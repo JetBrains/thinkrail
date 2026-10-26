@@ -41,6 +41,7 @@ was checked against the installed catalog version. **No removal gate is satisfie
   Restored truncated-call recovery now omits the paired tool result too, but does not replace
   `sessionRepair`'s host-restart and questionnaire repair. No host summarizer, effort-default change,
   reserve tuning, wire migration or session migration is introduced.
+- Pi 1.3's resumed tool-loadout restore adds one host seam, the registry-tool reconcile at attach below.
 - The bundled chat catalogue changes from 1,554 to 1,599 provider/model pairs: 71 removed and 116 added.
   Removed pairs include `openai-codex/gpt-5.5` and `openai-codex/gpt-5.3-codex-spark`;
   `openai/gpt-5.5` remains. This is a bundled-catalogue change, not a claim that providers retired those
@@ -125,30 +126,13 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
 
 ## Other pi-sensitive host seams
 
-**Registry-tool withholding** — [[submodule-server-agent]], `registryToolWithholding.ts` and
-`agentSessionManager.ts`. Pi 1.4.0 restores its declared tool selection from branch system messages;
-`setActiveToolsByName` persists a change only before the next model request. Keep branch-scoped Pi
-custom entries containing only owner-qualified host-withheld tools, retaining pending restoration
-across restarts until Pi declares it. Public `message_end` subscribers run after extension handlers
-but before persistence: record owner-qualified acknowledgement of only the withheld delta, bound to
-that exact next durable message. Replay never infers ownership from a name-only declaration or an
-unqualified request. Intentional removal before any restored declaration must survive missed settlement;
-check live removal before filtering disabled tools. Reconcile latest policy at `agent_settled`.
-`appendCustomEntry` mutates ancestry before its disk write: failure synchronously blocks every public
-mutation on that manager, reports `RESOURCE_UNAVAILABLE`, and detaches/aborts via the host teardown
-cascade. Throwing from the observer alone or waiting for asynchronous disposal cannot guard later Pi
-writes. Keep terminal-only forwarding after detachment through the actual SDK `agent_settled`, even
-when its reconciliation throws; exception-path disposal joins that delivery with bounded shutdown
-before invalidating contexts or clearing subscribers. Final state/host receipts read the pre-append
-branch, preserving the prior completion when the next user message never persisted. Idle failure
-publishes non-running state without synthetic settlement; recovery reopens a fresh manager. Re-check
-public mutators and callback ordering on upgrades. Missing tools retain provenance; unrelated
-inactive/deferred tools and ambiguous older selections without provenance remain untouched. Explicit chat resource reload is
-the manual escape to Pi's registration defaults, never an automatic legacy reset. **Removal gate:** a
-public Pi policy-overlay API that distinguishes host withholding from selected loadouts and preserves
-that distinction through restart, reload, branch navigation and compaction. Default-active metadata
-or bypassing restored selections with explicit SDK `tools` is not equivalent. Run the manager's
-persistent restart regression and `registryToolWithholding.test.ts` on upgrades.
+**Registry-tool reconcile at attach** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
+restores a resumed chat's recorded tool loadout and keeps recorded removals inactive, so a tool withheld
+while its registry extension was disabled would stay off after re-enabling. Attach re-activates enabled
+registry-extension tools by mirroring Pi's private `_isActivatedOnRegistration` (declarable exposure,
+`defaultActive !== false`); re-check that rule on upgrades. If the host ever calls `navigateTree`, which
+re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way to keep host-withheld tools
+apart from the recorded selection. Run the manager's restart regressions on upgrades.
 
 - **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
   pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))

@@ -599,46 +599,20 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     extension and `extensionsOverride` omits its `<inline:…>` entry — new parents never load it — and by
     `childExtensionFactories()` when a hidden child's loader runs. `refreshExtensionTools()` updates live
     sessions: tools whose `sourceInfo.path` belongs to a disabled registry extension leave the active set
-    idle-sync / streaming-deferred to `agent_settled`, latest policy wins. Branch-scoped Pi custom entries
-    persist only the host-withheld delta, identified by registry owner **and** tool name, never a second
-    tool loadout. Re-enabling restores only that delta; intentionally inactive/default-deferred tools
-    remain Pi-owned. Missing owners/tools retain their provenance across reloads and restarts without
-    transferring it to another owner. Restoration remains pending until an owner-qualified acknowledgement
-    and its corresponding Pi message are both durable. The public `message_end` observer runs after
-    extension handlers but before Pi appends the message: it records only matching withheld identities,
-    the upcoming message's role/timestamp and the immediate parent boundary, never a loadout. Replay
-    consumes that evidence only with the matching next message; tool names in declarations or arbitrary
-    requests alone cannot establish ownership. A restored tool deliberately removed before any restored
-    declaration is acknowledged by a subsequent request/response with that same owner, even when no
-    system delta or host settlement follows. An active restoration requires a durable declaration.
-    Reopening before the next prompt keeps restoration pending. Live intentional removal checks use
-    the unfiltered previous active set and matching owner, **before** host disabling can mask the removal.
-    `agent_settled` reconciles against the latest policy. Compaction retains branch custom entries.
-    If a custom append fails, Pi has already mutated its in-memory ancestry: synchronously quarantine
-    that manager's public mutation methods, throw `CodedError(RESOURCE_UNAVAILABLE)`, and detach the
-    live entry through the existing resource teardown lifecycle. A global refresh still reconciles the
-    remaining chats before reporting its first failure; one unwritable transcript cannot leave healthy
-    chats on an obsolete extension policy. No retry, prompt, callback,
-    completion or shutdown handler may write through that poisoned manager, including the Pi callback
-    currently emitting `message_end`. Abort the run without prematurely invalidating extension contexts;
-    Pi disposal still follows bounded shutdown, and on this exception path also waits for the
-    actual SDK settlement. Detachment retains only terminal-event forwarding (including a settlement
-    whose reconciliation throws); it never invents early settlement or re-enters policy writes. The
-    final authoritative state and host completion receipt use the branch ending at the pre-append
-    leaf, not poisoned ancestry or a message whose callback prevented persistence. A failure before
-    the next user message is durable preserves the preceding run's completion. An idle refresh failure
-    publishes non-running state without an invented `agent_settled`. Reopening uses a fresh manager
-    from disk, never the poisoned history. This guard does not repair a partially written filesystem
-    record; it prevents subsequent writes from extending an undurable parent. Older selections without provenance are
-    ambiguous and are preserved, **never automatically reset**. A user can explicitly reload the chat's
-    resources to adopt Pi's registration defaults; disabled-at-create and no-system-message legacy
-    sessions likewise use Pi's defaults.
+    (remembered per entry so re-enabling restores exactly the withheld tools, never ones that were inactive
+    by default) idle-sync / streaming-deferred to `agent_settled`, latest policy wins, and
     `setActiveToolsByName` drops their guidance with them. Hooks of a disabled extension keep running in an
     open session until its next resource reload — pi cannot unload an extension, and reloading on every
     disable would bust the prompt cache. The reverse is the one reload: an enabled extension the session
     never loaded (created while it was off) and that did not fail to load triggers a gated
     `requestSessionReload`. Registration applies the same reconciliation, and a completed reload reapplies
-    it without requesting another reload, so a toggle that lands mid-reload converges.
+    it without requesting another reload, so a toggle that lands mid-reload converges. Settings are the
+    source of truth across restarts: Pi ≥ 1.3 restores a resumed chat's recorded tool loadout, keeping
+    recorded removals inactive, so attach first re-activates every tool of an enabled registry extension
+    that Pi's activated-on-registration rule would activate (declarable exposure, not `defaultActive:
+    false`), then withholds disabled ones. Built-in, MCP, subagent and review tools keep Pi's restored
+    selection. A registry tool switched off by anything other than Settings therefore returns after a
+    restart, as it does on Pi `reload()`.
     The **`set_title`** tool (`titleTool.ts`) is how chats and workspaces get named: the main agent calls it
     with `chat_title?` / `workspace_name?` / `branch?` (English kebab slug). It is always registered and
     active, and listed via `promptSnippet`; toggling it off after naming would rebuild the system prompt
