@@ -3,6 +3,13 @@
 [![JetBrains incubator project](https://jb.gg/badges/incubator-plastic.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
 [![GitHub stars](https://img.shields.io/github/stars/JetBrains/thinkrail?style=social)](https://star-history.com/#JetBrains/thinkrail&Date)
 
+
+<a href="https://www.producthunt.com/products/thinkrail?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-thinkrail" target="_blank" rel="noopener noreferrer">
+  <img alt="ThinkRail - the agentic IDE that gets better every time you use it | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1293188&amp;theme=light&amp;t=1793013338496">
+</a>
+
+
+
 ThinkRail is the agentic IDE that gets better every time you use it — learning your project through
 living specs today, and building its own capabilities tomorrow.
 
@@ -25,6 +32,7 @@ create the tools it needs based on how you actually work.
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/workbench-dark.png">
   <img src=".github/readme-assets/workbench-light.png" alt="ThinkRail workbench: the Projects pane beside the left tool rail listing worktree workspaces and their Settled shelf, a finished pi conversation with its tool steps in the center, the resulting diff beside it, and the Specs tree above the Changes list on the right with their tools on the edge rail" width="900">
 </picture>
+
 
 *A `pi` session and the change it made, scoped to an isolated git-worktree workspace.*
 
