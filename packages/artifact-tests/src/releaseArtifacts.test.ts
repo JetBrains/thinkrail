@@ -40,6 +40,22 @@ const targets = [
 		},
 	},
 	{
+		target: "bun-darwin-x64",
+		stable: "macos-x64-ThinkRail.dmg",
+		nightly: "canary-macos-x64-ThinkRail-canary.dmg",
+		published: "thinkrail-desktop-darwin-x64.dmg",
+		updates: {
+			stable: {
+				manifest: "stable-macos-x64-update.json",
+				archive: "stable-macos-x64-ThinkRail.app.tar.zst",
+			},
+			nightly: {
+				manifest: "canary-macos-x64-update.json",
+				archive: "canary-macos-x64-ThinkRail-canary.app.tar.zst",
+			},
+		},
+	},
+	{
 		target: "bun-windows-x64",
 		stable: "win-x64-ThinkRail-Setup.zip",
 		nightly: "canary-win-x64-ThinkRail-Setup-canary.zip",
@@ -288,7 +304,7 @@ for (const target of targets) {
 			const update = target.updates[channel];
 			const updateManifestPath = `apps/desktop/artifacts/${update.manifest}`;
 			const updateArchivePath = `apps/desktop/artifacts/${update.archive}`;
-			const appArchivePath = target.target === "bun-darwin-arm64" ? updateArchivePath : "";
+			const appArchivePath = target.target.startsWith("bun-darwin") ? updateArchivePath : "";
 			expect(readFileSync(join(root, "outputs"), "utf8")).toBe(
 				`name=${target.published}\npath=apps/desktop/dist/${target.published}\napp-archive-path=${appArchivePath}\nupdate-manifest-path=${updateManifestPath}\nupdate-archive-path=${updateArchivePath}\n`,
 			);
@@ -329,10 +345,10 @@ test.each([
 	["archive", "archive"],
 ] as const)("refuses a missing requested update %s instead of falling back to another artifact", (kind, field) => {
 	const root = fixture();
-	const expected = targets[1].updates.nightly[field];
+	const expected = targets[2].updates.nightly[field];
 	const expectedPath = `apps/desktop/artifacts/${expected}`;
 	rmSync(join(root, expectedPath));
-	const result = collect(root, targets[1].target, "nightly");
+	const result = collect(root, targets[2].target, "nightly");
 	expect(result.exitCode).not.toBe(0);
 	expect(result.stdout.toString()).toContain(
 		`::error::desktop update ${kind} not found at ${expectedPath}`,
@@ -341,7 +357,6 @@ test.each([
 });
 
 test.each([
-	["bun-darwin-x64", "stable"],
 	["bun-darwin-arm64", "production"],
 ])("refuses an unsupported target/channel: %s %s", (target, channel) => {
 	expect(collect(fixture(), target, channel).exitCode).not.toBe(0);

@@ -175,10 +175,14 @@ runs:
         esac
         app_archive_path=''
         case "$TARGET" in
-          bun-darwin-arm64)
-            platform='macos-arm64'
+          bun-darwin-arm64|bun-darwin-x64)
+            case "$TARGET" in
+              bun-darwin-arm64) arch='arm64' ;;
+              *) arch='x64' ;;
+            esac
+            platform="macos-$arch"
             source="${prefix}${platform}-ThinkRail${suffix}.dmg"
-            name='thinkrail-desktop-darwin-arm64.dmg'
+            name="thinkrail-desktop-darwin-$arch.dmg"
             update_archive_name="${environment}-${platform}-ThinkRail${suffix}.app.tar.zst"
             app_archive_path="apps/desktop/artifacts/$update_archive_name"
             ;;

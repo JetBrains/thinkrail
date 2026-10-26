@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createWebsiteAnalytics, type MarketingConsentAdapter, type PostHogOptions } from "./index";
+import {
+	createWebsiteAnalytics,
+	type MarketingConsentAdapter,
+	type PostHogCaptureResult,
+	type PostHogOptions,
+} from "./index";
 
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
@@ -12,6 +17,7 @@ const expectedPostHogOptions: PostHogOptions = {
 	cookieless_mode: "always",
 	respect_dnt: true,
 	disable_session_recording: true,
+	before_send: expect.any(Function),
 };
 const expectedGtmScriptUrl = "https://www.googletagmanager.com/gtm.js?id=GTM-WDW2DZW4";
 const journeyStorageKey = "thinkrail_journey_id";
@@ -720,6 +726,58 @@ describe("website analytics", () => {
 		if (scriptFailure) dom.loadPostHog();
 
 		expect(dom.vendorCalls.filter(({ method }) => method === "capture")).toHaveLength(0);
+	});
+
+	describe("exception filter", () => {
+		const beforeSend = (event: PostHogCaptureResult | null) => {
+			const options = createWebsiteAnalytics({
+				productionHostname: "site.example",
+				postHogProjectKey: expectedPostHogProjectKey,
+				marketingConsent: createConsent().adapter,
+			}).configurationForHostname("site.example")?.postHog.options;
+			if (options === undefined) throw new Error("missing production configuration");
+			return options.before_send(event);
+		};
+		const exception = (...filenames: unknown[][]): PostHogCaptureResult => ({
+			event: "$exception",
+			properties: {
+				$exception_list: filenames.map((frames) => ({
+					type: "Error",
+					value: "boom",
+					stacktrace: { type: "raw", frames: frames.map((filename) => ({ filename })) },
+				})),
+			},
+		});
+
+		test("passes non-exception events and empty results through unchanged", () => {
+			const pageview = {
+				event: "$pageview",
+				properties: { $current_url: "https://site.example/" },
+			};
+
+			expect(beforeSend(pageview)).toBe(pageview);
+			expect(beforeSend(null)).toBeNull();
+		});
+
+		test("keeps an exception with a frame in a first-party script file", () => {
+			const firstParty = exception(
+				["https://www.googletagmanager.com/gtm.js"],
+				["https://p.site.example/static/array.js", "https://site.example/_astro/main.abc.js"],
+			);
+
+			expect(beforeSend(firstParty)).toBe(firstParty);
+		});
+
+		test.each([
+			["has no stack trace", { event: "$exception", properties: { $exception_list: [{}] } }],
+			["has no exception list", { event: "$exception", properties: {} }],
+			["comes from a script injected into the page", exception(["https://site.example/"])],
+			["comes from a third-party script", exception(["https://www.googletagmanager.com/gtm.js"])],
+			["comes from a sibling subdomain", exception(["https://p.site.example/static/array.js"])],
+			["has unusable filenames", exception(["", "not a url", 42, undefined])],
+		] as const)("drops an exception that %s", (_, event) => {
+			expect(beforeSend(event)).toBeNull();
+		});
 	});
 
 	test.each([
