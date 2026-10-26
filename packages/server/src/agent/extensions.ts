@@ -29,6 +29,7 @@ import { askUserQuestionExtension } from "./askUserQuestion";
 import { oversizedImageGuard } from "./imageGuard";
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
+import { sandboxExtensions } from "./sandbox";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import {
 	type CompatibilitySkillSource,
@@ -210,7 +211,7 @@ export function disabledExtensions(): ReadonlySet<string> {
 const isExtensionDisabled = (name: string): boolean => disabledExtensions().has(name);
 
 export function childBaseExtensionFactories(): InlineExtension[] {
-	return [oversizedImageGuard];
+	return [oversizedImageGuard, ...sandboxExtensions()];
 }
 
 export function childExtensionFactories(): InlineExtension[] {

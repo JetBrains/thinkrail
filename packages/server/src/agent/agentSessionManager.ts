@@ -119,6 +119,7 @@ import {
 } from "./piRuntime";
 import { catalogProviderAuth } from "./providerAuth";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
+import { sandboxCommandOptions, sandboxExtensions } from "./sandbox";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { deriveSessionState } from "./sessionState";
@@ -1336,23 +1337,26 @@ async function createParentSessionInternal(
 		() => subagentsEnabled(workspaceId),
 		() => sessions.get(sessionId)?.subagents === subagents && canDeliverCompletion(),
 	);
-	const commands = createBackgroundCommands({
-		sessionId,
-		getContext: () => {
-			if (!session || hasDeletionTombstone(sessionId))
-				throw new Error("Session resources unavailable");
-			return {
-				cwd: session.sessionManager.getCwd(),
-				sessionFile: session.sessionManager.getSessionFile(),
-				model: session.model,
-				thinkingLevel: session.thinkingLevel,
-				shellPath: settingsManager.getShellPath(),
-				commandPrefix: settingsManager.getShellCommandPrefix(),
-			};
+	const commands = createBackgroundCommands(
+		{
+			sessionId,
+			getContext: () => {
+				if (!session || hasDeletionTombstone(sessionId))
+					throw new Error("Session resources unavailable");
+				return {
+					cwd: session.sessionManager.getCwd(),
+					sessionFile: session.sessionManager.getSessionFile(),
+					model: session.model,
+					thinkingLevel: session.thinkingLevel,
+					shellPath: settingsManager.getShellPath(),
+					commandPrefix: settingsManager.getShellCommandPrefix(),
+				};
+			},
+			canDeliverCompletion: () =>
+				sessions.get(sessionId)?.commands === commands && canDeliverCompletion(),
 		},
-		canDeliverCompletion: () =>
-			sessions.get(sessionId)?.commands === commands && canDeliverCompletion(),
-	});
+		sandboxCommandOptions(),
+	);
 	try {
 		const result = await createAgentSession({
 			...options,
@@ -1367,6 +1371,7 @@ async function createParentSessionInternal(
 					subagents.extension,
 					createBackgroundCommandsExtension({ service: commands }),
 					...mcpHost.extensions,
+					...sandboxExtensions(settingsManager),
 				],
 			),
 		});
