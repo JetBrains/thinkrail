@@ -17,6 +17,9 @@ import type {
 	GitDiffScope,
 	GithubAuthStatus,
 	GitStatus,
+	HostEnvironment,
+	HostEnvironmentStatus,
+	HostEnvironmentUpdateResult,
 	HistoryScope,
 	HistorySearchResult,
 	InterviewResponse,
@@ -321,6 +324,8 @@ export const WS_METHODS = {
 	providerJbcentralQuota: "provider.jbcentralQuota",
 	hostUpdate: "host.update",
 	settingsUpdate: "settings.update",
+	environmentGet: "environment.get",
+	environmentUpdate: "environment.update",
 	feedbackRespond: "feedback.respond",
 	clientReportError: "client.reportError",
 	historySearch: "history.search",
@@ -900,6 +905,11 @@ export interface WsMethodMap {
 	"provider.jbcentralQuota": { params: { force?: boolean }; result: JbcentralQuotaSnapshot };
 	"host.update": { params: Record<string, never>; result: Ack };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
+	"environment.get": { params: Record<string, never>; result: HostEnvironmentStatus };
+	"environment.update": {
+		params: { environment: HostEnvironment };
+		result: HostEnvironmentUpdateResult;
+	};
 	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
 	"client.reportError": { params: ClientErrorReport; result: Ack };
 	"history.search": {

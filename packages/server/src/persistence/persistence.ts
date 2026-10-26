@@ -5,6 +5,7 @@ import { isAbsolute, join, resolve } from "node:path";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
+	type HostEnvironment,
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
@@ -65,12 +66,12 @@ function writeJson(file: string, value: unknown): void {
 	writeFileSync(join(dataDir(), file), `${JSON.stringify(value, null, "\t")}\n`);
 }
 
-function writeJsonAtomic(file: string, value: unknown): void {
+function writeJsonAtomic(file: string, value: unknown, mode?: number): void {
 	mkdirSync(dataDir(), { recursive: true });
 	const target = join(dataDir(), file);
 	const temporary = `${target}.${randomUUID()}.tmp`;
 	try {
-		writeFileSync(temporary, `${JSON.stringify(value, null, "\t")}\n`);
+		writeFileSync(temporary, `${JSON.stringify(value, null, "\t")}\n`, mode ? { mode } : undefined);
 		renameSync(temporary, target);
 	} finally {
 		rmSync(temporary, { force: true });
@@ -412,6 +413,27 @@ export function loadConfig(): AppConfig {
 
 export function saveConfig(config: AppConfig): void {
 	writeJson("config.json", config);
+}
+
+export function loadHostEnvironment(): HostEnvironment {
+	const raw = readJson<unknown>("environment.json", {});
+	const value = isRecord(raw) ? raw : {};
+	const vars = Array.isArray(value.vars)
+		? value.vars.filter(
+				(entry): entry is { name: string; value: string } =>
+					isRecord(entry) && typeof entry.name === "string" && typeof entry.value === "string",
+			)
+		: [];
+	return {
+		...(typeof value.agentDir === "string" && value.agentDir.length > 0
+			? { agentDir: value.agentDir }
+			: {}),
+		vars: vars.map(({ name, value }) => ({ name, value })),
+	};
+}
+
+export function saveHostEnvironment(environment: HostEnvironment): void {
+	writeJsonAtomic("environment.json", environment, 0o600);
 }
 
 export function ensureInstallation(): InstallationRecord {

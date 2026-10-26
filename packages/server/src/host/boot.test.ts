@@ -392,6 +392,46 @@ test("failed wire requests and logged host errors become sanitized exception rep
 	}
 });
 
+test("boot applies the stored environment before serving, and launch variables win", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	const agentDir = mkdtempSync(join(tmpdir(), "thinkrail-boot-agent-"));
+	tmpDirs.push(agentDir);
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	delete process.env.PI_CODING_AGENT_DIR;
+	delete (globalThis as Record<symbol, unknown>)[Symbol.for("thinkrail.shellEnv.launchKeys")];
+	process.env.TR_BOOT_LAUNCH = "launch";
+	writeFileSync(
+		join(dir, "environment.json"),
+		JSON.stringify({
+			agentDir,
+			vars: [
+				{ name: "TR_BOOT_STORED", value: "stored" },
+				{ name: "TR_BOOT_LAUNCH", value: "stored" },
+				{ name: "THINKRAIL_PORT", value: "1" },
+			],
+		}),
+	);
+	try {
+		await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+		expect(Bun.env.PI_CODING_AGENT_DIR).toBe(agentDir);
+		expect(process.env.TR_BOOT_STORED).toBe("stored");
+		expect(process.env.TR_BOOT_LAUNCH).toBe("launch");
+		expect(process.env.THINKRAIL_PORT).toBeUndefined();
+		const status = await handleRequest("environment.get", {}, { clientKey: "client" });
+		expect(status).toMatchObject({
+			restartRequired: false,
+			launchOverridden: ["TR_BOOT_LAUNCH"],
+			effectiveAgentDir: agentDir,
+		});
+	} finally {
+		delete process.env.TR_BOOT_STORED;
+		delete process.env.TR_BOOT_LAUNCH;
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+	}
+});
+
 test('portMode "exact" binds the requested port', async () => {
 	const requested = grabFreePort();
 	const b = await boot({ port: requested, host: "localhost", portMode: "exact" });

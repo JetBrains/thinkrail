@@ -99,6 +99,7 @@ import { findBranchReviewOutcome, providerFromRemoteUrl } from "../branch-review
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
+import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
 import { listExtensionCatalog } from "../extensions";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
 import { readDir, readFile } from "../fs";
@@ -1220,6 +1221,8 @@ const handlers: WsHandlers = {
 		const config = params.config;
 		return updateConfig(config);
 	},
+	"environment.get": () => hostEnvironmentStatus(),
+	"environment.update": (params) => updateHostEnvironment(params.environment),
 	"feedback.respond": (params) => {
 		respondToInterview(params.action);
 		return { ok: true } as const;

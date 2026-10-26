@@ -806,6 +806,31 @@ export interface GithubAuthStatus {
 	scopes?: string[];
 }
 
+export interface HostEnvironmentVar {
+	name: string;
+	value: string;
+}
+
+export interface HostEnvironment {
+	agentDir?: string;
+	vars: HostEnvironmentVar[];
+}
+
+export type HostEnvironmentIssue =
+	| { field: "agentDir"; code: "notAbsolute" | "notFound" | "notDirectory" }
+	| { field: "var"; index: number; code: "invalidName" | "reserved" | "duplicate" };
+
+export interface HostEnvironmentStatus {
+	stored: HostEnvironment;
+	restartRequired: boolean;
+	launchOverridden: string[];
+	effectiveAgentDir: string;
+}
+
+export type HostEnvironmentUpdateResult =
+	| { ok: true; status: HostEnvironmentStatus }
+	| { ok: false; issues: HostEnvironmentIssue[] };
+
 export type ThemeId = string;
 
 export const THEME_MODES = ["fixed", "system"] as const;

@@ -688,6 +688,11 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `systemThemePair` are complete replacements; entering system mode requires a complete existing-or-incoming
   pair. A legacy `{ theme }` mutation without explicit `themeMode` means a fixed-theme selection and exits
   system mode; returns the merged config) /
+  **`environment.get`** / **`environment.update`** (the stored host environment — optional pi config folder
+  plus ordered `{ name, value }` variables — outside `AppConfig`, never broadcast or in `server.welcome`
+  because values may be secrets; `get` → `HostEnvironmentStatus` with `restartRequired`, `launchOverridden`
+  names and the `effectiveAgentDir`; `update` replaces the whole record and returns
+  `{ ok: false, issues }` per field/row index instead of saving anything when it is invalid) /
   **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists the automatic invitation's book,
   postpone, or permanent-dismiss result; the Settings link never calls it;
   `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction so the host does not

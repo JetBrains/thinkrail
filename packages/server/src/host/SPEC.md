@@ -168,7 +168,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   agree, but keeps its own sync append — the death path must not depend on the logger's state);
   `boot.ts` (`bootHost` → await `initLogging` — debug level when the launcher passed `verbose` — then
   install the crash report, await the login-shell environment when the launcher passed
-  `resolveShellEnv: true` (started before `initLogging`), pre-warm the same Central watcher/runtime
+  `resolveShellEnv: true` (started before `initLogging`), apply the stored host environment
+  (`applyHostEnvironment`, before any `getAgentDir()` reader), pre-warm the same Central watcher/runtime
   initialization before choosing the serving port, await `createServer` (which idempotently enforces
   runtime bootstrap for low-level embedders), and write the `listening on` info line (see
   `submodule-server-log`); `reportDesktopError(error, scope)` is the desktop launcher's handled-error door
