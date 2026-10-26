@@ -70,8 +70,10 @@ Worker on either channel: a fully-closed app has no live client and raises nothi
 **OS-dependent (desktop).** The native rendering is the pinned Electrobun 2.0.1 backend, which takes
 `title` + `body` + `subtitle` + `silent` and renders per platform: macOS `UNUserNotificationCenter`
 (native title/subtitle/body, OS-requested authorization on first show), Windows a `Shell_NotifyIconW` tray
-**balloon** (title + body; `subtitle` folds in as an extra line per the SDK — not a Windows Toast), Linux
-libnotify/D-Bus (DE-dependent, Wayland caveats, subtitle folded likewise). The macOS bundle id comes from
+**balloon** (title + body; `subtitle` folds in as an extra line per the SDK — not a Windows Toast). On
+Linux the desktop bypasses that backend and calls `notify-send` itself, with ThinkRail's app name, icon
+and desktop-entry hint ([[module-desktop]]). Delivery depends on the desktop environment, has Wayland
+caveats, and folds the subtitle in the same way. The macOS bundle id comes from
 `apps/desktop/electrobun.config.ts` (`identifier: ai.thinkrail.app`, name `ThinkRail`), and macOS supplies
 the app icon (the native call has no icon field). The Windows balloon shows Electrobun's generic
 application icon. It carries no App User Model ID of its own, so the sender Windows shows follows the
