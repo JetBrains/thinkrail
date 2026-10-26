@@ -583,7 +583,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   symlinks not followed) for the confirmation. Every repository door refuses a chat or the container at
   the handler (`REPOSITORY_ONLY_METHODS` — git, changes, reviews, pull requests, turns, diff stats and
   base — plus project close/rename/trust/skills, `workspace.create`/`listExisting`, `git.listBranches`/
-  `prefetch`); the settled lifecycle, turn snapshots, plan artifacts and head recording skip chats; and
+  `prefetch`); the settled lifecycle, turn snapshots, plan artifacts, the plan's unattributed-change and
+  adopted-commit reads, head recording and the setup funnel's `project_present` skip chats; and
   `applyGitCeiling()` merges `<dataDir>/chats` into `GIT_CEILING_DIRECTORIES` before the server exists
   (the root created first), so git, `gh`, PTYs and pi's bash inherit a ceiling that stops any walk up
   out of a chat folder into a repository that happens to enclose the data dir. The container is ensured

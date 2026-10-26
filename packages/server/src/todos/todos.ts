@@ -16,7 +16,7 @@ import {
 } from "pi-todos/core";
 import { suggestPlanSummary } from "../assist";
 import { gitStatus, listCommits, readCommitSubject, resolveListedCommit } from "../git";
-import { getWorkspace } from "../workspaces";
+import { getWorkspace, isChatWorkspace } from "../workspaces";
 import { enqueueTodoMutation, settleChangeArtifacts, unattributedChanges } from "./artifacts";
 import { dropItemBaseline, readBaselines, removeSessionBaselines } from "./baselines";
 import {
@@ -178,6 +178,7 @@ export async function listTodos(params: {
 		),
 	};
 	if (plan.summary) wire.summary = plan.summary;
+	if (isChatWorkspace(getWorkspace(params.workspaceId))) return wire;
 	const unattributed = await resolveUnattributed(params.workspaceId, root, params.sessionId, plan);
 	if (unattributed.length > 0) wire.unattributed = unattributed;
 	const adoptedCommits = await resolveAdoptedCommits(params.workspaceId, plan, records, pending);

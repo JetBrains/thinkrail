@@ -3,6 +3,7 @@ import { t } from "@thinkrail/locales/react";
 import type { ChatAttachment } from "../chat/types";
 import { selectWorkspaceTick, supportsProjectlessChats, toast, useAppStore } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
+import { loadProjectWorkspaces } from "./workspaceActions";
 
 export interface ProjectlessChatStart {
 	readonly text?: string;
@@ -30,12 +31,17 @@ export async function startProjectlessChat(
 	const { workspace } = created;
 	const next = useAppStore.getState();
 	next.expandProject(workspace.projectId);
-	next.setWorkspaces(workspace.projectId, [
-		workspace,
-		...(next.workspaces[workspace.projectId] ?? []).filter(
-			(candidate) => candidate.id !== workspace.id,
-		),
-	]);
+	const listed = next.workspaces[workspace.projectId];
+	if (listed) {
+		next.setWorkspaces(workspace.projectId, [
+			workspace,
+			...listed.filter((candidate) => candidate.id !== workspace.id),
+		]);
+	} else {
+		await loadProjectWorkspaces(workspace.projectId).catch(() => {
+			useAppStore.getState().setWorkspaces(workspace.projectId, [workspace]);
+		});
+	}
 	next.activateWorkspace(workspace);
 	next.openChatSession(
 		workspace.id,

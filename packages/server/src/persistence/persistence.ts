@@ -317,6 +317,11 @@ export function chatsStoreWritable(): boolean {
 	return chatsWritable === true;
 }
 
+/** Tests swap data dirs under one process; the next ask re-reads the store instead of keeping a set-aside latch. */
+export function resetChatsStoreForTests(): void {
+	chatsWritable = null;
+}
+
 export function loadChats(): PersistedChats {
 	const loaded = loadSessionMetadata("chats.json", parseChats);
 	if (loaded.kind === "set-aside") {

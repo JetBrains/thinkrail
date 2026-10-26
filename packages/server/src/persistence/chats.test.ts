@@ -16,6 +16,7 @@ import {
 	loadChats,
 	loadProjects,
 	loadWorkspaces,
+	resetChatsStoreForTests,
 	saveProjects,
 	saveWorkspaces,
 } from "./persistence";
@@ -29,6 +30,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	resetChatsStoreForTests();
 	rmSync(root, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
