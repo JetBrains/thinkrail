@@ -163,12 +163,30 @@ export function validateCatalog(raw: unknown): CatalogValidation {
 	return { ok: true, strings: Object.fromEntries(entries) };
 }
 
+/**
+ * A tag reduced to `language-script` through CLDR likely-subtag expansion, so a regional
+ * variant matches the language it belongs to: `zh-Hans-CN` and `zh-CN` both become
+ * `zh-Hans`, while `zh-Hant-TW` stays `zh-Hant` and so never borrows a Simplified catalog.
+ */
+function scriptKey(tag: string): string | null {
+	try {
+		const locale = new Intl.Locale(tag).maximize();
+		return locale.script ? `${locale.language}-${locale.script}` : locale.language;
+	} catch {
+		return null;
+	}
+}
+
 function matchAvailable(tag: string, available: readonly string[]): string | undefined {
 	const lower = tag.toLowerCase();
 	const exact = available.find((candidate) => candidate.toLowerCase() === lower);
 	if (exact) return exact;
 	const base = baseLanguage(tag);
-	return available.find((candidate) => candidate.toLowerCase() === base);
+	const byBase = available.find((candidate) => candidate.toLowerCase() === base);
+	if (byBase) return byBase;
+	const key = scriptKey(tag);
+	if (key === null) return undefined;
+	return available.find((candidate) => scriptKey(candidate) === key);
 }
 
 export function resolveLocale(

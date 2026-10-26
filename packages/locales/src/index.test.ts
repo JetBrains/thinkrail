@@ -60,6 +60,25 @@ describe("resolveLocale", () => {
 		expect(resolveLocale("system", available, ["ja"])).toBe("en");
 	});
 
+	test("a regional variant matches the script it is written in", () => {
+		const chinese = ["en", "zh-CN"];
+		expect(resolveLocale("system", chinese, ["zh-Hans-CN"])).toBe("zh-CN");
+		expect(resolveLocale("system", chinese, ["zh-Hans"])).toBe("zh-CN");
+		expect(resolveLocale("system", chinese, ["zh"])).toBe("zh-CN");
+	});
+
+	test("a different script never borrows the catalog", () => {
+		const chinese = ["en", "zh-CN"];
+		expect(resolveLocale("system", chinese, ["zh-TW"])).toBe("en");
+		expect(resolveLocale("system", chinese, ["zh-Hant-TW"])).toBe("en");
+		expect(resolveLocale("system", chinese, ["zh-HK"])).toBe("en");
+	});
+
+	test("a region-only difference still matches", () => {
+		expect(resolveLocale("system", ["en", "pt-BR"], ["pt"])).toBe("pt-BR");
+		expect(resolveLocale("system", ["en", "pt-BR"], ["pt-PT"])).toBe("pt-BR");
+	});
+
 	test("an explicit tag is used only when available", () => {
 		expect(resolveLocale("de", available, ["ja"])).toBe("de");
 		expect(resolveLocale("uk", available, ["de"])).toBe("en");
