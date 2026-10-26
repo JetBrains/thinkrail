@@ -908,7 +908,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   plus this catalog's untrusted aliases, so a worktree-only alias still shows — so in a chat it is the place
   to grant pi-level trust, and its `project.setTrust` carries `resources: true` exactly when it named the
   project's Pi resources), re-confirm-new, a per-group track/thumb **switch** + an **All-plugins** master, and per-skill
-  switches. Switch position plus semantic colour carries state without visible On/Off text; the switch target
+  switches. Each skill row reads as a name (card title) over its description clamped to two lines (full text
+  on hover), so a scan of similar "Use when…" lines still tells skills apart. Switch position plus semantic colour carries state without visible On/Off text; the switch target
   alone mutates, while unavailable controls keep the existing trust/parent explanation and acknowledgement
   behavior. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,

@@ -55,6 +55,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
   `terminal` owns executable resolution and spawning.
 - `chatLineWidth` / `fileLineWidth` independently default to 120 and accept only finite integers from 40 through 240; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
 - `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
+- `onboardingDismissed` defaults to `false` when absent or malformed on disk; a present non-boolean update is rejected like the other boolean fields. Only the web onboarding wizard reads it.
 - `subagentMaxConcurrent` (per-chat concurrent subagents) defaults to 4 when absent or malformed on disk; a wire update outside `isSubagentMaxConcurrent` (whole 1–16) rejects the complete mutation — never clamped. Like `subagentsEnabled`, settings owns only the global value.
 - `disabledExtensions` lists host-registry extension `name`s the user switched off; absent means `[]` (every
   extension on). A wire update must be a list of non-blank strings or the whole mutation is rejected;

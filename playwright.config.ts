@@ -94,6 +94,13 @@ export default defineConfig({
 			USERPROFILE: E2E_HOME_DIR,
 			CLAUDE_CONFIG_DIR: `${E2E_HOME_DIR}/.claude`,
 			CODEX_HOME: `${E2E_HOME_DIR}/.codex`,
+			XDG_CONFIG_HOME: `${E2E_HOME_DIR}/.config`,
+			COPILOT_HOME: `${E2E_HOME_DIR}/.copilot`,
+			KIMI_SHARE_DIR: `${E2E_HOME_DIR}/.kimi`,
+			GROK_HOME: `${E2E_HOME_DIR}/.grok`,
+			GROK_AUTH_PATH: "",
+			CLAUDE_SECURESTORAGE_CONFIG_DIR: "",
+			CLAUDE_CODE_OAUTH_TOKEN: "",
 			GEMINI_CLI_HOME: E2E_HOME_DIR,
 			PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
 			// Keep the suite hermetic: `model.list` fires a detached pi.dev catalog refresh (issue #98) that

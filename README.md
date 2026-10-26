@@ -138,7 +138,9 @@ thinkrail ~/code/my-repo
 ```
 
 `thinkrail` needs `git` on your PATH and a model provider — sign in with JetBrains AI from the app or use
-your own provider credentials. `thinkrail --help` lists the flags; `thinkrail --version` prints the build.
+your own provider credentials. The first launch walks you through connecting a provider and picking a
+project; **Start a new project** creates an empty git repository (under `~/thinkrail` by default), so you
+don't need one ready. `thinkrail --help` lists the flags; `thinkrail --version` prints the build.
 
 <details>
 <summary><strong>Nightly builds, pinned versions, updates, and uninstall</strong></summary>
@@ -198,7 +200,7 @@ identity. Error reports are also always sent, tied to the same installation ID, 
 error type and code and where in ThinkRail's own code it happened. They never include error messages, file
 paths, names, URLs, or anything from your projects or extensions. Additional product
 usage and how you found ThinkRail are shared only while **Share additional usage
-data** is on; the switch is offered at first launch and lives in **Settings → Privacy**. When launching from
+data** is on; the switch is offered once first-run setup is done (or skipped) and lives in **Settings → Privacy**. When launching from
 the command line, `thinkrail --no-analytics` (or `THINKRAIL_NO_ANALYTICS=1`) turns additional sharing off for
 that run. With additional sharing on, a packaged build may open the ThinkRail blog in your browser once to
 link your installation to the website visit that brought you here — only where you accepted marketing cookies on the

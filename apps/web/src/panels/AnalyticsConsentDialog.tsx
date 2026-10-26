@@ -9,7 +9,7 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { useEffect, useRef, useState } from "react";
-import { AnalyticsDescription, AnalyticsSharingSwitch } from "./AnalyticsPreferences";
+import { AnalyticsConsentChoice } from "./AnalyticsPreferences";
 import { useAnalyticsConsent } from "./useAnalyticsConsent";
 
 export function AnalyticsConsentDialog() {
@@ -31,14 +31,12 @@ export function AnalyticsConsentDialog() {
 				if (!open) save(draft);
 			}}
 		>
-			<DialogContent data-testid="analytics-consent-dialog">
+			<DialogContent data-testid="analytics-consent-dialog" className="max-w-[30rem] gap-16">
 				<DialogHeader>
 					<DialogTitle>{t("panels.analyticsConsent.title")}</DialogTitle>
-					<DialogDescription>
-						<AnalyticsDescription />
-					</DialogDescription>
+					<DialogDescription>{t("panels.analyticsConsent.subtitle")}</DialogDescription>
 				</DialogHeader>
-				<AnalyticsSharingSwitch
+				<AnalyticsConsentChoice
 					enabled={draft}
 					disabled={pending}
 					onChange={(enabled) => {

@@ -1,3 +1,4 @@
+export { detectAccounts } from "./detectAccounts";
 export {
 	connectJbcentral,
 	disconnectJbcentral,

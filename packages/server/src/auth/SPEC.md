@@ -65,6 +65,27 @@ ourselves and never surface a credential value over the wire.
       keyed auth report `false` (Sign-out would no-op, so the strip hides it). Central's own lifecycle is only
       the dedicated closed `jbcentral` status, never a row; the `central` kind on a replaced built-in is an
       identity fact, never inferred from model URLs or configuration.
+  - `detectAccounts` — `provider.detect`'s onboarding hint: which **other local tools** are already signed in
+    to a subscription a pi provider can sign in with, plus a plan label when the tool records one. Sources and
+    their signed-in predicates (each verified against the tool's own code; relocation env vars honoured):
+    Claude Code → `anthropic` (`CLAUDE_CODE_OAUTH_TOKEN`; else a `.credentials.json` `claudeAiOauth` with a
+    refresh token and the `user:inference` scope; else, for the macOS Keychain sign-in, `oauthAccount` in the
+    global config with a subscription `billingType` — a bare `oauthAccount` is also written by a Console
+    API-key login, and `/logout` removes it); Codex → `openai`, falling back to legacy `openai-codex`
+    (resolved `auth_mode` `chatgpt` + a refresh token — Codex's own legacy-mode resolution when the field is
+    absent; keyring storage leaves no file and is not seen); Copilot editor plugins and the Copilot CLI →
+    `github-copilot` (`github-copilot/{apps,hosts}.json` under an absolute `XDG_CONFIG_HOME`, else
+    `~/AppData/Local` on Windows, else `~/.config`; the CLI's commented `config.json` `loggedInUsers`); Kimi CLI
+    → `kimi-coding` (`credentials/kimi-code.json` with a refresh token); Grok Build → `xai` (an `auth.json`
+    scope other than the API-key one with a refresh token or an unexpired session). An expired access token
+    with a live refresh token still counts. Gemini CLI and Meta Muse are out because pi has no matching OAuth
+    provider or no verified file. Each signal names candidate providers; the first one the current runtime can
+    OAuth-sign-in to is reported, and a provider is reported once (first source wins). Files are read only
+    when regular and under 1 MiB, BOM-tolerant; anything unreadable counts as not signed in. Never pi's
+    `auth.json` (pi already reports that as configured) and never an OS keychain — a Keychain read raises a
+    system access prompt. Detection **suggests, never borrows**: the user still signs in through pi's own
+    flow, because reusing another tool's rotating refresh token would sign one of the two out. No credential
+    value leaves the function; an API-key-only setup is not a sign-in.
   - `providerLogin` — the in-app credential **writes**, session-less (a login runs on the Welcome screen
     before any session exists), so a `loginId`-keyed sibling of `agent/webUiContext`:
     - `startLogin(providerId, type = "oauth")` → `{ loginId }` **synchronously**; `runtime.login(id,
@@ -86,6 +107,11 @@ ourselves and never surface a credential value over the wire.
     - `cancelLogin(loginId)` — aborts the signal **and** settles the parked input with `undefined` (which
       makes the awaiting `prompt` throw), because the signal alone won't stop a provider's
       browser/callback-server wait; `cancelAllLogins()` sweeps them on host `stop()`.
+    - **A new `startLogin` supersedes** any unfinished login for the same provider, cancelling it
+      silently: pi runs one credential operation per provider at a time, so a login abandoned at a
+      prompt (tab closed or reloaded, never cancelled) would otherwise park every later attempt behind
+      it on "Working…" until the host restarts. No frame is pushed for the superseded login — an idle
+      client would otherwise pop a stray error dialog for a login it never saw.
     - `logoutProvider(id)` — `runtime.logout` (refreshes internally). (The old `setProviderApiKey` — a
       canned interaction answering exactly one secret prompt — is gone with `provider.setApiKey`: the
       dialog flow subsumes it and also serves multi-prompt providers.)
@@ -136,6 +162,7 @@ ourselves and never surface a credential value over the wire.
     action results use only the closed contracts taxonomy—never child output, extension contents, diagnostics,
     proxy data, raw models, or arbitrary thrown messages.
 - **Public surface (barrel):** `getProviderStatus`, `buildProviderReport` (+ `ProviderStatusSources`);
+  `detectAccounts`;
   `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `logoutProvider`,
   `setLoginPublisher`; `initializeJbcentralRuntime`, `stopJbcentralRuntime`, `getJbcentralStatus`,
   `getJbcentralQuota`, `connectJbcentral`, `disconnectJbcentral`, `startProxyJbcentral`,

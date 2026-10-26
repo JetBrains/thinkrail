@@ -11,11 +11,12 @@ import {
 } from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { Project } from "@thinkrail/contracts";
 import {
 	approveProjectMcpServer,
 	closeProject,
+	createProject,
 	getProjects,
 	grantProjectMcpTool,
 	initProject,
@@ -245,6 +246,49 @@ test("initProject: an empty folder gets an empty initial commit (a HEAD), so wor
 	const wt = join(dataDir, "wt");
 	git(dir, "worktree", "add", wt, "-b", "feature");
 	expect(existsSync(wt)).toBe(true);
+});
+
+test("createProject: makes the folder and missing parents, bootstraps a repo, and opens it", () => {
+	const parent = join(dataDir, "nested", "parent");
+
+	const project = withoutUserGitConfig(() => createProject(parent, " my-app "));
+	const path = join(parent, "my-app");
+	expect(project.path).toBe(realpathSync(path));
+	expect(gitOut(path, "rev-parse", "HEAD")).not.toBe("");
+	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
+});
+
+test("createProject: reuses an empty folder but rejects a non-empty one or a file", () => {
+	mkdirSync(join(dataDir, "empty"));
+	expect(withoutUserGitConfig(() => createProject(dataDir, "empty")).path).toBe(
+		realpathSync(join(dataDir, "empty")),
+	);
+
+	mkdirSync(join(dataDir, "full"));
+	writeFileSync(join(dataDir, "full", "a.txt"), "a\n");
+	expect(() => createProject(dataDir, "full")).toThrow("already exists and isn't empty");
+	expect(existsSync(join(dataDir, "full", ".git"))).toBe(false);
+
+	writeFileSync(join(dataDir, "file"), "x\n");
+	expect(() => createProject(dataDir, "file")).toThrow("Not a folder");
+});
+
+test("createProject: a folder inside an enclosing repo becomes its own project", () => {
+	const outer = join(dataDir, "outer");
+	makeRepo(outer);
+
+	const project = withoutUserGitConfig(() => createProject(outer, "inner"));
+	expect(project.path).toBe(realpathSync(join(outer, "inner")));
+	expect(resolve(gitOut(join(outer, "inner"), "rev-parse", "--show-toplevel"))).toBe(
+		realpathSync(join(outer, "inner")),
+	);
+});
+
+test("createProject: rejects names that are not one plain folder name", () => {
+	for (const name of ["", "  ", ".", "..", "a/b", "a\\b"]) {
+		expect(() => createProject(dataDir, name)).toThrow("Invalid project folder name");
+	}
+	expect(() => createProject("relative", "app")).toThrow("must be absolute or start with ~/");
 });
 
 test("initProject: commits even with no configured git identity (the -c fallback)", () => {

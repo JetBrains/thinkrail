@@ -1,36 +1,69 @@
 import {
 	RiFolderOpenLine as FolderOpen,
 	RiHome2Line as House,
-	type RemixiconComponentType as LucideIcon,
 	RiRocketLine as Rocket,
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { cn } from "@thinkrail/ui/utils";
-import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { PRODUCT_NAME } from "../constants/branding";
-import { useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { selectSupportsOnboarding, toast, useAppStore } from "../store";
+import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { ConnectedLine, type ConnectedSummary } from "./ConnectedLine";
+import { connectedProviderName } from "./ConnectProviderOptions";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { OnboardingWizard } from "./OnboardingWizard";
 import { ProjectTrustNotice } from "./ProjectTrustNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
+import {
+	setupDialogRequest,
+	startProjectSetupChat,
+	type WorkspaceDialogRequest,
+} from "./setupPrompt";
+import { useHasProvider } from "./useHasProvider";
 import { useOpenProject } from "./useOpenProject";
-
-const SETUP_PROMPT = "/skill:setting-up-a-project ";
+import { Card, CardSkeleton } from "./WelcomeCard";
 
 export function WelcomePanel() {
 	const t = useT();
 	const projects = useAppStore((s) => s.projects);
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-	const [dialog, setDialog] = useState<{
-		projectId: string;
-		prompt: string;
-		note?: string;
-	} | null>(null);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const supportsOnboarding = useAppStore(selectSupportsOnboarding);
+	const onboardingDismissed = useAppStore((s) => s.onboardingDismissed);
+	const hasProvider = useHasProvider();
+	const [dialog, setDialog] = useState<WorkspaceDialogRequest | null>(null);
 	const [hasSpecs, setHasSpecs] = useState<boolean | null>(null);
+	const wizard = useAppStore((s) => s.onboardingWizard);
+	const setWizard = useAppStore((s) => s.setOnboardingWizard);
+	const [justConnected, setJustConnected] = useState<ConnectedSummary | null>(null);
+	const coldStart = projects.length === 0 && recentProjects.length === 0;
+
+	useEffect(() => {
+		if (wizard !== "pending" || protocolVersion === null) return;
+		if (!supportsOnboarding || onboardingDismissed || !coldStart || hasProvider === true) {
+			setWizard("hidden");
+		} else if (hasProvider === false) {
+			setWizard("shown");
+		}
+	}, [
+		wizard,
+		setWizard,
+		protocolVersion,
+		supportsOnboarding,
+		onboardingDismissed,
+		coldStart,
+		hasProvider,
+	]);
+
+	const dismissOnboarding = () => {
+		getTransport()
+			.request("settings.update", { config: { onboardingDismissed: true } })
+			.catch((err) => toast.error(errorText(err), "Couldn't save that onboarding is done"));
+	};
 
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
 
@@ -55,10 +88,18 @@ export function WelcomePanel() {
 		};
 	}, [project?.id]);
 
-	const { openProject, pickAndOpen, enterHostPath, dialogs } = useOpenProject((opened) =>
-		useAppStore.getState().selectProject(opened.id, { reveal: true }),
+	const { openProject, pickAndOpen, enterHostPath, startNewProject, dialogs } = useOpenProject(
+		(opened, { setup }) => {
+			useAppStore.getState().selectProject(opened.id, { reveal: true });
+			if (setup) void startProjectSetupChat(opened.id);
+		},
 	);
 	const noProjects = project == null;
+	const showWizard = wizard === "shown" && noProjects;
+
+	useEffect(() => {
+		if (wizard === "shown" && !noProjects) setWizard("hidden");
+	}, [wizard, noProjects, setWizard]);
 
 	const projectFolderCard = (projectId: string) => (
 		<Card
@@ -70,7 +111,7 @@ export function WelcomePanel() {
 		/>
 	);
 
-	const openProjectCard = () => (
+	const openProjectCard = (primary: boolean) => (
 		<AddProjectMenu
 			recentProjects={recentProjects}
 			onOpen={() => void pickAndOpen()}
@@ -79,8 +120,8 @@ export function WelcomePanel() {
 			align="start"
 		>
 			<Card
-				cta
-				primary
+				cta={primary}
+				primary={primary}
 				icon={FolderOpen}
 				title={t("panels.welcome.openProjectTitle")}
 				subtitle={t("panels.welcome.openProjectSubtitle")}
@@ -88,71 +129,117 @@ export function WelcomePanel() {
 		</AddProjectMenu>
 	);
 
+	const noProjectCards = () =>
+		supportsOnboarding ? (
+			<>
+				<Card
+					cta
+					primary
+					icon={Sparkles}
+					title={t("panels.welcome.startNewTitle")}
+					subtitle={t("panels.welcome.startNewSubtitle")}
+					onClick={() => startNewProject({ offerSetup: true })}
+				/>
+				{openProjectCard(false)}
+			</>
+		) : (
+			openProjectCard(true)
+		);
+
 	return (
 		<div
 			data-testid="welcome"
-			className="flex h-full min-h-0 flex-col items-center justify-center overflow-auto px-24 py-24 text-center"
+			className="flex h-full min-h-0 flex-col items-center justify-center-safe overflow-auto px-24 py-24 text-center"
 		>
-			<h1
-				data-testid="welcome-title"
-				className="tr-brand-hero max-w-[640px] break-words text-primary"
-			>
-				{project ? project.name : PRODUCT_NAME}
-			</h1>
+			{showWizard ? (
+				<OnboardingWizard
+					projectCards={noProjectCards()}
+					onConnected={dismissOnboarding}
+					onSkip={() => {
+						setWizard("hidden");
+						dismissOnboarding();
+					}}
+				/>
+			) : (
+				<>
+					<h1
+						data-testid="welcome-title"
+						className="tr-brand-hero max-w-[640px] break-words text-primary"
+					>
+						{project
+							? project.name
+							: justConnected
+								? t("panels.welcome.connectedTitle")
+								: PRODUCT_NAME}
+					</h1>
+					{noProjects && justConnected ? (
+						<div className="mt-12">
+							<ConnectedLine summary={justConnected} />
+						</div>
+					) : null}
 
-			<ProviderWarningBanner />
-			{project ? <ProjectTrustNotice projectId={project.id} /> : null}
+					<ProviderWarningBanner
+						onConnected={(p) =>
+							setJustConnected({
+								provider: connectedProviderName(p),
+								models: null,
+								defaultModel: null,
+							})
+						}
+					/>
+					{project ? <ProjectTrustNotice projectId={project.id} /> : null}
 
-			<div className="mt-24 flex flex-wrap justify-center gap-12">
-				{noProjects ? (
-					openProjectCard()
-				) : hasSpecs === null ? (
-					<>
-						<CardSkeleton />
-						<CardSkeleton />
-					</>
-				) : hasSpecs ? (
-					<>
-						<Card
-							cta
-							primary
-							icon={Rocket}
-							title={t("panels.welcome.startBuildingTitle")}
-							subtitle={t("panels.welcome.startBuildingSubtitle")}
-							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
-							className="motion-safe:animate-reveal"
-						/>
-						{projectFolderCard(project.id)}
-					</>
-				) : (
-					<>
-						<Card
-							cta
-							primary
-							icon={Sparkles}
-							title={t("panels.welcome.setupTitle")}
-							tag={t("panels.welcome.setupTag")}
-							subtitle={t("panels.welcome.setupSubtitle")}
-							onClick={() =>
-								setDialog({
-									projectId: project.id,
-									prompt: SETUP_PROMPT,
-									note: t("panels.welcome.setupNote"),
-								})
-							}
-							className="motion-safe:animate-reveal"
-						/>
-						<Card
-							icon={Rocket}
-							title={t("panels.welcome.startBuildingTitle")}
-							subtitle={t("panels.welcome.startBuildingSecondarySubtitle")}
-							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
-							className="motion-safe:animate-reveal"
-						/>
-						{projectFolderCard(project.id)}
-					</>
-				)}
-			</div>
+					<div className="mt-24 flex flex-wrap justify-center gap-12">
+						{noProjects && wizard === "pending" ? (
+							<>
+								<CardSkeleton />
+								<CardSkeleton />
+							</>
+						) : noProjects ? (
+							noProjectCards()
+						) : hasSpecs === null ? (
+							<>
+								<CardSkeleton />
+								<CardSkeleton />
+							</>
+						) : hasSpecs ? (
+							<>
+								<Card
+									cta
+									primary
+									icon={Rocket}
+									title={t("panels.welcome.startBuildingTitle")}
+									subtitle={t("panels.welcome.startBuildingSubtitle")}
+									onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+									className="motion-safe:animate-reveal"
+								/>
+								{projectFolderCard(project.id)}
+							</>
+						) : (
+							<>
+								<Card
+									cta
+									primary
+									icon={Sparkles}
+									title={t("panels.welcome.setupTitle")}
+									tag={t("panels.welcome.setupTag")}
+									subtitle={t("panels.welcome.setupSubtitle")}
+									onClick={() => setDialog(setupDialogRequest(project.id))}
+									className="motion-safe:animate-reveal"
+								/>
+								<Card
+									icon={Rocket}
+									title={t("panels.welcome.startBuildingTitle")}
+									subtitle={t("panels.welcome.startBuildingSecondarySubtitle")}
+									onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+									className="motion-safe:animate-reveal"
+								/>
+								{projectFolderCard(project.id)}
+							</>
+						)}
+					</div>
+				</>
+			)}
 
 			{dialog ? (
 				<NewWorkspaceDialog
@@ -169,62 +256,3 @@ export function WelcomePanel() {
 		</div>
 	);
 }
-
-function CardSkeleton() {
-	const t = useT();
-	return (
-		<div
-			role="status"
-			aria-label={t("panels.welcome.loading")}
-			aria-busy="true"
-			className="flex h-[150px] w-[220px] flex-col items-start justify-between rounded-sm border border-border-default bg-container-workspace-bg p-16"
-		>
-			<span className="size-24 shrink-0 animate-pulse rounded-full bg-control-bg-hovered" />
-			<span className="flex w-full flex-col gap-8">
-				<span className="h-3 w-3/4 animate-pulse rounded-sm bg-control-bg-hovered" />
-				<span className="h-3 w-full animate-pulse rounded-sm bg-control-bg-hovered" />
-			</span>
-		</div>
-	);
-}
-
-type CardProps = {
-	cta?: boolean;
-	primary?: boolean;
-	icon: LucideIcon;
-	title: string;
-	subtitle: string;
-	tag?: string;
-} & ComponentPropsWithoutRef<"button">;
-
-const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
-	{ cta, primary, icon: Icon, title, subtitle, tag, className, ...rest },
-	ref,
-) {
-	return (
-		<button
-			ref={ref}
-			type="button"
-			data-testid={cta ? "welcome-cta" : "welcome-action"}
-			{...rest}
-			className={cn(
-				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-sm border bg-clip-padding p-16 text-left transition-colors",
-				primary
-					? "border-primary-muted bg-primary-subtle hover:bg-primary-soft"
-					: "border-border-default bg-container-workspace-bg hover:border-primary-muted hover:bg-container-elevated-bg",
-				className,
-			)}
-		>
-			{tag ? (
-				<span className="absolute top-12 right-12 rounded-full border border-primary-muted bg-clip-padding bg-primary-subtle px-8 py-2 tr-text-label-pill text-primary">
-					{tag}
-				</span>
-			) : null}
-			<Icon className={cn("size-24", primary ? "text-primary" : "text-text-muted")} />
-			<span className="w-full">
-				<span className="block tr-title-card text-text-default">{title}</span>
-				<span className="mt-2 block text-text-muted tr-text-metadata leading-snug">{subtitle}</span>
-			</span>
-		</button>
-	);
-});

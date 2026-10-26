@@ -2,6 +2,7 @@ export {
 	acknowledgeProjectSkills,
 	approveProjectMcpServer,
 	closeProject,
+	createProject,
 	getProjects,
 	grantProjectMcpTool,
 	initProject,

@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import { useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { CreateProjectDialog } from "./CreateProjectDialog";
 import { createLatestOperation } from "./latestOperation";
 import { NoticeDialog } from "./NoticeDialog";
 import { OpenProjectPathDialog } from "./OpenProjectPathDialog";
@@ -11,22 +12,32 @@ import { OpenProjectPathDialog } from "./OpenProjectPathDialog";
 const PICK_TIMEOUT_MS = 30 * 60_000;
 const projectOpenIntents = createLatestOperation();
 
-export function useOpenProject(onOpened: (project: Project) => void | Promise<void>): {
+export type OpenedProjectIntent = { setup: boolean };
+
+export function useOpenProject(
+	onOpened: (project: Project, intent: OpenedProjectIntent) => void | Promise<void>,
+): {
 	openProject: (rawPath: string) => Promise<void>;
 	pickAndOpen: () => Promise<void>;
 	enterHostPath: () => void;
+	startNewProject: (options: { offerSetup: boolean }) => void;
 	dialogs: ReactNode;
 } {
 	const t = useT();
 	const [initTarget, setInitTarget] = useState<string | null>(null);
+	const [createOffer, setCreateOffer] = useState<{ offerSetup: boolean } | null>(null);
 	const [openError, setOpenError] = useState<string | null>(null);
 	const [pathEntry, setPathEntry] = useState<{ reason: string | null } | null>(null);
 
-	const adopt = async (project: Project, isCurrent: () => boolean) => {
+	const adopt = async (
+		project: Project,
+		isCurrent: () => boolean,
+		intent: OpenedProjectIntent = { setup: false },
+	) => {
 		if (!isCurrent()) return;
 		useAppStore.getState().applyProjectUpdated(project);
 		if (!isCurrent()) return;
-		await onOpened(project);
+		await onOpened(project, intent);
 	};
 
 	const openProjectForIntent = async (rawPath: string, isCurrent: () => boolean) => {
@@ -66,6 +77,11 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 			if (!isCurrent()) return;
 			setOpenError(errorText(err, t("panels.openProject.initFailed", { path })));
 		}
+	};
+
+	const startNewProject = (options: { offerSetup: boolean }) => {
+		projectOpenIntents.begin();
+		setCreateOffer(options);
 	};
 
 	const enterHostPath = () => {
@@ -112,6 +128,13 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 					if (initTarget) void initProject(initTarget);
 				}}
 			/>
+			{createOffer ? (
+				<CreateProjectDialog
+					offerSetup={createOffer.offerSetup}
+					onClose={() => setCreateOffer(null)}
+					onCreated={(project, setup) => void adopt(project, projectOpenIntents.begin(), { setup })}
+				/>
+			) : null}
 			<OpenProjectPathDialog
 				open={pathEntry !== null}
 				reason={pathEntry?.reason ?? null}
@@ -132,5 +155,5 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 		</>
 	);
 
-	return { openProject, pickAndOpen, enterHostPath, dialogs };
+	return { openProject, pickAndOpen, enterHostPath, startNewProject, dialogs };
 }

@@ -61,6 +61,7 @@ import {
 	selectAutoSettledCounts,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
+	selectSupportsOnboarding,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspacePartition,
@@ -84,6 +85,7 @@ import {
 	SETTLED_NOTICE_QUIET_MS,
 	settledShelfNoticed,
 } from "./settledShelfNotice";
+import { startProjectSetupChat, type WorkspaceDialogRequest } from "./setupPrompt";
 import { useOpenProject } from "./useOpenProject";
 import {
 	canRenameProject,
@@ -115,6 +117,7 @@ export function ProjectTree() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const supportsCreate = useAppStore(selectSupportsOnboarding);
 	const supportsSettling = useAppStore((s) => s.workspaceSettlingSupported);
 	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
@@ -125,7 +128,7 @@ export function ProjectTree() {
 	const editors = useEditors();
 
 	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
-	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
+	const [workspaceDialog, setWorkspaceDialog] = useState<WorkspaceDialogRequest | null>(null);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
@@ -225,8 +228,11 @@ export function ProjectTree() {
 		if (willExpand) void loadWorkspaces(projectId);
 	};
 
-	const { openProject, pickAndOpen, enterHostPath, dialogs } = useOpenProject((project) =>
-		selectProject(project.id),
+	const { openProject, pickAndOpen, enterHostPath, startNewProject, dialogs } = useOpenProject(
+		async (project, { setup }) => {
+			await selectProject(project.id);
+			if (setup) await startProjectSetupChat(project.id);
+		},
 	);
 
 	const onExistingWorktreeOpened = async (workspace: Workspace) => {
@@ -256,7 +262,7 @@ export function ProjectTree() {
 
 	const openWorkspaceDialog = (projectId: string, returnFocusToProject: boolean) => {
 		workspaceDialogReturnFocusIdRef.current = returnFocusToProject ? projectId : null;
-		setDialogProjectId(projectId);
+		setWorkspaceDialog({ projectId, prompt: "" });
 	};
 
 	const openExistingWorktreeDialog = (projectId: string) => {
@@ -273,6 +279,7 @@ export function ProjectTree() {
 					onOpen={() => void pickAndOpen()}
 					onEnterHostPath={enterHostPath}
 					onOpenRecent={(p) => void openProject(p)}
+					{...(supportsCreate ? { onStartNew: () => startNewProject({ offerSetup: true }) } : {})}
 				>
 					<Button
 						ref={addProjectButtonRef}
@@ -368,13 +375,15 @@ export function ProjectTree() {
 				})}
 			</ul>
 
-			{dialogProjectId !== null ? (
+			{workspaceDialog !== null ? (
 				<NewWorkspaceDialog
 					open
-					projectId={dialogProjectId}
+					projectId={workspaceDialog.projectId}
+					initialPrompt={workspaceDialog.prompt}
+					{...(workspaceDialog.note !== undefined ? { promptNote: workspaceDialog.note } : {})}
 					onOpenChange={(o) => {
 						if (o) return;
-						setDialogProjectId(null);
+						setWorkspaceDialog(null);
 						const returnFocusId = workspaceDialogReturnFocusIdRef.current;
 						workspaceDialogReturnFocusIdRef.current = null;
 						if (returnFocusId) focusProjectNameOrAdd(returnFocusId);

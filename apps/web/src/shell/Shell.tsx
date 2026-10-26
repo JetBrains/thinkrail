@@ -19,6 +19,7 @@ import {
 	selectActiveWorkspace,
 	selectAnalyticsConsentPromptOpen,
 	selectContextProject,
+	selectOnboardingActive,
 	useAppStore,
 } from "../store";
 import {
@@ -69,6 +70,7 @@ export function Shell() {
 	useAttentionNotifications();
 	const status = useAppStore((s) => s.status);
 	const analyticsConsentOpen = useAppStore(selectAnalyticsConsentPromptOpen);
+	const onboardingActive = useAppStore(selectOnboardingActive);
 	const StatusDot = status === "connected" ? RiCircleFill : Circle;
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
@@ -257,7 +259,11 @@ export function Shell() {
 			) : (
 				<ProjectHome projects={homeProjects} />
 			)}
-			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
+			{onboardingActive ? null : analyticsConsentOpen ? (
+				<AnalyticsConsentDialog />
+			) : (
+				<InterviewPromptDialog />
+			)}
 			<SessionSwitcher
 				open={sessionSwitcherOpen}
 				onOpenChange={(open) => {

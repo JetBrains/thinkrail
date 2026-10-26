@@ -25,6 +25,7 @@ export async function startChatInTab(
 	workspaceId: string,
 	preferredGroupId?: string,
 	prompt?: string,
+	draft?: string,
 ): Promise<void> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, preferredGroupId);
 	useAppStore.getState().beginChatStart(workspaceId);
@@ -43,6 +44,7 @@ export async function startChatInTab(
 			layoutOpenOptionsForNavigation(store, workspaceId, navigation),
 		);
 		if (prompt) sendPrompt(sessionId, prompt);
+		else if (draft) store.setChatDraft(sessionId, draft);
 	} catch {
 		const state = useAppStore.getState();
 		if (

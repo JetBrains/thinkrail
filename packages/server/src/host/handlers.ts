@@ -86,6 +86,7 @@ import { suggestPrDescription } from "../assist";
 import {
 	cancelLogin,
 	connectJbcentral,
+	detectAccounts,
 	disconnectJbcentral,
 	getJbcentralQuota,
 	getProviderStatus,
@@ -136,6 +137,7 @@ import {
 import {
 	acknowledgeProjectSkills,
 	closeProject,
+	createProject,
 	initProject,
 	inspectProjectPath,
 	listProjects,
@@ -496,6 +498,8 @@ const handlers: WsHandlers = {
 	"project.open": (params) => observeSetupAction("project_open", () => openProject(params.path)),
 	"project.inspect": (params) => inspectProjectPath(params.path),
 	"project.init": (params) => observeSetupAction("project_init", () => initProject(params.path)),
+	"project.create": (params) =>
+		observeSetupAction("project_create", () => createProject(params.parentPath, params.name)),
 	"project.list": () =>
 		observeSetupRead(listProjects, (projects) => ({
 			project_present: projects.length > 0 ? "yes" : "no",
@@ -1187,6 +1191,7 @@ const handlers: WsHandlers = {
 		observeSetupRead(getProviderStatus, (report) => ({
 			provider_available: providerAvailability(report),
 		})),
+	"provider.detect": async () => ({ accounts: await detectAccounts() }),
 	"provider.loginStart": (p) => {
 		const type = p.type ?? "oauth";
 		const capture = additionalCapture();

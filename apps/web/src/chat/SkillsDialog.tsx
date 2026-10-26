@@ -238,7 +238,7 @@ export function SkillsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-12 p-12">
+			<DialogContent data-testid="skills-dialog" className="max-w-[640px] gap-12 p-12">
 				<div className="flex items-center justify-between gap-8 pr-[2rem]">
 					<DialogTitle className="tr-text-ui text-text-default">
 						{t("chat.skills.title")}
@@ -403,12 +403,14 @@ function SkillRow({
 			data-testid="skill-row"
 			data-skill={entry.name}
 			data-decision={entry.decision}
-			className="flex items-center gap-8 py-8 pr-8 pl-12 hover:bg-control-bg-hovered"
+			className="flex items-center gap-12 py-12 pr-8 pl-12 hover:bg-control-bg-hovered"
 		>
-			<span className="flex min-w-0 flex-1 flex-col">
-				<span className="truncate tr-text-ui text-text-default">{entry.name}</span>
+			<span className="flex min-w-0 flex-1 flex-col gap-4">
+				<span className="truncate tr-title-card text-text-default">{entry.name}</span>
 				{entry.description ? (
-					<span className="truncate text-text-muted tr-text-metadata">{entry.description}</span>
+					<span title={entry.description} className="line-clamp-2 text-text-muted tr-text-metadata">
+						{entry.description}
+					</span>
 				) : null}
 			</span>
 			{entry.decision === "pending-ack" ? (

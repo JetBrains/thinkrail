@@ -71,7 +71,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   record of work that finished and drops only its answer,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`), the **`provider.changed`** invalidation broadcast after auth changes the Central status or
-  current runtime generation (clients re-read status/models), and the `provider.*` handlers—including
+  current runtime generation, and after every successful in-app provider login (not an MCP sign-in) so
+  other clients and the Welcome surfaces see the new provider (clients re-read status/models), and the `provider.*` handlers—including
   `provider.jbcentralQuota`, whose handler composes `settings`' enabled/interval values with `auth`'s closed
   cached read so the siblings never import each other—the
   **`watch` wiring** (inject the
@@ -628,7 +629,7 @@ enabled/confirmed choice before entering analytics attribution.
   the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +
   **`session.deleted`** (published from the agent module's injected publisher) + **`provider.changed`**
-  (published from auth's Central/runtime invalidation seam) + **`host.updateAvailable`** (published for each
+  (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
   `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Four channels are deliberately

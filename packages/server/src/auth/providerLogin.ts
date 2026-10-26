@@ -46,6 +46,9 @@ function frameForPrompt(prompt: AuthPrompt): LoginFrame {
 }
 
 export function startLogin(providerId: string, type: AuthType = "oauth"): { loginId: string } {
+	for (const [id, pending] of [...logins]) {
+		if (pending.providerId === providerId) cancelLogin(id);
+	}
 	const loginId = nextId();
 	const entry: Pending = { providerId, abort: new AbortController(), settled: false };
 	logins.set(loginId, entry);

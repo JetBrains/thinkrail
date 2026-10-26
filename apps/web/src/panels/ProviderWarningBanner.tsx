@@ -1,48 +1,47 @@
 import { RiAlertLine as TriangleAlert } from "@remixicon/react";
+import type { ProviderStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { useCallback, useEffect, useState } from "react";
-import { useAppStore } from "@/store";
-import { getTransport } from "@/transport";
+import { useState } from "react";
+import { ConnectProviderDialog } from "./ConnectProviderDialog";
+import { useHasProvider } from "./useHasProvider";
 
-export function ProviderWarningBanner() {
+export function ProviderWarningBanner({
+	onConnected,
+}: {
+	onConnected?: (provider: ProviderStatus) => void;
+}) {
 	const t = useT();
-	const [hasProvider, setHasProvider] = useState<boolean | null>(null);
-	const settingsOpen = useAppStore((s) => s.settingsOpen);
-
-	const check = useCallback(async () => {
-		try {
-			const report = await getTransport().request("provider.status", {});
-			setHasProvider(report.providers.some((p) => p.configured));
-		} catch {
-			setHasProvider(true);
-		}
-	}, []);
-
-	useEffect(() => {
-		if (!settingsOpen) void check();
-	}, [check, settingsOpen]);
-
-	if (hasProvider !== false) return null;
+	const hasProvider = useHasProvider();
+	const [connecting, setConnecting] = useState(false);
 
 	return (
-		<div
-			data-testid="welcome-provider-warning"
-			className="mt-16 flex w-full max-w-[560px] items-center gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
-		>
-			<TriangleAlert className="-mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
-			<span className="min-w-0 flex-1 tr-text-ui text-text-default">
-				{t("panels.providerWarning.message")}
-			</span>
-			<Button
-				variant="outline"
-				size="sm"
-				data-testid="welcome-connect-provider"
-				onClick={() => useAppStore.getState().openSettings("providers")}
-				className="shrink-0"
-			>
-				{t("panels.providerWarning.connect")}
-			</Button>
-		</div>
+		<>
+			{hasProvider === false ? (
+				<div
+					data-testid="welcome-provider-warning"
+					className="mt-16 flex w-full max-w-[560px] items-center gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
+				>
+					<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
+					<span className="min-w-0 flex-1 tr-text-reading text-text-default">
+						{t("panels.providerWarning.message")}
+					</span>
+					<Button
+						size="sm"
+						data-testid="welcome-connect-provider"
+						onClick={() => setConnecting(true)}
+						className="shrink-0"
+					>
+						{t("panels.providerWarning.connect")}
+					</Button>
+				</div>
+			) : null}
+			{connecting ? (
+				<ConnectProviderDialog
+					onClose={() => setConnecting(false)}
+					{...(onConnected ? { onConnected } : {})}
+				/>
+			) : null}
+		</>
 	);
 }

@@ -349,7 +349,10 @@ and pre-v76 hiding.
 General and private-restart fixtures seed additional analytics off with consent already confirmed, so
 unrelated scenarios stay unblocked. They also seed the automatic interview invitation as permanently
 dismissed: the serial agent lane intentionally accumulates accepted prompts across scenarios, while dedicated
-feedback coverage injects and asserts the addressed invitation channel directly. Before any fixture reset
+feedback coverage injects and asserts the addressed invitation channel directly. The cold-start onboarding
+wizard is likewise seeded dismissed (`onboardingDismissed: true`, in the config file and again over the
+settings wire, since the host may have loaded its config first) — every reset is a cold start with no
+provider — and only `onboarding.spec.ts` re-arms it over the settings wire, restoring it afterwards. Before any fixture reset
 deletes transcript storage, it lists and disposes every live session through the public wire; disposal aborts
 and settles an unfinished provider turn first, so a test ending mid-turn cannot recreate a headerless JSONL
 behind the next scenario. Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { BranchList } from "@thinkrail/contracts";
-import { remoteBranchPresentation } from "./branchGroups";
+import { hasRemoteBranches, remoteBranchPresentation } from "./branchGroups";
 
 test("host-supplied remote groups drive the two-layer presentation", () => {
 	const branches = {
@@ -30,4 +30,21 @@ test("an older host without grouping metadata keeps full refs in one layer", () 
 		kind: "flat",
 		refs: ["origin/main", "team/upstream/main"],
 	});
+});
+
+test("a repo with no remote branches reads as local-only", () => {
+	const local = { local: ["main"], remote: [], remoteGroups: [], defaultBranch: "main" };
+	expect(hasRemoteBranches(remoteBranchPresentation(local))).toBe(false);
+	expect(hasRemoteBranches(remoteBranchPresentation({ ...local, remoteGroups: undefined }))).toBe(
+		false,
+	);
+	expect(
+		hasRemoteBranches(
+			remoteBranchPresentation({
+				...local,
+				remote: ["origin/main"],
+				remoteGroups: [{ remote: "origin", branches: [{ ref: "origin/main", branch: "main" }] }],
+			}),
+		),
+	).toBe(true);
 });

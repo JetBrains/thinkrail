@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { rmSync, statSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
@@ -373,7 +373,38 @@ export function initProject(inputPath: string): Project {
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
 	if (status.kind === "repo") return openProject(path);
+	bootstrapRepository(path);
+	return openProject(path);
+}
 
+export function createProject(parentPath: string, requestedName: string): Project {
+	const name = requestedName.trim();
+	if (!name || name === "." || name === ".." || /[/\\\0]/.test(name)) {
+		throw new Error(`Invalid project folder name: ${requestedName}`);
+	}
+	const parent = resolveProjectPath(parentPath);
+	mkdirSync(parent, { recursive: true });
+	const path = join(parent, name);
+	let created = false;
+	try {
+		if (!statSync(path).isDirectory()) throw new Error(`Not a folder: ${path}`);
+		if (readdirSync(path).length > 0)
+			throw new Error(`Folder already exists and isn't empty: ${path}`);
+	} catch (err) {
+		if (!(err instanceof Error && "code" in err && err.code === "ENOENT")) throw err;
+		mkdirSync(path);
+		created = true;
+	}
+	try {
+		bootstrapRepository(path);
+		return openProject(path);
+	} catch (err) {
+		rmSync(created ? path : join(path, ".git"), { recursive: true, force: true });
+		throw err;
+	}
+}
+
+function bootstrapRepository(path: string): void {
 	const init = git(path, ["init", "-b", "main"]);
 	if (!init.ok) throw new Error(`git init failed: ${path}`);
 	try {
@@ -390,6 +421,4 @@ export function initProject(inputPath: string): Project {
 		rmSync(join(path, ".git"), { recursive: true, force: true });
 		throw err;
 	}
-
-	return openProject(path);
 }
