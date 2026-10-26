@@ -23,7 +23,7 @@ import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { preloadedLazy } from "../components/preloadedLazy";
 import { QuietScrollArea } from "../components/QuietScrollArea";
-import { type LayoutAttention, layoutResourceIdentity } from "../lib";
+import { chatDisplayName, type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FilesPanel } from "../panels/FilesPanel";
@@ -48,6 +48,8 @@ import {
 	isFileComparison,
 	type LayoutIntent,
 	selectCanRenameChat,
+	selectChatWorkspaceFirstPrompt,
+	selectChatWorkspaceTitle,
 	selectContextProject,
 	selectDiffTabTargetRef,
 	selectRailPlanSessionId,
@@ -354,6 +356,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
 	const isChat = workspace != null && isChatWorkspace(workspace);
+	const chatTitle = useAppStore((state) =>
+		isChat
+			? chatDisplayName(
+					t,
+					selectChatWorkspaceTitle(state, workspaceId),
+					selectChatWorkspaceFirstPrompt(state, workspaceId),
+				)
+			: "",
+	);
 	const repositoryId = isChat ? null : workspaceId;
 	const specs = useWorkspaceSpecs(repositoryId);
 	const review = useWorkspaceReview(repositoryId);
@@ -772,9 +783,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								: t("shell.workbench.ready.worktreeEyebrow")}
 				</span>
 				{workspace && isChat ? (
-					<h2 className="max-w-full truncate tr-title-entity text-text-default">
-						{t("panels.chats.untitled")}
-					</h2>
+					<h2 className="max-w-full truncate tr-title-entity text-text-default">{chatTitle}</h2>
 				) : workspace ? (
 					<>
 						<h2 className="max-w-full truncate tr-title-entity text-text-default">
@@ -821,7 +830,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</Button>
 			</div>
 		),
-		[chatStarting, contextProject, isChat, isDefault, isExternal, startChat, t, workspace],
+		[
+			chatStarting,
+			chatTitle,
+			contextProject,
+			isChat,
+			isDefault,
+			isExternal,
+			startChat,
+			t,
+			workspace,
+		],
 	);
 
 	const renderCenterActions = useCallback(

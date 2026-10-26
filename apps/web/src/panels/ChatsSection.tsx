@@ -28,9 +28,10 @@ import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { copyText } from "@/lib";
+import { chatLabel, copyText } from "@/lib";
 import {
 	selectChatsContainer,
+	selectChatWorkspaceFirstPrompt,
 	selectChatWorkspaces,
 	selectChatWorkspaceTitle,
 	selectWorkspaceIsRunning,
@@ -106,9 +107,7 @@ export function ChatsSection() {
 						<ChatRow
 							key={chat.id}
 							workspace={chat}
-							title={
-								selectChatWorkspaceTitle(stateProjection, chat.id) ?? t("panels.chats.untitled")
-							}
+							title={selectChatWorkspaceTitle(stateProjection, chat.id)}
 							isActive={activeWorkspaceId === chat.id}
 							needsAttention={selectWorkspaceNeedsAttention(stateProjection, chat.id)}
 							isRunning={selectWorkspaceIsRunning(stateProjection, chat.id)}
@@ -136,7 +135,7 @@ function ChatRow({
 	editors,
 }: {
 	workspace: Workspace;
-	title: string;
+	title: string | null;
 	isActive: boolean;
 	needsAttention: boolean;
 	isRunning: boolean;
@@ -144,6 +143,8 @@ function ChatRow({
 	editors: EditorInfo[];
 }) {
 	const t = useT();
+	const firstPrompt = useAppStore((s) => selectChatWorkspaceFirstPrompt(s, workspace.id));
+	const label = chatLabel(t, title, firstPrompt);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [files, setFiles] = useState<{ files: number; truncated: boolean } | null>(null);
@@ -176,7 +177,7 @@ function ChatRow({
 	return (
 		<li>
 			<fieldset
-				aria-label={title}
+				aria-label={label.text}
 				data-testid="chat-item"
 				data-row
 				data-active={isActive}
@@ -205,12 +206,14 @@ function ChatRow({
 					<span className="flex min-w-0 flex-1 flex-col">
 						<span
 							data-testid="chat-title"
+							data-title-source={label.source}
+							title={label.tooltip}
 							className={cn(
 								"truncate tr-text-ui leading-tight",
 								isActive ? "text-primary" : "text-text-muted",
 							)}
 						>
-							{title}
+							{label.text}
 						</span>
 						{pending ? (
 							<span className="truncate text-feedback-warning tr-text-metadata leading-tight">
@@ -224,7 +227,7 @@ function ChatRow({
 					<DropdownMenuTrigger asChild>
 						<IconButton
 							icon={MoreVertical}
-							label={t("panels.chats.chatActions", { name: title })}
+							label={t("panels.chats.chatActions", { name: label.text })}
 							variant="ghost"
 							size="s"
 							data-testid="chat-menu"
@@ -292,7 +295,7 @@ function ChatRow({
 			<ConfirmDialog
 				open={confirmOpen}
 				onOpenChange={setConfirmOpen}
-				title={t("panels.chats.deleteTitle", { name: title })}
+				title={t("panels.chats.deleteTitle", { name: label.text })}
 				description={description}
 				confirmLabel={t("common.delete")}
 				destructive

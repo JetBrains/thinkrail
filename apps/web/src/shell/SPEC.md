@@ -173,7 +173,8 @@ protocol supports `session.rename`.
 **Unnamed chats read as their first prompt.** Every shell surface that shows a chat title renders one
 `lib` `chatLabel` (the store's `selectChatTitle` for panels): a real name wins; a chat the agent has not
 named yet shows the head of its first prompt in the same style as a named chat, else the generic label —
-the search palette's chat rows included. The element carries the label's
+the search palette's chat rows, the Chats section, the topbar's chat segment and a chat workspace's empty
+center included. The element carries the label's
 `data-title-source="name" | "prompt" | "default"` and, for a prompt label, the full first line as its
 tooltip. The tab strip receives the prompts as the Workbench's `chatFirstPrompts` prop
 (`selectUnnamedChatFirstPrompts`, by session id, covering a plan document's chat too) beside the rename

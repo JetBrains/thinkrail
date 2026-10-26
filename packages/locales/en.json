@@ -848,7 +848,6 @@
 	"panels.chats.notAvailable": "Not available in a chat without a project",
 	"panels.chats.retryDelete": "Retry deletion",
 	"panels.chats.title": "Chats",
-	"panels.chats.untitled": "Chat",
 	"panels.cloneProject.authHint": "Uses Git credentials and SSH keys configured on the host. Do not include passwords or tokens in the URL.",
 	"panels.cloneProject.cancelFailed": "Could not request cancellation. Try Cancel again.",
 	"panels.cloneProject.cancelled": "Clone cancelled. You can change the details and try again.",

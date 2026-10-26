@@ -29,6 +29,7 @@ import {
 	selectChatAttended,
 	selectChatFirstPrompt,
 	selectChatTitle,
+	selectChatWorkspaceFirstPrompt,
 	selectCompletionMarkedUnread,
 	selectContextProject,
 	selectFileChangeSince,
@@ -877,6 +878,21 @@ describe("the first prompt of an unnamed chat", () => {
 		expect(selectChatFirstPrompt(state, "w1", "s5")).toBe("A later real prompt");
 		expect(selectChatFirstPrompt(state, "w1", "s6")).toBe("Pushed after a peer created it");
 		expect(selectChatFirstPrompt(state, "w1", "unknown")).toBeUndefined();
+	});
+
+	test("a chat workspace reads its conversation's first prompt", () => {
+		const state = {
+			sessions: {},
+			sessionStateByWorkspace: { chat1: { s1: { ...record("s1"), workspaceId: "chat1" } } },
+			closedChatsByWorkspace: {},
+		};
+		expect(selectChatWorkspaceFirstPrompt(state, "chat1")).toBeUndefined();
+		state.sessionStateByWorkspace.chat1.s1 = {
+			...record("s1", "Plan the trip"),
+			workspaceId: "chat1",
+		};
+		expect(selectChatWorkspaceFirstPrompt(state, "chat1")).toBe("Plan the trip");
+		expect(selectChatWorkspaceFirstPrompt(state, "missing")).toBeUndefined();
 	});
 
 	test("titles and tab labels fall back to the prompt only while the chat has no name", () => {

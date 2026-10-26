@@ -18,11 +18,12 @@ import {
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { RunningIcon } from "../../components/RunningIcon";
-import { copyText } from "../../lib";
+import { chatDisplayName, chatLabel, copyText } from "../../lib";
 import { ConfirmDialog } from "../../panels/ConfirmDialog";
 import { deleteProjectlessChat, startProjectlessChat } from "../../panels/chatActions";
 import { revealWorkspace } from "../../panels/workspaceActions";
 import {
+	selectChatWorkspaceFirstPrompt,
 	selectChatWorkspaces,
 	selectChatWorkspaceTitle,
 	selectWorkspaceIsRunning,
@@ -33,14 +34,21 @@ import { PillChevron, pillClass, Segment } from "./Segment";
 /** The topbar's `Chats › <title>` for a chat without a project: the conversation's title, the sibling chats, and the chat's few actions. */
 export function ChatSegment({ workspace }: { workspace: Workspace }) {
 	const t = useT();
-	const title = useAppStore(
-		(s) => selectChatWorkspaceTitle(s, workspace.id) ?? t("panels.chats.untitled"),
-	);
+	const realTitle = useAppStore((s) => selectChatWorkspaceTitle(s, workspace.id));
+	const firstPrompt = useAppStore((s) => selectChatWorkspaceFirstPrompt(s, workspace.id));
+	const label = chatLabel(t, realTitle, firstPrompt);
+	const title = label.text;
 	const running = useAppStore((s) => selectWorkspaceIsRunning(s, workspace.id));
 	const siblings = useAppStore(useShallow(selectChatWorkspaces));
 	const titles = useAppStore(
 		useShallow((s) =>
-			siblings.map((chat) => selectChatWorkspaceTitle(s, chat.id) ?? t("panels.chats.untitled")),
+			siblings.map((chat) =>
+				chatDisplayName(
+					t,
+					selectChatWorkspaceTitle(s, chat.id),
+					selectChatWorkspaceFirstPrompt(s, chat.id),
+				),
+			),
 		),
 	);
 	const [confirmOpen, setConfirmOpen] = useState(false);
@@ -57,7 +65,12 @@ export function ChatSegment({ workspace }: { workspace: Workspace }) {
 					className={pillClass}
 				>
 					{running ? <RunningIcon className="size-14 text-text-muted" /> : null}
-					<span data-testid="scope-name" className="truncate tr-title-section">
+					<span
+						data-testid="scope-name"
+						data-title-source={label.source}
+						title={label.tooltip}
+						className="truncate tr-title-section"
+					>
 						{title}
 					</span>
 					<PillChevron className="hidden sm:block" />

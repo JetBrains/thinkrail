@@ -31,8 +31,10 @@ treatment.
 - **Owns:** `ChatsSection` + `chatActions.ts` — the **Chats without a project** home. The section tops the
   Projects panel whenever the host speaks `CHATS_PROTOCOL_VERSION` (the container record itself appears
   with the first chat, so an empty section reads "Chats without a project appear here" and `+` works
-  before any container exists): one row per `kind: "chat"` workspace, newest activity first, titled by the
-  host's `SessionStateRecord.title` (else "Chat"), with the shared attention dot / running icon, the
+  before any container exists): one row per `kind: "chat"` workspace, newest activity first, labelled by
+  `lib`'s `chatLabel` over the host's `SessionStateRecord.title` and the conversation's first prompt
+  (`selectChatWorkspaceFirstPrompt`) — an unnamed chat reads as its first prompt, with `data-title-source`
+  and the full first line as tooltip, else "Chat" — with the shared attention dot / running icon, the
   active highlight, and a menu of Open in / Copy path / Reveal / Mark read / **Delete chat…** — the
   confirmation names the folder's file count from `chat.inspect` ("…with 3 files move to the Trash"),
   a chat whose deletion did not finish shows "Deletion incomplete" and offers only Retry. `chatActions`

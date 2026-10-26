@@ -26,8 +26,9 @@ actions through the panels-owned ship runner; it owns no host state.
   and review rows), the Remote and Pull request segments, and the responsive drop order. For a **chat
   without a project** the bar reads `Chats › <title>` (`data-context="chat"`): the project segment shows
   the Chats container (its switcher lists **Chats** above the repositories — picking it opens the newest
-  chat or starts one — and offers no Project Home for it), `ChatSegment` shows the conversation's title
-  from the host's state record with a menu of sibling chats, New chat, Copy path, Reveal and Delete
+  chat or starts one — and offers no Project Home for it), `ChatSegment` shows the conversation's
+  `chatLabel` (the host's state-record title, else the first prompt, else "Chat"; `data-title-source` on
+  `scope-name`) with a menu of sibling chats worded the same way, New chat, Copy path, Reveal and Delete
   chat…, and no branch, remote or pull-request segment is rendered — there is no repository to ask.
 - **Public surface (`index.ts`):**
   - `LocationBar`
