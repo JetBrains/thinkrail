@@ -97,6 +97,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   turn ([[module-pi-background-commands]]); each chat's Resources view watches, inspects and stops them, and
   keeps their finished history — outcomes and command log tails — for the workspace's lifetime, across host
   restarts ([[submodule-web-chat-resources]], [[submodule-server-resource-history]]).
+- **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
+  with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,
+  not the host, decides what to do with them ([[submodule-server-agent]], [[submodule-server-host]]).
 - **Review** — anchored comments on files and diffs, collected without starting the agent and sent as
   structured context to chats that can resolve them; local review, not a forge integration
   ([[submodule-server-reviews]]).

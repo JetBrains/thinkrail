@@ -431,6 +431,23 @@ channel fan-out, and the process-boot wrapper both launchers share.
   - `workspaceNeedsName(sessionId)` uses the same eligibility rule (managed, not `renamed`), so agent's
     turn-start `pending-naming` reminder and the write policy can't disagree.
   - A target the agent never names stays unnamed; there is no fallback.
+  - `workspaceTools.ts` — the **workspace-tools host** (`setWorkspaceToolsHost`), composing `agent` +
+    `projects` + `workspaces` + `git` + `watch` for `start_workspace` / `workspace_status`:
+    - A spawned workspace is indistinguishable from a hand-made one: the New Workspace dialog's defaults
+      (`listBranches().defaultBranch` plus its prefetch — not `createWorkspace`'s checkout-HEAD fallback;
+      the new-chat model via `chatSession.ts#startChatSession`, shared with `session.create` and the
+      review-chat path), the initial terminal, `ensureWatch`, and an auto `workspace-N` name that the
+      child renames itself through `set_title`. The first prompt is plain text, so pi's own `/template`
+      and `/skill:` expansion applies.
+    - Projects are any open registry entry, matched by id, slug or name (default: the caller's).
+      Attachments resolve against the caller's worktree: images ride as prompt images, and other files
+      are listed by absolute path, because the child's worktree only has committed refs.
+    - Project, model and attachments are validated **before** any worktree exists. If the chat fails to
+      start after the worktree is created, the workspace is **kept** and the error names it.
+    - The prompt goes through `ackSend` + `runObservation.send(…, "internal")`, not `sendUserMessage`: an
+      agent-sent prompt is not a user `message_sent` and never claims the feedback invitation.
+    - Status reuses existing state only: `listSessions` state (labelled working / needs_you / finished /
+      failed / interrupted / idle), the cached `Workspace.review` (no new PR refresh), and diff stats.
   - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
     the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
     side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback
