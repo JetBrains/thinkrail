@@ -1,5 +1,5 @@
-import { CFunction, dlopen, FFIType, type Pointer, ptr, read } from "bun:ffi";
-import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { CFunction, dlopen, FFIType, type Pointer, read, toArrayBuffer } from "bun:ffi";
+import { type Dirent, existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, win32 } from "node:path";
 import { windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
 
@@ -18,6 +18,7 @@ export interface WindowsShortcut {
 export interface WindowsShellApi {
 	setProcessAppUserModelId(id: string): void;
 	processAppUserModelId(): string | null;
+	withComApartment<T>(run: () => T): T;
 	openShortcut(path: string): WindowsShortcut;
 }
 
@@ -27,8 +28,21 @@ function hasCode(error: unknown, code: string): boolean {
 	return error instanceof Error && "code" in error && error.code === code;
 }
 
-export function taskbarShortcutCandidates(appDir: string, appData: string | undefined): string[] {
-	const candidates: string[] = [];
+function listDirectory(path: string, failures: unknown[]): Dirent[] {
+	try {
+		return readdirSync(path, { withFileTypes: true });
+	} catch (error) {
+		if (!hasCode(error, "ENOENT")) failures.push(error);
+		return [];
+	}
+}
+
+export function taskbarShortcutCandidates(
+	appDir: string,
+	appData: string | undefined,
+): { paths: string[]; failures: unknown[] } {
+	const paths: string[] = [];
+	const failures: unknown[] = [];
 	try {
 		const manifest: unknown = JSON.parse(
 			readFileSync(join(dirname(appDir), ELECTROBUN_UNINSTALL_MANIFEST), "utf8"),
@@ -37,35 +51,34 @@ export function taskbarShortcutCandidates(appDir: string, appData: string | unde
 			manifest &&
 			typeof manifest === "object" &&
 			"schema_version" in manifest &&
-			manifest.schema_version === 1
+			manifest.schema_version === 1 &&
+			"start_menu_shortcut" in manifest &&
+			typeof manifest.start_menu_shortcut === "string" &&
+			manifest.start_menu_shortcut
 		) {
-			const startMenu = "start_menu_shortcut" in manifest ? manifest.start_menu_shortcut : null;
-			const desktop = "desktop_shortcut" in manifest ? manifest.desktop_shortcut : null;
-			for (const path of [startMenu, desktop]) {
-				if (typeof path === "string" && path) candidates.push(path);
-			}
+			paths.push(manifest.start_menu_shortcut);
 		}
 	} catch (error) {
-		if (!hasCode(error, "ENOENT")) throw error;
+		if (!hasCode(error, "ENOENT")) failures.push(error);
 	}
 	if (appData) {
-		const pinned = join(
-			appData,
-			"Microsoft",
-			"Internet Explorer",
-			"Quick Launch",
-			"User Pinned",
-			"TaskBar",
-		);
-		try {
-			for (const name of readdirSync(pinned)) {
-				if (name.toLowerCase().endsWith(".lnk")) candidates.push(join(pinned, name));
+		const pinned = join(appData, "Microsoft", "Internet Explorer", "Quick Launch", "User Pinned");
+		const implicit = join(pinned, "ImplicitAppShortcuts");
+		const folders = [
+			join(pinned, "TaskBar"),
+			...listDirectory(implicit, failures)
+				.filter((entry) => entry.isDirectory())
+				.map((entry) => join(implicit, entry.name)),
+		];
+		for (const folder of folders) {
+			for (const entry of listDirectory(folder, failures)) {
+				if (entry.isFile() && entry.name.toLowerCase().endsWith(".lnk")) {
+					paths.push(join(folder, entry.name));
+				}
 			}
-		} catch (error) {
-			if (!hasCode(error, "ENOENT")) throw error;
 		}
 	}
-	return candidates;
+	return { paths, failures };
 }
 
 function canonicalWindowsPath(path: string): string {
@@ -84,6 +97,7 @@ export function stampTaskbarShortcuts(
 ): { stamped: string[]; failures: unknown[] } {
 	const stamped: string[] = [];
 	const failures: unknown[] = [];
+	const launcherName = win32.basename(launcher).toLowerCase();
 	const canonicalLauncher = canonicalWindowsPath(launcher);
 	for (const path of candidates) {
 		if (!existsSync(path)) continue;
@@ -91,7 +105,8 @@ export function stampTaskbarShortcuts(
 			const shortcut = openShortcut(path);
 			try {
 				const target = shortcut.target();
-				if (!target || canonicalWindowsPath(target) !== canonicalLauncher) continue;
+				if (!target || win32.basename(target).toLowerCase() !== launcherName) continue;
+				if (canonicalWindowsPath(target) !== canonicalLauncher) continue;
 				if (shortcut.appUserModelId() === id) continue;
 				shortcut.setAppUserModelId(id);
 				stamped.push(path);
@@ -107,6 +122,8 @@ export function stampTaskbarShortcuts(
 
 type ComPointer = Pointer | bigint;
 
+const S_OK = 0;
+const S_FALSE = 1;
 const CLSCTX_INPROC_SERVER = 0x1;
 const COINIT_APARTMENTTHREADED = 0x2;
 const STGM_READWRITE = 0x2;
@@ -114,6 +131,7 @@ const VT_LPWSTR = 31;
 const PATH_CHARACTERS = 1024;
 const SHCNE_UPDATEITEM = 0x2000;
 const SHCNF_PATHW = 0x5;
+const SHCNF_FLUSH = 0x1000;
 
 const QUERY_INTERFACE = 0;
 const RELEASE = 2;
@@ -156,8 +174,19 @@ function readWide(pointer: ComPointer): string {
 	}
 }
 
+function hresultError(call: string, hresult: number): Error {
+	const hex = (hresult >>> 0).toString(16).toUpperCase().padStart(8, "0");
+	return Object.assign(new Error(`${call} failed with HRESULT 0x${hex}`), {
+		code: `HRESULT_${hex}`,
+	});
+}
+
 function check(hresult: number, call: string): void {
-	if (hresult < 0) throw new Error(`${call} failed with HRESULT 0x${(hresult >>> 0).toString(16)}`);
+	if (hresult < 0) throw hresultError(call, hresult);
+}
+
+function checkOk(hresult: number, call: string): void {
+	if (hresult !== S_OK) throw hresultError(call, hresult);
 }
 
 function comMethod(object: ComPointer, index: number, args: FFIType[]) {
@@ -189,14 +218,15 @@ export function loadWindowsShellApi(): WindowsShellApi {
 	});
 	const ole32 = dlopen("ole32.dll", {
 		CoInitializeEx: { args: [FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
+		CoUninitialize: { args: [], returns: FFIType.void },
 		CoCreateInstance: {
 			args: [FFIType.ptr, FFIType.ptr, FFIType.u32, FFIType.ptr, FFIType.ptr],
 			returns: FFIType.i32,
 		},
+		CoTaskMemAlloc: { args: [FFIType.u64], returns: FFIType.ptr },
 		CoTaskMemFree: { args: [FFIType.ptr], returns: FFIType.void },
 		PropVariantClear: { args: [FFIType.ptr], returns: FFIType.i32 },
 	});
-	ole32.symbols.CoInitializeEx(null, COINIT_APARTMENTTHREADED);
 
 	function openShortcut(path: string): WindowsShortcut {
 		const out = new BigUint64Array(1);
@@ -212,6 +242,10 @@ export function loadWindowsShellApi(): WindowsShellApi {
 		);
 		const link = out[0] ?? 0n;
 		const opened: bigint[] = [link];
+		let changed = false;
+		const releaseAll = () => {
+			for (const object of opened.reverse()) release(object);
+		};
 		try {
 			const file = queryInterface(link, IID_PERSIST_FILE, "QueryInterface(IPersistFile)");
 			opened.push(file);
@@ -237,7 +271,7 @@ export function loadWindowsShellApi(): WindowsShellApi {
 					check(result, "IShellLinkW::GetPath");
 					const text = buffer.toString("utf16le");
 					const end = text.indexOf("\0");
-					return result === 0 ? text.slice(0, end === -1 ? text.length : end) : null;
+					return result === S_OK ? text.slice(0, end === -1 ? text.length : end) : null;
 				},
 				appUserModelId: () => {
 					const variant = new BigUint64Array(3);
@@ -258,30 +292,45 @@ export function loadWindowsShellApi(): WindowsShellApi {
 				},
 				setAppUserModelId: (id) => {
 					const value = wide(id);
-					const variant = new BigUint64Array(3);
-					new DataView(variant.buffer).setUint16(0, VT_LPWSTR, true);
-					variant[1] = BigInt(ptr(value));
-					check(
-						comMethod(store, PROPERTY_STORE_SET_VALUE, [FFIType.ptr, FFIType.ptr])(
-							store,
-							PKEY_APP_USER_MODEL_ID,
-							variant,
-						),
-						"IPropertyStore::SetValue",
-					);
-					check(comMethod(store, PROPERTY_STORE_COMMIT, [])(store), "IPropertyStore::Commit");
-					check(
+					const memory = ole32.symbols.CoTaskMemAlloc(value.length);
+					if (!memory) throw new Error("CoTaskMemAlloc failed");
+					try {
+						new Uint8Array(toArrayBuffer(memory, 0, value.length)).set(value);
+						const variant = new BigUint64Array(3);
+						new DataView(variant.buffer).setUint16(0, VT_LPWSTR, true);
+						variant[1] = BigInt(memory);
+						checkOk(
+							comMethod(store, PROPERTY_STORE_SET_VALUE, [FFIType.ptr, FFIType.ptr])(
+								store,
+								PKEY_APP_USER_MODEL_ID,
+								variant,
+							),
+							"IPropertyStore::SetValue",
+						);
+					} finally {
+						ole32.symbols.CoTaskMemFree(memory);
+					}
+					checkOk(comMethod(store, PROPERTY_STORE_COMMIT, [])(store), "IPropertyStore::Commit");
+					checkOk(
 						comMethod(file, PERSIST_FILE_SAVE, [FFIType.ptr, FFIType.i32])(file, null, 1),
 						"IPersistFile::Save",
 					);
-					shell32.symbols.SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, wide(path), null);
+					changed = true;
 				},
 				close: () => {
-					for (const object of opened.reverse()) release(object);
+					releaseAll();
+					if (changed) {
+						shell32.symbols.SHChangeNotify(
+							SHCNE_UPDATEITEM,
+							SHCNF_PATHW | SHCNF_FLUSH,
+							wide(path),
+							null,
+						);
+					}
 				},
 			};
 		} catch (error) {
-			for (const object of opened.reverse()) release(object);
+			releaseAll();
 			throw error;
 		}
 	}
@@ -300,6 +349,14 @@ export function loadWindowsShellApi(): WindowsShellApi {
 				return readWide(pointer);
 			} finally {
 				ole32.symbols.CoTaskMemFree(pointer);
+			}
+		},
+		withComApartment: (run) => {
+			const initialized = ole32.symbols.CoInitializeEx(null, COINIT_APARTMENTTHREADED);
+			try {
+				return run();
+			} finally {
+				if (initialized === S_OK || initialized === S_FALSE) ole32.symbols.CoUninitialize();
 			}
 		},
 		openShortcut,

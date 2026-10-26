@@ -145,13 +145,17 @@ function stampWindowsTaskbarShortcuts(): void {
 	if (process.platform !== "win32") return;
 	try {
 		const appDir = dirname(PATHS.RESOURCES_FOLDER);
-		const { failures } = stampTaskbarShortcuts(
-			taskbarShortcutCandidates(appDir, process.env.APPDATA),
-			join(appDir, "bin", "launcher.exe"),
-			desktopAppUserModelId(channel),
-			loadWindowsShellApi().openShortcut,
+		const shell = loadWindowsShellApi();
+		const candidates = taskbarShortcutCandidates(appDir, process.env.APPDATA);
+		const { failures } = shell.withComApartment(() =>
+			stampTaskbarShortcuts(
+				candidates.paths,
+				join(appDir, "bin", "launcher.exe"),
+				desktopAppUserModelId(channel),
+				shell.openShortcut,
+			),
 		);
-		const [failure] = failures;
+		const [failure] = [...candidates.failures, ...failures];
 		if (failure) {
 			desktopError(
 				"windows_app_id",
@@ -442,7 +446,6 @@ async function start(): Promise<void> {
 				}),
 	});
 	setWindowsWindowIcon(mainWindow);
-	stampWindowsTaskbarShortcuts();
 	if (!neutral) {
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
@@ -520,6 +523,7 @@ async function start(): Promise<void> {
 		startupSplash = undefined;
 		startAttributionClaim();
 		updateController.start();
+		stampWindowsTaskbarShortcuts();
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;
 		if (readyPath) {
 			writeReady(readyPath, {

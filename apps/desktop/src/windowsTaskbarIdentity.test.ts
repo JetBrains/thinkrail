@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,12 +26,21 @@ function withTemp(run: (root: string) => void): void {
 	}
 }
 
-test("collects Electrobun's recorded shortcuts and the taskbar pins", () => {
+function pinnedFolders(appData: string): { taskbar: string; implicit: string } {
+	const pinned = join(appData, "Microsoft", "Internet Explorer", "Quick Launch", "User Pinned");
+	const taskbar = join(pinned, "TaskBar");
+	const implicit = join(pinned, "ImplicitAppShortcuts", "a1b2c3");
+	mkdirSync(taskbar, { recursive: true });
+	mkdirSync(implicit, { recursive: true });
+	return { taskbar, implicit };
+}
+
+test("collects Electrobun's Start-menu shortcut and every taskbar pin, but not the Desktop shortcut", () => {
 	withTemp((root) => {
-		const appDir = join(root, "local", "ai.thinkrail.app", "canary", "app");
-		mkdirSync(appDir, { recursive: true });
+		const channelRoot = join(root, "local", "ai.thinkrail.app", "canary");
+		mkdirSync(join(channelRoot, "app"), { recursive: true });
 		writeFileSync(
-			join(root, "local", "ai.thinkrail.app", "canary", ".electrobun-uninstall.json"),
+			join(channelRoot, ".electrobun-uninstall.json"),
 			JSON.stringify({
 				schema_version: 1,
 				desktop_shortcut: "C:\\Users\\me\\Desktop\\ThinkRail (Canary).lnk",
@@ -39,23 +48,19 @@ test("collects Electrobun's recorded shortcuts and the taskbar pins", () => {
 			}),
 		);
 		const appData = join(root, "roaming");
-		const pinned = join(
-			appData,
-			"Microsoft",
-			"Internet Explorer",
-			"Quick Launch",
-			"User Pinned",
-			"TaskBar",
-		);
-		mkdirSync(pinned, { recursive: true });
-		writeFileSync(join(pinned, "ThinkRail (Canary).lnk"), "");
-		writeFileSync(join(pinned, "desktop.ini"), "");
+		const { taskbar, implicit } = pinnedFolders(appData);
+		writeFileSync(join(taskbar, "ThinkRail (Canary).lnk"), "");
+		writeFileSync(join(taskbar, "desktop.ini"), "");
+		writeFileSync(join(implicit, "ThinkRail (Canary).lnk"), "");
 
-		expect(taskbarShortcutCandidates(appDir, appData)).toEqual([
-			"C:\\Users\\me\\Start Menu\\Programs\\ThinkRail (Canary).lnk",
-			"C:\\Users\\me\\Desktop\\ThinkRail (Canary).lnk",
-			join(pinned, "ThinkRail (Canary).lnk"),
-		]);
+		expect(taskbarShortcutCandidates(join(channelRoot, "app"), appData)).toEqual({
+			paths: [
+				"C:\\Users\\me\\Start Menu\\Programs\\ThinkRail (Canary).lnk",
+				join(taskbar, "ThinkRail (Canary).lnk"),
+				join(implicit, "ThinkRail (Canary).lnk"),
+			],
+			failures: [],
+		});
 	});
 });
 
@@ -63,12 +68,32 @@ test("finds nothing for an unmanaged build or an unknown manifest schema", () =>
 	withTemp((root) => {
 		const appDir = join(root, "build", "ThinkRail-dev");
 		mkdirSync(appDir, { recursive: true });
-		expect(taskbarShortcutCandidates(appDir, undefined)).toEqual([]);
+		expect(taskbarShortcutCandidates(appDir, undefined)).toEqual({ paths: [], failures: [] });
 		writeFileSync(
 			join(root, "build", ".electrobun-uninstall.json"),
-			JSON.stringify({ schema_version: 2, desktop_shortcut: "C:\\x.lnk" }),
+			JSON.stringify({ schema_version: 2, start_menu_shortcut: "C:\\x.lnk" }),
 		);
-		expect(taskbarShortcutCandidates(appDir, join(root, "missing"))).toEqual([]);
+		expect(taskbarShortcutCandidates(appDir, join(root, "missing"))).toEqual({
+			paths: [],
+			failures: [],
+		});
+	});
+});
+
+test("a corrupt manifest is reported without hiding the taskbar pins", () => {
+	withTemp((root) => {
+		const appDir = join(root, "channel", "app");
+		mkdirSync(appDir, { recursive: true });
+		writeFileSync(join(root, "channel", ".electrobun-uninstall.json"), "");
+		const appData = join(root, "roaming");
+		const { taskbar } = pinnedFolders(appData);
+		writeFileSync(join(taskbar, "ThinkRail.lnk"), "");
+
+		const { paths, failures } = taskbarShortcutCandidates(appDir, appData);
+
+		expect(paths).toEqual([join(taskbar, "ThinkRail.lnk")]);
+		expect(failures).toHaveLength(1);
+		expect(failures[0]).toBeInstanceOf(SyntaxError);
 	});
 });
 
@@ -94,25 +119,33 @@ test("stamps only existing shortcuts to this launcher that carry another ID", ()
 		const open = (path: string): WindowsShortcut => {
 			if (path === broken) throw new Error("not a shortcut");
 			return {
-				target: () => (path === other ? "C:\\Tools\\other.exe" : launcher.toUpperCase()),
+				target: () =>
+					path === other ? "\\\\fileserver\\tools\\other.exe" : launcher.toUpperCase(),
 				appUserModelId: () => ids.get(path) ?? null,
 				setAppUserModelId: (id) => ids.set(path, id),
 				close: () => closed.push(path),
 			};
 		};
+		const resolve = spyOn(realpathSync, "native");
+		try {
+			const result = stampTaskbarShortcuts(
+				[ours, current, other, broken, join(root, "missing.lnk")],
+				launcher,
+				"JetBrains.ThinkRail",
+				open,
+			);
 
-		const result = stampTaskbarShortcuts(
-			[ours, current, other, broken, join(root, "missing.lnk")],
-			launcher,
-			"JetBrains.ThinkRail",
-			open,
-		);
-
-		expect(result.stamped).toEqual([ours]);
-		expect(result.failures).toEqual([new Error("not a shortcut")]);
-		expect(ids.get(ours)).toBe("JetBrains.ThinkRail");
-		expect(ids.get(other)).toBeNull();
-		expect(closed).toEqual([ours, current, other]);
+			expect(result.stamped).toEqual([ours]);
+			expect(result.failures).toEqual([new Error("not a shortcut")]);
+			expect(ids.get(ours)).toBe("JetBrains.ThinkRail");
+			expect(ids.get(other)).toBeNull();
+			expect(closed).toEqual([ours, current, other]);
+			expect(resolve.mock.calls.map(([path]) => String(path))).not.toContain(
+				"\\\\fileserver\\tools\\other.exe",
+			);
+		} finally {
+			resolve.mockRestore();
+		}
 	});
 });
 
@@ -156,33 +189,37 @@ test.skipIf(process.platform !== "win32")(
 			}
 			const shell = loadWindowsShellApi();
 			const id = "JetBrains.ThinkRail.Test";
-			const opened = shell.openShortcut(ours);
-			try {
-				expect(realpathSync.native(opened.target() ?? "")).toBe(realpathSync.native(launcher));
-				expect(opened.appUserModelId()).toBeNull();
-			} finally {
-				opened.close();
-			}
+			shell.withComApartment(() => {
+				const opened = shell.openShortcut(ours);
+				try {
+					expect(realpathSync.native(opened.target() ?? "")).toBe(realpathSync.native(launcher));
+					expect(opened.appUserModelId()).toBeNull();
+				} finally {
+					opened.close();
+				}
 
-			expect(stampTaskbarShortcuts([ours, foreign], launcher, id, shell.openShortcut)).toEqual({
-				stamped: [ours],
-				failures: [],
+				expect(stampTaskbarShortcuts([ours, foreign], launcher, id, shell.openShortcut)).toEqual({
+					stamped: [ours],
+					failures: [],
+				});
+				expect(
+					stampTaskbarShortcuts([ours, foreign], launcher, id, shell.openShortcut).stamped,
+				).toEqual([]);
 			});
-			expect(
-				stampTaskbarShortcuts([ours, foreign], launcher, id, shell.openShortcut).stamped,
-			).toEqual([]);
 			const readId = (path: string) =>
 				powershell(
 					`(New-Object -ComObject Shell.Application).NameSpace('${root}').ParseName('${path.slice(root.length + 1)}').ExtendedProperty('System.AppUserModel.ID')`,
 				);
 			expect(readId(ours)).toBe(id);
 			expect(readId(foreign)).toBe("");
-			const reopened = shell.openShortcut(ours);
-			try {
-				expect(reopened.appUserModelId()).toBe(id);
-			} finally {
-				reopened.close();
-			}
+			shell.withComApartment(() => {
+				const reopened = shell.openShortcut(ours);
+				try {
+					expect(reopened.appUserModelId()).toBe(id);
+				} finally {
+					reopened.close();
+				}
+			});
 		});
 	},
 );
