@@ -1198,7 +1198,8 @@ own section. The kebab menu (`plan-menu`, a
   host-side flow (push + `gh`, NEVER an agent prompt) that, **for first-time creation only**
   (`openReview` absent), goes through the **compose dialog** (`PrComposeDialog.tsx`,
   `pr-compose-dialog`): the click fetches `pr.preview` and opens editable
-  Title (`pr-compose-title`) + Description (`pr-compose-body`, prefilled from the plan) fields;
+  Title (`pr-compose-title`, prefilled from the chat's **real** name — never its first-prompt display label;
+  an unnamed chat leaves the host's branch fallback) + Description (`pr-compose-body`, prefilled from the plan) fields;
   only the submit (`pr-compose-submit`, label follows the action — Open PR / Open draft PR) runs
   `pr.open` with the edited `title`/`body`. The dialog closes on success, stays open
   on a generic failure (edits survive the toast), and hands off to `PrSetupDialog` on

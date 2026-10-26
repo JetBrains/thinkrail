@@ -61,6 +61,7 @@ import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import {
 	selectAgentReviewCommentCount,
+	selectChatName,
 	selectChatTitle,
 	selectWorkspaceById,
 	useAppStore,
@@ -856,6 +857,7 @@ export default function PlanPane({
 	const t = useT();
 	const plan = useChatTodos(workspaceId, sessionId);
 	const title = useAppStore((s) => selectChatTitle(t, s, workspaceId, sessionId));
+	const chatName = useAppStore((s) => selectChatName(s, workspaceId, sessionId));
 	const pushToast = useAppStore((s) => s.pushToast);
 	const requestToolView = useAppStore((s) => s.requestToolView);
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
@@ -894,7 +896,7 @@ export default function PlanPane({
 	const ship = useShipRunner({
 		workspace,
 		sessionId,
-		title,
+		title: chatName,
 		bodySource: "plan",
 		openReview,
 		status: branchStatus,

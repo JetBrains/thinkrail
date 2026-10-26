@@ -221,8 +221,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
   `setTitle`: normalize an absent name to the empty untitled name (worded at render by `lib`'s
   `chatDisplayName`, as `selectChatTitle` does; `selectChatName` returns the stored name, and
-  `workspaceName(t, ws)` words the host-named default workspace); update the cached `ChatTab`, its existing local
-  placement, any queued open, or its `closedChatsByWorkspace` row; and change no recency, runtime, placement,
+  `workspaceName(t, ws)` words the host-named default workspace); update the cached `ChatTab` and the same
+  session's `PlanTab` (each with its existing local placement and any queued open, matched by resource
+  identity), and/or its `closedChatsByWorkspace` row; and change no recency, runtime, placement,
   navigation clock, or attention. The durable Pi event may supersede an extension's presentation-only title.
   An event for a session this surface has never listed remains a no-op—`session.list`/`session.getMessages`
   supply reconnect and later-hydration truth, so there is no title-specific event buffer.

@@ -589,9 +589,16 @@ export function selectLayoutResourcePlacement(
 	workspaceId: string,
 	resource: LayoutTab,
 ): LayoutResourcePlacement | null {
+	return selectLayoutIdentityPlacement(state, workspaceId, layoutResourceIdentity(resource));
+}
+
+export function selectLayoutIdentityPlacement(
+	state: LayoutDocumentState,
+	workspaceId: string,
+	identity: string,
+): LayoutResourcePlacement | null {
 	const document = state.layoutDocumentsByWorkspace[workspaceId];
 	if (!document) return null;
-	const identity = layoutResourceIdentity(resource);
 	return findLayoutPlacement(document, (tab) => layoutResourceIdentity(tab) === identity);
 }
 

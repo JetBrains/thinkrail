@@ -179,7 +179,8 @@ tooltip. The tab strip receives the prompts as the Workbench's `chatFirstPrompts
 (`selectUnnamedChatFirstPrompts`, by session id, covering a plan document's chat too) beside the rename
 callback — the layout document itself is never relabelled, because every Workbench mutation commits a
 derivative of the document it was given and a relabelled copy would persist the fallback as the tab's
-name; `openPlan` likewise stores the real chat name and the plan tab is worded at render. Recently closed
+name; `openPlan` likewise stores the real chat name (and the title fold renames the plan tab with its
+chat), so the plan tab is worded at render and follows the real title once it lands. Recently closed
 rows and the session switcher read the same `selectChatFirstPrompt` (the host's state record first, so a
 row a peer's `session.created` added without a prompt picks it up from the next state push); the switcher
 carries `firstPrompt` beside `chatTitle` so the host title backfill still applies to a chat shown by its

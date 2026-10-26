@@ -1300,6 +1300,102 @@ test("a durable session title event renames an open chat without moving attentio
 	expect(rt("named").eventRevision).toBe(1);
 });
 
+test("a durable session title event renames the chat's plan tab with it, open or closed", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "planned", null, "medium");
+	store.openDoc({
+		kind: "plan",
+		id: "ws1:plan:planned",
+		workspaceId: "ws1",
+		name: "",
+		sessionId: "planned",
+	});
+	const planName = () =>
+		useAppStore
+			.getState()
+			.tabsByWorkspace.ws1?.find((tab) => tab.kind === "plan" && tab.sessionId === "planned")?.name;
+	const queuedPlanName = () =>
+		useAppStore
+			.getState()
+			.layoutIntents.find(
+				(intent) =>
+					intent.kind === "open" &&
+					intent.tab.kind === "plan" &&
+					intent.tab.sessionId === "planned",
+			)?.tab.name;
+
+	store.handlePiEvent(sessionTitleChanged("Auth refactor"), "planned");
+	expect(planName()).toBe("Auth refactor");
+	expect(queuedPlanName()).toBe("Auth refactor");
+
+	store.closeChatToHistory("planned", true, "ws1");
+	store.handlePiEvent(sessionTitleChanged("Auth refactor, take two"), "planned");
+	expect(planName()).toBe("Auth refactor, take two");
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe(
+		"Auth refactor, take two",
+	);
+});
+
+test("a durable title refreshes a placed plan document's name without requesting activation", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "placed-plan", null, "medium");
+	useAppStore.setState((state) => ({
+		tabsByWorkspace: {
+			...state.tabsByWorkspace,
+			ws1: [
+				...(state.tabsByWorkspace.ws1 ?? []),
+				{ kind: "plan", id: "plan-cache", workspaceId: "ws1", name: "", sessionId: "placed-plan" },
+			],
+		},
+		layoutIntents: [],
+		layoutDocumentsByWorkspace: {
+			ws1: {
+				version: 2,
+				center: {
+					kind: "group",
+					id: "center",
+					tabs: [
+						{ kind: "chat", id: "chat-placement", name: "", sessionId: "placed-plan" },
+						{
+							kind: "document",
+							id: "plan-placement",
+							name: "",
+							documentKind: "todo-plan",
+							sourceId: "placed-plan",
+							docPath: "TODO.md",
+						},
+					],
+				},
+				left: { visible: false, width: 0.2, groups: [] },
+				right: { visible: false, width: 0.2, groups: [] },
+				bottom: emptyBottomRegion(),
+				toolRestoreTargets: {},
+			},
+		},
+	}));
+
+	store.handlePiEvent(sessionTitleChanged("Auth refactor"), "placed-plan");
+
+	const state = useAppStore.getState();
+	expect(state.tabsByWorkspace.ws1?.find((tab) => tab.id === "plan-cache")?.name).toBe(
+		"Auth refactor",
+	);
+	expect(state.layoutIntents).toHaveLength(2);
+	expect(state.layoutIntents).toContainEqual(
+		expect.objectContaining({
+			kind: "open",
+			intent: "keep",
+			activate: false,
+			tab: expect.objectContaining({ kind: "plan", id: "plan-placement", name: "Auth refactor" }),
+		}),
+	);
+	expect(state.layoutIntents).toContainEqual(
+		expect.objectContaining({
+			tab: expect.objectContaining({ kind: "chat", id: "chat-placement", name: "Auth refactor" }),
+		}),
+	);
+});
+
 test("a durable session title event renames closed history and clears it back to untitled", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "closed-title", null, "medium");
