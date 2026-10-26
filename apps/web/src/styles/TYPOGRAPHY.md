@@ -8,10 +8,11 @@ parent: module-web
 
 # Typography system
 
-**`styles/typography.json` is the sole source of truth for typography.** Every font family, size,
+**`styles/typography.json` is the sole source of truth for default typography.** Every default font family, size,
 weight, line-height, letter-spacing, transform and semantic text style lives there; the CSS the app
 ships is *generated* from it. No component may declare a typography value, no hand-written utility may
-add one, and no other file may hold an alias onto one — change the type of anything by editing the JSON.
+add one, and no other file may hold an alias onto one — change default type by editing the JSON.
+User font-family overrides are owned by [[submodule-web-fonts]]; semantic styles still consume these tokens.
 
 ```
 styles/typography.json            the source (see typography.schema.json for the shape)
@@ -45,7 +46,7 @@ both markdown surfaces, the `<body>` base).
 
 | Group | Ids |
 |---|---|
-| `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` → **Orbitron Variable** (self-hosted `@fontsource-variable/orbitron`, a distinct display face for the brand role — `wordmark` + `hero`; it was formerly a `$ref` to `interface`). Orbitron is **latin-only** and `brand.hero` renders a project's own name, so the stack falls back to the *interface* face before any system font — a non-Latin name lands on Geist (cyrillic/latin-ext/vietnamese, already bundled) rather than on whatever the OS supplies |
+| `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `terminal` (independent resolved default of `code`) · `brand` → **Orbitron Variable** (self-hosted `@fontsource-variable/orbitron`, a distinct display face for the brand role — `wordmark` + `hero`; it was formerly a `$ref` to `interface`). Orbitron is **latin-only** and `brand.hero` renders a project's own name, so the stack falls back to the *interface* face before any system font — a non-Latin name lands on Geist (cyrillic/latin-ext/vietnamese, already bundled) rather than on whatever the OS supplies |
 | `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 400 |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px) |
 | `lineHeights` | `compact` 1.25 · `metadata` 1.25 (12px→15px) · `ui` 1.3 (14px→18.2px) · `code` 1.4 · `relaxed` 1.4 (13px→18.2px) · `default` 1.3 (14px→18.2px) · `reading` 1.45 (14px→20.3px) |
@@ -90,7 +91,7 @@ not fit, `action`→title.compact, `emphasis`→title.compact) · **body** (`rea
 inline code in table cells). `proseSystems` holds one entry per markdown surface, almost entirely aliases
 into the above. Dead aliases are not retained: prose points directly to the semantic style it uses.
 
-**20 canonical definitions + 30 aliases = 50 styles.**
+**21 canonical definitions + 30 aliases = 51 styles.**
 
 One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets **weight only**
 (`--tr-font-weight-medium`), emitted by the generator into each prose system. A complete style there
@@ -128,7 +129,7 @@ The generator derives one class per semantic style, mechanically:
 | `ui.default` · `ui.metadata` | `.tr-text-ui` · `.tr-text-metadata` |
 | `ui.eyebrow` · `ui.labelPill` · `ui.caption` · `ui.action` · `ui.emphasis` | `.tr-text-eyebrow` · `.tr-text-label-pill` · `.tr-text-caption` · `.tr-text-action` · `.tr-text-emphasis` |
 | `body.reading` | `.tr-text-reading` |
-| `code.text` · `code.document` · `code.otp` · `code.textSmall` | `.tr-code-text` · `.tr-code-document` · `.tr-code-otp` · `.tr-code-text-small` |
+| `code.text` · `code.document` · `code.otp` · `code.textSmall` · `code.terminal` | `.tr-code-text` · `.tr-code-document` · `.tr-code-otp` · `.tr-code-text-small` · `.tr-code-terminal` |
 | `proseSystems.<id>.*` | `.tr-prose-<id>` + one element selector each |
 
 Primitive tokens are also emitted as custom properties — `--tr-font-family-code`,
@@ -233,11 +234,23 @@ tokens; every one of them is gone, because a second name for a value is the thin
 consumers that cannot use a class read the `--tr-*` tokens directly. Cabinet Grotesk is retired
 repo-wide and must not return.
 
+## User font selection
+
+UI, code and terminal families are independently configurable by installed family name. The terminal
+family defaults to a resolved copy of the code stack (`$ref: code`), not a live CSS alias: changing the
+code preference must not change the terminal. The brand face stays unchanged. The runtime prepends a
+quoted user family to the generated default stack and restores the generated value on reset. Missing
+families and missing glyphs fall through naturally; no font availability claim or font CDN is involved.
+`code.terminal` is the terminal-preview semantic style. Size, weight and ligature policies do not change.
+Already-rendered Mermaid diagrams retain their measured SVG until their next source/theme render;
+that static diagram rendering is not an editor or terminal hot-update consumer.
+
 ## Mono policy
 
-`code` is for **code and technical content only**: editor and terminal text, code blocks, inline code,
+`code` is for **code and technical content only**: editor text, code blocks, inline code,
 diffs and technical file paths, shell commands, slash-command syntax, JSON/code editing surfaces,
-keycaps, raw tool output, and the OTP exception. It is **never** used for project or workspace names,
+keycaps, raw tool output, and the OTP exception. The separate `terminal` family follows the same
+monospace policy. These are **never** used for project or workspace names,
 branch or base refs, model names or ids, skill names, labels, tags, ordinary metadata or statuses —
 those are proportional. Validation enforces this: a monospace family on a non-code style fails
 `typography:validate`, as does a code style on a proportional family, as does a monospace `rootStyle`.
@@ -264,8 +277,9 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 |---|---|
 | `resource-renderers/support/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
 | `resource-renderers/renderers/code/pierreVirtualizer.ts` | Pierre's virtualizer takes its row height as a JS metric — it reads the generated `--tr-code-row-height`, the same value `.pierre-code-surface` gives `--diffs-line-height` |
-| `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-code` + `--tr-font-size-s13` (the primitives behind `code.text`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
+| `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-terminal` + `--tr-font-size-s13` (the primitives behind `code.terminal`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
 | `thinkrail-extensions/visualize/web/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
+| `fonts/runtime.ts` | Applies validated user family overrides over the generated defaults before first paint and publishes the completed font-change signal |
 | `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves; `.pierre-code-surface` passes the code family, `s11`, and the default line-height (rounded to whole pixels) into Pierre's Shadow DOM |
 
 The OTP code is **not** an exception any more: it is the named `code.otp` style (`.tr-code-otp`).

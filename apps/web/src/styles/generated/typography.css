@@ -20,6 +20,7 @@
 	/* Font families */
 	--tr-font-family-interface: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--tr-font-family-code: "JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
+	--tr-font-family-terminal: "JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
 	--tr-font-family-brand: "Orbitron Variable", Orbitron, "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
 	/* Font weights */
@@ -234,6 +235,15 @@
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-reading);
+	letter-spacing: var(--tr-letter-spacing-normal);
+	text-transform: none;
+	font-style: normal;
+}
+.tr-code-terminal {
+	font-family: var(--tr-font-family-terminal);
+	font-size: var(--tr-font-size-s13);
+	font-weight: var(--tr-font-weight-regular);
+	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;

@@ -44,10 +44,10 @@ describe("typography source", () => {
 		}
 	});
 
-	it("holds 20 canonical definitions and 30 aliases (50 styles)", () => {
+	it("holds 21 canonical definitions and 30 aliases (51 styles)", () => {
 		const styles = allStyles(typography);
-		expect(styles).toHaveLength(50);
-		expect(styles.filter((s) => !s.ref)).toHaveLength(20);
+		expect(styles).toHaveLength(51);
+		expect(styles.filter((s) => !s.ref)).toHaveLength(21);
 		expect(styles.filter((s) => s.ref)).toHaveLength(30);
 		expect(styles.filter((s) => s.prose)).toHaveLength(28);
 	});
@@ -426,8 +426,12 @@ describe("generated CSS", () => {
 		}
 	});
 
-	it("exposes the code family + size tokens Monaco and xterm read", () => {
+	it("exposes independent code and terminal families with their size tokens", () => {
 		expect(GENERATED).toContain("--tr-font-family-code:");
+		expect(GENERATED).toContain("--tr-font-family-terminal:");
+		expect(resolveFamily(typography, "terminal").stack).toEqual(
+			resolveFamily(typography, "code").stack,
+		);
 		expect(GENERATED).toContain("--tr-font-size-s11: 11px;");
 		expect(GENERATED).toContain("--tr-font-size-s13: 13px;");
 		expect(GENERATED).toContain("--tr-line-height-default: 1.3;");
@@ -438,9 +442,9 @@ describe("generated CSS", () => {
 		const xterm = read(join(SRC, "panels/TerminalInstance.tsx"));
 		expect(monaco).toContain('cssVar("--tr-font-size-s11")');
 		expect(xterm).toContain('cssVar("--tr-font-size-s13")');
-		for (const file of [monaco, xterm]) {
-			expect(file).toContain('cssVar("--tr-font-family-code")');
-		}
+		expect(monaco).toContain('cssVar("--tr-font-family-code")');
+		expect(xterm).toContain('cssVar("--tr-font-family-terminal")');
+		expect(xterm).not.toContain('cssVar("--tr-font-family-code")');
 		expect(monaco).toContain('cssVar("--tr-line-height-default")');
 	});
 });

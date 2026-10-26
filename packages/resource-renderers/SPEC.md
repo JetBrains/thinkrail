@@ -571,8 +571,11 @@ content's own height.
   desktop file editor. Pierre diffs and phone files own horizontal overflow and do not consume this Monaco
   preference. Rendered Markdown and rendered Markdown diffs retain their separate ~78ch reading measure.
   The React Compiler memoizes `MonacoEditor`'s options on width, bounded and path, and the editor calls
-  `updateOptions` only when that object changes; the typography and spacing tokens the options read are
-  static generated CSS (themes set only colours).
+  `updateOptions` only when that object changes. Font options share one token derivation;
+  `createFileEditor` subscribes to `@thinkrail/ui/typography`'s atomic font signal and updates only those
+  options plus Monaco's font measurements in place, without replacing the model. Editor disposal
+  removes the subscription. Spacing and type metrics remain generated CSS; the code family can be
+  overridden independently of UI and terminal families.
 - **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the
   configured wrapping, generated code typography, minimap/overview-ruler removal and 6px shadowless scrollbar,
   and add read-only messaging, the path as its accessible label, an 8px top inset, three-character line-number

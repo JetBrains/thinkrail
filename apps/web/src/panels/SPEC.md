@@ -730,7 +730,12 @@ a project picker, the prompt hero, and the reused
   naming the effective same-appearance fallback, and is never silently written back. The panel never owns
   a theme list, media-query logic, pair derivation, or fallback — all come from `themes`; it derives only
   the family/contrast counterpart the two controls move to. An **Editor** group hosts the file
-  `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
+  `LineWidthControl`). **`FontSettings`** adds a Fonts group on Appearance with separate UI, code and
+  terminal family-name fields, applied previews and per-field Reset. Enter/blur commits, Escape restores
+  the applied value without closing Settings, and an empty field restores the default. Invalid single-family
+  names remain editable with an inline error. A failed local save warns while retaining the in-session
+  application. The preference owner, fallback and client-local scope are [[submodule-web-fonts]];
+  no `settings.update` is sent. **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
   `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
   on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch
   (`${kind}-line-width-bounded`); defaults are 120/on. A changed authoritative width from
@@ -2064,6 +2069,11 @@ own section. The kebab menu (`plan-menu`, a
   Relayout failure or deadline expiry falls back to the construction-time measurement rather than stranding
   the pane; on expiry the stale relayout is neutralized first (disposing the addon skips its re-measuring
   `fontFamily` toggle), so a font that finishes loading late cannot re-lay-out an already-attached terminal.
+  The terminal uses its independent `--tr-font-family-terminal` token and subscribes to
+  `@thinkrail/ui/typography`'s atomic font signal. Changes during initial relayout coalesce to the
+  latest token when that bounded wait ends, before attach; afterward only a changed terminal family
+  updates xterm's options, fits the existing terminal and synchronizes its PTY grid. No font change
+  recreates xterm, attaches a shell or clears output. Unmount stops the font subscription.
   This ordering also prevents a fallback-width attach followed by a corrective resize from producing
   post-snapshot shell redraws that can erase replayed rows. Its pre-bind output buffer is a bounded waiting
   state: successful bind filters it to the adopted PTY, while creation failure clears it and stops accepting

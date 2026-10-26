@@ -19,6 +19,7 @@ import "monaco-editor/esm/vs/editor/contrib/wordHighlighter/browser/wordHighligh
 import "monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneCommandsQuickAccess.js";
 import "monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js";
 import { onThemeSwap } from "@thinkrail/ui/theme";
+import { onFontChange } from "@thinkrail/ui/typography";
 import type { Environment, editor } from "monaco-editor/esm/vs/editor/editor.api.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
@@ -84,14 +85,22 @@ function cssVar(name: string): string | undefined {
 	return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
 }
 
+function fileEditorFontOptions(): editor.IEditorOptions {
+	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
+	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
+	return {
+		fontSize,
+		fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
+		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
+	};
+}
+
 export function fileEditorOptions(
 	t: Translator,
 	lineWidth: number,
 	bounded: boolean,
 	path: string,
 ) {
-	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
-	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	const paddingTop = Number.parseFloat(cssVar("--space-8") ?? "");
 	const options: editor.IStandaloneEditorConstructionOptions = {
 		readOnly: true,
@@ -107,9 +116,7 @@ export function fileEditorOptions(
 		minimap: { enabled: false },
 		scrollBeyondLastLine: false,
 		automaticLayout: true,
-		fontSize,
-		fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
-		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
+		...fileEditorFontOptions(),
 		scrollbar: {
 			vertical: "auto",
 			horizontal: "auto",
@@ -143,11 +150,18 @@ export function createFileEditor(
 	container: HTMLElement,
 	{ options, ...model }: FileModelInput & { options: editor.IStandaloneEditorConstructionOptions },
 ) {
-	return monaco.editor.create(container, {
+	const codeEditor = monaco.editor.create(container, {
 		...options,
+		...fileEditorFontOptions(),
 		model: createFileModel(model),
 		theme: EDITOR_THEME,
 	});
+	const stopFontWatch = onFontChange(() => {
+		codeEditor.updateOptions(fileEditorFontOptions());
+		monaco.editor.remeasureFonts();
+	});
+	codeEditor.onDidDispose(stopFontWatch);
+	return codeEditor;
 }
 
 export function syncFileModel(

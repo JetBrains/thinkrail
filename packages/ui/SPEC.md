@@ -18,7 +18,8 @@ feature state, theme selection, and token generation stay with the app.
 Primitives expose per-file `@thinkrail/ui/<primitive>` subpaths, not a root component barrel; this keeps
 lazy chunks independent and preserves the shadcn convention. `./utils` exposes `cn`; `./theme` exposes
 only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
-explicit cleanup. It knows nothing about the theme catalog or preferences.
+explicit cleanup. `./typography` exposes `onFontChange`, the equivalent subscription to the completed
+`data-fonts` signal. Neither knows about catalogs, font selections or preferences.
 
 Workspace imports may reach `contracts` and `@thinkrail/locales/react` (the shared i18next instance, for
 primitive-owned strings such as the dialog's screen-reader Close and the toast's Dismiss label) only. External dependencies are React, Radix, cmdk,
@@ -33,7 +34,7 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
 `popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, `toast`, `toggle-segment`
 (the slim header toggle: active segment on `control-bg-selected` + `text-default`, `data-active` /
 `aria-pressed`), and `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
-live in the web components spec), alongside `utils` and `theme`. `menu-styles` is shared by the menu
+live in the web components spec), alongside `utils`, `theme` and `typography`. `menu-styles` is shared by the menu
 primitives and custom app menu rows. `toggle-segment` and `skeleton` moved here from the app when the
 resource renderers became a package, because both the app and [[module-resource-renderers]] use them.
 

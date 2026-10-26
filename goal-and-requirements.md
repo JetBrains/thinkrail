@@ -116,9 +116,11 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   Simplified Chinese ship built-in (an untranslated string shows in English), and a user adds or
   overrides a language with a flat JSON file in `~/.thinkrail/locales`, live on save. Agent and tool
   output is never translated ([[module-locales]], [[submodule-web-i18n]]).
+- **Font preferences** — independently choose installed UI, code and terminal font families in this
+  client, with immediate application, built-in fallbacks and per-family reset ([[submodule-web-fonts]]).
 - **Brand** — ThinkRail green accent (bright on dark themes, deepened on light ones so it clears AA on
   both), a Darcula-family dark background, Orbitron for the brand display role, Geist and JetBrains Mono
-  for UI and code ([[submodule-web-themes]], [[web-typography]]).
+  as the defaults for UI and code ([[submodule-web-themes]], [[web-typography]]).
 
 ## Non-goals
 

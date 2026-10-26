@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { initModelVisibilityPersistence } from "./chat/modelVisibility";
 import { ErrorBoundary, setErrorBoundaryReporter } from "./components/ErrorBoundary";
+import { initializeFontPreferences } from "./fonts";
 import { useLocaleSync } from "./i18n";
 import { initNavigation } from "./navigation";
 import { initFilesTreePersistence } from "./panels/filesTreeState";
@@ -22,6 +23,7 @@ import {
 
 initializeBundledThemes();
 applyThemePreference(readThemeHint());
+initializeFontPreferences();
 initTransport();
 installClientErrorReporting();
 setErrorBoundaryReporter((error, reportId) =>

@@ -33,6 +33,7 @@
 				"@fontsource-variable/jetbrains-mono/wght-italic.css"
 			]
 		},
+		"terminal": { "$ref": "code" },
 		"brand": {
 			"note": "Orbitron ships LATIN ONLY, and `brand.hero` renders a project's own name — so the next fallback is the interface face (Geist covers cyrillic/cyrillic-ext/latin-ext/vietnamese and is already bundled), not a system font. A non-Latin project name then falls back within our own type system instead of to whatever the OS supplies.",
 			"stack": [
@@ -235,6 +236,15 @@
 			}
 		},
 		"code": {
+			"terminal": {
+				"fontFamily": "terminal",
+				"fontSize": "s13",
+				"fontWeight": "regular",
+				"lineHeight": "relaxed",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
 			"text": {
 				"fontFamily": "code",
 				"fontSize": "s13",

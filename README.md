@@ -61,6 +61,10 @@ create the tools it needs based on how you actually work.
   connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your
   browser. Both embed the same engine host; app state lives under `~/.thinkrail`.
+- **Your fonts.** Settings → Appearance → Fonts lets you choose installed font families independently
+  for the UI, code and terminal, including Nerd Fonts. Choices stay in the current client and apply to
+  open editors and terminals without restarting their shells. Missing fonts fall back to the bundled
+  defaults; reset each choice separately.
 - **Your language.** Settings → Language follows your system language or a language you pick; English and
   Simplified Chinese are built in. Add a language ThinkRail doesn't ship yet by dropping a translated
   `en.json` into `~/.thinkrail/locales` — it applies as you save. Agent replies and tool output stay as

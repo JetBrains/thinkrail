@@ -159,7 +159,13 @@ export const PROSE_SELECTORS: Record<string, string> = {
 
 export const PROSE_CODE_NAMES = new Set(["inlineCode", "codeBlock", "tableInlineCode"]);
 
-export const CODE_STYLE_IDS = new Set(["code.text", "code.document", "code.otp", "code.textSmall"]);
+export const CODE_STYLE_IDS = new Set([
+	"code.text",
+	"code.document",
+	"code.otp",
+	"code.textSmall",
+	"code.terminal",
+]);
 
 export function isCodeStyleId(t: Typography, id: string): boolean {
 	const [group, name] = id.split(".");

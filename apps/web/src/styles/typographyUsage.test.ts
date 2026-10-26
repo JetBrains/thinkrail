@@ -30,6 +30,7 @@ const PRIMITIVE_ALLOWLIST = new Set([
 	"index.css",
 	"styles/tokens.css",
 	"styles/global.css",
+	"fonts/runtime.ts",
 	"packages/resource-renderers/src/support/monacoSetup.ts",
 	"panels/TerminalInstance.tsx",
 	"packages/resource-renderers/src/renderers/code/pierreVirtualizer.ts",

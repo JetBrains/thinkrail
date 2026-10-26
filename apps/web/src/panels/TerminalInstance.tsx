@@ -15,6 +15,7 @@ import "@xterm/xterm/css/xterm.css";
 import { i18n, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { onThemeSwap } from "@thinkrail/ui/theme";
+import { onFontChange } from "@thinkrail/ui/typography";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
 import { cssColorToHex } from "@/lib";
 import { SettingsSection, useAppStore } from "../store";
@@ -141,7 +142,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			allowProposedApi: true,
 			cursorBlink: true,
 			fontSize: Number.parseFloat(cssVar("--tr-font-size-s13") ?? "") || 13,
-			fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
+			fontFamily: cssVar("--tr-font-family-terminal") ?? "monospace",
 			theme: readTheme(),
 			minimumContrastRatio: contrastFloor(),
 			scrollback: 5000,
@@ -328,11 +329,24 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					setFailureMessage(errorText(error, i18n.t("panels.terminalInstance.startFailedDetail")));
 				});
 		};
+		let initialRelayoutDone = false;
+		const updateFontFamily = (): void => {
+			const family = cssVar("--tr-font-family-terminal") ?? "monospace";
+			if (family !== term.options.fontFamily) term.options.fontFamily = family;
+		};
+		const stopFontWatch = onFontChange(() => {
+			if (!initialRelayoutDone || disposed) return;
+			const previous = term.options.fontFamily;
+			updateFontFamily();
+			if (previous !== term.options.fontFamily) applyFit();
+		});
 		reattachRef.current = () => attach(true);
 		void runAfterTerminalRelayout(
 			() => webFonts.relayout(),
 			() => {
 				if (disposed) return;
+				initialRelayoutDone = true;
+				updateFontFamily();
 				applyFit();
 				attach();
 			},
@@ -358,6 +372,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			clearTimeout(fitTimer);
 			resizeObserver.disconnect();
 			stopThemeWatch();
+			stopFontWatch();
 			onData.dispose();
 			onViewportScroll.dispose();
 			onBufferWrite.dispose();
