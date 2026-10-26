@@ -1,10 +1,11 @@
 import {
 	assistantToolCallsAreExecutable,
 	type BackgroundCommandCompletionDetails,
-	type DelegationRunDetails,
+	completionDelivery,
 	type GitDiffScope,
 	type GitFileChange,
 	type ReviewFixDetails,
+	type SubagentCompletionDetails,
 	type TurnChangeSet,
 	type UserMessage,
 } from "@thinkrail/contracts";
@@ -12,6 +13,7 @@ import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "../lib";
 import type { AssistantFailure } from "./assistantFailure";
 import type { ChatMessageOrder } from "./chatPreferences";
+import { pulledResult, resultKey } from "./pulledResults";
 import { resolveProminence } from "./toolRegistry";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
 
@@ -60,7 +62,7 @@ export type ChatRow =
 	  }
 	| { kind: "markdown"; id: string; text: string }
 	| { kind: "backgroundCommandCompletion"; id: string; details: BackgroundCommandCompletionDetails }
-	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
+	| { kind: "subagentCompletion"; id: string; details: SubagentCompletionDetails; text: string }
 	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
@@ -127,10 +129,11 @@ function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 export function opensRound(turn: ChatTurn): boolean {
 	switch (turn.kind) {
 		case "user":
-		case "backgroundCommandCompletion":
-		case "subagentCompletion":
 		case "reviewFix":
 			return true;
+		case "backgroundCommandCompletion":
+		case "subagentCompletion":
+			return completionDelivery(turn.details) !== "run";
 		default:
 			return false;
 	}
@@ -153,6 +156,11 @@ export function deriveRows(
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
 	let run: ActivityStep[] = [];
+	const received = new Set<string>();
+	for (const turn of turns) {
+		const key = resultKey(turn);
+		if (key) received.add(key);
+	}
 
 	const flushRun = (live = false) => {
 		const first = run[0];
@@ -192,7 +200,16 @@ export function deriveRows(
 						dead,
 						streaming: turn.streaming,
 					};
-					if (resolveProminence(block.name).prominence === "primary") {
+					const pulled = pulledResult(block.name, block.arguments, data.tool);
+					if (pulled && !received.has(pulled.key)) {
+						received.add(pulled.key);
+						flushRun();
+						rows.push(
+							pulled.kind === "subagentCompletion"
+								? { kind: pulled.kind, id: block.id, details: pulled.details, text: pulled.text }
+								: { kind: pulled.kind, id: block.id, details: pulled.details },
+						);
+					} else if (resolveProminence(block.name).prominence === "primary") {
 						flushRun();
 						rows.push({ kind: "tool", id: block.id, ...data });
 					} else {

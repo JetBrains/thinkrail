@@ -1,11 +1,24 @@
-import type { ExtensionContext, ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import type {
+	ExtensionContext,
+	ExtensionFactory,
+	TurnEndEvent,
+} from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { tail } from "./output";
 import { createBackgroundCommands } from "./service";
 import { standaloneContext } from "./shell-context";
-import type { BackgroundCommandSnapshot, BackgroundCommands } from "./types";
+import type {
+	BackgroundCommandCompletion,
+	BackgroundCommandFlush,
+	BackgroundCommandSnapshot,
+	BackgroundCommands,
+} from "./types";
 
 export const BACKGROUND_COMMAND_COMPLETION_MESSAGE = "background-command-completion";
+
+export type CompletionDelivery = "wake" | "run" | "appended";
+
+type DeliveryMode = { idle: true } | { idle: false; runContinues: boolean; viaHost: boolean };
 
 export interface BackgroundCommandsExtensionOptions {
 	service?: BackgroundCommands;
@@ -83,17 +96,126 @@ function statusText(snapshot: BackgroundCommandSnapshot): string {
 	return `${snapshot.id} (${snapshot.name}): ${snapshot.status}`;
 }
 
+function terminalText(snapshot: BackgroundCommandSnapshot): string {
+	const exit =
+		snapshot.exitCode === undefined || snapshot.exitCode === null
+			? ""
+			: `, exit code ${snapshot.exitCode}`;
+	return `${statusText(snapshot)}${exit}${snapshot.errorMessage ? `\n${snapshot.errorMessage}` : ""}`;
+}
+
+const heldAtStopByService = new WeakMap<BackgroundCommands, Set<string>>();
+
+function heldAtStopFor(service: BackgroundCommands): Set<string> {
+	let held = heldAtStopByService.get(service);
+	if (!held) {
+		held = new Set();
+		heldAtStopByService.set(service, held);
+	}
+	return held;
+}
+
+function deliveryOf(mode: DeliveryMode, batchWakes: boolean, index: number): CompletionDelivery {
+	if (mode.idle) return !batchWakes ? "appended" : index === 0 ? "wake" : "run";
+	return mode.runContinues || batchWakes ? "run" : "appended";
+}
+
+function eligibleTurn(
+	event: TurnEndEvent,
+	ctx: ExtensionContext,
+): { runContinues: boolean } | undefined {
+	const stopReason = event.message.role === "assistant" ? event.message.stopReason : undefined;
+	if ((stopReason !== "stop" && stopReason !== "toolUse") || ctx.signal?.aborted === true)
+		return undefined;
+	return { runContinues: stopReason === "toolUse" };
+}
+
 export function createBackgroundCommandsExtension(
 	options: BackgroundCommandsExtensionOptions = {},
 ): ExtensionFactory {
 	return (pi) => {
 		let service = options.service;
 		let latestContext: ExtensionContext | undefined;
+		let sessionContext: ExtensionContext | undefined;
 		let shuttingDown = false;
 		let unbind: (() => void) | undefined;
+		let turnEnd: { runContinues: boolean } | undefined;
+		let boundary: { runContinues: boolean; wake: boolean } | undefined;
+		let owedWake = false;
+		let flushScheduled = false;
+
+		const parentIdle = () => {
+			try {
+				return sessionContext?.isIdle() ?? false;
+			} catch {
+				return false;
+			}
+		};
+		const modeFor = (flush: BackgroundCommandFlush): DeliveryMode | undefined => {
+			if (boundary) return { idle: false, runContinues: boundary.runContinues, viaHost: false };
+			if (parentIdle()) return flushScheduled ? undefined : { idle: true };
+			if (flush.atTurnEnd && turnEnd) return { idle: false, ...turnEnd, viaHost: true };
+			return undefined;
+		};
+		const wakes = ({ snapshot }: BackgroundCommandCompletion) =>
+			snapshot.status !== "stopped" && !(service && heldAtStopFor(service).has(snapshot.id));
+		const flushAtBoundary = (runContinues: boolean) => {
+			boundary = { runContinues, wake: false };
+			try {
+				service?.flushCompletions();
+				return boundary.wake;
+			} finally {
+				boundary = undefined;
+			}
+		};
+		const scheduleFlush = () => {
+			if (flushScheduled || shuttingDown) return;
+			flushScheduled = true;
+			setTimeout(() => {
+				flushScheduled = false;
+				service?.flushCompletions();
+			}, 0);
+		};
+
+		pi.on("turn_end", (event, ctx) => {
+			turnEnd = eligibleTurn(event, ctx);
+			if (turnEnd && flushAtBoundary(turnEnd.runContinues)) return { continue: true };
+			return undefined;
+		});
+		pi.on("turn_start", () => {
+			turnEnd = undefined;
+			owedWake = false;
+		});
+		pi.on("agent_end", () => {
+			turnEnd = undefined;
+		});
+		pi.on("agent_before_settle", () => {
+			const owed = owedWake;
+			owedWake = false;
+			return flushAtBoundary(owed) || owed ? { continue: true } : undefined;
+		});
+		pi.on("agent_settled", (event) => {
+			turnEnd = undefined;
+			owedWake = false;
+			if (event.aborted && service) {
+				const held = heldAtStopFor(service);
+				for (const snapshot of service.list()) {
+					if (snapshot.finishedAt !== undefined) held.add(snapshot.id);
+				}
+				for (const id of held) if (!service.find(id)) held.delete(id);
+			}
+			scheduleFlush();
+		});
+		pi.on("before_agent_start", (event) => {
+			if (event.messageType === "user" && service) heldAtStopFor(service).clear();
+		});
+		pi.on("session_compact", () => scheduleFlush());
+		pi.on("session_compact_failed", () => scheduleFlush());
+		pi.on("session_tree", () => scheduleFlush());
 
 		pi.on("session_start", (_event, ctx) => {
 			latestContext = ctx;
+			sessionContext = ctx;
 			shuttingDown = false;
 			service ??= createBackgroundCommands({
 				sessionId: ctx.sessionManager.getSessionId(),
@@ -113,7 +235,7 @@ export function createBackgroundCommandsExtension(
 				promptGuidelines: [
 					"Use background_command only for explicitly background work; ordinary bash behavior is unchanged.",
 					"Keep background_command shell commands foreground: do not detach with &, nohup, disown, daemonization, or similar escapes. Managed commands have no stdin or PTY.",
-					"Natural background_command completion sends a follow-up automatically; do not poll to wait. Use output when recent logs are needed. Stop cancels without waking the parent.",
+					"A finished background_command is reported to you automatically, before your next step while you work or as a new turn when you are idle; do not poll or sleep to wait, end your turn instead. Use output when recent logs are needed. Stop cancels without waking the parent.",
 				],
 				parameters,
 				async execute(_toolCallId, params, _signal, _onUpdate, currentContext) {
@@ -163,35 +285,64 @@ export function createBackgroundCommandsExtension(
 					}
 					const output = handle.output;
 					if (!output) throw new Error("Background command output unavailable");
+					const snapshot = handle.snapshot;
+					const finished = snapshot.finishedAt !== undefined;
+					if (finished) handle.claimCompletion();
 					return {
 						content: [
 							{
 								type: "text",
-								text: `${output.truncated ? "[Output truncated; retained tail only.]\n" : ""}${output.text || "(no output)"}`,
+								text: `${finished ? terminalText(snapshot) : statusText(snapshot)}\n\n${output.truncated ? "[Output truncated; retained tail only.]\n" : ""}${output.text || "(no output)"}`,
 							},
 						],
-						details: { snapshot: handle.snapshot, output },
+						details: { snapshot, output },
 					};
 				},
 			});
 
 			unbind?.();
 			unbind = service.bindCompletion({
-				canDeliverCompletion: () => !shuttingDown && options.canDeliverCompletion?.() !== false,
-				deliver({ snapshot, output }) {
-					const excerpt = tail(output.text, 4096, 40);
-					const truncated = output.truncated || excerpt.truncated;
-					const status = snapshot.status === "stopped" ? "Cancelled" : "Finished";
-					const diagnostic = snapshot.errorMessage ? `\n${snapshot.errorMessage}` : "";
-					pi.sendMessage(
-						{
-							customType: BACKGROUND_COMMAND_COMPLETION_MESSAGE,
-							display: true,
-							content: `${status} background command ${statusText(snapshot)}${diagnostic}\n\n${excerpt.text || "(no output)"}${truncated ? "\n[Excerpt truncated; use background_command output for the retained tail.]" : ""}`,
-							details: { ...summary(snapshot), output: { text: excerpt.text, truncated } },
-						},
-						{ deliverAs: "followUp", triggerTurn: snapshot.status !== "stopped" },
-					);
+				canDeliverCompletion: (flush) =>
+					!shuttingDown &&
+					options.canDeliverCompletion?.() !== false &&
+					modeFor(flush) !== undefined,
+				deliver(batch, flush) {
+					const mode = modeFor(flush);
+					if (!mode) return [];
+					const batchWakes = batch.some(wakes);
+					const carrier = mode.idle ? batch.findLast(wakes) : undefined;
+					const ordered = carrier ? [...batch.filter((c) => c !== carrier), carrier] : batch;
+					const accepted: BackgroundCommandCompletion[] = [];
+					for (const [index, completion] of ordered.entries()) {
+						const { snapshot, output } = completion;
+						const excerpt = tail(output.text, 4096, 40);
+						const truncated = output.truncated || excerpt.truncated;
+						const status = snapshot.status === "stopped" ? "Cancelled" : "Finished";
+						const diagnostic = snapshot.errorMessage ? `\n${snapshot.errorMessage}` : "";
+						try {
+							pi.sendMessage(
+								{
+									customType: BACKGROUND_COMMAND_COMPLETION_MESSAGE,
+									display: true,
+									content: `${status} background command ${statusText(snapshot)}${diagnostic}\n\n${excerpt.text || "(no output)"}${truncated ? "\n[Excerpt truncated; use background_command output for the retained tail.]" : ""}`,
+									details: {
+										...summary(snapshot),
+										output: { text: excerpt.text, truncated },
+										delivery: deliveryOf(mode, batchWakes, index),
+									},
+								},
+								{ triggerTurn: completion === carrier },
+							);
+						} catch {
+							break;
+						}
+						accepted.push(completion);
+					}
+					if (!mode.idle && accepted.some(wakes)) {
+						if (mode.viaHost) owedWake = true;
+						else if (boundary) boundary.wake = true;
+					}
+					return accepted;
 				},
 			});
 		});

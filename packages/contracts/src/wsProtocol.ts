@@ -6,7 +6,7 @@ import type {
 	BranchList,
 	BranchStatus,
 	ChangeReceipt,
-	DelegationRunDetails,
+	CompletionDelivery,
 	DelegationRunStatus,
 	DiffStats,
 	EditorInfo,
@@ -57,6 +57,7 @@ import type {
 	SessionResources,
 	SessionStateRecord,
 	SpecGraphSnapshot,
+	SubagentCompletionDetails,
 	SubagentOverride,
 	Template,
 	TemplateInfo,
@@ -413,9 +414,18 @@ export function isAskUserAnswersMessage(message: unknown): message is AskUserAns
 
 export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";
 
-export interface SubagentCompletionMessage extends WireCustomMessage<DelegationRunDetails> {
+export interface SubagentCompletionMessage extends WireCustomMessage<SubagentCompletionDetails> {
 	customType: typeof SUBAGENT_COMPLETION_CUSTOM_TYPE;
-	details: DelegationRunDetails;
+	details: SubagentCompletionDetails;
+}
+
+export function completionDelivery(details: {
+	delivery?: unknown;
+}): CompletionDelivery | undefined {
+	const { delivery } = details;
+	return delivery === "wake" || delivery === "run" || delivery === "appended"
+		? delivery
+		: undefined;
 }
 
 export function isSubagentCompletionMessage(

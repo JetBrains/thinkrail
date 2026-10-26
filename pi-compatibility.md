@@ -4,7 +4,7 @@ type: architecture-design
 status: draft
 title: Pi compatibility — host adaptations and upgrade removal gates
 parent: architecture
-references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat]
+references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands]
 tags: [pi, compatibility]
 ---
 
@@ -157,6 +157,17 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   discovery and prompt-template/frontmatter rules where public APIs cannot serve its read/edit UI.
   Prefer public discovery/parsing APIs when they meet those needs; retain parity coverage in history,
   template and composer tests until then.
+
+- **Detached result hold** — [[module-pi-subagents]] (Result delivery) and
+  [[module-pi-background-commands]], applied by [[submodule-server-agent]]'s `turn_end` and
+  `compaction_end` flushes. Pi drains follow-up messages only when a run would otherwise stop, offers
+  extensions no way to inspect or withdraw one queued message (`hasPendingMessages()` is a boolean,
+  `clearQueue()` is host-only and clears everything), and keeps queued messages across an abort, so a
+  pushed result duplicated one the agent had already pulled. The owners hold outcomes and send them
+  only at step boundaries or to an idle parent. **Removal gate:** a per-message queue handle an
+  extension can withdraw, delivered at the next step rather than at run end — even then, keep the
+  claim-on-pull rule. Run the `pi-subagents` and `pi-background-commands` suites and
+  `agent/chatResources.test.ts`.
 
 ## Not temporary SDK workarounds
 

@@ -970,7 +970,11 @@ requires that exact registered owner, no deletion tombstone, no resource closure
 live question. A non-waking user-stop notice must not append behind an unanswered tool call and break
 tail-only restart repair. Resource inspection and cancellation remain available while delivery waits
 in the existing portable owners. The native `turn_end` result boundary clears the question phase and
-flushes both owners, as do registration, resource reload and deletion rollback. `closeSessionResources` synchronously disposes
+flushes both owners with `{ atTurnEnd: true }` — the last safe point where a result can still join the
+next request of the running parent — and `compaction_end` flushes them once pi is no longer
+compacting, as do registration, resource reload and deletion rollback; while the parent is busy any
+other flush is a no-op, because the owners deliver at step boundaries ([[module-pi-subagents]] Result
+delivery). `closeSessionResources` synchronously disposes
 the subagent owner before child cancellation or any await, including preparation failures. Permanent
 closure survives shutdown-budget expiry and suppresses late outcomes; Pi disposal does not emit extension
 shutdown, so the cascade emits `session_shutdown` itself after the synchronous owner disposal (see

@@ -1,3 +1,4 @@
+import { completionDelivery } from "@thinkrail/contracts";
 import type { ChatRow } from "./rows";
 
 export interface MessageActionState {
@@ -40,6 +41,8 @@ export function deriveMessageActions(
 				break;
 			case "backgroundCommandCompletion":
 			case "subagentCompletion":
+				if (completionDelivery(row.details) !== "run") roundHasLaterContent = false;
+				break;
 			case "reviewFix":
 				roundHasLaterContent = false;
 				break;

@@ -563,3 +563,358 @@ test("tool actions reject cross-action inputs and unknown or foreign identities"
 		session.dispose();
 	}
 });
+
+function macrotask(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+type Session = Awaited<ReturnType<typeof makeSession>>;
+
+function commandDeliveries(session: Session) {
+	return session.sessionManager
+		.getEntries()
+		.flatMap((entry) =>
+			entry.type === "custom_message" && entry.customType === BACKGROUND_COMMAND_COMPLETION_MESSAGE
+				? [(entry.details as { delivery?: string }).delivery]
+				: [],
+		);
+}
+
+function countSettles(session: Session) {
+	const counter = { settles: 0 };
+	session.subscribe((event) => {
+		if (event.type === "agent_settled") counter.settles++;
+	});
+	return counter;
+}
+
+async function injected(canDeliverCompletion?: () => boolean) {
+	const executor = controlledOperations();
+	const sm = SessionManager.inMemory(cwd);
+	const service = createBackgroundCommands(
+		{ sessionId: sm.getSessionId(), getContext: () => ({ cwd }) },
+		executor,
+	);
+	const session = await makeSession(
+		createBackgroundCommandsExtension({
+			service,
+			...(canDeliverCompletion ? { canDeliverCompletion } : {}),
+		}),
+		sm,
+	);
+	const finish = async (index: number, text: string, exitCode = 0) => {
+		executor.call(index).options.onData?.(Buffer.from(text));
+		executor.call(index).resolve({ exitCode });
+		await waitFor(() => service.list()[index]?.finishedAt !== undefined);
+		await macrotask();
+	};
+	const close = async () => {
+		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		await service.dispose();
+		session.dispose();
+	};
+	return { executor, service, session, finish, close };
+}
+
+function startCommand(command: string) {
+	return fauxAssistantMessage(fauxToolCall("background_command", { action: "start", command }));
+}
+
+test("a command finishing during a tool turn reaches the next request of the same run", async () => {
+	const { service, session, finish, close } = await injected();
+	const counter = countSettles(session);
+	let sawReport = false;
+	try {
+		faux.setResponses([
+			startCommand("work"),
+			async () => {
+				await finish(0, "CMD_DONE");
+				return fauxAssistantMessage(fauxToolCall("background_command", { action: "list" }));
+			},
+			(context) => {
+				sawReport = JSON.stringify(context.messages).includes("CMD_DONE");
+				return fauxAssistantMessage("DONE");
+			},
+		]);
+		await session.prompt("Start and keep working.");
+		await macrotask();
+		expect(sawReport).toBe(true);
+		expect(counter.settles).toBe(1);
+		expect(commandDeliveries(session)).toEqual(["run"]);
+		expect(service.list()[0]?.status).toBe("completed");
+	} finally {
+		await close();
+	}
+});
+
+test("a finished command whose output the model read is never reported again", async () => {
+	const { service, session, finish, close } = await injected();
+	try {
+		faux.setResponses([
+			startCommand("work"),
+			async () => {
+				await finish(0, "CMD_OUTPUT", 3);
+				return fauxAssistantMessage(
+					fauxToolCall("background_command", { action: "output", id: service.list()[0]?.id ?? "" }),
+				);
+			},
+			fauxAssistantMessage("DONE"),
+			fauxAssistantMessage("ALREADY_SEEN"),
+		]);
+		const before = faux.state.callCount;
+		await session.prompt("Start, then read the output.");
+		await macrotask();
+		expect(commandDeliveries(session)).toEqual([]);
+		expect(faux.state.callCount - before).toBe(3);
+		const read = session.messages.filter((m) => m.role === "toolResult").at(-1);
+		expect(JSON.stringify(read)).toContain("error, exit code 3");
+		expect(JSON.stringify(read)).toContain("Command exited with code 3");
+	} finally {
+		await close();
+	}
+});
+
+test("a host read of finished output never suppresses the command's report", async () => {
+	let allowed = false;
+	const { service, session, finish, close } = await injected(() => allowed);
+	try {
+		faux.setResponses([
+			startCommand("work"),
+			fauxAssistantMessage("ACK"),
+			fauxAssistantMessage("SEEN"),
+		]);
+		await session.prompt("Start.");
+		await finish(0, "HOST_READ");
+		const id = service.list()[0]?.id ?? "";
+		expect(service.find(id)?.output?.text).toContain("HOST_READ");
+		allowed = true;
+		service.flushCompletions();
+		await waitFor(() => !session.isStreaming && commandDeliveries(session).length === 1);
+		expect(commandDeliveries(session)).toEqual(["wake"]);
+	} finally {
+		await close();
+	}
+});
+
+test("commands released to an idle parent together wake exactly one run", async () => {
+	let allowed = false;
+	const { service, session, finish, close } = await injected(() => allowed);
+	const counter = countSettles(session);
+	let reports = 0;
+	try {
+		faux.setResponses([
+			fauxAssistantMessage([
+				fauxToolCall("background_command", { action: "start", command: "one" }),
+				fauxToolCall("background_command", { action: "start", command: "two" }),
+			]),
+			fauxAssistantMessage("STARTED"),
+			(context) => {
+				const text = JSON.stringify(context.messages);
+				reports = ["FIRST_CMD", "SECOND_CMD"].filter((r) => text.includes(r)).length;
+				return fauxAssistantMessage("WOKEN_ONCE");
+			},
+			fauxAssistantMessage("SECOND_WAKE"),
+		]);
+		await session.prompt("Start two.");
+		await finish(0, "FIRST_CMD");
+		await finish(1, "SECOND_CMD");
+		expect(commandDeliveries(session)).toEqual([]);
+		allowed = true;
+		service.flushCompletions();
+		await waitFor(() => !session.isStreaming && counter.settles === 2);
+		await macrotask();
+		expect(counter.settles).toBe(2);
+		expect(reports).toBe(2);
+		expect(commandDeliveries(session)).toEqual(["wake", "run"]);
+		expect(JSON.stringify(session.messages)).not.toContain("SECOND_WAKE");
+	} finally {
+		await close();
+	}
+});
+
+test("a command held when the user stops the parent is shown without waking it", async () => {
+	const { session, finish, close } = await injected();
+	const counter = countSettles(session);
+	let parked = () => {};
+	const parkedPromise = new Promise<void>((resolve) => {
+		parked = resolve;
+	});
+	try {
+		faux.setResponses([
+			startCommand("work"),
+			async (_context, options) => {
+				await finish(0, "HELD_AT_STOP");
+				parked();
+				await new Promise((resolve) =>
+					options?.signal?.addEventListener("abort", resolve, { once: true }),
+				);
+				return fauxAssistantMessage("ABORTED");
+			},
+			fauxAssistantMessage("WOKE_AFTER_STOP"),
+		]);
+		const run = session.prompt("Start, then get stopped.");
+		await parkedPromise;
+		const callsAtStop = faux.state.callCount;
+		await session.abort();
+		await run;
+		await waitFor(() => commandDeliveries(session).length === 1);
+		await macrotask();
+		expect(commandDeliveries(session)).toEqual(["appended"]);
+		expect(faux.state.callCount).toBe(callsAtStop);
+		expect(counter.settles).toBe(1);
+	} finally {
+		await close();
+	}
+});
+
+test("several commands held when the user stops the parent are all shown without waking it", async () => {
+	const { session, finish, close } = await injected();
+	const counter = countSettles(session);
+	let parked = () => {};
+	const parkedPromise = new Promise<void>((resolve) => {
+		parked = resolve;
+	});
+	try {
+		faux.setResponses([
+			fauxAssistantMessage([
+				fauxToolCall("background_command", { action: "start", command: "one" }),
+				fauxToolCall("background_command", { action: "start", command: "two" }),
+			]),
+			async (_context, options) => {
+				await finish(0, "FIRST_HELD");
+				await finish(1, "SECOND_HELD");
+				parked();
+				await new Promise((resolve) =>
+					options?.signal?.addEventListener("abort", resolve, { once: true }),
+				);
+				return fauxAssistantMessage("ABORTED");
+			},
+			fauxAssistantMessage("WOKE_AFTER_STOP"),
+		]);
+		const run = session.prompt("Start two, then get stopped.");
+		await parkedPromise;
+		const callsAtStop = faux.state.callCount;
+		await session.abort();
+		await run;
+		await waitFor(() => commandDeliveries(session).length === 2);
+		await macrotask();
+		expect(commandDeliveries(session)).toEqual(["appended", "appended"]);
+		expect(faux.state.callCount).toBe(callsAtStop);
+		expect(counter.settles).toBe(1);
+	} finally {
+		await close();
+	}
+});
+
+test("a rejected waking send keeps the wake for the retry instead of losing it", async () => {
+	let allowed = false;
+	let rejectWake = true;
+	const executor = controlledOperations();
+	const sm = SessionManager.inMemory(cwd);
+	const service = createBackgroundCommands(
+		{ sessionId: sm.getSessionId(), getContext: () => ({ cwd }) },
+		executor,
+	);
+	const extension = createBackgroundCommandsExtension({
+		service,
+		canDeliverCompletion: () => allowed,
+	});
+	const session = await makeSession(
+		(pi) =>
+			extension({
+				...pi,
+				sendMessage: (message, options) => {
+					if (options?.triggerTurn && rejectWake) {
+						rejectWake = false;
+						throw new Error("runtime unavailable");
+					}
+					pi.sendMessage(message, options);
+				},
+			}),
+		sm,
+	);
+	const counter = countSettles(session);
+	let sawNatural = false;
+	try {
+		faux.setResponses([
+			fauxAssistantMessage([
+				fauxToolCall("background_command", { action: "start", command: "natural" }),
+				fauxToolCall("background_command", { action: "start", command: "stopped" }),
+			]),
+			fauxAssistantMessage("STARTED"),
+			(context) => {
+				sawNatural = JSON.stringify(context.messages).includes("NATURAL_RESULT");
+				return fauxAssistantMessage("WOKEN");
+			},
+		]);
+		await session.prompt("Start two.");
+		executor.call(0).options.onData?.(Buffer.from("NATURAL_RESULT"));
+		executor.call(0).resolve({ exitCode: 0 });
+		service.list()[1] && service.find(service.list()[1]?.id ?? "")?.stop();
+		executor.call(1).resolve({ exitCode: null });
+		await waitFor(() => service.list().every((snapshot) => snapshot.finishedAt !== undefined));
+		allowed = true;
+		service.flushCompletions();
+		expect(commandDeliveries(session)).toHaveLength(1);
+		expect(counter.settles).toBe(1);
+		service.flushCompletions();
+		await waitFor(() => !session.isStreaming && counter.settles === 2);
+		expect(sawNatural).toBe(true);
+		expect(commandDeliveries(session)).toHaveLength(2);
+	} finally {
+		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		await service.dispose();
+		session.dispose();
+	}
+});
+
+test("one factory serving two sessions keeps each session's Stop to itself", async () => {
+	let allowed = false;
+	const factory = createBackgroundCommandsExtension({ canDeliverCompletion: () => allowed });
+	const first = await makeSession(factory);
+	const second = await makeSession(factory);
+	let parked = () => {};
+	const parkedPromise = new Promise<void>((resolve) => {
+		parked = resolve;
+	});
+	try {
+		faux.setResponses([
+			startCommand("printf HELD_IN_FIRST"),
+			async (_context, options) => {
+				await Bun.sleep(300);
+				parked();
+				await new Promise((resolve) =>
+					options?.signal?.addEventListener("abort", resolve, { once: true }),
+				);
+				return fauxAssistantMessage("ABORTED");
+			},
+		]);
+		const run = first.prompt("Start, then get stopped.");
+		await parkedPromise;
+		await first.abort();
+		await run;
+		await macrotask();
+		faux.setResponses([fauxAssistantMessage("SECOND_ANSWER")]);
+		await second.prompt("An unrelated question in another chat.");
+		const calls = faux.state.callCount;
+		faux.setResponses([fauxAssistantMessage("FIRST_WOKE")]);
+		allowed = true;
+		await first.extensionRunner.emit({
+			type: "session_compact_failed",
+			reason: "manual",
+			aborted: true,
+			willRetry: false,
+			fromExtension: false,
+		});
+		await waitFor(() => commandDeliveries(first).length === 1);
+		await macrotask();
+		expect(commandDeliveries(first)).toEqual(["appended"]);
+		expect(faux.state.callCount).toBe(calls);
+		expect(JSON.stringify(first.messages)).not.toContain("FIRST_WOKE");
+	} finally {
+		await first.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		await second.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		first.dispose();
+		second.dispose();
+	}
+});

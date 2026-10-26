@@ -829,3 +829,182 @@ test("receipt paths the spec matcher claims land on the specs side", () => {
 	expect(d?.specs).toEqual(["docs/SPEC.md"]);
 	expect(d?.changedFiles).toEqual(["src/a.ts"]);
 });
+
+describe("background results follow how they reached the agent", () => {
+	const runDetails = {
+		childSessionId: "child-1",
+		roleName: "reviewer",
+		task: "review",
+		status: "completed",
+		usage: {
+			input: 1,
+			output: 1,
+			cacheRead: 0,
+			cacheWrite: 0,
+			cost: 0,
+			turns: 1,
+			contextTokens: 2,
+		},
+		durationMs: 1000,
+	} as const;
+
+	function pushed(delivery?: "wake" | "run" | "appended"): ChatTurn {
+		return {
+			kind: "subagentCompletion",
+			id: "pushed",
+			details: { ...runDetails, ...(delivery ? { delivery } : {}) },
+			text: "report",
+			timestamp: 5,
+		};
+	}
+
+	function pull(id: string): Block {
+		return {
+			type: "toolCall",
+			id,
+			name: "get_subagent_result",
+			arguments: { session_id: "child-1" },
+		};
+	}
+
+	function pullResult(status: "completed" | "running"): ToolResultState {
+		return {
+			status: "done",
+			raw: {
+				content: [
+					{ type: "text", text: status === "completed" ? "PULLED_REPORT" : "Still running." },
+				],
+				details: { ...runDetails, status },
+			},
+		};
+	}
+
+	test("a result delivered mid-run stays inside the round instead of opening one", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [tc("t1")]),
+			pushed("run"),
+			assistant("a2", [text("reacted")]),
+		];
+		expect(kinds(deriveRows(turns, {}, false))).toEqual([
+			"user",
+			"activity",
+			"subagentCompletion",
+			"markdown",
+			"divider",
+		]);
+	});
+
+	test("a result that woke the agent opens its round, like a result without a marker", () => {
+		for (const delivery of ["wake", undefined] as const) {
+			const turns = [
+				user("u1"),
+				assistant("a1", [text("done")]),
+				pushed(delivery),
+				assistant("a2", [text("reacted")]),
+			];
+			expect(kinds(deriveRows(turns, {}, false))).toEqual([
+				"user",
+				"markdown",
+				"divider",
+				"subagentCompletion",
+				"markdown",
+				"divider",
+			]);
+		}
+	});
+
+	test("a finished result the agent pulled renders as the same result row, once per run", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [tc("t1"), pull("p1")]),
+			assistant("a2", [pull("p2"), text("done")]),
+		];
+		const rows = deriveRows(
+			turns,
+			{ p1: pullResult("completed"), p2: pullResult("completed") },
+			false,
+		);
+		expect(kinds(rows)).toEqual([
+			"user",
+			"activity",
+			"subagentCompletion",
+			"activity",
+			"markdown",
+			"divider",
+		]);
+		const row = rows[2];
+		expect(row?.id).toBe("p1");
+		expect(row?.kind === "subagentCompletion" && row.text).toBe("PULLED_REPORT");
+		expect(row?.kind === "subagentCompletion" && row.details.delivery).toBe("run");
+	});
+
+	test("a status check or a pull of an already pushed result stays a routine step", () => {
+		const running = deriveRows(
+			[user("u1"), assistant("a1", [pull("p1")])],
+			{ p1: pullResult("running") },
+			true,
+		);
+		expect(kinds(running)).toEqual(["user", "activity"]);
+		const alreadyPushed = deriveRows(
+			[user("u1"), assistant("a1", [pull("p1")]), pushed("run"), assistant("a2", [text("ok")])],
+			{ p1: pullResult("completed") },
+			false,
+		);
+		expect(kinds(alreadyPushed)).toEqual([
+			"user",
+			"activity",
+			"subagentCompletion",
+			"markdown",
+			"divider",
+		]);
+		expect(alreadyPushed[2]?.id).toBe("pushed");
+	});
+
+	test("a finished command read through background_command output renders as its result row", () => {
+		const read = (id: string): Block => ({
+			type: "toolCall",
+			id,
+			name: "background_command",
+			arguments: { action: "output", id: "cmd-1" },
+		});
+		const snapshot = (finished: boolean) => ({
+			id: "cmd-1",
+			sessionId: "s",
+			command: "bun test",
+			name: "tests",
+			status: finished ? "error" : "running",
+			startedAt: 0,
+			...(finished
+				? { finishedAt: 9, exitCode: 1, errorMessage: "Command exited with code 1" }
+				: {}),
+		});
+		const result = (finished: boolean): ToolResultState => ({
+			status: "done",
+			raw: {
+				content: [{ type: "text", text: "out" }],
+				details: {
+					snapshot: snapshot(finished),
+					output: { text: `${"x\n".repeat(60)}FAIL`, truncated: false },
+				},
+			},
+		});
+		const rows = deriveRows(
+			[user("u1"), assistant("a1", [read("r1"), read("r2")])],
+			{ r1: result(false), r2: result(true) },
+			false,
+		);
+		expect(kinds(rows)).toEqual(["user", "activity", "backgroundCommandCompletion", "divider"]);
+		const row = rows[2];
+		if (row?.kind !== "backgroundCommandCompletion") throw new Error("expected a command row");
+		expect(row.details).toMatchObject({
+			id: "cmd-1",
+			status: "error",
+			exitCode: 1,
+			delivery: "run",
+		});
+		expect(row.details.output.text.endsWith("FAIL")).toBe(true);
+		expect(row.details.output.text.split("\n").length).toBeLessThanOrEqual(40);
+		expect(row.details.output.truncated).toBe(true);
+	});
+});

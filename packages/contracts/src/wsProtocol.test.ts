@@ -16,6 +16,7 @@ import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
+	completionDelivery,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
@@ -406,4 +407,14 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 	expect(WS_METHODS.subagentStop).toBe("subagent.stop");
 	expect(WS_METHODS.subagentStopAll).toBe("subagent.stopAll");
 	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
+});
+
+describe("completionDelivery", () => {
+	test("reads the delivery marker and treats a missing or unknown value as absent", () => {
+		expect(completionDelivery({ delivery: "wake" })).toBe("wake");
+		expect(completionDelivery({ delivery: "run" })).toBe("run");
+		expect(completionDelivery({ delivery: "appended" })).toBe("appended");
+		expect(completionDelivery({})).toBeUndefined();
+		expect(completionDelivery({ delivery: "later" })).toBeUndefined();
+	});
 });

@@ -468,6 +468,12 @@ export interface DelegationRunDetails {
 	abortReason?: string;
 }
 
+export type CompletionDelivery = "wake" | "run" | "appended";
+
+export interface SubagentCompletionDetails extends DelegationRunDetails {
+	delivery?: CompletionDelivery;
+}
+
 export type BackgroundCommandStatus = "running" | "stopping" | "completed" | "error" | "stopped";
 
 export interface BackgroundCommandSummary {
@@ -487,6 +493,7 @@ export interface BackgroundCommandCompletionDetails
 	status: "completed" | "error" | "stopped";
 	finishedAt: number;
 	output: { text: string; truncated: boolean };
+	delivery?: CompletionDelivery;
 }
 
 export interface SubagentResourceSummary {
@@ -496,6 +503,7 @@ export interface SubagentResourceSummary {
 	task: string;
 	status: DelegationRunStatus;
 	createdAt: string;
+	detached?: boolean;
 	model?: string;
 	thinkingLevel?: ThinkingLevel;
 	abortReason?: string;

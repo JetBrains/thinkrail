@@ -475,7 +475,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `wsProtocol` (the value-bearing half), mirroring the ask-user-answers posture exactly: the
   **`SUBAGENT_COMPLETION_CUSTOM_TYPE`** constant (mirrors `pi-subagents`' `SUBAGENT_COMPLETION_MESSAGE`,
   never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details
-  shape) and the shared **`isSubagentCompletionMessage`** guard — wire data is untrusted, so the
+  shape, its details **`SubagentCompletionDetails`**: the run details plus the optional
+  **`CompletionDelivery`** marker mirrored from `pi-subagents`) and the shared
+  **`isSubagentCompletionMessage`** guard — wire data is untrusted, so the
   details validate through **`isDelegationRunDetails`** (domain): the **closed status union**, every
   required **numeric usage field**, `durationMs`, every present optional display field as a string, and a
   present `thinkingLevel` as one of pi's closed levels, never just "an object is present" (PR #303 review finding). That validator is the one home for the
@@ -809,8 +811,10 @@ without importing that package. Subagents retain their Pi child session ids and 
   all currently active records plus bounded recent terminal records. The snapshot echoes workspace
   and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
   child/parent ids, role, task, status, creation time, the child's actual `model` (`provider/id`) and
-  effective `thinkingLevel` (both optional — absent from an older host), optional abort reason and — once
-  terminal — the run duration [[module-pi-delegation]] measured (`durationMs`), not usage or reports.
+  effective `thinkingLevel` (both optional — absent from an older host), optional abort reason,
+  `detached: true` for a background run (from the child's `info`; absent for a foreground run and from
+  an older host) and — once terminal — the run duration [[module-pi-delegation]] measured
+  (`durationMs`), not usage or reports.
   Subagent role/task summaries are capped at 200/2,000 characters, with the latest twenty terminal
   children by creation order retained in the projection. These are runtime catalogs; neither historical
   tool acknowledgements nor persisted PIDs supply live authority after restart.
@@ -839,7 +843,11 @@ wire-owned cancellation registry.
 
 `background-command-completion` is a displayed Pi custom message, not a catalog update. Its guarded
 wire details contain terminal snapshot metadata without the full command, plus the owner's bounded
-plain-text diagnostic excerpt and truncation flag. The conversation may render that historical notice,
+plain-text diagnostic excerpt and truncation flag, and the same optional `delivery` marker as a
+subagent completion (`wake` | `run` | `appended` — how the result reached the agent; absent in
+transcripts written before it, which keep the old round rules). The guards do not validate it; the
+shared `completionDelivery(details)` reader returns the marker or `undefined`, so an unknown value
+reads as absent everywhere. The conversation may render that historical notice,
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically

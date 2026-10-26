@@ -16,6 +16,7 @@ export interface ChildInfo {
 	createdBy: string;
 	roleName?: string;
 	roleSource?: string;
+	detached?: boolean;
 }
 
 export interface SessionOptions {

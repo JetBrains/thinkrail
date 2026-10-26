@@ -504,3 +504,72 @@ test("the inspector lists the chat's MCP servers as a third section and hides it
 		'data-testid="resources-mcp"',
 	);
 });
+
+test("the dock keeps finished results the user has not seen yet, with inspect and dismiss", () => {
+	const done: BackgroundCommandSummary = {
+		...command,
+		id: "done",
+		status: "completed",
+		exitCode: 0,
+		finishedAt: NOW - 60_000,
+	};
+	const reviewed: SubagentResourceSummary = {
+		...child,
+		childSessionId: "reviewed",
+		status: "completed",
+		durationMs: 120_000,
+	};
+	const freshOnly = renderToStaticMarkup(
+		<resources.ResourcesDock
+			{...dockProps}
+			freshCommands={[done]}
+			freshSubagents={[reviewed]}
+			onDismiss={() => {}}
+		/>,
+	);
+	expect(freshOnly).toContain('data-testid="resources-dock"');
+	expect(freshOnly).toMatch(/data-resource-id="done"[^>]*data-fresh="true"/);
+	expect(freshOnly).toMatch(/data-resource-id="reviewed"[^>]*data-fresh="true"/);
+	expect(freshOnly).toContain('data-testid="resource-dismiss"');
+	expect(freshOnly).not.toContain('data-testid="resource-stop"');
+	expect(freshOnly).toContain("2 new");
+	expect(freshOnly).not.toContain("active");
+	expect(freshOnly).not.toContain("animate-working");
+
+	const mixed = renderToStaticMarkup(
+		<resources.ResourcesDock {...dockProps} commands={[command]} freshCommands={[done]} />,
+	);
+	expect(mixed.indexOf('data-resource-id="build"')).toBeLessThan(
+		mixed.indexOf('data-resource-id="done"'),
+	);
+	expect(mixed).toContain("1 active");
+	expect(mixed).toContain("1 new");
+	expect(mixed).not.toContain('data-testid="resource-dismiss"');
+
+	const crowded = renderToStaticMarkup(
+		<resources.ResourcesDock
+			{...dockProps}
+			commands={[command]}
+			freshCommands={[1, 2, 3, 4].map((n) => ({ ...done, id: `done-${n}` }))}
+		/>,
+	);
+	expect(crowded).toContain('data-collapsed="true"');
+});
+
+test("the trigger shows how many finished results are new", () => {
+	const render = (freshCount?: number) =>
+		renderToStaticMarkup(
+			<TooltipProvider>
+				<resources.ResourcesButton
+					activeCount={1}
+					open={false}
+					{...(freshCount ? { freshCount } : {})}
+				/>
+			</TooltipProvider>,
+		);
+	const fresh = render(2);
+	expect(fresh).toContain('data-testid="resources-trigger-fresh"');
+	expect(fresh).toContain("2 new");
+	expect(fresh).toContain('aria-label="Resources, 1 active, 2 new"');
+	expect(render()).not.toContain("resources-trigger-fresh");
+});

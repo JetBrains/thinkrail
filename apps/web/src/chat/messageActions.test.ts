@@ -88,4 +88,33 @@ describe("deriveMessageActions", () => {
 
 		expect(state.finalAnswerRowIds.size).toBe(0);
 	});
+	test("a result delivered mid-run does not make the narration before it a final answer", () => {
+		const details = {
+			childSessionId: "child-1",
+			task: "review",
+			status: "completed",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				cost: 0,
+				turns: 0,
+				contextTokens: 0,
+			},
+			durationMs: 0,
+		} as const;
+		const rows: ChatRow[] = [
+			user("user-1"),
+			markdown("narration"),
+			{
+				kind: "subagentCompletion",
+				id: "result",
+				details: { ...details, delivery: "run" },
+				text: "",
+			},
+			markdown("answer"),
+		];
+		expect([...deriveMessageActions(rows, false).finalAnswerRowIds]).toEqual(["answer"]);
+	});
 });

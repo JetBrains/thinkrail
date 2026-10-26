@@ -138,3 +138,17 @@ test("a subagent result teases its report, offers the transcript and never rende
 	expect(html).not.toContain("completed:");
 	expect(html).not.toContain("<strong>");
 });
+
+test("a result row says whether the agent received it or replies after the user's next message", () => {
+	const receipt = (delivery?: "wake" | "run" | "appended") =>
+		renderToStaticMarkup(
+			<BackgroundCommandResult
+				id="row"
+				details={{ ...details, ...(delivery ? { delivery } : {}) }}
+			/>,
+		);
+	expect(receipt("run")).toContain("Agent received");
+	expect(receipt("wake")).toContain("Agent received");
+	expect(receipt("appended")).toContain("Agent replies after your next message");
+	expect(receipt()).not.toContain('data-testid="background-result-receipt"');
+});

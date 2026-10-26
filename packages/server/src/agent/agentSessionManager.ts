@@ -1129,8 +1129,8 @@ async function prepareSessionEntry(
 		}
 		if (event.type === "turn_end") {
 			entry.askUserQuestionWaiters.persistTurn(event.toolResults);
-			entry.commands.flushCompletions();
-			entry.subagents.flushCompletions();
+			entry.commands.flushCompletions({ atTurnEnd: true });
+			entry.subagents.flushCompletions({ atTurnEnd: true });
 		}
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
@@ -1151,6 +1151,8 @@ async function prepareSessionEntry(
 		if (event.type === "compaction_end") {
 			entry.piCompactionInProgress = false;
 			reconsiderPendingReload(entry);
+			entry.commands.flushCompletions();
+			entry.subagents.flushCompletions();
 		}
 		if (event.type === "agent_start") {
 			entry.lastSettlement = null;
