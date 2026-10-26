@@ -12,7 +12,7 @@ tags: [i18n]
 
 The single owner of ThinkRail's UI strings and of the rules every locale source obeys
 ([[architecture]] Decision 23). It ships the bundled catalogs — `en.json` is the English source of truth
-and the file translators start from, `zh-CN.json` is the Simplified Chinese translation — and the pure
+and the file translators start from, and each `<tag>.json` beside it is a translation — and the pure
 functions that validate a catalog, name a file's language, and pick the language to render. Its `./react`
 entry holds the **one** i18next instance every browser surface (`apps/web`, `packages/ui`, extension web
 halves) renders through, so they cannot drift onto separate instances.
@@ -22,8 +22,9 @@ halves) renders through, so they cannot drift onto separate instances.
 - **Root `@thinkrail/locales`** (pure, browser- and server-safe, no React):
   - `EN` — the English catalog; `MessageKey` — its key union (plural suffixes `_one`/`_other`/… fold
     into the base key).
-  - `BUNDLED_LOCALES` — the tags shipped with this build (`["en", "zh-CN"]` today) and
-    `bundledCatalog(tag)`.
+  - `BUNDLED_LOCALES` — the tags shipped with this build (`en` first, then the `BUNDLED` registry) and
+    `bundledCatalog(tag)`. Docs and tests derive the shipped list from it rather than naming it, so a
+    new bundled language changes only its catalog, the `BUNDLED` entry, and the README's list.
   - `SYSTEM_LOCALE` (`"system"`), `canonicalLocale(tag)`, `languageName(tag)` (own-language name via
     `Intl.DisplayNames`, first letter upper-cased), `DESKTOP_MENU_KEYS` and `DESKTOP_DIALOG_KEYS` — the keys the
     desktop's native menu, error dialogs, and startup splash render, one list each for the desktop and the web that pushes
