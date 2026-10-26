@@ -593,7 +593,10 @@ content's own height.
   retried, so the card stayed off screen. A focus on a mounted editor still scrolls smoothly.
   Monaco is imported from `editor.api` with only the reading contributions (find, folding, bracket matching,
   context menu/copy, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
-  messaging and Unicode highlighting); keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
+  messaging and Unicode highlighting); keeping word highlighting preserves F7. Each contribution loads through
+  its typed `monaco-editor/features/<name>/register.js` entry, because Monaco's `exports` map closes the deep
+  `esm/vs/...` paths. The editor core loads `coreCommands` itself. `codicon-modifiers.css` is not exported, so
+  codicon spin animations (only hover loading icons here) stay static. The TS/JS/JSON/CSS/HTML
   language-service contributions and their workers are absent, so this viewer emits no language-service
   diagnostics by construction. Each editor mount owns its model: the model id is a per-mount `useId` scope
   ahead of the path, so the same file on screen twice (a chat card and its full screen, a card and the

@@ -72,16 +72,17 @@ expansion) and navigation, then wraps `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
 screen, not a blank root) plus the app's single `TooltipProvider`.
 
-**React is one exact, matching `react` + `react-dom` 19.3 canary pin until the first stable release carrying
-upstream fix #34803.** React 19.2's development Performance Tracks retained every
-`performance.measure()` record; Pi-rate chat renders grew a Vite tab past 10 GB while the JS heap stayed
-flat, then Chrome killed the renderer and Vite reported the dead socket as `EPIPE` / `ECONNRESET` (React
-#34770). The selected canary contains React's own `clearMeasures` fix; ThinkRail deliberately carries no
-second measure-reaping policy. Because prereleases do not satisfy dependencies' stable React peer ranges,
-the root package-manager overrides resolve both runtime packages through their catalog entries; `check:deps`
-reads `bun.lock` and rejects any second `react` or `react-dom` version. Every React move upgrades both
-packages together and repeats the mounted-chat memory stress probe before this temporary canary pin can
-return to stable.
+**React is one exact, matching `react` + `react-dom` pin on a release that carries upstream fix #34803.**
+React 19.2's development Performance Tracks retained every `performance.measure()` record; Pi-rate chat
+renders grew a Vite tab past 10 GB while the JS heap stayed flat, then Chrome killed the renderer and Vite
+reported the dead socket as `EPIPE` / `ECONNRESET` (React #34770). ThinkRail ran a 19.3 canary with React's
+own `clearMeasures` fix until a stable release shipped it, and deliberately carries no second
+measure-reaping policy. The root package-manager overrides resolve both runtime packages through their
+catalog entries, and `check:deps` reads `bun.lock` and rejects any second `react` or `react-dom` version, so
+every React move upgrades both together. Every React move also repeats the mounted-chat measure probe: a
+development build (`NODE_ENV=development vite build --mode development`) streams replayed text deltas
+(`e2e/perf/chatReplay`) into a mounted chat and must keep `performance.getEntriesByType("measure")` flat.
+On 19.2.0 it grew by about 1,500 entries per 12 KB message; on the fixed releases it stays at zero.
 
 **Release source maps are build-only and never shipped.** With `THINKRAIL_SOURCEMAPS_RELEASE` set (a
 credentialed release build, [[module-ci-release]]), `vite.config.ts` emits hidden maps and the

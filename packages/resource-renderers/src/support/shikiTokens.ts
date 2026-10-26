@@ -1,5 +1,5 @@
 import { textmateThemeToMonacoTheme } from "@shikijs/monaco";
-import type { editor, languages } from "monaco-editor/esm/vs/editor/editor.api.js";
+import type { editor, languages } from "monaco-editor/editor/editor.api.js";
 import {
 	createHighlighterCore,
 	type HighlighterCore,

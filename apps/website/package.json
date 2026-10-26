@@ -25,7 +25,7 @@
 		"@astrojs/markdown-satteri": "0.3.7",
 		"@astrojs/react": "7.1.1",
 		"@astrojs/rss": "4.0.19",
-		"@astrojs/sitemap": "3.7.3",
+		"@astrojs/sitemap": "3.7.4",
 		"@fontsource-variable/geist": "catalog:",
 		"@fontsource-variable/jetbrains-mono": "catalog:",
 		"@fontsource-variable/orbitron": "catalog:",
