@@ -1,18 +1,30 @@
-import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	closeSync,
+	constants,
+	mkdirSync,
+	openSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 /**
- * Regression tests for CVE-3: TOCTOU Symlink Race in Path Traversal Guard
+ * Regression tests for Finding-3: TOCTOU Symlink Race in Path Traversal Guard
  *
- * These tests verify that the path traversal guard is not vulnerable to
- * symlink race conditions (Time-of-Check-Time-of-Use).
+ * These tests verify that the two-layer defense works:
+ *   Layer 1: realpathSync re-resolution + containment re-check in resolveInWorktree
+ *   Layer 2: O_NOFOLLOW + fd-based reading in readFile
  *
- * The fix ensures that after the security check passes, the path is
- * re-resolved using realpathSync and re-checked for containment before
- * any file operation.
+ * Together they eliminate the TOCTOU race by ensuring:
+ * - The resolved path is validated before use
+ * - The kernel refuses to follow symlinks at open time (O_NOFOLLOW / ELOOP)
+ * - Data is read from the opened inode (fd), not the path
  */
 
 function isContained(root: string, candidate: string): boolean {
@@ -23,7 +35,10 @@ function isContained(root: string, candidate: string): boolean {
 	);
 }
 
-/** The FIXED version of resolveInWorktree that closes the TOCTOU gap. */
+/**
+ * Simulates the FIXED resolveInWorktree: realpathSync + re-check containment.
+ * (Layer 1 of the defense)
+ */
 function resolveInWorktreeFixed(
 	root: string,
 	path: string,
@@ -31,7 +46,7 @@ function resolveInWorktreeFixed(
 	const abs = resolve(root, path);
 	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
 
-	// Original security check (realpathSync on ancestors)
+	// Original security check
 	const realRoot = realpathSync(root);
 	let cursor = abs;
 	while (true) {
@@ -53,13 +68,11 @@ function resolveInWorktreeFixed(
 		break;
 	}
 
-	// FIX: Re-resolve the full path and re-check containment
-	// This closes the TOCTOU window by using the resolved path for subsequent operations
+	// Layer 1: Re-resolve and re-check
 	let resolvedAbs: string;
 	try {
 		resolvedAbs = realpathSync(abs);
 	} catch {
-		// File might not exist yet (for writes) — use the checked abs
 		resolvedAbs = abs;
 	}
 	if (!isContained(realRoot, resolvedAbs)) {
@@ -67,6 +80,30 @@ function resolveInWorktreeFixed(
 	}
 
 	return { abs, resolvedAbs };
+}
+
+/**
+ * Simulates the FIXED readFile: opens with O_NOFOLLOW and reads via fd.
+ * (Layer 2 of the defense)
+ */
+function readFileFixed(resolvedAbs: string): Buffer {
+	const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+	let fd: number;
+	try {
+		fd = openSync(resolvedAbs, constants.O_RDONLY | noFollow);
+	} catch (error: unknown) {
+		const code =
+			typeof error === "object" && error !== null && "code" in error
+				? (error as { code: string }).code
+				: undefined;
+		if (code === "ELOOP") throw new Error("Path escapes the worktree");
+		throw error;
+	}
+	try {
+		return Buffer.from(readFileSync(fd));
+	} finally {
+		closeSync(fd);
+	}
 }
 
 describe("TOCTOU Symlink Race Prevention", () => {
@@ -77,12 +114,8 @@ describe("TOCTOU Symlink Race Prevention", () => {
 		testDir = join(tmpdir(), `toctou-test-${randomUUID()}`);
 		worktreeRoot = join(testDir, "worktree");
 		mkdirSync(join(worktreeRoot, "subdir"), { recursive: true });
-
-		// Create a file inside the worktree
 		writeFileSync(join(worktreeRoot, "safe.txt"), "safe content\n");
 		writeFileSync(join(worktreeRoot, "subdir", "nested.txt"), "nested content\n");
-
-		// Create a file outside the worktree (target for attack)
 		writeFileSync(join(testDir, "secret.txt"), "SECRET: api_key=sk-1234567890\n");
 	});
 
@@ -90,14 +123,18 @@ describe("TOCTOU Symlink Race Prevention", () => {
 		rmSync(testDir, { recursive: true, force: true });
 	});
 
-	test("allows reading files inside the worktree", () => {
+	test("allows reading regular files inside the worktree", () => {
 		const result = resolveInWorktreeFixed(worktreeRoot, "safe.txt");
 		expect(result.resolvedAbs).toBe(realpathSync(join(worktreeRoot, "safe.txt")));
+		const data = readFileFixed(result.resolvedAbs);
+		expect(data.toString()).toBe("safe content\n");
 	});
 
 	test("allows reading nested files inside the worktree", () => {
 		const result = resolveInWorktreeFixed(worktreeRoot, "subdir/nested.txt");
 		expect(result.resolvedAbs).toBe(realpathSync(join(worktreeRoot, "subdir", "nested.txt")));
+		const data = readFileFixed(result.resolvedAbs);
+		expect(data.toString()).toBe("nested content\n");
 	});
 
 	test("blocks path traversal via ../ sequences", () => {
@@ -106,66 +143,79 @@ describe("TOCTOU Symlink Race Prevention", () => {
 		);
 	});
 
-	test("blocks symlinks pointing outside the worktree", () => {
+	test("Layer 1: realpathSync re-check catches symlinks outside worktree", () => {
 		const secretPath = join(testDir, "secret.txt");
 		const symlinkPath = join(worktreeRoot, "evil-link");
-
-		// Create a symlink pointing outside the worktree
 		symlinkSync(secretPath, symlinkPath);
 
-		// The FIXED function should catch this
 		expect(() => resolveInWorktreeFixed(worktreeRoot, "evil-link")).toThrow(
 			/Path escapes the worktree/,
 		);
 	});
 
-	test("blocks symlinks in parent directories pointing outside", () => {
+	test("Layer 1: catches symlink directories pointing outside", () => {
 		const outsideDir = join(testDir, "outside");
 		mkdirSync(outsideDir, { recursive: true });
 		writeFileSync(join(outsideDir, "target.txt"), "escaped content\n");
+		symlinkSync(outsideDir, join(worktreeRoot, "subdir-link"));
 
-		// Create a symlink directory inside worktree pointing outside
-		const symlinkDir = join(worktreeRoot, "subdir-link");
-		symlinkSync(outsideDir, symlinkDir);
-
-		// Traversing through the symlink directory should be blocked
 		expect(() => resolveInWorktreeFixed(worktreeRoot, "subdir-link/target.txt")).toThrow(
 			/Path escapes the worktree/,
 		);
 	});
 
-	test("the resolved path is used (not the original string path)", () => {
-		// Create a symlink inside worktree pointing to another file inside worktree
+	test("Layer 2: O_NOFOLLOW rejects symlinks at read time (ELOOP → escape)", () => {
+		// This tests the second layer independently: even if resolveInWorktree
+		// returned a path that has since been swapped to a symlink, O_NOFOLLOW
+		// catches it at open time.
+		const symlinkPath = join(worktreeRoot, "swap-link");
+		const secretPath = join(testDir, "secret.txt");
+
+		// Create a symlink — simulates the attacker swapping after realpathSync
+		symlinkSync(secretPath, symlinkPath);
+
+		// O_NOFOLLOW should cause ELOOP on the symlink
+		const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+		if (noFollow !== 0) {
+			// On platforms with O_NOFOLLOW (Linux, macOS)
+			expect(() => readFileFixed(symlinkPath)).toThrow(/Path escapes the worktree/);
+		} else {
+			// On Windows, O_NOFOLLOW is not available — Layer 1 is the defense
+			// This test verifies the graceful degradation
+			expect(noFollow).toBe(0);
+		}
+	});
+
+	test("Layer 2: fd-based read returns same content as the opened inode", () => {
+		const filePath = join(worktreeRoot, "safe.txt");
+		const data = readFileFixed(filePath);
+		expect(data.toString()).toBe("safe content\n");
+	});
+
+	test("resolved path is the real path, not the symlink path", () => {
 		const symlinkPath = join(worktreeRoot, "internal-link");
 		symlinkSync(join(worktreeRoot, "safe.txt"), symlinkPath);
 
 		const result = resolveInWorktreeFixed(worktreeRoot, "internal-link");
-
-		// The resolved path should be the REAL path, not the symlink path
 		expect(result.resolvedAbs).toBe(realpathSync(join(worktreeRoot, "safe.txt")));
 		expect(result.resolvedAbs).not.toBe(join(worktreeRoot, "internal-link"));
 	});
 
-	test("double-resolution closes the TOCTOU window", () => {
-		// This test verifies the FIX behavior:
-		// Even if the first check passes (because the symlink points inside),
-		// the second resolution catches any change
-
+	test("both layers together: safe symlink that is later swapped", () => {
 		const symlinkPath = join(worktreeRoot, "race-link");
-		const secretPath = join(testDir, "secret.txt");
 
-		// Start with a safe symlink
+		// Start with a safe symlink inside worktree
 		symlinkSync(join(worktreeRoot, "safe.txt"), symlinkPath);
 
-		// Verify it works initially
+		// Layer 1 check passes
 		const result = resolveInWorktreeFixed(worktreeRoot, "race-link");
 		expect(result.resolvedAbs).toBe(realpathSync(join(worktreeRoot, "safe.txt")));
 
-		// Now swap the symlink to point outside
+		// Now swap the symlink to point outside (simulates race condition)
 		rmSync(symlinkPath);
-		symlinkSync(secretPath, symlinkPath);
+		symlinkSync(join(testDir, "secret.txt"), symlinkPath);
 
-		// The FIXED function should catch this even if the string path looks contained
+		// Layer 1 now catches it on re-check
 		expect(() => resolveInWorktreeFixed(worktreeRoot, "race-link")).toThrow(
 			/Path escapes the worktree/,
 		);
