@@ -64,6 +64,14 @@ never ships, and turns those three JSON sources into `styles/generated/` (plus t
 marks into `chat/generated/`).
 `index.html` names the product and links the local, symbol-only SVG favicon derived from the same
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
+It also links two generated raster fallbacks for clients that skip SVG icons, such as Safari 18 and earlier
+and tools that only fetch `/favicon.ico`:
+- `favicon.ico` (48/32/16);
+- a 180 px `apple-touch-icon.png`, opaque because iOS masks its own corners.
+
+Both use the native app tile (the same mark, green on black, as the desktop icon), since a raster cannot
+follow the light/dark scheme. Being real files under `dist`, they also stop those requests from falling
+through to the host's SPA `index.html` fallback.
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, resolves and
 applies the versioned first-paint theme-preference hint (including the current system color scheme) pre-React,
 initializes transport and its client error reporting (window listeners + the error-boundary reporter

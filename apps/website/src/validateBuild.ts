@@ -285,6 +285,18 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		for (const id of new Set(duplicateIds)) failures.push(`${name} duplicate id: ${id}`);
 	}
 
+	for (const icon of ["favicon.ico", "apple-touch-icon.png"]) {
+		if (!(await Bun.file(`${distDirectory}/${icon}`).exists())) failures.push(`missing ${icon}`);
+	}
+	for (const name of ["landing", "blog"] as const) {
+		for (const required of [
+			'<link rel="icon" href="/favicon.ico" sizes="32x32">',
+			'<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
+		]) {
+			if (!pages[name].includes(required)) failures.push(`${name}: missing ${required}`);
+		}
+	}
+
 	const robots = await Bun.file(`${distDirectory}/robots.txt`).text();
 	if (!robots.includes("Sitemap: https://thinkrail.ai/sitemap-index.xml")) {
 		failures.push("robots.txt missing production sitemap");
