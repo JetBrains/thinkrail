@@ -44,6 +44,13 @@ resolved when the operation runs, never persisted. Helpers evaluated during rend
 translator as their first argument, so a language change recomputes them. `layoutTabName` words every
 default name at render from the tab's kind (tool, untitled chat, default terminal, Changes / diff scope,
 plan document) through `lib`'s default-name helpers, and shows a name set by the user or agent verbatim.
+Its optional third argument, the Workbench's **`chatFirstPrompts`** prop (`ChatFirstPrompts`, first prompt by
+session id, injected by the shell beside `onRenameChat`), labels an unnamed chat tab by its first prompt
+through `lib`'s `chatDisplayName` wherever the strip, its overflow search, the drag overlay and the
+move-target summaries (`describeLayoutGroup`, `tabSearchKeywords`) show the name; the tab marks
+`data-title-source` and carries the full prompt as its tooltip, while the rename field still edits the
+real `name`. The label is presentation only: the document's `name` stays `""`, so every mutation the
+Workbench commits from the document it was given leaves the chat unnamed.
 
 A file, spec, or diff browse click opens its preview at once, with no settle wait. A double click then
 promotes that same placement in place. A keep that arrives while the read is still in flight coalesces
@@ -248,7 +255,7 @@ The singular `attention` object is not threaded into leaves. Only the region wra
 - A resize or drag gesture mutates only root-local projection state; because document, attention, and the shared callbacks are all unchanged, the memoized group subtree does not re-render and no feature body re-renders during the gesture. The pointer-up commit that actually changes the document is the only re-render.
 - A selection or focus change in one group re-renders that group's chrome only; sibling groups keep their `selectedId` and skip. Every mounted tab body sits behind the memoized `GroupTabBody` boundary keyed by selected-tab identity and depending only on the stable body renderers, so a body re-renders only when its own selected tab changes — never because a sibling, a resize, or a drag re-rendered. The shell host keeps that true for editor-tab cache writes too: a file/diff/changes body resolves its own cache tab inside the body (`EditorResourceBody`), never through the renderer's closure, so a review tab's keystroke-rate writes re-render that body alone (`e2e/perf/editorTabIsolation.perf.ts`).
 
-The memoization assumes the injected render callbacks are referentially stable: the shell host passes `renderTabBody`/`renderToolBody`/`renderTabAdornment`/`renderEmptyCenter`/`renderCenterActions` as memoized identities, so a parent re-render (such as an attention change) does not break a sibling group's chrome memo by prop identity alone.
+The memoization assumes the injected render callbacks are referentially stable: the shell host passes `renderTabBody`/`renderToolBody`/`renderTabAdornment`/`renderEmptyCenter`/`renderCenterActions` as memoized identities, so a parent re-render (such as an attention change) does not break a sibling group's chrome memo by prop identity alone. `chatFirstPrompts` is a shallow-stable record (the shell selects it with `useShallow`), so it changes identity only when an unnamed chat's label changes.
 
 `e2e/perf/layoutIsolation.perf.ts` pins both guarantees against the render profiler.
 

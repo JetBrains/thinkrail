@@ -12,7 +12,7 @@ import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { useNow } from "../components/useNow";
-import { chatName, relativeTime } from "../lib";
+import { chatDisplayName, relativeTime } from "../lib";
 import { openChatInTab } from "../panels/openChat";
 import { type ClosedChat, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
@@ -178,7 +178,13 @@ function ClosedChatRow({
 					}}
 					className={cn(menuItemClass, "min-w-0 flex-1")}
 				>
-					<span className="flex-1 truncate">{chatName(t, chat.title)}</span>
+					<span
+						className="flex-1 truncate"
+						data-title-source={chat.title ? "name" : chat.firstPrompt ? "prompt" : "default"}
+						title={chat.title ? undefined : chat.firstPrompt}
+					>
+						{chatDisplayName(t, chat.title, chat.firstPrompt)}
+					</span>
 					<span className="shrink-0 tr-text-metadata text-text-muted">
 						{relativeTime(t, chat.closedAt, now)}
 					</span>
@@ -193,7 +199,9 @@ function ClosedChatRow({
 						<button
 							type="button"
 							data-testid="closed-chat-rename"
-							aria-label={t("shell.chatHistory.renameNamed", { title: chatName(t, chat.title) })}
+							aria-label={t("shell.chatHistory.renameNamed", {
+								title: chatDisplayName(t, chat.title, chat.firstPrompt),
+							})}
 							onClick={() => {
 								editStartTitleRef.current = chat.title;
 								cancelNextBlurRef.current = false;
@@ -211,7 +219,9 @@ function ClosedChatRow({
 				<button
 					type="button"
 					data-testid="closed-chat-delete"
-					aria-label={t("shell.chatHistory.trashNamed", { title: chatName(t, chat.title) })}
+					aria-label={t("shell.chatHistory.trashNamed", {
+						title: chatDisplayName(t, chat.title, chat.firstPrompt),
+					})}
 					onClick={() => {
 						onDismiss();
 						void getTransport()

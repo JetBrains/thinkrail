@@ -116,6 +116,7 @@ import {
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
 	selectChatAttended,
+	selectChatFirstPrompt,
 	selectFilesTreeView,
 	selectLayoutResourcePlacement,
 	selectSupportsMcp,
@@ -431,6 +432,7 @@ export interface TerminalTab {
 export interface ClosedChat {
 	sessionId: string;
 	title: string;
+	firstPrompt?: string;
 	closedAt: number;
 }
 
@@ -3566,7 +3568,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (!tab) return {};
 			const remaining = tabs.filter((t) => t.id !== tab.id);
 			const wasActive = s.activeTabByWorkspace[wsId] === tab.id;
-			const entry: ClosedChat = { sessionId, title: tab.name, closedAt: Date.now() };
+			const firstPrompt = selectChatFirstPrompt(s, wsId, sessionId);
+			const entry: ClosedChat = {
+				sessionId,
+				title: tab.name,
+				...(firstPrompt ? { firstPrompt } : {}),
+				closedAt: Date.now(),
+			};
 			const targetsLocation =
 				s.chatLocationRequest?.workspaceId === wsId &&
 				s.chatLocationRequest.sessionId === sessionId;
@@ -3910,9 +3918,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				const replacement = incoming.get(entry.sessionId);
 				if (!replacement) return entry;
 				incoming.delete(entry.sessionId);
-				if (replacement.title === entry.title) return entry;
+				const firstPrompt = replacement.firstPrompt ?? entry.firstPrompt;
+				if (replacement.title === entry.title && firstPrompt === entry.firstPrompt) return entry;
 				changed = true;
-				return { ...entry, title: replacement.title };
+				return { ...entry, title: replacement.title, ...(firstPrompt ? { firstPrompt } : {}) };
 			});
 			if (incoming.size > 0) changed = true;
 			if (!changed) return {};

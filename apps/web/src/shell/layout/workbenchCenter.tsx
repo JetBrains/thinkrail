@@ -92,6 +92,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 				onHideSide={shared.onHideSide}
 				onRevealTool={shared.onRevealTool}
 				onRenameChat={shared.onRenameChat}
+				{...(shared.chatFirstPrompts ? { chatFirstPrompts: shared.chatFirstPrompts } : {})}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
 				trailing={

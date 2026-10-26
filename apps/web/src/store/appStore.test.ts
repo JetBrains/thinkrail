@@ -2165,6 +2165,21 @@ test("noteClosedChats surfaces disk-only sessions in history, skipping live/open
 		title: "Renamed chat",
 		closedAt: 200,
 	});
+	store.noteClosedChats("ws1", [
+		{ sessionId: "disk2", title: "", firstPrompt: "the older prompt", closedAt: 100 },
+	]);
+	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
+	expect(history.find((chat) => chat.sessionId === "disk2")).toEqual({
+		sessionId: "disk2",
+		title: "",
+		firstPrompt: "the older prompt",
+		closedAt: 100,
+	});
+	store.noteClosedChats("ws1", [{ sessionId: "disk2", title: "", closedAt: 100 }]);
+	expect(
+		useAppStore.getState().closedChatsByWorkspace.ws1?.find((chat) => chat.sessionId === "disk2")
+			?.firstPrompt,
+	).toBe("the older prompt");
 
 	store.openChatSession("ws1", "disk1", null, "medium");
 	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];

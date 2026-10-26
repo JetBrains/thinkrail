@@ -8,6 +8,27 @@ export function chatName(t: Translator, name: string | null | undefined): string
 	return name?.trim() || t("store.chatTab.defaultName");
 }
 
+const FALLBACK_CHAT_TITLE_LENGTH = 48;
+
+/** The display-only label of an unnamed chat: the head of its first prompt, cut at a word boundary. */
+export function fallbackChatTitle(firstPrompt: string | null | undefined): string | undefined {
+	const line = firstPrompt?.replace(/\s+/g, " ").trim();
+	if (!line || line.startsWith("<")) return undefined;
+	if (line.length <= FALLBACK_CHAT_TITLE_LENGTH) return line;
+	const cut = line.slice(0, FALLBACK_CHAT_TITLE_LENGTH);
+	const boundary = cut.lastIndexOf(" ");
+	return `${(boundary > FALLBACK_CHAT_TITLE_LENGTH / 2 ? cut.slice(0, boundary) : cut).trimEnd()}…`;
+}
+
+/** A real name wins; an unnamed chat shows its first prompt's head; otherwise the generic label. */
+export function chatDisplayName(
+	t: Translator,
+	name: string | null | undefined,
+	firstPrompt: string | null | undefined,
+): string {
+	return name?.trim() || fallbackChatTitle(firstPrompt) || t("store.chatTab.defaultName");
+}
+
 export function defaultTerminalTitle(index: number): string {
 	return `Terminal ${index}`;
 }

@@ -445,7 +445,12 @@ browser-local persistence, and cross-browser isolation without involving a provi
 coverage seeds one canonical giant Markdown block and drives real coarse wheel input so initial virtual
 geometry cannot clamp before the row mounts. Chat-title coverage uses persisted Pi transcripts to prove the
 native `/name` path, open-tab and closed-history inline rename paths, keyboard focus recovery, bounded
-long-history scrolling, and reload durability without involving a provider. Visualize coverage
+long-history scrolling, and reload durability without involving a provider. First-prompt label coverage
+(`chat-title-fallback.spec.ts`) seeds unnamed transcripts to pin the host-projected label on the tab strip,
+Recently closed and the session switcher (`data-title-source="prompt"`, full line as tooltip, word-boundary
+cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
+from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
+durability is the server unit test's. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
 sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
 fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons

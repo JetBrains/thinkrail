@@ -19,6 +19,7 @@ import { type LayoutAttention, readLayoutNavigationClock, tupleKey } from "../..
 import type { AuxiliaryRailEntry } from "./auxiliaryPresentation";
 import {
 	type CenterSplitDirection,
+	type ChatFirstPrompts,
 	canJoinAuxiliaryGroup,
 	canPlaceLayoutTab,
 	collectCenterGroups,
@@ -75,6 +76,8 @@ export interface WorkbenchProps {
 		prepare: (latestDocument?: WorkspaceLayoutDocument) => PreparedLayoutClose,
 	) => void;
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
+	/** Display labels for chat tabs that have no name yet; never written into the document. */
+	chatFirstPrompts?: ChatFirstPrompts;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (
 		groupId: string,
@@ -359,8 +362,12 @@ export function useHorizontalOverflow(
 	return overflow;
 }
 
-export function tabSearchKeywords(t: Translator, tab: LayoutTab): string[] {
-	const name = layoutTabName(t, tab);
+export function tabSearchKeywords(
+	t: Translator,
+	tab: LayoutTab,
+	chatFirstPrompts: ChatFirstPrompts | undefined,
+): string[] {
+	const name = layoutTabName(t, tab, chatFirstPrompts);
 	switch (tab.kind) {
 		case "file":
 		case "diff":
@@ -602,6 +609,7 @@ export interface SharedGroupProps {
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
+	chatFirstPrompts: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 }
 

@@ -172,6 +172,15 @@ describe("workspace layout model", () => {
 			const chat = (name: string) => ({ kind: "chat", id: "c", name, sessionId: "s" }) as const;
 			expect(layoutTabName(t, chat(""))).toBe("Unterhaltung");
 			expect(layoutTabName(t, chat("Fix login"))).toBe("Fix login");
+			const prompts = { s: "Please refactor the authentication module so that tokens refresh" };
+			expect(layoutTabName(t, chat(""), prompts)).toBe(
+				"Please refactor the authentication module so\u2026",
+			);
+			expect(layoutTabName(t, chat("Fix login"), prompts)).toBe("Fix login");
+			expect(layoutTabName(t, chat(""), { other: "x" })).toBe("Unterhaltung");
+			expect(describeLayoutGroup(t, [chat(""), toolTab("plan")], prompts)).toContain(
+				"Please refactor the authentication module so\u2026",
+			);
 			expect(layoutTabName(t, { kind: "terminal", id: "t", name: "Terminal 2", tabKey: "k" })).toBe(
 				"Konsole 2",
 			);

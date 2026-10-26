@@ -122,6 +122,36 @@ describe("selectSwitcherGroups", () => {
 		expect(sessions.find((s) => s.sessionId === "s2")?.chatTitle).toBeNull();
 	});
 
+	test("carries the first prompt beside the title, from the record or the closed-chat summary", () => {
+		const state = {
+			...baseState([
+				{
+					...stateRecord("s1", "w1", "p1", { execution: "running" }),
+					firstPrompt: "Fix the login",
+				},
+				stateRecord("s2", "w1", "p1", { execution: "running" }),
+				stateRecord("s3", "w1", "p1", { execution: "running" }),
+			]),
+			layoutDocumentsByWorkspace: { w1: layoutWithChat("s1", "") },
+			closedChatsByWorkspace: {
+				w1: [{ sessionId: "s2", title: "", firstPrompt: "Closed prompt", closedAt: 1 }],
+			},
+		};
+		const sessions = selectSwitcherGroups(state)[0]?.sessions ?? [];
+		expect(sessions.find((s) => s.sessionId === "s1")).toMatchObject({
+			chatTitle: "",
+			firstPrompt: "Fix the login",
+		});
+		expect(sessions.find((s) => s.sessionId === "s2")).toMatchObject({
+			chatTitle: "",
+			firstPrompt: "Closed prompt",
+		});
+		expect(sessions.find((s) => s.sessionId === "s3")).toMatchObject({
+			chatTitle: null,
+			firstPrompt: undefined,
+		});
+	});
+
 	test("resolves workspace name from store, else empty", () => {
 		const state = baseState([stateRecord("s1", "w1", "p1", { execution: "running" })]);
 		expect(selectSwitcherGroups(state)[0]?.sessions[0]?.workspaceName).toBe("Workspace 1");

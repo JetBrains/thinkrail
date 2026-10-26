@@ -18,6 +18,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { prepareChatTitle } from "../chat/chatTitle";
 import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
@@ -51,6 +52,7 @@ import {
 	selectDiffTabTargetRef,
 	selectRailPlanSessionId,
 	selectReviewDraftCount,
+	selectUnnamedChatFirstPrompts,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
@@ -577,6 +579,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				: emptyWorkspaceProjection(frame, workspaceProjectionReference(workspaceId)),
 		[attention, document, frame, workspaceId],
 	);
+	const chatFirstPrompts = useAppStore(
+		useShallow((state) => selectUnnamedChatFirstPrompts(state, workspaceId)),
+	);
 	const rendered = document && attention ? { document, attention } : pendingProjection;
 
 	const renderResourceBody = useCallback(
@@ -854,6 +859,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
 				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
+				chatFirstPrompts={chatFirstPrompts}
 				onRequestClose={(tab, prepare) => {
 					if (tab.kind === "terminal") {
 						const close = () => {

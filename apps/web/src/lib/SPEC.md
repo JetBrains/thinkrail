@@ -109,7 +109,10 @@ not this module; the theme-aware highlighter remains app-local.
   `relativeTime`, `compactAge`, the render-time default names `chatName` / `terminalName` (+ the
   language-neutral `defaultTerminalTitle` / `defaultTerminalIndex`) / `changesTabName` / `diffTabName` /
   `turnTimeLabel` / `planDocumentName` (stored tab names carry no translated text; these word them for the
-  caller's translator), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
+  caller's translator), **`fallbackChatTitle(firstPrompt)`** / **`chatDisplayName(t, name, firstPrompt)`** (the
+  one derivation of an unnamed chat's label: a real name wins; else the first prompt's head cut at a word
+  boundary at 48 characters with `…`; else `chatName`'s generic label — every surface that shows a chat
+  title calls it, so the agent's or user's title replaces the label everywhere at once), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
   `MCP_STATE_KEY`, `mcpStateLabel`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
   `isMcpActiveState`, the `McpStateTone` type,
   `DOUBLE_CLICK_SETTLE_MS`, `firstClickOnly`, `doubleClickPendingMs`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,

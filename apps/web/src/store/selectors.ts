@@ -4,6 +4,7 @@ import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
 	DEFAULT_WORKSPACE_NAME,
+	firstPromptHead,
 	type GitDiffScope,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
@@ -27,7 +28,7 @@ import {
 import type { Translator } from "@thinkrail/locales/react";
 import type { LoginState } from "../auth";
 import {
-	chatName,
+	chatDisplayName,
 	compactAge,
 	isAbsolutePath,
 	isMcpActiveState,
@@ -37,6 +38,7 @@ import {
 	normalizePath,
 	readLayoutSelection,
 	relativeTime,
+	userText,
 } from "../lib";
 import type {
 	LayoutAuxiliaryRegion,
@@ -918,13 +920,52 @@ export function selectChatName(
 	return tabs.find((tab) => tab.kind === "chat" && tab.sessionId === sessionId)?.name ?? "";
 }
 
+export interface ChatFirstPromptState {
+	sessions: Record<string, SessionRuntime>;
+	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
+	closedChatsByWorkspace: Record<string, ClosedChat[]>;
+}
+
+/** The first prompt's head for an unnamed chat's label: the host's projection, else the loaded runtime. */
+export function selectChatFirstPrompt(
+	state: ChatFirstPromptState,
+	workspaceId: string,
+	sessionId: string,
+): string | undefined {
+	const reported =
+		state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.firstPrompt ??
+		state.closedChatsByWorkspace[workspaceId]?.find((chat) => chat.sessionId === sessionId)
+			?.firstPrompt;
+	if (reported) return reported;
+	const first = state.sessions[sessionId]?.turns.find((turn) => turn.kind === "user");
+	return first ? firstPromptHead(userText(first.message.content)) : undefined;
+}
+
+/** First prompts by session id for the workspace's open chat tabs that have no name yet. */
+export function selectUnnamedChatFirstPrompts(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
+	workspaceId: string,
+): Record<string, string> {
+	const prompts: Record<string, string> = {};
+	for (const tab of state.tabsByWorkspace[workspaceId] ?? []) {
+		if (tab.kind !== "chat" || tab.name.trim()) continue;
+		const prompt = selectChatFirstPrompt(state, workspaceId, tab.sessionId);
+		if (prompt) prompts[tab.sessionId] = prompt;
+	}
+	return prompts;
+}
+
 export function selectChatTitle(
 	t: Translator,
-	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
 	workspaceId: string,
 	sessionId: string,
 ): string {
-	return chatName(t, selectChatName(state, workspaceId, sessionId));
+	return chatDisplayName(
+		t,
+		selectChatName(state, workspaceId, sessionId),
+		selectChatFirstPrompt(state, workspaceId, sessionId),
+	);
 }
 
 export function selectCompactionTurnIds(

@@ -237,11 +237,14 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.sessionCreated, (data) => {
 		const summary = data as SessionCreatedPayload;
-		useAppStore
-			.getState()
-			.noteClosedChats(summary.workspaceId, [
-				{ sessionId: summary.sessionId, title: summary.title, closedAt: summary.updatedAt },
-			]);
+		useAppStore.getState().noteClosedChats(summary.workspaceId, [
+			{
+				sessionId: summary.sessionId,
+				title: summary.title,
+				...(summary.firstPrompt ? { firstPrompt: summary.firstPrompt } : {}),
+				closedAt: summary.updatedAt,
+			},
+		]);
 	});
 
 	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {

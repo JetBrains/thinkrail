@@ -27,6 +27,8 @@ import {
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectChatAttended,
+	selectChatFirstPrompt,
+	selectChatTitle,
 	selectCompletionMarkedUnread,
 	selectContextProject,
 	selectFileChangeSince,
@@ -40,6 +42,7 @@ import {
 	selectReadyCompletionAck,
 	selectSkillsStale,
 	selectSupportsModelPicker,
+	selectUnnamedChatFirstPrompts,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspaceReadAction,
@@ -804,4 +807,75 @@ test("the host-named default workspace shows in the interface language until it 
 	} finally {
 		applyLocale("en", {});
 	}
+});
+
+describe("the first prompt of an unnamed chat", () => {
+	const quiet: SessionState = {
+		execution: "idle",
+		runId: null,
+		needsInput: null,
+		completion: null,
+		completionUnread: false,
+		queuedCount: 0,
+		backgroundWork: false,
+	};
+	const record = (sessionId: string, firstPrompt?: string): SessionStateRecord => ({
+		sessionId,
+		projectId: "p1",
+		workspaceId: "w1",
+		state: quiet,
+		...(firstPrompt ? { firstPrompt } : {}),
+	});
+	const userTurn = (text: string) => ({
+		kind: "user" as const,
+		id: `turn-${text}`,
+		message: { role: "user" as const, content: text, timestamp: 1 },
+	});
+	const chatTab = (sessionId: string, name: string): EditorTab => ({
+		kind: "chat",
+		id: `chat:w1:${sessionId}`,
+		workspaceId: "w1",
+		name,
+		sessionId,
+	});
+
+	test("prefers the host's record, then the closed-chat summary, then the loaded runtime", () => {
+		const state = {
+			sessions: {
+				s1: { ...EMPTY_RUNTIME, turns: [userTurn("From the runtime")] },
+				s2: { ...EMPTY_RUNTIME, turns: [userTurn("Only the runtime knows")] },
+				s4: {
+					...EMPTY_RUNTIME,
+					turns: [userTurn('<review id="r" branch="b" base="c" comments="0">')],
+				},
+			},
+			sessionStateByWorkspace: { w1: { s1: record("s1", "From the record"), s2: record("s2") } },
+			closedChatsByWorkspace: {
+				w1: [{ sessionId: "s3", title: "", firstPrompt: "From the closed summary", closedAt: 1 }],
+			},
+		};
+		expect(selectChatFirstPrompt(state, "w1", "s1")).toBe("From the record");
+		expect(selectChatFirstPrompt(state, "w1", "s2")).toBe("Only the runtime knows");
+		expect(selectChatFirstPrompt(state, "w1", "s3")).toBe("From the closed summary");
+		expect(selectChatFirstPrompt(state, "w1", "s4")).toBeUndefined();
+		expect(selectChatFirstPrompt(state, "w1", "unknown")).toBeUndefined();
+	});
+
+	test("titles and tab labels fall back to the prompt only while the chat has no name", () => {
+		const t = currentTranslator();
+		const state = {
+			tabsByWorkspace: {
+				w1: [chatTab("s1", ""), chatTab("s2", "Named by the agent"), chatTab("s3", "")],
+			},
+			sessions: {},
+			sessionStateByWorkspace: {
+				w1: { s1: record("s1", "Fix the login redirect"), s2: record("s2", "Please rename me") },
+			},
+			closedChatsByWorkspace: {},
+		};
+		expect(selectChatTitle(t, state, "w1", "s1")).toBe("Fix the login redirect");
+		expect(selectChatTitle(t, state, "w1", "s2")).toBe("Named by the agent");
+		expect(selectChatTitle(t, state, "w1", "s3")).toBe("Chat");
+		expect(selectUnnamedChatFirstPrompts(state, "w1")).toEqual({ s1: "Fix the login redirect" });
+	});
 });
