@@ -56,6 +56,7 @@ const TITLE_BACKFILL_TTL_MS = 60_000;
 
 const backfilledTitles = new Map<string, string>();
 const backfilledWorkspacesAt = new Map<string, number>();
+const loadingProjects = new Set<string>();
 
 function navigateToWorkspace(workspace: Pick<Workspace, "id" | "projectId">, sessionId?: string) {
 	useAppStore.getState().activateWorkspaceFromRoute(workspace, sessionId);
@@ -67,7 +68,11 @@ function backfillOrder(state: ReturnType<typeof useAppStore.getState>) {
 	const known = new Set(
 		state.projects.flatMap((project) => (state.workspaces[project.id] ?? []).map((ws) => ws.id)),
 	);
-	const missingProjects = new Set<string>();
+	const missingProjects = new Set(
+		state.projects
+			.filter((project) => state.workspaces[project.id] === undefined)
+			.map((project) => project.id),
+	);
 	const untitled: { workspaceId: string; rank: number }[] = [];
 	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
 		const list = Object.values(records);
@@ -97,14 +102,20 @@ function useChatTitleBackfill(): Record<string, string> {
 	const [titles, setTitles] = useState<Record<string, string>>(() =>
 		Object.fromEntries(backfilledTitles),
 	);
+	const snapshotKey = useAppStore((s) =>
+		Object.keys(s.sessionStateByWorkspace).sort().join("\u0000"),
+	);
 	useEffect(() => {
 		let cancelled = false;
 		const { missingProjects, workspaceIds } = backfillOrder(useAppStore.getState());
 		for (const projectId of missingProjects) {
+			if (loadingProjects.has(projectId)) continue;
+			loadingProjects.add(projectId);
 			void getTransport()
 				.request("workspace.list", { projectId })
 				.then((rows) => useAppStore.getState().setWorkspaces(projectId, rows))
-				.catch(() => {});
+				.catch(() => {})
+				.finally(() => loadingProjects.delete(projectId));
 		}
 		const queue = [...workspaceIds];
 		const drain = async (): Promise<void> => {
@@ -129,7 +140,7 @@ function useChatTitleBackfill(): Record<string, string> {
 		return () => {
 			cancelled = true;
 		};
-	}, []);
+	}, [snapshotKey]);
 	return titles;
 }
 
