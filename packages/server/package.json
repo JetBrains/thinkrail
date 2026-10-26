@@ -29,6 +29,7 @@
 		"jsonc-parser": "3.3.1",
 		"pi-background-commands": "workspace:*",
 		"pi-delegation": "workspace:*",
+		"pi-sandbox": "workspace:*",
 		"pi-spec-graph": "workspace:*",
 		"pi-subagents": "workspace:*",
 		"pi-thinkrail-workflow": "workspace:*",

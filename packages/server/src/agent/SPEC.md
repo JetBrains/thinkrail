@@ -893,6 +893,14 @@ never overwrite a durable name, and the first name is final. No generated/manual
 belongs here: the absent-vs-present pi name is sufficient. The architecture's accepted no-cross-process
 coordination rule still applies.
 
+## Sandbox (prototype)
+
+`sandbox` embeds [[module-pi-sandbox]] behind the process-wide `THINKRAIL_SANDBOX=1` flag: parent chats
+get the sandbox extension (with the session's effective shell path and command prefix) and their
+background-command service gets the sandboxed executor; hidden children get the extension through
+`childBaseExtensionFactories`. With the flag unset nothing is added. Making it a workspace property,
+and the UI around it, is planned in [[module-pi-sandbox]].
+
 ## Chat Resources integration
 
 The manager retains one [[module-pi-background-commands]] service per parent chat alongside its Pi
