@@ -1058,7 +1058,7 @@ async function prepareSessionEntry(
 	});
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "turn_end") {
-			entry.askUserQuestionWaiters.persistTurn(event.toolResults, event.message);
+			entry.askUserQuestionWaiters.persistTurn(event.toolResults);
 			entry.commands.flushCompletions();
 			entry.subagents.flushCompletions();
 		}

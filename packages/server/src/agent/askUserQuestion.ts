@@ -128,13 +128,6 @@ export function buildAnswersMessage(
 	};
 }
 
-function askArgsOf(assistant: unknown, toolCallId: string): AskUserQuestionArgs | undefined {
-	const call = toolCallsOf((assistant ?? {}) as MessageView).find(
-		(block) => block.id === toolCallId && block.name === ASK_USER_QUESTION_TOOL_NAME,
-	);
-	return call ? ((call.arguments ?? { questions: [] }) as AskUserQuestionArgs) : undefined;
-}
-
 export type AskUserQuestionWaitOutcome =
 	| { kind: "answer"; result: AskUserQuestionResult }
 	| { kind: "superseded" }
@@ -198,11 +191,9 @@ export interface AskUserQuestionWaiters {
 		toolResults: readonly {
 			toolCallId: string;
 			toolName: string;
-			content?: unknown;
 			details?: unknown;
 			isError?: boolean;
 		}[],
-		assistant?: unknown,
 	): void;
 	supersede(): boolean;
 	currentQuestion(): { interactionId: string; needsInput: boolean } | null;
@@ -277,7 +268,7 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			waiter.resolveAnswer({ kind: "answer", result });
 			return { handled: true, persisted: waiter.persisted };
 		},
-		persistTurn(toolResults, assistant) {
+		persistTurn(toolResults) {
 			for (const result of toolResults) {
 				if (result.toolName !== ASK_USER_QUESTION_TOOL_NAME) continue;
 				const waiter = waiting.get(result.toolCallId);
@@ -285,17 +276,11 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 				waiting.delete(result.toolCallId);
 				waiter.cleanupAbort();
 				if (waiter.phase !== "answer-accepted-uncommitted") continue;
-				const args = askArgsOf(assistant, result.toolCallId);
-				const expected =
-					waiter.acceptedResult && args
-						? buildQuestionnaireResponse(waiter.acceptedResult, args)
-						: undefined;
 				if (
 					waiter.executeStarted &&
-					expected !== undefined &&
+					waiter.acceptedResult !== undefined &&
 					result.isError !== true &&
-					isDeepStrictEqual(result.content, expected.content) &&
-					isDeepStrictEqual(result.details, expected.details)
+					isDeepStrictEqual(result.details, waiter.acceptedResult)
 				) {
 					waiter.resolvePersisted();
 				} else {
