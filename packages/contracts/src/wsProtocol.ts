@@ -706,7 +706,10 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"workspace.remove": { params: { id: string }; result: Ack };
-	"chat.create": { params: Record<string, never>; result: ChatCreateResult };
+	"chat.create": {
+		params: { model?: WireModel; thinkingLevel?: ThinkingLevel };
+		result: ChatCreateResult;
+	};
 	"chat.delete": { params: { workspaceId: string }; result: Ack };
 	"chat.inspect": { params: { workspaceId: string }; result: ChatInspection };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };

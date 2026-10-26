@@ -754,7 +754,7 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats(params.id),
-	"chat.create": () => createChat(),
+	"chat.create": (params) => createChat(params),
 	"chat.delete": async (params) => {
 		await deleteChat(params.workspaceId);
 		return { ok: true } as const;

@@ -12,13 +12,29 @@ import {
 	errorText,
 	getSessionMessagesWithSkillBaseline,
 	getTransport,
+	wsErrorCode,
 } from "../transport";
+import { startProjectlessChat } from "./chatActions";
 
 function sendPrompt(sessionId: string, text: string): void {
 	useAppStore.getState().appendUserMessage(sessionId, text);
 	void getTransport()
 		.request("session.prompt", { sessionId, text })
 		.catch((err) => useAppStore.getState().appendErrorTurn(sessionId, errorText(err)));
+}
+
+/** One chat = one folder: a second conversation in a chat without a project is a new chat, not a tab. */
+async function createSessionOrSiblingChat(
+	workspaceId: string,
+	prompt: string | undefined,
+): Promise<Awaited<ReturnType<typeof createSessionWithSkillBaseline>> | null> {
+	try {
+		return await createSessionWithSkillBaseline({ workspaceId });
+	} catch (err) {
+		if (wsErrorCode(err) !== "CHAT_WORKSPACE") throw err;
+		await startProjectlessChat(prompt ? { text: prompt } : {});
+		return null;
+	}
 }
 
 export async function startChatInTab(
@@ -32,10 +48,12 @@ export async function startChatInTab(
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, preferredGroupId);
 	useAppStore.getState().beginChatStart(workspaceId);
 	try {
+		const created = await createSessionOrSiblingChat(workspaceId, prompt);
+		if (!created) return;
 		const {
 			result: { sessionId, model, thinkingLevel },
 			syncedTick,
-		} = await createSessionWithSkillBaseline({ workspaceId });
+		} = created;
 		const store = useAppStore.getState();
 		store.openChatSession(
 			workspaceId,

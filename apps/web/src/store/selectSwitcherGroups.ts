@@ -54,10 +54,15 @@ function compareSessionsByAttention(a: SwitcherSession, b: SwitcherSession): num
 }
 
 export function selectKnownChatTitle(
-	state: Pick<SwitcherGroupsState, "layoutDocumentsByWorkspace" | "closedChatsByWorkspace">,
+	state: Pick<
+		SwitcherGroupsState,
+		"layoutDocumentsByWorkspace" | "closedChatsByWorkspace" | "sessionStateByWorkspace"
+	>,
 	workspaceId: string,
 	sessionId: string,
 ): string | null {
+	const fromHost = state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.title;
+	if (fromHost) return fromHost;
 	const document = state.layoutDocumentsByWorkspace[workspaceId];
 	if (document) {
 		const visit = (node: WorkspaceLayoutDocument["center"]): string | null => {

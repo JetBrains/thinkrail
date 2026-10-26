@@ -1,4 +1,5 @@
 import {
+	RiChat3Line,
 	RiExternalLinkLine,
 	RiFileCopyLine,
 	RiHome4Line,
@@ -10,6 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Command, CommandContext } from "../commands";
 import { copyText } from "../lib";
+import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
 import { openFileInTab } from "../panels/openTabs";
@@ -39,6 +41,7 @@ import {
 	isDefaultWorkspace,
 	selectActiveWorkspace,
 	selectContextProject,
+	selectContextRepoProject,
 	selectHistoryTarget,
 	selectRecordFirstPrompts,
 	selectSupportsOnboarding,
@@ -111,7 +114,7 @@ const hostHitTargets: HostHitTargets = {
 };
 
 export interface SearchPaletteOptions {
-	readonly openNewWorkspace: (projectId: string, initialPrompt?: string) => void;
+	readonly openNewWorkspace: (projectId: string | null, initialPrompt?: string) => void;
 	readonly toggleProjectsHome: () => void;
 	readonly pickAndOpenProject: () => Promise<void>;
 	readonly enterHostPath: () => void;
@@ -133,6 +136,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
+	const contextRepoProject = useAppStore(selectContextRepoProject);
+	const canStartChat = useAppStore(canStartProjectlessChat);
 	const historySessionId = useAppStore((s) => selectHistoryTarget(s)?.sessionId ?? null);
 	const readAction = useAppStore((s) =>
 		activeWorkspaceId && supportsWorkspaceReadState(s.protocolVersion)
@@ -190,19 +195,19 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const context: CommandContext = useMemo(
 		() => ({
 			online,
-			projectId: contextProject?.id ?? null,
+			projectId: contextRepoProject?.id ?? null,
 			workspaceId: activeWorkspaceId,
 			protocolVersion,
 		}),
-		[online, contextProject, activeWorkspaceId, protocolVersion],
+		[online, contextRepoProject, activeWorkspaceId, protocolVersion],
 	);
 	const openNewWorkspace = options.openNewWorkspace;
 	const start = useMemo<PaletteStart | undefined>(
 		() =>
-			contextProject
-				? { openDialog: (text) => openNewWorkspace(contextProject.id, text) }
+			contextRepoProject || canStartChat
+				? { openDialog: (text) => openNewWorkspace(contextRepoProject?.id ?? null, text) }
 				: undefined,
-		[contextProject, openNewWorkspace],
+		[contextRepoProject, canStartChat, openNewWorkspace],
 	);
 
 	const binding = useMemo(() => {
@@ -252,7 +257,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		};
 		const commands: Command[] = [
 			...buildCommands(deps),
-			...(contextProject
+			...(contextRepoProject
 				? [
 						{
 							id: "workspace.openDefault",
@@ -262,7 +267,20 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 							keywords: ["default", "project folder", "no worktree"],
 							mutates: true,
 							run: () =>
-								void enterDefaultWorkspace(contextProject.id, paletteNavigator.beginPick()),
+								void enterDefaultWorkspace(contextRepoProject.id, paletteNavigator.beginPick()),
+						},
+					]
+				: []),
+			...(canStartChat
+				? [
+						{
+							id: "chat.newProjectless",
+							title: t("commands.chat.newProjectless"),
+							group: "work" as const,
+							icon: RiChat3Line,
+							keywords: ["chat", "no project", "scratch", "quick"],
+							mutates: true,
+							run: () => void startProjectlessChat(),
 						},
 					]
 				: []),
@@ -350,6 +368,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		settingsShortcut,
 		options,
 		contextProject,
+		contextRepoProject,
+		canStartChat,
 		editors,
 		projects,
 		workspaces,

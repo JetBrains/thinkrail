@@ -21,7 +21,7 @@ import {
 } from "../workspaces";
 import { trackChatStarted } from "./authAnalytics";
 import { provisionInitialTerminal } from "./initialTerminal";
-import { resolveNewChatModel } from "./newChatModel";
+import { type NewChatModelRequest, resolveNewChatModel } from "./newChatModel";
 import { runObservation } from "./runAnalytics";
 import { taskObservation } from "./taskAnalytics";
 
@@ -38,8 +38,8 @@ function assertNotDeleting(workspaceId: string): void {
 }
 
 /** The chat's folder, record and the one session that owns it, in one operation. */
-export async function createChat(): Promise<ChatCreateResult> {
-	return startChatSession(provisionInitialTerminal(createChatRecord()));
+export async function createChat(requested: NewChatModelRequest = {}): Promise<ChatCreateResult> {
+	return startChatSession(provisionInitialTerminal(createChatRecord()), requested);
 }
 
 /** A chat whose session never came up (crash between folder and session) gets its session here; idempotent. */
@@ -61,9 +61,12 @@ export async function ensureChatSession(workspaceId: string): Promise<ChatCreate
 	return startChatSession(workspace);
 }
 
-async function startChatSession(workspace: Workspace): Promise<ChatCreateResult> {
+async function startChatSession(
+	workspace: Workspace,
+	requested: NewChatModelRequest = {},
+): Promise<ChatCreateResult> {
 	ensureWorkspaceScratchDir(workspace);
-	const defaults = await resolveNewChatModel({});
+	const defaults = await resolveNewChatModel(requested);
 	const created = await createSession({
 		cwd: workspace.worktreePath,
 		workspaceId: workspace.id,

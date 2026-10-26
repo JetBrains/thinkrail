@@ -7,7 +7,7 @@ import {
 import { clampThinkingForModel, listSettledModels, preferredDefaultModel } from "../agent";
 import { getConfig } from "../settings";
 
-type NewChatModelRequest = { model?: WireModel; thinkingLevel?: ThinkingLevel };
+export type NewChatModelRequest = { model?: WireModel; thinkingLevel?: ThinkingLevel };
 type ResolverDependencies = {
 	getConfig: () => AppConfig;
 	listSettledModels: typeof listSettledModels;

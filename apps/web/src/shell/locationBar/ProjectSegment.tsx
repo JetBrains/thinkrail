@@ -9,16 +9,34 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { useShallow } from "zustand/react/shallow";
+import { startProjectlessChat } from "../../panels/chatActions";
 import { useOpenProject } from "../../panels/useOpenProject";
 import { goToProjectHome } from "../../panels/workspaceActions";
-import { useAppStore } from "../../store";
+import {
+	isChatsContainer,
+	selectChatsContainer,
+	selectChatWorkspaces,
+	selectRepoProjects,
+	supportsProjectlessChats,
+	useAppStore,
+} from "../../store";
 import { projectInitial } from "./locationModel";
 import { PillChevron, pillClass, Segment } from "./Segment";
 
 export function ProjectSegment({ project, atHome }: { project: Project; atHome: boolean }) {
 	const t = useT();
-	const projects = useAppStore((s) => s.projects);
+	const projects = useAppStore(useShallow(selectRepoProjects));
+	const chatsContainer = useAppStore((s) =>
+		supportsProjectlessChats(s.protocolVersion) ? selectChatsContainer(s) : null,
+	);
+	const isChats = isChatsContainer(project);
 	const { pickAndOpen, dialogs } = useOpenProject((opened) => goToProjectHome(opened.id));
+	const goToChats = () => {
+		const newest = selectChatWorkspaces(useAppStore.getState())[0];
+		if (newest) useAppStore.getState().activateWorkspace(newest);
+		else void startProjectlessChat();
+	};
 	return (
 		<Segment
 			caption={t("shell.location.project.caption")}
@@ -44,6 +62,18 @@ export function ProjectSegment({ project, atHome }: { project: Project; atHome: 
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="start" data-testid="scope-project-menu">
 					<DropdownMenuLabel>{t("shell.location.project.menuTitle")}</DropdownMenuLabel>
+					{chatsContainer ? (
+						<DropdownMenuItem
+							data-testid="scope-project-chats"
+							data-active={isChats || undefined}
+							onSelect={goToChats}
+						>
+							<span className="flex w-14 shrink-0 justify-center">
+								{isChats ? <Check className="text-primary" /> : null}
+							</span>
+							<span className="truncate">{t("shell.locationBar.chats")}</span>
+						</DropdownMenuItem>
+					) : null}
 					{projects.map((candidate) => (
 						<DropdownMenuItem
 							key={candidate.id}
@@ -58,14 +88,16 @@ export function ProjectSegment({ project, atHome }: { project: Project; atHome: 
 						</DropdownMenuItem>
 					))}
 					<DropdownMenuSeparator />
-					<DropdownMenuItem
-						data-testid="scope-project-home"
-						disabled={atHome}
-						onSelect={() => goToProjectHome(project.id)}
-					>
-						<House />
-						{t("shell.location.project.home")}
-					</DropdownMenuItem>
+					{isChats ? null : (
+						<DropdownMenuItem
+							data-testid="scope-project-home"
+							disabled={atHome}
+							onSelect={() => goToProjectHome(project.id)}
+						>
+							<House />
+							{t("shell.location.project.home")}
+						</DropdownMenuItem>
+					)}
 					<DropdownMenuItem data-testid="scope-project-add" onSelect={() => void pickAndOpen()}>
 						<Plus />
 						{t("shell.location.project.add")}
