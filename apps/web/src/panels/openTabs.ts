@@ -1,4 +1,5 @@
 import type { GitDiffScope } from "@thinkrail/contracts";
+import { SOURCE_RENDERER_ID } from "@thinkrail/resource-renderers";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
 	fileName,
@@ -148,6 +149,16 @@ export function openFileInTab(
 		}),
 		requestedNavigation,
 	);
+}
+
+export async function openFileAtLine(
+	workspaceId: string,
+	path: string,
+	at: { line: number; column?: number; length?: number },
+	intent: TabIntent,
+): Promise<void> {
+	await openFileInTab(workspaceId, path, intent);
+	useAppStore.getState().revealFileTab(workspaceId, path, at, SOURCE_RENDERER_ID);
 }
 
 export function openDiffInTab(

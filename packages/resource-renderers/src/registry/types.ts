@@ -56,6 +56,14 @@ export interface SurfaceReview {
 	onFocusHandled(): void;
 }
 
+/** Scroll a text view to a line and mark a range on it; a new `tick` repeats the reveal. */
+export interface ResourceReveal {
+	line: number;
+	column?: number;
+	length?: number;
+	tick: number;
+}
+
 export interface ResourceViewProps {
 	resource: ResourceDescriptor;
 	content: ResourceContent;
@@ -63,6 +71,7 @@ export interface ResourceViewProps {
 	onPlacedThreadIds?(ids: ReadonlySet<string>): void;
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
+	reveal?: ResourceReveal;
 }
 
 export interface HunkActions {

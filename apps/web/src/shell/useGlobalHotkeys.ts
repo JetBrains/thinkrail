@@ -10,9 +10,16 @@ type GlobalHotkeyActions = {
 	onBottom?: () => void;
 	onNewWorkspace?: () => void;
 	onSearch?: () => void;
+	onFindInFiles?: () => void;
 };
 
-type GlobalHotkeyCommand = "projects" | "workspace" | "bottom" | "new-workspace" | "search";
+type GlobalHotkeyCommand =
+	| "projects"
+	| "workspace"
+	| "bottom"
+	| "new-workspace"
+	| "search"
+	| "find-in-files";
 
 type GlobalHotkeyAvailability = {
 	projects: boolean;
@@ -20,6 +27,7 @@ type GlobalHotkeyAvailability = {
 	bottom: boolean;
 	newWorkspace: boolean;
 	search: boolean;
+	findInFiles?: boolean;
 };
 
 type GlobalHotkeyEvent = Pick<
@@ -38,6 +46,7 @@ export function globalHotkeyCommand(
 	if (!event.shiftKey && !event.altKey && event.code === "KeyK" && available.search)
 		return "search";
 	if (event.altKey) return null;
+	if (event.shiftKey && event.code === "KeyF" && available.findInFiles) return "find-in-files";
 	if (!event.shiftKey && event.code === "KeyB" && available.projects) return "projects";
 	if (!event.shiftKey && event.code === "KeyJ" && available.workspace) return "workspace";
 	if (event.shiftKey && event.code === "KeyJ" && available.bottom) return "bottom";
@@ -75,6 +84,7 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 					bottom: actionsRef.current.onBottom !== undefined,
 					newWorkspace: actionsRef.current.onNewWorkspace !== undefined,
 					search: actionsRef.current.onSearch !== undefined,
+					findInFiles: actionsRef.current.onFindInFiles !== undefined,
 				},
 				hasOpenModal(),
 			);
@@ -86,6 +96,7 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 					else if (command === "workspace") actionsRef.current.onWorkspace?.();
 					else if (command === "bottom") actionsRef.current.onBottom?.();
 					else if (command === "search") actionsRef.current.onSearch?.();
+					else if (command === "find-in-files") actionsRef.current.onFindInFiles?.();
 					else actionsRef.current.onNewWorkspace?.();
 				}
 				return;

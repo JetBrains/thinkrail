@@ -2276,7 +2276,12 @@ own section. The kebab menu (`plan-menu`, a
   `MarkdownPreview`; `thinkrail/code` is the text fallback and uses Monaco on desktop plus Pierre `File`
   on phone-class viewports; `thinkrail/binary` shows identity and a host-backed
   download. The candidate list alone determines whether the resource toggle exists. No format predicate or
-  preview/source field remains in the pane or tab.
+  preview/source field remains in the pane or tab. A tab's `reveal` (the store's `FileReveal`) is passed
+  through to the mounted view as the renderer contract's `reveal`, so the code renderer scrolls to and marks
+  that line; `openTabs.ts`' **`openFileAtLine(workspaceId, path, at, intent)`** is the one open-at-a-line
+  entry (Find in Files' `↵` / `⌘↵`): the ordinary `openFileInTab` at the caller's intent, then
+  `revealFileTab` naming `SOURCE_RENDERER_ID`, so a Markdown or HTML file opens as source at the line rather
+  than as its rendered document.
 
   `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
   source-line stamps, review commenting, and bounded reading measure described above. These are renderer

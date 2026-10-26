@@ -63,6 +63,7 @@ does not reproduce yet.
 | `terminal.new` New terminal | `store.addTerminal` | active workspace, online (placement reserves on the host) | PR1 |
 | Start work from typed text (the Start work row, `⌘↵` from any row) | the shell's Create-workspace dialog, opened prefilled through the palette's `PaletteStart.openDialog` — nothing starts without the dialog | context project | PR3 |
 | Chat without a project | `chat.create` | — | PR4 |
+| `files.findInFiles` Find in files… (`Mod+Shift+F`) | `findInFiles.openFindInFiles` (the shell binds the chord, `FindInFilesHost` composes the window) | `supportsTextSearch` + a context project or active workspace | PR6 |
 | Continue in workspace | `chat.continue` | a projectless chat | PR5 |
 | Remove workspace, close project, stop trusting, layout apply/reset, clear review, MCP approve/remove, stop all subagents, delete template | their confirm dialogs | confirmation | Row UI |
 | Publish / push / open, mark ready, merge, reopen a pull request, delete the remote branch, hand checks or a diverged branch to the agent | `shell/locationBar` topbar review card | branch status + GitHub facts | Row UI |

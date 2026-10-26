@@ -35,6 +35,7 @@ export {
 	type ResourceEnvironment,
 	type ResourceIntent,
 	type ResourceRenderer,
+	type ResourceReveal,
 	type ResourceViewModule,
 	type ResourceViewProps,
 	type ReviewThread,
@@ -46,6 +47,7 @@ export {
 	type SurfaceReview,
 	threadLabel,
 } from "./registry";
+export { SOURCE_RENDERER_ID } from "./renderers/code";
 export { createAskAgentRequest } from "./renderers/code/changeBlocks";
 export { registerBundledResourceRenderers } from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";

@@ -26,6 +26,7 @@ export {
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
 	supportsRichAnchors,
+	supportsTextSearch,
 	supportsToolResponses,
 	supportsTurnChanges,
 	supportsUserThemes,

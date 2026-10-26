@@ -691,7 +691,14 @@ target's diff under the new target's label; the cached value is what the mount c
 and `DiffTab` share `rendererId` plus opaque `viewState`, written by workspace-explicit `setTabRenderer`
 and `setTabViewState` so an unmount callback settling after a workspace switch still updates its owning tab.
 The registry owns view-state interpretation; changing renderer or phone/desktop implementation drops the
-prior opaque state, and each implementation rejects state it cannot interpret. Diff-only presentation keeps
+prior opaque state, and each implementation rejects state it cannot interpret. A `FileTab` may also carry
+a **`reveal`** (`FileReveal`: `line`, optional `column` / `length`, and a `tick`) written by
+`revealFileTab(workspaceId, path, at, rendererId?)` — the open-at-a-line request Find in Files makes
+after `openFileInTab`: it finds the workspace's file tab by path, bumps `tick` so the same line reveals
+again, and when a renderer id is named switches the tab to it (dropping the opaque `viewState`, as
+`setTabRenderer` does) so a Markdown or HTML file opens at its source line. The reveal is not cleared on
+consume — the pane forwards it to the renderer, which acts once per `tick` — and, like `rendererId` and
+`viewState`, lives only in this client's tab cache, never in the persisted layout document. Diff-only presentation keeps
 `view` split|inline via
 `setDiffTabView` (split by default) and `ignoreWhitespace` via `setDiffTabIgnoreWhitespace`. Legacy persisted
 `view` on file documents and `rendered` on diff documents are outside the accepted cache shape and are

@@ -44,6 +44,7 @@ export default function MonacoEditor({
 	review,
 	viewState,
 	onViewState,
+	reveal,
 }: ResourceViewProps) {
 	const t = useT();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
@@ -59,6 +60,7 @@ export default function MonacoEditor({
 	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
 	const decorationsRef = useRef<string[]>([]);
 	const freshMountRef = useRef(false);
+	const revealMountRef = useRef(false);
 	const appliedRef = useRef({ scope, path, text, options });
 	const latestRef = useRef({
 		scope,
@@ -95,6 +97,7 @@ export default function MonacoEditor({
 		const codeEditor = createFileEditor(container, mount);
 		editorRef.current = codeEditor;
 		freshMountRef.current = true;
+		revealMountRef.current = true;
 		appliedRef.current = {
 			scope: mount.scope,
 			path: mount.path,
@@ -167,6 +170,26 @@ export default function MonacoEditor({
 		else codeEditor.revealLineInCenter(line);
 		review.onFocusHandled();
 	}, [review]);
+
+	const revealLine = reveal?.line;
+	const revealColumn = reveal?.column;
+	const revealLength = reveal?.length;
+	const revealTick = reveal?.tick;
+	useLayoutEffect(() => {
+		const codeEditor = editorRef.current;
+		const freshMount = revealMountRef.current;
+		revealMountRef.current = false;
+		if (!codeEditor || revealLine === undefined || revealTick === undefined) return;
+		if (freshMount) revealLineNow(codeEditor, revealLine);
+		else codeEditor.revealLineInCenter(revealLine);
+		const column = revealColumn ?? 1;
+		codeEditor.setSelection({
+			startLineNumber: revealLine,
+			startColumn: column,
+			endLineNumber: revealLine,
+			endColumn: column + (revealLength ?? 0),
+		});
+	}, [revealLine, revealColumn, revealLength, revealTick]);
 
 	return (
 		<>
