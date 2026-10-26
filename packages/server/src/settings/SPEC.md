@@ -15,7 +15,7 @@ effort defaults, terminal replay budget and Windows shell preference, chat compo
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
 display/cadence, the host-wide subagent default, plan-review policy, the host-registry extensions the
 user turned off, and the UI language preference (`locale`). `defaultModel` / `defaultEffort`
-select the defaults every new chat receives (unset model means first available; unset effort means medium);
+select the defaults every new chat receives (unset model means the preferred available model — pi's provider default, else the first; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
 verdict and waits instead of auto-sending a fix. **`favoriteModels`** is the picker's starred list in display

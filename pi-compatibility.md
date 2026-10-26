@@ -144,6 +144,17 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   and the image-resize override bridge resources a single-file artifact cannot discover or load.
   Replace each only when pi supplies an equivalent artifact seam; run `check:seams` and the relevant
   binary/desktop artifact probes, including extension value imports and images.
+- **Account-scoped model availability** — [[submodule-server-agent]], `modelAvailability.ts`. Pi's
+  `openai` provider lists its whole API catalog under Sign in with ChatGPT (its `filterAllModels` drops
+  only classifiers), so the host keeps the ids in pi's `openai-codex` catalog; Central proxies advertise
+  a narrower catalog than pi's, so the host intersects opaque providers with their `/models` listing.
+  Remove the ChatGPT rule when the installed `providers/openai.js` filters OAuth chat models itself, and
+  the listing rule when pi narrows a rerouted provider's catalog to what its endpoint serves; run
+  `modelAvailability.test.ts` and `runtimeGenerations.test.ts`.
+- **Default-model preference** — [[submodule-server-agent]], `modelDefaults.ts`. Pi's
+  `defaultModelPerProvider` is not exported, so the host mirrors it for new-chat, reviewer, and
+  one-shot defaults. Remove the mirror when a public export or initial-model resolver exists; until
+  then the parity test in `modelDefaults.test.ts` fails on any upstream change to the map or order.
 - **Headless theme** — [[submodule-server-agent]], `plainTextTheme`. Pi's terminal theme is not
   initialized by SDK session creation. Remove the subclass when pi supplies a usable non-TUI theme
   contract; run `webUiContext.test.ts` against the whole inherited surface.

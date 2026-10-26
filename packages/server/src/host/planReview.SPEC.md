@@ -45,7 +45,7 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
 
 - **The reviewer uses the host's new-chat defaults with the repository's reviewer profile.** `runReview`
   resolves the child's model as the pinned `reviewModel`, else `resolveNewChatModel({})`: AppConfig's
-  `defaultModel`, falling back to the first available model (or no model when none are available) — never
+  `defaultModel`, falling back to the preferred available model (or no model when none are available) — never
   the worker's silently inherited model. The reviewer's **effort** resolves the same way: the pinned
   `reviewEffort`, else AppConfig's `defaultEffort`, falling back to `medium`; the resolver clamps it for
   the selected model when one is available. `runReview` passes `thinkingLevel` **unconditionally** — an

@@ -432,7 +432,7 @@ degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filter
 a project picker, the prompt hero, and the reused
   `chat/ModelEffortPicker` in **pre-session** mode. It opens **following the host default**: the pill reads
   `Default · ‹model› · ‹level›` from the host's `model.default` result (the saved default when available or
-  the first available model) and the popover's Default row is checked. Any explicit pick (model, level, or
+  the host's preferred available model) and the popover's Default row is checked. Any explicit pick (model, level, or
   both) flips the dialog to an **explicit pair**; the Default row — and the unavailable-model reconcile below
   — return it to following **synchronously**, so a Create pressed right after choosing Default already
   omits the pair; the `model.default` read that follows only refreshes the displayed pair. Every such

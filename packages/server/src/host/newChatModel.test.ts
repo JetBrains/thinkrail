@@ -89,3 +89,11 @@ test("a thinking-only request uses the resolved default model and clamps the req
 	});
 	expect(clampCalls).toEqual([{ provider: "limited", id: "saved", level: "high" }]);
 });
+
+test("new-chat model resolution prefers pi's provider default over catalog order", async () => {
+	const legacy = wireModel("openai", "gpt-4");
+	const current = wireModel("openai", "gpt-5.5");
+	const { resolve } = resolver({}, [legacy, current]);
+
+	expect(await resolve()).toEqual({ model: current, thinkingLevel: "medium" });
+});

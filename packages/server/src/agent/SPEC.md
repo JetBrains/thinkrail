@@ -90,6 +90,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     attached after activation keeps its saved model when that model is available in the current runtime.
     If it is unavailable, Pi chooses its settings default, then its ordered provider defaults, then the
     first available model; this need not match ThinkRail's AppConfig default or the saved provider.
+    The exception is a model pi still lists but the account does not serve (`modelAvailability` filtered
+    it), which pi would otherwise restore verbatim; the host passes `preferredDefaultModel` instead.
     Opening does not change the saved model. An ordinary physical-model fallback becomes durable when
     Pi appends an assistant response, not at send acceptance; explicit model selection persists at once.
     Merely opening a chat preserves its original model for when that provider returns. The host exposes
@@ -98,7 +100,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     placeholder model is persisted as a replacement.
 
     Every models **read** goes through **`settledAvailableModels(runtime)`** — pi's
-    `getAvailableSnapshot()`, **never `getAvailable()`**: that one awaits `refreshAvailability()`, which
+    `getAvailableSnapshot()` narrowed by `modelAvailability`, **never `getAvailable()`**: that one awaits `refreshAvailability()`, which
     returns the pending per-provider auth fan-out *or starts one*, all unsignalled — so reading through it
     would hand `model.list` (whose contract is to answer without touching the network), `model.default` and
     every inbound model-ref check an unbounded wait, and would escape the refresh deadline one line after
@@ -107,6 +109,22 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     credential or configured key is registered — config and native (`registerNativeProvider`) registrations
     alike, so a Central or delegation-mirrored provider is readable before its availability pass lands. Being
     the one read makes the picker, default, and model resolution agree within a generation.
+  - `modelAvailability` — narrows that snapshot to what the **connection** serves; pi's catalogs are
+    per-provider, not per-account, so a provider pi calls configured can still 400 on most of its catalog.
+    Two rules, each scoped by `baseUrl` so custom or rerouted models are untouched: **Sign in with ChatGPT**
+    (`openai` + OAuth against `api.openai.com/v1`) keeps only ids in pi's own `openai-codex` catalog — the
+    ChatGPT backend rejects the API-only rest (`gpt-4`, `gpt-4o`, `o1`, …) with `model_not_found`; and an
+    **opaque (Central) provider** keeps the ids its proxy advertises on `GET /models` (OpenAI wire) or
+    `GET /v1/models` (Anthropic wire), an alias matching a listed `-YYYYMMDD` / `-YYYY-MM-DD` dated id
+    (the proxy resolves `gpt-4o` to `gpt-4o-2024-11-20`). Listings are read with pi's resolved auth beside
+    `refreshCatalogs` (detached on `model.list`, awaited and forced on `model.refresh`), single-flighted,
+    5s-bounded, throttled to 60s per runtime, and a change publishes `provider.changed` so the picker
+    re-reads; an unknown wire or a never-read listing filters nothing, and a failed re-read keeps the
+    last listing. Direct API keys and other subscriptions keep pi's catalog: no listing was verified to
+    agree with pi's aliases there.
+  - `modelDefaults` — `preferredDefaultModel(available)`: pi's `defaultModelPerProvider` in pi's order,
+    else the first available model. Pi does not export that map, so the host mirrors it under a parity
+    test against the installed dist; it is what pi's own `findInitialModel` would pick.
   - `modelContext` — a narrow settings adapter for the `contextWindow` override in pi's shared
     `getAgentDir()/models.json`, not a second model registry. It lists the OpenAI Responses / Codex
     Responses models from `settledAvailableModels` whose effective budget still equals the contracts'
@@ -261,13 +279,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `listAvailableModels` / `listSettledModels` (the same snapshot without starting a refresh) / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host uses it so defaults and live-session effort changes follow Pi).
     Earlier, #394 showed ThinkRail's `available[0]` differed from Pi's pick and hit a proxy 400. ThinkRail
-    now resolves new-chat defaults host-side from `AppConfig`, falling back to the first available model
-    when the saved default is unavailable, without rewriting that setting. An explicitly requested
-    unavailable model is rejected rather than silently substituted. The host passes the chosen model
-    explicitly so the UI and session agree. Accepted risk: the first available model
-    may not be the provider default; users can set one in Settings → Models. Plan review uses this same
-    `resolveNewChatModel({})` for unset reviewer overrides: AppConfig `defaultModel`/`defaultEffort`, with
-    the first available model and `medium` effort as fallbacks.
+    now resolves new-chat defaults host-side from `AppConfig`, falling back to `preferredDefaultModel`
+    (pi's provider default, then the first available model) when the saved default is unavailable,
+    without rewriting that setting. `available[0]` alone was catalog order — `openai/gpt-4`, an 8K-context
+    model, for a fresh OpenAI connection. An explicitly requested unavailable model is rejected rather
+    than silently substituted. The host passes the chosen model explicitly so the UI and session agree.
+    Plan review uses this same `resolveNewChatModel({})` for unset reviewer overrides: AppConfig
+    `defaultModel`/`defaultEffort`, with the preferred model and `medium` effort as fallbacks.
 
     **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
     `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl`, `headers`, extension/provider
@@ -393,8 +411,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     single `runtime.completeSimple()` — pi's canonical provider-agnostic request path, which resolves
     the model's auth itself (OAuth refresh included) and also serves providers that only implement
     `streamSimple` (extension-registered ones). `pickModel(tier)` = the model choice: `cheap` prefers a
-    curated small/fast allowlist ∩ the authenticated set, else the cheapest by per-token cost; `default`
-    = first available; `null` when nothing is authenticated. This is the primitive the `assist` tasks
+    curated small/fast allowlist ∩ the authenticated set, else the cheapest priced model by per-token cost (an unpriced catalog entry is a free, preview,
+    or stealth tier that rate-limits or disappears), else the `default` pick; `default`
+    = `preferredDefaultModel`; `null` when nothing is authenticated. This is the primitive the `assist` tasks
     (plan summaries, PR drafting) run on — the only place model **dispatch** happens outside a session.
   - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
     calls (dialogs round-trip to the browser, fire-and-forget methods push). A dialog names the tool call

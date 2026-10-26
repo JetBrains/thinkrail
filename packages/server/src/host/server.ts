@@ -42,6 +42,7 @@ import {
 	setMcpStatusPublisher,
 	setMcpToolGrantWriter,
 	setModelContextPublisher,
+	setModelListingPublisher,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -848,6 +849,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	};
 	setJbcentralChangedPublisher(publishProviderChanged);
 	setModelContextPublisher(publishProviderChanged);
+	setModelListingPublisher(publishProviderChanged);
 
 	const initialConfig = getConfig();
 	initializeAnalytics({
@@ -899,6 +901,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		setFeedbackPublisher(null);
 		setSettingsPublisher(null);
 		setModelContextPublisher(null);
+		setModelListingPublisher(null);
 		setJbcentralAppliedPublisher(() => {});
 		setJbcentralChangedPublisher(() => {});
 		server.stop(true);

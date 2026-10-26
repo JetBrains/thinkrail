@@ -4,7 +4,7 @@ import {
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
-import { clampThinkingForModel, listSettledModels } from "../agent";
+import { clampThinkingForModel, listSettledModels, preferredDefaultModel } from "../agent";
 import { getConfig } from "../settings";
 
 type NewChatModelRequest = { model?: WireModel; thinkingLevel?: ThinkingLevel };
@@ -24,7 +24,7 @@ export async function resolveNewChatModel(
 	const model =
 		requested.model ??
 		availableModels.find((candidate) => sameModel(candidate, savedModel)) ??
-		availableModels[0];
+		preferredDefaultModel(availableModels);
 	const level = requested.thinkingLevel ?? config.defaultEffort ?? "medium";
 	if (!model) return { model: null, thinkingLevel: level };
 	return {
