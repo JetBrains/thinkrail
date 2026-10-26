@@ -30,7 +30,6 @@ It owns no handlers: a command's `run` is supplied by whoever composes the catal
 - `when(context)` decides visibility (a command that cannot apply is not listed); `mutates` marks a host
   mutation, which `isCommandEnabled` refuses while `context.online` is false — the transport replays
   pending requests on reconnect, so a mutation is never issued blind.
-- `page` names a palette page to push instead of running; `run` receives the context it was listed with.
 - `title` is already in the user's language: the composer builds the catalog with `useT()`'s translator
   (so the palette matches what the user reads), and `COMMAND_GROUP_LABELS` carries the group keys it
   translates the same way.
@@ -51,11 +50,8 @@ does not reproduce yet.
 | `chat.history` Search chat history (`Ctrl+R`) | `store.requestHistoryOpen` | a chat tab | PR1 |
 | `view.show.{specs,files,review,plan}` (every `LayoutToolId` but `projects`) | `store.requestToolView` | active workspace | PR1 |
 | `view.toggleLeft/Right/Bottom` (`Mod+B`/`Mod+J`/`Mod+Shift+J`) | layout intents; Project Home pane toggle | right/bottom need a workspace | PR1 |
-| `view.theme` Change theme… | page → `settings.update { theme }` | online | PR1 |
-| `settings.open` and every Settings section | `store.openSettings(section)` | protocol-gated sections only | PR1 |
-| Open search with double Shift | `store.setDoubleShiftSearch` (client-local) | — | PR1 (inline toggle) |
-| `settings.extensions` Extensions… | page → `settings.update { disabledExtensions }` | the Extensions section available (protocol), online | PR1 (inline toggles) |
-| `settings.mcp` MCP servers… | page → `panels/McpSettings.setMcpServerEnabled`; locked rows open Settings | active workspace, the MCP section available (protocol), online | PR1 (inline toggles) |
+| `settings.open` and every Settings section (incl. Keyboard's double-Shift row, Extensions, MCP servers) | `store.openSettings(section)` | protocol-gated sections only | PR1 |
+| Theme, extension and MCP server switches | their Settings sections — the palette opens them, never flips them in place | — | Settings |
 | `workspace.markRead` / `markUnread` | `panels/workspaceActions` | `supportsWorkspaceReadState` + `selectWorkspaceReadAction` | PR1 |
 | `workspace.settle` / `unsettle` | `panels/workspaceActions` | `canSettleWorkspace` | PR1 |
 | `workspace.reveal`, `workspace.copyPath`, `workspace.openIn.<editor>` | `panels/workspaceActions`, `lib.copyText` | active workspace | PR1 |

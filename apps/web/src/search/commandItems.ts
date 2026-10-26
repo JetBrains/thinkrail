@@ -13,23 +13,19 @@ export function commandItems(
 	commands: readonly Command[],
 	context: CommandContext,
 ): PaletteItem[] {
-	return visibleCommands(commands, context).map((command) => {
-		const run = command.run;
-		return {
-			id: `command:${command.id}`,
-			kind: "command",
-			title: command.title,
-			subtitle: t(COMMAND_GROUP_LABELS[command.group]),
-			group: command.group === "settings" ? "settings" : "commands",
-			scope: "commands",
-			icon: command.icon,
-			...(command.keywords ? { keywords: command.keywords } : {}),
-			...(command.shortcut ? { shortcut: command.shortcut } : {}),
-			...(isCommandEnabled(command, context)
-				? {}
-				: { disabledReason: t("search.palette.offlineReason") }),
-			...(command.page ? { page: command.page } : {}),
-			...(run ? { run: () => run(context) } : {}),
-		};
-	});
+	return visibleCommands(commands, context).map((command) => ({
+		id: `command:${command.id}`,
+		kind: "command",
+		title: command.title,
+		subtitle: t(COMMAND_GROUP_LABELS[command.group]),
+		group: command.group === "settings" ? "settings" : "commands",
+		scope: "commands",
+		icon: command.icon,
+		...(command.keywords ? { keywords: command.keywords } : {}),
+		...(command.shortcut ? { shortcut: command.shortcut } : {}),
+		...(isCommandEnabled(command, context)
+			? {}
+			: { disabledReason: t("search.palette.offlineReason") }),
+		run: () => command.run(context),
+	}));
 }
