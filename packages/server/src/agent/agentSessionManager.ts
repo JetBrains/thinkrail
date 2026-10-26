@@ -2139,6 +2139,36 @@ export function getSessionMessages(
 	return getSessionMessagesInternal(sessionId, workspaceId, cwd);
 }
 
+export async function readFinalAssistantText(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+): Promise<string | null> {
+	if (isSessionDeleted(sessionId, workspaceId)) return null;
+	const entry = sessions.get(sessionId);
+	if (entry) {
+		return entry.workspaceId === workspaceId ? finalAssistantText(entry.session.messages) : null;
+	}
+	const info = (await SessionManager.list(cwd)).find(
+		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+	);
+	if (!info) return null;
+	return finalAssistantText(SessionManager.open(info.path).buildSessionContext().messages);
+}
+
+function finalAssistantText(messages: readonly AgentSession["messages"][number][]): string | null {
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index];
+		if (message?.role !== "assistant") continue;
+		const text = message.content
+			.flatMap((part) => (part.type === "text" ? [part.text] : []))
+			.join("\n")
+			.trim();
+		if (text) return text;
+	}
+	return null;
+}
+
 export async function respondToTool(
 	sessionId: string,
 	toolCallId: string,
