@@ -30,7 +30,7 @@ engine architecture.
   for release identity and the early `resolveShellEnv()` start; `contracts` for
   compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built web
   artifact; Electrobun `2.0.5` and its generated SDK; build-only `pe-library`/`resedit` for the
-  Electrobun 2.0.1 Windows-uninstaller icon gap; build-only `@resvg/resvg-js` to rasterize the icon
+  Electrobun 2.0.5 Windows-uninstaller icon gap; build-only `@resvg/resvg-js` to rasterize the icon
   source (below); Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
   agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
@@ -149,7 +149,7 @@ flow through the operating-system responder chain across ordinary inputs, Monaco
 webview surfaces without competing with their local key handling.
 
 macOS receives the conventional application, Edit, and Window role menus. Windows receives the supported
-Edit role menu. Linux skips registration because Electrobun 2.0.1 does not support application menus
+Edit role menu. Linux skips registration because Electrobun 2.0.5 does not support application menus
 there; WebKitGTK keeps its renderer-native editing behavior. macOS Command-H, Option-Command-H, and Command-M carry explicit
 accelerators because role items get no default shortcut. Settings… (Command-comma, after About), Quit, and Close
 are custom-action items, not roles; see Confirmed quit and close. Their labels, plus the Edit and Window menu
@@ -251,7 +251,7 @@ removing the native strip and letting the web header occupy it. The policy is pl
 | Windows | `hiddenInset` — Electrobun creates `WS_CAPTION \| WS_THICKFRAME` and strips the caption in `WM_NCCALCSIZE`: resize borders and the DWM shadow survive, no native caption buttons | none native; the web renders minimize / maximize-or-restore / close ([[submodule-web-shell]]) and drives the window over RPC | right `138px` — three 46px caption buttons | yes |
 | Linux | `default` | GTK/WM decorations | none | no |
 
-**Windows.** Electrobun 2.0.1 already enables WebView2's non-client-region support, so the header's
+**Windows.** Electrobun 2.0.5 already enables WebView2's non-client-region support, so the header's
 `app-region: drag` is a real `HTCAPTION` hit: Aero Snap, drag-from-maximized, double-click-to-maximize and
 Alt+Space come from the OS, not from Electrobun's raw-input mover. What Electrobun omits from its
 `hiddenInset` style is `WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX` (upstream blackboardsh/electrobun#558):
@@ -389,23 +389,27 @@ drivers and assertions live in the test package, which product code never import
 The package pins the Electrobun `2.0.5` npm bootstrap as a build-only dependency. That exact pin selects
 its paired Hutch `0.28.2` toolchain and SDK; direct global Hutch invocation and floating version overrides
 are not part of the build path. The pin is the lowest release that publishes a macOS x64 core, so Intel
-Macs build from the same unmodified `electrobun build` path as every other target. The application
-explicitly selects the real Bun main process, not the default Cottontail runtime. The packaged Bun is
-`1.4.4`, selected by `build.bun.version` rather than Electrobun's default `1.4.0`. Hutch resolves that
-field like the other toolchain versions (`configuredToolchainVersion`), but `ElectrobunConfig` does not
-type it, so the config passes the Bun block as a named value. `buildConfig.test.ts` asserts that it
-equals the root `packageManager` pin, which keeps the packaged runtime aligned with
-[[architecture]]'s root toolchain contract. Electrobun's own
-suite runs only on its default Bun, so desktop smoke and e2e are the gate for this runtime.
+Macs build from the same unmodified `electrobun build` path as every other target; both macOS
+architectures target macOS 14 or later and build only on a native runner. The application explicitly
+selects the Bun main process (`build.mainProcess: "bun"`, Electrobun's default since 2.0.4). The packaged
+Bun is `1.4.4`, pinned by `build.bun.version` even though it equals Electrobun 2.0.5's default, so a
+framework bump cannot silently move the runtime. Hutch resolves that field like the other toolchain
+versions (`configuredToolchainVersion`), but `ElectrobunConfig` does not type it, so the config passes the
+Bun block as a named value. `buildConfig.test.ts` asserts that it equals the root `packageManager` pin,
+which keeps the packaged runtime aligned with [[architecture]]'s root toolchain contract. Electrobun's own
+suite runs only on its default Bun; when that default diverges from the pin, desktop smoke and e2e are the
+gate for this runtime.
 
 The package runs the official `electrobun build` / `dev` commands. Configuration reads the same shared
 version module as the launcher, without an environment-version bridge. One documented `preBuild` hook
 builds the shared web artifact and stages the application-specific PTY/trash/skill resources and PI
-runtime. The hook runs under Hutch's Cottontail, so it invokes the real Bun CLI both to read the
+runtime. The hook invokes the real Bun CLI both to read the
 `@thinkrail/server/build-support` manifest (which value-loads the server extension registry and with it
 the pi graph — Cottontail's module runtime cannot evaluate that graph; `typebox`'s `String` export is the
 first casualty) and to bundle the separately staged `.ts` server runtime rather than changing PI's
-bundler. Its transient factory entry is removed even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
+bundler. That split dates from Hutch running hooks under Cottontail; Hutch 0.28.2 runs them under Bun, so
+the child Bun processes are now removable rather than required. Its transient factory entry is removed
+even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
 `postBuild` hook removes staging after the framework has copied it; a failed build's staging is replaced
 at the next pre-build. On Windows that hook also brands the bundled uninstaller after its resource exists
 but before release compression, wrapping, and signing. Builds in one worktree remain sequential.
@@ -416,8 +420,8 @@ rounded-square silhouette with the ThinkRail glyph in the dark-family brand gree
 black tile; translucent glass, highlights, and decorative edging are excluded so small taskbar frames stay
 crisp. The browser favicon and in-app shell mark are separate web-owned surfaces. The same Windows ICO is the
 Hutch-owned source for the installed app, setup/extractor executable, shortcuts, and taskbar identity; no
-release action substitutes a second installer icon. Electrobun 2.0.1 does not apply that icon to its
-bundled Windows uninstaller, so the project `postBuild` hook adds the same icon group to
+release action substitutes a second installer icon. Electrobun 2.0.5 (Hutch 0.28.2) does not apply that
+icon to its bundled Windows uninstaller, so the project `postBuild` hook adds the same icon group to
 `Resources/uninstall`.
 
 `assets/icon.svg` is the one hand-authored source; every raster below it (the iconset, the ICO, the
