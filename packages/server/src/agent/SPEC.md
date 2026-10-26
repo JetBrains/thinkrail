@@ -118,9 +118,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `GET /v1/models` (Anthropic wire), an alias matching a listed `-YYYYMMDD` / `-YYYY-MM-DD` dated id
     (the proxy resolves `gpt-4o` to `gpt-4o-2024-11-20`). Listings are read with pi's resolved auth beside
     `refreshCatalogs` (detached on `model.list`, awaited and forced on `model.refresh`), single-flighted,
-    5s-bounded, throttled to 60s per runtime, and a change publishes `provider.changed` so the picker
-    re-reads; an unknown wire or a never-read listing filters nothing, and a failed re-read keeps the
-    last listing. Direct API keys and other subscriptions keep pi's catalog: no listing was verified to
+    5s-bounded end to end (one deadline covers credential resolution and the fetch, so a stalled OAuth
+    refresh cannot wedge the single flight), throttled to 60s per runtime, and a change publishes
+    `provider.changed` so the picker re-reads; an unknown wire or a never-read listing filters nothing,
+    and a failed re-read keeps the last listing. Failures log only a closed count, never provider ids or
+    the provider's error text. Direct API keys and other subscriptions keep pi's catalog: no listing was verified to
     agree with pi's aliases there.
   - `modelDefaults` — `preferredDefaultModel(available)`: pi's `defaultModelPerProvider` in pi's order,
     then any available model whose id is one of those defaults, else the first available model. Pi does

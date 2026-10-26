@@ -163,3 +163,19 @@ test("an unreadable listing leaves the catalog unfiltered", async () => {
 
 	expect(modelIds(runtime, "openai")).toContain("gpt-4");
 });
+
+test("a stalled credential resolver cannot wedge listing refreshes past the deadline", async () => {
+	let authSignal: AbortSignal | undefined;
+	const runtime = {
+		getModels: () => [{ baseUrl: "http://127.0.0.1:9/v1", api: "openai-completions" }],
+		getAuth: (_providerId: string, options?: { signal?: AbortSignal }) => {
+			authSignal = options?.signal;
+			return new Promise<never>(() => {});
+		},
+	} as unknown as Parameters<typeof refreshModelListings>[0];
+	const started = Date.now();
+	expect(await refreshModelListings(runtime, new Set(["openai"]))).toBe(false);
+	expect(Date.now() - started).toBeLessThan(7_000);
+	expect(authSignal?.aborted).toBe(true);
+	expect(await refreshModelListings(runtime, new Set(["openai"]), { force: true })).toBe(false);
+}, 15_000);

@@ -88,26 +88,40 @@ async function readListings(
 	runtime: ModelListingRuntime,
 	providerIds: ReadonlySet<string>,
 ): Promise<ReadonlyMap<string, ProviderListing>> {
+	let failed = 0;
 	const entries = await Promise.all(
 		[...providerIds].map(async (providerId) => {
-			const listing = await readProviderListing(runtime, providerId).catch((error: unknown) => {
-				log.warn(`model listing for ${providerId} unavailable: ${String(error)}`);
+			const listing = await boundedListing(runtime, providerId).catch(() => {
+				failed += 1;
 				return undefined;
 			});
 			return listing ? ([providerId, listing] as const) : undefined;
 		}),
 	);
+	if (failed > 0) log.warn(`model listing: ${failed} provider(s) unavailable`);
 	return new Map(entries.filter((entry) => entry !== undefined));
+}
+
+function boundedListing(
+	runtime: ModelListingRuntime,
+	providerId: string,
+): Promise<ProviderListing | undefined> {
+	const signal = AbortSignal.timeout(LISTING_TIMEOUT_MS);
+	const deadline = new Promise<never>((_, reject) => {
+		signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+	});
+	return Promise.race([readProviderListing(runtime, providerId, signal), deadline]);
 }
 
 async function readProviderListing(
 	runtime: ModelListingRuntime,
 	providerId: string,
+	signal: AbortSignal,
 ): Promise<ProviderListing | undefined> {
 	const models = runtime.getModels(providerId);
 	const baseUrl = models[0]?.baseUrl;
 	if (!baseUrl || models.some((model) => model.baseUrl !== baseUrl)) return undefined;
-	const auth = (await runtime.getAuth(providerId))?.auth;
+	const auth = (await runtime.getAuth(providerId, { signal }))?.auth;
 	if (!auth) return undefined;
 	const request = listingRequest(models[0]?.api ?? "", baseUrl, auth.apiKey);
 	if (!request) return undefined;
@@ -118,7 +132,7 @@ async function readProviderListing(
 	for (const [name, value] of Object.entries(request.headers)) headers.set(name, value);
 	const response = await fetch(request.url, {
 		headers,
-		signal: AbortSignal.timeout(LISTING_TIMEOUT_MS),
+		signal,
 	});
 	if (!response.ok) return undefined;
 	const body = (await response.json()) as { data?: unknown };
