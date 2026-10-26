@@ -176,6 +176,44 @@ manually or reinstalled with the script.
 
 </details>
 
+### Docker (self-hosted)
+
+To run ThinkRail headless on a server or NAS and use it from a browser, build the image from this repository
+(no prebuilt image is published yet):
+
+```bash
+git clone https://github.com/JetBrains/thinkrail.git
+cd thinkrail
+mkdir -p workspace
+docker compose up -d --build
+```
+
+Then open <http://localhost:24242>. `compose.yaml` keeps app state, worktrees, and provider sign-ins in the
+`thinkrail-home` volume (`/home/thinkrail`) and mounts `./workspace` at `/workspace` for your repositories:
+clone them there and open one with **Enter host path…** under **+** next to Projects (for example
+`/workspace/my-repo`); a container has no native folder picker. Without Compose:
+
+```bash
+docker build -t thinkrail .
+docker run -d --name thinkrail -p 127.0.0.1:24242:24242 \
+  -v thinkrail-home:/home/thinkrail -v "$PWD/workspace:/workspace" thinkrail
+```
+
+> [!WARNING]
+> ThinkRail has no login of its own: anyone who can reach its port can run agents and shell commands in the
+> container. Keep the port on localhost or a private network such as Tailscale, or put an authenticating
+> reverse proxy in front of it. Never expose it directly to the internet.
+
+- The container runs as uid 1000, so a bind-mounted workspace must be writable by that user
+  (`sudo chown 1000:1000 workspace` on Linux).
+- Sign in to a model provider from the app, or pass the provider's API key as an environment variable.
+  Set a Git identity once with `docker compose exec thinkrail git config --global user.name "…"` (and
+  `user.email`).
+- Build for both AMD64 and ARM64 with
+  `docker buildx build --platform linux/amd64,linux/arm64 -t <registry>/thinkrail --push .`.
+- The image is built from source, so it has no in-app updater: pull the repository and run
+  `docker compose up -d --build` again to update.
+
 ### Platform notes
 
 | Platform | Desktop | CLI |

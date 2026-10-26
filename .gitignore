@@ -44,3 +44,6 @@ playwright-report-desktop/
 
 # Astro's generated type cache
 .astro/
+
+# Default repository mount for the Docker Compose setup (see README)
+/workspace/
