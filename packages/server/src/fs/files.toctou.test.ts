@@ -1,223 +1,190 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
-	closeSync,
 	constants,
 	mkdirSync,
-	openSync,
-	readFileSync,
+	mkdtempSync,
 	realpathSync,
 	rmSync,
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
-import { randomUUID } from "node:crypto";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { join } from "node:path";
+import { readDir, readFile, resolveWorktreeFile } from "./files";
 
 /**
  * Regression tests for Finding-3: TOCTOU Symlink Race in Path Traversal Guard
  *
- * These tests verify that the two-layer defense works:
- *   Layer 1: realpathSync re-resolution + containment re-check in resolveInWorktree
- *   Layer 2: O_NOFOLLOW + fd-based reading in readFile
+ * These tests exercise the PRODUCTION code (readFile, readDir, resolveWorktreeFile)
+ * against real filesystem symlinks. They follow the same test-harness pattern as
+ * files.test.ts: set THINKRAIL_DATA_DIR, write a workspaces.json, and call the
+ * actual exported functions.
  *
- * Together they eliminate the TOCTOU race by ensuring:
- * - The resolved path is validated before use
- * - The kernel refuses to follow symlinks at open time (O_NOFOLLOW / ELOOP)
- * - Data is read from the opened inode (fd), not the path
+ * The two-layer defense is:
+ *   Layer 1 (resolveInWorktree): realpathSync re-resolution + containment re-check
+ *   Layer 2 (readFile):          openSync(O_NOFOLLOW) + readFileSync(fd)
  */
 
-function isContained(root: string, candidate: string): boolean {
-	const rel = relative(root, candidate);
-	return (
-		rel === "" ||
-		(rel !== ".." && !rel.startsWith(`..${sep}`) && !require("node:path").isAbsolute(rel))
+let dataDir: string;
+let root: string;
+let outsideDir: string;
+const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+
+beforeEach(() => {
+	dataDir = mkdtempSync(join(tmpdir(), "trpi-toctou-test-"));
+	process.env.THINKRAIL_DATA_DIR = dataDir;
+	root = join(dataDir, "worktree");
+	outsideDir = join(dataDir, "outside");
+
+	mkdirSync(join(root, "subdir"), { recursive: true });
+	mkdirSync(outsideDir, { recursive: true });
+
+	writeFileSync(join(root, "safe.txt"), "safe content\n");
+	writeFileSync(join(root, "subdir", "nested.txt"), "nested content\n");
+	writeFileSync(join(outsideDir, "secret.txt"), "SECRET_API_KEY=sk-1234567890\n");
+
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{ id: "w1", projectId: "p1", name: "w1", worktreePath: root, createdAt: 1 },
+		]),
 	);
-}
+});
 
-/**
- * Simulates the FIXED resolveInWorktree: realpathSync + re-check containment.
- * (Layer 1 of the defense)
- */
-function resolveInWorktreeFixed(
-	root: string,
-	path: string,
-): { abs: string; resolvedAbs: string } {
-	const abs = resolve(root, path);
-	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
+afterEach(() => {
+	rmSync(dataDir, { recursive: true, force: true });
+	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
 
-	// Original security check
-	const realRoot = realpathSync(root);
-	let cursor = abs;
-	while (true) {
-		let real: string;
-		try {
-			real = realpathSync(cursor);
-		} catch (error: unknown) {
-			const code =
-				typeof error === "object" && error !== null && "code" in error
-					? (error as { code: string }).code
-					: undefined;
-			if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
-			const parent = dirname(cursor);
-			if (parent === cursor) throw error;
-			cursor = parent;
-			continue;
+describe("Production readFile: TOCTOU symlink protection", () => {
+	test("reads regular files inside the worktree", () => {
+		const result = readFile("w1", "safe.txt");
+		expect(result.content).toBe("safe content\n");
+		expect(result.meta.text).toBe(true);
+	});
+
+	test("reads nested files inside the worktree", () => {
+		const result = readFile("w1", "subdir/nested.txt");
+		expect(result.content).toBe("nested content\n");
+	});
+
+	test("blocks symlinks pointing outside the worktree", () => {
+		symlinkSync(join(outsideDir, "secret.txt"), join(root, "evil-link"));
+		expect(() => readFile("w1", "evil-link")).toThrow(/Path escapes the worktree/);
+	});
+
+	test("blocks ../ path traversal", () => {
+		expect(() => readFile("w1", "../outside/secret.txt")).toThrow(
+			/Path escapes the worktree/,
+		);
+	});
+
+	test("blocks symlink directories pointing outside the worktree", () => {
+		symlinkSync(outsideDir, join(root, "outside-link"));
+		expect(() => readFile("w1", "outside-link/secret.txt")).toThrow(
+			/Path escapes the worktree/,
+		);
+	});
+
+	test("allows internal symlinks within the worktree", () => {
+		symlinkSync(join(root, "safe.txt"), join(root, "internal-link"));
+		// O_NOFOLLOW at the leaf will block even internal symlinks — this is
+		// a defense-in-depth tradeoff. The realpathSync pass resolves the
+		// symlink first, so the fd is opened on the resolved path (no symlink).
+		const result = readFile("w1", "internal-link");
+		expect(result.content).toBe("safe content\n");
+	});
+});
+
+describe("Production readDir: symlink-root regression", () => {
+	test("produces valid relative paths when root is NOT a symlink", () => {
+		const entries = readDir("w1", ".");
+		const paths = entries.map((e) => e.path);
+		// Should contain "safe.txt" and "subdir" with forward-slash relative paths
+		expect(paths).toContain("safe.txt");
+		expect(paths).toContain("subdir");
+		// No path should start with ..
+		for (const p of paths) {
+			expect(p.startsWith("..")).toBe(false);
 		}
-		if (!isContained(realRoot, real)) throw new Error("Path escapes the worktree");
-		break;
-	}
-
-	// Layer 1: Re-resolve and re-check
-	let resolvedAbs: string;
-	try {
-		resolvedAbs = realpathSync(abs);
-	} catch {
-		resolvedAbs = abs;
-	}
-	if (!isContained(realRoot, resolvedAbs)) {
-		throw new Error("Path escapes the worktree");
-	}
-
-	return { abs, resolvedAbs };
-}
-
-/**
- * Simulates the FIXED readFile: opens with O_NOFOLLOW and reads via fd.
- * (Layer 2 of the defense)
- */
-function readFileFixed(resolvedAbs: string): Buffer {
-	const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
-	let fd: number;
-	try {
-		fd = openSync(resolvedAbs, constants.O_RDONLY | noFollow);
-	} catch (error: unknown) {
-		const code =
-			typeof error === "object" && error !== null && "code" in error
-				? (error as { code: string }).code
-				: undefined;
-		if (code === "ELOOP") throw new Error("Path escapes the worktree");
-		throw error;
-	}
-	try {
-		return Buffer.from(readFileSync(fd));
-	} finally {
-		closeSync(fd);
-	}
-}
-
-describe("TOCTOU Symlink Race Prevention", () => {
-	let testDir: string;
-	let worktreeRoot: string;
-
-	beforeEach(() => {
-		testDir = join(tmpdir(), `toctou-test-${randomUUID()}`);
-		worktreeRoot = join(testDir, "worktree");
-		mkdirSync(join(worktreeRoot, "subdir"), { recursive: true });
-		writeFileSync(join(worktreeRoot, "safe.txt"), "safe content\n");
-		writeFileSync(join(worktreeRoot, "subdir", "nested.txt"), "nested content\n");
-		writeFileSync(join(testDir, "secret.txt"), "SECRET: api_key=sk-1234567890\n");
 	});
 
-	afterEach(() => {
-		rmSync(testDir, { recursive: true, force: true });
+	test("produces valid relative paths when root IS a symlink", () => {
+		// Create a symlink to the worktree and register it as a workspace
+		const symlinkRoot = join(dataDir, "symlink-worktree");
+		symlinkSync(root, symlinkRoot);
+
+		writeFileSync(
+			join(dataDir, "workspaces.json"),
+			JSON.stringify([
+				{ id: "w2", projectId: "p2", name: "w2", worktreePath: symlinkRoot, createdAt: 2 },
+			]),
+		);
+
+		const entries = readDir("w2", ".");
+		const paths = entries.map((e) => e.path);
+
+		// Paths must be valid worktree-relative, not escaped via ../
+		expect(paths).toContain("safe.txt");
+		expect(paths).toContain("subdir");
+		for (const p of paths) {
+			expect(p.startsWith("..")).toBe(false);
+		}
 	});
 
-	test("allows reading regular files inside the worktree", () => {
-		const result = resolveInWorktreeFixed(worktreeRoot, "safe.txt");
-		expect(result.resolvedAbs).toBe(realpathSync(join(worktreeRoot, "safe.txt")));
-		const data = readFileFixed(result.resolvedAbs);
-		expect(data.toString()).toBe("safe content\n");
+	test("nested readDir through symlink-root also produces valid paths", () => {
+		const symlinkRoot = join(dataDir, "symlink-worktree");
+		symlinkSync(root, symlinkRoot);
+
+		writeFileSync(
+			join(dataDir, "workspaces.json"),
+			JSON.stringify([
+				{ id: "w2", projectId: "p2", name: "w2", worktreePath: symlinkRoot, createdAt: 2 },
+			]),
+		);
+
+		const entries = readDir("w2", "subdir");
+		const paths = entries.map((e) => e.path);
+
+		expect(paths).toContain("subdir/nested.txt");
+		for (const p of paths) {
+			expect(p.startsWith("..")).toBe(false);
+		}
+	});
+});
+
+describe("Production resolveWorktreeFile: symlink protection", () => {
+	test("resolves regular files to their real path", () => {
+		const resolved = resolveWorktreeFile("w1", "safe.txt");
+		expect(resolved).toBe(realpathSync(join(root, "safe.txt")));
 	});
 
-	test("allows reading nested files inside the worktree", () => {
-		const result = resolveInWorktreeFixed(worktreeRoot, "subdir/nested.txt");
-		expect(result.resolvedAbs).toBe(realpathSync(join(worktreeRoot, "subdir", "nested.txt")));
-		const data = readFileFixed(result.resolvedAbs);
-		expect(data.toString()).toBe("nested content\n");
-	});
-
-	test("blocks path traversal via ../ sequences", () => {
-		expect(() => resolveInWorktreeFixed(worktreeRoot, "../secret.txt")).toThrow(
+	test("blocks symlinks pointing outside the worktree", () => {
+		symlinkSync(join(outsideDir, "secret.txt"), join(root, "evil-link"));
+		expect(() => resolveWorktreeFile("w1", "evil-link")).toThrow(
 			/Path escapes the worktree/,
 		);
 	});
 
-	test("Layer 1: realpathSync re-check catches symlinks outside worktree", () => {
-		const secretPath = join(testDir, "secret.txt");
-		const symlinkPath = join(worktreeRoot, "evil-link");
-		symlinkSync(secretPath, symlinkPath);
-
-		expect(() => resolveInWorktreeFixed(worktreeRoot, "evil-link")).toThrow(
+	test("blocks path traversal", () => {
+		expect(() => resolveWorktreeFile("w1", "../../etc/passwd")).toThrow(
 			/Path escapes the worktree/,
 		);
 	});
+});
 
-	test("Layer 1: catches symlink directories pointing outside", () => {
-		const outsideDir = join(testDir, "outside");
-		mkdirSync(outsideDir, { recursive: true });
-		writeFileSync(join(outsideDir, "target.txt"), "escaped content\n");
-		symlinkSync(outsideDir, join(worktreeRoot, "subdir-link"));
-
-		expect(() => resolveInWorktreeFixed(worktreeRoot, "subdir-link/target.txt")).toThrow(
-			/Path escapes the worktree/,
-		);
-	});
-
-	test("Layer 2: O_NOFOLLOW rejects symlinks at read time (ELOOP → escape)", () => {
-		// This tests the second layer independently: even if resolveInWorktree
-		// returned a path that has since been swapped to a symlink, O_NOFOLLOW
-		// catches it at open time.
-		const symlinkPath = join(worktreeRoot, "swap-link");
-		const secretPath = join(testDir, "secret.txt");
-
-		// Create a symlink — simulates the attacker swapping after realpathSync
-		symlinkSync(secretPath, symlinkPath);
-
-		// O_NOFOLLOW should cause ELOOP on the symlink
-		const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
-		if (noFollow !== 0) {
-			// On platforms with O_NOFOLLOW (Linux, macOS)
-			expect(() => readFileFixed(symlinkPath)).toThrow(/Path escapes the worktree/);
+describe("O_NOFOLLOW kernel-level defense (Layer 2)", () => {
+	test("O_NOFOLLOW is available on this platform", () => {
+		// This test documents whether O_NOFOLLOW is available.
+		// On Linux/macOS it should be a positive integer.
+		// On Windows it is undefined (Layer 1 is the defense).
+		const noFollow = constants.O_NOFOLLOW;
+		if (process.platform === "win32") {
+			expect(noFollow).toBeUndefined();
 		} else {
-			// On Windows, O_NOFOLLOW is not available — Layer 1 is the defense
-			// This test verifies the graceful degradation
-			expect(noFollow).toBe(0);
+			expect(typeof noFollow).toBe("number");
+			expect(noFollow).toBeGreaterThan(0);
 		}
-	});
-
-	test("Layer 2: fd-based read returns same content as the opened inode", () => {
-		const filePath = join(worktreeRoot, "safe.txt");
-		const data = readFileFixed(filePath);
-		expect(data.toString()).toBe("safe content\n");
-	});
-
-	test("resolved path is the real path, not the symlink path", () => {
-		const symlinkPath = join(worktreeRoot, "internal-link");
-		symlinkSync(join(worktreeRoot, "safe.txt"), symlinkPath);
-
-		const result = resolveInWorktreeFixed(worktreeRoot, "internal-link");
-		expect(result.resolvedAbs).toBe(realpathSync(join(worktreeRoot, "safe.txt")));
-		expect(result.resolvedAbs).not.toBe(join(worktreeRoot, "internal-link"));
-	});
-
-	test("both layers together: safe symlink that is later swapped", () => {
-		const symlinkPath = join(worktreeRoot, "race-link");
-
-		// Start with a safe symlink inside worktree
-		symlinkSync(join(worktreeRoot, "safe.txt"), symlinkPath);
-
-		// Layer 1 check passes
-		const result = resolveInWorktreeFixed(worktreeRoot, "race-link");
-		expect(result.resolvedAbs).toBe(realpathSync(join(worktreeRoot, "safe.txt")));
-
-		// Now swap the symlink to point outside (simulates race condition)
-		rmSync(symlinkPath);
-		symlinkSync(join(testDir, "secret.txt"), symlinkPath);
-
-		// Layer 1 now catches it on re-check
-		expect(() => resolveInWorktreeFixed(worktreeRoot, "race-link")).toThrow(
-			/Path escapes the worktree/,
-		);
 	});
 });

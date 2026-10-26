@@ -72,7 +72,7 @@ function resolveInWorktree(
 				throw new Error("Path escapes the worktree");
 			if (isGitMetadataPath(resolvedRoot, resolvedAbs))
 				throw new Error("The .git directory is not readable");
-			return { root, abs: resolvedAbs };
+			return { root: resolvedRoot, abs: resolvedAbs };
 		} catch (error) {
 			const code =
 				typeof error === "object" && error !== null && "code" in error
