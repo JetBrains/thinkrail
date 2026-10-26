@@ -57,7 +57,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   unnamed-chat label: the first user text that is not a control message and has a head; a head is the first
   non-blank line, whitespace collapsed, clamped to 200 UTF-16 units without splitting a surrogate pair; a
   leading skill block *or* the `/skill:<name> <request>` command it expands from reads as the request, else
-  `/skill:<name>`; a package such as `<review …>` or no text has no head and the next user text is tried —
+  `/skill:<name>`; a first line that is one lowercase tag alone (a package header such as `<review …>`) or
+  no text has no head and the next user text is tried — a prompt that merely starts with `<Button>` keeps
+  its head; only the first 800 units of a line are normalized —
   host and client call the same functions over their user texts so the label never jumps),
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
   chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +

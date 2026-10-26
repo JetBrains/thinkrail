@@ -282,6 +282,13 @@ describe("firstPromptHead", () => {
 		);
 		expect(firstPromptHead("/skill:setting-up-a-project")).toBe("/skill:setting-up-a-project");
 		expect(firstPromptHead('<review scope="branch">\n<comment …>\n</review>')).toBeUndefined();
+		expect(
+			firstPromptHead('<review id="r1" branch="b" base="main@abc" comments="2">\n<comment …>'),
+		).toBeUndefined();
+		expect(firstPromptHead("<Button> loses focus after submit")).toBe(
+			"<Button> loses focus after submit",
+		);
+		expect(firstPromptHead(`${"word ".repeat(2_000)}`)?.length).toBe(FIRST_PROMPT_MAX_LENGTH);
 	});
 
 	test("firstPromptOfTexts skips control messages and texts without a head", () => {
