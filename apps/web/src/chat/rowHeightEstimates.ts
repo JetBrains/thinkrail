@@ -1,3 +1,4 @@
+import { ASK_USER_QUESTION_TOOL_NAME } from "@thinkrail/contracts";
 import { type ChatRow, LARGE_USER_MESSAGE } from "./rows";
 import { resolveProminence } from "./toolRegistry";
 
@@ -121,7 +122,7 @@ function estimateToolPayload(row: Extract<ChatRow, { kind: "tool" }>, baseHeight
 }
 
 function estimateToolHeight(row: Extract<ChatRow, { kind: "tool" }>): number {
-	if (row.toolName === "ask_user_question") return estimateToolPayload(row, 120);
+	if (row.toolName === ASK_USER_QUESTION_TOOL_NAME) return estimateToolPayload(row, 120);
 	const status = row.tool?.status ?? (row.dead ? "error" : "running");
 	const expanded =
 		status === "error" || (status === "done" && resolveProminence(row.toolName).defaultExpanded);

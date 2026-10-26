@@ -17,7 +17,12 @@ import {
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
 } from "@remixicon/react";
-import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
+import {
+	ASK_USER_QUESTION_TOOL_NAME,
+	type ReviewComment,
+	type TodoGroupItem,
+	type TodoItem,
+} from "@thinkrail/contracts";
 import { AskUserQuestionCard } from "@thinkrail/ext-ask-user-question/web";
 import { useT } from "@thinkrail/locales/react";
 import {
@@ -659,11 +664,11 @@ function PlanCardSection({
 }
 
 function PlanAskCard({ ask }: { ask: PendingAsk }) {
-	const interaction = useToolInteraction(ask.toolCallId, "ask_user_question");
+	const interaction = useToolInteraction(ask.toolCallId, ASK_USER_QUESTION_TOOL_NAME);
 	return (
 		<AskUserQuestionCard
 			toolCallId={ask.toolCallId}
-			toolName="ask_user_question"
+			toolName={ASK_USER_QUESTION_TOOL_NAME}
 			args={ask.args}
 			result={ask.result}
 			status={ask.status}
