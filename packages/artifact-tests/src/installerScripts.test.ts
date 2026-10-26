@@ -58,6 +58,11 @@ function makeFixture(): Fixture {
 	);
 	writeTool(
 		fakeBin,
+		"sysctl",
+		`[ "$*" = "-n sysctl.proc_translated" ] || exit 1\nprintf '%s\\n' "\${FAKE_PROC_TRANSLATED:-0}"\n`,
+	);
+	writeTool(
+		fakeBin,
 		"mktemp",
 		`last=""
 for arg in "$@"; do last="$arg"; done
@@ -411,6 +416,8 @@ describe("install.sh controlled installation", () => {
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Linux", "aarch64", "thinkrail-linux-arm64"],
 		["stable", "1.2.3", "v1.2.3", "Darwin", "arm64", "thinkrail-darwin-arm64"],
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Darwin", "arm64", "thinkrail-darwin-arm64"],
+		["stable", "1.2.3", "v1.2.3", "Darwin", "x86_64", "thinkrail-darwin-x64"],
+		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Darwin", "x86_64", "thinkrail-darwin-x64"],
 	])("selects the exact %s %s target (%s, %s/%s, %s)", (channel, version, tag, unameS, unameM, assetName) => {
 		const fixture = makeFixture();
 		const result = runInstaller(
@@ -442,17 +449,20 @@ describe("install.sh controlled installation", () => {
 		).toEqual([]);
 	});
 
-	test("refuses the Intel macOS CLI while pointing at the desktop DMG", () => {
+	test("installs the native arm64 CLI from a Rosetta shell on Apple Silicon", () => {
 		const fixture = makeFixture();
 		const result = runInstaller(
 			fixture,
 			["--version", "1.2.3", "--prefix", shellPath(fixture.prefix), "--no-modify-path"],
-			{ FAKE_UNAME_S: "Darwin", FAKE_UNAME_M: "x86_64" },
+			{
+				FAKE_UNAME_S: "Darwin",
+				FAKE_UNAME_M: "x86_64",
+				FAKE_PROC_TRANSLATED: "1",
+				FAKE_ASSET_NAME: "thinkrail-darwin-arm64",
+			},
 		);
-		expect(result.exitCode).not.toBe(0);
-		expect(result.stderr).toContain("No prebuilt ThinkRail CLI for Intel macOS.");
-		expect(result.stderr).toContain("The desktop DMG is available");
-		expect(curlRequests(fixture)).toEqual([]);
+		expect(result.exitCode).toBe(0);
+		expect(curlRequests(fixture)[0]).toContain("/releases/download/v1.2.3/thinkrail-darwin-arm64");
 	});
 
 	test("installs under a Unix prefix containing Unicode and safe punctuation", () => {

@@ -208,11 +208,10 @@ fi
 
 ARCH=$(detect_arch)
 [ "$OS" = "windows" ] && ARCH="x64"
-if [ "$OS" = "darwin" ] && [ "$ARCH" = "x64" ]; then
-    echo "No prebuilt ThinkRail CLI for Intel macOS." >&2
-    echo "The desktop DMG is available; for the CLI, build from source: https://github.com/$REPO" >&2
-    echo "(On Apple Silicon, run this from a native arm64 shell — a Rosetta shell reports x86_64.)" >&2
-    exit 1
+# A Rosetta shell on Apple Silicon reports x86_64; install the native binary instead.
+if [ "$OS" = "darwin" ] && [ "$ARCH" = "x64" ] \
+    && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" = "1" ]; then
+    ARCH="arm64"
 fi
 ASSET_NAME="thinkrail-${OS}-${ARCH}"
 [ "$OS" = "windows" ] && ASSET_NAME="${ASSET_NAME}.exe"
