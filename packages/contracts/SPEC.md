@@ -200,7 +200,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     **`ASK_USER_ANSWERS_CUSTOM_TYPE`** constant, **`AskUserAnswersMessage`** (the correctly-paired
     tag↔details shape the host's builder is compile-held to), the shared **`isAskUserAnswersMessage`**
     guard and **`readAskUserQuestionResult`** (a result from a tool-result envelope's `details` or a bare
-    result, else `null`; shared by the web `askState`, the host's interaction adapter and the card) (all
+    result, else `null`; shared by the web `askState`, the host's interaction adapter and the card), and
+    **`isAskUserQuestionArgs`** (our questionnaire argument shape; the host's restart repair and
+    answerability treat any other-shaped `ask_user_question` call as not ours) (all
     in `wsProtocol`, the value-bearing half): an eligible live reply becomes the native tool
     result; a `length`/`error`/`aborted` assistant call is terminal and never answerable; after restart, the
     reply travels as an `ask-user-answers` custom message paired by `details.toolCallId`.

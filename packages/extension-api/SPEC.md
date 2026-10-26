@@ -22,8 +22,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `toolHelpers` and `toolResultContent`.
 - `ToolRenderProps.interaction` is optional. The host fills it only for tool calls it blocks on for the
   person's response; today that is only `ask_user_question`. It carries:
-  - `state`: a `response` delivered outside the tool result (after a host restart), plus `superseded`
-    and `ended`;
+  - `state`: a `response` delivered outside the tool result (after a host restart), plus `superseded`,
+    `ended`, and `accepting` — whether the host is waiting for this call's response right now (a call the
+    host is not waiting on, such as a same-name tool from another package, renders but cannot respond);
   - `respond(response)`;
   - the chat's `focusScope`, so the card claims attention focus once per chat mount;
   - `prepareLayoutChange`, which keeps the reader's place when the card changes size;
@@ -45,8 +46,12 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   responsibilities.
 - `sessionExtensions(session: ExtensionSessionServices) => ExtensionFactory[]` is how an extension uses
   per-session state the host owns: the host calls it once per parent session with that session's
-  services. Today the services are `awaitToolResponse(toolCallId, signal)`, which resolves a
-  `ToolResponse`: `{kind: "response", value}`, `{kind: "deferred"}` or `{kind: "abandoned"}`.
+  services. Today the services are a tool-response mailbox:
+  - `expectToolResponse(toolCallId)` announces a call the extension will execute and await, from its
+    `message_end` hook, before pi runs it. The host tracks only announced calls, so a switched-off
+    extension or a same-name tool from another package never becomes a host-tracked interaction.
+  - `awaitToolResponse(toolCallId, signal)` resolves a `ToolResponse`: `{kind: "response", value}`,
+    `{kind: "deferred"}` or `{kind: "abandoned"}`.
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
 - Workspace dependencies are `contracts` and, type-only, `@thinkrail/locales/react`'s `Translator`.
   React and pi are type-only contract dependencies; there are no React components, registry, DOM access,

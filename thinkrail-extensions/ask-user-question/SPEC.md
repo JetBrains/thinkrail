@@ -22,9 +22,10 @@ supersede, Stop/Submit ordering and needs-input ([[submodule-server-agent]]).
 
 - `@thinkrail/ext-ask-user-question/server` default-exports a session-only descriptor:
   - `extensions: []`;
-  - `sessionExtensions: (session) => [createAskUserQuestionExtension({ ask, guidance })]`.
+  - `sessionExtensions: (session) => [createAskUserQuestionExtension({ ask, announce, guidance })]`.
 
-  The asker awaits `session.awaitToolResponse(toolCallId, signal)`. A `response` must be a questionnaire
+  `announce` forwards each executable call to `session.expectToolResponse(toolCallId)`, so the host's
+  question lifecycle starts only for calls this extension runs. The asker awaits `session.awaitToolResponse(toolCallId, signal)`. A `response` must be a questionnaire
   result (checked with the package's `isAskUserQuestionResult`, else the call fails); `deferred` and
   `abandoned` pass through as outcomes, so the package returns the canonical ack or the stop and ends the
   turn. `guidance` is ThinkRail's description and prompt guidelines: the inline card, and a composer reply
@@ -39,7 +40,8 @@ supersede, Stop/Submit ordering and needs-input ([[submodule-server-agent]]).
   for the host's injected Markdown), `@thinkrail/locales/react`, React and Remix Icon.
 - It never reaches app or host internals. Everything it needs from the chat arrives in
   `ToolRenderProps.interaction` ([[module-extension-api]]):
-  - the response delivered after a restart, the superseded and ended verdicts;
+  - the response delivered after a restart, the superseded and ended verdicts, and `accepting` (Submit and
+    Skip are enabled only while it holds);
   - `respond`;
   - the focus scope;
   - layout and reveal callbacks;

@@ -42,6 +42,8 @@ export default createAskUserQuestionExtension({
   // { kind: "answered", result }, { kind: "deferred" } (the answer arrives as a chat message)
   // or { kind: "abandoned" }. Reject to report the run as stopped.
   ask: async (request) => myHost.ask(request.toolCallId, request.args, request.signal),
+  // Optional: learn about each executable call before pi runs it.
+  announce: (toolCallId) => myHost.expect(toolCallId),
   // Optional: describe your UI to the model.
   guidance: { description: "…", promptGuidelines: ["…"] },
 });

@@ -20,14 +20,17 @@ answer mailbox.
 
 - **Default export**: the factory with the built-in asker, which `pi install` loads through the `pi`
   manifest.
-- **`createAskUserQuestionExtension({ ask?, guidance? })`**:
+- **`createAskUserQuestionExtension({ ask?, announce?, guidance? })`**:
   - `ask: AskUserQuestionAsker` replaces the built-in asking. The embedder is then the UI, so there is no
     `hasUI` gate.
+  - `announce(toolCallId)` is called from the `message_end` hook for the ask call the batch keeps, when
+    the assistant's stop reason lets it execute (`executableAskCallIds`). An embedder that tracks calls
+    outside `execute()` starts tracking here, so only calls this extension runs are tracked.
   - `guidance` replaces the description, `promptSnippet` and `promptGuidelines`, for a host whose UI
     behaves differently, such as ThinkRail's composer supersede.
 - **`./core`**: no runtime imports. Exports the tool name, limits, reserved labels, result types and texts,
-  plus `validateQuestionnaire`, `buildQuestionnaireResponse`, `outcomeResult`, `isAckDetails` and
-  `isolateAskUserQuestionBatch`. These are what an embedder needs to repair or continue a question outside
+  plus `validateQuestionnaire`, `buildQuestionnaireResponse`, `outcomeResult`, `isAckDetails`,
+  `isolateAskUserQuestionBatch` and `executableAskCallIds`. These are what an embedder needs to repair or continue a question outside
   `execute()`.
 - **The tool contract**, which renderers and embedders key on:
   - the name;
