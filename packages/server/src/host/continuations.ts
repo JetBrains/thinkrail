@@ -37,6 +37,9 @@ import { resolveNewChatModel } from "./newChatModel";
 
 const log = logger("host");
 
+/** How long `chat.continue` waits for the request to be refused before answering: a turn runs much longer. */
+const REQUEST_ACK_MS = 1_500;
+
 type Publisher = (continuation: ChatContinuation) => void;
 
 interface Operation {
@@ -144,6 +147,7 @@ export async function startContinuation(
 				requestText(project),
 				details,
 			),
+			REQUEST_ACK_MS,
 		);
 	} catch (error) {
 		emit(operation, { phase: "failed", reason: String(error) });

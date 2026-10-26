@@ -47,10 +47,8 @@ export function ContinueChatDialog({
 	const confirm = () => {
 		if (!selected || sending) return;
 		setSending(true);
-		void continueChatInWorkspace(chat.id, selected.id).finally(() => {
-			setSending(false);
-			onOpenChange(false);
-		});
+		void continueChatInWorkspace(chat.id, selected.id).finally(() => setSending(false));
+		onOpenChange(false);
 	};
 
 	return (

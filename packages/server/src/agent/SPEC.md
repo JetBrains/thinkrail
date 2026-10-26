@@ -1097,6 +1097,18 @@ A finished but malformed event keeps the non-retryable parse error. Observed fai
 rarely does, so the split CRLF is likely what users hit. Unconfirmed: whether api.anthropic.com or a
 proxy on the path sends CRLF. The guard test and removal gate live in [[pi-compatibility]].
 
+## Continue in workspace
+
+`continueTool.ts` registers `continue_in_workspace({ summary })` the way `titleTool.ts` registers
+`set_title`: a global inline extension whose behaviour is a host-injected `ContinueToolHost`
+(`setContinueToolHost`), so `agent` never imports `host`. The tool's description tells the agent it only
+works after ThinkRail asked (the request card); the host side refuses every call without a pending
+binding, which also keeps delegation children out. `clampHandoffSummary` bounds the summary to
+`CHAT_HANDOFF_SUMMARY_MAX_LENGTH`. `sendHostMessageToSession(sessionId, customType, content, details)` is
+the one way the host authors a message the agent answers: a `display: true` custom message delivered as a
+follow-up with `triggerTurn`, queued behind a running turn and never a steer — the review-fix request
+rides it too.
+
 ## Session titles
 
 `agentSessionManager` is the only durable chat-title writer. Its `renameSession(sessionId,

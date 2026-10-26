@@ -29,8 +29,9 @@ actions through the panels-owned ship runner; it owns no host state.
   container's list if this window has none, then opens the newest chat not pending deletion or starts
   one — and offers no Project Home for it), `ChatSegment` shows the conversation's
   `chatLabel` (the host's state-record title, else the first prompt, else "Chat"; `data-title-source` on
-  `scope-name`) with a menu of sibling chats worded the same way, New chat, Copy path, Reveal and Delete
-  chat…, and no branch, remote or pull-request segment is rendered — there is no repository to ask.
+  `scope-name`) with a menu of sibling chats worded the same way, New chat, Copy path, Reveal, Continue in
+  workspace… and Delete chat…, and no branch, remote or pull-request segment is rendered — there is no
+  repository to ask.
 - **Public surface (`index.ts`):**
   - `LocationBar`
 - **Allowed deps:** `store` (projects, workspaces, session state, diff base selector, toasts), `transport`

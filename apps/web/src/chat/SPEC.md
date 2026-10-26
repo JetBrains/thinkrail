@@ -307,6 +307,16 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   know), and the pruning surfaces only when *Review turn* is clicked — as the review tab's scope-aware
   `UNKNOWN_COMMIT` notice.
 
+- `continuationRequest` / `handoff` — the two host-authored cards of **Continue in workspace**
+  (`isContinueInWorkspaceRequestMessage` / `isChatHandoffMessage`, both open a round like `reviewFix`):
+  `ContinuationRequestCard` names the target project and shows the operation's host-owned phase from
+  `ChatActions.continuationOf` — asking, summarizing, creating, "Continued in a new workspace" with
+  **Open** (`openContinuation`), or the failure reason / "host restarted" with **Retry**
+  (`retryContinuation` asks the host again for the same project); `HandoffCard` renders the clamped
+  summary as Markdown under "Continued from “<title>”" with **Open the original chat**
+  (`openHandoffSource`). The renderers stay props-driven: `ChatTranscript` supplies the three actions and
+  the phase lookup from the store's `chatContinuations` slice, and it never imports `panels`.
+
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives
 re-derivation and virtualization: **every fold surface (outer activity groups, nested thinking groups, tool
