@@ -10,15 +10,15 @@ tags: [spec-graph, pi-extension]
 
 ## Responsibility
 
-The seven `pi` custom tools that expose the spec model to the agent — `spec_grep`, `spec_get`,
-`spec_graph`, `spec_create`, `spec_update`, `spec_delete`, `spec_validate`. Each is a **thin wrapper** over
+The eight `pi` custom tools that expose the spec model to the agent — `spec_search`, `spec_grep`,
+`spec_get`, `spec_graph`, `spec_create`, `spec_update`, `spec_delete`, `spec_validate`. Each is a **thin wrapper** over
 `core/`: parse the typebox params, call a `core/` function, format a text result + structured `details`.
 None edit prose.
 
 ## Boundary
 
-- **Owns:** tool registration, param schemas, and result formatting; the per-root `SpecIndex` cache and the
-  `spec_create` scaffold headings (`shared.ts`).
+- **Owns:** tool registration, param schemas, and result formatting; the per-root `SpecIndex` cache,
+  the bounded per-root section-index cache and the `spec_create` scaffold headings (`shared.ts`).
 - **Public surface:** the `index.ts` **barrel** exporting `registerSpecTools(pi)`; the extension entry
   (`../index.ts`) is the only caller.
 - **Allowed deps:** `core/` (via its barrel), `@earendil-works/pi-coding-agent` (types and public
@@ -32,7 +32,7 @@ None edit prose.
 One leaf per tool (`grep.ts` → `spec_grep`, and so on), each wrapping the corresponding `core/` function
 and depending on `shared.ts` (the index cache + result/scaffold helpers), which depends on `core/`. Leaves
 don't depend on each other; `index.ts` composes them. `spec_create`/`spec_update`/`spec_delete` write the
-file; the other four are read-only.
+file; the other five are read-only.
 
 ## Invariants
 
@@ -62,3 +62,10 @@ file; the other four are read-only.
 - The spec root is `ctx.cwd`; one `SpecIndex` is reused per root (freshness handled in `core/` — see
   `module-spec-graph`). `spec_update` reads via `recordForId` to reuse the scan's cached read; write tools
   just write, and the next read picks the change up.
+- `spec_search` re-syncs its root's section index from the `SpecIndex` read on every call
+  (`indexSections` re-tokenizes only changed files), so the agent's own edits rank on its next search.
+  Section indexes are the costly cache (several MB per large root), so `shared.ts` keeps the
+  `MAX_SECTION_INDEX_ROOTS` most recently searched roots and drops the oldest. The result is one
+  `path:line  Spec › Section — snippet` line per hit, best first, with `(n/m words)` on a partial
+  match, and no section bodies — the agent reads at the line. `limit` defaults to 8 and is clamped at
+  25; `type`/`tag`/`parent` narrow like `spec_grep`.
