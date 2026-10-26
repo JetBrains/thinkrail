@@ -1,7 +1,10 @@
 import { deriveEditorTabs } from "./editorTabs";
+import { heroDownloadTarget } from "./heroDownload";
 import { installShareUrl, isMobileDevice, shareInstallLink } from "./installLinkShare";
 import {
 	type BrowserPlatformHints,
+	type CpuArchitecture,
+	detectCpuArchitecture,
 	detectInstallPlatform,
 	type InstallPlatform,
 } from "./installPlatform";
@@ -250,9 +253,11 @@ if (motionOK && chat) {
 initThemeToggle();
 
 type WindowsShell = "powershell" | "cmd" | "wsl";
+type CliTab = "unix" | "cmd" | "powershell";
 
 interface NavigatorUserAgentData {
 	readonly platform?: string;
+	getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }>;
 }
 
 interface NavigatorWithUserAgentData extends Navigator {
@@ -281,6 +286,17 @@ function windowsShellFrom(value: string | undefined): WindowsShell | undefined {
 	}
 }
 
+function cliTabFrom(value: string | undefined): CliTab | undefined {
+	switch (value) {
+		case "unix":
+		case "cmd":
+		case "powershell":
+			return value;
+		default:
+			return undefined;
+	}
+}
+
 const browserNavigator: NavigatorWithUserAgentData = navigator;
 const platformHints: BrowserPlatformHints = {
 	userAgentDataPlatform: browserNavigator.userAgentData?.platform,
@@ -300,6 +316,47 @@ if (sendLink && isMobileDevice(platformHints)) {
 			setTimeout(() => button.classList.remove("copied"), 1400);
 		});
 	}
+}
+
+const detectedInstallPlatform = detectInstallPlatform(platformHints);
+
+function applyHeroDownload(architecture: CpuArchitecture | undefined): void {
+	const link = document.querySelector<HTMLAnchorElement>("[data-hero-download]");
+	const label = link?.querySelector<HTMLElement>("[data-hero-download-label]");
+	if (!link || !label) return;
+	const target = heroDownloadTarget(detectedInstallPlatform, architecture);
+	link.href = target.href;
+	if (target.ariaLabel) link.setAttribute("aria-label", target.ariaLabel);
+	else link.removeAttribute("aria-label");
+	label.textContent = target.label;
+}
+
+applyHeroDownload(
+	detectCpuArchitecture({
+		platform: browserNavigator.platform,
+		userAgent: browserNavigator.userAgent,
+	}),
+);
+const userAgentData = browserNavigator.userAgentData;
+if (userAgentData?.getHighEntropyValues) {
+	void userAgentData.getHighEntropyValues(["architecture"]).then(
+		(data) => {
+			const architecture = detectCpuArchitecture({
+				architecture: data?.architecture,
+				platform: browserNavigator.platform,
+				userAgent: browserNavigator.userAgent,
+			});
+			if (architecture !== undefined) applyHeroDownload(architecture);
+		},
+		() => undefined,
+	);
+}
+for (const row of document.querySelectorAll<HTMLElement>("[data-desktop-platform]")) {
+	row.classList.toggle(
+		"is-current",
+		detectedInstallPlatform !== undefined &&
+			row.dataset.desktopPlatform === detectedInstallPlatform,
+	);
 }
 
 const installPicker = document.querySelector<HTMLElement>("[data-install-picker]");
@@ -401,6 +458,55 @@ if (installPicker) {
 	document.documentElement.classList.add("install-tabs-ready");
 }
 
+const cliInstall = document.querySelector<HTMLElement>("[data-cli-install]");
+if (cliInstall) {
+	const cliTabs = [...cliInstall.querySelectorAll<HTMLButtonElement>("[data-cli-tab]")];
+	const cliPanels = [...cliInstall.querySelectorAll<HTMLElement>("[data-cli-panel]")];
+	const initialCliTab: CliTab = detectedInstallPlatform === "windows" ? "powershell" : "unix";
+
+	const selectCliTab = (tab: CliTab) => {
+		for (const button of cliTabs) {
+			const selected = cliTabFrom(button.dataset.cliTab) === tab;
+			button.setAttribute("aria-selected", String(selected));
+			button.tabIndex = selected ? 0 : -1;
+		}
+		for (const panel of cliPanels) {
+			panel.hidden = cliTabFrom(panel.dataset.cliPanel) !== tab;
+		}
+		const panel = cliPanels.find((item) => cliTabFrom(item.dataset.cliPanel) === tab);
+		const command = panel?.querySelector("[data-install-command]")?.textContent?.trim() ?? "";
+		const platform: InstallPlatform =
+			tab === "unix" ? (detectedInstallPlatform === "macos" ? "macos" : "linux") : "windows";
+		publishInstallSelection({ command, platform });
+	};
+
+	for (const tab of cliTabs) {
+		const activate = (button: HTMLButtonElement) => {
+			const next = cliTabFrom(button.dataset.cliTab);
+			if (next) selectCliTab(next);
+		};
+		tab.addEventListener("click", () => activate(tab));
+		tab.addEventListener("keydown", (event) => {
+			if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+			const index = cliTabs.indexOf(tab);
+			if (index < 0) return;
+			let nextIndex = index;
+			if (event.key === "ArrowLeft") nextIndex = (index - 1 + cliTabs.length) % cliTabs.length;
+			if (event.key === "ArrowRight") nextIndex = (index + 1) % cliTabs.length;
+			if (event.key === "Home") nextIndex = 0;
+			if (event.key === "End") nextIndex = cliTabs.length - 1;
+			const target = cliTabs[nextIndex];
+			if (!target) return;
+			event.preventDefault();
+			activate(target);
+			target.focus();
+		});
+	}
+
+	selectCliTab(initialCliTab);
+	document.documentElement.classList.add("install-tabs-ready");
+}
+
 for (const el of document.querySelectorAll<HTMLElement>("[data-copy]")) {
 	el.addEventListener("click", async () => {
 		const value = el.dataset.copy;
@@ -430,15 +536,20 @@ if (navToggle && railRight && backdrop) {
 	for (const row of treeRows) row.addEventListener("click", () => setOpen(false));
 }
 
-const stars = document.getElementById("gh-stars");
-if (stars) {
+const starBadges = document.querySelectorAll<HTMLElement>(".gh-stars");
+if (starBadges.length > 0) {
 	fetch("https://api.github.com/repos/JetBrains/thinkrail")
 		.then((response) => (response.ok ? response.json() : null))
 		.then((data: { stargazers_count?: number } | null) => {
 			if (typeof data?.stargazers_count !== "number") return;
 			const n = data.stargazers_count;
-			stars.textContent = n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-			stars.hidden = false;
+			const formatted = n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+			for (const stars of starBadges) {
+				const count = stars.querySelector<HTMLElement>("[data-gh-stars-count]");
+				if (count) count.textContent = formatted;
+				else stars.textContent = formatted;
+				stars.hidden = false;
+			}
 		})
 		.catch(() => {});
 }

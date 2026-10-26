@@ -1,8 +1,11 @@
 ---
 import BaseHead from "../components/BaseHead.astro";
+import CliInstall from "../components/CliInstall.astro";
 import IdeShell from "../components/IdeShell.astro";
-import InstallPicker from "../components/InstallPicker.astro";
-import { desktopInstallerPlatforms, installCommands } from "../installCommands";
+import { heroDownloadTarget } from "../heroDownload";
+import { desktopInstallerPlatforms } from "../installCommands";
+
+const heroDownload = heroDownloadTarget(undefined, undefined);
 ---
 
 <!doctype html>
@@ -41,12 +44,6 @@ import { desktopInstallerPlatforms, installCommands } from "../installCommands";
 					</p>
 					<h1 class="hero-title">ThinkRail</h1>
 					<p class="hero-tagline">The agentic IDE that gets better every time you use it.</p>
-					<div class="hero-badge">
-						<a href="https://www.producthunt.com/products/thinkrail?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-thinkrail" target="_blank" rel="noopener noreferrer">
-							<img class="hero-badge-dark" alt="ThinkRail - the agentic IDE that gets better every time you use it | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1293188&amp;theme=dark&amp;t=1793013338496" />
-							<img class="hero-badge-light" alt="ThinkRail - the agentic IDE that gets better every time you use it | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1293188&amp;theme=light&amp;t=1793013338496" />
-						</a>
-					</div>
 					<p class="hero-lede">
 						Open a repo as a project. Cut isolated <strong>git-worktree workspaces</strong>. Pair
 						with a real agent across Monaco tabs, terminals, and diffs — while your project's
@@ -59,13 +56,36 @@ import { desktopInstallerPlatforms, installCommands } from "../installCommands";
 						</button>
 						<p class="send-link-note">ThinkRail runs on macOS, Windows, and Linux.</p>
 					</div>
-					<InstallPicker idPrefix="hero" />
 					<div class="hero-ctas">
+						<div class="hero-download">
+							<a
+								class="btn btn-primary"
+								href={heroDownload.href}
+								data-hero-download
+								aria-label={heroDownload.ariaLabel}
+							>
+								<svg class="i" aria-hidden="true"><use href="#i-download" /></svg>
+								<span data-hero-download-label>{heroDownload.label}</span>
+							</a>
+							<a class="hero-download-other" href="#install">
+								Other versions
+								<svg class="i" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+							</a>
+						</div>
 						<a class="btn" href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
 							<svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>
-							Star on GitHub
+							View on GitHub
+							<span class="gh-stars" hidden title="GitHub stars">
+								<svg class="i" aria-hidden="true"><use href="#i-star" /></svg>
+								<span data-gh-stars-count></span>
+							</span>
 						</a>
-						<a class="btn" href="#agent-chat">ThinkRail in action</a>
+						<div class="hero-badge">
+							<a href="https://www.producthunt.com/products/thinkrail?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-thinkrail" target="_blank" rel="noopener noreferrer">
+								<img class="hero-badge-dark" alt="ThinkRail - the agentic IDE that gets better every time you use it | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1293188&amp;theme=dark&amp;t=1793013338496" />
+								<img class="hero-badge-light" alt="ThinkRail - the agentic IDE that gets better every time you use it | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1293188&amp;theme=light&amp;t=1793013338496" />
+							</a>
+						</div>
 					</div>
 				</section>
 
@@ -265,7 +285,7 @@ import { desktopInstallerPlatforms, installCommands } from "../installCommands";
 					<p>Choose your platform and start working.</p>
 					<div class="desktop-download-list">
 						{desktopInstallerPlatforms.map((installer) => (
-							<div class="desktop-download-row">
+							<div class="desktop-download-row" data-desktop-platform={installer.id}>
 								<div class="desktop-download-row-label">
 									<strong class="desktop-download-platform">{installer.label}</strong>
 									<span class="desktop-download-compatibility">{installer.detail}</span>
@@ -279,33 +299,9 @@ import { desktopInstallerPlatforms, installCommands } from "../installCommands";
 						))}
 					</div>
 					<p class="install-linux-note">Linux: extract the archive, run <code>./installer</code>, and check the <a href="https://github.com/JetBrains/thinkrail#install">native library requirements</a>.</p>
-					<details class="install-reference">
-						<summary>Browser UI via command line</summary>
-						<div class="install-reference-body">
-							<p class="browser-ui-note">Install the local launcher, then run <code>thinkrail</code> to open the browser UI.</p>
-							<div class="install-cli-row">
-								<span>macOS, Linux, WSL</span>
-								<div class="install-line">
-									<code tabindex="0">{installCommands.macos}</code>
-									<button type="button" class="copy-btn" data-copy={installCommands.macos} aria-label="Copy macOS, Linux, and WSL install command"><svg class="i" aria-hidden="true"><use href="#i-copy" /></svg><svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg></button>
-								</div>
-							</div>
-							<div class="install-cli-row">
-								<span>Windows PowerShell</span>
-								<div class="install-line">
-									<code tabindex="0">{installCommands.windows.powershell}</code>
-									<button type="button" class="copy-btn" data-copy={installCommands.windows.powershell} aria-label="Copy Windows PowerShell install command"><svg class="i" aria-hidden="true"><use href="#i-copy" /></svg><svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg></button>
-								</div>
-							</div>
-							<div class="install-cli-row">
-								<span>Command Prompt</span>
-								<div class="install-line">
-									<code tabindex="0">{installCommands.windows.cmd}</code>
-									<button type="button" class="copy-btn" data-copy={installCommands.windows.cmd} aria-label="Copy Command Prompt install command"><svg class="i" aria-hidden="true"><use href="#i-copy" /></svg><svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg></button>
-								</div>
-							</div>
-						</div>
-					</details>
+					<p class="install-cli-heading">Browser UI via command line</p>
+					<p class="browser-ui-note">Install the local launcher, then run <code>thinkrail</code> to open the browser UI.</p>
+					<CliInstall />
 					<p class="install-fineprint">Requires <code>git</code> and an authenticated <code>pi</code> provider. See <a href="https://github.com/JetBrains/thinkrail/releases">all releases</a> and <a href="https://github.com/JetBrains/thinkrail#install">advanced CLI options</a>.</p>
 				</section>
 

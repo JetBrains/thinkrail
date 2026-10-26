@@ -985,6 +985,15 @@ p.hero-lede {
 	margin: 22px 0 8px;
 }
 
+.cli-install .install-os-tabs {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+.cli-install .install-line {
+	margin: 12px;
+}
+
 .send-link {
 	margin: 22px 0 0;
 }
@@ -1229,8 +1238,65 @@ html.install-tabs-ready .windows-shell-tabs {
 .hero-ctas {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: flex-start;
 	gap: 12px;
-	margin-top: 26px;
+	margin-top: 22px;
+}
+
+.hero-download {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+a.hero-download-other {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1;
+	text-decoration: none;
+}
+
+a.hero-download-other .i {
+	width: 12px;
+	height: 12px;
+}
+
+a.hero-download-other:hover {
+	color: var(--text);
+	text-decoration: none;
+}
+
+.hero-ctas .hero-badge {
+	margin: 0;
+}
+
+.hero-ctas .hero-badge img {
+	width: auto;
+	height: 40px;
+}
+
+[data-theme="dark"] .hero-ctas .hero-badge-light,
+[data-theme="light"] .hero-ctas .hero-badge-dark {
+	display: none;
+}
+
+.hero-ctas .gh-stars:not([hidden]) {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: 2px;
+	padding-left: 9px;
+	border-left: 1px solid var(--border2);
+}
+
+.hero-ctas .gh-stars .i {
+	width: 12px;
+	height: 12px;
 }
 
 .btn {
@@ -1563,6 +1629,11 @@ html.anim .chat-demo [data-step].on {
 	border-top: 1px solid var(--border);
 }
 
+.desktop-download-row.is-current {
+	box-shadow: inset 2px 0 0 var(--accent);
+	padding-left: 10px;
+}
+
 .desktop-download-platform,
 .desktop-download-compatibility {
 	display: block;
@@ -1592,6 +1663,14 @@ p.install-fineprint {
 	color: var(--muted);
 	font-size: 12px;
 	line-height: 1.55;
+}
+
+p.install-cli-heading {
+	margin: 22px 0 8px;
+	color: var(--text);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 600;
 }
 
 p.install-linux-note a,
@@ -2192,9 +2271,14 @@ html:not(.anim) .term-caret {
 		flex-wrap: wrap;
 	}
 
-	.hero-ctas .btn {
+	.hero-ctas .btn,
+	.hero-download {
 		flex: 1;
 		justify-content: center;
+	}
+
+	.hero-download .btn {
+		width: 100%;
 	}
 
 	/* Give the depth-0 "main spec" row more room for its label so the badge never wraps. */
@@ -2266,6 +2350,11 @@ html:not(.anim) .term-caret {
 	.sb-license {
 		flex-basis: 100%;
 	}
+}
+
+.cli-install .install-tab {
+	flex: none;
+	white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {

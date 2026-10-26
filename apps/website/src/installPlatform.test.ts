@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { detectInstallPlatform } from "./installPlatform";
+import { detectCpuArchitecture, detectInstallPlatform } from "./installPlatform";
 
 describe("detectInstallPlatform", () => {
 	test("prefers the user-agent data platform", () => {
@@ -19,6 +19,19 @@ describe("detectInstallPlatform", () => {
 		[{ platform: "X11" }, "linux"],
 	] as const)("maps desktop browser hints %#", (hints, expected) => {
 		expect(detectInstallPlatform(hints)).toBe(expected);
+	});
+
+	test("reads an explicit CPU architecture", () => {
+		expect(detectCpuArchitecture({ architecture: "arm" })).toBe("arm64");
+		expect(detectCpuArchitecture({ architecture: "x86" })).toBe("x64");
+		expect(detectCpuArchitecture({ userAgent: "Mozilla/5.0 (X11; Linux aarch64)" })).toBe("arm64");
+		expect(detectCpuArchitecture({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" })).toBe(
+			"x64",
+		);
+	});
+
+	test("does not treat MacIntel as an Intel CPU", () => {
+		expect(detectCpuArchitecture({ platform: "MacIntel" })).toBeUndefined();
 	});
 
 	test.each([

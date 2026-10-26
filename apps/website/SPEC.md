@@ -123,10 +123,10 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
   editor tabs are a JS-built navigation affordance over content that is already reachable by scrolling
   and via the file tree), and animations are skipped under `prefers-reduced-motion`.
 - **Enhancement behaviors owned by `main.ts`** (the code carries no rationale — this is it):
-  - *Terminal replay*: the hero install picker keeps the selected OS/shell's primary desktop action and
-    **Browser UI via command line** disclosure together; the launcher command inside static markup is the single source of truth for the terminal,
+  - *Terminal replay*: the Install section's command tabs keep the launcher command in static markup;
+    that command is the single source of truth for the terminal,
     which subscribes and types it before the short install transcript. A generation counter invalidates an
-    in-flight sequence on OS change; clicking the
+    in-flight sequence when the selected command changes; clicking the
     *finished* terminal (or its keyboard-reachable `Replay logo` button, revealed only then) replays
     the ASCII logo + a GitHub CTA — never the install. The logo banner's characters are never
     altered; only its font size is fitted to the rail width (re-fitted on resize).
@@ -140,25 +140,27 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
     (from `data-mock-label`), `aria-expanded` + `aria-describedby` on open — no `aria-haspopup`
     (a `tooltip` is not an allowed popup value). The `.rail-tabs` callout anchors to the panel's
     live edge; others place beside the trigger, clamped to the viewport and repositioned on resize.
-- The hero's install experience has compact **macOS / Windows / Linux** tabs and makes the stable
-  desktop application the only expanded action in each panel: macOS Apple Silicon DMG, Windows x64
-  setup ZIP, and distinct Linux x64 / ARM64 setup archives. Each panel carries one compatibility line;
-  it does not repeat product name, desktop/stability prose, or format outside the action label. A native
-  **Browser UI via command line** disclosure retains the local launcher and explains that `thinkrail` opens
-  the browser UI, without presenting a second terminal-only interface. Windows
-  adds **PowerShell / Command Prompt (cmd) / WSL** tabs only inside that disclosure: PowerShell runs
+- The hero install control is three actions in a row: **Download**, **View on GitHub** (the existing
+  star count fills in beside the label), and the Product Hunt badge. Download starts the file for
+  the detected desktop: the Apple Silicon DMG on macOS, the Windows x64 ZIP on Windows, and a Linux
+  archive. Linux uses the ARM64 archive only when a browser hint explicitly says ARM; otherwise the
+  button downloads the x64 archive. When the desktop is unknown, including with JavaScript off,
+  Download scrolls to `#install` instead of choosing a file. **Other versions** sits under that button
+  and also scrolls to `#install`. It does not open a menu. JS sets the label and file URL when a
+  desktop is detected, and marks that row in the Install section. Versionless GitHub
+  `releases/latest/download` URLs name the public aliases owned by [[module-ci-release]]; the website
+  carries no release version, updater payload name, or private artifact knowledge. Browser hints
+  choose that file and the initial command tab; they never hide alternatives, treat `MacIntel` as an
+  Intel build, or claim to detect an ambiguous mobile platform.
+- The `INSTALL.md` section is the download surface: one compact platform-row matrix (macOS Apple
+  Silicon DMG, Windows x64 ZIP, Linux x64 and ARM64 archives), then **Browser UI via command line**
+  always visible. Those commands use the same tab chrome as the blog picker, with three tabs —
+  **macOS / Linux / WSL**, **Windows CMD**, **Windows PowerShell**. PowerShell runs
   `irm …/install.ps1 | iex`, Command Prompt launches `powershell -c "irm …/install.ps1 | iex"`, and
-  WSL uses `install.sh`. The closed picker stays under 150px on desktop and 190px on mobile. Versionless
-  GitHub `releases/latest/download` URLs name the public aliases owned by [[module-ci-release]]; the
-  website carries no release version, updater payload name, or private artifact knowledge. Browser hints
-  choose only the initial supported desktop OS; they never hide alternatives, infer Linux CPU architecture,
-  or claim to detect an ambiguous mobile platform. Every panel remains in the static DOM; JS turns the
-  complete fallback into tabs, while `<details>` owns keyboard/no-JS disclosure semantics. The detailed
-  `INSTALL.md` section is one compact platform-row matrix plus one browser-UI-via-command-line disclosure;
-  nightly/version examples
-  live in release documentation rather than the marketing page.
-- **Phone visitors get a "Send link to my computer" action** above the hero picker. It is in the static DOM
-  but `hidden`, and `main.ts` reveals it only on a detected phone or tablet (the desktop picker stays visible
+  macOS, Linux, and WSL share `install.sh`. Every command stays in the static DOM; JS turns that
+  fallback into tabs. Nightly/version examples live in release documentation rather than the marketing page.
+- **Phone visitors get a "Send link to my computer" action** above the hero actions. It is in the static DOM
+  but `hidden`, and `main.ts` reveals it only on a detected phone or tablet (the download link stays visible
   below it; no platform is hidden). Activation opens the native share sheet with the current page URL, its
   query replaced by `utm_source=send_to_computer&utm_medium=share` and its fragment by the hero anchor, so
   the later desktop visit records a tagged first touch. Without Web Share, or when sharing fails for any
@@ -319,14 +321,14 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   blog pages** (the landing keeps its section tabs; page-level Landing/Blog tabs were explicitly
   rejected for now). The right rail's Files list shows the published articles (current one
   active); the terminal keeps its static install transcript — `main.ts` guards make every
-  landing-only enhancement inert (no sections → no scroll-spy; only the `hero` picker drives the
+  landing-only enhancement inert (no sections → no scroll-spy; only the landing command tabs drive the
   terminal replay).
-- **Every article ends with the landing's install picker.** `src/components/InstallPicker.astro` is the
-  one picker markup (OS tabs, desktop downloads, **Browser UI via command line** disclosure with Windows
-  shell tabs); the hero renders it with `idPrefix="hero"` and `src/pages/blog/[slug].astro` with
-  `idPrefix="blog"` in a `.blog-post-install` section after the post body. It sits inside `.blog-post`,
+- **Every article ends with the install picker.** `src/components/InstallPicker.astro` is the
+  blog picker markup (OS tabs, desktop downloads, **Browser UI via command line** disclosure with Windows
+  shell tabs). `src/pages/blog/[slug].astro` renders it with `idPrefix="blog"` in a `.blog-post-install`
+  section after the post body. It sits inside `.blog-post`,
   so its downloads, copies, and disclosure opens report `blog_post`, and outside `.blog-post-content`, so
-  the prose cascade never restyles it. `main.ts` drives whichever picker the page has; posts keep their
+  the prose cascade never restyles it. `main.ts` drives that picker; posts keep their
   own prose install guidance, and `validateBuild.ts` requires the picker on every article.
   Post cards are whole-card links that signal hover on the border alone (no underline, no movement)
   and share the landing feature cards' surface, which keeps the `--elevated` tag chips visible on
