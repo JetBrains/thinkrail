@@ -19,6 +19,7 @@
 		"spacing:check": "bun scripts/generate-spacing.ts --check && bun test src/styles/spacingUsage.test.ts",
 		"provider-glyphs:generate": "bun scripts/generate-provider-glyphs.ts",
 		"provider-glyphs:check": "bun scripts/generate-provider-glyphs.ts --check",
+		"favicons:generate": "bun scripts/generate-favicons.ts",
 		"compiler:census": "bun scripts/compiler-census.ts",
 		"compiler:census:generate": "bun scripts/compiler-census.ts --write",
 		"compiler:census:check": "bun scripts/compiler-census.ts --check"
@@ -54,6 +55,7 @@
 		"@babel/core": "7.29.7",
 		"@lobehub/icons-static-svg": "1.95.1",
 		"@posthog/cli": "catalog:",
+		"@resvg/resvg-js": "catalog:",
 		"@rolldown/plugin-babel": "0.2.4",
 		"@tailwindcss/vite": "catalog:",
 		"@types/babel__core": "7.20.5",
@@ -62,6 +64,7 @@
 		"@types/react-dom": "catalog:",
 		"@vitejs/plugin-react": "6.0.2",
 		"babel-plugin-react-compiler": "1.0.0",
+		"resedit": "catalog:",
 		"tailwindcss": "catalog:",
 		"typescript": "catalog:",
 		"vite": "8.0.16"
