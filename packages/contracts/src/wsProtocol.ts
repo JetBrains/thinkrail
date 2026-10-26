@@ -66,6 +66,7 @@ import type {
 	TodoPlan,
 	TodoStatus,
 	TurnChangeSet,
+	UserThemesSnapshot,
 	Workspace,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
@@ -121,7 +122,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 91;
+export const PROTOCOL_VERSION = 92;
+export const USER_THEMES_PROTOCOL_VERSION = 92;
 export const HOST_ENVIRONMENT_PROTOCOL_VERSION = 91;
 export const CLIENT_ERROR_REPORT_PROTOCOL_VERSION = 90;
 export const LOCALES_PROTOCOL_VERSION = 89;
@@ -277,6 +279,8 @@ export const WS_METHODS = {
 	extensionList: "extension.list",
 	localesList: "locales.list",
 	localesReveal: "locales.reveal",
+	themesList: "themes.list",
+	themesReveal: "themes.reveal",
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
@@ -387,6 +391,7 @@ export const WS_CHANNELS = {
 	turnChanged: "turn.changed",
 	mcpStatus: "mcp.status",
 	localesChanged: "locales.changed",
+	themesChanged: "themes.changed",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -804,6 +809,8 @@ export interface WsMethodMap {
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
 	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
 	"locales.reveal": { params: Record<string, never>; result: Ack };
+	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
+	"themes.reveal": { params: Record<string, never>; result: Ack };
 	"session.create": {
 		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };

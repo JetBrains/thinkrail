@@ -1123,6 +1123,31 @@ export interface LocalLocalesSnapshot {
 	files: LocalLocaleFile[];
 }
 
+export interface UserThemeFileOk {
+	fileName: string;
+	ok: true;
+	/** The parsed JSON, unvalidated: the theme schema is owned by the web client. */
+	manifest: unknown;
+}
+
+export type UserThemeFileErrorCode = "too-large" | "too-many" | "unreadable" | "invalid-json";
+
+export interface UserThemeFileError {
+	fileName: string;
+	ok: false;
+	error: UserThemeFileErrorCode;
+	/** Parser or OS detail for `invalid-json` / `unreadable`, untranslated. */
+	detail?: string;
+}
+
+export type UserThemeFile = UserThemeFileOk | UserThemeFileError;
+
+/** The host's user theme files (`<dataDir>/themes/`), as `themes.list` reports them. */
+export interface UserThemesSnapshot {
+	dir: string;
+	files: UserThemeFile[];
+}
+
 export const SUBAGENT_MAX_CONCURRENT = { min: 1, max: 16, default: 4 } as const;
 
 export function isSubagentMaxConcurrent(value: unknown): value is number {

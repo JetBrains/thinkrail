@@ -47,6 +47,7 @@ import {
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TURN_CHANGES_PROTOCOL_VERSION,
+	USER_THEMES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
@@ -219,10 +220,18 @@ test("local language files and the locale setting are pinned to v89", () => {
 });
 
 test("the stored host environment is pinned to v91", () => {
-	expect(PROTOCOL_VERSION).toBe(91);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(HOST_ENVIRONMENT_PROTOCOL_VERSION);
 	expect(HOST_ENVIRONMENT_PROTOCOL_VERSION).toBe(91);
 	expect(WS_METHODS.environmentGet).toBe("environment.get");
 	expect(WS_METHODS.environmentUpdate).toBe("environment.update");
+});
+
+test("user theme files are pinned to v92", () => {
+	expect(PROTOCOL_VERSION).toBe(92);
+	expect(USER_THEMES_PROTOCOL_VERSION).toBe(92);
+	expect(WS_METHODS.themesList).toBe("themes.list");
+	expect(WS_METHODS.themesReveal).toBe("themes.reveal");
+	expect(WS_CHANNELS.themesChanged).toBe("themes.changed");
 });
 
 test("client error reports are pinned to v90", () => {
