@@ -31,13 +31,14 @@ const render = (
 		? draftFromEnvironment(status.stored)
 		: { agentDir: "", vars: [] },
 	issues: EnvironmentDraftIssues = NO_ISSUES,
+	saving = false,
 ) =>
 	renderToStaticMarkup(
 		<EnvironmentForm
 			status={status}
 			draft={draft}
 			issues={issues}
-			saving={false}
+			saving={saving}
 			saveFailed={false}
 			onChange={() => {}}
 			onSave={() => {}}
@@ -74,6 +75,15 @@ test("issues render under their field and row", () => {
 	});
 	expect(markup).toContain("This folder doesn&#x27;t exist.");
 	expect(markup).toContain("ThinkRail manages this variable, so it can&#x27;t be set here.");
+});
+
+test("the whole form is locked while a save is in flight, so no edit can be overwritten by its response", () => {
+	expect(render(STATUS)).toMatch(
+		/<fieldset(?![^>]*disabled)[^>]*data-testid="settings-environment-form"/,
+	);
+	expect(render(STATUS, undefined, NO_ISSUES, true)).toMatch(
+		/<fieldset[^>]*disabled=""[^>]*data-testid="settings-environment-form"/,
+	);
 });
 
 test("loading renders nothing and failure renders a notice", () => {

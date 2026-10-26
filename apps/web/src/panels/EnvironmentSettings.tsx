@@ -93,7 +93,11 @@ export function EnvironmentForm({
 				title={t("settings.environment.title")}
 				description={t("settings.environment.description")}
 			>
-				<div className="flex flex-col gap-16 px-12 py-12">
+				<fieldset
+					disabled={saving}
+					data-testid="settings-environment-form"
+					className="flex min-w-0 flex-col gap-16 px-12 py-12"
+				>
 					{status.restartRequired ? (
 						<SettingsNotice variant="warning" testId="settings-environment-restart">
 							<p>{t("settings.environment.restartRequired")}</p>
@@ -267,7 +271,7 @@ export function EnvironmentForm({
 							{t("common.save")}
 						</Button>
 					</div>
-				</div>
+				</fieldset>
 			</SettingsGroup>
 		</div>
 	);

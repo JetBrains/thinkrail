@@ -947,7 +947,8 @@ a project picker, the prompt hero, and the reused
   ([[submodule-server-environment]]): the pi config folder, the folder in use (`effectiveAgentDir`), and
   ordered name/value rows whose values are masked until revealed per row. It fetches `environment.get` on
   mount into section-local state — never a store slice, because values may be secrets — and keeps an
-  explicit draft (Save / Discard, not per-field writes), since nothing applies before a restart. Save sends
+  explicit draft (Save / Discard, not per-field writes), since nothing applies before a restart. The form is one `<fieldset disabled>` while a save is in flight, so a
+  response can never overwrite edits made after it was sent, nor attach its issues to rows it never saw. Save sends
   the whole record through `environment.update`; `{ ok: false }` maps each issue back to its field or row
   (blank rows are dropped client-side first so server indexes line up). A pending restart shows
   `settings-environment-restart`; names set at launch carry a "Set at launch" badge. Pure draft helpers
