@@ -9,6 +9,7 @@ import {
 	gateAllowsCallerKind,
 	IdSchema,
 	LIMITS,
+	SessionSchema,
 } from "./schemas.ts";
 
 const closed = { additionalProperties: false };
@@ -74,6 +75,7 @@ const details = Type.Object(
 		roleSource: Type.Optional(text),
 		status: Type.Union([runStatus, Type.Literal("queued"), Type.Literal("running")]),
 		model: Type.Optional(text),
+		thinkingLevel: SessionSchema.properties.thinkingLevel,
 		activity: Type.Optional(text),
 		durationMs: Type.Number(),
 		usage: Type.Object(

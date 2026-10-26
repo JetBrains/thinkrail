@@ -1344,7 +1344,7 @@ class Engine implements D.DagService {
 				const state = this.next(owned);
 				const current = D.currentTarget(state, job.target);
 				const { details, finalText, errorMessage, ...evidence } = outcome;
-				const { task: _task, thinkingLevel: _thinkingLevel, ...stats } = details;
+				const { task: _task, ...stats } = details;
 				current.activation.phase = "settled";
 				const observed: D.StoredOutcome = { ...evidence, details: stats };
 				const rejected: string[] = [];
