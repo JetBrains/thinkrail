@@ -420,7 +420,7 @@ export function AskUserQuestionCard({
 	}, [revealElement, tab]);
 
 	useEffect(() => {
-		if (!awaiting || streaming || questions.length === 0 || submitted) return;
+		if (!awaiting || !canRespond || streaming || questions.length === 0 || submitted) return;
 		let frame: number | null = null;
 		let attempts = 0;
 		let userTookOver = false;
@@ -464,6 +464,7 @@ export function AskUserQuestionCard({
 		};
 	}, [
 		awaiting,
+		canRespond,
 		cancelAutomaticReveal,
 		focusScope,
 		questions.length,
@@ -577,15 +578,18 @@ export function AskUserQuestionCard({
 
 	return (
 		<div className="flex flex-col gap-4 motion-safe:animate-reveal">
-			<AttentionLine announced={announced} />
+			{canRespond ? <AttentionLine announced={announced} /> : null}
 			<section
 				ref={cardRef}
 				data-testid="ask-user-question"
-				data-tone="active"
+				data-tone={canRespond ? "active" : "idle"}
 				aria-label={t("tools.ask.cardLabel")}
 				aria-keyshortcuts="Shift+Escape"
 				onKeyDown={onCardKeyDown}
-				className="overflow-hidden rounded-lg border border-primary bg-clip-padding bg-container-elevated-bg ring-2 ring-primary-soft"
+				className={cn(
+					"overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg",
+					canRespond ? "border-primary ring-2 ring-primary-soft" : "border-border-default",
+				)}
 			>
 				{multipleQuestions ? (
 					<div
