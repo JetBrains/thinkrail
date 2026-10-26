@@ -1,11 +1,10 @@
 import { CFunction, dlopen, FFIType, type Pointer, read, toArrayBuffer } from "bun:ffi";
 import { type Dirent, existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, win32 } from "node:path";
-import { windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
+import { windowsProductName } from "@thinkrail/shared/windowsIdentity";
 
 export function desktopAppUserModelId(channel: string): string {
-	const { productName } = windowsFileIdentity({ version: "0.0.0", channel });
-	return `JetBrains.${productName.replaceAll(" ", ".")}`;
+	return `JetBrains.${windowsProductName(channel).replaceAll(" ", ".")}`;
 }
 
 export interface WindowsShortcut {
@@ -19,7 +18,7 @@ export interface WindowsShellApi {
 	setProcessAppUserModelId(id: string): void;
 	processAppUserModelId(): string | null;
 	withComApartment<T>(run: () => T): T;
-	openShortcut(path: string): WindowsShortcut;
+	openShortcut(path: string, writable?: boolean): WindowsShortcut;
 }
 
 const ELECTROBUN_UNINSTALL_MANIFEST = ".electrobun-uninstall.json";
@@ -93,7 +92,7 @@ export function stampTaskbarShortcuts(
 	candidates: readonly string[],
 	launcher: string,
 	id: string,
-	openShortcut: (path: string) => WindowsShortcut,
+	openShortcut: (path: string, writable: boolean) => WindowsShortcut,
 ): { stamped: string[]; failures: unknown[] } {
 	const stamped: string[] = [];
 	const failures: unknown[] = [];
@@ -102,17 +101,22 @@ export function stampTaskbarShortcuts(
 	for (const path of candidates) {
 		if (!existsSync(path)) continue;
 		try {
-			const shortcut = openShortcut(path);
+			const shortcut = openShortcut(path, false);
 			try {
 				const target = shortcut.target();
 				if (!target || win32.basename(target).toLowerCase() !== launcherName) continue;
 				if (canonicalWindowsPath(target) !== canonicalLauncher) continue;
 				if (shortcut.appUserModelId() === id) continue;
-				shortcut.setAppUserModelId(id);
-				stamped.push(path);
 			} finally {
 				shortcut.close();
 			}
+			const writable = openShortcut(path, true);
+			try {
+				writable.setAppUserModelId(id);
+			} finally {
+				writable.close();
+			}
+			stamped.push(path);
 		} catch (error) {
 			failures.push(error);
 		}
@@ -126,6 +130,7 @@ const S_OK = 0;
 const S_FALSE = 1;
 const CLSCTX_INPROC_SERVER = 0x1;
 const COINIT_APARTMENTTHREADED = 0x2;
+const STGM_READ = 0x0;
 const STGM_READWRITE = 0x2;
 const VT_LPWSTR = 31;
 const PATH_CHARACTERS = 1024;
@@ -189,9 +194,16 @@ function checkOk(hresult: number, call: string): void {
 	if (hresult !== S_OK) throw hresultError(call, hresult);
 }
 
+const comMethods = new Map<bigint, ReturnType<typeof CFunction>>();
+
 function comMethod(object: ComPointer, index: number, args: FFIType[]) {
 	const method = BigInt(read.ptr(read.ptr(object, 0), index * 8));
-	return CFunction({ ptr: method, args: [FFIType.ptr, ...args], returns: FFIType.i32 });
+	let call = comMethods.get(method);
+	if (!call) {
+		call = CFunction({ ptr: method, args: [FFIType.ptr, ...args], returns: FFIType.i32 });
+		comMethods.set(method, call);
+	}
+	return call;
 }
 
 function release(object: ComPointer): void {
@@ -228,7 +240,7 @@ export function loadWindowsShellApi(): WindowsShellApi {
 		PropVariantClear: { args: [FFIType.ptr], returns: FFIType.i32 },
 	});
 
-	function openShortcut(path: string): WindowsShortcut {
+	function openShortcut(path: string, writable = false): WindowsShortcut {
 		const out = new BigUint64Array(1);
 		check(
 			ole32.symbols.CoCreateInstance(
@@ -253,7 +265,7 @@ export function loadWindowsShellApi(): WindowsShellApi {
 				comMethod(file, PERSIST_FILE_LOAD, [FFIType.ptr, FFIType.u32])(
 					file,
 					wide(path),
-					STGM_READWRITE,
+					writable ? STGM_READWRITE : STGM_READ,
 				),
 				"IPersistFile::Load",
 			);

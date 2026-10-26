@@ -128,3 +128,10 @@ test("names a stretched small frame, a foreign icon and wrong properties", () =>
 		"fixed file version is 0.3.0.6, expected 0.3.0.0",
 	]);
 });
+
+test("names a reference ICO without frames instead of throwing", () => {
+	const empty = new Uint8Array(new ResEdit.Data.IconFile().generate());
+	expect(windowsIdentityMismatches(bunLayout(frames), identity, empty)).toEqual([
+		"the reference ICO contains no frames",
+	]);
+});

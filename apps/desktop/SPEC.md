@@ -444,8 +444,8 @@ itself:
 - **Process ID.** The first thing startup does, before any window, is set an explicit per-channel ID
   derived from the product name: `JetBrains.ThinkRail`, `JetBrains.ThinkRail.Nightly`,
   `JetBrains.ThinkRail.Dev`. Stable and nightly stay separate apps.
-- **Shortcut IDs.** Once the main window first reaches `dom-ready`, the desktop writes the same ID onto
-  every shortcut whose target is this install's `bin\launcher.exe`:
+- **Shortcut IDs.** Once the main window first reaches `dom-ready` and readiness is reported, the desktop
+  writes the same ID onto every shortcut whose target is this install's `bin\launcher.exe`:
   - the Start-menu shortcut Electrobun records in `<channel root>\.electrobun-uninstall.json`
     (schema 1; any other schema is ignored);
   - the taskbar pins in `User Pinned\TaskBar` and `User Pinned\ImplicitAppShortcuts`, so pins made before
@@ -461,6 +461,8 @@ itself:
     against real shortcuts. A PowerShell `Add-Type` helper was rejected: it compiles C# on every launch.
   - A candidate's target is first compared by file name, so a foreign pin's target (possibly on a
     network share) is never resolved on the host's thread.
+  - Every candidate is opened read-only; only a shortcut to this launcher that needs the ID is reopened
+    for writing, so a foreign read-only or ACL-restricted pin is never a failure.
   - A write counts only on `S_OK`.
   - Failing HRESULTs carry an `HRESULT_XXXXXXXX` code for error tracking.
 - **Limits.** Shortcuts to other targets are never touched. That includes pins made from the running

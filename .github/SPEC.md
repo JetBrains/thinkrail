@@ -60,9 +60,8 @@ site PR queued behind an app PR must still run the full set. Conformance, lint/t
 always run; they are cheap and cover the website too. A second output, `artifacts`, gates the Linux binary
 and desktop suites, which replay the no-agent browser suite against built artifacts and cost over half of
 CI's runner time: on a PR they run only when a path feeds building or packaging — the CLI and desktop apps,
-artifact tests, shared's native icon set, its generator and Windows file identity, the server's build
-support and bundled-runtime registration, the artifact Playwright
-runners, CI definitions, patches and the root manifests and lockfile — and in a merge group they always run,
+artifact tests, shared's native icon set, its generator, release identity and Windows file identity, the
+server's build support and bundled-runtime registration, the artifact Playwright runners, CI definitions, patches and the root manifests and lockfile — and in a merge group they always run,
 so main never lands an artifact they have not exercised. An artifact-only defect in an unrelated change
 therefore surfaces at enqueue time instead of on the PR; it was 1 in 56 failed runs before the split. That
 includes the shared no-agent specs and fixtures the artifact suites replay: only the artifact runners and

@@ -523,7 +523,6 @@ async function start(): Promise<void> {
 		startupSplash = undefined;
 		startAttributionClaim();
 		updateController.start();
-		stampWindowsTaskbarShortcuts();
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;
 		if (readyPath) {
 			writeReady(readyPath, {
@@ -536,6 +535,7 @@ async function start(): Promise<void> {
 				mode: neutral ? "host" : "ui",
 			});
 		}
+		setTimeout(stampWindowsTaskbarShortcuts, 0);
 	});
 
 	const controlPath = process.env.THINKRAIL_DESKTOP_CONTROL_FILE;

@@ -116,8 +116,10 @@ test("stamps only existing shortcuts to this launcher that carry another ID", ()
 			[other, null],
 		]);
 		const closed: string[] = [];
-		const open = (path: string): WindowsShortcut => {
+		const writableOpens: string[] = [];
+		const open = (path: string, writable: boolean): WindowsShortcut => {
 			if (path === broken) throw new Error("not a shortcut");
+			if (writable) writableOpens.push(path);
 			return {
 				target: () =>
 					path === other ? "\\\\fileserver\\tools\\other.exe" : launcher.toUpperCase(),
@@ -139,7 +141,8 @@ test("stamps only existing shortcuts to this launcher that carry another ID", ()
 			expect(result.failures).toEqual([new Error("not a shortcut")]);
 			expect(ids.get(ours)).toBe("JetBrains.ThinkRail");
 			expect(ids.get(other)).toBeNull();
-			expect(closed).toEqual([ours, current, other]);
+			expect(writableOpens).toEqual([ours]);
+			expect(closed).toEqual([ours, ours, current, other]);
 			expect(resolve.mock.calls.map(([path]) => String(path))).not.toContain(
 				"\\\\fileserver\\tools\\other.exe",
 			);

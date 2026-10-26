@@ -103,7 +103,9 @@ export function windowsIdentityMismatches(
 	const actual = readWindowsExecutableIdentity(executable);
 	const mismatches: string[] = [];
 	const frames = iconFrames(icon);
-	const largest = frames.reduce((best, frame) => (frame.size > best.size ? frame : best));
+	const [first] = frames;
+	if (!first) return ["the reference ICO contains no frames"];
+	const largest = frames.reduce((best, frame) => (frame.size > best.size ? frame : best), first);
 	if (!actual.defaultIconFrames.some((frame) => sameBytes(frame, largest.bytes))) {
 		mismatches.push("the shell's default icon group lacks the ICO's largest frame");
 	}

@@ -18,15 +18,20 @@ const CHANNEL_SUFFIXES: Readonly<Record<string, string>> = {
 
 const MAX_VERSION_PART = 0xffff;
 
+export function windowsProductName(channel: string): string {
+	const suffix = CHANNEL_SUFFIXES[channel];
+	if (suffix === undefined) throw new Error(`unknown release channel "${channel}"`);
+	return `ThinkRail${suffix}`;
+}
+
 export function windowsFileIdentity(release: {
 	version: string;
 	channel: string;
 }): WindowsFileIdentity {
-	const suffix = CHANNEL_SUFFIXES[release.channel];
-	if (suffix === undefined) throw new Error(`unknown release channel "${release.channel}"`);
+	const productName = windowsProductName(release.channel);
 	const fileVersionParts = windowsVersionParts(release.version);
 	return {
-		productName: `ThinkRail${suffix}`,
+		productName,
 		companyName: "JetBrains s.r.o.",
 		copyright: "Copyright © 2026 JetBrains s.r.o.",
 		fileVersion: fileVersionParts.join("."),
