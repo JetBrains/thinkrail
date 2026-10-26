@@ -29,7 +29,7 @@ import {
 } from "@/store";
 import { getTransport } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
-import { AskStatesContext, deriveAskStates } from "./askState";
+import { AskStatesContext, awaitingQuestionIdOf, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
@@ -563,9 +563,10 @@ const ChatTranscript = forwardRef<
 		() => deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults),
 		[runtime.turns, runtime.askAnswers, runtime.toolResults],
 	);
+	const awaitingQuestionId = awaitingQuestionIdOf(runtime.hostState);
 	const askContext = useMemo(
-		() => ({ states: askStates, focusScope: askFocusScope }),
-		[askStates, askFocusScope],
+		() => ({ states: askStates, focusScope: askFocusScope, awaitingQuestionId }),
+		[askStates, askFocusScope, awaitingQuestionId],
 	);
 
 	const chatActions = useMemo<ChatActions>(

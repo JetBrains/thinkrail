@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
-import type { AskUserQuestionResult, AssistantMessage, UserMessage } from "@thinkrail/contracts";
-import { deriveAskStates } from "./askState";
+import type {
+	AskUserQuestionResult,
+	AssistantMessage,
+	SessionState,
+	UserMessage,
+} from "@thinkrail/contracts";
+import { awaitingQuestionIdOf, deriveAskStates } from "./askState";
 import type { ChatTurn } from "./types";
 
 const askTurn = (id: string, toolCallId: string, stopReason = "toolUse"): ChatTurn => ({
@@ -76,4 +81,23 @@ test("non-ask tool calls derive no state", () => {
 		},
 	];
 	expect(Object.keys(deriveAskStates(turns, {}))).toHaveLength(0);
+});
+
+test("the host's needs-input names the one question it accepts an answer for", () => {
+	const state = (needsInput: SessionState["needsInput"]) =>
+		({ needsInput }) as unknown as SessionState;
+	expect(awaitingQuestionIdOf(null)).toBeUndefined();
+	expect(awaitingQuestionIdOf(state(null))).toBeNull();
+	expect(awaitingQuestionIdOf(state({ interactionId: "question:call-1", kind: "question" }))).toBe(
+		"call-1",
+	);
+	expect(
+		awaitingQuestionIdOf(
+			state({
+				interactionId: "dialog:d1",
+				kind: "dialog",
+				request: { id: "d1", sessionId: "s", kind: "confirm", title: "t", message: "m" },
+			}),
+		),
+	).toBeNull();
 });

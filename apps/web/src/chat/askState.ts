@@ -2,6 +2,7 @@ import {
 	type AskUserQuestionResult,
 	assistantToolCallsAreExecutable,
 	readAskUserQuestionResult,
+	type SessionState,
 } from "@thinkrail/contracts";
 import { createContext, useContext } from "react";
 import type { ChatTurn, ToolResultState } from "./types";
@@ -63,6 +64,20 @@ export function deriveAskStates(
 export interface AskContextValue {
 	states: Record<string, AskState>;
 	focusScope: object;
+	awaitingQuestionId?: string | null | undefined;
+}
+
+export function awaitingQuestionIdOf(hostState: SessionState | null): string | null | undefined {
+	if (!hostState) return undefined;
+	const needsInput = hostState.needsInput;
+	return needsInput?.kind === "question"
+		? needsInput.interactionId.slice("question:".length)
+		: null;
+}
+
+export function useAskAccepting(toolCallId: string): boolean {
+	const awaiting = useContext(AskStatesContext)?.awaitingQuestionId;
+	return awaiting === undefined || awaiting === toolCallId;
 }
 
 export const AskStatesContext = createContext<AskContextValue | null>(null);

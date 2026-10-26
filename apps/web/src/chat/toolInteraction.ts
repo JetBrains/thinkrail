@@ -1,7 +1,7 @@
 import { readAskUserQuestionResult } from "@thinkrail/contracts";
 import type { ToolInteraction, ToolInteractionState } from "@thinkrail/extension-api/web";
 import { useMemo } from "react";
-import { useAskFocusScope, useAskState } from "./askState";
+import { useAskAccepting, useAskFocusScope, useAskState } from "./askState";
 import { useChatActions } from "./ChatActions";
 import { useFoldGeometry } from "./foldState";
 
@@ -18,9 +18,10 @@ export function useToolInteraction(
 	const answer = ask?.answer;
 	const superseded = ask?.superseded ?? false;
 	const ended = ask?.terminal ?? false;
+	const accepting = useAskAccepting(toolCallId);
 	const state = useMemo<ToolInteractionState>(
-		() => ({ response: answer, superseded, ended }),
-		[answer, superseded, ended],
+		() => ({ response: answer, superseded, ended, accepting }),
+		[answer, superseded, ended, accepting],
 	);
 	return useMemo(() => {
 		if (toolName !== ASK_USER_QUESTION || !actions || !focusScope) return undefined;
