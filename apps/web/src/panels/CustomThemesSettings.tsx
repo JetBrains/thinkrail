@@ -110,7 +110,7 @@ export function CustomThemesGroup({
 								<span className="tr-code-text">{issue.fileName}</span>
 								<span>{issueLabel(t, issue)}</span>
 								{issue.detail ? (
-									<span className="break-all text-text-muted">{issue.detail}</span>
+									<span className="break-words text-text-muted">{issue.detail}</span>
 								) : null}
 							</span>
 						</SettingsNotice>
