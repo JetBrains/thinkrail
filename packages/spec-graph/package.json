@@ -19,7 +19,8 @@
 	],
 	"scripts": {
 		"typecheck": "tsc --noEmit",
-		"test": "bun test"
+		"test": "bun test",
+		"bench:search": "bun core/bench/live.ts"
 	},
 	"dependencies": {
 		"yaml": "2.9.1"

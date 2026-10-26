@@ -32,8 +32,8 @@ used), and leaves every byte of the body untouched.
   extension's `before_agent_start` handler wrote it) and the `pi` manifest in
   `package.json` (`{ extensions: ["./index.ts"], skills: ["./skills"] }`) — how vanilla `pi` (`pi install`)
   and thinkrail (`additionalExtensionPaths` / `additionalSkillPaths`) load it — plus the **`pi-spec-graph/core`
-  export** (the pi-free read model), consumable by hosts (thinkrail's server) without going through the
-  agent. `tools/` stays internal.
+  export** (the pi-free read model and its ranked section search), consumable by hosts (thinkrail's
+  server) without going through the agent. `tools/` stays internal.
 - **Allowed deps:** `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `typebox` (peer); `yaml`
   (frontmatter parse/serialize); Node built-ins.
 - **Forbidden:** any `@thinkrail/*` package — the dependency edge is one-way (thinkrail → this
