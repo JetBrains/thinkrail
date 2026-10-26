@@ -79,6 +79,27 @@ offer document-led work as a distinct choice. GSD Pi embedding into ThinkRail ha
 
 ## 4. Design
 
+### Where the workflow comes from
+
+A spec describes what to build or what is true. A workflow supplies the steps, approval gates, and
+completion rules. ThinkRail follows those instructions; it does not infer a workflow from filenames
+or generate a new one just because it found specs.
+
+The instructions come from:
+
+- **The project's process:** team guides, installed framework skills, and their applicable configuration.
+  For OpenSpec, the change's selected schema defines artifacts and dependencies; workflow instructions
+  and native tools govern how the change is carried out.
+- **A user-selected procedure:** an existing or explicitly saved skill/recipe, subject to the project's
+  rules. A useful procedure does not need a framework integration to be followed.
+- **ThinkRail's bundled skills:** the default when successful discovery finds no documented process.
+  Product documentation alone is context, not evidence of a different process.
+
+The pi agent normally follows these instructions in the current session. An integration supplies
+native operations where needed. Durable execution, such as resuming a framework-managed run,
+additionally requires a compatible runner. A document's status, such as `draft` or `accepted`, is not
+itself a workflow or proof that its steps ran.
+
 ### Separate documents, instructions, and actions
 
 - **Artifacts:** documents or native records, their identity, type, status, and relationships.
@@ -186,9 +207,15 @@ retire the duplicate private rule. Cross-project reuse requires choosing persona
 
 ### Customize a workflow
 
-**“Add a threat-model step before implementing our OpenSpec changes.”** Edit the framework's native
-schema, templates, configuration, or instructions. For a homegrown process, edit its guide. Explain
+**“Add a threat-model step before implementing our OpenSpec changes.”** Propose an edit to the
+framework's native schema, templates, configuration, or instructions. For a skill-based process, use
+its supported skill-customization mechanism; for a homegrown process, edit its guide. Explain
 unsupported variations rather than maintain a hidden ThinkRail fork.
+
+Skills can be authored or revised during a conversation as reviewable changes to reusable instructions.
+That does not mean autonomous self-modification or hot-swapping a running workflow. When an approved
+revision takes effect—on the next use or through an explicit switch during the current task—remains an
+open decision.
 
 ### Save a procedure
 
@@ -209,10 +236,11 @@ An unfamiliar framework remains usable through its documents. A maintained integ
 knowledge and native operations. **Full support** means its spec/workflow lifecycle works for declared
 versions and customization boundaries—not that ThinkRail reproduces the framework's entire product.
 
-The integration must cover the applicable lifecycle: discovery, scoped context, start, continue,
-implement, validate, finish/archive, and customization. It must preserve approvals, read authoritative
-progress, handle external changes, and explain setup requirements. When it runs work, it also owns or
-explicitly delegates cancellation/resume, commits, scheduling, and workspaces.
+An integration must discover the applicable context and support the selected practice's operations,
+not impose a fixed sequence. These may include creating a change, implementing tasks, validating
+artifacts, archiving work, and customization. It must preserve approvals, read authoritative progress,
+handle external changes, and explain setup requirements. When it runs work, it also owns or explicitly
+delegates cancellation/resume, commits, scheduling, and workspaces.
 
 Missing prerequisites and unsupported operations are different failures. Do not claim full support
 while silently replacing a promised native operation with document-led assistance.
@@ -267,7 +295,8 @@ operation ownership, and versioned integration tests.
 1. **First release:** is custom-practice support enough, or must it include a full named integration?
 2. **Priorities:** should OpenSpec lead? Which versions and GSD operations should we validate first?
 3. **Saved guidance:** where do corrections and workflows live, and how can users inspect, edit,
-   remove, and share them separately from cached inferences?
+   remove, and share them separately from cached inferences? When do approved skill edits take effect
+   for work already underway?
 4. **Conflicts:** how do we present competing rules or changed guidance without repetitive questions
    or silent process switches?
 5. **Ownership:** what must change in Plan, commits, and workspaces before a native runner controls them?
