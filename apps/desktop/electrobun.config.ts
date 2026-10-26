@@ -26,9 +26,9 @@ export default {
 			"../web/dist": "views/web",
 			".stage/runtime": "runtime",
 		},
-		mac: { bundleCEF: false, icons: "assets/icon.iconset" },
-		linux: { bundleCEF: false, icon: "assets/icon.png" },
-		win: { bundleCEF: false, icon: "assets/icon.ico" },
+		mac: { bundleCEF: false, icons: "../../packages/shared/assets/icon.iconset" },
+		linux: { bundleCEF: false, icon: "../../packages/shared/assets/icon.png" },
+		win: { bundleCEF: false, icon: "../../packages/shared/assets/icon.ico" },
 	},
 	scripts: { preBuild: "preBuild.ts", postBuild: "postBuild.ts" },
 } satisfies ElectrobunConfig;

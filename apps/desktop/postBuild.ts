@@ -1,7 +1,7 @@
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { channel, version } from "@thinkrail/shared/version";
-import { windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
+import { windowsFileIdentity, windowsIconPath } from "@thinkrail/shared/windowsIdentity";
 import { brandWindowsExecutable } from "./src/windowsExecutableIdentity";
 
 const desktopDir = import.meta.dir;
@@ -16,7 +16,7 @@ if (process.env.ELECTROBUN_OS === "win") {
 
 	const bundleName = buildEnvironment === "stable" ? appName : `${appName}-${buildEnvironment}`;
 	const bundleDir = join(buildDir, bundleName);
-	const icon = readFileSync(join(desktopDir, "assets", "icon.ico"));
+	const icon = readFileSync(windowsIconPath);
 	const identity = windowsFileIdentity({ version, channel });
 	for (const [path, originalFilename] of [
 		[join(bundleDir, "bin", "bun.exe"), "bun.exe"],

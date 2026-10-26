@@ -6,7 +6,7 @@ title: CLI host launcher
 parent: architecture
 depends-on: [module-server, module-shared]
 tags: [host]
-references: [module-artifact-tests, module-desktop]
+references: [module-artifact-tests]
 ---
 
 ## Responsibility
@@ -245,8 +245,7 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `-title`, `-description`, `-publisher`, `-copyright` and `-version` flags.
   - The strings come from [[module-shared]]'s `windowsFileIdentity`. Task Manager shows the description,
     so it equals the product name.
-  - The icon is desktop's generated `assets/icon.ico`, the one native icon set ([[module-desktop]]). It
-    is read as a build input, the way `apps/web/dist` is.
+  - The icon is [[module-shared]]'s `windowsIconPath`, from the native icon set both launchers ship.
   - Bun applies these flags only on a Windows host. The release and CI Windows builds run on Windows; a
     cross-compile from macOS/Linux skips them with a warning and keeps Bun's identity.
   - Bun keeps its own named `IDI_MYICON` group, which the shell picks before numbered groups, and maps
@@ -337,10 +336,9 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   and the binary build (`scripts/build-binary.ts`,
   `scripts/artifactName.ts` — exposed as `@thinkrail/cli/artifact` and the one place the artifact filename
   rule lives, including the `.exe` Bun appends for a Windows target, so the build's output path and the
-  smoke's default input cannot disagree the way they did on Windows. It also holds the Windows-target rule
-  and the ICO path the Windows build embeds; the smoke checks the exe against that same ICO. The release
-  action re-derives the same name in bash because it is also the published-asset contract, see
-  `module-ci-release`),
+  smoke's default input cannot disagree the way they did on Windows. It also holds the Windows-target
+  rule. The release action re-derives the same name in bash because it is also the published-asset
+  contract, see `module-ci-release`),
   `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`,
   `src/runtime-assets.generated.*`),
   `src/update.ts` (the `update`
@@ -352,8 +350,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   uninstaller has to name the app state dir, and must name the *same* one the host uses),
   `@thinkrail/shared/startupMark` (the shared boot
   signature renderer) + `@thinkrail/shared/version` (the shared release identity) +
-  `@thinkrail/shared/windowsIdentity` (the Windows file properties the build stamps), Bun/Node; desktop's
-  generated `assets/icon.ico` as a build-time file input; the generated build module may
+  `@thinkrail/shared/windowsIdentity` (the Windows file properties and ICO the build stamps), Bun/Node;
+  the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
 - **Forbidden:** product feature/domain logic; reaching into the server's internals (use only its public

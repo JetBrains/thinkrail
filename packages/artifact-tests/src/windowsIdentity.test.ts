@@ -1,13 +1,16 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { binaryWindowsIconPath } from "@thinkrail/cli/artifact";
-import { type WindowsFileIdentity, windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
+import {
+	type WindowsFileIdentity,
+	windowsFileIdentity,
+	windowsIconPath,
+} from "@thinkrail/shared/windowsIdentity";
 import * as ResEdit from "resedit";
 import { readWindowsExecutableIdentity, windowsIdentityMismatches } from "./windowsIdentity";
 
 type ResourceEntry = Parameters<typeof ResEdit.Resource.IconGroupEntry.fromEntries>[0][number];
 
-const icon = new Uint8Array(readFileSync(binaryWindowsIconPath));
+const icon = new Uint8Array(readFileSync(windowsIconPath));
 const frames = ResEdit.Data.IconFile.from(icon).icons.map(({ width, data }) => ({
 	size: width || 256,
 	bytes: new Uint8Array(data.isRaw() ? data.bin : data.generate()),

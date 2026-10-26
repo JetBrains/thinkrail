@@ -1,14 +1,3 @@
-import { resolve } from "node:path";
-
-export const binaryWindowsIconPath = resolve(
-	import.meta.dir,
-	"..",
-	"..",
-	"desktop",
-	"assets",
-	"icon.ico",
-);
-
 export function targetsWindows(target?: string): boolean {
 	return target ? target.includes("windows") : process.platform === "win32";
 }

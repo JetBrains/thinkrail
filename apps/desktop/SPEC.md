@@ -29,9 +29,8 @@ engine architecture.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
   for release identity, its Windows file identity and the early `resolveShellEnv()` start; `contracts`
   for compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built
-  web artifact; Electrobun `2.0.1` and its generated SDK; build-only `resedit` to pack the ICO and to
-  close the Electrobun 2.0.1 Windows executable-identity gap (below); build-only `@resvg/resvg-js` to
-  rasterize the icon source; Bun/Node.
+  web artifact; Electrobun `2.0.1` and its generated SDK; build-only `resedit` to close the Electrobun 2.0.1
+  Windows executable-identity gap (below); shared's native icon set as build input; Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
   agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
   storing one active location on the backend; or bundling CEF without a new acceptance failure that
@@ -410,12 +409,10 @@ at the next pre-build. On Windows that hook also brands the bundled executables 
 icon embed and before release compression, wrapping, and signing. Builds in one worktree remain
 sequential.
 
-Electrobun's platform icon configuration points at one ThinkRail mark in the native formats each target
-requires: the macOS iconset, Windows multi-resolution ICO, and Linux PNG. The native mark preserves its
-rounded-square silhouette with the ThinkRail glyph in the dark-family brand green (`#8dff4f`) on a solid
-black tile; translucent glass, highlights, and decorative edging are excluded so small taskbar frames stay
-crisp. The browser favicon and in-app shell mark are separate web-owned surfaces. The same Windows ICO
-also brands the CLI's Windows binary ([[module-cli]]).
+Electrobun's platform icon configuration points at the native icon set in `packages/shared/assets`:
+the macOS iconset, the Windows multi-resolution ICO, and the Linux PNG. [[module-shared]] owns their
+artwork, generator and frame sizes, and the CLI's Windows binary embeds the same ICO ([[module-cli]]).
+The browser favicon and in-app shell mark are separate web-owned surfaces.
 
 On Windows, Hutch embeds the ICO in the setup/extractor executable and `bin/launcher.exe`, and the
 shortcuts and the Installed-apps entry point at the launcher. No release action substitutes a second
@@ -471,18 +468,6 @@ itself:
   non-fatal. An unreadable manifest is reported too, and the pins are still stamped.
 
 Removal gate: Electrobun giving its process and shortcuts a shared AppUserModelID.
-
-`assets/icon.svg` is the one hand-authored source; every raster below it (the iconset, the ICO, the
-Linux PNG) is generated, never hand-edited, by `scripts/generate-icons.ts` (`bun run generate-icons`)
-using `@resvg/resvg-js` to rasterize straight from the vector. The Windows ICO carries PNG-compressed
-frames at 256/128/80/72/64/56/48/40/36/32/28/24/20/16. That is Microsoft's documented icon-construction
-minimum (16/24/32/48/256), plus 64/128 and every small- and big-icon size Windows asks for between 125% and
-250% scaling. `LoadImage` picks the closest frame that does not exceed the requested size, so a missing
-size would be upscaled from a smaller frame and look blurry. The ICO is packed through the same `resedit`
-dependency the executable branding uses. Frames are ordered largest first because Bun's
-compiler keeps a named icon group that maps only icon #1 (oven-sh/bun#32428, [[module-cli]]). A prior
-4-frame raw-BMP ICO (16/32/48/256, pre-dating the generator) had no frame matching the Windows 11
-taskbar's 24×24 100%-scale target, reading as blurry there; the generated set closes that gap.
 
 Electrobun's `build.views` owns the browser preload bundle; `build.copy` owns physical resource inclusion.
 There is no custom SDK resolver, SDK metadata validator, or Electrobun command runner. App-local Hutch

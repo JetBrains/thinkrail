@@ -1,3 +1,7 @@
+import { resolve } from "node:path";
+
+export const windowsIconPath = resolve(import.meta.dir, "..", "assets", "icon.ico");
+
 export interface WindowsFileIdentity {
 	productName: string;
 	companyName: string;

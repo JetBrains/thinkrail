@@ -47,7 +47,6 @@
         "@thinkrail/shared": "workspace:*",
       },
       "devDependencies": {
-        "@resvg/resvg-js": "2.6.2",
         "@types/bun": "catalog:",
         "electrobun": "2.0.1",
         "resedit": "catalog:",
@@ -371,7 +370,9 @@
         "@thinkrail/contracts": "workspace:*",
       },
       "devDependencies": {
+        "@resvg/resvg-js": "2.6.2",
         "@types/bun": "catalog:",
+        "resedit": "catalog:",
         "typescript": "catalog:",
       },
     },
