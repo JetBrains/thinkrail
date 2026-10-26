@@ -1,5 +1,6 @@
 import type { RemixiconComponentType } from "@remixicon/react";
 import type { CommandShortcut } from "../commands";
+import type { ChatTitleSource } from "../lib";
 import type { SessionAttention } from "../store";
 import type { SearchScope } from "./query";
 
@@ -23,6 +24,8 @@ export interface PaletteItem {
 	readonly scope: SearchScope;
 	readonly icon: RemixiconComponentType;
 	readonly subtitle?: string;
+	readonly titleSource?: ChatTitleSource;
+	readonly titleTooltip?: string;
 	readonly keywords?: readonly string[];
 	readonly running?: boolean;
 	readonly attention?: SessionAttention;

@@ -5,8 +5,7 @@ import {
 	type Workspace,
 } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
-import type { ClosedChat, SessionRuntime } from "./appStore";
-import { selectChatFirstPrompt } from "./selectors";
+import type { ClosedChat } from "./appStore";
 
 export type SessionAttention = "needs-input" | "error" | "unread" | "running";
 
@@ -17,7 +16,6 @@ export interface SwitcherSession {
 	workspaceName: string;
 	workspaceKind: Workspace["kind"] | undefined;
 	chatTitle: string | null;
-	firstPrompt: string | undefined;
 	attention: SessionAttention;
 }
 
@@ -31,7 +29,6 @@ export interface SwitcherProject {
 interface SwitcherGroupsState {
 	projects: Project[];
 	workspaces: Record<string, Workspace[]>;
-	sessions: Record<string, SessionRuntime>;
 	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
@@ -102,7 +99,6 @@ export function selectSwitcherGroups(state: SwitcherGroupsState): SwitcherProjec
 				workspaceName: workspace?.name ?? "",
 				workspaceKind: workspace?.kind,
 				chatTitle: selectKnownChatTitle(state, record.workspaceId, record.sessionId),
-				firstPrompt: selectChatFirstPrompt(state, record.workspaceId, record.sessionId),
 				attention,
 			});
 			sessionsByProject.set(record.projectId, sessions);

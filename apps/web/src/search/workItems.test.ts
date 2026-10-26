@@ -53,12 +53,17 @@ function state(records: SessionStateRecord[], extra: Partial<WorkItemsState> = {
 	};
 }
 
-function items(records: SessionStateRecord[], chatTitles: Record<string, string> = {}) {
+function items(
+	records: SessionStateRecord[],
+	chatTitles: Record<string, string> = {},
+	firstPrompts: Record<string, string> = {},
+) {
 	return buildWorkItems({
 		t: currentTranslator(),
 		state: state(records),
 		contextProjectId: null,
 		chatTitles,
+		firstPrompts,
 		navigateToProject: () => {},
 		navigateToWorkspace: () => {},
 	});
@@ -82,6 +87,28 @@ describe("buildWorkItems", () => {
 		expect(items([record("s-idle")]).some((item) => item.kind === "chat")).toBe(false);
 		const titled = items([record("s-idle")], { "s-idle": "Spec review" });
 		expect(titled.find((item) => item.id === "chat:s-idle")?.title).toBe("Spec review");
+	});
+
+	test("an unnamed chat reads as its first prompt, findable by the whole prompt", () => {
+		const prompt = "Please refactor the authentication module so that tokens refresh quietly";
+		const idle = items([record("s-idle")], {}, { "s-idle": prompt }).find(
+			(item) => item.id === "chat:s-idle",
+		);
+		expect(idle).toMatchObject({
+			title: "Please refactor the authentication module so\u2026",
+			titleSource: "prompt",
+			titleTooltip: prompt,
+			keywords: [prompt],
+		});
+		const named = items([record("s-idle")], { "s-idle": "Spec review" }, { "s-idle": prompt }).find(
+			(item) => item.id === "chat:s-idle",
+		);
+		expect(named).toMatchObject({ title: "Spec review", titleSource: "name" });
+		expect(named?.titleTooltip).toBeUndefined();
+		expect(items([waiting]).find((item) => item.id === "chat:s-waiting")).toMatchObject({
+			title: "Chat",
+			titleSource: "default",
+		});
 	});
 
 	test("the waiting section maps switcher sessions onto their chat rows", () => {
