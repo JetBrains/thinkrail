@@ -179,6 +179,7 @@ import {
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
+import { readUserThemes, themesDir } from "../themes";
 import {
 	addTodo,
 	approveTodoReview,
@@ -890,6 +891,13 @@ const handlers: WsHandlers = {
 	"locales.list": () => readLocalLocales(),
 	"locales.reveal": () => {
 		const dir = localesDir();
+		mkdirSync(dir, { recursive: true });
+		revealInFileManager(dir);
+		return { ok: true } as const;
+	},
+	"themes.list": () => readUserThemes(),
+	"themes.reveal": () => {
+		const dir = themesDir();
 		mkdirSync(dir, { recursive: true });
 		revealInFileManager(dir);
 		return { ok: true } as const;

@@ -15,6 +15,7 @@ import {
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
@@ -99,6 +100,7 @@ import {
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 } from "../terminal";
+import { watchUserThemes } from "../themes";
 import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
 import { setTurnPublisher, TurnTracker } from "../turns";
 import {
@@ -346,6 +348,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				if (ws.data.protocolVersion >= MCP_PROTOCOL_VERSION) ws.subscribe(WS_CHANNELS.mcpStatus);
 				if (ws.data.protocolVersion >= LOCALES_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.localesChanged);
+				if (ws.data.protocolVersion >= USER_THEMES_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.themesChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -669,6 +673,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				JSON.stringify({ channel: WS_CHANNELS.localesChanged, data: {} }),
 			),
 	});
+	const stopThemesWatch = watchUserThemes({
+		onChange: () =>
+			server.publish(
+				WS_CHANNELS.themesChanged,
+				JSON.stringify({ channel: WS_CHANNELS.themesChanged, data: {} }),
+			),
+	});
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);
@@ -889,6 +900,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopAllWatches();
 		stopUserMcpWatch();
 		stopLocalesWatch();
+		stopThemesWatch();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();
