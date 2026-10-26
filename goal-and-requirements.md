@@ -108,7 +108,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   diverged branch with the agent, reopen, and delete the remote branch
   ([[submodule-server-pr]], [[submodule-web-shell-location-bar]]).
 - **Specs** — the agent searches, navigates, and maintains the spec graph through `spec_*` tools; the
-  read-only Specs tool renders it as a tree ([[module-spec-graph]], [[submodule-server-spec]]).
+  read-only Specs tool renders it as a tree. The agent and the search palette's `#` scope find the
+  sections that answer a question by words with one engine, and the palette hands a question that shares
+  no words with the specs to the agent ([[module-spec-graph]], [[submodule-server-spec]],
+  [[submodule-web-search]]).
 - **Workflows** — bundled workflow skills for project setup, design brainstorming, and shipping a PR
   ([[module-thinkrail-workflow]]).
 - **Providers** — in-app sign-in and API keys through pi's auth, and JetBrains AI through the user's

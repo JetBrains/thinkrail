@@ -51,7 +51,13 @@ One engine answers both the agent's `spec_search` and the host palette's `#` sec
 gets the same sections on both surfaces. It ranks by **words**, with no model and no download: meaning
 without shared words (paraphrases, other languages) is the agent's job, whose own model reformulates a
 question into words — `searchSpecs` takes several phrasings for exactly that. Semantic/embedding search
-stays a non-goal of [[module-spec-graph]]; a second ranker could be fused behind the same call.
+stays a non-goal of [[module-spec-graph]]; a second ranker could be fused behind the same call. The engine
+lives here because `core/` is the one place both the agent (vanilla pi, the CLI's bundled extension) and
+the host can reach. Rejected: pi's own BM25 ranker (not a public export, and it re-tokenizes every
+document per call), `minisearch`/Orama (a dependency outside this module's allowed set, for ~150 lines),
+and a local embedding model — transformers.js runs in Bun/Node only through native `onnxruntime-node`
+(~300 MB) and breaks `bun build --compile`, and BM25 alone already scores about what a small model
+does on retrieval benchmarks.
 
 - **Sections.** An ATX heading up to the next heading of any level, fence-aware; text before the first
   heading is a section named by the spec. A lone leading `#` heading names the document and stays out
@@ -73,7 +79,7 @@ stays a non-goal of [[module-spec-graph]]; a second ranker could be fused behind
 - **Snippet.** The body line with the most distinct query terms (then the phrase, then the count),
   markdown stripped, cut to 160 characters around its first match, with `[start, end)` ranges; the
   title and the heading trail carry ranges too.
-- **Index.** `indexSections(entries, previous)` is pure: same entries → same answer. It re-tokenizes
+- **Index.** `indexSections(entries, previous)` is deterministic: same entries → same ranking. It re-tokenizes
   only files whose content differs from `previous` and returns `previous` itself when nothing changed,
   so a caller re-syncs it on every read for the price of one string compare per file. Terms are ids in
   an append-only vocabulary the chain of indexes shares (a vanished term keeps its id); a section stores

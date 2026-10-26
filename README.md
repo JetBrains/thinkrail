@@ -64,7 +64,10 @@ create the tools it needs based on how you actually work.
   summary, a new workspace chat starts with it.
 - **Specs as ground truth.** A connected graph of `SPEC.md` files lives beside the code; the agent reads,
   searches, and maintains it through dedicated `spec_*` tools, so intent survives the session. The
-  read-only Specs tool renders the graph as a tree in the workbench.
+  read-only Specs tool renders the graph as a tree in the workbench. Type `#` and a question in the
+  palette to find the spec sections that answer it — words in any order, word forms matched, the same
+  ranking the agent's `spec_search` uses — and `↵` opens the spec at that heading; for a question the
+  specs phrase differently, `⌥↵` asks the agent in a new chat, and it searches with its own words.
 - **Skills and workflows.** Portable Agent Skills you already keep for other coding agents are read in
   place, and bundled workflows guide project setup, design brainstorming, and shipping a pull request —
   pushing the workspace branch and opening or updating its GitHub PR through your own `gh`.
