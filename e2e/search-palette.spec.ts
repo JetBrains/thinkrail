@@ -400,6 +400,9 @@ test("spec sections: words in any order find a section that opens and previews a
 		join(workspace.worktreePath, "guide", "SPEC.md"),
 		`---\nid: sample-guide\ntype: module-design\ntitle: Sample Guide\n---\n\n${filler}\n## Session titles\n\nThe manager is the only durable writer: renameSession sets a chat's title.\n`,
 	);
+	await expect(
+		page.locator('[data-testid="spec-node"][data-spec-id="sample-guide"]'),
+	).toBeVisible();
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	const chatsBefore = await chatTabs.count();
 	const rows = page.getByTestId("search-row");
@@ -440,6 +443,26 @@ test("spec sections: words in any order find a section that opens and previews a
 	await expect(page.getByTestId("search-host-pending")).toHaveCount(0, { timeout: 15_000 });
 	await expect(page.locator('[data-testid="search-row"][data-kind="section"]')).toHaveCount(0);
 	await expect(page.locator('[data-testid="search-row"][data-kind="ask"]')).toHaveCount(0);
+});
+
+test("from Project Home, the Ask the agent row names the Default workspace and Alt+Enter starts its chat there", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await expect(defaultWorkspaceRow(page)).not.toHaveAttribute("data-active", "true");
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("#where is the fixture token");
+	const ask = page.locator('[data-testid="search-row"][data-kind="ask"]');
+	await expect(ask).toContainText("Ask the agent: “where is the fixture token”");
+	await expect(ask).toContainText("New chat in Default");
+	await page.keyboard.press("Alt+Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	const asked = page.locator('[data-testid="chat-message"][data-role="user"]').last();
+	await expect(asked).toContainText("where is the fixture token");
+	await expect(asked).toContainText(
+		"Find the answer in this project's specs and cite the sections.",
+	);
 });
 
 test("host search: an image and an HTML file render in the preview pane, and from Project Home a hit enters the project's workspace", async ({
