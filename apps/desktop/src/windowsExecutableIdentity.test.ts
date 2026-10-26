@@ -1,11 +1,10 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
+import { windowsFileIdentity, windowsIconPath } from "@thinkrail/shared/windowsIdentity";
 import * as ResEdit from "resedit";
 import { brandWindowsExecutable } from "./windowsExecutableIdentity";
 
-const icon = readFileSync(resolve(import.meta.dir, "..", "assets", "icon.ico"));
+const icon = readFileSync(windowsIconPath);
 const iconSizes = ResEdit.Data.IconFile.from(icon).icons.map(({ width }) => width || 256);
 const identity = windowsFileIdentity({ version: "0.3.0-nightly.6", channel: "nightly" });
 const manifest = new TextEncoder().encode("<assembly/>").buffer;

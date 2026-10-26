@@ -1,6 +1,6 @@
 import { dlopen, FFIType } from "bun:ffi";
 import { expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { windowsIconPath } from "@thinkrail/shared/windowsIdentity";
 import {
 	applyWindowsWindowIcon,
 	loadWindowsIconApi,
@@ -8,7 +8,7 @@ import {
 	type WindowsIconApi,
 } from "./windowsWindowIcon";
 
-const iconPath = resolve(import.meta.dir, "..", "assets", "icon.ico");
+const iconPath = windowsIconPath;
 const windowHandle = 1n;
 
 function fakeIconApi(loads = true) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Generated from icon.svg — never hand-edit these outputs; see apps/desktop/SPEC.md's icon paragraph.
+// Generated from icon.svg — never hand-edit these outputs; see packages/shared/SPEC.md's /assets entry.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

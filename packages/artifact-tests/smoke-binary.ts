@@ -3,10 +3,9 @@
 import { existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { binaryWindowsIconPath } from "@thinkrail/cli/artifact";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { channel, version } from "@thinkrail/shared/version";
-import { windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
+import { windowsFileIdentity, windowsIconPath } from "@thinkrail/shared/windowsIdentity";
 import { binaryArtifactPath } from "./src/artifact";
 import {
 	type ArtifactHostAdapter,
@@ -102,7 +101,7 @@ try {
 		const mismatches = windowsIdentityMismatches(
 			new Uint8Array(readFileSync(binary)),
 			windowsFileIdentity({ version, channel }),
-			new Uint8Array(readFileSync(binaryWindowsIconPath)),
+			new Uint8Array(readFileSync(windowsIconPath)),
 		);
 		if (mismatches.length) throw new Error(`Windows identity: ${mismatches.join("; ")}`);
 	}

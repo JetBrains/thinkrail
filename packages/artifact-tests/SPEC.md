@@ -21,9 +21,9 @@ It consumes finished artifacts; it does not build the application or supply appl
   probes, their fixtures and helper unit tests, and the public build action's desktop packaging-invocation
   and artifact-collector contract tests.
 - **Public surface:** `locateDesktopLauncher`
-- **Allowed deps:** CLI's public artifact helper (artifact name, Windows-target rule, and the ICO the
-  Windows binary is compiled with); server's sanctioned history-fixture export; shared release identity,
-  its Windows file identity and retrying teardown; `resedit` to read Windows executable resources;
+- **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export; shared
+  release identity, its Windows file identity and icon, and retrying teardown; `resedit` to read Windows
+  executable resources;
   read-only access to
   `.github/actions/build-binary/action.yml` for executing its packaging invocation and collector in
   isolated fixture directories; Bun/Node and native installer tools.
@@ -59,8 +59,8 @@ On Windows both smokes first read executables' resources, without running them:
 Each executable must pass two checks, and each fails the release before publication:
 - **Icon.** The group the shell shows is the first in resource order; in a Bun exe, Bun's named
   `IDI_MYICON` shadows any numbered group. That group must include the ICO's largest frame and hold
-  only frames of that ICO. The reference ICO is the one the CLI build embeds, and the bundle's own
-  `Resources/app.ico` for the desktop.
+  only frames of that ICO. The reference ICO is shared's `windowsIconPath` for the CLI, and the bundle's
+  own `Resources/app.ico` for the desktop.
 - **VERSIONINFO.** It must equal [[module-shared]]'s `windowsFileIdentity` for the checkout's release
   identity, so a smoke runs in the same stamped checkout that built the artifact.
 

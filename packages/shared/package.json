@@ -17,13 +17,16 @@
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
-		"test": "bun test"
+		"test": "bun test",
+		"generate-icons": "bun scripts/generate-icons.ts"
 	},
 	"dependencies": {
 		"@thinkrail/contracts": "workspace:*"
 	},
 	"devDependencies": {
+		"@resvg/resvg-js": "2.6.2",
 		"@types/bun": "catalog:",
+		"resedit": "catalog:",
 		"typescript": "catalog:"
 	}
 }

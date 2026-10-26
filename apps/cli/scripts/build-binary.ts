@@ -13,9 +13,9 @@ import {
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
 import { channel, version } from "@thinkrail/shared/version";
-import { windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
+import { windowsFileIdentity, windowsIconPath } from "@thinkrail/shared/windowsIdentity";
 import { BINARY_SOURCE_MAP_BASE } from "../src/binarySourceMap";
-import { binaryArtifactName, binaryWindowsIconPath, targetsWindows } from "./artifactName";
+import { binaryArtifactName, targetsWindows } from "./artifactName";
 
 const cliDir = resolve(import.meta.dir, "..");
 const repoRoot = resolve(cliDir, "..", "..");
@@ -111,7 +111,7 @@ function windowsMetadataFlags(target: string | undefined): string[] {
 	}
 	const identity = windowsFileIdentity({ version, channel });
 	return [
-		`--windows-icon=${binaryWindowsIconPath}`,
+		`--windows-icon=${windowsIconPath}`,
 		`--windows-title=${identity.productName}`,
 		`--windows-description=${identity.productName}`,
 		`--windows-publisher=${identity.companyName}`,

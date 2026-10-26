@@ -28,7 +28,7 @@ dials it over the network; a phone reaches the selected host over Tailscale.
   shippable as static assets independent of the host.
 
 ```
-apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server, packages/shared (build input: apps/desktop's generated Windows ICO)
+apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
 apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/locales, packages/ui, packages/extension-api/web, packages/resource-renderers, thinkrail-extensions/*/web
 apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared, packages/locales
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
