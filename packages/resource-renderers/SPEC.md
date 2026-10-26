@@ -180,6 +180,15 @@ keeps it.
   `LoadingRegion`) became `@thinkrail/ui/toggle-segment` and `@thinkrail/ui/skeleton` because the app uses
   them too. `describeResource` and `ResourcePreview` canonicalize paths through the package's own
   `canonicalWorkspacePath`, because the package cannot import the app's `lib`.
+- **Monaco runs its vendored DOMPurify.** `monaco-editor` sanitizes hovers and rendered markdown with its own
+  copy under `esm/vs/base/browser/dompurify`, so only a Monaco upgrade changes the sanitizer that runs; the
+  `dompurify` it declares is never imported. The vendored copy predates several DOMPurify advisories. The
+  exposure is accepted: this read-only reader has no language services, hover providers or decoration
+  hover messages, so hover markdown is Monaco's own, and it calls DOMPurify with hooks and
+  `RETURN_DOM_FRAGMENT`, never `IN_PLACE` or `SAFE_FOR_TEMPLATES`.
+  Monaco 0.57 vendors 3.4.15. The root `overrides.dompurify` pin only keeps the declared copy on Mermaid's
+  patched version (Mermaid does import it); it is not a Monaco fix. Re-check the vendored banner on every
+  Monaco upgrade.
 
 ## Boundary
 

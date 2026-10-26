@@ -207,7 +207,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
     rejects any range, any catalog drift, and a lockfile graph that resolves `react` or `react-dom` outside
     its one catalog pin (the React pin rationale belongs to [[module-web]]). Every pi
     upgrade also follows [[pi-compatibility]], the architecture-owned registry of host adaptations and
-    their removal gates; detailed rationale stays in the owning module specs. Exempt:
+    their removal gates; detailed rationale stays in the owning module specs. Any other root `overrides`
+    entry is an exact security pin whose rationale and removal gate live with its owner. Exempt:
     `peerDependencies` (extension packages declare `"*"` on purpose — the host provides the dep) and local
     protocols (`workspace:` / `link:` / `file:`). An exact SemVer prerelease/build suffix is still an exact
     pin (`19.3.0-canary-a1124489-20260826`); the checker accepts the full identifier grammar, including
