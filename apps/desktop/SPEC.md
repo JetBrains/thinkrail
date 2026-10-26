@@ -27,7 +27,8 @@ engine architecture.
 - **Public surface:** the packaged desktop application and its installers. No test-helper library is
   exported by the application package.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
-  for release identity, its Windows file identity and the early `resolveShellEnv()` start; `contracts`
+  for release identity, its Windows file identity, the hidden-child spawn seam and the early
+  `resolveShellEnv()` start; `contracts`
   for compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built
   web artifact; Electrobun `2.0.1` and its generated SDK; build-only `resedit` to close the Electrobun 2.0.1
   Windows executable-identity gap (below); shared's native icon set as build input; Bun/Node.
@@ -406,8 +407,10 @@ first casualty) and to bundle the separately staged `.ts` server runtime rather 
 bundler. Its transient factory entry is removed even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
 `postBuild` hook removes staging after the framework has copied it; a failed build's staging is replaced
 at the next pre-build. On Windows that hook also brands the bundled executables (below) after Hutch's
-icon embed and before release compression, wrapping, and signing. Builds in one worktree remain
-sequential.
+icon embed and before release compression, wrapping, and signing. On Linux it files the bundle's
+`.desktop` template under `Categories=Development;IDE;` instead of Hutch's `Utility;`. Electrobun's
+installer copies that template, so its own user-edit detection is unaffected. Builds in one worktree
+remain sequential. The hook runs under Hutch's Cottontail, so nothing it imports may load `bun:ffi`.
 
 Electrobun's platform icon configuration points at the native icon set in `packages/shared/assets`:
 the macOS iconset, the Windows multi-resolution ICO, and the Linux PNG. [[module-shared]] owns their
@@ -524,8 +527,26 @@ only the private pipeline's verified final DMG is a signed release. The handoff 
 belong to [[module-ci-release]].
 
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
-`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
-CI-only and are never shipped as user configuration.
+`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, `librsvg2-2`, and `libnotify-bin` for
+notifications. Xvfb software-rendering flags are CI-only and are never shipped as user configuration.
+
+**Linux identity.** Electrobun 2.0.1 leaves two gaps here, both closed by the desktop:
+- **Window icon.** Electrobun's automatic window icon loads the relative path `Resources/appIcon.png`
+  against the process cwd. That cwd is never the bundle root: it is the launcher's `bin/`, then home.
+  The splash and main window therefore get the icon through Electrobun's exported native
+  `setWindowIcon`, with an absolute path, from the same `libNativeWrapper.so` Electrobun loaded.
+- **Notifications.** Electrobun runs `notify-send` with no icon or app name. The desktop's native
+  notification RPC therefore spawns `notify-send` itself, through the shared spawn seam and with an
+  argv, not a shell string. It passes `--app-name=ThinkRail`, the bundle icon, and the installed
+  entry's `desktop-entry` hint. A missing `notify-send` is reported once, and the notification is
+  dropped.
+
+hicolor theme icons are not installed. Electrobun's installer writes `Icon=` as an absolute path to
+the one 512 px PNG, and editing the installed entry at runtime would make Electrobun treat it as
+user-owned.
+
+Removal gates: Electrobun resolving its window icon from the bundle; Electrobun passing an icon and
+app name to `notify-send`.
 
 ## Auto-update policy
 

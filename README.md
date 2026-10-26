@@ -92,10 +92,11 @@ Download the `thinkrail-desktop-*` asset for your platform:
 - **Windows x64** — extract the complete setup ZIP, then run its setup executable in place, next to its
   payload.
 - **Linux x64 / ARM64** — extract the setup tarball and run `installer`. Desktop builds need glibc 2.38+
-  with GTK 3, WebKitGTK 4.1, Ayatana AppIndicator 3, and librsvg 2 — Ubuntu 24.04 or newer:
+  with GTK 3, WebKitGTK 4.1, Ayatana AppIndicator 3, and librsvg 2 — Ubuntu 24.04 or newer — plus
+  `notify-send` for desktop notifications:
 
   ```bash
-  sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
+  sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2 libnotify-bin
   ```
 
 Packaged stable and nightly desktop builds check for updates in the background and offer them in
