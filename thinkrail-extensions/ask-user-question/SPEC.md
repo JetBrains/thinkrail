@@ -41,7 +41,8 @@ supersede, Stop/Submit ordering and needs-input ([[submodule-server-agent]]).
 - It never reaches app or host internals. Everything it needs from the chat arrives in
   `ToolRenderProps.interaction` ([[module-extension-api]]):
   - the response delivered after a restart, the superseded and ended verdicts, and `accepting` (Submit and
-    Skip are enabled only while it holds);
+    Skip are enabled, and the attention line, active styling and focus claim appear, only while it holds,
+    so a call the host is not waiting on never asks for attention);
   - `respond`;
   - the focus scope;
   - layout and reveal callbacks;
