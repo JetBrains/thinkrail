@@ -132,4 +132,5 @@ test("an entry that turned invalid on disk is skipped at boot, the rest applies"
 	expect(process.env.HOME).toBe(home);
 	expect(process.env.TR_ENV_A).toBe("kept");
 	expect(process.env.PI_CODING_AGENT_DIR).toBeUndefined();
+	expect(hostEnvironmentStatus().launchOverridden).toEqual([]);
 });

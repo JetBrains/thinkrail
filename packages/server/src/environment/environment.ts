@@ -86,9 +86,14 @@ function sameEnvironment(a: HostEnvironment, b: HostEnvironment): boolean {
 }
 
 function launchOverridden(environment: HostEnvironment): string[] {
+	const invalid = new Set(
+		validateHostEnvironment(environment).flatMap((issue) =>
+			issue.field === "var" ? [issue.index] : [],
+		),
+	);
 	const names = [
 		...(environment.agentDir !== undefined ? [AGENT_DIR_VAR] : []),
-		...environment.vars.map(({ name }) => name),
+		...environment.vars.filter((_, index) => !invalid.has(index)).map(({ name }) => name),
 	];
 	return names.filter((name) => launchKeys.has(name));
 }
