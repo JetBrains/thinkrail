@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import {
 	buildThemeCatalog,
+	clearUserThemes,
 	deriveSystemThemePair,
 	getThemes,
 	getUserThemeIssues,
@@ -118,15 +119,12 @@ test("system appearance observation defaults light and cleans up its listener", 
 });
 
 test("theme hints migrate legacy ids and use the native stable adapter", () => {
-	let stored: string | null = "light";
+	const HINT_KEY = "thinkrail-theme";
+	const stored = new Map<string, string>([[HINT_KEY, "light"]]);
 	Reflect.set(globalThis, "__THINKRAIL_STABLE_PREFERENCES__", {
-		getItem: () => stored,
-		setItem: (_key: string, value: string) => {
-			stored = value;
-		},
-		removeItem: () => {
-			stored = null;
-		},
+		getItem: (key: string) => stored.get(key) ?? null,
+		setItem: (key: string, value: string) => stored.set(key, value),
+		removeItem: (key: string) => stored.delete(key),
 	});
 	try {
 		expect(readThemeHint()).toEqual({ theme: "light", themeMode: "fixed" });
@@ -137,7 +135,7 @@ test("theme hints migrate legacy ids and use the native stable adapter", () => {
 		};
 		writeThemeHint(preference);
 		expect(readThemeHint()).toEqual(preference);
-		stored = JSON.stringify({ version: 1, theme: "dark", themeMode: "system" });
+		stored.set(HINT_KEY, JSON.stringify({ version: 1, theme: "dark", themeMode: "system" }));
 		expect(readThemeHint()).toEqual({ theme: "dark", themeMode: "fixed" });
 	} finally {
 		Reflect.deleteProperty(globalThis, "__THINKRAIL_STABLE_PREFERENCES__");
@@ -181,7 +179,7 @@ test("user themes join the catalog; invalid, reserved and duplicate files become
 	}
 });
 
-test("valid user themes are cached and reinstalled before the host answers", () => {
+test("only the user themes the hint needs are cached and reinstalled before the host answers", () => {
 	const stored = new Map<string, string>();
 	Reflect.set(globalThis, "__THINKRAIL_STABLE_PREFERENCES__", {
 		getItem: (key: string) => stored.get(key) ?? null,
@@ -192,13 +190,61 @@ test("valid user themes are cached and reinstalled before the host answers", () 
 		installThemeCatalog(buildThemeCatalog(bundledCandidates()));
 		installUserThemes([
 			{ fileName: "ocean.theme.json", ok: true, manifest: userTheme("ocean") },
-			{ fileName: "bad.theme.json", ok: true, manifest: { id: "bad" } },
+			{ fileName: "forest.theme.json", ok: true, manifest: userTheme("forest") },
 		]);
+		writeThemeHint({
+			theme: "ocean",
+			themeMode: "system",
+			systemThemePair: { light: "light", dark: "ocean" },
+		});
 		installThemeCatalog(buildThemeCatalog(bundledCandidates()));
 		expect(getThemes().map((theme) => theme.id)).not.toContain("ocean");
 		installCachedUserThemes();
-		expect(getThemes().map((theme) => theme.id)).toContain("ocean");
+		const ids = getThemes().map((theme) => theme.id);
+		expect(ids).toContain("ocean");
+		expect(ids).not.toContain("forest");
 		expect(getUserThemeIssues()).toEqual([]);
+		writeThemeHint({ theme: "dark", themeMode: "fixed" });
+		expect(stored.has("thinkrail-user-themes")).toBe(false);
+	} finally {
+		Reflect.deleteProperty(globalThis, "__THINKRAIL_STABLE_PREFERENCES__");
+	}
+});
+
+test("a user theme id shaped like an object prototype key stays an ordinary id", () => {
+	installThemeCatalog(buildThemeCatalog(bundledCandidates()));
+	installUserThemes([
+		{ fileName: "constructor.theme.json", ok: true, manifest: userTheme("constructor") },
+	]);
+	expect(getUserThemeIssues()).toEqual([]);
+	expect(resolveThemePreference({ theme: "constructor", themeMode: "fixed" })).toMatchObject({
+		theme: { id: "constructor" },
+		fallback: false,
+	});
+});
+
+test("an unsupported host clears user themes, and an oversized cache is dropped, not written", () => {
+	const stored = new Map<string, string>();
+	Reflect.set(globalThis, "__THINKRAIL_STABLE_PREFERENCES__", {
+		getItem: (key: string) => stored.get(key) ?? null,
+		setItem: (key: string, value: string) => stored.set(key, value),
+		removeItem: (key: string) => stored.delete(key),
+	});
+	try {
+		installThemeCatalog(buildThemeCatalog(bundledCandidates()));
+		installUserThemes([
+			{
+				fileName: "huge.theme.json",
+				ok: true,
+				manifest: userTheme("huge", { label: "x".repeat(70_000) }),
+			},
+		]);
+		writeThemeHint({ theme: "huge", themeMode: "fixed" });
+		expect(stored.has("thinkrail-user-themes")).toBe(false);
+		expect(getThemes().map((theme) => theme.id)).toContain("huge");
+		clearUserThemes();
+		expect(getThemes().map((theme) => theme.id)).not.toContain("huge");
+		expect(resolveThemePreference({ theme: "huge", themeMode: "fixed" }).fallback).toBe(true);
 	} finally {
 		Reflect.deleteProperty(globalThis, "__THINKRAIL_STABLE_PREFERENCES__");
 	}

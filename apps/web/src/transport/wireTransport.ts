@@ -39,6 +39,10 @@ export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= HOST_UPDATE_RUN_PROTOCOL_VERSION;
 }
 
+export function supportsUserThemes(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= USER_THEMES_PROTOCOL_VERSION;
+}
+
 export function supportsChangeMutations(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= CHANGE_MUTATIONS_PROTOCOL_VERSION;
 }
@@ -155,7 +159,7 @@ function refreshLocalLocales(connectionGeneration: number): void {
 
 function refreshUserThemes(connectionGeneration: number): void {
 	const store = useAppStore.getState();
-	if (store.protocolVersion === null || store.protocolVersion < USER_THEMES_PROTOCOL_VERSION) {
+	if (!supportsUserThemes(store.protocolVersion)) {
 		store.installUserThemes(null);
 		return;
 	}

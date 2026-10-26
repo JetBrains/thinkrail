@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MAX_THEME_FILE_BYTES, readUserThemes, watchUserThemes } from "./themes";
+import { MAX_THEME_FILE_BYTES, MAX_THEME_NESTING, readUserThemes, watchUserThemes } from "./themes";
 
 const dirs: string[] = [];
 
@@ -37,6 +37,22 @@ test("theme files report their raw JSON; broken files report a code without bloc
 	expect(files[0]?.ok === false && files[0].detail).toBeTruthy();
 	expect(files[1]).toMatchObject({ ok: false, error: "too-large" });
 	expect(files[2]).toEqual({ fileName: "ocean.theme.json", ok: true, manifest: { id: "ocean" } });
+});
+
+test("deeply nested JSON is reported, so the whole response envelope still serializes", () => {
+	const dir = tempDir();
+	const nested = (depth: number) => `${"[".repeat(depth)}${"]".repeat(depth)}`;
+	writeFileSync(join(dir, "a-deep.theme.json"), nested(40_000));
+	writeFileSync(join(dir, "b-limit.theme.json"), nested(MAX_THEME_NESTING));
+	writeFileSync(join(dir, "c-strings.theme.json"), JSON.stringify({ id: '[[[[\\"{{{{' }));
+	const snapshot = readUserThemes(dir);
+	expect(() => JSON.stringify({ id: 1, ok: true, result: snapshot })).not.toThrow();
+	expect(snapshot.files.map((file) => [file.fileName, file.ok])).toEqual([
+		["a-deep.theme.json", false],
+		["b-limit.theme.json", true],
+		["c-strings.theme.json", true],
+	]);
+	expect(snapshot.files[0]).toMatchObject({ error: "invalid-json" });
 });
 
 test("the watcher creates the folder and nudges once per burst", async () => {

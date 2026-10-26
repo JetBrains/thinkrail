@@ -66,6 +66,7 @@ interface ColorSchemeMediaQuery {
 const HINT_KEY = `${STORAGE_PREFIX}theme`;
 const HINT_VERSION = 1;
 const USER_THEMES_KEY = `${STORAGE_PREFIX}user-themes`;
+const MAX_USER_THEME_CACHE_CHARS = 64 * 1024;
 const SYSTEM_QUERY = "(prefers-color-scheme: dark)";
 
 const paletteVariable = (key: string) =>
@@ -200,12 +201,17 @@ function isReservedThemeId(id: ThemeId): boolean {
 	return bundledCatalog.byId.has(id) || Object.hasOwn(RENAMED_THEME_IDS, id);
 }
 
+const NO_USER_THEME_FILES: readonly UserThemeFile[] = Object.freeze([]);
+
+export function clearUserThemes(): void {
+	installUserThemes(NO_USER_THEME_FILES);
+}
+
 export function installUserThemes(files: readonly UserThemeFile[]): void {
 	if (files === installedUserFiles) return;
 	installedUserFiles = files;
 	const byId = new Map(bundledCatalog.byId);
 	const issues: UserThemeIssue[] = [];
-	const accepted: UserThemeFile[] = [];
 	for (const file of files) {
 		if (!file.ok) {
 			issues.push({
@@ -228,37 +234,43 @@ export function installUserThemes(files: readonly UserThemeFile[]): void {
 			issues.push({ fileName: file.fileName, error: "duplicate-id", detail: parsed.value.id });
 		} else {
 			byId.set(parsed.value.id, parsed.value);
-			accepted.push({ fileName: file.fileName, ok: true, manifest: parsed.value });
 		}
 	}
-	writeUserThemeCache(accepted);
 	publishCatalog(catalogOf(byId), Object.freeze(issues));
 }
 
-function writeUserThemeCache(files: readonly UserThemeFile[]): void {
-	try {
-		const storage = themeHintStorage();
-		if (files.length === 0) storage?.removeItem(USER_THEMES_KEY);
-		else storage?.setItem(USER_THEMES_KEY, JSON.stringify(files));
-	} catch {
-		return;
+function writeUserThemeCache(preference: ThemePreference): void {
+	const ids = new Set([
+		preference.theme,
+		...(preference.systemThemePair
+			? [preference.systemThemePair.light, preference.systemThemePair.dark]
+			: []),
+	]);
+	const manifests = [...ids].flatMap((id) => {
+		const theme = bundledCatalog.byId.has(id) ? undefined : catalog.byId.get(id);
+		return theme ? [theme] : [];
+	});
+	const storage = themeHintStorage();
+	const serialized = JSON.stringify(manifests);
+	if (manifests.length === 0 || serialized.length > MAX_USER_THEME_CACHE_CHARS) {
+		storage?.removeItem(USER_THEMES_KEY);
+	} else {
+		storage?.setItem(USER_THEMES_KEY, serialized);
 	}
-}
-
-function isCachedThemeFile(value: unknown): value is UserThemeFile {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		Reflect.get(value, "ok") === true &&
-		typeof Reflect.get(value, "fileName") === "string"
-	);
 }
 
 export function installCachedUserThemes(): void {
 	try {
 		const raw = themeHintStorage()?.getItem(USER_THEMES_KEY);
 		const parsed: unknown = typeof raw === "string" ? JSON.parse(raw) : null;
-		if (Array.isArray(parsed)) installUserThemes(parsed.filter(isCachedThemeFile));
+		if (!Array.isArray(parsed)) return;
+		installUserThemes(
+			parsed.map((manifest: unknown, index) => ({
+				fileName: `cached-${index}`,
+				ok: true as const,
+				manifest,
+			})),
+		);
 	} catch {
 		return;
 	}
@@ -268,7 +280,8 @@ const RENAMED_THEME_IDS: Readonly<Record<string, ThemeId>> = {
 	"high-contrast": "high-contrast-dark",
 };
 
-const canonicalThemeId = (id: ThemeId): ThemeId => RENAMED_THEME_IDS[id] ?? id;
+const canonicalThemeId = (id: ThemeId): ThemeId =>
+	Object.hasOwn(RENAMED_THEME_IDS, id) ? (RENAMED_THEME_IDS[id] ?? id) : id;
 
 function exactTheme(id: ThemeId): ThemeManifest | undefined {
 	return catalog.byId.get(canonicalThemeId(id));
@@ -468,6 +481,7 @@ export function writeThemeHint(preference: ThemePreference): void {
 	try {
 		const normalized = normalizeThemeHint(preference);
 		themeHintStorage()?.setItem(HINT_KEY, JSON.stringify({ version: HINT_VERSION, ...normalized }));
+		writeUserThemeCache(normalized);
 	} catch {
 		return;
 	}

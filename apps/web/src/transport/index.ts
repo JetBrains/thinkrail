@@ -23,4 +23,5 @@ export {
 	supportsPlanSummaryGeneration,
 	supportsRichAnchors,
 	supportsTurnChanges,
+	supportsUserThemes,
 } from "./wireTransport";

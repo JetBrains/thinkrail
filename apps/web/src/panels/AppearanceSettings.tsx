@@ -60,7 +60,9 @@ const BUNDLED_THEME_LABELS: Readonly<Record<string, MessageKey>> = {
 };
 
 function themeLabel(t: Translator, theme: Pick<ThemeDescriptor, "id" | "label">): string {
-	const key = BUNDLED_THEME_LABELS[theme.id];
+	const key = Object.hasOwn(BUNDLED_THEME_LABELS, theme.id)
+		? BUNDLED_THEME_LABELS[theme.id]
+		: undefined;
 	return key ? t(key) : theme.label;
 }
 

@@ -12,6 +12,7 @@ const log = logger("themes");
 
 export const MAX_THEME_FILE_BYTES = 256 * 1024;
 export const MAX_THEME_FILES = 64;
+export const MAX_THEME_NESTING = 32;
 const THEME_SUFFIX = ".theme.json";
 const POLL_MS = 1_000;
 
@@ -19,11 +20,7 @@ export function themesDir(root: string = dataDir()): string {
 	return join(root, "themes");
 }
 
-function failure(
-	fileName: string,
-	error: UserThemeFileErrorCode,
-	detail?: unknown,
-): UserThemeFile {
+function failure(fileName: string, error: UserThemeFileErrorCode, detail?: unknown): UserThemeFile {
 	const text = detail instanceof Error ? detail.message : detail ? String(detail) : "";
 	return { fileName, ok: false, error, ...(text ? { detail: text } : {}) };
 }
@@ -37,11 +34,35 @@ function readThemeFile(dir: string, fileName: string): UserThemeFile {
 	} catch (error) {
 		return failure(fileName, "unreadable", error);
 	}
+	if (nestingDepth(text) > MAX_THEME_NESTING) {
+		return failure(fileName, "invalid-json", `nested deeper than ${MAX_THEME_NESTING} levels`);
+	}
 	try {
 		return { fileName, ok: true, manifest: JSON.parse(text) as unknown };
 	} catch (error) {
 		return failure(fileName, "invalid-json", error);
 	}
+}
+
+function nestingDepth(text: string): number {
+	let depth = 0;
+	let deepest = 0;
+	let inString = false;
+	for (let index = 0; index < text.length; index += 1) {
+		const char = text[index];
+		if (inString) {
+			if (char === "\\") index += 1;
+			else if (char === '"') inString = false;
+		} else if (char === '"') {
+			inString = true;
+		} else if (char === "{" || char === "[") {
+			depth += 1;
+			if (depth > deepest) deepest = depth;
+		} else if (char === "}" || char === "]") {
+			depth -= 1;
+		}
+	}
+	return deepest;
 }
 
 function themeFileNames(dir: string): string[] {

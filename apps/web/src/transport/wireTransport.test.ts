@@ -6,6 +6,7 @@ import {
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	type SessionStateRecord,
+	USER_THEMES_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import {
 	mergeSessionStateRecords,
@@ -14,7 +15,14 @@ import {
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
 	supportsRichAnchors,
+	supportsUserThemes,
 } from "./wireTransport";
+
+test("user theme files are read only from a host at or beyond their capability version", () => {
+	expect(supportsUserThemes(USER_THEMES_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsUserThemes(USER_THEMES_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsUserThemes(null)).toBe(false);
+});
 
 test("host update execution is offered only by a host at or beyond the v70 capability", () => {
 	expect(supportsHostUpdateRun(HOST_UPDATE_RUN_PROTOCOL_VERSION)).toBe(true);

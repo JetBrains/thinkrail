@@ -2,6 +2,7 @@ export { initializeThemes } from "./bundled";
 export {
 	applyTheme,
 	applyThemePreference,
+	clearUserThemes,
 	deriveSystemThemePair,
 	getThemes,
 	getUserThemeIssues,
