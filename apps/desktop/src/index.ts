@@ -70,6 +70,12 @@ import {
 } from "./windowChrome";
 import { loadWindowsFrameApi, restoreWindowsFrameControls } from "./windowsFrame";
 import {
+	desktopAppUserModelId,
+	loadWindowsShellApi,
+	stampTaskbarShortcuts,
+	taskbarShortcutCandidates,
+} from "./windowsTaskbarIdentity";
+import {
 	applyWindowsWindowIcon,
 	loadWindowsIconApi,
 	type WindowsHandle,
@@ -126,6 +132,42 @@ function windowControlsProbeScript(target: { testId: string; label: string }): s
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
 let startupSplash: StartupSplash | undefined;
 
+function setWindowsAppUserModelId(): void {
+	if (process.platform !== "win32") return;
+	try {
+		loadWindowsShellApi().setProcessAppUserModelId(desktopAppUserModelId(channel));
+	} catch (error) {
+		desktopError("windows_app_id", "could not set the Windows AppUserModelID", error);
+	}
+}
+
+function stampWindowsTaskbarShortcuts(): void {
+	if (process.platform !== "win32") return;
+	try {
+		const appDir = dirname(PATHS.RESOURCES_FOLDER);
+		const shell = loadWindowsShellApi();
+		const candidates = taskbarShortcutCandidates(appDir, process.env.APPDATA);
+		const { failures } = shell.withComApartment(() =>
+			stampTaskbarShortcuts(
+				candidates.paths,
+				join(appDir, "bin", "launcher.exe"),
+				desktopAppUserModelId(channel),
+				shell.openShortcut,
+			),
+		);
+		const [failure] = [...candidates.failures, ...failures];
+		if (failure) {
+			desktopError(
+				"windows_app_id",
+				"could not stamp a Windows shortcut's AppUserModelID",
+				failure,
+			);
+		}
+	} catch (error) {
+		desktopError("windows_app_id", "could not stamp the Windows shortcuts' AppUserModelID", error);
+	}
+}
+
 function setWindowsWindowIcon(window: { readonly ptr: WindowsHandle | null }): void {
 	if (process.platform !== "win32" || !window.ptr) return;
 	try {
@@ -153,6 +195,7 @@ function writeReady(path: string, payload: unknown): void {
 }
 
 async function start(): Promise<void> {
+	setWindowsAppUserModelId();
 	const savedLabels = readNativeLabels(nativeLabelsPath());
 	let dialogLabels: DesktopDialogLabels = readDialogLabels(savedLabels);
 	const applicationMenuInstalled = installDesktopApplicationMenu(
@@ -480,6 +523,7 @@ async function start(): Promise<void> {
 		startupSplash = undefined;
 		startAttributionClaim();
 		updateController.start();
+		stampWindowsTaskbarShortcuts();
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;
 		if (readyPath) {
 			writeReady(readyPath, {

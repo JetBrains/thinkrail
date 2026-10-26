@@ -126,7 +126,8 @@ existing chunk id with different content. `preBuild` also refuses to stage web `
 
 Handled native-shell failures that carry an error (keyboard state, title-bar double-click, update
 listener/lifecycle/journal, native-label writes, leaving the bundle working directory, Windows frame restore,
-Windows window icon, startup) go through `errorReporting.ts`'s `desktopError(scope, message, error)`:
+Windows window icon, Windows taskbar identity, startup) go through `errorReporting.ts`'s
+`desktopError(scope, message, error)`:
 the `[desktop] …` console line stays, and once the host has booted the error is forwarded to
 `DesktopHost.reportError` as a sanitized `desktop` error report ([[submodule-server-analytics]]); before
 that it is console-only. Uncaught main-process faults need no seam — they share the host's process
@@ -436,10 +437,40 @@ three gaps, closed by the project:
   failure is reported and non-fatal.
 
 Removal gates: Hutch writing the executable identity and replacing the main process's icon groups;
-Electrobun setting a window icon on Windows. Taskbar grouping is still open:
-- the pinned shortcut targets the launcher while the window belongs to `bun.exe`;
-- nothing sets an AppUserModelID, so the two show as separate taskbar buttons
-  (blackboardsh/electrobun#514; see Deferred).
+Electrobun setting a window icon on Windows.
+
+**Taskbar identity.** A pinned shortcut targets the launcher while the window belongs to `bun.exe`, and
+Electrobun sets no AppUserModelID. Without one, Windows derives each side's identity from its own exe
+and shows them as two taskbar buttons (blackboardsh/electrobun#514). The desktop therefore names
+itself:
+
+- **Process ID.** The first thing startup does, before any window, is set an explicit per-channel ID
+  derived from the product name: `JetBrains.ThinkRail`, `JetBrains.ThinkRail.Nightly`,
+  `JetBrains.ThinkRail.Dev`. Stable and nightly stay separate apps.
+- **Shortcut IDs.** Once the main window first reaches `dom-ready`, the desktop writes the same ID onto
+  every shortcut whose target is this install's `bin\launcher.exe`:
+  - the Start-menu shortcut Electrobun records in `<channel root>\.electrobun-uninstall.json`
+    (schema 1; any other schema is ignored);
+  - the taskbar pins in `User Pinned\TaskBar` and `User Pinned\ImplicitAppShortcuts`, so pins made before
+    this change group too.
+
+  The Desktop shortcut is left alone. Grouping does not need it, and rewriting desktop shortcuts has
+  moved their desktop icon before (Firefox bug 633728).
+
+  `WScript.Shell`, which Electrobun uses, cannot set the ID, and Electrobun rewrites its shortcuts on
+  install and update. The stamp is therefore idempotent and runs on every launch, after the UI has
+  loaded, inside a COM apartment that lasts only for the stamp. How it works:
+  - It uses `ShellLink` + `IPropertyStore` COM calls through Bun FFI, which the Windows PR job exercises
+    against real shortcuts. A PowerShell `Add-Type` helper was rejected: it compiles C# on every launch.
+  - A candidate's target is first compared by file name, so a foreign pin's target (possibly on a
+    network share) is never resolved on the host's thread.
+  - A write counts only on `S_OK`.
+  - Failing HRESULTs carry an `HRESULT_XXXXXXXX` code for error tracking.
+- **Limits.** Shortcuts to other targets are never touched. That includes pins made from the running
+  window before this change, which point at `bun.exe` and stay separate. Failures are reported and
+  non-fatal. An unreadable manifest is reported too, and the pins are still stamped.
+
+Removal gate: Electrobun giving its process and shortcuts a shared AppUserModelID.
 
 `assets/icon.svg` is the one hand-authored source; every raster below it (the iconset, the ICO, the
 Linux PNG) is generated, never hand-edited, by `scripts/generate-icons.ts` (`bun run generate-icons`)
@@ -559,7 +590,5 @@ release checks described in [[module-ci-release]].
 ## Deferred
 
 Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and removing the
-`user32` style-bit shim once blackboardsh/electrobun#558 ships. The Windows taskbar identity is deferred
-too: one AppUserModelID shared by the process and its shortcuts, so a pinned ThinkRail and the running
-window are one button (blackboardsh/electrobun#514). The update feed publication described above
+`user32` style-bit shim once blackboardsh/electrobun#558 ships. The update feed publication described above
 remains release-owned.
