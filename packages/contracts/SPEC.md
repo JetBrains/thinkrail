@@ -688,7 +688,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `systemThemePair` are complete replacements; entering system mode requires a complete existing-or-incoming
   pair. A legacy `{ theme }` mutation without explicit `themeMode` means a fixed-theme selection and exits
   system mode; returns the merged config) /
-  **`environment.get`** / **`environment.update`** (the stored host environment — optional pi config folder
+  **`environment.get`** / **`environment.update`** (`HOST_ENVIRONMENT_PROTOCOL_VERSION`, v91; the stored host environment — optional pi config folder
   plus ordered `{ name, value }` variables — outside `AppConfig`, never broadcast or in `server.welcome`
   because values may be secrets; `get` → `HostEnvironmentStatus` with `restartRequired`, `launchOverridden`
   names and the `effectiveAgentDir`; `update` replaces the whole record and returns

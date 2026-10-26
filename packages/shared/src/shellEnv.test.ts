@@ -3,9 +3,9 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-	launchEnvKeys,
 	LOGIN_ENV_END,
 	LOGIN_ENV_MARKER,
+	launchEnvKeys,
 	localeRepair,
 	loginShellImports,
 	loginShellProbe,

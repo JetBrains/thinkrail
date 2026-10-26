@@ -94,7 +94,10 @@ test("a saved update is private on disk, drops blank rows and requires a restart
 	applyHostEnvironment();
 	expect(process.env.TR_ENV_A).toBe("a");
 	expect(process.env.PI_CODING_AGENT_DIR).toBe(agentDir);
-	expect(hostEnvironmentStatus()).toMatchObject({ restartRequired: false, effectiveAgentDir: agentDir });
+	expect(hostEnvironmentStatus()).toMatchObject({
+		restartRequired: false,
+		effectiveAgentDir: agentDir,
+	});
 });
 
 test("a launch variable wins and is reported as overridden", () => {

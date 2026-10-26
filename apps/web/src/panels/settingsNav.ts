@@ -4,6 +4,7 @@ import {
 	RiBrainLine,
 	RiChat2Line,
 	RiDownloadCloud2Line,
+	RiFolderSettingsLine,
 	RiGitRepositoryLine,
 	RiKeyLine,
 	RiLayoutGridLine,
@@ -19,6 +20,7 @@ import {
 import {
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
@@ -57,6 +59,12 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				requiresProtocolVersion: MCP_PROTOCOL_VERSION,
 			},
 			{ id: SettingsSection.Templates, label: "settings.nav.templates", icon: RiLayoutGridLine },
+			{
+				id: SettingsSection.Environment,
+				label: "settings.nav.environment",
+				icon: RiFolderSettingsLine,
+				requiresProtocolVersion: HOST_ENVIRONMENT_PROTOCOL_VERSION,
+			},
 		],
 	},
 	{

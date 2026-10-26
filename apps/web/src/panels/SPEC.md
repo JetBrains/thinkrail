@@ -505,7 +505,7 @@ a project picker, the prompt hero, and the reused
   to report the dropped kick-off). (`gh` status lives in `SettingsDialog`, not the
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+
-  the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates) ·
+  the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates, Environment) ·
   **Interface** (Chat, Appearance, Language, Layout, Terminal) · **System** (Workspaces, Integrations, Extensions,
   Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
@@ -942,8 +942,19 @@ a project picker, the prompt hero, and the reused
   the list are carried through untouched. An empty registry renders `extensions-empty`; a failed fetch
   renders `extensions-failed`. Disabling never unregisters a tool renderer
   ([[submodule-web-extensions]]), so past transcripts still render.
+  **`EnvironmentSettings`** (the **Environment** section, nav `settings-nav-environment`, listed only at
+  `protocolVersion >= HOST_ENVIRONMENT_PROTOCOL_VERSION`) edits the stored host environment
+  ([[submodule-server-environment]]): the pi config folder, the folder in use (`effectiveAgentDir`), and
+  ordered name/value rows whose values are masked until revealed per row. It fetches `environment.get` on
+  mount into section-local state — never a store slice, because values may be secrets — and keeps an
+  explicit draft (Save / Discard, not per-field writes), since nothing applies before a restart. Save sends
+  the whole record through `environment.update`; `{ ok: false }` maps each issue back to its field or row
+  (blank rows are dropped client-side first so server indexes line up). A pending restart shows
+  `settings-environment-restart`; names set at launch carry a "Set at launch" badge. Pure draft helpers
+  live in `panels/environmentDraft.ts`; the props-driven `EnvironmentForm` is what tests render. No folder
+  picker: `dialog.selectDirectory` is the project-setup picker and records setup analytics.
   `ProvidersSettings`/`McpSettings`/`AppearanceSettings`/`LineWidthControl`/`ChatSettings`/`TemplatesSettings`/
-  `WorkspacesSettings`/`PrivacySettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings` and the app-wide **`InterviewPromptDialog`** are the
+  `WorkspacesSettings`/`PrivacySettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings`/`EnvironmentSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
   fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
   middle-button booking activation open Calendar immediately and record `book`; close, Escape, and backdrop record `postpone`; permanent

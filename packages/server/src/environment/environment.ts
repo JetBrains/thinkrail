@@ -98,7 +98,9 @@ export function applyHostEnvironment(): void {
 	applied = stored;
 	launchKeys = new Set(launchEnvKeys());
 	const issues = validateHostEnvironment(stored);
-	const skippedVars = new Set(issues.flatMap((issue) => (issue.field === "var" ? [issue.index] : [])));
+	const skippedVars = new Set(
+		issues.flatMap((issue) => (issue.field === "var" ? [issue.index] : [])),
+	);
 	stored.vars.forEach(({ name, value }, index) => {
 		if (!skippedVars.has(index) && !launchKeys.has(name)) process.env[name] = value;
 	});
@@ -106,7 +108,8 @@ export function applyHostEnvironment(): void {
 	if (stored.agentDir !== undefined && !agentDirInvalid && !launchKeys.has(AGENT_DIR_VAR)) {
 		process.env[AGENT_DIR_VAR] = expandAgentDir(stored.agentDir);
 	}
-	for (const issue of issues) log.warn(`stored environment entry skipped: ${issue.field}/${issue.code}`);
+	for (const issue of issues)
+		log.warn(`stored environment entry skipped: ${issue.field}/${issue.code}`);
 }
 
 export function hostEnvironmentStatus(): HostEnvironmentStatus {

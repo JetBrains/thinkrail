@@ -19,6 +19,7 @@ import {
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
@@ -216,8 +217,15 @@ test("local language files and the locale setting are pinned to v89", () => {
 	expect(WS_CHANNELS.localesChanged).toBe("locales.changed");
 });
 
+test("the stored host environment is pinned to v91", () => {
+	expect(PROTOCOL_VERSION).toBe(91);
+	expect(HOST_ENVIRONMENT_PROTOCOL_VERSION).toBe(91);
+	expect(WS_METHODS.environmentGet).toBe("environment.get");
+	expect(WS_METHODS.environmentUpdate).toBe("environment.update");
+});
+
 test("client error reports are pinned to v90", () => {
-	expect(PROTOCOL_VERSION).toBe(90);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CLIENT_ERROR_REPORT_PROTOCOL_VERSION);
 	expect(CLIENT_ERROR_REPORT_PROTOCOL_VERSION).toBe(90);
 	expect(WS_METHODS.clientReportError).toBe("client.reportError");
 });

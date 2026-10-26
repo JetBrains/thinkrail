@@ -17,11 +17,11 @@ import type {
 	GitDiffScope,
 	GithubAuthStatus,
 	GitStatus,
+	HistoryScope,
+	HistorySearchResult,
 	HostEnvironment,
 	HostEnvironmentStatus,
 	HostEnvironmentUpdateResult,
-	HistoryScope,
-	HistorySearchResult,
 	InterviewResponse,
 	JbcentralActionResult,
 	JbcentralConnectResult,
@@ -120,7 +120,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 90;
+export const PROTOCOL_VERSION = 91;
+export const HOST_ENVIRONMENT_PROTOCOL_VERSION = 91;
 export const CLIENT_ERROR_REPORT_PROTOCOL_VERSION = 90;
 export const LOCALES_PROTOCOL_VERSION = 89;
 export const REVIEW_ACTIONS_PROTOCOL_VERSION = 88;
