@@ -22,6 +22,7 @@ import {
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isAskUserAnswersMessage,
+	isAskUserQuestionArgs,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
@@ -419,6 +420,17 @@ describe("ask_user_question result guards", () => {
 		expect(readAskUserQuestionResult({ answers: "nope", cancelled: true })).toBeNull();
 		expect(readAskUserQuestionResult("nope")).toBeNull();
 		expect(readAskUserQuestionResult(null)).toBeNull();
+	});
+
+	test("isAskUserQuestionArgs accepts our questionnaire and rejects other shapes", () => {
+		const options = [{ label: "A", description: "a" }];
+		expect(isAskUserQuestionArgs({ questions: [{ question: "Q?", header: "H", options }] })).toBe(
+			true,
+		);
+		expect(isAskUserQuestionArgs({ questions: [] })).toBe(false);
+		expect(isAskUserQuestionArgs({ question: "Q?", choices: ["a"] })).toBe(false);
+		expect(isAskUserQuestionArgs({ questions: [{ question: "Q?", options: ["a"] }] })).toBe(false);
+		expect(isAskUserQuestionArgs(null)).toBe(false);
 	});
 
 	test("isAskUserAnswersMessage needs the custom type, a call id and a result", () => {

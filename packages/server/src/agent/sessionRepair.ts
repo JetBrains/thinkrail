@@ -1,5 +1,5 @@
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
-import { assistantToolCallsAreExecutable } from "@thinkrail/contracts";
+import { assistantToolCallsAreExecutable, isAskUserQuestionArgs } from "@thinkrail/contracts";
 import { scanReplayTools } from "pi-delegation";
 import { ASK_ACK_TEXT, ASK_USER_QUESTION_TOOL_NAME } from "./askUserQuestion";
 
@@ -20,9 +20,17 @@ export function repairDanglingToolCalls(sessionManager: SessionManager): Repaire
 	const danglingCallsAreExecutable =
 		!!assistant && assistantToolCallsAreExecutable(assistant.stopReason);
 
+	const argumentsOf = (toolCallId: string): unknown => {
+		for (const block of assistant?.content ?? []) {
+			if (block.type === "toolCall" && block.id === toolCallId) return block.arguments;
+		}
+		return undefined;
+	};
 	for (const toolCall of dangling) {
 		const isAnswerableAsk =
-			danglingCallsAreExecutable && toolCall.toolName === ASK_USER_QUESTION_TOOL_NAME;
+			danglingCallsAreExecutable &&
+			toolCall.toolName === ASK_USER_QUESTION_TOOL_NAME &&
+			isAskUserQuestionArgs(argumentsOf(toolCall.toolCallId));
 		sessionManager.appendMessage({
 			role: "toolResult",
 			toolCallId: toolCall.toolCallId,

@@ -9,6 +9,7 @@ import {
 	ASK_USER_ANSWERS_CUSTOM_TYPE,
 	assistantToolCallsAreExecutable,
 	isAskUserAnswersMessage,
+	isAskUserQuestionArgs,
 } from "@thinkrail/contracts";
 import {
 	ASK_STOPPED_ERROR,
@@ -58,7 +59,7 @@ export function assessAnswerability(
 			if (block.id === toolCallId && block.name === ASK_USER_QUESTION_TOOL_NAME) {
 				callIndex = i;
 				callDead = !assistantToolCallsAreExecutable(view.stopReason);
-				args = (block.arguments ?? { questions: [] }) as AskUserQuestionArgs;
+				args = isAskUserQuestionArgs(block.arguments) ? block.arguments : null;
 			}
 		}
 	}
@@ -86,7 +87,10 @@ export function hasQuestionAck(messages: readonly AgentMessage[], toolCallId: st
 	);
 }
 
-export function awaitingQuestionToolCallId(messages: readonly AgentMessage[]): string | null {
+export function awaitingQuestionToolCallId(
+	messages: readonly AgentMessage[],
+	acknowledgedOnly = false,
+): string | null {
 	const views = messages as readonly MessageView[];
 	for (let i = views.length - 1; i >= 0; i--) {
 		const view = views[i];
@@ -95,7 +99,8 @@ export function awaitingQuestionToolCallId(messages: readonly AgentMessage[]): s
 		for (const block of toolCallsOf(view)) {
 			const { id } = block;
 			if (id === undefined || block.name !== ASK_USER_QUESTION_TOOL_NAME) continue;
-			if (assessAnswerability(messages, id).ok) return id;
+			if (!assessAnswerability(messages, id).ok) continue;
+			if (!acknowledgedOnly || hasQuestionAck(messages, id)) return id;
 		}
 	}
 	return null;
@@ -364,6 +369,7 @@ export function askUserQuestionSessionServices(
 	waiters: AskUserQuestionWaiters,
 ): ExtensionSessionServices {
 	return {
+		expectToolResponse: (toolCallId) => waiters.expect(toolCallId),
 		awaitToolResponse: async (toolCallId, signal) => {
 			const outcome = await waiters.wait(toolCallId, signal);
 			return outcome.kind === "answer"

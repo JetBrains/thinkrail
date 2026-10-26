@@ -46,7 +46,6 @@ import type {
 	WireModelAuth,
 } from "@thinkrail/contracts";
 import {
-	assistantToolCallsAreExecutable,
 	canMarkCompletionUnread,
 	isTranscriptMessageRole,
 	normalizeSessionTitle,
@@ -77,7 +76,6 @@ import {
 import { trashFile } from "../trash";
 import {
 	ANSWERABILITY_ERRORS,
-	ASK_USER_QUESTION_TOOL_NAME,
 	type AskUserQuestionWaiters,
 	askUserQuestionSessionServices,
 	assessAnswerability,
@@ -384,6 +382,7 @@ function stateFromEntry(entry: Entry): SessionState {
 		lifecycleCompletion:
 			entry.lastSettlement === undefined ? persistedCompletion(sessionId) : undefined,
 		liveQuestion: entry.askUserQuestionWaiters.currentQuestion(),
+		liveRegistry: true,
 		pendingDialog: pendingExtUiDialog(sessionId),
 		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
 		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
@@ -431,6 +430,7 @@ function stateFromDisk(sessionId: string, manager: SessionManager, legacy = fals
 		lastSettlement: undefined,
 		lifecycleCompletion: legacy ? undefined : persistedCompletion(sessionId),
 		liveQuestion: null,
+		liveRegistry: false,
 		pendingDialog: null,
 		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
 		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
@@ -520,6 +520,7 @@ function recordSettlement(entry: Entry, terminal: AgentSettlement | null): void 
 		lastSettlement: terminal,
 		lifecycleCompletion: undefined,
 		liveQuestion: entry.askUserQuestionWaiters.currentQuestion(),
+		liveRegistry: true,
 		pendingDialog: pendingExtUiDialog(sessionId),
 		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
 		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
@@ -1056,16 +1057,6 @@ async function prepareSessionEntry(
 		scheduleEntryStatePublish(entry);
 	});
 	entry.unsubscribe = session.subscribe((event) => {
-		if (
-			event.type === "message_end" &&
-			event.message.role === "assistant" &&
-			assistantToolCallsAreExecutable(event.message.stopReason)
-		) {
-			for (const block of event.message.content) {
-				if (block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME)
-					entry.askUserQuestionWaiters.expect(block.id);
-			}
-		}
 		if (event.type === "turn_end") {
 			entry.askUserQuestionWaiters.persistTurn(event.toolResults, event.message);
 			entry.commands.flushCompletions();

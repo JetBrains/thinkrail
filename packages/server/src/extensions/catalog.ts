@@ -26,6 +26,7 @@ async function recordToolNames(factory: ExtensionFactory): Promise<string[]> {
 }
 
 const inertSession: ExtensionSessionServices = {
+	expectToolResponse: () => {},
 	awaitToolResponse: () => Promise.reject(new Error("the Settings catalog has no session")),
 };
 

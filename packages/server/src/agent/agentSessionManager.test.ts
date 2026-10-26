@@ -1959,6 +1959,203 @@ test("a chat created with ask-user-question off leaves a same-name package in ch
 	}
 });
 
+function installGatedForeignQuestionnaire(cwd: string): {
+	startedPath: string;
+	release: () => void;
+} {
+	const controlDir = tmpCwd("trpi-foreign-gate-");
+	const startedPath = join(controlDir, "started");
+	const releasePath = join(controlDir, "release");
+	const extensionDir = join(cwd, ".pi", "extensions");
+	mkdirSync(extensionDir, { recursive: true });
+	writeFileSync(
+		join(extensionDir, "foreign-questionnaire.ts"),
+		[
+			'import { existsSync, writeFileSync } from "node:fs";',
+			'import { setTimeout as sleep } from "node:timers/promises";',
+			"export default function (pi) {",
+			"  pi.registerTool({",
+			'    name: "ask_user_question", label: "Foreign questionnaire", description: "Foreign questionnaire",',
+			'    parameters: { type: "object", additionalProperties: true },',
+			"    async execute() {",
+			`      writeFileSync(${JSON.stringify(startedPath)}, "");`,
+			`      while (!existsSync(${JSON.stringify(releasePath)})) await sleep(2);`,
+			'      return { content: [{ type: "text", text: "FOREIGN_QUESTIONNAIRE" }] };',
+			"    },",
+			"  });",
+			"}",
+		].join("\n"),
+	);
+	return { startedPath, release: () => writeFileSync(releasePath, "") };
+}
+
+test("with ask-user-question off, a same-name package's call never becomes our live question", async () => {
+	setDisabledExtensionsResolver(() => new Set(["ask-user-question"]));
+	const cwd = tmpCwd("trpi-ask-off-foreign-live-");
+	const gate = installGatedForeignQuestionnaire(cwd);
+	let sessionId: string | undefined;
+	let prompting: Promise<void> | undefined;
+	try {
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-ask-off-foreign-live",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		const toolCallId = "foreign-live";
+		fauxA.setResponses([
+			gatedQuestionMessage(toolCallId),
+			fauxAssistantMessage("FOREIGN_CONTINUED"),
+		]);
+		prompting = promptSession(sessionId, "Choose a runtime.");
+		await waitForPath(gate.startedPath);
+		expect(getSessionState(sessionId).needsInput).toBeNull();
+		const answering = answerQuestion(sessionId, toolCallId, gatedQuestionAnswer());
+		answering.catch(() => {});
+		gate.release();
+		await expect(answering).rejects.toThrow("not awaiting an answer");
+		await prompting;
+		expect(seen(sessionId)).toContain("FOREIGN_CONTINUED");
+	} finally {
+		gate.release();
+		await prompting?.catch(() => {});
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("with ask-user-question off, a model calling the absent tool never raises a question", async () => {
+	setDisabledExtensionsResolver(() => new Set(["ask-user-question"]));
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const controlDir = tmpCwd("trpi-ask-off-absent-");
+	const startedPath = join(controlDir, "started");
+	const releasePath = join(controlDir, "release");
+	const probePath = join(agentDir, "extensions", "absent-ask-probe.ts");
+	mkdirSync(dirname(probePath), { recursive: true });
+	writeFileSync(
+		probePath,
+		[
+			'import { existsSync, writeFileSync } from "node:fs";',
+			'import { setTimeout as sleep } from "node:timers/promises";',
+			"export default function (pi) {",
+			'  pi.on("tool_execution_end", async (event) => {',
+			'    if (event.toolName !== "ask_user_question") return;',
+			`    writeFileSync(${JSON.stringify(startedPath)}, "");`,
+			`    while (!existsSync(${JSON.stringify(releasePath)})) await sleep(2);`,
+			"  });",
+			"}",
+		].join("\n"),
+	);
+	let sessionId: string | undefined;
+	let prompting: Promise<void> | undefined;
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-ask-off-absent-cwd-"),
+			workspaceId: "ws-ask-off-absent",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		fauxA.setResponses([
+			gatedQuestionMessage("absent-ask"),
+			fauxAssistantMessage("ABSENT_CONTINUED"),
+		]);
+		prompting = promptSession(sessionId, "Choose a runtime.");
+		await waitForPath(startedPath);
+		expect(getSessionState(sessionId).needsInput).toBeNull();
+		writeFileSync(releasePath, "");
+		await prompting;
+		expect(seen(sessionId)).toContain("ABSENT_CONTINUED");
+	} finally {
+		writeFileSync(releasePath, "");
+		await prompting?.catch(() => {});
+		rmSync(probePath, { force: true });
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("switching ask-user-question off while a question waits still persists its answer, then drops the tool", async () => {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	const cwd = tmpCwd("trpi-ask-off-pending-");
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-ask-off-pending",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		const toolCallId = "pending-while-off";
+		fauxA.setResponses([
+			gatedQuestionMessage(toolCallId),
+			fauxAssistantMessage("PENDING_CONTINUED"),
+		]);
+		const prompting = promptSession(sessionId, "Choose a runtime.");
+		await waitForQuestion(sessionId);
+		disabled = new Set(["ask-user-question"]);
+		refreshExtensionTools();
+		await answerQuestion(sessionId, toolCallId, gatedQuestionAnswer());
+		await prompting;
+		expect(seen(sessionId)).toContain("PENDING_CONTINUED");
+		const { messages } = await getSessionMessages(sessionId, "ws-ask-off-pending", cwd);
+		expect(messages).toContainEqual(
+			expect.objectContaining({ role: "toolResult", toolCallId, details: gatedQuestionAnswer() }),
+		);
+		fauxA.setResponses([(context) => fauxAssistantMessage(`AFTER_${askToolState(context)}`)]);
+		await promptSession(sessionId, "Check the ask tool.");
+		expect(seen(sessionId)).toContain("AFTER_ASK_OFF");
+	} finally {
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("restart repair and answering leave a foreign-shaped ask_user_question call alone", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const cwd = tmpCwd("trpi-restart-foreign-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const toolCallId = "restart-foreign";
+	const fixture = writeFixtureSession(dir, {
+		id: "restart-foreign-session",
+		cwd,
+		messages: [
+			{ role: "user", text: "Pick a runtime.", timestamp: 1 },
+			{
+				role: "assistant",
+				timestamp: 2,
+				stopReason: "toolUse",
+				content: [
+					{
+						type: "toolCall",
+						id: toolCallId,
+						name: "ask_user_question",
+						arguments: { question: "Which runtime?", choices: ["Bun", "Node"] },
+					},
+				],
+			},
+		],
+	});
+	try {
+		expect(await ensureSessionAttached(fixture.id, "ws-restart-foreign", cwd)).toBe(true);
+		const repaired = await getSessionMessages(fixture.id, "ws-restart-foreign", cwd);
+		const result = repaired.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (result?.role !== "toolResult") throw new Error("repair result was not persisted");
+		expect(result.isError).toBe(true);
+		expect(result.details).toBeUndefined();
+		expect(getSessionState(fixture.id).needsInput).toBeNull();
+		await expect(answerQuestion(fixture.id, toolCallId, gatedQuestionAnswer())).rejects.toThrow(
+			"Unknown ask_user_question tool call",
+		);
+	} finally {
+		if (hasSession(fixture.id)) removeSession(fixture.id);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("a live question blocks continuation, keeps the follow-up lane behind it, and acknowledges after its native result persists", async () => {
 	const toolCallId = "live-question";
 	const question = {

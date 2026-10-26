@@ -31,7 +31,10 @@ describe("server extension registry", () => {
 			);
 		expect(names()).toEqual(["visualize"]);
 		expect(
-			names({ awaitToolResponse: () => Promise.resolve({ kind: "deferred" as const }) }),
+			names({
+				expectToolResponse: () => {},
+				awaitToolResponse: () => Promise.resolve({ kind: "deferred" as const }),
+			}),
 		).toEqual(["visualize", "ask-user-question"]);
 		expect(registryInlineExtensions("childExtensions")).toEqual([]);
 	});

@@ -34,6 +34,10 @@ export default defineServerExtension({
 		"Lets the agent pause and ask you structured multiple-choice questions in chat instead of guessing.",
 	extensions: [],
 	sessionExtensions: (session) => [
-		createAskUserQuestionExtension({ ask: askThroughHost(session), guidance: THINKRAIL_GUIDANCE }),
+		createAskUserQuestionExtension({
+			ask: askThroughHost(session),
+			announce: (toolCallId) => session.expectToolResponse(toolCallId),
+			guidance: THINKRAIL_GUIDANCE,
+		}),
 	],
 });

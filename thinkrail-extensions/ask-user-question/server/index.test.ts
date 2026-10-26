@@ -35,21 +35,27 @@ const args = {
 	],
 };
 
+type MessageEndHandler = (event: { message: unknown }) => unknown;
+
 function compose(
 	respond: (toolCallId: string, signal: AbortSignal | undefined) => Promise<ToolResponse>,
+	expectToolResponse: (toolCallId: string) => void = () => {},
 ) {
-	const session: ExtensionSessionServices = { awaitToolResponse: respond };
+	const session: ExtensionSessionServices = { expectToolResponse, awaitToolResponse: respond };
 	const factories = askUserQuestion.sessionExtensions?.(session) ?? [];
 	let tool: CapturedTool | undefined;
+	const handlers = new Map<string, MessageEndHandler>();
 	const pi = {
 		registerTool: (definition: CapturedTool) => {
 			tool = definition;
 		},
-		on: () => {},
+		on: (event: string, handler: MessageEndHandler) => {
+			handlers.set(event, handler);
+		},
 	} as unknown as ExtensionAPI;
 	for (const factory of factories) factory(pi);
 	if (!tool) throw new Error("the session factories registered no tool");
-	return { tool, factories };
+	return { tool, factories, handlers };
 }
 
 const text = (result: { content: { text: string }[] }) =>
@@ -65,6 +71,22 @@ describe("the ask-user-question server half", () => {
 		expect(tool.description).toContain("render inline in the chat as an interactive card");
 		expect(tool.description).toContain("then the card is superseded");
 		expect(tool.promptGuidelines?.length).toBe(4);
+	});
+
+	test("announces each executable ask call to the host before it runs", () => {
+		const expected: string[] = [];
+		const { handlers } = compose(
+			async () => ({ kind: "deferred" }),
+			(toolCallId) => expected.push(toolCallId),
+		);
+		handlers.get("message_end")?.({
+			message: {
+				role: "assistant",
+				stopReason: "toolUse",
+				content: [{ type: "toolCall", id: "ask-1", name: ASK_USER_QUESTION_TOOL_NAME }],
+			},
+		});
+		expect(expected).toEqual(["ask-1"]);
 	});
 
 	test("waits for the host's response to this call and returns the answer envelope", async () => {

@@ -195,6 +195,22 @@ export function isAckDetails(details: unknown): details is AskUserQuestionAckDet
 interface ContentBlockView {
 	type?: unknown;
 	name?: unknown;
+	id?: unknown;
+}
+
+const NON_EXECUTABLE_STOP_REASONS: ReadonlySet<unknown> = new Set(["error", "aborted", "length"]);
+
+export function executableAskCallIds(message: { role: string }): string[] {
+	const { content, stopReason } = message as { content?: unknown; stopReason?: unknown };
+	if (message.role !== "assistant" || !Array.isArray(content)) return [];
+	if (NON_EXECUTABLE_STOP_REASONS.has(stopReason)) return [];
+	return (content as ContentBlockView[]).flatMap((block) =>
+		block?.type === "toolCall" &&
+		block.name === ASK_USER_QUESTION_TOOL_NAME &&
+		typeof block.id === "string"
+			? [block.id]
+			: [],
+	);
 }
 
 export function isolateAskUserQuestionBatch<M extends { role: string }>(message: M): M | undefined {

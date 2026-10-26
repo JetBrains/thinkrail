@@ -67,6 +67,7 @@ import type {
 import { isDelegationRunDetails } from "./domain";
 import type {
 	AskUserAnswersDetails,
+	AskUserQuestionArgs,
 	AskUserQuestionResult,
 	ExtUiResponse,
 	ImageContent,
@@ -398,6 +399,25 @@ function isAskUserQuestionResult(value: unknown): value is AskUserQuestionResult
 		typeof value === "object" &&
 		Array.isArray((value as AskUserQuestionResult).answers) &&
 		typeof (value as AskUserQuestionResult).cancelled === "boolean"
+	);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return !!value && typeof value === "object";
+}
+
+export function isAskUserQuestionArgs(value: unknown): value is AskUserQuestionArgs {
+	const questions = isRecord(value) ? value.questions : undefined;
+	return (
+		Array.isArray(questions) &&
+		questions.length > 0 &&
+		questions.every(
+			(question) =>
+				isRecord(question) &&
+				typeof question.question === "string" &&
+				Array.isArray(question.options) &&
+				question.options.every((option) => isRecord(option) && typeof option.label === "string"),
+		)
 	);
 }
 
