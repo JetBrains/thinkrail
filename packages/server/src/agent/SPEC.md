@@ -123,8 +123,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     last listing. Direct API keys and other subscriptions keep pi's catalog: no listing was verified to
     agree with pi's aliases there.
   - `modelDefaults` — `preferredDefaultModel(available)`: pi's `defaultModelPerProvider` in pi's order,
-    else the first available model. Pi does not export that map, so the host mirrors it under a parity
-    test against the installed dist; it is what pi's own `findInitialModel` would pick.
+    then any available model whose id is one of those defaults, else the first available model. Pi does
+    not export that map, so the host mirrors it under a parity test against the installed dist; the first
+    pass is what pi's own `findInitialModel` would pick. The same-id pass covers a provider whose own
+    default the account filter removed: Sign in with ChatGPT serves `openai` models from the
+    `openai-codex` set, so it lands on the Codex default instead of catalog order.
   - `modelContext` — a narrow settings adapter for the `contextWindow` override in pi's shared
     `getAgentDir()/models.json`, not a second model registry. It lists the OpenAI Responses / Codex
     Responses models from `settledAvailableModels` whose effective budget still equals the contracts'

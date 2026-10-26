@@ -8,11 +8,11 @@ export const PI_DEFAULT_MODEL_PER_PROVIDER: Readonly<Record<string, string>> = {
 	azure: "gpt-5.4",
 	"openai-codex": "gpt-6.1-sol",
 	radius: "balanced",
-	nvidia: "nvidia/nemotron-3-ultra-550b-a55b",
+	nvidia: "nvidia/nemotron-3.5-super-vl-120b-a12b",
 	deepseek: "deepseek-v4-pro",
 	google: "gemini-3.1-pro-preview",
 	"google-vertex": "gemini-3.1-pro-preview",
-	"github-copilot": "gpt-5.4",
+	"github-copilot": "gpt-6.1-sol",
 	openrouter: "moonshotai/kimi-k2.6",
 	"vercel-ai-gateway": "zai/glm-5.1",
 	xai: "grok-4.7",
@@ -38,10 +38,10 @@ export const PI_DEFAULT_MODEL_PER_PROVIDER: Readonly<Record<string, string>> = {
 	"qwen-token-plan": "qwen3.7-max",
 	"qwen-token-plan-cn": "qwen3.7-max",
 	"qwen-token-plan-individual": "qwen3.8-max",
-	xiaomi: "mimo-v2.5-pro",
-	"xiaomi-token-plan-cn": "mimo-v2.5-pro",
-	"xiaomi-token-plan-ams": "mimo-v2.5-pro",
-	"xiaomi-token-plan-sgp": "mimo-v2.5-pro",
+	xiaomi: "mimo-v2.6-pro",
+	"xiaomi-token-plan-cn": "mimo-v2.6-pro",
+	"xiaomi-token-plan-ams": "mimo-v2.6-pro",
+	"xiaomi-token-plan-sgp": "mimo-v2.6-pro",
 };
 
 export function preferredDefaultModel<T extends Pick<WireModel, "provider" | "id">>(
@@ -49,6 +49,10 @@ export function preferredDefaultModel<T extends Pick<WireModel, "provider" | "id
 ): T | undefined {
 	for (const [provider, id] of Object.entries(PI_DEFAULT_MODEL_PER_PROVIDER)) {
 		const match = available.find((model) => model.provider === provider && model.id === id);
+		if (match) return match;
+	}
+	for (const id of Object.values(PI_DEFAULT_MODEL_PER_PROVIDER)) {
+		const match = available.find((model) => model.id === id);
 		if (match) return match;
 	}
 	return available[0];

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { refreshModelListings, setModelListingPublisher } from "./modelAvailability";
-import { PI_DEFAULT_MODEL_PER_PROVIDER } from "./modelDefaults";
+import { PI_DEFAULT_MODEL_PER_PROVIDER, preferredDefaultModel } from "./modelDefaults";
 import { settledAvailableModels } from "./piRuntime";
 
 let priorOffline: string | undefined;
@@ -73,7 +73,9 @@ test("Sign in with ChatGPT offers only the models the ChatGPT backend serves", a
 	expect(offered.length).toBeGreaterThan(0);
 	expect(offered).not.toContain("gpt-4");
 	expect(offered.every((id) => chatgpt.includes(id))).toBe(true);
-	expect(offered).toContain(PI_DEFAULT_MODEL_PER_PROVIDER.openai ?? "");
+	expect(preferredDefaultModel(settledAvailableModels(runtime))?.id).toBe(
+		PI_DEFAULT_MODEL_PER_PROVIDER["openai-codex"],
+	);
 });
 
 test("an OpenAI API key keeps the full OpenAI catalog", async () => {
