@@ -48,8 +48,7 @@ import type {
 import {
 	assistantToolCallsAreExecutable,
 	canMarkCompletionUnread,
-	firstPromptHead,
-	isControlMessage,
+	firstPromptOfTexts,
 	isTranscriptMessageRole,
 	normalizeSessionTitle,
 	sameModel,
@@ -172,7 +171,8 @@ interface Entry {
 	withheldExtensionTools: Set<string>;
 	nudgePromptPending: boolean;
 	lastPublishedState: string | null;
-	firstPrompt: string | undefined;
+	firstPrompt: string | null;
+	firstPromptScanned: number;
 	askUserQuestionWaiters: AskUserQuestionWaiters;
 	mcpHost: McpSessionHost;
 }
@@ -393,29 +393,37 @@ function stateFromEntry(entry: Entry): SessionState {
 	});
 }
 
-function firstPromptOf(entries: readonly SessionEntry[]): { firstPrompt?: string } {
+function* userTextsOf(entries: readonly SessionEntry[]): Generator<string> {
 	for (const entry of entries) {
 		if (entry.type !== "message" || entry.message.role !== "user") continue;
 		const { content } = entry.message;
-		const text =
-			typeof content === "string"
-				? content
-				: content
-						.filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
-						.map((part) => part.text)
-						.join("");
-		if (isControlMessage(text)) continue;
-		const head = firstPromptHead(text);
-		if (head) return { firstPrompt: head };
+		yield typeof content === "string"
+			? content
+			: content
+					.filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
+					.map((part) => part.text)
+					.join("");
 	}
-	return {};
+}
+
+function firstPromptOf(entries: readonly SessionEntry[]): { firstPrompt?: string } {
+	const head = firstPromptOfTexts(userTextsOf(entries));
+	return head ? { firstPrompt: head } : {};
 }
 
 function entryFirstPrompt(entry: Entry): { firstPrompt?: string } {
-	if (entry.firstPrompt === undefined) {
-		entry.firstPrompt = firstPromptOf(entry.session.sessionManager.getEntries()).firstPrompt;
+	if (entry.firstPrompt === null) {
+		const manager = entry.session.sessionManager;
+		const count = manager.getEntryCount();
+		if (count !== entry.firstPromptScanned) {
+			const head = firstPromptOfTexts(
+				userTextsOf(manager.getEntries().slice(entry.firstPromptScanned)),
+			);
+			entry.firstPrompt = head ?? null;
+			entry.firstPromptScanned = count;
+		}
 	}
-	return entry.firstPrompt === undefined ? {} : { firstPrompt: entry.firstPrompt };
+	return entry.firstPrompt === null ? {} : { firstPrompt: entry.firstPrompt };
 }
 
 function publishEntryState(entry: Entry): void {
@@ -1078,7 +1086,8 @@ async function prepareSessionEntry(
 		withheldExtensionTools: new Set(),
 		nudgePromptPending: false,
 		lastPublishedState: null,
-		firstPrompt: undefined,
+		firstPrompt: null,
+		firstPromptScanned: 0,
 		askUserQuestionWaiters,
 		mcpHost,
 	};

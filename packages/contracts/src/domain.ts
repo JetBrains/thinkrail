@@ -5,29 +5,51 @@ export interface SessionStateRecord {
 	workspaceId: string;
 	projectId: string;
 	state: SessionState;
-	/** The first user prompt's head (one line, ≤ `FIRST_PROMPT_MAX_LENGTH`) — a display fallback while the agent has not named the chat; never a name. */
 	firstPrompt?: string;
 }
 
 export const FIRST_PROMPT_MAX_LENGTH = 200;
 
 const SKILL_BLOCK = /^\s*<skill name="([^"]+)"[^>]*>[\s\S]*?<\/skill>\s*/;
+const SKILL_COMMAND = /^\s*\/skill:(\S+)[ \t]*/;
 
-/**
- * One line of a prompt's head, for the display-only chat label: never written into the session. A
- * leading skill block reads as the request that followed it, else as `/skill:<name>`; a prompt that
- * is only a package (`<review …>`) or has no text yields nothing.
- */
+export function clampToCodePoints(text: string, maxUnits: number): string {
+	if (text.length <= maxUnits) return text;
+	const last = text.charCodeAt(maxUnits - 1);
+	return text.slice(0, last >= 0xd800 && last <= 0xdbff ? maxUnits - 1 : maxUnits);
+}
+
+function firstNonBlankLine(text: string): string | undefined {
+	let start = 0;
+	while (start < text.length) {
+		const newline = text.indexOf("\n", start);
+		const line = text
+			.slice(start, newline === -1 ? text.length : newline)
+			.replace(/\s+/g, " ")
+			.trim();
+		if (line) return line;
+		if (newline === -1) break;
+		start = newline + 1;
+	}
+	return undefined;
+}
+
 export function firstPromptHead(text: string | undefined): string | undefined {
 	if (!text) return undefined;
-	const skill = SKILL_BLOCK.exec(text);
+	const skill = SKILL_BLOCK.exec(text) ?? SKILL_COMMAND.exec(text);
 	const body = skill ? text.slice(skill[0].length) || `/skill:${skill[1]}` : text;
-	const line = body
-		.split("\n")
-		.map((candidate) => candidate.replace(/\s+/g, " ").trim())
-		.find((candidate) => candidate.length > 0);
+	const line = firstNonBlankLine(body);
 	if (!line || line.startsWith("<")) return undefined;
-	return line.length > FIRST_PROMPT_MAX_LENGTH ? line.slice(0, FIRST_PROMPT_MAX_LENGTH) : line;
+	return clampToCodePoints(line, FIRST_PROMPT_MAX_LENGTH);
+}
+
+export function firstPromptOfTexts(texts: Iterable<string>): string | undefined {
+	for (const text of texts) {
+		if (isControlMessage(text)) continue;
+		const head = firstPromptHead(text);
+		if (head) return head;
+	}
+	return undefined;
 }
 
 export interface Project {

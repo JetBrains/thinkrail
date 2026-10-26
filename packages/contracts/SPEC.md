@@ -52,10 +52,13 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
-  `FIRST_PROMPT_MAX_LENGTH` + **`firstPromptHead(text)`** (the one shared reading of a prompt's head for
-  the unnamed-chat label: first non-blank line, whitespace collapsed, clamped to 200; a leading skill block
-  reads as the request that followed it, else `/skill:<name>`; a package such as `<review …>` or no text
-  reads as nothing — host and client derive the same label so it never flickers),
+  `FIRST_PROMPT_MAX_LENGTH` + **`firstPromptHead(text)`** + **`firstPromptOfTexts(texts)`** +
+  **`clampToCodePoints(text, maxUnits)`** (the one shared reading of a chat's first prompt for the
+  unnamed-chat label: the first user text that is not a control message and has a head; a head is the first
+  non-blank line, whitespace collapsed, clamped to 200 UTF-16 units without splitting a surrogate pair; a
+  leading skill block *or* the `/skill:<name> <request>` command it expands from reads as the request, else
+  `/skill:<name>`; a package such as `<review …>` or no text has no head and the next user text is tried —
+  host and client call the same functions over their user texts so the label never jumps),
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
   chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on

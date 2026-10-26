@@ -900,7 +900,9 @@ and is not a control message — so clients can label a chat the agent has not n
 `firstPromptOf(entries)`, reads the **full** `SessionManager.getEntries()` for live and disk sessions alike:
 `AgentSession.messages` is the compaction-aware projection, whose first user message after a compaction
 is no longer the chat's first prompt, and pi's `SessionInfo.firstMessage` substitutes a placeholder string
-when no text exists. A live entry caches the head once found (the transcript is append-only). The value is
+when no text exists. A live entry caches the answer either way — found or absent — and re-reads only the
+entries appended since its last scan, and only when `getEntryCount()` grew, so the per-event state publish
+never rescans a transcript whose user turns are all packages or images. The value is
 read-only: no write path accepts it, `renameSession` and `onlyIfUnnamed` are untouched, and a named chat
 still carries it so a client can show the title and keep the prompt as a tooltip.
 

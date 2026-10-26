@@ -2652,8 +2652,22 @@ test("summaries and state records carry the first prompt's head as a display fal
 	expect(attached.summary.firstPrompt).toBe("The real first prompt");
 	expect(attached.messages.some((message) => message.role === "user")).toBe(true);
 	expect(SessionManager.open(listedPath(unnamed, cwd)).getSessionName()).toBeUndefined();
+
+	fauxA.setResponses([fauxAssistantMessage("noted"), fauxAssistantMessage("ok")]);
+	const packaged = await createSession({
+		cwd,
+		workspaceId: "ws-first-prompt",
+		model: toWireModel(fauxA.getModel()),
+	});
+	await promptSession(packaged.sessionId, '<review id="r" branch="b" base="c" comments="0">\nbody');
+	const summaryFor = async (id: string) =>
+		(await listSessions("ws-first-prompt", cwd)).find((row) => row.sessionId === id);
+	expect((await summaryFor(packaged.sessionId))?.firstPrompt).toBeUndefined();
+	await promptSession(packaged.sessionId, "/skill:setting-up-a-project Now a real prompt");
+	expect((await summaryFor(packaged.sessionId))?.firstPrompt).toBe("Now a real prompt");
 	removeSession(live.sessionId);
 	removeSession(compacted);
+	removeSession(packaged.sessionId);
 });
 
 /** An image-only first message, a real prompt, then a compaction that keeps only the later turns. */
