@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -156,6 +156,13 @@ test.skipIf(process.platform !== "win32")(
 			}
 			const shell = loadWindowsShellApi();
 			const id = "JetBrains.ThinkRail.Test";
+			const opened = shell.openShortcut(ours);
+			try {
+				expect(realpathSync.native(opened.target() ?? "")).toBe(realpathSync.native(launcher));
+				expect(opened.appUserModelId()).toBeNull();
+			} finally {
+				opened.close();
+			}
 
 			expect(stampTaskbarShortcuts([ours, foreign], launcher, id, shell.openShortcut)).toEqual({
 				stamped: [ours],
@@ -172,7 +179,6 @@ test.skipIf(process.platform !== "win32")(
 			expect(readId(foreign)).toBe("");
 			const reopened = shell.openShortcut(ours);
 			try {
-				expect(reopened.target()?.toLowerCase()).toBe(launcher.toLowerCase());
 				expect(reopened.appUserModelId()).toBe(id);
 			} finally {
 				reopened.close();

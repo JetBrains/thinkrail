@@ -1,5 +1,5 @@
 import { CFunction, dlopen, FFIType, type Pointer, ptr, read } from "bun:ffi";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, win32 } from "node:path";
 import { windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
 
@@ -68,8 +68,12 @@ export function taskbarShortcutCandidates(appDir: string, appData: string | unde
 	return candidates;
 }
 
-function sameWindowsPath(left: string, right: string): boolean {
-	return win32.normalize(left).toLowerCase() === win32.normalize(right).toLowerCase();
+function canonicalWindowsPath(path: string): string {
+	try {
+		return realpathSync.native(path).toLowerCase();
+	} catch {
+		return win32.normalize(path).toLowerCase();
+	}
 }
 
 export function stampTaskbarShortcuts(
@@ -80,13 +84,14 @@ export function stampTaskbarShortcuts(
 ): { stamped: string[]; failures: unknown[] } {
 	const stamped: string[] = [];
 	const failures: unknown[] = [];
+	const canonicalLauncher = canonicalWindowsPath(launcher);
 	for (const path of candidates) {
 		if (!existsSync(path)) continue;
 		try {
 			const shortcut = openShortcut(path);
 			try {
 				const target = shortcut.target();
-				if (!target || !sameWindowsPath(target, launcher)) continue;
+				if (!target || canonicalWindowsPath(target) !== canonicalLauncher) continue;
 				if (shortcut.appUserModelId() === id) continue;
 				shortcut.setAppUserModelId(id);
 				stamped.push(path);
