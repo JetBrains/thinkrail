@@ -8,6 +8,7 @@ import {
 import type { BranchReviewState, Workspace } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
+import { chatLabel } from "../lib";
 import {
 	getSessionAttention,
 	isDefaultWorkspace,
@@ -36,6 +37,7 @@ export interface WorkItemsInput {
 	state: WorkItemsState;
 	contextProjectId: string | null;
 	chatTitles: Readonly<Record<string, string>>;
+	firstPrompts: Readonly<Record<string, string>>;
 	navigateToProject: (projectId: string) => void;
 	navigateToWorkspace: (workspace: Pick<Workspace, "id" | "projectId">, sessionId?: string) => void;
 }
@@ -119,10 +121,12 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			const knownTitle =
 				selectKnownChatTitle(state, workspaceId, record.sessionId) ||
 				input.chatTitles[record.sessionId];
-			if (!knownTitle && !recordAttention) continue;
+			const firstPrompt = input.firstPrompts[record.sessionId];
+			if (!knownTitle && !firstPrompt && !recordAttention) continue;
 			const projectName = projectNames.get(record.projectId);
 			if (projectName === undefined) continue;
-			const title = knownTitle || t("search.item.untitledChat");
+			const label = chatLabel(t, knownTitle, firstPrompt);
+			const title = label.text;
 			const where = workspace
 				? t("search.item.inWorkspace", {
 						project: projectName,
@@ -133,6 +137,8 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 				id: `chat:${record.sessionId}`,
 				kind: "chat",
 				title,
+				titleSource: label.source,
+				...(label.tooltip ? { titleTooltip: label.tooltip, keywords: [label.tooltip] } : {}),
 				subtitle: where,
 				group: "chats",
 				scope: "work",

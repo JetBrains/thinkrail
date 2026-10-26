@@ -42,14 +42,19 @@ test("unnamed chats read as their first prompt in the tab strip and Recently clo
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-attention", "true");
 	await page.keyboard.press("ControlOrMeta+k");
-	const switcherTitle = page
-		.locator(`[data-testid="session-switcher-row"][data-session-id="${older.id}"]`)
+	const paletteTitle = page
+		.locator(`[data-testid="search-row"][data-item-id="chat:${older.id}"]`)
 		.locator("[data-title-source]");
-	await expect(switcherTitle).toHaveAttribute("data-title-source", "prompt");
-	await expect(switcherTitle).toHaveText(LONG_PROMPT_LABEL);
-	await expect(switcherTitle).toHaveAttribute("title", LONG_PROMPT_HEAD);
+	await expect(paletteTitle).toHaveAttribute("data-title-source", "prompt");
+	await expect(paletteTitle).toHaveText(LONG_PROMPT_LABEL);
+	await expect(paletteTitle).toHaveAttribute("title", LONG_PROMPT_HEAD);
+	await page.keyboard.type("tokens refresh quietly");
+	await expect(
+		page.locator(`[data-testid="search-row"][data-item-id="chat:${older.id}"]`),
+	).toBeVisible();
 	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("session-switcher")).toBeHidden();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("search-palette")).toBeHidden();
 
 	await enterDefaultWorkspace(page);
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');

@@ -478,8 +478,8 @@ geometry cannot clamp before the row mounts. Chat-title coverage uses persisted 
 native `/name` path, open-tab and closed-history inline rename paths, keyboard focus recovery, bounded
 long-history scrolling, and reload durability without involving a provider. First-prompt label coverage
 (`chat-title-fallback.spec.ts`) seeds unnamed transcripts to pin the host-projected label on the tab strip,
-Recently closed and the session switcher (`data-title-source="prompt"`, full line as tooltip, word-boundary
-cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
+Recently closed and the search palette's chat rows (`data-title-source="prompt"`, full line as tooltip,
+word-boundary cut, found by words past the cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
 from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
 durability is the server unit test's. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the

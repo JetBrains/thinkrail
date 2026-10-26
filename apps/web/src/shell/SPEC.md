@@ -173,7 +173,7 @@ protocol supports `session.rename`.
 **Unnamed chats read as their first prompt.** Every shell surface that shows a chat title renders one
 `lib` `chatLabel` (the store's `selectChatTitle` for panels): a real name wins; a chat the agent has not
 named yet shows the head of its first prompt in the same style as a named chat, else the generic label —
-the switcher included, which no longer words an unread title differently. The element carries the label's
+the search palette's chat rows included. The element carries the label's
 `data-title-source="name" | "prompt" | "default"` and, for a prompt label, the full first line as its
 tooltip. The tab strip receives the prompts as the Workbench's `chatFirstPrompts` prop
 (`selectUnnamedChatFirstPrompts`, by session id, covering a plan document's chat too) beside the rename
@@ -181,10 +181,9 @@ callback — the layout document itself is never relabelled, because every Workb
 derivative of the document it was given and a relabelled copy would persist the fallback as the tab's
 name; `openPlan` likewise stores the real chat name (and the title fold renames the plan tab with its
 chat), so the plan tab is worded at render and follows the real title once it lands. Recently closed
-rows and the session switcher read the same `selectChatFirstPrompt` (the host's state record first, so a
-row a peer's `session.created` added without a prompt picks it up from the next state push); the switcher
-carries `firstPrompt` beside `chatTitle` so the host title backfill still applies to a chat shown by its
-prompt. Nothing writes the label: the agent's
+rows read `selectChatFirstPrompt` (the host's state record first, so a row a peer's `session.created` added
+without a prompt picks it up from the next state push); the palette's chat rows read the same selector
+through `selectRecordFirstPrompts` ([[submodule-web-search]]). Nothing writes the label: the agent's
 `set_title` or a manual rename replaces it everywhere through the same `session_info_changed` fold.
 
 The shell injects the chat-only mutation callback into the otherwise domain-neutral Workbench tab menu rather

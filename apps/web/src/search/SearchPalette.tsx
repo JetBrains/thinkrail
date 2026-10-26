@@ -539,6 +539,8 @@ function Row({
 			)}
 			<span className="flex min-w-0 flex-1 flex-col">
 				<span
+					data-title-source={item.titleSource}
+					title={item.titleTooltip}
 					className={cn(
 						"truncate",
 						row.top ? "tr-title-section" : "tr-text-ui",

@@ -7,6 +7,7 @@ import {
 import type { Workspace } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import type { Command, CommandContext } from "../commands";
 import { copyText } from "../lib";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
@@ -36,6 +37,7 @@ import {
 	selectContextProject,
 	selectHistoryTarget,
 	selectKnownChatTitle,
+	selectRecordFirstPrompts,
 	selectSwitcherGroups,
 	selectWorkspaceReadAction,
 	selectWorkspaceSettledReason,
@@ -175,6 +177,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		return workspace ? selectWorkspaceSettledReason(s, workspace, Date.now()) !== null : false;
 	});
 	const chatTitles = useChatTitleBackfill();
+	const firstPrompts = useAppStore(useShallow(selectRecordFirstPrompts));
 	const settingsGroups = useMemo(
 		() => settingsNavGroups(protocolVersion, options.hasUpdateSettings),
 		[protocolVersion, options.hasUpdateSettings],
@@ -290,6 +293,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			},
 			contextProjectId: contextProject?.id ?? null,
 			chatTitles,
+			firstPrompts,
 			navigateToProject: goToProjectHome,
 			navigateToWorkspace,
 		});
@@ -333,6 +337,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		layoutDocumentsByWorkspace,
 		activeWorkspaceId,
 		chatTitles,
+		firstPrompts,
 	]);
 
 	return {

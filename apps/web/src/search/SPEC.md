@@ -50,6 +50,12 @@ best row and capped at four in All (thirty in a scope) with an "N more" row that
 The empty query lists **Waiting for you** (the former session switcher's attention set, every open
 project), **Recent** (by frecency), and **Actions**.
 
+A chat row is worded by `lib`'s `chatLabel` over the known title (a layout tab, a history row, the
+title backfill) and the host-reported first prompt (`selectRecordFirstPrompts`): an unnamed chat reads as
+its first prompt, carries `data-title-source` and the full first line as its tooltip, and is matchable by
+the whole prompt (a keyword), so words past the 48-character cut still find it; an unnamed chat with
+neither a prompt nor attention is not listed.
+
 ## Interaction
 
 DOM focus stays in the input (WAI-ARIA combobox + listbox with `aria-activedescendant` and a polite

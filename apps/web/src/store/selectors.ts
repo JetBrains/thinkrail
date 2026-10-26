@@ -1041,6 +1041,17 @@ export function selectChatFirstPrompt(
 	return runtime ? firstPromptOfTexts(userTurnTexts(runtime.turns)) : undefined;
 }
 
+export function selectRecordFirstPrompts(state: ChatFirstPromptState): Record<string, string> {
+	const prompts: Record<string, string> = {};
+	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
+		for (const sessionId of Object.keys(records)) {
+			const prompt = selectChatFirstPrompt(state, workspaceId, sessionId);
+			if (prompt) prompts[sessionId] = prompt;
+		}
+	}
+	return prompts;
+}
+
 export function selectUnnamedChatFirstPrompts(
 	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
 	workspaceId: string,
