@@ -33,13 +33,16 @@ export function taskbarShortcutCandidates(appDir: string, appData: string | unde
 		const manifest: unknown = JSON.parse(
 			readFileSync(join(dirname(appDir), ELECTROBUN_UNINSTALL_MANIFEST), "utf8"),
 		);
-		if (manifest && typeof manifest === "object" && "schema_version" in manifest) {
-			const recorded = manifest as Record<string, unknown>;
-			if (recorded.schema_version === 1) {
-				for (const key of ["start_menu_shortcut", "desktop_shortcut"]) {
-					const path = recorded[key];
-					if (typeof path === "string" && path) candidates.push(path);
-				}
+		if (
+			manifest &&
+			typeof manifest === "object" &&
+			"schema_version" in manifest &&
+			manifest.schema_version === 1
+		) {
+			const startMenu = "start_menu_shortcut" in manifest ? manifest.start_menu_shortcut : null;
+			const desktop = "desktop_shortcut" in manifest ? manifest.desktop_shortcut : null;
+			for (const path of [startMenu, desktop]) {
+				if (typeof path === "string" && path) candidates.push(path);
 			}
 		}
 	} catch (error) {
