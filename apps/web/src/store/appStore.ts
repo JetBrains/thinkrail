@@ -118,6 +118,7 @@ import {
 	selectChatAttended,
 	selectFilesTreeView,
 	selectLayoutResourcePlacement,
+	selectOrderedProjects,
 	selectSupportsMcp,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
@@ -952,6 +953,7 @@ interface AppState {
 	workspaces: Record<string, Workspace[]>;
 	removedWorkspaceIds: Record<string, true>;
 	expandedProjectIds: Record<string, true>;
+	projectOrder: string[];
 	workspaceSettlingSupported: boolean;
 	settledShelfExpanded: Record<string, true>;
 	settledShelfShown: Record<string, number>;
@@ -1083,6 +1085,8 @@ interface AppState {
 	showMoreSettled: (projectId: string, count: number) => void;
 	expandProject: (projectId: string) => void;
 	hydrateExpandedProjects: (projectIds: readonly string[]) => void;
+	hydrateProjectOrder: (projectIds: readonly string[]) => void;
+	moveProject: (id: string, targetId: string, placement: "before" | "after") => void;
 	selectMain: () => void;
 	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
 	activateWorkspaceFromRoute: (
@@ -2197,6 +2201,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaces: {},
 	removedWorkspaceIds: Object.create(null) as Record<string, true>,
 	expandedProjectIds: Object.create(null) as Record<string, true>,
+	projectOrder: [],
 	workspaceSettlingSupported: false,
 	settledShelfExpanded: Object.create(null) as Record<string, true>,
 	settledShelfShown: Object.create(null) as Record<string, number>,
@@ -2621,6 +2626,28 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (shown === (state.settledShelfShown[projectId] ?? SETTLED_SHELF_PAGE)) return {};
 			return { settledShelfShown: { ...state.settledShelfShown, [projectId]: shown } };
 		}),
+	hydrateProjectOrder: (projectIds) => set({ projectOrder: [...new Set(projectIds)] }),
+
+	moveProject: (id, targetId, placement) =>
+		set((state) => {
+			const visible = selectOrderedProjects(state).map((project) => project.id);
+			if (id === targetId || !visible.includes(id) || !visible.includes(targetId)) return state;
+			const moved = visible.filter((projectId) => projectId !== id);
+			moved.splice(moved.indexOf(targetId) + (placement === "after" ? 1 : 0), 0, id);
+			if (moved.every((projectId, index) => projectId === visible[index])) return state;
+			const open = new Set(visible);
+			const saved = new Set(state.projectOrder);
+			const all = [...saved, ...visible.filter((projectId) => !saved.has(projectId))];
+			let index = 0;
+			const projectOrder = all.map((projectId) => {
+				if (!open.has(projectId)) return projectId;
+				const next = moved[index];
+				index += 1;
+				return next ?? projectId;
+			});
+			return { projectOrder };
+		}),
+
 	hydrateExpandedProjects: (projectIds) =>
 		set(() => ({
 			expandedProjectIds: Object.fromEntries(projectIds.map((id) => [id, true as const])),

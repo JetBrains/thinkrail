@@ -1,5 +1,7 @@
 import {
+	RiArrowDownLine as ArrowDown,
 	RiArrowGoBackLine as ArrowGoBack,
+	RiArrowUpLine as ArrowUp,
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
@@ -46,7 +48,16 @@ import {
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+	type DragEvent,
+	type MouseEvent,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
+import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
 import { copyText, platformShortcutLabel } from "@/lib";
@@ -59,6 +70,7 @@ import {
 	type SettledReason,
 	selectActiveWorkspaceProjectId,
 	selectAutoSettledCounts,
+	selectOrderedProjects,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
 	selectWorkspaceIsRunning,
@@ -105,9 +117,29 @@ import {
 const HOVER_CONTROL_CLASS =
 	"flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
 
+function projectDropPlacement(event: DragEvent<HTMLElement>): "before" | "after" {
+	const rect = event.currentTarget.getBoundingClientRect();
+	return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+}
+
 export function ProjectTree() {
 	const t = useT();
-	const projects = useAppStore((s) => s.projects);
+	const projects = useAppStore(useShallow(selectOrderedProjects));
+	const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
+	const [dropTarget, setDropTarget] = useState<{
+		id: string;
+		placement: "before" | "after";
+	} | null>(null);
+	const dragging = projects.some((project) => project.id === draggedProjectId);
+	useEffect(() => {
+		if (dragging) return;
+		setDraggedProjectId(null);
+		setDropTarget(null);
+	}, [dragging]);
+	const endDrag = () => {
+		setDraggedProjectId(null);
+		setDropTarget(null);
+	};
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	const workspaces = useAppStore((s) => s.workspaces);
@@ -287,13 +319,62 @@ export function ProjectTree() {
 				</AddProjectMenu>
 			</header>
 
-			<ul className="flex flex-col">
-				{projects.map((project) => {
+			<ul
+				className="flex flex-col"
+				onDragLeave={(event) => {
+					if (
+						!(event.relatedTarget instanceof Node) ||
+						!event.currentTarget.contains(event.relatedTarget)
+					) {
+						setDropTarget(null);
+					}
+				}}
+			>
+				{projects.map((project, index) => {
 					const isExpanded = expandedProjectIds[project.id] === true;
 					const list = workspaces[project.id];
 					const stateProjection = { sessionStateByWorkspace };
 					return (
-						<li key={project.id}>
+						<li
+							key={project.id}
+							data-testid="project-group"
+							data-drop-placement={
+								dragging && dropTarget?.id === project.id ? dropTarget.placement : undefined
+							}
+							className={cn(
+								"relative",
+								draggedProjectId === project.id && "opacity-50",
+								dragging &&
+									dropTarget?.id === project.id &&
+									"before:pointer-events-none before:absolute before:inset-x-0 before:z-10 before:h-2 before:bg-primary",
+								dragging &&
+									dropTarget?.id === project.id &&
+									(dropTarget.placement === "before" ? "before:top-0" : "before:bottom-0"),
+							)}
+							onDragOver={(event) => {
+								if (!dragging) return;
+								event.preventDefault();
+								event.stopPropagation();
+								event.dataTransfer.dropEffect = "move";
+								setDropTarget(
+									project.id === draggedProjectId
+										? null
+										: {
+												id: project.id,
+												placement: projectDropPlacement(event),
+											},
+								);
+							}}
+							onDrop={(event) => {
+								if (!dragging || !draggedProjectId) return;
+								event.preventDefault();
+								event.stopPropagation();
+								useAppStore
+									.getState()
+									.moveProject(draggedProjectId, project.id, projectDropPlacement(event));
+								endDrag();
+							}}
+						>
 							<ProjectRow
 								project={project}
 								isSelected={selectedProjectId === project.id}
@@ -313,6 +394,33 @@ export function ProjectTree() {
 								onOpenExistingWorktree={() => openExistingWorktreeDialog(project.id)}
 								onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
 								onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
+								onMoveUp={
+									index > 0
+										? () => {
+												const target = projects[index - 1];
+												if (target)
+													useAppStore.getState().moveProject(project.id, target.id, "before");
+											}
+										: undefined
+								}
+								onMoveDown={
+									index < projects.length - 1
+										? () => {
+												const target = projects[index + 1];
+												if (target)
+													useAppStore.getState().moveProject(project.id, target.id, "after");
+											}
+										: undefined
+								}
+								draggable={projects.length > 1}
+								onDragStart={(event) => {
+									event.stopPropagation();
+									event.dataTransfer.setData("application/x-thinkrail-project", project.id);
+									event.dataTransfer.effectAllowed = "move";
+									setDraggedProjectId(project.id);
+									setDropTarget(null);
+								}}
+								onDragEnd={endDrag}
 							/>
 							{isExpanded && list === undefined && (
 								<LoadingRegion rows={2} className="py-4 pr-8 pl-16" />
@@ -503,6 +611,11 @@ function ProjectRow({
 	onOpenExistingWorktree,
 	onRegisterNameButton,
 	onRestoreFocus,
+	onMoveUp,
+	onMoveDown,
+	draggable,
+	onDragStart,
+	onDragEnd,
 }: {
 	project: Project;
 	isSelected: boolean;
@@ -520,6 +633,11 @@ function ProjectRow({
 	onOpenExistingWorktree: () => void;
 	onRegisterNameButton: (element: HTMLButtonElement | null) => void;
 	onRestoreFocus: () => void;
+	onMoveUp: (() => void) | undefined;
+	onMoveDown: (() => void) | undefined;
+	draggable: boolean;
+	onDragStart: (event: DragEvent<HTMLButtonElement>) => void;
+	onDragEnd: () => void;
 }) {
 	const t = useT();
 	const createWorkspaceLabel = t("panels.projectTree.createWorkspaceShortcut", {
@@ -596,8 +714,15 @@ function ProjectRow({
 					ref={onRegisterNameButton}
 					type="button"
 					data-testid="project-name"
+					draggable={draggable}
+					onDragStart={onDragStart}
+					onDragEnd={onDragEnd}
+					title={draggable ? t("panels.projectTree.dragToReorder") : undefined}
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left"
+					className={cn(
+						"flex min-w-0 flex-1 items-center gap-4 text-left",
+						draggable && "cursor-grab active:cursor-grabbing",
+					)}
 				>
 					{folderIcon}
 					<span className={nameClass}>{project.name}</span>
@@ -673,6 +798,23 @@ function ProjectRow({
 					>
 						<FolderOpen />
 						{t("panels.projectTree.openExistingWorktree")}
+					</ContextMenuItem>
+					<ContextMenuSeparator />
+					<ContextMenuItem
+						data-testid="project-menu-move-up"
+						disabled={!onMoveUp}
+						onSelect={() => onMoveUp?.()}
+					>
+						<ArrowUp />
+						{t("panels.projectTree.moveUp")}
+					</ContextMenuItem>
+					<ContextMenuItem
+						data-testid="project-menu-move-down"
+						disabled={!onMoveDown}
+						onSelect={() => onMoveDown?.()}
+					>
+						<ArrowDown />
+						{t("panels.projectTree.moveDown")}
 					</ContextMenuItem>
 					<ContextMenuSeparator />
 					{canRename ? (

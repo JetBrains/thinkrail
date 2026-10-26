@@ -103,6 +103,12 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`hydrateExpandedProjects(projectIds)`** seeds the set at boot from the `panels/projectExpansion`
   persistence module — the store itself still touches no storage: that module owns the localStorage
   mirror (host-qualified key, best-effort writes, untrusted reads) and subscribes to changes.
+  **`projectOrder: string[]`** is a client-local preference, separate from host project snapshots.
+  **`selectOrderedProjects`** projects the rail: saved IDs first, then unranked projects in their existing
+  order; without a preference the existing order is unchanged. **`moveProject(id, targetId, placement)`**
+  handles both drag and menu moves atomically, preserving closed projects' rank slots and rejecting
+  absent/self/no-op moves. Snapshots, renames and activity never rewrite this preference; closing and
+  reopening retains rank. Hydration comes from `panels/projectOrder`, not storage inside the store.
   **Settled shelf.** `selectors.ts` owns **`selectWorkspacePartition(state, projectId, now)`** — the one
   derivation of a project's rows into `live` and `settled` (each settled row carrying its reason:
   `override`, `review merged|closed`, or `idle since`), consumed by the rail, the topbar's *Switch to*
