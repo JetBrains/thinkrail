@@ -67,8 +67,8 @@ create the tools it needs based on how you actually work.
   connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your
   browser. Both embed the same engine host; app state lives under `~/.thinkrail`.
-- **Your language.** Settings → Language follows your system language or a language you pick; English and
-  Simplified Chinese are built in. Add a language ThinkRail doesn't ship yet by dropping a translated
+- **Your language.** Settings → Language follows your system language or a language you pick; English,
+  Japanese, and Simplified Chinese are built in. Add a language ThinkRail doesn't ship yet by dropping a translated
   `en.json` into `~/.thinkrail/locales` — it applies as you save. Agent replies and tool output stay as
   the agent wrote them.
 
