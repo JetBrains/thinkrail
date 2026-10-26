@@ -21,6 +21,7 @@ export interface SessionStateInputs {
 	lastSettlement: AgentSettlement | null | undefined;
 	lifecycleCompletion: { runId: string; completion: SessionCompletion } | null | undefined;
 	liveQuestion: LiveQuestionState | null;
+	liveRegistry: boolean;
 	pendingDialog: Extract<ExtUiRequest, { kind: "select" | "confirm" | "input" | "editor" }> | null;
 	handledCompletionId: string | undefined;
 	cancelledRunId: string | undefined;
@@ -142,7 +143,10 @@ export function deriveSessionState(inputs: SessionStateInputs): SessionState {
 			kind: "question",
 		};
 	} else if (inputs.liveQuestion === null) {
-		const questionId = awaitingQuestionToolCallId(sessionStateMessages(inputs.entries));
+		const questionId = awaitingQuestionToolCallId(
+			sessionStateMessages(inputs.entries),
+			inputs.liveRegistry,
+		);
 		if (questionId !== null) {
 			needsInput = { interactionId: `question:${questionId}`, kind: "question" };
 		}

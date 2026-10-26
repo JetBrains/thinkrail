@@ -71,6 +71,7 @@ describe("registryInlineExtensions with per-session factories", () => {
 	const labels = new WeakMap<ExtensionSessionServices, string>();
 	const session = (label: string): ExtensionSessionServices => {
 		const services: ExtensionSessionServices = {
+			expectToolResponse: () => {},
 			awaitToolResponse: async () => ({ kind: "deferred" }),
 		};
 		labels.set(services, label);

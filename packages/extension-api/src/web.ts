@@ -22,6 +22,7 @@ export interface ToolInteractionState<R = unknown> {
 	response?: R | undefined;
 	superseded: boolean;
 	ended: boolean;
+	accepting: boolean;
 }
 
 export interface ToolInteraction<R = unknown> {

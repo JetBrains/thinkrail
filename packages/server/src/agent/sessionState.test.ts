@@ -3,6 +3,19 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@thinkrail/contracts";
 import { deriveSessionState } from "./sessionState";
 
+const QUESTION_ARGS = {
+	questions: [
+		{
+			question: "Which runtime?",
+			header: "Runtime",
+			options: [
+				{ label: "Bun", description: "fast" },
+				{ label: "Node", description: "compatible" },
+			],
+		},
+	],
+};
+
 function entry(id: string, message: Message, parentId: string | null): SessionEntry {
 	return {
 		type: "message",
@@ -40,6 +53,7 @@ function inputs(overrides: Partial<Parameters<typeof deriveSessionState>[0]> = {
 		lastSettlement: undefined,
 		lifecycleCompletion: undefined,
 		liveQuestion: null,
+		liveRegistry: false,
 		pendingDialog: null,
 		handledCompletionId: undefined,
 		cancelledRunId: undefined,
@@ -98,7 +112,7 @@ describe("deriveSessionState", () => {
 						type: "toolCall",
 						id: "q1",
 						name: "ask_user_question",
-						arguments: { questions: [] },
+						arguments: QUESTION_ARGS,
 					},
 				],
 			} as unknown as Message,
@@ -127,13 +141,53 @@ describe("deriveSessionState", () => {
 						type: "toolCall",
 						id: "q1",
 						name: "ask_user_question",
-						arguments: { questions: [] },
+						arguments: QUESTION_ARGS,
 					},
 				],
 			} as unknown as Message,
 			"u1",
 		);
 		expect(deriveSessionState(inputs({ entries: [user(), ask] })).needsInput).toEqual({
+			interactionId: "question:q1",
+			kind: "question",
+		});
+	});
+
+	test("an attached session's transcript awaits only an acknowledged question", () => {
+		const ask = entry(
+			"a-ask",
+			{
+				role: "assistant",
+				stopReason: "toolUse",
+				timestamp: 2,
+				content: [
+					{
+						type: "toolCall",
+						id: "q1",
+						name: "ask_user_question",
+						arguments: QUESTION_ARGS,
+					},
+				],
+			} as unknown as Message,
+			"u1",
+		);
+		const ack = entry(
+			"r-ack",
+			{
+				role: "toolResult",
+				toolCallId: "q1",
+				toolName: "ask_user_question",
+				content: [{ type: "text", text: "ack" }],
+				details: { kind: "ack" },
+				isError: false,
+				timestamp: 3,
+			} as unknown as Message,
+			"a-ask",
+		);
+		const attached = (entries: SessionEntry[]) =>
+			deriveSessionState(inputs({ entries, isStreaming: true, liveRegistry: true })).needsInput;
+		expect(attached([user(), ask])).toBeNull();
+		expect(attached([user(), ask, ack])).toEqual({
 			interactionId: "question:q1",
 			kind: "question",
 		});

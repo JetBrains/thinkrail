@@ -4,6 +4,7 @@ import {
 	ASK_USER_QUESTION_TOOL_NAME,
 	type AskUserQuestionArgs,
 	type AskUserQuestionAsker,
+	executableAskCallIds,
 	isolateAskUserQuestionBatch,
 	MAX_OPTIONS,
 	MIN_OPTIONS,
@@ -23,6 +24,7 @@ export interface AskUserQuestionGuidance {
 
 export interface AskUserQuestionExtensionOptions {
 	ask?: AskUserQuestionAsker;
+	announce?: (toolCallId: string) => void;
 	guidance?: AskUserQuestionGuidance;
 }
 
@@ -57,6 +59,10 @@ export function createAskUserQuestionExtension(
 	return (pi: ExtensionAPI): void => {
 		pi.on("message_end", (event) => {
 			const message = isolateAskUserQuestionBatch(event.message);
+			if (options.announce) {
+				for (const toolCallId of executableAskCallIds(message ?? event.message))
+					options.announce(toolCallId);
+			}
 			return message ? { message } : undefined;
 		});
 		pi.registerTool({

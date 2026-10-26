@@ -50,6 +50,7 @@ describe("defineServerExtension", () => {
 		expect(extension.sessionExtensions).toBe(sessionExtensions);
 		expect(sessionExtensions).not.toHaveBeenCalled();
 		const session: ExtensionSessionServices = {
+			expectToolResponse: () => {},
 			awaitToolResponse: async () => ({ kind: "deferred" }),
 		};
 		expect(extension.sessionExtensions?.(session)).toEqual([sessionFactory]);

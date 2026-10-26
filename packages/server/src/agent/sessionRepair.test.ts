@@ -4,6 +4,19 @@ import type { Message } from "@thinkrail/contracts";
 import { ASK_ACK_TEXT } from "./askUserQuestion";
 import { repairDanglingToolCalls } from "./sessionRepair";
 
+const QUESTION = {
+	questions: [
+		{
+			question: "Which runtime?",
+			header: "Runtime",
+			options: [
+				{ label: "Bun", description: "fast" },
+				{ label: "Node", description: "compatible" },
+			],
+		},
+	],
+};
+
 const assistantWithCalls = (
 	calls: { id: string; name: string; args?: Record<string, unknown> }[],
 	stopReason: "toolUse" | "error" | "aborted" | "length" = "toolUse",
@@ -77,7 +90,7 @@ test("a dangling generic tool call gets an error 'Operation aborted' result", ()
 test("a dangling ask_user_question is repaired to the canonical answerable ack", () => {
 	const sm = SessionManager.inMemory("/tmp/repair-test");
 	sm.appendMessage(user("decide"));
-	sm.appendMessage(assistantWithCalls([{ id: "q1", name: "ask_user_question" }]));
+	sm.appendMessage(assistantWithCalls([{ id: "q1", name: "ask_user_question", args: QUESTION }]));
 	expect(repairDanglingToolCalls(sm)).toEqual([
 		{ toolCallId: "q1", toolName: "ask_user_question" },
 	]);
@@ -89,10 +102,32 @@ test("a dangling ask_user_question is repaired to the canonical answerable ack",
 	expect(text).toBe(ASK_ACK_TEXT);
 });
 
+test("a dangling ask_user_question in another package's shape is repaired as an interrupted call", () => {
+	const sm = SessionManager.inMemory("/tmp/repair-test");
+	sm.appendMessage(user("decide"));
+	sm.appendMessage(
+		assistantWithCalls([
+			{
+				id: "q-foreign",
+				name: "ask_user_question",
+				args: { question: "Pick?", choices: ["a", "b"] },
+			},
+		]),
+	);
+	repairDanglingToolCalls(sm);
+	const repaired = sm.buildSessionContext().messages.find((m) => m.role === "toolResult");
+	if (repaired?.role !== "toolResult") throw new Error("unreachable");
+	expect(repaired.isError).toBe(true);
+	expect(repaired.details).toBeUndefined();
+	expect((repaired.content[0] as { text?: string }).text).toContain("host restarted");
+});
+
 test("a length-truncated ask is repaired as a terminal error, never an answerable ack", () => {
 	const sm = SessionManager.inMemory("/tmp/repair-test");
 	sm.appendMessage(user("decide"));
-	sm.appendMessage(assistantWithCalls([{ id: "q-length", name: "ask_user_question" }], "length"));
+	sm.appendMessage(
+		assistantWithCalls([{ id: "q-length", name: "ask_user_question", args: QUESTION }], "length"),
+	);
 	expect(repairDanglingToolCalls(sm)).toEqual([
 		{ toolCallId: "q-length", toolName: "ask_user_question" },
 	]);
@@ -109,7 +144,7 @@ test("several orphans in one batch are all paired (mixed ask + generic)", () => 
 	sm.appendMessage(
 		assistantWithCalls([
 			{ id: "b1", name: "bash" },
-			{ id: "q1", name: "ask_user_question" },
+			{ id: "q1", name: "ask_user_question", args: QUESTION },
 		]),
 	);
 	const repaired = repairDanglingToolCalls(sm);

@@ -567,6 +567,16 @@ test("assessAnswerability: a call from a non-executable assistant is terminal", 
 	}
 });
 
+test("assessAnswerability: a call in another package's argument shape is not our questionnaire", () => {
+	const foreign = { question: "Pick?", choices: ["a", "b"] } as unknown as AskUserQuestionArgs;
+	const messages = [askCall("tc-foreign", foreign), ackResult("tc-foreign")];
+	expect(assessAnswerability(messages, "tc-foreign")).toEqual({
+		ok: false,
+		reason: "unknown_call",
+	});
+	expect(awaitingQuestionToolCallId(messages)).toBeNull();
+});
+
 test("assessAnswerability: an unknown tool call id is rejected", () => {
 	expect(assessAnswerability([askCall("tc"), ackResult("tc")], "nope")).toEqual({
 		ok: false,

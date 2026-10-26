@@ -230,7 +230,10 @@ re-opened transcripts provider-valid.
     quietly finished.
 
     State ids come from Pi's active session-entry chain: run/interruption from the latest user entry,
-    completion from the decisive assistant entry, questions/dialogs from their interaction ids. Disk state
+    completion from the decisive assistant entry, questions/dialogs from their interaction ids. A question
+    needs input from the live mailbox; without a live phase, an attached session reads it from the
+    transcript only as an acknowledged call (repair ack), while disk state still reads an unanswered
+    dangling call, which attach-time repair will ack. Disk state
     is reconstructed from the complete active branch; a file read/parse failure fails the all-workspace
     snapshot rather than omitting a row. Receipt initialization runs unless both metadata files load (first
     install, or a file persistence set aside as unreadable, which is logged): it marks existing completion
@@ -504,7 +507,10 @@ re-opened transcripts provider-valid.
     - Its registry entry registers the tool through `sessionExtensions`.
     - New and reopened parent sessions create one mailbox in `createParentSession`, and
       `askUserQuestionSessionServices(waiters)` hands it to that seam as
-      `awaitToolResponse(toolCallId, signal)`. The mailbox outlives resource reloads and the extension
+      `expectToolResponse(toolCallId)` and `awaitToolResponse(toolCallId, signal)`. A call enters the
+      mailbox only when the extension announces it, never by tool name: with the extension off, an
+      `ask_user_question` call (the model calling the absent tool, or a same-name package's tool) raises no
+      needs-input, holds no completion delivery, and its answer RPC fails as not awaiting. The mailbox outlives resource reloads and the extension
       switch: a question asked after re-enabling answers through the same mailbox, and a chat created
       with the extension off adopts it through the one reload the toggle requests, ahead of any same-name
       package.
@@ -526,7 +532,7 @@ re-opened transcripts provider-valid.
     depend on an open answer wait for a later round; the multi-round interview norm itself lives in the
     workflow family's `asking-user-questions` concept skill ([[submodule-workflow-skills]]).
 
-    The registry tracks `expected` (eligible call observed), `waiting`, `answer-accepted-uncommitted`, and
+    The registry tracks `expected` (eligible call announced), `waiting`, `answer-accepted-uncommitted`, and
     `stopped` through `turn_end`. This includes Pi's real asynchronous gap from `tool_execution_start` through
     pre-tool hooks to `execute`: graceful shutdown freezes new answer admission and preserves an expected call;
     an answer accepted before that freeze remains authoritative and is persisted before shutdown/Stop aborts
@@ -557,7 +563,9 @@ re-opened transcripts provider-valid.
     nudges (which already stop at `needsInput`) all leave the card open.
 
     A process restart deliberately changes only the continuation mechanism: attach-time repair writes the
-    canonical ack (`details {kind:"ack"}`) only for an eligible dangling ask before `createAgentSession`,
+    canonical ack (`details {kind:"ack"}`) only for an eligible dangling ask whose arguments have our
+    questionnaire shape (`isAskUserQuestionArgs`) before `createAgentSession`; answerability likewise
+    reports any other-shaped call as unknown,
     leaving the card answerable but the session idle. A length-truncated ask receives the same error repair
     as any other non-executable tool call. With no live phase, `answerQuestion` injects the existing
     `ask-user-answers` custom message through `sendCustomMessage({triggerTurn:true})`. Thus the question

@@ -6,6 +6,7 @@ export type ToolResponse =
 	| { kind: "abandoned" };
 
 export interface ExtensionSessionServices {
+	expectToolResponse(toolCallId: string): void;
 	awaitToolResponse(toolCallId: string, signal: AbortSignal | undefined): Promise<ToolResponse>;
 }
 

@@ -107,6 +107,24 @@ describe("ask_user_question extension", () => {
 		).toBeUndefined();
 	});
 
+	test("the message_end hook announces only the executable ask call it keeps", () => {
+		const announced: string[] = [];
+		const { handlers } = load({ announce: (toolCallId) => announced.push(toolCallId) });
+		const batch = (stopReason: string) => ({
+			role: "assistant",
+			stopReason,
+			content: [
+				{ type: "toolCall", id: "ask-1", name: "ask_user_question" },
+				{ type: "toolCall", id: "ask-2", name: "ask_user_question" },
+			],
+		});
+		handlers.get("message_end")?.({ message: batch("toolUse") });
+		for (const stopReason of ["length", "error", "aborted"])
+			handlers.get("message_end")?.({ message: batch(stopReason) });
+		handlers.get("message_end")?.({ message: { role: "user", content: "hi" } });
+		expect(announced).toEqual(["ask-1"]);
+	});
+
 	test("without UI the built-in asker reports that it cannot ask", async () => {
 		const { tool } = load();
 		const result = await tool.execute("tc", args, undefined, undefined, { hasUI: false });
