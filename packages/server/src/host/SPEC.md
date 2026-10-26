@@ -648,11 +648,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
   id, then sends the `chat-handoff` custom message — the clamped summary plus a link back, the new chat's
   first turn — reporting `firstMessage: sent | failed` apart from the phase, remembers the link on the
   source record (`continuedTo`, [[submodule-server-workspaces]]) and ends `started`; a second call returns
-  the recorded ids, so a same-host retry reuses partial work. A source turn that settles without the
-  call (`observeContinuation` on `agent_settled`) fails the operation ("…without a summary"); a host
-  restart loses the binding, so the tool refuses and the UI offers Retry. Phases travel on the scoped
-  `chat.continuation` push (sockets ≥ `CONTINUATION_PROTOCOL_VERSION`), `chat.continuationStatus`
-  answers after reconnect. Only the initiating client navigates — a web-side rule.
+  the recorded ids, and a new gesture after a failure for the same project inherits the ids the failed
+  operation had already created, so a same-host retry reuses partial work instead of leaving an empty
+  workspace behind. A source turn that settles without the call (`observeContinuation` on
+  `agent_settled`) fails the operation ("…without a summary"); a host restart loses every binding, so
+  the tool refuses, `chat.continuationStatus` answers `NOT_A_CHAT` (the client renders the card as
+  `lost`) and the UI offers Retry. Phases travel on the scoped `chat.continuation` push (sockets ≥
+  `CONTINUATION_PROTOCOL_VERSION`); `chat.continuationStatus` answers a client that missed the pushes
+  (a reload). Only the initiating client navigates — a web-side rule.
 - **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
   `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
   history index's `sessions()`, `specSnapshot` and `listStoredPlans`; the handler passes the socket's

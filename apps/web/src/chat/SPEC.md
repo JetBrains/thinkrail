@@ -315,7 +315,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   (`retryContinuation` asks the host again for the same project); `HandoffCard` renders the clamped
   summary as Markdown under "Continued from “<title>”" with **Open the original chat**
   (`openHandoffSource`). The renderers stay props-driven: `ChatTranscript` supplies the three actions and
-  the phase lookup from the store's `chatContinuations` slice, and it never imports `panels`.
+  the phase lookup from the store's `chatContinuations` slice — an operation the slice does not know
+  (a reload) is asked of `chat.continuationStatus` once, and the host's `NOT_A_CHAT` (a restart lost the
+  binding) becomes the `lost` phase — and it never imports `panels`; a Retry from the card registers the
+  new operation as initiated, so this client follows it like the original gesture.
 
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives

@@ -1,5 +1,5 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
-import type { GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
+import type { ChatContinuation, GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
@@ -29,7 +29,7 @@ import {
 	toast,
 	useAppStore,
 } from "@/store";
-import { errorText, getTransport, respondToTool } from "@/transport";
+import { errorText, getTransport, respondToTool, wsErrorCode } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
@@ -576,6 +576,29 @@ const ChatTranscript = forwardRef<
 	);
 
 	const continuations = useAppStore((s) => s.chatContinuations);
+	const askedStatus = useRef(new Set<string>());
+	const continuationOf = useCallback(
+		(operationId: string): ChatContinuation | undefined => {
+			const known = continuations[operationId];
+			if (known || askedStatus.current.has(operationId)) return known;
+			askedStatus.current.add(operationId);
+			void getTransport()
+				.request("chat.continuationStatus", { operationId })
+				.then((status) => useAppStore.getState().applyChatContinuation(status))
+				.catch((err: unknown) => {
+					if (wsErrorCode(err) !== "NOT_A_CHAT") return;
+					useAppStore.getState().applyChatContinuation({
+						operationId,
+						sourceWorkspaceId: workspaceId,
+						sourceSessionId: sessionId,
+						projectId: "",
+						phase: "lost",
+					});
+				});
+			return undefined;
+		},
+		[continuations, sessionId, workspaceId],
+	);
 	const chatActions = useMemo<ChatActions>(
 		() => ({
 			cancelAutomaticReveal,
@@ -590,7 +613,7 @@ const ChatTranscript = forwardRef<
 			openMcpSettings,
 			openProviderSettings,
 			findModel,
-			continuationOf: (operationId) => continuations[operationId],
+			continuationOf,
 			openContinuation: (continuation) => {
 				if (!continuation.workspaceId) return;
 				const target = { id: continuation.workspaceId, projectId: continuation.projectId };
@@ -605,6 +628,7 @@ const ChatTranscript = forwardRef<
 			retryContinuation: (details) => {
 				void getTransport()
 					.request("chat.continue", { workspaceId, projectId: details.projectId })
+					.then(({ operationId }) => useAppStore.getState().noteInitiatedContinuation(operationId))
 					.catch((err: unknown) =>
 						toast.error(errorText(err), t("chat.turn.continuation.retryFailed")),
 					);
@@ -622,7 +646,7 @@ const ChatTranscript = forwardRef<
 		}),
 		[
 			cancelAutomaticReveal,
-			continuations,
+			continuationOf,
 			findModel,
 			focusComposer,
 			markResultSeen,

@@ -1013,6 +1013,8 @@ interface AppState {
 	removedWorkspaceIds: Record<string, true>;
 	/** Continue-in-workspace operations this client heard about, by operation id (host-owned phases). */
 	chatContinuations: Record<string, ChatContinuation>;
+	/** The operations this client started: the one that follows the new chat when the host reports `started`. */
+	initiatedContinuations: Record<string, true>;
 	expandedProjectIds: Record<string, true>;
 	workspaceSettlingSupported: boolean;
 	settledShelfExpanded: Record<string, true>;
@@ -1154,6 +1156,8 @@ interface AppState {
 	removeWorkspace: (projectId: string, workspaceId: string) => void;
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
 	applyChatContinuation: (continuation: ChatContinuation) => void;
+	noteInitiatedContinuation: (operationId: string) => void;
+	forgetInitiatedContinuation: (operationId: string) => void;
 	selectProject: (projectId: string, opts?: { reveal?: boolean }) => void;
 	toggleProjectExpanded: (projectId: string) => void;
 	toggleSettledShelf: (projectId: string, expanded?: boolean) => void;
@@ -2313,6 +2317,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaces: {},
 	removedWorkspaceIds: Object.create(null) as Record<string, true>,
 	chatContinuations: {},
+	initiatedContinuations: {},
 	expandedProjectIds: Object.create(null) as Record<string, true>,
 	workspaceSettlingSupported: false,
 	settledShelfExpanded: Object.create(null) as Record<string, true>,
@@ -2707,6 +2712,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => ({
 			chatContinuations: { ...s.chatContinuations, [continuation.operationId]: continuation },
 		})),
+	noteInitiatedContinuation: (operationId) =>
+		set((s) => ({ initiatedContinuations: { ...s.initiatedContinuations, [operationId]: true } })),
+	forgetInitiatedContinuation: (operationId) =>
+		set((s) => ({ initiatedContinuations: omitKey(s.initiatedContinuations, operationId) })),
 	applyWorkspaceRemoved: (projectId, workspaceId) => {
 		const s = get();
 		const wasActive = s.activeWorkspaceId === workspaceId;

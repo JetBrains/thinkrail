@@ -119,6 +119,10 @@ export async function startContinuation(
 	) {
 		throw new CodedError("NOT_A_CHAT", "This chat's conversation could not be opened.");
 	}
+	const leftover =
+		existing?.state.phase === "failed" && existing.state.projectId === project.id
+			? existing.state
+			: null;
 	const operation: Operation = {
 		state: {
 			operationId: randomUUID(),
@@ -126,6 +130,8 @@ export async function startContinuation(
 			sourceSessionId,
 			projectId: project.id,
 			phase: "requested",
+			...(leftover?.workspaceId ? { workspaceId: leftover.workspaceId } : {}),
+			...(leftover?.sessionId ? { sessionId: leftover.sessionId } : {}),
 		},
 		project,
 		...(summary.title ? { sourceTitle: summary.title } : {}),
@@ -183,7 +189,7 @@ export async function applyContinuation(sessionId: string, summary: string): Pro
 	let workspace: Workspace;
 	try {
 		workspace = state.workspaceId
-			? getWorkspace(state.workspaceId)
+			? knownWorkspace(state.workspaceId)
 			: provisionInitialTerminal(await createWorkspace(project.id));
 	} catch (error) {
 		emit(operation, { phase: "failed", reason: String(error) });
@@ -241,6 +247,14 @@ export async function applyContinuation(sessionId: string, summary: string): Pro
 	}
 	emit(operation, { phase: "started", firstMessage });
 	return `Continued in workspace "${workspace.name}" of ${project.name} (workspace ${workspace.id}, chat ${targetSessionId}); the handoff ${firstMessage === "sent" ? "was delivered" : "could not be delivered — the user can resend it"}.`;
+}
+
+function knownWorkspace(workspaceId: string): Workspace {
+	try {
+		return getWorkspace(workspaceId);
+	} catch {
+		throw new Error("The workspace created earlier is gone; ask to continue again.");
+	}
 }
 
 /** A source turn that settles without the tool call ends the operation: the user sees "No summary" and may retry. */
