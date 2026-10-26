@@ -36,7 +36,7 @@ after desktop readiness, repeat on a jittered six-hour cadence, and retry transi
 bound; they never start or retry a download. A newer unprepared offer becomes `available`, **Download** owns
 transfer and preparation, and only a matching newer `updateReady` result becomes `ready`. Transfer reaching
 100% is not readiness: Electrobun's decompression/preparation phase remains visible separately. Electrobun
-2.0.1 exposes no operation to cancel an in-flight download or discard a prepared package, so while the app
+2.0.5 exposes no operation to cancel an in-flight download or discard a prepared package, so while the app
 remains running, transfer and preparation continue to completion or error; closing Settings only defers
 installation. The UI must not claim cancellation while native work continues. Errors retain the failed phase so retry repeats the intended
 operation, while a prepared package survives unrelated check failures. **Install & Restart** applies that package
@@ -67,7 +67,7 @@ after relaunch and immediately marks observed. ThinkRail therefore keeps one val
 
 After a relaunch, reconciliation becomes `lastInstall`:
 - `complete` → `installed`.
-- "failed during <phase>" → `failed`, with the phase and the raw cause. This parses the SDK 2.0.1
+- "failed during <phase>" → `failed`, with the phase and the raw cause. This parses the SDK 2.0.5
   message, with a raw fallback.
 - A pending journal contributes the from-version and the log. An upgrade from a build without the
   journal reports a null from-version and an empty log.

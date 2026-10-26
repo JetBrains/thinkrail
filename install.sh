@@ -209,8 +209,8 @@ fi
 ARCH=$(detect_arch)
 [ "$OS" = "windows" ] && ARCH="x64"
 if [ "$OS" = "darwin" ] && [ "$ARCH" = "x64" ]; then
-    echo "No prebuilt ThinkRail for Intel macOS." >&2
-    echo "Use an Apple Silicon Mac, or build from source: https://github.com/$REPO" >&2
+    echo "No prebuilt ThinkRail CLI for Intel macOS." >&2
+    echo "The desktop DMG is available; for the CLI, build from source: https://github.com/$REPO" >&2
     echo "(On Apple Silicon, run this from a native arm64 shell — a Rosetta shell reports x86_64.)" >&2
     exit 1
 fi

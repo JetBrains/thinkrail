@@ -67,7 +67,7 @@ channel-agnostic above it:
 Selection is capability-detection only (the bridge's presence), never a `desktop` branch. No Service
 Worker on either channel: a fully-closed app has no live client and raises nothing by design.
 
-**OS-dependent (desktop).** The native rendering is the pinned Electrobun 2.0.1 backend, which takes
+**OS-dependent (desktop).** The native rendering is the pinned Electrobun 2.0.5 backend, which takes
 `title` + `body` + `subtitle` + `silent` and renders per platform: macOS `UNUserNotificationCenter`
 (native title/subtitle/body, OS-requested authorization on first show), Windows a `Shell_NotifyIconW` tray
 **balloon** (title + body; `subtitle` folds in as an extra line per the SDK — not a Windows Toast and no App
@@ -93,7 +93,7 @@ known browser-API limitation that does not affect end users (only developers wit
 **Platform caveat (Windows):** on Windows, DevTools opens as a separate native window; focusing it fires
 `blur` on the main `BrowserWindow`, so `isWindowFocused()` returns `false` — the same limitation as the
 browser channel. On macOS, DevTools is docked inside the same native window and the main-window focus is
-preserved. Electrobun 2.0.1 exposes only per-window `focus`/`blur` events with no application-level
+preserved. Electrobun 2.0.5 exposes only per-window `focus`/`blur` events with no application-level
 activation signal, so a cross-window solution requires a future Electrobun API.
 
 ## Permission

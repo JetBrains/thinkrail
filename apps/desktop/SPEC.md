@@ -29,7 +29,7 @@ engine architecture.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
   for release identity and the early `resolveShellEnv()` start; `contracts` for
   compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built web
-  artifact; Electrobun `2.0.1` and its generated SDK; build-only `pe-library`/`resedit` for the
+  artifact; Electrobun `2.0.5` and its generated SDK; build-only `pe-library`/`resedit` for the
   Electrobun 2.0.1 Windows-uninstaller icon gap; build-only `@resvg/resvg-js` to rasterize the icon
   source (below); Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
@@ -56,7 +56,7 @@ another.
    import. Electrobun emits an ordinary JavaScript entry, not a `bun build --compile` executable, so it
    does not embed `bun-pty`'s library.
 2. Read Electrobun's bundle metadata, then leave the bundle. Electrobun's launcher starts the main
-   process with cwd inside the replaceable bundle (`app/bin`, `Contents/MacOS`), and Electrobun 2.0.1
+   process with cwd inside the replaceable bundle (`app/bin`, `Contents/MacOS`), and Electrobun 2.0.5
    resolves `../Resources/*.json` against cwd and caches the result: `PATHS` and `BuildConfig` at import,
    and `Utils.paths` version info and `Updater.getLocalInfo()` on first use. Startup reads
    `Utils.paths.userData` and creates the update controller, keeping its first `getLocalInfo()` and its
@@ -214,7 +214,7 @@ when DevTools or other in-window chrome has renderer focus, unlike `document.has
 `false` in that case. **Platform caveat:** on Windows, DevTools is a separate native window; focusing it
 fires `blur` on the main `BrowserWindow`, so `isWindowFocused()` falls back to the same limitation as
 the browser channel. On macOS, DevTools is docked and the main-window focus is preserved. Electrobun
-2.0.1 has no application-level activation signal; a cross-window solution requires a future API. The web
+2.0.5 has no application-level activation signal; a cross-window solution requires a future API. The web
 client detects this bridge by capability and routes its attention notifications through it instead of the
 page Notifications API — the web shell keeps no desktop branch.
 Electrobun click callbacks are not landed yet, so the native notification carries no click action.
@@ -240,7 +240,7 @@ compound or introduce a second zoom owner. The web app owns no duplicate shortcu
 ## Native window chrome
 
 The web topbar ([[submodule-web-shell]]) is the window's title bar wherever the framework lets native
-controls survive without a native strip. Electrobun 2.0.1 exposes no caption-colour API on any platform
+controls survive without a native strip. Electrobun 2.0.5 exposes no caption-colour API on any platform
 (macOS and Windows only follow the system light/dark setting), so a theme-coloured title bar means
 removing the native strip and letting the web header occupy it. The policy is platform-pure
 (`windowChrome.ts`, pinned by unit tests) and spread into the main `BrowserWindow`:
@@ -300,7 +300,7 @@ property it hit-tests against on `mousedown`. A decorated window (Linux, the neu
 publishes `no-drag` and so never acquires a second, partial drag strip.
 
 **Title-bar double-click.** The webview covers the native strip, so `NSWindow` never sees a header
-double-click, and Electrobun 2.0.1 implements app-region dragging only. Its native move uses pass-through
+double-click, and Electrobun 2.0.5 implements app-region dragging only. Its native move uses pass-through
 event monitors, so the page still receives `dblclick`. The desktop preload listens for primary-button
 `dblclick` events the page did not `preventDefault` and sends a payload-free `titleBarDoubleClick` message
 when the target is a drag region by Electrobun's own hit-test input: the computed, inherited
@@ -386,14 +386,16 @@ drivers and assertions live in the test package, which product code never import
 
 ## Build and release
 
-The package pins the Electrobun `2.0.1` npm bootstrap as a build-only dependency. That exact pin selects
-its paired Hutch toolchain and SDK; direct global Hutch invocation and floating version overrides are not
-part of the build path. The application explicitly selects the real Bun main process, not the default
-Cottontail runtime. The packaged Bun is `1.4.4`, selected by `build.bun.version` rather than
-Electrobun's default `1.4.0`. Hutch resolves that field like the other toolchain versions
-(`configuredToolchainVersion`), but `ElectrobunConfig` does not type it, so the config passes the Bun
-block as a named value. `buildConfig.test.ts` asserts that it equals the root `packageManager` pin, which
-keeps the packaged runtime aligned with [[architecture]]'s root toolchain contract. Electrobun's own
+The package pins the Electrobun `2.0.5` npm bootstrap as a build-only dependency. That exact pin selects
+its paired Hutch `0.28.2` toolchain and SDK; direct global Hutch invocation and floating version overrides
+are not part of the build path. The pin is the lowest release that publishes a macOS x64 core, so Intel
+Macs build from the same unmodified `electrobun build` path as every other target. The application
+explicitly selects the real Bun main process, not the default Cottontail runtime. The packaged Bun is
+`1.4.4`, selected by `build.bun.version` rather than Electrobun's default `1.4.0`. Hutch resolves that
+field like the other toolchain versions (`configuredToolchainVersion`), but `ElectrobunConfig` does not
+type it, so the config passes the Bun block as a named value. `buildConfig.test.ts` asserts that it
+equals the root `packageManager` pin, which keeps the packaged runtime aligned with
+[[architecture]]'s root toolchain contract. Electrobun's own
 suite runs only on its default Bun, so desktop smoke and e2e are the gate for this runtime.
 
 The package runs the official `electrobun build` / `dev` commands. Configuration reads the same shared
@@ -456,13 +458,13 @@ main imports use `electrobun/main`; the preload retains `electrobun/view`, and t
 References: [official v2 migration](https://framework.blackboard.sh/electrobun/guides/migrating-to-v2/),
 [upstream optional-property issue](https://github.com/blackboardsh/electrobun/issues/516).
 
-Desktop installers ship beside the CLI artifacts for macOS ARM64, Windows x64, Linux x64, and
-Linux ARM64. Electrobun 2.0.1 publishes no macOS x64 core. Nightly maps to Electrobun canary and stable
-maps to stable. Standard formats are DMG on macOS, a setup-EXE-plus-payload ZIP on Windows, and a setup
-tar.gz on Linux. The private release pipeline retains the existing `thinkrail-desktop-*` download aliases;
-its collector selects the exact framework artifact for the channel and native target. The macOS app
-archive is transferred privately for SRE finalization, never published as an updater payload. Runtime
-updating is integrated below; feed publication remains release-owned and gated by the target policy.
+Desktop installers ship beside the CLI artifacts for macOS ARM64, macOS x64, Windows x64, Linux x64, and
+Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable. Standard formats are DMG on
+macOS, a setup-EXE-plus-payload ZIP on Windows, and a setup tar.gz on Linux. The private release pipeline
+retains the existing `thinkrail-desktop-*` download aliases; its collector selects the exact framework
+artifact for the channel and native target. The macOS app archive is transferred privately for SRE
+finalization, never published as an updater payload. Runtime updating is integrated below; feed
+publication remains release-owned and gated by the target policy.
 
 ### Signing
 
@@ -502,7 +504,7 @@ agents and PTYs may terminate, with no second confirmation or renderer-preparati
 also carries the attempt's steps and log and the durable post-relaunch result, which the web presents.
 [[submodule-desktop-updates]] owns the attempt and its journal.
 
-Quit coordination preserves its completion action. Electrobun 2.0.1's first `applyUpdate()` returns on the
+Quit coordination preserves its completion action. Electrobun 2.0.5's first `applyUpdate()` returns on the
 asynchronous `before-quit` veto before arming its replacement helper. The update intent waits for the same
 idempotent host shutdown, waits for that first SDK call to settle, and then resumes `applyUpdate()` under the
 completed guard; ordinary completion still calls only `Utils.quit()`. A failed second handoff reports a
@@ -516,11 +518,11 @@ the JetBrains Central proxy daemon started from a pi `session_start`, editors, M
 made the helper's `app → app.previous` rename fail with `AccessDenied` for its whole retry window, roll
 back, and relaunch the old build. POSIX renames are unaffected. Children started by a build without this
 rule keep the old cwd, so the first update from such a build may still need them ended once. The step is an
-Electrobun 2.0.1 workaround with two removal gates. The read-before-`chdir` ordering goes once Electrobun
+Electrobun 2.0.5 workaround with two removal gates. The read-before-`chdir` ordering goes once Electrobun
 resolves resources from the executable path. The `chdir` itself goes once its launcher starts the main
 process outside the replaceable bundle.
 
-Reference: [pinned updater handoff](https://github.com/blackboardsh/electrobun/blob/v2.0.1/package/src/sdks/main/core/Updater.ts#L2220-L2330).
+Reference: [pinned updater handoff](https://github.com/blackboardsh/electrobun/blob/v2.0.5/package/src/sdks/main/core/Updater.ts#L2251-L2364).
 
 ## Verification
 

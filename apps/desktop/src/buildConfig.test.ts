@@ -55,7 +55,7 @@ test("generated server runtime threads the opener and desktop proxies explicit r
 });
 
 test("uses the exact npm bootstrap pin while Bun owns the workspace dependency graph", () => {
-	expect(manifest.devDependencies.electrobun).toBe("2.0.1");
+	expect(manifest.devDependencies.electrobun).toBe("2.0.5");
 	expect(manifest.dependencies).not.toHaveProperty("electrobun");
 	expect(hutchConfig).toEqual({ packageManager: "bun" });
 });

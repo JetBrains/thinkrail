@@ -442,6 +442,19 @@ describe("install.sh controlled installation", () => {
 		).toEqual([]);
 	});
 
+	test("refuses the Intel macOS CLI while pointing at the desktop DMG", () => {
+		const fixture = makeFixture();
+		const result = runInstaller(
+			fixture,
+			["--version", "1.2.3", "--prefix", shellPath(fixture.prefix), "--no-modify-path"],
+			{ FAKE_UNAME_S: "Darwin", FAKE_UNAME_M: "x86_64" },
+		);
+		expect(result.exitCode).not.toBe(0);
+		expect(result.stderr).toContain("No prebuilt ThinkRail CLI for Intel macOS.");
+		expect(result.stderr).toContain("The desktop DMG is available");
+		expect(curlRequests(fixture)).toEqual([]);
+	});
+
 	test("installs under a Unix prefix containing Unicode and safe punctuation", () => {
 		const fixture = makeFixture();
 		const prefix = join(fixture.root, "José+dev@example");

@@ -145,6 +145,7 @@ Supported desktop assets:
 | Target | Native runner | Published asset |
 | --- | --- | --- |
 | `bun-darwin-arm64` | `macos-14` | `thinkrail-desktop-darwin-arm64.dmg` |
+| `bun-darwin-x64` | `macos-15-intel` | `thinkrail-desktop-darwin-x64.dmg` |
 | `bun-windows-x64` | `windows-latest` | `thinkrail-desktop-windows-x64.zip` |
 | `bun-linux-x64` | `ubuntu-24.04` | `thinkrail-desktop-linux-x64.tar.gz` |
 | `bun-linux-arm64` | `ubuntu-24.04-arm` | `thinkrail-desktop-linux-arm64.tar.gz` |
@@ -218,7 +219,8 @@ and updates. The private pipeline extracts the payload, signs its PE files, repa
 other members, and publishes those same bytes as the Windows update archive. The payload's framework
 `hash` is identity metadata, not a content digest, so repacking keeps it valid. Publication requires the
 finalized ZIP to pass the first-install smoke on a hosted Windows runner.
-The macOS CLI keeps its independent Developer ID signing path.
+The macOS CLI keeps its independent Developer ID signing path and is still not prebuilt for Intel; only the
+desktop DMG covers macOS x64.
 
 Desktop macOS signing consumes Electrobun's expanded `.app.tar.zst`, because Hutch writes final version
 metadata after `postBuild` and compresses the inner app before `postWrap`. Hosted macOS prepares native

@@ -82,7 +82,8 @@ Both are published with `SHA256SUMS` on the [releases page](https://github.com/J
 
 Download the `thinkrail-desktop-*` asset for your platform:
 
-- **macOS (Apple Silicon)** — open the DMG. There is no Intel desktop build.
+- **macOS (Apple Silicon or Intel)** — open the DMG for your architecture: `thinkrail-desktop-darwin-arm64.dmg`
+  or `thinkrail-desktop-darwin-x64.dmg`.
 - **Windows x64** — extract the complete setup ZIP, then run its setup executable in place, next to its
   payload.
 - **Linux x64 / ARM64** — extract the setup tarball and run `installer`. Desktop builds need glibc 2.38+
@@ -166,7 +167,7 @@ manually or reinstalled with the script.
 | Platform | Desktop | CLI |
 | --- | --- | --- |
 | macOS Apple Silicon | DMG | signed binary |
-| macOS Intel | no Electrobun build | not prebuilt — [build from source](#developing-thinkrail) |
+| macOS Intel | DMG | not prebuilt — [build from source](#developing-thinkrail) |
 | Windows x64 | signed setup executable and app binaries | signed `.exe` |
 | Linux x64 / ARM64 | setup tarball, unsigned | unsigned |
 
