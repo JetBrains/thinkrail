@@ -5,6 +5,8 @@ export {
 	COMPOSER_GROWTH_LIMITS,
 	DEFAULT_CONFIG,
 	DEFAULT_WORKSPACE_NAME,
+	FIRST_PROMPT_MAX_LENGTH,
+	firstPromptHead,
 	IMAGE_MAX_BASE64_BYTES,
 	isComposerGrowthLimit,
 	isControlMessage,

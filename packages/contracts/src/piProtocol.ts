@@ -203,6 +203,8 @@ export interface SessionSummary {
 	sessionId: string;
 	workspaceId: string;
 	title: string;
+	/** See `SessionStateRecord.firstPrompt`: the display fallback for an unnamed chat, never a name. */
+	firstPrompt?: string;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	isStreaming: boolean;

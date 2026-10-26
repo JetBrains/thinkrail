@@ -2597,6 +2597,107 @@ test("renameSession updates a disk-only transcript without attaching an agent", 
 	expect(events.get(id)).toEqual([{ type: "session_info_changed", name: "New disk title" }]);
 });
 
+test("summaries and state records carry the first prompt's head as a display fallback, beside the real title", async () => {
+	const cwd = tmpCwd("trpi-first-prompt-");
+	const sessionDir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const long = `  Please   refactor the auth module\nand keep the tests green ${"x".repeat(300)}`;
+	const { id: named } = writeFixtureSession(sessionDir, {
+		cwd,
+		name: "Named by the agent",
+		messages: [{ role: "user", text: long, timestamp: Date.now() - 3 }],
+	});
+	const { id: unnamed } = writeFixtureSession(sessionDir, {
+		cwd,
+		messages: [{ role: "user", text: long, timestamp: Date.now() - 2 }],
+	});
+	const compacted = writeCompactedFixtureSession(sessionDir, cwd, Date.now() - 1);
+	fauxA.setResponses([fauxAssistantMessage("ok")]);
+	const live = await createSession({
+		cwd,
+		workspaceId: "ws-first-prompt",
+		model: toWireModel(fauxA.getModel()),
+	});
+	expect(
+		(await listSessions("ws-first-prompt", cwd)).find((row) => row.sessionId === live.sessionId)
+			?.firstPrompt,
+	).toBeUndefined();
+	await promptSession(live.sessionId, "Live prompt\nsecond line");
+
+	const rows = await listSessions("ws-first-prompt", cwd);
+	const byId = Object.fromEntries(rows.map((row) => [row.sessionId, row]));
+	expect(byId[named]).toMatchObject({ title: "Named by the agent" });
+	expect(byId[named]?.firstPrompt).toBe(`Please refactor the auth module`);
+	expect(byId[unnamed]).toMatchObject({
+		title: "",
+		firstPrompt: "Please refactor the auth module",
+	});
+	expect(byId[live.sessionId]).toMatchObject({ title: "", firstPrompt: "Live prompt" });
+	expect(byId[compacted]?.firstPrompt).toBe("The real first prompt");
+
+	await initializeSessionStates([{ id: "ws-first-prompt", projectId: "p-first-prompt", cwd }]);
+	const records = await listSessionStates([
+		{ id: "ws-first-prompt", projectId: "p-first-prompt", cwd },
+	]);
+	expect(records.find((record) => record.sessionId === unnamed)?.firstPrompt).toBe(
+		"Please refactor the auth module",
+	);
+	expect(records.find((record) => record.sessionId === live.sessionId)?.firstPrompt).toBe(
+		"Live prompt",
+	);
+	expect(records.find((record) => record.sessionId === compacted)?.firstPrompt).toBe(
+		"The real first prompt",
+	);
+
+	const attached = await getSessionMessages(compacted, "ws-first-prompt", cwd);
+	expect(attached.summary.firstPrompt).toBe("The real first prompt");
+	expect(attached.messages.some((message) => message.role === "user")).toBe(true);
+	expect(SessionManager.open(listedPath(unnamed, cwd)).getSessionName()).toBeUndefined();
+	removeSession(live.sessionId);
+	removeSession(compacted);
+});
+
+/** An image-only first message, a real prompt, then a compaction that keeps only the later turns. */
+function writeCompactedFixtureSession(dir: string, cwd: string, timestamp: number): string {
+	const sessionId = `sess-compacted-${timestamp}`;
+	const at = new Date(timestamp).toISOString();
+	const message = (id: string, parentId: string | null, role: string, content: unknown) =>
+		JSON.stringify({
+			type: "message",
+			id,
+			parentId,
+			timestamp: at,
+			message: { role, content, timestamp },
+		});
+	const lines = [
+		JSON.stringify({ type: "session", version: 3, id: sessionId, timestamp: at, cwd }),
+		message("u0", null, "user", [{ type: "image", data: "AA==", mimeType: "image/png" }]),
+		message("a0", "u0", "assistant", [{ type: "text", text: "I see an image" }]),
+		message("u1", "a0", "user", "The real first prompt\nwith a second line"),
+		message("a1", "u1", "assistant", [{ type: "text", text: "done" }]),
+		message("u2", "a1", "user", "A later prompt"),
+		JSON.stringify({
+			type: "compaction",
+			id: "c0",
+			parentId: "u2",
+			firstKeptEntryId: "u2",
+			summary: "earlier conversation summarized",
+			tokensBefore: 1000,
+			timestamp: at,
+		}),
+		message("a2", "c0", "assistant", [{ type: "text", text: "post-compaction answer" }]),
+	];
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, `${timestamp}_${sessionId}.jsonl`), `${lines.join("\n")}\n`);
+	return sessionId;
+}
+
+function listedPath(sessionId: string, cwd: string): string {
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const file = readdirSync(dir).find((name) => name.endsWith(`_${sessionId}.jsonl`));
+	if (!file) throw new Error(`no transcript for ${sessionId}`);
+	return join(dir, file);
+}
+
 test("renameSession serializes with a concurrent disk attach", async () => {
 	const cwd = tmpCwd("trpi-rename-attach-");
 	const { id } = writeFixtureSession(

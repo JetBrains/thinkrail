@@ -5,6 +5,29 @@ export interface SessionStateRecord {
 	workspaceId: string;
 	projectId: string;
 	state: SessionState;
+	/** The first user prompt's head (one line, ≤ `FIRST_PROMPT_MAX_LENGTH`) — a display fallback while the agent has not named the chat; never a name. */
+	firstPrompt?: string;
+}
+
+export const FIRST_PROMPT_MAX_LENGTH = 200;
+
+const SKILL_BLOCK = /^\s*<skill name="([^"]+)"[^>]*>[\s\S]*?<\/skill>\s*/;
+
+/**
+ * One line of a prompt's head, for the display-only chat label: never written into the session. A
+ * leading skill block reads as the request that followed it, else as `/skill:<name>`; a prompt that
+ * is only a package (`<review …>`) or has no text yields nothing.
+ */
+export function firstPromptHead(text: string | undefined): string | undefined {
+	if (!text) return undefined;
+	const skill = SKILL_BLOCK.exec(text);
+	const body = skill ? text.slice(skill[0].length) || `/skill:${skill[1]}` : text;
+	const line = body
+		.split("\n")
+		.map((candidate) => candidate.replace(/\s+/g, " ").trim())
+		.find((candidate) => candidate.length > 0);
+	if (!line || line.startsWith("<")) return undefined;
+	return line.length > FIRST_PROMPT_MAX_LENGTH ? line.slice(0, FIRST_PROMPT_MAX_LENGTH) : line;
 }
 
 export interface Project {

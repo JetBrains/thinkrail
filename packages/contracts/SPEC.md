@@ -52,6 +52,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
+  `FIRST_PROMPT_MAX_LENGTH` + **`firstPromptHead(text)`** (the one shared reading of a prompt's head for
+  the unnamed-chat label: first non-blank line, whitespace collapsed, clamped to 200; a leading skill block
+  reads as the request that followed it, else `/skill:<name>`; a package such as `<review …>` or no text
+  reads as nothing — host and client derive the same label so it never flickers),
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
   chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
@@ -180,6 +184,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     `session_info_changed { name?: string }` is the one live domain update for manual and automatic changes,
     and `session.list`/`session.getMessages` repair a missed event. No title source/provenance, uniqueness,
     workspace coupling, or new push channel crosses the wire; session ids remain canonical.
+    **`SessionSummary.firstPrompt`** and **`SessionStateRecord.firstPrompt`** (optional, additive, no
+    version gate) carry `firstPromptHead` of the transcript's first user prompt beside the title: the
+    display fallback for a chat that has no name, never a name — no mutation accepts it, nothing writes
+    it into the session, and an older host simply omits it (the client shows its generic label).
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel. A round-trip

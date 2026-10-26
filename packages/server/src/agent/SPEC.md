@@ -893,6 +893,17 @@ never overwrite a durable name, and the first name is final. No generated/manual
 belongs here: the absent-vs-present pi name is sufficient. The architecture's accepted no-cross-process
 coordination rule still applies.
 
+**First prompt beside the title.** Every `SessionSummary` and `SessionStateRecord` the manager projects
+(`summaryOf`, the disk rows of `listSessions`, the state publishes and `listSessionStates` sources) also
+carries `firstPrompt` — contracts' `firstPromptHead` of the transcript's first user message that has text
+and is not a control message — so clients can label a chat the agent has not named. One derivation,
+`firstPromptOf(entries)`, reads the **full** `SessionManager.getEntries()` for live and disk sessions alike:
+`AgentSession.messages` is the compaction-aware projection, whose first user message after a compaction
+is no longer the chat's first prompt, and pi's `SessionInfo.firstMessage` substitutes a placeholder string
+when no text exists. A live entry caches the head once found (the transcript is append-only). The value is
+read-only: no write path accepts it, `renameSession` and `onlyIfUnnamed` are untouched, and a named chat
+still carries it so a client can show the title and keep the prompt as a tooltip.
+
 ## Chat Resources integration
 
 The manager retains one [[module-pi-background-commands]] service per parent chat alongside its Pi

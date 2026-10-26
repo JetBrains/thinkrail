@@ -48,6 +48,8 @@ import type {
 import {
 	assistantToolCallsAreExecutable,
 	canMarkCompletionUnread,
+	firstPromptHead,
+	isControlMessage,
 	isTranscriptMessageRole,
 	normalizeSessionTitle,
 	sameModel,
@@ -170,6 +172,7 @@ interface Entry {
 	withheldExtensionTools: Set<string>;
 	nudgePromptPending: boolean;
 	lastPublishedState: string | null;
+	firstPrompt: string | undefined;
 	askUserQuestionWaiters: AskUserQuestionWaiters;
 	mcpHost: McpSessionHost;
 }
@@ -390,12 +393,38 @@ function stateFromEntry(entry: Entry): SessionState {
 	});
 }
 
+function firstPromptOf(entries: readonly SessionEntry[]): { firstPrompt?: string } {
+	for (const entry of entries) {
+		if (entry.type !== "message" || entry.message.role !== "user") continue;
+		const { content } = entry.message;
+		const text =
+			typeof content === "string"
+				? content
+				: content
+						.filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
+						.map((part) => part.text)
+						.join("");
+		if (isControlMessage(text)) continue;
+		const head = firstPromptHead(text);
+		if (head) return { firstPrompt: head };
+	}
+	return {};
+}
+
+function entryFirstPrompt(entry: Entry): { firstPrompt?: string } {
+	if (entry.firstPrompt === undefined) {
+		entry.firstPrompt = firstPromptOf(entry.session.sessionManager.getEntries()).firstPrompt;
+	}
+	return entry.firstPrompt === undefined ? {} : { firstPrompt: entry.firstPrompt };
+}
+
 function publishEntryState(entry: Entry): void {
 	if (sessions.get(entry.session.sessionId) !== entry) return;
 	const projectId = resolveProjectId(entry.workspaceId);
 	if (!projectId) return;
 	const state = stateFromEntry(entry);
-	const serialized = JSON.stringify(state);
+	const firstPrompt = entryFirstPrompt(entry);
+	const serialized = JSON.stringify({ state, ...firstPrompt });
 	if (entry.lastPublishedState === serialized) return;
 	entry.lastPublishedState = serialized;
 	publishState({
@@ -403,6 +432,7 @@ function publishEntryState(entry: Entry): void {
 		workspaceId: entry.workspaceId,
 		projectId,
 		state,
+		...firstPrompt,
 	});
 }
 
@@ -449,6 +479,7 @@ function stateRecordForEntry(entry: Entry): SessionStateRecord {
 		workspaceId: entry.workspaceId,
 		projectId,
 		state: stateFromEntry(entry),
+		...entryFirstPrompt(entry),
 	};
 }
 
@@ -1047,6 +1078,7 @@ async function prepareSessionEntry(
 		withheldExtensionTools: new Set(),
 		nudgePromptPending: false,
 		lastPublishedState: null,
+		firstPrompt: undefined,
 		askUserQuestionWaiters,
 		mcpHost,
 	};
@@ -1440,6 +1472,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		sessionId,
 		workspaceId: entry.workspaceId,
 		title: session.sessionName ?? "",
+		...entryFirstPrompt(entry),
 		model: session.model
 			? sessionWireModel(session.model as unknown as Model<string>, entry.generation)
 			: null,
@@ -1571,18 +1604,22 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 			(info) =>
 				info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
 		)
-		.map((info) => ({
-			sessionId: info.id,
-			workspaceId,
-			title: info.name ?? "",
-			model: null,
-			thinkingLevel: "medium" as ThinkingLevel,
-			isStreaming: false,
-			messageCount: info.messageCount,
-			updatedAt: info.modified.getTime(),
-			live: false,
-			state: stateFromDisk(info.id, SessionManager.open(info.path)),
-		}));
+		.map((info) => {
+			const manager = SessionManager.open(info.path);
+			return {
+				sessionId: info.id,
+				workspaceId,
+				title: info.name ?? "",
+				...firstPromptOf(manager.getEntries()),
+				model: null,
+				thinkingLevel: "medium" as ThinkingLevel,
+				isStreaming: false,
+				messageCount: info.messageCount,
+				updatedAt: info.modified.getTime(),
+				live: false,
+				state: stateFromDisk(info.id, manager),
+			};
+		});
 	return [...live, ...disk];
 }
 
@@ -1642,6 +1679,7 @@ async function collectSessionStateSources(
 				workspaceId: entry.workspaceId,
 				projectId: workspace.projectId,
 				state: stateFromEntry(entry),
+				...entryFirstPrompt(entry),
 			},
 			branch: () => entry.session.sessionManager.getBranch(),
 			publish: () => {
@@ -1665,6 +1703,7 @@ async function collectSessionStateSources(
 				workspaceId: workspace.id,
 				projectId: workspace.projectId,
 				state: stateFromDisk(info.id, manager, baseline),
+				...firstPromptOf(manager.getEntries()),
 			};
 			records.push({
 				record,

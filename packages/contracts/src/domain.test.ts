@@ -3,6 +3,8 @@ import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
 	DEFAULT_CONFIG,
+	FIRST_PROMPT_MAX_LENGTH,
+	firstPromptHead,
 	IMAGE_MAX_BASE64_BYTES,
 	isDelegationRunDetails,
 	isJbcentralConnected,
@@ -253,4 +255,20 @@ test("isLocalePreference accepts system and canonical BCP-47 tags only", () => {
 	expect(isLocalePreference("")).toBe(false);
 	expect(isLocalePreference("not a tag")).toBe(false);
 	expect(isLocalePreference(7)).toBe(false);
+});
+
+describe("firstPromptHead", () => {
+	test("takes the first non-blank line, collapses whitespace and clamps", () => {
+		expect(firstPromptHead("\n\n  Fix   the\tauth bug  \nmore")).toBe("Fix the auth bug");
+		expect(firstPromptHead("x".repeat(500))?.length).toBe(FIRST_PROMPT_MAX_LENGTH);
+		expect(firstPromptHead("")).toBeUndefined();
+		expect(firstPromptHead(undefined)).toBeUndefined();
+	});
+
+	test("a skill block reads as its request or its name, a package reads as nothing", () => {
+		const block = '<skill name="setting-up-a-project" location="/s/SKILL.md">\nbody\n</skill>';
+		expect(firstPromptHead(`${block}\n\nAnd also the docs`)).toBe("And also the docs");
+		expect(firstPromptHead(block)).toBe("/skill:setting-up-a-project");
+		expect(firstPromptHead('<review scope="branch">\n<comment …>\n</review>')).toBeUndefined();
+	});
 });
