@@ -9,7 +9,7 @@ import {
 	type ResourceReviewSendProps,
 	registerBundledResourceRenderers,
 } from "@thinkrail/resource-renderers";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useMemo, useSyncExternalStore } from "react";
 import { Markdown } from "../chat/Markdown";
 import { cssColorToHex, usePhoneViewport } from "../lib";
 import { SHIKI_FILE_LANGUAGES, shikiLanguageId } from "../lib/highlighter";
@@ -18,6 +18,12 @@ import { resourceBytesUrl } from "../panels/resourcePane";
 import { SendReviewButton } from "../panels/SendReviewButton";
 import { useFileReview } from "../panels/useReviewCommenting";
 import { selectFileChangeSince, useAppStore } from "../store";
+import {
+	currentFontScale,
+	scaledCodeFontSize,
+	scaledCodeRowHeight,
+	subscribeFontScale,
+} from "../styles/fontScale";
 import { resolveThinkrailShikiTheme } from "../themes";
 import { getTransport } from "../transport";
 
@@ -58,10 +64,16 @@ const HOST: ResourceHost = {
 export function AppResourceHost({ children }: { children: ReactNode }) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
+	const fontScale = useSyncExternalStore(subscribeFontScale, currentFontScale, () => 1);
 	const mobile = usePhoneViewport();
 	const preferences = useMemo<ResourcePreferences>(
-		() => ({ fileLineWidth, fileLineWidthBounded }),
-		[fileLineWidth, fileLineWidthBounded],
+		() => ({
+			fileLineWidth,
+			fileLineWidthBounded,
+			codeRowHeight: scaledCodeRowHeight(fontScale),
+			codeFontSize: scaledCodeFontSize(fontScale),
+		}),
+		[fileLineWidth, fileLineWidthBounded, fontScale],
 	);
 	const environment = useMemo<ResourceEnvironment>(() => ({ mobile }), [mobile]);
 	return (

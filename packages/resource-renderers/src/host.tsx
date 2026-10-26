@@ -78,6 +78,14 @@ export interface ResourceHost {
 export interface ResourcePreferences {
 	fileLineWidth: number;
 	fileLineWidthBounded: boolean;
+	/**
+	 * The row height of one code line in pixels, already scaled by the reader's font size. Pierre's
+	 * virtualizer takes it as a JS metric, so it has to arrive as a value rather than be re-read
+	 * from CSS: the CSS override lands after the render that changed it.
+	 */
+	codeRowHeight: number;
+	/** The code font size in pixels, scaled the same way; Monaco takes it as an option value. */
+	codeFontSize: number;
 }
 
 const ResourceHostContext = createContext<ResourceHost | null>(null);
@@ -104,6 +112,11 @@ export function useResourcePreferences(): ResourcePreferences {
 	const preferences = useContext(ResourcePreferencesContext);
 	if (!preferences) throw new Error("Resource renderers need a ResourcePreferencesProvider");
 	return preferences;
+}
+
+/** For a renderer that can work without preferences and only refines itself when they arrive. */
+export function useOptionalResourcePreferences(): ResourcePreferences | null {
+	return useContext(ResourcePreferencesContext);
 }
 
 export function useResourceScope(): ResourceScope | null {

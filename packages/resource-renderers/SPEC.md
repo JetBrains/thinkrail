@@ -105,7 +105,11 @@ Build the value once (the app does at module scope). Its functions are memo inpu
 defines its link and image components per call, so a new `bytesUrl`/`openFile` identity would remount every
 link and image in open previews and notebook cells. The reader's line-width preference
 (`fileLineWidth` / `fileLineWidthBounded`) arrives separately through `ResourcePreferencesProvider`; only
-`MonacoEditor` reads it, so a width change re-renders nothing else. The phone class arrives the same way
+`MonacoEditor` reads it, so a width change re-renders nothing else. The same provider carries `codeRowHeight`
+and `codeFontSize`, the reader's scaled code row and code size: Pierre's virtualizer takes its row height as
+a JS metric and never re-reads it, so `usePierreVirtualizer` keys the Pierre component on that number and a
+font-size change remounts just that instance; `MonacoEditor` passes both into `fileEditorOptions`, so an open
+editor gets `updateOptions` with the new size instead of keeping the one it read from CSS at mount. The phone class arrives the same way
 through `ResourceEnvironmentProvider` (the registry's `ResourceEnvironment`, `{ mobile }`); only
 `ResourcePreview` reads it — panes resolve with their own viewport reading — so a viewport flip re-renders
 only the previews that must re-resolve their renderer. A subtree that belongs to one workspace and chat
@@ -174,7 +178,9 @@ keeps it.
   loaders deferred nothing (rolldown reported the markdown import as ineffective) while costing a suspended
   render on first mount and a loader-identity contract a host could break. Plain values removed both, and the
   web eager graph shrank by about 1.5 kB. Preferences got their own context for the same reason the values are
-  static: a host value that changes re-renders every renderer that reads it.
+  static: a host value that changes re-renders every renderer that reads it. `codeRowHeight` and
+  `codeFontSize` are the preferences expected to change while a view is open, and they are numbers rather
+  than a scale so a renderer never has to know how the app derives them.
 - **Small helpers moved with their only consumer or became primitives.** `stripFrontmatter`, `threadLabel`
   and `outdatedReason` live here; `ToggleSegment` and the one loading placeholder (`SkeletonRows` /
   `LoadingRegion`) became `@thinkrail/ui/toggle-segment` and `@thinkrail/ui/skeleton` because the app uses

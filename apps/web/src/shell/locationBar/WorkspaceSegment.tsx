@@ -186,7 +186,7 @@ export function WorkspaceSegment({
 					aria-label={t("shell.location.workspace.nameInput")}
 					defaultValue={workspace.name}
 					{...renameInputProps}
-					className="window-no-drag h-20 w-full min-w-0 truncate rounded-sm border-0 bg-control-bg px-8 text-text-default tr-title-section outline-none ring-1 ring-control-border-active"
+					className="window-no-drag h-topbar-value w-full min-w-0 truncate rounded-sm border-0 bg-control-bg px-8 text-text-default tr-title-section outline-none ring-1 ring-control-border-active"
 				/>
 			) : (
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>

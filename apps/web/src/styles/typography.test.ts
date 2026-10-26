@@ -19,6 +19,7 @@ import {
 	styleClassName,
 	validate,
 } from "../../scripts/typography";
+import { BASE_CODE_FONT_SIZE, BASE_CODE_ROW_HEIGHT } from "./fontScale";
 
 const typography = loadTypography();
 const SRC = fileURLToPath(new URL("..", import.meta.url));
@@ -438,11 +439,15 @@ describe("generated CSS", () => {
 			join(SRC, "../../../packages/resource-renderers/src/support/monacoSetup.ts"),
 		);
 		const xterm = read(join(SRC, "panels/TerminalInstance.tsx"));
-		expect(monaco).toContain('cssVar("--tr-font-size-s11")');
 		expect(xterm).toContain('cssVar("--tr-font-size-s13")');
 		for (const file of [monaco, xterm]) {
 			expect(file).toContain('cssVar("--tr-font-family-code")');
 		}
-		expect(monaco).toContain('cssVar("--tr-line-height-default")');
+		// Monaco takes the code size and row height as values from the resource host, so an open
+		// editor follows the reader's font scale; they are the same codeRow pair the CSS emits.
+		expect(monaco).toContain("code.fontSize");
+		expect(monaco).toContain("code.rowHeight");
+		expect(BASE_CODE_FONT_SIZE).toBe(11);
+		expect(GENERATED).toContain(`--tr-code-row-height: ${BASE_CODE_ROW_HEIGHT}px;`);
 	});
 });

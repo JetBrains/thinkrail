@@ -406,7 +406,7 @@ function PierreDiffSurface({
 		viewState,
 		onViewState,
 	);
-	const { virtualizer, metrics, attach } = usePierreVirtualizer(attachScroller);
+	const { virtualizer, metrics, attach, lineHeight } = usePierreVirtualizer(attachScroller);
 	usePierreFocus(
 		rootRef,
 		virtualizer,
@@ -440,6 +440,7 @@ function PierreDiffSurface({
 					</p>
 				) : null}
 				<FileDiff<DiffAnnotationMetadata>
+					key={lineHeight}
 					fileDiff={fileDiff}
 					options={options}
 					metrics={metrics}

@@ -4,7 +4,8 @@ import {
 	type VirtualFileMetrics,
 	Virtualizer,
 } from "@pierre/diffs";
-import { type RefCallback, useCallback, useState } from "react";
+import { type RefCallback, useCallback, useMemo, useState } from "react";
+import { useOptionalResourcePreferences } from "../../host";
 
 type ConnectedInstance = Parameters<Virtualizer["connect"]>[1];
 
@@ -60,13 +61,24 @@ function codeLineHeight(): number {
 
 export function usePierreVirtualizer<T extends HTMLElement>(
 	attachScroller: RefCallback<T>,
-): { virtualizer: PierreVirtualizer; metrics: VirtualFileMetrics; attach: RefCallback<T> } {
+): {
+	virtualizer: PierreVirtualizer;
+	metrics: VirtualFileMetrics;
+	attach: RefCallback<T>;
+	/**
+	 * The row height the metrics were built for. Pierre reads metrics once, when its instance is
+	 * created, so a component that renders one must key itself on this value to pick up a change.
+	 */
+	lineHeight: number;
+} {
 	const [virtualizer] = useState(() => new PierreVirtualizer({ overscrollSize: OVERSCROLL_SIZE }));
-	const [metrics] = useState<VirtualFileMetrics>(() => ({
-		...DEFAULT_VIRTUAL_FILE_METRICS,
-		lineHeight: codeLineHeight(),
-		hunkLineCount: HUNK_LINE_COUNT,
-	}));
+	// The host knows the scaled row height. Reading the CSS property instead would lag by a frame —
+	// `applyFontScale` writes it from an effect, after the render that changed the reader's choice.
+	const lineHeight = useOptionalResourcePreferences()?.codeRowHeight ?? codeLineHeight();
+	const metrics = useMemo<VirtualFileMetrics>(
+		() => ({ ...DEFAULT_VIRTUAL_FILE_METRICS, lineHeight, hunkLineCount: HUNK_LINE_COUNT }),
+		[lineHeight],
+	);
 	const attach = useCallback<RefCallback<T>>(
 		(node) => {
 			if (node) virtualizer.setup(node);
@@ -75,5 +87,5 @@ export function usePierreVirtualizer<T extends HTMLElement>(
 		},
 		[attachScroller, virtualizer],
 	);
-	return { virtualizer, metrics, attach };
+	return { virtualizer, metrics, attach, lineHeight };
 }

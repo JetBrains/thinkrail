@@ -46,13 +46,17 @@ export default function MonacoEditor({
 	onViewState,
 }: ResourceViewProps) {
 	const t = useT();
-	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
+	const { fileLineWidth, fileLineWidthBounded, codeRowHeight, codeFontSize } =
+		useResourcePreferences();
 	ensureMonaco(useResourceHost().code);
 	const scope = useId().replace(/[^\w-]/g, "");
 	const path = resource.path;
 	const text = content.kind === "text" ? content.text : "";
 	const commentLabel = t("review.widget.commentOnSelection");
-	const options = fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path);
+	const options = fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path, {
+		fontSize: codeFontSize,
+		rowHeight: codeRowHeight,
+	});
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const commentingRef = useRef<ReviewCommenting | null>(null);
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);

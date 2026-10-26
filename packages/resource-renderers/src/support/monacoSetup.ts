@@ -87,9 +87,12 @@ export function fileEditorOptions(
 	lineWidth: number,
 	bounded: boolean,
 	path: string,
+	code: { fontSize: number; rowHeight: number },
 ) {
-	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
-	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
+	// The reader's scaled code metrics arrive as values, not as custom properties read here: React
+	// cannot see a custom property change, so a memoised caller would keep stale options.
+	const fontSize = code.fontSize > 0 ? code.fontSize : 11;
+	const lineHeight = code.rowHeight > 0 ? code.rowHeight : undefined;
 	const paddingTop = Number.parseFloat(cssVar("--space-8") ?? "");
 	const options: editor.IStandaloneEditorConstructionOptions = {
 		readOnly: true,
