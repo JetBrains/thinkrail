@@ -64,7 +64,7 @@ product contract (it then guards upstream's behavior instead).
   `windowsExecutableIdentity.ts`. **Removal gate:** Hutch writes the executable identity and replaces
   the main process's icon groups. Verify `windowsExecutableIdentity.test.ts` and artifact resource checks.
 - **Window icon.** Owner [[module-desktop]], `windowsWindowIcon.ts`. **Removal gate:** Electrobun sets
-  a window icon on Windows. Verify `windowsWindowIcon.test.ts` and the Windows real-window test.
+  and refreshes a window icon on Windows. Verify `windowsWindowIcon.test.ts` and the Windows real-window test.
 - **Taskbar AppUserModelID.** Owner [[module-desktop]], `windowsTaskbarIdentity.ts`. **Removal gate:**
   Electrobun gives its process and shortcuts a shared AppUserModelID
   ([electrobun#514](https://github.com/blackboardsh/electrobun/issues/514)). Verify
