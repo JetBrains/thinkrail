@@ -35,6 +35,7 @@ import type {
 	ThinkingLevel,
 	TurnChangeSet,
 	UserMessage,
+	UserThemesSnapshot,
 	WireModel,
 	Workspace,
 	WorkspaceFsChangedPayload,
@@ -1064,6 +1065,8 @@ interface AppState {
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
 	installLocalLocales: (snapshot: LocalLocalesSnapshot | null) => void;
+	userThemes: UserThemesSnapshot | null;
+	installUserThemes: (snapshot: UserThemesSnapshot | null) => void;
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -2320,6 +2323,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,
 	installLocalLocales: (snapshot) => set({ localLocales: snapshot }),
+	userThemes: null,
+	installUserThemes: (snapshot) => set({ userThemes: snapshot }),
 	toasts: [],
 	resourceSnapshots: {},
 	resourceRevision: 0,

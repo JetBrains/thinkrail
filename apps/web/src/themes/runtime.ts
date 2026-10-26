@@ -6,6 +6,8 @@ import {
 	normalizeThemePreference as normalizeConfigThemePreference,
 	type SystemThemePair,
 	type ThemeId,
+	type UserThemeFile,
+	type UserThemeFileErrorCode,
 } from "@thinkrail/contracts";
 import {
 	asStablePreferenceAdapter,
@@ -18,6 +20,7 @@ import {
 	type AnsiColorKey,
 	assertThemeManifest,
 	isThemeIdSlug,
+	parseThemeManifest,
 	SYNTAX_COLOR_KEYS,
 	type SyntaxColorKey,
 	THEME_COLOR_KEYS,
@@ -41,6 +44,12 @@ export interface ThemeCatalog {
 
 export type ThemePreference = ConfigThemePreference;
 
+export interface UserThemeIssue {
+	readonly fileName: string;
+	readonly error: UserThemeFileErrorCode | "invalid-theme" | "reserved-id" | "duplicate-id";
+	readonly detail?: string;
+}
+
 export interface ThemeResolution {
 	readonly requestedId: ThemeId;
 	readonly theme: ThemeDescriptor;
@@ -56,6 +65,7 @@ interface ColorSchemeMediaQuery {
 
 const HINT_KEY = `${STORAGE_PREFIX}theme`;
 const HINT_VERSION = 1;
+const USER_THEMES_KEY = `${STORAGE_PREFIX}user-themes`;
 const SYSTEM_QUERY = "(prefers-color-scheme: dark)";
 
 const paletteVariable = (key: string) =>
@@ -104,7 +114,11 @@ export const SYNTAX_VARIABLES: Record<SyntaxColorKey, string> = {
 	changed: "--code-changed",
 };
 
-let catalog: ThemeCatalog = { byId: new Map(), list: [] };
+let bundledCatalog: ThemeCatalog = { byId: new Map(), list: [] };
+let catalog: ThemeCatalog = bundledCatalog;
+let userThemeIssues: readonly UserThemeIssue[] = [];
+let installedUserFiles: readonly UserThemeFile[] | null = null;
+const catalogListeners = new Set<() => void>();
 
 function compareText(a: string, b: string): number {
 	return a < b ? -1 : a > b ? 1 : 0;
@@ -141,6 +155,10 @@ export function buildThemeCatalog(candidates: Record<string, unknown>): ThemeCat
 	if (!appearances.has("light") || !appearances.has("dark")) {
 		throw new Error("The bundled theme catalog must include light and dark themes");
 	}
+	return catalogOf(byId);
+}
+
+function catalogOf(byId: ReadonlyMap<ThemeId, ThemeManifest>): ThemeCatalog {
 	const list = Object.freeze(
 		[...byId.values()]
 			.sort((a, b) => {
@@ -153,12 +171,97 @@ export function buildThemeCatalog(candidates: Record<string, unknown>): ThemeCat
 	return { byId, list };
 }
 
-export function installThemeCatalog(next: ThemeCatalog): void {
+function publishCatalog(next: ThemeCatalog, issues: readonly UserThemeIssue[]): void {
 	catalog = next;
+	userThemeIssues = issues;
+	for (const listener of catalogListeners) listener();
+}
+
+export function installThemeCatalog(next: ThemeCatalog): void {
+	bundledCatalog = next;
+	installedUserFiles = null;
+	publishCatalog(next, []);
 }
 
 export function getThemes(): readonly ThemeDescriptor[] {
 	return catalog.list;
+}
+
+export function getUserThemeIssues(): readonly UserThemeIssue[] {
+	return userThemeIssues;
+}
+
+export function onThemesChange(listener: () => void): () => void {
+	catalogListeners.add(listener);
+	return () => catalogListeners.delete(listener);
+}
+
+function isReservedThemeId(id: ThemeId): boolean {
+	return bundledCatalog.byId.has(id) || Object.hasOwn(RENAMED_THEME_IDS, id);
+}
+
+export function installUserThemes(files: readonly UserThemeFile[]): void {
+	if (files === installedUserFiles) return;
+	installedUserFiles = files;
+	const byId = new Map(bundledCatalog.byId);
+	const issues: UserThemeIssue[] = [];
+	const accepted: UserThemeFile[] = [];
+	for (const file of files) {
+		if (!file.ok) {
+			issues.push({
+				fileName: file.fileName,
+				error: file.error,
+				...(file.detail ? { detail: file.detail } : {}),
+			});
+			continue;
+		}
+		const parsed = parseThemeManifest(file.manifest);
+		if (!parsed.ok) {
+			issues.push({
+				fileName: file.fileName,
+				error: "invalid-theme",
+				detail: parsed.issues.join("; "),
+			});
+		} else if (isReservedThemeId(parsed.value.id)) {
+			issues.push({ fileName: file.fileName, error: "reserved-id", detail: parsed.value.id });
+		} else if (byId.has(parsed.value.id)) {
+			issues.push({ fileName: file.fileName, error: "duplicate-id", detail: parsed.value.id });
+		} else {
+			byId.set(parsed.value.id, parsed.value);
+			accepted.push({ fileName: file.fileName, ok: true, manifest: parsed.value });
+		}
+	}
+	writeUserThemeCache(accepted);
+	publishCatalog(catalogOf(byId), Object.freeze(issues));
+}
+
+function writeUserThemeCache(files: readonly UserThemeFile[]): void {
+	try {
+		const storage = themeHintStorage();
+		if (files.length === 0) storage?.removeItem(USER_THEMES_KEY);
+		else storage?.setItem(USER_THEMES_KEY, JSON.stringify(files));
+	} catch {
+		return;
+	}
+}
+
+function isCachedThemeFile(value: unknown): value is UserThemeFile {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		Reflect.get(value, "ok") === true &&
+		typeof Reflect.get(value, "fileName") === "string"
+	);
+}
+
+export function installCachedUserThemes(): void {
+	try {
+		const raw = themeHintStorage()?.getItem(USER_THEMES_KEY);
+		const parsed: unknown = typeof raw === "string" ? JSON.parse(raw) : null;
+		if (Array.isArray(parsed)) installUserThemes(parsed.filter(isCachedThemeFile));
+	} catch {
+		return;
+	}
 }
 
 const RENAMED_THEME_IDS: Readonly<Record<string, ThemeId>> = {

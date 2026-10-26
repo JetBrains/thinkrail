@@ -12,7 +12,7 @@ import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { AppResourceHost } from "./shell/AppResourceHost";
 import { Shell } from "./shell/Shell";
-import { applyThemePreference, initializeBundledThemes, readThemeHint } from "./themes";
+import { applyThemePreference, initializeThemes, readThemeHint } from "./themes";
 import {
 	clientErrorReport,
 	initTransport,
@@ -20,7 +20,7 @@ import {
 	reportClientError,
 } from "./transport";
 
-initializeBundledThemes();
+initializeThemes();
 applyThemePreference(readThemeHint());
 initTransport();
 installClientErrorReporting();

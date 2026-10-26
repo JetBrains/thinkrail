@@ -23,6 +23,7 @@ import {
 } from "../store";
 import {
 	applyThemePreference,
+	installUserThemes,
 	onSystemAppearanceChange,
 	readThemeHint,
 	writeThemeHint,
@@ -90,7 +91,9 @@ export function Shell() {
 	const theme = useAppStore((s) => s.theme);
 	const themeMode = useAppStore((s) => s.themeMode);
 	const systemThemePair = useAppStore((s) => s.systemThemePair);
+	const userThemes = useAppStore((s) => s.userThemes);
 	useEffect(() => {
+		if (userThemes) installUserThemes(userThemes.files);
 		const preference =
 			welcomeGeneration === 0
 				? themeHint
@@ -99,7 +102,7 @@ export function Shell() {
 		apply();
 		if (welcomeGeneration > 0) writeThemeHint(preference);
 		return preference.themeMode === "system" ? onSystemAppearanceChange(apply) : undefined;
-	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair]);
+	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair, userThemes]);
 	useGlobalHotkeys({
 		onProjects: hasActiveWorkspace
 			? () => {

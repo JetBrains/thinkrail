@@ -5,8 +5,13 @@ import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import {
 	buildThemeCatalog,
 	deriveSystemThemePair,
+	getThemes,
+	getUserThemeIssues,
+	installCachedUserThemes,
 	installThemeCatalog,
+	installUserThemes,
 	onSystemAppearanceChange,
+	onThemesChange,
 	readSystemAppearance,
 	readThemeHint,
 	resolveThemePreference,
@@ -134,6 +139,66 @@ test("theme hints migrate legacy ids and use the native stable adapter", () => {
 		expect(readThemeHint()).toEqual(preference);
 		stored = JSON.stringify({ version: 1, theme: "dark", themeMode: "system" });
 		expect(readThemeHint()).toEqual({ theme: "dark", themeMode: "fixed" });
+	} finally {
+		Reflect.deleteProperty(globalThis, "__THINKRAIL_STABLE_PREFERENCES__");
+	}
+});
+
+function userTheme(id: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+	const dark = bundledCandidates()["dark.theme.json"] as Record<string, unknown>;
+	return { ...structuredClone(dark), id, label: id, ...overrides };
+}
+
+test("user themes join the catalog; invalid, reserved and duplicate files become issues", () => {
+	installThemeCatalog(buildThemeCatalog(bundledCandidates()));
+	let notified = 0;
+	const stop = onThemesChange(() => notified++);
+	try {
+		installUserThemes([
+			{ fileName: "ocean.theme.json", ok: true, manifest: userTheme("ocean", { order: 1 }) },
+			{ fileName: "copy.theme.json", ok: true, manifest: userTheme("ocean") },
+			{ fileName: "dark.theme.json", ok: true, manifest: userTheme("dark") },
+			{ fileName: "legacy.theme.json", ok: true, manifest: userTheme("high-contrast") },
+			{ fileName: "partial.theme.json", ok: true, manifest: { schemaVersion: 2 } },
+			{ fileName: "broken.theme.json", ok: false, error: "invalid-json", detail: "bad" },
+		]);
+		expect(notified).toBe(1);
+		expect(getThemes().map((theme) => theme.id)).toContain("ocean");
+		expect(getThemes()[0]?.id).toBe(DEFAULT_CONFIG.theme);
+		expect(resolveThemePreference({ theme: "ocean", themeMode: "fixed" }).fallback).toBe(false);
+		expect(getUserThemeIssues().map((issue) => [issue.fileName, issue.error])).toEqual([
+			["copy.theme.json", "duplicate-id"],
+			["dark.theme.json", "reserved-id"],
+			["legacy.theme.json", "reserved-id"],
+			["partial.theme.json", "invalid-theme"],
+			["broken.theme.json", "invalid-json"],
+		]);
+		installUserThemes([]);
+		expect(getThemes().map((theme) => theme.id)).not.toContain("ocean");
+		expect(getUserThemeIssues()).toEqual([]);
+	} finally {
+		stop();
+	}
+});
+
+test("valid user themes are cached and reinstalled before the host answers", () => {
+	const stored = new Map<string, string>();
+	Reflect.set(globalThis, "__THINKRAIL_STABLE_PREFERENCES__", {
+		getItem: (key: string) => stored.get(key) ?? null,
+		setItem: (key: string, value: string) => stored.set(key, value),
+		removeItem: (key: string) => stored.delete(key),
+	});
+	try {
+		installThemeCatalog(buildThemeCatalog(bundledCandidates()));
+		installUserThemes([
+			{ fileName: "ocean.theme.json", ok: true, manifest: userTheme("ocean") },
+			{ fileName: "bad.theme.json", ok: true, manifest: { id: "bad" } },
+		]);
+		installThemeCatalog(buildThemeCatalog(bundledCandidates()));
+		expect(getThemes().map((theme) => theme.id)).not.toContain("ocean");
+		installCachedUserThemes();
+		expect(getThemes().map((theme) => theme.id)).toContain("ocean");
+		expect(getUserThemeIssues()).toEqual([]);
 	} finally {
 		Reflect.deleteProperty(globalThis, "__THINKRAIL_STABLE_PREFERENCES__");
 	}
