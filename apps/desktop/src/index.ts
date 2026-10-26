@@ -2,8 +2,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
+import type {
+	NativeCommand,
+	NativeNotificationInput,
+	NativeQuitHint,
+	NativeWindowState,
+} from "@thinkrail/contracts";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
+import { spawnDetached } from "@thinkrail/shared/spawn";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import Electrobun, {
 	ApplicationMenu,
@@ -24,6 +30,8 @@ import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation } from "./externalNavigation";
 import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
 import { createKeyStateReader } from "./keyState";
+import { desktopEntryId, linuxNotificationCommand } from "./linuxDesktopIdentity";
+import { type LinuxWindowIconApi, loadLinuxWindowIconApi } from "./linuxWindowIcon";
 import {
 	type DesktopDialogLabels,
 	readDialogLabels,
@@ -168,17 +176,50 @@ function stampWindowsTaskbarShortcuts(): void {
 	}
 }
 
-function setWindowsWindowIcon(window: { readonly ptr: WindowsHandle | null }): void {
-	if (process.platform !== "win32" || !window.ptr) return;
+let linuxWindowIconApi: LinuxWindowIconApi | undefined;
+
+function setNativeWindowIcon(window: { readonly ptr: WindowsHandle | null }): void {
+	if (!window.ptr) return;
 	try {
-		applyWindowsWindowIcon(
-			window.ptr,
-			join(PATHS.RESOURCES_FOLDER, "app.ico"),
-			loadWindowsIconApi(),
-		);
+		if (process.platform === "win32") {
+			applyWindowsWindowIcon(
+				window.ptr,
+				join(PATHS.RESOURCES_FOLDER, "app.ico"),
+				loadWindowsIconApi(),
+			);
+		} else if (process.platform === "linux") {
+			linuxWindowIconApi ??= loadLinuxWindowIconApi(
+				join(dirname(process.execPath), "libNativeWrapper.so"),
+			);
+			linuxWindowIconApi.setWindowIcon(window.ptr, join(PATHS.RESOURCES_FOLDER, "appIcon.png"));
+		}
 	} catch (error) {
-		desktopError("windows_icon", "could not set the Windows window icon", error);
+		desktopError("window_icon", "could not set the native window icon", error);
 	}
+}
+
+let linuxDesktopEntry: string | null | undefined;
+let notifySendMissingReported = false;
+
+function showLinuxNotification(input: NativeNotificationInput): void {
+	if (linuxDesktopEntry === undefined) {
+		try {
+			linuxDesktopEntry = desktopEntryId(dirname(PATHS.RESOURCES_FOLDER));
+		} catch (error) {
+			linuxDesktopEntry = null;
+			desktopError("linux_notification", "could not find the desktop entry", error);
+		}
+	}
+	const command = linuxNotificationCommand(input, {
+		iconPath: join(PATHS.RESOURCES_FOLDER, "appIcon.png"),
+		desktopEntry: linuxDesktopEntry,
+	});
+	if (spawnDetached(command) || notifySendMissingReported) return;
+	notifySendMissingReported = true;
+	desktopError(
+		"linux_notification",
+		"notify-send is unavailable; install libnotify-bin to show notifications",
+	);
 }
 
 function desktopUserData(): string {
@@ -259,7 +300,7 @@ async function start(): Promise<void> {
 		startupSplash = await openStartupSplash(
 			(options) => {
 				const splash = new BrowserWindow(options);
-				setWindowsWindowIcon(splash);
+				setNativeWindowIcon(splash);
 				return splash;
 			},
 			splashMessage(dialogLabels, pendingInstallVersion),
@@ -359,6 +400,10 @@ async function start(): Promise<void> {
 					return undefined;
 				},
 				showNotification: (input): undefined => {
+					if (process.platform === "linux") {
+						showLinuxNotification(input);
+						return;
+					}
 					Utils.showNotification({
 						title: input.title,
 						body: input.body,
@@ -445,7 +490,7 @@ async function start(): Promise<void> {
 						: {}),
 				}),
 	});
-	setWindowsWindowIcon(mainWindow);
+	setNativeWindowIcon(mainWindow);
 	if (!neutral) {
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,

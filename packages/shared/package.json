@@ -24,7 +24,7 @@
 		"@thinkrail/contracts": "workspace:*"
 	},
 	"devDependencies": {
-		"@resvg/resvg-js": "2.6.2",
+		"@resvg/resvg-js": "catalog:",
 		"@types/bun": "catalog:",
 		"resedit": "catalog:",
 		"typescript": "catalog:"
