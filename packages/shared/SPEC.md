@@ -19,7 +19,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 - **Owns:** host-side runtime helpers that are neither engine- nor transport-specific, and the native
   brand icon set both launchers ship (`assets/` and its generator, `scripts/generate-icons.ts`).
 - **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `repairShellEnv()`, `mergePath()`,
-  `loginShellImports()`, `parseLoginShellEnv()`, `LOGIN_ENV_MARKER`, `localeRepair()`;
+  `loginShellImports()`, `parseLoginShellEnv()`, `LOGIN_ENV_MARKER`, `localeRepair()`, `launchEnvKeys()`;
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/startupMark` → the static recursive wordmark plus the pure responsive/ANSI renderer
   and interactive-output gate used by every launcher;
@@ -245,6 +245,11 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Get right (shellEnv)
 
 - Runs **once at startup, before creating any `AgentSession`**.
+- **Launch keys are snapshotted before any repair.** The first `resolveShellEnv()` call records the
+  names already in `process.env` (same `Symbol.for` state, so bundled copies share it); `launchEnvKeys()`
+  returns that set, or the current names when no repair ever ran. The stored host environment
+  ([[submodule-server-environment]]) uses it so an explicit launch variable beats the stored record while
+  a login-shell import or locale repair does not.
 - **Async, one run per process, awaited before the first spawn.** `resolveShellEnv()` returns one
   promise cached on a `Symbol.for` global key, so every caller awaits that same run, even from a second
   bundled copy of the module (the desktop shell and its server bundle). A GUI launch pays for the login

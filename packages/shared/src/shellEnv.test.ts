@@ -3,6 +3,7 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	launchEnvKeys,
 	LOGIN_ENV_END,
 	LOGIN_ENV_MARKER,
 	localeRepair,
@@ -44,6 +45,7 @@ beforeEach(() => {
 });
 afterEach(() => {
 	delete (globalThis as Record<symbol, unknown>)[Symbol.for("thinkrail.shellEnv.pending")];
+	delete (globalThis as Record<symbol, unknown>)[Symbol.for("thinkrail.shellEnv.launchKeys")];
 	rmSync(shellDir, { recursive: true, force: true });
 	if (originalPath === undefined) delete process.env.PATH;
 	else process.env.PATH = originalPath;
@@ -288,4 +290,26 @@ test("every resolveShellEnv caller awaits the same run, across bundled copies", 
 	expect(copy.resolveShellEnv).not.toBe(resolveShellEnv);
 	expect(copy.resolveShellEnv()).toBe(run);
 	await run;
+});
+
+test("launchEnvKeys keeps the keys set before the shell repair, not the ones it imports", async () => {
+	delete process.env.TERM;
+	process.env.TR_TEST_PRESET = "launch";
+	fakeShell(
+		`printf '${LOGIN_ENV_MARKER}TR_TEST_IMPORTED=login\\0PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'`,
+	);
+	const run = resolveShellEnv();
+	await run;
+	expect(process.env.TR_TEST_IMPORTED).toBe("login");
+	expect(launchEnvKeys().has("TR_TEST_PRESET")).toBe(true);
+	expect(launchEnvKeys().has("TR_TEST_IMPORTED")).toBe(false);
+	const copy: typeof import("./shellEnv") = await import(
+		`${import.meta.dir}/shellEnv.ts?bundled-copy-keys`
+	);
+	expect(copy.launchEnvKeys()).toBe(launchEnvKeys());
+});
+
+test("launchEnvKeys without a shell repair is the current environment", () => {
+	process.env.TR_TEST_PRESET = "now";
+	expect(launchEnvKeys().has("TR_TEST_PRESET")).toBe(true);
 });
