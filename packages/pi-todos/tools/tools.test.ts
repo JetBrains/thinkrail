@@ -1,8 +1,7 @@
-import { expect, spyOn, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import * as fs from "node:fs/promises";
+import { expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type {
 	AgentToolResult,
 	ExtensionAPI,
@@ -106,9 +105,12 @@ test("a completion preserves oversized summary output without repeating the muta
 		expect(store.read()).toEqual(afterMutation);
 		expect(afterMutation.summary).toBe(summary);
 		expect(afterMutation.todos[0]?.status).toBe("done");
-		if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600);
+		if (process.platform !== "win32") {
+			expect(statSync(path).mode & 0o777).toBe(0o600);
+			expect(statSync(dirname(path)).mode & 0o777).toBe(0o700);
+		}
 	} finally {
-		if (path) rmSync(path, { force: true });
+		if (path) rmSync(dirname(path), { recursive: true, force: true });
 		rmSync(cwd, { recursive: true, force: true });
 	}
 });
@@ -125,7 +127,7 @@ test("errors keep their model-facing failure status when the message is oversize
 				expect(text(result)).toStartWith("Error:");
 				expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
 			} finally {
-				if (path) rmSync(path, { force: true });
+				if (path) rmSync(dirname(path), { recursive: true, force: true });
 			}
 		}
 	} finally {
@@ -146,9 +148,13 @@ test("todo pagination keeps filters, clamps limits and handles empty or invalid 
 			],
 		});
 		store.add({ title: "Not done" });
-		const first = await run("todo_list", { status: "done", limit: 100000 }, cwd);
+		const first = await run("todo_list", { status: "done" }, cwd);
 		expect((first.details as { nextOffset?: number }).nextOffset).toBe(200);
 		expect(text(first)).toContain("status: done");
+		const expanded = await run("todo_list", { status: "done", limit: 100000 }, cwd);
+		expect((expanded.details as { nextOffset?: number }).nextOffset).toBeUndefined();
+		expect(text(expanded).split("\n")).toHaveLength(250);
+		expect(text(expanded)).not.toContain("Not done");
 		const last = await run("todo_list", { status: "done", offset: 200 }, cwd);
 		expect((last.details as { nextOffset?: number }).nextOffset).toBeUndefined();
 		expect(text(last).split("\n")).toHaveLength(50);
@@ -156,6 +162,59 @@ test("todo pagination keeps filters, clamps limits and handles empty or invalid 
 		expect(text(await run("todo_list", { offset: 9999 }, cwd))).toContain("No more plan lines");
 		expect(isError(await run("todo_list", { offset: -1 }, cwd))).toBe(true);
 		expect(isError(await run("todo_list", { limit: 0 }, cwd))).toBe(true);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("larger requested pages include the current task and loose queue after completed groups", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-expanded-page-"));
+	try {
+		const store = new TodoStore(cwd, "sess-test");
+		store.replaceAll({
+			groups: Array.from({ length: 30 }, (_, group) => ({
+				title: `Completed task ${group}`,
+				todos: Array.from({ length: 7 }, (_, step) => ({
+					title: `Step ${step}`,
+					status: "done",
+				})),
+			})),
+		});
+		store.add({ title: "Current work", group: "Current task" });
+		store.add({ title: "User request", origin: "user" });
+		const plan = store.read();
+		const compact = await run("todo_list", {}, cwd);
+		expect((compact.details as { nextOffset?: number }).nextOffset).toBe(200);
+		expect(text(compact)).not.toContain("Current work");
+		const expanded = await run("todo_list", { limit: 1000 }, cwd);
+		expect((expanded.details as { nextOffset?: number }).nextOffset).toBeUndefined();
+		expect(text(expanded)).toContain("Current work");
+		expect(text(expanded)).toContain("User request");
+		expect(text(expanded)).toContain("nothing is in_progress");
+		expect(Buffer.byteLength(text(expanded))).toBeLessThanOrEqual(50 * 1024);
+		expect(store.read()).toEqual(plan);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("requested TODO pages reserve notice lines within Pi's line limit", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-line-cap-"));
+	try {
+		const store = new TodoStore(cwd, "sess-test");
+		store.replaceAll({
+			groups: Array.from({ length: 2100 }, (_, i) => ({ title: String(i), todos: [] })),
+		});
+		store.add({ title: "Visible item" });
+		const first = await run("todo_list", { limit: 100000 }, cwd);
+		expect((first.details as { nextOffset?: number }).nextOffset).toBe(1990);
+		expect(text(first).split("\n")).toHaveLength(1991);
+		expect(text(first)).toContain("offset: 1990");
+		const last = await run("todo_list", { offset: 1990 }, cwd);
+		expect((last.details as { nextOffset?: number }).nextOffset).toBeUndefined();
+		expect(text(last).split("\n")).toHaveLength(113);
+		expect(text(last)).toStartWith("▸ 1990");
+		expect(text(last)).toContain("Visible item");
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
@@ -181,7 +240,7 @@ test("a single enormous plan line still exposes continuation and its file can ex
 		await expect(createReadTool(cwd).execute("missing", { path })).rejects.toThrow();
 		expect(store.read().todos).toHaveLength(2);
 	} finally {
-		if (path) rmSync(path, { force: true });
+		if (path) rmSync(dirname(path), { recursive: true, force: true });
 		rmSync(cwd, { recursive: true, force: true });
 	}
 });
@@ -218,53 +277,6 @@ test("failed output capture reports unavailable without retrying a successful mu
 			if (value === undefined) delete process.env[key];
 			else process.env[key] = value;
 		}
-		rmSync(cwd, { recursive: true, force: true });
-	}
-});
-
-test.each([
-	"partial write",
-	"collision",
-	"cleanup failure",
-] as const)("capture failure after %s preserves the mutation and cleans up only its own file", async (failure) => {
-	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-capture-ownership-"));
-	const realOpen = fs.open;
-	const realUnlink = fs.unlink;
-	let path: string | undefined;
-	let file: fs.FileHandle | undefined;
-	const unlink = spyOn(fs, "unlink").mockImplementation(async (name) => {
-		if (failure === "cleanup failure" && String(name) === path)
-			throw new Error("Synthetic cleanup failure");
-		return realUnlink(name);
-	});
-	const open = spyOn(fs, "open").mockImplementation(async (name, flags, mode) => {
-		if (!String(name).includes("pi-todo-output-")) return realOpen(name, flags, mode);
-		path = String(name);
-		if (failure === "collision") writeFileSync(path, "existing output", { flag: "wx" });
-		file = await realOpen(name, flags, mode);
-		const write = file.writeFile.bind(file);
-		file.writeFile = async () => {
-			await write("PARTIAL");
-			throw Object.assign(new Error("Synthetic disk-full failure"), { code: "ENOSPC" });
-		};
-		return file;
-	});
-	try {
-		const result = await run("todo_add", { title: "x".repeat(60000) }, cwd);
-		expect(result.isError).not.toBe(true);
-		expect((result.details as { output: { captureFailed: boolean } }).output.captureFailed).toBe(
-			true,
-		);
-		expect(new TodoStore(cwd, "sess-test").read().todos).toHaveLength(1);
-		if (!path) throw new Error("missing capture attempt");
-		expect(existsSync(path)).toBe(failure !== "partial write");
-		if (failure === "collision") expect(readFileSync(path, "utf8")).toBe("existing output");
-		if (file) await expect(file.stat()).rejects.toThrow();
-	} finally {
-		open.mockRestore();
-		unlink.mockRestore();
-		await file?.close().catch(() => {});
-		if (path) rmSync(path, { force: true });
 		rmSync(cwd, { recursive: true, force: true });
 	}
 });

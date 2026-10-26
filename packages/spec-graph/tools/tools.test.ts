@@ -1,4 +1,4 @@
-import { expect, spyOn, test } from "bun:test";
+import { expect, test } from "bun:test";
 import {
 	existsSync,
 	mkdirSync,
@@ -9,9 +9,8 @@ import {
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
-import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type {
 	AgentToolResult,
 	ExtensionAPI,
@@ -64,10 +63,13 @@ test("an oversized spec match is preserved privately without changing its source
 		try {
 			expect(readFileSync(path, "utf8")).toContain(line);
 			expect(readFileSync(join(root, "SPEC.md"), "utf8")).toBe(source);
-			if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600);
+			if (process.platform !== "win32") {
+				expect(statSync(path).mode & 0o777).toBe(0o600);
+				expect(statSync(dirname(path)).mode & 0o777).toBe(0o700);
+			}
 			expect(text(result)).toContain("byte ranges");
 		} finally {
-			rmSync(path, { force: true });
+			rmSync(dirname(path), { recursive: true, force: true });
 		}
 	});
 });
@@ -83,23 +85,44 @@ test("errors keep their model-facing failure status when the message is oversize
 				expect(text(result)).toStartWith("Error:");
 				expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
 			} finally {
-				if (path) rmSync(path, { force: true });
+				if (path) rmSync(dirname(path), { recursive: true, force: true });
 			}
 		}
 	});
 });
 
-test("an oversized error remains a failure when output capture is unavailable", async () => {
+test("unavailable temporary storage preserves mutation outcomes and oversized errors", async () => {
 	await withRoot(async (root) => {
-		const open = spyOn(fs, "open").mockRejectedValue(new Error("Synthetic capture failure"));
+		const keys = ["TMPDIR", "TMP", "TEMP"] as const;
+		const original = keys.map((key) => process.env[key]);
 		try {
-			const result = await run("spec_get", { id: "x".repeat(60000) }, root);
-			expect(result.isError).toBe(true);
-			expect(text(result)).toStartWith("Error:");
-			expect(text(result)).toContain("Full output unavailable");
-			expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+			const notDirectory = join(root, "not-a-directory");
+			writeFileSync(notDirectory, "fixture");
+			for (const key of keys) process.env[key] = notDirectory;
+			const id = "x".repeat(60000);
+			const created = await run(
+				"spec_create",
+				{ path: "SPEC.md", id, type: "module-design", title: "Fixture" },
+				root,
+			);
+			expect(created.isError).not.toBe(true);
+			expect((created.details as { output: { captureFailed: boolean } }).output.captureFailed).toBe(
+				true,
+			);
+			expect(readFileSync(join(root, "SPEC.md"), "utf8")).toContain(`id: ${id}`);
+			expect(text(created)).toContain("Full output unavailable");
+			expect(text(created)).toContain("do not repeat a mutation");
+			const failed = await run("spec_get", { id: "missing".repeat(10000) }, root);
+			expect(failed.isError).toBe(true);
+			expect(text(failed)).toStartWith("Error:");
+			expect(text(failed)).toContain("Full output unavailable");
+			expect(Buffer.byteLength(text(failed))).toBeLessThanOrEqual(50 * 1024);
 		} finally {
-			open.mockRestore();
+			for (const [index, key] of keys.entries()) {
+				const value = original[index];
+				if (value === undefined) delete process.env[key];
+				else process.env[key] = value;
+			}
 		}
 	});
 });
@@ -145,59 +168,8 @@ test("large graph, node and validation text also remains bounded and file-backed
 				if (!path) throw new Error("missing full output");
 				expect(readFileSync(path, "utf8").length).toBeGreaterThan(50000);
 			} finally {
-				if (path) rmSync(path, { force: true });
+				if (path) rmSync(dirname(path), { recursive: true, force: true });
 			}
-		}
-	});
-});
-
-test.each([
-	"partial write",
-	"collision",
-	"cleanup failure",
-] as const)("capture failure after %s preserves the mutation and cleans up only its own file", async (failure) => {
-	await withRoot(async (root) => {
-		const realOpen = fs.open;
-		const realUnlink = fs.unlink;
-		let path: string | undefined;
-		let file: fs.FileHandle | undefined;
-		const unlink = spyOn(fs, "unlink").mockImplementation(async (name) => {
-			if (failure === "cleanup failure" && String(name) === path)
-				throw new Error("Synthetic cleanup failure");
-			return realUnlink(name);
-		});
-		const open = spyOn(fs, "open").mockImplementation(async (name, flags, mode) => {
-			if (!String(name).includes("pi-spec-output-")) return realOpen(name, flags, mode);
-			path = String(name);
-			if (failure === "collision") writeFileSync(path, "existing output", { flag: "wx" });
-			file = await realOpen(name, flags, mode);
-			const write = file.writeFile.bind(file);
-			file.writeFile = async () => {
-				await write("PARTIAL");
-				throw Object.assign(new Error("Synthetic disk-full failure"), { code: "ENOSPC" });
-			};
-			return file;
-		});
-		try {
-			const result = await run(
-				"spec_create",
-				{ path: "SPEC.md", id: "x".repeat(60000), type: "module-design", title: "Fixture" },
-				root,
-			);
-			expect(result.isError).not.toBe(true);
-			expect((result.details as { output: { captureFailed: boolean } }).output.captureFailed).toBe(
-				true,
-			);
-			expect(readFileSync(join(root, "SPEC.md"), "utf8")).toContain(`id: ${"x".repeat(60000)}`);
-			if (!path) throw new Error("missing capture attempt");
-			expect(existsSync(path)).toBe(failure !== "partial write");
-			if (failure === "collision") expect(readFileSync(path, "utf8")).toBe("existing output");
-			if (file) await expect(file.stat()).rejects.toThrow();
-		} finally {
-			open.mockRestore();
-			unlink.mockRestore();
-			await file?.close().catch(() => {});
-			if (path) rmSync(path, { force: true });
 		}
 	});
 });

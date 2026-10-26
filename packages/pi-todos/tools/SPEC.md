@@ -87,17 +87,11 @@ The `index.ts` barrel: `registerTodoTools(pi)`, the sole entry point, called by 
 
 ## Bounded output
 
-Model-facing text, notices included, never exceeds Pi's 2,000-line / 50 KiB limits. `todo_list`
-pages the rendered plan by zero-based line offset, preserving group-first order and status filters;
-`nextOffset` is a continuation into the current plan, not a stored snapshot. Restart from zero after
-an edit. Full structured details remain available to presentation without entering model context.
+Model-facing text, notices included, stays within Pi's 2,000-line / 50 KiB limits. Overflow is captured
+in a private temporary file, which may expire; capture failure is explicit and never fails a completed
+mutation. Tool errors set `isError: true` and retain a visible error marker even if capture fails.
+Structured details remain presentation data, outside model context.
 
-Oversized text (including a single enormous title or a prior completion summary) is preserved exactly
-in an exclusive owner-only temporary file. Retrieval uses bounded `read` ranges or shell byte ranges
-for a single huge line; files may expire. Capture failure is explicit, with no false claim of saved
-output and no instruction to repeat a mutation. Failed captures close their handle and attempt to
-remove only a file whose exclusive creation succeeded; a collision is never ours to delete. Cleanup
-failure cannot change the mutation's outcome. Actual tool errors retain Pi's `isError` flag and a short
-model-facing error marker even when their payload is oversized or capture fails.
-No input truncation, durable output store, global wrapper or compaction policy lives here. The thin
-Pi/filesystem adapter stays local so this package remains independent of other portable extensions.
+`todo_list` pages current rendered lines in group-first order with the same status filter; restart
+after plan edits. Its 200-line default favors incremental reads; callers may request up to Pi's line
+limit minus a notice reserve. Pagination does not promise that every active or loose item is on page 1.

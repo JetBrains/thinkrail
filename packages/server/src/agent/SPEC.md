@@ -895,13 +895,9 @@ Portable tools own bounded model-facing output ([[submodule-spec-graph-tools]],
 read/bash/MCP limits remain authoritative. Structured result details are presentation metadata;
 measure model-facing content, not the serialized transcript or SDK context object.
 
-`piContextOverflow.test.ts` exercises real in-process sessions with synthetic providers and a stub
-compactor: tool-result sizes at dispatch, one overflow retry, and final settlement. Its pure parity
-probes also expose two engine limitations observed in Pi 1.2 and 1.4: retained tool pairs can exceed
-`keepRecentTokens`, and summary-output limits do not bound aggregate summary input. These are upgrade
-review signals, not guarantees of safe whole-request admission or a claim about a historical incident.
-Budgeting, compaction and retry corrections belong upstream; neither earlier-compaction overrides nor
-host retries compensate for them here. Re-evaluate the parity expectations when Pi changes those paths.
+Pi owns aggregate budgeting, compaction and recovery; bounded tool output does not guarantee
+whole-request admission. The host adds no compaction overrides or retry loop. Known upstream
+context-budget limitations and their upgrade checks live in [[pi-compatibility]].
 
 ## Session titles
 

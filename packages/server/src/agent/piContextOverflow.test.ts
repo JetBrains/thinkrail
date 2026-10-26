@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import {
 	createFauxCore,
@@ -14,16 +14,13 @@ import {
 	createAgentSession,
 	DEFAULT_MAX_BYTES,
 	DefaultResourceLoader,
-	estimateTokens,
-	findCutPoint,
-	generateSummary,
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
-async function scenario(responses: FauxResponseStep[], overflow = false) {
+async function scenario(responses: FauxResponseStep[]) {
 	const cwd = mkdtempSync(join(tmpdir(), "thinkrail-context-probe-"));
 	const agentDir = join(cwd, ".pi-agent");
 	mkdirSync(agentDir);
@@ -35,7 +32,7 @@ async function scenario(responses: FauxResponseStep[], overflow = false) {
 		reasoning: false,
 		input: ["text"] as "text"[],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-		contextWindow: overflow ? 1000 : 1_000_000,
+		contextWindow: 1_000_000,
 		maxTokens: 100,
 	};
 	const faux = createFauxCore({
@@ -57,9 +54,7 @@ async function scenario(responses: FauxResponseStep[], overflow = false) {
 		streamSimple: faux.streamSimple,
 		models: [{ ...model, api: faux.api }],
 	});
-	const settingsManager = SettingsManager.inMemory(
-		overflow ? { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } } : {},
-	);
+	const settingsManager = SettingsManager.inMemory();
 	const resourceLoader = new DefaultResourceLoader({
 		cwd,
 		agentDir,
@@ -79,14 +74,6 @@ async function scenario(responses: FauxResponseStep[], overflow = false) {
 						};
 					},
 				});
-				if (overflow)
-					pi.on("session_before_compact", (event) => ({
-						compaction: {
-							summary: "Synthetic bounded summary.",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-						},
-					}));
 			},
 		],
 	});
@@ -127,7 +114,7 @@ async function scenario(responses: FauxResponseStep[], overflow = false) {
 	const events: AgentSessionEvent[] = [];
 	const unsubscribe = session.subscribe((event) => events.push(event));
 	try {
-		await session.prompt(overflow ? "x".repeat(5000) : "Run the synthetic fixture.");
+		await session.prompt("Run the synthetic fixture.");
 		return { events, requests, callCount: faux.state.callCount };
 	} finally {
 		unsubscribe();
@@ -135,7 +122,8 @@ async function scenario(responses: FauxResponseStep[], overflow = false) {
 		for (const event of events) {
 			if (event.type !== "tool_execution_end") continue;
 			const details = event.result.details as { output?: { fullOutputPath?: string } } | undefined;
-			if (details?.output?.fullOutputPath) rmSync(details.output.fullOutputPath, { force: true });
+			if (details?.output?.fullOutputPath)
+				rmSync(dirname(details.output.fullOutputPath), { recursive: true, force: true });
 		}
 		rmSync(cwd, { recursive: true, force: true });
 	}
@@ -171,98 +159,5 @@ test("Pi dispatches an oversized tool error with its failure flag and bounded er
 	expect(result.requests[1]?.toolErrors).toEqual([true]);
 	expect(result.requests[1]?.content).toContain("Error:");
 	expect(result.requests[1]?.toolTextBytes[0]).toBeLessThanOrEqual(DEFAULT_MAX_BYTES);
-	expect(result.events.at(-1)?.type).toBe("agent_settled");
-});
-
-test("Pi parity: a retained tool pair can exceed the recent-token target", () => {
-	const session = SessionManager.inMemory("/synthetic-context-probe");
-	session.appendMessage({ role: "user", content: "Earlier context", timestamp: 1 });
-	session.appendMessage(fauxAssistantMessage("Earlier answer"));
-	session.appendMessage({ role: "user", content: "Current task", timestamp: 2 });
-	session.appendMessage(
-		fauxAssistantMessage(
-			fauxToolCall("fixture", { text: "x".repeat(20000) }, { id: "large-call" }),
-		),
-	);
-	session.appendMessage({
-		role: "toolResult",
-		toolCallId: "large-call",
-		toolName: "fixture",
-		content: [{ type: "text", text: "x".repeat(60000) }],
-		isError: false,
-		timestamp: 3,
-	});
-	const entries = session.getBranch();
-	const cut = findCutPoint(entries, 0, entries.length, 2000);
-	const retained = entries
-		.slice(cut.firstKeptEntryIndex)
-		.flatMap((entry) => (entry.type === "message" ? [entry.message] : []));
-	expect(retained.map((message) => message.role)).toEqual(["assistant", "toolResult"]);
-	expect(retained.reduce((total, message) => total + estimateTokens(message), 0)).toBeGreaterThan(
-		8000,
-	);
-});
-
-test("Pi parity: summary output limits do not bound aggregate summary input", async () => {
-	const faux = createFauxCore({
-		provider: "summary-input-probe",
-		models: [{ id: "summary-input", contextWindow: 8000, maxTokens: 1024 }],
-		tokensPerSecond: 100_000,
-	});
-	const requestBytes: number[] = [];
-	faux.setResponses([
-		(context) => {
-			requestBytes.push(
-				Buffer.byteLength(JSON.stringify(context.messages.map((message) => message.content))),
-			);
-			return fauxAssistantMessage("Synthetic summary");
-		},
-	]);
-	await generateSummary(
-		[{ role: "user", content: "x".repeat(100000), timestamp: 1 }],
-		faux.getModel(),
-		512,
-		"faux",
-		undefined,
-		undefined,
-		undefined,
-		undefined,
-		"off",
-		faux.streamSimple,
-	);
-	expect(faux.state.callCount).toBe(1);
-	expect(requestBytes).toHaveLength(1);
-	expect(requestBytes[0]).toBeGreaterThan(8000 * 4);
-});
-
-function overflowError(timestamp = Date.now()) {
-	return fauxAssistantMessage("", {
-		stopReason: "error",
-		errorMessage: "400 invalid_request_error: prompt is too long: 12000 tokens > 1000 maximum",
-		timestamp,
-	});
-}
-
-test("Pi retries a provider context overflow once before a final settlement", async () => {
-	const result = await scenario([overflowError(), fauxAssistantMessage("Recovered")], true);
-	expect(result.callCount).toBe(2);
-	expect(
-		result.events
-			.filter((event) => event.type === "compaction_end")
-			.map((event) => event.willRetry),
-	).toEqual([true]);
-	expect(result.events.filter((event) => event.type === "agent_settled")).toHaveLength(1);
-	expect(result.events.at(-1)?.type).toBe("agent_settled");
-});
-
-test("Pi reports exhausted context recovery instead of retrying indefinitely", async () => {
-	const result = await scenario([overflowError(), () => overflowError(Date.now() + 60_000)], true);
-	expect(result.callCount).toBe(2);
-	const ends = result.events.filter((event) => event.type === "compaction_end");
-	expect(ends.map((event) => event.willRetry)).toEqual([true, false]);
-	expect(ends[1]?.errorMessage).toContain(
-		"Context overflow recovery failed after one compact-and-retry attempt",
-	);
-	expect(result.events.filter((event) => event.type === "agent_settled")).toHaveLength(1);
 	expect(result.events.at(-1)?.type).toBe("agent_settled");
 });

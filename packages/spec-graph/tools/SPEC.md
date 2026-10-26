@@ -36,15 +36,10 @@ file; the other four are read-only.
 
 ## Invariants
 
-- Model-facing text, including notices, is capped at Pi's 2,000-line / 50 KiB limits. Oversized
-  responses retain the exact full text in an exclusive owner-only temporary file; capture failure is
-  explicit and never changes a successful mutation into a retry instruction. Files may expire; use
-  bounded `read` ranges (or shell byte ranges for a single huge line), not a full replay. Structured
-  `details` stay presentation data, not model context. This is tool-owned output formatting, not a
-  global wrapper or context manager. Failed captures close their handle and attempt to remove only
-  their exclusively created file, never an existing collision; cleanup failure cannot change a
-  mutation's outcome. Actual errors retain Pi's `isError` flag and a short model-facing error marker
-  even when their payload is oversized or capture fails.
+- Model-facing text, notices included, stays within Pi's 2,000-line / 50 KiB limits. Overflow is
+  captured in a private temporary file, which may expire; capture failure is explicit and never fails
+  a completed mutation. Tool errors set `isError: true` and retain a visible error marker even if
+  capture fails. Structured `details` remain presentation data, outside model context.
 - `spec_grep` pages by zero-based match offset with both a count and formatted-byte ceiling. Follow
   `nextOffset` with the same filters; offset reads the current sorted sources, not a snapshot, so
   restart when files change. One oversized match is file-backed rather than skipped or split.

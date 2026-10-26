@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { open, unlink } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -30,21 +29,14 @@ export async function textResult<T>(
 	const preview = truncateHead(text);
 	if (!preview.truncated) return { content: [{ type: "text", text }], details };
 	let fullOutputPath: string | undefined;
-	let ownedPath: string | undefined;
 	let notice: string;
 	try {
-		const path = join(tmpdir(), `pi-spec-output-${randomUUID()}.txt`);
-		const file = await open(path, "wx", 0o600);
-		ownedPath = path;
-		try {
-			await file.writeFile(text);
-		} finally {
-			await file.close();
-		}
+		const directory = await mkdtemp(join(tmpdir(), "pi-spec-output-"));
+		const path = join(directory, "output.txt");
+		await writeFile(path, text, { mode: 0o600 });
 		fullOutputPath = path;
 		notice = `Full output saved to: ${path}\nTemporary file; may expire. Read only relevant offset/limit ranges; use shell byte ranges for oversized single lines.`;
 	} catch {
-		if (ownedPath) await unlink(ownedPath).catch(() => {});
 		notice =
 			"Full output unavailable: temporary-file capture failed. Narrow a read query; do not repeat a mutation to retrieve its output.";
 	}

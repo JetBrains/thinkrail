@@ -79,9 +79,11 @@ default renderer.
 
 ## Specs and comments
 
-Specs are the durable home for intent, decisions, invariants, trade-offs, and post-mortems. Keep them
-concise and avoid restating code or another spec. Comments are near-zero: lint/type directives and a
-rare one-line hazard note are acceptable; rationale and narrative belong in the owning spec.
+Specs are the durable home for intent, decisions, invariants, trade-offs, and concise post-mortems.
+State contracts and boundaries, not implementation walkthroughs, failure-case inventories, or test-run
+narratives. Say each fact once; link to its owning spec rather than repeat it. Comments are near-zero:
+lint/type directives and a rare one-line hazard note are acceptable; rationale belongs in the owning
+spec.
 
 ## Verification
 
@@ -89,6 +91,9 @@ Local tests use disposable fixtures and have no production access. Run affected 
 caused by the requested change, and rerun them without asking for approval at each step.
 
 - Iterate with the smallest relevant unit or focused E2E target.
+- Test ThinkRail contracts and SDK integration behavior, not known upstream defects as required
+  behavior. Record Pi limitations and upgrade checks in `pi-compatibility.md`; extend existing test
+  fixtures rather than duplicate recovery or lifecycle setups.
 - For shipped app behavior or integration changes, run the complete no-agent browser suite
   (`bun run e2e`) once after the combined implementation and before final handoff or PR — not once per
   TODO item or commit.
@@ -125,10 +130,12 @@ Green gates are necessary but not sufficient:
   selectors and writes that always travel together belong in one atomic action.
 - When replacing a pattern or state model, search for every old occurrence and migrate it, or name the
   intentional survivors.
-- `README.md` is the user-facing front page. For a change that adds, removes, or renames a user-visible
-  capability, or alters installation or analytics behavior, review its claims and update the affected
-  ones in the same change; refresh a screenshot under `.github/readme-assets/` when the UI it depicts
-  changes materially.
+- `README.md` is the user-facing front page: describe capabilities, not internal mechanisms. For a
+  change that adds, removes, or renames a user-visible capability, or alters installation or analytics
+  behavior, review its claims and update the affected ones in the same change; refresh a screenshot
+  under `.github/readme-assets/` when the UI it depicts changes materially.
+- Describe behavior changes against the actual base: adding a flag or guarantee is new behavior, not
+  preservation of an existing contract.
 - Apply safe cleanup that is inside the approved scope. Ask only for destructive, out-of-scope, or
   product-level decisions.
 - Use the `shipping-a-pr` skill for PR lifecycle work, including screenshot expectations and PR

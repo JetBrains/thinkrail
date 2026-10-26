@@ -29,7 +29,7 @@ const parameters = Type.Object({
 		Type.Integer({
 			minimum: 0,
 			description:
-				"Zero-based match offset (default: 0). Continue with nextOffset and the same filters; restart after source changes.",
+				"Zero-based match offset (default: 0). Continue with the offset given in the result and the same filters; restart after source changes.",
 		}),
 	),
 });

@@ -1,6 +1,7 @@
 import { StringEnum } from "@earendil-works/pi-ai/compat";
 import {
 	DEFAULT_MAX_BYTES,
+	DEFAULT_MAX_LINES,
 	type ExtensionAPI,
 	truncateHead,
 } from "@earendil-works/pi-coding-agent";
@@ -16,6 +17,8 @@ import {
 	withNudges,
 } from "./shared.ts";
 
+const MAX_PAGE_LINES = DEFAULT_MAX_LINES - 10;
+
 const parameters = Type.Object({
 	status: Type.Optional(
 		StringEnum(TODO_STATUSES, {
@@ -27,13 +30,13 @@ const parameters = Type.Object({
 		Type.Integer({
 			minimum: 0,
 			description:
-				"Zero-based rendered-line offset (default: 0). Continue with nextOffset and the same status filter; restart after plan edits.",
+				"Zero-based rendered-line offset (default: 0). Continue with the offset given in the result and the same status filter; restart after plan edits.",
 		}),
 	),
 	limit: Type.Optional(
 		Type.Integer({
 			minimum: 1,
-			description: "Lines per page (default/max: 200; the byte limit may return fewer).",
+			description: `Lines per page (default: 200, max: ${MAX_PAGE_LINES}; the byte limit may return fewer).`,
 		}),
 	),
 });
@@ -49,7 +52,7 @@ export function registerTodoList(pi: ExtensionAPI): void {
 		parameters,
 		async execute(_callId, params, _signal, _onUpdate, ctx) {
 			const offset = params.offset ?? 0;
-			const limit = Math.min(params.limit ?? 200, 200);
+			const limit = Math.min(params.limit ?? 200, MAX_PAGE_LINES);
 			if (
 				!Number.isSafeInteger(offset) ||
 				offset < 0 ||
