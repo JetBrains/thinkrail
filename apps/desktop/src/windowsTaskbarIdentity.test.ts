@@ -37,23 +37,18 @@ function pinnedFolders(appData: string): { taskbar: string; implicit: string } {
 
 test("collects Electrobun's Start-menu shortcut and every taskbar pin, but not the Desktop shortcut", () => {
 	withTemp((root) => {
-		const channelRoot = join(root, "local", "ai.thinkrail.app", "canary");
-		mkdirSync(join(channelRoot, "app"), { recursive: true });
-		writeFileSync(
-			join(channelRoot, ".electrobun-uninstall.json"),
-			JSON.stringify({
-				schema_version: 1,
-				desktop_shortcut: "C:\\Users\\me\\Desktop\\ThinkRail (Canary).lnk",
-				start_menu_shortcut: "C:\\Users\\me\\Start Menu\\Programs\\ThinkRail (Canary).lnk",
-			}),
-		);
 		const appData = join(root, "roaming");
 		const { taskbar, implicit } = pinnedFolders(appData);
 		writeFileSync(join(taskbar, "ThinkRail (Canary).lnk"), "");
 		writeFileSync(join(taskbar, "desktop.ini"), "");
 		writeFileSync(join(implicit, "ThinkRail (Canary).lnk"), "");
+		const install = {
+			identifier: "ai.thinkrail.app",
+			channel: "canary",
+			startMenuShortcut: "C:\\Users\\me\\Start Menu\\Programs\\ThinkRail (Canary).lnk",
+		};
 
-		expect(taskbarShortcutCandidates(join(channelRoot, "app"), appData)).toEqual({
+		expect(taskbarShortcutCandidates(install, appData)).toEqual({
 			paths: [
 				"C:\\Users\\me\\Start Menu\\Programs\\ThinkRail (Canary).lnk",
 				join(taskbar, "ThinkRail (Canary).lnk"),
@@ -64,36 +59,13 @@ test("collects Electrobun's Start-menu shortcut and every taskbar pin, but not t
 	});
 });
 
-test("finds nothing for an unmanaged build or an unknown manifest schema", () => {
+test("finds nothing for an unmanaged build without pins", () => {
 	withTemp((root) => {
-		const appDir = join(root, "build", "ThinkRail-dev");
-		mkdirSync(appDir, { recursive: true });
-		expect(taskbarShortcutCandidates(appDir, undefined)).toEqual({ paths: [], failures: [] });
-		writeFileSync(
-			join(root, "build", ".electrobun-uninstall.json"),
-			JSON.stringify({ schema_version: 2, start_menu_shortcut: "C:\\x.lnk" }),
-		);
-		expect(taskbarShortcutCandidates(appDir, join(root, "missing"))).toEqual({
+		expect(taskbarShortcutCandidates(null, undefined)).toEqual({ paths: [], failures: [] });
+		expect(taskbarShortcutCandidates(null, join(root, "missing"))).toEqual({
 			paths: [],
 			failures: [],
 		});
-	});
-});
-
-test("a corrupt manifest is reported without hiding the taskbar pins", () => {
-	withTemp((root) => {
-		const appDir = join(root, "channel", "app");
-		mkdirSync(appDir, { recursive: true });
-		writeFileSync(join(root, "channel", ".electrobun-uninstall.json"), "");
-		const appData = join(root, "roaming");
-		const { taskbar } = pinnedFolders(appData);
-		writeFileSync(join(taskbar, "ThinkRail.lnk"), "");
-
-		const { paths, failures } = taskbarShortcutCandidates(appDir, appData);
-
-		expect(paths).toEqual([join(taskbar, "ThinkRail.lnk")]);
-		expect(failures).toHaveLength(1);
-		expect(failures[0]).toBeInstanceOf(SyntaxError);
 	});
 });
 

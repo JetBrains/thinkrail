@@ -208,7 +208,7 @@ jobs:
       - run: bun test packages/pi-background-commands
       - run: bun test packages/server/src/subprocess
       - run: bun run test:windows-paths
-      - run: bun test apps/desktop/src/windowsFrame.test.ts apps/desktop/src/windowChrome.test.ts apps/desktop/src/windowsWindowIcon.test.ts apps/desktop/src/windowsTaskbarIdentity.test.ts
+      - run: bun test apps/desktop/src/windowsFrame.test.ts apps/desktop/src/windowChrome.test.ts apps/desktop/src/windowsWindowIcon.test.ts apps/desktop/src/windowsTaskbarIdentity.test.ts apps/desktop/src/windowsInstalledApp.test.ts
       - run: bun run build:binary
       - run: bun run smoke:binary
 
