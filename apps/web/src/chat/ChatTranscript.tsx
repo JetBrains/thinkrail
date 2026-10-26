@@ -25,13 +25,14 @@ import {
 	selectChatAttended,
 	selectChatsContainer,
 	selectReadyCompletionAck,
+	selectWorkspaceById,
 	specPathMatcher,
 	toast,
 	useAppStore,
 } from "@/store";
 import { errorText, getTransport, respondToTool } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
-import { type ChatActions, ChatActionsContext } from "./ChatActions";
+import { type ChatActions, ChatActionsContext, type WorkspaceChatTarget } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { openContinuationTarget, refreshContinuation, requestContinuation } from "./continuations";
 import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
@@ -151,6 +152,20 @@ function useVirtualRows(
 	);
 	setStoredVirtualRows(virtualRows);
 	return virtualRows;
+}
+
+function LiveWorkspaceName({ workspaceId, fallback }: { workspaceId: string; fallback: string }) {
+	const name = useAppStore((state) => selectWorkspaceById(state, workspaceId)?.name);
+	return name ?? fallback;
+}
+
+function openWorkspace({ workspaceId, projectId, sessionId }: WorkspaceChatTarget): void {
+	const state = useAppStore.getState();
+	const known = selectWorkspaceById(state, workspaceId);
+	state.activateWorkspaceFromRoute(
+		{ id: workspaceId, projectId: known?.projectId ?? projectId },
+		sessionId,
+	);
 }
 
 export type ChatTranscriptHandle = {
@@ -639,6 +654,8 @@ const ChatTranscript = forwardRef<
 					t("chat.turn.handoff.sourceGone"),
 				);
 			},
+			openWorkspace,
+			WorkspaceName: LiveWorkspaceName,
 		}),
 		[
 			cancelAutomaticReveal,
