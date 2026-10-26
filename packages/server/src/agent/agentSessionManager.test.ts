@@ -2636,7 +2636,7 @@ test("an accepted answer persists and its RPC settles when Stop races before tur
 	}
 });
 
-test("Stop bounds a stalled post-tool hook and rejects an answer that did not persist", async () => {
+test("Stop bounds a stalled post-tool hook, and the answer it persisted is still acknowledged", async () => {
 	const hook = installStalledAskResultHook("stalled-ask-result");
 	const toolCallId = "stalled-answer-stop";
 	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
@@ -2656,7 +2656,7 @@ test("Stop bounds a stalled post-tool hook and rejects an answer that did not pe
 		await waitForPath(hook.startedPath);
 
 		const stopping = abortSession(session.sessionId, true, 25);
-		await expect(answering).rejects.toThrow("accepted answer was not persisted");
+		await answering;
 		await Promise.all([stopping, prompting]);
 
 		const transcript = await getSessionMessages(session.sessionId, "ws-stalled-answer-stop", cwd);

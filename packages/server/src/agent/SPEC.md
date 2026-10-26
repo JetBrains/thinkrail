@@ -540,10 +540,12 @@ re-opened transcripts provider-valid.
     reverse the winner. Semantic validation still gates execution: an answer accepted in the pre-execute
     window is acknowledged only if the real ask returned and `turn_end` contains its result; validation error
     or a missing result rejects the answer RPC rather than hanging or claiming success. The proof needs no
-    receipt from `execute`, which lives in the package. `persistTurn(toolResults, assistant)` reads the
-    call's arguments from the turn's assistant message and accepts only a non-error result whose `content`
-    and `details` deep-equal `buildQuestionnaireResponse(accepted, args)`. A post-tool hook that rewrites
-    the content therefore still rejects the RPC. Every expected call Pi
+    receipt from `execute`, which lives in the package. `persistTurn(toolResults)` accepts only a non-error
+    result whose `details` deep-equal the accepted answer: `details` is the answer itself, so the proof never
+    depends on the wording the extension gives the model. A post-tool hook that rewrites only the content
+    is acknowledged, since the answer did persist; one that replaces `details` or turns the result into an
+    error rejects the RPC. Rejected: comparing the rebuilt envelope too (it tied the host to the extension's
+    text and reported a persisted answer as lost whenever another extension rewrote tool output). Every expected call Pi
     does not execute is cleared at `turn_end`. The answer RPC resolves the phase and acknowledges only after
     the matching result reaches the persisted `turn_end` boundary. Explicit Stop drains the queue and aborts
     an unanswered phase with a stable stopped error; after Submit wins, Stop defers Pi abort until the answer

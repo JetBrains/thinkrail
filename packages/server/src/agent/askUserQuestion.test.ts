@@ -157,10 +157,7 @@ test("the host path accepts more than four questions in one call", async () => {
 	const answered = waiters.answer("tc-many", { answers: [], cancelled: true });
 	expect(answered.handled).toBe(true);
 	expect(textOf(await pending)).toContain("declined");
-	waiters.persistTurn(
-		[persistedAnswer("tc-many", { answers: [], cancelled: true }, many)],
-		askCall("tc-many", many),
-	);
+	waiters.persistTurn([persistedAnswer("tc-many", { answers: [], cancelled: true }, many)]);
 	if (answered.handled) await answered.persisted;
 });
 
@@ -209,47 +206,40 @@ test("a valid live execution is sequential, blocks for its answer, and returns t
 	expect(textOf(response)).toContain('"Which library?"="luxon"');
 	expect(response.details).toEqual(result);
 	expect((response as { terminate?: boolean }).terminate).toBeUndefined();
-	waiters.persistTurn([persistedAnswer("tc-1", result)], askCall("tc-1"));
+	waiters.persistTurn([persistedAnswer("tc-1", result)]);
 	if (answered.handled) await answered.persisted;
 	expect(waiters.hasRecoverableCall()).toBe(false);
 });
 
-test("an accepted answer persists only as the envelope built from the call's own arguments", async () => {
+test("an accepted answer is acknowledged by its persisted details, whatever text reached the model", async () => {
 	const result: AskUserQuestionResult = {
 		cancelled: false,
 		answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
 	};
-	const twoQuestions = args({
-		questions: [
-			...args().questions,
-			{
-				question: "Which runtime?",
-				header: "Runtime",
-				options: [
-					{ label: "bun", description: "" },
-					{ label: "node", description: "" },
-				],
-			},
-		],
-	});
-	const cases: [string, ReturnType<typeof persistedAnswer>, AgentMessage | undefined][] = [
+	const outcomes: [string, ReturnType<typeof persistedAnswer>, "resolves" | "rejects"][] = [
+		["the extension's own envelope", persistedAnswer("tc-proof", result), "resolves"],
 		[
-			"replaced content",
+			"content rewritten by a post-tool hook",
 			{ ...persistedAnswer("tc-proof", result), content: [{ type: "text", text: "rewritten" }] },
-			askCall("tc-proof"),
+			"resolves",
 		],
-		["unknown arguments", persistedAnswer("tc-proof", result), undefined],
-		["other arguments", persistedAnswer("tc-proof", result), askCall("tc-proof", twoQuestions)],
+		[
+			"details replaced by a post-tool hook",
+			{ ...persistedAnswer("tc-proof", result), details: { answers: [], cancelled: true } },
+			"rejects",
+		],
+		["an error result", { ...persistedAnswer("tc-proof", result), isError: true }, "rejects"],
 	];
-	for (const [label, persisted, assistant] of cases) {
+	for (const [label, persisted, expected] of outcomes) {
 		const waiters = createAskUserQuestionWaiters();
 		const pending = askTool(waiters).execute("tc-proof", args(), undefined, undefined, ctx());
 		await Promise.resolve();
 		const answered = waiters.answer("tc-proof", result);
 		await pending;
-		waiters.persistTurn([persisted], assistant);
+		waiters.persistTurn([persisted]);
 		if (!answered.handled) throw new Error(label);
-		await expect(answered.persisted).rejects.toThrow("accepted answer was not persisted");
+		if (expected === "resolves") await answered.persisted;
+		else await expect(answered.persisted).rejects.toThrow("accepted answer was not persisted");
 	}
 });
 
@@ -264,7 +254,7 @@ test("an answer arriving after tool_execution_start but before execute is retain
 	expect(answered.handled).toBe(true);
 	const response = await askTool(waiters).execute("tc-early", args(), undefined, undefined, ctx());
 	expect(response.details).toEqual(result);
-	waiters.persistTurn([persistedAnswer("tc-early", result)], askCall("tc-early"));
+	waiters.persistTurn([persistedAnswer("tc-early", result)]);
 	if (answered.handled) await answered.persisted;
 });
 
@@ -286,7 +276,7 @@ test("an early answer wins even if Stop reaches the tool before execute starts",
 		ctx(),
 	);
 	expect(response.details).toEqual(result);
-	waiters.persistTurn([persistedAnswer("tc-early-stop", result)], askCall("tc-early-stop"));
+	waiters.persistTurn([persistedAnswer("tc-early-stop", result)]);
 	if (answered.handled) await answered.persisted;
 });
 
@@ -319,10 +309,7 @@ test("shutdown waits for an answer already accepted before its snapshot", async 
 	await pending;
 	const settling = waiters.prepareShutdown();
 	expect(settling).not.toBeNull();
-	waiters.persistTurn(
-		[persistedAnswer("tc-shutdown-accepted", { answers: [], cancelled: true })],
-		askCall("tc-shutdown-accepted"),
-	);
+	waiters.persistTurn([persistedAnswer("tc-shutdown-accepted", { answers: [], cancelled: true })]);
 	await settling;
 });
 
@@ -428,7 +415,7 @@ test("an accepted answer wins over a later Stop before its result boundary", asy
 	const answered = waiters.answer("tc-answer-wins", result);
 	controller.abort();
 	expect((await pending).details).toEqual(result);
-	waiters.persistTurn([persistedAnswer("tc-answer-wins", result)], askCall("tc-answer-wins"));
+	waiters.persistTurn([persistedAnswer("tc-answer-wins", result)]);
 	if (answered.handled) await answered.persisted;
 });
 
@@ -514,7 +501,7 @@ test("supersede never reverses an answer that was already accepted", async () =>
 	const answered = waiters.answer("tc-answered-first", result);
 	expect(waiters.supersede()).toBe(false);
 	expect((await pending).details).toEqual(result);
-	waiters.persistTurn([persistedAnswer("tc-answered-first", result)], askCall("tc-answered-first"));
+	waiters.persistTurn([persistedAnswer("tc-answered-first", result)]);
 	if (answered.handled) await answered.persisted;
 });
 
@@ -534,10 +521,7 @@ test("the host's asker answers without pi's own UI, because the chat is the UI",
 	const answered = waiters.answer("tc-no-pi-ui", { answers: [], cancelled: true });
 	expect(answered.handled).toBe(true);
 	expect(textOf(await pending)).toContain("declined");
-	waiters.persistTurn(
-		[persistedAnswer("tc-no-pi-ui", { answers: [], cancelled: true })],
-		askCall("tc-no-pi-ui"),
-	);
+	waiters.persistTurn([persistedAnswer("tc-no-pi-ui", { answers: [], cancelled: true })]);
 	if (answered.handled) await answered.persisted;
 });
 
