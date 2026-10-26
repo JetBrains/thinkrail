@@ -9,14 +9,16 @@ import {
 } from "@remixicon/react";
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import { diffRendererSupportsLayout } from "@thinkrail/resource-renderers";
+import { diffRendererCapabilities } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
+import { useShallow } from "zustand/react/shallow";
 import { usePhoneViewport } from "@/lib";
 import {
 	type ChangesTab,
+	selectChangesTabRendererIds,
 	selectDiffBaseRef,
 	selectDiffTabTargetRef,
 	toast,
@@ -151,20 +153,18 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	);
 	const viewedCount = files.filter((change) => viewedSet.has(change.path)).length;
 	const view = mobile ? "inline" : (tab.view ?? "split");
-	const layoutToggleAvailable = useMemo(
-		() =>
-			!mobile &&
-			files.some((change) =>
-				diffRendererSupportsLayout(
-					workspaceId,
-					change.path,
-					scope,
-					tab.sections[change.path]?.rendererId,
-					mobile,
-				),
-			),
-		[files, mobile, scope, tab.sections, workspaceId],
+	const rendererIds = useAppStore(
+		useShallow((state) => selectChangesTabRendererIds(state, workspaceId, tab.id)),
 	);
+	const controls = useMemo(() => {
+		const capabilities = files.map((change) =>
+			diffRendererCapabilities(workspaceId, change.path, scope, rendererIds[change.path], mobile),
+		);
+		return {
+			layout: capabilities.some((candidate) => candidate.layout),
+			whitespace: capabilities.some((candidate) => candidate.whitespace),
+		};
+	}, [files, mobile, rendererIds, scope, workspaceId]);
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
 
 	const [lastIndex, setLastIndex] = useState(0);
@@ -362,15 +362,17 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							<Guide className="size-14" />
 						</HeaderIconButton>
 					) : null}
-					<HeaderIconButton
-						testid="changes-review-toggle-whitespace"
-						label={t("changes.review.hideWhitespace")}
-						active={ignoreWhitespace}
-						onClick={() => setIgnoreWhitespace(workspaceId, tab.id, !ignoreWhitespace)}
-					>
-						<Pilcrow className="size-14" />
-					</HeaderIconButton>
-					{layoutToggleAvailable ? (
+					{controls.whitespace ? (
+						<HeaderIconButton
+							testid="changes-review-toggle-whitespace"
+							label={t("changes.review.hideWhitespace")}
+							active={ignoreWhitespace}
+							onClick={() => setIgnoreWhitespace(workspaceId, tab.id, !ignoreWhitespace)}
+						>
+							<Pilcrow className="size-14" />
+						</HeaderIconButton>
+					) : null}
+					{!mobile && controls.layout ? (
 						<>
 							<ToggleSegment
 								testid="changes-review-toggle-split"

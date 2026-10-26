@@ -102,20 +102,16 @@ function inferredBinary(path: string): boolean {
 	);
 }
 
-// Whether the diff renderer a file would get — resolved from its path alone, before content loads —
-// honours the split/unified layout control. The text/binary split is inferred from the path's MIME
-// (known image and PDF types resolve to their layout-less renderers; an unknown-extension binary reads
-// as text until its bytes load). Lets a pane-level toggle hide itself when no file in a scope can use it.
-export function diffRendererSupportsLayout(
+export function diffRendererCapabilities(
 	workspaceId: string,
 	path: string,
 	scope: GitDiffScope,
 	selectedId: string | undefined,
 	mobile: boolean,
-): boolean {
+): ResourceRenderer["capabilities"] {
 	const meta = inferredBinary(path) ? { ...PENDING_TEXT_META, text: false } : PENDING_TEXT_META;
 	const candidates = resolveRenderers(describeResource(workspaceId, path, meta, scope), "diff", {
 		mobile,
 	});
-	return selectResourceRenderer(candidates, selectedId, path).capabilities.layout;
+	return selectResourceRenderer(candidates, selectedId, path).capabilities;
 }

@@ -9,7 +9,7 @@ import {
 } from "./fixtures/app";
 import { commitFile, gitAs } from "./fixtures/git";
 import { E2E_DATA_DIR } from "./fixtures/paths";
-import { selectPierreLine } from "./fixtures/pierre";
+import { pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const reviewTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="changes"]');
@@ -82,7 +82,7 @@ test("a single click opens one continuous review tab in preview with a section p
 	await expect(section(page, "README.md")).toHaveAttribute("data-collapsed", "true");
 });
 
-test("the Split/Inline toggle is hidden when no file in the scope supports a layout", async ({
+test("the Split/Inline and whitespace toggles are hidden when no file in the scope supports them", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -96,9 +96,12 @@ test("the Split/Inline toggle is hidden when no file in the scope supports a lay
 	await expect(section(page, "README.md").getByTestId("rendered-diff")).toBeVisible();
 	await expect(page.getByTestId("changes-review-toggle-split")).toHaveCount(0);
 	await expect(page.getByTestId("changes-review-toggle-inline")).toHaveCount(0);
+	await expect(page.getByTestId("changes-review-toggle-whitespace")).toHaveCount(0);
 });
 
-test("the Split/Inline toggle is hidden for an image-only scope", async ({ page }) => {
+test("the Split/Inline and whitespace toggles are hidden for an image-only scope", async ({
+	page,
+}) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
@@ -114,19 +117,22 @@ test("the Split/Inline toggle is hidden for an image-only scope", async ({ page 
 	await expect(section(page, "pixel.png").getByTestId("image-diff")).toBeVisible();
 	await expect(page.getByTestId("changes-review-toggle-split")).toHaveCount(0);
 	await expect(page.getByTestId("changes-review-toggle-inline")).toHaveCount(0);
+	await expect(page.getByTestId("changes-review-toggle-whitespace")).toHaveCount(0);
 });
 
-test("the Split/Inline toggle appears and switches layout when a code file is in the scope", async ({
+test("the Split/Inline and whitespace toggles appear when a code file is in the scope", async ({
 	page,
 }) => {
 	await seedThreeChanges(page);
-	await row(page, "script.ts").click();
+	await row(page, "notes.txt").click();
 	await expect(reviewTab(page)).toHaveCount(1);
 	await expect(page.getByTestId("changes-review-toggle-split")).toHaveAttribute(
 		"data-active",
 		"true",
 	);
-	const codeDiff = section(page, "script.ts").getByTestId("diff-view");
+	await expect(page.getByTestId("changes-review-toggle-whitespace")).toBeVisible();
+	const codeDiff = section(page, "notes.txt").getByTestId("diff-view");
+	await expect(pierreDeletionsSide(codeDiff)).toHaveCount(1);
 	await expect(codeDiff.locator("[data-unified]")).toHaveCount(0);
 	await page.getByTestId("changes-review-toggle-inline").click();
 	await expect(page.getByTestId("changes-review-toggle-inline")).toHaveAttribute(

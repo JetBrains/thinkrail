@@ -30,10 +30,10 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   missing hash is an absent side, a binary side without a byte URL is absent), `diffResourceMeta(original,
   modified)` (a diff is described by its modified side unless that side is absent, and is text only when
   both present sides are) and `PENDING_TEXT_META` — plus `registerBundledResourceRenderers()` (idempotent).
-  `diffRendererSupportsLayout` answers, from a path alone (before content loads), whether the diff renderer
-  it would resolve to honours the split/unified layout control — inferring the text/binary split from the
-  path's MIME so known image and PDF paths resolve to their layout-less renderers; MIME inference itself
-  stays module-internal. A pane uses it to hide a scope-wide layout toggle no file can use;
+  `diffRendererCapabilities` returns, from a path alone (before content loads), the capabilities of the
+  diff renderer it would resolve to — inferring the text/binary split from the path's MIME so known image
+  and PDF paths resolve to their layout-less renderers; MIME inference itself stays module-internal. A pane
+  uses it to hide scope-wide layout and whitespace controls no file can use;
 - the host seam — `ResourceHostProvider`, `ResourcePreferencesProvider`, `ResourceEnvironmentProvider`,
   `ResourceScopeProvider`, `useOptionalResourceHost`, `useResourceScope` and the `ResourceHost`,
   `ResourcePreferences`, `ResourceScope`, `ResourceFileReviewProps`, `ResourceReviewSendProps`,

@@ -1935,10 +1935,11 @@ own section. The kebab menu (`plan-menu`, a
   registry returns more than one. Renderer choice replaces the old markdown-only `rendered` state; layout
   and whitespace remain independent diff state. The review tab's toolbar carries the same whitespace and
   `Split | Inline` controls for every section at once — but, because that toggle is pane-level across every
-  section rather than per-renderer, it follows `DiffPane`'s capability gate collectively: the segment shows
-  only when at least one file in the scope resolves (by path, through `diffRendererSupportsLayout`) to a
-  layout-capable renderer, so an all-Markdown/image/PDF/rich scope hides it instead of offering an inert
-  control. Resolution runs before content loads, so the gate infers the text/binary split from the
+  section rather than per-renderer, they follow `DiffPane`'s capability gates collectively: each control
+  shows only when at least one file in the scope resolves (by path, through `diffRendererCapabilities`) to a
+  renderer advertising it, so an all-Markdown/image/PDF/rich scope hides them instead of offering inert
+  controls. The gate reads only the per-path renderer selections (`selectChangesTabRendererIds`), so draft
+  and view-state writes to a section do not re-resolve the scope. Resolution runs before content loads, so the gate infers the text/binary split from the
   path's MIME — known binary types (images, PDF) resolve to their layout-less renderers; an
   unknown-extension binary with no inferable MIME still reads as text until its bytes load.
   It also carries the scope and target as read-only chips (the scope
