@@ -61,9 +61,9 @@ test("the supplied native adapter uses project-order and restores before project
 		expect(selectOrderedProjects(useAppStore.getState())).toEqual([]);
 		useAppStore.getState().installProjectSnapshot(projects, projects);
 		expect(selectOrderedProjects(useAppStore.getState()).map(({ id }) => id)).toEqual([
+			"b",
 			"c",
 			"a",
-			"b",
 		]);
 		expect(adapter.setItem).not.toHaveBeenCalled();
 	} finally {

@@ -70,7 +70,7 @@ export function selectOrderedProjects(state: {
 		ordered.push(project);
 		remaining.delete(id);
 	}
-	return [...ordered, ...remaining.values()];
+	return [...remaining.values(), ...ordered];
 }
 
 export function selectLoginBusy(state: {

@@ -52,7 +52,7 @@ best-effort. Other project pickers and Recents keep their existing ordering; no 
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
   The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
-  **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
+  **ArrowUp Move up**, **ArrowDown Move down**, separator, **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
   project**. Rename swaps the project name for the same inline input as workspace rename (Enter/blur
   commits a changed trimmed name via `project.rename`, Escape cancels) and waits for the `project.updated`
   push — no optimistic label; rejection raises an error toast. Create is exactly the direct `+` flow. Open existing worktree opens the

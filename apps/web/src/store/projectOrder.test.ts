@@ -17,17 +17,17 @@ test("without a preference the selector returns the original project array and o
 	expect(selectOrderedProjects({ projects, projectOrder: [] })).toBe(projects);
 });
 
-test("saved IDs lead and unranked projects retain their original order", () => {
-	const state = { projects, projectOrder: ["c"] };
-	expect(selectOrderedProjects(state)).toEqual([projects[2], projects[0], projects[1]]);
+test("new unranked projects lead and preserve the saved projects' relative order", () => {
+	const state = { projects, projectOrder: ["c", "b"] };
+	expect(selectOrderedProjects(state)).toEqual([projects[0], projects[2], projects[1]]);
 	expect(state.projects).toBe(projects);
-	expect(state.projectOrder).toEqual(["c"]);
+	expect(state.projectOrder).toEqual(["c", "b"]);
 });
 
 test("unknown and duplicate saved IDs do not create or duplicate rows", () => {
 	expect(
 		selectOrderedProjects({ projects, projectOrder: ["closed", "b", "b", "missing"] }),
-	).toEqual([projects[1], projects[0], projects[2]]);
+	).toEqual([projects[0], projects[2], projects[1]]);
 	expect(selectOrderedProjects({ projects: [], projectOrder: ["closed"] })).toEqual([]);
 });
 
@@ -113,7 +113,16 @@ test("welcome, project snapshots and rename/activity updates preserve manual ord
 	expect(useAppStore.getState().recentProjects.map(({ id }) => id)).toEqual(["b", "a", "c"]);
 	expect(selectOrderedProjects(useAppStore.getState())[2]).toEqual(updated);
 	store.applyProjectUpdated(project("new", 600));
-	expect(orderedIds()).toEqual(["c", "a", "b", "new"]);
+	expect(orderedIds()).toEqual(["new", "c", "a", "b"]);
+	store.applyProjectUpdated(project("newer", 700));
+	expect(orderedIds()).toEqual(["newer", "new", "c", "a", "b"]);
+	store.moveProject("newer", "a", "after");
+	expect(orderedIds()).toEqual(["new", "c", "a", "newer", "b"]);
+	store.installProjectSnapshot(
+		useAppStore.getState().projects,
+		useAppStore.getState().recentProjects,
+	);
+	expect(orderedIds()).toEqual(["new", "c", "a", "newer", "b"]);
 });
 
 test("closing and reopening restores a project's saved rank", () => {
@@ -135,9 +144,9 @@ test("reordering open projects preserves closed slots for subsequent reopen", ()
 	store.applyProjectUpdated({ ...project("b", 200), closed: true });
 	store.applyProjectUpdated(project("new", 400));
 	store.moveProject("c", "a", "before");
-	expect(useAppStore.getState().projectOrder).toEqual(["c", "b", "a", "closed", "new"]);
-	expect(orderedIds()).toEqual(["c", "a", "new"]);
+	expect(useAppStore.getState().projectOrder).toEqual(["new", "b", "c", "closed", "a"]);
+	expect(orderedIds()).toEqual(["new", "c", "a"]);
 	store.applyProjectUpdated({ ...project("b", 900), closed: false });
 	store.applyProjectUpdated({ ...project("closed", 1000), closed: false });
-	expect(orderedIds()).toEqual(["c", "b", "a", "closed", "new"]);
+	expect(orderedIds()).toEqual(["new", "b", "c", "closed", "a"]);
 });

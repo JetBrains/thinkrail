@@ -96,8 +96,8 @@ async function openProjectActions(page: Page, row: Locator): Promise<Locator> {
 	return menu;
 }
 
-function seedSecondRepo(): string {
-	const repo = join(E2E_DATA_DIR, "second-project");
+function seedSecondRepo(name = "second-project"): string {
+	const repo = join(E2E_DATA_DIR, name);
 	rmSync(repo, { recursive: true, force: true });
 	mkdirSync(repo, { recursive: true });
 	git(repo, "init", "-b", "main");
@@ -251,6 +251,18 @@ test("project move menu preserves focus, local rank and reopen position", async 
 	await page.getByTestId("project-menu-move-up").click();
 	await expect(names).toHaveText(["second-project", "sample-project"]);
 	await expect(secondName).toBeFocused();
+
+	seedSecondRepo("third-project");
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	await expect(names).toHaveText(["third-project", "second-project", "sample-project"]);
+	await page.reload();
+	await expect(names).toHaveText(["third-project", "second-project", "sample-project"]);
+	await names.first().click({ button: "right" });
+	await page.getByTestId("project-menu-move-down").click();
+	await expect(names).toHaveText(["second-project", "third-project", "sample-project"]);
+	await page.reload();
+	await expect(names).toHaveText(["second-project", "third-project", "sample-project"]);
 });
 
 test("opens a git repo as a project via the directory picker", async ({ page }) => {

@@ -104,8 +104,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   persistence module — the store itself still touches no storage: that module owns the localStorage
   mirror (host-qualified key, best-effort writes, untrusted reads) and subscribes to changes.
   **`projectOrder: string[]`** is a client-local preference, separate from host project snapshots.
-  **`selectOrderedProjects`** projects the rail: saved IDs first, then unranked projects in their existing
-  order; without a preference the existing order is unchanged. **`moveProject(id, targetId, placement)`**
+  **`selectOrderedProjects`** projects the rail: new/unranked projects first in their existing newest-opened
+  order, then saved IDs in manual order. Opening a new project never disturbs the existing projects'
+  relative order; without a preference the existing order is unchanged. **`moveProject(id, targetId, placement)`**
   handles both drag and menu moves atomically, preserving closed projects' rank slots and rejecting
   absent/self/no-op moves. Snapshots, renames and activity never rewrite this preference; closing and
   reopening retains rank. Hydration comes from `panels/projectOrder`, not storage inside the store.
