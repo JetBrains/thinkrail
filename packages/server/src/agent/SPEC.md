@@ -275,8 +275,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `listSessions(workspaceId, cwd)` (live sessions
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
     `live`; before treating the **detached** disk list as authoritative it strictly scans every transcript
-    header and verifies pi returned every file, so an unreadable/malformed/skipped file rejects the read
-    rather than masquerading as absent and being tombstoned by reconnect reconciliation. A registered live
+    header and verifies pi returned every file, so an unreadable/malformed/skipped transcript rejects the
+    read rather than masquerading as absent and being tombstoned by reconnect reconciliation. A `.jsonl`
+    whose first parsed entry is not a session header is not a transcript — pi's own listing skips those
+    files, and extensions keep sidecar logs there (e.g. pi-automode's `<session>-pi-automode.jsonl`) — but a
+    file with no parsed entry at all still rejects. A registered live
     session's own exact `SessionManager.getSessionFile()` path is excluded from that disk preflight: its
     in-memory entry is already authoritative, and pi may truncate/rewrite that path while the host lists,
     so treating the transient physical state as a detached corrupt chat would blank every chat on reload) +

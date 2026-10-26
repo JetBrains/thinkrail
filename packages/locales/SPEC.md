@@ -12,7 +12,7 @@ tags: [i18n]
 
 The single owner of ThinkRail's UI strings and of the rules every locale source obeys
 ([[architecture]] Decision 23). It ships the bundled catalogs — `en.json` is the English source of truth
-and the file translators start from, `zh-CN.json` is the Simplified Chinese translation — and the pure
+and the file translators start from, and each `<tag>.json` beside it is a translation — and the pure
 functions that validate a catalog, name a file's language, and pick the language to render. Its `./react`
 entry holds the **one** i18next instance every browser surface (`apps/web`, `packages/ui`, extension web
 halves) renders through, so they cannot drift onto separate instances.
@@ -22,8 +22,9 @@ halves) renders through, so they cannot drift onto separate instances.
 - **Root `@thinkrail/locales`** (pure, browser- and server-safe, no React):
   - `EN` — the English catalog; `MessageKey` — its key union (plural suffixes `_one`/`_other`/… fold
     into the base key).
-  - `BUNDLED_LOCALES` — the tags shipped with this build (`["en", "zh-CN"]` today) and
-    `bundledCatalog(tag)`.
+  - `BUNDLED_LOCALES` — the tags shipped with this build (`en` first, then the `BUNDLED` registry) and
+    `bundledCatalog(tag)`. Docs and tests derive the shipped list from it rather than naming it, so a
+    new bundled language changes only its catalog, the `BUNDLED` entry, and the README's list.
   - `SYSTEM_LOCALE` (`"system"`), `canonicalLocale(tag)`, `languageName(tag)` (own-language name via
     `Intl.DisplayNames`, first letter upper-cased), `DESKTOP_MENU_KEYS` and `DESKTOP_DIALOG_KEYS` — the keys the
     desktop's native menu, error dialogs, and startup splash render, one list each for the desktop and the web that pushes
@@ -46,8 +47,12 @@ halves) renders through, so they cannot drift onto separate instances.
     present form), so a partly translated counter stays in its language instead of falling back to
     English. `applyLocale` runs it on every overlay.
   - `resolveLocale(preference, available, systemLanguages)` — `"system"` walks `systemLanguages` and
-    takes the first exact available tag, else its base language; an explicit tag is used only when
-    available; otherwise `"en"`.
+    takes the first exact available tag, else its base language, else a tag written in the same script;
+    an explicit tag is used only when available; otherwise `"en"`. The script level exists because a
+    system locale usually carries a region the catalog does not name: `zh-Hans-CN` reaches `zh-CN`
+    (both maximize to `zh-Hans`) where a base-language comparison alone stops at `zh` and misses it.
+    Scripts never cross: `zh-TW` and `zh-HK` maximize to `zh-Hant` and fall through to `en` rather than
+    borrowing the Simplified catalog.
   - `baseLanguage(tag)` and `fallbackChain(tag)` (`[tag, base, "en"]`, deduped).
 - **`@thinkrail/locales/react`** (browser): the initialized i18next instance (`i18n`), `useT()` — the
   `Translator` for render, a value that is **replaced whenever the language or its strings change** (a

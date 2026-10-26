@@ -2645,6 +2645,30 @@ test("listSessions ignores a live session's transient physical rewrite but stays
 	}
 });
 
+test("listing skips a non-session sidecar log in the pi sessions dir (#876)", async () => {
+	const cwd = tmpCwd("trpi-sidecar-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const session = writeFixtureSession(dir, {
+		cwd,
+		messages: [
+			{ role: "user", text: "persist next to a sidecar log", timestamp: 1_000 },
+			{ role: "assistant", text: "SIDECAR_REPLY", stopReason: "stop", timestamp: 1_001 },
+		],
+	});
+	// pi-automode inserts `-pi-automode` before the extension of the session file it follows, so
+	// the log sits in the same directory but starts with a `message` entry, never a header.
+	writeFileSync(
+		session.path.replace(/\.jsonl$/, "-pi-automode.jsonl"),
+		`${JSON.stringify({
+			type: "message",
+			timestamp: new Date(1_002).toISOString(),
+			message: { role: "assistant", model: "classifier", content: [], usage: {} },
+		})}\n`,
+	);
+
+	expect((await listSessions("ws-sidecar", cwd)).map((row) => row.sessionId)).toEqual([session.id]);
+});
+
 test("disk-reopen: a disposed session is re-listed from disk and re-opened with its transcript (restart survival)", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	try {

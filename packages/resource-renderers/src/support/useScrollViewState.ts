@@ -42,23 +42,44 @@ export function useScrollViewState<T extends HTMLElement>(
 ): { elementRef: RefObject<T | null>; attach: RefCallback<T> } {
 	const elementRef = useRef<T>(null);
 	const savedTopRef = useRef(viewStateScrollTop(viewState));
+	const appliedTopRef = useRef(savedTopRef.current ?? 0);
+	const seenStateRef = useRef(viewState);
 	const pendingRef = useRef<(() => void) | null>(null);
 	const onViewStateRef = useRef(onViewState);
 	onViewStateRef.current = onViewState;
-	const attach = useCallback<RefCallback<T>>((node) => {
-		const previous = elementRef.current;
-		const pending = pendingRef.current;
-		pending?.();
-		if (previous && previous !== node && !pending) savedTopRef.current = previous.scrollTop;
-		elementRef.current = node;
-		const top = savedTopRef.current;
-		if (!node || top === null) return;
+	const restore = useCallback((node: HTMLElement, top: number) => {
+		appliedTopRef.current = top;
 		node.scrollTop = top;
 		if (fits(node, top)) return;
 		pendingRef.current = restoreWhenFits(node, top, () => {
 			pendingRef.current = null;
 		});
 	}, []);
+	const attach = useCallback<RefCallback<T>>(
+		(node) => {
+			const previous = elementRef.current;
+			const pending = pendingRef.current;
+			pending?.();
+			if (previous && previous !== node && !pending) savedTopRef.current = previous.scrollTop;
+			elementRef.current = node;
+			const top = savedTopRef.current;
+			if (node && top !== null) restore(node, top);
+		},
+		[restore],
+	);
+	useEffect(() => {
+		if (viewState === seenStateRef.current) return;
+		seenStateRef.current = viewState;
+		const node = elementRef.current;
+		const top = viewStateScrollTop(viewState);
+		if (!node || top === null) return;
+		const pristine =
+			pendingRef.current !== null || Math.abs(node.scrollTop - appliedTopRef.current) < 1;
+		if (!pristine) return;
+		pendingRef.current?.();
+		savedTopRef.current = top;
+		restore(node, top);
+	}, [restore, viewState]);
 	useEffect(
 		() => () => {
 			const top = elementRef.current?.scrollTop ?? savedTopRef.current;

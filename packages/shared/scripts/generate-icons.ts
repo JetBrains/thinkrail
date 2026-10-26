@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Generated from icon.svg — never hand-edit these outputs; see apps/desktop/SPEC.md's icon paragraph.
+// Generated from icon.svg — never hand-edit these outputs; see packages/shared/SPEC.md's /assets entry.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -39,7 +39,7 @@ for (const [name, size] of MACOS_ICONSET_FILES) {
 	writeFileSync(join(assetsDir, "icon.iconset", name), pngAt(size));
 }
 
-const WINDOWS_ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
+const WINDOWS_ICO_SIZES = [256, 128, 80, 72, 64, 56, 48, 40, 36, 32, 28, 24, 20, 16];
 const iconFile = new ResEdit.Data.IconFile();
 for (const size of WINDOWS_ICO_SIZES) {
 	iconFile.icons.push({ data: ResEdit.Data.RawIconItem.from(pngAt(size), size, size, 32) });

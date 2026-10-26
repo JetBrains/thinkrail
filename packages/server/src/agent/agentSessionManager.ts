@@ -1473,7 +1473,8 @@ function hasErrorCode(error: unknown, code: string): boolean {
 	return typeof error === "object" && error !== null && Reflect.get(error, "code") === code;
 }
 
-async function readSessionFileIdentity(path: string): Promise<SessionFileIdentity> {
+/** Null when the file is not a pi session: pi's own listing skips those too. */
+async function readSessionFileIdentity(path: string): Promise<SessionFileIdentity | null> {
 	const input = createReadStream(path, { encoding: "utf8" });
 	const lines = createInterface({ input, crlfDelay: Number.POSITIVE_INFINITY });
 	try {
@@ -1490,7 +1491,7 @@ async function readSessionFileIdentity(path: string): Promise<SessionFileIdentit
 			}
 			const id = Reflect.get(entry, "id");
 			if (Reflect.get(entry, "type") !== "session" || typeof id !== "string") {
-				throw new Error("first parsed entry is not a session header");
+				return null;
 			}
 			const headerCwd = Reflect.get(entry, "cwd");
 			return { id, cwd: typeof headerCwd === "string" ? headerCwd : "" };
@@ -1522,7 +1523,8 @@ async function scanSessionFiles(
 		const path = join(dir, name);
 		if (excludedPaths.has(resolve(path))) continue;
 		try {
-			scanned.push({ path, ok: true, identity: await readSessionFileIdentity(path) });
+			const identity = await readSessionFileIdentity(path);
+			if (identity) scanned.push({ path, ok: true, identity });
 		} catch (error) {
 			scanned.push({
 				path,

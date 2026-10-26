@@ -69,6 +69,17 @@ import {
 	windowChromePreloadSeed,
 } from "./windowChrome";
 import { loadWindowsFrameApi, restoreWindowsFrameControls } from "./windowsFrame";
+import {
+	desktopAppUserModelId,
+	loadWindowsShellApi,
+	stampTaskbarShortcuts,
+	taskbarShortcutCandidates,
+} from "./windowsTaskbarIdentity";
+import {
+	applyWindowsWindowIcon,
+	loadWindowsIconApi,
+	type WindowsHandle,
+} from "./windowsWindowIcon";
 
 type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit>;
 
@@ -121,6 +132,55 @@ function windowControlsProbeScript(target: { testId: string; label: string }): s
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
 let startupSplash: StartupSplash | undefined;
 
+function setWindowsAppUserModelId(): void {
+	if (process.platform !== "win32") return;
+	try {
+		loadWindowsShellApi().setProcessAppUserModelId(desktopAppUserModelId(channel));
+	} catch (error) {
+		desktopError("windows_app_id", "could not set the Windows AppUserModelID", error);
+	}
+}
+
+function stampWindowsTaskbarShortcuts(): void {
+	if (process.platform !== "win32") return;
+	try {
+		const appDir = dirname(PATHS.RESOURCES_FOLDER);
+		const shell = loadWindowsShellApi();
+		const candidates = taskbarShortcutCandidates(appDir, process.env.APPDATA);
+		const { failures } = shell.withComApartment(() =>
+			stampTaskbarShortcuts(
+				candidates.paths,
+				join(appDir, "bin", "launcher.exe"),
+				desktopAppUserModelId(channel),
+				shell.openShortcut,
+			),
+		);
+		const [failure] = [...candidates.failures, ...failures];
+		if (failure) {
+			desktopError(
+				"windows_app_id",
+				"could not stamp a Windows shortcut's AppUserModelID",
+				failure,
+			);
+		}
+	} catch (error) {
+		desktopError("windows_app_id", "could not stamp the Windows shortcuts' AppUserModelID", error);
+	}
+}
+
+function setWindowsWindowIcon(window: { readonly ptr: WindowsHandle | null }): void {
+	if (process.platform !== "win32" || !window.ptr) return;
+	try {
+		applyWindowsWindowIcon(
+			window.ptr,
+			join(PATHS.RESOURCES_FOLDER, "app.ico"),
+			loadWindowsIconApi(),
+		);
+	} catch (error) {
+		desktopError("windows_icon", "could not set the Windows window icon", error);
+	}
+}
+
 function desktopUserData(): string {
 	return process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
 }
@@ -135,6 +195,7 @@ function writeReady(path: string, payload: unknown): void {
 }
 
 async function start(): Promise<void> {
+	setWindowsAppUserModelId();
 	const savedLabels = readNativeLabels(nativeLabelsPath());
 	let dialogLabels: DesktopDialogLabels = readDialogLabels(savedLabels);
 	const applicationMenuInstalled = installDesktopApplicationMenu(
@@ -196,7 +257,11 @@ async function start(): Promise<void> {
 	const shellEnv = resolveShellEnv();
 	if (!neutral && process.env.THINKRAIL_DESKTOP_HIDDEN !== "1") {
 		startupSplash = await openStartupSplash(
-			(options) => new BrowserWindow(options),
+			(options) => {
+				const splash = new BrowserWindow(options);
+				setWindowsWindowIcon(splash);
+				return splash;
+			},
 			splashMessage(dialogLabels, pendingInstallVersion),
 		);
 	}
@@ -380,6 +445,7 @@ async function start(): Promise<void> {
 						: {}),
 				}),
 	});
+	setWindowsWindowIcon(mainWindow);
 	if (!neutral) {
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
@@ -469,6 +535,7 @@ async function start(): Promise<void> {
 				mode: neutral ? "host" : "ui",
 			});
 		}
+		setTimeout(stampWindowsTaskbarShortcuts, 0);
 	});
 
 	const controlPath = process.env.THINKRAIL_DESKTOP_CONTROL_FILE;

@@ -401,7 +401,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     rendered through one shared i18next instance (`@thinkrail/locales/react`). **A lint gate fails on
     hardcoded user-facing text** (JSX text and text-bearing attributes such as `aria-label`, `title`,
     `placeholder`, `alt`, `label`) in those trees, so a new string cannot ship without a key. ThinkRail
-    ships bundled catalogs (English and a partial Simplified Chinese held to `en.json` by a test); a user
+    ships bundled catalogs (English plus translations held to `en.json` by a test); a user
     adds or overrides a language by dropping a flat i18next-JSON file into the **global** data dir
     (`~/.thinkrail/locales/<tag>.json`) — never a workspace, so a cloned repo cannot rewrite the UI.
     The host validates and watches those files ([[submodule-server-locales]]) and serves them over the

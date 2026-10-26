@@ -1,9 +1,11 @@
 #!/usr/bin/env bun
 
-import { existsSync, globSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
+import { channel, version } from "@thinkrail/shared/version";
+import { windowsFileIdentity, windowsIconPath } from "@thinkrail/shared/windowsIdentity";
 import { binaryArtifactPath } from "./src/artifact";
 import {
 	type ArtifactHostAdapter,
@@ -12,6 +14,7 @@ import {
 	runArtifactHostProbes,
 } from "./src/artifactProbes";
 import { terminateProcess, within } from "./src/lifecycle";
+import { windowsIdentityMismatches } from "./src/windowsIdentity";
 
 const binary = binaryArtifactPath(process.argv[2]);
 if (!existsSync(binary)) {
@@ -94,6 +97,14 @@ const adapter: ArtifactHostAdapter = {
 
 const temp = mkdtempSync(join(tmpdir(), "thinkrail-cli-artifact-"));
 try {
+	if (process.platform === "win32") {
+		const mismatches = windowsIdentityMismatches(
+			new Uint8Array(readFileSync(binary)),
+			windowsFileIdentity({ version, channel }),
+			new Uint8Array(readFileSync(windowsIconPath)),
+		);
+		if (mismatches.length) throw new Error(`Windows identity: ${mismatches.join("; ")}`);
+	}
 	const home = join(temp, "home");
 	const cache = join(temp, "cache");
 	const project = join(temp, "project");

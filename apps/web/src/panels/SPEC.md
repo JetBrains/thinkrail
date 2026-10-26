@@ -226,7 +226,15 @@ treatment.
   `store.filesMode`, default All, and `requestChangesView` / `revealChanges` reveal Files and select Changed
   in one store write. `FilesPanel` owns the single `git.status` read (`useGitStatus`, scope-keyed, including
   the unknown-commit scope fallback) and feeds `ChangesPanel` and the **All** marks from it, so count, marks
-  and the Changed list cannot disagree. **All** follows VS Code's Explorer: the plain tree plus marks derived
+  and the Changed list cannot disagree. Both `git.status` readers — `useGitStatus` and `ChangesReviewPane` —
+  read through `gitStatusCache.readGitStatus`, which records each result keyed by *(workspace, scope, target
+  ref)*; the review tab starts from that entry, then refreshes it with its own read. That way, opening a scope
+  the panel has already read renders its sections on first paint, not after a skeleton round-trip. The cache
+  is a bounded LRU (32 entries), a reply never overwrites one from a later request, a removed workspace's
+  entries are dropped, and an `UNKNOWN_COMMIT` rejection forgets the entry, so a vanished scope is never
+  seeded. A seeded status is provisional until the tab's own read settles: a reveal, the stored active file
+  and the Stacked restore whose path the seed lacks wait for that read instead of being dropped or
+  overwritten. **All** follows VS Code's Explorer: the plain tree plus marks derived
   once by the pure `changesModel.buildChangeMarks` — a changed file shows its name and a trailing
   `M`/`A`/`U`/`R` letter in the status colour (modified amber, added/untracked green, renamed blue; the one
   `chat/planView.statusLetter`, shared with the Changes review tab and plan rows, so untracked reads `U`
@@ -1825,6 +1833,12 @@ own section. The kebab menu (`plan-menu`, a
   (`V` toggles viewed and advances when it marks, `Alt+↓` / `Alt+↑` step files). Both modes read one model —
   the scope's ordered file list, `viewed`, `activePath`, collapse overrides, `Split | Inline`, ¶ — so
   switching never loses review progress; a second tab kind per mode was rejected for exactly that reason.
+  A switch reuses the pane's section-content cache and the renderers' render caches, so the new mode
+  paints finished diffs on its first frame. Returning to Stacked is double-buffered: the freshly mounted
+  list measures its viewport and scrolls to the active file while `invisible` beneath the still-shown
+  One-file view, which is dropped only once that file's header has held the list's top for two frames
+  (capped at 30). Shown directly, the list painted its first file and footer at scroll 0 and then
+  visibly scrolled to the active one.
   **Transient authoring belongs to the tab section, not its mounted renderer.** An optional scoped
   review-draft context retains the stamped selection, composer text/caret, pending submission, and
   unsaved thread edits across virtualization, collapse, renderer and Stacked/One-file switches. The

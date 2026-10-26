@@ -16,7 +16,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 
 ## Boundary
 
-- **Owns:** host-side runtime helpers that are neither engine- nor transport-specific.
+- **Owns:** host-side runtime helpers that are neither engine- nor transport-specific, and the native
+  brand icon set both launchers ship (`assets/` and its generator, `scripts/generate-icons.ts`).
 - **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `repairShellEnv()`, `mergePath()`,
   `loginShellImports()`, `parseLoginShellEnv()`, `LOGIN_ENV_MARKER`, `localeRepair()`;
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
@@ -24,6 +25,9 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   and interactive-output gate used by every launcher;
   `@thinkrail/shared/version` → the baked `{ version, channel, commit }` release identity shared by CLI,
   desktop, and host provenance (with a committed `0.0.0-dev` source default);
+  `@thinkrail/shared/windowsIdentity` → `windowsFileIdentity()`, the Windows file properties both
+  launchers stamp on their executables, `windowsProductName()`, the per-channel product name alone, and
+  `windowsIconPath`, the ICO they embed;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
@@ -44,7 +48,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   background console spawns from omitting it. The two bespoke bounded runners (`server/subprocess`
   `runBounded`, `jbcentral`'s version/quota runner) set it directly.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
-  returns — kept in the wire so the server can carry it to the card verbatim).
+  returns — kept in the wire so the server can carry it to the card verbatim); the icon generator's
+  build-only `@resvg/resvg-js` and `resedit`.
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
   Bun/Node code that must not reach the browser bundle).
 
@@ -97,6 +102,28 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `--version`, desktop package metadata, analytics, and `server.welcome.appVersion` cannot drift. It
   contains identity data plus the release-only public `posthogProjectKey` (empty in source, so
   unstamped builds never report) and has no launcher dependency.
+- **/windowsIdentity** — `windowsFileIdentity({ version, channel })`: what Windows shows for a ThinkRail
+  executable. The product name, which also serves as the file description Task Manager displays, is
+  `ThinkRail` on stable, `ThinkRail Nightly` on nightly and `ThinkRail Dev` on unstamped builds. The
+  publisher and copyright are JetBrains s.r.o., as in `LICENSE` and the signing certificate. The version
+  takes the four numeric parts Windows requires: `X.Y.Z` plus the prerelease's trailing number
+  (`0.3.0-nightly.6` → `0.3.0.6`), else `.0`. An unknown channel or a part above 65535 throws, so a
+  release build fails rather than ship wrong properties. The CLI compile, the desktop `postBuild` and
+  both Windows smokes (CLI and desktop) derive from it, so they cannot disagree.
+- **/assets** — the native icon set: the hand-authored `icon.svg` and the rasters generated from it.
+  Never hand-edit a raster; regenerate them with `bun run --cwd packages/shared generate-icons`
+  (`@resvg/resvg-js` rasterizes straight from the vector, `resedit` packs the ICO). The outputs are the
+  macOS iconset, the Linux 512 px PNG, and the Windows ICO, whose path `windowsIconPath` exports.
+  - **Artwork.** The mark keeps its rounded-square silhouette: the ThinkRail glyph in the dark-family
+    brand green (`#8dff4f`) on a solid black tile. Translucent glass, highlights, and decorative edging
+    are excluded so small taskbar frames stay crisp.
+  - **ICO frames.** PNG-compressed at 256/128/80/72/64/56/48/40/36/32/28/24/20/16: Microsoft's
+    documented minimum (16/24/32/48/256), plus 64/128 and every small and big icon size Windows asks for
+    between 125% and 250% scaling. `LoadImage` picks the closest frame that does not exceed the requested
+    size, so a missing size would be upscaled and blurry. An earlier 4-frame BMP ICO lacked the Windows
+    11 taskbar's 24 px frame and read as blurry there.
+  - **Frame order.** Frames are ordered largest first, because Bun's compiler keeps a named icon group
+    that maps only icon #1 (oven-sh/bun#32428, [[module-cli]]).
 - **/codedError** — `CodedError(code, message)` + `errorCodeOf(err)`: an error carrying a wire
   `WsErrorCode`, so a failure a client must react to *specifically* travels as a name rather than a string
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:

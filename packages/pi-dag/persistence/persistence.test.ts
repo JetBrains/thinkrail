@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import * as fsSync from "node:fs";
 import * as fs from "node:fs/promises";
 import {
 	chmod,
@@ -21,7 +22,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { canonicalJson, DagError, type DagFailureCode, LIMITS } from "../domain/index.ts";
-import { syncDirectory } from "./files.ts";
+import { canonicalRoot, syncDirectory } from "./files.ts";
 import { snapshot } from "./fixtures.ts";
 import { createDagStore } from "./index.ts";
 
@@ -436,6 +437,33 @@ describe("containment and failure handling", () => {
 		} finally {
 			Object.defineProperty(process, "platform", { value: platform });
 			blocked.mockRestore();
+		}
+	});
+
+	test("syncDirectory accepts an existing directory even when async realpath disagrees", async () => {
+		const { root } = await fixture();
+		const target = join(root, "accessible");
+		await mkdir(target);
+		const spy = spyOn(fs, "realpath").mockImplementation(
+			(async (path: string) => `${path}-DIVERGENT~1`) as unknown as typeof fs.realpath,
+		);
+		try {
+			await expect(syncDirectory(target)).resolves.toBeUndefined();
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	test("canonicalRoot fails closed instead of recursing without bound on a root that never resolves", () => {
+		const spy = spyOn(fsSync, "realpathSync").mockImplementation((() => {
+			throw Object.assign(new Error("no such file or directory"), { code: "ENOENT" });
+		}) as unknown as typeof fsSync.realpathSync);
+		try {
+			expect(() => canonicalRoot(join(tmpdir(), "missing-root", "nested", "dag"))).toThrow(
+				DagError,
+			);
+		} finally {
+			spy.mockRestore();
 		}
 	});
 

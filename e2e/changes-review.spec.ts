@@ -137,6 +137,7 @@ test("One file mode walks the scope with Prev / Next and V, sharing progress wit
 	await expect(page.getByTestId("changes-review-next")).toBeDisabled();
 
 	await page.getByTestId("changes-review-layout-stacked").click();
+	await expect(page.getByTestId("changes-review-walk")).toHaveCount(0);
 	await expect(sections(page)).toHaveCount(3);
 	await expect(page.getByTestId("changes-review-viewed-count")).toHaveText("1/3 viewed");
 	await expect(section(page, "README.md")).toHaveAttribute("data-viewed", "true");
@@ -154,6 +155,7 @@ test("returning to Stacked restores the first file rather than an earlier reveal
 	await page.getByTestId("changes-review-prev").click();
 	await expect(page.getByTestId("changes-review-counter")).toHaveText("1 / 3");
 	await page.getByTestId("changes-review-layout-stacked").click();
+	await expect(page.getByTestId("changes-review-walk")).toHaveCount(0);
 	await expect(section(page, "notes.txt").getByTestId("changes-section-header")).toBeInViewport();
 	await expect(row(page, "notes.txt")).toHaveAttribute("data-active", "true");
 });
@@ -261,6 +263,7 @@ test("an explicitly unviewed fully kept file stays unviewed after its section re
 	await expect(script).not.toHaveAttribute("data-viewed", "true");
 
 	await page.getByTestId("changes-review-layout-stacked").click();
+	await expect(page.getByTestId("changes-review-walk")).toHaveCount(0);
 	await expect(script.getByTestId("changes-section-kept")).toHaveText("1/1 kept");
 	await expect(script).not.toHaveAttribute("data-viewed", "true");
 });
@@ -469,4 +472,32 @@ test("a draft written inside a section counts toward the tab's Send review, and 
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
 	await expect(reviewTab(page)).toHaveCount(1);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="file"]')).toHaveCount(1);
+});
+
+test("a large diff scrolled in One file keeps its offset after returning to Stacked", async ({
+	page,
+}) => {
+	const worktree = await seedThreeChanges(page);
+	writeFileSync(
+		join(worktree, "big.ts"),
+		`${Array.from({ length: 1_500 }, (_, index) => `export const v${index} = ${index};`).join("\n")}\n`,
+	);
+	await row(page, "big.ts").click();
+	await page.getByTestId("changes-review-layout-single").click();
+	const view = section(page, "big.ts").getByTestId("diff-view");
+	await expect(view).toBeVisible();
+	await view.hover();
+	await page.mouse.wheel(0, 3_000);
+	await expect.poll(() => view.evaluate((element) => element.scrollTop)).toBeGreaterThan(500);
+	const offset = await view.evaluate((element) => element.scrollTop);
+
+	await page.getByTestId("changes-review-layout-stacked").click();
+	await expect(page.getByTestId("changes-review-walk")).toHaveCount(0);
+	await expect
+		.poll(() =>
+			section(page, "big.ts")
+				.getByTestId("diff-view")
+				.evaluate((element) => element.scrollTop),
+		)
+		.toBe(offset);
 });

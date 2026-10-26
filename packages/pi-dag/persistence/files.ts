@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants, lstatSync, realpathSync } from "node:fs";
-import { type FileHandle, link, lstat, mkdir, open, realpath, unlink } from "node:fs/promises";
+import { type FileHandle, link, lstat, mkdir, open, unlink } from "node:fs/promises";
 import { basename, dirname, join, parse, resolve } from "node:path";
 import { DagError, fail } from "../domain/index.ts";
 
@@ -35,7 +35,9 @@ export function canonicalRoot(path: string): string {
 		return realpathSync(absolute);
 	} catch (error) {
 		if (!hasCode(error, "ENOENT")) throw storageError(error);
-		return join(canonicalRoot(dirname(absolute)), basename(absolute));
+		const parent = dirname(absolute);
+		if (parent === absolute) throw storageError(error);
+		return join(canonicalRoot(parent), basename(absolute));
 	}
 }
 
@@ -136,7 +138,7 @@ export async function writeTemp(dir: string, bytes: string | Uint8Array): Promis
 }
 
 export async function syncDirectory(path: string): Promise<void> {
-	if ((await realpath(path)) !== path) fail("corrupt-state", "Symlinked storage directory");
+	if (realpathSync(path) !== path) fail("corrupt-state", "Symlinked storage directory");
 	const file = await open(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
 	try {
 		try {

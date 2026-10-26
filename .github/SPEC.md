@@ -60,8 +60,8 @@ site PR queued behind an app PR must still run the full set. Conformance, lint/t
 always run; they are cheap and cover the website too. A second output, `artifacts`, gates the Linux binary
 and desktop suites, which replay the no-agent browser suite against built artifacts and cost over half of
 CI's runner time: on a PR they run only when a path feeds building or packaging — the CLI and desktop apps,
-artifact tests, the server's build support and bundled-runtime registration, the artifact Playwright
-runners, CI definitions, patches and the root manifests and lockfile — and in a merge group they always run,
+artifact tests, shared's native icon set, its generator, release identity and Windows file identity, the
+server's build support and bundled-runtime registration, the artifact Playwright runners, CI definitions, patches and the root manifests and lockfile — and in a merge group they always run,
 so main never lands an artifact they have not exercised. An artifact-only defect in an unrelated change
 therefore surfaces at enqueue time instead of on the PR; it was 1 in 56 failed runs before the split. That
 includes the shared no-agent specs and fixtures the artifact suites replay: only the artifact runners and
@@ -96,9 +96,12 @@ get no further environment retries.
 
 A platform's native behavior is proven only on that platform. Windows remains a PR gate because its
 executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess unit
-gate also exercises native descendant-console behavior, which the Linux unit run cannot prove, and its
-desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on
-([[module-desktop]]); neither needs the Electrobun devkit. Its path gate (`bun run test:windows-paths`) runs
+gate also exercises native descendant-console behavior, which the Linux unit run cannot prove. Its
+desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on,
+round-trips the window icon through a real window, and stamps an AppUserModelID onto real shortcuts
+([[module-desktop]]). Neither gate needs the
+Electrobun devkit. Its binary smoke also checks the compiled exe's icon and file properties
+([[module-artifact-tests]]). Its path gate (`bun run test:windows-paths`) runs
 the suites that pin architecture Decision 22 on the one host where git prints `C:/…`, node prints `C:\…`,
 and `\` is not a file-name character: stored directories, chat lifecycle in Default and external workspaces,
 POSIX wire paths, git object names, picker roots, and `install.ps1`'s PATH check. A suite joins the gate only
@@ -161,7 +164,8 @@ bsdtar; Git's GNU tar interprets drive-letter paths as remote `host:path` operan
 exact framework filenames. Stable installers omit the `stable-` prefix; nightly
 uses Electrobun's `canary` prefix/suffix. Full updater archives and metadata are handed to the private
 pipeline under their raw framework names; patch generation remains disabled. Linux requires Ubuntu
-24.04+/glibc 2.38 and the declared GTK, WebKitGTK, AppIndicator, and librsvg dependencies. CEF and additional installer formats are outside this contract.
+24.04+/glibc 2.38 and the declared GTK, WebKitGTK, AppIndicator, and librsvg dependencies. CEF and
+additional installer formats are outside this contract.
 
 ## Release identity and trust
 
@@ -270,8 +274,7 @@ are preserved rather than rewritten. On macOS, `install.sh` selects arm64 when t
 (`sysctl.proc_translated` is 1) even though `uname -m` reports `x86_64`, so Apple Silicon always gets the
 native CLI and a translated x64 install moves to arm64 on its next self-update. CLI self-update binds
 metadata to the running executable and invokes these installers rather than duplicating download/checksum
-logic. Controlled script tests own these
-regressions; finalized Windows PowerShell/Git-Bash and custom-volume behavior remains release qualification.
+logic. Controlled script tests own these regressions; finalized Windows PowerShell/Git-Bash and custom-volume behavior remains release qualification.
 The `install.ps1` suite starts PowerShell once in a warm-up hook with its own budget before its timed tests:
 the first `powershell.exe` launch on a fresh hosted runner has taken up to 31 s (2–14 s in passing runs),
 a one-time environment cost that no single test's budget should absorb.

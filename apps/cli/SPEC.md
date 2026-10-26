@@ -239,6 +239,22 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `constructor.name` checks read.
 - Cross-compile with `--target=bun-darwin-arm64|bun-linux-x64|bun-windows-x64|…`; each bundles that
   platform's matching `bun-pty` lib. The binary is platform-specific and self-extracts a few MB on first run.
+- **Windows identity.** A compiled exe otherwise inherits everything from `bun.exe`: Bun's icon and
+  its VERSIONINFO ("Bun"/"Oven", Bun's version). So Explorer, Task Manager, Properties and the firewall
+  prompt would all name Bun. For a Windows target the build therefore passes Bun's `--windows-icon`,
+  `-title`, `-description`, `-publisher`, `-copyright` and `-version` flags.
+  - The strings come from [[module-shared]]'s `windowsFileIdentity`. Task Manager shows the description,
+    so it equals the product name.
+  - The icon is [[module-shared]]'s `windowsIconPath`, from the native icon set both launchers ship.
+  - Bun applies these flags only on a Windows host. The release and CI Windows builds run on Windows; a
+    cross-compile from macOS/Linux skips them with a warning and keeps Bun's identity.
+  - Bun keeps its own named `IDI_MYICON` group, which the shell picks before numbered groups, and maps
+    it to icon #1 only (oven-sh/bun#32428). The ICO must therefore list its 256 frame first; the shell
+    downsamples it for smaller sizes.
+  - The output file is deleted before compiling, because writing metadata into an existing exe can fail
+    (oven-sh/bun#24079).
+  - Post-editing the exe is not an option: `pe-library`/`resedit` refuse the `.bun` section Bun places
+    after `.rsrc`.
 - **Verify by booting the artifact** (not just building it): extension wiring regressions surface only at
   runtime — e.g. path-loading broke silently for every extension added after the binary build first landed.
   [[module-artifact-tests]]'s CLI smoke (root: `bun run smoke:binary`, after `build:binary`) boots the built binary
@@ -319,10 +335,10 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `src/index.ts` (the run-from-source `bootstrap()`: shell env → server → browser open → signal handlers),
   and the binary build (`scripts/build-binary.ts`,
   `scripts/artifactName.ts` — exposed as `@thinkrail/cli/artifact` and the one place the artifact filename
-  rule lives, including the `.exe` Bun
-  appends for a Windows target, so the build's output path and the smoke's default input cannot disagree
-  the way they did on Windows; the release action re-derives the same name in bash because it is also the
-  published-asset contract, see `module-ci-release`),
+  rule lives, including the `.exe` Bun appends for a Windows target, so the build's output path and the
+  smoke's default input cannot disagree the way they did on Windows. It also holds the Windows-target
+  rule. The release action re-derives the same name in bash because it is also the published-asset
+  contract, see `module-ci-release`),
   `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`,
   `src/runtime-assets.generated.*`),
   `src/update.ts` (the `update`
@@ -333,7 +349,9 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
 - **Allowed deps:** `@thinkrail/server` (`bootHost`, `registerBundledRuntime`, build-support, `dataDir` — the
   uninstaller has to name the app state dir, and must name the *same* one the host uses),
   `@thinkrail/shared/startupMark` (the shared boot
-  signature renderer) + `@thinkrail/shared/version` (the shared release identity), Bun/Node; the generated build module may
+  signature renderer) + `@thinkrail/shared/version` (the shared release identity) +
+  `@thinkrail/shared/windowsIdentity` (the Windows file properties and ICO the build stamps), Bun/Node;
+  the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
 - **Forbidden:** product feature/domain logic; reaching into the server's internals (use only its public
