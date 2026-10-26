@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Project, SessionStateRecord, Workspace } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
+import { EMPTY_RUNTIME } from "./appStore";
 import { selectSwitcherGroups } from "./selectSwitcherGroups";
 
 const project = (id: string, name: string): Project => ({
@@ -63,6 +64,7 @@ const baseState = (records: SessionStateRecord[]) => {
 	return {
 		projects: [project("p1", "Project One")],
 		workspaces: { p1: [workspace("w1", "p1", "Workspace 1")] },
+		sessions: {},
 		sessionStateByWorkspace,
 		layoutDocumentsByWorkspace: {},
 		closedChatsByWorkspace: {},
@@ -136,6 +138,18 @@ describe("selectSwitcherGroups", () => {
 			closedChatsByWorkspace: {
 				w1: [{ sessionId: "s2", title: "", firstPrompt: "Closed prompt", closedAt: 1 }],
 			},
+			sessions: {
+				s3: {
+					...EMPTY_RUNTIME,
+					turns: [
+						{
+							kind: "user" as const,
+							id: "t1",
+							message: { role: "user" as const, content: "Runtime prompt", timestamp: 1 },
+						},
+					],
+				},
+			},
 		};
 		const sessions = selectSwitcherGroups(state)[0]?.sessions ?? [];
 		expect(sessions.find((s) => s.sessionId === "s1")).toMatchObject({
@@ -148,7 +162,7 @@ describe("selectSwitcherGroups", () => {
 		});
 		expect(sessions.find((s) => s.sessionId === "s3")).toMatchObject({
 			chatTitle: null,
-			firstPrompt: undefined,
+			firstPrompt: "Runtime prompt",
 		});
 	});
 
@@ -177,6 +191,7 @@ describe("selectSwitcherGroups", () => {
 				p1: [workspace("w1", "p1", "Workspace 1")],
 				p2: [workspace("w2", "p2", "Workspace 2")],
 			},
+			sessions: {},
 			sessionStateByWorkspace: {
 				w1: { s1: stateRecord("s1", "w1", "p1", { execution: "running" }) },
 				w2: { s2: stateRecord("s2", "w2", "p2") },

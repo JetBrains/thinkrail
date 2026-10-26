@@ -4,7 +4,7 @@ import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
 	DEFAULT_WORKSPACE_NAME,
-	firstPromptHead,
+	firstPromptOfTexts,
 	type GitDiffScope,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
@@ -926,7 +926,10 @@ export interface ChatFirstPromptState {
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
 }
 
-/** The first prompt's head for an unnamed chat's label: the host's projection, else the loaded runtime. */
+function* userTurnTexts(turns: SessionRuntime["turns"]): Generator<string> {
+	for (const turn of turns) if (turn.kind === "user") yield userText(turn.message.content);
+}
+
 export function selectChatFirstPrompt(
 	state: ChatFirstPromptState,
 	workspaceId: string,
@@ -937,18 +940,18 @@ export function selectChatFirstPrompt(
 		state.closedChatsByWorkspace[workspaceId]?.find((chat) => chat.sessionId === sessionId)
 			?.firstPrompt;
 	if (reported) return reported;
-	const first = state.sessions[sessionId]?.turns.find((turn) => turn.kind === "user");
-	return first ? firstPromptHead(userText(first.message.content)) : undefined;
+	const runtime = state.sessions[sessionId];
+	return runtime ? firstPromptOfTexts(userTurnTexts(runtime.turns)) : undefined;
 }
 
-/** First prompts by session id for the workspace's open chat tabs that have no name yet. */
 export function selectUnnamedChatFirstPrompts(
 	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
 	workspaceId: string,
 ): Record<string, string> {
 	const prompts: Record<string, string> = {};
 	for (const tab of state.tabsByWorkspace[workspaceId] ?? []) {
-		if (tab.kind !== "chat" || tab.name.trim()) continue;
+		if ((tab.kind !== "chat" && tab.kind !== "plan") || tab.name.trim()) continue;
+		if (tab.sessionId in prompts) continue;
 		const prompt = selectChatFirstPrompt(state, workspaceId, tab.sessionId);
 		if (prompt) prompts[tab.sessionId] = prompt;
 	}

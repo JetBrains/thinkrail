@@ -3,6 +3,7 @@ import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
 import {
 	changesTabName,
 	chatDisplayName,
+	chatLabel,
 	chatName,
 	defaultTerminalIndex,
 	defaultTerminalTitle,
@@ -68,12 +69,24 @@ test("an unnamed chat shows its first prompt's head, cut at a word boundary; a r
 	expect(
 		fallbackChatTitle("Please refactor the authentication module so that tokens refresh quietly"),
 	).toBe("Please refactor the authentication module so…");
+	expect(fallbackChatTitle(`${"a".repeat(30)} ${"b".repeat(17)} tail words here`)).toBe(
+		`${"a".repeat(30)} ${"b".repeat(17)}…`,
+	);
 	expect(fallbackChatTitle("x".repeat(60))).toBe(`${"x".repeat(48)}…`);
-	expect(fallbackChatTitle("  spaced   out  \n next")).toBe("spaced out next");
-	expect(fallbackChatTitle('<review scope="branch">')).toBeUndefined();
+	expect(fallbackChatTitle(`${"x".repeat(47)}😀${"y".repeat(10)}`)).toBe(`${"x".repeat(47)}…`);
 	expect(fallbackChatTitle("")).toBeUndefined();
 	expect(fallbackChatTitle(undefined)).toBeUndefined();
 	expect(chatDisplayName(t, "Named", "Fix the login redirect")).toBe("Named");
 	expect(chatDisplayName(t, "", "Fix the login redirect")).toBe("Fix the login redirect");
 	expect(chatDisplayName(t, "", undefined)).toBe("Chat");
+	expect(chatLabel(t, "  Named  ", "Fix the login redirect")).toEqual({
+		text: "Named",
+		source: "name",
+	});
+	expect(chatLabel(t, "   ", "x".repeat(60))).toEqual({
+		text: `${"x".repeat(48)}…`,
+		source: "prompt",
+		tooltip: "x".repeat(60),
+	});
+	expect(chatLabel(t, null, undefined)).toEqual({ text: "Chat", source: "default" });
 });

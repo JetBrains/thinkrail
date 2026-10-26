@@ -307,10 +307,13 @@ re-read while a server starts. The state vocabulary and the attention/active pre
     running),
     unread-finished, and project/workspace rollups—no stored precedence or second running slice.
     The record's `firstPrompt` is the preferred source of **`selectChatFirstPrompt`** (then the
-    `ClosedChat` row, then the loaded runtime's first user turn — the runtime only until the host has
-    reported one, since a hydrated runtime may start after a compaction); `selectChatTitle` folds it through
-    `chatDisplayName`, `selectUnnamedChatFirstPrompts` collects it for the workspace's unnamed chat tabs,
-    and `selectSwitcherGroups` carries it as `SwitcherSession.firstPrompt` beside the real `chatTitle`.
+    `ClosedChat` row, then the loaded runtime's user turns through contracts' `firstPromptOfTexts` — the
+    same reading the host applies, so an optimistic `/skill:` send or a leading package yields the head the
+    host will report; the runtime only until the host has reported one, since a hydrated runtime may start
+    after a compaction); `selectChatTitle` folds it through `chatDisplayName`,
+    `selectUnnamedChatFirstPrompts` collects it for the workspace's unnamed chat *and plan* tabs by session
+    id, and `selectSwitcherGroups` reads the same selector into `SwitcherSession.firstPrompt` beside the
+    real `chatTitle` (its hook subscribes to `sessions` only while the palette is open).
     `SessionRuntime.hostState` is installed with transcript hydration and by state pushes delivered after Pi
     events. A result is **read when it is seen**, not on a gesture: `selectReadyCompletionAck` returns the
     exact unread completion id only while the connection is current, the runtime is synced to this

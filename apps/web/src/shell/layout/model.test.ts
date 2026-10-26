@@ -181,6 +181,18 @@ describe("workspace layout model", () => {
 			expect(describeLayoutGroup(t, [chat(""), toolTab("plan")], prompts)).toContain(
 				"Please refactor the authentication module so\u2026",
 			);
+			const plan = {
+				kind: "document",
+				id: "d",
+				name: "",
+				documentKind: "todo-plan",
+				sourceId: "s",
+				docPath: "TODO.md",
+			} as const;
+			expect(layoutTabName(t, plan)).toBe("Plan: Unterhaltung");
+			expect(layoutTabName(t, plan, prompts)).toBe(
+				"Plan: Please refactor the authentication module so\u2026",
+			);
 			expect(layoutTabName(t, { kind: "terminal", id: "t", name: "Terminal 2", tabKey: "k" })).toBe(
 				"Konsole 2",
 			);

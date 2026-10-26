@@ -45,11 +45,11 @@ translator as their first argument, so a language change recomputes them. `layou
 default name at render from the tab's kind (tool, untitled chat, default terminal, Changes / diff scope,
 plan document) through `lib`'s default-name helpers, and shows a name set by the user or agent verbatim.
 Its optional third argument, the Workbench's **`chatFirstPrompts`** prop (`ChatFirstPrompts`, first prompt by
-session id, injected by the shell beside `onRenameChat`), labels an unnamed chat tab by its first prompt
-through `lib`'s `chatDisplayName` wherever the strip, its overflow search, the drag overlay and the
-move-target summaries (`describeLayoutGroup`, `tabSearchKeywords`) show the name; the tab marks
-`data-title-source` and carries the full prompt as its tooltip, while the rename field still edits the
-real `name`. The label is presentation only: the document's `name` stays `""`, so every mutation the
+session id, injected by the shell beside `onRenameChat`), labels an unnamed chat tab — and a plan
+document whose stored chat name is empty, by `sourceId` — by the chat's first prompt through `lib`'s
+`chatDisplayName` wherever the strip, its overflow search, the drag overlay and the move-target summaries
+(`describeLayoutGroup`, `tabSearchKeywords`) show the name; the chat tab renders the same `chatLabel` for
+`data-title-source` and the full-prompt tooltip, while the rename field still edits the real `name`. The label is presentation only: the document's `name` stays `""`, so every mutation the
 Workbench commits from the document it was given leaves the chat unnamed.
 
 A file, spec, or diff browse click opens its preview at once, with no settle wait. A double click then

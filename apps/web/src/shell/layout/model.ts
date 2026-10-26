@@ -107,7 +107,6 @@ const LAYOUT_TOOL_NAME_KEYS = {
 	plan: "workbench.tool.plan",
 } as const satisfies Record<LayoutToolId, MessageKey>;
 
-/** The first prompt's head by chat session id: the display label of a chat tab that has no name yet. */
 export type ChatFirstPrompts = Readonly<Record<string, string>>;
 
 const NO_FIRST_PROMPTS: ChatFirstPrompts = {};
@@ -129,7 +128,7 @@ export function layoutTabName(
 		case "diff":
 			return tab.before === undefined ? diffTabName(t, tab.scope, tab.path) : tab.name;
 		case "document":
-			return planDocumentName(t, tab.name);
+			return planDocumentName(t, chatDisplayName(t, tab.name, chatFirstPrompts[tab.sourceId]));
 		case "file":
 			return tab.name;
 	}

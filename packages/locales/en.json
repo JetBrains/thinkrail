@@ -1850,7 +1850,6 @@
 	"shell.quitHint.release": "Release to quit",
 	"shell.sessionSwitcher.empty": "No active sessions",
 	"shell.sessionSwitcher.title": "Switch session",
-	"shell.sessionSwitcher.untitled": "Untitled chat",
 	"shell.topbar.settings": "Settings",
 	"shell.topbar.settingsWithShortcut": "Settings ({{shortcut}})",
 	"shell.windowControls.maximize": "Maximize",

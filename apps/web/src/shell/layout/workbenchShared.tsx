@@ -76,7 +76,6 @@ export interface WorkbenchProps {
 		prepare: (latestDocument?: WorkspaceLayoutDocument) => PreparedLayoutClose,
 	) => void;
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
-	/** Display labels for chat tabs that have no name yet; never written into the document. */
 	chatFirstPrompts?: ChatFirstPrompts;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (

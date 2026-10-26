@@ -839,7 +839,7 @@ describe("the first prompt of an unnamed chat", () => {
 		sessionId,
 	});
 
-	test("prefers the host's record, then the closed-chat summary, then the loaded runtime", () => {
+	test("prefers the host's record, then the closed-chat summary, then the loaded runtime's turns", () => {
 		const state = {
 			sessions: {
 				s1: { ...EMPTY_RUNTIME, turns: [userTurn("From the runtime")] },
@@ -847,6 +847,13 @@ describe("the first prompt of an unnamed chat", () => {
 				s4: {
 					...EMPTY_RUNTIME,
 					turns: [userTurn('<review id="r" branch="b" base="c" comments="0">')],
+				},
+				s5: {
+					...EMPTY_RUNTIME,
+					turns: [
+						userTurn('<review id="r" branch="b" base="c" comments="0">'),
+						userTurn("/skill:brainstorming A later real prompt"),
+					],
 				},
 			},
 			sessionStateByWorkspace: { w1: { s1: record("s1", "From the record"), s2: record("s2") } },
@@ -858,24 +865,39 @@ describe("the first prompt of an unnamed chat", () => {
 		expect(selectChatFirstPrompt(state, "w1", "s2")).toBe("Only the runtime knows");
 		expect(selectChatFirstPrompt(state, "w1", "s3")).toBe("From the closed summary");
 		expect(selectChatFirstPrompt(state, "w1", "s4")).toBeUndefined();
+		expect(selectChatFirstPrompt(state, "w1", "s5")).toBe("A later real prompt");
 		expect(selectChatFirstPrompt(state, "w1", "unknown")).toBeUndefined();
 	});
 
 	test("titles and tab labels fall back to the prompt only while the chat has no name", () => {
 		const t = currentTranslator();
+		const planTab: EditorTab = {
+			kind: "plan",
+			id: "plan:w1:s4",
+			workspaceId: "w1",
+			name: "",
+			sessionId: "s4",
+		};
 		const state = {
 			tabsByWorkspace: {
-				w1: [chatTab("s1", ""), chatTab("s2", "Named by the agent"), chatTab("s3", "")],
+				w1: [chatTab("s1", ""), chatTab("s2", "Named by the agent"), chatTab("s3", ""), planTab],
 			},
 			sessions: {},
 			sessionStateByWorkspace: {
-				w1: { s1: record("s1", "Fix the login redirect"), s2: record("s2", "Please rename me") },
+				w1: {
+					s1: record("s1", "Fix the login redirect"),
+					s2: record("s2", "Please rename me"),
+					s4: record("s4", "Plan this one"),
+				},
 			},
 			closedChatsByWorkspace: {},
 		};
 		expect(selectChatTitle(t, state, "w1", "s1")).toBe("Fix the login redirect");
 		expect(selectChatTitle(t, state, "w1", "s2")).toBe("Named by the agent");
 		expect(selectChatTitle(t, state, "w1", "s3")).toBe("Chat");
-		expect(selectUnnamedChatFirstPrompts(state, "w1")).toEqual({ s1: "Fix the login redirect" });
+		expect(selectUnnamedChatFirstPrompts(state, "w1")).toEqual({
+			s1: "Fix the login redirect",
+			s4: "Plan this one",
+		});
 	});
 });

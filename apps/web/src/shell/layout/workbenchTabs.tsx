@@ -20,7 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, memo, type ReactNode, useEffect, useRef, useState } from "react";
-import { DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
+import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
 	AuxiliaryRailIndicator,
@@ -575,10 +575,8 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 		: -1;
 	const currentAuxiliaryLimit = currentAuxiliary === "bottom" ? maxBottomGroups : maxSideGroups;
 	const name = layoutTabName(t, tab, chatFirstPrompts);
-	const firstPrompt =
-		tab.kind === "chat" && !tab.name.trim() ? chatFirstPrompts?.[tab.sessionId] : undefined;
-	const titleSource =
-		tab.kind !== "chat" ? undefined : tab.name.trim() ? "name" : firstPrompt ? "prompt" : "default";
+	const chatTitle =
+		tab.kind === "chat" ? chatLabel(t, tab.name, chatFirstPrompts?.[tab.sessionId]) : undefined;
 	const groupRemoval = removeLayoutGroup(t, document, location);
 
 	const move = (target: LayoutGroupLocation, targetIndex?: number) => {
@@ -612,7 +610,9 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			data-layout-tab-id={tab.id}
 			tabIndex={rail ? rail.tabIndex : active ? 0 : -1}
 			{...dragListeners}
-			title={rail ? undefined : preview ? t("workbench.tab.previewTitle") : (firstPrompt ?? name)}
+			title={
+				rail ? undefined : preview ? t("workbench.tab.previewTitle") : (chatTitle?.tooltip ?? name)
+			}
 			onFocus={rail?.onFocus}
 			onClick={rail ? rail.onActivate : selectFromClick}
 			onDoubleClick={rail ? undefined : selectFromDoubleClick}
@@ -654,7 +654,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 					data-preview={preview}
 					data-kind={tab.kind === "document" ? "plan" : tab.kind}
 					data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
-					data-title-source={titleSource}
+					data-title-source={chatTitle?.source}
 					data-dragging={(isDragging && draggingTab?.id === tab.id) || undefined}
 					className={cn(
 						"group data-[dragging]:opacity-40",

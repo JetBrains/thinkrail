@@ -5,7 +5,8 @@ import {
 	type Workspace,
 } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
-import type { ClosedChat } from "./appStore";
+import type { ClosedChat, SessionRuntime } from "./appStore";
+import { selectChatFirstPrompt } from "./selectors";
 
 export type SessionAttention = "needs-input" | "error" | "unread" | "running";
 
@@ -15,9 +16,7 @@ export interface SwitcherSession {
 	projectId: string;
 	workspaceName: string;
 	workspaceKind: Workspace["kind"] | undefined;
-	/** The real title: `""` for a known unnamed chat, `null` until a title has been read. */
 	chatTitle: string | null;
-	/** The first prompt's head, the display fallback while `chatTitle` is empty. */
 	firstPrompt: string | undefined;
 	attention: SessionAttention;
 }
@@ -32,6 +31,7 @@ export interface SwitcherProject {
 interface SwitcherGroupsState {
 	projects: Project[];
 	workspaces: Record<string, Workspace[]>;
+	sessions: Record<string, SessionRuntime>;
 	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
@@ -79,18 +79,6 @@ function resolveChatTitle(
 	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
 }
 
-function resolveFirstPrompt(
-	state: SwitcherGroupsState,
-	record: SessionStateRecord,
-): string | undefined {
-	return (
-		record.firstPrompt ??
-		state.closedChatsByWorkspace[record.workspaceId]?.find(
-			(chat) => chat.sessionId === record.sessionId,
-		)?.firstPrompt
-	);
-}
-
 function resolveWorkspace(
 	state: SwitcherGroupsState,
 	projectId: string,
@@ -114,7 +102,7 @@ export function selectSwitcherGroups(state: SwitcherGroupsState): SwitcherProjec
 				workspaceName: workspace?.name ?? "",
 				workspaceKind: workspace?.kind,
 				chatTitle: resolveChatTitle(state, record.workspaceId, record.sessionId),
-				firstPrompt: resolveFirstPrompt(state, record),
+				firstPrompt: selectChatFirstPrompt(state, record.workspaceId, record.sessionId),
 				attention,
 			});
 			sessionsByProject.set(record.projectId, sessions);

@@ -170,15 +170,17 @@ control; pointer blur preserves the user's new focus target. The named, viewport
 popover remains open and scrollable while its row is edited. The controls render only when the welcome
 protocol supports `session.rename`.
 
-**Unnamed chats read as their first prompt.** Every shell surface that shows a chat title renders
-`lib`'s `chatDisplayName` (the store's `selectChatTitle` for panels): a real name wins; a chat the agent has
-not named yet shows the head of its first prompt in the same style as a named chat, else the generic
-label. The element carries `data-title-source="name" | "prompt" | "default"` and, for a prompt label, the
-full first line as its tooltip. The tab strip receives the prompts as the Workbench's `chatFirstPrompts`
-prop (`selectUnnamedChatFirstPrompts`, by session id) beside the rename callback — the layout document
-itself is never relabelled, because every Workbench mutation commits a derivative of the document it was
-given and a relabelled copy would persist the fallback as the tab's name. Recently closed reads
-`ClosedChat.firstPrompt`; the session switcher carries `firstPrompt` beside `chatTitle` so the host
+**Unnamed chats read as their first prompt.** Every shell surface that shows a chat title renders one
+`lib` `chatLabel` (the store's `selectChatTitle` for panels): a real name wins; a chat the agent has not
+named yet shows the head of its first prompt in the same style as a named chat, else the generic label —
+the switcher included, which no longer words an unread title differently. The element carries the label's
+`data-title-source="name" | "prompt" | "default"` and, for a prompt label, the full first line as its
+tooltip. The tab strip receives the prompts as the Workbench's `chatFirstPrompts` prop
+(`selectUnnamedChatFirstPrompts`, by session id, covering a plan document's chat too) beside the rename
+callback — the layout document itself is never relabelled, because every Workbench mutation commits a
+derivative of the document it was given and a relabelled copy would persist the fallback as the tab's
+name; `openPlan` likewise stores the real chat name and the plan tab is worded at render. Recently closed
+reads `ClosedChat.firstPrompt`; the session switcher carries `firstPrompt` beside `chatTitle` so the host
 title backfill still applies to a chat shown by its prompt. Nothing writes the label: the agent's
 `set_title` or a manual rename replaces it everywhere through the same `session_info_changed` fold.
 

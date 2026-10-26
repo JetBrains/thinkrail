@@ -1850,7 +1850,6 @@
 	"shell.quitHint.release": "松开即可退出",
 	"shell.sessionSwitcher.empty": "没有活跃会话",
 	"shell.sessionSwitcher.title": "切换会话",
-	"shell.sessionSwitcher.untitled": "未命名会话",
 	"shell.topbar.settings": "设置",
 	"shell.topbar.settingsWithShortcut": "设置（{{shortcut}}）",
 	"shell.windowControls.maximize": "最大化",

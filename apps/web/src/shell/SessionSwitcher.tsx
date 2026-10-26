@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { useCallback } from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { chatDisplayName } from "@/lib";
+import { chatLabel } from "@/lib";
 import { workspaceName } from "@/store";
 import { useSessionSwitcher } from "./useSessionSwitcher";
 
@@ -60,6 +60,7 @@ export function SessionSwitcher({ open, onOpenChange }: SessionSwitcherProps) {
 								>
 									{project.sessions.map((session) => {
 										const isRunning = session.attention === "running";
+										const label = chatLabel(t, session.chatTitle, session.firstPrompt);
 										return (
 											<CommandItem
 												key={session.sessionId}
@@ -77,18 +78,10 @@ export function SessionSwitcher({ open, onOpenChange }: SessionSwitcherProps) {
 												<span className="flex min-w-0 flex-1 flex-col">
 													<span
 														className="truncate tr-text-ui text-text-default leading-tight group-data-[selected=true]:text-primary"
-														data-title-source={
-															session.chatTitle
-																? "name"
-																: session.firstPrompt
-																	? "prompt"
-																	: "default"
-														}
-														title={session.chatTitle ? undefined : session.firstPrompt}
+														data-title-source={label.source}
+														title={label.tooltip}
 													>
-														{session.chatTitle === null && !session.firstPrompt
-															? t("shell.sessionSwitcher.untitled")
-															: chatDisplayName(t, session.chatTitle, session.firstPrompt)}
+														{label.text}
 													</span>
 													{session.workspaceName ? (
 														<span className="truncate text-text-subtle tr-text-metadata leading-tight">
