@@ -326,7 +326,7 @@
 	"chat.skills.trustFailed": "Couldn't trust project",
 	"chat.skills.trustProject": "Trust project",
 	"chat.stats.contextUsed": "Context window used",
-	"chat.stats.usageLegend": "Cumulative usage: ↑ input · ↓ output · R cache read · W cache write",
+	"chat.stats.usageLegend": "Cumulative usage, including subagents: ↑ input · ↓ output · R cache read · W cache write",
 	"chat.stream.runningAnyTool": "Running tool…",
 	"chat.stream.runningTool": "Running {{tool}}…",
 	"chat.stream.writing": "Writing…",

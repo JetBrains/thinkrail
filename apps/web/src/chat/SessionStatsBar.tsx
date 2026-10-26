@@ -6,7 +6,9 @@ export function formatTokens(count: number): string {
 	if (count < 9_950) return `${(count / 1_000).toFixed(1)}k`;
 	if (count < 999_500) return `${Math.round(count / 1_000)}k`;
 	if (count < 9_950_000) return `${(count / 1_000_000).toFixed(1)}M`;
-	return `${Math.round(count / 1_000_000)}M`;
+	if (count < 999_500_000) return `${Math.round(count / 1_000_000)}M`;
+	if (count < 9_950_000_000) return `${(count / 1_000_000_000).toFixed(1)}B`;
+	return `${Math.round(count / 1_000_000_000)}B`;
 }
 
 export function formatCost(cost: number): string {

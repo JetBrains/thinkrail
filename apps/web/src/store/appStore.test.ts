@@ -379,8 +379,15 @@ test("stats refresh ticks survive batching at finalized Pi state boundaries", ()
 	expect(rt("a").statsRefreshTick).toBe(3);
 	store.handlePiEvent({ type: "entry_appended", entryType: "custom" }, "a");
 	expect(rt("a").statsRefreshTick).toBe(3);
-	store.handlePiEvent({ type: "entry_appended", entryType: "usage" }, "a");
-	expect(rt("a").statsRefreshTick).toBe(4);
+	for (const [index, entryType] of [
+		"usage",
+		"compaction",
+		"branch_summary",
+		"context_edit",
+	].entries()) {
+		store.handlePiEvent({ type: "entry_appended", entryType }, "a");
+		expect(rt("a").statsRefreshTick).toBe(4 + index);
+	}
 });
 
 test("a host-fired USER message folds into the transcript; the composer's optimistic twin doesn't duplicate", () => {

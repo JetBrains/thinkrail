@@ -79,7 +79,10 @@ export function reconcileSessionSubagentUsage(
 	return reconcileSubagentUsage({
 		dir: delegationSessionDir(delegationRootDir(), workspaceId, parentSessionId),
 		entries,
-		isLive: (childSessionId) => services.get(workspaceId)?.findChild(childSessionId) !== undefined,
+		isLive: (childSessionId) => {
+			const status = services.get(workspaceId)?.findChild(childSessionId)?.snapshot?.status;
+			return status === "queued" || status === "running";
+		},
 		record: (usage) => recordSubagentUsage(parentSessionId, usage),
 	});
 }

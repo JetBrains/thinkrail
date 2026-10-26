@@ -567,16 +567,21 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     at bind time). Every parented `run-terminal` appends that run's usage delta to the live parent as a pi
     `usage` entry (`kind: "subagent"`, `note` = child session id; only the cost total is known) and
     publishes `entry_appended { entryType: "usage" }`, so pi's own session totals include delegated spend
-    for every outcome and consumer (Agent, `request_review`), independent of completion delivery. Closing
+    for every outcome and consumer (Agent, `request_review`), independent of completion delivery. This is
+    delegated spend's only accounting channel: delegation tools must never return `AgentToolResult.usage`,
+    which pi would sum a second time. The write is best-effort, like pi's cache warmer: a failed append is
+    logged and never fails the child run, and the next attach reconciles it. Closing
     a chat keeps its entry writable until its teardown cascade settles, so runs that cascade stops are
     still recorded; attach is refused during teardown, so the transcript keeps one writer. A deletion
     tombstone suppresses the write, because pi's append would recreate the trashed file. Graceful host
     shutdown records within its budget. Children cannot spawn children (`RECURSION_GUARD_TOOLS`), so deltas
-    never nest. **`subagentUsage`** makes the transcript, not the event, authoritative: every attach
-    asynchronously totals each non-live fresh child file under the parent's delegation directory and
-    appends the shortfall against the parent's `subagent` entries for that child. This recovers runs a
+    never nest. **`subagentUsage`** makes the transcript, not the event, authoritative: every attach, and
+    a deletion rolled back after its tombstone suppressed a terminal write, asynchronously totals each
+    fresh child file without a queued or running run under the parent's delegation directory and appends
+    the shortfall against the parent's `subagent` entries for that child. This recovers runs a
     crash or kill never finished, back-fills chats from before parent recording, and picks up child spend
-    outside runs. A child file not newer than its latest record is skipped unread; the shortfall is
+    outside runs. A child file not newer than its latest record, or with the same mtime and size as a
+    read that found no shortfall in this process, is skipped unread; the shortfall is
     recomputed from the live entries immediately before appending, so overlapping reconciliations cannot
     double-count; only a positive token shortfall is appended, never a negative correction. Forked children
     (header `parentSession`) are skipped because their copied history carries the parent's own spend.

@@ -1,5 +1,15 @@
 import { expect, test } from "bun:test";
-import { childFileUsage, unrecordedUsage } from "./subagentUsage";
+import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import {
+	childFileUsage,
+	reconcileSubagentUsage,
+	SUBAGENT_USAGE_KIND,
+	type SubagentUsage,
+	unrecordedUsage,
+} from "./subagentUsage";
 
 const header = (extra: Record<string, unknown> = {}) =>
 	JSON.stringify({ type: "session", version: 3, id: "child", timestamp: "", cwd: "/w", ...extra });
@@ -60,4 +70,37 @@ test("unrecordedUsage appends only a non-negative token shortfall", () => {
 	});
 	expect(unrecordedUsage(total, recorded(30, 0.29999999))).toBeUndefined();
 	expect(unrecordedUsage(total, recorded(40, 0.4))).toBeUndefined();
+});
+
+test("reconcileSubagentUsage still records a settled child file once it grows", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "trusage-"));
+	const file = join(dir, "2026-01-01T00-00-00-000Z_child.jsonl");
+	writeFileSync(file, [header(), assistant(10, 0.1)].join("\n"));
+	const entries: SessionEntry[] = [];
+	const reconcile = () =>
+		reconcileSubagentUsage({
+			dir,
+			entries: () => entries,
+			isLive: () => false,
+			record: ({ provider, model, usage, childSessionId }: SubagentUsage) => {
+				entries.push({
+					type: "usage",
+					id: `u${entries.length}`,
+					parentId: null,
+					timestamp: new Date(0).toISOString(),
+					kind: SUBAGENT_USAGE_KIND,
+					provider,
+					model,
+					usage,
+					note: childSessionId,
+				});
+			},
+		});
+	await reconcile();
+	await reconcile();
+	expect(entries.map((entry) => entry.type === "usage" && entry.usage.input)).toEqual([10]);
+
+	appendFileSync(file, `\n${assistant(20, 0.2)}`);
+	await reconcile();
+	expect(entries.map((entry) => entry.type === "usage" && entry.usage.input)).toEqual([10, 20]);
 });

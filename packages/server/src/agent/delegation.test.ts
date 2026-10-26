@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -16,6 +16,7 @@ import {
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import { type DelegationRunDetails as CoreRunDetails, delegationSessionDir } from "pi-delegation";
 import { SUBAGENT_COMPLETION_MESSAGE } from "pi-subagents";
+import { setTrashImplementationForTests } from "../trash";
 import {
 	createSession,
 	deleteSession,
@@ -37,6 +38,7 @@ import {
 	setSubagentConcurrencyResolver,
 } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
+import { childFileUsage } from "./subagentUsage";
 
 const faux = createFauxCore({
 	provider: "faux",
@@ -233,6 +235,18 @@ test("a child run's usage delta lands in the parent's pi totals and invalidates 
 		]);
 		expect(published).toContainEqual({ type: "entry_appended", entryType: "usage" });
 
+		await child.dispose();
+		expect(
+			childFileUsage(child.sessionId, readFileSync(child.record.sessionFile, "utf8")),
+		).toMatchObject({
+			usage: {
+				input: usage.input,
+				output: usage.output,
+				cacheRead: usage.cacheRead,
+				cacheWrite: usage.cacheWrite,
+				cost: { total: usage.cost },
+			},
+		});
 		await reconcileSessionSubagentUsage("ws-usage", sessionId, () => parentManager?.getEntries());
 		expect(parentManager?.getEntries().filter((entry) => entry.type === "usage")).toHaveLength(1);
 	} finally {
@@ -261,7 +275,7 @@ async function parentWithGatedChild(workspaceId: string) {
 	await waitFor(() => child.snapshot?.status === "running");
 	const usageEntries = () =>
 		parentManager?.getEntries().filter((entry) => entry.type === "usage") ?? [];
-	return { cwd, sessionId, child, run, release, usageEntries };
+	return { cwd, sessionId, child, run, release, usageEntries, parentManager };
 }
 
 test("attaching a chat recovers the spend of children a crashed host never recorded", async () => {
@@ -326,6 +340,73 @@ test("deleting a chat never appends usage to its trashed transcript", async () =
 	release();
 	await Promise.all([deleted, run]);
 	expect(usageEntries()).toEqual([]);
+});
+
+test("a failed usage write never fails the child run", async () => {
+	const { sessionId, child, run, release, usageEntries, parentManager } =
+		await parentWithGatedChild("ws-enospc");
+	if (!parentManager) throw new Error("expected a parent session manager");
+	parentManager.appendUsage = () => {
+		throw new Error("ENOSPC: no space left on device");
+	};
+	try {
+		release();
+		expect((await run).status).toBe("completed");
+		expect(child.snapshot?.status).toBe("completed");
+		expect(usageEntries()).toEqual([]);
+	} finally {
+		await removeSession(sessionId);
+	}
+});
+
+test("a failed deletion recovers the usage of a child that settled while trash was pending", async () => {
+	let reportTrashStarted: () => void = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash: () => void = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
+	setTrashImplementationForTests(async () => {
+		reportTrashStarted();
+		await trashOutcome;
+	});
+	let parentManager: SessionManager | undefined;
+	setSessionManagerFactory((dir) => {
+		parentManager = SessionManager.create(dir);
+		return parentManager;
+	});
+	const cwd = tmpDir("trdel-trashfail-");
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-trashfail" });
+	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	parentManager?.appendMessage({ role: "user", content: "persist", timestamp: Date.now() });
+	const { release } = gatedChildResponse();
+	try {
+		const child = await delegationServiceFor("ws-trashfail").createChild({
+			parent: sessionId,
+			visibility: "hidden",
+			info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+			session: { systemPrompt: "You are a test scout." },
+		});
+		const run = child.runQueued("Long background job.");
+		await waitFor(() => child.snapshot?.status === "running");
+		const deleting = deleteSession(sessionId, "ws-trashfail", cwd);
+		await trashStarted;
+		release();
+		await run;
+		const usageEntries = () => parentManager?.getEntries().filter((e) => e.type === "usage") ?? [];
+		expect(usageEntries()).toEqual([]);
+
+		failTrash();
+		await expect(deleting).rejects.toThrow("recycle bin unavailable");
+		await waitFor(() => usageEntries().length > 0);
+		expect(usageEntries()).toMatchObject([{ kind: "subagent", note: child.sessionId }]);
+	} finally {
+		failTrash();
+		setTrashImplementationForTests(undefined);
+		await removeSession(sessionId);
+	}
 });
 
 test("owned children remain inspectable before and during their first provider response", async () => {

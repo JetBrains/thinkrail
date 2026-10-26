@@ -629,12 +629,14 @@ function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntim
 		: rt;
 }
 
+const STATS_ENTRY_TYPES = new Set(["usage", "compaction", "branch_summary", "context_edit"]);
+
 function invalidatesSessionStats(event: PiEvent): boolean {
 	return (
 		event.type === "message_end" ||
 		event.type === "compaction_end" ||
 		event.type === "agent_settled" ||
-		(event.type === "entry_appended" && event.entryType === "usage")
+		(event.type === "entry_appended" && STATS_ENTRY_TYPES.has(event.entryType))
 	);
 }
 

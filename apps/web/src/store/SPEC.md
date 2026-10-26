@@ -371,8 +371,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   connected generation and advances the revision so two reads cannot regress one another. When the latest
   live compaction matches the durable record, its id + estimated-after count survive, and `resuming` survives
   only while the returned summary is still streaming. The
-  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. Every `message_end`, `compaction_end`, and
-  `agent_settled` also advances `statsRefreshTick`, even when that event changes no rendered turn, so a
+  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. Every `message_end`, `compaction_end`,
+  `agent_settled`, and `entry_appended` of a spend- or context-bearing entry (`usage`, `compaction`,
+  `branch_summary`, `context_edit`) also advances `statsRefreshTick`, even when that event changes no rendered turn, so a
   finalized Pi usage/context boundary cannot be lost behind presentation filtering or a batched
   `isStreaming` false→false endpoint. **`handlePiEvents` folds an ordered batch in one atomic store write
   while incrementing each affected runtime's revision once per event, even for a UI-ignored event**, because

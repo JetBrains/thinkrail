@@ -989,8 +989,9 @@ so an already-loaded old client clears retired markers after reconnect. No activ
 - **Mirrors are not version-pinned in comments.** A shape re-declared here because its real home is
   Node-only carries *what* it mirrors, never *which pi version it was last checked against*: those
   markers had to be hand-edited across several files on every bump and nothing verified them. A
-  UI-relevant lifecycle member must be explicit here (especially the host-enriched `agent_settled`);
-  UI-irrelevant session events such as `entry_appended` may remain unmodelled and ignored. Re-audit a
+  UI-relevant lifecycle member must be explicit here (especially the host-enriched `agent_settled`, and
+  `entry_appended`, which the host projects to `{ entryType }` so the UI can refresh stats);
+  UI-irrelevant session events may remain unmodelled and ignored. Re-audit a
   mirror when a bump's changelog touches it, not because a comment names a version.
 - **Type-only, from the package roots, always** (type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths

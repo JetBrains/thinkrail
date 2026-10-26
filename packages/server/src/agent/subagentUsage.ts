@@ -8,6 +8,9 @@ import {
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import type { DelegationRunDetails } from "pi-delegation";
+import { logger } from "../log";
+
+const log = logger("agent");
 
 export const SUBAGENT_USAGE_KIND = "subagent";
 
@@ -133,33 +136,52 @@ export function unrecordedUsage(
 	return { ...total, usage: toUsage(missing) };
 }
 
-async function readChildTotals(
+interface ChildFile {
+	childSessionId: string;
+	path: string;
+	mtimeMs: number;
+	size: number;
+	total: SubagentUsage | undefined;
+}
+
+const settledChildFiles = new Map<string, { mtimeMs: number; size: number }>();
+
+async function readChildFiles(
 	dir: string,
 	recorded: ReadonlyMap<string, Recorded>,
 	isLive: (childSessionId: string) => boolean,
-): Promise<SubagentUsage[]> {
+): Promise<ChildFile[]> {
 	let names: string[];
 	try {
 		names = await readdir(dir);
 	} catch {
 		return [];
 	}
-	const totals: SubagentUsage[] = [];
+	const files: ChildFile[] = [];
 	for (const name of names) {
 		const separator = name.indexOf("_");
 		if (separator < 0 || !name.endsWith(".jsonl")) continue;
 		const childSessionId = name.slice(separator + 1, -".jsonl".length);
 		if (isLive(childSessionId)) continue;
-		const file = join(dir, name);
+		const path = join(dir, name);
 		try {
-			const { mtimeMs } = await stat(file);
+			const { mtimeMs, size } = await stat(path);
 			const at = recorded.get(childSessionId)?.at;
 			if (at !== undefined && mtimeMs <= at) continue;
-			const total = childFileUsage(childSessionId, await readFile(file, "utf8"));
-			if (total) totals.push(total);
-		} catch {}
+			const settled = settledChildFiles.get(path);
+			if (settled?.mtimeMs === mtimeMs && settled.size === size) continue;
+			files.push({
+				childSessionId,
+				path,
+				mtimeMs,
+				size,
+				total: childFileUsage(childSessionId, await readFile(path, "utf8")),
+			});
+		} catch (error) {
+			log.warn(`subagent usage was not read from ${name}`, error as Error);
+		}
 	}
-	return totals;
+	return files;
 }
 
 export async function reconcileSubagentUsage(deps: {
@@ -170,13 +192,14 @@ export async function reconcileSubagentUsage(deps: {
 }): Promise<void> {
 	const before = deps.entries();
 	if (!before) return;
-	const totals = await readChildTotals(deps.dir, recordedSubagentUsage(before), deps.isLive);
+	const files = await readChildFiles(deps.dir, recordedSubagentUsage(before), deps.isLive);
 	const current = deps.entries();
-	if (!current || totals.length === 0) return;
+	if (!current || files.length === 0) return;
 	const recorded = recordedSubagentUsage(current);
-	for (const total of totals) {
-		if (deps.isLive(total.childSessionId)) continue;
-		const missing = unrecordedUsage(total, recorded.get(total.childSessionId)?.totals);
+	for (const { childSessionId, path, mtimeMs, size, total } of files) {
+		if (deps.isLive(childSessionId)) continue;
+		const missing = total && unrecordedUsage(total, recorded.get(childSessionId)?.totals);
 		if (missing) deps.record(missing);
+		else settledChildFiles.set(path, { mtimeMs, size });
 	}
 }

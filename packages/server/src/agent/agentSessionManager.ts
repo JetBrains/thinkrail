@@ -1238,11 +1238,7 @@ async function registerSession(
 	restartMcpStatus(session.sessionId);
 	commands.flushCompletions();
 	subagents.flushCompletions();
-	void reconcileSessionSubagentUsage(workspaceId, session.sessionId, () =>
-		usageWritableEntry(session.sessionId)?.session.sessionManager.getEntries(),
-	).catch((error: unknown) =>
-		log.warn(`subagent usage was not reconciled for ${session.sessionId}`, error as Error),
-	);
+	reconcileSubagentUsageInBackground(workspaceId, session.sessionId);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) {
 		publishCreated(summaryOf(session.sessionId, prepared.entry));
@@ -2399,6 +2395,14 @@ export function getSessionStats(sessionId: string): SessionStats {
 	};
 }
 
+function reconcileSubagentUsageInBackground(workspaceId: string, sessionId: string): void {
+	void reconcileSessionSubagentUsage(workspaceId, sessionId, () =>
+		usageWritableEntry(sessionId)?.session.sessionManager.getEntries(),
+	).catch((error: unknown) =>
+		log.warn(`subagent usage was not reconciled for ${sessionId}`, error as Error),
+	);
+}
+
 function usageWritableEntry(sessionId: string): Entry | undefined {
 	if (hasDeletionTombstone(sessionId)) return undefined;
 	return sessions.get(sessionId) ?? tearingDownEntries.get(sessionId);
@@ -2411,7 +2415,12 @@ export function recordSessionUsage(
 	const entry = usageWritableEntry(sessionId);
 	if (!entry) return;
 	const { kind, provider, model, usage, note } = record;
-	entry.session.sessionManager.appendUsage(kind, provider, model, usage, note);
+	try {
+		entry.session.sessionManager.appendUsage(kind, provider, model, usage, note);
+	} catch (error) {
+		log.warn(`${kind} usage was not recorded for ${sessionId}`, error as Error);
+		return;
+	}
 	publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
 }
 
@@ -2873,6 +2882,7 @@ async function runDeleteTransaction(
 			deletedSessions.delete(sessionId);
 			sessions.get(sessionId)?.commands.flushCompletions();
 			sessions.get(sessionId)?.subagents.flushCompletions();
+			if (sessions.has(sessionId)) reconcileSubagentUsageInBackground(workspaceId, sessionId);
 			publishSessionResourcesChanged(workspaceId, sessionId);
 		}
 		throw error;

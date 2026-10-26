@@ -444,7 +444,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	): DelegationRunDetails {
 		const { session, record } = entry;
 		const stats = session.getSessionStats();
-		const contextUsage = stats.contextUsage ?? session.getContextUsage();
+		const { contextUsage } = stats;
 		return {
 			childSessionId: record.sessionId,
 			...(record.info.roleName !== undefined ? { roleName: record.info.roleName } : {}),
