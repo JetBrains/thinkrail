@@ -789,6 +789,22 @@ test("custom preset updates validate the complete catalog and permit empty struc
 	);
 });
 
+test("a custom preset may place every layout tool, the TODO List included", () => {
+	const withTools: LayoutPreset = {
+		...preset(),
+		right: {
+			visible: true,
+			width: 0.28,
+			groups: [
+				{ id: "custom-right", weight: 1, folded: false, tools: ["specs", "plan", "review"] },
+			],
+		},
+	};
+	expect(updateConfig({ customLayoutPresets: [withTools] }).customLayoutPresets).toEqual([
+		withTools,
+	]);
+});
+
 test("stored custom presets keep only complete current-schema entries", () => {
 	const { bottom: _bottom, ...bottomless } = preset("bottomless");
 	writeFileSync(

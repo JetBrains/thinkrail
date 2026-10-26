@@ -85,7 +85,7 @@ import {
 	SETTLED_NOTICE_QUIET_MS,
 	settledShelfNoticed,
 } from "./settledShelfNotice";
-import { startProjectSetupChat, type WorkspaceDialogRequest } from "./setupPrompt";
+import { startProjectSetupChat } from "./setupPrompt";
 import { useOpenProject } from "./useOpenProject";
 import {
 	canRenameProject,
@@ -128,7 +128,7 @@ export function ProjectTree() {
 	const editors = useEditors();
 
 	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
-	const [workspaceDialog, setWorkspaceDialog] = useState<WorkspaceDialogRequest | null>(null);
+	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
@@ -262,7 +262,7 @@ export function ProjectTree() {
 
 	const openWorkspaceDialog = (projectId: string, returnFocusToProject: boolean) => {
 		workspaceDialogReturnFocusIdRef.current = returnFocusToProject ? projectId : null;
-		setWorkspaceDialog({ projectId, prompt: "" });
+		setDialogProjectId(projectId);
 	};
 
 	const openExistingWorktreeDialog = (projectId: string) => {
@@ -375,15 +375,13 @@ export function ProjectTree() {
 				})}
 			</ul>
 
-			{workspaceDialog !== null ? (
+			{dialogProjectId !== null ? (
 				<NewWorkspaceDialog
 					open
-					projectId={workspaceDialog.projectId}
-					initialPrompt={workspaceDialog.prompt}
-					{...(workspaceDialog.note !== undefined ? { promptNote: workspaceDialog.note } : {})}
+					projectId={dialogProjectId}
 					onOpenChange={(o) => {
 						if (o) return;
-						setWorkspaceDialog(null);
+						setDialogProjectId(null);
 						const returnFocusId = workspaceDialogReturnFocusIdRef.current;
 						workspaceDialogReturnFocusIdRef.current = null;
 						if (returnFocusId) focusProjectNameOrAdd(returnFocusId);

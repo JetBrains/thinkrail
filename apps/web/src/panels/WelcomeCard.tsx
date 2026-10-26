@@ -1,4 +1,4 @@
-import type { RemixiconComponentType as LucideIcon } from "@remixicon/react";
+import type { RemixiconComponentType } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { type ComponentPropsWithoutRef, forwardRef } from "react";
@@ -24,7 +24,7 @@ export function CardSkeleton() {
 type CardProps = {
 	cta?: boolean;
 	primary?: boolean;
-	icon: LucideIcon;
+	icon: RemixiconComponentType;
 	title: string;
 	subtitle: string;
 	tag?: string;

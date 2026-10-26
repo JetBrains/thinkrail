@@ -413,9 +413,11 @@ the shared **`useProviderAuth`** hook, which `ProvidersSettings` uses too: one `
 `LoginDialog` node. Exactly one surface mounts that node: Settings while it is open, otherwise the
 connect surface (`ownsLoginDialog`), so a login never renders two stacked dialogs. **Post-connect handoff:**
 when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key
-login or a Central connect alike — the surface clears the finished login, closes itself, and raises one
-success toast naming the provider and the `model.list` count ("JetBrains AI connected — 23 models
-available"); `onConnected` lets Welcome switch its hero. Settings keeps its own behavior (no auto-close),
+login or a Central connect alike — `ConnectProviderOptions` reports it once through `onConnected` and the host
+surface decides: `ConnectProviderDialog` clears the finished login, closes itself, and raises one success
+toast naming the provider and the `model.list` count ("JetBrains AI connected — 23 models available"), then
+lets Welcome switch its hero to the `ConnectedLine`; the wizard neither toasts nor closes — it verifies in place
+(below). Settings keeps its own behavior (no auto-close),
 because a power user there may be adding a second provider.
 
 **Starting from nothing.** "Start a new project" opens **`CreateProjectDialog`** (driven by `useOpenProject`'s
@@ -431,7 +433,7 @@ only add clicks before anything exists. The "Set up project" card on an existing
 
 **Cold-start onboarding wizard.** `OnboardingWizard` replaces the Welcome cards only on a true cold start:
 the host supports `ONBOARDING_PROTOCOL_VERSION`, `AppConfig.onboardingDismissed` is false, there are no
-open or recent projects, and `useHasProvider` reports none. The decision is **latched once** per mount so
+open or recent projects, and `useHasProvider` reports none. The decision is **latched in the store gate** (it survives remounts) so
 connecting a provider mid-wizard does not tear it down. It opens on an **intro**
 (the brand title, the landing page's tagline and its three "why" beats — worktrees, specs, pi as the
 engine — as small cards, and **Get started**; the copy follows thinkrail.ai so first run and landing say the same thing) — a first-time user meets the

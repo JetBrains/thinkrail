@@ -15,7 +15,6 @@
 	"auth.login.openPage": "打开登录页面",
 	"auth.login.pasteHint": "如果登录没有自动完成，请复制浏览器最终停留的地址并粘贴到此处。",
 	"auth.login.pasteToggle": "登录没有完成？请粘贴最终地址",
-	"auth.login.submit": "提交",
 	"auth.login.waitingForBrowser": "等待你完成登录…",
 	"auth.login.working": "处理中…",
 	"changes.empty": "此范围内没有改动。",

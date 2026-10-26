@@ -5,11 +5,11 @@ import {
 } from "@remixicon/react";
 import type { DetectedAccount, DetectedAccountSource, ProviderStatus } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
-import { t as translate, useT } from "@thinkrail/locales/react";
+import { type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
-import { type ComponentProps, useEffect, useRef, useState } from "react";
+import { type ComponentProps, useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "@/store";
 import { getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
@@ -59,8 +59,8 @@ interface DetectedChoice {
 	provider: ProviderStatus;
 }
 
-export function connectedProviderName(provider: ProviderStatus): string {
-	return provider.kind === "central" ? "JetBrains AI" : provider.name;
+export function connectedProviderName(provider: ProviderStatus, t: Translator): string {
+	return provider.kind === "central" ? t("settings.jbcentral.title") : provider.name;
 }
 
 export async function announceProviderConnected(provider: ProviderStatus): Promise<void> {
@@ -71,7 +71,9 @@ export async function announceProviderConnected(provider: ProviderStatus): Promi
 		models
 			? translate("panels.connectProvider.modelsAvailable", { count: models.length })
 			: translate("panels.connectProvider.agentCanRun"),
-		translate("auth.login.connectedTitle", { provider: connectedProviderName(provider) }),
+		translate("auth.login.connectedTitle", {
+			provider: connectedProviderName(provider, translate),
+		}),
 	);
 }
 
@@ -88,6 +90,7 @@ export function ConnectProviderOptions({
 	const { report, failed, load, startLogin, rowBusy } = auth;
 	const [search, setSearch] = useState("");
 	const baseline = useRef<Set<string> | null>(null);
+	const announceConnected = useEffectEvent(onConnected);
 
 	useEffect(() => {
 		if (!report) return;
@@ -100,8 +103,8 @@ export function ConnectProviderOptions({
 		const fresh = configured.find((p) => !known.has(p.id));
 		if (!fresh) return;
 		for (const p of configured) known.add(p.id);
-		onConnected(fresh);
-	}, [report, onConnected]);
+		announceConnected(fresh);
+	}, [report]);
 
 	if (failed && !report) {
 		return (

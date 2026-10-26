@@ -96,6 +96,14 @@ describe("Claude Code", () => {
 		expect(await detect()).toEqual([{ source: "claude-code", providerIds: ["anthropic"] }]);
 	});
 
+	test("a heavy user's multi-megabyte .claude.json is still read", async () => {
+		put(join(home, ".claude.json"), {
+			oauthAccount: { accountUuid: "u", billingType: "stripe_subscription" },
+			projects: { pad: "x".repeat(3 * 1024 * 1024) },
+		});
+		expect(await sources()).toEqual(["claude-code"]);
+	});
+
 	test("an account without subscription billing, or with an API key only, is not detected", async () => {
 		put(join(home, ".claude.json"), { oauthAccount: { accountUuid: "u" } });
 		expect(await detect()).toEqual([]);
@@ -164,6 +172,22 @@ describe("Codex", () => {
 		expect(await detect()).toEqual([
 			{ source: "codex", providerIds: ["openai", "openai-codex"], plan: "plus" },
 		]);
+	});
+
+	test("only a known plan name reaches the badge, normalized", async () => {
+		const withPlan = (planType: unknown) =>
+			put(authPath(), {
+				auth_mode: "chatgpt",
+				tokens: tokens({ "https://api.openai.com/auth": { chatgpt_plan_type: planType } }),
+			});
+		withPlan(" Pro ");
+		expect((await detect())[0]?.plan).toBe("pro");
+		for (const odd of ["free", "x".repeat(500), "<b>plus</b>", 7]) {
+			withPlan(odd);
+			const [signal] = await detect();
+			expect(signal?.source).toBe("codex");
+			expect(signal && "plan" in signal).toBe(false);
+		}
 	});
 
 	test("API-key mode is not a sign-in even when stale tokens remain", async () => {
@@ -238,6 +262,13 @@ describe("GitHub Copilot", () => {
 			"github.com:Iv1": { user: "octocat" },
 		});
 		expect(await sources({}, "win32")).toEqual(["github-copilot"]);
+	});
+
+	test("Windows honours an absolute LOCALAPPDATA", async () => {
+		const local = join(home, "Redirected", "Local");
+		put(join(local, "github-copilot", "apps.json"), { "github.com:Iv1": { user: "octocat" } });
+		expect(await sources({ LOCALAPPDATA: local }, "win32")).toEqual(["github-copilot"]);
+		expect(await sources({ LOCALAPPDATA: "relative" }, "win32")).toEqual([]);
 	});
 
 	test("the Copilot CLI's commented config.json lists signed-in users", async () => {

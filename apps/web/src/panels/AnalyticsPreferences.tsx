@@ -13,7 +13,7 @@ interface AnalyticsPreferenceProps {
 	onChange: (enabled: boolean) => void;
 }
 
-export function AnalyticsSharingSwitch({
+function AnalyticsSharingSwitch({
 	enabled,
 	disabled,
 	onChange,

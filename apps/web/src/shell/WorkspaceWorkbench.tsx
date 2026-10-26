@@ -698,7 +698,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			const currentAttention = useAppStore.getState().layoutAttentionByWorkspace[workspaceId];
 			if (!currentAttention) return;
 			changeAttention({ ...currentAttention, lastFocusedCenterGroupId: groupId });
-			void startChatInTab(workspaceId, groupId);
+			void startChatInTab(workspaceId, { preferredGroupId: groupId });
 		},
 		[changeAttention, workspaceId],
 	);

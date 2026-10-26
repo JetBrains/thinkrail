@@ -13,7 +13,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useState } from "react";
 import { PRODUCT_NAME } from "@/constants/branding";
 import { selectAnalyticsConsentPromptOpen, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -21,7 +21,7 @@ import { AnalyticsConsentChoice } from "./AnalyticsPreferences";
 import { ConnectedLine, type ConnectedSummary } from "./ConnectedLine";
 import { ConnectProviderOptions, connectedProviderName } from "./ConnectProviderOptions";
 import { detectAccounts } from "./detectAccounts";
-import { useAnalyticsConsent } from "./useAnalyticsConsent";
+import { useConsentDraft } from "./useAnalyticsConsent";
 import { useProviderAuth } from "./useProviderAuth";
 
 type Step = "intro" | "privacy" | "connect";
@@ -126,6 +126,7 @@ export function OnboardingWizard({
 				</div>
 			) : (
 				<div
+					inert={connected !== null}
 					className={cn(
 						"flex w-full flex-col items-center gap-24 transition-opacity duration-200 ease-out motion-reduce:transition-none",
 						connected && "pointer-events-none opacity-0",
@@ -140,14 +141,16 @@ export function OnboardingWizard({
 						</p>
 					</div>
 					<div className="relative w-full">
-						<ConnectProviderOptions
-							auth={auth}
-							detected={detected}
-							onConnected={(fresh) => {
-								useAppStore.getState().clearLogin();
-								setProvider(fresh);
-							}}
-						/>
+						<div inert={provider !== null}>
+							<ConnectProviderOptions
+								auth={auth}
+								detected={detected}
+								onConnected={(fresh) => {
+									useAppStore.getState().clearLogin();
+									setProvider(fresh);
+								}}
+							/>
+						</div>
 						{provider ? (
 							<VerifyConnection
 								provider={provider}
@@ -191,15 +194,7 @@ export function OnboardingWizard({
 
 function PrivacyStep({ onContinue }: { onContinue: () => void }) {
 	const t = useT();
-	const [draft, setDraft] = useState(true);
-	const primed = useRef(false);
-	const { pending, error, save, prime } = useAnalyticsConsent();
-
-	useEffect(() => {
-		if (primed.current) return;
-		primed.current = true;
-		prime();
-	}, [prime]);
+	const { draft, toggle, pending, error, confirm } = useConsentDraft();
 
 	return (
 		<div
@@ -212,14 +207,7 @@ function PrivacyStep({ onContinue }: { onContinue: () => void }) {
 				</h1>
 				<p className="tr-text-reading text-text-muted">{t("panels.analyticsConsent.subtitle")}</p>
 			</div>
-			<AnalyticsConsentChoice
-				enabled={draft}
-				disabled={pending}
-				onChange={(enabled) => {
-					setDraft(enabled);
-					if (!enabled) save(false);
-				}}
-			/>
+			<AnalyticsConsentChoice enabled={draft} disabled={pending} onChange={toggle} />
 			{error ? (
 				<p role="alert" className="tr-text-metadata text-feedback-error">
 					{error}
@@ -229,7 +217,7 @@ function PrivacyStep({ onContinue }: { onContinue: () => void }) {
 				data-testid="onboarding-privacy-continue"
 				disabled={pending}
 				onClick={() => {
-					save(draft);
+					confirm();
 					onContinue();
 				}}
 			>
@@ -251,7 +239,7 @@ function VerifyConnection({
 }) {
 	const t = useT();
 	const [empty, setEmpty] = useState(false);
-	const name = connectedProviderName(provider);
+	const name = connectedProviderName(provider, t);
 	const verified = useEffectEvent(onVerified);
 
 	useEffect(() => {

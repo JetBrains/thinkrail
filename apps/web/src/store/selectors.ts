@@ -125,7 +125,7 @@ export function selectOnboardingActive(
 		recentProjects: readonly unknown[];
 	},
 ): boolean {
-	if (state.onboardingWizard === "shown") return true;
+	if (state.onboardingWizard === "shown") return state.projects.length === 0;
 	if (state.onboardingDismissed || state.onboardingWizard === "hidden") return false;
 	return (
 		selectSupportsOnboarding(state) &&

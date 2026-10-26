@@ -12,5 +12,5 @@ export function setupDialogRequest(projectId: string): WorkspaceDialogRequest {
 
 export async function startProjectSetupChat(projectId: string): Promise<void> {
 	const workspace = await enterDefaultWorkspace(projectId);
-	if (workspace) await startChatInTab(workspace.id, undefined, undefined, SETUP_PROMPT);
+	if (workspace) await startChatInTab(workspace.id, { draft: SETUP_PROMPT });
 }

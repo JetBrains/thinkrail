@@ -1,6 +1,6 @@
 import type { AppConfigUpdate } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getTransport } from "@/transport";
 
 export function useAnalyticsConsent() {
@@ -40,4 +40,23 @@ export function useAnalyticsConsent() {
 	}, [persist]);
 
 	return { pending, error, save, prime };
+}
+
+export function useConsentDraft() {
+	const [draft, setDraft] = useState(true);
+	const primed = useRef(false);
+	const { pending, error, save, prime } = useAnalyticsConsent();
+
+	useEffect(() => {
+		if (primed.current) return;
+		primed.current = true;
+		prime();
+	}, [prime]);
+
+	const toggle = (enabled: boolean) => {
+		setDraft(enabled);
+		if (!enabled) save(false);
+	};
+
+	return { draft, toggle, pending, error, confirm: () => save(draft) };
 }

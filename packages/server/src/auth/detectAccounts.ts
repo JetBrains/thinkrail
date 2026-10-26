@@ -20,6 +20,10 @@ export interface AccountSignal {
 type Json = Record<string, unknown>;
 
 const MAX_CONFIG_BYTES = 1024 * 1024;
+const MAX_CLAUDE_CONFIG_BYTES = 32 * 1024 * 1024;
+const SOURCE_TIMEOUT_MS = 1500;
+
+const KNOWN_PLANS = new Set(["plus", "pro", "max", "team", "business", "enterprise", "edu"]);
 
 const CLAUDE_SUBSCRIPTION_BILLING = new Set([
 	"stripe_subscription",
@@ -46,18 +50,18 @@ function envPath(env: NodeJS.ProcessEnv, name: string): string | undefined {
 	return value ? value : undefined;
 }
 
-async function readConfig(path: string): Promise<string | null> {
+async function readConfig(path: string, maxBytes: number): Promise<string | null> {
 	try {
 		const info = await stat(path);
-		if (!info.isFile() || info.size > MAX_CONFIG_BYTES) return null;
+		if (!info.isFile() || info.size > maxBytes) return null;
 		return (await readFile(path, "utf8")).replace(/^﻿/, "");
 	} catch {
 		return null;
 	}
 }
 
-async function readJson(path: string): Promise<Json | null> {
-	const text = await readConfig(path);
+async function readJson(path: string, maxBytes = MAX_CONFIG_BYTES): Promise<Json | null> {
+	const text = await readConfig(path, maxBytes);
 	if (text === null) return null;
 	try {
 		const parsed: unknown = JSON.parse(text.replace(/^(?:\s*\/\/[^\n]*\n)+/, ""));
@@ -68,7 +72,17 @@ async function readJson(path: string): Promise<Json | null> {
 }
 
 function plan(value: unknown): { plan?: string } {
-	return filled(value) ? { plan: value.trim() } : {};
+	const name = typeof value === "string" ? value.trim().toLowerCase() : "";
+	return KNOWN_PLANS.has(name) ? { plan: name } : {};
+}
+
+function within<T>(work: Promise<T | null>, ms: number): Promise<T | null> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<null>((resolve) => {
+		timer = setTimeout(() => resolve(null), ms);
+		timer.unref?.();
+	});
+	return Promise.race([work.catch(() => null), timeout]).finally(() => clearTimeout(timer));
 }
 
 function jwtClaims(token: unknown): Json | null {
@@ -110,8 +124,8 @@ async function detectClaudeCode(
 	const configDir = configured ?? join(home, ".claude");
 	const secureDir = envPath(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR") ?? configDir;
 	const [legacy, global, credentials] = await Promise.all([
-		readJson(join(configDir, ".config.json")),
-		readJson(join(configured ?? home, ".claude.json")),
+		readJson(join(configDir, ".config.json"), MAX_CLAUDE_CONFIG_BYTES),
+		readJson(join(configured ?? home, ".claude.json"), MAX_CLAUDE_CONFIG_BYTES),
 		readJson(join(secureDir, ".credentials.json")),
 	]);
 	const oauth = credentials?.claudeAiOauth;
@@ -164,11 +178,14 @@ async function detectCopilotEditor(
 	platform: NodeJS.Platform,
 ): Promise<AccountSignal | null> {
 	const xdg = envPath(env, "XDG_CONFIG_HOME");
+	const localAppData = envPath(env, "LOCALAPPDATA");
 	const base =
 		xdg && isAbsolute(xdg)
 			? xdg
 			: platform === "win32"
-				? join(home, "AppData", "Local")
+				? localAppData && isAbsolute(localAppData)
+					? localAppData
+					: join(home, "AppData", "Local")
 				: join(home, ".config");
 	const dir = join(base, "github-copilot");
 	const files = await Promise.all([
@@ -234,14 +251,16 @@ export async function detectAccountSignals(
 	const home =
 		options.homeDir ?? envPath(env, platform === "win32" ? "USERPROFILE" : "HOME") ?? homedir();
 	const now = options.now ?? Date.now();
-	const found = await Promise.all([
-		detectClaudeCode(env, home),
-		detectCodex(env, home),
-		detectCopilotEditor(env, home, platform),
-		detectCopilotCli(env, home),
-		detectKimiCli(env, home),
-		detectGrokBuild(env, home, now),
-	]);
+	const found = await Promise.all(
+		[
+			detectClaudeCode(env, home),
+			detectCodex(env, home),
+			detectCopilotEditor(env, home, platform),
+			detectCopilotCli(env, home),
+			detectKimiCli(env, home),
+			detectGrokBuild(env, home, now),
+		].map((source) => within(source, SOURCE_TIMEOUT_MS)),
+	);
 	return found.filter((signal) => signal !== null);
 }
 

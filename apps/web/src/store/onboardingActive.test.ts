@@ -14,9 +14,6 @@ const coldStart = {
 test("first-run prompts wait while the wizard is undecided on a cold start, or showing", () => {
 	expect(selectOnboardingActive(coldStart)).toBe(true);
 	expect(selectOnboardingActive({ ...coldStart, onboardingWizard: "shown" })).toBe(true);
-	expect(selectOnboardingActive({ ...coldStart, onboardingWizard: "shown", projects: [{}] })).toBe(
-		true,
-	);
 	expect(
 		selectOnboardingActive({ ...coldStart, onboardingWizard: "shown", onboardingDismissed: true }),
 	).toBe(true);
@@ -24,6 +21,9 @@ test("first-run prompts wait while the wizard is undecided on a cold start, or s
 
 test("first-run prompts are free once the wizard is decided against, done, or impossible", () => {
 	expect(selectOnboardingActive({ ...coldStart, onboardingWizard: "hidden" })).toBe(false);
+	expect(selectOnboardingActive({ ...coldStart, onboardingWizard: "shown", projects: [{}] })).toBe(
+		false,
+	);
 	expect(selectOnboardingActive({ ...coldStart, onboardingDismissed: true })).toBe(false);
 	expect(selectOnboardingActive({ ...coldStart, recentProjects: [{}] })).toBe(false);
 	expect(selectOnboardingActive({ ...coldStart, projects: [{}] })).toBe(false);

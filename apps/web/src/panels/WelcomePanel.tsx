@@ -59,10 +59,14 @@ export function WelcomePanel() {
 		hasProvider,
 	]);
 
+	useEffect(() => {
+		if (hasProvider === false) setJustConnected(null);
+	}, [hasProvider]);
+
 	const dismissOnboarding = () => {
 		getTransport()
 			.request("settings.update", { config: { onboardingDismissed: true } })
-			.catch((err) => toast.error(errorText(err), "Couldn't save that onboarding is done"));
+			.catch((err) => toast.error(errorText(err), t("panels.onboarding.dismissFailed")));
 	};
 
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
@@ -181,7 +185,7 @@ export function WelcomePanel() {
 					<ProviderWarningBanner
 						onConnected={(p) =>
 							setJustConnected({
-								provider: connectedProviderName(p),
+								provider: connectedProviderName(p, t),
 								models: null,
 								defaultModel: null,
 							})

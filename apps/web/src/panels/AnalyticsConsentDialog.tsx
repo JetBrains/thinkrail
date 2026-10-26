@@ -8,27 +8,18 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { useEffect, useRef, useState } from "react";
 import { AnalyticsConsentChoice } from "./AnalyticsPreferences";
-import { useAnalyticsConsent } from "./useAnalyticsConsent";
+import { useConsentDraft } from "./useAnalyticsConsent";
 
 export function AnalyticsConsentDialog() {
 	const t = useT();
-	const [draft, setDraft] = useState(true);
-	const primed = useRef(false);
-	const { pending, error, save, prime } = useAnalyticsConsent();
-
-	useEffect(() => {
-		if (primed.current) return;
-		primed.current = true;
-		prime();
-	}, [prime]);
+	const { draft, toggle, pending, error, confirm } = useConsentDraft();
 
 	return (
 		<Dialog
 			open
 			onOpenChange={(open) => {
-				if (!open) save(draft);
+				if (!open) confirm();
 			}}
 		>
 			<DialogContent data-testid="analytics-consent-dialog" className="max-w-[30rem] gap-16">
@@ -36,25 +27,14 @@ export function AnalyticsConsentDialog() {
 					<DialogTitle>{t("panels.analyticsConsent.title")}</DialogTitle>
 					<DialogDescription>{t("panels.analyticsConsent.subtitle")}</DialogDescription>
 				</DialogHeader>
-				<AnalyticsConsentChoice
-					enabled={draft}
-					disabled={pending}
-					onChange={(enabled) => {
-						setDraft(enabled);
-						if (!enabled) save(false);
-					}}
-				/>
+				<AnalyticsConsentChoice enabled={draft} disabled={pending} onChange={toggle} />
 				{error && (
 					<p role="alert" className="tr-text-metadata text-feedback-error">
 						{error}
 					</p>
 				)}
 				<DialogFooter>
-					<Button
-						disabled={pending}
-						data-testid="analytics-consent-confirm"
-						onClick={() => save(draft)}
-					>
+					<Button disabled={pending} data-testid="analytics-consent-confirm" onClick={confirm}>
 						{pending ? t("panels.analyticsConsent.saving") : t("common.done")}
 					</Button>
 				</DialogFooter>

@@ -71,17 +71,22 @@ ourselves and never surface a credential value over the wire.
     Claude Code → `anthropic` (`CLAUDE_CODE_OAUTH_TOKEN`; else a `.credentials.json` `claudeAiOauth` with a
     refresh token and the `user:inference` scope; else, for the macOS Keychain sign-in, `oauthAccount` in the
     global config with a subscription `billingType` — a bare `oauthAccount` is also written by a Console
-    API-key login, and `/logout` removes it); Codex → `openai`, falling back to legacy `openai-codex`
+    API-key login, and `/logout` removes it; a lapsed or revoked Keychain token that was never logged out
+    still reads as signed in, the one accepted false positive, since the Keychain itself is off limits); Codex → `openai`, falling back to legacy `openai-codex`
     (resolved `auth_mode` `chatgpt` + a refresh token — Codex's own legacy-mode resolution when the field is
     absent; keyring storage leaves no file and is not seen); Copilot editor plugins and the Copilot CLI →
     `github-copilot` (`github-copilot/{apps,hosts}.json` under an absolute `XDG_CONFIG_HOME`, else
-    `~/AppData/Local` on Windows, else `~/.config`; the CLI's commented `config.json` `loggedInUsers`); Kimi CLI
+    an absolute `LOCALAPPDATA` (else `~/AppData/Local`) on Windows, else `~/.config`; the CLI's commented `config.json` `loggedInUsers`); Kimi CLI
     → `kimi-coding` (`credentials/kimi-code.json` with a refresh token); Grok Build → `xai` (an `auth.json`
     scope other than the API-key one with a refresh token or an unexpired session). An expired access token
     with a live refresh token still counts. Gemini CLI and Meta Muse are out because pi has no matching OAuth
     provider or no verified file. Each signal names candidate providers; the first one the current runtime can
-    OAuth-sign-in to is reported, and a provider is reported once (first source wins). Files are read only
-    when regular and under 1 MiB, BOM-tolerant; anything unreadable counts as not signed in. Never pi's
+    OAuth-sign-in to is reported, and a provider is reported once (first source wins). The plan label is
+    reported only when it is a known plan name (`plus`, `pro`, `max`, `team`, `business`, `enterprise`, `edu`,
+    lower-cased) — anything else, `free` included, drops the badge but not the sign-in. Files are read only
+    when regular and under 1 MiB (32 MiB for Claude Code's global config, which carries per-project history),
+    BOM-tolerant; each source gets 1.5 s, so a hung mount reads as not signed in instead of stalling first run;
+    anything unreadable counts as not signed in. Never pi's
     `auth.json` (pi already reports that as configured) and never an OS keychain — a Keychain read raises a
     system access prompt. Detection **suggests, never borrows**: the user still signs in through pi's own
     flow, because reusing another tool's rotating refresh token would sign one of the two out. No credential
