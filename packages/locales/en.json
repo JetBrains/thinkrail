@@ -181,6 +181,7 @@
 	"chat.extUi.ok": "OK",
 	"chat.extUi.submit": "Submit",
 	"chat.failure.error": "The agent run ended in an error.",
+	"chat.failure.modelUnavailable": "This model isn't available for this connection. Pick another model in the model picker and try again.",
 	"chat.failure.truncated": "The response was truncated before completion. Ask the agent to continue.",
 	"chat.history.deleteChat": "Move chat to trash",
 	"chat.history.error": "search unavailable",

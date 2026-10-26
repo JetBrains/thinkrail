@@ -72,7 +72,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   summarization"). **`ErrorTurn`** is a persistent failure notice
   (provider/model error, an unrecovered `length` truncation, or a rejected send), drawn in the shared
   [[web-notices]] style: neutral fill, error border and icon, **Try again** in a footer row. It is **never folded**, so
-  a failed turn can't look like nothing happened. Only the current settlement-derived failure carries the
+  a failed turn can't look like nothing happened. A provider error that matches a known
+  model-unavailable signature (`model_not_found`, Anthropic's `not_found_error` on `model:`, OpenRouter's
+  `No endpoints found`, Bedrock's model access denial, …) leads with a localized "pick another model"
+  notice above the provider's verbatim text, since these are account/plan limits a retry cannot fix. Only the current settlement-derived failure carries the
   web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user
   message through `ChatView`'s existing immediate-send path. Rejected sends, extension notifications, and
   generic app errors stay non-actionable because the missing prompt or repair may not be in Pi's context.

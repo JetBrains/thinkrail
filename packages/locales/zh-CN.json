@@ -181,6 +181,7 @@
 	"chat.extUi.ok": "确定",
 	"chat.extUi.submit": "提交",
 	"chat.failure.error": "agent 运行以错误结束。",
+	"chat.failure.modelUnavailable": "当前连接无法使用此模型。请在模型选择器中选择其他模型后重试。",
 	"chat.failure.truncated": "回答在完成前被截断，请让 agent 继续。",
 	"chat.history.deleteChat": "将会话移入废纸篓",
 	"chat.history.error": "搜索不可用",
