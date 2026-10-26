@@ -73,6 +73,10 @@ create the tools it needs based on how you actually work.
   servers next to its background commands and subagents.
 - **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or
   connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
+- **Your pi setup.** ThinkRail reads your existing `pi` configuration (`~/.pi/agent`). To use another one
+  — say a personal `~/.pi/agent-personal` — or to pass extra environment variables to the agent, terminals
+  and MCP servers, set them in Settings → Environment; they apply on the next start. A variable you set
+  when launching (`PI_CODING_AGENT_DIR=… thinkrail`) still wins.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your
   browser. Both embed the same engine host; app state lives under `~/.thinkrail`.
 - **Your language.** Settings → Language follows your system language or a language you pick; English and

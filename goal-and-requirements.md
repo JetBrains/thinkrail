@@ -103,6 +103,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   ([[module-thinkrail-workflow]]).
 - **Providers** — in-app sign-in and API keys through pi's auth, and JetBrains AI through the user's
   `central` CLI ([[submodule-server-auth]], [[central-integration]]).
+- **Pi configuration** — the user's own pi config folder, or another one (a personal vs a work setup), plus
+  extra environment variables, chosen in Settings and applied to the whole host at the next start; one setup
+  per host, not per project ([[submodule-server-environment]]).
 - **Agent tools** — web research, and inline diagrams, comparisons and file previews in chat; a proposed
   UI change is shown as a rendered before/after mockup through the same renderers and review comments
   as diff review ([[submodule-web-chat-tools-web]], [[module-ext-visualize]]).

@@ -67,7 +67,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
     and `models.json` / `mcp.json` `${VAR}` references (often copied from vendor docs) rely on. Skipped
     when `TERM` is set (a host launched from a terminal already carries the shell's environment). Variables
     already set for the process win; `PATH` keeps its own repair above; `PWD`/`OLDPWD`/`SHLVL`/`_` and
-    `PI_*` / `THINKRAIL_*` are never imported. One marker-delimited `env -0` probe of the login shell
+    `PI_*` / `THINKRAIL_*` are never imported (a pi config folder or `PI_*` variable the user wants comes
+    from the stored host environment instead, [[submodule-server-environment]]). One marker-delimited `env -0` probe of the login shell
     (`-l -i`, then `-l`) serves both this import and the PATH repair; rc-file chatter before the marker
     (`LOGIN_ENV_MARKER`) is ignored. Trade-off recorded: the host, every process it spawns (stdio MCP
     servers included) and every `!command` resolution then see the secrets the shell exports — the user's

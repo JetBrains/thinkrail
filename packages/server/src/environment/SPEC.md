@@ -53,5 +53,9 @@ ThinkRail terminal uses the same config folder.
   falls back to pi's default, which the status' `effectiveAgentDir` makes visible.
 - **Storage:** `<dataDir>/environment.json`, atomically replaced with mode `0600`; fetched only by
   `environment.get`, never broadcast.
+- **One setup per host, not per project.** Per-project was rejected: `process.env` is process-global with pi
+  in-process, so provider key lookups and extension code cannot see a per-project value, and third-party
+  extensions read the global `getAgentDir()` regardless of a per-session `agentDir`. Revisit only if pi
+  gains a scoped agent dir.
 - **Consequence the user accepted:** pi keeps transcripts under `<agentDir>/sessions`, so switching the
   folder hides chats made under another one until switched back, as in pi's CLI.
