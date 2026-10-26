@@ -19,7 +19,7 @@ export function AnalyticsConsentDialog() {
 		<Dialog
 			open
 			onOpenChange={(open) => {
-				if (!open) confirm();
+				if (!open) void confirm();
 			}}
 		>
 			<DialogContent data-testid="analytics-consent-dialog" className="max-w-[30rem] gap-16">
@@ -34,7 +34,11 @@ export function AnalyticsConsentDialog() {
 					</p>
 				)}
 				<DialogFooter>
-					<Button disabled={pending} data-testid="analytics-consent-confirm" onClick={confirm}>
+					<Button
+						disabled={pending}
+						data-testid="analytics-consent-confirm"
+						onClick={() => void confirm()}
+					>
 						{pending ? t("panels.analyticsConsent.saving") : t("common.done")}
 					</Button>
 				</DialogFooter>

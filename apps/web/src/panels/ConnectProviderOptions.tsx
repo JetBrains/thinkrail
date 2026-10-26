@@ -80,16 +80,20 @@ export async function announceProviderConnected(provider: ProviderStatus): Promi
 export function ConnectProviderOptions({
 	auth,
 	detected,
+	configuredAtStart,
 	onConnected,
 }: {
 	auth: ProviderAuth;
 	detected: readonly DetectedAccount[] | null;
+	configuredAtStart?: readonly string[];
 	onConnected: (provider: ProviderStatus) => void;
 }) {
 	const t = useT();
 	const { report, failed, load, startLogin, rowBusy } = auth;
 	const [search, setSearch] = useState("");
-	const baseline = useRef<Set<string> | null>(null);
+	const baseline = useRef<Set<string> | null>(
+		configuredAtStart ? new Set(configuredAtStart) : null,
+	);
 	const announceConnected = useEffectEvent(onConnected);
 
 	useEffect(() => {

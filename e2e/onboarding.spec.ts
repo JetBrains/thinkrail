@@ -1,9 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { AppConfig } from "@thinkrail/contracts";
 import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
 import { openAppFresh } from "./fixtures/app";
+import { openProviders } from "./fixtures/jbcentral";
 import { E2E_DATA_DIR, E2E_HOME_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
 
@@ -287,6 +288,81 @@ test("Get started asks about usage data as its own step before the models, or th
 		await expect(consent).toBeVisible();
 	} finally {
 		await seedAnalyticsConsent(baseURL, false, true);
+	}
+});
+
+test("a failed usage-data save keeps the privacy step, its off choice and the error until a retry lands", async ({
+	page,
+	baseURL,
+}) => {
+	const config = join(E2E_DATA_DIR, "config.json");
+	await setOnboardingDismissed(baseURL, false);
+	await seedAnalyticsConsent(baseURL, false, false);
+	try {
+		await openAppFresh(page);
+		test.skip(
+			await anyProviderConfigured(baseURL),
+			"an ambient provider makes this host a warm start",
+		);
+
+		const wizard = page.getByTestId("onboarding-wizard");
+		await wizard.getByTestId("onboarding-start").click();
+		await expect(wizard).toHaveAttribute("data-step", "privacy");
+		const toggle = wizard.getByTestId("analytics-toggle");
+		const readConfig = () => JSON.parse(readFileSync(config, "utf8")) as AppConfig;
+		await expect.poll(() => readConfig().analyticsEnabled).toBe(true);
+		const continueButton = wizard.getByTestId("onboarding-privacy-continue");
+		await expect(continueButton).toBeEnabled();
+
+		chmodSync(config, 0o400);
+		await toggle.click();
+		await expect(wizard.getByRole("alert")).toBeVisible();
+		await continueButton.click();
+		await expect(wizard.getByRole("alert")).toBeVisible();
+		await expect(wizard).toHaveAttribute("data-step", "privacy");
+		await expect(toggle).toHaveAttribute("aria-checked", "false");
+		expect(readConfig().analyticsEnabled).toBe(true);
+
+		chmodSync(config, 0o600);
+		await continueButton.click();
+		await expect(wizard).toHaveAttribute("data-step", "connect");
+		expect([readConfig().analyticsEnabled, readConfig().analyticsConsentConfirmed]).toEqual([
+			false,
+			true,
+		]);
+	} finally {
+		chmodSync(config, 0o600);
+		await seedAnalyticsConsent(baseURL, false, true);
+	}
+});
+
+test("a provider connected through Settings during the intro is verified on reaching Connect", {
+	tag: "@dev-seam",
+}, async ({ page, baseURL }) => {
+	await setOnboardingDismissed(baseURL, false);
+	await openAppFresh(page);
+	test.skip(
+		await anyProviderConfigured(baseURL),
+		"an ambient provider makes this host a warm start",
+	);
+
+	const wizard = page.getByTestId("onboarding-wizard");
+	let providerId: string | null = null;
+	try {
+		await expect(wizard).toHaveAttribute("data-step", "intro");
+		await openProviders(page);
+		providerId = await connectFirstApiKeyProvider(page, page.getByTestId("settings-providers"));
+		await expect(page.getByTestId("login-success")).toBeVisible();
+		await page.getByTestId("login-close").click();
+		await expect(page.getByTestId("login-dialog")).toHaveCount(0);
+		await page.keyboard.press("Escape");
+		await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+		await wizard.getByTestId("onboarding-start").click();
+		await expect(wizard).toHaveAttribute("data-step", "done");
+		await expect(wizard.getByTestId("welcome-connected")).toContainText(" connected");
+	} finally {
+		await signOut(baseURL, providerId);
 	}
 });
 

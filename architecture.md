@@ -110,7 +110,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
    whose cwd is the project folder itself (git's *main working tree*) — non-removable, non-renamable,
    and entered explicitly from the project's Welcome fork ("Work in project folder"), never
    auto-entered — the "just work in my project folder" anchor for users lost in the
-   worktree model; and an **existing worktree** the user explicitly attaches in place
+   worktree model. The one exception is a project ThinkRail just created empty with the spec-drafting
+   switch on: it enters Default for that setup chat, because a fresh repo has nothing to isolate yet
+   ([[submodule-web-panels]]); and an **existing worktree** the user explicitly attaches in place
    (`kind: "external"`), which ThinkRail may forget but never mutates (see
    [[submodule-server-workspaces]]). The shell is built first,
    `pi` connected last. **Open PR** is a deterministic, host-side push + open/update of the branch's

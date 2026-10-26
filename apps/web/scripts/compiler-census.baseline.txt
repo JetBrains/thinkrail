@@ -16,7 +16,6 @@ src/chat/ChatTranscript.tsx useVirtualRows
 src/chat/HistoryOverlay.tsx Highlight
 src/chat/resources/ResourcesInspector.tsx ResourcesInspector
 src/panels/branches.ts useBranchList
-src/panels/useAnalyticsConsent.ts useAnalyticsConsent
 src/panels/useBranchStatus.ts useBranchStatus
 src/panels/useLiveTabContent.ts useLiveTabContent
 src/panels/useWorkspaceRead.ts useWorkspaceRead

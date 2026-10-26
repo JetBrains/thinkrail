@@ -145,6 +145,7 @@ export function OnboardingWizard({
 							<ConnectProviderOptions
 								auth={auth}
 								detected={detected}
+								configuredAtStart={[]}
 								onConnected={(fresh) => {
 									useAppStore.getState().clearLogin();
 									setProvider(fresh);
@@ -217,8 +218,9 @@ function PrivacyStep({ onContinue }: { onContinue: () => void }) {
 				data-testid="onboarding-privacy-continue"
 				disabled={pending}
 				onClick={() => {
-					confirm();
-					onContinue();
+					void confirm().then((saved) => {
+						if (saved) onContinue();
+					});
 				}}
 			>
 				{t("panels.analyticsConsent.continue")}

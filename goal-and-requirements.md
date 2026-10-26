@@ -39,7 +39,8 @@ to move fast without losing control of what the agent did.
 
 - **Isolation by default.** A workspace ThinkRail creates is a git worktree with its own branch and cwd:
   agents run in parallel and the main branch stays clean until the user merges. Working directly in the
-  project folder (the Default workspace) is an explicit choice, never the default.
+  project folder (the Default workspace) is an explicit choice, never the default — except the setup chat of
+  a project ThinkRail just created empty, which has nothing to isolate yet.
 - **A real IDE around the agent.** Editor, diffs, terminals, and review in one workbench, so the user
   sees and steers the agent's work instead of reconstructing it from a scrollback.
 - **Specs as ground truth.** The project's intent lives in a spec graph beside the code that the agent

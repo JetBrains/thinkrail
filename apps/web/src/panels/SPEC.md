@@ -413,7 +413,9 @@ the shared **`useProviderAuth`** hook, which `ProvidersSettings` uses too: one `
 `LoginDialog` node. Exactly one surface mounts that node: Settings while it is open, otherwise the
 connect surface (`ownsLoginDialog`), so a login never renders two stacked dialogs. **Post-connect handoff:**
 when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key
-login or a Central connect alike — `ConnectProviderOptions` reports it once through `onConnected` and the host
+login or a Central connect alike; the surface's first report is that baseline unless it passes
+`configuredAtStart`, which the wizard does as empty (a cold start has no provider), so one connected through
+Settings during the intro or privacy step is still verified on reaching Connect — `ConnectProviderOptions` reports it once through `onConnected` and the host
 surface decides: `ConnectProviderDialog` clears the finished login, closes itself, and raises one success
 toast naming the provider and the `model.list` count ("JetBrains AI connected — 23 models available"), then
 lets Welcome switch its hero to the `ConnectedLine`; the wizard neither toasts nor closes — it verifies in place
@@ -940,7 +942,9 @@ a project picker, the prompt hero, and the reused
   showing (`selectOnboardingActive`): a new user meets the product before a privacy question, and sharing
   stays off until the dialog mounts, so holding it never collects without asking. The wizard itself asks at
   its natural seam — **Get started** leads to its own **privacy** step (same `AnalyticsConsentChoice` body,
-  priming and saving through `useAnalyticsConsent`, **Continue** confirms) before the model list, and only
+  priming and saving through `useAnalyticsConsent`; **Continue** confirms and advances only once that save
+  lands, so a failed write keeps the step with its draft and error instead of moving on with sharing still
+  primed on) before the model list, and only
   while consent is unconfirmed — so neither the intro nor the first project opens on a privacy prompt;
   skipping on the intro hands the question back to the shell's dialog. The cost is that the intro carries
   only basic events.
