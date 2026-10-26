@@ -613,6 +613,34 @@ test("the preview pane reads a file only under its cap, even one that grows whil
 	}
 });
 
+test("start from the typed text: the Start work row and Mod+Enter open the Create-workspace dialog prefilled", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("Refactor the auth module");
+	const startRow = page.locator('[data-testid="search-row"][data-item-id="start"]');
+	await expect(startRow).toContainText("Start work with “Refactor the auth module”");
+	await startRow.click();
+	await expect(palette(page)).toBeHidden();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("ws-prompt")).toHaveValue("Refactor the auth module");
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+
+	await openPalette(page);
+	await page.getByTestId("search-input").fill(">Write release notes");
+	await expect(startRow).toHaveCount(0);
+	await page.getByTestId("search-input").fill("Write release notes");
+	await pressPlatformShortcut(page, "Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("ws-prompt")).toHaveValue("Write release notes");
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+});
+
 test("an older host gets the local scopes only, with a notice, and never a search.query", async ({
 	page,
 }) => {

@@ -4,7 +4,7 @@ import { currentTranslator } from "@thinkrail/locales/react";
 import { EMPTY_LEARNING, recordPick } from "./learning";
 import type { PaletteItem } from "./model";
 import { parseSearchQuery } from "./query";
-import { buildSections, flattenRows } from "./sections";
+import { buildSections, flattenRows, startEligible, startPrompt } from "./sections";
 
 const chat = (id: string, title: string, extra: Partial<PaletteItem> = {}): PaletteItem => ({
 	id: `chat:${id}`,
@@ -164,6 +164,33 @@ describe("buildSections", () => {
 				?.items.every((row) => row.item.kind !== "more"),
 		).toBe(true);
 		expect(result.some((section) => section.id === "top")).toBe(false);
+	});
+
+	test("the start row closes a typed query in All and Work, never in another scope, and opens the dialog with the text", () => {
+		const opened: string[] = [];
+		const start = { openDialog: (text: string) => opened.push(text) };
+		const withStart = (raw: string) =>
+			sections(raw, { start: { start, text: raw.replace(/^[@>]/, "").trim() } });
+		const last = (raw: string) => withStart(raw).at(-1);
+		expect(last("ship the thing")).toMatchObject({ id: "start" });
+		expect(last("ship the thing")?.items[0]?.item).toMatchObject({
+			kind: "start",
+			title: "Start work with “ship the thing”…",
+		});
+		last("ship the thing")?.items[0]?.item.run?.();
+		expect(opened).toEqual(["ship the thing"]);
+		expect(last("@ship")?.id).toBe("start");
+		expect(last(">ship")?.id).not.toBe("start");
+		expect(flattenRows(withStart("zzz-no-match"))).toHaveLength(1);
+		expect(startEligible(parseSearchQuery("/ship"))).toBe(false);
+		expect(startEligible(parseSearchQuery("   "))).toBe(false);
+	});
+
+	test("the prompt is the text as typed: the scope prefix goes, inner whitespace and quotes stay", () => {
+		const raw = "  replace 'a  b' with 'a b'  ";
+		expect(startPrompt(raw, parseSearchQuery(raw))).toBe("replace 'a  b' with 'a b'");
+		expect(startPrompt("@ fix  it", parseSearchQuery("@ fix  it"))).toBe("fix  it");
+		expect(startPrompt("#812", parseSearchQuery("#812"))).toBe("#812");
 	});
 
 	test("a scoped group past its cap ends in a more row that expands it in place", () => {

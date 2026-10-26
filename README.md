@@ -53,7 +53,8 @@ create the tools it needs based on how you actually work.
 - **One search box for everything.** `⌘K` (or a double tap of Shift) opens a palette that finds chats and
   the messages inside them, workspaces and projects, files in the current workspace, specs and plans — with
   a preview pane on `⌘I` — runs the app's commands with their shortcuts shown, and jumps to a Settings
-  section. With nothing typed it lists the chats waiting for you.
+  section. Whatever you typed can also become work: `⌘↵` opens Create workspace with it as the prompt. With
+  nothing typed it lists the chats waiting for you.
 - **Specs as ground truth.** A connected graph of `SPEC.md` files lives beside the code; the agent reads,
   searches, and maintains it through dedicated `spec_*` tools, so intent survives the session. The
   read-only Specs tool renders the graph as a tree in the workbench.

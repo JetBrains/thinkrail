@@ -42,7 +42,7 @@ function renderFilePreview(file: PaletteFile) {
 }
 
 export interface SearchPaletteHostProps {
-	readonly onNewWorkspace: (projectId: string) => void;
+	readonly onNewWorkspace: (projectId: string, initialPrompt?: string) => void;
 	readonly onToggleProjectsHome: () => void;
 	readonly hasUpdateSettings: boolean;
 }
