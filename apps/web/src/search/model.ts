@@ -13,6 +13,7 @@ export type PaletteItemKind =
 	| "chat"
 	| "file"
 	| "spec"
+	| "section"
 	| "plan"
 	| "transcript"
 	| "start"

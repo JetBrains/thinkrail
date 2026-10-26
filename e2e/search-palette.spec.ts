@@ -336,7 +336,7 @@ test("Tab, Alt+digit and the chips switch the scope and write its prefix", async
 	await expect(preview).toHaveAttribute("aria-pressed", "false");
 });
 
-test("host search: a file by name opens as a tab, a spec by body opens in the Specs tool", async ({
+test("host search: a file by name opens as a tab, a spec section by its words opens in the Specs tool", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -364,10 +364,10 @@ test("host search: a file by name opens as a tab, a spec by body opens in the Sp
 
 	await openPalette(page);
 	await page.getByTestId("search-input").fill("#SPECGRAPHPROBE");
-	const spec = page.locator('[data-testid="search-row"][data-kind="spec"]');
-	await expect(spec).toHaveCount(1, { timeout: 15_000 });
-	await expect(spec).toContainText("Sample Project");
-	await expect(spec).toContainText("SPECGRAPHPROBE");
+	const section = page.locator('[data-testid="search-row"][data-kind="section"]');
+	await expect(section).toHaveCount(1, { timeout: 15_000 });
+	await expect(section).toContainText("Sample Project › Goal");
+	await expect(section).toContainText("SPECGRAPHPROBE");
 	await pressPlatformShortcut(page, "i");
 	await expect(preview.getByRole("heading", { name: "Goal" })).toBeVisible();
 	await pressPlatformShortcut(page, "i");

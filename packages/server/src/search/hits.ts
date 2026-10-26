@@ -45,21 +45,6 @@ export function termRanges(text: string, terms: readonly string[]): [number, num
 	return merged;
 }
 
-export function lineSnippet(content: string, terms: readonly string[], radius = 70): string | null {
-	const lower = content.toLowerCase();
-	const first = terms.map((term) => lower.indexOf(term.toLowerCase())).filter((at) => at !== -1);
-	if (first.length === 0) return null;
-	const at = Math.min(...first);
-	const lineStart = content.lastIndexOf("\n", at) + 1;
-	const lineEnd = content.indexOf("\n", at);
-	const line = content.slice(lineStart, lineEnd === -1 ? content.length : lineEnd).trim();
-	if (line.length <= radius * 2) return line;
-	const local = at - lineStart;
-	const start = Math.max(0, local - radius);
-	const end = Math.min(line.length, local + radius);
-	return `${start > 0 ? "…" : ""}${line.slice(start, end)}${end < line.length ? "…" : ""}`;
-}
-
 export function compactWhitespace(text: string): string {
 	return text.replace(/\s+/g, " ").trim();
 }

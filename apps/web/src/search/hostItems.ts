@@ -3,6 +3,7 @@ import {
 	RiChatHistoryLine,
 	RiFileTextLine,
 	RiGitBranchLine,
+	RiHeading,
 	RiListCheck3,
 	RiNodeTree,
 } from "@remixicon/react";
@@ -25,6 +26,7 @@ export const HOST_GROUP_OF_KIND: Readonly<Record<SearchKind, string>> = {
 	workspace: "workspaces",
 	file: "files",
 	spec: "specs",
+	section: "sections",
 	plan: "plans",
 };
 
@@ -72,6 +74,7 @@ function hostFields(hit: SearchHit): MatchField[] {
 		case "chat":
 		case "plan":
 		case "transcript":
+		case "section":
 			return [{ key: "title", text: hit.title }];
 	}
 }
@@ -82,30 +85,44 @@ function rangesOf(fields: readonly { key: string; ranges: readonly MatchRange[] 
 	return ranges;
 }
 
-function contentRanges(text: string, terms: readonly MatchTerm[]): [number, number][] | null {
+function occurrences(
+	text: string,
+	terms: readonly MatchTerm[],
+): { ranges: [number, number][]; found: number } {
 	const lower = text.toLowerCase();
-	const found: [number, number][] = [];
+	const hits: [number, number][] = [];
 	for (const term of terms) {
 		const needle = term.text.toLowerCase();
 		const at = lower.indexOf(needle);
-		if (at === -1) return null;
-		found.push([at, at + needle.length]);
+		if (at !== -1) hits.push([at, at + needle.length]);
 	}
-	found.sort((a, b) => a[0] - b[0]);
+	hits.sort((a, b) => a[0] - b[0]);
 	const ranges: [number, number][] = [];
-	for (const [start, end] of found) {
+	for (const [start, end] of hits) {
 		const last = ranges.at(-1);
 		if (last && start <= last[1]) last[1] = Math.max(last[1], end);
 		else ranges.push([start, end]);
 	}
-	return ranges;
+	return { ranges, found: hits.length };
 }
 
 export function rematchHit(hit: SearchHit, terms: readonly MatchTerm[]): SearchHit | null {
+	if (hit.kind === "section") {
+		const heading = hit.section?.heading ?? "";
+		const snippet = hit.snippet ?? "";
+		if (occurrences([hit.title, heading, snippet].join("\n"), terms).found < terms.length) {
+			return null;
+		}
+		const ranges = {
+			title: occurrences(hit.title, terms).ranges,
+			heading: occurrences(heading, terms).ranges,
+			snippet: occurrences(snippet, terms).ranges,
+		};
+		return { ...hit, score: 0, ranges };
+	}
 	if (hit.tier === MATCH_TIER.content) {
-		const key = hit.kind === "spec" ? "snippet" : "title";
-		const ranges = contentRanges(key === "snippet" ? (hit.snippet ?? "") : hit.title, terms);
-		return ranges ? { ...hit, score: 0, ranges: { [key]: ranges } } : null;
+		const { ranges, found } = occurrences(hit.title, terms);
+		return found === terms.length ? { ...hit, score: 0, ranges: { title: ranges } } : null;
 	}
 	const match = matchFields(terms, hostFields(hit));
 	if (!match) return null;
@@ -137,6 +154,10 @@ function matchOf(hit: SearchHit, ranges: PaletteMatch["ranges"]): { match: Palet
 function lateOf(context: HostItemContext, id: string): { late?: number } {
 	const late = context.late.get(id);
 	return late === undefined ? {} : { late };
+}
+
+function shifted(ranges: readonly MatchRange[] | undefined, by: number): MatchRange[] {
+	return (ranges ?? []).map(([start, end]) => [start + by, end + by]);
 }
 
 function where(context: HostItemContext, hit: SearchHit): string {
@@ -204,6 +225,27 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 					...(hit.size === undefined ? {} : { size: hit.size }),
 				},
 			};
+		case "section": {
+			if (!hit.workspaceId || !hit.path || !hit.section) return null;
+			const heading = hit.section.heading;
+			return {
+				...base,
+				kind: "section",
+				title: heading ? `${hit.title} › ${heading}` : hit.title,
+				subtitle: hit.snippet ?? hit.path,
+				group: "sections",
+				scope: "specs",
+				icon: RiHeading,
+				...matchOf(hit, {
+					title: [
+						...(hit.ranges?.title ?? []),
+						...(heading ? shifted(hit.ranges?.heading, hit.title.length + 3) : []),
+					],
+					subtitle: hit.snippet ? (hit.ranges?.snippet ?? []) : [],
+				}),
+				file: { workspaceId: hit.workspaceId, path: hit.path },
+			};
+		}
 		case "plan":
 			return {
 				...base,

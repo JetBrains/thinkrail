@@ -10,10 +10,10 @@ export const SEARCH_SCOPES = ["all", "work", "files", "specs", "commands"] as co
 export type SearchScope = (typeof SEARCH_SCOPES)[number];
 
 const SCOPE_KINDS: Record<SearchScope, readonly SearchKind[]> = {
-	all: SEARCH_KINDS,
+	all: SEARCH_KINDS.filter((kind) => kind !== "section"),
 	work: ["chat", "transcript", "workspace", "plan"],
 	files: ["file"],
-	specs: ["spec"],
+	specs: ["spec", "section"],
 	commands: [],
 };
 

@@ -12,7 +12,7 @@ import {
 	serializeLearning,
 } from "./learning";
 import type { PaletteItem } from "./model";
-import { parseSearchQuery, stripScopePrefix, withScopePrefix } from "./query";
+import { parseSearchQuery, scopeKinds, stripScopePrefix, withScopePrefix } from "./query";
 import { pickTopHit, rankItems } from "./rank";
 
 const DAY = 86_400_000;
@@ -56,6 +56,12 @@ describe("parseSearchQuery", () => {
 		expect(parsed.text).toBe(long.slice(0, MAX_SEARCH_QUERY_LENGTH));
 		expect(parsed.terms).toEqual(parseMatchTerms(parsed.text.slice(0, MAX_SEARCH_QUERY_LENGTH)));
 		expect(parsed.terms.map((term) => term.text)).not.toContain("distinguishing");
+	});
+
+	test("spec sections are asked for only in the specs scope, never in All", () => {
+		expect(scopeKinds("specs")).toEqual(["spec", "section"]);
+		expect(scopeKinds("all")).not.toContain("section");
+		expect(scopeKinds("all")).toContain("spec");
 	});
 
 	test("scope prefixes round-trip, so a chip can write its prefix back", () => {

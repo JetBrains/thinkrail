@@ -97,7 +97,8 @@ each again against the current terms on the fields the host matches it on (a fil
 title / id / path, a chat's or plan's title, a workspace's name and branch), so it takes the tier the
 host's answer will give it, and a body or message hit stays in the `content` tier and must still
 contain every term in its snippet as a case-folded substring — the content providers' rule, so never an
-acronym; a row that no longer matches leaves at once, and Enter can only open a row
+acronym — and a section row must still show every term across its spec title, heading and snippet (the
+section engine ranks by words, so this keeps only rows it would surely return); a row that no longer matches leaves at once, and Enter can only open a row
 the typed text matches; their counts are ignored.
 A fresh reply's rows carry the host's matcher result as `PaletteItem.match`, ranked with the local rows
 by the same tiers instead of re-matching the title. A host chat or workspace hit is dropped only when

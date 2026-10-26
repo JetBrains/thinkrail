@@ -534,12 +534,14 @@ both rings rank with. The one package
   `session.getMessages` order, `anchorText` makes the anchor drift-tolerant), and
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
   the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v99): **`SearchKind`** (`chat` / `transcript` /
-  `workspace` / `file` / `spec` / `plan`), **`SearchContext`** (the active workspace + context project the
+  `workspace` / `file` / `spec` / `section` / `plan` — `section` from `SPEC_SECTIONS_PROTOCOL_VERSION`,
+  v103, a ranked spec section that replaced the line-level body hit of a `spec`), **`SearchContext`** (the active workspace + context project the
   host turns into its one file/spec root), **`SearchHit`** (a stable `kind:id[:locator]` id, title / subtitle / `snippet`,
   the shared matcher's `tier` + `score` and highlight `ranges` so the browser merges host hits with its
   local ones by the same rule, and the navigation target — `projectId` / `workspaceId` / `sessionId` /
-  `messageIndex` + `anchorText` / root-relative `path` / `specId` — and a file or spec hit's byte `size`, so
-  the client declines to preview a large one), **`SearchGroup`** (one per kind:
+  `messageIndex` + `anchorText` / root-relative `path` / `specId`, a file or spec hit's byte `size` so the
+  client declines to preview a large one, and on a `section` hit **`SearchHitSection`** — the heading
+  trail, its 1-based `line`, and how many of the query's words the section holds), **`SearchGroup`** (one per kind:
   capped `hits`, the true `total`, and a `state` of `ready` / `truncated` / `indexing` / `failed` — a
   client re-asks only on `indexing`), **`SearchQueryResult`** (`seq` echoed; `superseded` when a newer
   `seq` from the same client overtook it), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (the

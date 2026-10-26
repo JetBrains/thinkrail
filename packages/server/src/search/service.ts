@@ -21,7 +21,7 @@ import {
 } from "@thinkrail/contracts";
 import type { HistorySession } from "../history";
 import { logger } from "../log";
-import type { SpecSnapshot } from "../spec";
+import type { SpecSectionSearch, SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import { FileListCache } from "./files";
 import { deadlineAt, emptyGroup } from "./hits";
@@ -33,6 +33,7 @@ import {
 	searchChatTitles,
 	searchFiles,
 	searchPlans,
+	searchSections,
 	searchSpecs,
 	searchTranscripts,
 	searchWorkspaces,
@@ -46,6 +47,7 @@ export interface SearchReaders {
 	readonly workspaces: () => Workspace[];
 	readonly sessions: () => Promise<{ sessions: readonly HistorySession[]; indexing: boolean }>;
 	readonly specs: (root: string) => SpecSnapshot;
+	readonly sections: (root: string, query: string, limit: number) => SpecSectionSearch;
 	readonly plans: (root: string) => StoredPlanFile[];
 	readonly invalidateSpecs: (root: string) => void;
 	readonly files?: FileListCache;
@@ -160,13 +162,15 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			latestSeq.set(clientKey, seq);
 			const superseded = () => latestSeq.get(clientKey) !== seq;
 
-			const terms = parseMatchTerms(params.query.slice(0, MAX_SEARCH_QUERY_LENGTH));
+			const text = params.query.slice(0, MAX_SEARCH_QUERY_LENGTH);
+			const terms = parseMatchTerms(text);
 			const kinds = new Set<SearchKind>(params.kinds ?? SEARCH_KINDS);
 			if (terms.length === 0) return { seq, groups: [...kinds].map((kind) => emptyGroup(kind)) };
 
 			const limit = clampLimit(params.limit);
 			const started = now();
 			const input = (): ProviderInput => ({
+				text,
 				terms,
 				limit,
 				deadline: deadlineAt(
@@ -199,6 +203,9 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			);
 			push("spec", () =>
 				root?.git ? searchSpecs(root, readers.specs, input()) : emptyGroup("spec"),
+			);
+			push("section", () =>
+				root?.git ? searchSections(root, readers.sections, input()) : emptyGroup("section"),
 			);
 
 			let sessions: { sessions: readonly HistorySession[]; indexing: boolean } | null = null;

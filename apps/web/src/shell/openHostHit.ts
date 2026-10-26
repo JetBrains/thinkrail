@@ -32,6 +32,7 @@ export async function openHostHit(hit: SearchHit, targets: HostHitTargets): Prom
 			}
 			return;
 		case "spec":
+		case "section":
 			if ((await targets.navigateToWorkspace(workspace)) && hit.path) {
 				targets.openSpec(workspace.id, hit.path);
 			}
