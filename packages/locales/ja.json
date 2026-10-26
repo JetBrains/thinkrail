@@ -1815,8 +1815,6 @@
 	"shell.quitHint.hold": "{{shortcut}} を長押し、または 2 回押して終了",
 	"shell.quitHint.quitting": "終了中…",
 	"shell.quitHint.release": "離すと終了",
-	"shell.sessionSwitcher.empty": "アクティブなセッションなし",
-	"shell.sessionSwitcher.title": "セッションを切り替え",
 	"shell.topbar.settings": "設定",
 	"shell.topbar.settingsWithShortcut": "設定 ({{shortcut}})",
 	"shell.windowControls.maximize": "最大化",
