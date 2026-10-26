@@ -5,14 +5,7 @@ import { makeSnippet, matchesTerms } from "../history";
 import type { SpecSnapshotEntry } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import type { FileListCache, IndexedFileList } from "./files";
-import {
-	buildGroup,
-	compactWhitespace,
-	type Deadline,
-	emptyGroup,
-	lineSnippet,
-	termRanges,
-} from "./hits";
+import { buildGroup, compactWhitespace, type Deadline, lineSnippet, termRanges } from "./hits";
 
 export interface SearchRoot {
 	readonly root: string;
@@ -56,8 +49,8 @@ export function searchFiles(
 ): SearchGroup {
 	const hits: SearchHit[] = [];
 	const lowerTerms = input.terms.map((term) => term.toLowerCase());
-	const fuzzyTerms = lowerTerms.some((term) => term.length >= 3);
 	let indexing = false;
+	let sourceTruncated = false;
 	let truncated = false;
 	let scanned = 0;
 	const pushHit = (
@@ -85,6 +78,7 @@ export function searchFiles(
 		truncated = true;
 		return true;
 	};
+	lists.retain(roots.length);
 	const ready: { root: SearchRoot; list: IndexedFileList }[] = [];
 	for (const root of roots) {
 		const list = lists.peek(root.root);
@@ -93,16 +87,17 @@ export function searchFiles(
 			indexing = true;
 			continue;
 		}
-		if (list.truncated) truncated = true;
+		if (list.truncated) sourceTruncated = true;
 		ready.push({ root, list });
 	}
-	const rest: { root: SearchRoot; index: number }[] = [];
+	const rest: { root: SearchRoot; list: IndexedFileList; index: number }[] = [];
 	for (const { root, list } of ready) {
 		for (let index = 0; index < list.paths.length && !truncated; index += 1) {
 			if (expired()) break;
 			const lower = list.lower[index] ?? "";
 			if (!lowerTerms.every((term) => lower.includes(term))) {
-				if (fuzzyTerms) rest.push({ root, index });
+				if (lowerTerms.every((term) => isSubsequence(lower, term)))
+					rest.push({ root, list, index });
 				continue;
 			}
 			const path = list.paths[index] ?? "";
@@ -110,19 +105,18 @@ export function searchFiles(
 			if (match) pushHit(root, path, match);
 		}
 	}
-	if (!truncated && hits.length < input.limit) {
-		for (const { root, index } of rest) {
-			if (expired()) break;
-			const list = lists.peek(root.root);
-			const lower = list?.lower[index] ?? "";
-			if (!lowerTerms.every((term) => isSubsequence(lower, term))) continue;
-			const path = list?.paths[index] ?? "";
-			const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
-			if (match) pushHit(root, path, match);
-		}
+	for (const { root, list, index } of rest) {
+		if (truncated || expired()) break;
+		const path = list.paths[index] ?? "";
+		const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
+		if (match) pushHit(root, path, match);
 	}
-	const group = buildGroup("file", hits, input.limit, truncated ? "truncated" : "ready");
-	return indexing && hits.length === 0 ? { ...group, state: "indexing" } : group;
+	return buildGroup(
+		"file",
+		hits,
+		input.limit,
+		indexing ? "indexing" : truncated || sourceTruncated ? "truncated" : "ready",
+	);
 }
 
 export function searchSpecs(
@@ -321,5 +315,3 @@ export function searchWorkspaces(
 	}
 	return buildGroup("workspace", hits, input.limit);
 }
-
-export { emptyGroup };

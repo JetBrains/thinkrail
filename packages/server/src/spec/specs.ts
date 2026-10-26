@@ -38,13 +38,11 @@ export interface SpecSnapshotEntry {
 
 const SNAPSHOT_TTL_MS = 5_000;
 const snapshots = new Map<string, { at: number; entries: readonly SpecSnapshotEntry[] }>();
+const rebuilding = new Set<string>();
 
-export function specSnapshot(root: string, now = Date.now()): readonly SpecSnapshotEntry[] {
-	const cached = snapshots.get(root);
-	if (cached && now - cached.at < SNAPSHOT_TTL_MS) return cached.entries;
-	let entries: SpecSnapshotEntry[] = [];
+function buildSnapshot(root: string): SpecSnapshotEntry[] {
 	try {
-		entries = rootIndexFor(root)
+		return rootIndexFor(root)
 			.contentEntries()
 			.map((entry) => {
 				const id = scalar(entry.frontmatter, FIELDS.id) ?? "";
@@ -57,14 +55,34 @@ export function specSnapshot(root: string, now = Date.now()): readonly SpecSnaps
 				};
 			});
 	} catch {
-		entries = [];
+		return [];
 	}
-	snapshots.set(root, { at: now, entries });
-	return entries;
 }
 
+/** The root's specs, memoized for a short TTL; the first read of a root builds synchronously, later rebuilds happen off the request. */
+export function specSnapshot(root: string, now = Date.now()): readonly SpecSnapshotEntry[] {
+	const cached = snapshots.get(root);
+	if (!cached) {
+		const entries = buildSnapshot(root);
+		snapshots.set(root, { at: now, entries });
+		return entries;
+	}
+	if (now - cached.at >= SNAPSHOT_TTL_MS) scheduleSnapshotRebuild(root);
+	return cached.entries;
+}
+
+function scheduleSnapshotRebuild(root: string): void {
+	if (rebuilding.has(root)) return;
+	rebuilding.add(root);
+	setImmediate(() => {
+		rebuilding.delete(root);
+		snapshots.set(root, { at: Date.now(), entries: buildSnapshot(root) });
+	});
+}
+
+/** A worktree changed: keep serving the old snapshot and rebuild it off the request path. */
 export function invalidateSpecSnapshot(root: string): void {
-	snapshots.delete(root);
+	if (snapshots.has(root)) scheduleSnapshotRebuild(root);
 }
 
 export function projectHasSpecs(root: string): boolean {

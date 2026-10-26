@@ -49,6 +49,7 @@ export interface SearchService {
 	query(clientKey: string, params: WsParams<"search.query">): Promise<SearchQueryResult>;
 	preview(target: SearchPreviewTarget): Promise<SearchPreviewResult>;
 	invalidateRoot(root: string): void;
+	forgetClient(clientKey: string): void;
 }
 
 export const SEARCH_BUDGET = {
@@ -256,6 +257,10 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			files.invalidate(root);
 			readers.invalidateSpecs(root);
 		},
+
+		forgetClient(clientKey) {
+			latestSeq.delete(clientKey);
+		},
 	};
 }
 
@@ -304,18 +309,27 @@ async function fileHeadPreview(root: string, path: string): Promise<SearchPrevie
 		const length = Math.min(stat.size, SEARCH_BUDGET.previewBytes);
 		const buffer = new Uint8Array(length);
 		const { bytesRead } = await handle.read(buffer, 0, length, 0);
-		const bytes = buffer.subarray(0, bytesRead);
+		const truncated = stat.size > length;
+		const bytes = truncated
+			? trimIncompleteUtf8(buffer.subarray(0, bytesRead))
+			: buffer.subarray(0, bytesRead);
 		const meta = resourceMeta(bytes, path);
 		if (!meta.text) return { kind: "unavailable", reason: "binary" };
-		return {
-			kind: "text",
-			title: path,
-			body: new TextDecoder().decode(bytes),
-			truncated: stat.size > length,
-		};
+		return { kind: "text", title: path, body: new TextDecoder().decode(bytes), truncated };
 	} finally {
 		await handle.close();
 	}
+}
+
+/** A head cut at a byte boundary may end inside a multi-byte sequence; drop that tail so the text test stays honest. */
+export function trimIncompleteUtf8(bytes: Uint8Array): Uint8Array {
+	for (let back = 1; back <= 3 && back <= bytes.length; back += 1) {
+		const byte = bytes[bytes.length - back] ?? 0;
+		if ((byte & 0xc0) === 0x80) continue;
+		const needed = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc0 ? 2 : 1;
+		return needed > back ? bytes.subarray(0, bytes.length - back) : bytes;
+	}
+	return bytes;
 }
 
 function renderPlan(file: StoredPlanFile): string {

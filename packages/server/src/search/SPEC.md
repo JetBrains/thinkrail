@@ -20,9 +20,9 @@ history index, spec snapshots, stored plans), the same shape as `host/historySco
 
 ## Boundary
 
-- **Public surface (barrel):** `createSearchService`, `SearchService`, `SearchReaders`,
-  `resolveSearchRoots`, `SEARCH_BUDGET`, `FileListCache`, `FileList`, `FILE_LIST_LIMITS`,
-  `listRootFiles`, `parseNulList`.
+- **Public surface (barrel):** `createSearchService`, `SearchService`, `SearchReaders`.
+- **Internals:** the file-list cache, root resolution and the providers are composed by the service and
+  reached by tests per file, never through the barrel.
 - **Allowed deps:** `contracts` (DTOs + the matcher), `history` (`HistoryIndex.sessions()` — the
   narrow read of titles and entries), `spec` (`specSnapshot` / `invalidateSpecSnapshot`), `todos`
   (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`), `fs` (`resolveContainedFile` +
@@ -49,20 +49,27 @@ skipping plan files whose session has no transcript on disk (orphans).
 - **Per-client superseding:** the service remembers the latest `seq` per `clientKey`; an older `seq`
   is answered `{ superseded: true }` immediately, and a query that was overtaken while it awaited the
   history index returns `superseded` instead of stale groups. `seq` is the client's monotonic counter
-  across reopen and reconnect.
+  across reopen and reconnect; `forgetClient` drops a reaped client's counter (the host calls it from
+  its client reap).
 - **Budgets:** each provider gets `SEARCH_BUDGET.providerMs`, all within `queryMs`; a provider that
   runs out of time returns what it has as `truncated`. A throwing provider reports `failed` (the
-  client never polls a failed group). A cold file list reports `indexing` and starts loading
-  (single-flight per root); the client re-asks.
+  client never polls a failed group). A file list that has never loaded reports the whole group
+  `indexing` — with whatever the warm roots found — and starts loading (single-flight per root); the
+  client paints the hits and re-asks.
 - **Files:** `git ls-files -co --exclude-standard -z` streamed through `gitAsyncStream` and a capped
   NUL parser (`FILE_LIST_LIMITS`: 100k names / 16 MB, then `truncated`), a bounded `readdir` walk for a
   non-git root; `node_modules` and VCS directories are always hidden. Lists are cached per root with a
-  lower-cased twin, revalidated after a TTL or on `workspace.fsChanged` (`invalidateRoot`). Matching is
-  two-pass: a substring prefilter over every term, then — only when that cannot fill the page — the
-  matcher's subsequence tier over the rest, gated by a cheap subsequence test. 100k paths answer in
-  tens of milliseconds.
-- **Specs:** the `spec` module's per-root snapshot (title / id / path through the matcher; a body
-  match from three characters becomes a `content`-tier hit with the matching line as `snippet`).
+  lower-cased twin (at most `maxRoots` roots — or as many as one query spans — least recently asked
+  first out; a list cut at its cap is still searched and its group reported `truncated`) and revalidated
+  stale-while-reloading after a TTL or on `workspace.fsChanged` (`invalidateRoot`) — the old list keeps
+  answering until the reload lands, so a change never blanks the active workspace's files. Matching is
+  two-pass: a substring prefilter over every term runs the matcher on the plain hits first, then every
+  remaining path that passes a cheap subsequence test goes through the matcher too (acronym, camel-hump
+  and subsequence tiers), both passes bounded by the deadline. 100k paths answer in tens of milliseconds.
+- **Specs:** the `spec` module's per-root snapshot — built synchronously only on a root's first read,
+  afterwards rebuilt off the request path (`setImmediate`) when its TTL lapses or the worktree changes,
+  the previous snapshot answering meanwhile (title / id / path through the matcher; a body match from
+  three characters becomes a `content`-tier hit with the matching line as `snippet`).
 - **Chats and transcripts:** title hits through the matcher; transcript hits are substring-AND over
   entries (the history index's rule), one per message, `content` tier, newest first, carrying
   `messageIndex` / `anchorText` for the client's drift-tolerant jump.
@@ -75,12 +82,14 @@ skipping plan files whose session has no transcript on disk (orphans).
 
 `search.preview` reads bounded content without side effects: a chat preview is a window of
 `previewMessages` entries around the focused message from the history index (never a pi session); a
-file preview is the first `previewBytes` of a root-contained file (`resolveContainedFile`), refused as
-`binary` when `resourceMeta` says so; a spec preview is the cached body; a plan preview renders the
+file preview is the first `previewBytes` of a root-contained file (`resolveContainedFile`), trimmed of a
+multi-byte sequence the cut split so the text test stays honest, refused as `binary` when `resourceMeta`
+says so; a spec preview is the cached body; a plan preview renders the
 stored plan as a checklist. Anything unresolvable answers `unavailable`.
 
 ## Get right
 
 - The host never blocks a keystroke on a corpus build: file lists load off the request, spec
-  snapshots are TTL-cached per root, and the history index keeps its cold-build budget.
+  snapshots rebuild off the request after their first read, and the history index keeps its cold-build
+  budget.
 - Hit ids are stable (`kind:id[:locator]`) so the browser can keep a selection across replies.

@@ -8,7 +8,12 @@ import type { HistorySession } from "../history";
 import type { SpecSnapshotEntry } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import { type FileList, FileListCache, listRootFiles, parseNulList } from "./files";
-import { createSearchService, resolveSearchRoots, type SearchReaders } from "./service";
+import {
+	createSearchService,
+	resolveSearchRoots,
+	type SearchReaders,
+	trimIncompleteUtf8,
+} from "./service";
 
 const encoder = new TextEncoder();
 
@@ -313,6 +318,127 @@ describe("search.query", () => {
 		expect(loads).toBe(3);
 	});
 
+	test("a root invalidated after a change keeps answering while it reloads, and a cold root marks the group indexing even with hits", async () => {
+		let loads = 0;
+		const files = new FileListCache(async (root) => {
+			loads += 1;
+			return lists[root] ?? { paths: [], truncated: false };
+		});
+		await files.load("/repos/one-auth");
+		const service = createSearchService(readers({ files }));
+		const partial = await service.query("c1", {
+			seq: 1,
+			query: "refresh",
+			kinds: ["file"],
+			context,
+		});
+		expect(partial.groups[0]).toMatchObject({ kind: "file", state: "indexing" });
+		expect(partial.groups[0]?.hits.map((hit) => hit.id)).toEqual([
+			"file:p1:w-feature:src/auth/refresh.ts",
+		]);
+		await Bun.sleep(0);
+		expect(loads).toBe(3);
+
+		service.invalidateRoot("/repos/one-auth");
+		const stale = await service.query("c1", { seq: 2, query: "refresh", kinds: ["file"], context });
+		expect(stale.groups[0]?.state).toBe("ready");
+		expect(stale.groups[0]?.hits).toHaveLength(3);
+		await Bun.sleep(0);
+		expect(loads).toBe(4);
+	});
+
+	test("the file-list cache keeps a bounded number of roots, never fewer than one query needs", async () => {
+		const files = new FileListCache(async () => ({ paths: ["a.ts"], truncated: false }));
+		for (let index = 0; index < 10; index += 1) await files.load(`/root-${index}`);
+		expect(files.peek("/root-0")).toBeNull();
+		expect(files.peek("/root-9")).not.toBeNull();
+
+		const many = Array.from({ length: 9 }, (_, index) => ({
+			...other,
+			id: `p${index}`,
+			path: `/many/${index}`,
+		}));
+		const wide = new FileListCache(async (root) => ({
+			paths: [`${root.slice(1)}/refresh.ts`],
+			truncated: false,
+		}));
+		const service = createSearchService(
+			readers({ files: wide, projects: () => many, workspaces: () => [] }),
+		);
+		let result = await service.query("c1", {
+			seq: 1,
+			query: "refresh",
+			kinds: ["file"],
+			context: {},
+		});
+		for (let poll = 2; result.groups[0]?.state === "indexing" && poll < 6; poll += 1) {
+			await Bun.sleep(0);
+			result = await service.query("c1", {
+				seq: poll,
+				query: "refresh",
+				kinds: ["file"],
+				context: {},
+			});
+		}
+		expect(result.groups[0]?.state).toBe("ready");
+		expect(result.groups[0]?.total).toBe(9);
+	});
+
+	test("a source list cut at its cap is still searched and reported truncated, and acronyms reach the matcher", async () => {
+		const files = new FileListCache(async () => ({
+			paths: ["src/auth/UserController.ts", "src/auth/refresh.ts"],
+			truncated: true,
+		}));
+		await files.load("/repos/one-auth");
+		const service = createSearchService(
+			readers({
+				files,
+				projects: () => [{ ...project, path: "/repos/one-auth" }],
+				workspaces: () => [feature],
+			}),
+		);
+		const capped = await service.query("c1", {
+			seq: 1,
+			query: "refresh",
+			kinds: ["file"],
+			context,
+		});
+		expect(capped.groups[0]).toMatchObject({ state: "truncated", total: 1 });
+		const acronym = await service.query("c1", { seq: 2, query: "uc", kinds: ["file"], context });
+		expect(acronym.groups[0]?.hits.map((hit) => hit.path)).toEqual(["src/auth/UserController.ts"]);
+	});
+
+	test("a provider that runs out of its budget answers what it has as truncated", async () => {
+		const many: FileList = {
+			paths: Array.from({ length: 5_000 }, (_, index) => `src/refresh-${index}.ts`),
+			truncated: false,
+		};
+		const files = new FileListCache(async () => many);
+		await files.load("/repos/one-auth");
+		let tick = 0;
+		const service = createSearchService(
+			readers({
+				files,
+				projects: () => [{ ...project, path: "/repos/one-auth" }],
+				workspaces: () => [feature],
+				now: () => {
+					tick += 1;
+					return tick <= 2 ? 0 : 10_000;
+				},
+			}),
+		);
+		const result = await service.query("c1", {
+			seq: 1,
+			query: "refresh",
+			kinds: ["file"],
+			context,
+		});
+		const file = result.groups[0];
+		expect(file?.state).toBe("truncated");
+		expect(file?.total).toBeGreaterThan(0);
+		expect(file?.total).toBeLessThan(5_000);
+	});
+
 	test("an older seq from the same client is superseded, also when a newer one arrived mid-flight", async () => {
 		const gate = Promise.withResolvers<void>();
 		const service = createSearchService(
@@ -363,6 +489,17 @@ describe("search.query", () => {
 		expect(file?.hits).toHaveLength(50);
 		expect(file?.total).toBe(80);
 		expect(result.groups.find((group) => group.kind === "spec")).toMatchObject({ state: "failed" });
+	});
+});
+
+describe("trimIncompleteUtf8", () => {
+	test("drops a multi-byte sequence cut by the byte limit and keeps complete text", () => {
+		const whole = new TextEncoder().encode("abcé");
+		expect(trimIncompleteUtf8(whole)).toEqual(whole);
+		expect(new TextDecoder().decode(trimIncompleteUtf8(whole.subarray(0, 4)))).toBe("abc");
+		const emoji = new TextEncoder().encode("a😀");
+		expect(new TextDecoder().decode(trimIncompleteUtf8(emoji.subarray(0, 3)))).toBe("a");
+		expect(trimIncompleteUtf8(new Uint8Array([0, 1, 2]))).toEqual(new Uint8Array([0, 1, 2]));
 	});
 });
 

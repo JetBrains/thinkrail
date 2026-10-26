@@ -11,18 +11,19 @@ tags: [ui, search, public-surface-checked]
 
 ## Responsibility
 
-The one finder: a palette that finds chats, workspaces and projects, runs commands and opens Settings
-sections, opened with `Mod+K`, double Shift, or the topbar search button. It owns the presentation,
-the query grammar, ranking and learning, and the store-derived work items; the command catalog and its
-handlers are composed and injected by `shell`. It finds and jumps — it never mutates a setting in
-place (every setting row opens its Settings section), and every verb runs through the command it was
-listed as.
+The one finder: a palette that finds chats and their transcripts, workspaces and projects, files,
+specs and plans, runs commands and opens Settings sections, opened with `Mod+K`, double Shift, or the
+topbar search button. It owns the presentation, the query grammar, ranking and learning, the
+store-derived work items, and the host-search controller (`search.query` / `search.preview`); the
+command catalog and its handlers, the way a host hit opens and the file preview renderer are composed
+and injected by `shell`. It finds and jumps — it never mutates a setting in place (every setting row
+opens its Settings section), and every verb runs through the command it was listed as.
 
 ## Boundary
 
-- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `SearchSettings`, `initSearchPreferences`,
-  `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`, `WorkItemsState`, `commandItems`,
-  `SearchScope`, `PaletteItem`, `PaletteItemKind`, `PalettePreview`.
+- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `SearchSettings`,
+  `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`,
+  `WorkItemsState`, `commandItems`, `SearchScope`, `PaletteItem`, `PaletteItemKind`, `PalettePreview`.
 - **Allowed deps:** `contracts` (the shared matcher and domain types), `commands`, `store`, `transport`
   (the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`,
   `lib`, `@thinkrail/locales` (UI strings), `@thinkrail/ui/*`, `@remixicon/react`.
@@ -33,14 +34,15 @@ listed as.
 ## Query grammar
 
 A leading prefix selects a scope and its chip, and a chip writes the prefix back: `@` work (projects,
-workspaces, chats), `>` commands and settings; `/` files and `#` specs join with host search. `#<digits>`
-is a pull-request number, never the specs scope — it matches the `#N` keyword of the workspace that
-carries that review. Quoted text is one contiguous literal term — never matched as an acronym or a
-subsequence — and escapes a prefix; an unterminated quote runs to the end of the query, so a phrase
-matches while it is typed. Terms AND-combine through the shared matcher in [[module-contracts]], which
-folds case and Latin diacritics (`configuracion` finds `Configuración`) without moving highlight offsets.
-`/` and `#` fall back to All on a host without host search. There is no filter grammar: triage happens
-through the empty state's grouping and the status dots every row carries.
+workspaces, chats, transcripts, plans), `>` commands and settings, `/` files, `#` specs — the last two
+exist only when the host serves `search.query` (`supportsHostSearch`; an older host keeps the local
+scopes, searches `/…` and `#…` in All and shows a notice). `#<digits>` is a pull-request number, never the
+specs scope — it matches the `#N` keyword of the workspace that carries that review. Quoted text is one
+contiguous literal term — never matched as an acronym or a subsequence — and escapes a prefix; an
+unterminated quote runs to the end of the query, so a phrase matches while it is typed. Terms AND-combine
+through the shared matcher in [[module-contracts]], which folds case and Latin diacritics
+(`configuracion` finds `Configuración`) without moving highlight offsets. There is no filter grammar:
+triage happens through the empty state's grouping and the status dots every row carries.
 
 ## Ranking
 
@@ -62,6 +64,22 @@ like any other row) and the host-reported first prompt (`selectRecordFirstPrompt
 its first prompt, carries `data-title-source` and the full first line as its tooltip, and is matchable by
 the whole prompt (a keyword), so words past the 48-character cut still find it; an unnamed chat with
 neither a prompt nor attention is not listed.
+
+## Host search
+
+`useHostSearch` wraps the pure `createHostSearchController`: a 100 ms debounce, at most one request in
+flight plus the latest queued input, a monotonic `seq` for the host's per-client superseding, and
+fencing — a reply paints only when it answers the current input, its `seq` is the latest issued, the
+welcome generation is unchanged and the host did not mark it `superseded`; a failed request paints
+nothing and never retries; an `indexing` group polls every 300 ms up to twenty times, `truncated` and
+`failed` never poll. The host is asked only for the scope's kinds (`scopeKinds`) and never on a page or
+for an empty query. `hostItems` turns the host's groups into rows — files, specs, plans, transcripts, plus
+chats and workspaces the client does not already list — carrying the host's matcher result as
+`PaletteItem.match`, so `rankItems` ranks them with the local rows by the same tiers instead of
+re-matching the title. Host hits that arrive after the user moved the selection are flagged `late` and
+sort after their group's earlier rows, so the rows above the selection never reorder. A host row's
+preview is loaded through `search.preview` (memoized per target) and renders a transcript window, a text
+head, or the unavailable notice; a host row opens through the injected `PaletteHost.openHit`.
 
 ## Interaction
 

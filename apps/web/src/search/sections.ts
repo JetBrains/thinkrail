@@ -27,6 +27,10 @@ const GROUP_LABELS: Readonly<Record<string, MessageKey>> = {
 	projects: "search.group.projects",
 	commands: "search.group.commands",
 	settings: "search.group.settings",
+	files: "search.group.files",
+	specs: "search.group.specs",
+	plans: "search.group.plans",
+	transcripts: "search.group.transcripts",
 };
 
 export function groupLabel(t: Translator, group: string): string {

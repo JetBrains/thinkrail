@@ -50,9 +50,10 @@ create the tools it needs based on how you actually work.
   its own model and live token and cost readout. Steer a running turn or queue a follow-up, delegate to
   subagents, and work a shared plan the agent updates and you edit — each completed step can be committed
   and reviewed on its own.
-- **One search box for everything.** `⌘K` (or a double tap of Shift) opens a palette that finds chats,
-  workspaces and projects across every open project, runs the app's commands with their shortcuts shown,
-  and jumps to a Settings section. With nothing typed it lists the chats waiting for you.
+- **One search box for everything.** `⌘K` (or a double tap of Shift) opens a palette that finds chats and
+  the messages inside them, workspaces and projects, files in the current workspace, specs and plans — with
+  a preview pane on `⌘I` — runs the app's commands with their shortcuts shown, and jumps to a Settings
+  section. With nothing typed it lists the chats waiting for you.
 - **Specs as ground truth.** A connected graph of `SPEC.md` files lives beside the code; the agent reads,
   searches, and maintains it through dedicated `spec_*` tools, so intent survives the session. The
   read-only Specs tool renders the graph as a tree in the workbench.

@@ -1,5 +1,6 @@
 import { realpathSync, rmSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import { SEARCH_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
 	defaultWorkspaceRow,
@@ -300,7 +301,12 @@ test("Tab, Alt+digit and the chips switch the scope and write its prefix", async
 	await page.keyboard.press("Shift+Tab");
 	await expect(chip(page, "all")).toHaveAttribute("aria-pressed", "true");
 	await expect(input).toHaveValue("auth");
-	await page.keyboard.press("Alt+3");
+	const commandsChip = await page
+		.getByTestId("search-chip")
+		.evaluateAll((chips) =>
+			chips.findIndex((chip) => chip.getAttribute("data-scope") === "commands"),
+		);
+	await page.keyboard.press(`Alt+${commandsChip + 1}`);
 	await expect(input).toHaveValue(">auth");
 	await chip(page, "work").click();
 	await expect(input).toHaveValue("@auth");
@@ -313,4 +319,163 @@ test("Tab, Alt+digit and the chips switch the scope and write its prefix", async
 	await page.keyboard.press("ControlOrMeta+Alt+KeyI");
 	await pressPlatformShortcut(page, "i");
 	await expect(preview).toHaveAttribute("aria-pressed", "false");
+});
+
+test("host search: a file by name opens as a tab, a spec by body opens in the Specs tool", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("/notes");
+	await expect(page.locator('[data-testid="search-chip"][data-scope="files"]')).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	const file = page.locator('[data-testid="search-row"][data-kind="file"]', {
+		hasText: "notes.txt",
+	});
+	await expect(file).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByTestId("search-host-pending")).toHaveCount(0);
+	await pressPlatformShortcut(page, "i");
+	const preview = page.getByTestId("search-file-preview");
+	await expect(preview).toContainText("plain-text-fixture");
+	await pressPlatformShortcut(page, "i");
+	await file.click();
+	await expect(palette(page)).toBeHidden();
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "notes.txt" }),
+	).toBeVisible();
+
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("#SPECGRAPHPROBE");
+	const spec = page.locator('[data-testid="search-row"][data-kind="spec"]');
+	await expect(spec).toHaveCount(1, { timeout: 15_000 });
+	await expect(spec).toContainText("Sample Project");
+	await expect(spec).toContainText("SPECGRAPHPROBE");
+	await pressPlatformShortcut(page, "i");
+	await expect(preview.getByRole("heading", { name: "Goal" })).toBeVisible();
+	await pressPlatformShortcut(page, "i");
+	await page.keyboard.press("Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "SPEC.md" }),
+	).toBeVisible();
+});
+
+test("host search: an image and an HTML file render in the preview pane, and from Project Home a hit enters the project's workspace", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await expect(defaultWorkspaceRow(page)).not.toHaveAttribute("data-active", "true");
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("/RENDERERS.png");
+	const image = page.locator('[data-testid="search-row"][data-kind="file"]', {
+		hasText: "RENDERERS.png",
+	});
+	await expect(image).toBeVisible({ timeout: 15_000 });
+	await pressPlatformShortcut(page, "i");
+	const preview = page.getByTestId("search-file-preview");
+	await expect(preview.getByTestId("image-resource")).toBeVisible();
+
+	await page.getByTestId("search-input").fill("/sample.html");
+	await expect(
+		page.locator('[data-testid="search-row"][data-kind="file"]', { hasText: "sample.html" }),
+	).toBeVisible({ timeout: 15_000 });
+	await expect(preview.getByTestId("html-view")).toBeVisible();
+	await expect(preview.frameLocator("iframe").locator("body")).toHaveText("script-ran");
+	await pressPlatformShortcut(page, "i");
+
+	await page.getByTestId("search-input").fill("/notes");
+	const file = page.locator('[data-testid="search-row"][data-kind="file"]', {
+		hasText: "notes.txt",
+	});
+	await expect(file).toBeVisible({ timeout: 15_000 });
+	await page.keyboard.press("Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "notes.txt" }),
+	).toBeVisible();
+});
+
+test("host search: a transcript hit jumps to its message and the preview shows the window around it", async ({
+	page,
+}) => {
+	const repo = realpathSync(E2E_FIXTURE_REPO);
+	await openFixtureProject(page);
+	const seeded = seedWorkspaceSession(repo, {
+		name: "Watcher chat",
+		messages: [
+			{ role: "user", text: "first question", timestamp: BASE_TS },
+			{ role: "assistant", text: "first answer", timestamp: BASE_TS + 1 },
+			{ role: "user", text: "where is the quantum banana", timestamp: BASE_TS + 2 },
+			{
+				role: "assistant",
+				text: "The quantum banana lives in the fridge.",
+				timestamp: BASE_TS + 3,
+			},
+		],
+	});
+	try {
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await enterDefaultWorkspace(page);
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("quantum banana");
+		const transcripts = page.locator('[data-testid="search-row"][data-kind="transcript"]');
+		await expect(transcripts).toHaveCount(2, { timeout: 15_000 });
+		await expect(transcripts.first()).toContainText("quantum banana");
+		await expect(transcripts.first().locator("mark").first()).toBeVisible();
+
+		await pressPlatformShortcut(page, "i");
+		await transcripts.first().hover();
+		const preview = page.getByTestId("search-host-preview");
+		await expect(preview).toHaveAttribute("data-state", "transcript");
+		await expect(preview).toContainText("first question");
+		await expect(preview.locator("[data-focus='true']")).toContainText("quantum banana");
+		await pressPlatformShortcut(page, "i");
+
+		await transcripts.first().click();
+		await expect(palette(page)).toBeHidden();
+		const flashed = page.locator("[data-flash]");
+		await expect(flashed).toBeVisible({ timeout: 15_000 });
+		await expect(flashed).toContainText("quantum banana");
+	} finally {
+		rmSync(seeded.path, { force: true });
+	}
+});
+
+test("an older host gets the local scopes only, with a notice, and never a search.query", async ({
+	page,
+}) => {
+	const hostRequests: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		socket.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as { method?: string };
+			if (frame.method?.startsWith("search.")) hostRequests.push(frame.method);
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				channel?: string;
+				data: { protocolVersion: number };
+			};
+			if (frame.channel === WS_CHANNELS.serverWelcome) {
+				frame.data.protocolVersion = SEARCH_PROTOCOL_VERSION - 1;
+				socket.send(JSON.stringify(frame));
+			} else socket.send(message);
+		});
+	});
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openPalette(page);
+	await expect(page.getByTestId("search-notice")).toContainText("doesn't search files");
+	await expect(page.locator('[data-testid="search-chip"][data-scope="files"]')).toHaveCount(0);
+	await page.getByTestId("search-input").fill("/notes");
+	await expect(page.getByTestId("search-input")).toHaveValue("/notes");
+	await expect(page.locator('[data-testid="search-row"][data-kind="file"]')).toHaveCount(0);
+	await page.waitForTimeout(500);
+	expect(hostRequests).toEqual([]);
 });

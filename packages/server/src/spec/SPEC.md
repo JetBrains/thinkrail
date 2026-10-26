@@ -40,9 +40,11 @@ core/SPEC.md), not an async wrapper — that would still block the loop in one p
   glob/parse failure so it can never break `project.open` / `project.list`.
   **`specSnapshot(root) → SpecSnapshotEntry[]`** — the search palette's read: every spec of a repo
   **root** (path, id, title, type, full content) through the same per-root reused `SpecIndex`,
-  memoized for a 5 s TTL so a keystroke never re-walks the tree; `invalidateSpecSnapshot(root)` drops
-  the memo (the host calls it on `workspace.fsChanged`). The walk stays synchronous and bounded by the
-  parse cache; a glob/parse failure degrades to an empty snapshot.
+  memoized for a 5 s TTL so a keystroke never re-walks the tree; a lapsed TTL or
+  `invalidateSpecSnapshot(root)` (the host calls it on `workspace.fsChanged`) keeps the old snapshot
+  answering and rebuilds it on `setImmediate`, so only a root's very first read walks on the request
+  path. The walk stays synchronous and bounded by the parse cache; a glob/parse failure degrades to an
+  empty snapshot.
 - **Public surface (barrel):** `specGraph`, `evictSpecIndex`, `projectHasSpecs`, `specSnapshot`,
   `invalidateSpecSnapshot`, `SpecSnapshotEntry`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (DTOs); **`pi-spec-graph/core`** (the

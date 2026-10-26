@@ -22,6 +22,7 @@ export const FILE_LIST_LIMITS = {
 	walkMaxFiles: 20_000,
 	ttlMs: 60_000,
 	gitTimeoutMs: 15_000,
+	maxRoots: 8,
 } as const;
 
 const WALK_IGNORED = new Set([".git", "node_modules", ".hg", ".svn"]);
@@ -149,15 +150,19 @@ export async function listRootFiles(root: string): Promise<FileList> {
 export class FileListCache {
 	private readonly lists = new Map<string, { at: number; list: IndexedFileList }>();
 	private readonly loading = new Map<string, Promise<IndexedFileList>>();
+	private minRoots = 0;
 
 	constructor(
 		private readonly loader: (root: string) => Promise<FileList> = listRootFiles,
 		private readonly now: () => number = Date.now,
 	) {}
 
+	/** The cached list, stale or fresh; a stale one is served while its reload runs. `null` only before the first load. */
 	peek(root: string): IndexedFileList | null {
 		const cached = this.lists.get(root);
 		if (!cached) return null;
+		this.lists.delete(root);
+		this.lists.set(root, cached);
 		if (this.now() - cached.at > FILE_LIST_LIMITS.ttlMs) void this.load(root);
 		return cached.list;
 	}
@@ -166,24 +171,31 @@ export class FileListCache {
 		const inFlight = this.loading.get(root);
 		if (inFlight) return inFlight;
 		const promise = this.loader(root)
+			.then((list) => indexFileList(list))
+			.catch(() => indexFileList({ paths: [], truncated: false }))
 			.then((list) => {
-				const indexed = indexFileList(list);
-				this.lists.set(root, { at: this.now(), list: indexed });
-				return indexed;
-			})
-			.catch(() => {
-				const list = indexFileList({ paths: [], truncated: false });
+				this.lists.delete(root);
 				this.lists.set(root, { at: this.now(), list });
-				return list;
-			})
-			.finally(() => {
+				while (this.lists.size > Math.max(FILE_LIST_LIMITS.maxRoots, this.minRoots)) {
+					const oldest = this.lists.keys().next().value;
+					if (oldest === undefined) break;
+					this.lists.delete(oldest);
+				}
 				this.loading.delete(root);
+				return list;
 			});
 		this.loading.set(root, promise);
 		return promise;
 	}
 
+	/** A query over `count` roots must be able to hold all of them, however small the cap. */
+	retain(count: number): void {
+		this.minRoots = count;
+	}
+
+	/** Marks a root stale: the old list keeps answering until the reload lands. */
 	invalidate(root: string): void {
-		this.lists.delete(root);
+		const cached = this.lists.get(root);
+		if (cached) this.lists.set(root, { at: Number.NEGATIVE_INFINITY, list: cached.list });
 	}
 }
