@@ -5,12 +5,7 @@ import {
 	RiHome4Line,
 	RiLoader4Line,
 } from "@remixicon/react";
-import {
-	type BranchReviewState,
-	isSessionWorking,
-	type SessionStateRecord,
-	type Workspace,
-} from "@thinkrail/contracts";
+import type { BranchReviewState, Workspace } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import {
@@ -19,11 +14,10 @@ import {
 	type SessionAttention,
 	type SwitcherSession,
 	selectKnownChatTitle,
-	selectWorkspaceSettledReason,
 	type useAppStore,
 	workspaceName,
 } from "../store";
-import type { PaletteItem, WorkState } from "./model";
+import type { PaletteItem } from "./model";
 
 type AppState = ReturnType<typeof useAppStore.getState>;
 
@@ -35,9 +29,6 @@ export type WorkItemsState = Pick<
 	| "layoutDocumentsByWorkspace"
 	| "closedChatsByWorkspace"
 	| "activeWorkspaceId"
-	| "activeWorkspaceLiveLatch"
-	| "workspaceSettlingSupported"
-	| "settleIdleDays"
 >;
 
 export interface WorkItemsInput {
@@ -45,7 +36,6 @@ export interface WorkItemsInput {
 	state: WorkItemsState;
 	contextProjectId: string | null;
 	chatTitles: Readonly<Record<string, string>>;
-	nowMs: number;
 	navigateToProject: (projectId: string) => void;
 	navigateToWorkspace: (workspace: Pick<Workspace, "id" | "projectId">, sessionId?: string) => void;
 }
@@ -59,15 +49,6 @@ const ATTENTION_RANK: Record<SessionAttention, number> = {
 	unread: 2,
 	running: 3,
 };
-
-function sessionStates(state: SessionStateRecord["state"]): WorkState[] {
-	const states: WorkState[] = [];
-	if (state.needsInput !== null) states.push("waiting");
-	if (state.completion?.outcome === "failed") states.push("error");
-	if (state.completionUnread) states.push("unread");
-	if (isSessionWorking(state)) states.push("running");
-	return states;
-}
 
 function strongest(
 	current: SessionAttention | undefined,
@@ -129,16 +110,12 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 		}
 	}
 	const attentionByWorkspace = new Map<string, SessionAttention>();
-	const statesByWorkspace = new Map<string, Set<WorkState>>();
 	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
 		const workspace = workspaceById.get(workspaceId);
 		let attention: SessionAttention | undefined;
-		const workspaceStates = new Set<WorkState>();
 		for (const record of Object.values(records)) {
 			const recordAttention = getSessionAttention(record.state);
 			attention = strongest(attention, recordAttention);
-			const states = sessionStates(record.state);
-			for (const value of states) workspaceStates.add(value);
 			const knownTitle =
 				selectKnownChatTitle(state, workspaceId, record.sessionId) ||
 				input.chatTitles[record.sessionId];
@@ -162,7 +139,6 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 				icon: recordAttention === "running" ? RiLoader4Line : RiChat2Line,
 				running: recordAttention === "running",
 				...(recordAttention ? { attention: recordAttention } : {}),
-				states,
 				projectId: record.projectId,
 				workspaceId,
 				sessionId: record.sessionId,
@@ -182,13 +158,10 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			});
 		}
 		if (attention) attentionByWorkspace.set(workspaceId, attention);
-		statesByWorkspace.set(workspaceId, workspaceStates);
 	}
 	for (const workspace of workspaceById.values()) {
 		const projectName = projectNames.get(workspace.projectId) ?? "";
-		const settled = selectWorkspaceSettledReason(state, workspace, input.nowMs) !== null;
 		const review = workspace.review;
-		const prOpen = review !== undefined && (review.state === undefined || review.state === "open");
 		const attention = attentionByWorkspace.get(workspace.id);
 		const isDefault = isDefaultWorkspace(workspace);
 		const name = workspaceName(t, workspace);
@@ -205,10 +178,7 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			scope: "work",
 			icon: isDefault ? RiHome4Line : RiGitBranchLine,
 			...(attention ? { attention } : {}),
-			states: [...(statesByWorkspace.get(workspace.id) ?? [])],
 			...(reviewRef ? { badge: reviewRef } : {}),
-			settled,
-			hasPr: prOpen,
 			projectId: workspace.projectId,
 			workspaceId: workspace.id,
 			contextBoost: contextBoost(workspace.projectId, workspace.id, input),
@@ -230,7 +200,6 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 					...(attention
 						? ([[t("search.preview.state"), attentionLabel(t, attention)]] as const)
 						: []),
-					...(settled ? ([[t("search.preview.shelf"), t("search.preview.settled")]] as const) : []),
 				],
 			}),
 		});

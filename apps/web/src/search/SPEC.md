@@ -11,21 +11,22 @@ tags: [ui, search, public-surface-checked]
 
 ## Responsibility
 
-The universal entry point: one palette that finds chats, workspaces and projects, runs commands, and
-manages settings, opened with `Mod+K`, double Shift, or the topbar search button. It owns the
-presentation, the query grammar, ranking and learning, and the store-derived work items; the command
-catalog, settings pages and their handlers are composed and injected by `shell`.
+The one finder: a palette that finds chats, workspaces and projects, runs commands and opens Settings
+sections, opened with `Mod+K`, double Shift, or the topbar search button. It owns the presentation,
+the query grammar, ranking and learning, and the store-derived work items; the command catalog and its
+handlers are composed and injected by `shell`. It finds and jumps — it never mutates a setting in
+place (every setting row opens its Settings section), and every verb runs through the command it was
+listed as.
 
 ## Boundary
 
 - **Public surface:** `SearchPalette`, `SearchPaletteProps`, `SearchSettings`, `initSearchPreferences`,
   `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`, `WorkItemsState`, `commandItems`,
-  `SearchScope`, `PalettePage`, `PalettePageSection`, `PaletteItem`, `PaletteItemKind`, `PaletteAction`,
-  `PalettePreview`, `PaletteToggle`.
+  `SearchScope`, `PaletteItem`, `PaletteItemKind`, `PalettePreview`.
 - **Allowed deps:** `contracts` (the shared matcher and domain types), `commands`, `store`, `transport`
   (the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`,
   `lib`, `@thinkrail/ui/*`, `@remixicon/react`.
-- **Forbidden:** importing `panels`, `chat` or `shell` (shell injects commands, pages and actions);
+- **Forbidden:** importing `panels`, `chat` or `shell` (shell injects the commands and their handlers);
   owning a chord another module binds; sending host mutations itself outside the injected handlers and
   the store's navigation actions.
 
@@ -33,11 +34,10 @@ catalog, settings pages and their handlers are composed and injected by `shell`.
 
 A leading prefix selects a scope and its chip, and a chip writes the prefix back: `@` work (projects,
 workspaces, chats), `>` commands and settings; `/` files and `#` specs join with host search. `#<digits>`
-is a pull-request lookup, never the specs scope. `is:waiting|error|unread|running|settled` and `has:pr`
-filter work items anywhere in the query (`is:settled` is the workspace shelf rule, `has:pr` an open
-review); a bare `is:` lists the filters. Quoted text is one contiguous literal term, escapes a prefix, and is
-never read as a filter (`"is:running"` searches for that text).
-Terms AND-combine through the shared matcher in [[module-contracts]].
+is a pull-request number, never the specs scope — it matches the `#N` keyword of the workspace that
+carries that review. Quoted text is one contiguous literal term and escapes a prefix. Terms AND-combine
+through the shared matcher in [[module-contracts]]. There is no filter grammar: triage happens through
+the empty state's grouping and the status dots every row carries.
 
 ## Ranking
 
@@ -54,13 +54,12 @@ project), **Recent** (by frecency), and **Actions**.
 
 DOM focus stays in the input (WAI-ARIA combobox + listbox with `aria-activedescendant` and a polite
 result count; chips and footer buttons are not tabbable, and Tab is always consumed). ↑/↓ select, ↵
-runs the row (a toggle flips in place and the palette stays open; a page row pushes its page),
-Tab/Shift+Tab and `Alt+1…n` change scope at the root (a chip writes its prefix into the query, so the
-prefix is the one source of scope), `Mod+I` toggles the preview pane,
-`Mod+K` opens the selected row's searchable action panel, Backspace on an empty page query pops it.
-Escape closes the action panel, then pops a page, then clears, then closes; an untrusted (synthetic)
-Escape — the desktop close-item command — closes outright. `Ctrl+R` is swallowed while the palette is
-open. Mutating rows are disabled while offline or before the current welcome.
+opens or runs the row and closes the palette, Tab/Shift+Tab and `Alt+1…n` change scope (a chip writes
+its prefix into the query, so the prefix is the one source of scope), `Mod+I` toggles the preview pane,
+`Mod+K` closes the palette (the chord that opened it). Escape clears the query, then closes; an
+untrusted (synthetic) Escape — the desktop close-item command — closes outright. `Ctrl+R` is swallowed
+while the palette is open. Mutating rows are disabled while offline or before the current welcome.
+The palette has one level: no pages, no per-row action panel — a row is a destination or a command.
 
 ## Preferences
 

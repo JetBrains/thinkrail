@@ -4,7 +4,7 @@ import { currentTranslator } from "@thinkrail/locales/react";
 import { EMPTY_LEARNING, recordPick } from "./learning";
 import type { PaletteItem } from "./model";
 import { parseSearchQuery } from "./query";
-import { buildSections, flattenRows, type PalettePage } from "./sections";
+import { buildSections, flattenRows } from "./sections";
 
 const chat = (id: string, title: string, extra: Partial<PaletteItem> = {}): PaletteItem => ({
 	id: `chat:${id}`,
@@ -34,11 +34,11 @@ const command = (id: string, title: string): PaletteItem => ({
 });
 
 const rootItems = [
-	chat("a", "Fix auth token refresh", { attention: "needs-input", states: ["waiting"] }),
-	chat("b", "Auth flow follow-ups", { attention: "unread", states: ["error", "unread"] }),
-	chat("c", "Billing redesign", { attention: "running", states: ["running", "error"] }),
-	workspace("w1", "Fix Auth Refresh", { hasPr: true, states: ["waiting", "error", "unread"] }),
-	workspace("w2", "Old experiment", { settled: true }),
+	chat("a", "Fix auth token refresh", { attention: "needs-input" }),
+	chat("b", "Auth flow follow-ups", { attention: "unread" }),
+	chat("c", "Billing redesign", { attention: "running" }),
+	workspace("w1", "Fix Auth Refresh"),
+	workspace("w2", "Old experiment"),
 	command("new", "New workspace…"),
 	command("theme", "Change theme…"),
 	...Array.from({ length: 6 }, (_, index) => chat(`x${index}`, `Auth note ${index}`)),
@@ -48,7 +48,6 @@ function sections(raw: string, extra: Partial<Parameters<typeof buildSections>[0
 	return buildSections({
 		t: currentTranslator(),
 		parsed: parseSearchQuery(raw),
-		page: null,
 		rootItems,
 		waiting: [rootItems[0] as PaletteItem],
 		actions: [rootItems[5] as PaletteItem],
@@ -85,25 +84,6 @@ describe("buildSections", () => {
 		expect(flattenRows(result)).toHaveLength(2);
 	});
 
-	test("a partial filter suggests filters with counts", () => {
-		const [filters] = sections("is:");
-		expect(filters?.id).toBe("filters");
-		expect(filters?.items.find((row) => row.item.title === "is:waiting")?.item.meta).toBe("2");
-	});
-
-	test("state filters narrow work items and combine with text", () => {
-		expect(flattenRows(sections("is:running")).map((row) => row.item.id)).toEqual(["chat:c"]);
-		expect(
-			flattenRows(sections("is:error"))
-				.map((row) => row.item.id)
-				.sort(),
-		).toEqual(["chat:b", "chat:c", "workspace:w1"]);
-		expect(flattenRows(sections("is:settled")).map((row) => row.item.id)).toEqual(["workspace:w2"]);
-		expect(flattenRows(sections("has:pr auth")).map((row) => row.item.id)).toEqual([
-			"workspace:w1",
-		]);
-	});
-
 	test("text groups by kind, caps All at four rows with a more row, and skips an unclear top hit", () => {
 		const result = sections("auth");
 		expect(result[0]?.id).not.toBe("top");
@@ -137,21 +117,5 @@ describe("buildSections", () => {
 		});
 		const expanded = sections("@", { rootItems: many, expanded: new Set(["chats"]) });
 		expect(expanded.find((section) => section.id === "chats")?.items).toHaveLength(35);
-	});
-
-	test("pages rank within their own sections", () => {
-		const page: PalettePage = {
-			id: "theme",
-			crumb: ["Theme"],
-			placeholder: "",
-			sections: () => [
-				{ title: "Themes", items: [command("dark", "Dark"), command("light", "Light")] },
-			],
-		};
-		expect(flattenRows(sections("", { page })).map((row) => row.item.title)).toEqual([
-			"Dark",
-			"Light",
-		]);
-		expect(flattenRows(sections("lig", { page })).map((row) => row.item.title)).toEqual(["Light"]);
 	});
 });

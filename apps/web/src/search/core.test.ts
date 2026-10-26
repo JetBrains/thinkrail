@@ -30,26 +30,12 @@ describe("parseSearchQuery", () => {
 		expect(parseSearchQuery("auth")).toMatchObject({ scope: "all", text: "auth" });
 	});
 
-	test("state filters are extracted and partial ones are reported", () => {
-		expect(parseSearchQuery("is:waiting auth")).toMatchObject({
-			filters: ["is:waiting"],
-			terms: ["auth"],
-		});
-		expect(parseSearchQuery("is:").partialFilter).toBe("is:");
-		expect(parseSearchQuery("IS:Error has:pr").filters).toEqual(["is:error", "has:pr"]);
-	});
-
-	test("#digits is a PR lookup, #text is the specs scope, quotes escape prefixes", () => {
-		expect(parseSearchQuery("#812")).toMatchObject({
-			prNumber: "812",
-			scope: "all",
-			terms: ["#812"],
-		});
+	test("#digits is a pull-request number, #text is the specs scope, quotes escape prefixes", () => {
+		expect(parseSearchQuery("#812")).toMatchObject({ scope: "all", terms: ["#812"] });
 		expect(parseSearchQuery("#shell")).toMatchObject({ scope: "specs", text: "shell" });
 		expect(parseSearchQuery('"@team"')).toMatchObject({ scope: "all", terms: ["@team"] });
-		expect(parseSearchQuery('"Document is:running filter" is:unread')).toMatchObject({
-			terms: ["Document is:running filter"],
-			filters: ["is:unread"],
+		expect(parseSearchQuery('"is:running filter" unread')).toMatchObject({
+			terms: ["is:running filter", "unread"],
 		});
 	});
 

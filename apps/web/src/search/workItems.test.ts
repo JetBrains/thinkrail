@@ -49,9 +49,6 @@ function state(records: SessionStateRecord[], extra: Partial<WorkItemsState> = {
 		layoutDocumentsByWorkspace: {},
 		closedChatsByWorkspace: {},
 		activeWorkspaceId: null,
-		activeWorkspaceLiveLatch: false,
-		workspaceSettlingSupported: false,
-		settleIdleDays: null,
 		...extra,
 	};
 }
@@ -62,7 +59,6 @@ function items(records: SessionStateRecord[], chatTitles: Record<string, string>
 		state: state(records),
 		contextProjectId: null,
 		chatTitles,
-		nowMs: 0,
 		navigateToProject: () => {},
 		navigateToWorkspace: () => {},
 	});
@@ -74,14 +70,12 @@ const failedRead = record("s-failed", {
 const waiting = record("s-waiting", { needsInput: { inputKind: "ask_user_question" } });
 
 describe("buildWorkItems", () => {
-	test("a read failure still matches is:error, and a workspace carries every chat's states", () => {
+	test("a read failure is listed by title without attention, and a workspace carries its strongest chat attention", () => {
 		const result = items([failedRead, waiting], { "s-failed": "Broken build" });
 		const failedChat = result.find((item) => item.id === "chat:s-failed");
+		expect(failedChat?.title).toBe("Broken build");
 		expect(failedChat?.attention).toBeUndefined();
-		expect(failedChat?.states).toEqual(["error"]);
-		const row = result.find((item) => item.id === "workspace:w1");
-		expect(row?.attention).toBe("needs-input");
-		expect([...(row?.states ?? [])].sort()).toEqual(["error", "waiting"]);
+		expect(result.find((item) => item.id === "workspace:w1")?.attention).toBe("needs-input");
 	});
 
 	test("an idle chat is listed only once its title is known", () => {

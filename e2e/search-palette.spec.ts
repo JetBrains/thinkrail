@@ -1,6 +1,4 @@
-import { realpathSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { realpathSync, rmSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
@@ -9,15 +7,10 @@ import {
 	openFixtureProject,
 	pressPlatformShortcut,
 } from "./fixtures/app";
-import { resolveBunExecutable } from "./fixtures/executables";
-import { E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./fixtures/paths";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_704_000_000_000;
-const STDIO_SERVER = fileURLToPath(
-	new URL("../packages/server/src/agent/mcp/fixtures/stdioServer.ts", import.meta.url),
-);
-const USER_MCP_CONFIG = join(E2E_PI_AGENT_DIR, "mcp.json");
 const askArgs: AskUserQuestionArgs = {
 	questions: [
 		{
@@ -156,21 +149,19 @@ test("commands run from the palette and show their shortcut", async ({ page }) =
 	await expect(bottom).toHaveCount(before === 0 ? 1 : 0);
 });
 
-test("the Settings page opens a section, and Backspace on an empty query goes back", async ({
+test("a Settings section row opens that section, and Mod+K inside the palette closes it", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
 	await openPalette(page);
-	await page.getByTestId("search-input").fill("open settings");
-	await page.keyboard.press("Enter");
-	await expect(page.getByTestId("search-crumb")).toHaveText("Settings");
+	await pressPlatformShortcut(page, "k");
+	await expect(palette(page)).toBeHidden();
 
-	await page.keyboard.press("Backspace");
-	await expect(page.getByTestId("search-crumb")).toHaveCount(0);
-
-	await page.getByTestId("search-input").fill("open settings");
-	await page.keyboard.press("Enter");
-	await page.getByTestId("search-input").fill("appearance");
+	await openPalette(page);
+	await page.getByTestId("search-input").fill(">appearance");
+	await expect(
+		page.locator('[data-testid="search-row"][data-item-id="setting:appearance"]'),
+	).toBeVisible();
 	await page.keyboard.press("Enter");
 	await expect(palette(page)).toBeHidden();
 	await expect(page.getByTestId("settings-dialog")).toBeVisible();
@@ -206,85 +197,20 @@ test("double Shift toggles the palette and can be turned off in Settings › Key
 	await expect(palette(page)).toBeHidden();
 });
 
-test("the Extensions page flips a host-backed switch in place and the switch survives a reload", async ({
+test("the double-Shift row opens Settings › Keyboard, and Ctrl+R stays inert under the palette", async ({
 	page,
 }) => {
-	await openFixtureProject(page);
-	const row = page.locator('[data-testid="search-row"][data-item-id="extension:visualize"]');
-	const openPage = async () => {
-		await openPalette(page);
-		await page.getByTestId("search-input").fill(">extensions");
-		await page
-			.locator('[data-testid="search-row"][data-item-id="command:settings.extensions"]')
-			.click();
-		await expect(page.getByTestId("search-crumb")).toContainText("Extensions");
-		await expect(row).toBeVisible();
-	};
-	try {
-		await openPage();
-		await expect(row.getByTestId("search-toggle")).toHaveAttribute("data-on", "true");
-		await row.click();
-		await expect(row.getByTestId("search-toggle")).toHaveAttribute("data-on", "false");
-		await expect(palette(page)).toBeVisible();
-		await page.keyboard.press("Escape");
-		await page.keyboard.press("Escape");
-		await expect(palette(page)).toBeHidden();
-
-		await page.reload();
-		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-		await openPage();
-		await expect(row.getByTestId("search-toggle")).toHaveAttribute("data-on", "false");
-	} finally {
-		if ((await row.getByTestId("search-toggle").getAttribute("data-on")) === "false") {
-			await row.click();
-			await expect(row.getByTestId("search-toggle")).toHaveAttribute("data-on", "true");
-		}
-	}
-});
-
-test("the MCP page lists the workspace's servers with their state and switches one off in place", async ({
-	page,
-}) => {
-	rmSync(USER_MCP_CONFIG, { force: true });
-	writeFileSync(
-		USER_MCP_CONFIG,
-		JSON.stringify({
-			mcpServers: { fixture: { command: resolveBunExecutable(), args: [STDIO_SERVER] } },
-		}),
-	);
-	try {
-		await openFixtureProject(page);
-		await enterDefaultWorkspace(page);
-		await openPalette(page);
-		await page.getByTestId("search-input").fill(">mcp");
-		await page.locator('[data-testid="search-row"][data-item-id="command:settings.mcp"]').click();
-		await expect(page.getByTestId("search-crumb")).toContainText("MCP servers");
-		const row = page.locator('[data-testid="search-row"][data-item-id="mcp:user:fixture"]');
-		await expect(row).toContainText("Personal");
-		await expect(row.getByTestId("search-toggle")).toHaveAttribute("data-on", "true");
-		await row.click();
-		await expect(row.getByTestId("search-toggle")).toHaveAttribute("data-on", "false", {
-			timeout: 15_000,
-		});
-		await expect(palette(page)).toBeVisible();
-		await expect(row).toContainText("Disabled");
-	} finally {
-		rmSync(USER_MCP_CONFIG, { force: true });
-	}
-});
-
-test("inline toggles keep the palette open and Ctrl+R stays inert under it", async ({ page }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
 	await openPalette(page);
-	await page.getByTestId("search-input").fill("double shift");
-	const row = page.locator('[data-testid="search-row"][data-item-id="setting:double-shift"]');
-	await expect(row.getByTestId("search-toggle")).toHaveAttribute("data-on", "true");
-	await page.keyboard.press("Enter");
-	await expect(row.getByTestId("search-toggle")).toHaveAttribute("data-on", "false");
-	await expect(palette(page)).toBeVisible();
-
 	await page.keyboard.press("Control+r");
 	await expect(palette(page)).toBeVisible();
 	await expect(page.getByTestId("history-overlay")).toHaveCount(0);
+
+	await page.getByTestId("search-input").fill("double shift");
+	await page.locator('[data-testid="search-row"][data-item-id="setting:double-shift"]').click();
+	await expect(palette(page)).toBeHidden();
+	await expect(page.getByTestId("settings-dialog")).toBeVisible();
+	await expect(page.getByTestId("settings-nav-keyboard")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("settings-double-shift")).toBeVisible();
 });

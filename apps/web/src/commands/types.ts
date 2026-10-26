@@ -34,7 +34,6 @@ export interface Command {
 	readonly keywords?: readonly string[];
 	readonly shortcut?: CommandShortcut;
 	readonly mutates?: boolean;
-	readonly page?: string;
 	readonly when?: (context: CommandContext) => boolean;
-	readonly run?: (context: CommandContext) => void;
+	readonly run: (context: CommandContext) => void;
 }

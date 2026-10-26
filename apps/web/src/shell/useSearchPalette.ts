@@ -1,19 +1,15 @@
 import {
-	RiAddLine,
 	RiExternalLinkLine,
 	RiFileCopyLine,
-	RiFolderOpenLine,
 	RiHome4Line,
 	RiTerminalBoxLine,
 } from "@remixicon/react";
-import type { ExtensionCatalogEntry, Workspace } from "@thinkrail/contracts";
-import { t as globalT, type Translator, useT } from "@thinkrail/locales/react";
+import type { Workspace } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import type { Command, CommandContext } from "../commands";
 import { copyText } from "../lib";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
-import { setExtensionEnabled } from "../panels/ExtensionsSettings";
-import { setMcpServerEnabled } from "../panels/McpSettings";
 import { startChatInTab } from "../panels/openChat";
 import { settingsNavGroups } from "../panels/settingsNav";
 import {
@@ -30,15 +26,12 @@ import {
 import {
 	buildWorkItems,
 	commandItems,
-	type PaletteAction,
 	type PaletteItem,
 	type SearchPaletteProps,
 	type SearchScope,
 	waitingItems,
 } from "../search";
 import {
-	deriveMcpServerRows,
-	SettingsSection,
 	selectActiveWorkspace,
 	selectContextProject,
 	selectHistoryTarget,
@@ -47,14 +40,11 @@ import {
 	selectWorkspaceReadAction,
 	selectWorkspaceSettledReason,
 	supportsWorkspaceReadState,
-	toast,
 	useAppStore,
 } from "../store";
-import { getThemes } from "../themes";
-import { errorText, getTransport, requestMcpList } from "../transport";
+import { getTransport } from "../transport";
 import {
 	buildCommands,
-	buildPages,
 	buildSettingsItems,
 	emptyStateActionIds,
 	type PaletteTool,
@@ -143,26 +133,6 @@ function useChatTitleBackfill(): Record<string, string> {
 	return titles;
 }
 
-function useExtensionCatalog(enabled: boolean): ExtensionCatalogEntry[] | null {
-	const [entries, setEntries] = useState<ExtensionCatalogEntry[] | null>(null);
-	useEffect(() => {
-		if (!enabled) return;
-		let current = true;
-		void getTransport()
-			.request("extension.list", {})
-			.then((catalog) => {
-				if (current) setEntries(catalog);
-			})
-			.catch(() => {
-				if (current) setEntries([]);
-			});
-		return () => {
-			current = false;
-		};
-	}, [enabled]);
-	return entries;
-}
-
 export interface SearchPaletteOptions {
 	readonly openNewWorkspace: (projectId: string) => void;
 	readonly toggleProjectsHome: () => void;
@@ -181,23 +151,9 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const layoutDocumentsByWorkspace = useAppStore((s) => s.layoutDocumentsByWorkspace);
 	const closedChatsByWorkspace = useAppStore((s) => s.closedChatsByWorkspace);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
-	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
-	const workspaceSettlingSupported = useAppStore((s) => s.workspaceSettlingSupported);
-	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
 	const historySessionId = useAppStore((s) => selectHistoryTarget(s)?.sessionId ?? null);
-	const theme = useAppStore((s) => s.theme);
-	const disabledExtensions = useAppStore((s) => s.disabledExtensions);
-	const doubleShift = useAppStore((s) => s.doubleShiftSearch);
-	const mcpProjection = useAppStore((s) =>
-		activeWorkspaceId ? s.mcpByWorkspace[activeWorkspaceId] : undefined,
-	);
-	const projectTrusted = useAppStore(
-		(s) =>
-			s.projects.find((project) => project.id === selectActiveWorkspace(s)?.projectId)
-				?.piResourceTrust === "granted",
-	);
 	const readAction = useAppStore((s) =>
 		activeWorkspaceId && supportsWorkspaceReadState(s.protocolVersion)
 			? selectWorkspaceReadAction(s, activeWorkspaceId)
@@ -212,18 +168,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		() => settingsNavGroups(protocolVersion, options.hasUpdateSettings),
 		[protocolVersion, options.hasUpdateSettings],
 	);
-	const availableSections = useMemo(
-		() => new Set(settingsGroups.flatMap((group) => group.sections.map((section) => section.id))),
-		[settingsGroups],
-	);
-	const extensions = useExtensionCatalog(availableSections.has(SettingsSection.Extensions));
 	const editors = useEditors();
-	const [nowMs] = useState(Date.now);
-	const mcpAvailable = availableSections.has(SettingsSection.Mcp);
-	useEffect(() => {
-		if (!activeWorkspaceId || !mcpAvailable) return;
-		void requestMcpList("mcp.list", { workspaceId: activeWorkspaceId }).catch(() => {});
-	}, [activeWorkspaceId, mcpAvailable]);
 
 	const online = status === "connected" && welcomeGeneration > 0 && protocolVersion !== null;
 	const context: CommandContext = useMemo(
@@ -247,18 +192,6 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			canSettle: activeWorkspace !== null && canSettleWorkspace(protocolVersion, activeWorkspace),
 			settled,
 			settingsGroups,
-			availableSections,
-			themes: getThemes(),
-			theme,
-			extensions,
-			disabledExtensions,
-			mcpRows: mcpProjection
-				? deriveMcpServerRows(mcpProjection, nowMs).filter(
-						(row) => projectTrusted || row.summary.scope !== "project",
-					)
-				: null,
-			nowMs,
-			doubleShift,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
 				openProject: () => void options.pickAndOpenProject(),
@@ -286,26 +219,6 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				reveal: revealWorkspace,
 				openSettings: (section?: Parameters<ReturnType<typeof store>["openSettings"]>[0]) =>
 					store().openSettings(section),
-				setTheme: (id: string) => {
-					void getTransport()
-						.request("settings.update", { config: { theme: id, themeMode: "fixed" } })
-						.catch((err: unknown) =>
-							toast.error(errorText(err, globalT("commands.settings.themeFailed"))),
-						);
-				},
-				setExtensionEnabled: (name: string, enabled: boolean) => {
-					void setExtensionEnabled(name, enabled).catch(() =>
-						toast.error(globalT("commands.settings.extensionFailed")),
-					);
-				},
-				setMcpEnabled: (row: Parameters<typeof setMcpServerEnabled>[1], enabled: boolean) => {
-					const workspaceId = store().activeWorkspaceId;
-					if (!workspaceId) return;
-					void setMcpServerEnabled(workspaceId, row, enabled).catch((err: unknown) =>
-						toast.error(errorText(err, globalT("commands.settings.mcpFailed"))),
-					);
-				},
-				setDoubleShift: (enabled: boolean) => store().setDoubleShiftSearch(enabled),
 			},
 		};
 		const commands: Command[] = [
@@ -363,16 +276,12 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				layoutDocumentsByWorkspace,
 				closedChatsByWorkspace,
 				activeWorkspaceId,
-				activeWorkspaceLiveLatch,
-				workspaceSettlingSupported,
-				settleIdleDays,
 			},
 			contextProjectId: contextProject?.id ?? null,
 			chatTitles,
-			nowMs,
 			navigateToProject: goToProjectHome,
 			navigateToWorkspace,
-		}).map((item) => withActions(t, item, deps.actions.newWorkspace));
+		});
 		const rootItems: PaletteItem[] = [
 			...commandItems(t, commands, context),
 			...buildSettingsItems(deps),
@@ -393,29 +302,16 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		const actions = emptyStateActionIds()
 			.map((id) => byId.get(id))
 			.filter((item): item is PaletteItem => item !== undefined);
-		return {
-			rootItems,
-			waiting,
-			actions,
-			pages: buildPages(deps),
-		};
+		return { rootItems, waiting, actions };
 	}, [
 		t,
 		context,
 		settingsGroups,
-		availableSections,
 		activeWorkspace,
 		historySessionId,
 		readAction,
 		protocolVersion,
 		settled,
-		theme,
-		extensions,
-		disabledExtensions,
-		mcpProjection,
-		projectTrusted,
-		nowMs,
-		doubleShift,
 		options,
 		contextProject,
 		editors,
@@ -425,9 +321,6 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		closedChatsByWorkspace,
 		layoutDocumentsByWorkspace,
 		activeWorkspaceId,
-		activeWorkspaceLiveLatch,
-		workspaceSettlingSupported,
-		settleIdleDays,
 		chatTitles,
 	]);
 
@@ -437,49 +330,4 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		...(online ? {} : { notice: t("search.palette.offline") }),
 		...binding,
 	};
-}
-
-function withActions(
-	t: Translator,
-	item: PaletteItem,
-	newWorkspace: (projectId: string) => void,
-): PaletteItem {
-	if (item.kind === "project" && item.projectId) {
-		const projectId = item.projectId;
-		const actions: readonly PaletteAction[] = [
-			{
-				id: "open",
-				title: t("commands.rowActions.openProjectHome"),
-				icon: RiFolderOpenLine,
-				run: () => item.run?.(),
-			},
-			{
-				id: "new-workspace",
-				title: t("commands.rowActions.newWorkspace"),
-				icon: RiAddLine,
-				shortcut: { key: "N", mod: true },
-				run: () => newWorkspace(projectId),
-			},
-		];
-		return { ...item, actions: () => actions };
-	}
-	if (item.kind === "workspace" && item.workspaceId && item.projectId) {
-		const workspace = { id: item.workspaceId, projectId: item.projectId };
-		const actions: readonly PaletteAction[] = [
-			{
-				id: "open",
-				title: t("commands.rowActions.openWorkspace"),
-				icon: RiFolderOpenLine,
-				run: () => item.run?.(),
-			},
-			{
-				id: "new-workspace",
-				title: t("commands.rowActions.newWorkspaceInProject"),
-				icon: RiAddLine,
-				run: () => newWorkspace(workspace.projectId),
-			},
-		];
-		return { ...item, actions: () => actions };
-	}
-	return item;
 }

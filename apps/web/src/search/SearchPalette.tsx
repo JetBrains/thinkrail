@@ -1,11 +1,4 @@
-import {
-	RiArrowRightSLine,
-	RiCornerDownLeftLine,
-	RiFilter3Line,
-	RiSearchLine,
-	RiSideBarLine,
-	RiWifiOffLine,
-} from "@remixicon/react";
+import { RiCornerDownLeftLine, RiSearchLine, RiSideBarLine, RiWifiOffLine } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
@@ -25,17 +18,16 @@ import { AttentionDot } from "../components/AttentionDot";
 import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier } from "../lib";
 import { recordPick } from "./learning";
-import type { PaletteAction, PaletteItem, PaletteRow, PaletteSection } from "./model";
+import type { PaletteItem, PaletteRow, PaletteSection } from "./model";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
 import {
 	parseSearchQuery,
 	SCOPE_PREFIX,
 	type SearchScope,
-	type StateFilter,
 	stripScopePrefix,
 	withScopePrefix,
 } from "./query";
-import { buildSections, flattenRows, type PalettePage } from "./sections";
+import { buildSections, flattenRows } from "./sections";
 
 const SCOPE_LABELS: Record<SearchScope, MessageKey> = {
 	all: "search.scope.all",
@@ -50,7 +42,6 @@ export interface SearchPaletteProps {
 	readonly rootItems: readonly PaletteItem[];
 	readonly waiting: readonly PaletteItem[];
 	readonly actions: readonly PaletteItem[];
-	readonly pages: Readonly<Record<string, PalettePage>>;
 	readonly scopes: readonly SearchScope[];
 	readonly notice?: string;
 }
@@ -82,37 +73,24 @@ export function SearchPalette(props: SearchPaletteProps) {
 	);
 }
 
-interface ActionPanelState {
-	readonly rowId: string;
-	readonly title: string;
-	readonly actions: readonly PaletteAction[];
-	readonly query: string;
-	readonly index: number;
-}
-
 function PaletteBody({
 	onClose,
 	rootItems,
 	waiting,
 	actions: emptyActions,
-	pages,
 	scopes,
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
 	const [query, setQuery] = useState("");
-	const [stack, setStack] = useState<readonly string[]>([]);
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_GROUPS);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
-	const [panel, setPanel] = useState<ActionPanelState | null>(null);
 	const [previewOpen, setPreviewOpen] = useState(readPreviewOpen);
 	const [learning, setLearning] = useState(readLearning);
 	const [nowMs] = useState(Date.now);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const listRef = useRef<HTMLDivElement>(null);
 
-	const pageId = stack[stack.length - 1] ?? null;
-	const page = pageId ? (pages[pageId] ?? null) : null;
 	const parsed = useMemo(() => {
 		const result = parseSearchQuery(query);
 		return scopes.includes(result.scope) ? result : parseSearchQuery(stripScopePrefix(query));
@@ -121,8 +99,7 @@ function PaletteBody({
 		() =>
 			buildSections({
 				t,
-				parsed: page ? parseSearchQuery(query) : parsed,
-				page,
+				parsed,
 				rootItems,
 				waiting,
 				actions: emptyActions,
@@ -130,7 +107,7 @@ function PaletteBody({
 				learning,
 				nowMs,
 			}),
-		[t, page, parsed, query, rootItems, waiting, emptyActions, expanded, learning, nowMs],
+		[t, parsed, rootItems, waiting, emptyActions, expanded, learning, nowMs],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
 	const selectedIndex = Math.max(
@@ -164,18 +141,6 @@ function PaletteBody({
 		resetQuery(withScopePrefix(stripScopePrefix(query), scope));
 	};
 
-	const pushPage = (id: string) => {
-		setStack((current) => [...current, id]);
-		setExpanded(NO_GROUPS);
-		resetQuery("");
-	};
-
-	const popPage = () => {
-		setStack((current) => current.slice(0, -1));
-		setExpanded(NO_GROUPS);
-		resetQuery("");
-	};
-
 	const remember = (item: PaletteItem) => {
 		const next = recordPick(learning, query, item.id, Date.now());
 		setLearning(next);
@@ -196,50 +161,11 @@ function PaletteBody({
 			setSelectedId(more.nextId);
 			return;
 		}
-		if (item.fillQuery !== undefined) {
-			resetQuery(item.fillQuery);
-			return;
-		}
-		if (item.toggle) {
-			item.toggle.set(!item.toggle.on);
-			return;
-		}
-		if (item.page && pages[item.page]) {
-			remember(item);
-			pushPage(item.page);
-			return;
-		}
 		if (item.run) {
 			remember(item);
 			onClose();
 			item.run();
 		}
-	};
-
-	const openPanel = () => {
-		if (!selected?.item.actions) return;
-		const list = selected.item.actions();
-		if (list.length === 0) return;
-		setPanel({
-			rowId: selected.item.id,
-			title: selected.item.title,
-			actions: list,
-			query: "",
-			index: 0,
-		});
-	};
-
-	const panelActions = panel
-		? panel.actions.filter((action) =>
-				action.title.toLowerCase().includes(panel.query.trim().toLowerCase()),
-			)
-		: [];
-
-	const runAction = (action: PaletteAction | undefined) => {
-		if (!action || action.disabledReason) return;
-		setPanel(null);
-		onClose();
-		action.run();
 	};
 
 	const cycleScope = (delta: number) => {
@@ -259,22 +185,14 @@ function PaletteBody({
 		if (event.key === "Escape") {
 			event.preventDefault();
 			event.stopPropagation();
-			if (!event.nativeEvent.isTrusted) onClose();
-			else if (panel) {
-				setPanel(null);
-				inputRef.current?.focus();
-			} else if (stack.length > 0) popPage();
-			else if (query) resetQuery("");
-			else onClose();
+			if (!event.nativeEvent.isTrusted || !query) onClose();
+			else resetQuery("");
 			return;
 		}
 		if (mod && event.code === "KeyK" && !event.shiftKey && !event.altKey) {
 			event.preventDefault();
 			event.stopPropagation();
-			if (panel) {
-				setPanel(null);
-				inputRef.current?.focus();
-			} else openPanel();
+			onClose();
 			return;
 		}
 		if (event.ctrlKey && event.code === "KeyR") {
@@ -284,22 +202,7 @@ function PaletteBody({
 		}
 		if (event.key === "Tab") {
 			event.preventDefault();
-			if (!panel && stack.length === 0) cycleScope(event.shiftKey ? -1 : 1);
-			return;
-		}
-		if (panel) {
-			if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-				event.preventDefault();
-				const delta = event.key === "ArrowDown" ? 1 : -1;
-				setPanel({
-					...panel,
-					index: (panel.index + delta + panelActions.length) % Math.max(1, panelActions.length),
-				});
-			} else if (event.key === "Enter") {
-				if (event.nativeEvent.isComposing) return;
-				event.preventDefault();
-				runAction(panelActions[panel.index]);
-			}
+			cycleScope(event.shiftKey ? -1 : 1);
 			return;
 		}
 		if (mod && event.code === "KeyI") {
@@ -307,7 +210,7 @@ function PaletteBody({
 			togglePreview();
 			return;
 		}
-		if (event.altKey && /^Digit[1-9]$/.test(event.code) && stack.length === 0) {
+		if (event.altKey && /^Digit[1-9]$/.test(event.code)) {
 			const scope = scopes[Number(event.code.slice(5)) - 1];
 			if (scope) {
 				event.preventDefault();
@@ -329,16 +232,9 @@ function PaletteBody({
 				event.preventDefault();
 				activate(selected);
 				return;
-			case "Backspace":
-				if (!query && stack.length > 0) {
-					event.preventDefault();
-					popPage();
-				}
-				return;
 		}
 	};
 
-	const crumb = page?.crumb ?? [];
 	const optionId = (index: number) => `search-option-${index}`;
 	const previewItem = previewOpen ? selected?.item : undefined;
 
@@ -353,21 +249,6 @@ function PaletteBody({
 		>
 			<div className="flex h-48 shrink-0 items-center gap-8 border-border-muted border-b px-16">
 				<RiSearchLine aria-hidden className="size-16 shrink-0 text-text-muted" />
-				{crumb.length > 0 ? (
-					<span
-						data-testid="search-crumb"
-						className="flex shrink-0 items-center gap-4 rounded-sm bg-control-bg-selected px-8 py-2 tr-text-metadata text-text-default"
-					>
-						{crumb.map((part, index) => (
-							<span key={part} className="flex items-center gap-4">
-								{index > 0 ? (
-									<RiArrowRightSLine aria-hidden className="size-12 text-text-subtle" />
-								) : null}
-								{part}
-							</span>
-						))}
-					</span>
-				) : null}
 				<input
 					ref={inputRef}
 					data-testid="search-input"
@@ -380,22 +261,14 @@ function PaletteBody({
 					autoComplete="off"
 					spellCheck={false}
 					value={query}
-					placeholder={page?.placeholder ?? t("search.palette.placeholder")}
+					placeholder={t("search.palette.placeholder")}
 					onChange={(event) => resetQuery(event.target.value)}
 					onKeyDown={onKeyDown}
 					className="h-full min-w-0 flex-1 bg-transparent tr-text-reading text-text-default outline-none placeholder:text-text-subtle"
 				/>
 				<Keycaps keys={["esc"]} />
 			</div>
-			{page ? null : (
-				<ScopeChips
-					t={t}
-					scopes={scopes}
-					active={parsed.scope}
-					filters={parsed.filters}
-					onSelect={changeScope}
-				/>
-			)}
+			<ScopeChips t={t} scopes={scopes} active={parsed.scope} onSelect={changeScope} />
 			{notice ? (
 				<p
 					data-testid="search-notice"
@@ -436,17 +309,8 @@ function PaletteBody({
 			<footer className="flex h-32 shrink-0 items-center gap-12 overflow-hidden border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
 				<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
 				<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
-				{stack.length === 0 ? <Hint keys={["Tab"]} label={t("search.hint.scope")} /> : null}
-				<Hint
-					keys={["esc"]}
-					label={t(
-						stack.length > 0
-							? "search.hint.back"
-							: query
-								? "search.hint.clear"
-								: "search.hint.close",
-					)}
-				/>
+				<Hint keys={["Tab"]} label={t("search.hint.scope")} />
+				<Hint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
 				<span className="flex-1" />
 				<button
 					type="button"
@@ -461,30 +325,7 @@ function PaletteBody({
 					{t("search.palette.preview")}
 					<Keycaps keys={shortcutKeys({ key: "I", mod: true })} />
 				</button>
-				<button
-					type="button"
-					tabIndex={-1}
-					data-testid="search-actions-open"
-					disabled={!selected?.item.actions}
-					onMouseDown={keepInputFocus}
-					onClick={openPanel}
-					className="flex items-center gap-4 text-text-muted hover:text-text-default disabled:text-text-disabled"
-				>
-					{t("search.palette.actions")}
-					<Keycaps keys={shortcutKeys({ key: "K", mod: true })} />
-				</button>
 			</footer>
-			{panel ? (
-				<ActionPanel
-					t={t}
-					state={panel}
-					actions={panelActions}
-					onQuery={(value) => setPanel({ ...panel, query: value, index: 0 })}
-					onHover={(index) => setPanel({ ...panel, index })}
-					onRun={runAction}
-					onKeyDown={onKeyDown}
-				/>
-			) : null}
 			<p role="status" aria-live="polite" className="sr-only">
 				{t("search.palette.resultCount", { count: rows.length })}
 			</p>
@@ -500,8 +341,6 @@ function keepInputFocus(event: ReactMouseEvent): void {
 
 function enterLabel(item: PaletteItem | undefined): MessageKey {
 	if (!item) return "search.hint.open";
-	if (item.toggle) return "search.hint.toggle";
-	if (item.page) return "search.hint.enter";
 	if (item.kind === "command") return "search.hint.run";
 	return "search.hint.open";
 }
@@ -534,13 +373,11 @@ function ScopeChips({
 	t,
 	scopes,
 	active,
-	filters,
 	onSelect,
 }: {
 	t: Translator;
 	scopes: readonly SearchScope[];
 	active: SearchScope;
-	filters: readonly StateFilter[];
 	onSelect: (scope: SearchScope) => void;
 }) {
 	return (
@@ -568,16 +405,6 @@ function ScopeChips({
 						<span className="tr-code-text-small text-text-subtle">{SCOPE_PREFIX[scope]}</span>
 					)}
 				</button>
-			))}
-			{filters.map((filter) => (
-				<span
-					key={filter}
-					data-testid="search-filter-chip"
-					className="flex h-24 items-center gap-4 rounded-md border border-primary-soft bg-primary-subtle px-8 tr-text-metadata text-text-default"
-				>
-					<RiFilter3Line aria-hidden className="size-12" />
-					{filter}
-				</span>
 			))}
 		</div>
 	);
@@ -731,28 +558,9 @@ function Row({
 				{item.badge ? (
 					<span className="rounded-xs border border-border-muted px-4">{item.badge}</span>
 				) : null}
-				{item.meta ? <span>{item.meta}</span> : null}
 				{item.attention && item.attention !== "running" ? <AttentionDot /> : null}
 				{item.shortcut ? <Keycaps keys={shortcutKeys(item.shortcut)} /> : null}
-				{item.toggle ? (
-					<span
-						data-testid="search-toggle"
-						data-on={item.toggle.on}
-						className={cn(
-							"relative h-16 w-28 rounded-full transition-colors",
-							item.toggle.on ? "bg-primary" : "bg-control-bg-hovered",
-						)}
-					>
-						<span
-							className={cn(
-								"absolute top-2 size-12 rounded-full transition-all",
-								item.toggle.on ? "left-14 bg-container-elevated-bg" : "left-2 bg-text-muted",
-							)}
-						/>
-					</span>
-				) : null}
-				{item.page ? <RiArrowRightSLine aria-hidden className="size-14" /> : null}
-				{selected && !item.toggle && !item.page && !item.disabledReason ? (
+				{selected && !item.disabledReason ? (
 					<RiCornerDownLeftLine aria-hidden className="size-14 text-text-muted" />
 				) : null}
 			</span>
@@ -787,101 +595,10 @@ function Preview({ t, item }: { t: Translator; item: PaletteItem }) {
 							))}
 						</dl>
 					) : null}
-					{preview.body ? (
-						<p className="mt-12 whitespace-pre-wrap tr-text-ui text-text-muted">{preview.body}</p>
-					) : null}
 				</>
 			) : (
 				<p className="tr-text-ui text-text-subtle">{t("search.palette.noPreview")}</p>
 			)}
 		</aside>
-	);
-}
-
-function ActionPanel({
-	t,
-	state,
-	actions,
-	onQuery,
-	onHover,
-	onRun,
-	onKeyDown,
-}: {
-	t: Translator;
-	state: ActionPanelState;
-	actions: readonly PaletteAction[];
-	onQuery: (value: string) => void;
-	onHover: (index: number) => void;
-	onRun: (action: PaletteAction) => void;
-	onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
-}) {
-	const inputRef = useRef<HTMLInputElement>(null);
-	useEffect(() => {
-		inputRef.current?.focus();
-	}, []);
-	return (
-		<div
-			data-testid="search-actions"
-			className="absolute right-8 bottom-40 z-10 flex w-[20rem] flex-col overflow-hidden rounded-md border border-border-default bg-container-elevated-bg shadow-[var(--shadow-lg)]"
-		>
-			<p className="truncate px-12 pt-8 pb-4 tr-text-metadata text-text-subtle">{state.title}</p>
-			<div
-				role="listbox"
-				aria-label={t("search.palette.actions")}
-				className="max-h-[18rem] overflow-y-auto px-4 pb-4"
-			>
-				{actions.map((action, index) => {
-					const Icon = action.icon;
-					return (
-						<div
-							key={action.id}
-							role="option"
-							tabIndex={-1}
-							aria-selected={index === state.index}
-							aria-disabled={action.disabledReason ? true : undefined}
-							data-testid="search-action-row"
-							data-action-id={action.id}
-							onMouseMove={() => onHover(index)}
-							onMouseDown={(event) => event.preventDefault()}
-							onClick={() => onRun(action)}
-							onKeyDown={(event) => {
-								if (event.key === "Enter" || event.key === " ") {
-									event.preventDefault();
-									onRun(action);
-								}
-							}}
-							className={cn(
-								"flex min-h-28 cursor-pointer items-center gap-8 rounded-sm px-8 py-4 tr-text-ui",
-								index === state.index ? "bg-control-bg-selected" : undefined,
-								action.danger ? "text-feedback-error" : "text-text-default",
-								action.disabledReason ? "text-text-disabled" : undefined,
-							)}
-						>
-							<Icon aria-hidden className="size-14 shrink-0" />
-							<span className="min-w-0 flex-1 truncate">{action.title}</span>
-							{action.disabledReason ? (
-								<span className="tr-text-metadata text-text-subtle">{action.disabledReason}</span>
-							) : null}
-							{action.shortcut ? <Keycaps keys={shortcutKeys(action.shortcut)} /> : null}
-						</div>
-					);
-				})}
-				{actions.length === 0 ? (
-					<p className="px-8 py-12 text-center tr-text-ui text-text-muted">
-						{t("search.palette.noActions")}
-					</p>
-				) : null}
-			</div>
-			<input
-				ref={inputRef}
-				data-testid="search-actions-input"
-				onKeyDown={onKeyDown}
-				aria-label={t("search.palette.searchActions")}
-				value={state.query}
-				onChange={(event) => onQuery(event.target.value)}
-				placeholder={t("search.palette.searchActions")}
-				className="h-32 border-border-muted border-t bg-transparent px-12 tr-text-ui text-text-default outline-none placeholder:text-text-subtle"
-			/>
-		</div>
 	);
 }

@@ -1,27 +1,14 @@
-import { RiFilter3Line, RiMoreLine } from "@remixicon/react";
+import { RiMoreLine } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import { frecencyScore, type LearningSnapshot } from "./learning";
 import type { PaletteItem, PaletteRow, PaletteSection } from "./model";
-import { type ParsedQuery, type SearchScope, STATE_FILTERS, type StateFilter } from "./query";
+import type { ParsedQuery, SearchScope } from "./query";
 import { compareRanked, pickTopHit, plainRow, type RankedItem, rankItems, toRow } from "./rank";
-
-export interface PalettePageSection {
-	readonly title: string;
-	readonly items: readonly PaletteItem[];
-}
-
-export interface PalettePage {
-	readonly id: string;
-	readonly crumb: readonly string[];
-	readonly placeholder: string;
-	readonly sections: () => readonly PalettePageSection[];
-}
 
 export interface SectionsInput {
 	readonly t: Translator;
 	readonly parsed: ParsedQuery;
-	readonly page: PalettePage | null;
 	readonly rootItems: readonly PaletteItem[];
 	readonly waiting: readonly PaletteItem[];
 	readonly actions: readonly PaletteItem[];
@@ -40,19 +27,6 @@ const GROUP_LABELS: Readonly<Record<string, MessageKey>> = {
 	projects: "search.group.projects",
 	commands: "search.group.commands",
 	settings: "search.group.settings",
-	mcp: "search.group.mcp",
-	extensions: "search.group.extensions",
-	themes: "search.group.themes",
-	filters: "search.group.filters",
-};
-
-const FILTER_LABELS: Record<StateFilter, MessageKey> = {
-	"is:waiting": "search.filter.waiting",
-	"is:error": "search.filter.error",
-	"is:unread": "search.filter.unread",
-	"is:running": "search.filter.running",
-	"is:settled": "search.filter.settled",
-	"has:pr": "search.filter.pr",
 };
 
 export function groupLabel(t: Translator, group: string): string {
@@ -64,46 +38,8 @@ const ALL_SCOPE_CAP = 4;
 const SCOPED_CAP = 30;
 const RECENT_LIMIT = 5;
 
-function matchesFilter(item: PaletteItem, filter: StateFilter): boolean {
-	switch (filter) {
-		case "is:waiting":
-			return item.states?.includes("waiting") === true;
-		case "is:error":
-			return item.states?.includes("error") === true;
-		case "is:unread":
-			return item.states?.includes("unread") === true;
-		case "is:running":
-			return item.states?.includes("running") === true;
-		case "is:settled":
-			return item.kind === "workspace" && item.settled === true;
-		case "has:pr":
-			return item.kind === "workspace" && item.hasPr === true;
-	}
-}
-
 function inScope(item: PaletteItem, scope: SearchScope): boolean {
 	return scope === "all" || item.scope === scope;
-}
-
-function filterSuggestions(
-	t: Translator,
-	partial: string,
-	items: readonly PaletteItem[],
-): PaletteSection {
-	const rows = STATE_FILTERS.filter((filter) => filter.startsWith(partial)).map((filter) =>
-		plainRow({
-			id: `filter:${filter}`,
-			kind: "filter",
-			title: filter,
-			subtitle: t(FILTER_LABELS[filter]),
-			meta: String(items.filter((item) => matchesFilter(item, filter)).length),
-			group: "filters",
-			scope: "work",
-			icon: RiFilter3Line,
-			fillQuery: `${filter} `,
-		}),
-	);
-	return { id: "filters", title: groupLabel(t, "filters"), items: rows };
 }
 
 function moreRow(
@@ -171,22 +107,6 @@ function groupRanked(
 		);
 }
 
-function pageSections(page: PalettePage, input: SectionsInput): PaletteSection[] {
-	const { terms, raw } = input.parsed;
-	return page
-		.sections()
-		.map((section, index) => {
-			const rows =
-				terms.length === 0
-					? section.items.map(plainRow)
-					: rankItems(section.items, terms, input.learning, raw, input.nowMs).map((entry) =>
-							toRow(entry),
-						);
-			return { id: `page:${index}`, title: section.title, items: rows };
-		})
-		.filter((section) => section.items.length > 0);
-}
-
 function emptyRootSections(input: SectionsInput): PaletteSection[] {
 	const { t } = input;
 	const { scope } = input.parsed;
@@ -224,28 +144,10 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 
 export function buildSections(input: SectionsInput): PaletteSection[] {
 	const { t, parsed } = input;
-	if (input.page) return pageSections(input.page, input);
-	if (parsed.partialFilter !== null && parsed.filters.length === 0 && parsed.terms.length === 0) {
-		return [filterSuggestions(t, parsed.partialFilter, input.rootItems)];
-	}
-	let candidates = input.rootItems.filter((item) => inScope(item, parsed.scope));
-	if (parsed.filters.length > 0) {
-		candidates = candidates.filter((item) =>
-			parsed.filters.every((filter) => matchesFilter(item, filter)),
-		);
-		if (parsed.terms.length === 0) {
-			return groupRanked(
-				t,
-				rankItems(candidates, [], input.learning, "", input.nowMs),
-				true,
-				input.expanded,
-			);
-		}
-	} else if (parsed.terms.length === 0) {
-		return emptyRootSections(input);
-	}
+	if (parsed.terms.length === 0) return emptyRootSections(input);
+	const candidates = input.rootItems.filter((item) => inScope(item, parsed.scope));
 	const ranked = rankItems(candidates, parsed.terms, input.learning, parsed.raw, input.nowMs);
-	const scoped = parsed.scope !== "all" || parsed.filters.length > 0;
+	const scoped = parsed.scope !== "all";
 	const top = scoped ? null : pickTopHit(ranked);
 	const rest = top ? ranked.filter((entry) => entry !== top) : ranked;
 	const sections = groupRanked(t, rest, scoped, input.expanded);

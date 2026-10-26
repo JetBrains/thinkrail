@@ -3,7 +3,6 @@ import {
 	RiAddLine,
 	RiChatNewLine,
 	RiCheckDoubleLine,
-	RiContrast2Line,
 	RiFileList3Line,
 	RiFolderLine,
 	RiFolderOpenLine,
@@ -17,21 +16,16 @@ import {
 	RiListCheck3,
 	RiMailUnreadLine,
 	RiNodeTree,
-	RiPlugLine,
-	RiPuzzle2Line,
 	RiSearchEyeLine,
 	RiSettings3Line,
 } from "@remixicon/react";
-import type { ExtensionCatalogEntry, ThemeId, Workspace } from "@thinkrail/contracts";
+import type { Workspace } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command, CommandContext } from "../commands";
-import { lockedSettings } from "../panels/McpSettings";
-import { mcpRowView } from "../panels/mcpServerView";
 import type { SettingsNavGroup } from "../panels/settingsNav";
-import type { PaletteItem, PalettePage } from "../search";
-import type { McpServerRow, SettingsSection } from "../store";
-import type { ThemeDescriptor } from "../themes";
+import type { PaletteItem } from "../search";
+import type { SettingsSection } from "../store";
 import type { LayoutToolId } from "./layout";
 
 export type PaletteTool = Exclude<LayoutToolId, "projects">;
@@ -59,14 +53,6 @@ export interface PaletteCatalogDeps {
 	readonly canSettle: boolean;
 	readonly settled: boolean;
 	readonly settingsGroups: readonly SettingsNavGroup[];
-	readonly availableSections: ReadonlySet<SettingsSection>;
-	readonly themes: readonly ThemeDescriptor[];
-	readonly theme: ThemeId;
-	readonly extensions: readonly ExtensionCatalogEntry[] | null;
-	readonly disabledExtensions: readonly string[];
-	readonly mcpRows: readonly McpServerRow[] | null;
-	readonly nowMs: number;
-	readonly doubleShift: boolean;
 	readonly actions: PaletteCatalogActions;
 }
 
@@ -85,10 +71,6 @@ export interface PaletteCatalogActions {
 	readonly unsettle: (workspaceId: string) => void;
 	readonly reveal: (workspace: Workspace) => void;
 	readonly openSettings: (section?: SettingsSection) => void;
-	readonly setTheme: (theme: ThemeId) => void;
-	readonly setExtensionEnabled: (name: string, enabled: boolean) => void;
-	readonly setMcpEnabled: (row: McpServerRow, enabled: boolean) => void;
-	readonly setDoubleShift: (enabled: boolean) => void;
 }
 
 const hasWorkspace = (context: CommandContext) => context.workspaceId !== null;
@@ -187,38 +169,12 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			},
 		},
 		{
-			id: "view.theme",
-			title: t("commands.view.theme"),
-			group: "view",
-			icon: RiContrast2Line,
-			keywords: ["appearance", "dark", "light", "colors"],
-			page: "theme",
-		},
-		{
 			id: "settings.open",
 			title: t("commands.settings.open"),
 			group: "settings",
 			icon: RiSettings3Line,
 			keywords: ["preferences", "options"],
-			page: "settings",
-		},
-		{
-			id: "settings.extensions",
-			title: t("commands.settings.extensions"),
-			group: "settings",
-			icon: RiPuzzle2Line,
-			keywords: ["extension", "enable", "disable", "tools"],
-			when: () => deps.availableSections.has("extensions"),
-			page: "extensions",
-		},
-		{
-			id: "settings.mcp",
-			title: t("commands.settings.mcp"),
-			group: "settings",
-			icon: RiPlugLine,
-			keywords: ["mcp", "server", "tools", "enable", "disable"],
-			when: (context) => hasWorkspace(context) && deps.availableSections.has("mcp"),
-			page: "mcp",
+			run: () => actions.openSettings(),
 		},
 	];
 	if (workspaceId && deps.readAction === "markRead") {
@@ -308,133 +264,9 @@ export function buildSettingsItems(deps: PaletteCatalogDeps): PaletteItem[] {
 			scope: "commands",
 			icon: RiKeyboardLine,
 			keywords: ["shortcut", "hotkey", "shift"],
-			toggle: { on: deps.doubleShift, set: deps.actions.setDoubleShift },
+			run: () => deps.actions.openSettings("keyboard"),
 		},
 	];
-}
-
-function offlineReason(deps: PaletteCatalogDeps): Partial<PaletteItem> {
-	return deps.context.online ? {} : { disabledReason: deps.t("search.palette.offlineReason") };
-}
-
-export function buildPages(deps: PaletteCatalogDeps): Record<string, PalettePage> {
-	const { t, actions } = deps;
-	return {
-		settings: {
-			id: "settings",
-			crumb: [t("search.page.settings")],
-			placeholder: t("search.page.settingsPlaceholder"),
-			sections: () =>
-				deps.settingsGroups.map((group) => ({
-					title: t(group.label),
-					items: settingsSectionItems(group, deps),
-				})),
-		},
-		theme: {
-			id: "theme",
-			crumb: [t("search.page.theme")],
-			placeholder: t("search.page.themePlaceholder"),
-			sections: () => [
-				{
-					title: t("search.group.themes"),
-					items: deps.themes.map(
-						(theme): PaletteItem => ({
-							id: `theme:${theme.id}`,
-							kind: "theme",
-							title: theme.label,
-							...(theme.contrast === "high" ? { subtitle: t("search.item.highContrast") } : {}),
-							group: "themes",
-							scope: "commands",
-							icon: RiContrast2Line,
-							...(theme.id === deps.theme ? { meta: t("search.item.current") } : {}),
-							...offlineReason(deps),
-							run: () => actions.setTheme(theme.id),
-						}),
-					),
-				},
-			],
-		},
-		extensions: {
-			id: "extensions",
-			crumb: [t("search.page.settings"), t("search.page.extensions")],
-			placeholder: t("search.page.extensionsPlaceholder"),
-			sections: () => [
-				{
-					title:
-						deps.extensions === null
-							? t("search.page.extensionsLoading")
-							: t("search.group.extensions"),
-					items: (deps.extensions ?? []).map((entry): PaletteItem => {
-						const enabled = !deps.disabledExtensions.includes(entry.name);
-						return {
-							id: `extension:${entry.name}`,
-							kind: "extension",
-							title: entry.title,
-							...(entry.description ? { subtitle: entry.description } : {}),
-							group: "extensions",
-							scope: "commands",
-							icon: RiPuzzle2Line,
-							...offlineReason(deps),
-							toggle: {
-								on: enabled,
-								set: (on) => actions.setExtensionEnabled(entry.name, on),
-							},
-						};
-					}),
-				},
-			],
-		},
-		mcp: {
-			id: "mcp",
-			crumb: [t("search.page.settings"), t("search.page.mcp")],
-			placeholder: t("search.page.mcpPlaceholder"),
-			sections: () => [
-				{
-					title:
-						deps.mcpRows === null ? t("search.page.mcpLoading") : t("search.page.mcpInWorkspace"),
-					items: (deps.mcpRows ?? []).map((row): PaletteItem => {
-						const toggleable = !lockedSettings(row);
-						const enabled = row.summary.enabled;
-						const subtitle = [
-							t(
-								row.summary.scope === "user"
-									? "search.item.mcpPersonal"
-									: "search.item.mcpRepository",
-							),
-							mcpRowView(t, row, deps.nowMs).label,
-						].join(" · ");
-						return {
-							id: `mcp:${row.key}`,
-							kind: "mcp",
-							title: row.summary.name,
-							subtitle,
-							group: "mcp",
-							scope: "commands",
-							icon: RiPlugLine,
-							...offlineReason(deps),
-							...(toggleable
-								? { toggle: { on: enabled, set: (on: boolean) => actions.setMcpEnabled(row, on) } }
-								: { run: () => actions.openSettings("mcp") }),
-						};
-					}),
-				},
-				{
-					title: "",
-					items: [
-						{
-							id: "mcp:open-settings",
-							kind: "setting",
-							title: t("search.page.mcpManage"),
-							group: "mcp",
-							scope: "commands",
-							icon: RiSettings3Line,
-							run: () => actions.openSettings("mcp"),
-						},
-					],
-				},
-			],
-		},
-	};
 }
 
 export function emptyStateActionIds(): readonly string[] {
