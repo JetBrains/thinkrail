@@ -439,8 +439,18 @@ three gaps, closed by the project:
   ICO) through `user32` and sends it to the splash and the main window, sized for the window's DPI. A
   failure is reported and non-fatal.
 
+  `WM_SETICON` stores the handle rather than copying the icon, so each icon must outlive its window.
+  They are set once per window and never destroyed: four handles for the life of the process, which
+  the OS reclaims at exit; nothing grows, so a `DestroyIcon` pass would only matter if icons were
+  re-applied. They are not re-applied on `WM_DPICHANGED` either: after a move to a monitor with another
+  scale, Windows rescales the loaded frames, so the Alt+Tab and Task Manager icon can read slightly soft
+  until a restart. The native caption icon is never shown (`hiddenInset` with the app's own controls),
+  and a pinned taskbar button takes its icon from the launcher. Re-applying would mean subclassing the
+  window procedure from Bun FFI with a callback on the native message thread, which is out of proportion
+  to that effect; the decision is deliberate.
+
 Removal gates: Hutch writing the executable identity and replacing the main process's icon groups;
-Electrobun setting a window icon on Windows.
+Electrobun setting and refreshing a window icon on Windows.
 
 **Taskbar identity.** A pinned shortcut targets the launcher while the window belongs to `bun.exe`, and
 Electrobun sets no AppUserModelID. Without one, Windows derives each side's identity from its own exe

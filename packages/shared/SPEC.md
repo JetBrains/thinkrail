@@ -109,7 +109,13 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   takes the four numeric parts Windows requires: `X.Y.Z` plus the prerelease's trailing number
   (`0.3.0-nightly.6` → `0.3.0.6`), else `.0`. An unknown channel or a part above 65535 throws, so a
   release build fails rather than ship wrong properties. The CLI compile, the desktop `postBuild` and
-  both Windows smokes (CLI and desktop) derive from it, so they cannot disagree.
+  both Windows smokes (CLI and desktop) derive from it, so they cannot disagree. The mapping is lossy
+  by design: a stable `0.3.0.0` sorts below the nightlies `0.3.0.N` that preceded it, since four numbers
+  cannot say "pre-release". That order is never compared: stable and nightly are separate installs that
+  never replace each other's files, no MSI versioning is involved, each channel's own sequence is
+  monotonic, and the product name already tells the channels apart. Encodings that force the order
+  (`.65535` for stable, nightlies under the previous patch) only misreport the version, so they are
+  rejected.
 - **/assets** — the native icon set: the hand-authored `icon.svg` and the rasters generated from it.
   Never hand-edit a raster; regenerate them with `bun run --cwd packages/shared generate-icons`
   (`@resvg/resvg-js` rasterizes straight from the vector, `resedit` packs the ICO). The outputs are the
