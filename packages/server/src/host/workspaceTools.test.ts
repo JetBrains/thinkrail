@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Project, SessionState, WireModel, Workspace } from "@thinkrail/contracts";
 import {
+	chatName,
 	chatStateLabel,
 	clampFinalMessage,
 	composePrompt,
@@ -128,4 +129,12 @@ test("matchWorkspaces finds by id, branch, or name and reports misses", () => {
 	const { matched, missing } = matchWorkspaces(["w1", "FIX-LOGIN", "workspace-2", "nope"], all);
 	expect(matched.map((w) => w.id)).toEqual(["w1", "w2"]);
 	expect(missing).toEqual(["nope"]);
+});
+
+test("chatName prefers the chat's title, then its first prompt", () => {
+	expect(chatName({ title: "Fix login" })).toBe('"Fix login"');
+	expect(chatName({ title: " ", firstPrompt: "Add a test" })).toBe(
+		'unnamed, first prompt "Add a test"',
+	);
+	expect(chatName({ title: "" })).toBe("unnamed");
 });
