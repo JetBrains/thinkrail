@@ -354,6 +354,7 @@ export function AskUserQuestionCard({
 		readAskUserQuestionResult(interaction?.state.response) ?? readAskUserQuestionResult(result);
 	const superseded = interaction?.state.superseded ?? false;
 	const ended = interaction?.state.ended ?? false;
+	const canRespond = !!interaction && interaction.state.accepting;
 	const awaiting = !resolvedResult && !superseded && !ended && status !== "error";
 	const [states, setStates] = useState<Record<number, QState>>(
 		() => cardStateCache.get(toolCallId)?.states ?? {},
@@ -480,7 +481,7 @@ export function AskUserQuestionCard({
 	const answeredIndices = new Set(answers.map((a) => a.questionIndex));
 
 	const reply = (r: AskUserQuestionResult) => {
-		if (!interaction) return;
+		if (!interaction || !canRespond) return;
 		const held = document.activeElement;
 		const handedOff = !!held && !!cardRef.current?.contains(held) && held.matches(":focus-visible");
 		if (handedOff) interaction.focusComposer();
@@ -523,8 +524,7 @@ export function AskUserQuestionCard({
 
 	const showContinue = multipleQuestions && !onReview;
 	const canSubmit =
-		!!interaction &&
-		(onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
+		canRespond && (onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
 	const nudgeVisible = nudgeShowsOnPage(nudge, idx, onReview, answeredIndices.has(idx));
 
 	const confirmQuestion = (nextState: QState) => {
@@ -680,7 +680,7 @@ export function AskUserQuestionCard({
 								type="button"
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
-								disabled={!interaction}
+								disabled={!canRespond}
 								className="shrink-0 rounded-sm px-4 text-text-muted tr-text-ui outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
 							>
 								{t("tools.ask.skip")}

@@ -30,7 +30,7 @@ import {
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { AskStatesContext, deriveAskStates } from "../chat/askState";
+import { AskStatesContext, awaitingQuestionIdOf, deriveAskStates } from "../chat/askState";
 import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
 import { Markdown } from "../chat/Markdown";
 import { SectionLabel, VerificationBadge, VerificationGlyph } from "../chat/planKit";
@@ -699,7 +699,13 @@ function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string
 	if (ask) {
 		return (
 			<ChatActionsContext.Provider value={actions}>
-				<AskStatesContext.Provider value={{ states: askStates, focusScope }}>
+				<AskStatesContext.Provider
+					value={{
+						states: askStates,
+						focusScope,
+						awaitingQuestionId: awaitingQuestionIdOf(runtime?.hostState ?? null),
+					}}
+				>
 					<div data-testid="plan-ask" className="mb-8">
 						<PlanAskCard ask={ask} />
 					</div>
