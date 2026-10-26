@@ -52,10 +52,17 @@ stdio fixture must report *connected · 1 tool* and an in-probe HTTP server that
 protected-resource metadata *needs sign-in*, read back through `mcp.list`, which proves the lazily imported
 MCP runtime executes inside the artifact), reach an OAuth URL without a provider turn, verify health/UI
 and transcript trash, and shut down. CLI-specific probes also check its exit-only and embedded-cache behavior.
-On Windows the CLI smoke first reads the built exe's resources, without running it:
-- the icon group the shell shows must contain the ICO's largest frame and nothing else. That is the
-  first group in resource order, where Bun's named `IDI_MYICON` shadows any numbered group;
-- VERSIONINFO must equal [[module-shared]]'s `windowsFileIdentity` for the checkout's release identity.
+On Windows both smokes first read executables' resources, without running them:
+- the CLI smoke reads the built exe;
+- the desktop smoke reads the bundle's `bin/bun.exe`, `bin/launcher.exe` and `Resources/uninstall`.
+
+Each executable must pass two checks, and each fails the release before publication:
+- **Icon.** The group the shell shows is the first in resource order; in a Bun exe, Bun's named
+  `IDI_MYICON` shadows any numbered group. That group must include the ICO's largest frame and hold
+  only frames of that ICO. The reference ICO is the one the CLI build embeds, and the bundle's own
+  `Resources/app.ico` for the desktop.
+- **VERSIONINFO.** It must equal [[module-shared]]'s `windowsFileIdentity` for the checkout's release
+  identity, so a smoke runs in the same stamped checkout that built the artifact.
 
 The resource-directory walk is local because `pe-library` refuses Bun's `.bun` section after `.rsrc`;
 `resedit` parses the icon-group and version structures.

@@ -105,8 +105,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   publisher and copyright are JetBrains s.r.o., as in `LICENSE` and the signing certificate. The version
   takes the four numeric parts Windows requires: `X.Y.Z` plus the prerelease's trailing number
   (`0.3.0-nightly.6` → `0.3.0.6`), else `.0`. An unknown channel or a part above 65535 throws, so a
-  release build fails rather than ship wrong properties. The CLI compile, desktop `postBuild` and the
-  CLI smoke all derive from it, so they cannot disagree.
+  release build fails rather than ship wrong properties. The CLI compile, the desktop `postBuild` and
+  both Windows smokes (CLI and desktop) derive from it, so they cannot disagree.
 - **/codedError** — `CodedError(code, message)` + `errorCodeOf(err)`: an error carrying a wire
   `WsErrorCode`, so a failure a client must react to *specifically* travels as a name rather than a string
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:

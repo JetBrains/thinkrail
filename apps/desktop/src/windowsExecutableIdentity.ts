@@ -6,6 +6,9 @@ const RT_GROUP_ICON = 14;
 const RT_VERSION = 16;
 const EN_US = 1033;
 const UNICODE = 1200;
+const VOS_NT_WINDOWS32 = 0x40004;
+const VFT_APP = 1;
+const VS_FFI_FILEFLAGSMASK = 0x3f;
 
 export function brandWindowsExecutable(
 	executableData: Uint8Array,
@@ -28,6 +31,9 @@ export function brandWindowsExecutable(
 	);
 	const version = ResEdit.Resource.VersionInfo.createEmpty();
 	version.lang = EN_US;
+	version.fixedInfo.fileOS = VOS_NT_WINDOWS32;
+	version.fixedInfo.fileType = VFT_APP;
+	version.fixedInfo.fileFlagsMask = VS_FFI_FILEFLAGSMASK;
 	version.setFileVersion(...identity.fileVersionParts, EN_US);
 	version.setProductVersion(...identity.fileVersionParts, EN_US);
 	version.setStringValues(
