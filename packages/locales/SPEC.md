@@ -102,6 +102,10 @@ so the files diff cleanly.
   English string's placeholders or markup, or removing a key, therefore fails in the same change, and
   that change updates or deletes the translation (deleting falls back to English). A rewording that
   changes the meaning deletes the translation too, rather than leaving it stale.
+- **A literal the user must type stays verbatim.** A protocol answer, JSON key, flag, or command quoted
+  inside translated prose keeps its exact spelling: OpenSSH accepts only `yes` for a host key, so
+  `panels.prSetup.hostKeyHint` keeps `yes` in every catalog — a translated «sí» makes ssh re-prompt and
+  the push stays broken. Translate the sentence, never the token.
 - **Render reads the translator as a value, never the global.** The React Compiler caches each render
   expression by its own inputs, so a helper that reads the global `t` / `currentLocale()` (or a getter
   that does) keeps the old language after a switch. Every function evaluated at render — component and

@@ -961,7 +961,7 @@
 	"panels.prSetup.ghMissingTitle": "La CLI de GitHub no está instalada",
 	"panels.prSetup.ghUnauthenticatedDescription": "La rama se subió, pero la CLI de GitHub de este equipo no tiene la sesión iniciada, así que el PR no se puede crear directamente. Inicia sesión y vuelve a intentarlo.",
 	"panels.prSetup.ghUnauthenticatedTitle": "La CLI de GitHub no tiene la sesión iniciada",
-	"panels.prSetup.hostKeyHint": "La clave SSH de este host aún no está en known_hosts: conéctate una vez y responde «sí» para aprobarla:",
+	"panels.prSetup.hostKeyHint": "La clave SSH de este host aún no está en known_hosts: conéctate una vez y responde «yes» para aprobarla:",
 	"panels.prSetup.httpsHint": "Remoto HTTPS: en su lugar, inicia sesión con la CLI de GitHub.",
 	"panels.prSetup.openCompare": "Abrir la página de comparación",
 	"panels.prSetup.pushAuthDescription": "ThinkRail sube los cambios sin terminal, así que no pueden aparecer solicitudes de contraseña SSH ni de credenciales. Configura la autenticación de git para que no sea interactiva y vuelve a intentarlo.",
