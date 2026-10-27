@@ -216,17 +216,79 @@ export function projectRelativePath(path: string, workspaceRoot?: string | undef
 	return canonical;
 }
 
+const WINDOWS_DRIVE_PREFIX = /^[A-Za-z]:[\\/]/;
+
+function isWindowsUncPath(path: string): boolean {
+	return path.startsWith("\\\\");
+}
+
+function isWindowsNativePath(path: string): boolean {
+	return WINDOWS_DRIVE_PREFIX.test(path) || isWindowsUncPath(path);
+}
+
+function nativePathSeparator(worktreePath: string): "\\" | "/" {
+	return isWindowsUncPath(worktreePath) || /^[A-Za-z]:\\/.test(worktreePath) ? "\\" : "/";
+}
+
+function isNativeAbsolutePath(path: string, worktreePath: string): boolean {
+	return isWindowsNativePath(worktreePath) ? isWindowsNativePath(path) : path.startsWith("/");
+}
+
+function trimTrailingNativeSeparators(path: string): string {
+	if (path === "/" || /^[A-Za-z]:[\\/]$/.test(path)) return path;
+	return path.replace(/[\\/]+$/, "") || path;
+}
+
+function nativeFileName(path: string, windows: boolean): string {
+	const parts = path.split(windows ? /[\\/]/ : "/").filter(Boolean);
+	return parts.at(-1) ?? path;
+}
+
+function nativeWorktreePrefixLength(
+	path: string,
+	root: string,
+	windows: boolean,
+	ignoreCase: boolean,
+): number | null {
+	const comparable = (value: string) => {
+		const unified = windows ? value.replaceAll("\\", "/") : value;
+		return ignoreCase ? unified.toLowerCase() : unified;
+	};
+	const comparablePath = comparable(path);
+	let comparableRoot = comparable(root);
+	if (comparableRoot !== "/" && !/^[a-z]:\/$/i.test(comparableRoot)) {
+		comparableRoot = comparableRoot.replace(/\/+$/, "");
+	}
+	if (!comparableRoot) return null;
+	if (comparablePath === comparableRoot) return path.length;
+	const rootPrefix = comparableRoot.endsWith("/") ? comparableRoot : `${comparableRoot}/`;
+	if (!comparablePath.startsWith(rootPrefix)) return null;
+	return trimTrailingNativeSeparators(root).length;
+}
+
+function workspaceCopyRelativePath(worktreePath: string, path: string): string {
+	if (!path || !isNativeAbsolutePath(path, worktreePath)) return path;
+	const windows = isWindowsNativePath(worktreePath);
+	const root = trimTrailingNativeSeparators(worktreePath);
+	const prefixLength = nativeWorktreePrefixLength(
+		path,
+		root,
+		windows,
+		windows && isWindowsNativePath(path),
+	);
+	if (prefixLength === null) return path;
+	return path.slice(prefixLength).replace(/^[\\/]+/, "") || nativeFileName(path, windows);
+}
+
 export function joinWorkspacePath(worktreePath: string, relativePath: string): string {
-	const relative = projectRelativePath(relativePath, worktreePath);
-	const posixRoot = trimTrailingSlashes(canonicalPosixPath(worktreePath));
-	const posixJoined = relative
-		? posixRoot.endsWith("/")
-			? `${posixRoot}${relative}`
-			: posixRoot
-				? `${posixRoot}/${relative}`
-				: relative
-		: posixRoot;
-	return worktreePath.includes("\\") ? posixJoined.replaceAll("/", "\\") : posixJoined;
+	const relative = workspaceCopyRelativePath(worktreePath, relativePath).replace(/^\.\//, "");
+	const separator = nativePathSeparator(worktreePath);
+	const root = trimTrailingNativeSeparators(worktreePath);
+	if (!relative) return root;
+	if (isNativeAbsolutePath(relative, worktreePath)) return relative;
+	const nativeRelative = separator === "\\" ? relative.replaceAll("/", "\\") : relative;
+	if (root.endsWith("/") || root.endsWith("\\")) return `${root}${nativeRelative}`;
+	return root ? `${root}${separator}${nativeRelative}` : nativeRelative;
 }
 
 export type WorkspaceFileCopyKind = "absolute" | "relative";
@@ -237,7 +299,7 @@ export function workspaceFileCopyText(
 	kind: WorkspaceFileCopyKind,
 ): string {
 	return kind === "relative"
-		? projectRelativePath(relativePath, worktreePath)
+		? workspaceCopyRelativePath(worktreePath, relativePath)
 		: joinWorkspacePath(worktreePath, relativePath);
 }
 

@@ -33,6 +33,15 @@ test("joinWorkspacePath joins onto a Windows drive root without doubling separat
 	expect(joinWorkspacePath("C:/", "file.ts")).toBe("C:/file.ts");
 });
 
+test("joinWorkspacePath preserves a UNC worktree prefix", () => {
+	expect(joinWorkspacePath("\\\\server\\share\\repo", "README.md")).toBe(
+		"\\\\server\\share\\repo\\README.md",
+	);
+	expect(joinWorkspacePath("\\\\server\\share\\repo\\", "src/App.tsx")).toBe(
+		"\\\\server\\share\\repo\\src\\App.tsx",
+	);
+});
+
 test("workspaceFileCopyText returns the relative posix path or the joined absolute path", () => {
 	expect(workspaceFileCopyText("/repo", "apps/web/src/App.tsx", "relative")).toBe(
 		"apps/web/src/App.tsx",
@@ -46,4 +55,26 @@ test("workspaceFileCopyText returns the relative posix path or the joined absolu
 	expect(workspaceFileCopyText("C:\\repo", "apps/web/src/App.tsx", "relative")).toBe(
 		"apps/web/src/App.tsx",
 	);
+});
+
+test("workspaceFileCopyText keeps a UNC worktree prefix", () => {
+	expect(workspaceFileCopyText("\\\\server\\share\\repo", "README.md", "absolute")).toBe(
+		"\\\\server\\share\\repo\\README.md",
+	);
+	expect(workspaceFileCopyText("\\\\server\\share\\repo", "README.md", "relative")).toBe(
+		"README.md",
+	);
+});
+
+test("workspaceFileCopyText joins onto a Windows drive root", () => {
+	expect(workspaceFileCopyText("C:\\", "file.ts", "absolute")).toBe("C:\\file.ts");
+	expect(workspaceFileCopyText("C:/", "file.ts", "absolute")).toBe("C:/file.ts");
+	expect(workspaceFileCopyText("C:\\", "file.ts", "relative")).toBe("file.ts");
+});
+
+test("workspaceFileCopyText keeps a POSIX name with a literal backslash", () => {
+	expect(workspaceFileCopyText("/repo", "a\\b.ts", "relative")).toBe("a\\b.ts");
+	expect(workspaceFileCopyText("/repo", "a\\b.ts", "absolute")).toBe("/repo/a\\b.ts");
+	expect(workspaceFileCopyText("/repo", "/repo/a\\b.ts", "relative")).toBe("a\\b.ts");
+	expect(joinWorkspacePath("/repo\\name", "file.ts")).toBe("/repo\\name/file.ts");
 });

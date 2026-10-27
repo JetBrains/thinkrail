@@ -248,8 +248,9 @@ treatment.
   reveals only if the active file differs from the persisted `seenActivePath`, and then skips the scroll
   restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. Clicks still open
   the editor. Right-clicking a file or folder row — or the Context Menu key / Shift+F10 on a focused row —
-  offers **Copy path** (the workspace worktree path joined with the row) and **Copy relative path**
-  (worktree-relative, `/`). A compacted directory copies its deepest path, matching the row label.
+  offers **Copy path** (the workspace worktree path joined with the row, keeping a UNC prefix and POSIX
+  literal backslashes) and **Copy relative path** (the row's host-produced worktree-relative path).
+  A compacted directory copies its deepest path, matching the row label.
   Copying identifies the clicked row and does not open or select it. A failed first status read shows no marks; a failed refresh keeps the last ones, like the
   Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
   All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
