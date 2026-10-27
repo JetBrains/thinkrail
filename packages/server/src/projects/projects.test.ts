@@ -290,7 +290,7 @@ function withFailingCommitHook<T>(hookBody: string, run: () => T): T {
 	mkdirSync(hooks, { recursive: true });
 	writeFileSync(join(hooks, "pre-commit"), `#!/bin/sh\n${hookBody}\nexit 1\n`, { mode: 0o755 });
 	const config = join(dataDir, "gitconfig");
-	writeFileSync(config, `[core]\n\thooksPath = ${hooks}\n`);
+	writeFileSync(config, `[core]\n\thooksPath = "${hooks.replaceAll("\\", "/")}"\n`);
 	const saved = process.env.GIT_CONFIG_GLOBAL;
 	process.env.GIT_CONFIG_GLOBAL = config;
 	try {
