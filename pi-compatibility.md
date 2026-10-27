@@ -124,7 +124,9 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
   Pi's session-total loop (`AgentSession.getSessionStats`) is not exported for a bare session file, so
   the host mirrors which entries carry spend (`usage`, compaction/branch-summary `usage`, assistant and
   tool-result message usage) to reconcile crashed child runs. Remove the mirror when pi exports a totals
-  helper over entries or a file; `delegation.test.ts` pins parity with pi's own run delta.
+  helper over entries or a file. Until then `delegation.test.ts` ("the subagent totals mirror matches pi's
+  own totals for every spend source") pins parity with pi's `getSessionStats` on one transcript that
+  carries every spend source, including off-branch spend; rerun it on every pi bump.
 
 ## Not temporary SDK workarounds
 

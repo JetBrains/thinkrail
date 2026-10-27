@@ -255,6 +255,59 @@ test("a child run's usage delta lands in the parent's pi totals and invalidates 
 	}
 });
 
+test("the subagent totals mirror matches pi's own totals for every spend source", async () => {
+	const cwd = tmpDir("trdel-parity-");
+	const spend = (seed: number, total: number) => ({
+		input: seed,
+		output: seed + 1,
+		cacheRead: seed + 2,
+		cacheWrite: seed + 3,
+		totalTokens: 4 * seed + 6,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total },
+	});
+	const transcript = SessionManager.create(cwd, tmpDir("trdel-parity-sessions-"));
+	transcript.appendMessage({ role: "user", content: "Find it.", timestamp: Date.now() });
+	const askedId = transcript.appendMessage({
+		...fauxAssistantMessage([fauxToolCall("search", { q: "it" }, { id: "call-1" })], {
+			stopReason: "toolUse",
+		}),
+		usage: spend(10, 0.011),
+	});
+	transcript.appendMessage({
+		role: "toolResult",
+		toolCallId: "call-1",
+		toolName: "search",
+		content: [{ type: "text", text: "found" }],
+		isError: false,
+		usage: spend(20, 0.022),
+		timestamp: Date.now(),
+	});
+	transcript.appendCompaction("Compacted.", askedId, 1_000, undefined, false, spend(30, 0.033));
+	transcript.branchWithSummary(askedId, "Abandoned branch.", undefined, false, spend(40, 0.044));
+	transcript.appendUsage("cache_warm", "faux", "faux", spend(50, 0.055));
+	const file = transcript.getSessionFile();
+	if (!file) throw new Error("expected a persisted transcript");
+
+	setSessionManagerFactory(() => SessionManager.open(file));
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-parity" });
+	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	try {
+		const pi = getSessionStats(sessionId);
+		expect(pi.tokens).toMatchObject({ input: 150, output: 155, cacheRead: 160, cacheWrite: 165 });
+		expect(pi.cost).toBeCloseTo(0.165, 12);
+		const mirror = childFileUsage(transcript.getSessionId(), readFileSync(file, "utf8"));
+		expect(mirror?.usage).toMatchObject({
+			input: pi.tokens.input,
+			output: pi.tokens.output,
+			cacheRead: pi.tokens.cacheRead,
+			cacheWrite: pi.tokens.cacheWrite,
+		});
+		expect(mirror?.usage.cost.total).toBeCloseTo(pi.cost, 12);
+	} finally {
+		await removeSession(sessionId);
+	}
+});
+
 async function parentWithGatedChild(workspaceId: string) {
 	let parentManager: SessionManager | undefined;
 	setSessionManagerFactory((dir) => {
