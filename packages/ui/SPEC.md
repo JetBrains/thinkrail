@@ -61,7 +61,7 @@ test's documented specialized list names it.
 - **Sizes** (exactly three; border-box, same for every variant and state, radius `rounded-sm`, type
   `tr-text-button` — the 14px interface face at weight 470, one step above ordinary UI text): `s` 20px
   high, 4px text padding, 14px icon, 4px icon↔text gap, 20px square icon-only; `m` 24 / 8 / 16 / 4 / 24;
-  `l` 32 / 12 / 20 / 6 / 32 (the default). At `s` the gap equals the side padding: a 12px icon read as
+  `l` 32 / 12 / 20 / 6 / 32 (the default for `Button`; `IconButton` defaults to `m`). At `s` the gap equals the side padding: a 12px icon read as
   lighter than the 14px label beside it, so the icon was raised to 14px and the gap to 4px to keep the pair
   legible. Icon weight follows the icon size only — Remix Icon ships Line/Fill, not stroke weights, so
   there is no per-size weight to match and none is simulated with CSS. Icons never shrink; text buttons
