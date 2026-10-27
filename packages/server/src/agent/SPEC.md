@@ -564,10 +564,19 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     while parents created afterward project the new generation. The host-wide `getPiRuntime` resolver
     is passed as the core's dynamic fallback rather than captured at service creation. One
     `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
-    at bind time). Every parented `run-terminal` appends that run's usage delta to the live parent as a pi
-    `usage` entry (`kind: "subagent"`, `note` = child session id; only the cost total is known) and
-    publishes `entry_appended { entryType: "usage" }`, so pi's own session totals include delegated spend
-    for every outcome and consumer (Agent, `request_review`), independent of completion delivery. This is
+    at bind time). A parented run's spend is appended to the live parent as pi `usage` entries
+    (`kind: "subagent"`, `note` = child session id; only the cost total is known), each publishing
+    `entry_appended { entryType: "usage" }`: every `run-progress` (after each child response or tool
+    start) appends the increment of the run's usage delta over a per-run watermark, and `run-terminal`
+    appends the remainder, so the toolbar follows a running subagent and pi's own session totals include
+    delegated spend for every outcome and consumer (Agent, `request_review`), independent of completion
+    delivery. The watermark is in-memory, starts at zero on `run-queued`, is dropped at `run-terminal`,
+    and advances whenever pi took the increment into its session (even if persisting it failed), so a
+    write is never counted twice; an increment pi did not take is carried by the next one, but one dropped
+    at `run-terminal` is not carried into the child's next run — reconciliation recovers it. Increments
+    record any positive token count or a cost above 1e-9. Progress events skip the listener's
+    resource/state publishes (resource summaries carry status, not usage). Progress only freshens the
+    readout; crash recovery still comes from child transcripts and reconciliation. This is
     delegated spend's only accounting channel: delegation tools must never return `AgentToolResult.usage`,
     which pi would sum a second time. The write is best-effort, like pi's cache warmer: a failed append is
     logged and never fails the child run. `recordSessionUsage` reports only whether pi took the usage into
@@ -580,7 +589,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     a chat keeps its entry writable until its teardown cascade settles, so runs that cascade stops are
     still recorded; attach is refused during teardown, so the transcript keeps one writer. A deletion
     tombstone suppresses the write, because pi's append would recreate the trashed file. Graceful host
-    shutdown records within its budget. Children cannot spawn children (`RECURSION_GUARD_TOOLS`), so deltas
+    shutdown records within its budget; emergency disposal (`disposeAllSessions`) revokes the teardown
+    writers together with the tombstones, so a late record can never recreate a trashed transcript, and
+    records it drops are recovered when the chat is next attached. Children cannot spawn children (`RECURSION_GUARD_TOOLS`), so deltas
     never nest. **`subagentUsage`** makes the transcript, not the event, authoritative: every attach, and
     a deletion rolled back after its tombstone suppressed a terminal write, asynchronously totals each
     fresh child file without a queued or running run under the parent's delegation directory and appends

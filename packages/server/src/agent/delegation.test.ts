@@ -5,6 +5,7 @@ import {
 	existsSync,
 	mkdtempSync,
 	readFileSync,
+	renameSync,
 	rmSync,
 	statSync,
 	writeFileSync,
@@ -659,6 +660,271 @@ test("a failed deletion recovers the usage of a child that settled while trash w
 	} finally {
 		failTrash();
 		setTrashImplementationForTests(undefined);
+		await removeSession(sessionId);
+	}
+});
+
+function twoStepChildResponses(): { release: () => void } {
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	faux.setResponses([
+		fauxAssistantMessage([fauxToolCall("no_such_tool", {})], { stopReason: "toolUse" }),
+		async () => {
+			await gate;
+			return fauxAssistantMessage("DONE");
+		},
+	]);
+	return { release };
+}
+
+function scoutChild(workspaceId: string, parent: string) {
+	return delegationServiceFor(workspaceId).createChild({
+		parent,
+		visibility: "hidden",
+		info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+		session: { systemPrompt: "You are a test scout." },
+	});
+}
+
+const tokenCounts = (usage: {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+}) => ({
+	input: usage.input,
+	output: usage.output,
+	cacheRead: usage.cacheRead,
+	cacheWrite: usage.cacheWrite,
+});
+
+async function inMemoryParent(workspaceId: string) {
+	let manager: SessionManager | undefined;
+	setSessionManagerFactory((dir) => {
+		manager = SessionManager.inMemory(dir);
+		return manager;
+	});
+	const { sessionId } = await createSession({ cwd: tmpDir(`trdel-${workspaceId}-`), workspaceId });
+	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	if (!manager) throw new Error("expected a parent session manager");
+	const parent = manager;
+	const usageEntries = () => parent.getEntries().filter((entry) => entry.type === "usage");
+	return { sessionId, manager: parent, usageEntries };
+}
+
+test("a running subagent's spend reaches its parent after each response, before the run ends", async () => {
+	const { sessionId, manager, usageEntries } = await inMemoryParent("ws-live");
+	const { release } = twoStepChildResponses();
+	try {
+		const child = await scoutChild("ws-live", sessionId);
+		const run = child.runQueued("Two steps.");
+		await waitFor(() => usageEntries().length > 0);
+		expect(child.snapshot?.status).toBe("running");
+		const firstStep = getSessionStats(sessionId).tokens.total;
+		expect(firstStep).toBeGreaterThan(0);
+
+		release();
+		const { usage } = (await run).details;
+		const { tokens } = getSessionStats(sessionId);
+		expect(tokens.total).toBeGreaterThan(firstStep);
+		expect(tokenCounts(tokens)).toEqual(tokenCounts(usage));
+		const recorded = usageEntries().length;
+		expect(recorded).toBeGreaterThanOrEqual(2);
+		await child.dispose();
+		await reconcileSessionSubagentUsage("ws-live", sessionId, () => manager.getEntries());
+		expect(usageEntries()).toHaveLength(recorded);
+	} finally {
+		release();
+		await removeSession(sessionId);
+	}
+});
+
+test.skipIf(!writesCanBeDenied)(
+	"a progress write kept only in memory is neither recounted nor lost after reopening",
+	async () => {
+		const { cwd, sessionId, file } = await persistedParent("ws-progressfail");
+		const { release } = twoStepChildResponses();
+		try {
+			const child = await scoutChild("ws-progressfail", sessionId);
+			chmodSync(file, 0o444);
+			const run = child.runQueued("Two steps.");
+			await waitFor(() => getSessionStats(sessionId).tokens.total > 0);
+			chmodSync(file, 0o644);
+			release();
+			const { usage } = (await run).details;
+			expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
+			await removeSession(sessionId);
+			const onDisk = SessionManager.open(file).getEntries();
+			expect(onDisk.filter((entry) => entry.type === "usage").length).toBeGreaterThan(0);
+
+			setSessionManagerFactory(() => SessionManager.open(file));
+			await createSession({ cwd, workspaceId: "ws-progressfail" });
+			setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+			await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+			expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
+		} finally {
+			release();
+			chmodSync(file, 0o644);
+			await removeSession(sessionId);
+		}
+	},
+);
+
+test("sequential runs of one child each record only their own spend", async () => {
+	const { sessionId } = await inMemoryParent("ws-reuse");
+	faux.setResponses([fauxAssistantMessage("FIRST"), fauxAssistantMessage("SECOND")]);
+	try {
+		const child = await scoutChild("ws-reuse", sessionId);
+		const first = (await child.runQueued("One.")).details.usage;
+		const second = (await child.runQueued("Two.")).details.usage;
+		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual({
+			input: first.input + second.input,
+			output: first.output + second.output,
+			cacheRead: first.cacheRead + second.cacheRead,
+			cacheWrite: first.cacheWrite + second.cacheWrite,
+		});
+	} finally {
+		await removeSession(sessionId);
+	}
+});
+
+test("a dropped progress write is carried by the run's remainder", async () => {
+	const { sessionId, manager } = await inMemoryParent("ws-dropprogress");
+	const appendUsage = manager.appendUsage.bind(manager);
+	let failures = 1;
+	manager.appendUsage = (...args) => {
+		if (failures-- > 0) throw new Error("EAGAIN: resource temporarily unavailable");
+		return appendUsage(...args);
+	};
+	faux.setResponses([fauxAssistantMessage("DONE")]);
+	try {
+		const child = await scoutChild("ws-dropprogress", sessionId);
+		const { usage } = (await child.runQueued("One.")).details;
+		expect(failures).toBe(-1);
+		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
+	} finally {
+		manager.appendUsage = appendUsage;
+		await removeSession(sessionId);
+	}
+});
+
+test("a dropped terminal write is recovered by reconciliation, never by the child's next run", async () => {
+	const { sessionId, manager } = await inMemoryParent("ws-dropterminal");
+	const appendUsage = manager.appendUsage.bind(manager);
+	let failing = true;
+	manager.appendUsage = (...args) => {
+		if (failing) throw new Error("EAGAIN: resource temporarily unavailable");
+		return appendUsage(...args);
+	};
+	faux.setResponses([fauxAssistantMessage("FIRST"), fauxAssistantMessage("SECOND")]);
+	try {
+		const child = await scoutChild("ws-dropterminal", sessionId);
+		const first = (await child.runQueued("One.")).details.usage;
+		failing = false;
+		const second = (await child.runQueued("Two.")).details.usage;
+		expect(getSessionStats(sessionId).tokens.input).toBe(second.input);
+
+		await child.dispose();
+		await reconcileSessionSubagentUsage("ws-dropterminal", sessionId, () => manager.getEntries());
+		expect(getSessionStats(sessionId).tokens.input).toBe(first.input + second.input);
+	} finally {
+		manager.appendUsage = appendUsage;
+		await removeSession(sessionId);
+	}
+});
+
+test("a failed deletion after partial progress records only the missing remainder", async () => {
+	let reportTrashStarted: () => void = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash: () => void = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
+	setTrashImplementationForTests(async () => {
+		reportTrashStarted();
+		await trashOutcome;
+	});
+	const { cwd, sessionId, manager } = await persistedParent("ws-partialdelete");
+	const usageEntries = () => manager.getEntries().filter((entry) => entry.type === "usage");
+	const { release } = twoStepChildResponses();
+	try {
+		const child = await scoutChild("ws-partialdelete", sessionId);
+		const run = child.runQueued("Two steps.");
+		await waitFor(() => usageEntries().length > 0);
+		const partial = usageEntries().length;
+		const deleting = deleteSession(sessionId, "ws-partialdelete", cwd);
+		await trashStarted;
+		release();
+		const { usage } = (await run).details;
+		expect(usageEntries()).toHaveLength(partial);
+
+		failTrash();
+		await expect(deleting).rejects.toThrow("recycle bin unavailable");
+		await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
+	} finally {
+		failTrash();
+		release();
+		setTrashImplementationForTests(undefined);
+		await removeSession(sessionId);
+	}
+});
+
+test("emergency disposal never lets a late subagent record recreate a trashed transcript", async () => {
+	const { cwd, sessionId, file } = await persistedParent("ws-emergency");
+	setTrashImplementationForTests(async (input) => {
+		for (const path of typeof input === "string" ? [input] : input) {
+			renameSync(path, `${path}.trashed`);
+		}
+	});
+	const { release } = gatedChildResponse();
+	try {
+		const child = await scoutChild("ws-emergency", sessionId);
+		const run = child.runQueued("Long background job.");
+		await waitFor(() => child.snapshot?.status === "running");
+		const deleting = deleteSession(sessionId, "ws-emergency", cwd);
+		await waitFor(() => !existsSync(file) && liveParentContext(sessionId) === undefined);
+		disposeAllSessions();
+		release();
+		expect((await run).details.usage.input).toBeGreaterThan(0);
+		await deleting;
+		expect(existsSync(file)).toBe(false);
+	} finally {
+		release();
+		setTrashImplementationForTests(undefined);
+	}
+});
+
+test("spend dropped by emergency disposal during a close is recovered when the chat reopens", async () => {
+	const { cwd, sessionId, file } = await persistedParent("ws-closeemergency");
+	const { release } = gatedChildResponse();
+	try {
+		const child = await scoutChild("ws-closeemergency", sessionId);
+		const run = child.runQueued("Long background job.");
+		await waitFor(() => child.snapshot?.status === "running");
+		const closed = removeSession(sessionId);
+		await waitFor(() => liveParentContext(sessionId) === undefined);
+		disposeAllSessions();
+		release();
+		const { usage } = (await run).details;
+		await closed;
+		expect(usage.input).toBeGreaterThan(0);
+		expect(
+			SessionManager.open(file)
+				.getEntries()
+				.some((entry) => entry.type === "usage"),
+		).toBe(false);
+
+		setSessionManagerFactory(() => SessionManager.open(file));
+		await createSession({ cwd, workspaceId: "ws-closeemergency" });
+		setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+		await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+	} finally {
+		release();
 		await removeSession(sessionId);
 	}
 });

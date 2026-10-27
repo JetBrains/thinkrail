@@ -5,10 +5,12 @@ import { join } from "node:path";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import {
 	childFileUsage,
+	raiseWatermark,
 	reconcileSubagentUsage,
 	SUBAGENT_USAGE_KIND,
 	type SubagentUsage,
 	unrecordedUsage,
+	usageIncrement,
 } from "./subagentUsage";
 
 const header = (extra: Record<string, unknown> = {}) =>
@@ -174,4 +176,22 @@ test("cost-only child spend is reconciled once", async () => {
 	expect(parent.entries.map((entry) => entry.type === "usage" && entry.usage.cost.total)).toEqual([
 		0.5,
 	]);
+});
+
+test("run increments keep cost-only spend and skip duplicate snapshots and cost noise", () => {
+	const totals = (input: number, cost: number) => ({
+		input,
+		output: 2,
+		cacheRead: 3,
+		cacheWrite: 4,
+		cost,
+	});
+	expect(usageIncrement(totals(10, 0.1), undefined)).toEqual(totals(10, 0.1));
+	expect(usageIncrement(totals(10, 0.1), totals(10, 0.1))).toBeUndefined();
+	expect(usageIncrement(totals(10, 0.1 + 1e-12), totals(10, 0.1))).toBeUndefined();
+	const costOnly = usageIncrement(totals(10, 0.4), totals(10, 0.1));
+	expect(costOnly).toMatchObject({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+	expect(costOnly?.cost).toBeCloseTo(0.3, 12);
+	expect(usageIncrement(totals(15, 0.1), totals(20, 0.1))).toBeUndefined();
+	expect(raiseWatermark(totals(20, 0.1), totals(15, 0.3))).toEqual(totals(20, 0.3));
 });

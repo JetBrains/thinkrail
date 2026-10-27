@@ -15,6 +15,7 @@ import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	type ChildHandle,
 	createDelegationService,
+	type DelegationRunDetails,
 	type DelegationService,
 	delegationSessionDir,
 	deriveChildSessionFile,
@@ -34,10 +35,13 @@ import { childBaseExtensionFactories, childExtensionFactories } from "./extensio
 import { getPiRuntime } from "./piRuntime";
 import { isHostResourceId, isPiSessionId } from "./resourceIdentity";
 import {
+	raiseWatermark,
 	reconcileSubagentUsage,
-	runUsage,
 	SUBAGENT_USAGE_KIND,
 	type SubagentUsage,
+	subagentUsage,
+	type UsageTotals,
+	usageIncrement,
 } from "./subagentUsage";
 
 export function delegationRootDir(): string {
@@ -60,15 +64,29 @@ export function refreshSubagentConcurrency(workspaceId?: string): void {
 	}
 }
 
-function recordSubagentUsage(parentSessionId: string, usage: SubagentUsage | undefined): void {
-	if (!usage) return;
-	recordSessionUsage(parentSessionId, {
+function recordSubagentUsage(parentSessionId: string, usage: SubagentUsage): boolean {
+	return recordSessionUsage(parentSessionId, {
 		kind: SUBAGENT_USAGE_KIND,
 		provider: usage.provider,
 		model: usage.model,
 		usage: usage.usage,
 		note: usage.childSessionId,
 	});
+}
+
+const runWatermarks = new Map<string, UsageTotals>();
+
+function recordRunUsage(
+	parentSessionId: string,
+	childSessionId: string,
+	details: DelegationRunDetails,
+): void {
+	const watermark = runWatermarks.get(childSessionId);
+	const increment = usageIncrement(details.usage, watermark);
+	if (!increment) return;
+	const usage = subagentUsage(childSessionId, details.model, increment);
+	if (recordSubagentUsage(parentSessionId, usage))
+		runWatermarks.set(childSessionId, raiseWatermark(watermark, details.usage));
 }
 
 export function reconcileSessionSubagentUsage(
@@ -103,11 +121,15 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			buildChildSettings: buildSessionSettings,
 		});
 		service.onLifecycle((event) => {
-			if (event.type === "run-terminal")
-				recordSubagentUsage(
-					event.parentSessionId,
-					runUsage(event.sessionId, event.outcome.details),
-				);
+			if (event.type === "run-progress") {
+				recordRunUsage(event.parentSessionId, event.sessionId, event.details);
+				return;
+			}
+			if (event.type === "run-queued") runWatermarks.delete(event.sessionId);
+			if (event.type === "run-terminal") {
+				recordRunUsage(event.parentSessionId, event.sessionId, event.outcome.details);
+				runWatermarks.delete(event.sessionId);
+			}
 			const parentSessionId =
 				event.type === "child-created" ? event.record.parentSessionId : event.parentSessionId;
 			if (canUseSessionResources(parentSessionId, workspaceId)) {

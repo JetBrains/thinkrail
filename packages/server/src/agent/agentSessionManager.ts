@@ -2769,6 +2769,7 @@ export function disposeAllSessions(): void {
 		disposePiSessionAfterShutdown(entry);
 	}
 	sessions.clear();
+	tearingDownEntries.clear();
 	deletedSessions.clear();
 }
 

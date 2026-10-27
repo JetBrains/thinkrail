@@ -210,7 +210,10 @@ conditional first state; the diagram's direct `running` entry remains the semant
 when it lands). Entering `queued` initializes matching `RunSnapshot.status` and
 `RunSnapshot.details.status`; the transition to `running` updates both fields and the run's
 `onUpdate` callback together before `run-started` is emitted, so consumers never observe
-contradictory in-flight status surfaces.
+contradictory in-flight status surfaces. While a parented run is running, every in-run update (child
+`tool_execution_start` and `turn_end`) is also emitted as `run-progress` with the details object the
+snapshot just stored, so an embedder can follow live usage without owning the run's `onUpdate`; a
+queued run that never starts emits none, and resource-owned children emit no lifecycle events.
 
 ```mermaid
 stateDiagram-v2

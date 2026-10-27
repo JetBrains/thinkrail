@@ -872,7 +872,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
 - **Live session telemetry follows Pi's finalized boundaries.** `SessionStatsBar` renders only the host's
   authoritative `session.getStats` snapshot; the web never derives billed totals or context usage from
   message content. Totals include delegated subagent spend, which the host records into the parent as pi
-  `usage` entries. The mounted chat refreshes on mount/reconnect, after each finalized message, compaction,
+  `usage` entries after each response of a running subagent and at its run's end, so the toolbar moves
+  while a subagent works instead of jumping when it finishes. The mounted chat refreshes on mount/reconnect, after each finalized message, compaction,
   settlement, and appended spend- or context-bearing entry (`usage` from subagent runs or cache warming,
   `compaction`, `branch_summary`, `context_edit`), and after Pi accepts a model change. A reconnect read may race a restarted host before
   transcript sync has reattached the persisted session, so that sync edge retriggers the read. Consecutive

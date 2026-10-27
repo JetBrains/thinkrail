@@ -7,7 +7,6 @@ import {
 	parseSessionEntries,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import type { DelegationRunDetails } from "pi-delegation";
 import { logger } from "../log";
 
 const log = logger("agent");
@@ -46,18 +45,44 @@ function tokensOf(totals: Totals): number {
 	return totals.input + totals.output + totals.cacheRead + totals.cacheWrite;
 }
 
-export function runUsage(
+export type UsageTotals = Totals;
+
+export function subagentUsage(
 	childSessionId: string,
-	details: DelegationRunDetails,
-): SubagentUsage | undefined {
-	if (tokensOf(details.usage) === 0 && details.usage.cost === 0) return undefined;
-	const ref = details.model ?? "unknown";
+	modelRef: string | undefined,
+	totals: Totals,
+): SubagentUsage {
+	const ref = modelRef ?? "unknown";
 	const slash = ref.indexOf("/");
 	return {
 		childSessionId,
 		provider: slash > 0 ? ref.slice(0, slash) : "unknown",
 		model: ref.slice(slash + 1),
-		usage: toUsage(details.usage),
+		usage: toUsage(totals),
+	};
+}
+
+export function usageIncrement(current: Totals, watermark: Totals | undefined): Totals | undefined {
+	const base = watermark ?? emptyTotals();
+	const cost = current.cost - base.cost;
+	const increment: Totals = {
+		input: Math.max(0, current.input - base.input),
+		output: Math.max(0, current.output - base.output),
+		cacheRead: Math.max(0, current.cacheRead - base.cacheRead),
+		cacheWrite: Math.max(0, current.cacheWrite - base.cacheWrite),
+		cost: cost > COST_EPSILON ? cost : 0,
+	};
+	return tokensOf(increment) > 0 || increment.cost > 0 ? increment : undefined;
+}
+
+export function raiseWatermark(watermark: Totals | undefined, current: Totals): Totals {
+	const base = watermark ?? emptyTotals();
+	return {
+		input: Math.max(base.input, current.input),
+		output: Math.max(base.output, current.output),
+		cacheRead: Math.max(base.cacheRead, current.cacheRead),
+		cacheWrite: Math.max(base.cacheWrite, current.cacheWrite),
+		cost: Math.max(base.cost, current.cost),
 	};
 }
 

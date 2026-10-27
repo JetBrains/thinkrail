@@ -251,7 +251,16 @@ test("a foreground run completes: outcome, registry, lineage storage, lifecycle 
 	let startedView:
 		| { snapshotStatus: string | undefined; detailsStatus: string | undefined; updates: string[] }
 		| undefined;
+	const progressViews: { matchesSnapshot: boolean; status: string; turns: number }[] = [];
 	child.onEvent((event) => {
+		if (event.type === "run-progress") {
+			progressViews.push({
+				matchesSnapshot: event.details === child.snapshot?.details,
+				status: event.details.status,
+				turns: event.details.usage.turns,
+			});
+			return;
+		}
 		if (event.type !== "run-started") return;
 		startedView = {
 			snapshotStatus: child.snapshot?.status,
@@ -298,8 +307,10 @@ test("a foreground run completes: outcome, registry, lineage storage, lifecycle 
 		"child-created",
 		"run-queued",
 		"run-started",
+		"run-progress",
 		"run-terminal",
 	]);
+	expect(progressViews).toEqual([{ matchesSnapshot: true, status: "running", turns: 1 }]);
 
 	await child.dispose();
 	expect(service.findChild(child.sessionId)).toBeUndefined();
@@ -1120,7 +1131,13 @@ test("concurrent child and parent disposal share one teardown and both await it"
 		expect(paced.findChild(child.sessionId)).toBeUndefined();
 		expect((await run).status).toBe("aborted");
 		await childDisposal;
-		expect(events).toEqual(["run-queued", "run-started", "run-terminal", "child-disposed"]);
+		expect(events).toEqual([
+			"run-queued",
+			"run-started",
+			"run-progress",
+			"run-terminal",
+			"child-disposed",
+		]);
 	} finally {
 		await Promise.allSettled([childDisposal, run]);
 		await paced.disposeChildrenOf(parent.sessionId);
