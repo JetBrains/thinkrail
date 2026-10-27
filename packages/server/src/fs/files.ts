@@ -56,15 +56,42 @@ function isGitSegmentInDir(parentDir: string, segment: string): boolean {
 }
 
 function isGitMetadataPath(root: string, candidate: string): boolean {
+	if (process.platform !== "win32") {
+		return relative(root, candidate).split(sep).includes(".git");
+	}
+
 	const rel = relative(root, candidate);
 	if (rel === "" || rel === ".") return false;
-	const segments = process.platform === "win32" ? rel.split(/[\\/]/) : rel.split(sep);
-	let current = root;
-	for (const segment of segments) {
-		if (segment === "" || segment === ".") continue;
-		if (isGitSegmentInDir(current, segment)) return true;
-		current = join(current, segment);
+
+	const n = rel.length;
+	let start = 0;
+	let prevEnd = 0;
+
+	for (let i = 0; i <= n; i++) {
+		const isSep =
+			i === n || rel.charCodeAt(i) === 47 /* '/' */ || rel.charCodeAt(i) === 92 /* '\\' */;
+		if (isSep) {
+			if (i > start) {
+				const segment = rel.slice(start, i);
+				if (segment !== ".") {
+					const streamStripped = segment.split(":")[0] ?? "";
+					const entryName = trimWin32TrailingDotsAndSpaces(streamStripped);
+					const base = entryName.toLowerCase();
+					if (base === ".git") return true;
+					if (/^git~\d+$/i.test(base)) {
+						const parentRel = prevEnd > 0 ? rel.slice(0, prevEnd) : "";
+						const parentDir = parentRel.length > 0 ? join(root, parentRel) : root;
+						if (isSameFileOrDir(join(parentDir, entryName), join(parentDir, ".git"))) {
+							return true;
+						}
+					}
+				}
+				prevEnd = i;
+			}
+			start = i + 1;
+		}
 	}
+
 	return false;
 }
 

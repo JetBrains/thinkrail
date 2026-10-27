@@ -69,6 +69,13 @@ test("readDir refuses .git and filters it from listings", () => {
 	expect(top).not.toContain(".git");
 });
 
+test("candidate path inspection does not exhibit quadratic segment traversal on long paths", () => {
+	const deepPath = "a/".repeat(60_000) + "x";
+	const start = performance.now();
+	expect(() => readFile("w1", deepPath)).toThrow();
+	expect(performance.now() - start).toBeLessThan(1000);
+});
+
 test.skipIf(process.platform !== "win32")(
 	"candidate path inspection runs deterministically with long runs of dots and spaces",
 	() => {
