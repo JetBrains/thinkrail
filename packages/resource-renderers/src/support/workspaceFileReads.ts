@@ -52,40 +52,55 @@ export function startWorkspaceFileReads({
 	let alive = true;
 	let issued = 0;
 	let applied = 0;
+	let busy = false;
+	let again = false;
 	const settle = (ticket: number, next: (current: LoadedFile | null) => LoadedFile) => {
 		if (!alive || ticket < applied) return;
 		applied = ticket;
 		update(next);
 	};
+	const followUp = () => {
+		busy = false;
+		if (!again || !alive) return;
+		again = false;
+		load();
+	};
 	const load = () => {
+		if (busy) {
+			again = true;
+			return;
+		}
+		busy = true;
 		issued += 1;
 		const ticket = issued;
-		read().then(
-			({ content, meta }) =>
-				settle(ticket, (current) => {
-					const previous = ready(current);
-					if (previous && meta && meta.hash !== null && previous.meta.hash === meta.hash) {
-						return previous.stale === undefined
-							? previous
-							: { status: "ready", content: previous.content, meta: previous.meta };
-					}
-					return {
-						status: "ready",
-						content: resourceContent(content, meta, bytesUrl),
-						meta: meta ?? PENDING_TEXT_META,
-					};
-				}),
-			(error: unknown) =>
-				settle(ticket, (current) => {
-					const previous = ready(current);
-					const message = errorMessage(error);
-					if (previous)
-						return previous.stale === message ? previous : { ...previous, stale: message };
-					return current?.status === "error" && current.message === message
-						? current
-						: { status: "error", message };
-				}),
-		);
+		new Promise<Awaited<ReturnType<typeof read>>>((resolve) => resolve(read()))
+			.then(
+				({ content, meta }) =>
+					settle(ticket, (current) => {
+						const previous = ready(current);
+						if (previous && meta && meta.hash !== null && previous.meta.hash === meta.hash) {
+							return previous.stale === undefined
+								? previous
+								: { status: "ready", content: previous.content, meta: previous.meta };
+						}
+						return {
+							status: "ready",
+							content: resourceContent(content, meta, bytesUrl),
+							meta: meta ?? PENDING_TEXT_META,
+						};
+					}),
+				(error: unknown) =>
+					settle(ticket, (current) => {
+						const previous = ready(current);
+						const message = errorMessage(error);
+						if (previous)
+							return previous.stale === message ? previous : { ...previous, stale: message };
+						return current?.status === "error" && current.message === message
+							? current
+							: { status: "error", message };
+					}),
+			)
+			.finally(followUp);
 	};
 	const unsubscribe = subscribe(load);
 	load();
