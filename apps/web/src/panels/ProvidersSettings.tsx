@@ -16,6 +16,7 @@ import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
+import { LocalModelsSettings } from "./LocalModelsSettings";
 import { ProviderRow } from "./ProviderRow";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { useProviderAuth } from "./useProviderAuth";
@@ -117,6 +118,8 @@ export function ProvidersSettings() {
 							{...(quotaSettings ? { quotaSettings } : {})}
 						/>
 					) : null}
+
+					<LocalModelsSettings />
 
 					{subscriptionRows.length > 0 ? (
 						<SettingsGroup

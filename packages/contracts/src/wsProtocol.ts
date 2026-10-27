@@ -128,7 +128,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 98;
+export const PROTOCOL_VERSION = 99;
+export const LOCAL_MODELS_PROTOCOL_VERSION = 99;
 export const SURVEY_TRANSLATIONS_PROTOCOL_VERSION = 98;
 export const RESOURCE_HISTORY_PROTOCOL_VERSION = 96;
 export const PROJECT_CLONE_PROTOCOL_VERSION = 95;
@@ -334,6 +335,10 @@ export const WS_METHODS = {
 	modelDefault: "model.default",
 	modelContextSettings: "model.contextSettings",
 	modelSetContextWindow: "model.setContextWindow",
+	localModelsList: "localModels.list",
+	localModelsProbe: "localModels.probe",
+	localModelsSave: "localModels.save",
+	localModelsRemove: "localModels.remove",
 	modelClampThinking: "model.clampThinking",
 	providerStatus: "provider.status",
 	providerDetect: "provider.detect",
@@ -591,6 +596,109 @@ export type ModelContextTarget = "available" | Pick<WireModel, "provider" | "id"
 export interface ModelContextSetting
 	extends Pick<WireModel, "provider" | "id" | "name" | "contextWindow"> {
 	override: number | null;
+}
+
+export const LOCAL_MODEL_SERVER_KINDS = [
+	"llama.cpp",
+	"vllm",
+	"ollama",
+	"lmstudio",
+	"openai-compatible",
+] as const;
+
+export type LocalModelServerKind = (typeof LOCAL_MODEL_SERVER_KINDS)[number];
+
+export const LOCAL_MODEL_DEFAULT_URLS: Readonly<Record<LocalModelServerKind, string>> = {
+	"llama.cpp": "http://127.0.0.1:8080/v1",
+	vllm: "http://127.0.0.1:8000/v1",
+	ollama: "http://127.0.0.1:11434/v1",
+	lmstudio: "http://127.0.0.1:1234/v1",
+	"openai-compatible": "http://127.0.0.1:8000/v1",
+};
+
+export const LOCAL_MODEL_CONTEXT_LIMITS = {
+	min: 1_024,
+	max: 10_000_000,
+	fallback: 32_768,
+} as const;
+
+/** Output-token budget per request. */
+export const LOCAL_MODEL_OUTPUT_LIMITS = { min: 256, max: 1_000_000 } as const;
+
+export function isLocalModelContextWindow(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isSafeInteger(value) &&
+		value >= LOCAL_MODEL_CONTEXT_LIMITS.min &&
+		value <= LOCAL_MODEL_CONTEXT_LIMITS.max
+	);
+}
+
+export function defaultLocalMaxTokens(contextWindow: number): number {
+	return Math.max(LOCAL_MODEL_OUTPUT_LIMITS.min, Math.min(16_384, Math.floor(contextWindow / 4)));
+}
+
+export function isLocalMaxTokens(value: unknown, contextWindow: number): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isSafeInteger(value) &&
+		value >= LOCAL_MODEL_OUTPUT_LIMITS.min &&
+		value <= Math.min(LOCAL_MODEL_OUTPUT_LIMITS.max, contextWindow)
+	);
+}
+
+export interface LocalModelEntry {
+	id: string;
+	contextWindow: number;
+	/** Output-token budget pi requests; must pass `isLocalMaxTokens`. */
+	maxTokens: number;
+	reasoning: boolean;
+	vision: boolean;
+}
+
+/** A `local-*` provider in `models.json` that serves the OpenAI chat-completions API. */
+export interface LocalModelEndpoint {
+	id: string;
+	name: string;
+	baseUrl: string;
+	/** True when the provider carries a real key (a literal, `$ENV` or `!command`), not the placeholder. */
+	hasApiKey: boolean;
+	models: LocalModelEntry[];
+}
+
+export interface LocalModelProbeRequest {
+	kind: LocalModelServerKind;
+	baseUrl: string;
+	/** Omitted with `endpointId` to reuse that endpoint's saved key. */
+	apiKey?: string;
+	endpointId?: string;
+}
+
+export interface LocalModelProbedModel {
+	id: string;
+	/** What the server reported, or null when it reports no context length. */
+	contextWindow: number | null;
+	reasoning: boolean;
+	vision: boolean;
+	/** Whether the server says the model's chat template takes tools; null when it does not say. */
+	tools: boolean | null;
+}
+
+export interface LocalModelProbe {
+	baseUrl: string;
+	models: LocalModelProbedModel[];
+}
+
+export interface LocalModelEndpointDraft {
+	/** Present to replace an existing endpoint; absent to add a new one. */
+	id?: string;
+	name: string;
+	baseUrl: string;
+	/** Omitted to keep the saved key; an empty string removes it. */
+	apiKey?: string;
+	/** Drives URL normalization and defaults only; it is not saved. */
+	kind: LocalModelServerKind;
+	models: LocalModelEntry[];
 }
 
 export function isSharedModelContextTarget(
@@ -964,6 +1072,10 @@ export interface WsMethodMap {
 		params: { target: ModelContextTarget; contextWindow: number | null };
 		result: ModelContextSetting[];
 	};
+	"localModels.list": { params: Record<string, never>; result: LocalModelEndpoint[] };
+	"localModels.probe": { params: LocalModelProbeRequest; result: LocalModelProbe };
+	"localModels.save": { params: LocalModelEndpointDraft; result: LocalModelEndpoint[] };
+	"localModels.remove": { params: { id: string }; result: LocalModelEndpoint[] };
 	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
 	"provider.detect": { params: Record<string, never>; result: { accounts: DetectedAccount[] } };
 	"provider.loginStart": {

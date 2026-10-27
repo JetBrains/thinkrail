@@ -630,6 +630,22 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   only settings **`isSharedModelContextTarget`** accepts (no override, or one inside the range): an
   override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
   existing `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
+  **`localModels.list`** / **`localModels.probe`** / **`localModels.save`** / **`localModels.remove`**
+  (v99, `LOCAL_MODELS_PROTOCOL_VERSION`; local and self-hosted OpenAI chat-completions servers stored as
+  pi `models.json` providers with `local-*` ids. `LocalModelServerKind` is closed
+  (`LOCAL_MODEL_SERVER_KINDS`: llama.cpp, vLLM, Ollama, LM Studio, generic OpenAI-compatible) with
+  per-kind `LOCAL_MODEL_DEFAULT_URLS`; the kind is a form-only input to probes and saves and is not
+  stored. Probing takes `{kind, baseUrl, apiKey? | endpointId?}` (an `endpointId` without `apiKey` reuses
+  that endpoint's saved key host-side, only for its own unchanged URL) and returns the normalized
+  `baseUrl` plus `LocalModelProbedModel`s whose `contextWindow` is `null` when the server reports no
+  running context, with a per-model `tools` hint. Saves take a `LocalModelEndpointDraft` (absent `id` =
+  add; absent `apiKey` = keep, `""` = clear) whose context windows must pass
+  **`isLocalModelContextWindow`** (`LOCAL_MODEL_CONTEXT_LIMITS`, 1,024–10,000,000; `fallback` 32,768 for
+  servers that report nothing) and whose `maxTokens` must pass **`isLocalMaxTokens`**
+  (`LOCAL_MODEL_OUTPUT_LIMITS`, ≥256 and ≤ the context; `defaultLocalMaxTokens` is the shared default).
+  Every list/save/remove returns `LocalModelEndpoint[]` (`id`, `name`, `baseUrl`, `hasApiKey` rather
+  than the key, and the effective model entries); saves and removals that change `models.json` emit
+  `provider.changed`) /
   **`model.clampThinking`** (pi's
   `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
   client re-derives pi's policy) / **`provider.status`**

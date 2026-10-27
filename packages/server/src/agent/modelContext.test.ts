@@ -15,11 +15,8 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createAgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { parse } from "jsonc-parser";
-import {
-	listModelContextSettings,
-	setModelContextPublisher,
-	setModelContextWindow,
-} from "./modelContext";
+import { listModelContextSettings, setModelContextWindow } from "./modelContext";
+import { setModelsFilePublisher } from "./modelsFile";
 import { configurePiRuntime } from "./piRuntime";
 
 let directory: string;
@@ -48,7 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	setModelContextPublisher(null);
+	setModelsFilePublisher(null);
 	configurePiRuntime(null);
 	if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
@@ -130,7 +127,7 @@ test("saving 1M updates Pi metadata for new chats, keeps live session models, an
 		sessionManager: SessionManager.inMemory(),
 	});
 	let published = 0;
-	setModelContextPublisher(() => {
+	setModelsFilePublisher(() => {
 		published++;
 	});
 	try {

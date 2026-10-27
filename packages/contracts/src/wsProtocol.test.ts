@@ -19,14 +19,18 @@ import {
 	completionDelivery,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
+	defaultLocalMaxTokens,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
+	isLocalMaxTokens,
+	isLocalModelContextWindow,
 	isTodoReviewFixMessage,
 	isToolResponsePending,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
+	LOCAL_MODELS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
@@ -249,7 +253,7 @@ test("the stored host environment is pinned to v91", () => {
 	expect(WS_METHODS.environmentUpdate).toBe("environment.update");
 });
 
-test("client error reports are pinned to v90", () => {
+test("client error reports ride from v90", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CLIENT_ERROR_REPORT_PROTOCOL_VERSION);
 	expect(CLIENT_ERROR_REPORT_PROTOCOL_VERSION).toBe(90);
 	expect(WS_METHODS.clientReportError).toBe("client.reportError");
@@ -282,6 +286,7 @@ test("review details and the GitHub review actions are pinned to v88", () => {
 test("project create and the onboarding dismissal are pinned to v94", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ONBOARDING_PROTOCOL_VERSION);
 	expect(ONBOARDING_PROTOCOL_VERSION).toBe(94);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ONBOARDING_PROTOCOL_VERSION);
 	expect(WS_METHODS.projectCreate).toBe("project.create");
 	expect(WS_METHODS.providerDetect).toBe("provider.detect");
 	expect(DEFAULT_CONFIG.onboardingDismissed).toBe(false);
@@ -337,6 +342,23 @@ test("model context settings name their two methods at v76", () => {
 	expect(WS_METHODS.modelSetContextWindow).toBe("model.setContextWindow");
 	expect(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION).toBe(76);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION);
+});
+
+test("local model endpoints name their four methods at v99", () => {
+	expect(WS_METHODS.localModelsList).toBe("localModels.list");
+	expect(WS_METHODS.localModelsProbe).toBe("localModels.probe");
+	expect(WS_METHODS.localModelsSave).toBe("localModels.save");
+	expect(WS_METHODS.localModelsRemove).toBe("localModels.remove");
+	expect(LOCAL_MODELS_PROTOCOL_VERSION).toBe(99);
+	expect(PROTOCOL_VERSION).toBe(99);
+	expect(isLocalModelContextWindow(32_768)).toBe(true);
+	expect(isLocalModelContextWindow(512)).toBe(false);
+	expect(isLocalModelContextWindow(4096.5)).toBe(false);
+	expect(defaultLocalMaxTokens(8_192)).toBe(2_048);
+	expect(defaultLocalMaxTokens(1_024)).toBe(256);
+	expect(defaultLocalMaxTokens(1_000_000)).toBe(16_384);
+	expect(isLocalMaxTokens(4_096, 8_192)).toBe(true);
+	expect(isLocalMaxTokens(16_384, 8_192)).toBe(false);
 });
 
 test("resource metadata rides the two content reads from v75", () => {
@@ -517,5 +539,5 @@ describe("tool response guards", () => {
 
 test("survey translations and separate Other text are pinned to v98", () => {
 	expect(SURVEY_TRANSLATIONS_PROTOCOL_VERSION).toBe(98);
-	expect(PROTOCOL_VERSION).toBe(98);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SURVEY_TRANSLATIONS_PROTOCOL_VERSION);
 });

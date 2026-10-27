@@ -219,6 +219,13 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   ("a usage write pi kept only in memory never cuts the reopened history", "a torn usage append is cut
   back…"). Remove the leaf restore when a failed persist leaves pi's memory and leaf unchanged; remove the
   truncation only when pi also guarantees that a failed append leaves no torn bytes.
+- **Probe key interpolation** — [[submodule-server-agent]], `localModels.ts` `resolveProbeKey`. Detect runs
+  before an endpoint is saved, and pi does not export `resolveConfigValue`, so a typed key is
+  interpolated by a copy of pi's `$VAR` / `${VAR}` / `$$` / `$!` rules. Unlike pi, a typed `!command`
+  is never run; a saved key is resolved through the runtime's `getAuth` instead. **Removal gate:** a
+  public pi export for config-value interpolation with a no-command mode. Re-check the template rules
+  against the installed `resolveConfigValue`; run "probe keys interpolate env references like pi and
+  never run commands" in `localModels.test.ts`.
 
 - **Detached result hold** — [[module-pi-subagents]] (Result delivery) and
   [[module-pi-background-commands]], applied by [[submodule-server-agent]]'s `turn_end` and
