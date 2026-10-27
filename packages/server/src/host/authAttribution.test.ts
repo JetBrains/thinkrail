@@ -23,6 +23,7 @@ import {
 import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import { saveWorkspaces } from "../persistence";
 import { resetConfigCache } from "../settings";
+import { ensureChatsContainer, resetChatIdCache } from "../workspaces";
 import { handleRequest } from "./handlers";
 import { runObservation } from "./runAnalytics";
 
@@ -276,6 +277,28 @@ test("a chat created without any usable model still counts, bucketed as none", a
 	expect(properties("chat_started")).toMatchObject([
 		{ provider: "none", model: "none", auth_method: "unknown" },
 	]);
+});
+
+test("a chat without a project created without any usable model is bucketed as none too", async () => {
+	const bare = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+		refreshOnCreate: false,
+	});
+	configurePiRuntime(bare);
+	resetChatIdCache();
+	try {
+		ensureChatsContainer();
+		const created = (await handleRequest("chat.create", {}, context)) as WsResult<"chat.create">;
+		sessionIds.push(created.sessionId, created.workspace.id);
+		await shutdownAnalytics();
+		expect(properties("chat_started")).toMatchObject([
+			{ provider: "none", model: "none", auth_method: "unknown" },
+		]);
+	} finally {
+		resetChatIdCache();
+	}
 });
 
 test("a startup extension that switches the model is reported as the model the chat actually got", async () => {

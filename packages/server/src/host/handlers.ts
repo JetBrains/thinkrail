@@ -1095,9 +1095,7 @@ const handlers: WsHandlers = {
 			const { workspace: _workspace, ...created } = await recoverChatSession(ws.id, p);
 			return created;
 		}
-		const created = await startChatSession(ws, p);
-		if (p.model && created.model) noteRecentModel(created.model);
-		return created;
+		return startChatSession(ws, p, { pick: true });
 	},
 	"session.prompt": (p, ctx) => {
 		return sendUserMessage("prompt", p.sessionId, p.text, ctx.clientKey, () =>
