@@ -86,7 +86,7 @@ export function getProjects(): Project[] {
 	return projects;
 }
 
-export function openProject(inputPath: string): Project {
+export function openProject(inputPath: string, displayName?: string): Project {
 	const path = resolveProjectPath(inputPath);
 	const root = gitToplevel(path);
 	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
@@ -109,9 +109,10 @@ export function openProject(inputPath: string): Project {
 		);
 
 	const taken = new Set(projects.map((p) => p.slug));
+	const label = displayName?.replace(/\s+/g, " ").trim();
 	const project: Project = {
 		id: randomUUID(),
-		name: basename(root),
+		name: label && label.length <= PROJECT_NAME_MAX_LENGTH ? label : basename(root),
 		path: root,
 		slug: uniqueSlug(slugify(basename(root)), taken),
 		lastOpened: Date.now(),
@@ -399,19 +400,14 @@ export function createProject(
 		mkdirSync(path);
 		created = true;
 	}
-	let project: Project;
 	try {
 		bootstrapRepository(path);
-		project = openProject(path);
+		return openProject(path, displayName);
 	} catch (err) {
 		rmSync(join(path, ".git"), { recursive: true, force: true });
 		if (created && readdirSync(path).length === 0) rmdirSync(path);
 		throw err;
 	}
-	const label = displayName?.replace(/\s+/g, " ").trim();
-	return label && label !== project.name && label.length <= PROJECT_NAME_MAX_LENGTH
-		? renameProject(project.id, label)
-		: project;
 }
 
 function bootstrapRepository(path: string): void {

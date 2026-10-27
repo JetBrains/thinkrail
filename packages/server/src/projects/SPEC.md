@@ -57,8 +57,9 @@ bootstrap it into one so it can be opened.
   bootstrap as `initProject`, run in that folder even when it sits inside an enclosing repository (a
   dotfiles repo in `~` must not swallow the new project); a failed bootstrap or open removes the folder
   this call made only while it is still empty (anything written into it meanwhile survives), and always the
-  `.git` it added. An optional display name — what the user typed, before slugging — becomes the project
-  name when it differs from the folder.
+  `.git` it added. An optional display name — what the user typed, before slugging — is passed through to
+  `openProject` and becomes the project name (whitespace-collapsed, trimmed) in the one record it publishes,
+  so creation emits a single project event rather than a folder-named one followed by a rename.
   The commit supplies a **fallback `user.name`/`user.email` only for a field git has none configured for**,
   so a real global identity is never overridden. ("Does the project have specs?" is **not** computed here
   — `host` answers the lazy `project.hasSpecs` query via `spec.projectHasSpecs`, keeping this module free

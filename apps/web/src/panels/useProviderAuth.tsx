@@ -6,6 +6,18 @@ import { selectLoginBusy, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { reloadProviderStatus, useProviderStatus } from "./useProviderStatus";
 
+/** Cancels and clears a pending target-less provider login left open when a connect surface closes. */
+export function cancelUnownedLogin(): void {
+	const login = useAppStore.getState().activeLogin;
+	if (!login || login.target) return;
+	if (login.status === "active") {
+		getTransport()
+			.request("provider.loginCancel", { loginId: login.loginId })
+			.catch(() => {});
+	}
+	useAppStore.getState().clearLogin();
+}
+
 export interface ProviderAuth {
 	report: ProviderStatusReport | null;
 	failed: boolean;

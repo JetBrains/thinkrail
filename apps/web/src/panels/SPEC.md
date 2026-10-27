@@ -458,10 +458,13 @@ whole connect screen (title, options, Skip) fades out in place over 200 ms, then
 own two cards (Start a new project / Open project, passed in as `projectCards` so their menus and dialogs stay
 Welcome's). Nothing animates height, so no list is clipped mid-collapse and the centered column only re-centers
 while it is invisible; under reduced motion the swap is instant. Reaching done persists
-`onboardingDismissed`; the wizard (and with it the hidden rail and held prompts) stays until a project opens. Zero models warns and offers **Check again**
+`onboardingDismissed`; the wizard (and with it the hidden rail and held prompts) stays until a project opens. An empty
+list is re-read once automatically (~600 ms) before warning, since the catalog can lag a just-finished login; a still-empty
+read then warns and offers **Check again**
 (re-runs the same read, e.g. after fixing the account elsewhere) and Back to the choices — Back alone could not
 return, since the provider is configured and so no longer listed. The wizard owns no project step of its own and shows no progress strip.
-**Skip setup** is on every screen before done except privacy, whose Continue is the only way on.
+**Skip setup** is on every screen before done except privacy, whose Continue is the only way on; skipping also cancels any
+target-less login still pending in the dialog (`cancelUnownedLogin`, shared with `ConnectProviderDialog`).
 The gate lives in the store (`onboardingWizard`: pending → shown | hidden) so shell can hold first-run
 prompts while it is undecided. Finishing or skipping writes `onboardingDismissed: true`, so a returning user — even one who later removes
 every project and provider — gets the regular Welcome; a failed write still closes the wizard locally.

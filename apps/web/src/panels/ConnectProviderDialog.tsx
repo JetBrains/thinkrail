@@ -9,21 +9,9 @@ import {
 } from "@thinkrail/ui/dialog";
 import { useEffect, useState } from "react";
 import { useAppStore } from "@/store";
-import { getTransport } from "@/transport";
 import { announceProviderConnected, ConnectProviderOptions } from "./ConnectProviderOptions";
 import { detectAccounts } from "./detectAccounts";
-import { useProviderAuth } from "./useProviderAuth";
-
-function cancelUnownedLogin(): void {
-	const login = useAppStore.getState().activeLogin;
-	if (!login || login.target) return;
-	if (login.status === "active") {
-		getTransport()
-			.request("provider.loginCancel", { loginId: login.loginId })
-			.catch(() => {});
-	}
-	useAppStore.getState().clearLogin();
-}
+import { cancelUnownedLogin, useProviderAuth } from "./useProviderAuth";
 
 export function ConnectProviderDialog({
 	onClose,

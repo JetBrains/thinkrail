@@ -13,7 +13,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useEffect, useEffectEvent, useState } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 import { PRODUCT_NAME } from "@/constants/branding";
 import { selectAnalyticsConsentPromptOpen, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -22,11 +22,12 @@ import { ConnectedLine, type ConnectedSummary } from "./ConnectedLine";
 import { ConnectProviderOptions, connectedProviderName } from "./ConnectProviderOptions";
 import { detectAccounts } from "./detectAccounts";
 import { useConsentDraft } from "./useAnalyticsConsent";
-import { useProviderAuth } from "./useProviderAuth";
+import { cancelUnownedLogin, type ProviderAuth, useProviderAuth } from "./useProviderAuth";
 
 type Step = "intro" | "privacy" | "connect";
 
 const FADE_OUT_MS = 200;
+const AUTO_RECHECK_MS = 600;
 
 const INTRO_BEATS = [
 	{
@@ -59,7 +60,6 @@ export function OnboardingWizard({
 	onConnected: (connected: ConnectedSummary) => void;
 	onSkip: () => void;
 }) {
-	const t = useT();
 	const [step, setStep] = useState<Step>("intro");
 	const [provider, setProvider] = useState<ProviderStatus | null>(null);
 	const [connected, setConnected] = useState<ConnectedSummary | null>(null);
@@ -69,6 +69,11 @@ export function OnboardingWizard({
 	const settingsOpen = useAppStore((s) => s.settingsOpen);
 	const auth = useProviderAuth({ ownsLoginDialog: !settingsOpen && step === "connect" });
 
+	const skip = () => {
+		cancelUnownedLogin();
+		onSkip();
+	};
+
 	return (
 		<div
 			data-testid="onboarding-wizard"
@@ -76,119 +81,158 @@ export function OnboardingWizard({
 			className="flex w-full max-w-[640px] flex-col items-center gap-24"
 		>
 			{step === "intro" ? (
-				<div
-					data-testid="onboarding-intro"
-					className="flex flex-col items-center gap-24 text-center"
-				>
-					<div className="flex flex-col items-center gap-8">
-						<span className="tr-text-eyebrow text-text-muted">
-							{t("panels.onboarding.intro.welcomeTo")}
-						</span>
-						<h1 data-testid="welcome-title" className="tr-brand-hero text-primary">
-							{PRODUCT_NAME}
-						</h1>
-						<p className="tr-heading-sm text-text-default">
-							{t("panels.onboarding.intro.tagline")}
-						</p>
-					</div>
-					<ul className="grid w-full gap-12 sm:grid-cols-3">
-						{INTRO_BEATS.map(({ icon: Icon, title, detail }) => (
-							<li
-								key={title}
-								className="flex flex-col gap-8 rounded-sm border border-border-default bg-clip-padding bg-container-workspace-bg p-16 text-left"
-							>
-								<Icon className="size-16 text-primary" />
-								<span className="tr-title-card text-text-default">{t(title)}</span>
-								<span className="text-text-muted tr-text-metadata">{t(detail)}</span>
-							</li>
-						))}
-					</ul>
-					<Button
-						data-testid="onboarding-start"
-						onClick={() => {
-							setStep(consentOpen ? "privacy" : "connect");
-							void detectAccounts().then(setDetected);
-						}}
-					>
-						{t("panels.onboarding.intro.start")}
-						<ArrowRight className="size-16" />
-					</Button>
-				</div>
+				<IntroStep
+					onStart={() => {
+						setStep(consentOpen ? "privacy" : "connect");
+						void detectAccounts().then(setDetected);
+					}}
+				/>
 			) : step === "privacy" ? (
 				<PrivacyStep onContinue={() => setStep("connect")} />
 			) : done && connected ? (
-				<div className="flex flex-col items-center gap-24 motion-safe:animate-reveal">
-					<h1 data-testid="welcome-title" className="tr-brand-hero break-words text-primary">
-						{t("panels.welcome.connectedTitle")}
-					</h1>
-					<ConnectedLine summary={connected} />
-					<div className="flex flex-wrap justify-center gap-12">{projectCards}</div>
-				</div>
+				<DoneStep connected={connected} projectCards={projectCards} />
 			) : (
-				<div
-					inert={connected !== null}
-					className={cn(
-						"flex w-full flex-col items-center gap-24 transition-opacity duration-200 ease-out motion-reduce:transition-none",
-						connected && "pointer-events-none opacity-0",
-					)}
-				>
-					<div className="flex flex-col items-center gap-8 text-center">
-						<h1 data-testid="welcome-title" className="tr-heading-xl break-words text-primary">
-							{t("panels.connectProvider.title")}
-						</h1>
-						<p className="tr-text-reading text-text-muted">
-							{t("panels.connectProvider.description")}
-						</p>
-					</div>
-					<div className="relative w-full">
-						<div inert={provider !== null}>
-							<ConnectProviderOptions
-								auth={auth}
-								detected={detected}
-								configuredAtStart={[]}
-								onConnected={(fresh) => {
-									useAppStore.getState().clearLogin();
-									setProvider(fresh);
-								}}
-							/>
-						</div>
-						{provider ? (
-							<VerifyConnection
-								provider={provider}
-								onBack={() => setProvider(null)}
-								onVerified={(summary) => {
-									setConnected(summary);
-									onConnected(summary);
-									const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-									window.setTimeout(() => setDone(true), reduced ? 0 : FADE_OUT_MS);
-								}}
-							/>
-						) : null}
-					</div>
-					<Button
-						variant="ghost"
-						size="sm"
-						data-testid="onboarding-skip"
-						className="text-text-muted"
-						onClick={onSkip}
-					>
-						{t("panels.onboarding.skip")}
-					</Button>
-				</div>
+				<ConnectStep
+					auth={auth}
+					detected={detected}
+					provider={provider}
+					connected={connected}
+					onPick={(fresh) => {
+						useAppStore.getState().clearLogin();
+						setProvider(fresh);
+					}}
+					onBack={() => setProvider(null)}
+					onVerified={(summary) => {
+						setConnected(summary);
+						onConnected(summary);
+						const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+						window.setTimeout(() => setDone(true), reduced ? 0 : FADE_OUT_MS);
+					}}
+					onSkip={skip}
+				/>
 			)}
 
-			{step === "intro" ? (
-				<Button
-					variant="ghost"
-					size="sm"
-					data-testid="onboarding-skip"
-					className="text-text-muted"
-					onClick={onSkip}
-				>
-					{t("panels.onboarding.skip")}
-				</Button>
-			) : null}
+			{step === "intro" ? <SkipButton onSkip={skip} /> : null}
 			{auth.loginDialog}
+		</div>
+	);
+}
+
+function SkipButton({ onSkip }: { onSkip: () => void }) {
+	const t = useT();
+	return (
+		<Button
+			variant="ghost"
+			size="sm"
+			data-testid="onboarding-skip"
+			className="text-text-muted"
+			onClick={onSkip}
+		>
+			{t("panels.onboarding.skip")}
+		</Button>
+	);
+}
+
+function IntroStep({ onStart }: { onStart: () => void }) {
+	const t = useT();
+	return (
+		<div data-testid="onboarding-intro" className="flex flex-col items-center gap-24 text-center">
+			<div className="flex flex-col items-center gap-8">
+				<span className="tr-text-eyebrow text-text-muted">
+					{t("panels.onboarding.intro.welcomeTo")}
+				</span>
+				<h1 data-testid="welcome-title" className="tr-brand-hero text-primary">
+					{PRODUCT_NAME}
+				</h1>
+				<p className="tr-heading-sm text-text-default">{t("panels.onboarding.intro.tagline")}</p>
+			</div>
+			<ul className="grid w-full gap-12 sm:grid-cols-3">
+				{INTRO_BEATS.map(({ icon: Icon, title, detail }) => (
+					<li
+						key={title}
+						className="flex flex-col gap-8 rounded-sm border border-border-default bg-clip-padding bg-container-workspace-bg p-16 text-left"
+					>
+						<Icon className="size-16 text-primary" />
+						<span className="tr-title-card text-text-default">{t(title)}</span>
+						<span className="text-text-muted tr-text-metadata">{t(detail)}</span>
+					</li>
+				))}
+			</ul>
+			<Button data-testid="onboarding-start" onClick={onStart}>
+				{t("panels.onboarding.intro.start")}
+				<ArrowRight className="size-16" />
+			</Button>
+		</div>
+	);
+}
+
+function DoneStep({
+	connected,
+	projectCards,
+}: {
+	connected: ConnectedSummary;
+	projectCards: ReactNode;
+}) {
+	const t = useT();
+	return (
+		<div className="flex flex-col items-center gap-24 motion-safe:animate-reveal">
+			<h1 data-testid="welcome-title" className="tr-brand-hero break-words text-primary">
+				{t("panels.welcome.connectedTitle")}
+			</h1>
+			<ConnectedLine summary={connected} />
+			<div className="flex flex-wrap justify-center gap-12">{projectCards}</div>
+		</div>
+	);
+}
+
+function ConnectStep({
+	auth,
+	detected,
+	provider,
+	connected,
+	onPick,
+	onBack,
+	onVerified,
+	onSkip,
+}: {
+	auth: ProviderAuth;
+	detected: DetectedAccount[] | null;
+	provider: ProviderStatus | null;
+	connected: ConnectedSummary | null;
+	onPick: (provider: ProviderStatus) => void;
+	onBack: () => void;
+	onVerified: (connected: ConnectedSummary) => void;
+	onSkip: () => void;
+}) {
+	const t = useT();
+	return (
+		<div
+			inert={connected !== null}
+			className={cn(
+				"flex w-full flex-col items-center gap-24 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+				connected && "pointer-events-none opacity-0",
+			)}
+		>
+			<div className="flex flex-col items-center gap-8 text-center">
+				<h1 data-testid="welcome-title" className="tr-heading-xl break-words text-primary">
+					{t("panels.connectProvider.title")}
+				</h1>
+				<p className="tr-text-reading text-text-muted">{t("panels.connectProvider.description")}</p>
+			</div>
+			<div className="relative w-full">
+				<div inert={provider !== null}>
+					<ConnectProviderOptions
+						auth={auth}
+						detected={detected}
+						configuredAtStart={[]}
+						onConnected={onPick}
+					/>
+				</div>
+				{provider ? (
+					<VerifyConnection provider={provider} onBack={onBack} onVerified={onVerified} />
+				) : null}
+			</div>
+			<SkipButton onSkip={onSkip} />
 		</div>
 	);
 }
@@ -242,11 +286,13 @@ function VerifyConnection({
 	const t = useT();
 	const [empty, setEmpty] = useState(false);
 	const [attempt, setAttempt] = useState(0);
+	const autoRechecked = useRef(false);
 	const name = connectedProviderName(provider, t);
 	const verified = useEffectEvent(onVerified);
 
 	useEffect(() => {
 		let cancelled = false;
+		let recheck: ReturnType<typeof setTimeout> | undefined;
 		const transport = getTransport();
 		Promise.all([
 			transport.request("model.list", {}),
@@ -254,13 +300,20 @@ function VerifyConnection({
 		]).then(
 			([models, fallback]) => {
 				if (cancelled) return;
-				if (models.length === 0) setEmpty(true);
-				else
+				if (models.length > 0) {
 					verified({
 						provider: name,
 						models: models.length,
 						defaultModel: fallback?.model?.name ?? null,
 					});
+				} else if (autoRechecked.current) {
+					setEmpty(true);
+				} else {
+					autoRechecked.current = true;
+					recheck = setTimeout(() => {
+						if (!cancelled) setAttempt((n) => n + 1);
+					}, AUTO_RECHECK_MS);
+				}
 			},
 			() => {
 				if (!cancelled) verified({ provider: name, models: null, defaultModel: null });
@@ -268,6 +321,7 @@ function VerifyConnection({
 		);
 		return () => {
 			cancelled = true;
+			clearTimeout(recheck);
 		};
 	}, [name, attempt]);
 

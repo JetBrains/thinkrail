@@ -8,7 +8,6 @@ import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
-import { cn } from "@thinkrail/ui/utils";
 import { type ComponentProps, useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "@/store";
 import { getTransport } from "@/transport";
@@ -17,13 +16,6 @@ import { ProviderRow } from "./ProviderRow";
 import type { ProviderAuth } from "./useProviderAuth";
 
 const JETBRAINS_AI_SEARCH = "jetbrains ai central";
-
-const LIST_VIEWPORT_CAP = [
-	"max-h-[calc(100dvh-360px)]",
-	"max-h-[calc(100dvh-431px)]",
-	"max-h-[calc(100dvh-502px)]",
-	"max-h-[calc(100dvh-573px)]",
-] as const;
 
 type Method = "oauth" | "api_key";
 
@@ -202,10 +194,7 @@ export function ConnectProviderOptions({
 				</div>
 				<div
 					data-testid="connect-provider-list"
-					className={cn(
-						"flex h-240 min-h-160 flex-col overflow-y-auto",
-						LIST_VIEWPORT_CAP[Math.min(detectedCount, 3)],
-					)}
+					className="flex h-240 min-h-160 max-h-[calc(100dvh-360px)] flex-col overflow-y-auto"
 				>
 					{others.map((p) => (
 						<ProviderRow
