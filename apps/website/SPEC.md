@@ -216,7 +216,9 @@ thank-you dialog and does not cancel the file. The dialog records the PostHog su
 closes before an answer, and `survey sent` on each Continue or Finish. One
 `$survey_submission_id` ties those sends together, each send repeats the answers collected so
 far, and `$survey_completed` is true only on Finish, so the furthest event is how far that
-response went. Closing the dialog resets it to the welcome screen. The next open is a new
+response went. Survey events attempt no attribution touch: they are feedback, not acquisition
+actions, and the download that opened the dialog already recorded the page's touch and bridge.
+Closing the dialog resets it to the welcome screen. The next open is a new
 showing, with a new submission id and a new choice order; answers already sent stay on the
 submission that recorded them. Choice order is shuffled for each response, except a custom answer, which stays
 last. Required steps leave Continue disabled until the answer is valid. The first-try note and

@@ -5,7 +5,6 @@ import {
 	ctaLocationForElement,
 	desktopArtifactForUrl,
 } from "./analyticsEvents";
-import { recordCurrentAttributionTouch } from "./attribution/recording";
 import {
 	downloadPostHogSurveyId,
 	downloadSurveyFreeTextLimit,
@@ -26,7 +25,6 @@ const thankYou = "Thank you so much for taking time to answer these questions!";
 export function initDownloadThanks(
 	doc: Document = document,
 	capture: Capture = captureAnalytics,
-	recordAttribution: () => void = recordCurrentAttributionTouch,
 	random: () => number = Math.random,
 	responseId: () => string = () => crypto.randomUUID(),
 ): void {
@@ -247,7 +245,6 @@ export function initDownloadThanks(
 		window.setTimeout(() => {
 			advanceLocked = false;
 		}, 400);
-		recordAttribution();
 		const value = surveyAnswerValue(
 			step,
 			answer.selected,
