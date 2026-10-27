@@ -145,7 +145,7 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
   the detected desktop: the Apple Silicon DMG on macOS, the Windows x64 ZIP on Windows, and a Linux
   archive. Linux uses the ARM64 archive only when a browser hint explicitly says ARM; otherwise the
   button downloads the x64 archive. When the desktop is unknown, including with JavaScript off,
-  Download scrolls to `#install` instead of choosing a file. **Other versions** sits under that button
+  Download scrolls to `#install` instead of choosing a file. **Other platforms & CLI** sits under that button
   and also scrolls to `#install`. It does not open a menu. JS sets the label and file URL when a
   desktop is detected, and marks that row in the Install section. Versionless GitHub
   `releases/latest/download` URLs name the public aliases owned by [[module-ci-release]]; the website
@@ -224,8 +224,9 @@ submission that recorded them. Choice order is shuffled for each response, excep
 last. Required steps leave Continue disabled until the answer is valid. The first-try note and
 the email are optional. A filled-in email has to satisfy the browser's email field before
 Finish enables; a blank email does not. While Finish is disabled, a muted note on the same line as the
-button reads “— please enter a valid email or leave it blank”. Opening a command-line disclosure (the hero or blog-post picker's, or the install section's) emits only
-`install_cta_clicked` (`cli`); closing it does not. That open is browsing, not install intent: a
+button reads “— please enter a valid email or leave it blank”. Opening the blog-post picker's command-line disclosure emits only
+`install_cta_clicked` (`cli`); closing it does not, and the landing's always-visible command tabs emit
+nothing. That open is browsing, not install intent: a
 primary-button click on a `[data-copy]` control whose value is a known install command emits
 `install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero, install-section, or blog-post location
 (other copy values emit nothing; selecting and copying the text manually is not observed). Any other
@@ -341,7 +342,7 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   terminal replay).
 - **Every article ends with the install picker.** `src/components/InstallPicker.astro` is the
   blog picker markup (OS tabs, desktop downloads, **Browser UI via command line** disclosure with Windows
-  shell tabs). `src/pages/blog/[slug].astro` renders it with `idPrefix="blog"` in a `.blog-post-install`
+  shell tabs). `src/pages/blog/[slug].astro` renders it in a `.blog-post-install`
   section after the post body. It sits inside `.blog-post`,
   so its downloads, copies, and disclosure opens report `blog_post`, and outside `.blog-post-content`, so
   the prose cascade never restyles it. `main.ts` drives that picker; posts keep their

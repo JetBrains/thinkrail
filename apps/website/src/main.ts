@@ -298,6 +298,27 @@ function cliTabFrom(value: string | undefined): CliTab | undefined {
 	}
 }
 
+function moveTabFocus(
+	event: KeyboardEvent,
+	tabs: readonly HTMLButtonElement[],
+	tab: HTMLButtonElement,
+	activate: (tab: HTMLButtonElement) => void,
+): void {
+	if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+	const index = tabs.indexOf(tab);
+	if (index < 0) return;
+	let nextIndex = index;
+	if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+	if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+	if (event.key === "Home") nextIndex = 0;
+	if (event.key === "End") nextIndex = tabs.length - 1;
+	const target = tabs[nextIndex];
+	if (!target) return;
+	event.preventDefault();
+	activate(target);
+	target.focus();
+}
+
 const browserNavigator: NavigatorWithUserAgentData = navigator;
 const platformHints: BrowserPlatformHints = {
 	userAgentDataPlatform: browserNavigator.userAgentData?.platform,
@@ -362,28 +383,14 @@ for (const row of document.querySelectorAll<HTMLElement>("[data-desktop-platform
 
 const installPicker = document.querySelector<HTMLElement>("[data-install-picker]");
 if (installPicker) {
-	const detectedPlatform = detectInstallPlatform(platformHints);
-	const platformTabs = installPicker.querySelectorAll<HTMLButtonElement>("[data-install-platform]");
+	const platformTabs = [
+		...installPicker.querySelectorAll<HTMLButtonElement>("[data-install-platform]"),
+	];
 	const platformPanels = installPicker.querySelectorAll<HTMLElement>("[data-install-panel]");
-	const shellTabs = installPicker.querySelectorAll<HTMLButtonElement>("[data-windows-shell]");
+	const shellTabs = [...installPicker.querySelectorAll<HTMLButtonElement>("[data-windows-shell]")];
 	const shellPanels = installPicker.querySelectorAll<HTMLElement>("[data-windows-shell-panel]");
 
-	const drivesTerminal = installPicker.dataset.installPicker === "hero";
-	const syncActiveCommand = () => {
-		if (!drivesTerminal) return;
-		const osPanel = Array.from(platformPanels).find((panel) => !panel.hidden);
-		const shellPanel = osPanel?.querySelector<HTMLElement>(
-			"[data-windows-shell-panel]:not([hidden])",
-		);
-		const code = (shellPanel ?? osPanel)?.querySelector("[data-install-command]");
-		const command = code?.textContent?.trim() ?? "";
-		publishInstallSelection({ command, platform: selectedPlatform });
-	};
-	let selectedPlatform: InstallPlatform = detectedPlatform ?? "linux";
-	const initialShell: WindowsShell = "powershell";
-
-	const selectPlatform = (platform: InstallPlatform, publish = true) => {
-		selectedPlatform = platform;
+	const selectPlatform = (platform: InstallPlatform) => {
 		for (const tab of platformTabs) {
 			const selected = platformFrom(tab.dataset.installPlatform) === platform;
 			tab.setAttribute("aria-selected", String(selected));
@@ -392,10 +399,9 @@ if (installPicker) {
 		for (const panel of platformPanels) {
 			panel.hidden = platformFrom(panel.dataset.installPanel) !== platform;
 		}
-		if (publish) syncActiveCommand();
 	};
 
-	const selectShell = (shell: WindowsShell, publish = true) => {
+	const selectShell = (shell: WindowsShell) => {
 		for (const tab of shellTabs) {
 			const selected = windowsShellFrom(tab.dataset.windowsShell) === shell;
 			tab.setAttribute("aria-selected", String(selected));
@@ -404,32 +410,6 @@ if (installPicker) {
 		for (const panel of shellPanels) {
 			panel.hidden = windowsShellFrom(panel.dataset.windowsShellPanel) !== shell;
 		}
-		if (publish) syncActiveCommand();
-	};
-
-	const nextTab = (
-		event: KeyboardEvent,
-		button: HTMLButtonElement,
-		selector: string,
-		activate: (button: HTMLButtonElement) => void,
-	) => {
-		if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-		const tablist = button.closest<HTMLElement>("[role=tablist]");
-		if (!tablist) return;
-		const tabs = Array.from(tablist.querySelectorAll<HTMLButtonElement>(selector));
-		const index = tabs.indexOf(button);
-		if (index < 0) return;
-
-		let nextIndex = index;
-		if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
-		if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
-		if (event.key === "Home") nextIndex = 0;
-		if (event.key === "End") nextIndex = tabs.length - 1;
-		const target = tabs[nextIndex];
-		if (!target) return;
-		event.preventDefault();
-		activate(target);
-		target.focus();
 	};
 
 	for (const tab of platformTabs) {
@@ -438,9 +418,7 @@ if (installPicker) {
 			if (platform) selectPlatform(platform);
 		};
 		tab.addEventListener("click", () => activate(tab));
-		tab.addEventListener("keydown", (event) =>
-			nextTab(event, tab, "[data-install-platform]", activate),
-		);
+		tab.addEventListener("keydown", (event) => moveTabFocus(event, platformTabs, tab, activate));
 	}
 
 	for (const tab of shellTabs) {
@@ -449,13 +427,11 @@ if (installPicker) {
 			if (shell) selectShell(shell);
 		};
 		tab.addEventListener("click", () => activate(tab));
-		tab.addEventListener("keydown", (event) =>
-			nextTab(event, tab, "[data-windows-shell]", activate),
-		);
+		tab.addEventListener("keydown", (event) => moveTabFocus(event, shellTabs, tab, activate));
 	}
 
-	selectShell(initialShell, false);
-	selectPlatform(selectedPlatform);
+	selectShell("powershell");
+	selectPlatform(detectedInstallPlatform ?? "linux");
 	document.documentElement.classList.add("install-tabs-ready");
 }
 
@@ -487,21 +463,7 @@ if (cliInstall) {
 			if (next) selectCliTab(next);
 		};
 		tab.addEventListener("click", () => activate(tab));
-		tab.addEventListener("keydown", (event) => {
-			if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-			const index = cliTabs.indexOf(tab);
-			if (index < 0) return;
-			let nextIndex = index;
-			if (event.key === "ArrowLeft") nextIndex = (index - 1 + cliTabs.length) % cliTabs.length;
-			if (event.key === "ArrowRight") nextIndex = (index + 1) % cliTabs.length;
-			if (event.key === "Home") nextIndex = 0;
-			if (event.key === "End") nextIndex = cliTabs.length - 1;
-			const target = cliTabs[nextIndex];
-			if (!target) return;
-			event.preventDefault();
-			activate(target);
-			target.focus();
-		});
+		tab.addEventListener("keydown", (event) => moveTabFocus(event, cliTabs, tab, activate));
 	}
 
 	selectCliTab(initialCliTab);

@@ -215,10 +215,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 			pages.landing,
 		)
 	) {
-		failures.push("landing: other versions link is missing");
-	}
-	if (pages.landing.includes('data-install-picker="hero"')) {
-		failures.push("landing: hero install picker is still present");
+		failures.push("landing: other platforms link is missing");
 	}
 	if (!pages.landing.includes("data-cli-install")) {
 		failures.push("landing: install command tabs are missing");

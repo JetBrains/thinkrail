@@ -959,10 +959,6 @@ p.hero-lede {
 	max-width: 100%;
 }
 
-.install-picker-hero {
-	margin: 22px 0 8px;
-}
-
 .cli-install .install-os-tabs {
 	max-width: 100%;
 	overflow-x: auto;
@@ -1123,8 +1119,7 @@ html.install-tabs-ready .install-panel {
 	background: var(--container-header-bg);
 }
 
-.cli-disclosure > summary,
-.install-reference > summary {
+.cli-disclosure > summary {
 	display: flex;
 	min-height: 34px;
 	align-items: center;
@@ -1138,25 +1133,21 @@ html.install-tabs-ready .install-panel {
 	list-style: none;
 }
 
-.cli-disclosure > summary::-webkit-details-marker,
-.install-reference > summary::-webkit-details-marker {
+.cli-disclosure > summary::-webkit-details-marker {
 	display: none;
 }
 
-.cli-disclosure > summary:hover,
-.install-reference > summary:hover {
+.cli-disclosure > summary:hover {
 	color: var(--text);
 	background: var(--hover);
 }
 
-.cli-disclosure > summary::after,
-.install-reference > summary::after {
+.cli-disclosure > summary::after {
 	content: "⌄";
 	transition: transform 150ms ease;
 }
 
-.cli-disclosure[open] > summary::after,
-.install-reference[open] > summary::after {
+.cli-disclosure[open] > summary::after {
 	transform: rotate(180deg);
 }
 
@@ -1641,29 +1632,6 @@ p.install-linux-note a,
 p.install-fineprint a {
 	text-decoration: underline;
 	text-underline-offset: 3px;
-}
-
-.install-reference {
-	margin-top: 18px;
-	border: 1px solid var(--border2);
-	border-radius: 4px;
-	overflow: hidden;
-	background: var(--container-header-bg);
-}
-
-.install-reference-body {
-	display: grid;
-	gap: 10px;
-	padding: 12px;
-	border-top: 1px solid var(--border);
-}
-
-.install-cli-row > span {
-	display: block;
-	margin-bottom: 5px;
-	color: var(--muted);
-	font-family: var(--font-mono);
-	font-size: 10.5px;
 }
 
 /* ── Footer section ─────────────────────────────────────────────────────── */
