@@ -213,7 +213,10 @@ themselves.
   zoom, swipe position, portal placement, and virtual-list geometry (a loading section's reserved height,
   a measured tail spacer); colour, spacing, and control skin remain token utilities.
   Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come from Tailwind (inline styles can't
-  express them, and the responsive shell needs them).
+  express them, and the responsive shell needs them). Class detection is rooted at `src/`
+  (`@import "tailwindcss" source(".")`) plus the explicit `@source` package globs (TS/TSX only), so prose in Markdown specs
+  and the component library ([[submodule-web-library]], which compiles this same stylesheet with its own
+  directory added) never leak classes into the app's CSS.
 - **Chrome geometry lives in `index.css`, host geometry arrives as CSS custom properties.** Beside the
   generated colour/spacing layers, `index.css` maps the shell's structural rows (`--spacing-panel-header-row`,
   `--spacing-topbar-row` from `tokens.css`) and the two host-published window-chrome insets

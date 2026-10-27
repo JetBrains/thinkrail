@@ -102,6 +102,9 @@ test's documented specialized list names it.
   choice cards keep their own primitives or components.
 - The dialog close button and `ToastClose` are `IconButton ghost m`.
 
+Usage guidance, live states and copyable examples for `Button` and `IconButton` are the component
+library ([[submodule-web-library]]); its written form is the generated [COMPONENTS.md](./COMPONENTS.md).
+
 ## Primitive invariants
 
 The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-menu`, `menu-styles`,
