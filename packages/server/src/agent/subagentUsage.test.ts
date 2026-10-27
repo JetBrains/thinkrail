@@ -5,12 +5,11 @@ import { join } from "node:path";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import {
 	childFileUsage,
-	raiseWatermark,
+	createRunUsageRecorder,
 	reconcileSubagentUsage,
 	SUBAGENT_USAGE_KIND,
 	type SubagentUsage,
 	unrecordedUsage,
-	usageIncrement,
 } from "./subagentUsage";
 
 const header = (extra: Record<string, unknown> = {}) =>
@@ -178,20 +177,38 @@ test("cost-only child spend is reconciled once", async () => {
 	]);
 });
 
-test("run increments keep cost-only spend and skip duplicate snapshots and cost noise", () => {
-	const totals = (input: number, cost: number) => ({
-		input,
-		output: 2,
-		cacheRead: 3,
-		cacheWrite: 4,
-		cost,
+function recorderHarness(outcomes: boolean[] = []) {
+	const writes: { input: number; cost: number }[] = [];
+	const recorder = createRunUsageRecorder((_parent, { usage }) => {
+		writes.push({ input: usage.input, cost: usage.cost.total });
+		return outcomes.shift() ?? true;
 	});
-	expect(usageIncrement(totals(10, 0.1), undefined)).toEqual(totals(10, 0.1));
-	expect(usageIncrement(totals(10, 0.1), totals(10, 0.1))).toBeUndefined();
-	expect(usageIncrement(totals(10, 0.1 + 1e-12), totals(10, 0.1))).toBeUndefined();
-	const costOnly = usageIncrement(totals(10, 0.4), totals(10, 0.1));
-	expect(costOnly).toMatchObject({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
-	expect(costOnly?.cost).toBeCloseTo(0.3, 12);
-	expect(usageIncrement(totals(15, 0.1), totals(20, 0.1))).toBeUndefined();
-	expect(raiseWatermark(totals(20, 0.1), totals(15, 0.3))).toEqual(totals(20, 0.3));
+	const run = (input: number, cost: number) => ({
+		model: "anthropic/claude",
+		usage: { input, output: 0, cacheRead: 0, cacheWrite: 0, cost },
+	});
+	return { writes, recorder, run };
+}
+
+test("a run records each increment once and its remainder at the end, cost-only included", () => {
+	const { writes, recorder, run } = recorderHarness();
+	recorder.progress("parent", "child", run(10, 0.1));
+	recorder.progress("parent", "child", run(10, 0.1));
+	recorder.progress("parent", "child", run(10, 0.1 + 1e-12));
+	recorder.progress("parent", "child", run(25, 0.2));
+	recorder.terminal("parent", "child", run(25, 0.5));
+	expect(writes.map(({ input }) => input)).toEqual([10, 15, 0]);
+	expect(writes.map(({ cost }) => cost).reduce((sum, cost) => sum + cost)).toBeCloseTo(0.5, 12);
+	expect(writes[2]?.cost).toBeCloseTo(0.3, 12);
+});
+
+test("an increment pi did not take is carried within the run but not into the next run", () => {
+	const { writes, recorder, run } = recorderHarness([false, true, false]);
+	recorder.progress("parent", "child", run(10, 0));
+	recorder.terminal("parent", "child", run(30, 0));
+	expect(writes.map(({ input }) => input)).toEqual([10, 30]);
+
+	recorder.terminal("parent", "child", run(5, 0));
+	recorder.terminal("parent", "child", run(7, 0));
+	expect(writes.map(({ input }) => input)).toEqual([10, 30, 5, 7]);
 });

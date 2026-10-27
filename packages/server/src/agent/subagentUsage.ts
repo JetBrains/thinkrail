@@ -45,9 +45,7 @@ function tokensOf(totals: Totals): number {
 	return totals.input + totals.output + totals.cacheRead + totals.cacheWrite;
 }
 
-export type UsageTotals = Totals;
-
-export function subagentUsage(
+function subagentUsage(
 	childSessionId: string,
 	modelRef: string | undefined,
 	totals: Totals,
@@ -62,7 +60,7 @@ export function subagentUsage(
 	};
 }
 
-export function usageIncrement(current: Totals, watermark: Totals | undefined): Totals | undefined {
+function usageIncrement(current: Totals, watermark: Totals | undefined): Totals | undefined {
 	const base = watermark ?? emptyTotals();
 	const cost = current.cost - base.cost;
 	const increment: Totals = {
@@ -75,7 +73,7 @@ export function usageIncrement(current: Totals, watermark: Totals | undefined): 
 	return tokensOf(increment) > 0 || increment.cost > 0 ? increment : undefined;
 }
 
-export function raiseWatermark(watermark: Totals | undefined, current: Totals): Totals {
+function raiseWatermark(watermark: Totals | undefined, current: Totals): Totals {
 	const base = watermark ?? emptyTotals();
 	return {
 		input: Math.max(base.input, current.input),
@@ -83,6 +81,31 @@ export function raiseWatermark(watermark: Totals | undefined, current: Totals): 
 		cacheRead: Math.max(base.cacheRead, current.cacheRead),
 		cacheWrite: Math.max(base.cacheWrite, current.cacheWrite),
 		cost: Math.max(base.cost, current.cost),
+	};
+}
+
+export interface RunUsageDetails {
+	model?: string;
+	usage: Totals;
+}
+
+export function createRunUsageRecorder(
+	record: (parentSessionId: string, usage: SubagentUsage) => boolean,
+) {
+	const watermarks = new Map<string, Totals>();
+	const progress = (parentSessionId: string, childSessionId: string, details: RunUsageDetails) => {
+		const watermark = watermarks.get(childSessionId);
+		const increment = usageIncrement(details.usage, watermark);
+		if (!increment) return;
+		if (record(parentSessionId, subagentUsage(childSessionId, details.model, increment)))
+			watermarks.set(childSessionId, raiseWatermark(watermark, details.usage));
+	};
+	return {
+		progress,
+		terminal: (parentSessionId: string, childSessionId: string, details: RunUsageDetails) => {
+			progress(parentSessionId, childSessionId, details);
+			watermarks.delete(childSessionId);
+		},
 	};
 }
 

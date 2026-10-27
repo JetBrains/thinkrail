@@ -186,6 +186,18 @@ test("host embedding: projection, per-workspace service, transcript store, casca
 	expect(errorCodeOf(missing)).toBe("SUBAGENT_TRANSCRIPT_NOT_FOUND");
 });
 
+async function createSessionWith(
+	factory: (dir: string) => SessionManager,
+	input: Parameters<typeof createSession>[0],
+) {
+	setSessionManagerFactory(factory);
+	try {
+		return await createSession(input);
+	} finally {
+		setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	}
+}
+
 async function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (!predicate()) {
@@ -211,12 +223,13 @@ function gatedChildResponse(): { release: () => void } {
 test("a child run's usage delta lands in the parent's pi totals and invalidates its stats", async () => {
 	const cwd = tmpDir("trdel-usage-");
 	let parentManager: SessionManager | undefined;
-	setSessionManagerFactory((dir) => {
-		parentManager = SessionManager.inMemory(dir);
-		return parentManager;
-	});
-	const { sessionId } = await createSession({ cwd, workspaceId: "ws-usage" });
-	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			parentManager = SessionManager.inMemory(dir);
+			return parentManager;
+		},
+		{ cwd, workspaceId: "ws-usage" },
+	);
 	const published: unknown[] = [];
 	setSessionPublisher((payload) => {
 		if (payload.sessionId === sessionId) published.push(payload.event);
@@ -299,9 +312,10 @@ test("the subagent totals mirror matches pi's own totals for every spend source"
 	const file = transcript.getSessionFile();
 	if (!file) throw new Error("expected a persisted transcript");
 
-	setSessionManagerFactory(() => SessionManager.open(file));
-	const { sessionId } = await createSession({ cwd, workspaceId: "ws-parity" });
-	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	const { sessionId } = await createSessionWith(() => SessionManager.open(file), {
+		cwd,
+		workspaceId: "ws-parity",
+	});
 	try {
 		const pi = getSessionStats(sessionId);
 		expect(pi.tokens).toMatchObject({ input: 150, output: 155, cacheRead: 160, cacheWrite: 165 });
@@ -321,13 +335,14 @@ test("the subagent totals mirror matches pi's own totals for every spend source"
 
 async function parentWithGatedChild(workspaceId: string) {
 	let parentManager: SessionManager | undefined;
-	setSessionManagerFactory((dir) => {
-		parentManager = SessionManager.inMemory(dir);
-		return parentManager;
-	});
 	const cwd = tmpDir(`trdel-${workspaceId}-`);
-	const { sessionId } = await createSession({ cwd, workspaceId });
-	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			parentManager = SessionManager.inMemory(dir);
+			return parentManager;
+		},
+		{ cwd, workspaceId },
+	);
 	const { release } = gatedChildResponse();
 	const child = await delegationServiceFor(workspaceId).createChild({
 		parent: sessionId,
@@ -346,31 +361,32 @@ test("attaching a chat recovers the spend of children a crashed host never recor
 	const cwd = tmpDir("trdel-crash-");
 	let parentManager: SessionManager | undefined;
 	let orphanId = "";
-	setSessionManagerFactory((dir) => {
-		parentManager = SessionManager.inMemory(dir);
-		const orphan = SessionManager.create(
-			cwd,
-			delegationSessionDir(delegationRootDir(), "ws-crash", parentManager.getSessionId()),
-		);
-		orphan.appendMessage({ role: "user", content: "Long job.", timestamp: Date.now() });
-		orphan.appendMessage({
-			...fauxAssistantMessage("partial"),
-			provider: "faux",
-			model: "faux",
-			usage: {
-				input: 120,
-				output: 30,
-				cacheRead: 4_000,
-				cacheWrite: 500,
-				totalTokens: 4_650,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.25 },
-			},
-		});
-		orphanId = orphan.getSessionId();
-		return parentManager;
-	});
-	const { sessionId } = await createSession({ cwd, workspaceId: "ws-crash" });
-	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			parentManager = SessionManager.inMemory(dir);
+			const orphan = SessionManager.create(
+				cwd,
+				delegationSessionDir(delegationRootDir(), "ws-crash", parentManager.getSessionId()),
+			);
+			orphan.appendMessage({ role: "user", content: "Long job.", timestamp: Date.now() });
+			orphan.appendMessage({
+				...fauxAssistantMessage("partial"),
+				provider: "faux",
+				model: "faux",
+				usage: {
+					input: 120,
+					output: 30,
+					cacheRead: 4_000,
+					cacheWrite: 500,
+					totalTokens: 4_650,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.25 },
+				},
+			});
+			orphanId = orphan.getSessionId();
+			return parentManager;
+		},
+		{ cwd, workspaceId: "ws-crash" },
+	);
 	try {
 		await waitFor(() => getSessionStats(sessionId).tokens.total > 0);
 		expect(getSessionStats(sessionId)).toMatchObject({
@@ -441,13 +457,14 @@ const writesCanBeDenied = (() => {
 
 async function persistedParent(workspaceId: string) {
 	let manager: SessionManager | undefined;
-	setSessionManagerFactory((dir) => {
-		manager = SessionManager.create(dir);
-		return manager;
-	});
 	const cwd = tmpDir(`trdel-${workspaceId}-`);
-	const { sessionId } = await createSession({ cwd, workspaceId });
-	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			manager = SessionManager.create(dir);
+			return manager;
+		},
+		{ cwd, workspaceId },
+	);
 	if (!manager) throw new Error("expected a parent session manager");
 	manager.appendMessage({ role: "user", content: "BEFORE", timestamp: Date.now() });
 	const file = manager.getSessionFile();
@@ -505,6 +522,7 @@ test.skipIf(!writesCanBeDenied)(
 			expect(userTexts(reopened)).toEqual(["BEFORE", "AFTER"]);
 			expect(reopened.getEntries().some((entry) => entry.type === "usage")).toBe(false);
 		} finally {
+			release();
 			chmodSync(file, 0o644);
 			await removeSession(sessionId);
 		}
@@ -532,9 +550,10 @@ test.skipIf(!writesCanBeDenied)(
 				.some((entry) => entry.type === "usage"),
 		).toBe(false);
 
-		setSessionManagerFactory(() => SessionManager.open(file));
-		const reopened = await createSession({ cwd, workspaceId: "ws-reopen" });
-		setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+		const reopened = await createSessionWith(() => SessionManager.open(file), {
+			cwd,
+			workspaceId: "ws-reopen",
+		});
 		try {
 			expect(reopened.sessionId).toBe(sessionId);
 			await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
@@ -628,13 +647,14 @@ test("a failed deletion recovers the usage of a child that settled while trash w
 		await trashOutcome;
 	});
 	let parentManager: SessionManager | undefined;
-	setSessionManagerFactory((dir) => {
-		parentManager = SessionManager.create(dir);
-		return parentManager;
-	});
 	const cwd = tmpDir("trdel-trashfail-");
-	const { sessionId } = await createSession({ cwd, workspaceId: "ws-trashfail" });
-	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			parentManager = SessionManager.create(dir);
+			return parentManager;
+		},
+		{ cwd, workspaceId: "ws-trashfail" },
+	);
 	parentManager?.appendMessage({ role: "user", content: "persist", timestamp: Date.now() });
 	const { release } = gatedChildResponse();
 	try {
@@ -702,12 +722,13 @@ const tokenCounts = (usage: {
 
 async function inMemoryParent(workspaceId: string) {
 	let manager: SessionManager | undefined;
-	setSessionManagerFactory((dir) => {
-		manager = SessionManager.inMemory(dir);
-		return manager;
-	});
-	const { sessionId } = await createSession({ cwd: tmpDir(`trdel-${workspaceId}-`), workspaceId });
-	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			manager = SessionManager.inMemory(dir);
+			return manager;
+		},
+		{ cwd: tmpDir(`trdel-${workspaceId}-`), workspaceId },
+	);
 	if (!manager) throw new Error("expected a parent session manager");
 	const parent = manager;
 	const usageEntries = () => parent.getEntries().filter((entry) => entry.type === "usage");
@@ -741,6 +762,37 @@ test("a running subagent's spend reaches its parent after each response, before 
 	}
 });
 
+test("a live-recorded run stays exact after its chat is reopened", async () => {
+	const { cwd, sessionId, file } = await persistedParent("ws-livereopen");
+	const { release } = twoStepChildResponses();
+	let reopened: SessionManager | undefined;
+	try {
+		const child = await scoutChild("ws-livereopen", sessionId);
+		const run = child.runQueued("Two steps.");
+		await waitFor(() => getSessionStats(sessionId).tokens.total > 0);
+		release();
+		const { usage } = (await run).details;
+		await removeSession(sessionId);
+		const onDisk = SessionManager.open(file).getEntries();
+		const recorded = onDisk.filter((entry) => entry.type === "usage").length;
+		expect(recorded).toBeGreaterThanOrEqual(2);
+
+		await createSessionWith(
+			() => {
+				reopened = SessionManager.open(file);
+				return reopened;
+			},
+			{ cwd, workspaceId: "ws-livereopen" },
+		);
+		await reconcileSessionSubagentUsage("ws-livereopen", sessionId, () => reopened?.getEntries());
+		expect(reopened?.getEntries().filter((entry) => entry.type === "usage")).toHaveLength(recorded);
+		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
+	} finally {
+		release();
+		await removeSession(sessionId);
+	}
+});
+
 test.skipIf(!writesCanBeDenied)(
 	"a progress write kept only in memory is neither recounted nor lost after reopening",
 	async () => {
@@ -759,9 +811,10 @@ test.skipIf(!writesCanBeDenied)(
 			const onDisk = SessionManager.open(file).getEntries();
 			expect(onDisk.filter((entry) => entry.type === "usage").length).toBeGreaterThan(0);
 
-			setSessionManagerFactory(() => SessionManager.open(file));
-			await createSession({ cwd, workspaceId: "ws-progressfail" });
-			setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+			await createSessionWith(() => SessionManager.open(file), {
+				cwd,
+				workspaceId: "ws-progressfail",
+			});
 			await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
 			expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
 		} finally {
@@ -919,9 +972,10 @@ test("spend dropped by emergency disposal during a close is recovered when the c
 				.some((entry) => entry.type === "usage"),
 		).toBe(false);
 
-		setSessionManagerFactory(() => SessionManager.open(file));
-		await createSession({ cwd, workspaceId: "ws-closeemergency" });
-		setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+		await createSessionWith(() => SessionManager.open(file), {
+			cwd,
+			workspaceId: "ws-closeemergency",
+		});
 		await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
 	} finally {
 		release();

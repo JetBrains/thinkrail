@@ -570,9 +570,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     start) appends the increment of the run's usage delta over a per-run watermark, and `run-terminal`
     appends the remainder, so the toolbar follows a running subagent and pi's own session totals include
     delegated spend for every outcome and consumer (Agent, `request_review`), independent of completion
-    delivery. The watermark is in-memory, starts at zero on `run-queued`, is dropped at `run-terminal`,
-    and advances whenever pi took the increment into its session (even if persisting it failed), so a
-    write is never counted twice; an increment pi did not take is carried by the next one, but one dropped
+    delivery. The watermark (`subagentUsage`'s run recorder) is in-memory, lives from a run's first record
+    until its `run-terminal`, and advances whenever pi took the increment into its session (even if
+    persisting it failed), so a write is never counted twice; an increment pi did not take is carried by
+    the next one, but one dropped
     at `run-terminal` is not carried into the child's next run — reconciliation recovers it. Increments
     record any positive token count or a cost above 1e-9. Progress events skip the listener's
     resource/state publishes (resource summaries carry status, not usage). Progress only freshens the

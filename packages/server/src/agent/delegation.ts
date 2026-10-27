@@ -15,7 +15,6 @@ import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	type ChildHandle,
 	createDelegationService,
-	type DelegationRunDetails,
 	type DelegationService,
 	delegationSessionDir,
 	deriveChildSessionFile,
@@ -35,13 +34,10 @@ import { childBaseExtensionFactories, childExtensionFactories } from "./extensio
 import { getPiRuntime } from "./piRuntime";
 import { isHostResourceId, isPiSessionId } from "./resourceIdentity";
 import {
-	raiseWatermark,
+	createRunUsageRecorder,
 	reconcileSubagentUsage,
 	SUBAGENT_USAGE_KIND,
 	type SubagentUsage,
-	subagentUsage,
-	type UsageTotals,
-	usageIncrement,
 } from "./subagentUsage";
 
 export function delegationRootDir(): string {
@@ -74,20 +70,7 @@ function recordSubagentUsage(parentSessionId: string, usage: SubagentUsage): boo
 	});
 }
 
-const runWatermarks = new Map<string, UsageTotals>();
-
-function recordRunUsage(
-	parentSessionId: string,
-	childSessionId: string,
-	details: DelegationRunDetails,
-): void {
-	const watermark = runWatermarks.get(childSessionId);
-	const increment = usageIncrement(details.usage, watermark);
-	if (!increment) return;
-	const usage = subagentUsage(childSessionId, details.model, increment);
-	if (recordSubagentUsage(parentSessionId, usage))
-		runWatermarks.set(childSessionId, raiseWatermark(watermark, details.usage));
-}
+const runUsage = createRunUsageRecorder(recordSubagentUsage);
 
 export function reconcileSessionSubagentUsage(
 	workspaceId: string,
@@ -122,14 +105,11 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 		});
 		service.onLifecycle((event) => {
 			if (event.type === "run-progress") {
-				recordRunUsage(event.parentSessionId, event.sessionId, event.details);
+				runUsage.progress(event.parentSessionId, event.sessionId, event.details);
 				return;
 			}
-			if (event.type === "run-queued") runWatermarks.delete(event.sessionId);
-			if (event.type === "run-terminal") {
-				recordRunUsage(event.parentSessionId, event.sessionId, event.outcome.details);
-				runWatermarks.delete(event.sessionId);
-			}
+			if (event.type === "run-terminal")
+				runUsage.terminal(event.parentSessionId, event.sessionId, event.outcome.details);
 			const parentSessionId =
 				event.type === "child-created" ? event.record.parentSessionId : event.parentSessionId;
 			if (canUseSessionResources(parentSessionId, workspaceId)) {
