@@ -16,7 +16,8 @@ feature state, theme selection, and token generation stay with the app.
 ## Boundary
 
 Primitives expose per-file `@thinkrail/ui/<primitive>` subpaths, not a root component barrel; this keeps
-lazy chunks independent and preserves the shadcn convention. `./utils` exposes `cn`; `./theme` exposes
+lazy chunks independent and preserves the shadcn convention. `./utils` exposes `cn`; `./keyboard` exposes
+`isImeComposing` and `yieldEscapeToIme`; `./theme` exposes
 only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
 explicit cleanup. It knows nothing about the theme catalog or preferences.
 
@@ -33,7 +34,7 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
 `popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, `toast`, `toggle-segment`
 (the slim header toggle: active segment on `control-bg-selected` + `text-default`, `data-active` /
 `aria-pressed`), and `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
-live in the web components spec), alongside `utils` and `theme`. `menu-styles` is shared by the menu
+live in the web components spec), alongside `utils`, `keyboard` and `theme`. `menu-styles` is shared by the menu
 primitives and custom app menu rows. `toggle-segment` and `skeleton` moved here from the app when the
 resource renderers became a package, because both the app and [[module-resource-renderers]] use them.
 
@@ -43,6 +44,15 @@ resource renderers became a package, because both the app and [[module-resource-
   text. Every modal dialog's overlay carries `data-modal-layer`, and `useModalLayerOpen()` reports whether one is open: it lets callers tell "covered by a modal" from their own visibility without a dialog registry, independent of how `aria-hidden` treats live regions. Dialog accepts `hideClose` for chromeless surfaces. `DialogPanel` renders Radix content in place
   without a portal or overlay for caller-positioned, non-modal dialogs; title/role semantics, Escape
   dismissal, and focus return remain Radix-owned while surrounding UI stays interactive.
+- **An active IME owns the key** ([[module-web]]'s text-field rule). `isImeComposing` is `isComposing`
+  or the legacy `keyCode` 229 sentinel, the same test cmdk applies. The sentinel is needed because
+  `compositionend` may come before the final keydown, leaving `isComposing` false while the IME still
+  owns that event. `DialogContent`, `DialogPanel` and `PopoverContent` wrap the caller's
+  `onEscapeKeyDown` in `yieldEscapeToIme`. A composing Escape is `preventDefault`ed, so Radix's
+  document-level Escape listener keeps the layer open, and the caller's handler never sees it. Menus hold
+  no text fields and stay unwrapped. `keyboard.test.ts` scans the app, ui, `resource-renderers` and
+  extension web sources: a file with both a key handler and a text field must use the guard. The scan is
+  file-level, and each allow-list entry carries its reason.
 - React 19 refs pass through controls; dialog/popover portals preserve accessible focus and scroll
   behavior. Popover accepts a host Dialog container for scroll-lock compatibility.
 - Icon-only controls use `IconTooltip` with `aria-label`, not native `title`; one root `TooltipProvider`

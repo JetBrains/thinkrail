@@ -6,6 +6,7 @@ import {
 	type Workspace,
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import {
 	type FocusEvent,
 	type KeyboardEvent,
@@ -221,6 +222,7 @@ export function useInlineRename<T extends Renameable>(options: {
 		inputProps: {
 			onBlur: (event) => controller.commit(event.currentTarget.value),
 			onKeyDown: (event) => {
+				if (isImeComposing(event.nativeEvent)) return;
 				if (event.key === "Enter") {
 					event.preventDefault();
 					event.currentTarget.blur();

@@ -1,6 +1,7 @@
 import { type AppConfigUpdate, isLineWidth, LINE_WIDTH_COLUMNS } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useState } from "react";
 import { toast, useAppStore } from "@/store";
@@ -121,6 +122,7 @@ export function LineWidthControl({ kind }: { kind: LineWidthKind }) {
 						onChange={(event) => setDraft(event.currentTarget.value)}
 						onBlur={commit}
 						onKeyDown={(event) => {
+							if (isImeComposing(event.nativeEvent)) return;
 							if (event.key === "Enter") {
 								event.preventDefault();
 								commit();

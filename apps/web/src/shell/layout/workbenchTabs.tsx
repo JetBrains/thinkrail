@@ -16,6 +16,7 @@ import {
 	ContextMenuSeparator,
 	ContextMenuTrigger,
 } from "@thinkrail/ui/context-menu";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
@@ -482,6 +483,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	};
 	const onNameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
 		event.stopPropagation();
+		if (isImeComposing(event.nativeEvent)) return;
 		if (event.key === "Enter") {
 			event.preventDefault();
 			restoreTabFocusRef.current = true;

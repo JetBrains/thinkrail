@@ -15,6 +15,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { copyText } from "@/lib";
 import type { LoginState } from "./loginState";
@@ -248,6 +249,7 @@ export function LoginDialog({
 										type={state.input.secret ? "password" : "text"}
 										placeholder={state.input.placeholder ?? ""}
 										onKeyDown={(e) => {
+											if (isImeComposing(e.nativeEvent)) return;
 											if (e.key === "Enter") {
 												e.preventDefault();
 												submitPrompt();

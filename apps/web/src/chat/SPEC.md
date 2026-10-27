@@ -960,11 +960,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   meaning + shortcut. The chevron stays enabled with an empty draft so the shortcuts remain discoverable;
   only the rows disable. Menu rows are **actions** (send the current draft with that mode), never a
   sticky mode switch — a persistent mode would make the next plain Enter silently obey hidden state.
-  `Composer` yields every keydown to an active IME before slot, menu, recall, or send handling. It uses
-  `KeyboardEvent.isComposing` plus the legacy `keyCode` 229 sentinel because `compositionend` may precede
-  the final keydown, making `isComposing` false while the IME still owns that event. The guard does not
-  cancel the event, so candidate-confirming Enter commits; only a later ordinary Enter invokes send
-  semantics.
+  `Composer` yields every keydown to an active IME before slot, menu, recall, or send handling
+  ([[module-web]]'s text-field rule). The guard does not cancel the event, so candidate-confirming
+  Enter commits; only a later ordinary Enter invokes send semantics.
   **Interrupt** (`SubmitBehavior: "interrupt"`, Cmd/Ctrl+Shift+Enter while streaming; plain send when
   idle; Shift+Enter alone stays newline) is the "take my message NOW" gesture pi lacks: `ChatView`
   awaits `session.abort` (the ack means idle) then performs an ordinary idle send — the partial reply

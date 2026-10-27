@@ -21,6 +21,7 @@ import {
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyText } from "@/lib";
 import { getTransport } from "@/transport";
@@ -122,6 +123,7 @@ function JbcentralQuotaSettings({
 					}}
 					onBlur={commitInterval}
 					onKeyDown={(event) => {
+						if (isImeComposing(event.nativeEvent)) return;
 						if (event.key === "Enter") {
 							event.preventDefault();
 							event.currentTarget.blur();

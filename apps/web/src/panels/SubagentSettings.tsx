@@ -8,6 +8,7 @@ import {
 	type Workspace,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useEffect, useState } from "react";
 import { workspaceName } from "../store";
 import { SettingsGroup } from "./SettingsGroup";
@@ -116,6 +117,7 @@ function LimitField({
 				}}
 				onBlur={commit}
 				onKeyDown={(event) => {
+					if (isImeComposing(event.nativeEvent)) return;
 					if (event.key === "Enter") {
 						event.preventDefault();
 						commit();

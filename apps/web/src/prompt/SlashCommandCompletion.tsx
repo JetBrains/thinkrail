@@ -8,14 +8,6 @@ export type SlashCommandItem = Omit<SlashCommandInfo, "source"> & {
 };
 
 const MAX_MATCHES = 8;
-const IME_SENTINEL_KEYCODE = 229;
-
-export function isPromptKeyEventComposing(event: {
-	isComposing: boolean;
-	keyCode: number;
-}): boolean {
-	return event.isComposing || event.keyCode === IME_SENTINEL_KEYCODE;
-}
 
 export async function slashCommandCatalogOrEmpty(
 	load: () => Promise<SlashCommandInfo[]>,

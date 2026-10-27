@@ -9,6 +9,7 @@
 		"./context-menu": "./context-menu.tsx",
 		"./dialog": "./dialog.tsx",
 		"./dropdown-menu": "./dropdown-menu.tsx",
+		"./keyboard": "./keyboard.ts",
 		"./menu-styles": "./menu-styles.ts",
 		"./popover": "./popover.tsx",
 		"./resizable": "./resizable.tsx",

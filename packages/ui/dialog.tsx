@@ -3,6 +3,7 @@ import { RiCloseLine as X } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import type * as React from "react";
 import { useSyncExternalStore } from "react";
+import { yieldEscapeToIme } from "./keyboard";
 import { cn } from "./utils";
 
 const OPEN_MODAL_LAYER = '[data-modal-layer][data-state="open"]';
@@ -48,6 +49,7 @@ function DialogContent({
 	className,
 	children,
 	hideClose = false,
+	onEscapeKeyDown,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & { hideClose?: boolean }) {
 	const t = useT();
@@ -59,6 +61,7 @@ function DialogContent({
 					"-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex w-full max-w-[28rem] flex-col gap-16 rounded-lg border border-border-default bg-container-elevated-bg p-16 text-text-default shadow-[var(--shadow-lg)]",
 					className,
 				)}
+				onEscapeKeyDown={yieldEscapeToIme(onEscapeKeyDown)}
 				{...props}
 			>
 				{children}
@@ -75,6 +78,7 @@ function DialogContent({
 
 function DialogPanel({
 	className,
+	onEscapeKeyDown,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
 	return (
@@ -83,6 +87,7 @@ function DialogPanel({
 				"flex flex-col border-border-default bg-container-elevated-bg text-text-default outline-none",
 				className,
 			)}
+			onEscapeKeyDown={yieldEscapeToIme(onEscapeKeyDown)}
 			{...props}
 		/>
 	);

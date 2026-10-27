@@ -370,6 +370,14 @@ themselves.
 - Streaming invariant: `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
   **REPLACE**. Attempt-level `agent_end` never means idle; automatic work ends only at `agent_settled`.
 - Panels stay arrangement-agnostic so the mobile shell is an additive layer, not a rewrite.
+- **An active IME owns every key in a text field.** While a composition is open, Enter, Escape, arrows,
+  Tab and shortcuts belong to the IME. The key that commits or cancels a candidate never submits,
+  renames, cancels a rename, or closes the field or its dialog/popover; only a later ordinary key does.
+  Every text-field key handler here, in `resource-renderers` and in extension web halves first returns on
+  [[module-ui]]'s `isImeComposing`. A handler that contains its keys calls `stopPropagation` before that
+  check. The dialog and popover primitives guard their own Escape. #875: the rule was once stated for
+  `Composer` alone, and 16 other fields drifted until the [[module-ui]] source scan caught them.
+  Global modifier shortcuts (`Mod+K`, `Ctrl+R`, …) are app chords, not text-field keys, and stay ungated.
 - **Every host HTTP route the app composes is proxied by the Vite dev server.** The app reaches the host
   over `/ws` and over the two byte routes `/files` and `/blob` (images, PDFs, notebooks, markdown-relative
   images), always composed through one function (`panels/resourcePane.resourceBytesUrl`) on the

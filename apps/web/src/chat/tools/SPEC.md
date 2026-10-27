@@ -156,7 +156,9 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
     the key (it cancels the composition, so the note stays open) but the gesture still must not reach the
     card — declining to finish while also declining to swallow would let `Shift+Escape` bubble out and take
     the questionnaire down with the text being composed. The card's skip therefore also **ignores any
-    keystroke the IME is composing**, which covers the Other field, whose free text has no inner guard.
+    keystroke the IME owns**, and so does the Other field: its ↑/↓ and Enter wait for the composition
+    to end, so while composing the arrows move through IME candidates, not questionnaire choices
+    ([[module-web]]'s text-field rule).
     `Shift+Escape` is otherwise the deliberate card-local skip; plain Escape outside a note never declines.
     Tab still reaches
     Other, Skip, and footer actions. A compact visible shortcut legend makes the interaction discoverable,

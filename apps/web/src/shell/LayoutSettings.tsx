@@ -16,6 +16,7 @@ import type { LayoutPreset } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -119,6 +120,7 @@ function GroupLimitInput({
 				onChange={(event) => setDraft(event.currentTarget.value)}
 				onBlur={commit}
 				onKeyDown={(event) => {
+					if (isImeComposing(event.nativeEvent)) return;
 					if (event.key === "Enter") {
 						event.preventDefault();
 						commit();
@@ -249,6 +251,7 @@ export function LayoutSettings() {
 										value={renaming.name}
 										onChange={(event) => setRenaming({ id: preset.id, name: event.target.value })}
 										onKeyDown={(event) => {
+											if (isImeComposing(event.nativeEvent)) return;
 											if (event.key === "Enter") commitRename(preset.id);
 											if (event.key === "Escape") setRenaming(null);
 										}}

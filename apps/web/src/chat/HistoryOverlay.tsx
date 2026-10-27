@@ -13,6 +13,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNow } from "@/components/useNow";
@@ -401,7 +402,7 @@ function HistoryPicker({
 	useEffect(() => {
 		if (scopeMenuOpen) return;
 		const onWindowKeyDown = (e: globalThis.KeyboardEvent) => {
-			if (e.key !== "Escape") return;
+			if (e.key !== "Escape" || isImeComposing(e)) return;
 			e.preventDefault();
 			e.stopPropagation();
 			onClose();
@@ -439,6 +440,7 @@ function HistoryPicker({
 	}, [selectedKey]);
 
 	const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+		if (isImeComposing(e.nativeEvent)) return;
 		if ((e.metaKey || e.ctrlKey) && e.code === "KeyS") {
 			e.preventDefault();
 			const item = resolveHistorySelection(stage, result, selected);

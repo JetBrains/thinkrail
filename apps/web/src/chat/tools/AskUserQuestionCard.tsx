@@ -14,6 +14,7 @@ import type {
 } from "@thinkrail/contracts";
 import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	Fragment,
@@ -537,7 +538,7 @@ export function AskUserQuestionCard({
 		confirmQuestion(confirmStateFor(state, !!q.multiSelect, { kind: "custom" }));
 
 	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-		if (event.nativeEvent.isComposing) return;
+		if (isImeComposing(event.nativeEvent)) return;
 		if (
 			event.key === "Escape" &&
 			event.shiftKey &&
@@ -1000,7 +1001,7 @@ function QuestionBody({
 														const action = noteKeyAction(
 															event.key,
 															event.shiftKey,
-															event.nativeEvent.isComposing,
+															isImeComposing(event.nativeEvent),
 														);
 														if (action === "none") return;
 														event.stopPropagation();
@@ -1206,6 +1207,7 @@ function OtherOptionRow({
 				placeholder={t("tools.ask.otherPlaceholder")}
 				onChange={(event) => onText(event.target.value)}
 				onKeyDown={(event) => {
+					if (isImeComposing(event.nativeEvent)) return;
 					if (
 						(event.key === "ArrowUp" || event.key === "ArrowDown") &&
 						!event.shiftKey &&
@@ -1217,7 +1219,7 @@ function OtherOptionRow({
 						onMove(event.key);
 						return;
 					}
-					if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+					if (event.key === "Enter") {
 						event.preventDefault();
 						onConfirm();
 					}

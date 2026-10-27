@@ -1,4 +1,5 @@
 import { useT } from "@thinkrail/locales/react";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useRef, useState } from "react";
 import type { AnchorDraft, SurfaceReview } from "../registry";
@@ -96,6 +97,7 @@ export function ReviewComposer({
 				}}
 				onKeyDown={(event) => {
 					event.stopPropagation();
+					if (isImeComposing(event.nativeEvent)) return;
 					if (event.key === "Escape") onClose();
 					if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
 						event.preventDefault();

@@ -1,5 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
 import { AttentionLine } from "./AttentionLine";
@@ -131,6 +132,7 @@ export function ExtUiPrompt({
 							placeholder={request.placeholder ?? ""}
 							onChange={(e) => setText(e.target.value)}
 							onKeyDown={(e) => {
+								if (isImeComposing(e.nativeEvent)) return;
 								if (e.key === "Enter") {
 									e.preventDefault();
 									answer(text);
