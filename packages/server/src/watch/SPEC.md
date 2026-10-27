@@ -77,7 +77,7 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     terminal would otherwise produce no signal at all. Resolved with plain fs (stat + parse the gitfile
     line), never by shelling out — this module has no `git` sibling edge. Non-recursive because only the
     dir's top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) while `objects/`/`logs/` are
-    pure storms; a missing/unreadable git dir (non-git folder) or a failed start degrades silently.
+    pure storms; a missing/unreadable git dir (non-git folder) or a failed start degrades silently. The watcher cannot tell an `index` rewrite from a commit, so the host's own git reads must not rewrite it (`git`'s `nonInteractiveGitEnv` sets `GIT_OPTIONAL_LOCKS=0`).
 
   `host` fans the nudge out to two convergences: `refreshUserOwnedWorkspace` (a user-owned workspace's
   folder-truth branch labels) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,

@@ -77,7 +77,7 @@ ref off the workspace-create critical path.
   is literal — no caller re-spells the `rev-parse` by hand;
   **`nonInteractiveGitEnv()`** — the default environment both runners spawn under (`git`'s only option is
   `raw`; `gitAsync` alone accepts an `opts.env` override, e.g. `pr`'s non-interactive push, which layers its
-  own SSH batch-mode settings): `process.env` plus `GIT_TERMINAL_PROMPT=0`, and **nothing else** by default.
+  own SSH batch-mode settings): `process.env` plus `GIT_TERMINAL_PROMPT=0` and `GIT_OPTIONAL_LOCKS=0`, and **nothing else** by default. `GIT_OPTIONAL_LOCKS=0` stops a read (`status`) from writing back its refreshed `.git/index`: that write wakes the `watch` git-dir watcher, whose pathless `fsChanged` makes every client read again, a loop that ran at ~45 git spawns/s (#438). Porcelain `diff` may still refresh the index once after a change; it does not repeat.
   It reads no config and rewrites none of the user's ssh setup on its own;
   **Request-path reads run through `gitAsync`** — `resolveDiffRange`,
   `gitStatus`, `gitDiffFile`, `listCommits`, `listBranches` and the workspace badge fan-out are async, so a

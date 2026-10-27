@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	statSync,
+	utimesSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { git, gitAsync, gitAsyncBytes, nonInteractiveGitEnv } from "./gitExec";
@@ -55,6 +64,28 @@ test("nonInteractiveGitEnv layers over process.env and leaves the user's ssh cli
 	expect(env.GIT_TERMINAL_PROMPT).toBe("0");
 	expect(env.PATH).toBe(process.env.PATH);
 	expect(env.GIT_SSH_COMMAND).toBe("ssh -i /keys/sentinel");
+});
+
+test("host reads settle the index after one pass, so they cannot keep waking the git-dir watcher", async () => {
+	const files = Array.from({ length: 20 }, (_, i) => `f${i}.txt`);
+	for (const name of files) writeFileSync(join(repo, name), `${name}\n`);
+	run(repo, "add", "-A");
+	run(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init");
+	writeFileSync(join(repo, "f3.txt"), "edited\n");
+	const now = new Date();
+	for (const name of files.slice(10)) utimesSync(join(repo, name), now, now);
+	const index = join(repo, ".git", "index");
+	const readPass = async () => {
+		expect(git(repo, ["status", "--porcelain"]).ok).toBe(true);
+		expect((await gitAsync(repo, ["diff", "--shortstat"])).ok).toBe(true);
+		expect((await gitAsync(repo, ["diff", "HEAD", "--shortstat"])).ok).toBe(true);
+	};
+
+	await readPass();
+	const settled = statSync(index).mtimeMs;
+	for (let pass = 0; pass < 3; pass++) await readPass();
+
+	expect(statSync(index).mtimeMs).toBe(settled);
 });
 
 posix("the user's core.sshCommand runs unmodified — we add no options of our own", async () => {
