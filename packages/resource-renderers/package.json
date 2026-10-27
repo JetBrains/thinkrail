@@ -19,6 +19,7 @@
 		"@thinkrail/ui": "workspace:*",
 		"diff": "catalog:",
 		"jsondiffpatch": "0.7.6",
+		"mdast-util-from-markdown": "2.1.0",
 		"monaco-editor": "0.57.0",
 		"node-htmldiff": "0.9.4",
 		"pdfjs-dist": "6.4.299",

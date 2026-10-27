@@ -47,9 +47,16 @@ function relativePathname(href: string): string {
 
 interface MdNode {
 	type: string;
-	value?: string;
-	children?: MdNode[];
-	data?: { hProperties?: Record<string, unknown> };
+	depth?: number | undefined;
+	value?: string | undefined;
+	children?: MdNode[] | undefined;
+	data?: { hProperties?: Record<string, unknown> | undefined } | undefined;
+}
+
+export interface MarkdownHeading {
+	depth: number;
+	text: string;
+	id: string;
 }
 
 function headingText(node: MdNode): string {
@@ -57,24 +64,45 @@ function headingText(node: MdNode): string {
 	return (node.children ?? []).map(headingText).join("");
 }
 
+function headingId(text: string, seen: Map<string, number>): string | null {
+	const base = slugify(text);
+	if (!base) return null;
+	const n = seen.get(base) ?? 0;
+	seen.set(base, n + 1);
+	return n === 0 ? base : `${base}-${n}`;
+}
+
+export function collectMarkdownHeadings(tree: unknown): MarkdownHeading[] {
+	const seen = new Map<string, number>();
+	const headings: MarkdownHeading[] = [];
+	walk(tree, (node) => {
+		if (node.type !== "heading" || typeof node.depth !== "number") return;
+		const text = headingText(node);
+		const id = headingId(text, seen);
+		if (!id) return;
+		headings.push({ depth: node.depth, text: text.replace(/\s+/g, " ").trim() || text, id });
+		node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id } };
+	});
+	return headings;
+}
+
 export function remarkHeadingIds() {
-	return (tree: MdNode): void => {
-		const seen = new Map<string, number>();
-		walk(tree, (node) => {
-			if (node.type !== "heading") return;
-			const base = slugify(headingText(node));
-			if (!base) return;
-			const n = seen.get(base) ?? 0;
-			seen.set(base, n + 1);
-			const id = n === 0 ? base : `${base}-${n}`;
-			node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id } };
-		});
+	return (tree: unknown): void => {
+		collectMarkdownHeadings(tree);
 	};
 }
 
-function walk(node: MdNode, visit: (n: MdNode) => void): void {
+function isMdNode(value: unknown): value is MdNode {
+	return (
+		typeof value === "object" && value !== null && typeof Reflect.get(value, "type") === "string"
+	);
+}
+
+function walk(node: unknown, visit: (n: MdNode) => void): void {
+	if (!isMdNode(node)) return;
 	visit(node);
-	for (const child of node.children ?? []) walk(child, visit);
+	const children = Reflect.get(node, "children");
+	if (Array.isArray(children)) for (const child of children) walk(child, visit);
 }
 
 function scrollToAnchor(id: string): void {

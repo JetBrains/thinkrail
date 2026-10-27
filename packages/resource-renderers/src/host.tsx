@@ -78,6 +78,8 @@ export interface ResourceHost {
 export interface ResourcePreferences {
 	fileLineWidth: number;
 	fileLineWidthBounded: boolean;
+	markdownOutlineVisible: boolean | null;
+	setMarkdownOutlineVisible: (visible: boolean) => void;
 }
 
 const ResourceHostContext = createContext<ResourceHost | null>(null);

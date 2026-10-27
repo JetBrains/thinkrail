@@ -18,7 +18,8 @@ content loading, review persistence, tabs or navigation — a host supplies thos
 
 The package exists so one renderer stack serves every surface that shows a file: the web app's file and
 diff panes, the file-comparison diff tab, and extension tool cards (visualize's file previews,
-[[module-ext-visualize]]), so a renderer fix lands everywhere at once.
+[[module-ext-visualize]]), so a renderer fix lands everywhere at once. The Markdown preview lists the
+document's headings in a collapsible outline beside the rendered view.
 
 ## Public surface
 
@@ -104,8 +105,10 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
 Build the value once (the app does at module scope). Its functions are memo inputs: `documentComponents`
 defines its link and image components per call, so a new `bytesUrl`/`openFile` identity would remount every
 link and image in open previews and notebook cells. The reader's line-width preference
-(`fileLineWidth` / `fileLineWidthBounded`) arrives separately through `ResourcePreferencesProvider`; only
-`MonacoEditor` reads it, so a width change re-renders nothing else. The phone class arrives the same way
+(`fileLineWidth` / `fileLineWidthBounded`) arrives separately through `ResourcePreferencesProvider`;
+`MonacoEditor` reads those fields. The Markdown preview reads `markdownOutlineVisible` /
+`setMarkdownOutlineVisible` from the same value so a hide/show choice persists per client. A preference
+object identity change re-renders both consumers. The phone class arrives the same way
 through `ResourceEnvironmentProvider` (the registry's `ResourceEnvironment`, `{ mobile }`); only
 `ResourcePreview` reads it — panes resolve with their own viewport reading — so a viewport flip re-renders
 only the previews that must re-resolve their renderer. A subtree that belongs to one workspace and chat
@@ -195,8 +198,8 @@ keeps it.
 - **Allowed deps:** `@thinkrail/contracts` (types), `@thinkrail/locales` (the `MessageKey` type and
   `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
   engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
-  `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
-  `node-htmldiff`).
+  `react-markdown`, `mdast-util-from-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`,
+  `react-virtuoso`, `node-htmldiff`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
   pi packages. `scripts/check-module-boundaries.ts` enforces it; only `apps/web` consumes the package today.
 - UI text follows [[architecture]] Decision 23: renderer chrome renders through `useT()`'s translator
@@ -565,7 +568,13 @@ content's own height.
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (through `resourcePane.resourceBytesUrl`, injected into `documentComponents` so the markdown layer never
   reaches for the transport itself). A cross-file link's `#fragment` is not yet followed (opens the
-  file only).
+  file only). A document with two or more headings shows a heading outline on the right of the preview:
+  entries nest under the nearest shallower heading (a skipped level still nests), click scrolls that
+  heading inside the preview scroller, the last heading at or above the viewport top is `aria-current`,
+  and a toggle hides the outline. The choice persists through the host's client-preference adapter;
+  below `MARKDOWN_OUTLINE_NARROW_WIDTH` (720px of the preview container) the outline starts hidden.
+  Fewer than two headings omit both the outline and the toggle. Rendered diffs and source view stay
+  unchanged.
 - **Document markdown renders sanitized raw HTML; chat markdown does not.** READMEs place logos and
   banners with `<p align="center"><img src width>`, float images with `<img align="right">`, fold
   sections in `<details>`, and ship theme-aware logos as `<picture><source media srcset>`; shown as

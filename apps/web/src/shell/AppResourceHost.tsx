@@ -9,7 +9,7 @@ import {
 	type ResourceReviewSendProps,
 	registerBundledResourceRenderers,
 } from "@thinkrail/resource-renderers";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Markdown } from "../chat/Markdown";
 import { cssColorToHex, usePhoneViewport } from "../lib";
 import { SHIKI_FILE_LANGUAGES, shikiLanguageId } from "../lib/highlighter";
@@ -20,6 +20,10 @@ import { useFileReview } from "../panels/useReviewCommenting";
 import { selectFileChangeSince, useAppStore } from "../store";
 import { resolveThinkrailShikiTheme } from "../themes";
 import { getTransport } from "../transport";
+import {
+	readMarkdownOutlineVisible,
+	writeMarkdownOutlineVisible,
+} from "./markdownOutlinePreference";
 
 registerBundledResourceRenderers();
 
@@ -58,10 +62,22 @@ const HOST: ResourceHost = {
 export function AppResourceHost({ children }: { children: ReactNode }) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
+	const [markdownOutlineVisible, setMarkdownOutlineVisibleState] = useState<boolean | null>(() =>
+		readMarkdownOutlineVisible(),
+	);
+	const setMarkdownOutlineVisible = useCallback((visible: boolean) => {
+		writeMarkdownOutlineVisible(visible);
+		setMarkdownOutlineVisibleState(visible);
+	}, []);
 	const mobile = usePhoneViewport();
 	const preferences = useMemo<ResourcePreferences>(
-		() => ({ fileLineWidth, fileLineWidthBounded }),
-		[fileLineWidth, fileLineWidthBounded],
+		() => ({
+			fileLineWidth,
+			fileLineWidthBounded,
+			markdownOutlineVisible,
+			setMarkdownOutlineVisible,
+		}),
+		[fileLineWidth, fileLineWidthBounded, markdownOutlineVisible, setMarkdownOutlineVisible],
 	);
 	const environment = useMemo<ResourceEnvironment>(() => ({ mobile }), [mobile]);
 	return (
