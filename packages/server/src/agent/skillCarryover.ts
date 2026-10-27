@@ -70,22 +70,43 @@ function readTarget(path: string, cwd: string): string | undefined {
 	}
 }
 
+interface LineRange {
+	start: number;
+	end: number;
+}
+
 interface ReadLoad {
 	skill: Skill;
-	partial: boolean;
+	start: number;
+	limit: number | undefined;
 }
 
 interface SkillLoad {
 	skill: Skill;
 	index: number;
-	complete: boolean;
+	lines: LineRange;
 }
 
-function isPartialResult(details: unknown): boolean {
-	const truncation = (
-		details as { truncation?: { truncated?: unknown; firstLineExceedsLimit?: unknown } }
-	)?.truncation;
-	return truncation?.truncated === true || truncation?.firstLineExceedsLimit === true;
+const WHOLE_FILE: LineRange = { start: 0, end: Number.POSITIVE_INFINITY };
+
+function readLines(read: ReadLoad, details: unknown): LineRange {
+	const truncation = (details as { truncation?: { truncated?: unknown; outputLines?: unknown } })
+		?.truncation;
+	if (truncation?.truncated === true) {
+		const shown = typeof truncation.outputLines === "number" ? truncation.outputLines : 0;
+		return { start: read.start, end: read.start + shown };
+	}
+	const end = read.limit === undefined ? Number.POSITIVE_INFINITY : read.start + read.limit;
+	return { start: read.start, end };
+}
+
+function covers(ranges: readonly LineRange[], lineCount: number): boolean {
+	let reach = 0;
+	for (const range of [...ranges].sort((a, b) => a.start - b.start)) {
+		if (range.start > reach) break;
+		reach = Math.max(reach, range.end);
+	}
+	return reach >= lineCount;
 }
 
 function skillLoads(
@@ -104,7 +125,7 @@ function skillLoads(
 			for (const text of texts(message.content)) {
 				const block = parseSkillBlock(text);
 				const skill = block && byName.get(block.name);
-				if (skill) loads.push({ skill, index, complete: true });
+				if (skill) loads.push({ skill, index, lines: WHOLE_FILE });
 			}
 		} else if (message.role === "assistant") {
 			for (const part of message.content) {
@@ -116,23 +137,31 @@ function skillLoads(
 				if (skill)
 					reads.set(part.id, {
 						skill,
-						partial: args.offset !== undefined || args.limit !== undefined,
+						start: typeof args.offset === "number" ? Math.max(0, args.offset - 1) : 0,
+						limit: typeof args.limit === "number" ? args.limit : undefined,
 					});
 			}
 		} else if (message.role === "toolResult" && !message.isError) {
 			const read = reads.get(message.toolCallId);
-			if (!read) return;
-			const complete = !read.partial && !isPartialResult(message.details);
-			loads.push({ skill: read.skill, index, complete });
+			if (read) loads.push({ skill: read.skill, index, lines: readLines(read, message.details) });
 		}
 	});
 	return loads;
+}
+
+function skillLineCount(skill: Skill): number | undefined {
+	try {
+		return readFileSync(skill.filePath, "utf8").split("\n").length;
+	} catch {
+		return undefined;
+	}
 }
 
 export function compactedSkills(
 	entries: readonly SessionEntry[],
 	skills: readonly Skill[],
 	cwd: string,
+	lineCount: (skill: Skill) => number | undefined = skillLineCount,
 ): Skill[] {
 	const compaction = entries.findLastIndex((entry) => entry.type === "compaction");
 	const entry = entries[compaction];
@@ -140,14 +169,16 @@ export function compactedSkills(
 	const kept = entries.findIndex((candidate) => candidate.id === entry.firstKeptEntryId);
 	const cut = kept < 0 || kept > compaction ? compaction : kept;
 	const loads = skillLoads(entries, skills, cwd);
-	const compacted = new Set(loads.filter((load) => load.index < cut).map((load) => load.skill));
-	const retained = new Set(
-		loads.filter((load) => load.index >= cut && load.complete).map((load) => load.skill),
-	);
 	const latest = new Map<Skill, number>();
 	for (const load of loads) latest.set(load.skill, load.index);
+	const retained = (skill: Skill) =>
+		covers(
+			loads.filter((load) => load.skill === skill && load.index >= cut).map((load) => load.lines),
+			lineCount(skill) ?? Number.POSITIVE_INFINITY,
+		);
 	return [...latest]
-		.filter(([skill]) => compacted.has(skill) && !retained.has(skill))
+		.filter(([skill]) => loads.some((load) => load.skill === skill && load.index < cut))
+		.filter(([skill]) => !retained(skill))
 		.sort(([, a], [, b]) => a - b)
 		.map(([skill]) => skill);
 }

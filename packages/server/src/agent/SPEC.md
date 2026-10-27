@@ -636,12 +636,14 @@ re-opened transcripts provider-valid.
     (`display: false`) right after the `compactionSummary` in every request while the branch has a
     compaction. It restores each skill pi loaded (`before_agent_start`'s `systemPromptOptions.skills`)
     that has a load — a `parseSkillBlock` user block or a successful `read` resolving to that skill's
-    `filePath` (after pi's `@`/`~`/`file://` handling and symlinks) — before the latest cut and no
-    complete load at or after it; reads of other `SKILL.md` files do not count. Any load before the cut,
-    partial (`offset`/`limit` or a truncated result) included, is invocation evidence; only a complete
-    load in the kept tail proves the body survives, so a partial read there never suppresses restoring
-    a skill loaded — fully or only page by page — before the cut. Skills are ordered by their latest
-    load of either kind. Bodies are
+    `filePath` (after pi's `@`/`~`/`file://` handling and symlinks) — before the latest cut, unless the
+    loads at or after it already show the whole file; reads of other `SKILL.md` files do not count.
+    Any load before the cut, an excerpt included, is invocation evidence. In the kept tail each load
+    counts by the lines it showed, computed like pi's `read` (1-indexed `offset`, `limit`, and
+    `details.truncation.outputLines` when truncated; a `/skill:` block shows all): only when their union
+    covers every line of the current file does the body survive, so an excerpt never hides a compacted
+    load, and pages that together show the file are not paid for twice. Skills are ordered by their
+    latest load. Bodies are
     re-read from the admitted skill file (frontmatter stripped, wrapped like pi's `/skill:` block) and
     budgeted at 5K tokens of body per skill and min(25K, 10% of the context window) for the whole
     rendered message (preamble, wrappers, truncation notices), newest first, truncated from the end

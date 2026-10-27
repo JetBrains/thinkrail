@@ -237,6 +237,46 @@ test("restored skills are ordered by their latest load, a kept-tail excerpt incl
 	expect(compactedSkills(sm.getBranch(), SKILLS, "/repo")).toEqual([TODOS, LEDGER]);
 });
 
+test("pages in the kept tail that together show the whole file are not restored twice", () => {
+	const sm = session();
+	sm.appendMessage(user(skillBlock("ledger")));
+	sm.appendMessage(user(skillBlock("todos")));
+	const kept = sm.appendMessage(readCall("r1", "/skills/ledger/SKILL.md", { offset: 11 }));
+	sm.appendMessage(readResult("r1", "page 2"));
+	sm.appendMessage(readCall("r2", "/skills/ledger/SKILL.md", { limit: 10 }));
+	sm.appendMessage(readResult("r2", "page 1"));
+	sm.appendMessage(readCall("r3", "/skills/todos/SKILL.md"));
+	sm.appendMessage(
+		readResult("r3", "head", false, { truncation: { truncated: true, outputLines: 12 } }),
+	);
+	sm.appendMessage(readCall("r4", "/skills/todos/SKILL.md", { offset: 13, limit: 8 }));
+	sm.appendMessage(readResult("r4", "tail"));
+	sm.appendCompaction("summary", kept, 100);
+
+	expect(compactedSkills(sm.getBranch(), SKILLS, "/repo", () => 20)).toEqual([]);
+});
+
+test("kept-tail pages with a gap, a short end or an oversized first line still restore the skill", () => {
+	const sm = session();
+	sm.appendMessage(user(skillBlock("ledger")));
+	sm.appendMessage(user(skillBlock("todos")));
+	const kept = sm.appendMessage(readCall("r1", "/skills/ledger/SKILL.md", { limit: 10 }));
+	sm.appendMessage(readResult("r1", "page 1"));
+	sm.appendMessage(readCall("r2", "/skills/ledger/SKILL.md", { offset: 12 }));
+	sm.appendMessage(readResult("r2", "page 3"));
+	sm.appendMessage(readCall("r3", "/skills/todos/SKILL.md", { limit: 19 }));
+	sm.appendMessage(readResult("r3", "almost"));
+	sm.appendMessage(readCall("r4", "/skills/todos/SKILL.md", { offset: 20 }));
+	sm.appendMessage(
+		readResult("r4", "[Line 20 is 60KB]", false, {
+			truncation: { truncated: true, outputLines: 0, firstLineExceedsLimit: true },
+		}),
+	);
+	sm.appendCompaction("summary", kept, 100);
+
+	expect(compactedSkills(sm.getBranch(), SKILLS, "/repo", () => 20)).toEqual([LEDGER, TODOS]);
+});
+
 test("loads compacted by an earlier compaction stay restored after the next one", () => {
 	const sm = session();
 	sm.appendMessage(user(skillBlock("ledger")));
@@ -503,18 +543,18 @@ test("manual compaction restores the skill on the next prompt without writing a 
 	expect(result.entries).not.toContain("custom_message");
 });
 
-test("pi's read tool paginating the skill before the cut and excerpting it after still restores it", async () => {
+function paginatedScenario(tail: { offset?: number; limit?: number }[]) {
 	let keptTail: string[] = [];
-	const result = await runScenario(
+	return runScenario(
 		({ skillFile }) => [
 			call("read", { path: skillFile, limit: 3 }),
 			call("read", { path: skillFile, offset: 4 }),
 			() => fauxAssistantMessage("loaded"),
-			call("read", { path: skillFile, limit: 1 }),
+			...tail.map((window) => call("read", { path: skillFile, ...window })),
 		],
 		async (session) => {
 			await session.prompt("Load the ledger skill page by page.");
-			await session.prompt(`Check its first line.\n\n${"context ".repeat(500)}`);
+			await session.prompt(`Check the skill again.\n\n${"context ".repeat(500)}`);
 			await session.compact();
 			const branch = session.sessionManager.getBranch();
 			const compaction = branch.findLast((entry) => entry.type === "compaction");
@@ -525,12 +565,24 @@ test("pi's read tool paginating the skill before the cut and excerpting it after
 			await session.prompt("Next task.");
 		},
 		{ keepRecentTokens: 500 },
-	);
+	).then((result) => ({ ...result, keptTail }));
+}
 
-	expect(keptTail.some((entry) => entry.includes('"limit":1'))).toBe(true);
-	expect(keptTail.some((entry) => entry.includes(RULE))).toBe(false);
+test("pi's read tool paginating the skill before the cut and excerpting it after still restores it", async () => {
+	const result = await paginatedScenario([{ limit: 1 }]);
+
+	expect(result.keptTail.some((entry) => entry.includes('"limit":1'))).toBe(true);
+	expect(result.keptTail.some((entry) => entry.includes(RULE))).toBe(false);
 	expect(result.requests.at(-1)).toContain(SKILL_CARRYOVER_PREAMBLE);
 	expect(result.requests.at(-1)).toContain(RULE);
+});
+
+test("pi's read tool paging through the whole skill in the kept tail adds no carry-over", async () => {
+	const result = await paginatedScenario([{ offset: 4 }, { limit: 3 }]);
+
+	expect(result.keptTail.some((entry) => entry.includes(RULE))).toBe(true);
+	expect(result.keptTail.some((entry) => entry.includes('"limit":3'))).toBe(true);
+	expect(result.requests.at(-1)).not.toContain(SKILL_CARRYOVER_PREAMBLE);
 });
 
 test("a virtual selection gets no carry-over, while the physical model it routes to does", async () => {
