@@ -4,11 +4,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { TestMarkdown as Markdown } from "../testing/markdown";
 import { stripFrontmatter } from "./frontmatter";
 import { documentRehypePlugins } from "./markdownHtml";
-import { remarkHeadingIds } from "./markdownLinks";
+import { headingIdPlugin, remarkHeadingIds } from "./markdownLinks";
 import {
 	activeHeadingId,
 	extractMarkdownOutline,
 	flattenOutlineHeadings,
+	headingIdsInSlice,
 	nestOutlineHeadings,
 	scrollHeadingIntoView,
 } from "./outlineHeadings";
@@ -17,11 +18,11 @@ function ids(markdown: string): string[] {
 	return flattenOutlineHeadings(extractMarkdownOutline(markdown)).map((entry) => entry.heading.id);
 }
 
-function renderHeadings(markdown: string): string {
+function renderHeadings(markdown: string, ids?: readonly string[]): string {
 	return renderToStaticMarkup(
 		createElement(Markdown, {
 			text: stripFrontmatter(markdown),
-			remarkPlugins: [remarkHeadingIds],
+			remarkPlugins: [ids ? headingIdPlugin(ids) : remarkHeadingIds],
 			rehypePlugins: documentRehypePlugins(),
 		}),
 	);
@@ -43,8 +44,8 @@ test("nests headings under the nearest shallower level, including skipped levels
 	expect(tree.map((node) => node.text)).toEqual(["One", "Other"]);
 	expect(tree[0]?.children.map((node) => node.text)).toEqual(["Two", "Two-b"]);
 	expect(tree[0]?.children[0]?.children.map((node) => node.text)).toEqual(["Four", "Three"]);
-	expect(nestOutlineHeadings([{ depth: 3, text: "Lonely", id: "lonely" }])).toEqual([
-		{ depth: 3, text: "Lonely", id: "lonely", children: [] },
+	expect(nestOutlineHeadings([{ depth: 3, text: "Lonely", id: "lonely", line: 1 }])).toEqual([
+		{ depth: 3, text: "Lonely", id: "lonely", line: 1, children: [] },
 	]);
 	const skipped = extractMarkdownOutline("# One\n\n### Three\n");
 	expect(skipped[0]?.children.map((node) => node.text)).toEqual(["Three"]);
@@ -112,6 +113,61 @@ test("inline formatting and links contribute plain text to labels and ids", () =
 	);
 	expect(heading?.heading.text).toBe("Hello world and docs");
 	expect(heading?.heading.id).toBe("hello-world-and-docs");
+});
+
+test("GFM footnotes in headings share one id with the renderer", () => {
+	const markdown = `# Details [^note]
+
+[^note]: a footnote
+
+# Details
+`;
+	expect(ids(markdown)).toEqual(["details", "details-1"]);
+	const html = renderHeadings(markdown);
+	expect(html).toContain('id="user-content-details"');
+	expect(html).toContain('id="user-content-details-1"');
+	expect(html).not.toContain("user-content-details-note");
+});
+
+test("unicode headings get nonempty ids shared with the renderer", () => {
+	const markdown = `# 中文
+
+## 日本語
+
+# 中文
+`;
+	expect(ids(markdown)).toEqual(["中文", "日本語", "中文-1"]);
+	const html = renderHeadings(markdown);
+	for (const id of ids(markdown)) {
+		expect(html).toContain(`id="user-content-${id}"`);
+	}
+});
+
+test("punctuation-only headings still get a stable fallback id", () => {
+	expect(ids("# !!!\n\n## ???\n")).toEqual(["heading", "heading-1"]);
+});
+
+test("spliced segments reuse document-wide heading ids", () => {
+	const markdown = `## Repeat
+
+between
+
+## Repeat
+`;
+	const outline = extractMarkdownOutline(markdown);
+	const entries = flattenOutlineHeadings(outline);
+	expect(entries.map((entry) => [entry.heading.id, entry.heading.line])).toEqual([
+		["repeat", 1],
+		["repeat-1", 5],
+	]);
+	const first = "## Repeat\n\nbetween";
+	const second = "\n## Repeat\n";
+	expect(headingIdsInSlice(outline, 0, first)).toEqual(["repeat"]);
+	expect(headingIdsInSlice(outline, 3, second)).toEqual(["repeat-1"]);
+	const html = `${renderHeadings(first, ["repeat"])}${renderHeadings(second, ["repeat-1"])}`;
+	expect(html).toContain('id="user-content-repeat"');
+	expect(html).toContain('id="user-content-repeat-1"');
+	expect(html.match(/id="user-content-repeat"/g)?.length).toBe(1);
 });
 
 test("outline ids match the ids the renderer stamps on headings", () => {

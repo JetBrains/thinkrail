@@ -1,4 +1,6 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
+import { gfmFromMarkdown } from "mdast-util-gfm";
+import { gfm } from "micromark-extension-gfm";
 import { stripFrontmatter } from "./frontmatter";
 import { DOCUMENT_ID_PREFIX } from "./markdownHtml";
 import { collectMarkdownHeadings, type MarkdownHeading } from "./markdownLinks";
@@ -33,8 +35,28 @@ export function flattenOutlineHeadings(
 	]);
 }
 
+function parseDocumentMarkdown(markdown: string) {
+	return fromMarkdown(stripFrontmatter(markdown), {
+		extensions: [gfm()],
+		mdastExtensions: [gfmFromMarkdown()],
+	});
+}
+
 export function extractMarkdownOutline(markdown: string): OutlineHeading[] {
-	return nestOutlineHeadings(collectMarkdownHeadings(fromMarkdown(stripFrontmatter(markdown))));
+	return nestOutlineHeadings(collectMarkdownHeadings(parseDocumentMarkdown(markdown)));
+}
+
+export function headingIdsInSlice(
+	headings: readonly OutlineHeading[],
+	startLine0: number,
+	text: string,
+): string[] {
+	if (!text) return [];
+	const start = startLine0 + 1;
+	const end = startLine0 + text.split("\n").length;
+	return flattenOutlineHeadings(headings).flatMap(({ heading }) =>
+		heading.line >= start && heading.line <= end ? [heading.id] : [],
+	);
 }
 
 export function headingElement(root: ParentNode, id: string): HTMLElement | null {

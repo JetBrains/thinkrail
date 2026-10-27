@@ -33,11 +33,19 @@ export function resolveRelativePath(fromFile: string, href: string): string | nu
 }
 
 export function slugify(text: string): string {
-	return text
+	const ascii = text
 		.trim()
 		.toLowerCase()
 		.replace(/[^\w\s-]/g, "")
 		.replace(/\s+/g, "-");
+	if (ascii) return ascii;
+	return text
+		.trim()
+		.toLowerCase()
+		.normalize("NFC")
+		.replace(/[^\p{L}\p{N}\p{M}_\s-]/gu, "")
+		.replace(/\s+/g, "-")
+		.replace(/^-+|-+$/g, "");
 }
 
 function relativePathname(href: string): string {
@@ -51,12 +59,14 @@ interface MdNode {
 	value?: string | undefined;
 	children?: MdNode[] | undefined;
 	data?: { hProperties?: Record<string, unknown> | undefined } | undefined;
+	position?: { start?: { line?: number | undefined } | undefined } | undefined;
 }
 
 export interface MarkdownHeading {
 	depth: number;
 	text: string;
 	id: string;
+	line: number;
 }
 
 function headingText(node: MdNode): string {
@@ -64,32 +74,49 @@ function headingText(node: MdNode): string {
 	return (node.children ?? []).map(headingText).join("");
 }
 
-function headingId(text: string, seen: Map<string, number>): string | null {
-	const base = slugify(text);
-	if (!base) return null;
+function headingLine(node: MdNode): number {
+	const line = node.position?.start?.line;
+	return typeof line === "number" ? line : 0;
+}
+
+function headingId(text: string, seen: Map<string, number>): string {
+	const base = slugify(text) || "heading";
 	const n = seen.get(base) ?? 0;
 	seen.set(base, n + 1);
 	return n === 0 ? base : `${base}-${n}`;
 }
 
-export function collectMarkdownHeadings(tree: unknown): MarkdownHeading[] {
+export function collectMarkdownHeadings(tree: unknown, ids?: readonly string[]): MarkdownHeading[] {
 	const seen = new Map<string, number>();
 	const headings: MarkdownHeading[] = [];
+	let i = 0;
 	walk(tree, (node) => {
 		if (node.type !== "heading" || typeof node.depth !== "number") return;
 		const text = headingText(node);
-		const id = headingId(text, seen);
-		if (!id) return;
-		headings.push({ depth: node.depth, text: text.replace(/\s+/g, " ").trim() || text, id });
+		const id = ids?.[i] ?? headingId(text, seen);
+		i += 1;
+		headings.push({
+			depth: node.depth,
+			text: text.replace(/\s+/g, " ").trim() || text,
+			id,
+			line: headingLine(node),
+		});
 		node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id } };
 	});
 	return headings;
 }
 
-export function remarkHeadingIds() {
+export function remarkHeadingIds(ids?: readonly string[]) {
+	const assigned = Array.isArray(ids) ? ids : undefined;
 	return (tree: unknown): void => {
-		collectMarkdownHeadings(tree);
+		collectMarkdownHeadings(tree, assigned);
 	};
+}
+
+export function headingIdPlugin(
+	ids: readonly string[],
+): [typeof remarkHeadingIds, readonly string[]] {
+	return [remarkHeadingIds, ids];
 }
 
 function isMdNode(value: unknown): value is MdNode {

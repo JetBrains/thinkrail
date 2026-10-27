@@ -6,7 +6,8 @@ import { type ResourceHost, ResourceHostProvider, ResourcePreferencesProvider } 
 import type { ResourceViewProps } from "../registry";
 import { TestMarkdown as Markdown, testLinks } from "../testing/markdown";
 import { MarkdownOutline } from "./MarkdownOutline";
-import MarkdownPreview from "./MarkdownPreview";
+import MarkdownPreview, { MarkdownSplicedArticle } from "./MarkdownPreview";
+import { alertComponents } from "./markdownAlerts";
 import { activeHeadingId, extractMarkdownOutline, scrollHeadingIntoView } from "./outlineHeadings";
 
 function render(node: ReactNode): string {
@@ -151,4 +152,46 @@ test("a closed preference hides the outline and keeps the toggle", () => {
 	expect(html).not.toContain('data-testid="markdown-outline"');
 	expect(html).toContain('data-testid="markdown-outline-toggle"');
 	expect(html).toContain('aria-label="Show outline"');
+});
+
+test("footnote headings in the preview keep GFM ids", () => {
+	const html = preview(`# Details [^note]\n\n[^note]: a footnote\n\n# Details\n`);
+	expect(html).toContain('data-id="details"');
+	expect(html).toContain('data-id="details-1"');
+	expect(html).not.toContain('data-id="details-note"');
+	expect(html).toContain('id="user-content-details"');
+	expect(html).toContain('id="user-content-details-1"');
+});
+
+test("unicode headings appear in the outline with nonempty ids", () => {
+	const html = preview("# 中文\n\n## 日本語\n");
+	expect(html).toContain('data-testid="markdown-outline"');
+	expect(html).toContain('data-id="中文"');
+	expect(html).toContain('data-id="日本語"');
+	expect(html).toContain('id="user-content-中文"');
+	expect(html).toContain('id="user-content-日本語"');
+});
+
+test("a review comment between duplicate headings keeps distinct heading ids", () => {
+	const markdown = `## Repeat
+
+between
+
+## Repeat
+`;
+	const html = render(
+		<MarkdownSplicedArticle
+			content={markdown}
+			headings={extractMarkdownOutline(markdown)}
+			Markdown={Markdown}
+			components={alertComponents}
+			inserts={[
+				{ key: "thread-1", line: 3, node: <div key="thread-1" data-testid="review-thread-card" /> },
+			]}
+		/>,
+	);
+	expect(html).toContain('id="user-content-repeat"');
+	expect(html).toContain('id="user-content-repeat-1"');
+	expect(html.match(/id="user-content-repeat"/g)?.length).toBe(1);
+	expect(html).toContain('data-testid="review-thread-card"');
 });

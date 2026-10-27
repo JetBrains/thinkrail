@@ -198,7 +198,7 @@ keeps it.
 - **Allowed deps:** `@thinkrail/contracts` (types), `@thinkrail/locales` (the `MessageKey` type and
   `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
   engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
-  `react-markdown`, `mdast-util-from-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`,
+  `react-markdown`, `mdast-util-from-markdown`, `mdast-util-gfm`, `micromark-extension-gfm`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`,
   `react-virtuoso`, `node-htmldiff`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
   pi packages. `scripts/check-module-boundaries.ts` enforces it; only `apps/web` consumes the package today.
@@ -571,7 +571,10 @@ content's own height.
   file only). A document with two or more headings shows a heading outline on the right of the preview:
   entries nest under the nearest shallower heading (a skipped level still nests), click scrolls that
   heading inside the preview scroller, the last heading at or above the viewport top is `aria-current`,
-  and a toggle hides the outline. The choice persists through the host's client-preference adapter;
+  and a toggle hides the outline. Heading ids are allocated once per document from a GFM parse shared
+  with rendering — Unicode headings get a nonempty slug, ASCII slugs stay as they were — and those ids
+  are reused for the outline and every spliced preview segment, so a review comment or composer cannot
+  renumber duplicates. The choice persists through the host's client-preference adapter;
   below `MARKDOWN_OUTLINE_NARROW_WIDTH` (720px of the preview container) the outline starts hidden.
   Fewer than two headings omit both the outline and the toggle. Rendered diffs and source view stay
   unchanged.

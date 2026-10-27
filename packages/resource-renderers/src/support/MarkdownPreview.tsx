@@ -2,6 +2,7 @@ import { type ReactNode, type RefObject, useMemo } from "react";
 import {
 	type ResourceHost,
 	type ResourceMarkdown,
+	type ResourceMarkdownProps,
 	useResourceHost,
 	useResourcePreferences,
 } from "../host";
@@ -10,11 +11,13 @@ import { stripFrontmatter } from "./frontmatter";
 import { MarkdownOutline } from "./MarkdownOutline";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 import { documentRehypePlugins } from "./markdownHtml";
-import { documentComponents, remarkHeadingIds } from "./markdownLinks";
+import { documentComponents, headingIdPlugin, remarkHeadingIds } from "./markdownLinks";
 import {
 	extractMarkdownOutline,
 	flattenOutlineHeadings,
+	headingIdsInSlice,
 	MARKDOWN_OUTLINE_NARROW_WIDTH,
+	type OutlineHeading,
 } from "./outlineHeadings";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
@@ -52,12 +55,14 @@ export function MarkdownDocument({
 	path,
 	Markdown,
 	links,
+	headingIds,
 }: {
 	content: string;
 	workspaceId: string;
 	path: string;
 	Markdown: ResourceMarkdown;
 	links: Pick<ResourceHost, "bytesUrl" | "openFile">;
+	headingIds?: readonly string[];
 }) {
 	const components = useMemo(
 		() => documentComponents({ workspaceId, path }, links),
@@ -67,7 +72,10 @@ export function MarkdownDocument({
 		<Markdown
 			text={stripFrontmatter(content)}
 			className={DOCUMENT_PROSE}
-			remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
+			remarkPlugins={[
+				remarkGithubAlerts,
+				headingIds ? headingIdPlugin(headingIds) : remarkHeadingIds,
+			]}
 			rehypePlugins={documentRehypePlugins()}
 			components={{ ...alertComponents, ...components }}
 		/>
@@ -122,21 +130,61 @@ function splicedSegments(
 	return segments;
 }
 
+export function MarkdownSplicedArticle({
+	content,
+	headings,
+	Markdown,
+	components,
+	inserts,
+}: {
+	content: string;
+	headings: readonly OutlineHeading[];
+	Markdown: ResourceMarkdown;
+	components: ResourceMarkdownProps["components"];
+	inserts: readonly FlowInsert[];
+}) {
+	const stripped = stripFrontmatter(content);
+	const rawOffset = frontmatterOffset(content, stripped);
+	const segments = splicedSegments(stripped, rawOffset, [...inserts]);
+	return (
+		<article className="mx-auto max-w-[78ch] px-24 py-16">
+			{segments.map((segment) => (
+				<div key={segment.key}>
+					{segment.text && (
+						<Markdown
+							text={segment.text}
+							className={DOCUMENT_PROSE}
+							remarkPlugins={[
+								remarkGithubAlerts,
+								headingIdPlugin(
+									headingIdsInSlice(headings, segment.stampOffset - rawOffset, segment.text),
+								),
+							]}
+							rehypePlugins={documentRehypePlugins(segment.stampOffset)}
+							components={components}
+						/>
+					)}
+					{segment.nodes}
+				</div>
+			))}
+		</article>
+	);
+}
+
 const PREVIEW_SCROLLER =
 	"relative h-full min-h-0 min-w-0 flex-1 overflow-auto bg-container-workspace-bg motion-safe:animate-reveal";
 
 function MarkdownPreviewShell({
-	text,
+	headings,
 	scrollerRef,
 	children,
 }: {
-	text: string;
+	headings: readonly OutlineHeading[];
 	scrollerRef: RefObject<HTMLDivElement | null>;
 	children: ReactNode;
 }) {
 	const { markdownOutlineVisible, setMarkdownOutlineVisible } = useResourcePreferences();
 	const { ref: sizeRef, size } = useElementSize<HTMLDivElement>();
-	const headings = useMemo(() => extractMarkdownOutline(text), [text]);
 	const showToggle = flattenOutlineHeadings(headings).length >= 2;
 	const open =
 		showToggle &&
@@ -175,6 +223,11 @@ export default function MarkdownPreview({
 		viewState,
 		onViewState,
 	);
+	const headings = useMemo(() => extractMarkdownOutline(text), [text]);
+	const headingIds = useMemo(
+		() => flattenOutlineHeadings(headings).map((entry) => entry.heading.id),
+		[headings],
+	);
 	const documentView = !review ? (
 		<div ref={attachScroller} data-testid="markdown-preview" className={PREVIEW_SCROLLER}>
 			<article className="mx-auto max-w-[78ch] px-24 py-16">
@@ -184,6 +237,7 @@ export default function MarkdownPreview({
 					path={path}
 					Markdown={Markdown}
 					links={links}
+					headingIds={headingIds}
 				/>
 			</article>
 		</div>
@@ -195,14 +249,6 @@ export default function MarkdownPreview({
 			attachScroller={attachScroller}
 		>
 			{(composer: ComposerInsert | null) => {
-				const stripped = stripFrontmatter(text);
-				const rawOffset = frontmatterOffset(text, stripped);
-				const mdProps = (stampOffset: number) => ({
-					className: DOCUMENT_PROSE,
-					remarkPlugins: [remarkGithubAlerts, remarkHeadingIds],
-					rehypePlugins: documentRehypePlugins(stampOffset),
-					components: { ...alertComponents, ...components },
-				});
 				const threadInserts: FlowInsert[] = review.threads.flatMap((thread) => {
 					const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
 					return range?.kind === "lineRange"
@@ -217,25 +263,24 @@ export default function MarkdownPreview({
 							]
 						: [];
 				});
-				const inserts = composer
-					? [...threadInserts, { key: "composer", line: composer.line, node: composer.node }]
-					: threadInserts;
-				const segments = splicedSegments(stripped, rawOffset, inserts);
 				return (
-					<article className="mx-auto max-w-[78ch] px-24 py-16">
-						{segments.map((segment) => (
-							<div key={segment.key}>
-								{segment.text && <Markdown text={segment.text} {...mdProps(segment.stampOffset)} />}
-								{segment.nodes}
-							</div>
-						))}
-					</article>
+					<MarkdownSplicedArticle
+						content={text}
+						headings={headings}
+						Markdown={Markdown}
+						components={{ ...alertComponents, ...components }}
+						inserts={
+							composer
+								? [...threadInserts, { key: "composer", line: composer.line, node: composer.node }]
+								: threadInserts
+						}
+					/>
 				);
 			}}
 		</PreviewCommenting>
 	);
 	return (
-		<MarkdownPreviewShell text={text} scrollerRef={scrollerRef}>
+		<MarkdownPreviewShell headings={headings} scrollerRef={scrollerRef}>
 			{documentView}
 		</MarkdownPreviewShell>
 	);
