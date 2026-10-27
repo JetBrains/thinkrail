@@ -9,6 +9,7 @@ import { getTransport } from "@/transport";
 
 const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
 	visualize: "settings.extensions.visualize.description",
+	"web-access": "settings.extensions.web-access.description",
 };
 
 function bundledDescription(t: Translator, entry: ExtensionCatalogEntry): string {

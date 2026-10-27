@@ -28,6 +28,7 @@ async function closeSettings(page: Page): Promise<void> {
 const EXTENSIONS = [
 	{ name: "visualize", title: "Visualize", tool: "visualize" },
 	{ name: "ask-user-question", title: "Ask user question", tool: "ask_user_question" },
+	{ name: "web-access", title: "Web access", tool: "web_search" },
 ] as const;
 
 async function setExtension(page: Page, name: string, enabled: boolean): Promise<void> {

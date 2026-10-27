@@ -3,7 +3,14 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { registryInlineExtensions, resolveExtensionSkillRoots, serverExtensions } from "./index";
+import {
+	extensionSkillRoots,
+	registryInlineExtensions,
+	resolveExtensionSkillRoots,
+	type ServerExtensionEntry,
+	serverExtensions,
+	stagedExtensionSkillRoute,
+} from "./index";
 
 describe("server extension registry", () => {
 	it("lists each extension with its public server specifier bound to the imported descriptor", async () => {
@@ -11,6 +18,7 @@ describe("server extension registry", () => {
 		expect(specifiers).toEqual([
 			"@thinkrail/ext-visualize/server",
 			"@thinkrail/ext-ask-user-question/server",
+			"@thinkrail/ext-web-access/server",
 		]);
 		expect(new Set(specifiers).size).toBe(specifiers.length);
 		for (const entry of serverExtensions) {
@@ -21,6 +29,7 @@ describe("server extension registry", () => {
 		expect(serverExtensions.map((entry) => entry.extension.name)).toEqual([
 			"visualize",
 			"ask-user-question",
+			"web-access",
 		]);
 	});
 
@@ -29,14 +38,18 @@ describe("server extension registry", () => {
 			registryInlineExtensions("extensions", undefined, serverExtensions, session).map((inline) =>
 				typeof inline === "function" ? "fn" : inline.name,
 			);
-		expect(names()).toEqual(["visualize"]);
+		expect(names()).toEqual(["visualize", "web-access#1", "web-access#2"]);
 		expect(
 			names({
 				expectToolResponse: () => {},
 				awaitToolResponse: () => Promise.resolve({ kind: "deferred" as const }),
 			}),
-		).toEqual(["visualize", "ask-user-question"]);
-		expect(registryInlineExtensions("childExtensions")).toEqual([]);
+		).toEqual(["visualize", "ask-user-question", "web-access#1", "web-access#2"]);
+		expect(
+			registryInlineExtensions("childExtensions").map((inline) =>
+				typeof inline === "function" ? "fn" : inline.name,
+			),
+		).toEqual(["web-access#1", "web-access#2"]);
 	});
 });
 
@@ -107,6 +120,28 @@ describe("resolveExtensionSkillRoots", () => {
 	it("resolves the shipped registry without error", () => {
 		for (const entry of serverExtensions) {
 			expect(() => resolveExtensionSkillRoots(entry)).not.toThrow();
+		}
+	});
+});
+
+describe("extensionSkillRoots", () => {
+	const entry = (name: string, skillPackages?: string[]): ServerExtensionEntry => ({
+		specifier: "@acme/never-resolved/server",
+		extension: { name, extensions: [], ...(skillPackages ? { skillPackages } : {}) },
+	});
+
+	it("maps an extension with skills to its owner folder under a staged skills root", () => {
+		const staged = join(tmpdir(), "staged-skills");
+		expect(stagedExtensionSkillRoute("web-access")).toBe("extensions/web-access");
+		expect(extensionSkillRoots(entry("web-access", ["pi-web-access"]), staged)).toEqual([
+			join(staged, "extensions", "web-access"),
+		]);
+		expect(extensionSkillRoots(entry("visualize"), staged)).toEqual([]);
+	});
+
+	it("resolves source roots when nothing is staged", () => {
+		for (const shipped of serverExtensions) {
+			expect(extensionSkillRoots(shipped)).toEqual(resolveExtensionSkillRoots(shipped));
 		}
 	});
 });

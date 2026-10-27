@@ -10,6 +10,7 @@ import {
 	childExtensionFactories,
 	disabledExtensions,
 	listProjectAliasSkillNames,
+	listSkillCatalog,
 	listSkillCommands,
 	setDisabledExtensionsResolver,
 } from "./extensions";
@@ -495,9 +496,66 @@ describe("registry extensions", () => {
 
 	it("keeps the curated child set and appends registry children", () => {
 		const children = childExtensionFactories();
-		expect(children).toHaveLength(3 + registryInlineExtensions("childExtensions").length);
-		expect(children.slice(0, 3).every((inline) => typeof inline === "function")).toBe(true);
-		expect(children.slice(3)).toEqual(registryInlineExtensions("childExtensions"));
+		expect(children).toHaveLength(1 + registryInlineExtensions("childExtensions").length);
+		expect(typeof children[0]).toBe("function");
+		const names = (inlines: typeof children) =>
+			inlines.map((inline) => (typeof inline === "function" ? "fn" : inline.name));
+		expect(names(children.slice(1))).toEqual(names(registryInlineExtensions("childExtensions")));
+		expect(names(children.slice(1))).toEqual(["web-access#1", "web-access#2"]);
+	});
+
+	it("loads web access with its skill and drops both while the extension is off", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-skills-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		let disabled = new Set<string>();
+		setDisabledExtensionsResolver(() => disabled);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const paths = () => loader.getExtensions().extensions.map((extension) => extension.path);
+			const tools = () =>
+				loader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()]);
+			const skills = () => loader.getSkills().skills.map((skill) => skill.name);
+			expect(paths()).toEqual(
+				expect.arrayContaining(["<inline:web-access#1>", "<inline:web-access#2>"]),
+			);
+			expect(tools()).toEqual(
+				expect.arrayContaining(["web_search", "fetch_content", "get_search_content"]),
+			);
+			expect(skills()).toContain("librarian");
+			expect(skills()).toContain("spec-graph");
+			const commands = async () =>
+				(await listSkillCommands(project, ctx(true))).map((command) => command.name);
+			const catalog = async () =>
+				(await listSkillCatalog(project, ctx(true))).map((entry) => entry.name);
+			expect(await commands()).toContain("skill:librarian");
+			expect(await catalog()).toContain("librarian");
+
+			disabled = new Set(["web-access"]);
+			await loader.reload();
+			expect(paths().some((path) => path.startsWith("<inline:web-access"))).toBe(false);
+			expect(tools()).not.toContain("web_search");
+			expect(skills()).not.toContain("librarian");
+			expect(skills()).toContain("spec-graph");
+			expect(await commands()).not.toContain("skill:librarian");
+			expect(await catalog()).not.toContain("librarian");
+
+			disabled = new Set();
+			await loader.reload();
+			expect(tools()).toContain("web_search");
+			expect(skills()).toContain("librarian");
+			expect(await commands()).toContain("skill:librarian");
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 
 	it("guards every child's images from the base set, not the opt-in curated set", () => {

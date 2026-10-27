@@ -707,9 +707,11 @@ re-opened transcripts provider-valid.
     by default) idle-sync / streaming-deferred to `agent_settled`, latest policy wins, and
     `setActiveToolsByName` drops their guidance with them. Hooks of a disabled extension keep running in an
     open session until its next resource reload — pi cannot unload an extension, and reloading on every
-    disable would bust the prompt cache. The reverse is the one reload: an enabled extension the session
-    never loaded (created while it was off) and that did not fail to load triggers a gated
-    `requestSessionReload`. An extension counts as loadable when it has static or per-session parent
+    disable would bust the prompt cache. Two cases do reload, gated through `requestSessionReload`: an
+    enabled extension the session never loaded (created while it was off) and that did not fail to load,
+    and a disabled extension whose **skills the session has loaded** (`loadsDisabledExtensionSkills`) —
+    skills live in the system prompt, which only a reload rebuilds, and a skill left behind would steer
+    the agent at withheld tools. Skill-less extensions keep the no-reload disable. An extension counts as loadable when it has static or per-session parent
     factories. Registration applies the same reconciliation, and a completed reload reapplies
     it without requesting another reload, so a toggle that lands mid-reload converges. Settings are the
     source of truth across restarts: Pi ≥ 1.3 restores a resumed chat's recorded tool loadout, keeping
@@ -773,15 +775,13 @@ re-opened transcripts provider-valid.
     `@thinkrail/shared/codedError` edge, shared with Chat Resources and mirroring `git`'s use).
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
-    (`childExtensionFactories` in `extensions`, pi `InlineExtension`s): the headless-search policy +
-    `pi-web-access` + `pi-spec-graph` + every registry extension's `childExtensions` (named inline,
-    from [[submodule-server-extensions]]; none today) — deliberately not the parent's full set
+    (`childExtensionFactories` in `extensions`, pi `InlineExtension`s): `pi-spec-graph` + every registry
+    extension's `childExtensions` (named inline, from [[submodule-server-extensions]]; today `web-access`'s
+    headless-search policy and `pi-web-access`) — deliberately not the parent's full set
     (rationale + the listed-children carve-out: core decision #25). **Every** child, opted in or not,
     also loads the core's base set (`childBaseExtensionFactories`, same decision): just
     `oversizedImageGuard`, since a child's `read` returns raw images under the shared settings (see the
-    `buildSessionSettings` bullet). Web-access reaches the child set via a **named bundled-seam
-    field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its raw
-    third-party `.ts` must stay out of the strict tsc graph.
+    `buildSessionSettings` bullet).
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves
@@ -796,12 +796,12 @@ re-opened transcripts provider-valid.
     reads in place, then relabels discovered-path provenance after the load — pi's `extensionsOverride` is
     not used because it runs after factories have executed. All other user extensions
     retain normal discovery. The loader then adds
-    automatic **portable cross-agent skill aliases**, then loads the four bundled pi packages — **`pi-web-access`**
-    (`web_search` + `fetch_content`), **`pi-spec-graph`** (the `spec_*`
+    automatic **portable cross-agent skill aliases**, then loads the three bundled pi packages —
+    **`pi-spec-graph`** (the `spec_*`
     tools + its `before_agent_start` rule), **`pi-thinkrail-workflow`** (the workflow-router rule +
     workflow skills), and **`pi-todos`** (the `todo_*` tools + its skill) — and the **ThinkRail extensions
-    from the server registry** ([[submodule-server-extensions]]; today `visualize`, whose server half
-    injects the strict mermaid validator) as named inline extensions. Existing personal aliases are Claude
+    from the server registry** ([[submodule-server-extensions]]; `visualize`, `ask-user-question`, and
+    `web-access` with `pi-web-access`'s tools and `librarian` skill) as named inline extensions. Existing personal aliases are Claude
     (`${CLAUDE_CONFIG_DIR:-~/.claude}/skills`), Codex (`${CODEX_HOME:-~/.codex}/skills`), Copilot
     (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
     plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
@@ -827,7 +827,11 @@ re-opened transcripts provider-valid.
     `SkillCatalogEntry.group`), layered with the workspace's per-skill `skillOverrides` (the trust gate is
     checked before the toggle layer, so an "on" override can never un-gate an untrusted alias, and a per-skill
     `on` beats a group disable). `skillsGate` filters + relabels in one `skillsOverride`; only `load` skills
-    reach the system prompt / `/skill:` list.
+    reach the system prompt / `/skill:` list. Before admission, the same `skillsOverride` drops every skill
+    under a **disabled registry extension's** skill roots (`extensionSkillRoots`: source roots in dev, the
+    `extensions/<name>` folder of the staged root when bundled), read from the disabled-extensions resolver
+    at each reload; `listSkillCatalog` applies the same drop and `listSkillCommands`' cache key includes
+    the disabled set, so a switched-off extension's skills vanish from Settings → Skills and `/skill:` too.
     The host resolves the context via the **`setSkillAdmissionResolver`** seam (keyed by `workspaceId`, fails
     closed); `buildResourceLoader` takes the resolver as a thunk and `skillsGate` re-resolves **both** the admission
     context (`getCtx`) **and** the live compatibility source set (fresh discovery) on every `loader.reload()`, so
@@ -857,7 +861,7 @@ re-opened transcripts provider-valid.
       Registry extensions themselves are never path-loaded: they are the same named inline factories in
       both modes (one composition mode; `{ name, factory }` keeps `<inline:visualize>` in diagnostics).
     - **Bundled launchers (compiled CLI binary and packaged desktop runtime):** the launcher awaits the
-      **`registerBundledRuntime({ factories, skillsDir, trashHelpers, webAccessFactory })` seam** before the first session — the same four pi packages as
+      **`registerBundledRuntime({ factories, skillsDir, trashHelpers })` seam** before the first session — the same three pi packages as
       **value-imported default-export factories** (pi gives `extensionFactories` full API parity with path loading; what's lost —
       file-relative `baseDir`, per-reload re-evaluation — none of them use) plus a staged on-disk
       skills dir (pi reads `SKILL.md` via plain fs, so skills must live on the real filesystem; the
@@ -895,9 +899,7 @@ re-opened transcripts provider-valid.
     filename is only a name.
     In every mode, the optional Central artifact remains an external filesystem path loaded by PI's public
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
-    `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
-    `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
-    `rpc` host can't render),
+    `extensionFactories`:
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
@@ -974,13 +976,12 @@ re-opened transcripts provider-valid.
   + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports);
   `pi-delegation` + `pi-subagents` (the portable delegation runtime and Agent-tool composition,
   value-imported by the host embedding); `pi-background-commands` (the session-bound command
-  capability, likewise value-imported by its host embedding); `pi-web-access` + `pi-spec-graph` +
+  capability, likewise value-imported by its host embedding); `pi-spec-graph` +
   `pi-thinkrail-workflow` + `pi-todos` (the bundled pi packages — parent sessions load the set through
-  resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph` and receive
-  the named `pi-web-access` factory through the bundled runtime seam; the source-mode equivalent loads it
-  lazily through `jiti` — the loader pi uses for extension paths — so a parent never pays for it and the
-  barrel stays Node-loadable for the workflow harness ([[module-workflow-tests]])); the sibling `extensions` registry module (the ThinkRail extensions' inline factories and
-  skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly); `jiti` (the source-mode child `pi-web-access` load above); `typebox` (the host tools' parameter schemas); `jsonc-parser` (targeted
+  resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph`); the sibling `extensions` registry module (the ThinkRail extensions' inline factories and
+  skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly; the barrel
+  stays Node-loadable for the workflow harness ([[module-workflow-tests]]) because a registry extension
+  over raw third-party `.ts` loads it lazily, see [[module-ext-web-access]]); `typebox` (the host tools' parameter schemas); `jsonc-parser` (targeted
   `models.json` edits in `modelContext`); `trash` (reached only through the
   sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to
   throw, never degraded to `unlink`; the launcher's staged-helper and procfs-parser seams live there too,

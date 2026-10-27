@@ -14,4 +14,8 @@ export {
 } from "./inline";
 export { type InteractiveTools, interactiveTools } from "./interactive";
 export { type ServerExtensionEntry, serverExtensions } from "./registry";
-export { resolveExtensionSkillRoots } from "./skills";
+export {
+	extensionSkillRoots,
+	resolveExtensionSkillRoots,
+	stagedExtensionSkillRoute,
+} from "./skills";

@@ -483,20 +483,30 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["ask_user_question"],
 			hasChildExtensions: false,
 		},
+		{
+			name: "web-access",
+			title: "Web access",
+			description: expect.any(String),
+			enabled: true,
+			tools: ["web_search", "fetch_content", "get_search_content"],
+			hasChildExtensions: true,
+		},
 	]);
 	await handleRequest(
 		"settings.update",
-		{ config: { disabledExtensions: ["visualize", "retired"] } },
+		{ config: { disabledExtensions: ["visualize", "web-access", "retired"] } },
 		CTX,
 	);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: false },
 		{ name: "ask-user-question", enabled: true },
+		{ name: "web-access", enabled: false },
 	]);
 	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: true },
 		{ name: "ask-user-question", enabled: true },
+		{ name: "web-access", enabled: true },
 	]);
 });
 

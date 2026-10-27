@@ -83,7 +83,12 @@ import {
 	stopSessionChildren,
 	subagentsFor,
 } from "./delegation";
-import { buildResourceLoader, disabledExtensions, toSkillCommands } from "./extensions";
+import {
+	buildResourceLoader,
+	disabledExtensions,
+	loadsDisabledExtensionSkills,
+	toSkillCommands,
+} from "./extensions";
 import {
 	createMcpSessionHost,
 	type McpProjectPolicy,
@@ -747,7 +752,11 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	if (kept.length !== active.length || restored.length > 0) {
 		session.setActiveToolsByName([...kept, ...restored]);
 	}
-	if (allowReload && enabledExtensionMissing(session, disabled)) {
+	if (
+		allowReload &&
+		(enabledExtensionMissing(session, disabled) ||
+			loadsDisabledExtensionSkills(session.resourceLoader.getSkills().skills))
+	) {
 		void requestSessionReload(session.sessionId).catch((error) => {
 			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(session.sessionId)) {
 				log.warn(`extension reload failed for ${session.sessionId}`, error as Error);

@@ -5,7 +5,6 @@ import {
 	createSyntheticSourceInfo,
 	DefaultPackageManager,
 	DefaultResourceLoader,
-	type ExtensionAPI,
 	type ExtensionFactory,
 	getAgentDir,
 	type InlineExtension,
@@ -20,6 +19,7 @@ import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import specGraphExtension from "pi-spec-graph";
 import {
 	type ExtensionSessionServices,
+	extensionSkillRoots,
 	omitDisabledRegistryExtensions,
 	preferRegistryTools,
 	registryInlineExtensions,
@@ -44,7 +44,6 @@ export interface BundledExtensions {
 	factories: BundledExtensionFactory[];
 	skillsDir: string;
 	trashHelpers: BundledTrashHelpers;
-	webAccessFactory: BundledExtensionFactory;
 }
 
 let bundled: BundledExtensions | undefined;
@@ -66,12 +65,11 @@ let devPaths: { extensionPaths: string[]; skillPaths: string[] } | undefined;
 function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	if (devPaths) return devPaths;
 	const require = createRequire(import.meta.url);
-	const webAccessPath = require.resolve("pi-web-access/index.ts");
 	const specGraphPath = require.resolve("pi-spec-graph/index.ts");
 	const workflowPath = require.resolve("pi-thinkrail-workflow/index.ts");
 	const todosPath = require.resolve("pi-todos/index.ts");
 	devPaths = {
-		extensionPaths: [webAccessPath, specGraphPath, workflowPath, todosPath],
+		extensionPaths: [specGraphPath, workflowPath, todosPath],
 		skillPaths: [
 			join(dirname(specGraphPath), "skills"),
 			join(dirname(workflowPath), "skills"),
@@ -82,14 +80,6 @@ function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	};
 	return devPaths;
 }
-
-const headlessSearchPolicy: ExtensionFactory = (pi: ExtensionAPI) => {
-	pi.on("tool_call", (event) => {
-		if (event.toolName !== "web_search") return;
-		const input = event.input as Record<string, unknown>;
-		if (input.workflow == null) input.workflow = "none";
-	});
-};
 
 function isUnderPath(path: string, root: string): boolean {
 	const normalizedPath = resolve(path);
@@ -110,6 +100,36 @@ function relabelAliasProvenance(skill: Skill, sources: CompatibilitySkillSource[
 			baseDir: source.path,
 		}),
 	};
+}
+
+let devExtensionSkillRoots: ReadonlyMap<string, readonly string[]> | undefined;
+function extensionSkillRootsByName(): ReadonlyMap<string, readonly string[]> {
+	const skillsDir = bundled?.skillsDir;
+	if (skillsDir !== undefined) {
+		return new Map(
+			serverExtensions.map((entry) => [
+				entry.extension.name,
+				extensionSkillRoots(entry, skillsDir),
+			]),
+		);
+	}
+	devExtensionSkillRoots ??= new Map(
+		serverExtensions.map((entry) => [entry.extension.name, extensionSkillRoots(entry)]),
+	);
+	return devExtensionSkillRoots;
+}
+
+export function loadsDisabledExtensionSkills(skills: readonly Skill[]): boolean {
+	return withoutDisabledExtensionSkills(skills).length !== skills.length;
+}
+
+function withoutDisabledExtensionSkills(skills: readonly Skill[]): Skill[] {
+	const disabled = disabledExtensions();
+	const roots = [...extensionSkillRootsByName()].flatMap(([name, owned]) =>
+		disabled.has(name) ? owned : [],
+	);
+	if (roots.length === 0) return [...skills];
+	return skills.filter((skill) => !roots.some((root) => isUnderPath(skill.filePath, root)));
 }
 
 function skillGroup(
@@ -136,7 +156,7 @@ function skillsGate(cwd: string, bundledPaths: string[], getCtx: () => SkillAdmi
 			projectAliasPaths.some((path) => isUnderPath(filePath, path));
 		return {
 			...current,
-			skills: current.skills
+			skills: withoutDisabledExtensionSkills(current.skills)
 				.map((skill) => relabelAliasProvenance(skill, sources))
 				.filter((skill) => {
 					const { group, isPlugin } = skillGroup(skill.filePath, sources, bundledPaths);
@@ -181,20 +201,6 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
 	}));
 }
 
-let devWebAccessFactory: Promise<BundledExtensionFactory> | undefined;
-const devWebAccess: BundledExtensionFactory = async (pi) => {
-	devWebAccessFactory ??= import("jiti").then(({ createJiti }) =>
-		createJiti(import.meta.url).import<BundledExtensionFactory>("pi-web-access/index.ts", {
-			default: true,
-		}),
-	);
-	await (await devWebAccessFactory)(pi);
-};
-
-function webAccessFactory(): BundledExtensionFactory {
-	return bundled ? bundled.webAccessFactory : devWebAccess;
-}
-
 let disabledExtensionsResolver: () => ReadonlySet<string> = () => new Set();
 export function setDisabledExtensionsResolver(resolver: () => ReadonlySet<string>): void {
 	disabledExtensionsResolver = resolver;
@@ -215,12 +221,7 @@ export function childBaseExtensionFactories(): InlineExtension[] {
 }
 
 export function childExtensionFactories(): InlineExtension[] {
-	return [
-		headlessSearchPolicy,
-		webAccessFactory(),
-		specGraphExtension,
-		...registryInlineExtensions("childExtensions", isExtensionDisabled),
-	];
+	return [specGraphExtension, ...registryInlineExtensions("childExtensions", isExtensionDisabled)];
 }
 
 export async function buildResourceLoader(
@@ -235,7 +236,6 @@ export async function buildResourceLoader(
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
 	const sharedFactories: InlineExtension[] = [
 		...registryInlineExtensions("extensions", isDisabledAtReload, serverExtensions, session),
-		headlessSearchPolicy,
 		reviewToolExtension,
 		requestReviewExtension,
 		setTitleExtension,
@@ -371,6 +371,7 @@ function admissionCacheKey(cwd: string, ctx: SkillAdmissionContext): string {
 		[...ctx.disabled].sort(),
 		[...ctx.disabledGroups].sort(),
 		Object.entries(ctx.overrides).sort(([a], [b]) => a.localeCompare(b)),
+		[...disabledExtensions()].sort(),
 	]);
 }
 
@@ -448,7 +449,9 @@ export async function listSkillCatalog(
 		],
 		skillsOverride: (current) => ({
 			...current,
-			skills: current.skills.map((skill) => relabelAliasProvenance(skill, discovered)),
+			skills: withoutDisabledExtensionSkills(current.skills).map((skill) =>
+				relabelAliasProvenance(skill, discovered),
+			),
 		}),
 		noExtensions: true,
 		noPromptTemplates: true,

@@ -90,11 +90,11 @@ another.
    define a single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve
    inside it ([[submodule-server-agent]] owns the seam). Flattening PI into Electrobun's normal entry is still
    forbidden: it would load `bun-pty` before `BUN_PTY_LIB` is set.
-4. The runtime value-imports the four bundled pi-package factories (`pi-web-access`, `pi-spec-graph`,
+4. The runtime value-imports the three bundled pi-package factories (`pi-spec-graph`,
    `pi-thinkrail-workflow`, `pi-todos`) and calls `registerBundledRuntime()` with those factories, the
-   `pi-web-access` factory needed by delegation children (picked by `BuildRuntimeSources.webAccessIndex`,
-   never by position), the staged skills (every `BuildRuntimeSources.skillRoots` entry flattened into one
-   dir, duplicate routes rejected), and macOS/Windows trash helpers. ThinkRail extensions from the server
+   staged skills (every `BuildRuntimeSources.skillRoots` entry copied into one dir under its `route` —
+   host roots flat, a registry extension's under `extensions/<name>/` — duplicate routes rejected), and
+   macOS/Windows trash helpers. ThinkRail extensions from the server
    registry ([[submodule-server-extensions]]) need no generated entry: their factories reach the bundle
    through `@thinkrail/server`'s static import graph. The generator's key map must satisfy every key of the server-owned
    `BundledExtensions` contract, so adding a required launcher field fails desktop typecheck instead of
