@@ -78,9 +78,3 @@ ThinkRail is in the early stages of development, and we are eager to hear your q
 
 
 Happy developing!
-
-------
-
-
-
-*ThinkRail is backed by JetBrains, leveraging their expertise in building developer tools that are both powerful and intuitive.*

@@ -66,11 +66,6 @@ export function Hero({ title, positioning }: { title: string; positioning: Posit
 				<Reveal delay={300}>
 					<div className="mt-14 flex flex-wrap items-center justify-center gap-2.5 sm:mt-28 sm:justify-start">
 						<span className="rounded-sm border border-border px-3 py-1.5 text-[15.6px] text-text-muted">
-							JetBrains InnovationHub
-						</span>
-						<span aria-hidden className="basis-full sm:hidden" />
-
-						<span className="rounded-sm border border-border px-3 py-1.5 text-[15.6px] text-text-muted">
 							Apache-2.0
 						</span>
 						<span className="rounded-sm border border-border px-3 py-1.5 text-[15.6px] text-text-muted">

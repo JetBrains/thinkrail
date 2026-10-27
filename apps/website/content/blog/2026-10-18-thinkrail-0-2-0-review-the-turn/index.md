@@ -87,9 +87,3 @@ take [**our survey**](https://forms.gle/es1ksqAax6hnDWCP8), and join [**our Disc
 to say "hi!" and let us know what you think. Your feedback is greatly appreciated.
 
 Happy developing!
-
-------
-
-
-
-*ThinkRail is backed by JetBrains, leveraging their expertise in building developer tools that are both powerful and intuitive.*
