@@ -2171,8 +2171,9 @@ html:not(.anim) .term-caret {
 	}
 
 	.hero-ctas .btn {
-		flex: 1;
+		flex: 1 1 auto;
 		justify-content: center;
+		white-space: nowrap;
 	}
 
 	/* Give the depth-0 "main spec" row more room for its label so the badge never wraps. */
