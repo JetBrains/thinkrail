@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -447,34 +447,41 @@ test("a detached command survives the parent-turn signal and reports after paren
 
 test("standalone shutdown kills owned process trees silently", async () => {
 	const session = await makeSession();
-	const escaped = join(cwd, "must-not-finish");
-	const ready = join(cwd, "process-ready");
-	const leakAfterMs = 3000;
+	const heartbeat = join(cwd, "descendant-heartbeat");
+	const beats = () => (existsSync(heartbeat) ? statSync(heartbeat).size : 0);
 	try {
 		faux.setResponses([
 			fauxAssistantMessage(
 				fauxToolCall("background_command", {
 					action: "start",
-					command: `sh -c 'printf ready > "${ready}"; sleep ${leakAfterMs / 1000}; printf leaked > "${escaped}"'`,
+					command: `sh -c '(while :; do printf . >> "${heartbeat}"; sleep 0.1; done) & wait'`,
 				}),
 			),
 			fauxAssistantMessage("ACK"),
 			fauxAssistantMessage("MUST_NOT_WAKE"),
 		]);
 		await session.prompt("Start until shutdown.");
-		await waitFor(() => existsSync(ready));
-		const readyAt = Date.now();
+		await waitFor(() => beats() > 0, 5000);
 		const calls = faux.state.callCount;
 		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
-		await Bun.sleep(Math.max(500, readyAt + leakAfterMs + 500 - Date.now()));
+		const deadline = Date.now() + 10_000;
+		let seen = beats();
+		let quietSince = Date.now();
+		while (Date.now() - quietSince < 1500) {
+			if (Date.now() > deadline) throw new Error("Descendant outlived session shutdown");
+			await Bun.sleep(50);
+			if (beats() !== seen) {
+				seen = beats();
+				quietSince = Date.now();
+			}
+		}
 		expect(faux.state.callCount).toBe(calls);
-		expect(existsSync(escaped)).toBe(false);
 		expect(JSON.stringify(session.messages)).not.toContain(BACKGROUND_COMMAND_COMPLETION_MESSAGE);
 	} finally {
 		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
 		session.dispose();
 	}
-}, 15_000);
+}, 20_000);
 
 test("deletion tombstones defer bounded completion messages until rollback, without a resource reload", async () => {
 	const executor = controlledOperations();
@@ -614,6 +621,24 @@ async function injected(canDeliverCompletion?: () => boolean) {
 		session.dispose();
 	};
 	return { executor, service, session, finish, close };
+}
+
+async function waitForListed(session: Session, status: string): Promise<void> {
+	const tool = session.getToolDefinition("background_command");
+	if (!tool) throw new Error("Missing background_command");
+	const deadline = Date.now() + 10_000;
+	for (;;) {
+		const listed = await tool.execute(
+			"probe",
+			{ action: "list" },
+			undefined,
+			undefined,
+			session.extensionRunner.createToolContext("probe", undefined),
+		);
+		if (JSON.stringify(listed.content).includes(`: ${status}`)) return;
+		if (Date.now() > deadline) throw new Error(`No command reached ${status}`);
+		await Bun.sleep(20);
+	}
 }
 
 function startCommand(command: string) {
@@ -881,7 +906,7 @@ test("one factory serving two sessions keeps each session's Stop to itself", asy
 		faux.setResponses([
 			startCommand("printf HELD_IN_FIRST"),
 			async (_context, options) => {
-				await Bun.sleep(300);
+				await waitForListed(first, "completed");
 				parked();
 				await new Promise((resolve) =>
 					options?.signal?.addEventListener("abort", resolve, { once: true }),
@@ -917,4 +942,4 @@ test("one factory serving two sessions keeps each session's Stop to itself", asy
 		first.dispose();
 		second.dispose();
 	}
-});
+}, 20_000);
