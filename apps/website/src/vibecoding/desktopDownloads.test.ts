@@ -30,10 +30,10 @@ describe("desktop install model", () => {
 				platform.desktop.downloads.map((download) => download.href),
 			),
 		).toEqual([
-			"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-arm64.dmg",
-			"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-windows-x64.zip",
-			"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-x64.tar.gz",
-			"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-arm64.tar.gz",
+			"https://thinkrail.ai/releases/latest/download/thinkrail-desktop-darwin-arm64.dmg",
+			"https://thinkrail.ai/releases/latest/download/thinkrail-desktop-windows-x64.zip",
+			"https://thinkrail.ai/releases/latest/download/thinkrail-desktop-linux-x64.tar.gz",
+			"https://thinkrail.ai/releases/latest/download/thinkrail-desktop-linux-arm64.tar.gz",
 		]);
 	});
 

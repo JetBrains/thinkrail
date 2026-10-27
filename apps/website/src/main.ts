@@ -103,7 +103,7 @@ const TERMINAL_LOGO: readonly string[] = [
 	"           T–––R  ^–––5  :––––:            R––––:  ~–––––^",
 ];
 
-const GITHUB_URL = "https://github.com/JetBrains/thinkrail";
+const GITHUB_URL = "https://github.com/thinkrail/thinkrail";
 const INSTALL_TARGET: Record<InstallPlatform, string> = {
 	macos: "macos-arm64",
 	linux: "linux",

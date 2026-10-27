@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "./installCommands";
 
-const INSTALL_PS1_URL = "https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1";
-const RELEASE_DOWNLOAD_URL = "https://github.com/JetBrains/thinkrail/releases/latest/download";
+const INSTALL_PS1_URL = "https://thinkrail.ai/install.ps1";
+const RELEASE_DOWNLOAD_URL = "https://thinkrail.ai/releases/latest/download";
 
 describe("desktop installers", () => {
 	it("publishes the stable desktop aliases in platform order", () => {

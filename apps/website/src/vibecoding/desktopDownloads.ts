@@ -15,7 +15,7 @@ type InstallPlatformOption = {
 	};
 };
 
-const stableDesktopReleaseUrl = "https://github.com/JetBrains/thinkrail/releases/latest/download";
+const stableDesktopReleaseUrl = "https://thinkrail.ai/releases/latest/download";
 
 const installPlatformOptions = {
 	macos: {
