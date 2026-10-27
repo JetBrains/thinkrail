@@ -79,10 +79,10 @@ create the tools it needs based on how you actually work.
   when launching (`PI_CODING_AGENT_DIR=… thinkrail`) still wins.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your
   browser. Both embed the same engine host; app state lives under `~/.thinkrail`.
-- **Your language.** Settings → Language follows your system language or a language you pick; English and
-  Simplified Chinese are built in. Add a language ThinkRail doesn't ship yet by dropping a translated
-  `en.json` into `~/.thinkrail/locales` — it applies as you save. Agent replies and tool output stay as
-  the agent wrote them.
+- **Your language.** Settings → Language follows your system language or a language you pick; English,
+  Simplified Chinese and Spanish are built in. Add a language ThinkRail doesn't ship yet by dropping a
+  translated `en.json` into `~/.thinkrail/locales` — it applies as you save. Agent replies and tool
+  output stay as the agent wrote them.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/specs-dark.png">

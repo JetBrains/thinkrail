@@ -77,7 +77,8 @@ no setup — renders English.
 
 Keys are named by surface (`settings.language.title`, `chat.composer.placeholder`), never English text: a
 wording fix must not orphan translations. `en.json` stays sorted; a bundled translation holds a sorted
-subset of its keys, so the files diff cleanly.
+subset of its keys plus the CLDR categories its language needs that English lacks (Spanish adds `_many`),
+so the files diff cleanly.
 
 ## Boundary
 
@@ -96,10 +97,11 @@ subset of its keys, so the files diff cleanly.
   renders English through the chain, so it can ship incomplete and fill in later; a new key lands in
   `en.json` first. `applyLocale` loads bundled catalogs as-is (`validateCatalog` and `completePlurals` run
   only on local files), so a catalog test requires every bundled translation to pass `validateCatalog`
-  with nothing dropped, to hold only sorted `en.json` keys, and to carry every plural form its language
-  needs. Changing an English string's placeholders or markup, or removing a key, therefore fails in the
-  same change, and that change updates or deletes the translation (deleting falls back to English). A
-  rewording that changes the meaning deletes the translation too, rather than leaving it stale.
+  with nothing dropped, to hold only sorted `en.json` keys — plus a plural form for a category English
+  lacks when the language needs one — and to carry every plural form its language needs. Changing an
+  English string's placeholders or markup, or removing a key, therefore fails in the same change, and
+  that change updates or deletes the translation (deleting falls back to English). A rewording that
+  changes the meaning deletes the translation too, rather than leaving it stale.
 - **Render reads the translator as a value, never the global.** The React Compiler caches each render
   expression by its own inputs, so a helper that reads the global `t` / `currentLocale()` (or a getter
   that does) keeps the old language after a switch. Every function evaluated at render — component and

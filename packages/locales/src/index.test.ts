@@ -160,6 +160,8 @@ test("the bundled English catalog passes its own validation", () => {
 	expect(result.ok && Object.keys(result.strings).length).toBe(Object.keys(EN).length);
 });
 
+const PLURAL_FORM = /_(?:zero|one|two|few|many|other)$/;
+
 describe("bundled non-English catalogs follow en.json", () => {
 	for (const tag of BUNDLED_LOCALES.filter((tag) => tag !== "en")) {
 		const catalog = bundledCatalog(tag) ?? {};
@@ -171,8 +173,13 @@ describe("bundled non-English catalogs follow en.json", () => {
 			expect(keys.filter((key) => !Object.hasOwn(kept, key))).toEqual([]);
 		});
 
-		test(`${tag}: every key exists in en.json and the keys stay sorted`, () => {
-			expect(keys.filter((key) => !Object.hasOwn(EN, key))).toEqual([]);
+		test(`${tag}: every key is an en.json key or an extra plural form of one, and the keys stay sorted`, () => {
+			const foreign = keys.filter(
+				(key) =>
+					!Object.hasOwn(EN, key) &&
+					!(PLURAL_FORM.test(key) && Object.hasOwn(EN, key.replace(PLURAL_FORM, "_other"))),
+			);
+			expect(foreign).toEqual([]);
 			expect(keys).toEqual([...keys].sort());
 		});
 
