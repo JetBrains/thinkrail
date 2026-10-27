@@ -7,7 +7,13 @@ import { IconButton } from "@thinkrail/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
 import { type ReactNode, useEffect, useState } from "react";
 import type { ReviewThread } from "../../registry";
-import type { JsonDiffMark, JsonNestedChange, JsonNestedChanges } from "./jsonDiff";
+import {
+	type JsonDiffMark,
+	type JsonNestedChange,
+	type JsonNestedChanges,
+	jsonPathLabel,
+	jsonPointerDepth,
+} from "./jsonDiff";
 import { type JsonNode, jsonPrimitiveLabel } from "./jsonScanner";
 
 export interface JsonTreeThread {
@@ -39,28 +45,14 @@ function valueLabel(value: unknown): string {
 	return jsonPrimitiveLabel(value);
 }
 
-function displayPath(pointer: string): string {
-	return pointer
-		.split("/")
-		.slice(1)
-		.map((segment, index) => {
-			if (/^\d+$/.test(segment)) return `[${segment}]`;
-			const key = segment.replaceAll("~1", "/").replaceAll("~0", "~");
-			return index === 0 ? key : `.${key}`;
-		})
-		.join("");
-}
-
-function NestedChangeLine({ change, base }: { change: JsonNestedChange; base: string }) {
+function NestedChangeLine({ change, depth }: { change: JsonNestedChange; depth: number }) {
 	const t = useT();
 	const { mark } = change;
 	const replacement =
 		mark.kind === "changed" && mark.oldValue !== undefined && mark.newValue !== undefined;
 	return (
 		<div className="truncate">
-			<span className="tr-code-text text-primary">
-				{displayPath(change.pointer.slice(base.length))}
-			</span>
+			<span className="tr-code-text text-primary">{jsonPathLabel(change.path.slice(depth))}</span>
 			{replacement ? null : <span className="px-4 text-text-muted">{ownChangeLabel(t, mark)}</span>}
 			{mark.kind === "added" ? (
 				<span className="tr-code-text text-feedback-success">{valueLabel(mark.newValue)}</span>
@@ -136,7 +128,7 @@ export function JsonTree({
 				<IconButton
 					icon={expanded ? ChevronDown : ChevronRight}
 					label={expanded ? t("viewer.json.collapseNode") : t("viewer.json.expandNode")}
-						className="shrink-0"
+					className="shrink-0"
 					aria-expanded={expanded}
 					onClick={() => setExpanded((value) => !value)}
 				/>
@@ -182,7 +174,11 @@ export function JsonTree({
 					<TooltipContent side="bottom" align="start" className="max-w-md">
 						{ownLabel ? <div>{ownLabel}</div> : null}
 						{nested?.first.map((change) => (
-							<NestedChangeLine key={change.order} change={change} base={node.pointer} />
+							<NestedChangeLine
+								key={change.order}
+								change={change}
+								depth={jsonPointerDepth(node.pointer)}
+							/>
 						))}
 						{nested && nested.total > nested.first.length ? (
 							<div className="text-text-muted">

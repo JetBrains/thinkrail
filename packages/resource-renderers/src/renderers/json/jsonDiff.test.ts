@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { ReviewThread } from "../../registry";
 import {
 	classifyJsonDiff,
+	jsonPathLabel,
 	nestedJsonDiffChanges,
 	oldToRenderedJsonPointers,
 	stableObjectHash,
@@ -135,23 +136,46 @@ test("nested changes keep each ancestor's total and its first changes in documen
 		["/list", 4],
 		["/list/0", 5],
 	]);
-	const changes = nestedJsonDiffChanges(
-		classification,
-		oldToRenderedJsonPointers(original, modified, classification.delta),
-		(pointer) => lines.get(pointer) ?? 0,
-		4,
-	);
+	const changes = nestedJsonDiffChanges(classification, (pointer) => lines.get(pointer) ?? 0, 4);
 	const summary = (pointer: string) =>
-		changes.get(pointer)?.first.map(({ mark, pointer: changed }) => `${mark.kind} ${changed}`);
-	expect(summary("/a")).toEqual(["removed /a/gone", "changed /a/b", "added /a/extra"]);
-	expect(summary("/list")).toEqual(["removed /list/1", "added /list/0"]);
+		changes.get(pointer)?.first.map(({ mark, path }) => `${mark.kind} ${jsonPathLabel(path)}`);
+	expect(summary("/a")).toEqual(["removed a.gone", "changed a.b", "added a.extra"]);
+	expect(summary("/list")).toEqual(["removed list[1]", "added list[0]"]);
 	expect(summary("")).toEqual([
-		"removed /a/gone",
-		"changed /a/b",
-		"added /a/extra",
-		"removed /list/1",
+		"removed a.gone",
+		"changed a.b",
+		"added a.extra",
+		"removed list[1]",
 	]);
 	expect(changes.get("")?.total).toBe(5);
 	expect(changes.has("/same")).toBe(false);
 	expect(changes.has("/a/b")).toBe(false);
+});
+
+test("removals inside reordered or shifted array items keep base pointers and attach to the rendered parent", () => {
+	const reordered = classifyJsonDiff(
+		{ items: [{ id: "a" }, { id: "b", gone: true }] },
+		{ items: [{ id: "b" }, { id: "a" }] },
+	);
+	expect(reordered.removed.get("/items/1/gone")).toMatchObject({
+		renderedParent: "/items/0",
+		path: ["items", 0, "gone"],
+	});
+	const shifted = classifyJsonDiff(
+		{ items: [{ id: "x" }, { id: "a", gone: 1 }] },
+		{ items: [{ id: "a" }] },
+	);
+	expect([...shifted.removed.keys()].sort()).toEqual(["/items/0", "/items/1/gone"]);
+	const counts = nestedJsonDiffChanges(shifted, () => 0, 8);
+	expect(counts.get("/items/0")?.total).toBe(1);
+	expect(counts.get("/items")?.total).toBe(2);
+});
+
+test("path labels keep distinct pointers distinct", () => {
+	expect(jsonPathLabel(["a.b"])).toBe('["a.b"]');
+	expect(jsonPathLabel(["a", "b"])).toBe("a.b");
+	expect(jsonPathLabel(["a", 0])).toBe("a[0]");
+	expect(jsonPathLabel(["a", "0"])).toBe('a["0"]');
+	expect(jsonPathLabel(["a[0]"])).toBe('["a[0]"]');
+	expect(jsonPathLabel(["", "@scope/pkg"])).toBe('[""]["@scope/pkg"]');
 });

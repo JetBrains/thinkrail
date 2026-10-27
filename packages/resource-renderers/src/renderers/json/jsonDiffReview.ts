@@ -148,7 +148,6 @@ export function buildJsonDiffReviewLayout({
 		baseRenderedPointers,
 		nestedChanges: nestedJsonDiffChanges(
 			classification,
-			oldToCurrent,
 			(pointer) => modifiedDocument?.nodes.get(pointer)?.startLine ?? 0,
 			NESTED_CHANGE_LIMIT,
 		),
