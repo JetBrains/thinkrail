@@ -19,8 +19,53 @@ export function workspaceRelativePath(root: string, path: string): string | null
 	return isContained(base, abs) ? posixRelative(base, abs) : null;
 }
 
+function trimWin32TrailingDotsAndSpaces(segment: string): string {
+	let end = segment.length;
+	while (end > 0) {
+		const code = segment.charCodeAt(end - 1);
+		if (code === 46 /* '.' */ || code === 32 /* ' ' */) {
+			end--;
+		} else {
+			break;
+		}
+	}
+	return end === segment.length ? segment : segment.slice(0, end);
+}
+
+function isSameFileOrDir(pathA: string, pathB: string): boolean {
+	const realpath = typeof realpathSync.native === "function" ? realpathSync.native : realpathSync;
+	try {
+		return realpath(pathA).toLowerCase() === realpath(pathB).toLowerCase();
+	} catch {
+		return false;
+	}
+}
+
+function isGitSegmentInDir(parentDir: string, segment: string): boolean {
+	if (process.platform === "win32") {
+		const streamStripped = segment.split(":")[0] ?? "";
+		const entryName = trimWin32TrailingDotsAndSpaces(streamStripped);
+		const base = entryName.toLowerCase();
+		if (base === ".git") return true;
+		if (/^git~\d+$/i.test(base)) {
+			return isSameFileOrDir(join(parentDir, entryName), join(parentDir, ".git"));
+		}
+		return false;
+	}
+	return segment === ".git";
+}
+
 function isGitMetadataPath(root: string, candidate: string): boolean {
-	return relative(root, candidate).split(sep).includes(".git");
+	const rel = relative(root, candidate);
+	if (rel === "" || rel === ".") return false;
+	const segments = process.platform === "win32" ? rel.split(/[\\/]/) : rel.split(sep);
+	let current = root;
+	for (const segment of segments) {
+		if (segment === "" || segment === ".") continue;
+		if (isGitSegmentInDir(current, segment)) return true;
+		current = join(current, segment);
+	}
+	return false;
 }
 
 function assertExistingAncestorContained(root: string, abs: string): void {
@@ -65,7 +110,7 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 	const { root, abs } = resolveInWorktree(workspaceId, path, true);
 
 	return readdirSync(abs, { withFileTypes: true })
-		.filter((entry) => entry.name !== ".git")
+		.filter((entry) => !isGitSegmentInDir(abs, entry.name))
 		.map(
 			(entry): FileNode => ({
 				path: posixRelative(root, join(abs, entry.name)),

@@ -148,6 +148,31 @@ test("file routes refuse .git and symlinks escaping the worktree", async () => {
 	expect((await serveBlob(`/blob/w1/${head}/.git%2Fconfig`)).status).toBe(404);
 });
 
+test.skipIf(process.platform !== "win32")(
+	"file routes refuse NTFS .git aliases on Windows",
+	async () => {
+		expect((await serveWorktreeFile("/files/w1/.GIT%2Fconfig")).status).toBe(404);
+		expect((await serveWorktreeFile("/files/w1/GIT~1%2Fconfig")).status).toBe(404);
+		expect((await serveWorktreeFile("/files/w1/.git.%2Fconfig")).status).toBe(404);
+		expect(
+			(await serveWorktreeFile("/files/w1/.git%3A%3A%24INDEX_ALLOCATION%2Fconfig")),
+		).status.toBe(404);
+		expect((await serveBlob(`/blob/w1/${head}/.GIT%2Fconfig`)).status).toBe(404);
+		expect((await serveBlob(`/blob/w1/${head}/GIT~1%2Fconfig`)).status).toBe(404);
+		expect(
+			(await serveBlob(`/blob/w1/${head}/.git%3A%3A%24INDEX_ALLOCATION%2Fconfig`)),
+		).status.toBe(404);
+	},
+);
+
+test.skipIf(process.platform !== "win32")(
+	"file routes serve legitimate files named git~2 on Windows",
+	async () => {
+		writeFileSync(join(repo, "git~2"), "legit\n");
+		expect((await serveWorktreeFile("/files/w1/git~2")).status).toBe(200);
+	},
+);
+
 test("/blob streams a multi-megabyte blob through a live server", async () => {
 	const big = new Uint8Array(3 * 1024 * 1024);
 	for (let index = 0; index < big.byteLength; index++) big[index] = (index * 31 + 7) & 0xff;
