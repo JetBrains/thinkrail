@@ -6,7 +6,7 @@ title: pi-thinkrail-workflow — pi extension shipping the workflow system
 parent: architecture
 depends-on: [module-spec-graph]
 tags: [pi-extension, workflow, skill, workflow-system]
-references: [module-workflow-tests]
+references: [module-workflow-tests, module-pi-ask-user-question, module-ext-ask-user-question]
 ---
 
 ## Responsibility
@@ -56,13 +56,16 @@ dispatcher to load rather than relying on description-matching (see [[module-web
   `before_agent_start` rule and skill content.
 - **Forbidden:** any `@thinkrail/*` package, `apps/web`, `packages/server` internals — reached only by
   tool *name* (`ask_user_question`, `spec_*`), never by import.
-- **Not portable, and honest about it.** Unlike `pi-spec-graph` and `@thinkrail/pi-visualize`, this package's skill
-  content assumes the host's `ask_user_question` tool (`packages/server/src/agent/askUserQuestion.ts`) is
-  present in the session — that tool exists only in thinkrail. This package does not claim to run
-  under vanilla `pi`; it is a workspace-internal module, not a portable capability. It stays its own
-  package rather than folding into `packages/server` anyway, for the same reason `packages/shared` isn't
-  folded into `server`: non-portable is not the same as infra-runtime-coupled. A `SKILL.md` has no runtime
-  coupling to the WS/session layer — it only needs a path handed to `additionalSkillPaths`.
+- **Workspace-internal, no longer tied to a host-only tool.** The skill content reaches capabilities by
+  tool *name* only: `spec_*` from the portable `pi-spec-graph`, and `ask_user_question` from the portable
+  `@thinkrail/pi-ask-user-question` package ([[module-pi-ask-user-question]]) — composed into ThinkRail by
+  [[module-ext-ask-user-question]], installable from npm in vanilla `pi`. When the tool is absent
+  (switched off in Settings → Extensions, or never installed), `asking-user-questions` asks the round as a
+  plain chat message and ends the turn, so no workflow blocks on it. The package still does not claim to
+  run under vanilla `pi` — it is unpublished and staged only by ThinkRail — and it stays its own package
+  rather than folding into `packages/server` for the same reason `packages/shared` isn't folded into
+  `server`: a `SKILL.md` has no runtime coupling to the WS/session layer — it only needs a path handed to
+  `additionalSkillPaths`.
 - **The authoring checklist ships with the product — deliberately.** `writing-workflow-skills` is
   dev-facing (it edits this package), yet it stages into every ThinkRail project like the rest of the
   family: excluding one skill would complicate the staging path for little gain, and its trigger is

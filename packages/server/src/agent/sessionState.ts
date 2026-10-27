@@ -6,10 +6,11 @@ import type {
 	SessionCompletion,
 	SessionState,
 } from "@thinkrail/contracts";
-import { awaitingQuestionToolCallId } from "./askUserQuestion";
+import type { InteractiveTools } from "../extensions";
+import { awaitingToolCallId } from "./toolResponses";
 
-export interface LiveQuestionState {
-	interactionId: string;
+export interface LiveInteractionState {
+	toolCallId: string;
 	needsInput: boolean;
 }
 
@@ -20,7 +21,9 @@ export interface SessionStateInputs {
 	backgroundWorkActive: boolean;
 	lastSettlement: AgentSettlement | null | undefined;
 	lifecycleCompletion: { runId: string; completion: SessionCompletion } | null | undefined;
-	liveQuestion: LiveQuestionState | null;
+	liveInteraction: LiveInteractionState | null;
+	liveRegistry: boolean;
+	interactiveTools: InteractiveTools;
 	pendingDialog: Extract<ExtUiRequest, { kind: "select" | "confirm" | "input" | "editor" }> | null;
 	handledCompletionId: string | undefined;
 	cancelledRunId: string | undefined;
@@ -126,6 +129,10 @@ function deriveCompletion(
 	return completionFrom(`interrupted:${runId}`, undefined, cancelled);
 }
 
+function toolResponseInput(toolCallId: string): SessionState["needsInput"] {
+	return { interactionId: `tool:${toolCallId}`, kind: "tool-response", toolCallId };
+}
+
 export function deriveSessionState(inputs: SessionStateInputs): SessionState {
 	const turn = latestUser(inputs.entries);
 	const runId = turn?.entry.id ?? null;
@@ -136,16 +143,15 @@ export function deriveSessionState(inputs: SessionStateInputs): SessionState {
 			kind: "dialog",
 			request: inputs.pendingDialog,
 		};
-	} else if (inputs.liveQuestion?.needsInput) {
-		needsInput = {
-			interactionId: `question:${inputs.liveQuestion.interactionId}`,
-			kind: "question",
-		};
-	} else if (inputs.liveQuestion === null) {
-		const questionId = awaitingQuestionToolCallId(sessionStateMessages(inputs.entries));
-		if (questionId !== null) {
-			needsInput = { interactionId: `question:${questionId}`, kind: "question" };
-		}
+	} else if (inputs.liveInteraction?.needsInput) {
+		needsInput = toolResponseInput(inputs.liveInteraction.toolCallId);
+	} else if (inputs.liveInteraction === null) {
+		const toolCallId = awaitingToolCallId(
+			sessionStateMessages(inputs.entries),
+			inputs.interactiveTools,
+			inputs.liveRegistry,
+		);
+		if (toolCallId !== null) needsInput = toolResponseInput(toolCallId);
 	}
 
 	if (needsInput !== null || inputs.isStreaming) {

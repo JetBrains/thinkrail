@@ -376,6 +376,23 @@ test("retired session activity returns the empty compatibility snapshot", async 
 	expect(await handleRequest("session.activityList", {}, CTX)).toEqual([]);
 });
 
+test("the retired ask answer method and respondToTool both refuse an unknown session the same way", async () => {
+	await expect(
+		handleRequest(
+			"session.answerQuestion",
+			{ sessionId: "nope", toolCallId: "tc", result: {} },
+			CTX,
+		),
+	).rejects.toThrow("Unknown session: nope");
+	await expect(
+		handleRequest(
+			"session.respondToTool",
+			{ sessionId: "nope", toolCallId: "tc", response: {} },
+			CTX,
+		),
+	).rejects.toThrow("Unknown session: nope");
+});
+
 test("template reads resolve a project's current checkout and reject ambiguous locations", async () => {
 	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
 	const agentDir = join(dataDir, "agent");
@@ -458,6 +475,14 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["visualize"],
 			hasChildExtensions: false,
 		},
+		{
+			name: "ask-user-question",
+			title: "Ask user question",
+			description: expect.any(String),
+			enabled: true,
+			tools: ["ask_user_question"],
+			hasChildExtensions: false,
+		},
 	]);
 	await handleRequest(
 		"settings.update",
@@ -466,10 +491,12 @@ test("extension.list reflects disabledExtensions written through settings.update
 	);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: false },
+		{ name: "ask-user-question", enabled: true },
 	]);
 	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: true },
+		{ name: "ask-user-question", enabled: true },
 	]);
 });
 

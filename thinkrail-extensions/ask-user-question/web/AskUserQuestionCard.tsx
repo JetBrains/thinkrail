@@ -6,14 +6,16 @@ import {
 	RiPencilLine as Pencil,
 	RiSkipForwardLine as SkipForward,
 } from "@remixicon/react";
+import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { useT } from "@thinkrail/locales/react";
 import type {
 	AskUserQuestionAnswer,
 	AskUserQuestionArgs,
 	AskUserQuestionItem,
 	AskUserQuestionResult,
-} from "@thinkrail/contracts";
-import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
-import { useT } from "@thinkrail/locales/react";
+} from "@thinkrail/pi-ask-user-question/core";
+import { useOptionalResourceHost } from "@thinkrail/resource-renderers";
+import { AttentionLine } from "@thinkrail/ui/attention-line";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	Fragment,
@@ -25,13 +27,9 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { AttentionLine } from "../AttentionLine";
-import { readAskResult, useAskFocusScope, useAskState } from "../askState";
-import { useChatActions } from "../ChatActions";
-import { useFoldGeometry } from "../foldState";
-import { Markdown } from "../Markdown";
+import { readAskUserQuestionResult } from "./readResult";
 
-export { readAskResult } from "../askState";
+const noLayoutChange = () => () => undefined;
 
 export function parseQuestions(args: Record<string, unknown>): AskUserQuestionItem[] {
 	const qs = (args as Partial<AskUserQuestionArgs>).questions;
@@ -343,17 +341,21 @@ export function AskUserQuestionCard({
 	result,
 	status,
 	streaming,
+	interaction,
 }: ToolRenderProps) {
 	const t = useT();
-	const actions = useChatActions();
-	const ask = useAskState(toolCallId);
-	const providedFocusScope = useAskFocusScope();
 	const localFocusScope = useRef<object>({}).current;
-	const focusScope = providedFocusScope ?? localFocusScope;
+	const focusScope = interaction?.focusScope ?? localFocusScope;
+	const revealElement = interaction?.revealElement;
+	const cancelAutomaticReveal = interaction?.cancelAutomaticReveal;
 	const cardRef = useRef<HTMLElement>(null);
 	const questions = useMemo(() => parseQuestions(args), [args]);
-	const resolvedResult = ask?.answer ?? readAskResult(result);
-	const awaiting = !resolvedResult && !ask?.superseded && !ask?.terminal && status !== "error";
+	const resolvedResult =
+		readAskUserQuestionResult(interaction?.state.response) ?? readAskUserQuestionResult(result);
+	const superseded = interaction?.state.superseded ?? false;
+	const ended = interaction?.state.ended ?? false;
+	const canRespond = !!interaction && interaction.state.accepting;
+	const awaiting = !resolvedResult && !superseded && !ended && status !== "error";
 	const [states, setStates] = useState<Record<number, QState>>(
 		() => cardStateCache.get(toolCallId)?.states ?? {},
 	);
@@ -367,7 +369,7 @@ export function AskUserQuestionCard({
 	const nudgeSeq = useRef(0);
 	const previousTab = useRef(tab);
 	const reclaimFocusAfterFailedSend = useRef(false);
-	const prepareGeometryChange = useFoldGeometry();
+	const prepareGeometryChange = interaction?.prepareLayoutChange ?? noLayoutChange;
 	const completeSubmitChange = useRef<() => void>(() => undefined);
 
 	useLayoutEffect(() => {
@@ -406,7 +408,7 @@ export function AskUserQuestionCard({
 		const frame = requestAnimationFrame(() => {
 			const card = cardRef.current;
 			if (!card) return;
-			actions?.revealChatElement(currentQuestionPageStart(card), {
+			revealElement?.(currentQuestionPageStart(card), {
 				block: "start",
 				provenance: "user-navigation",
 				runway: "release",
@@ -415,22 +417,22 @@ export function AskUserQuestionCard({
 			focusCurrentQuestionPage(card);
 		});
 		return () => cancelAnimationFrame(frame);
-	}, [actions, tab]);
+	}, [revealElement, tab]);
 
 	useEffect(() => {
-		if (!awaiting || streaming || questions.length === 0 || submitted) return;
+		if (!awaiting || !canRespond || streaming || questions.length === 0 || submitted) return;
 		let frame: number | null = null;
 		let attempts = 0;
 		let userTookOver = false;
 		const yieldToUser = () => {
 			userTookOver = true;
-			actions?.cancelAutomaticReveal();
+			cancelAutomaticReveal?.();
 		};
 		const settleAttention = () => {
 			const card = cardRef.current;
 			if (!card || userTookOver) return;
 			if (attempts === 0) {
-				actions?.revealChatElement(currentQuestionPageStart(card), {
+				revealElement?.(currentQuestionPageStart(card), {
 					block: "start",
 					provenance: "automatic-attention",
 					runway: "release",
@@ -460,7 +462,17 @@ export function AskUserQuestionCard({
 			window.removeEventListener("keydown", yieldToUser, { capture: true });
 			window.removeEventListener("wheel", yieldToUser, { capture: true });
 		};
-	}, [actions, awaiting, focusScope, questions.length, streaming, submitted, toolCallId]);
+	}, [
+		awaiting,
+		canRespond,
+		cancelAutomaticReveal,
+		focusScope,
+		questions.length,
+		revealElement,
+		streaming,
+		submitted,
+		toolCallId,
+	]);
 
 	const stateFor = (qi: number): QState => states[qi] ?? emptyQState();
 	const patch = (qi: number, next: Partial<QState>) =>
@@ -470,13 +482,13 @@ export function AskUserQuestionCard({
 	const answeredIndices = new Set(answers.map((a) => a.questionIndex));
 
 	const reply = (r: AskUserQuestionResult) => {
-		if (!actions) return;
+		if (!interaction || !canRespond) return;
 		const held = document.activeElement;
 		const handedOff = !!held && !!cardRef.current?.contains(held) && held.matches(":focus-visible");
-		if (handedOff) actions.focusComposer();
+		if (handedOff) interaction.focusComposer();
 		completeSubmitChange.current = prepareGeometryChange(() => cardRef.current, "user");
 		setSubmitted(true);
-		actions.answerQuestion(toolCallId, r).catch(() => {
+		interaction.respond(r).catch(() => {
 			reclaimFocusAfterFailedSend.current = handedOff;
 			setSubmitted(false);
 		});
@@ -487,8 +499,8 @@ export function AskUserQuestionCard({
 			<ResolvedRecord questions={questions} result={resolvedResult} rawText={resultText(result)} />
 		);
 	}
-	if (ask?.superseded) return <SupersededRecord questions={questions} />;
-	if (ask?.terminal) {
+	if (superseded) return <SupersededRecord questions={questions} />;
+	if (ended) {
 		return <ResolvedRecord questions={questions} result={null} rawText={resultText(result)} />;
 	}
 	if (status === "error") {
@@ -513,7 +525,7 @@ export function AskUserQuestionCard({
 
 	const showContinue = multipleQuestions && !onReview;
 	const canSubmit =
-		!!actions && (onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
+		canRespond && (onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
 	const nudgeVisible = nudgeShowsOnPage(nudge, idx, onReview, answeredIndices.has(idx));
 
 	const confirmQuestion = (nextState: QState) => {
@@ -566,15 +578,18 @@ export function AskUserQuestionCard({
 
 	return (
 		<div className="flex flex-col gap-4 motion-safe:animate-reveal">
-			<AttentionLine announced={announced} />
+			{canRespond ? <AttentionLine announced={announced} /> : null}
 			<section
 				ref={cardRef}
 				data-testid="ask-user-question"
-				data-tone="active"
+				data-tone={canRespond ? "active" : "idle"}
 				aria-label={t("tools.ask.cardLabel")}
 				aria-keyshortcuts="Shift+Escape"
 				onKeyDown={onCardKeyDown}
-				className="overflow-hidden rounded-lg border border-primary bg-clip-padding bg-container-elevated-bg ring-2 ring-primary-soft"
+				className={cn(
+					"overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg",
+					canRespond ? "border-primary ring-2 ring-primary-soft" : "border-border-default",
+				)}
 			>
 				{multipleQuestions ? (
 					<div
@@ -669,7 +684,7 @@ export function AskUserQuestionCard({
 								type="button"
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
-								disabled={!actions}
+								disabled={!canRespond}
 								className="shrink-0 rounded-sm px-4 text-text-muted tr-text-ui outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
 							>
 								{t("tools.ask.skip")}
@@ -1059,12 +1074,18 @@ function QuestionBody({
 						<div className="mb-4 text-text-muted tr-text-metadata">
 							{t("tools.ask.preview", { label: previewSource.label })}
 						</div>
-						<Markdown text={previewSource.preview} />
+						<PreviewMarkdown text={previewSource.preview} />
 					</div>
 				) : null}
 			</div>
 		</div>
 	);
+}
+
+function PreviewMarkdown({ text }: { text: string }) {
+	const Markdown = useOptionalResourceHost()?.markdown;
+	if (Markdown) return <Markdown text={text} />;
+	return <pre className="whitespace-pre-wrap tr-text-metadata text-text-default">{text}</pre>;
 }
 
 function OptionRow({

@@ -1,6 +1,5 @@
 import type {
 	AppConfig,
-	AskUserQuestionResult,
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
@@ -35,6 +34,7 @@ import type {
 	ThinkingLevel,
 	TurnChangeSet,
 	UserMessage,
+	UserThemesSnapshot,
 	WireModel,
 	Workspace,
 	WorkspaceFsChangedPayload,
@@ -43,7 +43,6 @@ import {
 	canMarkCompletionUnread,
 	customMessageText,
 	DEFAULT_CONFIG,
-	isAskUserAnswersMessage,
 	isBackgroundCommandCompletionMessage,
 	isControlMessage,
 	isLineWidth,
@@ -54,6 +53,7 @@ import {
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
 	normalizeThemePreference,
+	readToolResponseMessage,
 	sameModel,
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
@@ -461,7 +461,7 @@ export interface SessionRuntime {
 	turns: ChatTurn[];
 	turnIdByMessageIndex?: (string | null)[];
 	toolResults: Record<string, ToolResultState>;
-	askAnswers: Record<string, AskUserQuestionResult>;
+	toolResponses: Record<string, unknown>;
 	currentAssistantId: string | null;
 	attemptAssistantId: string | null;
 	isStreaming: boolean;
@@ -492,7 +492,7 @@ function newRuntime(
 	return {
 		turns: [],
 		toolResults: {},
-		askAnswers: {},
+		toolResponses: {},
 		currentAssistantId: null,
 		attemptAssistantId: null,
 		isStreaming: false,
@@ -633,11 +633,14 @@ function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntim
 		: rt;
 }
 
+const STATS_ENTRY_TYPES = new Set(["usage", "compaction", "branch_summary", "context_edit"]);
+
 function invalidatesSessionStats(event: PiEvent): boolean {
 	return (
 		event.type === "message_end" ||
 		event.type === "compaction_end" ||
-		event.type === "agent_settled"
+		event.type === "agent_settled" ||
+		(event.type === "entry_appended" && STATS_ENTRY_TYPES.has(event.entryType))
 	);
 }
 
@@ -716,9 +719,10 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			};
 		}
 		case "message_end": {
-			if (isAskUserAnswersMessage(event.message)) {
-				const { toolCallId, result } = event.message.details;
-				return { ...rt, askAnswers: { ...rt.askAnswers, [toolCallId]: result } };
+			const toolResponse = readToolResponseMessage(event.message);
+			if (toolResponse) {
+				const { toolCallId, response } = toolResponse;
+				return { ...rt, toolResponses: { ...rt.toolResponses, [toolCallId]: response } };
 			}
 			if (isBackgroundCommandCompletionMessage(event.message)) {
 				return {
@@ -1061,6 +1065,8 @@ interface AppState {
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
 	installLocalLocales: (snapshot: LocalLocalesSnapshot | null) => void;
+	userThemes: UserThemesSnapshot | null;
+	installUserThemes: (snapshot: UserThemesSnapshot | null) => void;
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -2317,6 +2323,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,
 	installLocalLocales: (snapshot) => set({ localLocales: snapshot }),
+	userThemes: null,
+	installUserThemes: (snapshot) => set({ userThemes: snapshot }),
 	toasts: [],
 	resourceSnapshots: {},
 	resourceRevision: 0,
@@ -3967,7 +3975,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...newRuntime(summary.model, summary.thinkingLevel, s.connectionGeneration),
 				turns: hydrated.turns,
 				toolResults: hydrated.toolResults,
-				askAnswers: hydrated.askAnswers,
+				toolResponses: hydrated.toolResponses,
 				isStreaming: summary.isStreaming,
 				hostState:
 					summary.state ??
@@ -4060,7 +4068,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...preserved,
 				turns: reconcileCompactionTurns(current.turns, hydrated.turns, summary.isStreaming),
 				toolResults: hydrated.toolResults,
-				askAnswers: hydrated.askAnswers,
+				toolResponses: hydrated.toolResponses,
 				currentAssistantId: null,
 				attemptAssistantId: null,
 				isStreaming: summary.isStreaming,

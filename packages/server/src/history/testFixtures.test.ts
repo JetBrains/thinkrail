@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { AskUserQuestionAckDetails, AskUserQuestionArgs } from "@thinkrail/contracts";
+import type { ToolResponsePendingDetails } from "@thinkrail/contracts";
 import { defaultSessionDirFor, writeFixtureSession } from "./testFixtures";
 
 describe("writeFixtureSession — pinned against pi's real SessionManager", () => {
@@ -50,8 +50,8 @@ describe("writeFixtureSession — pinned against pi's real SessionManager", () =
 						],
 					},
 				],
-			} satisfies AskUserQuestionArgs;
-			const ack: AskUserQuestionAckDetails = { kind: "ack" };
+			};
+			const ack: ToolResponsePendingDetails = { kind: "ack" };
 			const { path } = writeFixtureSession(dir, {
 				id: "pin-toolcall-1",
 				cwd: "/tmp/thinkrail-toolcall-pin",

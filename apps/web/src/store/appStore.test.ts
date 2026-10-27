@@ -377,6 +377,17 @@ test("stats refresh ticks survive batching at finalized Pi state boundaries", ()
 	expect(rt("a").statsRefreshTick).toBe(3);
 	store.handlePiEvent(toolEnd("t1", {}), "a");
 	expect(rt("a").statsRefreshTick).toBe(3);
+	store.handlePiEvent({ type: "entry_appended", entryType: "custom" }, "a");
+	expect(rt("a").statsRefreshTick).toBe(3);
+	for (const [index, entryType] of [
+		"usage",
+		"compaction",
+		"branch_summary",
+		"context_edit",
+	].entries()) {
+		store.handlePiEvent({ type: "entry_appended", entryType }, "a");
+		expect(rt("a").statsRefreshTick).toBe(4 + index);
+	}
 });
 
 test("a host-fired USER message folds into the transcript; the composer's optimistic twin doesn't duplicate", () => {
@@ -505,14 +516,14 @@ test("hydrateSession seeds the queue from the summary snapshot", () => {
 		live: true,
 		queue: { steering: [], followUp: ["waiting in line"] },
 	};
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
+	store.hydrateSession(summary, { turns: [], toolResults: {}, toolResponses: {} });
 	expect(rt("q1").queue).toEqual({ steering: [], followUp: ["waiting in line"] });
 
 	const { queue, ...bare } = summary;
 	void queue;
 	store.hydrateSession(
 		{ ...bare, sessionId: "q2" },
-		{ turns: [], toolResults: {}, askAnswers: {} },
+		{ turns: [], toolResults: {}, toolResponses: {} },
 	);
 	expect(rt("q2").queue).toEqual({ steering: [], followUp: [] });
 });
@@ -618,7 +629,58 @@ test("message_end finalizes the turn the moment its message completes (not at ag
 	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
-test("an ask-user-answers custom message_end indexes into askAnswers (never the turn list)", () => {
+test("a tool-response custom message_end indexes into toolResponses (never the turn list)", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	const response = { answers: [{ questionIndex: 0, question: "Q?", kind: "text", answer: "A" }] };
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "tool-response",
+				content: "User has answered your questions: …",
+				display: true,
+				details: { toolCallId: "ask1", response },
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	expect(rt("a").toolResponses.ask1).toEqual(response);
+	expect(rt("a").turns.filter((t) => t.kind === "assistant" || t.kind === "user")).toHaveLength(0);
+
+	// The response value is opaque to the store — whatever the tool's extension chose rides through.
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "tool-response",
+				content: "free text",
+				display: true,
+				details: { toolCallId: "ask2", response: "free text" },
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	expect(rt("a").toolResponses).toEqual({ ask1: response, ask2: "free text" });
+
+	const before = rt("a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: { role: "custom", customType: "other", content: "x", display: false },
+		} as unknown as PiEvent,
+		"a",
+	);
+	const ignored = rt("a");
+	expect(ignored.turns).toBe(before.turns);
+	expect(ignored.toolResponses).toBe(before.toolResponses);
+	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
+});
+
+test("a legacy ask-user-answers custom message_end (details.result) indexes into toolResponses too", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
@@ -639,21 +701,8 @@ test("an ask-user-answers custom message_end indexes into askAnswers (never the 
 		} as unknown as PiEvent,
 		"a",
 	);
-	expect(rt("a").askAnswers.ask1).toEqual(result as never);
+	expect(rt("a").toolResponses.ask1).toEqual(result);
 	expect(rt("a").turns.filter((t) => t.kind === "assistant" || t.kind === "user")).toHaveLength(0);
-
-	const before = rt("a");
-	store.handlePiEvent(
-		{
-			type: "message_end",
-			message: { role: "custom", customType: "other", content: "x", display: false },
-		} as unknown as PiEvent,
-		"a",
-	);
-	const ignored = rt("a");
-	expect(ignored.turns).toBe(before.turns);
-	expect(ignored.askAnswers).toBe(before.askAnswers);
-	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
 test("a subagent-completion custom message_end appends a subagentCompletion turn", () => {
@@ -1731,7 +1780,7 @@ test("a frame that beats a reopened chat's transcript is replayed by hydrateSess
 		updatedAt: 0,
 		live: true,
 	};
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
+	store.hydrateSession(summary, { turns: [], toolResults: {}, toolResponses: {} });
 
 	expect(rt("reopened").extUiStatus).toEqual({ test: "Theme works" });
 	expect(useAppStore.getState().extUiOrphans).toEqual([]);
@@ -2062,7 +2111,7 @@ test("a deletion that beats getMessages prevents its late hydrate from restoring
 	store.hydrateSession(summary, {
 		turns: [],
 		toolResults: {},
-		askAnswers: {},
+		toolResponses: {},
 		turnIdByMessageIndex: [],
 	});
 
@@ -2087,7 +2136,7 @@ test("a page-lifetime deletion tombstone survives workspace cleanup until late h
 
 	store.deleteChat("ws1", "late");
 	store.clearWorkspaceTabs("ws1");
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
+	store.hydrateSession(summary, { turns: [], toolResults: {}, toolResponses: {} });
 
 	expect(useAppStore.getState().sessions.late).toBeUndefined();
 });
@@ -2118,7 +2167,7 @@ test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a l
 	store.hydrateSession(summary, {
 		turns: [{ kind: "user", id: "u1", message: { role: "user", content: "hi", timestamp: 0 } }],
 		toolResults: {},
-		askAnswers: {},
+		toolResponses: {},
 		turnIdByMessageIndex: ["u1"],
 	});
 	const st = useAppStore.getState();
@@ -2128,7 +2177,7 @@ test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a l
 
 	store.hydrateSession(
 		{ ...summary, messageCount: 99 },
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
+		{ turns: [], toolResults: {}, toolResponses: {}, turnIdByMessageIndex: [] },
 	);
 	expect(useAppStore.getState().sessions.h1?.turns).toHaveLength(1);
 });
@@ -2179,7 +2228,7 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 				},
 			],
 			toolResults: {},
-			askAnswers: {},
+			toolResponses: {},
 			turnIdByMessageIndex: [null],
 		},
 		before.eventRevision,
@@ -2228,7 +2277,7 @@ test("reconcileSession rejects a transcript read crossed by even a UI-ignored Pi
 			updatedAt: 2,
 			live: true,
 		},
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
+		{ turns: [], toolResults: {}, toolResponses: {}, turnIdByMessageIndex: [] },
 		expectedRevision,
 		3,
 	);
@@ -2333,7 +2382,7 @@ test("hydrateSession preserves the stable id of an already-restored shared place
 		live: true,
 	};
 	store.restorePlacedChatCache("ws1", "legacy-placement-id", summary.sessionId, summary.title);
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} }, false);
+	store.hydrateSession(summary, { turns: [], toolResults: {}, toolResponses: {} }, false);
 	const chats = useAppStore.getState().tabsByWorkspace.ws1?.filter((tab) => tab.kind === "chat");
 	expect(chats).toHaveLength(1);
 	expect(chats?.[0]?.id).toBe("legacy-placement-id");
@@ -2358,7 +2407,7 @@ test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, 
 	};
 	store.hydrateSession(
 		summary,
-		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
+		{ turns: [], toolResults: {}, toolResponses: {}, turnIdByMessageIndex: [] },
 		true,
 	);
 
@@ -4414,12 +4463,12 @@ test("skills badge: a LIVE restore stays conservatively stale; a disk attach anc
 	const s = () => useAppStore.getState();
 	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
 
-	s().hydrateSession(summaryFor("live1", true), { turns: [], toolResults: {}, askAnswers: {} });
+	s().hydrateSession(summaryFor("live1", true), { turns: [], toolResults: {}, toolResponses: {} });
 	expect(isStale("ws1", "live1")).toBe(true);
 
 	s().hydrateSession(
 		summaryFor("disk1", false),
-		{ turns: [], toolResults: {}, askAnswers: {} },
+		{ turns: [], toolResults: {}, toolResponses: {} },
 		false,
 		selectWorkspaceTick(s(), "ws1"),
 	);
@@ -4430,7 +4479,7 @@ test("explicitly passive hydration never becomes navigation just because the cac
 	const store = useAppStore.getState();
 	store.hydrateSession(
 		summaryFor("passive", true),
-		{ turns: [], toolResults: {}, askAnswers: {} },
+		{ turns: [], toolResults: {}, toolResponses: {} },
 		false,
 		undefined,
 		{ activate: false },
@@ -4637,7 +4686,7 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 			updatedAt: 0,
 			live: true,
 		} as unknown as SessionSummary,
-		{ turns: [], toolResults: {}, askAnswers: {} },
+		{ turns: [], toolResults: {}, toolResponses: {} },
 	);
 	expect(tick()).toBe(before);
 

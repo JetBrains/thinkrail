@@ -4,7 +4,7 @@ type: architecture-design
 status: draft
 title: Pi compatibility — host adaptations and upgrade removal gates
 parent: architecture
-references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat]
+references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands]
 tags: [pi, compatibility]
 ---
 
@@ -134,6 +134,19 @@ registry-extension tools by mirroring Pi's private `_isActivatedOnRegistration` 
 re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way to keep host-withheld tools
 apart from the recorded selection. Run the manager's restart regressions on upgrades.
 
+- **Registry tool precedence** — [[submodule-server-extensions]], `preferRegistryTools` in the session
+  loader's `extensionsOverride`. It relies on three pi facts:
+  - pi keeps every extension and gives a tool name to its first registration
+    (`ExtensionRunner.getAllRegisteredTools`);
+  - path extensions (user packages) load before inline factories;
+  - tool conflicts are reported only between extensions, before the override runs.
+
+  The override moves a ThinkRail registry extension ahead of the first user package registering one of
+  its tool names, so a same-name package such as rpiv's `ask_user_question` cannot take over the card,
+  mailbox and repair that key on the name. Remove it when pi offers an inline-extension precedence or
+  replace option. Re-verify the three facts in the installed dist, and run the collision tests in
+  `agentSessionManager.test.ts` (same-name questionnaire before and after reload, and a chat created with
+  ours off that re-enables it over the package) on every upgrade.
 - **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
   pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))
   and retains image content lost by the destructive queue API. Remove the corresponding workaround
@@ -144,6 +157,17 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   and the image-resize override bridge resources a single-file artifact cannot discover or load.
   Replace each only when pi supplies an equivalent artifact seam; run `check:seams` and the relevant
   binary/desktop artifact probes, including extension value imports and images.
+- **Account-scoped model availability** — [[submodule-server-agent]], `modelAvailability.ts`. Pi's
+  `openai` provider lists its whole API catalog under Sign in with ChatGPT (its `filterAllModels` drops
+  only classifiers), so the host keeps the ids in pi's `openai-codex` catalog; Central proxies advertise
+  a narrower catalog than pi's, so the host intersects opaque providers with their `/models` listing.
+  Remove the ChatGPT rule when the installed `providers/openai.js` filters OAuth chat models itself, and
+  the listing rule when pi narrows a rerouted provider's catalog to what its endpoint serves; run
+  `modelAvailability.test.ts` and `runtimeGenerations.test.ts`.
+- **Default-model preference** — [[submodule-server-agent]], `modelDefaults.ts`. Pi's
+  `defaultModelPerProvider` is not exported, so the host mirrors it for new-chat, reviewer, and
+  one-shot defaults. Remove the mirror when a public export or initial-model resolver exists; until
+  then the parity test in `modelDefaults.test.ts` fails on any upstream change to the map or order.
 - **Headless theme** — [[submodule-server-agent]], `plainTextTheme`. Pi's terminal theme is not
   initialized by SDK session creation. Remove the subclass when pi supplies a usable non-TUI theme
   contract; run `webUiContext.test.ts` against the whole inherited surface.
@@ -157,6 +181,44 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   discovery and prompt-template/frontmatter rules where public APIs cannot serve its read/edit UI.
   Prefer public discovery/parsing APIs when they meet those needs; retain parity coverage in history,
   template and composer tests until then.
+- **Subagent usage totals from child transcripts** — [[submodule-server-agent]], `subagentUsage.ts`.
+  Pi's session-total loop (`AgentSession.getSessionStats`) is not exported for a bare session file, so
+  the host mirrors which entries carry spend (`usage`, compaction/branch-summary `usage`, assistant and
+  tool-result message usage) to reconcile crashed child runs. Remove the mirror when pi exports a totals
+  helper over entries or a file. Until then `delegation.test.ts` ("the subagent totals mirror matches pi's
+  own totals for every spend source") pins parity with pi's `getSessionStats` on one transcript that
+  carries every spend source, including off-branch spend; rerun it on every pi bump.
+- **Rollback of a failed usage append** — [[submodule-server-agent]], `recordSessionUsage`.
+  `SessionManager._appendEntry` adds the entry to memory and moves the leaf before `_persist`, and a
+  failed `appendFileSync` can leave a torn partial line. The host therefore restores the previous leaf
+  and truncates an existing transcript back to its pre-append size; `delegation.test.ts` pins both
+  ("a usage write pi kept only in memory never cuts the reopened history", "a torn usage append is cut
+  back…"). Remove the leaf restore when a failed persist leaves pi's memory and leaf unchanged; remove the
+  truncation only when pi also guarantees that a failed append leaves no torn bytes.
+
+- **Detached result hold** — [[module-pi-subagents]] (Result delivery) and
+  [[module-pi-background-commands]], applied by [[submodule-server-agent]]'s `turn_end` and
+  `compaction_end` flushes. Pi drains follow-up messages only when a run would otherwise stop, offers
+  extensions no way to inspect or withdraw one queued message (`hasPendingMessages()` is a boolean,
+  `clearQueue()` is host-only and clears everything), and keeps queued messages across an abort, so a
+  pushed result duplicated one the agent had already pulled. The owners hold outcomes and send them
+  only at step boundaries or to an idle parent. **Removal gate:** a per-message queue handle an
+  extension can withdraw, delivered at the next step rather than at run end — even then, keep the
+  claim-on-pull rule. Run the `pi-subagents` and `pi-background-commands` suites and
+  `agent/chatResources.test.ts`.
+
+## Context-budget limitations
+
+**Owner:** [[submodule-server-agent]]. These are upstream limitations, not host adaptations. In the
+installed SDK, `findCutPoint` keeps a trailing tool-call/result pair whole even when it alone exceeds
+`keepRecentTokens`, and `generateSummary` serializes the whole summarized span without an input
+budget (since Pi 1.4 it requests up to the model's output limit). Bounded tool results therefore do
+not guarantee whole-request admission.
+
+**Upgrade check:** inspect those public functions in the installed compaction implementation for
+retained-batch and summary-input budgeting. Use a tool pair larger than the recent-token target and
+user text larger than the summary model's input window to assess admission, not as CI assertions that
+the limitations must persist. Do not compensate with host retries or compaction-default overrides.
 
 ## Not temporary SDK workarounds
 

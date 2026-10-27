@@ -48,6 +48,8 @@ export async function renderMermaid(source: string): Promise<MermaidRenderResult
 			startOnLoad: false,
 			securityLevel: "strict",
 			theme: "base",
+			look: "classic",
+			layout: "dagre",
 			themeVariables: themeVariables(),
 		});
 		const { svg } = await mermaid.render(id, source);

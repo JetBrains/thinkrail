@@ -1,8 +1,8 @@
-import { createReadStream, existsSync, rmSync } from "node:fs";
+import { createReadStream, existsSync, rmSync, statSync, truncateSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
-import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
+import { clampThinkingLevel, getSupportedThinkingLevels, type Usage } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	type CreateAgentSessionOptions,
@@ -21,7 +21,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
-	AskUserQuestionResult,
 	ImageContent,
 	Model,
 	PiEvent,
@@ -46,7 +45,6 @@ import type {
 	WireModelAuth,
 } from "@thinkrail/contracts";
 import {
-	assistantToolCallsAreExecutable,
 	canMarkCompletionUnread,
 	firstPromptOfTexts,
 	isTranscriptMessageRole,
@@ -62,7 +60,7 @@ import {
 } from "pi-background-commands";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS, type Subagents } from "pi-subagents";
-import { registryExtensionName, serverExtensions } from "../extensions";
+import { interactiveTools, registryExtensionName, serverExtensions } from "../extensions";
 import { logger } from "../log";
 import {
 	dataDir,
@@ -76,20 +74,11 @@ import {
 	saveSessionReceipts,
 } from "../persistence";
 import { trashFile } from "../trash";
-import {
-	ANSWERABILITY_ERRORS,
-	ASK_USER_QUESTION_TOOL_NAME,
-	type AskUserQuestionWaiters,
-	assessAnswerability,
-	buildAnswersMessage,
-	createAskUserQuestionTool,
-	createAskUserQuestionWaiters,
-	hasQuestionAck,
-} from "./askUserQuestion";
 import { publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
 	hasLiveSessionChildren,
+	reconcileSessionSubagentUsage,
 	removeWorkspaceDelegation,
 	stopSessionChildren,
 	subagentsFor,
@@ -112,6 +101,8 @@ import {
 	showPendingMcpReload,
 	watchMcpStatus,
 } from "./mcpSessions";
+import { refreshModelListings } from "./modelAvailability";
+import { preferredDefaultModel } from "./modelDefaults";
 import {
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
@@ -124,6 +115,16 @@ import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { deriveSessionState } from "./sessionState";
 import type { SkillAdmissionContext } from "./skillAdmission";
+import {
+	assessRespondability,
+	buildToolResponseMessage,
+	createToolResponseWaiters,
+	describeToolResponse,
+	hasPendingToolResult,
+	RESPONDABILITY_ERRORS,
+	type ToolResponseWaiters,
+	toolResponseSessionServices,
+} from "./toolResponses";
 import {
 	cancelExtUiForSession,
 	createWebUiContext,
@@ -173,7 +174,7 @@ interface Entry {
 	lastPublishedState: string | null;
 	firstPrompt: string | null;
 	firstPromptScanned: number;
-	askUserQuestionWaiters: AskUserQuestionWaiters;
+	toolResponseWaiters: ToolResponseWaiters;
 	mcpHost: McpSessionHost;
 }
 
@@ -183,6 +184,7 @@ const workspaceLifecycleGenerations = new Map<string, number>();
 const closingWorkspaces = new Map<string, number>();
 const pendingSessionPreparations = new Map<string, Set<Promise<unknown>>>();
 const sessionTeardowns = new Map<string, Promise<void>>();
+const tearingDownEntries = new Map<string, Entry>();
 
 interface WorkspaceLifecycleToken {
 	global: number;
@@ -386,11 +388,18 @@ function stateFromEntry(entry: Entry): SessionState {
 		lastSettlement: entry.lastSettlement,
 		lifecycleCompletion:
 			entry.lastSettlement === undefined ? persistedCompletion(sessionId) : undefined,
-		liveQuestion: entry.askUserQuestionWaiters.currentQuestion(),
+		liveInteraction: entry.toolResponseWaiters.currentInteraction(),
+		liveRegistry: true,
+		interactiveTools: enabledInteractiveTools(),
 		pendingDialog: pendingExtUiDialog(sessionId),
 		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
 		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
 	});
+}
+
+function enabledInteractiveTools() {
+	const disabled = disabledExtensions();
+	return interactiveTools((name) => disabled.has(name));
 }
 
 function* userTextsOf(entries: readonly SessionEntry[]): Generator<string> {
@@ -468,7 +477,9 @@ function stateFromDisk(sessionId: string, manager: SessionManager, legacy = fals
 		backgroundWorkActive: false,
 		lastSettlement: undefined,
 		lifecycleCompletion: legacy ? undefined : persistedCompletion(sessionId),
-		liveQuestion: null,
+		liveInteraction: null,
+		liveRegistry: false,
+		interactiveTools: enabledInteractiveTools(),
 		pendingDialog: null,
 		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
 		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
@@ -558,7 +569,9 @@ function recordSettlement(entry: Entry, terminal: AgentSettlement | null): void 
 		backgroundWorkActive: false,
 		lastSettlement: terminal,
 		lifecycleCompletion: undefined,
-		liveQuestion: entry.askUserQuestionWaiters.currentQuestion(),
+		liveInteraction: entry.toolResponseWaiters.currentInteraction(),
+		liveRegistry: true,
+		interactiveTools: enabledInteractiveTools(),
 		pendingDialog: pendingExtUiDialog(sessionId),
 		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
 		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
@@ -772,7 +785,7 @@ function enabledExtensionMissing(session: AgentSession, disabled: ReadonlySet<st
 	);
 	return serverExtensions.some(
 		({ extension }) =>
-			extension.extensions.length > 0 &&
+			(extension.extensions.length > 0 || extension.sessionExtensions !== undefined) &&
 			!disabled.has(extension.name) &&
 			!present.has(extension.name),
 	);
@@ -782,6 +795,7 @@ export function refreshExtensionTools(): void {
 	for (const entry of sessions.values()) {
 		if (entry.session.isStreaming) entry.extensionToolsRefreshPending = true;
 		else applyExtensionTools(entry);
+		scheduleEntryStatePublish(entry);
 	}
 }
 
@@ -1073,7 +1087,7 @@ async function prepareSessionEntry(
 	generation: PiRuntimeGeneration,
 	commands: BackgroundCommands,
 	subagents: Subagents,
-	askUserQuestionWaiters: AskUserQuestionWaiters,
+	toolResponseWaiters: ToolResponseWaiters,
 	mcpHost: McpSessionHost,
 	lastSettlement: AgentSettlement | null | undefined = undefined,
 ): Promise<PreparedSessionEntry> {
@@ -1108,7 +1122,7 @@ async function prepareSessionEntry(
 		lastPublishedState: null,
 		firstPrompt: null,
 		firstPromptScanned: 0,
-		askUserQuestionWaiters,
+		toolResponseWaiters,
 		mcpHost,
 	};
 	entry.unsubscribeCommands = commands.onChange(() => {
@@ -1117,20 +1131,10 @@ async function prepareSessionEntry(
 		scheduleEntryStatePublish(entry);
 	});
 	entry.unsubscribe = session.subscribe((event) => {
-		if (
-			event.type === "message_end" &&
-			event.message.role === "assistant" &&
-			assistantToolCallsAreExecutable(event.message.stopReason)
-		) {
-			for (const block of event.message.content) {
-				if (block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME)
-					entry.askUserQuestionWaiters.expect(block.id);
-			}
-		}
 		if (event.type === "turn_end") {
-			entry.askUserQuestionWaiters.persistTurn(event.toolResults);
-			entry.commands.flushCompletions();
-			entry.subagents.flushCompletions();
+			entry.toolResponseWaiters.persistTurn(event.toolResults);
+			entry.commands.flushCompletions({ atTurnEnd: true });
+			entry.subagents.flushCompletions({ atTurnEnd: true });
 		}
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
@@ -1151,6 +1155,8 @@ async function prepareSessionEntry(
 		if (event.type === "compaction_end") {
 			entry.piCompactionInProgress = false;
 			reconsiderPendingReload(entry);
+			entry.commands.flushCompletions();
+			entry.subagents.flushCompletions();
 		}
 		if (event.type === "agent_start") {
 			entry.lastSettlement = null;
@@ -1253,7 +1259,7 @@ function abandonPreparedEntry(entry: Entry): void {
 	const { sessionId } = entry.session;
 	cancelExtUiForSession(sessionId);
 	forgetMcpStatus(sessionId);
-	entry.askUserQuestionWaiters.abandon();
+	entry.toolResponseWaiters.abandon();
 	entry.unsubscribe();
 	entry.unsubscribeCommands();
 	entry.disposed = true;
@@ -1268,7 +1274,7 @@ async function registerSession(
 	generation: PiRuntimeGeneration,
 	commands: BackgroundCommands,
 	subagents: Subagents,
-	askUserQuestionWaiters: AskUserQuestionWaiters,
+	toolResponseWaiters: ToolResponseWaiters,
 	mcpHost: McpSessionHost,
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
@@ -1279,7 +1285,7 @@ async function registerSession(
 		generation,
 		commands,
 		subagents,
-		askUserQuestionWaiters,
+		toolResponseWaiters,
 		mcpHost,
 	);
 	if (
@@ -1298,6 +1304,7 @@ async function registerSession(
 	restartMcpStatus(session.sessionId);
 	commands.flushCompletions();
 	subagents.flushCompletions();
+	reconcileSubagentUsageInBackground(workspaceId, session.sessionId);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) {
 		publishCreated(summaryOf(session.sessionId, prepared.entry));
@@ -1368,7 +1375,7 @@ async function createParentSessionInternal(
 ): Promise<CreateSessionResult> {
 	const { sessionManager, settingsManager, cwd } = options;
 	const sessionId = sessionManager.getSessionId();
-	const askUserQuestionWaiters = createAskUserQuestionWaiters();
+	const toolResponseWaiters = createToolResponseWaiters();
 	const mcpHost = createMcpSessionHost({
 		policy: () => mcpPolicyResolver(workspaceId),
 		onCommandSettled: scheduleMcpStatusRefresh,
@@ -1390,7 +1397,7 @@ async function createParentSessionInternal(
 	});
 	const canDeliverCompletion = () =>
 		canUseSessionResources(sessionId, workspaceId) &&
-		!askUserQuestionWaiters.hasRecoverableCall() &&
+		!toolResponseWaiters.hasRecoverableCall() &&
 		!sessions.get(sessionId)?.reloadRunning;
 	let session: AgentSession | undefined;
 	const subagents = subagentsFor(
@@ -1419,7 +1426,6 @@ async function createParentSessionInternal(
 		const result = await createAgentSession({
 			...options,
 			modelRuntime: generation.runtime,
-			customTools: [createAskUserQuestionTool(askUserQuestionWaiters)],
 			resourceLoader: await buildResourceLoader(
 				cwd,
 				settingsManager,
@@ -1430,6 +1436,7 @@ async function createParentSessionInternal(
 					createBackgroundCommandsExtension({ service: commands }),
 					...mcpHost.extensions,
 				],
+				toolResponseSessionServices(toolResponseWaiters),
 			),
 		});
 		session = result.session;
@@ -1439,7 +1446,7 @@ async function createParentSessionInternal(
 			generation,
 			commands,
 			subagents,
-			askUserQuestionWaiters,
+			toolResponseWaiters,
 			mcpHost,
 			lifecycleToken,
 			announceCreation,
@@ -1455,7 +1462,7 @@ async function createParentSessionInternal(
 				workspaceId,
 				commands.dispose().catch(() => {}),
 			);
-			askUserQuestionWaiters.abandon();
+			toolResponseWaiters.abandon();
 		}
 		throw error;
 	}
@@ -1966,9 +1973,13 @@ async function openDiskSession(
 	if (persistedModel) {
 		try {
 			exactModel = resolvePersistedModel(generation.runtime, persistedModel);
-		} catch {}
+		} catch {
+			const pi = generation.runtime.getAvailableSnapshot();
+			if (pi.some((model) => sameModel(model, persistedModel)))
+				exactModel = preferredDefaultModel(settledAvailableModels(generation.runtime));
+		}
 	}
-	repairDanglingToolCalls(sessionManager);
+	repairDanglingToolCalls(sessionManager, enabledInteractiveTools());
 	await createParentSession(
 		{
 			cwd,
@@ -2046,26 +2057,28 @@ export function getSessionMessages(
 	return getSessionMessagesInternal(sessionId, workspaceId, cwd);
 }
 
-export async function answerQuestion(
+export async function respondToTool(
 	sessionId: string,
 	toolCallId: string,
-	result: AskUserQuestionResult,
+	response: unknown,
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
-	const live = entry.askUserQuestionWaiters.answer(toolCallId, result);
+	const live = entry.toolResponseWaiters.respond(toolCallId, response);
 	if (live.handled) {
 		publishEntryState(entry);
 		await live.persisted;
 		return;
 	}
-	const verdict = assessAnswerability(entry.session.messages, toolCallId);
-	if (!verdict.ok) throw new Error(`${ANSWERABILITY_ERRORS[verdict.reason]}: ${toolCallId}`);
-	if (!hasQuestionAck(entry.session.messages, toolCallId)) {
-		throw new Error(`${ANSWERABILITY_ERRORS.not_awaiting}: ${toolCallId}`);
+	const interactive = enabledInteractiveTools();
+	const verdict = assessRespondability(entry.session.messages, toolCallId, interactive);
+	if (!verdict.ok) throw new Error(`${RESPONDABILITY_ERRORS[verdict.reason]}: ${toolCallId}`);
+	if (!hasPendingToolResult(entry.session.messages, toolCallId)) {
+		throw new Error(`${RESPONDABILITY_ERRORS.not_awaiting}: ${toolCallId}`);
 	}
+	const content = describeToolResponse(verdict.toolName, verdict.args, response, interactive);
 	const release = admitPreflight(entry);
 	try {
-		await entry.session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
+		await entry.session.sendCustomMessage(buildToolResponseMessage(content, toolCallId, response), {
 			triggerTurn: true,
 		});
 	} finally {
@@ -2217,7 +2230,7 @@ async function steerEntry(
 	);
 	if (disposition !== "queued") return;
 	cancelExtUiForSession(entry.session.sessionId);
-	if (entry.askUserQuestionWaiters.supersede()) publishEntryState(entry);
+	if (entry.toolResponseWaiters.supersede()) publishEntryState(entry);
 }
 
 export async function promptSession(
@@ -2423,7 +2436,7 @@ async function abortEntry(
 	acceptedAnswerGraceMs = ACCEPTED_ANSWER_STOP_GRACE_MS,
 ): Promise<SessionQueueContent | undefined> {
 	let restoredQueue = restoreQueue ? clearEntryQueue(entry) : undefined;
-	const acceptedResult = entry.askUserQuestionWaiters.prepareAbort();
+	const acceptedResult = entry.toolResponseWaiters.prepareAbort();
 	await waitForAcceptedAnswerGrace(acceptedResult, acceptedAnswerGraceMs);
 	if (sessions.get(entry.session.sessionId) !== entry) return restoredQueue;
 	if (restoredQueue) {
@@ -2447,7 +2460,7 @@ export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel)
 export function getSessionStats(sessionId: string): SessionStats {
 	const session = mustGet(sessionId);
 	const stats = session.getSessionStats();
-	const contextUsage = stats.contextUsage ?? session.getContextUsage();
+	const { contextUsage } = stats;
 	return {
 		sessionId: stats.sessionId,
 		totalMessages: stats.totalMessages,
@@ -2461,6 +2474,74 @@ export function getSessionStats(sessionId: string): SessionStats {
 		cost: stats.cost,
 		...(contextUsage ? { contextUsage } : {}),
 	};
+}
+
+function reconcileSubagentUsageInBackground(workspaceId: string, sessionId: string): void {
+	void reconcileSessionSubagentUsage(workspaceId, sessionId, () =>
+		usageWritableEntry(sessionId)?.session.sessionManager.getEntries(),
+	).catch((error: unknown) =>
+		log.warn(`subagent usage was not reconciled for ${sessionId}`, error as Error),
+	);
+}
+
+function usageWritableEntry(sessionId: string): Entry | undefined {
+	if (hasDeletionTombstone(sessionId)) return undefined;
+	return sessions.get(sessionId) ?? tearingDownEntries.get(sessionId);
+}
+
+function sessionFileSize(file: string | undefined): number | undefined {
+	if (!file) return undefined;
+	try {
+		return statSync(file).size;
+	} catch {
+		return undefined;
+	}
+}
+
+function rollBackUsageAppend(
+	sessionId: string,
+	sessionManager: SessionManager,
+	leaf: string | null,
+	file: string | undefined,
+	size: number | undefined,
+): boolean {
+	const incorporated = sessionManager.getLeafId() !== leaf;
+	try {
+		if (incorporated && leaf) sessionManager.branch(leaf);
+		else if (incorporated) sessionManager.resetLeaf();
+		if (file && size !== undefined && statSync(file).size > size) truncateSync(file, size);
+	} catch (error) {
+		log.warn(`a failed usage append was not rolled back for ${sessionId}`, error as Error);
+	}
+	return incorporated;
+}
+
+/** Returns whether pi took the usage into its session totals; persisting it is best-effort. */
+export function recordSessionUsage(
+	sessionId: string,
+	record: { kind: string; provider: string; model: string; usage: Usage; note?: string },
+): boolean {
+	const entry = usageWritableEntry(sessionId);
+	if (!entry) return false;
+	const { sessionManager } = entry.session;
+	const { kind, provider, model, usage, note } = record;
+	const leaf = sessionManager.getLeafId();
+	const file = sessionManager.getSessionFile();
+	const size = sessionFileSize(file);
+	let incorporated = true;
+	try {
+		sessionManager.appendUsage(kind, provider, model, usage, note);
+	} catch (error) {
+		incorporated = rollBackUsageAppend(sessionId, sessionManager, leaf, file, size);
+		log.warn(`${kind} usage was not persisted for ${sessionId}`, error as Error);
+	}
+	if (!incorporated) return false;
+	try {
+		publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
+	} catch (error) {
+		log.warn(`usage invalidation was not published for ${sessionId}`, error as Error);
+	}
+	return true;
 }
 
 export interface McpSessionView {
@@ -2572,6 +2653,7 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 export async function listAvailableModels(): Promise<WireModel[]> {
 	const generation = await getPiRuntimeGeneration();
 	void refreshCatalogs(generation.runtime);
+	void refreshModelListings(generation.runtime, generation.opaqueProviderIds);
 	return readAvailableWireModels(generation);
 }
 
@@ -2581,7 +2663,10 @@ export async function listSettledModels(): Promise<WireModel[]> {
 
 export async function refreshAvailableModels(force = false): Promise<RefreshedModels> {
 	const generation = await getPiRuntimeGeneration();
-	const { completed } = await refreshCatalogs(generation.runtime, { force });
+	const [{ completed }] = await Promise.all([
+		refreshCatalogs(generation.runtime, { force }),
+		refreshModelListings(generation.runtime, generation.opaqueProviderIds, { force }),
+	]);
 	return { models: readAvailableWireModels(generation), complete: completed };
 }
 
@@ -2720,9 +2805,13 @@ function disposeSession(sessionId: string): Promise<void> {
 	if (!entry) return Promise.resolve();
 	entry.disposed = true;
 	const cascade = trackSessionTeardown(sessionId, closeSessionResources(entry));
+	tearingDownEntries.set(sessionId, entry);
+	void cascade.finally(() => {
+		if (tearingDownEntries.get(sessionId) === entry) tearingDownEntries.delete(sessionId);
+	});
 	cancelExtUiForSession(sessionId);
 	forgetMcpStatus(sessionId);
-	entry.askUserQuestionWaiters.abandon();
+	entry.toolResponseWaiters.abandon();
 	entry.unsubscribe();
 	entry.unsubscribeCommands();
 	clearEntryQueue(entry);
@@ -2757,7 +2846,7 @@ export function disposeAllSessions(): void {
 	for (const [sessionId, entry] of sessions) {
 		cancelExtUiForSession(sessionId);
 		forgetMcpStatus(sessionId);
-		entry.askUserQuestionWaiters.abandon();
+		entry.toolResponseWaiters.abandon();
 		entry.unsubscribe();
 		entry.unsubscribeCommands();
 		entry.disposed = true;
@@ -2765,6 +2854,7 @@ export function disposeAllSessions(): void {
 		disposePiSessionAfterShutdown(entry);
 	}
 	sessions.clear();
+	tearingDownEntries.clear();
 	deletedSessions.clear();
 }
 
@@ -2775,7 +2865,7 @@ export async function settleSessionsForShutdown(
 	for (const entry of sessions.values()) settling.add(closeSessionResources(entry, timeoutMs));
 	for (const [sessionId, entry] of sessions) {
 		clearEntryQueue(entry);
-		const acceptedResult = entry.askUserQuestionWaiters.prepareShutdown();
+		const acceptedResult = entry.toolResponseWaiters.prepareShutdown();
 		if (acceptedResult) {
 			settling.add(
 				acceptedResult
@@ -2788,7 +2878,7 @@ export async function settleSessionsForShutdown(
 					}),
 			);
 		}
-		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasRecoverableCall()) {
+		if (entry.session.isStreaming && !entry.toolResponseWaiters.hasRecoverableCall()) {
 			settling.add(entry.session.abort());
 		}
 	}
@@ -2917,6 +3007,7 @@ async function runDeleteTransaction(
 			deletedSessions.delete(sessionId);
 			sessions.get(sessionId)?.commands.flushCompletions();
 			sessions.get(sessionId)?.subagents.flushCompletions();
+			if (sessions.has(sessionId)) reconcileSubagentUsageInBackground(workspaceId, sessionId);
 			publishSessionResourcesChanged(workspaceId, sessionId);
 		}
 		throw error;

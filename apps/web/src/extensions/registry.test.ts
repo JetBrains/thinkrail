@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
 import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { currentTranslator } from "@thinkrail/locales/react";
@@ -7,6 +8,7 @@ import {
 	getToolChrome,
 	getToolRenderer,
 	getToolSummary,
+	isInteractiveTool,
 	resolveProminence,
 } from "../chat/toolRegistry";
 import { registerWebExtensions, webExtensions } from "./index";
@@ -21,7 +23,7 @@ const props: ToolRenderProps = {
 };
 
 test("the ordered web registry composes the public visualize descriptor without replacing fallback", () => {
-	expect(webExtensions).toEqual([visualize]);
+	expect(webExtensions).toEqual([visualize, askUserQuestion]);
 	expect(typeof MermaidView).toBe("function");
 	for (let i = 0; i < 2; i++) {
 		registerWebExtensions();
@@ -47,4 +49,17 @@ test("visualize summaries preserve titles and diagram/comparison fallbacks", () 
 	] as const) {
 		expect(getToolSummary(currentTranslator(), "visualize", { ...props, args })).toBe(summary);
 	}
+});
+
+test("the ask_user_question card registers bare and interactive from its extension — the one the plan page resolves by name", () => {
+	registerWebExtensions();
+	const registration = askUserQuestion.toolRenderers.ask_user_question;
+	expect(typeof registration.renderer).toBe("function");
+	expect(registration.options).toEqual({ chrome: "bare", interactive: true });
+	expect(getToolRenderer("ask_user_question")).toBe(registration.renderer);
+	expect(getToolChrome("ask_user_question")).toBe("bare");
+	expect(isInteractiveTool("ask_user_question")).toBe(true);
+	// Interactivity is opt-in per registration: the other extension tool and unknown names are not.
+	expect(isInteractiveTool("visualize")).toBe(false);
+	expect(isInteractiveTool("unregistered-extension-tool")).toBe(false);
 });

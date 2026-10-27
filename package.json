@@ -26,10 +26,10 @@
 			"@types/bun": "1.4.4",
 			"@types/react": "19.3.0",
 			"@types/react-dom": "19.3.0",
-			"astro": "7.2.8",
+			"astro": "7.3.3",
 			"diff": "9.0.0",
 			"lucide-react": "1.61.0",
-			"mermaid": "11.16.0",
+			"mermaid": "12.2.0",
 			"react": "19.3.1",
 			"react-dom": "19.3.1",
 			"react-markdown": "10.1.0",
@@ -43,6 +43,7 @@
 		}
 	},
 	"overrides": {
+		"dompurify": "3.4.17",
 		"react": "catalog:",
 		"react-dom": "catalog:"
 	},
@@ -110,6 +111,7 @@
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@thinkrail/artifact-tests": "workspace:*",
 		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/pi-ask-user-question": "workspace:*",
 		"@thinkrail/server": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
 		"@playwright/test": "1.61.0",

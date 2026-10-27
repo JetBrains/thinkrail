@@ -1,14 +1,21 @@
-import type {
-	BackgroundCommandCompletionDetails,
-	DelegationRunDetails,
+import {
+	type BackgroundCommandCompletionDetails,
+	completionDelivery,
+	type SubagentCompletionDetails,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { useChatActions } from "./ChatActions";
 import { useFold } from "./foldState";
 import { Markdown } from "./Markdown";
 import { RunModelLabel } from "./ModelEffortLabel";
-import { ResultRow } from "./resources";
+import { type ResultReceipt, ResultRow } from "./resources";
 import { completionReport, reportTeaser, usageCounters } from "./tools/subagent/runDetails";
+
+function receiptOf(details: { delivery?: unknown }): ResultReceipt | undefined {
+	const delivery = completionDelivery(details);
+	if (delivery === undefined) return undefined;
+	return delivery === "appended" ? "awaitingReply" : "received";
+}
 
 export function BackgroundCommandResult({
 	id,
@@ -19,7 +26,11 @@ export function BackgroundCommandResult({
 }) {
 	const t = useT();
 	const actions = useChatActions();
-	const [expanded, toggle, toggleRef] = useFold(`${id}:result`, false);
+	const [expanded, fold, toggleRef] = useFold(`${id}:result`, false);
+	const toggle: typeof fold = (event) => {
+		if (!expanded) actions?.markResultSeen?.({ kind: "command", id: details.id });
+		fold(event);
+	};
 	return (
 		<div
 			data-testid="background-command-completion"
@@ -30,6 +41,7 @@ export function BackgroundCommandResult({
 		>
 			<ResultRow
 				source={{ kind: "command", details }}
+				receipt={receiptOf(details)}
 				expanded={expanded}
 				onToggle={toggle}
 				toggleRef={toggleRef}
@@ -69,12 +81,17 @@ export function SubagentResult({
 	text,
 }: {
 	id: string;
-	details: DelegationRunDetails;
+	details: SubagentCompletionDetails;
 	text: string;
 }) {
 	const t = useT();
 	const actions = useChatActions();
-	const [expanded, toggle, toggleRef] = useFold(`${id}:result`, false);
+	const [expanded, fold, toggleRef] = useFold(`${id}:result`, false);
+	const toggle: typeof fold = (event) => {
+		if (!expanded)
+			actions?.markResultSeen?.({ kind: "subagent", childSessionId: details.childSessionId });
+		fold(event);
+	};
 	const report = completionReport(text);
 	return (
 		<div
@@ -86,6 +103,7 @@ export function SubagentResult({
 		>
 			<ResultRow
 				source={{ kind: "subagent", details }}
+				receipt={receiptOf(details)}
 				expanded={expanded}
 				onToggle={report ? toggle : undefined}
 				toggleRef={toggleRef}

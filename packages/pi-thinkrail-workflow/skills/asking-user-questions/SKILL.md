@@ -96,6 +96,11 @@ through the tool's automatic free-text row — do not author an edit option. Rea
   dependents from that assumption — don't re-ask it.
 - A whole round skipped means the user wants to stop being interviewed: ask no further rounds and
   proceed on recorded assumptions for everything still open.
+- If `ask_user_question` is not among your tools (switched off in the host, or never installed), ask
+  the round as a plain chat message instead: the same frontier, each question with its numbered
+  options and the recommended one first with its reason. Then end the turn and wait for the reply;
+  never trade the missing tool for a guess. Read the reply as the round's result, and a question it
+  leaves unanswered counts as declined.
 - If the host reports no interactive UI (`ask_user_question` returns "not available"), state your
   assumptions the same way instead of blocking.
 - "I don't know / help me understand" is a mis-framing signal, not a missing-knowledge one: re-explain

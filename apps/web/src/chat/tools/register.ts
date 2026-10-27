@@ -1,7 +1,6 @@
 import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "@/lib";
 import { registerToolRenderer } from "../toolRegistry";
-import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
 import { ReadCard } from "./ReadCard";
@@ -45,5 +44,3 @@ registerToolRenderer("request_review", RequestReviewCard, {
 	prominence: "primary",
 	defaultExpanded: true,
 });
-
-registerToolRenderer("ask_user_question", AskUserQuestionCard, { chrome: "bare" });

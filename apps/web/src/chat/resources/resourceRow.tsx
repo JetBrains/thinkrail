@@ -2,6 +2,7 @@ import {
 	RiCheckboxBlankCircleFill,
 	RiCheckboxCircleFill,
 	RiCloseCircleFill,
+	RiCloseLine,
 	RiIndeterminateCircleLine,
 	RiLoader4Line,
 	RiRobot2Line,
@@ -27,6 +28,16 @@ export type Resource =
 	| { kind: "subagent"; summary: SubagentResourceSummary };
 
 export type ResourceState = "working" | "queued" | "stopping" | "done" | "failed" | "stopped";
+
+export type ResourceTarget =
+	| { kind: "command"; id: string }
+	| { kind: "subagent"; childSessionId: string };
+
+export function resourceTarget(resource: Resource): ResourceTarget {
+	return resource.kind === "command"
+		? { kind: "command", id: resource.summary.id }
+		: { kind: "subagent", childSessionId: resource.summary.childSessionId };
+}
 
 export function resourceId(resource: Resource): string {
 	return resource.kind === "command" ? resource.summary.id : resource.summary.childSessionId;
@@ -302,8 +313,10 @@ export interface ResourceRowProps {
 	 * `listitem`: a dock row whose name and activity are one Inspect button.
 	 */
 	role?: "option" | "listitem";
+	fresh?: boolean;
 	onSelect: () => void;
 	onStop: () => void;
+	onDismiss?: (() => void) | undefined;
 }
 
 const ACCESSIBLE_ACTIVITY_LIMIT = 80;
@@ -324,8 +337,10 @@ export function ResourceRow({
 	stopAllPending = false,
 	selected = false,
 	role = "listitem",
+	fresh = false,
 	onSelect,
 	onStop,
+	onDismiss,
 }: ResourceRowProps) {
 	const t = useT();
 	const state = resourceState(resource);
@@ -374,6 +389,14 @@ export function ResourceRow({
 				>
 					<RiStopFill className="size-14" />
 				</RowActionButton>
+			) : onDismiss ? (
+				<RowActionButton
+					label={t("resources.action.dismiss")}
+					testId="resource-dismiss"
+					onClick={onDismiss}
+				>
+					<RiCloseLine className="size-14" />
+				</RowActionButton>
 			) : null}
 		</span>
 	);
@@ -387,6 +410,7 @@ export function ResourceRow({
 		"data-resource-id": id,
 		"data-status": resource.summary.status,
 		"data-state": state,
+		"data-fresh": fresh || undefined,
 	};
 	const rowClass =
 		"group grid min-h-32 min-w-0 items-center gap-8 rounded-sm px-8 py-4 hover:bg-control-bg-hovered";
@@ -431,7 +455,10 @@ export function ResourceRow({
 		);
 	}
 	return (
-		<li {...dataAttributes} className={cn(rowClass, "grid-cols-[auto_minmax(0,1fr)_auto]")}>
+		<li
+			{...dataAttributes}
+			className={cn(rowClass, "grid-cols-[auto_minmax(0,1fr)_auto]", fresh && "bg-primary-subtle")}
+		>
 			<KindGlyph kind={resource.kind} state={state} />
 			<span className="flex min-w-0 flex-col">
 				<button

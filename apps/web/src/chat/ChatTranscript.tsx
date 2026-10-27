@@ -1,5 +1,5 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
-import type { AskUserQuestionResult, GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
+import type { GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
@@ -27,13 +27,17 @@ import {
 	toast,
 	useAppStore,
 } from "@/store";
-import { getTransport } from "@/transport";
+import { getTransport, respondToTool } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
-import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
 import { FoldGeometryProvider } from "./foldState";
+import {
+	awaitingToolCallIdOf,
+	deriveInteractionStates,
+	InteractionStatesContext,
+} from "./interactionState";
 import { deriveMessageActions } from "./messageActions";
 import { turnAnchorText } from "./recentPrompts";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
@@ -171,6 +175,7 @@ const ChatTranscript = forwardRef<
 		focusComposer: () => void;
 		openSubagentTranscript: (childSessionId: string | null) => void;
 		resultOpener: ChatActions["resultOpener"];
+		markResultSeen?: ChatActions["markResultSeen"];
 		onTryAgain: () => void;
 		historyOpen: boolean;
 		inspectorOpen: boolean;
@@ -190,6 +195,7 @@ const ChatTranscript = forwardRef<
 		focusComposer,
 		openSubagentTranscript,
 		resultOpener,
+		markResultSeen,
 		onTryAgain,
 		historyOpen,
 		inspectorOpen,
@@ -215,7 +221,7 @@ const ChatTranscript = forwardRef<
 				isStreaming: rt.isStreaming,
 				settlementTick: rt.settlementTick,
 				currentAssistantId: rt.currentAssistantId,
-				askAnswers: rt.askAnswers,
+				toolResponses: rt.toolResponses,
 				hostState: rt.hostState,
 				turnIdByMessageIndex: rt.turnIdByMessageIndex,
 				syncedConnectionGeneration: rt.syncedConnectionGeneration,
@@ -407,7 +413,7 @@ const ChatTranscript = forwardRef<
 			streamEdgeRef,
 		],
 	);
-	const [askFocusScope] = useState<object>(() => ({}));
+	const [interactionFocusScope] = useState<object>(() => ({}));
 
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const activeChatLocationReveal = useRef<typeof chatLocationRequest>(null);
@@ -557,25 +563,25 @@ const ChatTranscript = forwardRef<
 	const promptOnToolCard =
 		anchorToolCallId !== undefined && rowsHaveToolCall(chronologicalRows, anchorToolCallId);
 
-	const askStates = useMemo(
-		() => deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults),
-		[runtime.turns, runtime.askAnswers, runtime.toolResults],
+	const interactionStates = useMemo(
+		() => deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults),
+		[runtime.turns, runtime.toolResponses, runtime.toolResults],
 	);
-	const askContext = useMemo(
-		() => ({ states: askStates, focusScope: askFocusScope }),
-		[askStates, askFocusScope],
+	const awaitingToolCallId = awaitingToolCallIdOf(runtime.hostState);
+	const interactionContext = useMemo(
+		() => ({ states: interactionStates, focusScope: interactionFocusScope, awaitingToolCallId }),
+		[interactionStates, interactionFocusScope, awaitingToolCallId],
 	);
 
 	const chatActions = useMemo<ChatActions>(
 		() => ({
-			answerQuestion: (toolCallId: string, result: AskUserQuestionResult) =>
-				getTransport()
-					.request("session.answerQuestion", { sessionId, toolCallId, result })
-					.then(() => undefined),
 			cancelAutomaticReveal,
 			focusComposer,
 			openSubagentTranscript,
+			respondToTool: (toolCallId: string, response: unknown) =>
+				respondToTool(sessionId, toolCallId, response),
 			resultOpener,
+			markResultSeen,
 			revealChatElement: revealElement,
 			readMcpOutput,
 			openMcpSettings,
@@ -586,6 +592,7 @@ const ChatTranscript = forwardRef<
 			cancelAutomaticReveal,
 			findModel,
 			focusComposer,
+			markResultSeen,
 			openMcpSettings,
 			openProviderSettings,
 			openSubagentTranscript,
@@ -600,7 +607,7 @@ const ChatTranscript = forwardRef<
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
 			<PendingExtUiContext.Provider value={pendingExtUi}>
-				<AskStatesContext.Provider value={askContext}>
+				<InteractionStatesContext.Provider value={interactionContext}>
 					<div
 						data-testid="chat-scroll"
 						data-follow-state={followState}
@@ -745,7 +752,7 @@ const ChatTranscript = forwardRef<
 						) : null}
 						{resourcesOverlay}
 					</div>
-				</AskStatesContext.Provider>
+				</InteractionStatesContext.Provider>
 			</PendingExtUiContext.Provider>
 		</ChatActionsContext.Provider>
 	);

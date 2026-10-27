@@ -242,8 +242,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   rejection preserves placement. There is no workspace-global `activeTerminal`: workspace attention decides
   which bodies mount, while host exclusive attach/takeover decides which client controls a PTY. The
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
-  one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
-  by tool call id — indexed by the reducer and hydration, never turned into bubbles; the sibling
+  one chat's `turns` (pi-canonical) / `toolResults` / `toolResponses` (the interactive tools' late
+  responses — `tool-response` custom messages, and `ask-user-answers` in older transcripts — keyed by tool
+  call id with an opaque value, indexed by the reducer and hydration, never turned into bubbles; the sibling
   `subagent-completion` custom message is instead **appended as a `subagentCompletion` turn** — a
   detached subagent's terminal report is transcript-positioned, rendered as `chat`'s background result
   row; it, `backgroundCommandCompletion` and `reviewFix` turns keep the message `timestamp` so the chat can
@@ -384,8 +385,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   connected generation and advances the revision so two reads cannot regress one another. When the latest
   live compaction matches the durable record, its id + estimated-after count survive, and `resuming` survives
   only while the returned summary is still streaming. The
-  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. Every `message_end`, `compaction_end`, and
-  `agent_settled` also advances `statsRefreshTick`, even when that event changes no rendered turn, so a
+  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. Every `message_end`, `compaction_end`,
+  `agent_settled`, and `entry_appended` of a spend- or context-bearing entry (`usage`, `compaction`,
+  `branch_summary`, `context_edit`) also advances `statsRefreshTick`, even when that event changes no rendered turn, so a
   finalized Pi usage/context boundary cannot be lost behind presentation filtering or a batched
   `isStreaming` false→false endpoint. **`handlePiEvents` folds an ordered batch in one atomic store write
   while incrementing each affected runtime's revision once per event, even for a UI-ignored event**, because
@@ -749,7 +751,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
   `selectChangesTabSection` (one Changes tab section by workspace, tab and path — the review-draft
-  persistence reads its scratch slots through it),
+  persistence reads its scratch slots through it), `selectChangesTabRendererIds` (path → selected renderer
+  id for a Changes tab's sections, read with `useShallow` so the review toolbar's capability gate ignores
+  draft and view-state writes),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
   placement + history membership used as a reconnect-reconciliation baseline), normalized session-state
   selectors/actions (exact session + workspace/project needs-input/working/unread-finished rollups, direct

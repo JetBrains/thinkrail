@@ -294,6 +294,61 @@ test("sessionless creation is paused and replay ignores replacement execution co
 	).toMatchObject({ ok: false, error: { code: "id-reused" } });
 });
 
+test("getDag retains effective model and thinking level through settlement and restoration", async () => {
+	const { owner, service, scope, delegation, signal } = fixture();
+	const reasoningModel = { provider: "dag-reasoning", id: "worker" };
+	const reasoning = createFauxCore({
+		provider: reasoningModel.provider,
+		api: "dag-reasoning",
+		tokensPerSecond: 100_000,
+	});
+	runtime.registerProvider(reasoningModel.provider, {
+		api: reasoning.api,
+		baseUrl: "http://faux.local",
+		apiKey: "synthetic",
+		streamSimple: reasoning.streamSimple,
+		models: [
+			{
+				id: reasoningModel.id,
+				name: "Reasoning worker",
+				reasoning: true,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 100_000,
+				maxTokens: 4096,
+			},
+		],
+	});
+	const graph = definition(["reasoning", "plain"]);
+	graph.defaults = { tools: [], model: reasoningModel, thinkingLevel: "high" };
+	const plain = graph.nodes[1];
+	if (!plain) throw new Error("Missing plain worker");
+	plain.session = { model };
+	reasoning.setResponses([result("REASONED")]);
+	faux.setResponses([result("PLAIN")]);
+	const dagId = await start(owner, graph);
+	const settled = await until(owner, dagId, (state) =>
+		state.nodes.every((node) => node.status === "completed"),
+	);
+	const expected = [
+		{ model: "dag-reasoning/worker", thinkingLevel: "high" },
+		{ model: "dag-faux/worker", thinkingLevel: "off" },
+	];
+	expect(settled.nodes.map((node) => node.outcome?.details)).toMatchObject(expected);
+	for (const node of settled.nodes) expect(node.outcome?.details).not.toHaveProperty("task");
+	await service.close();
+	const before = faux.state.callCount + reasoning.state.callCount;
+	const restored = createDagService({ storageRoot: join(root, "dags"), scope, delegation });
+	services.push(restored);
+	const reader = restored.bind({ caller: { kind: "controller", sessionId: "reader" }, signal });
+	const snapshot = value(await reader.getDag({ dagId }));
+	expect(snapshot.nodes.map((node) => node.outcome?.details)).toMatchObject(expected);
+	expect(snapshot.nodes.map((node) => node.outcome)).toEqual(
+		settled.nodes.map((node) => node.outcome),
+	);
+	expect(faux.state.callCount + reasoning.state.callCount).toBe(before);
+});
+
 test("human release authorizes one immutable fork base for independent workers after source deletion", async () => {
 	const { owner, service, signal } = fixture();
 	const human = service.bind({ caller: { kind: "human", operatorId: "operator" }, signal });

@@ -25,10 +25,14 @@ import { SettingsRow } from "./SettingsRow";
 const REPO_URL = "https://github.com/JetBrains/thinkrail";
 export const CONTRIBUTE_TRANSLATIONS_URL = `${REPO_URL}/blob/main/CONTRIBUTING.md#translations`;
 
-export function englishSourceUrl(appVersion: string | null): string {
+export function repoSourceUrl(appVersion: string | null, path: string): string {
 	const released =
 		appVersion && /^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(appVersion) && appVersion !== "0.0.0";
-	return `${REPO_URL}/blob/${released ? `v${appVersion}` : "main"}/packages/locales/en.json`;
+	return `${REPO_URL}/blob/${released ? `v${appVersion}` : "main"}/${path}`;
+}
+
+export function englishSourceUrl(appVersion: string | null): string {
+	return repoSourceUrl(appVersion, "packages/locales/en.json");
 }
 
 function InlineLink({ href, children }: { href: string; children?: ReactNode }) {

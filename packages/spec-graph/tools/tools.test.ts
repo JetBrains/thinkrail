@@ -5,11 +5,12 @@ import {
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	statSync,
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type {
 	AgentToolResult,
 	ExtensionAPI,
@@ -24,6 +25,157 @@ import {
 	SPEC_TYPES,
 } from "../core/index.ts";
 import { registerSpecTools } from "./index.ts";
+
+test("spec_grep pages by bytes without losing or repeating matches", async () => {
+	await withRoot(async (root) => {
+		const lines = Array.from({ length: 240 }, (_, i) => `needle ${i} ${"x".repeat(1000)}`);
+		writeFileSync(
+			join(root, "SPEC.md"),
+			`---\nid: large\ntype: module-design\n---\n${lines.join("\n")}`,
+		);
+		const found: string[] = [];
+		let offset = 0;
+		for (let page = 0; page < 20; page++) {
+			const result = await run("spec_grep", { pattern: "needle", offset }, root);
+			expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+			const details = result.details as { matches: { snippet: string }[]; nextOffset?: number };
+			found.push(...details.matches.map((match) => match.snippet));
+			if (details.nextOffset === undefined) break;
+			expect(details.nextOffset).toBeGreaterThan(offset);
+			expect(text(result)).toContain(`offset: ${details.nextOffset}`);
+			offset = details.nextOffset;
+		}
+		expect(found).toEqual(lines);
+	});
+});
+
+test("an oversized spec match is preserved privately without changing its source", async () => {
+	await withRoot(async (root) => {
+		const line = `needle ${"🧪".repeat(20000)} END`;
+		const source = `---\nid: large\ntype: module-design\n---\n${line}`;
+		writeFileSync(join(root, "SPEC.md"), source);
+		const result = await run("spec_grep", { pattern: "needle" }, root);
+		expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+		const details = result.details as { output?: { fullOutputPath?: string } };
+		const path = details.output?.fullOutputPath;
+		expect(path).toBeDefined();
+		if (!path) throw new Error("missing full output");
+		try {
+			expect(readFileSync(path, "utf8")).toContain(line);
+			expect(readFileSync(join(root, "SPEC.md"), "utf8")).toBe(source);
+			if (process.platform !== "win32") {
+				expect(statSync(path).mode & 0o777).toBe(0o600);
+				expect(statSync(dirname(path)).mode & 0o777).toBe(0o700);
+			}
+			expect(text(result)).toContain("byte ranges");
+		} finally {
+			rmSync(dirname(path), { recursive: true, force: true });
+		}
+	});
+});
+
+test("errors keep their model-facing failure status when the message is oversized", async () => {
+	await withRoot(async (root) => {
+		for (const size of [7, 60000]) {
+			const result = await run("spec_get", { id: "x".repeat(size) }, root);
+			const path = (result.details as { output?: { fullOutputPath?: string } }).output
+				?.fullOutputPath;
+			try {
+				expect(result.isError).toBe(true);
+				if (size === 7) expect(text(result)).toBe('Error: No spec with id "xxxxxxx".');
+				else expect(text(result).split("\n")[0]).toBe("Error:");
+				expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+			} finally {
+				if (path) rmSync(dirname(path), { recursive: true, force: true });
+			}
+		}
+	});
+});
+
+test("unavailable temporary storage preserves mutation outcomes and oversized errors", async () => {
+	await withRoot(async (root) => {
+		const keys = ["TMPDIR", "TMP", "TEMP"] as const;
+		const original = keys.map((key) => process.env[key]);
+		try {
+			const notDirectory = join(root, "not-a-directory");
+			writeFileSync(notDirectory, "fixture");
+			for (const key of keys) process.env[key] = notDirectory;
+			const id = "x".repeat(60000);
+			const created = await run(
+				"spec_create",
+				{ path: "SPEC.md", id, type: "module-design", title: "Fixture" },
+				root,
+			);
+			expect(created.isError).not.toBe(true);
+			expect((created.details as { output: { captureFailed: boolean } }).output.captureFailed).toBe(
+				true,
+			);
+			expect(readFileSync(join(root, "SPEC.md"), "utf8")).toContain(`id: ${id}`);
+			expect(text(created)).toContain("Full output unavailable");
+			expect(text(created)).toContain("do not repeat a mutation");
+			const failed = await run("spec_get", { id: "missing".repeat(10000) }, root);
+			expect(failed.isError).toBe(true);
+			expect(text(failed)).toStartWith("Error:");
+			expect(text(failed)).toContain("Full output unavailable");
+			expect(Buffer.byteLength(text(failed))).toBeLessThanOrEqual(50 * 1024);
+		} finally {
+			for (const [index, key] of keys.entries()) {
+				const value = original[index];
+				if (value === undefined) delete process.env[key];
+				else process.env[key] = value;
+			}
+		}
+	});
+});
+
+test("grep count limits are clamped and continuation keeps filters", async () => {
+	await withRoot(async (root) => {
+		writeFileSync(
+			join(root, "SPEC.md"),
+			`---\nid: many\ntype: module-design\ntags: [target]\n---\n${"needle\n".repeat(250)}`,
+		);
+		writeFileSync(
+			join(root, "other.md"),
+			"---\nid: other\ntype: module-design\n---\nneedle excluded",
+		);
+		const first = await run("spec_grep", { pattern: "needle", tag: "target", limit: 100000 }, root);
+		expect((first.details as { matches: unknown[] }).matches).toHaveLength(200);
+		expect((first.details as { nextOffset?: number }).nextOffset).toBe(200);
+		const last = await run("spec_grep", { pattern: "needle", tag: "target", offset: 200 }, root);
+		expect((last.details as { matches: unknown[] }).matches).toHaveLength(50);
+		expect((last.details as { nextOffset?: number }).nextOffset).toBeUndefined();
+		const invalid = await run("spec_grep", { pattern: "needle", offset: -1 }, root);
+		expect(isError(invalid)).toBe(true);
+		expect(text(invalid)).toBe("Error: Use a nonnegative integer offset.");
+	});
+});
+
+test("large graph, node and validation text also remains bounded and file-backed", async () => {
+	await withRoot(async (root) => {
+		writeFileSync(
+			join(root, "SPEC.md"),
+			`---\nid: root\ntype: module-design\ntitle: ${"x".repeat(60000)}\nreferences: [${Array.from({ length: 2200 }, (_, i) => `missing-${i}`).join(", ")}]\n---\n`,
+		);
+		for (const [name, params] of [
+			["spec_get", { id: "root" }],
+			["spec_graph", { root: "root", direction: "subtree" }],
+			["spec_validate", {}],
+		] as const) {
+			const result = await run(name, params, root);
+			const path = (result.details as { output?: { fullOutputPath?: string } }).output
+				?.fullOutputPath;
+			try {
+				expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+				expect(text(result).split("\n").length).toBeLessThanOrEqual(2000);
+				expect(path).toBeDefined();
+				if (!path) throw new Error("missing full output");
+				expect(readFileSync(path, "utf8").length).toBeGreaterThan(50000);
+			} finally {
+				if (path) rmSync(dirname(path), { recursive: true, force: true });
+			}
+		}
+	});
+});
 
 function foldsCase(): boolean {
 	const probe = mkdtempSync(join(tmpdir(), "spec-probe-"));

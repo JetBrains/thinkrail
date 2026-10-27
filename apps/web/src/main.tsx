@@ -6,13 +6,14 @@ import { createRoot } from "react-dom/client";
 import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { initModelVisibilityPersistence } from "./chat/modelVisibility";
 import { ErrorBoundary, setErrorBoundaryReporter } from "./components/ErrorBoundary";
+import { registerWebExtensions } from "./extensions";
 import { useLocaleSync } from "./i18n";
 import { initNavigation } from "./navigation";
 import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { AppResourceHost } from "./shell/AppResourceHost";
 import { Shell } from "./shell/Shell";
-import { applyThemePreference, initializeBundledThemes, readThemeHint } from "./themes";
+import { applyThemePreference, initializeThemes, readThemeHint } from "./themes";
 import {
 	clientErrorReport,
 	initTransport,
@@ -20,7 +21,7 @@ import {
 	reportClientError,
 } from "./transport";
 
-initializeBundledThemes();
+initializeThemes();
 applyThemePreference(readThemeHint());
 initTransport();
 installClientErrorReporting();
@@ -32,6 +33,7 @@ initModelVisibilityPersistence();
 initProjectExpansionPersistence();
 initFilesTreePersistence();
 initNavigation();
+registerWebExtensions();
 
 function App() {
 	useLocaleSync();

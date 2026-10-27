@@ -16,7 +16,9 @@ function state(overrides: Partial<SessionState> = {}): SessionState {
 	};
 }
 
-const lit = state({ needsInput: { interactionId: "i", kind: "question" } });
+const lit = state({
+	needsInput: { interactionId: "tool:i", kind: "tool-response", toolCallId: "i" },
+});
 
 function candidate(sessionId: string, s: SessionState): AttentionCandidate {
 	return { sessionId, workspaceId: "w1", worktreeName: "branch", state: s };

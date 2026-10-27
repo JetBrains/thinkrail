@@ -1,5 +1,4 @@
 import {
-	type AskUserQuestionResult,
 	type GitFileChange,
 	isSessionWorking,
 	type ReviewComment,
@@ -10,7 +9,8 @@ import {
 	type TodoPlan,
 } from "@thinkrail/contracts";
 import type { ToolStatus } from "@thinkrail/extension-api/web";
-import { type AskState, deriveAskStates } from "./askState";
+import { deriveInteractionStates, type InteractionState } from "./interactionState";
+import { isInteractiveTool } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export type ItemChangeSet =
@@ -224,9 +224,12 @@ export function planSections(plan: TodoPlan): PlanSections {
 
 export type PlanGlance = "working" | "waiting_question" | "waiting";
 
-export function planGlance(isStreaming: boolean, askStates: Record<string, AskState>): PlanGlance {
-	const awaiting = Object.values(askStates).some(
-		(state) => !state.answer && !state.superseded && !state.terminal,
+export function planGlance(
+	isStreaming: boolean,
+	interactions: Record<string, InteractionState>,
+): PlanGlance {
+	const awaiting = Object.values(interactions).some(
+		(state) => state.response === undefined && !state.superseded && !state.terminal,
 	);
 	if (awaiting) return "waiting_question";
 	return isStreaming ? "working" : "waiting";
@@ -244,7 +247,7 @@ export function hostSessionGlance(
 interface GlanceInputs {
 	isStreaming: boolean;
 	turns: ChatTurn[];
-	askAnswers: Record<string, AskUserQuestionResult>;
+	toolResponses: Record<string, unknown>;
 	toolResults: Record<string, ToolResultState>;
 	hostState?: SessionState | null;
 }
@@ -257,19 +260,22 @@ const glanceByTurns = new WeakMap<
 function transcriptGlance({
 	isStreaming,
 	turns,
-	askAnswers,
+	toolResponses,
 	toolResults,
 }: GlanceInputs): PlanGlance {
 	const cached = glanceByTurns.get(turns);
 	if (
 		cached?.isStreaming === isStreaming &&
-		cached.askAnswers === askAnswers &&
+		cached.toolResponses === toolResponses &&
 		cached.toolResults === toolResults
 	) {
 		return cached.glance;
 	}
-	const glance = planGlance(isStreaming, deriveAskStates(turns, askAnswers, toolResults));
-	glanceByTurns.set(turns, { isStreaming, askAnswers, toolResults, glance });
+	const glance = planGlance(
+		isStreaming,
+		deriveInteractionStates(turns, toolResponses, toolResults),
+	);
+	glanceByTurns.set(turns, { isStreaming, toolResponses, toolResults, glance });
 	return glance;
 }
 
@@ -302,8 +308,9 @@ export function lastAgentText(rt: { turns: ChatTurn[] }): string | undefined {
 	return undefined;
 }
 
-export interface PendingAsk {
+export interface PendingInteraction {
 	toolCallId: string;
+	toolName: string;
 	args: Record<string, unknown>;
 	result: unknown;
 	status: ToolStatus;
@@ -311,26 +318,27 @@ export interface PendingAsk {
 }
 
 /**
- * The session's currently-awaiting `ask_user_question` — the one the user still has to answer (no answer,
- * not superseded, not terminal) — reconstructed as the tool render props the shared `AskUserQuestionCard`
+ * The session's currently-awaiting interactive tool call — the one the user still has to respond to (no
+ * response, not superseded, not terminal) — reconstructed as the tool render props its registered renderer
  * needs, so the plan page can host the SAME card. Undefined when nothing is awaiting. Latest wins.
  */
-export function pendingAsk(rt: {
+export function pendingInteraction(rt: {
 	turns: ChatTurn[];
-	askAnswers: Record<string, AskUserQuestionResult>;
+	toolResponses: Record<string, unknown>;
 	toolResults: Record<string, ToolResultState>;
-}): PendingAsk | undefined {
-	const states = deriveAskStates(rt.turns, rt.askAnswers, rt.toolResults);
-	let found: PendingAsk | undefined;
+}): PendingInteraction | undefined {
+	const states = deriveInteractionStates(rt.turns, rt.toolResponses, rt.toolResults);
+	let found: PendingInteraction | undefined;
 	for (const turn of rt.turns) {
 		if (turn.kind !== "assistant") continue;
 		for (const block of turn.message.content) {
-			if (block.type !== "toolCall" || block.name !== "ask_user_question") continue;
+			if (block.type !== "toolCall" || !isInteractiveTool(block.name)) continue;
 			const state = states[block.id];
-			if (!state || state.answer || state.superseded || state.terminal) continue;
+			if (!state || state.response !== undefined || state.superseded || state.terminal) continue;
 			const tool = rt.toolResults[block.id];
 			found = {
 				toolCallId: block.id,
+				toolName: block.name,
 				args: (block.arguments ?? {}) as Record<string, unknown>,
 				result: tool?.raw,
 				status: tool?.status ?? "running",

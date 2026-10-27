@@ -30,3 +30,20 @@ test("notices translate at render; a provider message stays verbatim", () => {
 	expect(errorTurnText(t, { text: "429 rate limited", failure: "error" })).toBe("429 rate limited");
 	expect(errorTurnText(t, { text: "Couldn't send the message" })).toBe("Couldn't send the message");
 });
+
+test("a provider's model-unavailable error leads with a pick-another-model notice and keeps the provider text", () => {
+	const t = currentTranslator();
+	const errors = [
+		'OpenAI API error (400): {"type":"invalid_request_error","code":"model_not_found","message":"The \'gpt-4\' model is not supported when using Codex with a ChatGPT account."}',
+		'404 {"type":"error","error":{"type":"not_found_error","message":"model: claude-x"}}',
+		"404 The model `gpt-x` does not exist or you do not have access to it.",
+		"404 No endpoints found for apodex/apodex-1.1-mini:free.",
+		"You don't have access to the model with the specified model ID.",
+	];
+	for (const text of errors)
+		expect(errorTurnText(t, { text, failure: "error" })).toBe(
+			`${t("chat.failure.modelUnavailable")}\n\n${text}`,
+		);
+	expect(errorTurnText(t, { text: "429 rate limited", failure: "error" })).toBe("429 rate limited");
+	expect(errorTurnText(t, { text: "model_not_found" })).toBe("model_not_found");
+});

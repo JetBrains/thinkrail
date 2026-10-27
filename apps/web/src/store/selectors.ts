@@ -898,6 +898,20 @@ export function selectChangesTabSection(
 	return tab?.kind === "changes" ? tab.sections[path] : undefined;
 }
 
+export function selectChangesTabRendererIds(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	tabId: string,
+): Record<string, string> {
+	const tab = state.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === tabId);
+	const ids: Record<string, string> = {};
+	if (tab?.kind !== "changes") return ids;
+	for (const [path, section] of Object.entries(tab.sections)) {
+		if (section.rendererId) ids[path] = section.rendererId;
+	}
+	return ids;
+}
+
 export function matchesWorktreePath(reported: string, rel: string): boolean {
 	const path = normalizePath(reported);
 	if (path === rel) return true;

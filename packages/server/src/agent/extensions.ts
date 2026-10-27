@@ -19,13 +19,14 @@ import {
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import specGraphExtension from "pi-spec-graph";
 import {
+	type ExtensionSessionServices,
 	omitDisabledRegistryExtensions,
+	preferRegistryTools,
 	registryInlineExtensions,
 	resolveExtensionSkillRoots,
 	serverExtensions,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
-import { askUserQuestionExtension } from "./askUserQuestion";
 import { oversizedImageGuard } from "./imageGuard";
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
@@ -228,13 +229,13 @@ export async function buildResourceLoader(
 	getAdmission: () => SkillAdmissionContext,
 	excludedExtensionPaths: readonly string[] = [],
 	extraFactories: InlineExtension[] = [],
+	session?: ExtensionSessionServices,
 ): Promise<ResourceLoader> {
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
 	const sharedFactories: InlineExtension[] = [
-		...registryInlineExtensions("extensions", isDisabledAtReload),
+		...registryInlineExtensions("extensions", isDisabledAtReload, serverExtensions, session),
 		headlessSearchPolicy,
-		askUserQuestionExtension(),
 		reviewToolExtension,
 		requestReviewExtension,
 		setTitleExtension,
@@ -251,7 +252,7 @@ export async function buildResourceLoader(
 		...skillInputs,
 		extensionFactories,
 		extensionsOverride: (result: LoadExtensionsResult) =>
-			omitDisabledRegistryExtensions(result, isDisabledAtReload),
+			preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload)),
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
 	const applyCurrentPolicy = (): void => {

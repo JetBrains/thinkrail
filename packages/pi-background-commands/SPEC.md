@@ -20,12 +20,12 @@ restart/rerun, daemon discovery, or arbitrary-process management.
   snapshots, bounded output, cancellation and completion-delivery bookkeeping; the
   `background_command` Pi tool and a default vanilla-Pi extension entry.
 - **Public surface:** `BACKGROUND_COMMAND_COMPLETION_MESSAGE`, `BackgroundCommandInput`,
-  `BackgroundCommandsExtensionOptions`, `createBackgroundCommandsExtension`,
+  `BackgroundCommandsExtensionOptions`, `CompletionDelivery`, `createBackgroundCommandsExtension`,
   `createBackgroundCommands`, `default`, `BackgroundCommandCompletion`,
-  `BackgroundCommandCompletionBinding`, `BackgroundCommandContext`, `BackgroundCommandHandle`,
-  `BackgroundCommandOutput`, `BackgroundCommandSnapshot`, `BackgroundCommandStart`,
-  `BackgroundCommandStatus`, `BackgroundCommands`, `BackgroundCommandsBinding`,
-  `BackgroundCommandsOptions`.
+  `BackgroundCommandCompletionBinding`, `BackgroundCommandContext`, `BackgroundCommandFlush`,
+  `BackgroundCommandHandle`, `BackgroundCommandOutput`, `BackgroundCommandSnapshot`,
+  `BackgroundCommandStart`, `BackgroundCommandStatus`, `BackgroundCommands`,
+  `BackgroundCommandsBinding`, `BackgroundCommandsOptions`.
 - **Allowed deps:** public package-root Pi SDK APIs and `typebox` as peers; Node standard libraries.
   Execution delegates to Pi's exported `createLocalBashOperations`, not a copied spawn runner.
 - **Forbidden:** ThinkRail packages, web/TUI widget ownership, Pi private imports, delegation
@@ -36,7 +36,8 @@ restart/rerun, daemon discovery, or arbitrary-process management.
 
 The root `index.ts` is the only import surface; `src/` is private implementation. A service exposes
 start/list/find/change-subscription/dispose, plus completion binding and replay; a command handle
-exposes its snapshot, output and idempotent stop. Controllers and subprocess details stay private.
+exposes its snapshot, output, idempotent stop and `claimCompletion()`. Controllers and subprocess
+details stay private.
 
 The embedder binds one service to one immutable session identity and supplies current session
 context plus effective shell settings. The standalone extension supplies the equivalent binding from
@@ -119,26 +120,43 @@ an owner outside that extension lifetime.
 
 `bindCompletion({ deliver, canDeliverCompletion? })` replaces the current synchronous delivery
 binding, immediately replays pending retained outcomes, and returns an identity-safe unbind function.
-`flushCompletions()` retries pending outcomes against the current binding without polling. Both the
-service binding's and the delivery binding's optional predicates must permit delivery. A host closes
+`flushCompletions(flush?)` retries pending outcomes against the current binding without polling; the
+optional `{ atTurnEnd }` flag passes through to the binding. A flush claims every pending outcome and
+hands them to the binding as one batch — `deliver(batch, flush)` returns the completions it actually
+handed to Pi, and every other one becomes pending again — so the binding owns order and wake choice
+for the whole batch, decided once. Both the service binding's and the delivery binding's optional
+predicates must permit delivery. The records are the only hold: a record stays pending until it is
+actually sent, and `claimCompletion()` (the tool's `output` read of a finished command, never a UI
+read) clears it so a result the agent already read is never pushed. A host closes
 its predicate during a provisional deletion tombstone, then calls `flushCompletions()` after rollback;
 confirmed deletion calls `dispose()`. A resource-reload gap has no delivery binding and is replayed
-on the next bind. Claims are made before synchronous send to prevent reentrant duplication; a thrown
-send keeps the record pending. A successful send means acceptance by Pi's public fire-and-forget API,
+on the next bind. Claims are made before synchronous send to prevent reentrant duplication; an
+unaccepted or thrown send keeps the record pending. A successful send means acceptance by Pi's public fire-and-forget API,
 not confirmation of an eventual provider response. Eviction also removes a pending claim: there is no
 unbounded second notification queue.
 
 ## Completion and controls
 
-Natural completion sends one displayed Pi custom message with a bounded result excerpt and schedules
-a follow-up turn, matching the existing detached-subagent convention. The agent can inspect more
-retained output explicitly rather than poll to wait for completion. The exported
-`BACKGROUND_COMMAND_COMPLETION_MESSAGE` is `background-command-completion`; message details omit the
-full command and retain only a 40-line/4-KiB diagnostic output excerpt plus bounded snapshot metadata.
-Messages are displayed with `deliverAs: "followUp"`, with `triggerTurn: true` for natural outcomes and
-`false` for stopped commands. An explicit user/tool stop records the cancellation without starting
-an idle parent; it does not abort a parent already running. Actual
-session shutdown suppresses delivery into the dying session.
+A finished command reaches the agent once, at its next step, under the same delivery rule as
+detached subagents ([[module-pi-subagents]] Result delivery): the extension lets the service release
+pending records only at an eligible `turn_end`, at `agent_before_settle`, to an idle parent as one
+batch that starts at most one run, or through an embedder's `flushCompletions({ atTurnEnd: true })`
+from its `turn_end` listener; it schedules an idle flush after `agent_settled` and after compaction
+or tree events. Each message is one displayed Pi custom message with a bounded result excerpt and a
+`delivery` marker (`wake` | `run` | `appended`). The exported `BACKGROUND_COMMAND_COMPLETION_MESSAGE`
+is `background-command-completion`; message details omit the full command and retain only a
+40-line/4-KiB diagnostic output excerpt plus bounded snapshot metadata. The tool guidance tells the
+agent the report arrives on its own, so it ends its turn to wait instead of polling; `output` of a
+finished command starts with its status, exit code and error, because a read that claims the
+completion must not hide what the push would have said.
+
+Stopped commands never wake the parent; neither do commands that had finished when the parent's run
+was aborted — remembered per service until that service's next user prompt, so one factory serving
+several sessions cannot clear another session's Stop. In an idle batch the turn is triggered by the
+last waking completion, sent last: if that send fails, the completion stays pending and still carries
+the wake on retry. An explicit user/tool stop
+records the cancellation without starting an idle parent; it does not abort a parent already running.
+Actual session shutdown suppresses delivery into the dying session.
 
 The tool and the host UI call the same handles. A service change subscription reports catalog or
 lifecycle changes, not every byte of output; output is read separately while inspected. Native
@@ -148,7 +166,8 @@ lifecycle changes, not every byte of output; output is read separately while ins
 
 Exercise admission and eviction, bounded multibyte output, natural/nonzero/null exits, launch errors,
 per-job stop isolation, parent-abort independence, duplicate stop, notification/reload races and
-bounded disposal. Integration checks use real local commands and Pi's public executor; provider-driven
+bounded disposal, plus delivery: next-step delivery within one run, one run per idle batch, a read
+finished output never pushed again while a host read never claims, and no wake after a parent stop. Integration checks use real local commands and Pi's public executor; provider-driven
 coverage verifies tool use and completion through a real Pi session. Windows CI runs the package
 suite natively, including the descendant marker used by shutdown/process-tree coverage; visible-console
 behavior still needs a native visual probe rather than a Unix-only claim. The package suite uses Bun

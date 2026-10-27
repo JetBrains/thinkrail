@@ -40,7 +40,10 @@ function idle(): SessionState {
 		queuedCount: 0,
 	};
 }
-const question: SessionState = { ...idle(), needsInput: { interactionId: "i", kind: "question" } };
+const question: SessionState = {
+	...idle(),
+	needsInput: { interactionId: "tool:i", kind: "tool-response", toolCallId: "i" },
+};
 const finished: SessionState = {
 	...idle(),
 	completion: { completionId: "c", outcome: "succeeded" },

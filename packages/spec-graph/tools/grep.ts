@@ -1,6 +1,6 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { DEFAULT_MAX_BYTES, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { DEFAULT_GREP_LIMIT, type GrepResult, grepSpecs } from "../core/index.ts";
+import { DEFAULT_GREP_LIMIT, formatGrepMatch, type GrepResult, grepSpecs } from "../core/index.ts";
 import { errorResult, getIndex, textResult } from "./shared.ts";
 
 const parameters = Type.Object({
@@ -20,7 +20,17 @@ const parameters = Type.Object({
 		Type.String({ description: "Only search specs that depend-on this id." }),
 	),
 	limit: Type.Optional(
-		Type.Number({ description: `Max matches to return (default: ${DEFAULT_GREP_LIMIT}).` }),
+		Type.Integer({
+			minimum: 1,
+			description: `Matches per page (default/max: ${DEFAULT_GREP_LIMIT}; the byte limit may return fewer).`,
+		}),
+	),
+	offset: Type.Optional(
+		Type.Integer({
+			minimum: 0,
+			description:
+				"Zero-based match offset (default: 0). Continue with the offset given in the result and the same filters; restart after source changes.",
+		}),
 	),
 });
 
@@ -29,11 +39,14 @@ export function registerSpecGrep(pi: ExtensionAPI): void {
 		name: "spec_grep",
 		label: "Spec Grep",
 		description:
-			"Search the project's spec-graph: regex or substring match within spec files (files whose frontmatter carries `id` + `type`), optionally narrowed by metadata (type / tag / parent / depends-on). Returns path:line matches with a snippet. Read a matched file's body with the normal read tool.",
+			"Search the project's spec-graph: regex or substring match within spec files (files whose frontmatter carries `id` + `type`), optionally narrowed by metadata (type / tag / parent / depends-on). Returns size-bounded pages of path:line matches; follow the returned offset only if needed. Oversized text is capped at 2,000 lines / 50 KiB with full output in a temporary file. Read a matched file's body with the normal read tool.",
 		promptSnippet:
 			"spec_grep — search specs by content when documented decisions, contracts, or boundaries may govern the work.",
 		parameters,
 		async execute(_callId, params, _signal, _onUpdate, ctx) {
+			const offset = params.offset ?? 0;
+			if (!Number.isSafeInteger(offset) || offset < 0)
+				return errorResult("Use a nonnegative integer offset.");
 			const index = getIndex(ctx.cwd);
 			let result: GrepResult;
 			try {
@@ -45,7 +58,9 @@ export function registerSpecGrep(pi: ExtensionAPI): void {
 					...(params.tag !== undefined ? { tag: params.tag } : {}),
 					...(params.parent !== undefined ? { parent: params.parent } : {}),
 					...(params.dependsOn !== undefined ? { dependsOn: params.dependsOn } : {}),
-					...(params.limit !== undefined ? { limit: params.limit } : {}),
+					limit: Math.min(params.limit ?? DEFAULT_GREP_LIMIT, DEFAULT_GREP_LIMIT),
+					offset,
+					maxBytes: DEFAULT_MAX_BYTES - 2048,
 				});
 			} catch (err) {
 				return errorResult(`Invalid search pattern: ${(err as Error).message}`);
@@ -55,8 +70,12 @@ export function registerSpecGrep(pi: ExtensionAPI): void {
 				matches.length === 0
 					? "No matches."
 					: `${matches.length} match(es)${truncated ? " (truncated)" : ""}:`;
-			const body = matches.map((m) => `${m.path}:${m.line}: ${m.snippet}`).join("\n");
-			return textResult(`${header}\n${body}`.trimEnd(), { matches, truncated });
+			const body = matches.map(formatGrepMatch).join("\n");
+			const continuation =
+				result.nextOffset === undefined
+					? ""
+					: `More matches: repeat spec_grep with the same filters and offset: ${result.nextOffset}, or narrow the search.`;
+			return textResult(`${header}\n${body}`.trimEnd(), result, continuation);
 		},
 	});
 }

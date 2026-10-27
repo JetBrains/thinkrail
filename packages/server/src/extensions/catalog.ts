@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
+import type { ExtensionSessionServices } from "@thinkrail/extension-api/server";
 import { type ServerExtensionEntry, serverExtensions } from "./registry";
 
 const inert: unknown = new Proxy(() => inert, {
@@ -24,11 +25,20 @@ async function recordToolNames(factory: ExtensionFactory): Promise<string[]> {
 	return tools;
 }
 
+const inertSession: ExtensionSessionServices = {
+	expectToolResponse: () => {},
+	awaitToolResponse: () => Promise.reject(new Error("the Settings catalog has no session")),
+};
+
 type ExtensionDescription = Omit<ExtensionCatalogEntry, "enabled">;
 
 async function describeEntry(entry: ServerExtensionEntry): Promise<ExtensionDescription> {
 	const { extension } = entry;
-	const tools = (await Promise.all(extension.extensions.map(recordToolNames))).flat();
+	const factories = [
+		...extension.extensions,
+		...(extension.sessionExtensions?.(inertSession) ?? []),
+	];
+	const tools = (await Promise.all(factories.map(recordToolNames))).flat();
 	return {
 		name: extension.name,
 		title: extension.title ?? extension.name,

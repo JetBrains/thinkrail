@@ -79,7 +79,9 @@ describe("selectSwitcherGroups", () => {
 
 	test("includes sessions needing attention or running, drops idle", () => {
 		const state = baseState([
-			stateRecord("s_needs", "w1", "p1", { needsInput: { inputKind: "ask_user_question" } }),
+			stateRecord("s_needs", "w1", "p1", {
+				needsInput: { interactionId: "tool:q1", kind: "tool-response", toolCallId: "q1" },
+			}),
 			stateRecord("s_running", "w1", "p1", { execution: "running" }),
 			stateRecord("s_delegating", "w1", "p1", { backgroundWork: true }),
 			stateRecord("s_idle", "w1", "p1"),
@@ -105,7 +107,9 @@ describe("selectSwitcherGroups", () => {
 				completionUnread: true,
 				completion: { completionId: "c1", outcome: "failed", failure: "error" },
 			}),
-			stateRecord("s_needs", "w1", "p1", { needsInput: { inputKind: "ask_user_question" } }),
+			stateRecord("s_needs", "w1", "p1", {
+				needsInput: { interactionId: "tool:q1", kind: "tool-response", toolCallId: "q1" },
+			}),
 		]);
 		const sessions = selectSwitcherGroups(state)[0]?.sessions ?? [];
 		expect(sessions.map((s) => s.attention)).toEqual(["needs-input", "error", "unread", "running"]);
@@ -179,7 +183,9 @@ describe("selectSwitcherGroups", () => {
 		expect(selectSwitcherGroups(running)[0]?.needsAttention).toBe(false);
 
 		const needs = baseState([
-			stateRecord("s1", "w1", "p1", { needsInput: { inputKind: "ask_user_question" } }),
+			stateRecord("s1", "w1", "p1", {
+				needsInput: { interactionId: "tool:q1", kind: "tool-response", toolCallId: "q1" },
+			}),
 		]);
 		expect(selectSwitcherGroups(needs)[0]?.needsAttention).toBe(true);
 	});

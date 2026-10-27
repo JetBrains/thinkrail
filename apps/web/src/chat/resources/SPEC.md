@@ -28,7 +28,7 @@ subagent reads the same in the chat as in Finished.
   they share and the private MCP rows (`mcpRow.tsx`). The inspector renders the roster and a detail
   *header*; the detail *body* is a slot the parent fills, and so is the result row's expanded body.
 - **Public surface:** `ResourcesButton`, `ResourcesAttention`, `ResourcesDock`, `ResourcesInspector`,
-  `CommandLogView`, `ResultRow`, `ResultSource`.
+  `CommandLogView`, `ResultRow`, `ResultReceipt`, `ResultSource`, `ResourceTarget`.
 - **Allowed external deps:** contracts, React, Remix icons, shared UI primitives and theme utilities,
   `@thinkrail/locales` (UI strings), and `lib` (the shared MCP state vocabulary). Time arrives as a `now` prop so formatting stays pure.
 - **Forbidden:** store/transport, server/portable extension packages, Pi value imports, process
@@ -58,7 +58,8 @@ badge.
 ## Presentation
 
 **Trigger.** The header button reads **Resources** plus the count of active resources only while the
-snapshot is authoritative: live rows plus MCP servers that are connected or starting. The icon breathes
+snapshot is authoritative: live rows plus MCP servers that are connected or starting, then an "N new"
+pill (also in its accessible name) for finished results the parent reports the user has not seen. The icon breathes
 only while background work runs (`working`), so an always-connected server never animates the header.
 Before the first read, during
 reconnect, or after refresh failure it shows an explicit unavailable-count mark and a matching
@@ -68,9 +69,12 @@ trigger toggles the inspector and carries `aria-expanded`. A separate small **at
 (`ResourcesAttention`, a sibling button, never nested) appears while any of the chat's servers needs
 sign-in, failed, or awaits approval, and opens Settings › MCP servers.
 
-**Dock.** The dock lists live rows only — never finished work — directly above the composer, and
-renders nothing when there is none. Past four rows it collapses to one summary line (live count,
-per-kind counts) that the user can expand; the collapsed/expanded choice is local to the dock. A dock
+**Dock.** The dock lists live rows directly above the composer, then the finished results the parent
+marks **new** (`freshCommands`/`freshSubagents`, newest first, highlighted, with a dismiss control in
+place of Stop), and renders nothing when there is neither. The parent owns what counts as new; the
+dock only reports a dismissal through `onDismiss(target)`. Past four rows it collapses to one summary
+line (live count, per-kind live counts, "N new") that the user can expand; the collapsed/expanded
+choice is local to the dock. A dock
 row has exactly two controls: its name and activity together are one Inspect control that opens the
 inspector at that row, and Stop requests cancellation for that row. The dock is **hidden while the inspector is open** so the live roster is never rendered twice.
 It reserves its rows rather than animating height on every change, so the composer does not jitter.
@@ -108,8 +112,9 @@ authority, one request per server is in flight, and errors stay on the row.
 it opens the inspector and is the only chat-body roster hint — there is no inline list.
 
 **Result row.** `ResultRow` renders one historical completion notice (the details of a
-`background-command-completion` or `subagent-completion` message) for the transcript: chevron · kind
-glyph with status dot · `Background` / `Subagent` · name · state · run time (the same coarse
+`background-command-completion` or `subagent-completion` message, or of a finished result the agent
+pulled) for the transcript: chevron · kind glyph with status dot · an optional `receipt` lead ("Agent
+received" / "Agent replies after your next message") · `Background` / `Subagent` · name · state · run time (the same coarse
 `formatElapsed` the Finished row shows) · exit badge (commands) · optional parent-supplied `metaLead`
 node (the subagent's model label) and `meta` text ·
 a one-line teaser · an optional open action ("Open log" / "Transcript"). The command teaser is the
@@ -138,8 +143,10 @@ confirmation. A transient reconnect with unknown protocol support preserves the 
 instead of misclassifying the host. Use existing Radix primitives (the in-place `DialogPanel`), token-only
 styling and visible text alongside status icons.
 
-The subagent list includes this chat's direct foreground and background children. Their registry does
-not distinguish detachment, and queued/running must never be used to guess it. This version has no
+The subagent list includes this chat's direct foreground and background children. A summary says
+`detached` for a background run (the child's `info`, never guessed from queued/running), and only those
+— plus finished commands — can be new results: a foreground child's report already reached the agent
+in its own card. This version has no
 recursive tree, workspace/global scope, restart/steer actions, artifacts, needs-you state (children run
 headless), or arbitrary shell-process discovery. Ordinary workspace terminal tabs do not appear.
 

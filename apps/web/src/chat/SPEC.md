@@ -72,7 +72,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   summarization"). **`ErrorTurn`** is a persistent failure notice
   (provider/model error, an unrecovered `length` truncation, or a rejected send), drawn in the shared
   [[web-notices]] style: neutral fill, error border and icon, **Try again** in a footer row. It is **never folded**, so
-  a failed turn can't look like nothing happened. Only the current settlement-derived failure carries the
+  a failed turn can't look like nothing happened. A provider error that matches a known
+  model-unavailable signature (`model_not_found`, Anthropic's `not_found_error` on `model:`, OpenRouter's
+  `No endpoints found`, Bedrock's model access denial, …) leads with a localized "pick another model"
+  notice above the provider's verbatim text, since these are account/plan limits a retry cannot fix. Only the current settlement-derived failure carries the
   web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user
   message through `ChatView`'s existing immediate-send path. Rejected sends, extension notifications, and
   generic app errors stay non-actionable because the missing prompt or repair may not be in Pi's context.
@@ -215,10 +218,14 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   still renders directly. Non-empty text, primary tools, and non-assistant turns break the outer run. Only
   its trailing instance carries the live ticker. Errored routine tools get **no special treatment**
   (deliberate — agents often recover; `ErrorTurn` and primary error-auto-expand are the safety nets).
-- `backgroundCommandCompletion` / `subagentCompletion` — the **result** of background work: a
-  `background-command-completion` or `subagent-completion` custom message, the terminal report of a
-  background command or detached subagent whose start (a routine tool call / a frozen `Agent` card) and
-  live phase (the Resources dock) live elsewhere. Both render as **one collapsed row** in the Resources
+- `backgroundCommandCompletion` / `subagentCompletion` — the **result** of background work at the
+  point **the agent received it**: a `background-command-completion` or `subagent-completion` custom
+  message, or — when the agent pulled a finished result itself — the terminal `get_subagent_result` /
+  `background_command output` step (`pulledResults.ts`; only the first receipt per run, and never when
+  the transcript also holds a push for that run, so transcripts written before the delivery fix keep
+  their single row instead of gaining a second). The start (a routine tool call / a frozen `Agent`
+  card), the live phase and the "finished, not yet looked at" signal live in Resources
+  ([[submodule-web-chat-resources]]). Both render as **one collapsed row** in the Resources
   grammar (`BackgroundResult.tsx` wrapping `resources`' `ResultRow`, [[submodule-web-chat-resources]]):
   state, run time, exit badge or usage counters, and a one-line teaser (the command's last output line,
   the report's first line). **Always collapsed by default, failures included** — the red state carries
@@ -227,8 +234,11 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   inner scroll) or the report Markdown without pi-subagents' `Subagent "x" (id) status:` header. The open
   action comes from `ChatActions.resultOpener`: `ChatView` opens the Resources inspector at that row while
   the snapshot holds it, a subagent that left the in-memory registry (host restart, older than the latest
-  twenty) falls back to the transcript dialog, and a command has no fallback (no action). The rows never
-  infer current resource authority. Never folded into activity groups.
+  twenty) falls back to the transcript dialog, and a command has no fallback (no action). A row whose
+  details carry a `delivery` marker leads with whether the agent received it ("Agent received") or will
+  react with the user's next message (`appended`); expanding or opening it marks the result seen
+  through `ChatActions.markResultSeen`. The rows never infer current resource authority. Never folded
+  into activity groups.
 - `reviewFix` — a `todo-review-fix` custom message (#363): a plan-review verdict's fix request the host
   delivers to the worker chat as **structured `ReviewFixDetails`** (not a synthetic user turn). Rendered as
   a compact `ReviewFixCard` (`turns.tsx`, `data-testid="review-fix-card"`) — a one-line summary
@@ -246,8 +256,12 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   reappeared below the reaction with the whole background wait in its elapsed time. Now the earlier
   divider stays put, the reaction gets its own divider timed from the event's message timestamp, and an
   opener never closes a round itself (a user-stopped result with no reaction gets no divider). The same
-  boundary drives `deriveMessageActions` and receipt matching. A wake-up delivered while the agent is busy
-  shares that pi run, so its receipt stays with the preceding round (accepted).
+  boundary drives `deriveMessageActions` and receipt matching. The persisted `delivery` marker decides
+  which results are openers, so live and hydrated chats agree: `run` (delivered into a run already
+  going — the common case since results arrive at the agent's next step) stays inside its round and
+  does not end the narration before it as a final answer; `wake` and a result without a marker (older
+  transcripts) open one; `appended` (shown without waking — a stopped result, or one held when the
+  user stopped the parent) is unanswered, so the round closer goes before it.
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
   round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
   tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
@@ -300,7 +314,7 @@ rows, `ToolCard`, the divider's multi-artifact chips) records manual toggles in 
 (`foldState.ts`, keyed by row/step id. Two hooks over that module: **`useFold`** for independent booleans,
 and **`useSelection`** for a single-choice group — the divider's chips, which store the *selected key* under
 `${rowId}:artifacts` rather than a boolean per side, so "only one list open" cannot be violated;
-the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
+the `AskUserQuestionCard` pattern, see [[module-ext-ask-user-question]]; deliberately
 never evicted — growth is bounded by manual toggles). A manual toggle always wins — over auto-expand
 defaults *and* over a virtualization remount. `FoldGeometryProvider` is the transcript's explicit pre/post
 change seam: every fold header registers a stable row-derived id through `useFold`, including `Collapsible`
@@ -356,7 +370,10 @@ entry/exit obeys reduced motion.
 the **capability** registers with the pi session server-side (custom tool or pi extension/skill), the
 **presentation** registers here. The registry `Map` and fallback renderer stay app-local;
 `extensions/registerWebExtensions()` feeds the ordered descriptors from `extensions/registry.ts`
-into it when `ChatView` loads. Built-in app renderers retain their local side-effect registrations.
+into it at app bootstrap (`main.tsx`), before any lazy view loads: the plan and review panes derive
+interaction state from the registry's `interactive` registrations, so the registry must be complete before
+the first transcript is read, not only once the chat view mounts. Built-in app renderers retain their local
+side-effect registrations (`tools/register`, loaded with `ChatView`).
 Render contracts (`ToolRenderProps`, `ToolStatus`, registration metadata) and pure argument/result
 helpers come from `@thinkrail/extension-api/web`, not chat internals. `Markdown` imports the named
 `MermaidView` from `@thinkrail/ext-visualize/web` for fenced mermaid; shiki and highlighted `CodeBlock`
@@ -382,14 +399,28 @@ name, else the longest app-local prefix registration (`registerToolRendererPrefi
 because pi names MCP tools per server), else the default. Exact names always win, an empty prefix never
 matches, and extension descriptors stay exact-name only.
 
-Unregistered tools fall back to `DefaultToolRenderer`. Tools needing user input mid-run either route
-through the extension-UI bridge (`pi.extensionUi` → `ExtUiPrompt`, below) or — for a rich inline card —
-render from their `toolCall` args and reply through **`ChatActions`** (see below). Worked example: the
-`ask_user_question` flow in [tools/SPEC.md](tools/SPEC.md).
+Unregistered tools fall back to `DefaultToolRenderer`. A tool that needs user input mid-run takes one of
+two routes:
+- the extension-UI bridge (`pi.extensionUi` → `ExtUiPrompt`, below);
+- for a rich inline card, rendering from its `toolCall` args and replying through the props-only
+  **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
+  (`toolInteraction.ts`), and the plan page does the same for its card. The adapter reads `ChatActions`,
+  `interactionState` and the fold-geometry context, and fills `interaction` for every tool whose renderer
+  is registered `interactive` (`isInteractiveTool`) — it knows no tool by name. Its `state.accepting` is
+  true only while the host's `needsInput` names this call (`awaitingToolCallIdOf`, carried in the
+  interaction context; a pre-v93 host's `kind: "question"` / `question:<id>` is read the same way for one
+  compatibility window) or no host state has arrived yet, so a call the host is not waiting on (another
+  package's same-name tool, a call to the switched-off tool) cannot submit a response. `respond(value)`
+  forwards the value as is through the transport's `respondToTool` (`session.respondToTool`, or the
+  retired `session.answerQuestion` below `TOOL_RESPONSE_PROTOCOL_VERSION`); the tool validates its
+  shape. The renderer never reads those contexts itself.
+
+Worked example: the `ask_user_question` flow in [tools/SPEC.md](tools/SPEC.md).
 
 **Extension dialogs ask inside the chat, never in a modal** (`ExtUiPrompt.tsx`). Every pi
 `select`/`confirm`/`input`/`editor` request renders as an inline prompt under the shared
-`AttentionLine` ("Your input is needed · Agent is waiting", also used by `ask_user_question`): a select is
+`AttentionLine` (`@thinkrail/ui/attention-line`: "Your input is needed · Agent is waiting", also used by
+`ask_user_question`): a select is
 one button per option in the extension's order with no extra Cancel (a chat message is the escape: the
 host cancels every pending dialog when it accepts a user message, and the prompt says so in a footer
 hint — "Sending a chat message cancels this request."), confirm is Cancel/OK, input and editor a field
@@ -432,13 +463,13 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
 
 - **Transcript/shell split** — `ChatView` (the exported integration component) splits into a churn-isolated
   `ChatTranscript` child that owns the per-delta transcript rendering — subscribing (via `useShallow`) to the
-  streaming runtime fields it renders from (turns, toolResults, currentAssistantId, askAnswers,
+  streaming runtime fields it renders from (turns, toolResults, currentAssistantId, toolResponses,
   turnIdByMessageIndex, isStreaming, settlementTick, hostState, syncedConnectionGeneration, eventRevision) —
   and owns the scroll container and
   rows — plus a chrome shell that reads only granular rarely-changing fields, so text/thinking/tool deltas
   no longer re-render header/composer/queue/dialogs; completion-ack, location-reveal, and the ask-focus
-  scope live in the child (a private refactor; `ChatActions`/`AskStatesContext` are provided by
-  `ChatTranscript`). The shell still reads `turns`/`askAnswers`/`toolResults`, but only through
+  scope live in the child (a private refactor; `ChatActions`/`InteractionStatesContext` are provided by
+  `ChatTranscript`). The shell still reads `turns`/`toolResponses`/`toolResults`, but only through
   shallow-compared derived selectors (recent prompts, plan glance) that stay stable across streamed deltas,
   so it does not re-render on them.
 - **Structured tool-file navigation** — `ChatView` accepts an optional `onOpenFile(path)` from the shell and
@@ -455,13 +486,14 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   chat — the renderer never learns workspace or session ids through props, and chat never imports panels.
 - **`ChatActions`** — a React context (provided by `ChatTranscript`, `null` standalone): how a renderer talks
   **back** to the agent — or asks the integration layer to open something — without importing
-  store/transport. Today: `answerQuestion(toolCallId, result)` —
-  it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX —
+  store/transport. Today: `respondToTool(toolCallId, response)` —
+  it rejects when the host refuses (unknown/responded/superseded call), and the caller owns the failure UX —
   plus `focusComposer()`, for a renderer that resolves *itself*: it unmounts the control the user was
   standing on, and focus would otherwise fall to `<body>` and swallow every following keystroke (the same
   stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
   only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
-  cards' transcript link (no provider → the cards hide the action).
+  cards' transcript link (no provider → the cards hide the action) — and `markResultSeen(target)`, a
+  background result row reporting that the user opened it.
   The optional MCP actions — `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat),
   `openMcpSettings()` (Settings › MCP servers) and `openProviderSettings()` (Settings › Providers for
   provider-backed authentication) — are supplied by `ChatView` (through `ChatTranscript`'s provider)
@@ -494,16 +526,20 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   append-only refresh preserves row identity and manual folds instead of remounting the transcript.
   Works during the run, after completion, and after a host restart (transcripts persist on disk; only
   the in-memory registry is lost — and its absence is precisely what stops the polling).
-- **`askState`** — the questionnaire lifecycle seam: the pure
-  `deriveAskStates(turns, askAnswers, toolResults)` + `AskStatesContext`/`useAskState` (provided by
-  `ChatTranscript`, and also by the plan page's `PlanAskQuestion` so the SAME `AskUserQuestionCard` can be
-  answered from the plan — see `panels/SPEC.md`; `null` standalone). A live blocking ask resolves through its native tool result; a
-  restart-repaired eligible ack resolves later through `ask-user-answers`; a live ask the user typed past
-  returns that same ack natively, so "superseded" (ack + later user turn) reads identically whether the
-  session was live or restored; a stopped/error/length result is
+- **`interactionState`** — the interactive-tool lifecycle seam: the pure
+  `deriveInteractionStates(turns, toolResponses, toolResults)` + `InteractionStatesContext`/
+  `useInteractionState` (provided by `ChatTranscript`, and also by the plan page's `PlanSessionLive` so the
+  SAME registered card can be answered from the plan — see `panels/SPEC.md`; `null` standalone). It
+  covers every tool call whose renderer is registered `interactive`; the response is opaque (`unknown`) —
+  the card reads its own shape. A live blocking call resolves through its native tool result (its
+  `details`); a restart-repaired pending marker resolves later through a `tool-response` custom message
+  (`ask-user-answers` in older transcripts); a live call the user typed past returns that same marker
+  natively, so "superseded" (pending marker + later user turn) reads identically whether the session was
+  live or restored; a stopped/error/length result is
   terminal because Pi never executes tools from a length-truncated assistant response. "Answered /
   superseded / stopped / awaiting" is therefore derived once from all three transcript
-  projections and consumed by the card and plan glance, keeping both props-driven everywhere else.
+  projections and consumed by the card (as `interaction.state`) and plan glance, keeping both
+  props-driven everywhere else.
   The same seam supplies an opaque **per-mounted-ChatView focus scope**: an awaiting card claims attention
   once within that scope (so Virtuoso remounts cannot steal focus), while a fresh mount creates a new scope
   and may focus the still-pending question again. "Fresh mount" is broader than closing/reopening the chat:
@@ -513,7 +549,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   transport state.
 - **Hydration** (`hydrate.ts`) — the pure
   `messagesToRuntime(TranscriptMessage[], lastSettlement?, { idScope? })` converter (read-side counterpart
-  of the event reducer; a synthesized failure turn carries its `failure` kind and the provider message, worded at render by `errorTurnText`): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a
+  of the event reducer; a synthesized failure turn carries its `failure` kind and the provider message, worded at render by `errorTurnText`): rebuilds `{ turns, toolResults, toolResponses, turnIdByMessageIndex }` (a
   `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
   the live path (same `raw` result shape). One-shot consumers keep freshly minted ids; a repeated-snapshot
   consumer supplies its session scope to derive stable role/timestamp/index ids for persisted turns. When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
@@ -533,8 +569,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `compactionSummary` (its own turn, but never a search hit — the host's index consumes the same slot, so
   the two stay aligned), and a message that
   ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
-  `custom` messages: `ask-user-answers` indexes into `askAnswers` (never a turn — the questionnaire card
-  is its rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the result
+  `custom` messages: a tool response (`readToolResponseMessage`: `tool-response`, or the retired
+  `ask-user-answers`) indexes into `toolResponses` (never a turn — the interactive tool's card is its
+  rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the result
   row is transcript-positioned, so it maps its message index too); `todo-review-fix` **becomes its own
   `reviewFix` turn** (same positioning); unknown customTypes are ignored. No
   store/transport/shiki.
@@ -879,8 +916,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
 - **Live session telemetry follows Pi's finalized boundaries.** `SessionStatsBar` renders only the host's
   authoritative `session.getStats` snapshot; the web never derives billed totals or context usage from
-  message content. The mounted chat refreshes on mount/reconnect, after each finalized message, compaction,
-  and settlement, and after Pi accepts a model change. A reconnect read may race a restarted host before
+  message content. Totals include delegated subagent spend, which the host records into the parent as pi
+  `usage` entries after each response of a running subagent and at its run's end, so the toolbar moves
+  while a subagent works instead of jumping when it finishes. The mounted chat refreshes on mount/reconnect, after each finalized message, compaction,
+  settlement, and appended spend- or context-bearing entry (`usage` from subagent runs or cache warming,
+  `compaction`, `branch_summary`, `context_edit`), and after Pi accepts a model change. A reconnect read may race a restarted host before
   transcript sync has reattached the persisted session, so that sync edge retriggers the read. Consecutive
   Pi events batched into one store commit
   collapse to one read, and a response superseded by a newer session revision, host generation, or unmount
@@ -1411,7 +1451,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   pending question never claims the user owes an answer. The glance's working/waiting lifecycle comes
   from the normalized host `SessionState` — in the TODO rail and, through `sessionGlance`, in the Plan
   and Review panels — so a chat idle on its background commands or subagents reads as working (`isSessionWorking`); the transcript-derived glance is only the older-host
-  fallback. `askStates` remains only to identify and render the exact questionnaire/recap. **Unread results clear when seen** (no per-chat read gesture; the workspace menu's mark read/unread is
+  fallback. The interaction states remain only to identify and render the exact questionnaire/recap. **Unread results clear when seen** (no per-chat read gesture; the workspace menu's mark read/unread is
   the explicit exception owned by [[submodule-web-store]]): `ChatTranscript`
   acknowledges the exact unread completion while the window has focus and is visible, the chat is
   attended (`selectChatAttended`: selected in the last-focused center group of the active workspace, no
@@ -1458,6 +1498,17 @@ gets a fresh bounded read: the host publishes no edge when a server finishes
 connecting, and the `mcp.list` re-read is what makes it refresh status and push `session.resourcesChanged`.
 The divider's "still running" chip and the dock keep counting work only. No PID is shown — pi exposes
 none — and there is no immediate per-server stop.
+
+**New results.** `useFreshResults` tells the user a background result exists before or regardless of
+when the agent receives it (user-settled, 2026-10: "Resources announces, the chat marks receipt").
+A finished command or background (`detached`) subagent is **new** until the user opens it — its dock
+row, the inspector selection once it has finished, or its chat result row
+(`ChatActions.markResultSeen`) — or sends the next message.
+`ChatView` passes the new ones to the dock (highlighted, with dismiss) and their count to the trigger.
+The seen set is client UI state under a host-qualified localStorage key per chat: a client's first
+visit baselines everything already finished as seen (an acknowledgement before that first
+authoritative snapshot keeps the baseline pending), later visits surface what finished while away,
+and every send resets the set to the current finished list, so it stays bounded by the snapshot.
 
 The dependency edges are `ChatView`/`useChatResources` → `resources`, `store`, `transport`,
 `BackgroundResult` → `resources` (`ResultRow`, the run label as its `metaLead`), `tools/subagent`
@@ -1511,10 +1562,11 @@ Unknown custom messages retain their existing behavior.
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
   is `ChatView.tsx`, **`ChatTranscript.tsx`** (the churn-isolated transcript child — the Virtuoso list, scroll
   control, transcript sync, completion-ack, the extension-dialog reply, and the
-  `ChatActions`/`AskStatesContext`/`PendingExtUiContext` providers),
+  `ChatActions`/`InteractionStatesContext`/`PendingExtUiContext` providers),
   `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
   `useModelCatalog.ts`, **`useChatResources.ts`** (the Resources hydration/control/log-read seam),
+  **`useFreshResults.ts`** (the per-chat "new result" seen set),
   **`useSessionStats.ts`** (generation/revision-fenced authoritative telemetry reads),
   **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical transcript
   reconciliation), `SkillsDialog.tsx`, **`useProjectTrustSummary.ts`** (the trust-summary read the Skills
@@ -1550,7 +1602,7 @@ Unknown custom messages retain their existing behavior.
   **`useSessionStats.ts`** (the guarded read that keeps telemetry live), and
   **`TemplateEditorDialog.tsx`** (the shared template save form), the other shell integration points. Its
   churn-isolated child **`ChatTranscript`** is the second integration file: it owns the streaming runtime
-  subscription (`store.sessions[sessionId]`), provides the `ChatActions` + `AskStates` contexts, builds the
+  subscription (`store.sessions[sessionId]`), provides the `ChatActions` + `InteractionStates` contexts, builds the
   divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
   receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), the
   `isSpec` classifier from the store's `specsByWorkspace` snapshot (subscribed as the stored array — a
@@ -1569,13 +1621,13 @@ message's true terminal is **`message_end`**: the reducer adopts the final messa
 `agent_end` is only an attempt boundary (for a tool-calling message it arrives after its tools ran, but
 it can still precede auto-compaction/retry); `agent_settled` alone closes the automatic run, clears the
 session loader, and adds one success/error marker through `insertRoundCloser` (`roundCloser.ts`, shared with
-hydration): the marker goes before any trailing results that woke nobody (a stopped command, a
-user-aborted subagent — the extensions' no-`triggerTurn` cases). Such a result may be appended before or
+hydration): the marker goes before any trailing results that woke nobody (`delivery: "appended"`; for
+transcripts without the marker, a stopped command or a user-aborted subagent). Such a result may be appended before or
 after settlement depending on delivery timing; one rule on both paths keeps a round's closer and divider
 ahead of it, so live and reloaded rows agree. A successful overflow `compaction_end` with
 `willRetry: true` removes the superseded errored/truncated attempt, matching Pi's rebuilt context. Tool results are
-indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages index into `askAnswers`
-(never the turn list — the questionnaire card is their rendering); `subagent-completion` custom messages
+indexed by `toolCallId` in `toolResults`; tool-response custom messages index into `toolResponses`
+(never the turn list — the interactive tool's card is their rendering); `subagent-completion` custom messages
 append a `subagentCompletion` turn with the message `timestamp` (the shared contracts guard narrows both,
 on the live and read paths). The view re-derives rows each render
 (`deriveRows` is pure; `ChatTranscript` memoizes it, then reuses unchanged row objects via `stabilizeRows`

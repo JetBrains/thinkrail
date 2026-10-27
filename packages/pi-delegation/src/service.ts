@@ -444,7 +444,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	): DelegationRunDetails {
 		const { session, record } = entry;
 		const stats = session.getSessionStats();
-		const contextUsage = stats.contextUsage ?? session.getContextUsage();
+		const { contextUsage } = stats;
 		return {
 			childSessionId: record.sessionId,
 			...(record.info.roleName !== undefined ? { roleName: record.info.roleName } : {}),
@@ -490,6 +490,16 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline);
 			if (entry.snapshot?.task === task) entry.snapshot = { ...entry.snapshot, status, details };
 			opts.onUpdate?.(details);
+			if ("parentSessionId" in entry.record)
+				emit(
+					{
+						type: "run-progress",
+						sessionId: entry.record.sessionId,
+						parentSessionId: entry.record.parentSessionId,
+						details,
+					},
+					entry,
+				);
 		};
 
 		const unsubscribe = session.subscribe((event) => {

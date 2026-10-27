@@ -1,5 +1,4 @@
 export * from "./agentSessionManager";
-export * from "./askUserQuestion";
 export {
 	getSessionResources,
 	readBackgroundCommandOutput,
@@ -53,11 +52,13 @@ export {
 	setMcpLoginPublisher,
 	startMcpProbe,
 } from "./mcpSignIn";
+export { setModelListingPublisher } from "./modelAvailability";
 export {
 	listModelContextSettings,
 	setModelContextPublisher,
 	setModelContextWindow,
 } from "./modelContext";
+export { preferredDefaultModel } from "./modelDefaults";
 export * from "./oneshot";
 export {
 	activatePiRuntimeGeneration,
@@ -102,4 +103,5 @@ export {
 	setTitleToolHost,
 	type TitleToolHost,
 } from "./titleTool";
+export * from "./toolResponses";
 export * from "./webUiContext";

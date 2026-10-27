@@ -42,7 +42,7 @@ const SIGN_IN_TEXT = 'MCP server "linear" requires sign-in. Run /mcp to sign in.
 
 function actions(overrides: Partial<ChatActions> = {}): ChatActions {
 	return {
-		answerQuestion: async () => {},
+		respondToTool: async () => {},
 		cancelAutomaticReveal: () => {},
 		focusComposer: () => {},
 		openSubagentTranscript: () => {},

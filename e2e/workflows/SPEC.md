@@ -48,12 +48,12 @@ user?, dialog?, stopWhen?, forbid?, watchdog?, expect, judge?, record? }`.
   rendering; deltas APPEND, `partialResult` REPLACES.
 - `workspace` — throwaway git cwds under the e2e data dir (`empty` / `code-only` / `specced` /
   custom seed).
-- `dialog` — answers `ask_user_question` rounds through the **production `answerQuestion` bridge**,
+- `dialog` — answers `ask_user_question` rounds through the **production `respondToTool` bridge**,
   walking a ladder: script matchers → persona (validated; malformed → next rung) → deterministic
   fallback (`skip` / `pickRecommended`). An unscripted interview can never hang a run, and neither
   can a *throwing* script (scenario-author code): it degrades straight to the deterministic fallback
   with the error recorded on the round — never an unhandled rejection. Delivery failures are rounds
-  too: `answerQuestion` can reject after the fact (a slow persona answer superseded by the user
+  too: `respondToTool` can reject after the fact (a slow persona answer superseded by the user
   simulator's next message), which is recorded on the round, not thrown — scenarios that must win
   that race script their rounds (the script rung answers synchronously at `tool_execution_start`).
   A live answer resolves the blocking tool and continues its current run; a restart-repaired ack answer

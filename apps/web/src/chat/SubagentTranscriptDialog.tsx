@@ -4,10 +4,10 @@ import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { useEffect, useMemo, useState } from "react";
 import { isConnectedGeneration, useAppStore } from "@/store";
 import { errorText, getTransport, wsErrorCode } from "@/transport";
-import { AskStatesContext, deriveAskStates } from "./askState";
 import { ChatActionsContext } from "./ChatActions";
 import { startDetailPolling } from "./detailPolling";
 import { messagesToRuntime } from "./hydrate";
+import { deriveInteractionStates, InteractionStatesContext } from "./interactionState";
 import { deriveMessageActions } from "./messageActions";
 import { deriveRows } from "./rows";
 import { ChatTurnView } from "./turns";
@@ -71,24 +71,25 @@ function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }:
 		[runtime, live],
 	);
 	const messageActions = useMemo(() => deriveMessageActions(rows, live), [rows, live]);
-	const askContext = useMemo(
+	const interactionContext = useMemo(
 		() => ({
 			states: runtime
-				? deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults)
+				? deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults)
 				: {},
 			focusScope: {},
 		}),
 		[runtime],
 	);
-	return { messages, live, error, rows, messageActions, askContext };
+	return { messages, live, error, rows, messageActions, interactionContext };
 }
 
 export function SubagentTranscriptPane(scope: TranscriptScope) {
 	const t = useT();
-	const { messages, live, error, rows, messageActions, askContext } = useSubagentTranscript(scope);
+	const { messages, live, error, rows, messageActions, interactionContext } =
+		useSubagentTranscript(scope);
 	return (
 		<ChatActionsContext.Provider value={null}>
-			<AskStatesContext.Provider value={askContext}>
+			<InteractionStatesContext.Provider value={interactionContext}>
 				<div
 					data-testid="subagent-transcript"
 					data-live={live || undefined}
@@ -116,7 +117,7 @@ export function SubagentTranscriptPane(scope: TranscriptScope) {
 						))
 					)}
 				</div>
-			</AskStatesContext.Provider>
+			</InteractionStatesContext.Provider>
 		</ChatActionsContext.Provider>
 	);
 }

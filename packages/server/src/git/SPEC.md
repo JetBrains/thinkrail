@@ -278,7 +278,8 @@ ref off the workspace-create critical path.
   that as "fall back to path-list artifacts" and never lets it throw. It is the one git primitive that
   **writes** the user's branch; the caller serializes it per workspace.
   **`gitHeadSha(workspaceId)`** → `string | null` — `rev-parse HEAD` (`null` on an unborn HEAD), recorded
-  into the todos baseline sidecar at `in_progress`.
+  into the todos baseline sidecar at `in_progress`. **`headShaAt(repoPath)`** is the same read for a caller
+  that already holds the workspace record, so it never re-resolves an id another writer may have removed.
   **`readCommitSubject(workspaceId, sha)`** → `string | null` — a commit's subject line (`null` when the
   sha is malformed or unresolvable), the sync read behind the todos module's adopted-commit review
   resolver (`base..HEAD` commits owned by no plan item).
@@ -305,7 +306,7 @@ ref off the workspace-create critical path.
   `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,
   `readPathModeAtAsync`, `readCommitSubject`, `commitsAheadOf`, `originUrls`, `countPushTargetDivergence`,
   `PushTargetStatus`,
-  `gitCommitPaths`, `gitHeadSha`, `listCommits`, `listCommitsSince`,
+  `gitCommitPaths`, `gitHeadSha`, `headShaAt`, `listCommits`, `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `resolveListedCommit`, `prefetchBranch`, `countPushDivergence`, `listRemotes`, `remoteNameOf`,

@@ -44,6 +44,10 @@ Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`val
 ## Invariants
 
 - No `@earendil-works/*` import anywhere under `core/`.
+- Grep pagination skips a zero-based match offset in source order and returns a continuation only
+  when another match exists. Callers may bound formatted bytes as well as count; one oversized first
+  match is admitted so the tool layer can preserve it outside context instead of stalling pagination.
+  The core has no Pi-sized default byte policy or output-file ownership.
 - `buildGraph` is pure (same input → same output); the index revalidates each file by `(mtimeMs, size)`,
   memoizes the graph, and never serves a stale one.
 - The glob filters each directory's entries down to the traversal candidates **first** — directories that

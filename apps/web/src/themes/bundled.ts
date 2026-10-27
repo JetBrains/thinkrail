@@ -1,8 +1,8 @@
-import { buildThemeCatalog, installThemeCatalog } from "./runtime";
+import { buildThemeCatalog, installCachedUserThemes, installThemeCatalog } from "./runtime";
 
 let initialized = false;
 
-export function initializeBundledThemes(): void {
+export function initializeThemes(): void {
 	if (initialized) return;
 
 	const bundled = import.meta.glob("./bundled/*.theme.json", {
@@ -11,5 +11,6 @@ export function initializeBundledThemes(): void {
 	}) as Record<string, unknown>;
 
 	installThemeCatalog(buildThemeCatalog(bundled));
+	installCachedUserThemes();
 	initialized = true;
 }

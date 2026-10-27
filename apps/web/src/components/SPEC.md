@@ -155,7 +155,7 @@ Beyond picking the right tier:
 - Bare "Loading…"/"Restoring…" text with neither a skeleton nor a spinner is a defect, full stop.
 - **The resolved content fades in rather than popping in.** Once a skeleton's data arrives, the element that
   replaces it carries `motion-safe:animate-reveal` (`index.css`'s shared `reveal` keyframe — 150ms
-  opacity+translateY, the same primitive `chat/tools/AskUserQuestionCard.tsx` already uses for a card
+  opacity+translateY, the same primitive the questionnaire card ([[module-ext-ask-user-question]]) already uses for a card
   settling into place; `motion-safe:` so `prefers-reduced-motion` gets an instant swap instead). It goes on
   the resolved branch's own root — never the skeleton, never a wrapper that also encloses the skeleton
   branch (a `Suspense` boundary's *children*, not the `Suspense` element itself) — because the animation

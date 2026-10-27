@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { TranscriptMessage } from "@thinkrail/contracts";
-import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
 import { messagesToRuntime } from "./hydrate";
 import { deriveRows } from "./rows";
 import { readRunDetails } from "./tools/subagent/runDetails";
@@ -382,19 +382,39 @@ test("a resolved toolResult keeps its structured `details` (a legacy blocking-er
 	expect((toolResults.ask2?.raw as { details: unknown }).details).toEqual(details);
 });
 
-test("an ask-user-answers custom message indexes into askAnswers and never becomes a turn", () => {
-	const result = {
-		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
-		cancelled: false,
-	};
-	const { turns, askAnswers } = messagesToRuntime([
+test("a tool-response custom message indexes into toolResponses and never becomes a turn", () => {
+	const response = { answers: [{ questionIndex: 0, question: "Q?", kind: "text", answer: "A" }] };
+	const { turns, toolResponses } = messagesToRuntime([
 		{
 			role: "assistant",
 			content: [{ type: "toolCall", id: "ask3", name: "ask_user_question", arguments: {} }],
 		},
 		{
 			role: "custom",
-			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+			customType: TOOL_RESPONSE_CUSTOM_TYPE,
+			content: "User has answered your questions: …",
+			display: true,
+			details: { toolCallId: "ask3", response },
+			timestamp: 2,
+		},
+	] as unknown as Message[]);
+	expect(turns).toHaveLength(1);
+	expect(toolResponses.ask3).toEqual(response);
+});
+
+test("a legacy ask-user-answers custom message (details.result) indexes into toolResponses too", () => {
+	const result = {
+		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+		cancelled: false,
+	};
+	const { turns, toolResponses } = messagesToRuntime([
+		{
+			role: "assistant",
+			content: [{ type: "toolCall", id: "ask3", name: "ask_user_question", arguments: {} }],
+		},
+		{
+			role: "custom",
+			customType: "ask-user-answers",
 			content: "User has answered your questions: …",
 			display: true,
 			details: { toolCallId: "ask3", result },
@@ -402,32 +422,48 @@ test("an ask-user-answers custom message indexes into askAnswers and never becom
 		},
 	] as unknown as Message[]);
 	expect(turns).toHaveLength(1);
-	expect(askAnswers.ask3).toEqual(result as never);
+	expect(toolResponses.ask3).toEqual(result);
 });
 
-test("an answers message with malformed details is ignored — the guard validates shape, not just tag", () => {
-	const { askAnswers } = messagesToRuntime([
+test("a response message with malformed details is ignored — the guard validates the envelope, not just the tag", () => {
+	const { toolResponses } = messagesToRuntime([
 		{
 			role: "custom",
-			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+			customType: TOOL_RESPONSE_CUSTOM_TYPE,
 			content: "looks right, isn't",
 			display: true,
 			timestamp: 1,
 		},
 		{
 			role: "custom",
-			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
-			content: "still not right",
+			customType: TOOL_RESPONSE_CUSTOM_TYPE,
+			content: "no tool call id",
 			display: true,
-			details: { toolCallId: 42, result: { answers: "nope", cancelled: "nope" } },
+			details: { toolCallId: 42, response: {} },
 			timestamp: 2,
 		},
+		{
+			role: "custom",
+			customType: TOOL_RESPONSE_CUSTOM_TYPE,
+			content: "no response key",
+			display: true,
+			details: { toolCallId: "ask4" },
+			timestamp: 3,
+		},
+		{
+			role: "custom",
+			customType: "ask-user-answers",
+			content: "legacy without a result",
+			display: true,
+			details: { toolCallId: "ask5" },
+			timestamp: 4,
+		},
 	] as unknown as Message[]);
-	expect(Object.keys(askAnswers)).toHaveLength(0);
+	expect(Object.keys(toolResponses)).toHaveLength(0);
 });
 
 test("unknown custom messages are ignored entirely", () => {
-	const { turns, askAnswers } = messagesToRuntime([
+	const { turns, toolResponses } = messagesToRuntime([
 		{
 			role: "custom",
 			customType: "someone-elses-extension",
@@ -437,7 +473,7 @@ test("unknown custom messages are ignored entirely", () => {
 		},
 	] as unknown as Message[]);
 	expect(turns).toHaveLength(0);
-	expect(Object.keys(askAnswers)).toHaveLength(0);
+	expect(Object.keys(toolResponses)).toHaveLength(0);
 });
 
 test("a compaction summary becomes its own turn without claiming a jump anchor", () => {

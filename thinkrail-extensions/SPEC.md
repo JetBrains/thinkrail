@@ -26,24 +26,34 @@ extension's `skillPackages` — they keep staging and loading until an extension
 
 ## Shape — two entrypoints, no root barrel
 
-- `./server` — default export `defineServerExtension({ name, title?, description?, extensions, childExtensions?, skillPackages? })`
+- `./server` — default export `defineServerExtension({ name, title?, description?, extensions, sessionExtensions?, interactiveTools?, childExtensions?, skillPackages? })`
   (`title` / `description` are Settings display copy).
   `extensions` / `childExtensions` are pi `ExtensionFactory`s the host composes into every parent session /
   the curated child set, registered as named `InlineExtension`s so pi diagnostics keep an identity.
+  `sessionExtensions(session)` returns further parent factories built from one session's host services;
+  `interactiveTools` names the tools whose calls wait for the person and, optionally, how a late response
+  reads to the model ([[module-extension-api]]).
   `skillPackages` are **package specifiers** whose `pi.skills` directories the host stages — explicit module
   identity for the build step, never inferred from a function. Server-only; may value-import pi.
 - `./web` — default export `defineWebExtension({ name, toolRenderers })` keyed by tool name, **plus named
   exports** for components the host uses directly (visualize exports `MermaidView` for fenced mermaid in
   chat markdown). Browser-only; never value-imports pi; heavy renderers stay lazy.
 
-The `define*` objects and the named web exports are the whole contract. Future capabilities (wire methods,
-panels, settings) are added to these objects when a real consumer needs them.
+The `define*` objects and the named `./web` exports are the whole contract: named `./web` exports are
+components the host renders directly. `./server` has no named exports the host consumes — everything the
+host needs for a capability's lifecycle is declared on the descriptor (`interactiveTools`), so the core
+never imports an extension outside its two registry files and an extension can be deleted without touching
+the core.
+
+Future capabilities (wire methods, panels, settings) are added to these objects when a real consumer needs
+them.
 
 **The property fixed now so later extensions never force a rewrite — runtime/lifecycle ownership:**
 separate server and browser entrypoints; no imports of host internals; host-owned scoped state
 (per-session owners such as subagents and background commands, per-workspace services) is supplied through
 explicit seams and never created by an extension. Per-session owners therefore stay in the host's
-session manager, outside the static registry.
+session manager. An extension reaches their services only through `sessionExtensions(session)`, the
+explicit per-session seam. The descriptor itself stays static.
 
 ## Host UI SDK
 
@@ -98,7 +108,9 @@ What a `./web` half may import:
 - **Public subpaths:** `apps/web` may import only `@thinkrail/ext-*/web`; `packages/server` only
   `@thinkrail/ext-*/server`.
 - Edges: `extension-api → contracts`; `ui → contracts`; `resource-renderers → contracts, ui`;
-  `ext-*/web → ui, extension-api, resource-renderers, contracts`;
+  `ext-*/web → ui, extension-api, resource-renderers, contracts` plus **type-only** imports of its own pi
+  package (the argument/result shapes belong to the package; the existing browser rule still rejects a
+  value import of any pi package);
   `ext-*/server → extension-api, its pi package`;
   `apps/web → contracts, ui, extension-api, resource-renderers, ext-*/web`;
   `packages/server → extension-api, ext-*/server` (and no longer directly on pi packages an extension owns).
@@ -119,4 +131,5 @@ the default tool renderer until step 2 — never visualize, whose renderer exist
 | extension | pi capability | notes |
 | --- | --- | --- |
 | `visualize` | `@thinkrail/pi-visualize` | shipped. `./server` injects the **strict** mermaid validator (`mermaid` at the web renderer's catalog version, initialised through `linkedom` — required: DOMPurify needs a real `document` for flowchart/class/state/gantt/mindmap, verified under Bun). `./web` carries the diagram/comparison cards and exports `MermaidView`. The guarantee is syntax parsing, not SVG/layout success; the browser renderer keeps its fallback. |
+| `ask-user-question` | `@thinkrail/pi-ask-user-question` | shipped; the first interactive tool. `./server` is session-only: `sessionExtensions` composes the portable tool with ThinkRail's wording and an asker over the host's interactive-tool mailbox (`awaitToolResponse`); `interactiveTools` declares `ask_user_question` with a `describeResponse` that renders a late answer in the package's own envelope wording. `./web` registers the questionnaire card `interactive`, fed entirely by the host through `ToolRenderProps.interaction`; the plan page renders it through the tool registry like the chat does. [[module-ext-ask-user-question]]. |
 | `web-access` | third-party `pi-web-access` | planned next: wraps the npm package with the existing renderers and `headlessSearchPolicy`, removing the last packager special case. |

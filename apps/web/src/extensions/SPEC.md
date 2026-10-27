@@ -4,7 +4,7 @@ type: submodule-design
 status: draft
 title: Web extension composition registry
 parent: module-web
-depends-on: [module-extension-api, module-ext-visualize]
+depends-on: [module-extension-api, module-ext-visualize, module-ext-ask-user-question]
 references: [submodule-web-chat, module-thinkrail-extensions]
 ---
 
@@ -24,5 +24,8 @@ switch only decides what the host gives the agent next.
 `index.ts` exports `webExtensions` and `registerWebExtensions` only. Imports reach public extension
 `./web` entries, the web SDK contract, and chat's registration function; never `ChatView`, stores,
 transport, extension internals or server halves. The registry Map remains owned by chat, so this module
-creates no parallel state owner or runtime extension loader. Direct component consumers such as
-Markdown use the extension's named public exports independently of tool registration.
+creates no parallel state owner or runtime extension loader. `registerWebExtensions()` runs once at app
+bootstrap (`main.tsx`): interaction state and the plan/review glances are derived from the registry's
+`interactive` registrations, so it must be complete before any lazy view reads a transcript. Direct
+component consumers use an extension's named public exports independently of tool registration: Markdown
+renders `MermaidView`. The plan page reaches the questionnaire card through the registry, not by name.

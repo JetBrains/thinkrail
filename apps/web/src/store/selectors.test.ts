@@ -102,7 +102,7 @@ test("normalized rail flags keep attention binary and working orthogonal", () =>
 	};
 	const needsInput = {
 		...working,
-		needsInput: { interactionId: "question:q1", kind: "question" as const },
+		needsInput: { interactionId: "tool:q1", kind: "tool-response" as const, toolCallId: "q1" },
 	};
 	const state = {
 		sessionStateByWorkspace: {

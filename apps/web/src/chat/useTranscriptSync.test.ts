@@ -11,7 +11,7 @@ function runtime(overrides: Partial<SessionRuntime> = {}): SessionRuntime {
 	return {
 		turns: [],
 		toolResults: {},
-		askAnswers: {},
+		toolResponses: {},
 		currentAssistantId: null,
 		attemptAssistantId: null,
 		isStreaming: false,
@@ -81,7 +81,7 @@ test("transcriptSyncNeed recognizes only successful live compactions without a d
 
 test("synchronizeTranscript compare-and-installs one canonical snapshot", async () => {
 	const hostSummary = summary();
-	const hydrated = { turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] };
+	const hydrated = { turns: [], toolResults: {}, toolResponses: {}, turnIdByMessageIndex: [] };
 	let installed: unknown[] | null = null;
 	const outcome = await synchronizeTranscript(
 		{
@@ -127,7 +127,7 @@ test("synchronizeTranscript defers a reconnect-only streaming snapshot without h
 			}),
 			hydrate: () => {
 				hydrated = true;
-				return { turns: [], toolResults: {}, askAnswers: {} };
+				return { turns: [], toolResults: {}, toolResponses: {}, turnIdByMessageIndex: [] };
 			},
 			state: () => ({
 				status: "connected",
@@ -163,7 +163,7 @@ test("synchronizeTranscript defers a streaming compaction snapshot without hydra
 			}),
 			hydrate: () => {
 				hydrated = true;
-				return { turns: [], toolResults: {}, askAnswers: {} };
+				return { turns: [], toolResults: {}, toolResponses: {}, turnIdByMessageIndex: [] };
 			},
 			state: () => ({
 				status: "connected",
@@ -199,7 +199,7 @@ test("synchronizeTranscript rejects a response from an overtaken connection gene
 		},
 		{
 			read: async () => ({ result: { summary: summary(), messages: [] }, syncedTick: 0 }),
-			hydrate: () => ({ turns: [], toolResults: {}, askAnswers: {} }),
+			hydrate: () => ({ turns: [], toolResults: {}, toolResponses: {}, turnIdByMessageIndex: [] }),
 			state: () => ({
 				status: "connected",
 				connectionGeneration: 5,
@@ -226,7 +226,7 @@ test("synchronizeTranscript distinguishes an idle crossed snapshot so a stale st
 		},
 		{
 			read: async () => ({ result: { summary: summary(), messages: [] }, syncedTick: 0 }),
-			hydrate: () => ({ turns: [], toolResults: {}, askAnswers: {} }),
+			hydrate: () => ({ turns: [], toolResults: {}, toolResponses: {}, turnIdByMessageIndex: [] }),
 			state: () => ({
 				status: "connected",
 				connectionGeneration: 4,

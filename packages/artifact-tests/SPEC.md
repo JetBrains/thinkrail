@@ -5,7 +5,7 @@ status: active
 title: Native artifact test harnesses
 parent: architecture
 depends-on: [module-cli, module-server, module-shared]
-references: [module-desktop, module-browser-e2e, module-ci-release, module-ext-visualize]
+references: [module-desktop, module-browser-e2e, module-ci-release, module-ext-visualize, module-ext-ask-user-question]
 tags: [testing, artifacts, public-surface-checked]
 ---
 
@@ -43,11 +43,14 @@ fixture value-imports a bare `@earendil-works/pi-coding-agent` specifier and sur
 its model name, so the load exercises pi's virtual-module mapping through the transform path the host
 forces — a bundle missing the `PI_BUNDLED_NODE` define fails this probe; [[submodule-server-agent]] owns
 the seam),
-exercise the bundled factories/skills, run **one scripted provider turn** — the fixture also registers a
-pi-ai faux `streamSimple` under its own `api` name that always calls `visualize` with a dangling flowchart
-edge, so the probe asserts the strict mermaid parse error reaches the transcript as an `isError` tool
-result (the packaged host composes the ThinkRail extension registry, never the portable package's
-best-effort probe; [[module-ext-visualize]]) — start pi's bundled MCP engine in a real chat (a written-out
+exercise the bundled factories/skills, run **two scripted provider turns** — the fixture also registers a
+pi-ai faux `streamSimple` under its own `api` name that calls `visualize` with a dangling flowchart edge,
+so the probe asserts the strict mermaid parse error reaches the transcript as an `isError` tool result
+(the packaged host composes the ThinkRail extension registry, never the portable package's best-effort
+probe; [[module-ext-visualize]]), and on a second prompt calls `ask_user_question`, so the probe sees the
+session block with `needsInput.kind === "tool-response"`, answers through `session.respondToTool`, and reads
+the answer back as the call's non-error tool result (the registry's per-session composition and the host
+mailbox inside the artifact; [[module-ext-ask-user-question]]) — start pi's bundled MCP engine in a real chat (a written-out
 stdio fixture must report *connected · 1 tool* and an in-probe HTTP server that answers 401 with
 protected-resource metadata *needs sign-in*, read back through `mcp.list`, which proves the lazily imported
 MCP runtime executes inside the artifact), reach an OAuth URL without a provider turn, verify health/UI

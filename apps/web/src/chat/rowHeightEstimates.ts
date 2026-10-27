@@ -1,5 +1,5 @@
 import { type ChatRow, LARGE_USER_MESSAGE } from "./rows";
-import { resolveProminence } from "./toolRegistry";
+import { isInteractiveTool, resolveProminence } from "./toolRegistry";
 
 const MAX_ESTIMATED_HEIGHT = 20_000;
 const MIN_ESTIMATED_HEIGHT = 20;
@@ -121,7 +121,7 @@ function estimateToolPayload(row: Extract<ChatRow, { kind: "tool" }>, baseHeight
 }
 
 function estimateToolHeight(row: Extract<ChatRow, { kind: "tool" }>): number {
-	if (row.toolName === "ask_user_question") return estimateToolPayload(row, 120);
+	if (isInteractiveTool(row.toolName)) return estimateToolPayload(row, 120);
 	const status = row.tool?.status ?? (row.dead ? "error" : "running");
 	const expanded =
 		status === "error" || (status === "done" && resolveProminence(row.toolName).defaultExpanded);

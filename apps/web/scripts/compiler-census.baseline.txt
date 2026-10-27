@@ -11,10 +11,10 @@
 ../../packages/resource-renderers/src/renderers/pdf/View.tsx PdfView
 ../../packages/resource-renderers/src/renderers/pdf/usePdfDocument.ts usePdfDocument
 ../../packages/resource-renderers/src/support/useScrollViewState.ts useScrollViewState
+../../thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx AskUserQuestionCard
 src/chat/ChatTranscript.tsx useVirtualRows
 src/chat/HistoryOverlay.tsx Highlight
 src/chat/resources/ResourcesInspector.tsx ResourcesInspector
-src/chat/tools/AskUserQuestionCard.tsx AskUserQuestionCard
 src/panels/branches.ts useBranchList
 src/panels/useAnalyticsConsent.ts useAnalyticsConsent
 src/panels/useBranchStatus.ts useBranchStatus

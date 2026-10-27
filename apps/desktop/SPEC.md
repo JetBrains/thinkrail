@@ -432,7 +432,11 @@ three gaps, closed by the project:
   `postBuild` closes both gaps. It rewrites the resources of `bin/bun.exe`, `bin/launcher.exe` and
   `Resources/uninstall`: every icon entry is replaced by one group 1 with all frames, and VERSIONINFO
   comes from [[module-shared]]'s `windowsFileIdentity`. Rewriting drops `bun.exe`'s now-invalid Oven
-  certificate entry; release signing covers every PE afterwards ([[module-ci-release]]).
+  certificate entry; release signing covers every PE afterwards ([[module-ci-release]]). Hutch's Win32
+  resource update already drops the signature bytes but keeps their directory entry, which then points
+  past end of file. Branding therefore clears the entry and cuts any signature bytes before parsing,
+  rather than relying on the PE library's signed-file bypass, which still reads to that offset. Windows
+  PR CI builds and smokes the desktop app, so a branding defect fails the PR ([[module-ci-release]]).
 - **Window icon.** Electrobun registers its window class without an icon, never sends `WM_SETICON`, and
   its Windows `setWindowIcon` is a stub. Startup therefore loads `Resources/app.ico` (Hutch's copy of the
   ICO) through `user32` and sends it to the splash and the main window, sized for the window's DPI. A

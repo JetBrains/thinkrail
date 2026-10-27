@@ -6,23 +6,36 @@ import { join } from "node:path";
 import { registryInlineExtensions, resolveExtensionSkillRoots, serverExtensions } from "./index";
 
 describe("server extension registry", () => {
-	it("lists visualize with its public server specifier bound to the imported descriptor", async () => {
+	it("lists each extension with its public server specifier bound to the imported descriptor", async () => {
 		const specifiers = serverExtensions.map((entry) => entry.specifier);
-		expect(specifiers).toEqual(["@thinkrail/ext-visualize/server"]);
+		expect(specifiers).toEqual([
+			"@thinkrail/ext-visualize/server",
+			"@thinkrail/ext-ask-user-question/server",
+		]);
 		expect(new Set(specifiers).size).toBe(specifiers.length);
 		for (const entry of serverExtensions) {
 			const resolved = createRequire(import.meta.url).resolve(entry.specifier);
 			const loaded = (await import(resolved)) as { default: unknown };
 			expect(loaded.default).toBe(entry.extension);
-			expect(entry.extension.name).toBe("visualize");
 		}
+		expect(serverExtensions.map((entry) => entry.extension.name)).toEqual([
+			"visualize",
+			"ask-user-question",
+		]);
 	});
 
 	it("flattens parent and child factories into named inline extensions", () => {
-		const parents = registryInlineExtensions("extensions");
-		expect(parents.map((inline) => (typeof inline === "function" ? "fn" : inline.name))).toEqual([
-			"visualize",
-		]);
+		const names = (session?: Parameters<typeof registryInlineExtensions>[3]) =>
+			registryInlineExtensions("extensions", undefined, serverExtensions, session).map((inline) =>
+				typeof inline === "function" ? "fn" : inline.name,
+			);
+		expect(names()).toEqual(["visualize"]);
+		expect(
+			names({
+				expectToolResponse: () => {},
+				awaitToolResponse: () => Promise.resolve({ kind: "deferred" as const }),
+			}),
+		).toEqual(["visualize", "ask-user-question"]);
 		expect(registryInlineExtensions("childExtensions")).toEqual([]);
 	});
 });

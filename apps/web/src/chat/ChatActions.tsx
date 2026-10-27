@@ -1,25 +1,19 @@
-import type { AskUserQuestionResult, McpReadOutputResult, WireModel } from "@thinkrail/contracts";
+import type { McpReadOutputResult, WireModel } from "@thinkrail/contracts";
+import type { ToolRevealOptions } from "@thinkrail/extension-api/web";
 import { createContext, useContext } from "react";
-import type { RevealBlock } from "./scrollGeometry";
+import type { ResourceTarget } from "./resources";
 
-export interface ChatRevealOptions {
-	block: RevealBlock;
-	provenance: "automatic-attention" | "user-navigation";
-	runway: "preserve" | "release";
-	stability: "none" | "bounded";
-	topInset?: number;
-}
+export type ChatRevealOptions = ToolRevealOptions;
 
-export type ResultTarget =
-	| { kind: "command"; id: string }
-	| { kind: "subagent"; childSessionId: string };
+export type ResultTarget = ResourceTarget;
 
 export interface ChatActions {
-	answerQuestion: (toolCallId: string, result: AskUserQuestionResult) => Promise<void>;
 	cancelAutomaticReveal: () => void;
 	focusComposer: () => void;
 	openSubagentTranscript: (childSessionId: string) => void;
+	respondToTool: (toolCallId: string, response: unknown) => Promise<void>;
 	resultOpener: (target: ResultTarget) => (() => void) | undefined;
+	markResultSeen?: ((target: ResultTarget) => void) | undefined;
 	revealChatElement: (element: HTMLElement, options: ChatRevealOptions) => void;
 	readMcpOutput?: ((toolCallId: string) => Promise<McpReadOutputResult>) | undefined;
 	openMcpSettings?: (() => void) | undefined;

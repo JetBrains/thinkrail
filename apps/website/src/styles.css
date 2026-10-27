@@ -427,11 +427,13 @@ code {
 	display: block;
 }
 
-.gh-btn {
+.gh-btn,
+.discord-btn {
 	color: var(--muted);
 }
 
-.gh-btn:hover {
+.gh-btn:hover,
+.discord-btn:hover {
 	text-decoration: none;
 }
 
@@ -2235,8 +2237,9 @@ html:not(.anim) .term-caret {
 
 	.hero-ctas .btn,
 	.hero-download {
-		flex: 1;
+		flex: 1 1 auto;
 		justify-content: center;
+		white-space: nowrap;
 	}
 
 	.hero-download .btn {

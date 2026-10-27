@@ -35,6 +35,7 @@ export {
 
 export {
 	DEFAULT_GREP_LIMIT,
+	formatGrepMatch,
 	type GraphSlice,
 	type GrepMatch,
 	type GrepOptions,

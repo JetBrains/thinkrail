@@ -45,7 +45,35 @@ for (const name of spec.skills) {
 }
 
 pi.initTheme("dark", false);
-const plainTheme = { fg: (_color, text) => text, bold: (text) => text };
+const plainTheme = { fg: (_color, text) => text, bg: (_color, text) => text, bold: (text) => text };
+const fakeTui = { requestRender: () => {}, terminal: { rows: 40, columns: 100 } };
+
+function scriptedContext(script) {
+	if (!script) return {};
+	const replies = [...(script.replies ?? [])];
+	const next = () => {
+		if (replies.length === 0) throw new Error("the scripted UI ran out of replies");
+		const reply = replies.shift();
+		return reply === null ? undefined : reply;
+	};
+	const ui = {
+		select: async (_title, choices) => {
+			const reply = next();
+			return typeof reply === "number" ? choices[reply] : reply;
+		},
+		input: async () => next(),
+		custom: (factory) =>
+			new Promise((resolve, reject) => {
+				Promise.resolve(factory(fakeTui, plainTheme, {}, resolve))
+					.then((component) => {
+						for (const key of script.keys ?? []) component.handleInput(key);
+					})
+					.catch(reject);
+			}),
+		notify: () => {},
+	};
+	return { mode: script.mode, hasUI: true, cwd: spec.cwd, ui };
+}
 
 for (const testCase of spec.cases) {
 	const tool = tools.get(testCase.tool)?.definition;
@@ -53,7 +81,13 @@ for (const testCase of spec.cases) {
 	const label = `${testCase.tool} ${testCase.name}`;
 	let result;
 	try {
-		result = await tool.execute(`parity-${testCase.name}`, testCase.args, undefined, undefined, {});
+		result = await tool.execute(
+			`parity-${testCase.name}`,
+			testCase.args,
+			undefined,
+			undefined,
+			scriptedContext(testCase.ui),
+		);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		if (testCase.expectError) {
@@ -75,6 +109,9 @@ for (const testCase of spec.cases) {
 		.join("\n");
 	for (const needle of testCase.expectText ?? []) {
 		if (!text.includes(needle)) fail(`${label}: result text lacks ${JSON.stringify(needle)}`);
+	}
+	if (testCase.expectTerminate !== undefined && result.terminate !== testCase.expectTerminate) {
+		fail(`${label}: terminate was ${result.terminate}, expected ${testCase.expectTerminate}`);
 	}
 	if (testCase.expectRender && tool.renderResult) {
 		const component = tool.renderResult(result, { expanded: false, isPartial: false }, plainTheme, {

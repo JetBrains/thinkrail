@@ -29,8 +29,12 @@ import {
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { AskStatesContext, deriveAskStates } from "../chat/askState";
 import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
+import {
+	awaitingToolCallIdOf,
+	deriveInteractionStates,
+	InteractionStatesContext,
+} from "../chat/interactionState";
 import { Markdown } from "../chat/Markdown";
 import { SectionLabel, VerificationBadge, VerificationGlyph } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
@@ -45,8 +49,9 @@ import {
 	itemOpenFindings,
 	itemRevisions,
 	lastAgentText,
+	type PendingInteraction,
 	type PlanGlance,
-	pendingAsk,
+	pendingInteraction,
 	planCompletionSummary,
 	planSections,
 	planStaleSummary,
@@ -57,7 +62,8 @@ import {
 	sessionGlance,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
-import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
+import { useToolInteraction } from "../chat/toolInteraction";
+import { getToolRenderer } from "../chat/toolRegistry";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import {
 	selectAgentReviewCommentCount,
@@ -66,7 +72,7 @@ import {
 	selectWorkspaceById,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport, supportsPlanReview } from "../transport";
+import { errorText, getTransport, respondToTool, supportsPlanReview } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
@@ -656,6 +662,22 @@ function PlanCardSection({
 	);
 }
 
+function PlanInteractionCard({ pending }: { pending: PendingInteraction }) {
+	const interaction = useToolInteraction(pending.toolCallId, pending.toolName);
+	const Renderer = getToolRenderer(pending.toolName);
+	return (
+		<Renderer
+			toolCallId={pending.toolCallId}
+			toolName={pending.toolName}
+			args={pending.args}
+			result={pending.result}
+			status={pending.status}
+			streaming={pending.streaming}
+			interaction={interaction}
+		/>
+	);
+}
+
 // Keep the session's live slot isolated from the heavy PlanPane.
 function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string }) {
 	const t = useT();
@@ -663,38 +685,37 @@ function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string
 	const [focusScope] = useState<object>(() => ({}));
 	const actions = useMemo<ChatActions>(
 		() => ({
-			answerQuestion: (toolCallId, result) =>
-				getTransport()
-					.request("session.answerQuestion", { sessionId, toolCallId, result })
-					.then(() => undefined),
 			cancelAutomaticReveal: () => {},
 			focusComposer: () => {},
 			openSubagentTranscript: () => {},
+			respondToTool: (toolCallId, response) => respondToTool(sessionId, toolCallId, response),
 			resultOpener: () => undefined,
 			revealChatElement: () => {},
 		}),
 		[sessionId],
 	);
-	const askStates = useMemo(
-		() => (runtime ? deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults) : {}),
+	const interactionStates = useMemo(
+		() =>
+			runtime
+				? deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults)
+				: {},
 		[runtime],
 	);
-	const ask = runtime ? pendingAsk(runtime) : undefined;
-	if (ask) {
+	const pending = runtime ? pendingInteraction(runtime) : undefined;
+	if (pending) {
 		return (
 			<ChatActionsContext.Provider value={actions}>
-				<AskStatesContext.Provider value={{ states: askStates, focusScope }}>
+				<InteractionStatesContext.Provider
+					value={{
+						states: interactionStates,
+						focusScope,
+						awaitingToolCallId: awaitingToolCallIdOf(runtime?.hostState ?? null),
+					}}
+				>
 					<div data-testid="plan-ask" className="mb-8">
-						<AskUserQuestionCard
-							toolCallId={ask.toolCallId}
-							toolName="ask_user_question"
-							args={ask.args}
-							result={ask.result}
-							status={ask.status}
-							streaming={ask.streaming}
-						/>
+						<PlanInteractionCard pending={pending} />
 					</div>
-				</AskStatesContext.Provider>
+				</InteractionStatesContext.Provider>
 			</ChatActionsContext.Provider>
 		);
 	}

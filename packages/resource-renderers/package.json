@@ -18,7 +18,7 @@
 		"@thinkrail/locales": "workspace:*",
 		"@thinkrail/ui": "workspace:*",
 		"diff": "catalog:",
-		"jsondiffpatch": "0.7.3",
+		"jsondiffpatch": "0.7.6",
 		"monaco-editor": "0.57.0",
 		"node-htmldiff": "0.9.4",
 		"pdfjs-dist": "6.4.299",

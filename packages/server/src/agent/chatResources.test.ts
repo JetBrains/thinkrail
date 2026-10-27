@@ -17,12 +17,13 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { AskUserQuestionResult, SessionResources, SessionState } from "@thinkrail/contracts";
+import type { SessionResources, SessionState } from "@thinkrail/contracts";
 import type { ChildHandle } from "pi-delegation";
+import { interactiveTools } from "../extensions";
 import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
-	answerQuestion,
+	compactSession,
 	createSession,
 	deleteSession,
 	disposeAllSessions,
@@ -33,6 +34,7 @@ import {
 	reloadSessionResources,
 	removeSession,
 	removeWorkspaceSessions,
+	respondToTool,
 	setSessionCreatedPublisher,
 	setSessionManagerFactory,
 	setSessionProjectResolver,
@@ -41,7 +43,6 @@ import {
 	setSkillAdmissionResolver,
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
-import { ASK_ACK_TEXT, assessAnswerability } from "./askUserQuestion";
 import {
 	getSessionResources,
 	readBackgroundCommandOutput,
@@ -53,6 +54,7 @@ import {
 import { delegationServiceFor, readChildTranscript } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
 import { admissionContextFor } from "./skillAdmission";
+import { assessRespondability, TOOL_RESPONSE_PENDING_TEXT } from "./toolResponses";
 
 const model = {
 	id: "resources",
@@ -591,9 +593,9 @@ test("stop-all acknowledges after signalling every sibling without awaiting sett
 		expect(acknowledged).toBe(6);
 		await waitFor(async () => children.slice(4).every((c) => c.snapshot?.status === "aborted"));
 		expect(children.slice(4).every((c) => c.snapshot?.details.abortReason === "user")).toBe(true);
-		expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents).toHaveLength(
-			6,
-		);
+		const summaries = (await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents;
+		expect(summaries).toHaveLength(6);
+		expect(summaries.every((summary) => summary.detached === undefined)).toBe(true);
 	} finally {
 		gate.resolve();
 	}
@@ -1215,7 +1217,7 @@ test.each([
 	try {
 		await inGap.promise;
 		expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents).toMatchObject([
-			{ childSessionId: job.child.sessionId, status: "running" },
+			{ childSessionId: job.child.sessionId, status: "running", detached: true },
 		]);
 		if (timing === "gap") {
 			job.finish();
@@ -1260,7 +1262,7 @@ const resourceQuestion = {
 		},
 	],
 };
-const resourceAnswer: AskUserQuestionResult = {
+const resourceAnswer = {
 	cancelled: false,
 	answers: [
 		{
@@ -1364,7 +1366,7 @@ test.each([
 		expect(questionTurnEnded).toBe(false);
 		expect(continuationCalls).toBe(0);
 
-		await answerQuestion(p.sessionId, toolCallId, resourceAnswer);
+		await respondToTool(p.sessionId, toolCallId, resourceAnswer);
 		await waitFor(async () => continuationCalls === 1);
 		const answered = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
 		expect(questionTurnEnded).toBe(true);
@@ -1481,28 +1483,40 @@ test("stopped command completion cannot strand a live question across polite shu
 		expect(ack).toMatchObject([
 			{
 				toolName: "ask_user_question",
-				content: [{ type: "text", text: ASK_ACK_TEXT }],
+				content: [{ type: "text", text: TOOL_RESPONSE_PENDING_TEXT }],
 				details: { kind: "ack" },
 				isError: false,
 			},
 		]);
-		expect(assessAnswerability(reopened.messages, toolCallId).ok).toBe(true);
+		expect(
+			assessRespondability(
+				reopened.messages,
+				toolCallId,
+				interactiveTools(() => false),
+			).ok,
+		).toBe(true);
 		expect(SessionManager.open(path).buildSessionContext().messages.at(-1)).toEqual(ack[0]);
 		expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands).toEqual([]);
 		faux.setResponses([fauxAssistantMessage("RESOURCE_QUESTION_RESTART_ANSWERED")]);
-		await answerQuestion(p.sessionId, toolCallId, resourceAnswer);
+		await respondToTool(p.sessionId, toolCallId, resourceAnswer);
 		const answered = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
 		expect(answered.summary.isStreaming).toBe(false);
 		expect(answered.messages.filter((m) => m.role === "custom")).toMatchObject([
 			{
-				customType: "ask-user-answers",
-				details: { toolCallId, result: resourceAnswer },
+				customType: "tool-response",
+				details: { toolCallId, response: resourceAnswer },
 			},
 		]);
 		expect(JSON.stringify(answered.messages)).toContain("RESOURCE_QUESTION_RESTART_ANSWERED");
-		expect(assessAnswerability(answered.messages, toolCallId)).toEqual({
+		expect(
+			assessRespondability(
+				answered.messages,
+				toolCallId,
+				interactiveTools(() => false),
+			),
+		).toEqual({
 			ok: false,
-			reason: "already_answered",
+			reason: "already_responded",
 		});
 	} finally {
 		setSessionPublisher(() => {});
@@ -1510,4 +1524,63 @@ test("stopped command completion cannot strand a live question across polite shu
 		if (hasSession(p.sessionId)) await removeSession(p.sessionId);
 		await prompting?.catch(() => {});
 	}
+});
+
+test("a command that finishes during an idle manual compaction is reported once it ends", async () => {
+	const workspaceId = `resources-${++sequence}`;
+	const cwd = mkdtempSync(join(root, "compact-"));
+	mkdirSync(join(cwd, ".pi"));
+	writeFileSync(
+		join(cwd, ".pi", "settings.json"),
+		JSON.stringify({ compaction: { enabled: false, keepRecentTokens: 1, reserveTokens: 4096 } }),
+	);
+	const p = { workspaceId, cwd, ...(await createSession({ workspaceId, cwd })) };
+	const gate = join(cwd, "finish");
+	await launch(p, `while ! test -f '${gate}'; do sleep 0.02; done; printf COMPACTED_COMMAND`);
+	faux.setResponses([fauxAssistantMessage("SEED_ANSWER")]);
+	await promptSession(p.sessionId, "Seed some context to compact.");
+	const summaryGate = deferred();
+	const summaryStarted = deferred();
+	let wokeWithReport = false;
+	const summaryOrWake = (context: { messages: unknown[] }) => {
+		const text = JSON.stringify(context.messages);
+		if (text.includes("context summarization assistant"))
+			return fauxAssistantMessage("COMPACTION_SUMMARY");
+		wokeWithReport = text.includes("COMPACTED_COMMAND");
+		return fauxAssistantMessage("AFTER_COMPACTION");
+	};
+	faux.setResponses([
+		async () => {
+			summaryStarted.resolve();
+			await summaryGate.promise;
+			return fauxAssistantMessage("COMPACTION_SUMMARY");
+		},
+		summaryOrWake,
+		summaryOrWake,
+	]);
+	const compaction = compactSession(p.sessionId);
+	await summaryStarted.promise;
+	writeFileSync(gate, "done");
+	await waitFor(async () => {
+		const resources = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
+		return resources.commands.at(-1)?.status === "completed";
+	});
+	await Bun.sleep(20);
+	const during = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+	expect(
+		during.messages.filter(
+			(m) => m.role === "custom" && m.customType === "background-command-completion",
+		),
+	).toHaveLength(0);
+	summaryGate.resolve();
+	await compaction;
+	await waitFor(async () => {
+		const { messages, summary } = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+		return !summary.isStreaming && JSON.stringify(messages).includes("AFTER_COMPACTION");
+	});
+	expect(wokeWithReport).toBe(true);
+	const { messages } = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+	expect(
+		messages.filter((m) => m.role === "custom" && m.customType === "background-command-completion"),
+	).toHaveLength(1);
 });

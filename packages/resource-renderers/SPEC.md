@@ -29,7 +29,11 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   rules every surface shares: `resourceContent(text, meta, url)` (no metadata yet is provisional text, a
   missing hash is an absent side, a binary side without a byte URL is absent), `diffResourceMeta(original,
   modified)` (a diff is described by its modified side unless that side is absent, and is text only when
-  both present sides are) and `PENDING_TEXT_META` — plus `registerBundledResourceRenderers()` (idempotent);
+  both present sides are) and `PENDING_TEXT_META` — plus `registerBundledResourceRenderers()` (idempotent).
+  `diffRendererCapabilities` returns, from a path alone (before content loads), the capabilities of the
+  diff renderer it would resolve to — inferring the text/binary split from the path's MIME so known image
+  and PDF paths resolve to their layout-less renderers; MIME inference itself stays module-internal. A pane
+  uses it to hide scope-wide layout and whitespace controls no file can use;
 - the host seam — `ResourceHostProvider`, `ResourcePreferencesProvider`, `ResourceEnvironmentProvider`,
   `ResourceScopeProvider`, `useOptionalResourceHost`, `useResourceScope` and the `ResourceHost`,
   `ResourcePreferences`, `ResourceScope`, `ResourceFileReviewProps`, `ResourceReviewSendProps`,
@@ -176,6 +180,15 @@ keeps it.
   `LoadingRegion`) became `@thinkrail/ui/toggle-segment` and `@thinkrail/ui/skeleton` because the app uses
   them too. `describeResource` and `ResourcePreview` canonicalize paths through the package's own
   `canonicalWorkspacePath`, because the package cannot import the app's `lib`.
+- **Monaco runs its vendored DOMPurify.** `monaco-editor` sanitizes hovers and rendered markdown with its own
+  copy under `esm/vs/base/browser/dompurify`, so only a Monaco upgrade changes the sanitizer that runs; the
+  `dompurify` it declares is never imported. The vendored copy predates several DOMPurify advisories. The
+  exposure is accepted: this read-only reader has no language services, hover providers or decoration
+  hover messages, so hover markdown is Monaco's own, and it calls DOMPurify with hooks and
+  `RETURN_DOM_FRAGMENT`, never `IN_PLACE` or `SAFE_FOR_TEMPLATES`.
+  Monaco 0.57 vendors 3.4.15. The root `overrides.dompurify` pin only keeps the declared copy on Mermaid's
+  patched version (Mermaid does import it); it is not a Monaco fix. Re-check the vendored banner on every
+  Monaco upgrade.
 
 ## Boundary
 

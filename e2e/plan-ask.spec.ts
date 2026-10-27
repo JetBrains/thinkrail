@@ -1,7 +1,8 @@
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import type { AskUserQuestionAckDetails, AskUserQuestionArgs } from "@thinkrail/contracts";
+import type { ToolResponsePendingDetails } from "@thinkrail/contracts";
+import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
 	enterDefaultWorkspace,
 	hideAuxiliaryWorkbench,
@@ -30,7 +31,7 @@ test("a pending ask surfaces on the rail as waiting_question glance, not paused"
 			},
 		],
 	};
-	const ack: AskUserQuestionAckDetails = { kind: "ack" };
+	const ack: ToolResponsePendingDetails = { kind: "ack" };
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: "rail glance on pending ask",
 		messages: [
@@ -81,7 +82,7 @@ test("a pending ask_user_question is answerable from the plan page", async ({ pa
 			},
 		],
 	};
-	const ack: AskUserQuestionAckDetails = { kind: "ack" };
+	const ack: ToolResponsePendingDetails = { kind: "ack" };
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: "plan ask question",
 		messages: [
