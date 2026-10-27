@@ -61,7 +61,7 @@ by typing a command? In any case, before you make the decision, try out the desk
 Go to [**our main webpage**](https://jb.gg/osk2n7) and choose an installation package for your operating system: macOS, Windows, or Linux (Ubuntu) - or simply use the widget at the bottom of this blog post.
 
 By the way, find us on social media platforms: [**X/Twitter**](https://x.com/ThinkRailAI), [**YouTube**](https://www.youtube.com/@ThinkRailAI), and [**TikTok**](https://www.tiktok.com/@thinkrail).
-You can also browse [**our GitHub repository**](https://github.com/JetBrains/thinkrail),
+You can also browse [**our GitHub repository**](https://github.com/thinkrail/thinkrail),
 take [**our survey**](https://forms.gle/es1ksqAax6hnDWCP8), and join [**our Discord server**](https://thinkrail.ai/discord)
 to say "hi!" and let us know what you think. Your feedback is greatly appreciated.
 

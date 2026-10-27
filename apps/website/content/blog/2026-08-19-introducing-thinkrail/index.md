@@ -19,26 +19,26 @@ We believe ThinkRail can make Pi more accessible without compromising its power.
 
 Download the stable desktop application for your platform:
 
-- [macOS — Apple Silicon (.dmg)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-arm64.dmg)
-- [Windows — x64 (.zip)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-windows-x64.zip) — unzip it, then run Setup with its adjacent payload
-- [Linux — x64 (.tar.gz)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-x64.tar.gz)
-- [Linux — ARM64 (.tar.gz)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-arm64.tar.gz)
+- [macOS — Apple Silicon (.dmg)](https://thinkrail.ai/releases/latest/download/thinkrail-desktop-darwin-arm64.dmg)
+- [Windows — x64 (.zip)](https://thinkrail.ai/releases/latest/download/thinkrail-desktop-windows-x64.zip) — unzip it, then run Setup with its adjacent payload
+- [Linux — x64 (.tar.gz)](https://thinkrail.ai/releases/latest/download/thinkrail-desktop-linux-x64.tar.gz)
+- [Linux — ARM64 (.tar.gz)](https://thinkrail.ai/releases/latest/download/thinkrail-desktop-linux-arm64.tar.gz)
 
 For either Linux archive, extract it and run `./installer`. Linux desktop builds require Ubuntu 24.04+ or another distribution with glibc 2.38 and the required GTK/WebKitGTK libraries.
 
 Prefer the command line? The CLI/browser host remains available for terminal and remote workflows. Its install,
-channel, and update options are documented in the [project install guide](https://github.com/JetBrains/thinkrail#install).
+channel, and update options are documented in the [project install guide](https://thinkrail.ai/#install).
 
 **macOS/Linux/WSL:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
+curl -fsSL https://thinkrail.ai/install.sh | bash
 ```
 
 **Windows — PowerShell:**
 
 ```powershell
-irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex
+irm https://thinkrail.ai/install.ps1 | iex
 ```
 
 Launch the desktop app and choose a Git repository. If you installed the CLI, run `thinkrail`; your browser will open a new tab prompting you to open your first local project. Every working session operates on a separate Git branch that merges with the original repository only after the work is finished and reviewed.
@@ -71,7 +71,7 @@ ThinkRail is in the early stages of development, and we are eager to hear your q
 
 1. **Try ThinkRail**: Launch it locally and try it out!
 2. [**Visit our webpage**](https://jb.gg/osk2n7): The ThinkRail landing page serves a dual purpose: it both describes and demonstrates the product. There you can learn more about each feature and the team behind ThinkRail.
-3. [**Browse our GitHub repository**](https://github.com/JetBrains/thinkrail)
+3. [**Browse our GitHub repository**](https://github.com/thinkrail/thinkrail)
 4. Find us on social media platforms: [**X/Twitter**](https://x.com/ThinkRailAI), [**YouTube**](https://www.youtube.com/@ThinkRailAI), and [**TikTok**](https://www.tiktok.com/@thinkrail).
 5. [**Join Our Discord server**](https://thinkrail.ai/discord): Say "hi" and let us know what you think about ThinkRail.
 6. [**Take Our Survey**](https://forms.gle/es1ksqAax6hnDWCP8): Share how you use Pi, what frustrates you, and what features you would like to see in ThinkRail. Your input will directly influence our roadmap.

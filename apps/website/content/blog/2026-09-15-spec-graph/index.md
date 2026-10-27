@@ -96,7 +96,7 @@ not getting in the way if everything works well.
 To read those documents, look to the right panel in ThinkRail. There you will find the Specs tab. When you open it, 
 you will see the titles of all specs in the project, already organized in a foldable tree. By unfolding it, you gain 
 access to specs from submodules, and by clicking on them, you open them in read-only mode in the central panel. 
-In the following video you can see how the spec graph looks like in [the ThinkRail project itself](https://github.com/JetBrains/thinkrail):
+In the following video you can see how the spec graph looks like in [the ThinkRail project itself](https://github.com/thinkrail/thinkrail):
 
 <iframe src="https://youtube.com/embed/603EdnbbDYo" width="640" height="360" allow="autoplay" allowfullscreen></iframe>
 
@@ -107,7 +107,7 @@ your project, and let us know: what do you work on? Has SDD helped you? Or have 
 
 To try out ThinkRail, visit [**our main webpage**](https://jb.gg/osk2n7) and follow the installation
 instructions. Find us on social media platforms: [**X/Twitter**](https://x.com/ThinkRailAI), [**YouTube**](https://www.youtube.com/@ThinkRailAI), and [**TikTok**](https://www.tiktok.com/@thinkrail).
-You can also browse [**our GitHub repository**](https://github.com/JetBrains/thinkrail),
+You can also browse [**our GitHub repository**](https://github.com/thinkrail/thinkrail),
 take [**our survey**](https://forms.gle/es1ksqAax6hnDWCP8), and join [**our Discord server**](https://thinkrail.ai/discord)
 to say "hi!" and let us know what you think. Your feedback is greatly appreciated.
 
