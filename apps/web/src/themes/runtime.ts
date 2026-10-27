@@ -46,7 +46,7 @@ export type ThemePreference = ConfigThemePreference;
 
 export interface UserThemeIssue {
 	readonly fileName: string;
-	readonly error: UserThemeFileErrorCode | "invalid-theme" | "duplicate-id";
+	readonly error: UserThemeFileErrorCode | "invalid-theme" | "id-too-long" | "duplicate-id";
 	readonly detail?: string;
 }
 
@@ -232,11 +232,7 @@ export function installUserThemes(files: readonly UserThemeFile[]): void {
 				detail: parsed.issues.join("; "),
 			});
 		} else if (!isThemeIdSlug(id)) {
-			issues.push({
-				fileName: file.fileName,
-				error: "invalid-theme",
-				detail: `theme.id must be at most ${64 - USER_THEME_ID_PREFIX.length} characters`,
-			});
+			issues.push({ fileName: file.fileName, error: "id-too-long", detail: parsed.value.id });
 		} else if (byId.has(id)) {
 			issues.push({ fileName: file.fileName, error: "duplicate-id", detail: parsed.value.id });
 		} else {

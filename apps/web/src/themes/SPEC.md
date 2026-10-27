@@ -127,7 +127,7 @@ configured default, or catalog without at least one light and one dark manifest 
 tests catch it before merge). Runtime and JSON-schema validation agree.
 
 **User theme files are held to the same schema but fail soft.** Each file is validated on its own; an
-unusable one becomes a `UserThemeIssue` (the host's read codes, `invalid-theme`, or `duplicate-id`
+unusable one becomes a `UserThemeIssue` (the host's read codes, `invalid-theme`, `id-too-long`, or `duplicate-id`
 between two user files) and the rest still load. The legibility and AAA gates above are merge gates for
 our files and are deliberately not applied to user files — their contrast is the user's choice. The
 user's file name carries no meaning; the id inside it does.

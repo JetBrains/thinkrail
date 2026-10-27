@@ -1400,6 +1400,7 @@
 	"settings.appearance.contrastLevel": "Contrast level",
 	"settings.appearance.currentOnDevice": "Current on this device",
 	"settings.appearance.custom.error.duplicateId": "Another theme file already uses this id.",
+	"settings.appearance.custom.error.idTooLong": "The theme id is too long. Use at most 59 characters.",
 	"settings.appearance.custom.error.invalidJson": "The file isn't valid JSON.",
 	"settings.appearance.custom.error.invalidTheme": "The file isn't a complete theme.",
 	"settings.appearance.custom.error.tooLarge": "The file is larger than 256 KB.",

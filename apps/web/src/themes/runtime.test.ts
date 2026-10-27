@@ -178,7 +178,7 @@ test("user themes join the catalog under the user namespace; invalid and duplica
 		expect(resolveThemePreference({ theme: "dark", themeMode: "fixed" }).theme.label).toBe("Dark");
 		expect(getUserThemeIssues().map((issue) => [issue.fileName, issue.error])).toEqual([
 			["copy.theme.json", "duplicate-id"],
-			["long.theme.json", "invalid-theme"],
+			["long.theme.json", "id-too-long"],
 			["partial.theme.json", "invalid-theme"],
 			["broken.theme.json", "invalid-json"],
 		]);
