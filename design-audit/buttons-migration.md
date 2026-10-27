@@ -173,10 +173,10 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 
 | Site | Before | After | Notes |
 | --- | --- | --- | --- |
-| `chat/tools/AskUserQuestionCard.tsx:667` | raw <button> ask-skip: transparent, text-text-muted, hover text-default, px-4 tr-text-ui (~18px) | Button ghost l | size l via sizeException (footer pair with Next/Submit); disabled={!actions} kept; className shrink-0 |
-| `chat/tools/AskUserQuestionCard.tsx:678` | raw <button> ask-continue: bg-control-primary-bg px-12 py-8 tr-text-action (~34px) | Button primary l | label 'Next →' kept; className shrink-0 |
-| `chat/tools/AskUserQuestionCard.tsx:688` | raw <button> ask-submit: bg-control-primary-bg px-12 py-8 + disabled skin (~34px) | Button primary l | disabled={!canSubmit} kept; disabled:cursor-not-allowed skin dropped (component owns disabled) |
-| `chat/tools/AskUserQuestionCard.tsx:1012` | raw <button> ask-note-toggle: transparent text-text-muted tr-text-metadata, hover text-default, Pencil size-12 (~15px) | Button ghost s iconLeft=Pencil | aria-label kept; audit family link-action but not underlined/not prose — looks like a ghost text button with icon |
+| `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx:667` | raw <button> ask-skip: transparent, text-text-muted, hover text-default, px-4 tr-text-ui (~18px) | Button ghost l | size l via sizeException (footer pair with Next/Submit); disabled={!canRespond} kept; className shrink-0 |
+| `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx:678` | raw <button> ask-continue: bg-control-primary-bg px-12 py-8 tr-text-action (~34px) | Button primary l | label 'Next →' kept; className shrink-0 |
+| `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx:688` | raw <button> ask-submit: bg-control-primary-bg px-12 py-8 + disabled skin (~34px) | Button primary l | disabled={!canSubmit} kept; disabled:cursor-not-allowed skin dropped (component owns disabled) |
+| `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx:1012` | raw <button> ask-note-toggle: transparent text-text-muted tr-text-metadata, hover text-default, Pencil size-12 (~15px) | Button ghost s iconLeft=Pencil | aria-label kept; audit family link-action but not underlined/not prose — looks like a ghost text button with icon |
 | `chat/resources/ResourcesButton.tsx:35` | Button ghost sm + h-panel-header-control (24px) gap-4 tr-text-metadata aria-expanded:bg-control-bg-selected, icon child size-14 with motion-safe:animate-working when live | Button ghost m iconLeft={Stack icon} selected={open} | aria-expanded:bg-control-bg-selected replaced by selected={open}; breathing animation kept via module-level icon wrappers (breathing(RiStackFill/RiStackLine)) since iconLeft takes a component; IconTooltip wrapTrigger, aria-*, data-* kept |
 | `chat/resources/CommandLogView.tsx:23` | Button ghost sm (28) | Button ghost m |  |
 | `chat/resources/ResourcesInspector.tsx:298` | raw <button> resources-inspector-close: size-28 ghost-like, RiCloseLine size-16, aria-label 'Close resources', no tooltip | IconButton ghost m icon=RiCloseLine label='Close resources' | now gains a 'Close resources' tooltip (IconButton label = tooltip) |
@@ -255,7 +255,7 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 
 ## Size exceptions
 
-- `chat/tools/AskUserQuestionCard.tsx:667` → `l`: Skip sits in the card footer action pair beside Next/Submit (primary l, 32px); as a ghost it now shows a hover fill, so a 20px Skip next to a 32px primary would misalign the button pair. Nearest-height rule alone would give s (~18px).
+- `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx:667` → `l`: Skip sits in the card footer action pair beside Next/Submit (primary l, 32px); as a ghost it now shows a hover fill, so a 20px Skip next to a 32px primary would misalign the button pair. Nearest-height rule alone would give s (~18px).
 - `thinkrail-extensions/visualize/web/PanZoomView.tsx:139` → `m`: Was 22px (tie → s), but it sits in one zoom toolbar with the 24px zoom-out/zoom-in buttons; m keeps the row uniform
 
 ## Remaining exceptions (kept as-is, need a variant decision)
@@ -277,7 +277,7 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 - `chat/Composer.tsx:661`: rounded-full 28px ghost circle (History: `Button variant="ghost" size="icon"` under IconTooltip) (apps/web/src/chat/SPEC.md (Composer trailing controls))
 - `chat/Composer.tsx:673`: Stop as rounded-full h-28 ghost pill; compact mode collapses to a 28px icon circle (@max-md:w-28 px-0) — now a ghost m button that collapses to a 24px square (@max-md:w-24 px-0) (apps/web/src/chat/SPEC.md (Composer trailing controls / Compact mode))
 - `chat/ExtUiPrompt.tsx:15`: OPTION_BUTTON h-auto min-h-28 whitespace-normal break-words justify-start text-left py-4 — 'Option buttons wrap long labels' (apps/web/src/chat/SPEC.md (Extension dialogs ask inside the chat))
-- `chat/tools/AskUserQuestionCard.tsx:667,678,688,1012`: focus-visible:ring-2 ring-primary focus ring on Skip/Next/Submit/Add note — SPEC says every focus indicator in the card is the app-wide `focus-visible:ring-2` + `ring-primary` ring; the shared Button uses an offset `outline-primary` focus outline instead (still accent) (apps/web/src/chat/tools/SPEC.md ("Every focus indicator in the card is the app-wide accent focus ring"))
+- `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx:667,678,688,1012`: focus-visible:ring-2 ring-primary focus ring on Skip/Next/Submit/Add note — SPEC says every focus indicator in the card is the app-wide `focus-visible:ring-2` + `ring-primary` ring; the shared Button uses an offset `outline-primary` focus outline instead (still accent) (apps/web/src/chat/tools/SPEC.md ("Every focus indicator in the card is the app-wide accent focus ring"))
 - `chat/resources/mcpRow.tsx:164`: SPEC calls the section header's Settings a "link" (`resources-mcp-settings`); it is now a soft-primary s button (wording only) (apps/web/src/chat/resources/SPEC.md (MCP servers paragraph))
 
 ## Specialized buttons not converted
@@ -348,10 +348,10 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 | chat | `chat/TodoList.tsx:342` | text link-action path (CHAT-170) |
 | chat | `prompt/SlashCommandCompletion.tsx:152` | template slot-hint chip (CHAT-086) |
 | chat | `prompt/SlashCommandCompletion.tsx:188` | slash command menu item (CHAT-084) |
-| tools | `chat/tools/AskUserQuestionCard.tsx:779` | TabChip (ask-tab) — tab strip |
-| tools | `chat/tools/AskUserQuestionCard.tsx:1093` | OptionRow (ask-option) — radio/checkbox option card |
-| tools | `chat/tools/AskUserQuestionCard.tsx:1174` | OtherOptionRow ask-custom-toggle — checkbox/radio indicator |
-| tools | `chat/tools/AskUserQuestionCard.tsx:1299` | ask-unanswered — warning-coloured underlined text link |
+| tools | `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx:779` | TabChip (ask-tab) — tab strip |
+| tools | `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx:1093` | OptionRow (ask-option) — radio/checkbox option card |
+| tools | `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx:1174` | OtherOptionRow ask-custom-toggle — checkbox/radio indicator |
+| tools | `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx:1299` | ask-unanswered — warning-coloured underlined text link |
 | tools | `chat/tools/mcp/McpActions.tsx:33` | CliActionButton (ACTION_CLASS) — accent text link with hover:underline |
 | tools | `chat/tools/mcp/McpActions.tsx:86` | mcp-full-output-retry (ACTION_CLASS) — underlined text link inside an error paragraph |
 | tools | `chat/tools/mcp/McpActions.tsx:163` | mcp-full-output trigger (ACTION_CLASS) — accent text link with hover:underline |
@@ -406,6 +406,8 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 Not moved, by design: model / thinking selector triggers (select family, `data-[open]` border), the history scope chip, and the raw red / amber / green-on-hover actions below (`tone` colours a ghost or outline label in every state; a hover-only colour has no variant).
 
 ## Review follow-ups (after the rebase onto main)
+
+The ask-user-question card moved into `thinkrail-extensions/ask-user-question` on main (#869); its rows below carry the new path, and its migration came along with it.
 
 System-level changes made while addressing the PR review; per-site rows above are updated where they changed.
 
@@ -462,7 +464,7 @@ _Why:_ two-part pills with their own tones: the composer send pill (chat/SPEC.md
 
 _Why:_ selection grammar of a tab strip / nav list.
 
-- `web/chat/tools/AskUserQuestionCard.tsx:783` `ask-tab`
+- `ext/ask-user-question/web/AskUserQuestionCard.tsx:783` `ask-tab`
 - `web/panels/SettingsDialog.tsx:74` `settings-nav-${id`
 - `web/panels/SettingsDialog.tsx:96` `settings-nav-feedback`
 
@@ -473,8 +475,8 @@ _Why:_ radio / checkbox / switch semantics.
 - `web/chat/ModelEffortPicker.tsx:273` `thinking-option`
 - `web/chat/TemplateEditorDialog.tsx:272` `template-scope-${id`
 - `web/chat/ThinkingSelector.tsx:43` `thinking-option`
-- `web/chat/tools/AskUserQuestionCard.tsx:1104` `ask-option`
-- `web/chat/tools/AskUserQuestionCard.tsx:1186` `ask-custom-toggle`
+- `ext/ask-user-question/web/AskUserQuestionCard.tsx:1104` `ask-option`
+- `ext/ask-user-question/web/AskUserQuestionCard.tsx:1186` `ask-custom-toggle`
 - `web/panels/AppearanceSettings.tsx:169` `theme-option-${id`
 - `web/panels/MergePrDialog.tsx:69`
 - `web/panels/PrComposeDialog.tsx:81`
@@ -564,7 +566,7 @@ _Why:_ inline underlined or link-coloured text inside prose or metadata.
 - `web/chat/TodoList.tsx:353` `todo-change-path`
 - `web/chat/activityBreadcrumbs.tsx:132`
 - `web/chat/assistantLinks.tsx:108` `chat-file-link`
-- `web/chat/tools/AskUserQuestionCard.tsx:1315` `ask-unanswered`
+- `ext/ask-user-question/web/AskUserQuestionCard.tsx:1315` `ask-unanswered`
 - `web/chat/tools/ToolFileLink.tsx:39` `tool-file-link`
 - `web/chat/tools/mcp/McpActions.tsx:35` `mcp-cli-action`
 - `web/chat/tools/mcp/McpActions.tsx:89` `mcp-full-output-retry`

@@ -134,7 +134,7 @@ const SPECIALIZED: Exception[] = [
 		reason: "sign-in method choice rows: multi-line, left-aligned option cards, not actions",
 	},
 	{
-		file: "chat/tools/AskUserQuestionCard.tsx",
+		file: "thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx",
 		contains: 'data-testid="ask-tab"',
 		reason: "question pager tabs (role=tab) of the ask-user-question card",
 	},
