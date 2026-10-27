@@ -151,21 +151,23 @@ test("project names drag whole groups without navigation and keep their order af
 	expect(page.url()).toBe(location);
 });
 
-test("cancelled and external project drops leave the rail unchanged", async ({
-	page,
-}, testInfo) => {
+test("cancelled and outside project drops leave the rail unchanged", async ({ page }, testInfo) => {
 	await openFixtureProject(page);
 	seedSecondRepo();
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 	const names = page.getByTestId("project-name");
 	await expect(names).toHaveText(["second-project", "sample-project"]);
-	const target = page.getByTestId("project-group").first();
+	const groups = page.getByTestId("project-group");
+	const target = groups.first();
+	const source = groups.last();
+	await expect(target.getByTestId("workspace-item").first()).toBeVisible();
 	await names.last().hover();
 	await page.mouse.down();
 	const box = await target.boundingBox();
 	if (!box) throw new Error("Project group is missing");
 	await page.mouse.move(box.x + 40, box.y + 2, { steps: 8 });
+	await page.mouse.move(box.x + 42, box.y + 3);
 	await page.mouse.move(box.x + 42, box.y + 3);
 	await expect(target).toHaveAttribute("data-drop-placement", "before");
 	const indicator = await target.evaluate((element) => {
@@ -184,16 +186,46 @@ test("cancelled and external project drops leave the rail unchanged", async ({
 	await page.keyboard.press("Escape");
 	await page.mouse.up();
 	await expect(target).not.toHaveAttribute("data-drop-placement");
+	await expect(source).not.toHaveClass(/opacity-50/);
 	await expect(names).toHaveText(["second-project", "sample-project"]);
 
-	await names.last().dragTo(page.getByTestId("welcome-title"));
+	await names.last().hover();
+	await page.mouse.down();
+	await target.hover({ position: { x: 40, y: 2 } });
+	await target.hover({ position: { x: 40, y: 2 } });
+	await expect(target).toHaveAttribute("data-drop-placement", "before");
+	await page.getByTestId("welcome-title").hover();
+	await page.getByTestId("welcome-title").hover();
+	await expect(source).toHaveClass(/opacity-50/);
+	await expect(target).not.toHaveAttribute("data-drop-placement");
+	await page.mouse.up();
+	await expect(source).not.toHaveClass(/opacity-50/);
+	await expect(target).not.toHaveAttribute("data-drop-placement");
 	await expect(names).toHaveText(["second-project", "sample-project"]);
-	const transfer = await page.evaluateHandle(() => {
+	await expect(page.getByTestId("welcome-title")).toHaveText("second-project");
+});
+
+test("external project drops leave the rail unchanged", async ({ page }) => {
+	await openFixtureProject(page);
+	await expect(page).toHaveURL(/#\/v1\/projects\/[^/]+$/);
+	const sourceProjectId = new URL(page.url()).hash.split("/").at(-1);
+	if (!sourceProjectId) throw new Error("Source project ID is missing");
+	seedSecondRepo();
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	const names = page.getByTestId("project-name");
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	const target = page.getByTestId("project-group").first();
+	await expect(target.getByTestId("workspace-item").first()).toBeVisible();
+	const box = await target.boundingBox();
+	if (!box) throw new Error("Project group is missing");
+	const transfer = await page.evaluateHandle((projectId) => {
 		const data = new DataTransfer();
-		data.setData("application/x-thinkrail-project", "external-project");
+		data.setData("application/x-thinkrail-project", projectId);
 		return data;
-	});
+	}, sourceProjectId);
 	await target.dispatchEvent("dragover", { dataTransfer: transfer, clientY: box.y });
+	await expect(target).not.toHaveAttribute("data-drop-placement");
 	await target.dispatchEvent("drop", { dataTransfer: transfer, clientY: box.y });
 	await transfer.dispose();
 	await expect(names).toHaveText(["second-project", "sample-project"]);
