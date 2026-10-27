@@ -31,17 +31,21 @@ The app's Tailwind sources and adoption guards include this package and extensio
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /
 `iconRight`), `IconButton` (icon only — `label` is required and becomes both the `aria-label` and the shared
-`IconTooltip`), and `buttonVariants` for a non-button element that must look like one (a link), with
+`IconTooltip`), and `buttonVariants` for a non-button element that must look like one (a link) — it
+returns the same merged class list the components render, compounds resolved — with
 `buttonDataAttributes` giving such an element the same `data-slot` / `data-variant` / `data-size` /
 `data-icon-only` / `data-selected` contract the components render (the panel tool rails, the Monaco
 comment widget), and `withIconClass(Icon, classes)` for a tinted or animated glyph (a success check, a
 working pulse) — created once at module scope, never during render, so the icon keeps its identity. Neither
 component accepts a native `title`: an explanation is `tooltip` (on `IconButton` it overrides the label's
 tooltip text), rendered through the same `IconTooltip`, so it also shows on a disabled button — the
-place a reason for being unavailable matters most. A caller that passes `disabled` at all (even `false`)
-gets the `wrapTrigger` span automatically, so the tooltip survives the disabled button's
-`pointer-events: none` and the DOM shape never changes when `disabled` toggles; an explicit `wrapTrigger`
-still isolates a second Radix trigger, and `wrapTrigger={false}` opts out. Every
+place a reason for being unavailable matters most. While `disabled`, a button moves its tooltip trigger to
+the `wrapTrigger` span automatically, so the tooltip survives the disabled button's `pointer-events:
+none`; the value, not the prop's presence, decides, because a Radix trigger such as
+`DropdownMenuTrigger asChild` injects `disabled={false}` into every child and a wrapper would take a
+text button's `min-w-0` truncation away. The button element remounts inside the span when `disabled`
+flips; an explicit `wrapTrigger` keeps the span permanently (and isolates a second Radix trigger), and
+`wrapTrigger={false}` opts out. Every
 ordinary action in the app, the renderer package and extension web halves renders through it; a raw
 `<button>` carrying a button skin is rejected by `apps/web/src/styles/buttonUsage.test.ts` unless that
 test's documented specialized list names it.
@@ -85,7 +89,9 @@ test's documented specialized list names it.
   row carries `data-row`, and a `ghost` button inside it takes `container-elevated-bg` for hover, pressed,
   focus-visible and selected instead — the raised look row actions had before the system — so a hovered
   row action and an open row menu stay visible against the filled row. Marked rows: project and workspace
-  rows, change rows, todo rows, history-overlay rows and every cmdk `CommandItem`.
+  rows, change rows, todo rows, every cmdk `CommandItem`, and a history-overlay row only while it is
+  selected — those rows sit on the overlay's elevated surface and fill only when selected, so an unselected
+  row keeps ghost's own hover fill.
 - **Call sites own placement only**: margins, self/flex/grid placement, `w-full`, positioning, responsive
   visibility and whole-button hover reveal. Height, padding, gap, radius, colours, borders, typography and
   state skins are rejected by the adoption guard. Documented exceptions live in that guard with a reason
@@ -120,7 +126,7 @@ moved here from the app when the resource renderers became a package, because bo
   sets the delay. Native `title` remains only for non-control truncation fallbacks or surfaces outside
   the provider (the app's review widgets). `wrapTrigger` supplies the interactive flex span for a disabled
   control or another Radix trigger, isolating their `data-state` values; callers do not hand-roll that
-  wrapper, and `Button`/`IconButton` apply it themselves whenever the caller passes `disabled`. App, SDK,
+  wrapper, and `Button`/`IconButton` apply it themselves while disabled. App, SDK,
   and extension web call-site tests enforce the no-hand-rolled-span convention. `IconTooltip` opens on
   hover and on *keyboard-visible* focus only: focus that does not match `:focus-visible` (a dialog's or
   popover's autofocus after a pointer open, focus returning to a clicked trigger) never opens it, because

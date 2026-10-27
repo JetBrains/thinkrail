@@ -410,7 +410,7 @@ System-level changes made while addressing the PR review; per-site rows above ar
 
 | Change | Where | Why |
 | --- | --- | --- |
-| `IconButton` wraps its tooltip trigger whenever the caller passes `disabled` (even `false`); `Button` gains `tooltip`; neither accepts `title` | `packages/ui/button.tsx`; 9 former `title` sites (PlanPane ×4, ChangesReviewGuide apply, ChangesScopeMenu, PlanCommitsMenu, PrSetupDialog run, SubagentSettings) | a disabled button's `pointer-events: none` hid both a native `title` and an unwrapped tooltip, so the reason it was unavailable never showed |
+| `Button` / `IconButton` move their tooltip trigger to the wrapper span while `disabled`; `Button` gains `tooltip`; neither accepts `title` | `packages/ui/button.tsx`; 9 former `title` sites (PlanPane ×4, ChangesReviewGuide apply, ChangesScopeMenu, PlanCommitsMenu, PrSetupDialog run, SubagentSettings) | a disabled button's `pointer-events: none` hid both a native `title` and an unwrapped tooltip, so the reason it was unavailable never showed |
 | ghost inside a `data-row` takes `container-elevated-bg` for hover / pressed / focus / selected | project and workspace rows, change rows, todo rows, history-overlay rows, cmdk `CommandItem` | row fills and ghost fills are the same `--hover` role, so row actions and open row menus were invisible |
 | `soft-primary` selected = its hover look | turn-divider artifact chip (`selected={many && expanded}`) | an expanded "N files" chip looked collapsed |
 | `tone` (`warning` / `danger`) on ghost and outline | ResourcesAttention, Stop all, resource-detail Stop, model-picker pinned star | a call-site colour lost to ghost's own focus / pressed text |

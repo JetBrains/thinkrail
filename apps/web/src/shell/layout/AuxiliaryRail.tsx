@@ -31,9 +31,11 @@ export function railEntryFrameClass(region: LayoutAuxiliaryRegion | "center"): s
 	);
 }
 
-export const RAIL_ENTRY_BUTTON_CLASS = cn(
-	buttonVariants({ variant: "ghost", size: "m", shape: "icon" }),
-);
+export const RAIL_ENTRY_BUTTON_CLASS = buttonVariants({
+	variant: "ghost",
+	size: "m",
+	shape: "icon",
+});
 
 export function railEntryButtonProps(active: boolean) {
 	return buttonDataAttributes({ variant: "ghost", size: "m", iconOnly: true, selected: active });

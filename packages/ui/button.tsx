@@ -12,7 +12,7 @@ export type ButtonIcon = React.ElementType<{
 	"aria-hidden"?: React.AriaAttributes["aria-hidden"];
 }>;
 
-const buttonVariants = cva(
+const variantClasses = cva(
 	[
 		"relative inline-flex select-none items-center justify-center whitespace-nowrap rounded-sm border tr-text-button",
 		"outline-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary focus-visible:outline-solid",
@@ -210,7 +210,7 @@ export function Button({
 			ref={ref}
 			type={type}
 			{...buttonDataAttributes({ variant, size })}
-			className={cn(buttonVariants({ variant, size, shape: "text", tone }), className)}
+			className={cn(variantClasses({ variant, size, shape: "text", tone }), className)}
 			{...props}
 			{...stateProps(props, selected, loading)}
 		>
@@ -254,7 +254,7 @@ export function Button({
 		tooltip,
 		tooltipSide,
 		tooltipAlign,
-		wrapTrigger ?? "disabled" in props,
+		wrapTrigger ?? props.disabled === true,
 	);
 }
 
@@ -290,7 +290,7 @@ export function IconButton({
 			type={type}
 			aria-label={label}
 			{...buttonDataAttributes({ variant, size, iconOnly: true })}
-			className={cn(buttonVariants({ variant, size, shape: "icon", tone }), className)}
+			className={cn(variantClasses({ variant, size, shape: "icon", tone }), className)}
 			{...props}
 			{...stateProps(props, selected, loading)}
 		>
@@ -307,8 +307,10 @@ export function IconButton({
 		tooltip ?? label,
 		tooltipSide,
 		tooltipAlign,
-		wrapTrigger ?? "disabled" in props,
+		wrapTrigger ?? props.disabled === true,
 	);
 }
 
-export { buttonVariants };
+export function buttonVariants(options?: Parameters<typeof variantClasses>[0]): string {
+	return cn(variantClasses(options));
+}

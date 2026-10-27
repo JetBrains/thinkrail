@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { RiAddLine, RiArrowRightSLine } from "@remixicon/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Button, type ButtonSize, type ButtonVariant, buttonVariants, IconButton } from "./button";
+import { DropdownMenu, DropdownMenuTrigger } from "./dropdown-menu";
 import { TooltipProvider } from "./tooltip";
 
 const VARIANTS: ButtonVariant[] = ["primary", "soft-primary", "outline", "ghost", "destructive"];
@@ -92,6 +93,15 @@ test("focus is an offset outline in every variant, never a ring", () => {
 	}
 });
 
+test("buttonVariants resolves its own compounds, so a link or rail styled with it matches the component", () => {
+	const ghostIcon = buttonVariants({ variant: "ghost", size: "m", shape: "icon" }).split(" ");
+	expect(ghostIcon).toContain("focus-visible:-outline-offset-2");
+	expect(ghostIcon).not.toContain("focus-visible:outline-offset-2");
+	const warning = buttonVariants({ variant: "ghost", tone: "warning" }).split(" ");
+	expect(warning).toContain("text-feedback-warning");
+	expect(warning).not.toContain("text-text-muted");
+});
+
 test("no state is drawn with opacity", () => {
 	for (const variant of VARIANTS) expect(buttonVariants({ variant })).not.toMatch(/opacity/);
 });
@@ -158,18 +168,30 @@ test("selected is a persistent attribute, and an open Radix trigger counts as se
 describe("a tooltip still explains a disabled button", () => {
 	const wrapped = (markup: string) => /^<span class="flex"[^>]*><button/.test(markup);
 
-	test("an IconButton whose caller controls disabled is wrapped, whatever the current value", () => {
+	test("a disabled IconButton moves its tooltip trigger to the wrapper span", () => {
 		expect(wrapped(render(<IconButton icon={RiAddLine} label="Next page" disabled />))).toBe(true);
 		expect(
 			wrapped(render(<IconButton icon={RiAddLine} label="Next page" disabled={false} />)),
-		).toBe(true);
+		).toBe(false);
 		expect(wrapped(render(<IconButton icon={RiAddLine} label="Add" />))).toBe(false);
 		expect(
 			wrapped(render(<IconButton icon={RiAddLine} label="Add" disabled wrapTrigger={false} />)),
 		).toBe(false);
+		expect(wrapped(render(<IconButton icon={RiAddLine} label="Menu" wrapTrigger />))).toBe(true);
 	});
 
-	test("a Button tooltip renders through IconTooltip and wraps when disabled is controlled", () => {
+	test("a Radix trigger's injected disabled={false} never wraps its child", () => {
+		const markup = render(
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button tooltip="All changes since main">Scope</Button>
+				</DropdownMenuTrigger>
+			</DropdownMenu>,
+		);
+		expect(markup.startsWith("<button")).toBe(true);
+	});
+
+	test("a Button tooltip renders through IconTooltip and wraps while disabled", () => {
 		const plain = render(<Button>Check it</Button>);
 		expect(plain).not.toContain("data-state");
 		const enabled = render(<Button tooltip="Explains the action">Open PR</Button>);
