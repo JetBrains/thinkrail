@@ -2,6 +2,7 @@
 
 [![JetBrains incubator project](https://jb.gg/badges/incubator-plastic.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
 [![GitHub stars](https://img.shields.io/github/stars/JetBrains/thinkrail?style=social)](https://star-history.com/#JetBrains/thinkrail&Date)
+[![Discord](https://img.shields.io/badge/Discord-Join%20the%20chat-5865F2?logo=discord&logoColor=white)](https://thinkrail.ai/discord)
 
 ThinkRail is the agentic IDE that gets better every time you use it — learning your project through
 living specs today, and building its own capabilities tomorrow.
@@ -11,7 +12,8 @@ coding agent, isolated work into separate workspaces, and gave the agent durable
 through living specs and reusable skills. Next, we're adding full extension support, so ThinkRail can
 create the tools it needs based on how you actually work.
 
-**Website:** [thinkrail.ai](https://thinkrail.ai/) · **Blog:** [thinkrail.ai/blog](https://thinkrail.ai/blog/)
+**Website:** [thinkrail.ai](https://thinkrail.ai/) · **Blog:** [thinkrail.ai/blog](https://thinkrail.ai/blog/) ·
+**Discord:** [thinkrail.ai/discord](https://thinkrail.ai/discord)
 
 ⭐ If you find ThinkRail useful, give it a star — it helps others discover it.
 
@@ -241,6 +243,11 @@ repository layout.
 
 Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md). This project and community are
 governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Community
+
+Join us on [Discord](https://thinkrail.ai/discord) to ask questions, share what you're building, and
+talk to the team. Bugs and feature requests go to [GitHub issues](https://github.com/JetBrains/thinkrail/issues).
 
 ## License
 

@@ -427,11 +427,13 @@ code {
 	display: block;
 }
 
-.gh-btn {
+.gh-btn,
+.discord-btn {
 	color: var(--muted);
 }
 
-.gh-btn:hover {
+.gh-btn:hover,
+.discord-btn:hover {
 	text-decoration: none;
 }
 

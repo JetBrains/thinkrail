@@ -1477,6 +1477,8 @@
 	"settings.extensions.loadFailed": "Couldn't load the extensions from this host.",
 	"settings.extensions.title": "Extensions",
 	"settings.extensions.visualize.description": "Lets the agent draw Mermaid diagrams, side-by-side option comparisons, and rendered file previews or before/after mockups in chat.",
+	"settings.feedback.discordDescription": "Chat with the team and other ThinkRail users: ask questions and share what you're building.",
+	"settings.feedback.joinDiscord": "Join our Discord",
 	"settings.feedback.scheduleInterview": "Schedule an interview",
 	"settings.feedback.title": "Feedback",
 	"settings.github.connected": "Connected",

@@ -869,7 +869,9 @@ a project picker, the prompt hero, and the reused
   Calendar booking page, opened in a new tab with `noopener noreferrer`. ThinkRail communicates the
   incentive only; attendance verification, eligibility, and credit fulfillment stay outside the app. This
   proactive Settings link is always available and deliberately does not call `feedback.respond`, alter
-  automatic-popup state, or claim that booking alone earns credits.
+  automatic-popup state, or claim that booking alone earns credits. Below it, a one-line community blurb and
+  an outline external anchor open the Discord server through the website's stable `thinkrail.ai/discord`
+  redirect (never a raw invite, so a rotated invite needs no app release).
   **`ModelsSettings`** is the **Models** section, visible only at protocol v72 or newer. It re-reads
   `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed

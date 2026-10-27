@@ -1477,6 +1477,8 @@
 	"settings.extensions.loadFailed": "无法从此 host 加载扩展。",
 	"settings.extensions.title": "扩展",
 	"settings.extensions.visualize.description": "让 agent 在会话中绘制 Mermaid 图表、并排的方案对比，以及渲染后的文件预览或前后对比示意图。",
+	"settings.feedback.discordDescription": "与团队和其他 ThinkRail 用户交流：提问并分享你正在构建的内容。",
+	"settings.feedback.joinDiscord": "加入我们的 Discord",
 	"settings.feedback.scheduleInterview": "预约访谈",
 	"settings.feedback.title": "反馈",
 	"settings.github.connected": "已连接",

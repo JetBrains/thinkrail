@@ -71,6 +71,10 @@ test("feedback settings and the addressed interview prompt preserve the approved
 	await expect(settingsLink).toHaveAttribute("href", BOOKING_URL);
 	await expect(settingsLink).toHaveAttribute("target", "_blank");
 	await expect(settingsLink).toHaveAttribute("rel", "noopener noreferrer");
+	const discordLink = settings.getByTestId("feedback-join-discord");
+	await expect(discordLink).toHaveAttribute("href", "https://thinkrail.ai/discord");
+	await expect(discordLink).toHaveAttribute("target", "_blank");
+	await expect(discordLink).toHaveAttribute("rel", "noopener noreferrer");
 	const primaryTextColor = await page.evaluate(() => {
 		const probe = document.createElement("span");
 		probe.className = "text-control-primary-text";

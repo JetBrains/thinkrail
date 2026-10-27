@@ -1,7 +1,9 @@
-import { RiExternalLinkLine as ExternalLink } from "@remixicon/react";
+import { RiDiscordLine as Discord, RiExternalLinkLine as ExternalLink } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { buttonVariants } from "@thinkrail/ui/button";
 import { INTERVIEW_BOOKING_URL, INTERVIEW_INVITATION_KEY } from "./interview";
+
+const DISCORD_URL = "https://thinkrail.ai/discord";
 
 export function FeedbackSettings() {
 	const t = useT();
@@ -20,6 +22,19 @@ export function FeedbackSettings() {
 			>
 				<ExternalLink className="size-14" />
 				{t("settings.feedback.scheduleInterview")}
+			</a>
+			<p className="text-text-muted tr-text-metadata">
+				{t("settings.feedback.discordDescription")}
+			</p>
+			<a
+				data-testid="feedback-join-discord"
+				href={DISCORD_URL}
+				target="_blank"
+				rel="noopener noreferrer"
+				className={buttonVariants({ variant: "outline", className: "self-start" })}
+			>
+				<Discord className="size-14" />
+				{t("settings.feedback.joinDiscord")}
 			</a>
 		</section>
 	);
