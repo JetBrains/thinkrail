@@ -27,7 +27,7 @@ import {
 	toast,
 	useAppStore,
 } from "@/store";
-import { getTransport } from "@/transport";
+import { getTransport, respondToTool } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
@@ -579,9 +579,7 @@ const ChatTranscript = forwardRef<
 			focusComposer,
 			openSubagentTranscript,
 			respondToTool: (toolCallId: string, response: unknown) =>
-				getTransport()
-					.request("session.respondToTool", { sessionId, toolCallId, response })
-					.then(() => undefined),
+				respondToTool(sessionId, toolCallId, response),
 			resultOpener,
 			markResultSeen,
 			revealChatElement: revealElement,

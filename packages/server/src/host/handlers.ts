@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import type {
+	Ack,
 	OpenBranchReview,
 	ReviewComment,
 	ReviewFixDetails,
@@ -478,6 +479,17 @@ function resourceParams<K extends string>(params: unknown, keys: K[]): Record<K,
 		result[key] = value;
 	}
 	return result;
+}
+
+async function deliverToolResponse(
+	sessionId: string,
+	toolCallId: string,
+	response: unknown,
+): Promise<Ack> {
+	if (!hasSession(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+	if (response === undefined) throw new Error("A tool response must carry a value");
+	await ackSend(respondToTool(sessionId, toolCallId, response));
+	return { ok: true };
 }
 
 const handlers: WsHandlers = {
@@ -1145,12 +1157,8 @@ const handlers: WsHandlers = {
 		resolveExtUi(params.response);
 		return { ok: true } as const;
 	},
-	"session.respondToTool": async (p) => {
-		if (!hasSession(p.sessionId)) throw new Error(`Unknown session: ${p.sessionId}`);
-		if (p.response === undefined) throw new Error("A tool response must carry a value");
-		await ackSend(respondToTool(p.sessionId, p.toolCallId, p.response));
-		return { ok: true } as const;
-	},
+	"session.respondToTool": (p) => deliverToolResponse(p.sessionId, p.toolCallId, p.response),
+	"session.answerQuestion": (p) => deliverToolResponse(p.sessionId, p.toolCallId, p.result),
 	"model.list": () =>
 		observeSetupRead(listAvailableModels, (models) => ({
 			model_available: models.length > 0 ? "yes" : "no",

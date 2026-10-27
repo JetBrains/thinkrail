@@ -16,12 +16,14 @@ export type { ConnectionStatus, TransportOptions } from "./transport";
 export {
 	getTransport,
 	initTransport,
+	respondToTool,
 	runHostUpdate,
 	supportsChangeMutations,
 	supportsHostUpdateRun,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
 	supportsRichAnchors,
+	supportsToolResponses,
 	supportsTurnChanges,
 	supportsUserThemes,
 } from "./wireTransport";

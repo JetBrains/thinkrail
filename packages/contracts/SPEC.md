@@ -227,8 +227,12 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     card **inline** and replies via `session.respondToTool` (correlated by the tool call id; the value is
     opaque to the wire and validated by the tool; rejected loud when the call is unknown/responded/
     superseded). `TOOL_RESPONSE_PROTOCOL_VERSION` (93) marks the rename from the ask-only
-    `session.answerQuestion` and the `needsInput` arm `question` → `tool-response`; no alias is kept —
-    an older client reading `kind: "question"` could not submit against this host anyway.
+    `session.answerQuestion` and the `needsInput` arm `question` → `tool-response`. **One compatibility
+    window, both directions:** the request registry keeps `session.answerQuestion` (`result: unknown`)
+    forwarding to the same delivery, so an already-loaded older client still answers; and the client
+    sends `session.answerQuestion` to a host below v93 (`supportsToolResponses`) and reads that host's
+    `needsInput.kind: "question"` / `question:<toolCallId>` as the awaiting call, because the UI ships
+    independently of the host (Decision 3). Both go when the window closes.
   - the **todo plan-review fix** wire types — the **`TODO_REVIEW_FIX_CUSTOM_TYPE`** constant,
     **`TodoReviewFixMessage`** (the tag↔details shape) + its **`isTodoReviewFixMessage`** guard (in
     `wsProtocol`), and **`ReviewFixDetails`** / **`ReviewFixComment`** (in `domain`): a plan-review

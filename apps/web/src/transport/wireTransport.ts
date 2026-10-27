@@ -25,6 +25,7 @@ import {
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
+	TOOL_RESPONSE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -41,6 +42,22 @@ export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 
 export function supportsUserThemes(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= USER_THEMES_PROTOCOL_VERSION;
+}
+
+export function supportsToolResponses(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= TOOL_RESPONSE_PROTOCOL_VERSION;
+}
+
+export function respondToTool(
+	sessionId: string,
+	toolCallId: string,
+	response: unknown,
+): Promise<void> {
+	const transport = getTransport();
+	const sent = supportsToolResponses(useAppStore.getState().protocolVersion)
+		? transport.request("session.respondToTool", { sessionId, toolCallId, response })
+		: transport.request("session.answerQuestion", { sessionId, toolCallId, result: response });
+	return sent.then(() => undefined);
 }
 
 export function supportsChangeMutations(protocolVersion: number | null): boolean {

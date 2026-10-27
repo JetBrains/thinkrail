@@ -136,3 +136,12 @@ test("the host's needs-input names the one tool call it accepts a response for",
 		),
 	).toBeNull();
 });
+
+test("a pre-v93 host's question state still names the awaiting call", () => {
+	const legacy = (needsInput: unknown) => ({ needsInput }) as unknown as SessionState;
+	expect(awaitingToolCallIdOf(legacy({ interactionId: "question:call-9", kind: "question" }))).toBe(
+		"call-9",
+	);
+	expect(awaitingToolCallIdOf(legacy({ interactionId: "call-9", kind: "question" }))).toBeNull();
+	expect(awaitingToolCallIdOf(legacy({ interactionId: "question:x", kind: "other" }))).toBeNull();
+});

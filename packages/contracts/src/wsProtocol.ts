@@ -300,6 +300,7 @@ export const WS_METHODS = {
 	sessionReloadResources: "session.reloadResources",
 	sessionExtUiReply: "session.extUiReply",
 	sessionRespondToTool: "session.respondToTool",
+	sessionAnswerQuestion: "session.answerQuestion",
 	sessionList: "session.list",
 	sessionStateList: "session.stateList",
 	sessionAcknowledgeCompletion: "session.acknowledgeCompletion",
@@ -864,6 +865,10 @@ export interface WsMethodMap {
 	"session.extUiReply": { params: { response: ExtUiResponse }; result: Ack };
 	"session.respondToTool": {
 		params: { sessionId: string; toolCallId: string; response: unknown };
+		result: Ack;
+	};
+	"session.answerQuestion": {
+		params: { sessionId: string; toolCallId: string; result: unknown };
 		result: Ack;
 	};
 	"session.list": { params: { workspaceId: string }; result: SessionSummary[] };

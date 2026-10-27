@@ -149,8 +149,11 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
-  `supportsUserThemes`,
-  `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `runHostUpdate` is the typed empty host action
+  `supportsUserThemes`, `supportsToolResponses`, `respondToTool`,
+  `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
+  toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
+  it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
+  (`supportsToolResponses`), for one compatibility window — [[module-contracts]]. `runHostUpdate` is the typed empty host action
   and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsUserThemes` (v92) is
   exported because `Shell` must drop user themes (cached or from an earlier host) once a host that cannot
   serve theme files has welcomed it; `supportsPlanReview` is exported

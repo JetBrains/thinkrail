@@ -227,7 +227,7 @@ test("tool responses replace the ask-only answer method at v93", () => {
 	expect(PROTOCOL_VERSION).toBe(93);
 	expect(TOOL_RESPONSE_PROTOCOL_VERSION).toBe(93);
 	expect(WS_METHODS.sessionRespondToTool).toBe("session.respondToTool");
-	expect(Object.values(WS_METHODS)).not.toContain("session.answerQuestion");
+	expect(WS_METHODS.sessionAnswerQuestion).toBe("session.answerQuestion");
 });
 
 test("user theme files are pinned to v92", () => {

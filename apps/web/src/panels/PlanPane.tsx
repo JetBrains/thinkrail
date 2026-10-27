@@ -72,7 +72,7 @@ import {
 	selectWorkspaceById,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport, supportsPlanReview } from "../transport";
+import { errorText, getTransport, respondToTool, supportsPlanReview } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
@@ -688,10 +688,7 @@ function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string
 			cancelAutomaticReveal: () => {},
 			focusComposer: () => {},
 			openSubagentTranscript: () => {},
-			respondToTool: (toolCallId, response) =>
-				getTransport()
-					.request("session.respondToTool", { sessionId, toolCallId, response })
-					.then(() => undefined),
+			respondToTool: (toolCallId, response) => respondToTool(sessionId, toolCallId, response),
 			resultOpener: () => undefined,
 			revealChatElement: () => {},
 		}),

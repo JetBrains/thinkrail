@@ -376,6 +376,23 @@ test("retired session activity returns the empty compatibility snapshot", async 
 	expect(await handleRequest("session.activityList", {}, CTX)).toEqual([]);
 });
 
+test("the retired ask answer method and respondToTool both refuse an unknown session the same way", async () => {
+	await expect(
+		handleRequest(
+			"session.answerQuestion",
+			{ sessionId: "nope", toolCallId: "tc", result: {} },
+			CTX,
+		),
+	).rejects.toThrow("Unknown session: nope");
+	await expect(
+		handleRequest(
+			"session.respondToTool",
+			{ sessionId: "nope", toolCallId: "tc", response: {} },
+			CTX,
+		),
+	).rejects.toThrow("Unknown session: nope");
+});
+
 test("template reads resolve a project's current checkout and reject ambiguous locations", async () => {
 	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
 	const agentDir = join(dataDir, "agent");
