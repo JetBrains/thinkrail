@@ -87,7 +87,7 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 | `panels/AnalyticsConsentDialog.tsx:51` | Button default (32) | Button primary l | source unchanged; 'Saving…' label logic kept |
 | `panels/HeaderIconButton.tsx:37` | raw icon <button> size-24, active = bg-container-elevated-bg, IconTooltip | IconButton ghost m, selected={active}, aria-pressed={active}, data-active kept | API kept (testid/label/active/disabled/onClick/children-as-icon-element) because all call sites (ChangesReviewPane, DiffPane, ChangesFileSection) are outside this packet; children rendered through a stable context-backed icon component (span display:contents, aria-hidden) so no remounts; optional new `icon?: ButtonIcon` prop added for call sites to migrate to later |
 
-## settings (38 sites)
+## settings (41 sites)
 
 | Site | Before | After | Notes |
 | --- | --- | --- | --- |
@@ -129,6 +129,9 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 | `panels/McpServerDialogs.tsx:525` | Button outline sm (Use recipe) | Button outline m |  |
 | `panels/McpServerDialogs.tsx:760,763,773,777,781,920,923,933,936,1062,1065,1156,1224` | dialog footer Button default/outline at default size (32) | Button primary l / outline l (via component defaults) | no source change needed: old default variant/size map 1:1 to the new defaults primary/l; disabled={saving…} kept (no spinner before) |
 | `panels/SubagentSettings.tsx SourceTag 'Custom ↺'` | raw accent-text link-action tag | Button soft-primary s iconRight=RiArrowGoBackLine | green → soft-primary |
+| `panels/EnvironmentSettings.tsx:196` | Button ghost icon, Eye/EyeOff swap, aria-label Show/Hide value | IconButton ghost m icon={shown ? EyeOff : Eye} label=Show/Hide value | added on main after this change branched (#912); now also shows the label as a tooltip |
+| `panels/EnvironmentSettings.tsx:207` | Button ghost icon aria-label Remove + Trash2 | IconButton ghost m icon=Trash2 label='Remove' | added on main (#912) |
+| `panels/EnvironmentSettings.tsx:232` | Button ghost sm self-start + Plus (Add variable) | Button ghost m iconLeft=Plus self-start | added on main (#912) |
 
 ## chat (29 sites)
 
