@@ -21,12 +21,12 @@ export function InstallLogToggle({
 	return (
 		<Button
 			variant="ghost"
-			size="sm"
+			size="m"
+			iconLeft={Icon}
 			data-testid="update-log-toggle"
 			aria-expanded={open}
 			onClick={() => onOpenChange(!open)}
 		>
-			<Icon className="size-14" />
 			{open ? t("updates.log.hide") : t("updates.log.show")}
 		</Button>
 	);
@@ -70,14 +70,14 @@ export function InstallLog({
 				<span className="text-text-muted tr-text-metadata">{note}</span>
 				<Button
 					variant="ghost"
-					size="sm"
+					size="m"
+					iconLeft={Copy}
 					data-testid="update-log-copy"
 					disabled={entries.length === 0}
 					onClick={() => {
 						void navigator.clipboard?.writeText(formatInstallLog(t, entries)).catch(() => {});
 					}}
 				>
-					<Copy className="size-14" />
 					{t("updates.log.copy")}
 				</Button>
 			</div>

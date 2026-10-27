@@ -4,7 +4,7 @@ import {
 	RiZoomOutLine as ZoomOut,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ResourceViewProps } from "../../registry";
 import { RegionReviewSurface } from "../RegionReviewSurface";
@@ -86,43 +86,30 @@ export default function ImageView({
 			className="flex h-full min-h-0 flex-col bg-container-workspace-bg"
 		>
 			<div className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8">
-				<Button
-					variant="ghost"
-					size="icon"
-					aria-label={t("viewer.image.fit")}
+				<IconButton
+					icon={Fit}
+					label={t("viewer.image.fit")}
 					data-testid="image-fit"
 					onClick={() => updateView("fit", zoom)}
-				>
-					<Fit className="size-14" />
-				</Button>
+				/>
 				<Button
 					variant="ghost"
-					size="icon"
+					size="m"
 					aria-label={t("viewer.image.actualSize")}
 					data-testid="image-actual-size"
 					onClick={() => updateView("zoom", 1)}
 				>
-					<span className="tr-text-action">1:1</span>
+					1:1
 				</Button>
-				<Button
-					variant="ghost"
-					size="icon"
-					aria-label={t("viewer.image.zoomOut")}
+				<IconButton
+					icon={ZoomOut}
+					label={t("viewer.image.zoomOut")}
 					onClick={() => zoomBy(1 / 1.2)}
-				>
-					<ZoomOut className="size-14" />
-				</Button>
+				/>
 				<span className="min-w-40 text-center tr-text-metadata text-text-muted">
 					{Math.round(zoom * 100)}%
 				</span>
-				<Button
-					variant="ghost"
-					size="icon"
-					aria-label={t("viewer.image.zoomIn")}
-					onClick={() => zoomBy(1.2)}
-				>
-					<ZoomIn className="size-14" />
-				</Button>
+				<IconButton icon={ZoomIn} label={t("viewer.image.zoomIn")} onClick={() => zoomBy(1.2)} />
 				<span className="ml-auto tr-text-metadata text-text-muted">
 					{dimensions} · {formatByteLength(t, resource.byteLength ?? content.byteLength)}
 				</span>

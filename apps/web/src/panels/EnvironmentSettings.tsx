@@ -7,7 +7,7 @@ import {
 import type { HostEnvironmentStatus } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useState } from "react";
 import { randomId } from "@/lib";
@@ -193,22 +193,22 @@ export function EnvironmentForm({
 												{t("settings.environment.vars.launchOverridden")}
 											</span>
 										) : null}
-										<Button
+										<IconButton
 											variant="ghost"
-											size="icon"
-											aria-label={
+											size="m"
+											icon={shown ? EyeOff : Eye}
+											label={
 												shown
 													? t("settings.environment.vars.hide")
 													: t("settings.environment.vars.show")
 											}
 											onClick={() => toggleReveal(entry.id)}
-										>
-											{shown ? <EyeOff className="size-14" /> : <Eye className="size-14" />}
-										</Button>
-										<Button
+										/>
+										<IconButton
 											variant="ghost"
-											size="icon"
-											aria-label={t("common.remove")}
+											size="m"
+											icon={Trash2}
+											label={t("common.remove")}
 											data-testid="settings-environment-var-remove"
 											onClick={() =>
 												onChange({
@@ -216,9 +216,7 @@ export function EnvironmentForm({
 													vars: draft.vars.filter((other) => other.id !== entry.id),
 												})
 											}
-										>
-											<Trash2 className="size-14" />
-										</Button>
+										/>
 									</div>
 									{issue ? (
 										<p
@@ -233,7 +231,8 @@ export function EnvironmentForm({
 						})}
 						<Button
 							variant="ghost"
-							size="sm"
+							size="m"
+							iconLeft={Plus}
 							data-testid="settings-environment-add-var"
 							className="self-start"
 							onClick={() =>
@@ -243,7 +242,6 @@ export function EnvironmentForm({
 								})
 							}
 						>
-							<Plus className="size-14" />
 							{t("settings.environment.vars.add")}
 						</Button>
 					</div>

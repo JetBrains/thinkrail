@@ -10,7 +10,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent, useRef, useState } from "react";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
@@ -88,15 +87,13 @@ export function InterviewPromptDialog() {
 							target="_blank"
 							rel="noopener noreferrer"
 							aria-disabled={pendingAction !== null}
+							data-disabled={pendingAction !== null ? true : undefined}
 							data-testid="interview-book"
-							className={cn(
-								buttonVariants(),
-								pendingAction !== null && "pointer-events-none opacity-50",
-							)}
+							className={buttonVariants({ variant: "primary", size: "l" })}
 							onClick={book}
 							onAuxClick={book}
 						>
-							<ExternalLink className="size-14" />
+							<ExternalLink aria-hidden />
 							{t("panels.interview.book")}
 						</a>
 					</div>

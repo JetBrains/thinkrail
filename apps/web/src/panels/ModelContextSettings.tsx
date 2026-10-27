@@ -301,7 +301,7 @@ export function ModelContextControls({
 			{failed ? (
 				<div className="flex items-center gap-8 border-border-muted border-b py-12" role="alert">
 					<p className="tr-text-ui text-text-muted">{t("settings.modelContext.loadFailed")}</p>
-					<Button variant="ghost" size="sm" disabled={pending} onClick={onRetry}>
+					<Button variant="ghost" size="m" disabled={pending} onClick={onRetry}>
 						{t("common.retry")}
 					</Button>
 				</div>

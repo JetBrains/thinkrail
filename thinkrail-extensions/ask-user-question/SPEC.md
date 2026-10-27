@@ -43,7 +43,7 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
 - The card imports `extension-api/web`, the package's argument/result **types** (type-only, from
   `@thinkrail/pi-ask-user-question/core`; a value import of the pi package stays forbidden in browser code,
   so the result guard `readAskUserQuestionResult` is the card's own), `@thinkrail/ui` (`attention-line`,
-  `utils`), `@thinkrail/resource-renderers` (`useOptionalResourceHost` for the host's injected Markdown),
+  `button`, `utils`), `@thinkrail/resource-renderers` (`useOptionalResourceHost` for the host's injected Markdown),
   `@thinkrail/locales/react`, React and Remix Icon.
 - It never reaches app or host internals. Everything it needs from the chat arrives in
   `ToolRenderProps.interaction` ([[module-extension-api]]):
@@ -117,9 +117,10 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   A **failed send undoes the hand-off with the latch**: the form comes back interactive, and since the
   one-shot claim is long spent and could neither re-focus nor re-announce, the card takes focus back itself
   rather than reappearing with the keyboard parked in the composer and nothing to say it had returned.
-- **Every focus indicator in the card is the app-wide accent focus ring** (`focus-visible:ring-2` +
-  `ring-primary`; `focus-within:` on the Other row, whose ring marks the roving cursor passing through
-  a text field) — per the colour system's "accent = focus" rule (`styles/COLOR.md`, Control row). The
+- **Every focus indicator in the card is the app-wide accent focus indicator** — the shared buttons'
+  offset `primary` outline (Skip, Next/Submit, Add/Edit note), and `focus-visible:ring-2` + `ring-primary`
+  on the card's own controls (`focus-within:` on the Other row, whose ring marks the roving cursor passing
+  through a text field) — per the colour system's "accent = focus" rule (`styles/COLOR.md`, Control row). The
   card originally shipped on `ring-primary-soft`, which the theme refinement's palette flattening
   composites to near-invisibility (accent @20% over the flattened surfaces), leaving keyboard users
   with no visible cursor — the one file the app-wide focus-ring sweep missed. `ring-primary-soft`

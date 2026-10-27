@@ -3,6 +3,7 @@ import { RiCloseLine as X } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
+import { IconButton } from "./button";
 import { cn } from "./utils";
 
 const ToastProvider = ToastPrimitive.Provider;
@@ -71,15 +72,12 @@ function ToastAction({ className, ...props }: React.ComponentProps<typeof ToastP
 function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Close>) {
 	const t = useT();
 	return (
-		<ToastPrimitive.Close
-			aria-label={t("common.dismiss")}
-			className={cn(
-				"ml-auto flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
-				className,
-			)}
-			{...props}
-		>
-			<X className="size-14" />
+		<ToastPrimitive.Close asChild {...props}>
+			<IconButton
+				icon={X}
+				label={t("common.dismiss")}
+				className={cn("ml-auto shrink-0", className)}
+			/>
 		</ToastPrimitive.Close>
 	);
 }

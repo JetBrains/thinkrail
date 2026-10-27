@@ -7,13 +7,15 @@ import type {
 } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as resources from "./index";
 import { mcpRowActions } from "./mcpRow";
 import { elapsedLabel, formatElapsed, resourceState, sortLive } from "./resourceRow";
 
 const NOW = 10 * 60_000;
+const renderInspector = (node: ReactNode) =>
+	renderToStaticMarkup(<TooltipProvider>{node}</TooltipProvider>);
 const command: BackgroundCommandSummary = {
 	id: "build",
 	sessionId: "chat",
@@ -216,7 +218,7 @@ test("the dock lists live rows oldest-first with escaped text, one inspect contr
 });
 
 test("the inspector renders a listbox of options whose accessible names carry the activity, selects the first live row, and keeps Stop beside the option", () => {
-	const html = renderToStaticMarkup(
+	const html = renderInspector(
 		<resources.ResourcesInspector
 			{...inspectorProps}
 			commands={[command]}
@@ -255,7 +257,7 @@ test("the inspector renders a listbox of options whose accessible names carry th
 });
 
 test("the inspector keeps the selected finished row, disables controls when stale, and surfaces failures with retry", () => {
-	const html = renderToStaticMarkup(
+	const html = renderInspector(
 		<resources.ResourcesInspector
 			{...inspectorProps}
 			commands={[command]}
@@ -282,7 +284,7 @@ test("the inspector keeps the selected finished row, disables controls when stal
 
 test("the detail header shows a subagent's model through the parent's label and omits it when the host sent none", () => {
 	const withModel = { ...child, model: "openai/gpt-6", thinkingLevel: "max" as const };
-	const labelled = renderToStaticMarkup(
+	const labelled = renderInspector(
 		<resources.ResourcesInspector
 			{...inspectorProps}
 			subagents={[withModel]}
@@ -295,7 +297,7 @@ test("the detail header shows a subagent's model through the parent's label and 
 	expect(labelled).toContain(">Model<");
 	expect(labelled).toContain("openai/gpt-6 @ max");
 
-	const older = renderToStaticMarkup(
+	const older = renderInspector(
 		<resources.ResourcesInspector
 			{...inspectorProps}
 			subagents={[child]}
@@ -471,7 +473,7 @@ test("the inspector lists the chat's MCP servers as a third section and hides it
 		{ name: "fixture", state: "connected", toolCount: 2, transport: "stdio" },
 		{ name: "quiet", state: "disabled-in-chat", transport: "stdio" },
 	];
-	const html = renderToStaticMarkup(
+	const html = renderInspector(
 		<resources.ResourcesInspector
 			{...inspectorProps}
 			mcpServers={mcpServers}
@@ -488,7 +490,7 @@ test("the inspector lists the chat's MCP servers as a third section and hides it
 	expect(html).toContain("Disable failed");
 	expect(html).toContain('data-testid="resources-mcp-settings"');
 	expect(html).toContain("stdio · runs on host");
-	const stale = renderToStaticMarkup(
+	const stale = renderInspector(
 		<resources.ResourcesInspector
 			{...inspectorProps}
 			mcpServers={mcpServers}
@@ -496,11 +498,11 @@ test("the inspector lists the chat's MCP servers as a third section and hides it
 		/>,
 	);
 	expect(stale).toMatch(/data-testid="resource-mcp-disable"[^>]*disabled=""/);
-	const empty = renderToStaticMarkup(
+	const empty = renderInspector(
 		<resources.ResourcesInspector {...inspectorProps} mcpServers={[]} />,
 	);
 	expect(empty).toContain("No MCP servers in this chat.");
-	expect(renderToStaticMarkup(<resources.ResourcesInspector {...inspectorProps} />)).not.toContain(
+	expect(renderInspector(<resources.ResourcesInspector {...inspectorProps} />)).not.toContain(
 		'data-testid="resources-mcp"',
 	);
 });

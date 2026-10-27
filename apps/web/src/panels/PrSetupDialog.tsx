@@ -8,7 +8,7 @@ import {
 import type { GhSetupProblem, HostPlatform } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { Button, buttonVariants } from "@thinkrail/ui/button";
+import { Button, buttonVariants, IconButton, withIconClass } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -24,6 +24,8 @@ export type PrSetupState =
 	| { kind: "push-auth"; detail: string }
 	| { kind: "gh"; problem: GhSetupProblem; compareUrl?: string };
 
+const CopiedIcon = withIconClass(Check, "text-feedback-success");
+
 function CommandRow({ command, onRun }: { command: string; onRun: (command: string) => void }) {
 	const t = useT();
 	const [copied, setCopied] = useState(false);
@@ -36,27 +38,22 @@ function CommandRow({ command, onRun }: { command: string; onRun: (command: stri
 	return (
 		<div className="flex items-center gap-8 rounded-sm border border-border-default bg-control-bg px-12 py-8">
 			<code className="min-w-0 flex-1 truncate tr-code-text text-text-default">{command}</code>
-			<Button
+			<IconButton
+				icon={copied ? CopiedIcon : Copy}
+				label={t("panels.prSetup.copyCommand")}
 				variant="ghost"
-				size="icon"
+				size="m"
 				data-testid="open-pr-setup-copy"
-				aria-label={t("panels.prSetup.copyCommand")}
 				onClick={() => void copy()}
-			>
-				{copied ? (
-					<Check className="size-14 text-feedback-success" />
-				) : (
-					<Copy className="size-14" />
-				)}
-			</Button>
+			/>
 			<Button
 				variant="outline"
-				size="sm"
+				size="m"
+				iconLeft={Play}
+				tooltip={t("panels.prSetup.runTitle")}
 				data-testid="open-pr-setup-run"
-				title={t("panels.prSetup.runTitle")}
 				onClick={() => onRun(command)}
 			>
-				<Play className="size-14" />
 				{t("panels.prSetup.run")}
 			</Button>
 		</div>
@@ -191,14 +188,13 @@ export function PrSetupDialog({
 							target="_blank"
 							rel="noopener noreferrer"
 							onClick={onCompareOpen}
-							className={buttonVariants({ variant: "outline" })}
+							className={buttonVariants({ variant: "outline", size: "l" })}
 						>
-							<ExternalLink className="size-14" />
+							<ExternalLink aria-hidden />
 							{t("panels.prSetup.openCompare")}
 						</a>
 					) : null}
-					<Button data-testid="open-pr-setup-retry" onClick={onRetry}>
-						<RefreshCw className="size-14" />
+					<Button iconLeft={RefreshCw} data-testid="open-pr-setup-retry" onClick={onRetry}>
 						{t("panels.prSetup.tryAgain")}
 					</Button>
 				</DialogFooter>

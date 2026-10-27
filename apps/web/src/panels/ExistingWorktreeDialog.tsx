@@ -121,11 +121,11 @@ export function ExistingWorktreeDialog({
 						<p>{loadError}</p>
 						<Button
 							variant="outline"
-							size="sm"
+							size="m"
+							iconLeft={RefreshCw}
 							data-testid="existing-worktree-retry"
 							onClick={loadCandidates}
 						>
-							<RefreshCw className="size-14" />
 							{t("common.retry")}
 						</Button>
 					</div>

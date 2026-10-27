@@ -1,5 +1,6 @@
 import type { SlashCommandInfo, TemplateInfo } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useState } from "react";
 
@@ -151,17 +152,15 @@ export function TemplateSlotHint({
 }) {
 	const t = useT();
 	return (
-		<button
-			type="button"
+		<Button
+			variant="outline"
+			size="s"
 			data-testid="slot-hint"
 			onClick={onNext}
-			className={cn(
-				"rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default",
-				className,
-			)}
+			className={cn("shadow-[var(--shadow-md)]", className)}
 		>
 			{t("prompt.slotHint.label", { index: activeIndex + 1, count })}
-		</button>
+		</Button>
 	);
 }
 
