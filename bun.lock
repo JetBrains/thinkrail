@@ -434,7 +434,7 @@
     },
     "pi-extensions/ask-user-question": {
       "name": "@thinkrail/pi-ask-user-question",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "devDependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
@@ -451,7 +451,7 @@
     },
     "pi-extensions/visualize": {
       "name": "@thinkrail/pi-visualize",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "lovely-mermaid": "0.3.3",
       },
