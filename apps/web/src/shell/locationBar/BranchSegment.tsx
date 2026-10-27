@@ -221,7 +221,6 @@ export function BranchSegment({
 						refreshing={refreshing}
 						label=""
 						testid="scope-diff-base"
-						triggerClassName="flex h-24 min-w-0 max-w-full items-center gap-4 rounded-sm px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
 						onSelect={(ref) => void pointDiffBaseAt(ref)}
 						onRefresh={refresh}
 					/>

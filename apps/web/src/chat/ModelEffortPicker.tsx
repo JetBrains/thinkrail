@@ -599,7 +599,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							onSelectLevel={onSelectLevel}
 						/>
 					) : null}
-					<div className="flex shrink-0 items-center gap-8 border-border-default border-t px-8 py-4">
+					<div className="flex shrink-0 flex-wrap items-center gap-x-8 gap-y-4 border-border-default border-t px-8 py-4">
 						{preferences.supported && current ? (
 							<Button
 								variant="ghost"
@@ -624,7 +624,6 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								{t("chat.modelPicker.resetTo", { level: resetLevel })}
 							</Button>
 						) : null}
-						<span className="flex-1" />
 						<Button
 							variant="outline"
 							size="m"
@@ -635,6 +634,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							data-refreshing={refreshing}
 							disabled={refreshing}
 							onClick={() => onRefresh(true)}
+							className="ml-auto"
 						>
 							{refreshing ? t("chat.modelPicker.updating") : t("chat.modelPicker.refresh")}
 						</Button>

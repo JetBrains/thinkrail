@@ -52,6 +52,7 @@ export function QueueStrip({
 						size="s"
 						data-testid="queue-item-edit"
 						label={t("chat.queue.edit", { text: item.text })}
+						tooltip={t("common.edit")}
 						onClick={() => onEdit(item.kind, item.index)}
 						className="shrink-0"
 					/>
@@ -60,6 +61,7 @@ export function QueueStrip({
 						size="s"
 						data-testid="queue-item-remove"
 						label={t("chat.queue.remove", { text: item.text })}
+						tooltip={t("common.remove")}
 						onClick={() => onRemove(item.kind, item.index)}
 						className="shrink-0"
 					/>

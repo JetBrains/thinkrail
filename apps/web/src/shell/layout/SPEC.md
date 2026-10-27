@@ -111,7 +111,9 @@ rail entry is a `data-active` 32px frame (24px in the bottom rail) around a cont
 shared hover — pressed looks the same — and the ghost icon-only focus ring drawn inside the square, so no
 rail margin or strip edge clips it). The control keeps its own element for the roving toolbar, drag and drop and
 adornments; the open entry sets `data-selected` (the shared `control-bg-selected` fill), while drop cues sit on the
-control. Tab
+control — the passive drop hint adds an inset `primary-soft` ring, so it still shows on a selected entry whose
+fill wins the background. Adornments (review badge, terminal ordinal) are offset to the 32px frame's
+corners and the join droppable is the frame itself, so neither shrinks with the 24px control. Tab
 and tool icons resolve in one place (`tabIcon`), Line at rest and Fill when active; rail tooltips open away
 from their edge. Rail geometry is excluded from available pane space, but
 saved dimensions remain workbench-wide ratios; viewport projection never rewrites them. Measurement

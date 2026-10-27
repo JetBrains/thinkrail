@@ -633,7 +633,12 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			{rail ? tabIcon(tab, active, RAIL_ICON) : tabIcon(tab, active)}
 			{rail ? null : <span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>}
 			{rail ? (
-				<span className="pointer-events-none absolute top-0 right-0 flex">
+				<span
+					className={cn(
+						"pointer-events-none absolute -right-4 flex",
+						rail.vertical ? "-top-4" : "top-0",
+					)}
+				>
 					{renderTabAdornment(tab)}
 				</span>
 			) : (

@@ -168,16 +168,17 @@ export function ChangesPanel({
 						onSelectScope={(next) => setDiffScope(workspaceId, next)}
 					/>
 					{workspace ? (
-						<BranchPicker
-							branches={branches}
-							selected={baseRef}
-							refreshing={branchesRefreshing}
-							label={t("changes.panel.versus")}
-							testid="changes-target-picker"
-							triggerClassName="flex h-24 min-w-0 max-w-[200px] items-center gap-4 rounded-sm px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
-							onSelect={(ref) => void pointAt(ref)}
-							onRefresh={refreshBranches}
-						/>
+						<div className="flex min-w-0 max-w-[200px]">
+							<BranchPicker
+								branches={branches}
+								selected={baseRef}
+								refreshing={branchesRefreshing}
+								label={t("changes.panel.versus")}
+								testid="changes-target-picker"
+								onSelect={(ref) => void pointAt(ref)}
+								onRefresh={refreshBranches}
+							/>
+						</div>
 					) : null}
 				</div>
 				<ToggleSegment

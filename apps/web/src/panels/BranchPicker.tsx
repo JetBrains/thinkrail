@@ -6,7 +6,7 @@ import {
 } from "@remixicon/react";
 import type { BranchList } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import { IconButton } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	Command,
 	CommandEmpty,
@@ -34,7 +34,7 @@ export function BranchPicker({
 	selected: string;
 	label: ReactNode;
 	testid: string;
-	triggerClassName: string;
+	triggerClassName?: string;
 	refreshing?: boolean;
 	container?: HTMLElement | null;
 	onSelect: (ref: string) => void;
@@ -79,14 +79,31 @@ export function BranchPicker({
 				if (nextOpen) onRefresh();
 			}}
 		>
-			<PopoverTrigger data-testid={testid} data-open={open} className={triggerClassName}>
-				<GitBranch className="size-14 shrink-0 text-text-muted" />
-				<span className="shrink-0 text-text-muted tr-text-metadata">{label}</span>
-				<span className="truncate text-text-muted tr-text-metadata">
-					{selected || t("panels.branchPicker.placeholder")}
-				</span>
-				<ChevronDown className="size-16 shrink-0 text-text-muted" />
-			</PopoverTrigger>
+			{triggerClassName === undefined ? (
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						size="m"
+						iconLeft={GitBranch}
+						iconRight={ChevronDown}
+						data-testid={testid}
+						data-open={open}
+						className="min-w-0 max-w-full"
+					>
+						{label ? <span className="shrink-0">{label}</span> : null}
+						<span className="truncate">{selected || t("panels.branchPicker.placeholder")}</span>
+					</Button>
+				</PopoverTrigger>
+			) : (
+				<PopoverTrigger data-testid={testid} data-open={open} className={triggerClassName}>
+					<GitBranch className="size-14 shrink-0 text-text-muted" />
+					<span className="shrink-0 text-text-muted tr-text-metadata">{label}</span>
+					<span className="truncate text-text-muted tr-text-metadata">
+						{selected || t("panels.branchPicker.placeholder")}
+					</span>
+					<ChevronDown className="size-16 shrink-0 text-text-muted" />
+				</PopoverTrigger>
+			)}
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
 				<div className="flex items-center justify-end border-border-muted border-b px-8 py-4">
 					<IconButton

@@ -85,7 +85,7 @@ export function attachReviewCommenting(
 	const iconButton = document.createElement("button");
 	iconButton.type = "button";
 	iconButton.dataset.testid = "review-add-icon";
-	iconButton.className = buttonVariants({ variant: "outline", size: "s", shape: "icon" });
+	iconButton.className = `${buttonVariants({ variant: "outline", size: "s", shape: "icon" })} shadow-[var(--shadow-sm)]`;
 	for (const [name, value] of Object.entries(
 		buttonDataAttributes({ variant: "outline", size: "s", iconOnly: true }),
 	))

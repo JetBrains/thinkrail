@@ -205,7 +205,7 @@ export function PreviewCommenting({
 					data-testid="review-add-icon"
 					onMouseDown={(e) => e.preventDefault()}
 					onClick={openComposer}
-					className="review-add-icon-float"
+					className="review-add-icon-float shadow-[var(--shadow-sm)]"
 				/>,
 				document.body,
 			)}
