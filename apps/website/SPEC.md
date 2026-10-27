@@ -94,7 +94,8 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
   and blog render through — icon sprite, skip link, title bar (workspace name
   parameterized: `website` on the landing, `blog` on blog pages, each with the matching
   `workspace/<name> · from main` branch label, and GitHub + Discord icon links), the left project rail, the right files rail +
-  terminal, the status bar, and the `main.ts` script import; the center column is its default slot
+  terminal, the status bar, the post-download thank-you dialog (`DownloadThanks.astro`), and the
+  `main.ts` script import; the center column is its default slot
   and the right rail's Files rows its `filetree` slot. The left rail carries the site's real
   navigation as child rows of the `website` workspace — **Landing** (`/`) and **Blog** (`/blog/`,
   selected on the index and on every article) as links, **Docs** disabled with a `Coming soon` chip
@@ -216,7 +217,9 @@ thank-you dialog and does not cancel the file. The dialog records the PostHog su
 closes before an answer, and `survey sent` on each Continue or Finish. One
 `$survey_submission_id` ties those sends together, each send repeats the answers collected so
 far, and `$survey_completed` is true only on Finish, so the furthest event is how far that
-response went. Survey events attempt no attribution touch: they are feedback, not acquisition
+response went. A choice is sent as its label and a custom answer as its typed text; multiple-choice
+answers are arrays. The welcome screen says continuing accepts the privacy policy and links it. The
+dialog initializes only on pages with a valid content key, so its events always carry one. Survey events attempt no attribution touch: they are feedback, not acquisition
 actions, and the download that opened the dialog already recorded the page's touch and bridge.
 Closing the dialog resets it to the welcome screen. The next open is a new
 showing, with a new submission id and a new choice order; answers already sent stay on the
@@ -240,7 +243,9 @@ installing. A primary-button click on a `[data-share-install-link]` control in t
 emits `install_link_share_clicked`; it records the activation, not whether the share sheet completed.
 Each of these events attempts the live navigation touch first, like the existing actions. No page or
 child module carries analytics imports, vendor configuration, or another loader; controls expose only
-the `data-copy` / `data-share-install-link` markers the delegation reads.
+the `data-copy` / `data-share-install-link` markers the delegation reads. The one exception is
+`src/downloadThanks.ts`: it owns the survey's step state, so it captures the three survey events itself
+through the site facade `src/analytics.ts`, and adds no vendor configuration or loader.
 
 The existing GTM container remains Cookiebot's control plane; route-specific downstream tags use a
 `thinkrail.ai` hostname condition plus Page Path, never another GTM container. Sharing the exact apex

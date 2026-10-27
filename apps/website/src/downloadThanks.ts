@@ -10,6 +10,7 @@ import {
 	downloadSurveyFreeTextLimit,
 	downloadSurveySteps,
 	type SurveyChoice,
+	type SurveyPlace,
 	type SurveyStep,
 	startSurveyResponse,
 	stepCanContinue,
@@ -35,6 +36,8 @@ export function initDownloadThanks(
 	const actionRow = dialog?.querySelector<HTMLElement>("[data-survey-action-row]");
 	if (!dialog || !body || !action || !progress || !thanks || !welcome || !emailHint || !actionRow)
 		return;
+	const contentKey = contentKeyForPathname(doc.location?.pathname ?? "/");
+	if (contentKey === undefined) return;
 	if (dialog.dataset.downloadThanksReady === "true") return;
 	dialog.dataset.downloadThanksReady = "true";
 
@@ -190,8 +193,8 @@ export function initDownloadThanks(
 		thanks.hidden = false;
 	};
 
-	const surveyPlace = () => ({
-		content_key: contentKeyForPathname(doc.location?.pathname ?? "/") ?? "unknown",
+	const surveyPlace = (): SurveyPlace => ({
+		content_key: contentKey,
 		...(ctaLocation === undefined ? {} : { cta_location: ctaLocation }),
 	});
 
