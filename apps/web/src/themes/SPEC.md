@@ -60,6 +60,15 @@ consumer's native foreground. There is no inheritance or partial overlay. The en
 effects, TextMate/Monaco scope mapping, and CSS-token mapping, so those mechanics never leak into
 manifests. Typography, spacing, radii, fonts, and motion remain product tokens, not theme values.
 
+**The manifest is a user-kept file format, so its schema evolves compatibly.** The parser accepts every
+schema version released for user files (v2 is the first) and migrates older ones in code to the current
+shape before validation, so a theme a user saved never breaks on upgrade. Consequently a key added in a
+later version must be derivable from keys every earlier version already has — the way v2's `header`
+equals the v1 `content` — or it cannot be added; a value a palette genuinely needs to vary starts as a
+derived default. Compatibility is backward only: a file declaring a newer `schemaVersion` than the
+running app knows, or carrying a key it does not know, is reported as `invalid-theme` rather than
+guessed at.
+
 **A manifest supplies the palette, not the roles.** It answers *which colour*; what each colour is
 *for* is the semantic layer declared in `styles/colors.json` — `container-elevated-bg`,
 `feedback-warning`, `text-subtle` — which is the only layer components name, and which owns the alpha
@@ -187,9 +196,14 @@ editor-specific catalog entry. Unit coverage pins exact and wrong-appearance res
 pair derivation, absent-signal light behavior, legacy/versioned hints, media-listener cleanup, and complete
 hex resolution of the shared syntax map.
 
+## Deferred
+
+Open, not excluded: partial overlays or inheritance from a bundled theme, import of external formats
+(shadcn/tweakcn CSS, VS Code themes), extension-packaged themes (the seam is a source tag on the same
+`themes.list` files, filtered by the existing extension switch), an in-app editor, and contrast warnings
+for user themes. Until then a user theme is one complete manifest.
+
 ## Non-goals (deliberate)
 
-User themes are complete manifests only: no partial overlays or inheritance from a bundled theme,
-no overriding a bundled theme, no contrast warnings, no in-app editor, and no import of external formats
-(shadcn/tweakcn CSS, VS Code themes). Extension-packaged themes, operating-system contrast following, and
-schedule/time-zone UI are also out of scope.
+A user theme never replaces or shadows a bundled one — the `user.` namespace above is the decision.
+Operating-system contrast following and schedule/time-zone UI are out of scope.
