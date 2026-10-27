@@ -17,7 +17,7 @@ import type {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { currentTranslator, t as translate, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -305,7 +305,7 @@ export function McpServerRowView({
 					{secondary ? (
 						<Button
 							variant="ghost"
-							size="sm"
+							size="m"
 							data-testid="mcp-server-secondary"
 							data-action={secondary}
 							disabled={inert}
@@ -316,8 +316,8 @@ export function McpServerRowView({
 					) : null}
 					{action ? (
 						<Button
-							variant={action === "review" || action === "sign-in" ? "default" : "outline"}
-							size="sm"
+							variant={action === "review" || action === "sign-in" ? "primary" : "outline"}
+							size="m"
 							data-testid="mcp-server-action"
 							data-action={action}
 							disabled={inert}
@@ -343,18 +343,13 @@ export function McpServerRowView({
 						onCheckedChange={(enabled) => onCommand({ kind: "toggle", enabled })}
 					/>
 					<DropdownMenu>
-						<IconTooltip label={t("mcp.server.more", { name: summary.name })}>
-							<DropdownMenuTrigger asChild>
-								<Button
-									variant="ghost"
-									size="icon"
-									data-testid="mcp-server-menu"
-									aria-label={t("mcp.server.more", { name: summary.name })}
-								>
-									<MoreVertical className="size-14" />
-								</Button>
-							</DropdownMenuTrigger>
-						</IconTooltip>
+						<DropdownMenuTrigger asChild>
+							<IconButton
+								icon={MoreVertical}
+								label={t("mcp.server.more", { name: summary.name })}
+								data-testid="mcp-server-menu"
+							/>
+						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
 							{row.effective && summary.oauth ? (
 								<>
@@ -453,19 +448,14 @@ export function McpServerRowView({
 							<span className="min-w-0 truncate" title={tool}>
 								{label}
 							</span>
-							<IconTooltip label={t("mcp.server.revokeTool", { tool: label })}>
-								<Button
-									variant="ghost"
-									size="icon"
-									data-testid="mcp-always-allowed-revoke"
-									aria-label={t("mcp.server.revokeTool", { tool: label })}
-									disabled={inert}
-									onClick={() => onCommand({ kind: "revoke-tool", tool })}
-									className="size-20"
-								>
-									<Close className="size-12" />
-								</Button>
-							</IconTooltip>
+							<IconButton
+								icon={Close}
+								label={t("mcp.server.revokeTool", { tool: label })}
+								size="s"
+								data-testid="mcp-always-allowed-revoke"
+								disabled={inert}
+								onClick={() => onCommand({ kind: "revoke-tool", tool })}
+							/>
 						</span>
 					))}
 				</div>
@@ -644,11 +634,11 @@ export function McpEmptyState({
 							</span>
 							<Button
 								variant="outline"
-								size="sm"
+								size="m"
+								iconLeft={Plus}
 								disabled={disabled}
 								onClick={() => onPreset(preset)}
 							>
-								<Plus className="size-14" />
 								{t("common.add")}
 							</Button>
 						</li>
@@ -656,13 +646,19 @@ export function McpEmptyState({
 				</ul>
 			) : null}
 			<div className="flex flex-wrap gap-8">
-				<Button size="sm" data-testid="mcp-empty-add" disabled={disabled} onClick={onAdd}>
-					<Plus className="size-14" />
+				<Button
+					variant="primary"
+					size="m"
+					iconLeft={Plus}
+					data-testid="mcp-empty-add"
+					disabled={disabled}
+					onClick={onAdd}
+				>
 					{t("mcp.empty.add")}
 				</Button>
 				<Button
 					variant="outline"
-					size="sm"
+					size="m"
 					data-testid="mcp-empty-import"
 					disabled={disabled}
 					onClick={onImport}
@@ -929,12 +925,13 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 				<McpIntro projectName={project?.name} />
 				{servers && servers.length > 0 ? (
 					<Button
-						size="sm"
+						variant="primary"
+						size="m"
+						iconLeft={Plus}
 						data-testid="mcp-add"
 						disabled={readOnly}
 						onClick={() => setAdding({ tier: "form", key: Date.now() })}
 					>
-						<Plus className="size-14" />
 						{t("mcp.settings.addServer")}
 					</Button>
 				) : null}
@@ -968,7 +965,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 						</p>
 						<Button
 							variant="outline"
-							size="sm"
+							size="m"
 							data-testid="mcp-retry"
 							onClick={() => setReadAttempt((attempt) => attempt + 1)}
 						>

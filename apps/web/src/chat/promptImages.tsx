@@ -1,6 +1,7 @@
 import { RiCloseLine as X } from "@remixicon/react";
 import { REQUEST_IMAGE_BASE64_BUDGET } from "@thinkrail/contracts";
 import { t as translate, useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type ClipboardEvent,
@@ -186,7 +187,7 @@ export function PromptImageChips({
 							onClick={() => dismissError(err.id)}
 							className="hover:opacity-80"
 						>
-							<X className="size-12" />
+							<X className="size-14" />
 						</button>
 					}
 				/>
@@ -202,14 +203,12 @@ export function PromptImageChips({
 					label={img.name}
 					meta={img.width && img.height ? ` · ${img.width}×${img.height}` : undefined}
 					trailing={
-						<button
-							type="button"
-							aria-label={t("chat.promptImages.remove")}
+						<IconButton
+							icon={X}
+							size="s"
+							label={t("chat.promptImages.remove")}
 							onClick={() => removeImage(img.id)}
-							className="text-text-muted hover:text-text-default"
-						>
-							<X className="size-12" />
-						</button>
+						/>
 					}
 				/>
 			))}

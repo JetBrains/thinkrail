@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ToolCard } from "./ToolCard";
@@ -15,18 +16,22 @@ describe("tool result images", () => {
 			},
 		);
 		const markup = renderToStaticMarkup(
-			createElement(ToolCard, {
-				toolCallId: "registered-image-call",
-				toolName: "registered-image-output",
-				args: {},
-				tool: {
-					status: "done",
-					raw: {
-						content: [{ type: "image", data: "cG5n", mimeType: "image/png" }],
+			createElement(
+				TooltipProvider,
+				null,
+				createElement(ToolCard, {
+					toolCallId: "registered-image-call",
+					toolName: "registered-image-output",
+					args: {},
+					tool: {
+						status: "done",
+						raw: {
+							content: [{ type: "image", data: "cG5n", mimeType: "image/png" }],
+						},
 					},
-				},
-				streaming: false,
-			}),
+					streaming: false,
+				}),
+			),
 		);
 
 		expect(markup).toContain("specialized body");
@@ -37,23 +42,27 @@ describe("tool result images", () => {
 
 	it("renders accepted fallback-result images in block order without dumping content JSON", () => {
 		const markup = renderToStaticMarkup(
-			createElement(ToolCard, {
-				toolCallId: "fallback-image-call",
-				toolName: "unregistered-image-output",
-				args: {},
-				tool: {
-					status: "error",
-					raw: {
-						content: [
-							{ type: "text", text: "Captured two frames" },
-							{ type: "image", data: "Zmlyc3Q=", mimeType: "image/png" },
-							{ type: "image", data: "c2Vjb25k", mimeType: "image/jpeg" },
-							{ type: "image", data: "PHN2Zz4=", mimeType: "image/svg+xml" },
-						],
+			createElement(
+				TooltipProvider,
+				null,
+				createElement(ToolCard, {
+					toolCallId: "fallback-image-call",
+					toolName: "unregistered-image-output",
+					args: {},
+					tool: {
+						status: "error",
+						raw: {
+							content: [
+								{ type: "text", text: "Captured two frames" },
+								{ type: "image", data: "Zmlyc3Q=", mimeType: "image/png" },
+								{ type: "image", data: "c2Vjb25k", mimeType: "image/jpeg" },
+								{ type: "image", data: "PHN2Zz4=", mimeType: "image/svg+xml" },
+							],
+						},
 					},
-				},
-				streaming: false,
-			}),
+					streaming: false,
+				}),
+			),
 		);
 
 		expect(markup).toContain("Captured two frames");

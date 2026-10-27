@@ -26,27 +26,27 @@ export function ProviderRow({
 			<div className="flex shrink-0 items-center gap-4">
 				{provider.canOAuth && (
 					<Button
-						variant="soft"
-						size="sm"
+						variant="soft-primary"
+						size="m"
+						iconLeft={LogIn}
 						data-testid="provider-signin"
 						data-provider={provider.id}
 						disabled={busy}
 						onClick={onSignIn}
 					>
-						<LogIn className="size-14" />
 						{t("settings.providers.signIn")}
 					</Button>
 				)}
 				{provider.canApiKey && (
 					<Button
 						variant="outline"
-						size="sm"
+						size="m"
+						iconLeft={KeyRound}
 						data-testid="provider-apikey"
 						data-provider={provider.id}
 						disabled={busy}
 						onClick={onApiKey}
 					>
-						<KeyRound className="size-14" />
 						{t("settings.providers.apiKey")}
 					</Button>
 				)}

@@ -90,7 +90,6 @@
 	"changes.scope.uncommitted": "Uncommitted",
 	"changes.scope.uncommittedSuffix": "uncommitted",
 	"changes.scopeMenu.commits": "Commits",
-	"changes.scopeMenu.label": "Diff scope",
 	"changes.scopeMenu.lastTurnFiles_one": "Last turn · {{count}} file",
 	"changes.scopeMenu.lastTurnFiles_other": "Last turn · {{count}} files",
 	"changes.scopeMenu.loadingCommits": "Loading commits",

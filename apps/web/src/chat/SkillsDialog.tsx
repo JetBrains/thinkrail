@@ -251,13 +251,13 @@ export function SkillsDialog({
 							wrapTrigger
 						>
 							<Button
-								size="sm"
+								size="m"
 								variant="outline"
+								iconLeft={RefreshCw}
 								data-testid="skills-reload"
 								disabled={busy || workspace.streaming}
 								onClick={() => void reload()}
 							>
-								<RefreshCw className="size-14" />
 								{t("chat.skills.reload")}
 							</Button>
 						</IconTooltip>
@@ -295,7 +295,7 @@ export function SkillsDialog({
 						<div className="flex justify-end">
 							<Button
 								variant="outline"
-								size="sm"
+								size="m"
 								disabled={busy}
 								onClick={() =>
 									void mutate(
@@ -414,8 +414,13 @@ function SkillRow({
 				) : null}
 			</span>
 			{entry.decision === "pending-ack" ? (
-				<Button size="sm" data-testid="skill-ack" disabled={busy} onClick={onAcknowledge}>
-					<ShieldCheck className="size-14" />
+				<Button
+					size="m"
+					iconLeft={ShieldCheck}
+					data-testid="skill-ack"
+					disabled={busy}
+					onClick={onAcknowledge}
+				>
 					{t("chat.skills.enable")}
 				</Button>
 			) : (

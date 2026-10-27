@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { applyLocale } from "@thinkrail/locales/react";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ChatRow } from "./rows";
 import { ChatTurnView } from "./turns";
 
 function renderRow(row: ChatRow, isFinalAnswer: boolean): string {
 	return renderToStaticMarkup(
-		<ChatTurnView row={row} agentResponded isFinalAnswer={isFinalAnswer} />,
+		<TooltipProvider>
+			<ChatTurnView row={row} agentResponded isFinalAnswer={isFinalAnswer} />
+		</TooltipProvider>,
 	);
 }
 

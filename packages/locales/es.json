@@ -90,7 +90,6 @@
 	"changes.scope.uncommitted": "Sin confirmar",
 	"changes.scope.uncommittedSuffix": "sin confirmar",
 	"changes.scopeMenu.commits": "Commits",
-	"changes.scopeMenu.label": "Ámbito del diff",
 	"changes.scopeMenu.lastTurnFiles_many": "Último turno · {{count}} archivos",
 	"changes.scopeMenu.lastTurnFiles_one": "Último turno · {{count}} archivo",
 	"changes.scopeMenu.lastTurnFiles_other": "Último turno · {{count}} archivos",

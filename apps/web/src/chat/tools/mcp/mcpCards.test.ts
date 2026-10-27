@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { ToolRenderProps, ToolStatus } from "@thinkrail/extension-api/web";
 import { currentTranslator } from "@thinkrail/locales/react";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { type ChatActions, ChatActionsContext } from "../../ChatActions";
@@ -71,7 +72,11 @@ function render(node: ReactNode, provider: ChatActions | null = actions()): stri
 
 function renderTool(rendererProps: ToolRenderProps, provider: ChatActions | null = actions()) {
 	return render(
-		createElement(ToolRendererBody, { ...rendererProps, imageLabel: "tool output" }),
+		createElement(
+			TooltipProvider,
+			null,
+			createElement(ToolRendererBody, { ...rendererProps, imageLabel: "tool output" }),
+		),
 		provider,
 	);
 }

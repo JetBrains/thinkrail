@@ -108,7 +108,7 @@ export function ConnectProviderOptions({
 				<p className="min-w-0 flex-1 text-text-muted tr-text-ui">
 					{t("panels.connectProvider.loadFailed")}
 				</p>
-				<Button variant="outline" size="sm" onClick={() => void load()}>
+				<Button variant="outline" size="m" onClick={() => void load()}>
 					{t("common.retry")}
 				</Button>
 			</div>
@@ -237,7 +237,7 @@ function JetBrainsAiRow(props: ComponentProps<typeof JetBrainsAiCard>) {
 				</span>
 				<Button
 					variant="outline"
-					size="sm"
+					size="m"
 					data-testid="jetbrains-ai-setup"
 					aria-expanded={open}
 					onClick={() => setOpen((o) => !o)}

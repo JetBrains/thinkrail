@@ -6,6 +6,7 @@ import {
 } from "@remixicon/react";
 import type { BranchList } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	Command,
 	CommandEmpty,
@@ -35,7 +36,7 @@ export function BranchPicker({
 	selected: string;
 	label: ReactNode;
 	testid: string;
-	triggerClassName: string;
+	triggerClassName?: string;
 	refreshing?: boolean;
 	container?: HTMLElement | null;
 	onSelect: (ref: string) => void;
@@ -81,37 +82,60 @@ export function BranchPicker({
 				if (nextOpen) onRefresh();
 			}}
 		>
-			<PopoverTrigger data-testid={testid} data-open={open} className={triggerClassName}>
-				<GitBranch className="size-14 shrink-0 text-text-muted" />
-				<span className="shrink-0 text-text-muted tr-text-metadata">{label}</span>
-				<span className="truncate text-text-muted tr-text-metadata">
-					{selected || t("panels.branchPicker.placeholder")}
-				</span>
-				{localOnly ? (
-					<span
-						data-testid="branch-local-only"
-						className="shrink-0 text-text-muted tr-text-metadata"
+			{triggerClassName === undefined ? (
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						size="m"
+						iconLeft={GitBranch}
+						iconRight={ChevronDown}
+						data-testid={testid}
+						data-open={open}
+						className="min-w-0 max-w-full"
 					>
-						{t("panels.branchPicker.localOnly")}
+						{label ? <span className="shrink-0">{label}</span> : null}
+						<span className="truncate">{selected || t("panels.branchPicker.placeholder")}</span>
+						{localOnly ? (
+							<span data-testid="branch-local-only" className="shrink-0">
+								{t("panels.branchPicker.localOnly")}
+							</span>
+						) : null}
+					</Button>
+				</PopoverTrigger>
+			) : (
+				<PopoverTrigger data-testid={testid} data-open={open} className={triggerClassName}>
+					<GitBranch className="size-14 shrink-0 text-text-muted" />
+					<span className="shrink-0 text-text-muted tr-text-metadata">{label}</span>
+					<span className="truncate text-text-muted tr-text-metadata">
+						{selected || t("panels.branchPicker.placeholder")}
 					</span>
-				) : null}
-				<ChevronDown className="size-16 shrink-0 text-text-muted" />
-			</PopoverTrigger>
+					{localOnly ? (
+						<span
+							data-testid="branch-local-only"
+							className="shrink-0 text-text-muted tr-text-metadata"
+						>
+							{t("panels.branchPicker.localOnly")}
+						</span>
+					) : null}
+					<ChevronDown className="size-16 shrink-0 text-text-muted" />
+				</PopoverTrigger>
+			)}
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
 				<div className="flex items-center gap-8 border-border-muted border-b py-4 pr-8 pl-12">
 					<span className="min-w-0 flex-1 text-text-muted tr-text-metadata">
 						{localOnly ? t("panels.branchPicker.noRemote") : null}
 					</span>
-					<button
-						type="button"
+					<IconButton
+						icon={RefreshCw}
+						label={t("panels.branchPicker.refresh")}
+						variant="ghost"
+						size="m"
 						data-testid="branch-refresh"
-						aria-label={t("panels.branchPicker.refresh")}
-						title={t("panels.branchPicker.refresh")}
+						wrapTrigger
+						loading={refreshing}
+						spinIcon
 						onClick={onRefresh}
-						className="flex size-24 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						<RefreshCw className={`size-14 ${refreshing ? "animate-spin" : ""}`} />
-					</button>
+					/>
 				</div>
 				<Command>
 					<CommandInput placeholder={t("panels.branchPicker.search")} />

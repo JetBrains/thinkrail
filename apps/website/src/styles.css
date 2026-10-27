@@ -959,8 +959,13 @@ p.hero-lede {
 	max-width: 100%;
 }
 
-.install-picker-hero {
-	margin: 22px 0 8px;
+.cli-install .install-os-tabs {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+.cli-install .install-line {
+	margin: 12px;
 }
 
 .send-link {
@@ -1114,8 +1119,7 @@ html.install-tabs-ready .install-panel {
 	background: var(--container-header-bg);
 }
 
-.cli-disclosure > summary,
-.install-reference > summary {
+.cli-disclosure > summary {
 	display: flex;
 	min-height: 34px;
 	align-items: center;
@@ -1129,25 +1133,21 @@ html.install-tabs-ready .install-panel {
 	list-style: none;
 }
 
-.cli-disclosure > summary::-webkit-details-marker,
-.install-reference > summary::-webkit-details-marker {
+.cli-disclosure > summary::-webkit-details-marker {
 	display: none;
 }
 
-.cli-disclosure > summary:hover,
-.install-reference > summary:hover {
+.cli-disclosure > summary:hover {
 	color: var(--text);
 	background: var(--hover);
 }
 
-.cli-disclosure > summary::after,
-.install-reference > summary::after {
+.cli-disclosure > summary::after {
 	content: "⌄";
 	transition: transform 150ms ease;
 }
 
-.cli-disclosure[open] > summary::after,
-.install-reference[open] > summary::after {
+.cli-disclosure[open] > summary::after {
 	transform: rotate(180deg);
 }
 
@@ -1207,8 +1207,51 @@ html.install-tabs-ready .windows-shell-tabs {
 .hero-ctas {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: flex-start;
 	gap: 12px;
-	margin-top: 26px;
+	margin-top: 22px;
+}
+
+.hero-download {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+a.hero-download-other {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1;
+	text-decoration: none;
+}
+
+a.hero-download-other .i {
+	width: 12px;
+	height: 12px;
+}
+
+a.hero-download-other:hover {
+	color: var(--text);
+	text-decoration: none;
+}
+
+.hero-ctas .gh-stars:not([hidden]) {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: 2px;
+	padding-left: 9px;
+	border-left: 1px solid var(--border2);
+}
+
+.hero-ctas .gh-stars .i {
+	width: 12px;
+	height: 12px;
 }
 
 .btn {
@@ -1541,6 +1584,11 @@ html.anim .chat-demo [data-step].on {
 	border-top: 1px solid var(--border);
 }
 
+.desktop-download-row.is-current {
+	box-shadow: inset 2px 0 0 var(--accent);
+	padding-left: 10px;
+}
+
 .desktop-download-platform,
 .desktop-download-compatibility {
 	display: block;
@@ -1572,33 +1620,18 @@ p.install-fineprint {
 	line-height: 1.55;
 }
 
+h3.install-cli-heading {
+	margin: 22px 0 8px;
+	color: var(--text);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 600;
+}
+
 p.install-linux-note a,
 p.install-fineprint a {
 	text-decoration: underline;
 	text-underline-offset: 3px;
-}
-
-.install-reference {
-	margin-top: 18px;
-	border: 1px solid var(--border2);
-	border-radius: 4px;
-	overflow: hidden;
-	background: var(--container-header-bg);
-}
-
-.install-reference-body {
-	display: grid;
-	gap: 10px;
-	padding: 12px;
-	border-top: 1px solid var(--border);
-}
-
-.install-cli-row > span {
-	display: block;
-	margin-bottom: 5px;
-	color: var(--muted);
-	font-family: var(--font-mono);
-	font-size: 10.5px;
 }
 
 /* ── Footer section ─────────────────────────────────────────────────────── */
@@ -2170,10 +2203,15 @@ html:not(.anim) .term-caret {
 		flex-wrap: wrap;
 	}
 
-	.hero-ctas .btn {
+	.hero-ctas .btn,
+	.hero-download {
 		flex: 1 1 auto;
 		justify-content: center;
 		white-space: nowrap;
+	}
+
+	.hero-download .btn {
+		width: 100%;
 	}
 
 	/* Give the depth-0 "main spec" row more room for its label so the badge never wraps. */
@@ -2245,6 +2283,11 @@ html:not(.anim) .term-caret {
 	.sb-license {
 		flex-basis: 100%;
 	}
+}
+
+.cli-install .install-tab {
+	flex: none;
+	white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2654,4 +2697,187 @@ html:not(.anim) .term-caret {
 	.blog-nav-next {
 		text-align: center;
 	}
+}
+
+/* ── Download thanks ────────────────────────────────────────────────────── */
+
+.download-thanks {
+	width: min(640px, calc(100vw - 32px));
+	max-height: min(760px, calc(100dvh - 32px));
+	overflow: auto;
+	margin: auto;
+	padding: 18px 20px 20px;
+	border: 1px solid var(--border2);
+	border-radius: 6px;
+	background: var(--container-workspace-bg);
+	color: var(--text);
+}
+
+.download-thanks::backdrop {
+	background: color-mix(in srgb, black 55%, transparent);
+}
+
+.download-thanks-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.download-thanks-head h2 {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 600;
+}
+
+.download-thanks-note {
+	margin: 6px 0 0;
+	color: var(--muted);
+	font-size: 13.5px;
+}
+
+.download-thanks-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--muted);
+	cursor: pointer;
+}
+
+.download-thanks-close:hover {
+	background: var(--hover);
+	color: var(--text);
+}
+
+.download-thanks .feature-grid {
+	margin: 14px 0;
+}
+
+a.feature-card {
+	color: inherit;
+	text-decoration: none;
+}
+
+a.feature-card:hover {
+	color: inherit;
+	text-decoration: none;
+	border-color: color-mix(in srgb, var(--accent) 55%, var(--border2));
+}
+
+.download-survey {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.download-survey h3 {
+	margin: 0;
+}
+
+.download-survey [data-survey-welcome],
+.download-survey [data-survey-answered] {
+	margin: 0;
+	color: var(--muted);
+	font-size: 13.5px;
+}
+
+.download-survey-action {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.download-survey-progress,
+.download-survey-hint {
+	margin: 0;
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 12px;
+}
+
+.download-survey-question {
+	width: 100%;
+	min-inline-size: 0;
+	margin: 4px 0 0;
+	padding: 0;
+	border: 0;
+}
+
+.download-survey-question:focus-visible,
+.download-survey-thanks:focus-visible {
+	outline-offset: 6px;
+	border-radius: 4px;
+}
+
+.download-survey-question legend {
+	margin: 0 0 8px;
+	padding: 0;
+	font-size: 14.5px;
+	font-weight: 600;
+}
+
+.download-survey-choices {
+	display: grid;
+	gap: 8px;
+}
+
+.download-survey-choices.columns {
+	grid-template-columns: 1fr 1fr;
+	column-gap: 18px;
+}
+
+.download-survey-choice {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	font-size: 13.5px;
+	cursor: pointer;
+}
+
+.download-survey-choice input {
+	margin-top: 2px;
+	accent-color: var(--accent);
+}
+
+.download-survey-text {
+	width: 100%;
+	margin-top: 6px;
+	padding: 8px 10px;
+	border: 1px solid var(--border2);
+	border-radius: 4px;
+	background: var(--input);
+	color: var(--text);
+	font: inherit;
+	font-size: 13.5px;
+}
+
+.download-survey-thanks {
+	margin: 4px 0 0;
+	font-size: 14.5px;
+}
+
+.download-survey .btn:disabled,
+.download-survey .btn:disabled:hover {
+	background: var(--control-primary-bg);
+	border-color: var(--control-primary-bg);
+	color: var(--control-primary-text);
+	opacity: 0.45;
+	cursor: default;
+}
+
+@media (max-width: 560px) {
+	.download-survey-choices.columns {
+		grid-template-columns: 1fr;
+	}
+}
+
+.download-thanks [hidden] {
+	display: none;
 }

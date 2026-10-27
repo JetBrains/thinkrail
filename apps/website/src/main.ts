@@ -1,7 +1,11 @@
+import { initDownloadThanks } from "./downloadThanks";
 import { deriveEditorTabs } from "./editorTabs";
+import { heroDownloadTarget } from "./heroDownload";
 import { installShareUrl, isMobileDevice, shareInstallLink } from "./installLinkShare";
 import {
 	type BrowserPlatformHints,
+	type CpuArchitecture,
+	detectCpuArchitecture,
 	detectInstallPlatform,
 	type InstallPlatform,
 } from "./installPlatform";
@@ -250,9 +254,11 @@ if (motionOK && chat) {
 initThemeToggle();
 
 type WindowsShell = "powershell" | "cmd" | "wsl";
+type CliTab = "unix" | "cmd" | "powershell";
 
 interface NavigatorUserAgentData {
 	readonly platform?: string;
+	getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }>;
 }
 
 interface NavigatorWithUserAgentData extends Navigator {
@@ -281,6 +287,38 @@ function windowsShellFrom(value: string | undefined): WindowsShell | undefined {
 	}
 }
 
+function cliTabFrom(value: string | undefined): CliTab | undefined {
+	switch (value) {
+		case "unix":
+		case "cmd":
+		case "powershell":
+			return value;
+		default:
+			return undefined;
+	}
+}
+
+function moveTabFocus(
+	event: KeyboardEvent,
+	tabs: readonly HTMLButtonElement[],
+	tab: HTMLButtonElement,
+	activate: (tab: HTMLButtonElement) => void,
+): void {
+	if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+	const index = tabs.indexOf(tab);
+	if (index < 0) return;
+	let nextIndex = index;
+	if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+	if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+	if (event.key === "Home") nextIndex = 0;
+	if (event.key === "End") nextIndex = tabs.length - 1;
+	const target = tabs[nextIndex];
+	if (!target) return;
+	event.preventDefault();
+	activate(target);
+	target.focus();
+}
+
 const browserNavigator: NavigatorWithUserAgentData = navigator;
 const platformHints: BrowserPlatformHints = {
 	userAgentDataPlatform: browserNavigator.userAgentData?.platform,
@@ -302,30 +340,57 @@ if (sendLink && isMobileDevice(platformHints)) {
 	}
 }
 
+const detectedInstallPlatform = detectInstallPlatform(platformHints);
+
+function applyHeroDownload(architecture: CpuArchitecture | undefined): void {
+	const link = document.querySelector<HTMLAnchorElement>("[data-hero-download]");
+	const label = link?.querySelector<HTMLElement>("[data-hero-download-label]");
+	if (!link || !label) return;
+	const target = heroDownloadTarget(detectedInstallPlatform, architecture);
+	link.href = target.href;
+	if (target.ariaLabel) link.setAttribute("aria-label", target.ariaLabel);
+	else link.removeAttribute("aria-label");
+	label.textContent = target.label;
+}
+
+applyHeroDownload(
+	detectCpuArchitecture({
+		platform: browserNavigator.platform,
+		userAgent: browserNavigator.userAgent,
+	}),
+);
+const userAgentData = browserNavigator.userAgentData;
+if (userAgentData?.getHighEntropyValues) {
+	void userAgentData.getHighEntropyValues(["architecture"]).then(
+		(data) => {
+			const architecture = detectCpuArchitecture({
+				architecture: data?.architecture,
+				platform: browserNavigator.platform,
+				userAgent: browserNavigator.userAgent,
+			});
+			if (architecture !== undefined) applyHeroDownload(architecture);
+		},
+		() => undefined,
+	);
+}
+for (const row of document.querySelectorAll<HTMLElement>("[data-desktop-platform]")) {
+	row.classList.toggle(
+		"is-current",
+		detectedInstallPlatform !== undefined &&
+			row.dataset.desktopPlatform === detectedInstallPlatform,
+	);
+}
+
 const installPicker = document.querySelector<HTMLElement>("[data-install-picker]");
 if (installPicker) {
-	const detectedPlatform = detectInstallPlatform(platformHints);
-	const platformTabs = installPicker.querySelectorAll<HTMLButtonElement>("[data-install-platform]");
+	const platformTabs = [
+		...installPicker.querySelectorAll<HTMLButtonElement>("[data-install-platform]"),
+	];
 	const platformPanels = installPicker.querySelectorAll<HTMLElement>("[data-install-panel]");
-	const shellTabs = installPicker.querySelectorAll<HTMLButtonElement>("[data-windows-shell]");
+	const shellTabs = [...installPicker.querySelectorAll<HTMLButtonElement>("[data-windows-shell]")];
 	const shellPanels = installPicker.querySelectorAll<HTMLElement>("[data-windows-shell-panel]");
 
-	const drivesTerminal = installPicker.dataset.installPicker === "hero";
-	const syncActiveCommand = () => {
-		if (!drivesTerminal) return;
-		const osPanel = Array.from(platformPanels).find((panel) => !panel.hidden);
-		const shellPanel = osPanel?.querySelector<HTMLElement>(
-			"[data-windows-shell-panel]:not([hidden])",
-		);
-		const code = (shellPanel ?? osPanel)?.querySelector("[data-install-command]");
-		const command = code?.textContent?.trim() ?? "";
-		publishInstallSelection({ command, platform: selectedPlatform });
-	};
-	let selectedPlatform: InstallPlatform = detectedPlatform ?? "linux";
-	const initialShell: WindowsShell = "powershell";
-
-	const selectPlatform = (platform: InstallPlatform, publish = true) => {
-		selectedPlatform = platform;
+	const selectPlatform = (platform: InstallPlatform) => {
 		for (const tab of platformTabs) {
 			const selected = platformFrom(tab.dataset.installPlatform) === platform;
 			tab.setAttribute("aria-selected", String(selected));
@@ -334,10 +399,9 @@ if (installPicker) {
 		for (const panel of platformPanels) {
 			panel.hidden = platformFrom(panel.dataset.installPanel) !== platform;
 		}
-		if (publish) syncActiveCommand();
 	};
 
-	const selectShell = (shell: WindowsShell, publish = true) => {
+	const selectShell = (shell: WindowsShell) => {
 		for (const tab of shellTabs) {
 			const selected = windowsShellFrom(tab.dataset.windowsShell) === shell;
 			tab.setAttribute("aria-selected", String(selected));
@@ -346,32 +410,6 @@ if (installPicker) {
 		for (const panel of shellPanels) {
 			panel.hidden = windowsShellFrom(panel.dataset.windowsShellPanel) !== shell;
 		}
-		if (publish) syncActiveCommand();
-	};
-
-	const nextTab = (
-		event: KeyboardEvent,
-		button: HTMLButtonElement,
-		selector: string,
-		activate: (button: HTMLButtonElement) => void,
-	) => {
-		if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-		const tablist = button.closest<HTMLElement>("[role=tablist]");
-		if (!tablist) return;
-		const tabs = Array.from(tablist.querySelectorAll<HTMLButtonElement>(selector));
-		const index = tabs.indexOf(button);
-		if (index < 0) return;
-
-		let nextIndex = index;
-		if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
-		if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
-		if (event.key === "Home") nextIndex = 0;
-		if (event.key === "End") nextIndex = tabs.length - 1;
-		const target = tabs[nextIndex];
-		if (!target) return;
-		event.preventDefault();
-		activate(target);
-		target.focus();
 	};
 
 	for (const tab of platformTabs) {
@@ -380,9 +418,7 @@ if (installPicker) {
 			if (platform) selectPlatform(platform);
 		};
 		tab.addEventListener("click", () => activate(tab));
-		tab.addEventListener("keydown", (event) =>
-			nextTab(event, tab, "[data-install-platform]", activate),
-		);
+		tab.addEventListener("keydown", (event) => moveTabFocus(event, platformTabs, tab, activate));
 	}
 
 	for (const tab of shellTabs) {
@@ -391,13 +427,46 @@ if (installPicker) {
 			if (shell) selectShell(shell);
 		};
 		tab.addEventListener("click", () => activate(tab));
-		tab.addEventListener("keydown", (event) =>
-			nextTab(event, tab, "[data-windows-shell]", activate),
-		);
+		tab.addEventListener("keydown", (event) => moveTabFocus(event, shellTabs, tab, activate));
 	}
 
-	selectShell(initialShell, false);
-	selectPlatform(selectedPlatform);
+	selectShell("powershell");
+	selectPlatform(detectedInstallPlatform ?? "linux");
+	document.documentElement.classList.add("install-tabs-ready");
+}
+
+const cliInstall = document.querySelector<HTMLElement>("[data-cli-install]");
+if (cliInstall) {
+	const cliTabs = [...cliInstall.querySelectorAll<HTMLButtonElement>("[data-cli-tab]")];
+	const cliPanels = [...cliInstall.querySelectorAll<HTMLElement>("[data-cli-panel]")];
+	const initialCliTab: CliTab = detectedInstallPlatform === "windows" ? "powershell" : "unix";
+
+	const selectCliTab = (tab: CliTab) => {
+		for (const button of cliTabs) {
+			const selected = cliTabFrom(button.dataset.cliTab) === tab;
+			button.setAttribute("aria-selected", String(selected));
+			button.tabIndex = selected ? 0 : -1;
+		}
+		for (const panel of cliPanels) {
+			panel.hidden = cliTabFrom(panel.dataset.cliPanel) !== tab;
+		}
+		const panel = cliPanels.find((item) => cliTabFrom(item.dataset.cliPanel) === tab);
+		const command = panel?.querySelector("[data-install-command]")?.textContent?.trim() ?? "";
+		const platform: InstallPlatform =
+			tab === "unix" ? (detectedInstallPlatform === "macos" ? "macos" : "linux") : "windows";
+		publishInstallSelection({ command, platform });
+	};
+
+	for (const tab of cliTabs) {
+		const activate = (button: HTMLButtonElement) => {
+			const next = cliTabFrom(button.dataset.cliTab);
+			if (next) selectCliTab(next);
+		};
+		tab.addEventListener("click", () => activate(tab));
+		tab.addEventListener("keydown", (event) => moveTabFocus(event, cliTabs, tab, activate));
+	}
+
+	selectCliTab(initialCliTab);
 	document.documentElement.classList.add("install-tabs-ready");
 }
 
@@ -430,15 +499,20 @@ if (navToggle && railRight && backdrop) {
 	for (const row of treeRows) row.addEventListener("click", () => setOpen(false));
 }
 
-const stars = document.getElementById("gh-stars");
-if (stars) {
+const starBadges = document.querySelectorAll<HTMLElement>(".gh-stars");
+if (starBadges.length > 0) {
 	fetch("https://api.github.com/repos/JetBrains/thinkrail")
 		.then((response) => (response.ok ? response.json() : null))
 		.then((data: { stargazers_count?: number } | null) => {
 			if (typeof data?.stargazers_count !== "number") return;
 			const n = data.stargazers_count;
-			stars.textContent = n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-			stars.hidden = false;
+			const formatted = n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+			for (const stars of starBadges) {
+				const count = stars.querySelector<HTMLElement>("[data-gh-stars-count]");
+				if (count) count.textContent = formatted;
+				else stars.textContent = formatted;
+				stars.hidden = false;
+			}
 		})
 		.catch(() => {});
 }
@@ -625,3 +699,5 @@ if (mockElements.length > 0) {
 		if (currentTarget) positionTooltip(currentTarget);
 	});
 }
+
+initDownloadThanks();

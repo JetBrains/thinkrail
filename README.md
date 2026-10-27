@@ -194,7 +194,7 @@ and locally built packages may still be unsigned and blocked by Gatekeeper. Linu
 
 ## Analytics & privacy
 
-ThinkRail collects basic usage events — launches, chat creation, message sends, provider connections — tied to
+ThinkRail apps collect basic usage events — launches, chat creation, message sends, provider connections — tied to
 a random installation ID. Usage analytics never include prompts, code, files, credentials, or account
 identity. Error reports are also always sent, tied to the same installation ID, so we can fix crashes: the
 error type and code and where in ThinkRail's own code it happened. They never include error messages, file
@@ -205,6 +205,11 @@ the command line, `thinkrail --no-analytics` (or `THINKRAIL_NO_ANALYTICS=1`) tur
 that run. With additional sharing on, a packaged build may open the ThinkRail blog in your browser once to
 link your installation to the website visit that brought you here — only where you accepted marketing cookies on the
 website or no consent is required — and that link expires after 30 days.
+
+The ThinkRail apps and the ThinkRail website ([thinkrail.ai](https://thinkrail.ai)) use PostHog Inc. services for
+analytics. The website also uses PostHog Surveys to collect feedback after a desktop download and, only if you
+choose to enter one, your email address, which is used to ask for further feedback and to send product updates.
+PostHog's privacy policy is at [posthog.com/privacy](https://posthog.com/privacy).
 
 ## Under the hood
 

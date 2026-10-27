@@ -6,6 +6,7 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton, withIconClass } from "@thinkrail/ui/button";
 import { menuItemClass } from "@thinkrail/ui/menu-styles";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
@@ -16,6 +17,8 @@ import { chatLabel, relativeTime } from "../lib";
 import { openChatInTab } from "../panels/openChat";
 import { type ClosedChat, selectChatFirstPrompt, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
+
+const StartingIcon = withIconClass(Loader2, "animate-spin motion-reduce:animate-none");
 
 export function WorkspaceChatHistory({
 	workspaceId,
@@ -34,19 +37,18 @@ export function WorkspaceChatHistory({
 	if (closed.length === 0) return null;
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
-			<IconTooltip label={t("shell.chatHistory.view")} wrapTrigger>
-				<PopoverTrigger
+			<PopoverTrigger asChild>
+				<IconButton
+					variant="ghost"
+					size="m"
+					icon={chatStarting ? StartingIcon : History}
+					label={t("shell.chatHistory.reopen")}
+					tooltip={t("shell.chatHistory.view")}
+					wrapTrigger
 					data-testid="chat-history"
-					aria-label={t("shell.chatHistory.reopen")}
-					className="flex w-panel-header-row shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-				>
-					{chatStarting ? (
-						<Loader2 className="size-14 animate-spin motion-reduce:animate-none" />
-					) : (
-						<History className="size-14" />
-					)}
-				</PopoverTrigger>
-			</IconTooltip>
+					className="shrink-0 self-center"
+				/>
+			</PopoverTrigger>
 			<PopoverContent
 				align="end"
 				data-testid="chat-history-popover"
@@ -195,22 +197,21 @@ function ClosedChatRow({
 				editing ? (
 					<span aria-hidden className="w-24 shrink-0" />
 				) : (
-					<IconTooltip label={t("shell.chatHistory.renameChat")}>
-						<button
-							type="button"
-							data-testid="closed-chat-rename"
-							aria-label={t("shell.chatHistory.renameNamed", { title: label.text })}
-							onClick={() => {
-								editStartTitleRef.current = chat.title;
-								cancelNextBlurRef.current = false;
-								restoreRowFocusRef.current = false;
-								setEditing(true);
-							}}
-							className={cn(menuItemClass, "shrink-0 px-4 text-text-muted")}
-						>
-							<Pencil className="size-14" />
-						</button>
-					</IconTooltip>
+					<IconButton
+						variant="ghost"
+						size="m"
+						icon={Pencil}
+						label={t("shell.chatHistory.renameNamed", { title: label.text })}
+						tooltip={t("shell.chatHistory.renameChat")}
+						data-testid="closed-chat-rename"
+						onClick={() => {
+							editStartTitleRef.current = chat.title;
+							cancelNextBlurRef.current = false;
+							restoreRowFocusRef.current = false;
+							setEditing(true);
+						}}
+						className="shrink-0"
+					/>
 				)
 			) : null}
 			<IconTooltip label={t("shell.chatHistory.trashChat")}>

@@ -20,6 +20,7 @@ export type PostHogOptions = {
 	cookieless_mode: "always";
 	respect_dnt: true;
 	disable_session_recording: true;
+	disable_surveys: true;
 	before_send(event: PostHogCaptureResult | null): PostHogCaptureResult | null;
 };
 
@@ -82,6 +83,27 @@ export type WebsiteInstallLinkShareClickedProperties = {
 	cta_location: "hero" | "quick_start";
 };
 
+export type WebsiteSurveyQuestionRef = {
+	id: string;
+	question: string;
+};
+
+export type WebsiteSurveyShownProperties = {
+	$survey_id: string;
+	content_key: string;
+	cta_location?: WebsiteCtaLocation;
+};
+
+export type WebsiteSurveyDismissedProperties = WebsiteSurveyShownProperties;
+
+export type WebsiteSurveySentProperties = WebsiteSurveyShownProperties & {
+	$survey_submission_id: string;
+	$survey_completed: boolean;
+	$survey_questions: WebsiteSurveyQuestionRef[];
+} & {
+	[response: `$survey_response_${string}`]: string | string[];
+};
+
 export type WebsiteDownloadStartedProperties = {
 	content_key: string;
 	cta_location: WebsiteCtaLocation;
@@ -98,6 +120,9 @@ export type WebsiteAnalyticsEventProperties = {
 	install_command_copied: WebsiteInstallCommandCopiedProperties;
 	github_clicked: WebsiteGithubClickedProperties;
 	install_link_share_clicked: WebsiteInstallLinkShareClickedProperties;
+	"survey shown": WebsiteSurveyShownProperties;
+	"survey sent": WebsiteSurveySentProperties;
+	"survey dismissed": WebsiteSurveyDismissedProperties;
 };
 
 export type WebsiteAnalyticsEventName = keyof WebsiteAnalyticsEventProperties;
@@ -182,6 +207,7 @@ const configurationFor = (
 			cookieless_mode: "always",
 			respect_dnt: true,
 			disable_session_recording: true,
+			disable_surveys: true,
 			before_send: firstPartyExceptionsOnly(productionHostname),
 		},
 	},

@@ -120,13 +120,7 @@ export function OnboardingWizard({
 function SkipButton({ onSkip }: { onSkip: () => void }) {
 	const t = useT();
 	return (
-		<Button
-			variant="ghost"
-			size="sm"
-			data-testid="onboarding-skip"
-			className="text-text-muted"
-			onClick={onSkip}
-		>
+		<Button variant="ghost" size="m" data-testid="onboarding-skip" onClick={onSkip}>
 			{t("panels.onboarding.skip")}
 		</Button>
 	);
@@ -157,9 +151,14 @@ function IntroStep({ onStart }: { onStart: () => void }) {
 					</li>
 				))}
 			</ul>
-			<Button data-testid="onboarding-start" onClick={onStart}>
+			<Button
+				variant="primary"
+				size="l"
+				iconRight={ArrowRight}
+				data-testid="onboarding-start"
+				onClick={onStart}
+			>
 				{t("panels.onboarding.intro.start")}
-				<ArrowRight className="size-16" />
 			</Button>
 		</div>
 	);
@@ -258,6 +257,9 @@ function PrivacyStep({ onContinue }: { onContinue: () => void }) {
 				</p>
 			) : null}
 			<Button
+				variant="primary"
+				size="l"
+				iconRight={ArrowRight}
 				data-testid="onboarding-privacy-continue"
 				disabled={pending}
 				onClick={() => {
@@ -267,7 +269,6 @@ function PrivacyStep({ onContinue }: { onContinue: () => void }) {
 				}}
 			>
 				{t("common.continue")}
-				<ArrowRight className="size-16" />
 			</Button>
 		</div>
 	);
@@ -341,12 +342,18 @@ function VerifyConnection({
 						{t("panels.onboarding.verify.noModels", { provider: name })}
 					</p>
 					<div className="flex gap-8">
-						<Button variant="outline" size="sm" data-testid="onboarding-back" onClick={onBack}>
-							<ArrowLeft className="size-16" />
+						<Button
+							variant="outline"
+							size="m"
+							iconLeft={ArrowLeft}
+							data-testid="onboarding-back"
+							onClick={onBack}
+						>
 							{t("common.back")}
 						</Button>
 						<Button
-							size="sm"
+							variant="primary"
+							size="m"
 							data-testid="onboarding-recheck"
 							onClick={() => {
 								setEmpty(false);

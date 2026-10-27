@@ -135,10 +135,11 @@ export function CreateProjectDialog({
 							/>
 							<Button
 								variant="outline"
+								size="l"
+								iconLeft={FolderOpen}
 								data-testid="create-project-browse"
 								onClick={() => void browse()}
 							>
-								<FolderOpen className="size-16" />
 								{t("panels.createProject.browse")}
 							</Button>
 						</div>

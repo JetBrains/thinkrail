@@ -150,20 +150,21 @@ export function LoginDialog({
 									target="_blank"
 									rel="noopener noreferrer"
 									data-testid="login-open-url"
-									className={buttonVariants({ className: "flex-1" })}
+									className={buttonVariants({ variant: "primary", size: "l", className: "flex-1" })}
 								>
-									<ExternalLink className="size-16" />
+									<ExternalLink aria-hidden />
 									{t("auth.login.openPage")}
 								</a>
 								<Button
 									variant="outline"
+									size="l"
+									iconLeft={copied ? Check : Copy}
 									data-testid="login-copy-url"
 									data-copied={copied || undefined}
 									onClick={() => {
 										if (state.url) void copyUrl(state.url);
 									}}
 								>
-									{copied ? <Check className="size-16" /> : <Copy className="size-16" />}
 									{copied ? t("common.copied") : t("auth.login.copyLink")}
 								</Button>
 							</div>
@@ -303,16 +304,21 @@ export function LoginDialog({
 
 				<DialogFooter>
 					{terminal ? (
-						<Button variant="outline" data-testid="login-close" onClick={onClose}>
+						<Button variant="outline" size="l" data-testid="login-close" onClick={onClose}>
 							{t("common.done")}
 						</Button>
 					) : (
 						<>
-							<Button variant="outline" data-testid="login-cancel" onClick={onCancel}>
+							<Button variant="outline" size="l" data-testid="login-cancel" onClick={onCancel}>
 								{t("common.cancel")}
 							</Button>
 							{promptOpen ? (
-								<Button data-testid="login-submit" onClick={submitPrompt}>
+								<Button
+									variant="primary"
+									size="l"
+									data-testid="login-submit"
+									onClick={submitPrompt}
+								>
 									{t("common.continue")}
 								</Button>
 							) : null}

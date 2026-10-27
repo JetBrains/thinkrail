@@ -8,6 +8,7 @@ import {
 	type Workspace,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
 import { workspaceName } from "../store";
 import { SettingsGroup } from "./SettingsGroup";
@@ -44,18 +45,18 @@ function SourceTag({
 		);
 	}
 	return (
-		<button
-			type="button"
+		<Button
+			variant="soft-primary"
+			size="s"
+			iconRight={RiArrowGoBackLine}
 			data-testid={testId}
 			data-source="custom"
 			aria-label={resetLabel}
-			title={t("settings.subagents.source.useGlobal")}
+			tooltip={t("settings.subagents.source.useGlobal")}
 			onClick={onReset}
-			className="inline-flex items-center gap-2 rounded-sm px-4 text-primary tr-text-metadata outline-none hover:bg-primary-subtle focus-visible:ring-2 focus-visible:ring-primary"
 		>
 			{t("settings.subagents.source.custom")}
-			<RiArrowGoBackLine aria-hidden className="size-12" />
-		</button>
+		</Button>
 	);
 }
 

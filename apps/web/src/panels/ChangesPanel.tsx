@@ -1,5 +1,6 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -158,7 +159,7 @@ export function ChangesPanel({
 				data-testid="changes-view-toggle"
 				role="toolbar"
 				aria-label={t("changes.panel.toolbar")}
-				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
+				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-x-clip border-border-default border-b px-12"
 			>
 				<div className="mr-auto flex min-w-0 items-center gap-4">
 					<ChangesScopeMenu
@@ -168,17 +169,18 @@ export function ChangesPanel({
 						onSelectScope={(next) => setDiffScope(workspaceId, next)}
 					/>
 					{workspace ? (
-						<BranchPicker
-							branches={branches}
-							failed={branchesFailed}
-							selected={baseRef}
-							refreshing={branchesRefreshing}
-							label={t("changes.panel.versus")}
-							testid="changes-target-picker"
-							triggerClassName="flex h-24 min-w-0 max-w-[200px] items-center gap-4 rounded-sm px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
-							onSelect={(ref) => void pointAt(ref)}
-							onRefresh={refreshBranches}
-						/>
+						<div className="flex min-w-0 max-w-[200px]">
+							<BranchPicker
+								branches={branches}
+								failed={branchesFailed}
+								selected={baseRef}
+								refreshing={branchesRefreshing}
+								label={t("changes.panel.versus")}
+								testid="changes-target-picker"
+								onSelect={(ref) => void pointAt(ref)}
+								onRefresh={refreshBranches}
+							/>
+						</div>
 					) : null}
 				</div>
 				<ToggleSegment
@@ -207,14 +209,9 @@ export function ChangesPanel({
 						<p className="tr-text-metadata text-feedback-error">
 							{t("changes.readFailed", { error })}
 						</p>
-						<button
-							type="button"
-							data-testid="changes-retry"
-							onClick={reload}
-							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
-						>
+						<Button variant="ghost" size="s" data-testid="changes-retry" onClick={reload}>
 							{t("common.retry")}
-						</button>
+						</Button>
 					</div>
 				) : status === null ? (
 					<LoadingRegion rows={5} className="px-8 py-4" />

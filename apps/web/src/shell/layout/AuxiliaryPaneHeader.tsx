@@ -1,7 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { RiCloseLine as X } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { type ComponentPropsWithoutRef, forwardRef, type ReactNode } from "react";
 import { tupleKey } from "../../lib";
@@ -69,18 +69,16 @@ export function AuxiliaryPaneHideButton({
 }) {
 	const t = useT();
 	return (
-		<IconTooltip label={t("workbench.pane.hide")}>
-			<button
-				type="button"
-				data-testid={testId}
-				aria-label={t("workbench.pane.hide")}
-				aria-controls={controls}
-				aria-expanded="true"
-				onClick={onClick}
-				className="flex w-panel-header-row shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-			>
-				<X className="size-14" />
-			</button>
-		</IconTooltip>
+		<IconButton
+			variant="ghost"
+			size="m"
+			icon={X}
+			label={t("workbench.pane.hide")}
+			data-testid={testId}
+			aria-controls={controls}
+			aria-expanded="true"
+			onClick={onClick}
+			className="shrink-0 self-center"
+		/>
 	);
 }

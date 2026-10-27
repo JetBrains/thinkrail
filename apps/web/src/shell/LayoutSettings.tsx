@@ -15,9 +15,8 @@ import {
 import { LAYOUT_PLAN_PRESET_PROTOCOL_VERSION, type LayoutPreset } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { randomId } from "../lib";
 import { ConfirmDialog } from "../panels/ConfirmDialog";
@@ -235,21 +234,17 @@ export function LayoutSettings() {
 									<span className="rounded-full bg-primary-subtle px-8 py-2 tr-text-label-pill text-primary">
 										{isStoredDefault ? t("common.default") : t("workbench.layoutSettings.fallback")}
 									</span>
-									<IconTooltip
-										label={
+									<IconButton
+										variant="ghost"
+										size="s"
+										icon={RiQuestionLine}
+										label={t("workbench.layoutSettings.aboutDefault")}
+										tooltip={
 											isStoredDefault
 												? t("workbench.layoutSettings.defaultHint")
 												: t("workbench.layoutSettings.fallbackHint")
 										}
-									>
-										<button
-											type="button"
-											aria-label={t("workbench.layoutSettings.aboutDefault")}
-											className="rounded-sm p-2 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary outline-none"
-										>
-											<RiQuestionLine className="size-14" />
-										</button>
-									</IconTooltip>
+									/>
 								</div>
 							)}
 
@@ -289,36 +284,33 @@ export function LayoutSettings() {
 									<div className="mr-auto flex items-center gap-2">
 										{renaming?.id === preset.id ? (
 											<>
-												<button
-													type="button"
-													aria-label={t("workbench.layoutSettings.saveName", { name: presetName })}
+												<IconButton
+													variant="soft-primary"
+													size="s"
+													icon={Check}
+													label={t("workbench.layoutSettings.saveName", { name: presetName })}
 													disabled={!renaming.name.trim() || saving}
 													onClick={() => commitRename(preset.id)}
-													className="rounded-sm p-4 text-primary hover:bg-control-bg-hovered disabled:text-control-disabled-text"
-												>
-													<Check className="size-14" />
-												</button>
-												<button
-													type="button"
-													aria-label={t("workbench.layoutSettings.cancelRename", {
+												/>
+												<IconButton
+													variant="ghost"
+													size="s"
+													icon={X}
+													label={t("workbench.layoutSettings.cancelRename", {
 														name: presetName,
 													})}
 													onClick={() => setRenaming(null)}
-													className="rounded-sm p-4 text-text-muted hover:bg-control-bg-hovered"
-												>
-													<X className="size-14" />
-												</button>
+												/>
 											</>
 										) : (
-											<button
-												type="button"
-												aria-label={t("workbench.layoutSettings.renameNamed", { name: presetName })}
+											<IconButton
+												variant="ghost"
+												size="s"
+												icon={Pencil}
+												label={t("workbench.layoutSettings.renameNamed", { name: presetName })}
 												disabled={saving}
 												onClick={() => setRenaming({ id: preset.id, name: preset.name })}
-												className="rounded-sm p-4 text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
-											>
-												<Pencil className="size-14" />
-											</button>
+											/>
 										)}
 										<button
 											type="button"
@@ -347,7 +339,7 @@ export function LayoutSettings() {
 								{!isStoredDefault && (
 									<Button
 										variant="outline"
-										size="sm"
+										size="m"
 										disabled={saving}
 										onClick={() =>
 											useAppStore.getState().setLocalLayoutPreferences({
@@ -368,8 +360,8 @@ export function LayoutSettings() {
 									</Button>
 								)}
 								<Button
-									variant="default"
-									size="sm"
+									variant="primary"
+									size="m"
 									disabled={!canApply || isCurrentlyApplied}
 									onClick={() => setApplying(preset)}
 								>
@@ -444,15 +436,15 @@ export function LayoutSettings() {
 								<Button
 									type="button"
 									variant="ghost"
-									size="sm"
+									size="m"
 									onClick={() => setAddLayoutOpen(false)}
 								>
 									{t("common.cancel")}
 								</Button>
 								<Button
 									type="submit"
-									variant="default"
-									size="sm"
+									variant="primary"
+									size="m"
 									aria-label={t("workbench.layoutSettings.savePreset")}
 									disabled={!name.trim() || saving}
 								>
@@ -473,7 +465,7 @@ export function LayoutSettings() {
 				control={
 					<Button
 						variant="outline"
-						size="sm"
+						size="m"
 						data-testid="layout-reset-default"
 						disabled={!canApply}
 						onClick={() => setApplying(selected)}

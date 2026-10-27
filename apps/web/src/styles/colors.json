@@ -130,6 +130,39 @@
 			"publish": true,
 			"note": "disabled primary button label/icon = the normal primary text (`onAccent`, i.e. control-primary-text) at the `strong` (60%) alpha step"
 		},
+		"control-destructive-bg": {
+			"from": "danger",
+			"publish": true,
+			"note": "the destructive button fill — the feedback-error hue as an opaque control surface"
+		},
+		"control-soft-primary-bg-hovered": {
+			"from": "accent",
+			"alpha": "wash",
+			"publish": true,
+			"note": "the soft-primary button's hover fill: one step past its primary-subtle rest, kept below primary-soft so the accent label stays AA on tinted Light surfaces (themes/schema.test.ts); hover also swaps the border to primary-muted"
+		},
+		"control-destructive-bg-hovered": {
+			"from": "dangerHover",
+			"publish": true,
+			"note": "the destructive button's hover fill — its own manifest key (like accentHover), so hover is a colour step, never an opacity change"
+		},
+		"control-destructive-text": {
+			"from": "onDanger",
+			"publish": true,
+			"note": "label/icon on the destructive fill; each theme picks it to clear AA on both danger and dangerHover"
+		},
+		"control-destructive-disabled-bg": {
+			"from": "danger",
+			"alpha": "strong",
+			"publish": true,
+			"note": "disabled destructive fill = the enabled fill at the `strong` (60%) alpha step"
+		},
+		"control-destructive-disabled-text": {
+			"from": "onDanger",
+			"alpha": "strong",
+			"publish": true,
+			"note": "disabled destructive label = the enabled label at the `strong` (60%) alpha step"
+		},
 		"border-default": {
 			"from": "borderStrong",
 			"publish": true

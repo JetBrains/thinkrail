@@ -11,6 +11,7 @@ import {
 } from "@remixicon/react";
 import type { OpenBranchReview, ReviewChecks, Workspace } from "@thinkrail/contracts";
 import { T, type Translator, useT } from "@thinkrail/locales/react";
+import { buttonVariants, IconButton } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
@@ -54,9 +55,6 @@ function Row({
 		</div>
 	);
 }
-
-const rowActionClass =
-	"flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 
 interface RemoteSummary {
 	text: string;
@@ -200,17 +198,15 @@ export function BranchSegment({
 				<Row
 					label={t("shell.location.branch.caption")}
 					action={
-						<IconTooltip label={t("shell.location.branch.copyName")}>
-							<button
-								type="button"
-								data-testid="scope-branch-copy"
-								aria-label={t("shell.location.branch.copyName")}
-								className={rowActionClass}
-								onClick={copyBranch}
-							>
-								<Copy className="size-14" />
-							</button>
-						</IconTooltip>
+						<IconButton
+							variant="ghost"
+							size="m"
+							icon={Copy}
+							label={t("shell.location.branch.copyName")}
+							data-testid="scope-branch-copy"
+							className="shrink-0"
+							onClick={copyBranch}
+						/>
 					}
 				>
 					<span className="truncate tr-code-text">{workspace.branch}</span>
@@ -228,7 +224,6 @@ export function BranchSegment({
 						refreshing={refreshing}
 						label=""
 						testid="scope-diff-base"
-						triggerClassName="flex h-24 min-w-0 max-w-full items-center gap-4 rounded-sm px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
 						onSelect={(ref) => void pointDiffBaseAt(ref)}
 						onRefresh={refresh}
 					/>
@@ -266,9 +261,14 @@ export function BranchSegment({
 										href={review.url}
 										target="_blank"
 										rel="noreferrer"
-										className={rowActionClass}
+										className={buttonVariants({
+											variant: "ghost",
+											size: "m",
+											shape: "icon",
+											className: "shrink-0",
+										})}
 									>
-										<ExternalLink className="size-14" />
+										<ExternalLink aria-hidden />
 									</a>
 								</IconTooltip>
 							) : null

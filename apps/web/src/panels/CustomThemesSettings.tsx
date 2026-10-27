@@ -82,17 +82,16 @@ export function CustomThemesGroup({
 				noBorder={issues.length === 0}
 				control={
 					<div className="flex gap-8">
-						<Button variant="outline" size="sm" onClick={() => onCopyFolder(folder)}>
-							<Copy className="size-14" />
+						<Button variant="outline" size="m" iconLeft={Copy} onClick={() => onCopyFolder(folder)}>
 							{t("settings.language.folder.copy")}
 						</Button>
 						<Button
 							variant="outline"
-							size="sm"
+							size="m"
+							iconLeft={FolderOpen}
 							data-testid="custom-themes-open-folder"
 							onClick={onRevealFolder}
 						>
-							<FolderOpen className="size-14" />
 							{t("settings.language.folder.open")}
 						</Button>
 					</div>

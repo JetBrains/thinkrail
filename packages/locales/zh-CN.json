@@ -86,7 +86,6 @@
 	"changes.scope.uncommitted": "未提交",
 	"changes.scope.uncommittedSuffix": "未提交",
 	"changes.scopeMenu.commits": "Commit",
-	"changes.scopeMenu.label": "Diff 范围",
 	"changes.scopeMenu.lastTurnFiles_one": "上一轮 · 1 个文件",
 	"changes.scopeMenu.lastTurnFiles_other": "上一轮 · {{count}} 个文件",
 	"changes.scopeMenu.loadingCommits": "正在加载 commit",

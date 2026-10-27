@@ -25,7 +25,7 @@ import {
 } from "@remixicon/react";
 import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { IconButton } from "@thinkrail/ui/button";
 import {
 	ContextMenu,
 	ContextMenuContent,
@@ -44,7 +44,6 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { AttentionDot } from "@/components/AttentionDot";
@@ -105,7 +104,7 @@ import {
 } from "./workspaceActions";
 
 const HOVER_CONTROL_CLASS =
-	"flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
+	"shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100";
 
 export function ProjectTree() {
 	const t = useT();
@@ -281,16 +280,14 @@ export function ProjectTree() {
 					onOpenRecent={(p) => void openProject(p)}
 					{...(supportsCreate ? { onStartNew: startNewProject } : {})}
 				>
-					<Button
+					<IconButton
 						ref={addProjectButtonRef}
+						icon={Plus}
+						label={t("panels.projectTree.addProject")}
 						variant="ghost"
-						size="icon"
-						className="size-panel-row"
+						size="s"
 						data-testid="add-project-menu"
-						aria-label={t("panels.projectTree.addProject")}
-					>
-						<Plus className="size-14" />
-					</Button>
+					/>
 				</AddProjectMenu>
 			</header>
 
@@ -563,6 +560,7 @@ function ProjectRow({
 	const row = (
 		<div
 			data-testid="project-item"
+			data-row
 			data-menu-open={menuOpen}
 			data-attention={needsAttention || undefined}
 			data-running={isRunning || undefined}
@@ -619,18 +617,15 @@ function ProjectRow({
 					{workspaceCount}
 				</span>
 			)}
-			<IconTooltip label={createWorkspaceLabel}>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="size-panel-row shrink-0"
-					data-testid="add-workspace"
-					aria-label={createWorkspaceLabel}
-					onClick={onAddWorkspace}
-				>
-					<Plus className="size-14" />
-				</Button>
-			</IconTooltip>
+			<IconButton
+				icon={Plus}
+				label={createWorkspaceLabel}
+				variant="ghost"
+				size="s"
+				className="shrink-0"
+				data-testid="add-workspace"
+				onClick={onAddWorkspace}
+			/>
 		</div>
 	);
 	return (
@@ -840,32 +835,31 @@ function WorkspaceRow({
 		</span>
 	) : null;
 	const hoverAction = isSettled ? (
-		<IconTooltip label={t("panels.projectTree.keepActive")}>
-			<button
-				type="button"
-				data-testid="workspace-keep-active"
-				aria-label={t("panels.projectTree.keepActiveLabel", { name: displayName })}
-				onClick={onKeepActive}
-				className={HOVER_CONTROL_CLASS}
-			>
-				<ArrowGoBack className="size-14" />
-			</button>
-		</IconTooltip>
+		<IconButton
+			icon={ArrowGoBack}
+			label={t("panels.projectTree.keepActiveLabel", { name: displayName })}
+			tooltip={t("panels.projectTree.keepActive")}
+			variant="ghost"
+			size="s"
+			data-testid="workspace-keep-active"
+			onClick={onKeepActive}
+			className={HOVER_CONTROL_CLASS}
+		/>
 	) : canSettle ? (
-		<IconTooltip
-			label={settleBlocked ? t("panels.projectTree.settleBlocked") : t("panels.projectTree.settle")}
-		>
-			<button
-				type="button"
-				data-testid="workspace-settle"
-				aria-label={t("panels.projectTree.settleLabel", { name: displayName })}
-				disabled={settleBlocked}
-				onClick={onSettle}
-				className={HOVER_CONTROL_CLASS}
-			>
-				<Check className="size-14" />
-			</button>
-		</IconTooltip>
+		<IconButton
+			icon={Check}
+			label={t("panels.projectTree.settleLabel", { name: displayName })}
+			tooltip={
+				settleBlocked ? t("panels.projectTree.settleBlocked") : t("panels.projectTree.settle")
+			}
+			wrapTrigger
+			variant="ghost"
+			size="s"
+			data-testid="workspace-settle"
+			disabled={settleBlocked}
+			onClick={onSettle}
+			className={HOVER_CONTROL_CLASS}
+		/>
 	) : null;
 
 	return (
@@ -873,6 +867,7 @@ function WorkspaceRow({
 			<fieldset
 				aria-label={displayName}
 				data-testid="workspace-item"
+				data-row
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
 				data-settled={settled?.kind}
@@ -931,12 +926,15 @@ function WorkspaceRow({
 				>
 					{hoverAction}
 					<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-						<DropdownMenuTrigger
-							data-testid="workspace-menu"
-							aria-label={t("panels.projectTree.workspaceActions", { name: displayName })}
-							className={HOVER_CONTROL_CLASS}
-						>
-							<MoreVertical className="size-14" />
+						<DropdownMenuTrigger asChild>
+							<IconButton
+								icon={MoreVertical}
+								label={t("panels.projectTree.workspaceActions", { name: displayName })}
+								variant="ghost"
+								size="s"
+								data-testid="workspace-menu"
+								className={HOVER_CONTROL_CLASS}
+							/>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent
 							align="end"

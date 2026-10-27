@@ -1,5 +1,7 @@
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import type * as React from "react";
+import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { cn } from "./utils";
 
 const TooltipProvider = TooltipPrimitive.Provider;
@@ -16,7 +18,7 @@ function TooltipContent({
 			<TooltipPrimitive.Content
 				sideOffset={sideOffset}
 				className={cn(
-					"z-50 overflow-hidden rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 text-text-default tr-text-metadata shadow-[var(--shadow-sm)]",
+					"z-150 overflow-hidden rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 text-text-default tr-text-metadata shadow-[var(--shadow-sm)]",
 					className,
 				)}
 				{...props}
@@ -38,14 +40,36 @@ function IconTooltip({
 	wrapTrigger?: boolean;
 	children: React.ReactNode;
 }) {
+	const [open, setOpen] = useState(false);
+	const quietFocus = useRef(false);
+	const onFocus = (event: React.FocusEvent) => {
+		quietFocus.current = !(event.target as Element).matches(":focus-visible");
+		queueMicrotask(() => {
+			quietFocus.current = false;
+		});
+	};
+	const onOpenChange = (next: boolean) => {
+		if (next && quietFocus.current) return;
+		setOpen(next);
+	};
+	useEffect(() => {
+		if (!open) return;
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") flushSync(() => setOpen(false));
+		};
+		window.addEventListener("keydown", onKeyDown, true);
+		return () => window.removeEventListener("keydown", onKeyDown, true);
+	}, [open]);
 	return (
-		<Tooltip>
+		<Tooltip open={open} onOpenChange={onOpenChange}>
 			{wrapTrigger ? (
-				<TooltipTrigger asChild>
+				<TooltipTrigger asChild onFocus={onFocus}>
 					<span className="flex">{children}</span>
 				</TooltipTrigger>
 			) : (
-				<TooltipTrigger asChild>{children}</TooltipTrigger>
+				<TooltipTrigger asChild onFocus={onFocus}>
+					{children}
+				</TooltipTrigger>
 			)}
 			<TooltipContent {...(side ? { side } : {})} {...(align ? { align } : {})}>
 				{label}

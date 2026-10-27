@@ -1,4 +1,5 @@
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useRef, useState } from "react";
 import type { AnchorDraft, SurfaceReview } from "../registry";
@@ -104,32 +105,27 @@ export function ReviewComposer({
 				}}
 			/>
 			<div className="review-composer-row">
-				<button
-					type="button"
+				<Button
+					variant="outline"
+					size="s"
 					data-testid="review-composer-save"
-					className="review-composer-btn tr-text-action"
 					disabled={busy || !text.trim()}
 					onClick={() => submit(commenting.onSave)}
 				>
 					{t("review.composer.saveDraft")}
-				</button>
-				<button
-					type="button"
+				</Button>
+				<Button
+					variant="primary"
+					size="s"
 					data-testid="review-composer-send"
-					className="review-composer-btn review-composer-btn-primary tr-text-action"
 					disabled={busy || !text.trim()}
 					onClick={() => submit(commenting.onSend)}
 				>
 					{t("review.composer.sendNow")}
-				</button>
-				<button
-					type="button"
-					data-testid="review-composer-cancel"
-					className="review-composer-btn review-composer-btn-quiet tr-text-action"
-					onClick={onClose}
-				>
+				</Button>
+				<Button variant="ghost" size="s" data-testid="review-composer-cancel" onClick={onClose}>
 					{t("common.cancel")}
-				</button>
+				</Button>
 			</div>
 		</div>
 	);

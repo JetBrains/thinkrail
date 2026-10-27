@@ -5,7 +5,7 @@ import {
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
@@ -207,23 +207,19 @@ export function Shell() {
 							{t(STATUS_LABEL[status])}
 						</span>
 					</span>
-					<IconTooltip
-						label={
+					<IconButton
+						variant="ghost"
+						size="m"
+						icon={Settings}
+						label={t("shell.topbar.settings")}
+						tooltip={
 							settingsShortcut
 								? t("shell.topbar.settingsWithShortcut", { shortcut: settingsShortcut })
 								: t("shell.topbar.settings")
 						}
-					>
-						<button
-							type="button"
-							data-testid="open-settings"
-							aria-label={t("shell.topbar.settings")}
-							onClick={() => useAppStore.getState().openSettings()}
-							className="flex size-28 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-						>
-							<Settings className="size-16" />
-						</button>
-					</IconTooltip>
+						data-testid="open-settings"
+						onClick={() => useAppStore.getState().openSettings()}
+					/>
 				</div>
 				<div
 					aria-hidden="true"

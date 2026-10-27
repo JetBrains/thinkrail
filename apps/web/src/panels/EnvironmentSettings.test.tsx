@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { HostEnvironmentStatus } from "@thinkrail/contracts";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EnvironmentForm } from "./EnvironmentSettings";
 import {
@@ -34,16 +35,18 @@ const render = (
 	saving = false,
 ) =>
 	renderToStaticMarkup(
-		<EnvironmentForm
-			status={status}
-			draft={draft}
-			issues={issues}
-			saving={saving}
-			saveFailed={false}
-			onChange={() => {}}
-			onSave={() => {}}
-			onDiscard={() => {}}
-		/>,
+		<TooltipProvider>
+			<EnvironmentForm
+				status={status}
+				draft={draft}
+				issues={issues}
+				saving={saving}
+				saveFailed={false}
+				onChange={() => {}}
+				onSave={() => {}}
+				onDiscard={() => {}}
+			/>
+		</TooltipProvider>,
 	);
 
 test("renders the stored folder, the folder in use and masked variable values", () => {

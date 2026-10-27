@@ -124,7 +124,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	const islandPages = ["vibecoding", "agenticDevelopment", "agenticIde"] as const;
 	const staticPages = ["landing", "blog", "introducingThinkRail", "claim"] as const;
 	const installPages = [
-		{ name: "landing", html: pages.landing, expectedDownloads: 2 },
+		{ name: "landing", html: pages.landing, expectedDownloads: 1 },
 		{
 			name: "introducingThinkRail",
 			html: pages.introducingThinkRail,
@@ -204,8 +204,21 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 			}
 		}
 	}
-	if (!pages.landing.includes('data-install-picker="hero"')) {
-		failures.push("landing: hero install picker is missing");
+	if (!pages.landing.includes("data-hero-download")) {
+		failures.push("landing: hero download is missing");
+	}
+	if (!pages.landing.includes("Thanks for downloading ThinkRail!")) {
+		failures.push("landing: download thanks dialog is missing");
+	}
+	if (
+		!/class="hero-download-other"[^>]*href="#install"|href="#install"[^>]*class="hero-download-other"/.test(
+			pages.landing,
+		)
+	) {
+		failures.push("landing: other platforms link is missing");
+	}
+	if (!pages.landing.includes("data-cli-install")) {
+		failures.push("landing: install command tabs are missing");
 	}
 	for (const [path, html] of htmlPages) {
 		if (!/^blog\/[^/]+\/index\.html$/.test(path)) continue;

@@ -3,7 +3,6 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
-	RiLoader4Line as Loader2,
 	type RemixiconComponentType as LucideIcon,
 	RiSparkling2Line as Sparkles,
 	RiAlertLine as TriangleAlert,
@@ -563,7 +562,7 @@ export function NewWorkspaceDialog({
 						<div className="flex justify-end">
 							<Button
 								variant="outline"
-								size="sm"
+								size="m"
 								data-testid="ws-trust-project"
 								disabled={trusting}
 								onClick={() => void trustProject(trustNotice)}
@@ -683,18 +682,21 @@ export function NewWorkspaceDialog({
 							className="max-w-full"
 						/>
 					</div>
-					<button
-						type="button"
+					<Button
+						variant="primary"
+						size="l"
 						data-testid="create-workspace"
 						disabled={!submitEnabled}
+						loading={creating}
 						onClick={() => void create()}
-						className="flex h-32 shrink-0 items-center gap-8 rounded-sm bg-control-primary-bg px-12 tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+						className="shrink-0"
 					>
 						{creating ? (
-							<>
-								<Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
-								{isolated ? t("panels.newWorkspace.creating") : t("panels.newWorkspace.starting")}
-							</>
+							isolated ? (
+								t("panels.newWorkspace.creating")
+							) : (
+								t("panels.newWorkspace.starting")
+							)
 						) : (
 							<>
 								{isolated ? t("panels.newWorkspace.create") : t("panels.newWorkspace.start")}
@@ -703,7 +705,7 @@ export function NewWorkspaceDialog({
 								</span>
 							</>
 						)}
-					</button>
+					</Button>
 				</div>
 				<SkillsDialog
 					projectId={selectedProjectId}

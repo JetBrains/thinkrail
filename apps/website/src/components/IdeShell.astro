@@ -1,5 +1,6 @@
 ---
 import Copyright from "./Copyright.astro";
+import DownloadThanks from "./DownloadThanks.astro";
 
 interface Props {
 	workspace: string;
@@ -135,6 +136,11 @@ const { workspace, nav, skipHref } = Astro.props;
 		<path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1" />
 		<path d="m5 8 3 8a5 5 0 0 1-6 0z" />
 		<path d="M7 21h10" />
+	</symbol>
+	<symbol id="i-download" viewBox="0 0 24 24">
+		<path d="M12 15V3" />
+		<path d="m7 10 5 5 5-5" />
+		<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
 	</symbol>
 	<symbol id="i-package" viewBox="0 0 24 24">
 		<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" />
@@ -328,6 +334,8 @@ const { workspace, nav, skipHref } = Astro.props;
 		</aside>
 		<div class="rail-backdrop" id="rail-backdrop" hidden></div>
 	</div>
+
+	<DownloadThanks />
 
 	<!-- ══ Status bar ══ -->
 	<footer class="statusbar">

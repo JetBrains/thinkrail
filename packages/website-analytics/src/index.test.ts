@@ -17,6 +17,7 @@ const expectedPostHogOptions: PostHogOptions = {
 	cookieless_mode: "always",
 	respect_dnt: true,
 	disable_session_recording: true,
+	disable_surveys: true,
 	before_send: expect.any(Function),
 };
 const expectedGtmScriptUrl = "https://www.googletagmanager.com/gtm.js?id=GTM-WDW2DZW4";

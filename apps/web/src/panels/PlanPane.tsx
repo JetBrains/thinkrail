@@ -19,6 +19,7 @@ import {
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Button, buttonVariants, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -180,8 +181,6 @@ function ChangeSetBlock({
 const PLAN_CARD_CLASS =
 	"mb-16 rounded-md border border-border-default bg-container-elevated-bg p-12";
 const NEXT_ACTION_CLASS = `${PLAN_CARD_CLASS} flex items-center gap-8`;
-const NEXT_ACTION_BUTTON_CLASS =
-	"flex h-28 shrink-0 items-center rounded-sm bg-control-primary-bg px-8 tr-text-ui text-control-primary-text transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text";
 
 type StageState = "done" | "active" | "pending";
 
@@ -383,16 +382,17 @@ function ItemBlock({
 									: t("plan.item.needsFix")}
 							</button>
 						) : needsReview ? (
-							<button
-								type="button"
+							<Button
+								variant="primary"
+								size="m"
 								data-testid="plan-start-review"
 								disabled={startDisabled}
-								title={startDisabled ? t("plan.item.reviewBusy") : undefined}
+								tooltip={startDisabled ? t("plan.item.reviewBusy") : undefined}
 								onClick={() => onStartReview(item.id)}
-								className="flex h-24 shrink-0 items-center rounded-sm bg-control-primary-bg px-8 text-control-primary-text tr-text-action opacity-100 transition hover:bg-control-primary-bg-hovered focus-visible:opacity-100 disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+								className="shrink-0 opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
 							>
 								{t("plan.item.checkIt")}
-							</button>
+							</Button>
 						) : reviewed ? (
 							<span
 								data-testid="plan-item-verified"
@@ -797,16 +797,17 @@ function SessionBlock({
 						{t("plan.session.question")}
 					</button>
 				) : null}
-				<button
-					type="button"
+				<Button
+					variant="ghost"
+					size="m"
+					iconLeft={Plus}
 					data-testid="plan-add-task"
 					onClick={() => setAdding((v) => !v)}
-					title={t("plan.session.addTaskTitle")}
-					className="ml-auto flex h-24 shrink-0 items-center gap-4 rounded-sm px-8 tr-text-action text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+					tooltip={t("plan.session.addTaskTitle")}
+					className="ml-auto shrink-0"
 				>
-					<Plus className="size-14" />
 					{t("plan.session.task")}
-				</button>
+				</Button>
 			</div>
 			{renderLive()}
 			{hasActive ? (
@@ -1144,16 +1145,17 @@ export default function PlanPane({
 						) : null}
 					</div>
 					{agentComments > 0 ? (
-						<button
-							type="button"
+						<Button
+							variant="ghost"
+							size="l"
+							iconLeft={MessageSquare}
 							data-testid="plan-review-comments"
 							onClick={onOpenReview}
-							title={t("plan.header.commentsTitle")}
-							className="flex h-32 shrink-0 items-center gap-4 rounded-sm px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+							tooltip={t("plan.header.commentsTitle")}
+							className="shrink-0"
 						>
-							<MessageSquare className="size-14" />
 							{t("plan.header.comments", { count: agentComments })}
-						</button>
+						</Button>
 					) : null}
 					{openReview ? (
 						openReviewUrl ? (
@@ -1162,7 +1164,7 @@ export default function PlanPane({
 								href={openReviewUrl}
 								target="_blank"
 								rel="noopener noreferrer"
-								className="flex h-32 shrink-0 items-center rounded-sm px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+								className={buttonVariants({ variant: "ghost", size: "l", className: "shrink-0" })}
 							>
 								{openReviewLabel(openReview)}
 							</a>
@@ -1175,13 +1177,20 @@ export default function PlanPane({
 							</span>
 						)
 					) : null}
-					<button
-						type="button"
+					<Button
+						variant={
+							(planReady && !openReview) || unpushed > 0 || (openReview && diverged)
+								? "primary"
+								: "ghost"
+						}
+						size="l"
+						iconLeft={GitPullRequestArrow}
+						loading={prBusy}
 						data-testid="plan-open-pr"
 						data-diverged={openReview && diverged ? "" : undefined}
 						disabled={prBusy || sameBranch || (!!openReview && diverged && !integrateCommand)}
 						onClick={openReview && diverged ? copyIntegrateCommand : () => void openPrFlow(false)}
-						title={
+						tooltip={
 							sameBranch
 								? t("plan.openPr.sameBranch")
 								: openReview && diverged
@@ -1192,17 +1201,8 @@ export default function PlanPane({
 										? t("plan.openPr.pushTitle")
 										: t("plan.openPr.openTitle")
 						}
-						className={`flex h-32 shrink-0 items-center gap-4 rounded-sm px-8 tr-text-ui transition-colors ${
-							(planReady && !openReview) || unpushed > 0 || (openReview && diverged)
-								? "bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
-								: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
-						}`}
+						className="shrink-0"
 					>
-						{prBusy ? (
-							<Loader2 className="size-14 animate-spin" />
-						) : (
-							<GitPullRequestArrow className="size-14" />
-						)}
 						{ship.submitting
 							? t("plan.openPr.pushing")
 							: openReview
@@ -1212,14 +1212,17 @@ export default function PlanPane({
 										? t("plan.openPr.pushUpdatesCount", { count: unpushed })
 										: t("plan.openPr.pushUpdates")
 								: t("plan.openPr.open")}
-					</button>
+					</Button>
 					<DropdownMenu>
-						<DropdownMenuTrigger
-							data-testid="plan-menu"
-							aria-label={t("plan.menu.label")}
-							className="flex size-32 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-hovered"
-						>
-							<MoreVertical className="size-16" />
+						<DropdownMenuTrigger asChild>
+							<IconButton
+								size="l"
+								icon={MoreVertical}
+								label={t("plan.menu.label")}
+								data-testid="plan-menu"
+								wrapTrigger
+								className="shrink-0"
+							/>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end" data-testid="plan-menu-content">
 							<DropdownMenuItem data-testid="plan-copy-markdown" onSelect={() => copyMarkdown()}>
@@ -1267,14 +1270,15 @@ export default function PlanPane({
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{t("plan.next.fix", { count: flagged.length })}
 						</span>
-						<button
-							type="button"
+						<Button
+							variant="primary"
+							size="m"
 							data-testid="plan-next-action-go"
 							onClick={() => flagged[0] && jumpToItem(flagged[0].id)}
-							className={NEXT_ACTION_BUTTON_CLASS}
+							className="shrink-0"
 						>
 							{t("plan.next.showStep")}
-						</button>
+						</Button>
 					</div>
 				) : unsettledReviewables.length > 0 ? (
 					<div data-testid="plan-next-action" data-kind="review" className={NEXT_ACTION_CLASS}>
@@ -1282,15 +1286,16 @@ export default function PlanPane({
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{t("plan.next.review", { count: unsettledReviewables.length })}
 						</span>
-						<button
-							type="button"
+						<Button
+							variant="primary"
+							size="m"
 							data-testid="plan-next-action-go"
 							disabled={reviewingAny || !canReview}
 							onClick={() => void reviewAll()}
-							className={NEXT_ACTION_BUTTON_CLASS}
+							className="shrink-0"
 						>
 							{t("plan.menu.checkAll")}
-						</button>
+						</Button>
 					</div>
 				) : openReview && diverged ? (
 					<div data-testid="plan-next-action" data-kind="diverged" className={NEXT_ACTION_CLASS}>
@@ -1311,14 +1316,15 @@ export default function PlanPane({
 							) : null}
 						</div>
 						{integrateCommand ? (
-							<button
-								type="button"
+							<Button
+								variant="primary"
+								size="m"
 								data-testid="plan-next-action-go"
 								onClick={copyIntegrateCommand}
-								className={NEXT_ACTION_BUTTON_CLASS}
+								className="shrink-0"
 							>
 								{t("plan.next.copyCommand")}
-							</button>
+							</Button>
 						) : null}
 					</div>
 				) : openReview && unpushed > 0 ? (
@@ -1327,15 +1333,16 @@ export default function PlanPane({
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{t("plan.next.unpushed", { count: unpushed, review: openReviewLabel(openReview) })}
 						</span>
-						<button
-							type="button"
+						<Button
+							variant="primary"
+							size="m"
 							data-testid="plan-next-action-go"
 							disabled={prBusy}
 							onClick={() => void openPrFlow(false)}
-							className={NEXT_ACTION_BUTTON_CLASS}
+							className="shrink-0"
 						>
 							{t("plan.openPr.pushUpdates")}
-						</button>
+						</Button>
 					</div>
 				) : planReady && !openReview && !sameBranch ? (
 					<div data-testid="plan-next-action" data-kind="ship" className={NEXT_ACTION_CLASS}>
@@ -1343,15 +1350,16 @@ export default function PlanPane({
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{t("plan.next.ship")}
 						</span>
-						<button
-							type="button"
+						<Button
+							variant="primary"
+							size="m"
 							data-testid="plan-next-action-go"
 							disabled={prBusy}
 							onClick={() => void openPrFlow(false)}
-							className={NEXT_ACTION_BUTTON_CLASS}
+							className="shrink-0"
 						>
 							{t("plan.openPr.open")}
-						</button>
+						</Button>
 					</div>
 				) : null}
 				{summaryProse ? <PlanSummary summary={summaryProse} stale={!buildDone} /> : null}
