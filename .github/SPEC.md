@@ -35,8 +35,9 @@ PR and merge-queue gates cover dependency/boundary/seam/spec-surface conformance
 no-agent browser tests. Linux and Windows run native CLI artifact smoke; Linux also runs browser tests
 against the compiled binary. Desktop coverage builds the Linux target, runs native-window and shared
 artifact probes under Xvfb with test-only software-rendering flags, and runs desktop-backed browser tests.
-The Linux binary and desktop suites run on every merge group but on a PR only when its change can affect
-artifacts (change classifier below). Real-provider tests remain explicitly authorized and separate.
+Windows also builds the desktop app and runs its native smoke, without browser tests (below).
+The Linux binary and desktop suites and the Windows desktop smoke run on every merge group but on a PR
+only when its change can affect artifacts (change classifier below). Real-provider tests remain explicitly authorized and separate.
 
 The three browser suites dominate wall time, so each runs as a matrix of Playwright shards on separate
 runners ([[module-browser-e2e]] owns the slicing). Shard counts trade runner minutes for wall time and are
@@ -58,7 +59,7 @@ conformance gates). In the merge queue it diffs against the target branch, not t
 is the previous entry's group head, and with HEADGREEN grouping a green head merges every entry ahead, so a
 site PR queued behind an app PR must still run the full set. Conformance, lint/typecheck and unit tests
 always run; they are cheap and cover the website too. A second output, `artifacts`, gates the Linux binary
-and desktop suites, which replay the no-agent browser suite against built artifacts and cost over half of
+and desktop suites and the Windows desktop smoke; the Linux suites replay the no-agent browser suite against built artifacts and cost over half of
 CI's runner time: on a PR they run only when a path feeds building or packaging — the CLI and desktop apps,
 artifact tests, shared's native icon set, its generator, release identity and Windows file identity, the
 server's build support and bundled-runtime registration, the artifact Playwright runners, CI definitions, patches and the root manifests and lockfile — and in a merge group they always run,
@@ -66,8 +67,8 @@ so main never lands an artifact they have not exercised. An artifact-only defect
 therefore surfaces at enqueue time instead of on the PR; it was 1 in 56 failed runs before the split. That
 includes the shared no-agent specs and fixtures the artifact suites replay: only the artifact runners and
 configs are classifier paths, so a harness change that breaks only the binary or desktop replay is also
-caught at enqueue. The Windows job stays on every app PR: it is mostly native unit gates, not an artifact
-replay.
+caught at enqueue. The Windows unit-and-binary job stays on every app PR: it is mostly native unit gates,
+not an artifact replay.
 
 Browser jobs retry the Playwright browser download a bounded number of times, a network fault that otherwise
 ejects an entry from the merge queue; inside a job Playwright retries a failed test once on CI (source and
@@ -101,7 +102,10 @@ desktop window-chrome unit gate binds the `user32.dll` frame symbols the framele
 round-trips the window icon through a real window, and stamps an AppUserModelID onto real shortcuts
 ([[module-desktop]]). Neither gate needs the
 Electrobun devkit. Its binary smoke also checks the compiled exe's icon and file properties
-([[module-artifact-tests]]). Its path gate (`bun run test:windows-paths`) runs
+([[module-artifact-tests]]). A separate Windows desktop job builds the desktop app and runs the native
+desktop smoke, which checks the branded `bun.exe`, `launcher.exe` and uninstaller. Only a Windows build
+runs the desktop `postBuild` branding over Hutch's output ([[module-desktop]]). Before this job existed, a
+branding defect first failed in the nightly release build. Its path gate (`bun run test:windows-paths`) runs
 the suites that pin architecture Decision 22 on the one host where git prints `C:/…`, node prints `C:\…`,
 and `\` is not a file-name character: stored directories, chat lifecycle in Default and external workspaces,
 POSIX wire paths, git object names, picker roots, and `install.ps1`'s PATH check. A suite joins the gate only
@@ -113,7 +117,7 @@ install turns that into timeouts. Tests with an explicit timeout keep it. The ru
 name (`C:\Users\RUNNER~1\…`) while git reports the long one, so path fixtures are rooted at
 `realpathSync.native`, the spelling git and the OS agree on. The installer file contributes only its
 `install.ps1` suite, because its `install.sh` tests rightly reject the `~` such a prefix carries. Native
-macOS and Linux ARM64 acceptance belongs to the release matrix. The Windows job installs Bun and its
+macOS and Linux ARM64 acceptance belongs to the release matrix. The Windows jobs install Bun and their
 dependencies without the Actions cache: restoring it took longer than a fresh install, and with no Windows
 job on main every PR and merge group kept its own copy, about half of the repository's cache quota.
 
