@@ -510,6 +510,45 @@ test.skipIf(!writesCanBeDenied)(
 	},
 );
 
+test.skipIf(!writesCanBeDenied)(
+	"reopening a chat restores subagent spend that was recorded only in memory",
+	async () => {
+		const { cwd, sessionId, file } = await persistedParent("ws-reopen");
+		faux.setResponses([fauxAssistantMessage("CHILD_DONE")]);
+		const child = await delegationServiceFor("ws-reopen").createChild({
+			parent: sessionId,
+			visibility: "hidden",
+			info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+			session: { systemPrompt: "You are a test scout." },
+		});
+		chmodSync(file, 0o444);
+		const outcome = await child.runQueued("Report.").finally(() => chmodSync(file, 0o644));
+		const { usage } = outcome.details;
+		await removeSession(sessionId);
+		expect(
+			SessionManager.open(file)
+				.getEntries()
+				.some((entry) => entry.type === "usage"),
+		).toBe(false);
+
+		setSessionManagerFactory(() => SessionManager.open(file));
+		const reopened = await createSession({ cwd, workspaceId: "ws-reopen" });
+		setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+		try {
+			expect(reopened.sessionId).toBe(sessionId);
+			await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+			expect(getSessionStats(sessionId).tokens).toMatchObject({
+				input: usage.input,
+				output: usage.output,
+				cacheRead: usage.cacheRead,
+				cacheWrite: usage.cacheWrite,
+			});
+		} finally {
+			await removeSession(sessionId);
+		}
+	},
+);
+
 test("a torn usage append is cut back so the next entry stays readable", async () => {
 	const { sessionId, manager, file } = await persistedParent("ws-torn");
 	const appendUsage = manager.appendUsage.bind(manager);

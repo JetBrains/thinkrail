@@ -14,6 +14,8 @@ const log = logger("agent");
 
 export const SUBAGENT_USAGE_KIND = "subagent";
 
+const COST_EPSILON = 1e-9;
+
 export interface SubagentUsage {
 	childSessionId: string;
 	provider: string;
@@ -102,19 +104,13 @@ export function childFileUsage(childSessionId: string, content: string): Subagen
 		: { childSessionId, provider, model, usage: toUsage(totals) };
 }
 
-interface Recorded {
-	totals: Totals;
-	at: number;
-}
-
-export function recordedSubagentUsage(entries: readonly SessionEntry[]): Map<string, Recorded> {
-	const recorded = new Map<string, Recorded>();
+function recordedSubagentUsage(entries: readonly SessionEntry[]): Map<string, Totals> {
+	const recorded = new Map<string, Totals>();
 	for (const entry of entries) {
 		if (entry.type !== "usage" || entry.kind !== SUBAGENT_USAGE_KIND || !entry.note) continue;
-		const current = recorded.get(entry.note) ?? { totals: emptyTotals(), at: 0 };
-		add(current.totals, entry.usage);
-		current.at = Math.max(current.at, Date.parse(entry.timestamp));
-		recorded.set(entry.note, current);
+		const totals = recorded.get(entry.note) ?? emptyTotals();
+		add(totals, entry.usage);
+		recorded.set(entry.note, totals);
 	}
 	return recorded;
 }
@@ -129,35 +125,31 @@ export function unrecordedUsage(
 		output: total.usage.output - base.output,
 		cacheRead: total.usage.cacheRead - base.cacheRead,
 		cacheWrite: total.usage.cacheWrite - base.cacheWrite,
-		cost: Math.max(0, total.usage.cost.total - base.cost),
+		cost: total.usage.cost.total - base.cost,
 	};
 	const tokens = [missing.input, missing.output, missing.cacheRead, missing.cacheWrite];
-	if (tokens.some((count) => count < 0) || tokensOf(missing) === 0) return undefined;
+	if (tokens.some((count) => count < 0)) return undefined;
+	if (missing.cost <= COST_EPSILON) missing.cost = 0;
+	if (tokensOf(missing) === 0 && missing.cost === 0) return undefined;
 	return { ...total, usage: toUsage(missing) };
 }
 
-interface ChildFile {
-	childSessionId: string;
-	path: string;
-	mtimeMs: number;
-	size: number;
-	total: SubagentUsage | undefined;
-}
+const childTotals = new Map<
+	string,
+	{ mtimeMs: number; size: number; total: SubagentUsage | undefined }
+>();
 
-const settledChildFiles = new Map<string, { mtimeMs: number; size: number }>();
-
-async function readChildFiles(
+async function readChildTotals(
 	dir: string,
-	recorded: ReadonlyMap<string, Recorded>,
 	isLive: (childSessionId: string) => boolean,
-): Promise<ChildFile[]> {
+): Promise<SubagentUsage[]> {
 	let names: string[];
 	try {
 		names = await readdir(dir);
 	} catch {
 		return [];
 	}
-	const files: ChildFile[] = [];
+	const totals: SubagentUsage[] = [];
 	for (const name of names) {
 		const separator = name.indexOf("_");
 		if (separator < 0 || !name.endsWith(".jsonl")) continue;
@@ -166,22 +158,18 @@ async function readChildFiles(
 		const path = join(dir, name);
 		try {
 			const { mtimeMs, size } = await stat(path);
-			const at = recorded.get(childSessionId)?.at;
-			if (at !== undefined && mtimeMs <= at) continue;
-			const settled = settledChildFiles.get(path);
-			if (settled?.mtimeMs === mtimeMs && settled.size === size) continue;
-			files.push({
-				childSessionId,
-				path,
-				mtimeMs,
-				size,
-				total: childFileUsage(childSessionId, await readFile(path, "utf8")),
-			});
+			let cached = childTotals.get(path);
+			if (cached?.mtimeMs !== mtimeMs || cached.size !== size) {
+				const total = childFileUsage(childSessionId, await readFile(path, "utf8"));
+				cached = { mtimeMs, size, total };
+				childTotals.set(path, cached);
+			}
+			if (cached.total) totals.push(cached.total);
 		} catch (error) {
 			log.warn(`subagent usage was not read from ${name}`, error as Error);
 		}
 	}
-	return files;
+	return totals;
 }
 
 export async function reconcileSubagentUsage(deps: {
@@ -190,16 +178,14 @@ export async function reconcileSubagentUsage(deps: {
 	isLive: (childSessionId: string) => boolean;
 	record: (usage: SubagentUsage) => void;
 }): Promise<void> {
-	const before = deps.entries();
-	if (!before) return;
-	const files = await readChildFiles(deps.dir, recordedSubagentUsage(before), deps.isLive);
+	if (!deps.entries()) return;
+	const totals = await readChildTotals(deps.dir, deps.isLive);
 	const current = deps.entries();
-	if (!current || files.length === 0) return;
+	if (!current || totals.length === 0) return;
 	const recorded = recordedSubagentUsage(current);
-	for (const { childSessionId, path, mtimeMs, size, total } of files) {
-		if (deps.isLive(childSessionId)) continue;
-		const missing = total && unrecordedUsage(total, recorded.get(childSessionId)?.totals);
+	for (const total of totals) {
+		if (deps.isLive(total.childSessionId)) continue;
+		const missing = unrecordedUsage(total, recorded.get(total.childSessionId));
 		if (missing) deps.record(missing);
-		else settledChildFiles.set(path, { mtimeMs, size });
 	}
 }
