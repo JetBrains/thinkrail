@@ -31,7 +31,7 @@ treatment.
 - **Owns:** `ProjectTree`. Each top-level project row is a compact IDE-tree row at the shared `--panel-row-height` (`web-spacing`):
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
-  project `+`** — both are `Button variant="ghost" size="icon"`, so they render identically and their glyphs
+  project `+`** — both are `IconButton` ghost `s`, so they render identically and their glyphs
   line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+` carries a
   tooltip and accessible name naming the shell's `Mod+N` chord and its `Mod+Alt+N` browser alias through `lib`'s
   `platformShortcutLabel` (see `submodule-web-shell` global chords); the context-menu item stays plain.
