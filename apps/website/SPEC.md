@@ -202,7 +202,9 @@ so PostHog joins those events to the app's `acquisition_linked.journey_id` for l
 Document-level `click`, middle-button `auxclick`, and disclosure `toggle`
 delegation instruments the static install controls without changing their navigation or no-JS behavior.
 Before each post-initialization install CTA, download, or CLI event, the current navigation touch is
-attempted so consent granted on the page can affect only a subsequent action. Only the four exact stable
+attempted so consent granted on the page can affect only a subsequent action; a page records that touch
+at most once per consented journey, so later actions on it never drop a bridge its download created
+(see [[submodule-website-attribution]]). Only the four exact stable
 GitHub desktop aliases are downloads. Their CTA location comes from the containing hero, install
 section, quick start, final CTA, or blog post; one recognized activation emits `install_cta_clicked`
 (`desktop`) followed by `download_started`. When a consented journey context is available, the activation
