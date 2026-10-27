@@ -223,7 +223,12 @@ dialog initializes only on pages with a valid content key, so its events always 
 actions, and the download that opened the dialog already recorded the page's touch and bridge.
 Closing the dialog resets it to the welcome screen. The next open is a new
 showing, with a new submission id and a new choice order; answers already sent stay on the
-submission that recorded them. Choice order is shuffled for each response, except a custom answer, which stays
+submission that recorded them. Finishing the survey is remembered in `localStorage` under
+`thinkrail_download_survey_completed`, which holds the survey id and nothing else; it is the dialog's
+UX state, not analytics state, so consent does not gate it. Later downloads still open the dialog,
+but the survey card says the visitor has already answered and offers **Answer again**: `survey shown`
+is sent only when they take it, so closing such a dialog sends nothing, and a new survey id offers
+the survey again. Choice order is shuffled for each response, except a custom answer, which stays
 last. Required steps leave Continue disabled until the answer is valid. The first-try note and
 the email are optional. A filled-in email has to satisfy the browser's email field before
 Finish enables; a blank email does not. While Finish is disabled, a muted note on the same line as the

@@ -9,22 +9,34 @@ import {
 	answerSurveyStep,
 	downloadSurveyFreeTextLimit,
 	downloadSurveySteps,
+	rememberSurveyCompleted,
 	type SurveyChoice,
+	type SurveyCompletionStorage,
 	type SurveyPlace,
 	type SurveyStep,
 	startSurveyResponse,
 	stepCanContinue,
+	surveyCompletedBefore,
 	surveyDismissedProperties,
 	surveyShownProperties,
 } from "./downloadSurvey";
 
 type Capture = typeof captureAnalytics;
 
+function browserStorage(): SurveyCompletionStorage | undefined {
+	try {
+		return window.localStorage;
+	} catch {
+		return undefined;
+	}
+}
+
 export function initDownloadThanks(
 	doc: Document = document,
 	capture: Capture = captureAnalytics,
 	random: () => number = Math.random,
 	responseId: () => string = () => crypto.randomUUID(),
+	storage: () => SurveyCompletionStorage | undefined = browserStorage,
 ): void {
 	const dialog = doc.querySelector<HTMLDialogElement>("[data-download-thanks]");
 	const body = dialog?.querySelector<HTMLElement>("[data-survey-body]");
@@ -32,9 +44,20 @@ export function initDownloadThanks(
 	const progress = dialog?.querySelector<HTMLElement>("[data-survey-progress]");
 	const thanks = dialog?.querySelector<HTMLElement>("[data-survey-thanks]");
 	const welcome = dialog?.querySelector<HTMLElement>("[data-survey-welcome]");
+	const answeredBefore = dialog?.querySelector<HTMLElement>("[data-survey-answered]");
 	const emailHint = dialog?.querySelector<HTMLElement>("[data-survey-email-hint]");
 	const actionRow = dialog?.querySelector<HTMLElement>("[data-survey-action-row]");
-	if (!dialog || !body || !action || !progress || !thanks || !welcome || !emailHint || !actionRow)
+	if (
+		!dialog ||
+		!body ||
+		!action ||
+		!progress ||
+		!thanks ||
+		!welcome ||
+		!answeredBefore ||
+		!emailHint ||
+		!actionRow
+	)
 		return;
 	const contentKey = contentKeyForPathname(doc.location?.pathname ?? "/");
 	if (contentKey === undefined) return;
@@ -44,6 +67,8 @@ export function initDownloadThanks(
 	let stepIndex = 0;
 	let started = false;
 	let shown = false;
+	let retakeOffered = false;
+	let completedHere = false;
 	let advanceLocked = false;
 	let response = startSurveyResponse(responseId(), random);
 	let ctaLocation: WebsiteCtaLocation | undefined;
@@ -79,11 +104,32 @@ export function initDownloadThanks(
 		thanks.hidden = true;
 		body.hidden = true;
 		progress.hidden = true;
+		answeredBefore.hidden = true;
 		welcome.hidden = false;
 		actionRow.hidden = false;
+		action.classList.add("btn-primary");
 		action.disabled = false;
 		action.textContent = "Start";
 		emailHint.hidden = true;
+	};
+
+	const renderAnsweredBefore = () => {
+		thanks.hidden = true;
+		body.hidden = true;
+		progress.hidden = true;
+		welcome.hidden = true;
+		answeredBefore.hidden = false;
+		actionRow.hidden = false;
+		action.classList.remove("btn-primary");
+		action.disabled = false;
+		action.textContent = "Answer again";
+		emailHint.hidden = true;
+	};
+
+	const announceShown = () => {
+		if (shown) return;
+		shown = true;
+		capture("survey shown", surveyShownProperties(surveyPlace()));
 	};
 
 	const legendId = (step: SurveyStep) => `download-survey-question-${step.index}`;
@@ -213,6 +259,7 @@ export function initDownloadThanks(
 		stepIndex = 0;
 		started = false;
 		shown = false;
+		retakeOffered = false;
 		advanceLocked = false;
 		response = startSurveyResponse(responseId(), random);
 		body.replaceChildren();
@@ -221,6 +268,12 @@ export function initDownloadThanks(
 
 	action.addEventListener("click", () => {
 		const step = currentStep();
+		if (retakeOffered) {
+			retakeOffered = false;
+			announceShown();
+			renderWelcome();
+			return;
+		}
 		if (!started) {
 			started = true;
 			renderStep();
@@ -243,6 +296,8 @@ export function initDownloadThanks(
 		response = answered.response;
 		capture("survey sent", answered.properties);
 		if (step.index === downloadSurveySteps.length) {
+			completedHere = true;
+			rememberSurveyCompleted(storage());
 			showThanks();
 			return;
 		}
@@ -262,10 +317,9 @@ export function initDownloadThanks(
 	const openFrom = (anchor: Element) => {
 		if (dialog.open) return;
 		ctaLocation = ctaLocationForElement(anchor);
-		if (!shown) {
-			shown = true;
-			capture("survey shown", surveyShownProperties(surveyPlace()));
-		}
+		retakeOffered = completedHere || surveyCompletedBefore(storage());
+		if (retakeOffered) renderAnsweredBefore();
+		else announceShown();
 		dialog.showModal();
 	};
 

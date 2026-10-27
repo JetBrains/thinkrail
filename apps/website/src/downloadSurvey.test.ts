@@ -3,13 +3,16 @@ import type { WebsiteSurveySentProperties } from "@thinkrail/website-analytics";
 import {
 	answerSurveyStep,
 	downloadPostHogSurveyId,
+	downloadSurveyCompletionKey,
 	downloadSurveySteps,
 	orderedChoices,
+	rememberSurveyCompleted,
 	type SurveyPlace,
 	type SurveyResponse,
 	startSurveyResponse,
 	stepCanContinue,
 	surveyAnswerValue,
+	surveyCompletedBefore,
 	surveyDismissedProperties,
 	surveySentProperties,
 	surveyShownProperties,
@@ -232,6 +235,37 @@ describe("download survey response", () => {
 				if (custom !== undefined) expect(response.order[position]?.at(-1)).toBe(custom);
 			}
 		}
+	});
+
+	test("a finished survey is remembered by its id only", () => {
+		const values = new Map<string, string>();
+		const storage = {
+			getItem: (key: string) => values.get(key) ?? null,
+			setItem: (key: string, value: string) => void values.set(key, value),
+		};
+
+		expect(surveyCompletedBefore(storage)).toBe(false);
+		rememberSurveyCompleted(storage);
+		expect(surveyCompletedBefore(storage)).toBe(true);
+		expect([...values]).toEqual([[downloadSurveyCompletionKey, downloadPostHogSurveyId]]);
+
+		values.set(downloadSurveyCompletionKey, "an-older-survey");
+		expect(surveyCompletedBefore(storage)).toBe(false);
+	});
+
+	test("unavailable storage never throws and never counts as finished", () => {
+		const denied = {
+			getItem(): string | null {
+				throw new Error("denied");
+			},
+			setItem(): void {
+				throw new Error("denied");
+			},
+		};
+
+		expect(() => rememberSurveyCompleted(denied)).not.toThrow();
+		expect(surveyCompletedBefore(denied)).toBe(false);
+		expect(surveyCompletedBefore(undefined)).toBe(false);
 	});
 
 	test("a showing names the survey and where the download was", () => {

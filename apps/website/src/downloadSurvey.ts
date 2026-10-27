@@ -6,6 +6,9 @@ import type {
 
 export const downloadPostHogSurveyId = "01a17ce8-aae4-0000-f8c2-74cf8eb20b72";
 export const downloadSurveyFreeTextLimit = 500;
+export const downloadSurveyCompletionKey = "thinkrail_download_survey_completed";
+
+export type SurveyCompletionStorage = Pick<Storage, "getItem" | "setItem">;
 
 export type SurveyChoice = {
 	id: string;
@@ -213,6 +216,20 @@ export function surveySentProperties(input: {
 		...(input.ctaLocation === undefined ? {} : { cta_location: input.ctaLocation }),
 		...responses,
 	};
+}
+
+export function surveyCompletedBefore(storage: SurveyCompletionStorage | undefined): boolean {
+	try {
+		return storage?.getItem(downloadSurveyCompletionKey) === downloadPostHogSurveyId;
+	} catch {
+		return false;
+	}
+}
+
+export function rememberSurveyCompleted(storage: SurveyCompletionStorage | undefined): void {
+	try {
+		storage?.setItem(downloadSurveyCompletionKey, downloadPostHogSurveyId);
+	} catch {}
 }
 
 export function startSurveyResponse(id: string, random: () => number): SurveyResponse {

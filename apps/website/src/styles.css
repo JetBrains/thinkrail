@@ -2781,7 +2781,8 @@ a.feature-card:hover {
 	margin: 0;
 }
 
-.download-survey [data-survey-welcome] {
+.download-survey [data-survey-welcome],
+.download-survey [data-survey-answered] {
 	margin: 0;
 	color: var(--muted);
 	font-size: 13.5px;
