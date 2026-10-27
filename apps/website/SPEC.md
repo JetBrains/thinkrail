@@ -140,8 +140,8 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
     (from `data-mock-label`), `aria-expanded` + `aria-describedby` on open — no `aria-haspopup`
     (a `tooltip` is not an allowed popup value). The `.rail-tabs` callout anchors to the panel's
     live edge; others place beside the trigger, clamped to the viewport and repositioned on resize.
-- The hero install control is three actions in a row: **Download**, **View on GitHub** (the existing
-  star count fills in beside the label), and the Product Hunt badge. Download starts the file for
+- The hero install control is two actions in a row: **Download** and **View on GitHub** (the existing
+  star count fills in beside the label). Download starts the file for
   the detected desktop: the Apple Silicon DMG on macOS, the Windows x64 ZIP on Windows, and a Linux
   archive. Linux uses the ARM64 archive only when a browser hint explicitly says ARM; otherwise the
   button downloads the x64 archive. When the desktop is unknown, including with JavaScript off,

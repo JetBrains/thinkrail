@@ -892,30 +892,6 @@ p.hero-tagline {
 	line-height: 1.25;
 }
 
-.hero-badge {
-	margin: 0 0 18px;
-}
-
-.hero-badge a {
-	display: inline-block;
-}
-
-.hero-badge img {
-	max-width: 100%;
-	height: auto;
-}
-
-/* Show the badge matching the page theme */
-[data-theme="dark"] .hero-badge-light,
-[data-theme="light"] .hero-badge-dark {
-	display: none;
-}
-
-[data-theme="dark"] .hero-badge-dark,
-[data-theme="light"] .hero-badge-light {
-	display: block;
-}
-
 p.hero-lede {
 	font-size: 16px;
 	max-width: 58ch;
@@ -1269,20 +1245,6 @@ a.hero-download-other .i {
 a.hero-download-other:hover {
 	color: var(--text);
 	text-decoration: none;
-}
-
-.hero-ctas .hero-badge {
-	margin: 0;
-}
-
-.hero-ctas .hero-badge img {
-	width: auto;
-	height: 40px;
-}
-
-[data-theme="dark"] .hero-ctas .hero-badge-light,
-[data-theme="light"] .hero-ctas .hero-badge-dark {
-	display: none;
 }
 
 .hero-ctas .gh-stars:not([hidden]) {
