@@ -92,6 +92,9 @@ in a private temporary file, which may expire; capture failure is explicit and n
 mutation. Tool errors set `isError: true` and retain a visible error marker even if capture fails.
 Structured details remain presentation data, outside model context.
 
-`todo_list` pages current rendered lines in group-first order with the same status filter; restart
-after plan edits. Its 200-line default favors incremental reads; callers may request up to Pi's line
-limit minus a notice reserve. Pagination does not promise that every active or loose item is on page 1.
+`todo_list` returns the whole rendered plan (group-first; loose queue and nudges last) whenever it fits
+a payload budget reserved below Pi's limits for notices (1,990 lines / 48 KiB). Only a larger plan
+pages, by rendered-line offset with the same status filter; offsets address the current plan, not a
+snapshot, so restart after plan edits. There is deliberately no page-size parameter: a short page holds
+only the completed head of a long plan and would hide the active task, loose queue and nudge; `status`
+is the way to read less.

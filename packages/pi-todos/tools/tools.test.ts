@@ -136,7 +136,7 @@ test("errors keep their model-facing failure status when the message is oversize
 	}
 });
 
-test("todo pagination keeps filters, clamps limits and handles empty or invalid ranges", async () => {
+test("todo pagination keeps the status filter and handles empty or invalid ranges", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-ranges-"));
 	try {
 		const store = new TodoStore(cwd, "sess-test");
@@ -144,32 +144,51 @@ test("todo pagination keeps filters, clamps limits and handles empty or invalid 
 			groups: [
 				{
 					title: "Task",
-					todos: Array.from({ length: 250 }, (_, i) => ({ title: `Step ${i}`, status: "done" })),
+					todos: Array.from({ length: 2100 }, (_, i) => ({ title: `Step ${i}`, status: "done" })),
 				},
 			],
 		});
 		store.add({ title: "Not done" });
-		const first = await run("todo_list", { status: "done" }, cwd);
-		expect((first.details as { nextOffset?: number }).nextOffset).toBe(200);
-		expect(text(first)).toContain("status: done");
-		const expanded = await run("todo_list", { status: "done", limit: 100000 }, cwd);
-		expect((expanded.details as { nextOffset?: number }).nextOffset).toBeUndefined();
-		expect(text(expanded).split("\n")).toHaveLength(250);
-		expect(text(expanded)).not.toContain("Not done");
-		const last = await run("todo_list", { status: "done", offset: 200 }, cwd);
-		expect((last.details as { nextOffset?: number }).nextOffset).toBeUndefined();
-		expect(text(last).split("\n")).toHaveLength(50);
-		expect(text(last)).not.toContain("Not done");
+		const found: string[] = [];
+		let offset = 0;
+		for (let page = 0; page < 5; page++) {
+			const result = await run("todo_list", { status: "done", offset }, cwd);
+			expect(text(result)).not.toContain("Not done");
+			const lines = text(result).split("\n");
+			const nextOffset = (result.details as { nextOffset?: number }).nextOffset;
+			if (nextOffset === undefined) {
+				found.push(...lines);
+				break;
+			}
+			expect(lines.at(-1)).toBe(
+				`More plan lines: call todo_list with offset: ${nextOffset} and status: done. Restart at offset: 0 after plan edits.`,
+			);
+			found.push(...lines.slice(0, -1));
+			offset = nextOffset;
+		}
+		expect(offset).toBeGreaterThan(0);
+		expect(found).toEqual(
+			Array.from({ length: 2100 }, (_, i) => expect.stringContaining(`Step ${i} `)),
+		);
+		expect(text(await run("todo_list", { status: "in_progress" }, cwd))).toBe(
+			"No in_progress TODOs.",
+		);
 		expect(text(await run("todo_list", { offset: 9999 }, cwd))).toContain("No more plan lines");
-		expect(isError(await run("todo_list", { offset: -1 }, cwd))).toBe(true);
-		expect(isError(await run("todo_list", { limit: 0 }, cwd))).toBe(true);
+		const invalid = await run("todo_list", { offset: -1 }, cwd);
+		expect(isError(invalid)).toBe(true);
+		expect(text(invalid)).toBe("Error: Use a nonnegative integer offset.");
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
 });
 
-test("larger requested pages include the current task and loose queue after completed groups", async () => {
-	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-expanded-page-"));
+test("todo_list exposes no page-size parameter", () => {
+	const schema = tools.get("todo_list")?.parameters as { properties?: Record<string, unknown> };
+	expect(Object.keys(schema.properties ?? {}).sort()).toEqual(["offset", "status"]);
+});
+
+test("a default read of a long plan includes the current task, loose queue and nudge", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-long-plan-"));
 	try {
 		const store = new TodoStore(cwd, "sess-test");
 		store.replaceAll({
@@ -184,22 +203,19 @@ test("larger requested pages include the current task and loose queue after comp
 		store.add({ title: "Current work", group: "Current task" });
 		store.add({ title: "User request", origin: "user" });
 		const plan = store.read();
-		const compact = await run("todo_list", {}, cwd);
-		expect((compact.details as { nextOffset?: number }).nextOffset).toBe(200);
-		expect(text(compact)).not.toContain("Current work");
-		const expanded = await run("todo_list", { limit: 1000 }, cwd);
-		expect((expanded.details as { nextOffset?: number }).nextOffset).toBeUndefined();
-		expect(text(expanded)).toContain("Current work");
-		expect(text(expanded)).toContain("User request");
-		expect(text(expanded)).toContain("nothing is in_progress");
-		expect(Buffer.byteLength(text(expanded))).toBeLessThanOrEqual(50 * 1024);
+		const result = await run("todo_list", {}, cwd);
+		expect((result.details as { nextOffset?: number }).nextOffset).toBeUndefined();
+		expect(text(result)).toContain("Current work");
+		expect(text(result)).toContain("User request");
+		expect(text(result)).toEndWith("nothing is in_progress — flip the step you're working on.");
+		expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
 		expect(store.read()).toEqual(plan);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
 });
 
-test("requested TODO pages reserve notice lines within Pi's line limit", async () => {
+test("TODO pages reserve notice lines within Pi's line limit", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-line-cap-"));
 	try {
 		const store = new TodoStore(cwd, "sess-test");
@@ -207,7 +223,7 @@ test("requested TODO pages reserve notice lines within Pi's line limit", async (
 			groups: Array.from({ length: 2100 }, (_, i) => ({ title: String(i), todos: [] })),
 		});
 		store.add({ title: "Visible item" });
-		const first = await run("todo_list", { limit: 100000 }, cwd);
+		const first = await run("todo_list", {}, cwd);
 		expect((first.details as { nextOffset?: number }).nextOffset).toBe(1990);
 		expect(text(first).split("\n")).toHaveLength(1991);
 		expect(text(first)).toContain("offset: 1990");

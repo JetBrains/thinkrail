@@ -33,12 +33,6 @@ const parameters = Type.Object({
 				"Zero-based rendered-line offset (default: 0). Continue with the offset given in the result and the same status filter; restart after plan edits.",
 		}),
 	),
-	limit: Type.Optional(
-		Type.Integer({
-			minimum: 1,
-			description: `Lines per page (default: 200, max: ${MAX_PAGE_LINES}; the byte limit may return fewer).`,
-		}),
-	),
 });
 
 export function registerTodoList(pi: ExtensionAPI): void {
@@ -46,21 +40,14 @@ export function registerTodoList(pi: ExtensionAPI): void {
 		name: "todo_list",
 		label: "Todo List",
 		description:
-			"Read this chat's TODO plan — loose items plus named groups (optionally filtered by status). The plan is the source of truth and the user may edit it at any time, so re-read before choosing each next item, after user input, and before completion. Results are paginated; use the returned offset to continue when needed. Text is capped at 2,000 lines / 50 KiB; oversized text is saved to a temporary file.",
+			"Read this chat's TODO plan — loose items plus named groups (optionally filtered by status). The plan is the source of truth and the user may edit it at any time, so re-read before choosing each next item, after user input, and before completion. A plan beyond Pi's 2,000-line / 50 KiB output limit continues at the offset given in the result; oversized text is saved to a temporary file.",
 		promptSnippet:
 			"todo_list — read this chat's TODO plan (source of truth; re-read to catch the user's edits).",
 		parameters,
 		async execute(_callId, params, _signal, _onUpdate, ctx) {
 			const offset = params.offset ?? 0;
-			const limit = Math.min(params.limit ?? 200, MAX_PAGE_LINES);
-			if (
-				!Number.isSafeInteger(offset) ||
-				offset < 0 ||
-				!Number.isSafeInteger(limit) ||
-				limit < 1
-			) {
-				return errorResult("Use a nonnegative integer offset and a positive integer limit.");
-			}
+			if (!Number.isSafeInteger(offset) || offset < 0)
+				return errorResult("Use a nonnegative integer offset.");
 			const plan = storeFor(ctx).read();
 			const filtered: TodoPlan = params.status
 				? {
@@ -86,8 +73,11 @@ export function registerTodoList(pi: ExtensionAPI): void {
 				return textResult("No more plan lines. Restart at offset: 0 if the plan changed.", {
 					plan: filtered,
 				});
-			const candidate = lines.slice(offset, offset + limit).join("\n");
-			const page = truncateHead(candidate, { maxBytes: DEFAULT_MAX_BYTES - 2048, maxLines: limit });
+			const candidate = lines.slice(offset, offset + MAX_PAGE_LINES).join("\n");
+			const page = truncateHead(candidate, {
+				maxBytes: DEFAULT_MAX_BYTES - 2048,
+				maxLines: MAX_PAGE_LINES,
+			});
 			const count = page.firstLineExceedsLimit ? 1 : page.outputLines;
 			const body = page.firstLineExceedsLimit ? (lines[offset] ?? "") : page.content;
 			const nextOffset = offset + count < lines.length ? offset + count : undefined;
