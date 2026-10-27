@@ -15,8 +15,8 @@ The shell-owned, headless workbench engine: the normalized frontend-local frame 
 ## Boundary
 
 - **Owns:** web-local `WorkbenchFrame`/`WorkspaceViewState` types; frame-plus-view projection; pure topology, placement, attention, and policy operations; semantic minimum and independent group-limit checks; one-result drag previews; center/side/bottom renderers; alignment-owned nested composition and side-width projection; tab-strip overflow; ARIA tab/separator behavior; and the terminal visibility gate.
-- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers and commit complete pure results rather than splicing arrays.
-- **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO and git diff-scope type only; shell-neutral `lib` attention/id primitives; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`.
+- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, and commit complete pure results rather than splicing arrays.
+- **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO and git diff-scope type only; shell-neutral `lib` attention/id primitives plus `copyText` / `workspaceFileCopyText` for file-tab copy actions; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`.
 - **Forbidden:** server/shared/pi imports; domain-resource lifetime; browser persistence or WS calls; feature-panel internals; a mutable third-party docking model; inline component styles; or non-semantic colour values.
 
 ## State contract
@@ -231,7 +231,10 @@ tools. A terminal created from an auxiliary group lands in that workspace's matc
 target reroutes through the current local focus rule. Menus name a pane by its contents — `Move to right
 pane (Changes, Review)`, at most three names then `+N`, `(empty)` when it has none — never by an id, and
 a tab's menu lists only commands that can ever apply to it: tools carry no center-only items (keep
-preview, the four splits) and auxiliary terminals carry no splits.
+preview, the four splits) and auxiliary terminals carry no splits. File and diff tabs add **Copy path**
+and **Copy relative path** in a separate group; other kinds omit them. Copying identifies the clicked
+tab and does not select or keep it. The shell injects the workspace worktree path so the layout can join
+it with the tab's file path without importing store or transport.
 
 ## Presets and local persistence
 

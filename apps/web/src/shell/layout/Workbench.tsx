@@ -87,6 +87,7 @@ export type { LayoutTabFocusRequest, WorkbenchProps } from "./workbenchShared";
 
 export function Workbench({
 	workspaceId,
+	worktreePath,
 	document,
 	attention,
 	maxSideGroups,
@@ -758,6 +759,7 @@ export function Workbench({
 	);
 	const shared: SharedGroupProps = {
 		workspaceId,
+		worktreePath,
 		document,
 		readAttention,
 		selectionEpochRef: tabSelectionEpoch,

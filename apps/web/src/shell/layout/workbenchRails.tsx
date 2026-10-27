@@ -328,6 +328,7 @@ export function AuxiliaryRegionRail({
 									onRenameChat={shared.onRenameChat}
 									canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 									renderTabAdornment={shared.renderTabAdornment}
+									worktreePath={shared.worktreePath}
 									draggingTab={shared.draggingTab}
 									panelId={groupPanelId(location)}
 									onKeyDown={(event) => {

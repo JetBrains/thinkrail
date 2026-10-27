@@ -25,6 +25,8 @@ not this module; the theme-aware highlighter remains app-local.
   `@thinkrail/resource-renderers` keeps its own `canonicalWorkspacePath` for `describeResource` and
   `ResourcePreview` because a package cannot import the app's `lib`; `panels/pathIdentity.test.ts` pins it to
   `projectRelativePath` for workspace-relative paths),
+  **`joinWorkspacePath()`** / **`workspaceFileCopyText()`** (the inverse of `projectRelativePath`: join a
+  worktree directory identity with a worktree-relative path using the worktree's own separators),
   **`viewport.ts`** → `isPhoneViewport()` plus the live `usePhoneViewport()` projection (coarse pointer
   or a viewport below 768px is phone-class; both media queries are observed), and **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
   store's snapshot-identity guard and `ErrorBoundary`'s reset keys), **`userText()`** (a user
@@ -103,6 +105,9 @@ not this module; the theme-aware highlighter remains app-local.
   `usePhoneViewport`, `normalizePath`, `isAbsolutePath`, `fileName`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
+  **`joinWorkspacePath()`** (the inverse: a worktree directory identity plus a worktree-relative path,
+  using the worktree's own separators so a Windows root stays `\` and a POSIX root stays `/`),
+  **`workspaceFileCopyText()`** (absolute via `joinWorkspacePath`, relative via `projectRelativePath`),
   `shallowEqualArrays`, `userText`, `firstNonBlankLine` (first trimmed non-empty line, `undefined` when
   the text is blank — shared by chat's thinking-heading extraction and history prompt rows), `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,

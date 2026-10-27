@@ -95,6 +95,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 				{...(shared.chatFirstPrompts ? { chatFirstPrompts: shared.chatFirstPrompts } : {})}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				worktreePath={shared.worktreePath}
 				trailing={
 					<>
 						{renderCenterActions(group.id)}

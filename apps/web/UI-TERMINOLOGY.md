@@ -163,7 +163,7 @@ Children:
 |---|---|---|---|
 | Center Group | `CenterGroupView` in `Workbench` | `center-group` | One leaf: tab strip + locally selected body |
 | Group Header | `TabStrip` plus injected group controls in `Workbench` | `center-tab-strip` | Fixed one-row chrome containing the ARIA tablist, scrolling, searchable overflow, and group actions |
-| Tab | `WorkbenchTab` | `editor-tab` / `terminal-tab` | One canonical placement; `data-preview` marks a preview |
+| Tab | `WorkbenchTab` | `editor-tab` / `terminal-tab` | One canonical placement; `data-preview` marks a preview; file and diff tabs offer Copy path / Copy relative path (`tab-copy-path` / `tab-copy-relative-path`) |
 | — Tab Close | inline `X` action | `editor-tab-close` | Close the placement (not the underlying durable resource) |
 | New-Chat Button | injected center action | `new-chat` | Open a fresh chat tab |
 | Chat-History Menu | `shell/WorkspaceChatHistory.tsx` | `chat-history` | Reopen or delete closed/disk-only chats |
@@ -417,7 +417,7 @@ joins that last group. This is startup behavior, not a fixed hierarchy.
 |---|---|---|
 | Projects | `tab-projects`, body `left-nav` | `panels/ProjectTree.tsx`; projects and workspaces |
 | Specs | `tab-specs` | `panels/SpecsPanel.tsx`; automatically refreshed read-only spec graph, with error-only `specs-retry` |
-| Files | `tab-files` | `panels/FilesPanel.tsx`; **All | Changed** switch (`files-mode-all` / `files-mode-changed`, app-wide `store.filesMode`, default All) over `panels/FileTree.tsx` (worktree tree; changed files carry a status-coloured name + letter `file-status`, folders containing changes an amber name + dot `file-folder-dot`; git-ignored rows `data-status="ignored"` in the subtle colour; the active file/diff tab's row selected and auto-revealed) plus the **Collapse All Button** `files-collapse-all` or `panels/ChangesPanel.tsx` (below) |
+| Files | `tab-files` | `panels/FilesPanel.tsx`; **All | Changed** switch (`files-mode-all` / `files-mode-changed`, app-wide `store.filesMode`, default All) over `panels/FileTree.tsx` (worktree tree; changed files carry a status-coloured name + letter `file-status`, folders containing changes an amber name + dot `file-folder-dot`; git-ignored rows `data-status="ignored"` in the subtle colour; the active file/diff tab's row selected and auto-revealed; right-click Copy path / Copy relative path on a file or folder row, `file-copy-path` / `file-copy-relative-path`) plus the **Collapse All Button** `files-collapse-all` or `panels/ChangesPanel.tsx` (below) |
 | Review | `tab-review` | `panels/ReviewPanel.tsx`; review accordion and send actions |
 
 `WorkspaceWorkbench` owns the long-lived Specs and Review reads so badges, review flags, and artifact

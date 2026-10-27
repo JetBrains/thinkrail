@@ -216,6 +216,31 @@ export function projectRelativePath(path: string, workspaceRoot?: string | undef
 	return canonical;
 }
 
+export function joinWorkspacePath(worktreePath: string, relativePath: string): string {
+	const relative = projectRelativePath(relativePath, worktreePath);
+	const posixRoot = trimTrailingSlashes(canonicalPosixPath(worktreePath));
+	const posixJoined = relative
+		? posixRoot.endsWith("/")
+			? `${posixRoot}${relative}`
+			: posixRoot
+				? `${posixRoot}/${relative}`
+				: relative
+		: posixRoot;
+	return worktreePath.includes("\\") ? posixJoined.replaceAll("/", "\\") : posixJoined;
+}
+
+export type WorkspaceFileCopyKind = "absolute" | "relative";
+
+export function workspaceFileCopyText(
+	worktreePath: string,
+	relativePath: string,
+	kind: WorkspaceFileCopyKind,
+): string {
+	return kind === "relative"
+		? projectRelativePath(relativePath, worktreePath)
+		: joinWorkspacePath(worktreePath, relativePath);
+}
+
 let colorCanvas: CanvasRenderingContext2D | null | undefined;
 
 function canvasNormalize(color: string): string {
