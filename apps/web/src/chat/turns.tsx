@@ -768,6 +768,7 @@ function ArtifactChip({
 			data-testid={`turn-divider-${id}`}
 			data-expanded={many && expanded ? true : undefined}
 			aria-expanded={many ? expanded : undefined}
+			selected={many && expanded}
 			aria-controls={many && expanded ? listId : undefined}
 			onClick={(event) => {
 				if (!many) {

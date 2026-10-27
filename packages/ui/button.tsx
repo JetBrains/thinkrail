@@ -24,7 +24,7 @@ const buttonVariants = cva(
 				primary:
 					"border-transparent bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered data-[disabled=true]:bg-control-primary-disabled-bg data-[disabled=true]:text-control-primary-disabled-text active:bg-control-primary-bg-hovered",
 				"soft-primary":
-					"border-primary-soft bg-primary-subtle text-primary hover:border-primary-muted hover:bg-control-soft-primary-bg-hovered data-[disabled=true]:border-control-disabled-border data-[disabled=true]:bg-control-disabled-bg data-[disabled=true]:text-control-disabled-text active:border-primary-muted active:bg-control-soft-primary-bg-hovered",
+					"border-primary-soft bg-primary-subtle text-primary hover:border-primary-muted hover:bg-control-soft-primary-bg-hovered data-[selected=true]:border-primary-muted data-[selected=true]:bg-control-soft-primary-bg-hovered data-[disabled=true]:border-control-disabled-border data-[disabled=true]:bg-control-disabled-bg data-[disabled=true]:text-control-disabled-text active:border-primary-muted active:bg-control-soft-primary-bg-hovered",
 				outline:
 					"border-control-border-default bg-control-bg text-text-default hover:bg-control-bg-hovered data-[selected=true]:bg-control-bg-selected data-[disabled=true]:border-control-disabled-border data-[disabled=true]:bg-control-disabled-bg data-[disabled=true]:text-control-disabled-text active:bg-control-bg-hovered",
 				ghost: [

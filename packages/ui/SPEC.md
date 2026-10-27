@@ -65,8 +65,10 @@ test's documented specialized list names it.
   (never opacity, never hidden); `loading` swaps the icon (with `spinIcon`, it instead rotates the button's own icon in place — the refresh idiom of `apps/web/src/components` *Loading vocabulary*) (or, with no icon, overlays the label it keeps
   transparent for width and the accessible name) for a spinner at the size's icon size, sets `aria-busy`, and natively disables the
   element so the action cannot run twice; `selected` — or an open Radix trigger (`data-state="open"`) — is
-  the persistent toggle/open fill (`control-bg-selected`) for `outline` and `ghost`, distinct from pressed.
-  Toggles keep `aria-pressed`.
+  the persistent toggle/open fill (`control-bg-selected`) for `outline` and `ghost`, distinct from pressed;
+  `soft-primary` shows selected as its hover look (`primary-muted` border on the hover tint), the one
+  accent step that keeps its label AA, so an expanded accent chip still reads as expanded. Toggles keep
+  `aria-pressed`; disclosures keep `aria-expanded`.
 - **Rows**: a list row that paints its own hover or selected fill uses the same roles as ghost's fills
   (`control-bg-hovered` / `control-bg-selected`), so a ghost action on it would show no feedback. Such a
   row carries `data-row`, and a `ghost` button inside it takes `container-elevated-bg` for hover, pressed,

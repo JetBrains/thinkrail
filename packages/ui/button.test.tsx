@@ -185,6 +185,19 @@ describe("a tooltip still explains a disabled button", () => {
 	});
 });
 
+test("selected has a fill in every variant that can toggle, and soft-primary selected looks like its hover", () => {
+	const selectedOf = (variant: ButtonVariant) =>
+		classOf(render(<Button variant={variant}>x</Button>))
+			.filter((x) => x.startsWith("data-[selected=true]:"))
+			.map((x) => x.slice("data-[selected=true]:".length));
+	for (const variant of ["soft-primary", "outline", "ghost"] as const)
+		expect(selectedOf(variant).some((x) => x.startsWith("bg-"))).toBe(true);
+	const softHover = classOf(render(<Button variant="soft-primary">x</Button>))
+		.filter((x) => x.startsWith("hover:"))
+		.map((x) => x.slice("hover:".length));
+	expect(selectedOf("soft-primary").sort()).toEqual(softHover.sort());
+});
+
 test("there are exactly five variants and three sizes", () => {
 	const markup = render(<Button>x</Button>);
 	expect(markup).toContain('data-variant="primary"');
