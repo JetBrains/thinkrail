@@ -1,6 +1,7 @@
 import {
 	RiBox3Line as Box,
 	RiArrowDownSLine as ChevronDown,
+	RiFolderOpenLine as FolderOpen,
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
 	RiLoader4Line as Loader2,
@@ -28,13 +29,7 @@ import {
 	CommandItem,
 	CommandList,
 } from "@thinkrail/ui/command";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "@thinkrail/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@thinkrail/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
@@ -94,8 +89,10 @@ export function reconcileModel(
 	return catalogFresh && models.length > 0 ? "unavailable" : null;
 }
 
-const PILL =
-	"flex h-32 min-w-0 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
+const PILL_SHAPE =
+	"flex h-32 min-w-0 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors";
+
+const PILL = `${PILL_SHAPE} hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected`;
 
 async function refreshProjectWorkspaces(projectId: string): Promise<void> {
 	useAppStore.getState().expandProject(projectId);
@@ -124,6 +121,9 @@ export function NewWorkspaceDialog({
 	const [target, setTarget] = useState<WorkspaceTarget>("worktree");
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [prompt, setPrompt] = useState("");
+	const [name, setName] = useState("");
+	const [suggestedName, setSuggestedName] = useState("");
+	const [worktreePath, setWorktreePath] = useState("");
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
@@ -206,6 +206,7 @@ export function NewWorkspaceDialog({
 		if (!open) return;
 		setSelectedProjectId(projectId);
 		updatePromptDraft(initialPrompt ?? "", null);
+		setName("");
 		setTarget("worktree");
 		setCreating(false);
 		attachedImages.reset();
@@ -255,6 +256,32 @@ export function NewWorkspaceDialog({
 	}, [open, selectedProjectId, slashActive, supportsProjectTemplatePreview]);
 
 	const trustSummary = useProjectTrustSummary(selectedProjectId, open);
+
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		const typed = name.trim();
+		const timer = setTimeout(
+			() => {
+				getTransport()
+					.request("workspace.suggestName", {
+						projectId: selectedProjectId,
+						...(typed ? { name: typed } : {}),
+					})
+					.then((suggested) => {
+						if (cancelled) return;
+						setWorktreePath(suggested.path);
+						if (!typed) setSuggestedName(suggested.name);
+					})
+					.catch(() => {});
+			},
+			typed ? 200 : 0,
+		);
+		return () => {
+			cancelled = true;
+			clearTimeout(timer);
+		};
+	}, [open, selectedProjectId, name]);
 
 	const {
 		models: allModels,
@@ -376,9 +403,11 @@ export function NewWorkspaceDialog({
 			workspace = def;
 		} else {
 			useAppStore.getState().beginWorktreeCreation(selectedProjectId);
+			const chosenName = name.trim();
 			const createWorktree = async () =>
 				getTransport().request("workspace.create", {
 					projectId: selectedProjectId,
+					...(chosenName ? { name: chosenName } : {}),
 					...(baseRef ? { baseRef } : {}),
 				});
 			const created = await createWorktree()
@@ -456,6 +485,7 @@ export function NewWorkspaceDialog({
 	const trustNotice = deriveProjectTrustNotice(selectedProject, trustSummary);
 	const trustEnables = trustNotice.kind === "untrusted" ? trustEnablesText(t, trustNotice) : null;
 	const isolated = target === "worktree";
+	const checkoutPath = isolated ? worktreePath : (selectedProject?.path ?? "");
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -479,41 +509,37 @@ export function NewWorkspaceDialog({
 					promptRef.current?.focus();
 				}}
 			>
-				<DialogHeader>
-					<DialogTitle>
-						{isolated
-							? t("panels.newWorkspace.titleIsolated")
-							: t("panels.newWorkspace.titleDefault")}
-					</DialogTitle>
+				<DialogTitle>{t("panels.newWorkspace.title")}</DialogTitle>
+
+				<div className="flex flex-col gap-8">
+					<fieldset
+						data-testid="ws-target"
+						className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
+					>
+						<legend className="sr-only">{t("panels.newWorkspace.targetLegend")}</legend>
+						<TargetOption
+							icon={GitBranch}
+							label={t("panels.newWorkspace.targetIsolated")}
+							name={targetGroupName}
+							active={isolated}
+							testid="ws-target-worktree"
+							onSelect={() => setTarget("worktree")}
+						/>
+						<TargetOption
+							icon={House}
+							label={t("panels.newWorkspace.targetDefault")}
+							name={targetGroupName}
+							active={!isolated}
+							testid="ws-target-default"
+							onSelect={() => setTarget("default")}
+						/>
+					</fieldset>
 					<DialogDescription>
 						{isolated
 							? t("panels.newWorkspace.descriptionIsolated")
 							: t("panels.newWorkspace.descriptionDefault")}
 					</DialogDescription>
-				</DialogHeader>
-
-				<fieldset
-					data-testid="ws-target"
-					className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
-				>
-					<legend className="sr-only">{t("panels.newWorkspace.targetLegend")}</legend>
-					<TargetOption
-						icon={GitBranch}
-						label={t("panels.newWorkspace.targetIsolated")}
-						name={targetGroupName}
-						active={isolated}
-						testid="ws-target-worktree"
-						onSelect={() => setTarget("worktree")}
-					/>
-					<TargetOption
-						icon={House}
-						label={t("panels.newWorkspace.targetDefault")}
-						name={targetGroupName}
-						active={!isolated}
-						testid="ws-target-default"
-						onSelect={() => setTarget("default")}
-					/>
-				</fieldset>
+				</div>
 
 				<div className="flex flex-wrap items-center gap-8">
 					<ProjectPicker
@@ -534,6 +560,34 @@ export function NewWorkspaceDialog({
 							onSelect={selectBaseRef}
 							onRefresh={refreshBranches}
 						/>
+					) : (
+						<span
+							data-testid="ws-current-branch"
+							className="flex h-32 min-w-0 max-w-224 items-center gap-8 text-text-muted tr-text-metadata"
+						>
+							<GitBranch className="size-14 shrink-0" />
+							<span className="truncate">
+								{branches?.current
+									? t("panels.newWorkspace.currentBranch", { branch: branches.current })
+									: t("panels.newWorkspace.detachedHead")}
+							</span>
+						</span>
+					)}
+					{isolated ? (
+						<label className={`${PILL_SHAPE} max-w-160 focus-within:border-control-border-active`}>
+							<span className="shrink-0 tr-text-eyebrow text-text-muted">
+								{t("panels.newWorkspace.nameLabel")}
+							</span>
+							<input
+								type="text"
+								data-testid="ws-name"
+								value={name}
+								placeholder={suggestedName}
+								spellCheck={false}
+								onChange={(e) => setName(e.target.value)}
+								className="min-w-0 flex-1 bg-transparent text-text-muted tr-text-metadata outline-none"
+							/>
+						</label>
 					) : null}
 					<SkillsButton
 						onOpen={() => setManageSkills(true)}
@@ -542,33 +596,41 @@ export function NewWorkspaceDialog({
 					/>
 				</div>
 
+				{checkoutPath ? (
+					<div
+						data-testid="ws-checkout-path"
+						className="flex min-w-0 items-center gap-8 text-text-subtle tr-text-metadata"
+					>
+						<FolderOpen className="size-14 shrink-0" />
+						<span className="truncate" title={checkoutPath}>
+							{checkoutPath}
+						</span>
+					</div>
+				) : null}
+
 				{trustNotice.kind === "untrusted" ? (
 					<div
 						data-testid="ws-trust-notice"
-						className="flex w-full flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
+						className="flex w-full items-center gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
 					>
-						<div className="flex items-start gap-8">
-							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
-							<span className="flex min-w-0 flex-1 flex-col gap-2">
-								<span className="tr-text-ui text-text-default">
-									{untrustedNoticeText(t, trustNotice)} {t("panels.newWorkspace.trustUnaffected")}
-								</span>
-								{trustEnables ? (
-									<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
-								) : null}
+						<TriangleAlert className="size-14 shrink-0 text-feedback-warning" aria-hidden />
+						<span className="flex min-w-0 flex-1 flex-col gap-2">
+							<span className="tr-text-ui text-text-default">
+								{untrustedNoticeText(t, trustNotice)}
 							</span>
-						</div>
-						<div className="flex justify-end">
-							<Button
-								variant="outline"
-								size="sm"
-								data-testid="ws-trust-project"
-								disabled={trusting}
-								onClick={() => void trustProject(trustNotice)}
-							>
-								{t("panels.newWorkspace.trustProject")}
-							</Button>
-						</div>
+							<span className="text-text-muted tr-text-metadata">
+								{trustEnables} {t("panels.newWorkspace.trustUnaffected")}
+							</span>
+						</span>
+						<Button
+							variant="outline"
+							size="sm"
+							data-testid="ws-trust-project"
+							disabled={trusting}
+							onClick={() => void trustProject(trustNotice)}
+						>
+							{t("panels.newWorkspace.trustProject")}
+						</Button>
 					</div>
 				) : null}
 
@@ -641,7 +703,7 @@ export function NewWorkspaceDialog({
 							onNext={() => stepPromptSlot(1)}
 							className="absolute top-full left-8 z-50 mt-4"
 						/>
-					) : prompt.trim() && isolated ? (
+					) : prompt.trim() && isolated && !name.trim() ? (
 						<p
 							data-testid="workspace-naming-hint"
 							className="px-4 text-text-muted tr-text-metadata"

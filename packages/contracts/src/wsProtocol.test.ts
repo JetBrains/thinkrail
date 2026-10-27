@@ -50,6 +50,7 @@ import {
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WORKSPACE_SUGGEST_NAME_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
 } from "./wsProtocol";
@@ -219,7 +220,7 @@ test("local language files and the locale setting are pinned to v89", () => {
 });
 
 test("the stored host environment is pinned to v91", () => {
-	expect(PROTOCOL_VERSION).toBe(91);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(HOST_ENVIRONMENT_PROTOCOL_VERSION);
 	expect(HOST_ENVIRONMENT_PROTOCOL_VERSION).toBe(91);
 	expect(WS_METHODS.environmentGet).toBe("environment.get");
 	expect(WS_METHODS.environmentUpdate).toBe("environment.update");
@@ -417,4 +418,10 @@ describe("completionDelivery", () => {
 		expect(completionDelivery({})).toBeUndefined();
 		expect(completionDelivery({ delivery: "later" })).toBeUndefined();
 	});
+});
+
+test("the workspace-name suggestion is pinned to v92", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_SUGGEST_NAME_PROTOCOL_VERSION);
+	expect(WORKSPACE_SUGGEST_NAME_PROTOCOL_VERSION).toBe(92);
+	expect(WS_METHODS.workspaceSuggestName).toBe("workspace.suggestName");
 });

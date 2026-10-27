@@ -78,10 +78,7 @@ function branchExists(repoPath: string, branch: string): boolean {
 }
 
 function nameTaken(project: Project, candidate: string): boolean {
-	return (
-		branchExists(project.path, candidate) ||
-		existsSync(join(dataDir(), "worktrees", project.slug, candidate))
-	);
+	return branchExists(project.path, candidate) || existsSync(worktreePathFor(project, candidate));
 }
 
 function uniqueBranch(project: Project, base: string): string {
@@ -95,6 +92,14 @@ function nextAutoBranch(project: Project): string {
 	let n = 1;
 	while (nameTaken(project, `workspace-${n}`)) n += 1;
 	return `workspace-${n}`;
+}
+
+function planBranch(project: Project, displayName: string | null): string {
+	return displayName ? uniqueBranch(project, toBranch(displayName)) : nextAutoBranch(project);
+}
+
+function worktreePathFor(project: Project, branch: string): string {
+	return join(dataDir(), "worktrees", project.slug, branch);
 }
 
 function openProjectById(projectId: string): Project {
@@ -230,6 +235,12 @@ async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
 	}
 }
 
+export function suggestWorkspace(projectId: string, name?: string): { name: string; path: string } {
+	const project = openProjectById(projectId);
+	const branch = planBranch(project, name ? toDisplayName(name) : null);
+	return { name: branch, path: worktreePathFor(project, branch) };
+}
+
 export async function createWorkspace(
 	projectId: string,
 	name?: string,
@@ -238,9 +249,7 @@ export async function createWorkspace(
 	const project = openProjectById(projectId);
 
 	const displayName = name ? toDisplayName(name) : null;
-	const branch = displayName
-		? uniqueBranch(project, toBranch(displayName))
-		: nextAutoBranch(project);
+	const branch = planBranch(project, displayName);
 	const wsName = displayName ?? branch;
 
 	const base = baseRef?.trim();
@@ -269,7 +278,7 @@ export async function createWorkspace(
 			);
 	}
 
-	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
+	const worktreePath = worktreePathFor(project, branch);
 	mkdirSync(dirname(worktreePath), { recursive: true });
 	const added = git(project.path, [
 		"worktree",

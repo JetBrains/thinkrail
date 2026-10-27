@@ -101,10 +101,10 @@ describe("notice copy", () => {
 
 	test("names what is gated", () => {
 		expect(untrustedNoticeText(t, untrusted(1, ["prompts"]))).toBe(
-			"This project ships 1 skill and its own Pi resources — off until you trust it.",
+			"This project ships 1 skill and its own Pi resources, off until you trust it.",
 		);
 		expect(untrustedNoticeText(t, untrusted(3, []))).toBe(
-			"This project ships 3 skills — off until you trust it.",
+			"This project ships 3 skills, off until you trust it.",
 		);
 		expect(trustedNoticeText(t, { kind: "trusted", aliasSkills: 2 })).toBe(
 			"2 project skills trusted.",
@@ -130,7 +130,7 @@ describe("notice copy", () => {
 
 	test("counts repository MCP servers and says each still needs approval", () => {
 		expect(untrustedNoticeText(t, untrusted(0, [], 2))).toBe(
-			"This project ships 2 MCP servers — off until you trust it.",
+			"This project ships 2 MCP servers, off until you trust it.",
 		);
 		expect(trustEnablesText(t, untrusted(0, [], 1))).toBe(
 			"Its 1 MCP server still needs your approval one by one.",

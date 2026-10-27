@@ -867,7 +867,7 @@
 	"panels.newWorkspace.projectFallback": "项目",
 	"panels.newWorkspace.promptPlaceholder": "您想做什么？",
 	"panels.newWorkspace.searchProjects": "搜索项目…",
-	"panels.newWorkspace.slashHint": "输入 <0>/</0> 可使用 skill 和提示词模板 — 预览来自当前检出；所创建工作区的会话才是权威来源。",
+	"panels.newWorkspace.slashHint": "输入 <0>/</0> 可使用 skill 和提示词模板。新工作区提供的列表可能略有不同。",
 	"panels.newWorkspace.start": "开始",
 	"panels.newWorkspace.starting": "正在启动…",
 	"panels.newWorkspace.targetDefault": "项目文件夹",
