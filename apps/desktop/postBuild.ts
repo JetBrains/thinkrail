@@ -23,10 +23,14 @@ if (process.env.ELECTROBUN_OS === "win") {
 		[join(bundleDir, "bin", "launcher.exe"), "launcher.exe"],
 		[join(bundleDir, "Resources", "uninstall"), "uninstall.exe"],
 	] as const) {
-		writeFileSync(
-			path,
-			brandWindowsExecutable(readFileSync(path), icon, identity, originalFilename),
-		);
+		try {
+			writeFileSync(
+				path,
+				brandWindowsExecutable(readFileSync(path), icon, identity, originalFilename),
+			);
+		} catch (error) {
+			throw new Error(`could not brand Windows executable ${path}`, { cause: error });
+		}
 	}
 	console.log(`branded Windows executables as ${identity.productName} ${identity.fileVersion}`);
 }
