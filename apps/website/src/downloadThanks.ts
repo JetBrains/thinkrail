@@ -86,6 +86,9 @@ export function initDownloadThanks(
 		emailHint.hidden = true;
 	};
 
+	const legendId = (step: SurveyStep) => `download-survey-question-${step.index}`;
+	const hintId = (step: SurveyStep) => `download-survey-hint-${step.index}`;
+
 	const renderStep = () => {
 		const step = currentStep();
 		const choices = response.order[stepIndex];
@@ -98,7 +101,10 @@ export function initDownloadThanks(
 		body.replaceChildren();
 		const fieldset = doc.createElement("fieldset");
 		fieldset.className = "download-survey-question";
+		fieldset.tabIndex = -1;
+		if (step.hint !== undefined) fieldset.setAttribute("aria-describedby", hintId(step));
 		const legend = doc.createElement("legend");
+		legend.id = legendId(step);
 		legend.textContent = step.prompt;
 		fieldset.append(legend);
 		if (step.kind === "text") {
@@ -108,11 +114,13 @@ export function initDownloadThanks(
 		}
 		body.append(fieldset);
 		syncAction();
+		fieldset.focus();
 	};
 
 	const freeTextControl = (step: SurveyStep): HTMLInputElement | HTMLTextAreaElement => {
 		const field = step.email ? doc.createElement("input") : doc.createElement("textarea");
 		field.className = "download-survey-text";
+		field.setAttribute("aria-labelledby", legendId(step));
 		field.dataset.surveyFreeText = "";
 		field.maxLength = downloadSurveyFreeTextLimit;
 		field.required = false;
@@ -133,6 +141,7 @@ export function initDownloadThanks(
 		if (step.hint !== undefined) {
 			const hint = doc.createElement("p");
 			hint.className = "download-survey-hint";
+			hint.id = hintId(step);
 			hint.textContent = step.hint;
 			wrap.append(hint);
 		}
@@ -155,6 +164,7 @@ export function initDownloadThanks(
 			if (custom) {
 				custom.type = "text";
 				custom.className = "download-survey-text";
+				custom.setAttribute("aria-label", choice.label);
 				custom.dataset.surveyFreeText = "";
 				custom.maxLength = downloadSurveyFreeTextLimit;
 				custom.placeholder = "A few words";
@@ -191,6 +201,7 @@ export function initDownloadThanks(
 		progress.hidden = true;
 		emailHint.hidden = true;
 		thanks.hidden = false;
+		thanks.focus();
 	};
 
 	const surveyPlace = (): SurveyPlace => ({

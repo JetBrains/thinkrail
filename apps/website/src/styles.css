@@ -1620,7 +1620,7 @@ p.install-fineprint {
 	line-height: 1.55;
 }
 
-p.install-cli-heading {
+h3.install-cli-heading {
 	margin: 22px 0 8px;
 	color: var(--text);
 	font-family: var(--font-mono);
@@ -2807,6 +2807,12 @@ a.feature-card:hover {
 	margin: 4px 0 0;
 	padding: 0;
 	border: 0;
+}
+
+.download-survey-question:focus-visible,
+.download-survey-thanks:focus-visible {
+	outline-offset: 6px;
+	border-radius: 4px;
 }
 
 .download-survey-question legend {
