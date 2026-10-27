@@ -12,32 +12,39 @@ references: [module-pi-ask-user-question, submodule-web-chat, submodule-server-a
 
 The ThinkRail halves of the `ask_user_question` capability.
 - `./server` composes the portable tool ([[module-pi-ask-user-question]]) for every parent session, with
-  ThinkRail's own wording and an asker that waits on the host's answer mailbox.
+  ThinkRail's own wording and an asker that waits on the host's interactive-tool mailbox.
 - `./web` is the inline questionnaire card.
 
-The host keeps the question lifecycle: the mailbox phases, restart repair, late answers, composer
-supersede, Stop/Submit ordering and needs-input ([[submodule-server-agent]]).
+The host keeps the interactive-tool lifecycle — mailbox phases, restart repair, late responses, composer
+supersede, Stop/Submit ordering and needs-input ([[submodule-server-agent]]) — and knows nothing about
+this tool beyond what the descriptor and the renderer registration declare. The extension is the first
+client of that contract ([[module-extension-api]]) and is deletable without a core change.
 
 ## Boundary
 
 - `@thinkrail/ext-ask-user-question/server` default-exports a session-only descriptor:
   - `extensions: []`;
-  - `sessionExtensions: (session) => [createAskUserQuestionExtension({ ask, announce, guidance })]`.
+  - `sessionExtensions: (session) => [createAskUserQuestionExtension({ ask, announce, guidance })]`;
+  - `interactiveTools: { ask_user_question: { describeResponse } }` — `describeResponse(args, response)`
+    renders a late answer (one delivered after a host restart) through the package's
+    `buildQuestionnaireResponse` when both have our shape, so the model reads the same wording as for a
+    live answer; any other shape returns `undefined` and the host's generic JSON preface applies.
 
   `announce` forwards each executable call to `session.expectToolResponse(toolCallId)`, so the host's
   question lifecycle starts only for calls this extension runs. The asker awaits `session.awaitToolResponse(toolCallId, signal)`. A `response` must be a questionnaire
   result (checked with the package's `isAskUserQuestionResult`, else the call fails); `deferred` and
   `abandoned` pass through as outcomes, so the package returns the canonical ack or the stop and ends the
   turn. `guidance` is ThinkRail's description and prompt guidelines: the inline card, and a composer reply
-  that supersedes it. Named pure exports re-export the package core for the host: tool name, ack and stop
-  texts, `buildQuestionnaireResponse`, `isAckDetails`. The server half imports only `extension-api/server`
-  and its pi package.
+  that supersedes it. The server half has no named exports; it imports only `extension-api/server` and its
+  pi package. The package's deferral ack `{ kind: "ack" }` is the host's pending marker — a test pins it.
 - `@thinkrail/ext-ask-user-question/web` default-exports a `defineWebExtension` descriptor that registers
-  `AskUserQuestionCard` for `ask_user_question` with `chrome: "bare"`. It also exports the card by name for
-  the plan page.
-- The card imports `extension-api/web`, the `contracts` ask types and `readAskUserQuestionResult`,
-  `@thinkrail/ui` (`attention-line`, `utils`), `@thinkrail/resource-renderers` (`useOptionalResourceHost`
-  for the host's injected Markdown), `@thinkrail/locales/react`, React and Remix Icon.
+  `AskUserQuestionCard` for `ask_user_question` with `{ chrome: "bare", interactive: true }`. Nothing is
+  exported by name: the plan page reaches the card through the tool registry, as the chat does.
+- The card imports `extension-api/web`, the package's argument/result **types** (type-only, from
+  `@thinkrail/pi-ask-user-question/core`; a value import of the pi package stays forbidden in browser code,
+  so the result guard `readAskUserQuestionResult` is the card's own), `@thinkrail/ui` (`attention-line`,
+  `utils`), `@thinkrail/resource-renderers` (`useOptionalResourceHost` for the host's injected Markdown),
+  `@thinkrail/locales/react`, React and Remix Icon.
 - It never reaches app or host internals. Everything it needs from the chat arrives in
   `ToolRenderProps.interaction` ([[module-extension-api]]):
   - the response delivered after a restart, the superseded and ended verdicts, and `accepting` (Submit and
@@ -57,8 +64,9 @@ supersede, Stop/Submit ordering and needs-input ([[submodule-server-agent]]).
 Registered `"bare"`: the card owns its full-width frame and never folds. Behaviors worth their invariants:
 
 - **The lifecycle derives from the transcript across two host paths:** a live blocking call resolves with
-  the real tool result; a restarted dangling call is repaired to ack and later paired with an
-  `ask-user-answers` custom message. `interaction.state` (the host derives it from `askState`) supplies the restart reply /
+  the real tool result; a restarted dangling call is repaired to the pending marker and later paired with a
+  `tool-response` custom message (older transcripts carry the same pairing as `ask-user-answers`).
+  `interaction.state` (the host derives it from its interaction state) supplies the restart reply /
   superseded / ended verdict, and the card resolves in order — **answered/declined** (either real result form),
   **superseded** (a later free-form user message replaced a repaired idle question),
   **stopped/error/length** (explicit Stop or a non-executable assistant result finalized the tool), else

@@ -122,7 +122,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the created session's actual model is reported), `message_sent` (via the
   local `trackSend(mode, text)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`
   (`prompt`/`steer`/`follow_up`; skipped when contracts' `isControlMessage(text)` — the client's TODO
-  wake-nudge rides the same methods and is not a user message; `session.answerQuestion` is a tool reply,
+  wake-nudge rides the same methods and is not a user message; `session.respondToTool` is a tool reply,
   not a message either),
   `provider_login` from the
   login-publisher tee's terminal `success` frames with the method (`oauth`/`api-key`) looked up from
@@ -656,12 +656,13 @@ enabled/confirmed choice before entering analytics attribution.
   conflicts are accepted rather than serialized by the host.
 - `shutdown()` is safe under concurrent signal/native-quit calls: callers receive one promise, lifecycle
   work runs once, and resource disposal remains ordered after session settling and turn-receipt draining.
-- **A send (prompt/steer/followUp/answerQuestion) is acked when ACCEPTED, not when the turn ends**
+- **A send (prompt/steer/followUp/respondToTool) is acked when ACCEPTED, not when the turn ends**
   (`ackSend`): pi's send methods resolve only at turn end, and a turn can outlive the client's request
   timeout (long tool rounds and multi-minute reasoning turns are routine) — awaiting completion would
   surface a phantom "request timed out" over a healthy turn. A rejection inside the ack window still
-  fails the request (bad model / missing key; for `answerQuestion` also an unknown/answered/superseded
-  call — `assessAnswerability`'s loud verdicts); later faults reach the client via the event stream.
+  fails the request (bad model / missing key; for `respondToTool` also an unknown/responded/superseded
+  call — `assessRespondability`'s loud verdicts, or a response without a value); later faults reach the
+  client via the event stream.
 
 ### Drift & overwrite
 

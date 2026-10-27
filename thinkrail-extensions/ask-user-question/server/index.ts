@@ -7,15 +7,12 @@ import {
 	createAskUserQuestionExtension,
 	isAskUserQuestionResult,
 } from "@thinkrail/pi-ask-user-question";
-import { THINKRAIL_GUIDANCE } from "./guidance";
-
-export {
-	ASK_ACK_TEXT,
-	ASK_STOPPED_ERROR,
+import {
 	ASK_USER_QUESTION_TOOL_NAME,
 	buildQuestionnaireResponse,
-	isAckDetails,
+	isAskUserQuestionArgs,
 } from "@thinkrail/pi-ask-user-question/core";
+import { THINKRAIL_GUIDANCE } from "./guidance";
 
 function askThroughHost(session: ExtensionSessionServices): AskUserQuestionAsker {
 	return async ({ toolCallId, signal }) => {
@@ -25,6 +22,13 @@ function askThroughHost(session: ExtensionSessionServices): AskUserQuestionAsker
 			throw new Error("Malformed ask_user_question response");
 		return { kind: "answered", result: response.value };
 	};
+}
+
+function describeResponse(args: unknown, response: unknown): string | undefined {
+	if (!isAskUserQuestionArgs(args) || !isAskUserQuestionResult(response)) return undefined;
+	return buildQuestionnaireResponse(response, args)
+		.content.map((block) => block.text)
+		.join("");
 }
 
 export default defineServerExtension({
@@ -40,4 +44,5 @@ export default defineServerExtension({
 			guidance: THINKRAIL_GUIDANCE,
 		}),
 	],
+	interactiveTools: { [ASK_USER_QUESTION_TOOL_NAME]: { describeResponse } },
 });

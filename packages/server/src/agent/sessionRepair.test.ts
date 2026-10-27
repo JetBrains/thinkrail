@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@thinkrail/contracts";
-import { ASK_ACK_TEXT } from "./askUserQuestion";
+import { type InteractiveTools, interactiveTools } from "../extensions";
 import { repairDanglingToolCalls } from "./sessionRepair";
+import { TOOL_RESPONSE_PENDING_TEXT } from "./toolResponses";
+
+const INTERACTIVE: InteractiveTools = new Map([["ask_user_question", {}]]);
 
 const QUESTION = {
 	questions: [
@@ -68,7 +71,7 @@ test("a healthy transcript is untouched", () => {
 	sm.appendMessage(assistantWithCalls([{ id: "b1", name: "bash" }]));
 	sm.appendMessage(toolResult("b1", "bash"));
 	const before = sm.buildSessionContext().messages.length;
-	expect(repairDanglingToolCalls(sm)).toEqual([]);
+	expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([]);
 	expect(sm.buildSessionContext().messages.length).toBe(before);
 });
 
@@ -76,7 +79,9 @@ test("a dangling generic tool call gets an error 'Operation aborted' result", ()
 	const sm = SessionManager.inMemory("/tmp/repair-test");
 	sm.appendMessage(user("run it"));
 	sm.appendMessage(assistantWithCalls([{ id: "b1", name: "bash" }]));
-	expect(repairDanglingToolCalls(sm)).toEqual([{ toolCallId: "b1", toolName: "bash" }]);
+	expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([
+		{ toolCallId: "b1", toolName: "bash" },
+	]);
 	const { messages } = sm.buildSessionContext();
 	const repaired = messages.find((m) => m.role === "toolResult");
 	expect(repaired).toBeDefined();
@@ -84,14 +89,14 @@ test("a dangling generic tool call gets an error 'Operation aborted' result", ()
 	expect(repaired.toolCallId).toBe("b1");
 	expect(repaired.isError).toBe(true);
 	expect((repaired.content[0] as { text?: string }).text ?? "").toContain("host restarted");
-	expect(repairDanglingToolCalls(sm)).toEqual([]);
+	expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([]);
 });
 
-test("a dangling ask_user_question is repaired to the canonical answerable ack", () => {
+test("a dangling interactive tool call is repaired to the canonical pending ack", () => {
 	const sm = SessionManager.inMemory("/tmp/repair-test");
 	sm.appendMessage(user("decide"));
 	sm.appendMessage(assistantWithCalls([{ id: "q1", name: "ask_user_question", args: QUESTION }]));
-	expect(repairDanglingToolCalls(sm)).toEqual([
+	expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([
 		{ toolCallId: "q1", toolName: "ask_user_question" },
 	]);
 	const repaired = sm.buildSessionContext().messages.find((m) => m.role === "toolResult");
@@ -99,22 +104,32 @@ test("a dangling ask_user_question is repaired to the canonical answerable ack",
 	expect(repaired.isError).toBe(false);
 	expect(repaired.details).toEqual({ kind: "ack" });
 	const text = (repaired.content[0] as { text?: string }).text ?? "";
-	expect(text).toBe(ASK_ACK_TEXT);
+	expect(text).toBe(TOOL_RESPONSE_PENDING_TEXT);
 });
 
-test("a dangling ask_user_question in another package's shape is repaired as an interrupted call", () => {
+test("a dangling call whose tool is not in the interactive map is repaired as an interrupted call", () => {
 	const sm = SessionManager.inMemory("/tmp/repair-test");
 	sm.appendMessage(user("decide"));
 	sm.appendMessage(
-		assistantWithCalls([
-			{
-				id: "q-foreign",
-				name: "ask_user_question",
-				args: { question: "Pick?", choices: ["a", "b"] },
-			},
-		]),
+		assistantWithCalls([{ id: "q-foreign", name: "ask_user_question", args: QUESTION }]),
 	);
-	repairDanglingToolCalls(sm);
+	repairDanglingToolCalls(sm, new Map());
+	const repaired = sm.buildSessionContext().messages.find((m) => m.role === "toolResult");
+	if (repaired?.role !== "toolResult") throw new Error("unreachable");
+	expect(repaired.isError).toBe(true);
+	expect(repaired.details).toBeUndefined();
+	expect((repaired.content[0] as { text?: string }).text).toContain("host restarted");
+});
+
+test("a disabled extension's tool is not interactive and gets the interrupted repair", () => {
+	const sm = SessionManager.inMemory("/tmp/repair-test");
+	sm.appendMessage(user("decide"));
+	sm.appendMessage(
+		assistantWithCalls([{ id: "q-off", name: "ask_user_question", args: QUESTION }]),
+	);
+	const disabled = interactiveTools((name) => name === "ask-user-question");
+	expect(disabled.has("ask_user_question")).toBe(false);
+	repairDanglingToolCalls(sm, disabled);
 	const repaired = sm.buildSessionContext().messages.find((m) => m.role === "toolResult");
 	if (repaired?.role !== "toolResult") throw new Error("unreachable");
 	expect(repaired.isError).toBe(true);
@@ -128,7 +143,7 @@ test("a length-truncated ask is repaired as a terminal error, never an answerabl
 	sm.appendMessage(
 		assistantWithCalls([{ id: "q-length", name: "ask_user_question", args: QUESTION }], "length"),
 	);
-	expect(repairDanglingToolCalls(sm)).toEqual([
+	expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([
 		{ toolCallId: "q-length", toolName: "ask_user_question" },
 	]);
 	const repaired = sm.buildSessionContext().messages.find((m) => m.role === "toolResult");
@@ -147,7 +162,7 @@ test("several orphans in one batch are all paired (mixed ask + generic)", () => 
 			{ id: "q1", name: "ask_user_question", args: QUESTION },
 		]),
 	);
-	const repaired = repairDanglingToolCalls(sm);
+	const repaired = repairDanglingToolCalls(sm, INTERACTIVE);
 	expect(repaired.map((r) => r.toolCallId).sort()).toEqual(["b1", "q1"]);
 	const results = sm.buildSessionContext().messages.filter((m) => m.role === "toolResult");
 	expect(results).toHaveLength(2);
@@ -163,8 +178,10 @@ test("a partially completed tail batch repairs only the missing calls", () => {
 		]),
 	);
 	sm.appendMessage(toolResult("b1", "read"));
-	expect(repairDanglingToolCalls(sm)).toEqual([{ toolCallId: "b2", toolName: "bash" }]);
-	expect(repairDanglingToolCalls(sm)).toEqual([]);
+	expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([
+		{ toolCallId: "b2", toolName: "bash" },
+	]);
+	expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([]);
 });
 
 test("an errored tool call followed by a successful retry is never repaired", () => {
@@ -174,7 +191,7 @@ test("an errored tool call followed by a successful retry is never repaired", ()
 	sm.appendMessage(assistantWithCalls([{ id: "retry", name: "write" }]));
 	sm.appendMessage(toolResult("retry", "write"));
 	sm.appendMessage(assistantText("done"));
-	expect(repairDanglingToolCalls(sm)).toEqual([]);
+	expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([]);
 	expect(
 		sm
 			.buildSessionContext()
@@ -187,7 +204,7 @@ test("errored and aborted tail attempts never contribute repair candidates", () 
 		const sm = SessionManager.inMemory("/tmp/repair-test");
 		sm.appendMessage(user("run it"));
 		sm.appendMessage(assistantWithCalls([{ id: stopReason, name: "bash" }], stopReason));
-		expect(repairDanglingToolCalls(sm)).toEqual([]);
+		expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([]);
 	}
 });
 
@@ -197,7 +214,7 @@ test("errored and aborted attempts close an older repair candidate", () => {
 		sm.appendMessage(user("run it"));
 		sm.appendMessage(assistantWithCalls([{ id: "old", name: "bash" }]));
 		sm.appendMessage(assistantWithCalls([], stopReason));
-		expect(repairDanglingToolCalls(sm)).toEqual([]);
+		expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([]);
 	}
 });
 
@@ -206,7 +223,7 @@ test("a historical orphan is not repaired after a later replayable message", () 
 	sm.appendMessage(user("run it"));
 	sm.appendMessage(assistantWithCalls([{ id: "old", name: "bash" }]));
 	sm.appendMessage(assistantText("recovered"));
-	expect(repairDanglingToolCalls(sm)).toEqual([]);
+	expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([]);
 });
 
 test("malformed trailing results prevent repair of the preceding batch", () => {
@@ -225,7 +242,7 @@ test("malformed trailing results prevent repair of the preceding batch", () => {
 			]),
 		);
 		for (const result of results) sm.appendMessage(result);
-		expect(repairDanglingToolCalls(sm)).toEqual([]);
+		expect(repairDanglingToolCalls(sm, INTERACTIVE)).toEqual([]);
 	}
 });
 
@@ -235,5 +252,5 @@ test("only calls on the context path are considered — resulted calls never re-
 	sm.appendMessage(assistantWithCalls([{ id: "b1", name: "bash" }]));
 	sm.appendMessage(toolResult("b1", "bash"));
 	sm.appendMessage(assistantWithCalls([{ id: "b2", name: "bash" }]));
-	expect(repairDanglingToolCalls(sm).map((r) => r.toolCallId)).toEqual(["b2"]);
+	expect(repairDanglingToolCalls(sm, INTERACTIVE).map((r) => r.toolCallId)).toEqual(["b2"]);
 });

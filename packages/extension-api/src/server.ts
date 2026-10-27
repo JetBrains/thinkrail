@@ -10,12 +10,17 @@ export interface ExtensionSessionServices {
 	awaitToolResponse(toolCallId: string, signal: AbortSignal | undefined): Promise<ToolResponse>;
 }
 
+export interface InteractiveTool {
+	describeResponse?: (args: unknown, response: unknown) => string | undefined;
+}
+
 export interface ServerExtension {
 	name: string;
 	title?: string;
 	description?: string;
 	extensions: ExtensionFactory[];
 	sessionExtensions?: (session: ExtensionSessionServices) => ExtensionFactory[];
+	interactiveTools?: Record<string, InteractiveTool>;
 	childExtensions?: ExtensionFactory[];
 	skillPackages?: string[];
 }

@@ -17,12 +17,12 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { AskUserQuestionResult, SessionResources, SessionState } from "@thinkrail/contracts";
+import type { SessionResources, SessionState } from "@thinkrail/contracts";
 import type { ChildHandle } from "pi-delegation";
+import { interactiveTools } from "../extensions";
 import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
-	answerQuestion,
 	compactSession,
 	createSession,
 	deleteSession,
@@ -34,6 +34,7 @@ import {
 	reloadSessionResources,
 	removeSession,
 	removeWorkspaceSessions,
+	respondToTool,
 	setSessionCreatedPublisher,
 	setSessionManagerFactory,
 	setSessionProjectResolver,
@@ -42,7 +43,6 @@ import {
 	setSkillAdmissionResolver,
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
-import { ASK_ACK_TEXT, assessAnswerability } from "./askUserQuestion";
 import {
 	getSessionResources,
 	readBackgroundCommandOutput,
@@ -54,6 +54,7 @@ import {
 import { delegationServiceFor, readChildTranscript } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
 import { admissionContextFor } from "./skillAdmission";
+import { assessRespondability, TOOL_RESPONSE_PENDING_TEXT } from "./toolResponses";
 
 const model = {
 	id: "resources",
@@ -1261,7 +1262,7 @@ const resourceQuestion = {
 		},
 	],
 };
-const resourceAnswer: AskUserQuestionResult = {
+const resourceAnswer = {
 	cancelled: false,
 	answers: [
 		{
@@ -1365,7 +1366,7 @@ test.each([
 		expect(questionTurnEnded).toBe(false);
 		expect(continuationCalls).toBe(0);
 
-		await answerQuestion(p.sessionId, toolCallId, resourceAnswer);
+		await respondToTool(p.sessionId, toolCallId, resourceAnswer);
 		await waitFor(async () => continuationCalls === 1);
 		const answered = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
 		expect(questionTurnEnded).toBe(true);
@@ -1482,28 +1483,40 @@ test("stopped command completion cannot strand a live question across polite shu
 		expect(ack).toMatchObject([
 			{
 				toolName: "ask_user_question",
-				content: [{ type: "text", text: ASK_ACK_TEXT }],
+				content: [{ type: "text", text: TOOL_RESPONSE_PENDING_TEXT }],
 				details: { kind: "ack" },
 				isError: false,
 			},
 		]);
-		expect(assessAnswerability(reopened.messages, toolCallId).ok).toBe(true);
+		expect(
+			assessRespondability(
+				reopened.messages,
+				toolCallId,
+				interactiveTools(() => false),
+			).ok,
+		).toBe(true);
 		expect(SessionManager.open(path).buildSessionContext().messages.at(-1)).toEqual(ack[0]);
 		expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands).toEqual([]);
 		faux.setResponses([fauxAssistantMessage("RESOURCE_QUESTION_RESTART_ANSWERED")]);
-		await answerQuestion(p.sessionId, toolCallId, resourceAnswer);
+		await respondToTool(p.sessionId, toolCallId, resourceAnswer);
 		const answered = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
 		expect(answered.summary.isStreaming).toBe(false);
 		expect(answered.messages.filter((m) => m.role === "custom")).toMatchObject([
 			{
-				customType: "ask-user-answers",
-				details: { toolCallId, result: resourceAnswer },
+				customType: "tool-response",
+				details: { toolCallId, response: resourceAnswer },
 			},
 		]);
 		expect(JSON.stringify(answered.messages)).toContain("RESOURCE_QUESTION_RESTART_ANSWERED");
-		expect(assessAnswerability(answered.messages, toolCallId)).toEqual({
+		expect(
+			assessRespondability(
+				answered.messages,
+				toolCallId,
+				interactiveTools(() => false),
+			),
+		).toEqual({
 			ok: false,
-			reason: "already_answered",
+			reason: "already_responded",
 		});
 	} finally {
 		setSessionPublisher(() => {});

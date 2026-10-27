@@ -30,7 +30,8 @@ answer mailbox.
     behaves differently, such as ThinkRail's composer supersede.
 - **`./core`**: no runtime imports. Exports the tool name, limits, reserved labels, result types and texts,
   plus `validateQuestionnaire`, `buildQuestionnaireResponse`, `outcomeResult`, `isAckDetails`,
-  `isolateAskUserQuestionBatch` and `executableAskCallIds`. These are what an embedder needs to repair or continue a question outside
+  `isAskUserQuestionArgs`, `isAskUserQuestionResult`, `isolateAskUserQuestionBatch` and
+  `executableAskCallIds`. These are what an embedder needs to repair or continue a question outside
   `execute()`.
 - **The tool contract**, which renderers and embedders key on:
   - the name;
@@ -45,8 +46,10 @@ answer mailbox.
     | `abandoned` | the stopped text | cancelled | yes |
     | asker rejects | thrown, so pi records a tool error | — | — |
 
-  The types mirror the contracts' `AskUserQuestion*` wire types structurally. Changing them breaks
-  ThinkRail's card and its restart repair.
+  The argument and result types are the one definition of the questionnaire shape: ThinkRail's card
+  type-imports them from `./core`, and the deferral ack `{kind: "ack"}` doubles as the host's generic
+  "response pending" marker ([[module-extension-api]]). Changing either breaks ThinkRail's card and its
+  restart repair.
 
 ## Decisions
 

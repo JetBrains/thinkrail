@@ -1,11 +1,11 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import type { ToolResponsePendingDetails } from "@thinkrail/contracts";
 import type {
-	AskUserQuestionAckDetails,
 	AskUserQuestionArgs,
 	AskUserQuestionOption,
-} from "@thinkrail/contracts";
+} from "@thinkrail/pi-ask-user-question/core";
 import {
 	enterDefaultWorkspace,
 	hideAuxiliaryWorkbench,
@@ -64,7 +64,7 @@ async function selectOldestFirst(page: Page): Promise<void> {
 }
 
 function seedQuestionnaire(name: string, toolCallId: string, args: AskUserQuestionArgs) {
-	const ack: AskUserQuestionAckDetails = { kind: "ack" };
+	const ack: ToolResponsePendingDetails = { kind: "ack" };
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name,
 		messages: [

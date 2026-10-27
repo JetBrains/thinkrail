@@ -300,10 +300,14 @@ test("discovers new pi and ThinkRail extensions and rejects host and sibling dep
 	write(
 		root,
 		"thinkrail-extensions/future/web/pi.ts",
-		'import type { Value } from "@thinkrail/pi-future";',
+		'import type { Value } from "@thinkrail/pi-future"; import { value } from "@thinkrail/pi-future";',
 	);
 	write(root, "thinkrail-extensions/future/server/sibling.ts", 'import "@thinkrail/pi-visualize";');
-	expect(moduleBoundaryViolations(root)).toHaveLength(5);
+	const violations = moduleBoundaryViolations(root);
+	expect(violations).toHaveLength(5);
+	expect(violations.filter((violation) => violation.includes("web/pi.ts"))).toEqual([
+		expect.stringContaining("pi value import"),
+	]);
 });
 
 test.each([

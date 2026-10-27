@@ -12,6 +12,7 @@
         "@playwright/test": "1.61.0",
         "@thinkrail/artifact-tests": "workspace:*",
         "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/pi-ask-user-question": "workspace:*",
         "@thinkrail/server": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "husky": "9.1.7",

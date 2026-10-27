@@ -1,6 +1,6 @@
-import { expect, test } from "bun:test";
-import type { AssistantMessage, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
-import type { AskState } from "./askState";
+import { beforeAll, expect, test } from "bun:test";
+import type { AssistantMessage, TodoGroupItem, TodoItem, UserMessage } from "@thinkrail/contracts";
+import type { InteractionState } from "./interactionState";
 import {
 	adoptedCommits,
 	flatItems,
@@ -10,6 +10,7 @@ import {
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
+	pendingInteraction,
 	planChangeTotals,
 	planCompletionSummary,
 	planGlance,
@@ -23,7 +24,14 @@ import {
 	shouldNudgeOnAdd,
 	verificationStatus,
 } from "./planView";
+import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn } from "./types";
+
+// Transcript-derived glances only see calls whose web renderer registered as interactive; stand in for
+// the real ask-user-question card with an inert one.
+beforeAll(() => {
+	registerToolRenderer("ask_user_question", () => null, { interactive: true });
+});
 
 const item = (title: string, status: TodoItem["status"] = "pending"): TodoItem => ({
 	id: `t_${title}`,
@@ -87,13 +95,13 @@ test("planSummary spans loose + groups and surfaces the current step", () => {
 	expect(summary.current?.title).toBe("a");
 });
 
-const asked = (answered: boolean, superseded = false, terminal = false): AskState => ({
-	...(answered ? { answer: { answers: [], cancelled: false } } : {}),
+const asked = (responded: boolean, superseded = false, terminal = false): InteractionState => ({
+	...(responded ? { response: { answers: [], cancelled: false } } : {}),
 	superseded,
 	terminal,
 });
 
-test("planGlance: an awaiting question wins even while its live tool blocks the run", () => {
+test("planGlance: an awaiting interaction wins even while its live tool blocks the run", () => {
 	expect(planGlance(true, {})).toBe("working");
 	expect(planGlance(true, { q1: asked(false) })).toBe("waiting_question");
 	expect(planGlance(false, {})).toBe("waiting");
@@ -146,30 +154,37 @@ test("shouldNudgeOnAdd: never wake an agent waiting on a question; wake it other
 	expect(shouldNudgeOnAdd("waiting")).toBe(true);
 });
 
-test("sessionGlance prefers host state and falls back to the runtime transcript (deriveAskStates + planGlance)", () => {
-	const askTurn: ChatTurn = {
-		kind: "assistant",
-		id: "a1",
-		streaming: false,
-		message: {
-			role: "assistant",
-			content: [{ type: "toolCall", id: "q1", name: "ask_user_question", arguments: {} }],
-		} as unknown as AssistantMessage,
-	};
-	expect(
-		sessionGlance({ isStreaming: true, turns: [askTurn], askAnswers: {}, toolResults: {} }),
-	).toBe("waiting_question");
-	expect(
-		sessionGlance({ isStreaming: false, turns: [askTurn], askAnswers: {}, toolResults: {} }),
-	).toBe("waiting_question");
-	expect(sessionGlance({ isStreaming: false, turns: [], askAnswers: {}, toolResults: {} })).toBe(
+const askTurn = (
+	id: string,
+	toolCallId: string,
+	args: Record<string, unknown> = {},
+	streaming = false,
+): ChatTurn => ({
+	kind: "assistant",
+	id,
+	streaming,
+	message: {
+		role: "assistant",
+		content: [{ type: "toolCall", id: toolCallId, name: "ask_user_question", arguments: args }],
+	} as unknown as AssistantMessage,
+});
+
+test("sessionGlance prefers host state and falls back to the runtime transcript (deriveInteractionStates + planGlance)", () => {
+	const turns = [askTurn("a1", "q1")];
+	expect(sessionGlance({ isStreaming: true, turns, toolResponses: {}, toolResults: {} })).toBe(
+		"waiting_question",
+	);
+	expect(sessionGlance({ isStreaming: false, turns, toolResponses: {}, toolResults: {} })).toBe(
+		"waiting_question",
+	);
+	expect(sessionGlance({ isStreaming: false, turns: [], toolResponses: {}, toolResults: {} })).toBe(
 		"waiting",
 	);
 	expect(
 		sessionGlance({
 			isStreaming: false,
-			turns: [askTurn],
-			askAnswers: {},
+			turns,
+			toolResponses: {},
 			toolResults: { q1: { status: "error", raw: {} } },
 		}),
 	).toBe("waiting");
@@ -177,7 +192,7 @@ test("sessionGlance prefers host state and falls back to the runtime transcript 
 		sessionGlance({
 			isStreaming: false,
 			turns: [],
-			askAnswers: {},
+			toolResponses: {},
 			toolResults: {},
 			hostState: {
 				execution: "idle",
@@ -193,27 +208,84 @@ test("sessionGlance prefers host state and falls back to the runtime transcript 
 });
 
 test("sessionGlance recomputes when any input changes identity under the same turns array", () => {
-	const turns: ChatTurn[] = [
-		{
-			kind: "assistant",
-			id: "a1",
-			streaming: false,
-			message: {
-				role: "assistant",
-				content: [{ type: "toolCall", id: "q1", name: "ask_user_question", arguments: {} }],
-			} as unknown as AssistantMessage,
-		},
-	];
-	const pending = { isStreaming: false, turns, askAnswers: {}, toolResults: {} };
+	const turns: ChatTurn[] = [askTurn("a1", "q1")];
+	const pending = { isStreaming: false, turns, toolResponses: {}, toolResults: {} };
 	expect(sessionGlance(pending)).toBe("waiting_question");
 	expect(sessionGlance({ ...pending, toolResults: { q1: { status: "error", raw: {} } } })).toBe(
 		"waiting",
 	);
-	expect(sessionGlance({ ...pending, askAnswers: { q1: { answers: [], cancelled: false } } })).toBe(
-		"waiting",
-	);
+	expect(
+		sessionGlance({ ...pending, toolResponses: { q1: { answers: [], cancelled: false } } }),
+	).toBe("waiting");
 	expect(sessionGlance(pending)).toBe("waiting_question");
 	expect(sessionGlance({ ...pending, turns: [] })).toBe("waiting");
+});
+
+test("pendingInteraction reconstructs the latest awaiting interactive call as render props, by tool name", () => {
+	const userTurn: ChatTurn = {
+		kind: "user",
+		id: "u1",
+		message: { role: "user", content: "hi", timestamp: 0 } as UserMessage,
+	};
+	const bashTurn: ChatTurn = {
+		kind: "assistant",
+		id: "b",
+		streaming: false,
+		message: {
+			role: "assistant",
+			content: [{ type: "toolCall", id: "b1", name: "bash", arguments: { command: "ls" } }],
+		} as unknown as AssistantMessage,
+	};
+	const first = askTurn("a1", "q1", { questions: [{ question: "First?" }] });
+	const second = askTurn("a2", "q2", { questions: [{ question: "Second?" }] }, true);
+
+	expect(pendingInteraction({ turns: [], toolResponses: {}, toolResults: {} })).toBeUndefined();
+	// A non-interactive call never qualifies, whatever its state.
+	expect(
+		pendingInteraction({ turns: [bashTurn], toolResponses: {}, toolResults: {} }),
+	).toBeUndefined();
+
+	// Latest wins; the host's ack result rides along as the card's `result`.
+	expect(
+		pendingInteraction({
+			turns: [first, bashTurn, second],
+			toolResponses: {},
+			toolResults: { q2: { status: "done", raw: { details: { kind: "ack" } } } },
+		}),
+	).toEqual({
+		toolCallId: "q2",
+		toolName: "ask_user_question",
+		args: { questions: [{ question: "Second?" }] },
+		result: { details: { kind: "ack" } },
+		status: "done",
+		streaming: true,
+	});
+	// Without a result the call reads as still running.
+	expect(pendingInteraction({ turns: [first], toolResponses: {}, toolResults: {} })).toMatchObject({
+		toolCallId: "q1",
+		result: undefined,
+		status: "running",
+		streaming: false,
+	});
+
+	// A responded, superseded, or terminal call drops out — earlier awaiting ones still surface.
+	expect(
+		pendingInteraction({
+			turns: [first, second],
+			toolResponses: { q2: { answers: [], cancelled: false } },
+			toolResults: {},
+		})?.toolCallId,
+	).toBe("q1");
+	expect(
+		pendingInteraction({ turns: [first, userTurn], toolResponses: {}, toolResults: {} }),
+	).toBeUndefined();
+	expect(
+		pendingInteraction({
+			turns: [first],
+			toolResponses: {},
+			toolResults: { q1: { status: "error", raw: {} } },
+		}),
+	).toBeUndefined();
 });
 
 test("itemChangeSet: the LATEST resolvable commit wins; live change paths (a fallback redo) win over commits", () => {

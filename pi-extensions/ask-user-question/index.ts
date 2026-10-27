@@ -25,6 +25,7 @@ export {
 	DECLINE_MESSAGE,
 	executableAskCallIds,
 	isAckDetails,
+	isAskUserQuestionArgs,
 	isAskUserQuestionResult,
 	isolateAskUserQuestionBatch,
 	MAX_HEADER_LENGTH,

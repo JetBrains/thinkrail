@@ -1,5 +1,4 @@
 export * from "./agentSessionManager";
-export * from "./askUserQuestion";
 export {
 	getSessionResources,
 	readBackgroundCommandOutput,
@@ -104,4 +103,5 @@ export {
 	setTitleToolHost,
 	type TitleToolHost,
 } from "./titleTool";
+export * from "./toolResponses";
 export * from "./webUiContext";

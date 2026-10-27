@@ -39,8 +39,8 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
   `reviewFix`/review-package renderers). Registered `primary` + `defaultExpanded`; `data-verdict` +
   `data-testid="request-review-card"` are the test hooks.
 - **Ask user question** is owned by [[module-ext-ask-user-question]], outside this module. Its card
-  registers bare through the public web entrypoint, and the plan page renders the named
-  `AskUserQuestionCard`.
+  registers bare and `interactive` through the public web entrypoint; the plan page renders it through the
+  registry.
 - **Visualize** is owned by [[module-ext-visualize]], outside this module. Its primary/default-expanded
   registration and named `MermaidView` reach chat through the public web entrypoint.
 - **Spec-graph tools** — one defensive `SpecToolCard` registered for all seven `spec_*` names. Each keeps
@@ -69,7 +69,7 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 
 - **Public surface:** the side-effect `register` import + shared `CodeBlock`/`Collapsible` for sibling
   renderers. No barrel (chat pulls shiki — per-file imports, as in the parent).
-- **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`, `askState`,
+- **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`, `interactionState`,
   `fileTargets`, `foldState`);
   `contracts` (types and pure guards); `@thinkrail/ui/*` (including
   `attention-line`, the "Your input is needed" line shared with extension prompts);

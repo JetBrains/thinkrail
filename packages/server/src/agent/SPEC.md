@@ -324,8 +324,8 @@ re-opened transcripts provider-valid.
     PI records the replacement when the user sends a message. Legacy transcripts with no persisted model
     reference also use PI's model resolver—then returns `{ summary, messages }` —
     `TranscriptMessage[]`: the pi-canonical subset **plus
-    `custom` messages**, which carry the `ask-user-answers` replies the questionnaire card pairs by tool
-    call id, **plus `compactionSummary`**, pi's durable marker for the messages compaction summarized away —
+    `custom` messages**, which carry the `tool-response` replies (and the retired `ask-user-answers` form in
+    older transcripts) an interactive tool's card pairs by tool call id, **plus `compactionSummary`**, pi's durable marker for the messages compaction summarized away —
     kept precisely because pi's resolved transcript is all that survives, so dropping it would hand the
     client a chat that starts mid-conversation with nothing to explain the gap. Which roles those are is
     **not decided here**: the filter is contracts' `isTranscriptMessageRole`, shared with `history`'s index
@@ -351,8 +351,8 @@ re-opened transcripts provider-valid.
     missing calls get pi's abort convention (`isError` "Operation aborted (host restarted…)"); a dangling
     ask gets the canonical ack (`details {kind:"ack"}`), so its card remains answerable while the transcript
     is provider-valid;
-    **`answerQuestion(sessionId, toolCallId, result)`** — the `ask_user_question` reply path (see the
-    `askUserQuestion` bullet); **`settleSessionsForShutdown(timeoutMs)`** — the polite half of shutdown:
+    **`respondToTool(sessionId, toolCallId, response)`** — the interactive-tool reply path (see the
+    `toolResponses` bullet); **`settleSessionsForShutdown(timeoutMs)`** — the polite half of shutdown:
     synchronously close every command service and subagent completion owner and start every hidden-child
     cascade before aborting any streaming parent. Preserve parents with a recoverable live ask phase
     (`expected`, `waiting`, or `answer-accepted-uncommitted`); dispose every hidden child (including those
@@ -499,26 +499,32 @@ re-opened transcripts provider-valid.
     is a `Proxy` that throws `Theme not initialized` until `initTheme()` runs, and `initTheme` is called
     only from pi's own CLI entrypoints, never when pi is embedded via `createAgentSession`. Every
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
-  - `askUserQuestion` — the host half of **`ask_user_question`**: the per-session answer mailbox
-    (`AskUserQuestionWaiters`), answerability, restart repair support and late answers. The tool itself is
-    the portable [[module-pi-ask-user-question]] package, composed by [[module-ext-ask-user-question]]:
+  - `toolResponses` — the host half of **interactive tools** (tools whose `execute` waits for the person):
+    the per-session response mailbox (`ToolResponseWaiters`), respondability, restart repair support and
+    late responses. The mailbox is **tool-agnostic**: every entry is keyed by `toolCallId`, the response is
+    an opaque value, and the only tool knowledge the host holds is the enabled registry extensions'
+    `interactiveTools` map (`extensions/interactive`) — which names wait for a person, and how a late
+    response reads to the model. `ask_user_question` is the first client ([[module-pi-ask-user-question]]
+    composed by [[module-ext-ask-user-question]]):
     - The package owns the schema, validation, the `message_end` normalizer that keeps the first ask as
       the response's sole tool call, the sequential `execute` and the result envelope.
-    - Its registry entry registers the tool through `sessionExtensions`.
+    - Its registry entry registers the tool through `sessionExtensions` and declares it in
+      `interactiveTools`.
     - New and reopened parent sessions create one mailbox in `createParentSession`, and
-      `askUserQuestionSessionServices(waiters)` hands it to that seam as
-      `expectToolResponse(toolCallId)` and `awaitToolResponse(toolCallId, signal)`. A call enters the
-      mailbox only when the extension announces it, never by tool name: with the extension off, an
-      `ask_user_question` call (the model calling the absent tool, or a same-name package's tool) raises no
-      needs-input, holds no completion delivery, and its answer RPC fails as not awaiting. The mailbox outlives resource reloads and the extension
-      switch: a question asked after re-enabling answers through the same mailbox, and a chat created
-      with the extension off adopts it through the one reload the toggle requests, ahead of any same-name
-      package.
-    - Answer → `response`, supersede → `deferred` (the package returns the canonical ack and ends the
+      `toolResponseSessionServices(waiters)` hands it to that seam as `expectToolResponse(toolCallId)`
+      and `awaitToolResponse(toolCallId, signal)`. A call enters the mailbox only when the extension
+      announces it, never by tool name: with the extension off, an `ask_user_question` call (the model
+      calling the absent tool, or a same-name package's tool) raises no needs-input, holds no completion
+      delivery, and its response RPC fails as not awaiting. The mailbox outlives resource reloads and the
+      extension switch: a question asked after re-enabling answers through the same mailbox, and a chat
+      created with the extension off adopts it through the one reload the toggle requests, ahead of any
+      same-name package.
+    - Response → `response`, supersede → `deferred` (the tool returns the pending marker and ends the
       turn; pi still drains the queued composer message), dispose → `abandoned`. Stop rejections pass
-      through as the stopped error.
-    - `agent` reaches the package's tool name, texts and envelope builder only through the `extensions`
-      barrel.
+      through as the host's stopped error.
+    - `agent` imports nothing from an extension: the pending marker and its guard are `contracts`', the
+      pending and stopped texts are the host's own, and the late-response wording comes from the
+      descriptor's `describeResponse` (else a generic preface plus the response as JSON).
     - A same-name tool from a user package loses to ours through the loader's `preferRegistryTools` order
       ([[submodule-server-extensions]], registered in [[pi-compatibility]]). That keeps the structured
       card and its answer channel paired: an installed terminal questionnaire must not replace execution
@@ -526,61 +532,67 @@ re-opened transcripts provider-valid.
       available.
 
     An eligible live call is **sequential and blocking**: after validation its `execute` waits for
-    `session.answerQuestion`, then returns the person's real
-    `AskUserQuestionResult`/`buildQuestionnaireResponse` as the native tool result. Eligibility is
-    shared: an assistant stopped by `error`, `aborted`, or `length` cannot execute an ask. Questions that
-    depend on an open answer wait for a later round; the multi-round interview norm itself lives in the
-    workflow family's `asking-user-questions` concept skill ([[submodule-workflow-skills]]).
+    `session.respondToTool`, then returns the person's real response through the tool's own envelope as
+    the native tool result. Eligibility is shared: an assistant stopped by `error`, `aborted`, or `length`
+    cannot execute an interactive call. Questions that depend on an open answer wait for a later round;
+    the multi-round interview norm itself lives in the workflow family's `asking-user-questions` concept
+    skill ([[submodule-workflow-skills]]).
 
-    The registry tracks `expected` (eligible call announced), `waiting`, `answer-accepted-uncommitted`, and
-    `stopped` through `turn_end`. This includes Pi's real asynchronous gap from `tool_execution_start` through
-    pre-tool hooks to `execute`: graceful shutdown freezes new answer admission and preserves an expected call;
-    an answer accepted before that freeze remains authoritative and is persisted before shutdown/Stop aborts
-    its continuation. Stop-first synchronously marks an expected/waiting call stopped, so a later answer cannot
-    reverse the winner. Semantic validation still gates execution: an answer accepted in the pre-execute
-    window is acknowledged only if the real ask returned and `turn_end` contains its result; validation error
-    or a missing result rejects the answer RPC rather than hanging or claiming success. The proof needs no
-    receipt from `execute`, which lives in the package. `persistTurn(toolResults)` accepts only a non-error
-    result whose `details` deep-equal the accepted answer: `details` is the answer itself, so the proof never
-    depends on the wording the extension gives the model. A post-tool hook that rewrites only the content
-    is acknowledged, since the answer did persist; one that replaces `details` or turns the result into an
-    error rejects the RPC. Rejected: comparing the rebuilt envelope too (it tied the host to the extension's
-    text and reported a persisted answer as lost whenever another extension rewrote tool output). Every expected call Pi
-    does not execute is cleared at `turn_end`. The answer RPC resolves the phase and acknowledges only after
-    the matching result reaches the persisted `turn_end` boundary. Explicit Stop drains the queue and aborts
-    an unanswered phase with a stable stopped error; after Submit wins, Stop defers Pi abort until the answer
-    persists and then ends only the continuation. Either ordering leaves one terminal provider-valid result.
+    The registry tracks `expected` (eligible call announced), `waiting`, `response-accepted-uncommitted`,
+    and `stopped` through `turn_end`. This includes Pi's real asynchronous gap from `tool_execution_start`
+    through pre-tool hooks to `execute`: graceful shutdown freezes new response admission and preserves an
+    expected call; a response accepted before that freeze remains authoritative and is persisted before
+    shutdown/Stop aborts its continuation. Stop-first synchronously marks an expected/waiting call stopped,
+    so a later response cannot reverse the winner. Semantic validation still gates execution: a response
+    accepted in the pre-execute window is acknowledged only if the real tool returned and `turn_end`
+    contains its result; a validation error (the tool's asker throws) or a missing result rejects the
+    response RPC rather than hanging or claiming success. The proof needs no receipt from `execute`, which
+    lives in the package. `persistTurn(toolResults)` matches results to waiters by `toolCallId` and
+    accepts only a non-error result whose `details` deep-equal the accepted response: `details` is the
+    response itself, so the proof never depends on the wording the tool gives the model. A post-tool hook
+    that rewrites only the content is acknowledged, since the response did persist; one that replaces
+    `details` or turns the result into an error rejects the RPC. Rejected: comparing the rebuilt envelope
+    too (it tied the host to the tool's text and reported a persisted answer as lost whenever another
+    extension rewrote tool output). Every expected call Pi does not execute is cleared at `turn_end`. The
+    response RPC resolves the phase and acknowledges only after the matching result reaches the persisted
+    `turn_end` boundary. Explicit Stop drains the queue and aborts an unanswered phase with a stable
+    stopped error; after Submit wins, Stop defers Pi abort until the response persists and then ends only
+    the continuation. Either ordering leaves one terminal provider-valid result.
 
-    **Typing instead of answering supersedes the live card, exactly as after a restart.** `steerSession` and
-    a streaming-time `promptSession` queue the text in Pi's steering lane first and, only when `steer()`
+    **Typing instead of answering supersedes the live card, exactly as after a restart.** `steerSession`
+    and a streaming-time `promptSession` queue the text in Pi's steering lane first and, only when `steer()`
     reports the `queued` disposition (an extension `input` handler that returns `handled` queues nothing, so
-    no user turn would follow the ack), `supersede()` every expected/waiting call: the tool returns the same canonical ack (`ASK_ACK_TEXT`, `details {kind:"ack"}`)
-    the restart repair writes, with `terminate: true` so Pi skips the tool batch's own model request.
-    Pi drains the steering message as the next user turn, and the card derives
-    `superseded` from the transcript through the one shape it already understands (ack + later user
-    message). A later answer RPC fails with the `superseded` answerability error; a call already in
-    `answer-accepted-uncommitted` is never superseded (the answer wins and the steering delivers after it).
-    Scope is deliberately narrow: only the user's own composer send supersedes — the follow-up lane
-    (Cmd+Enter), steering queued *before* the card appeared, `removeQueuedSession`'s internal re-queue, and
-    nudges (which already stop at `needsInput`) all leave the card open.
+    no user turn would follow the ack), `supersede()` every expected/waiting call: the tool returns the same
+    pending marker (`details {kind:"ack"}`) the restart repair writes, with `terminate: true` so Pi skips
+    the tool batch's own model request. Pi drains the steering message as the next user turn, and the card
+    derives `superseded` from the transcript through the one shape it already understands (pending marker
+    + later user message). A later response RPC fails with the `superseded` respondability error; a call
+    already in `response-accepted-uncommitted` is never superseded (the response wins and the steering
+    delivers after it). Scope is deliberately narrow: only the user's own composer send supersedes — the
+    follow-up lane (Cmd+Enter), steering queued *before* the card appeared, `removeQueuedSession`'s internal
+    re-queue, and nudges (which already stop at `needsInput`) all leave the card open.
 
     A process restart deliberately changes only the continuation mechanism: attach-time repair writes the
-    canonical ack (`details {kind:"ack"}`) only for an eligible dangling ask whose arguments have our
-    questionnaire shape (`isAskUserQuestionArgs`) before `createAgentSession`; answerability likewise
-    reports any other-shaped call as unknown,
-    leaving the card answerable but the session idle. A length-truncated ask receives the same error repair
-    as any other non-executable tool call. With no live phase, `answerQuestion` injects the existing
-    `ask-user-answers` custom message through `sendCustomMessage({triggerTurn:true})`. Thus the question
+    pending marker (`details {kind:"ack"}`, the host's `TOOL_RESPONSE_PENDING_TEXT`) for an eligible
+    dangling call whose tool name is in the enabled `interactiveTools` map before `createAgentSession`;
+    respondability likewise reports a call of any other tool as unknown, leaving the card answerable but the
+    session idle. No argument-shape check: while ours is enabled it wins the name, and a disabled
+    extension's tool is simply not interactive, so a foreign same-name call gets the ordinary error repair.
+    A length-truncated call receives the same error repair as any other non-executable tool call. With no
+    live phase, `respondToTool` injects a `tool-response` custom message (content from `describeResponse`,
+    `details { toolCallId, response }`) through `sendCustomMessage({triggerTurn:true})`. Thus the question
     survives without restoring a JavaScript promise or calling low-level `Agent.continue`; an uncommitted
     Submit simply appears again. Queue entries remain Pi-owned and live-only by explicit scope. The card
-    derives both forms from the transcript (native live result versus repaired ack + custom answer).
+    derives both forms from the transcript (native live result versus pending marker + custom response).
 
     Rejected alternatives: immediate ack on every live call lets Pi drain input queued *before* the card
     and supersede it unseen; restoring a dangling invocation exactly requires a lifecycle-safe resume API Pi
     does not expose; a durable host queue/SQLite outbox is unnecessary when only the question must survive;
     a client-side "skip then steer" pair races the answer path and leaves a decline in the transcript
-    where the restored path leaves an ack.
-  - `sessionRepair` — `repairDanglingToolCalls(sessionManager)`: the restart safety net (rationale under
+    where the restored path leaves an ack; keying the mailbox on the tool name (the seam would be generic in
+    type only — a second interactive tool, or a third party's, could announce a call the web could never
+    answer).
+  - `sessionRepair` — `repairDanglingToolCalls(sessionManager, interactiveTools)`: the restart safety net (rationale under
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
     unit-tested against `SessionManager.inMemory`, including failed-attempt and historical-gap replay.
@@ -899,7 +911,7 @@ re-opened transcripts provider-valid.
     [MCP servers](#mcp-servers).
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
-- **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
+- **Public surface (barrel):** the manager operations (incl. `respondToTool` +
   `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
@@ -908,9 +920,9 @@ re-opened transcripts provider-valid.
   `provider.changed` seam); `piLoginOptions` (pi login options
   carrying the lazily created installation device id, for `auth`);
   `completeOnce`/`pickModel` +
-  `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` mailbox
-  and pure helpers (`createAskUserQuestionWaiters`/`askUserQuestionSessionServices`/`assessAnswerability`/
-  `buildAnswersMessage`/`awaitingQuestionToolCallId`); normalized-state operations
+  `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `toolResponses` mailbox
+  and pure helpers (`createToolResponseWaiters`/`toolResponseSessionServices`/`assessRespondability`/
+  `describeToolResponse`/`buildToolResponseMessage`/`awaitingToolCallId`); normalized-state operations
   (`listSessionStates`/`acknowledgeCompletion`/`markWorkspaceUnread`/`markWorkspaceRead`/`nudgeSession` +
   publisher/project seams);
   `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
@@ -1225,7 +1237,7 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   the marker and restarts status. Closing or disposed entries neither report failures nor restart.
   Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
   admission seam (`promptSession`, `steerSession`, `followUpSession`, `nudgeSession`, queue requeues,
-  `answerQuestion`, `sendReviewFixToSession`, `compactSession`) refuses with "reloading", and completion
+  `respondToTool`, `sendReviewFixToSession`, `compactSession`) refuses with "reloading", and completion
   delivery waits in its owners through `canDeliverCompletion` and flushes afterwards; the gate opens only
   when pi is `isIdle`, no admitted prompt is still in preflight (the host reserves the window from
   admission to `agent_start` — pi ≤ 1.1 reported idle throughout it and pi 1.2 still does until
@@ -1330,10 +1342,11 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
 - **A re-opened disk session is repaired before it is seeded** (`repairDanglingToolCalls` between
   `SessionManager.open` and `createAgentSession`) — never append to a session file behind a live
   `AgentSession`, its in-memory context would desync.
-- **A live ask blocks only in its session-bound phase registry; restart state stays transcript-derived.**
-  The registry is forgotten on disposal and never restored. Only a tool-executable dangling ask is repaired
-  to ack before attach; `length`/`error`/`aborted` attempts are terminal. `assessAnswerability` remains the
-  one reply-validity authority; rejections fail the WS request loud.
+- **A live interactive call blocks only in its session-bound phase registry; restart state stays
+  transcript-derived.** The registry is forgotten on disposal and never restored. Only a tool-executable
+  dangling call of an enabled interactive tool is repaired to the pending marker before attach;
+  `length`/`error`/`aborted` attempts are terminal. `assessRespondability` remains the one reply-validity
+  authority; rejections fail the WS request loud.
 - Share one **current** `ModelRuntime` for pre-session reads and new sessions. Every session receives and
   retains its generation as `createAgentSession`'s `modelRuntime`; give each its own `SessionManager` and
   `dispose()` it on removal. Old runtimes remain reachable only through old live sessions and become

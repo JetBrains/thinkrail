@@ -63,6 +63,7 @@ export interface ToolRegistrationOptions {
 	chrome?: ToolChrome;
 	prominence?: ToolProminence;
 	defaultExpanded?: boolean;
+	interactive?: boolean;
 }
 
 export interface WebExtension {

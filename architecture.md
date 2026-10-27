@@ -380,11 +380,17 @@ dependency. This keeps test process drivers outside both launchers and the serve
     the ThinkRail server half through `createVisualizeExtension({ validateMermaid })`; the old
     `packages/pi-visualize` is deleted. Second: ask-user-question — the portable package asks through a
     terminal questionnaire or per-question dialogs; ThinkRail composes it per parent session through the
-    registry's `sessionExtensions(session)` seam with an asker over the host's answer mailbox
-    (`awaitToolResponse`) — the first per-session host service an extension receives, added as its own
-    PR between the web half and the wiring — while the mailbox lifecycle (restart repair, late answers,
-    composer supersede, Stop/Submit) stays in `agent`. The loader keeps a registry extension's tool ahead
-    of a same-name user package ([[pi-compatibility]]). Detail: [[module-thinkrail-extensions]].
+    registry's `sessionExtensions(session)` seam with an asker over the host's **interactive-tool
+    mailbox** (`awaitToolResponse`) — the first per-session host service an extension receives. The
+    mailbox, restart repair, late responses, composer supersede, Stop/Submit, needs-input and the web
+    `interaction` props are **tool-agnostic**: keyed by `toolCallId`, told which tool names wait for a
+    person by the descriptor's `interactiveTools` and the renderer's `interactive` flag, and never
+    naming a tool in `contracts`, `agent` or `apps/web`. `ask_user_question` is the first client of that
+    contract, not a special case; the extension is deletable without touching the core (the vanilla
+    package then falls back to pi's `ctx.ui` dialogs, which the host already renders). Product rule: a
+    built-in (registry) extension wins a same-name tool collision with a user package while it is
+    enabled; switched off, the package's tool runs ([[pi-compatibility]] holds the pi-level mechanism).
+    Detail: [[module-thinkrail-extensions]].
 
 22. **A path's spelling follows its kind.** A directory identity (`Project.path`,
     `Workspace.worktreePath`) is the host's **resolved** spelling (`path.resolve`), exactly what pi records as a

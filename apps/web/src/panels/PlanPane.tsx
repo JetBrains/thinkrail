@@ -17,13 +17,7 @@ import {
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
 } from "@remixicon/react";
-import {
-	ASK_USER_QUESTION_TOOL_NAME,
-	type ReviewComment,
-	type TodoGroupItem,
-	type TodoItem,
-} from "@thinkrail/contracts";
-import { AskUserQuestionCard } from "@thinkrail/ext-ask-user-question/web";
+import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import {
 	DropdownMenu,
@@ -35,8 +29,12 @@ import {
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { AskStatesContext, awaitingQuestionIdOf, deriveAskStates } from "../chat/askState";
 import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
+import {
+	awaitingToolCallIdOf,
+	deriveInteractionStates,
+	InteractionStatesContext,
+} from "../chat/interactionState";
 import { Markdown } from "../chat/Markdown";
 import { SectionLabel, VerificationBadge, VerificationGlyph } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
@@ -51,9 +49,9 @@ import {
 	itemOpenFindings,
 	itemRevisions,
 	lastAgentText,
-	type PendingAsk,
+	type PendingInteraction,
 	type PlanGlance,
-	pendingAsk,
+	pendingInteraction,
 	planCompletionSummary,
 	planSections,
 	planStaleSummary,
@@ -65,6 +63,7 @@ import {
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useToolInteraction } from "../chat/toolInteraction";
+import { getToolRenderer } from "../chat/toolRegistry";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import {
 	selectAgentReviewCommentCount,
@@ -663,16 +662,17 @@ function PlanCardSection({
 	);
 }
 
-function PlanAskCard({ ask }: { ask: PendingAsk }) {
-	const interaction = useToolInteraction(ask.toolCallId, ASK_USER_QUESTION_TOOL_NAME);
+function PlanInteractionCard({ pending }: { pending: PendingInteraction }) {
+	const interaction = useToolInteraction(pending.toolCallId, pending.toolName);
+	const Renderer = getToolRenderer(pending.toolName);
 	return (
-		<AskUserQuestionCard
-			toolCallId={ask.toolCallId}
-			toolName={ASK_USER_QUESTION_TOOL_NAME}
-			args={ask.args}
-			result={ask.result}
-			status={ask.status}
-			streaming={ask.streaming}
+		<Renderer
+			toolCallId={pending.toolCallId}
+			toolName={pending.toolName}
+			args={pending.args}
+			result={pending.result}
+			status={pending.status}
+			streaming={pending.streaming}
 			interaction={interaction}
 		/>
 	);
@@ -685,37 +685,40 @@ function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string
 	const [focusScope] = useState<object>(() => ({}));
 	const actions = useMemo<ChatActions>(
 		() => ({
-			answerQuestion: (toolCallId, result) =>
-				getTransport()
-					.request("session.answerQuestion", { sessionId, toolCallId, result })
-					.then(() => undefined),
 			cancelAutomaticReveal: () => {},
 			focusComposer: () => {},
 			openSubagentTranscript: () => {},
+			respondToTool: (toolCallId, response) =>
+				getTransport()
+					.request("session.respondToTool", { sessionId, toolCallId, response })
+					.then(() => undefined),
 			resultOpener: () => undefined,
 			revealChatElement: () => {},
 		}),
 		[sessionId],
 	);
-	const askStates = useMemo(
-		() => (runtime ? deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults) : {}),
+	const interactionStates = useMemo(
+		() =>
+			runtime
+				? deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults)
+				: {},
 		[runtime],
 	);
-	const ask = runtime ? pendingAsk(runtime) : undefined;
-	if (ask) {
+	const pending = runtime ? pendingInteraction(runtime) : undefined;
+	if (pending) {
 		return (
 			<ChatActionsContext.Provider value={actions}>
-				<AskStatesContext.Provider
+				<InteractionStatesContext.Provider
 					value={{
-						states: askStates,
+						states: interactionStates,
 						focusScope,
-						awaitingQuestionId: awaitingQuestionIdOf(runtime?.hostState ?? null),
+						awaitingToolCallId: awaitingToolCallIdOf(runtime?.hostState ?? null),
 					}}
 				>
 					<div data-testid="plan-ask" className="mb-8">
-						<PlanAskCard ask={ask} />
+						<PlanInteractionCard pending={pending} />
 					</div>
-				</AskStatesContext.Provider>
+				</InteractionStatesContext.Provider>
 			</ChatActionsContext.Provider>
 		);
 	}

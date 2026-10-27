@@ -111,6 +111,7 @@
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@thinkrail/artifact-tests": "workspace:*",
 		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/pi-ask-user-question": "workspace:*",
 		"@thinkrail/server": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
 		"@playwright/test": "1.61.0",

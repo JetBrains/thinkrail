@@ -269,6 +269,7 @@ function sourceRule(rule: ModuleRule, subpath: string): ModuleRule {
 					"packages/ui",
 					"packages/extension-api",
 					"packages/resource-renderers",
+					piExtensionRoot(rule.root),
 				],
 			};
 		case "server":

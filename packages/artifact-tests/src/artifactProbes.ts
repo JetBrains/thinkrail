@@ -271,18 +271,18 @@ async function assertAskUserQuestionRoundTrip(
 	prompting.catch(() => {});
 	let asked = false;
 	for (let attempt = 0; attempt < 240 && !asked; attempt += 1) {
-		asked = (await sessionState(socket, sessionId)).needsInput?.kind === "question";
+		asked = (await sessionState(socket, sessionId)).needsInput?.kind === "tool-response";
 		if (!asked) await Bun.sleep(250);
 	}
 	assert(asked, "the scripted ask_user_question call never blocked the artifact session");
 	await within(
-		rpc(socket, "session.answerQuestion", {
+		rpc(socket, "session.respondToTool", {
 			sessionId,
 			toolCallId: ASK_TOOL_CALL_ID,
-			result: ASK_ANSWER,
+			response: ASK_ANSWER,
 		}),
 		10_000,
-		"session.answerQuestion",
+		"session.respondToTool",
 	);
 	await within(prompting, 30_000, "session.prompt acknowledgement");
 	for (let attempt = 0; attempt < 240; attempt += 1) {

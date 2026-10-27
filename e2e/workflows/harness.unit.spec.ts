@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import type { AskUserQuestionItem, PiEvent } from "@thinkrail/contracts";
+import type { PiEvent } from "@thinkrail/contracts";
+import type { AskUserQuestionItem } from "@thinkrail/pi-ask-user-question/core";
 import {
 	attachDialog,
 	checkBudget,

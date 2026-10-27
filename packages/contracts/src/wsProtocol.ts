@@ -71,9 +71,6 @@ import type {
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
 import type {
-	AskUserAnswersDetails,
-	AskUserQuestionArgs,
-	AskUserQuestionResult,
 	ExtUiResponse,
 	ImageContent,
 	QueueLane,
@@ -85,6 +82,8 @@ import type {
 	SkillCatalogEntry,
 	SlashCommandInfo,
 	ThinkingLevel,
+	ToolResponseDetails,
+	ToolResponsePendingDetails,
 	TranscriptMessage,
 	WireCustomMessage,
 	WireModel,
@@ -123,7 +122,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 92;
+export const PROTOCOL_VERSION = 93;
+export const TOOL_RESPONSE_PROTOCOL_VERSION = 93;
 export const USER_THEMES_PROTOCOL_VERSION = 92;
 export const HOST_ENVIRONMENT_PROTOCOL_VERSION = 91;
 export const CLIENT_ERROR_REPORT_PROTOCOL_VERSION = 90;
@@ -299,7 +299,7 @@ export const WS_METHODS = {
 	sessionGetCommands: "session.getCommands",
 	sessionReloadResources: "session.reloadResources",
 	sessionExtUiReply: "session.extUiReply",
-	sessionAnswerQuestion: "session.answerQuestion",
+	sessionRespondToTool: "session.respondToTool",
 	sessionList: "session.list",
 	sessionStateList: "session.stateList",
 	sessionAcknowledgeCompletion: "session.acknowledgeCompletion",
@@ -398,56 +398,33 @@ export const WS_CHANNELS = {
 type SameUnion<A extends B, B extends C, C = A> = A;
 export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
 
-export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
+export const TOOL_RESPONSE_CUSTOM_TYPE = "tool-response";
+const LEGACY_ASK_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
 
-export const ASK_USER_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
-
-export interface AskUserAnswersMessage extends WireCustomMessage<AskUserAnswersDetails> {
-	customType: typeof ASK_USER_ANSWERS_CUSTOM_TYPE;
-	details: AskUserAnswersDetails;
+export interface ToolResponseMessage extends WireCustomMessage<ToolResponseDetails> {
+	customType: typeof TOOL_RESPONSE_CUSTOM_TYPE;
+	details: ToolResponseDetails;
 }
 
-function isAskUserQuestionResult(value: unknown): value is AskUserQuestionResult {
+export function isToolResponsePending(details: unknown): details is ToolResponsePendingDetails {
 	return (
-		!!value &&
-		typeof value === "object" &&
-		Array.isArray((value as AskUserQuestionResult).answers) &&
-		typeof (value as AskUserQuestionResult).cancelled === "boolean"
+		!!details &&
+		typeof details === "object" &&
+		(details as ToolResponsePendingDetails).kind === "ack"
 	);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === "object";
-}
-
-export function isAskUserQuestionArgs(value: unknown): value is AskUserQuestionArgs {
-	const questions = isRecord(value) ? value.questions : undefined;
-	return (
-		Array.isArray(questions) &&
-		questions.length > 0 &&
-		questions.every(
-			(question) =>
-				isRecord(question) &&
-				typeof question.question === "string" &&
-				Array.isArray(question.options) &&
-				question.options.every((option) => isRecord(option) && typeof option.label === "string"),
-		)
-	);
-}
-
-export function readAskUserQuestionResult(raw: unknown): AskUserQuestionResult | null {
-	const details =
-		raw && typeof raw === "object" ? (raw as { details?: unknown }).details : undefined;
-	if (isAskUserQuestionResult(details)) return details;
-	return isAskUserQuestionResult(raw) ? raw : null;
-}
-
-export function isAskUserAnswersMessage(message: unknown): message is AskUserAnswersMessage {
-	if (!message || typeof message !== "object") return false;
+export function readToolResponseMessage(message: unknown): ToolResponseDetails | null {
+	if (!message || typeof message !== "object") return null;
 	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
-	if (m.role !== "custom" || m.customType !== ASK_USER_ANSWERS_CUSTOM_TYPE) return false;
-	const details = m.details as Partial<AskUserAnswersDetails> | undefined;
-	return typeof details?.toolCallId === "string" && isAskUserQuestionResult(details.result);
+	if (m.role !== "custom" || !m.details || typeof m.details !== "object") return null;
+	const details = m.details as { toolCallId?: unknown; response?: unknown; result?: unknown };
+	if (typeof details.toolCallId !== "string") return null;
+	if (m.customType === TOOL_RESPONSE_CUSTOM_TYPE && "response" in details)
+		return { toolCallId: details.toolCallId, response: details.response };
+	if (m.customType === LEGACY_ASK_ANSWERS_CUSTOM_TYPE && details.result !== undefined)
+		return { toolCallId: details.toolCallId, response: details.result };
+	return null;
 }
 
 export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";
@@ -885,8 +862,8 @@ export interface WsMethodMap {
 	"session.getCommands": { params: { sessionId: string }; result: SlashCommandInfo[] };
 	"session.reloadResources": { params: { sessionId: string }; result: Ack };
 	"session.extUiReply": { params: { response: ExtUiResponse }; result: Ack };
-	"session.answerQuestion": {
-		params: { sessionId: string; toolCallId: string; result: AskUserQuestionResult };
+	"session.respondToTool": {
+		params: { sessionId: string; toolCallId: string; response: unknown };
 		result: Ack;
 	};
 	"session.list": { params: { workspaceId: string }; result: SessionSummary[] };

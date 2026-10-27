@@ -6,15 +6,14 @@ import {
 	RiPencilLine as Pencil,
 	RiSkipForwardLine as SkipForward,
 } from "@remixicon/react";
-import {
-	type AskUserQuestionAnswer,
-	type AskUserQuestionArgs,
-	type AskUserQuestionItem,
-	type AskUserQuestionResult,
-	readAskUserQuestionResult,
-} from "@thinkrail/contracts";
 import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import type {
+	AskUserQuestionAnswer,
+	AskUserQuestionArgs,
+	AskUserQuestionItem,
+	AskUserQuestionResult,
+} from "@thinkrail/pi-ask-user-question/core";
 import { useOptionalResourceHost } from "@thinkrail/resource-renderers";
 import { AttentionLine } from "@thinkrail/ui/attention-line";
 import { cn } from "@thinkrail/ui/utils";
@@ -28,6 +27,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { readAskUserQuestionResult } from "./readResult";
 
 const noLayoutChange = () => () => undefined;
 

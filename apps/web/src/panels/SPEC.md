@@ -1021,15 +1021,16 @@ a project picker, the prompt hero, and the reused
   that **opens the chat** (`openChatInTab`) so you can jump from the plan into the conversation: `working`
   → a `Working on this` spinner, `waiting_question` → a `Question` chip. The awaiting question is ALSO
   **answerable in place**: the Session body's **live slot** (`PlanSessionLive`, which subscribes to the
-  session runtime so its re-renders stay off the heavy PlanPane) hosts the SAME **`AskUserQuestionCard`**
-  as the chat (`plan-ask`, found via `planView.pendingAsk`; the card is the named export of
-  [[module-ext-ask-user-question]]). It sits inside a minimal `ChatActionsContext` and a derived
-  `AskStatesContext`:
-  - the actions carry a real `session.answerQuestion`;
+  session runtime so its re-renders stay off the heavy PlanPane) hosts the SAME card as the chat
+  (`plan-ask`, found via `planView.pendingInteraction` and rendered through the tool registry's
+  `getToolRenderer(toolName)` — any interactive tool, not only the questionnaire; the pane imports no
+  extension). It sits inside a minimal `ChatActionsContext` and a derived `InteractionStatesContext`:
+  - the actions carry a real `session.respondToTool`;
   - the chat-only actions (reveal, focus, subagent) are no-ops.
 
-  `PlanAskCard` turns these into the card's `interaction` through the same `useToolInteraction` adapter
-  the chat uses, so an answer submitted from the plan flows through the identical path as the chat.
+  `PlanInteractionCard` turns these into the card's `interaction` through the same `useToolInteraction`
+  adapter the chat uses, so a response submitted from the plan flows through the identical path as the
+  chat.
   When there's no pending question, the same slot instead shows the **agent's
   latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown inside a bounded
   scroll area — `max-h-[12rem] overflow-y-auto` so the full message stays readable without pushing

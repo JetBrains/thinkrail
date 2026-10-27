@@ -52,15 +52,15 @@ list for registry extensions.
   `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `preferRegistryTools`,
   `registryExtensionName`,
   `listExtensionCatalog`,
-  `resolveExtensionSkillRoots`, `ExtensionSessionServices`, `ToolResponse`, `ASK_ACK_TEXT`,
-  `ASK_STOPPED_ERROR`, `ASK_USER_QUESTION_TOOL_NAME`, `buildQuestionnaireResponse`, `isAckDetails`.
-- **Session-seam types:** `ExtensionSessionServices` and `ToolResponse` are re-exported from
-  `extension-api/server` so that `agent` can type the services it builds through this barrel.
-- **Ask helpers (`ask.ts`):** the `ask_user_question` tool name, ack and stop texts, envelope builder and
-  ack guard, re-exported from `@thinkrail/ext-ask-user-question/server`'s named pure exports. `agent`'s
-  restart repair, late answers and persistence proof use them without importing the extension or its pi
-  package. `ask.test.ts` pins that the package's questionnaire types and the contracts wire types are
-  interchangeable.
+  `resolveExtensionSkillRoots`, `interactiveTools`, `InteractiveTools`, `ExtensionSessionServices`,
+  `InteractiveTool`, `ToolResponse`.
+- **Session-seam types:** `ExtensionSessionServices`, `InteractiveTool` and `ToolResponse` are re-exported
+  from `extension-api/server` so that `agent` can type the services it builds through this barrel.
+- **Interactive tools (`interactive.ts`):** `interactiveTools(isDisabled)` folds the enabled registry
+  extensions' `interactiveTools` declarations into one name → `InteractiveTool` map (first declaration of a
+  name wins). It is the only tool knowledge `agent` holds for restart repair, transcript-derived
+  needs-input and late-response wording; nothing in `packages/server` names a tool or imports an extension
+  outside `registry.ts`.
 - **Allowed deps:** `@thinkrail/extension-api/server` (types), every `@thinkrail/ext-*/server`,
   `@earendil-works/pi-coding-agent` (types only), `@thinkrail/contracts` (the `ExtensionCatalogEntry` type),
   Node `module`/`fs`/`path`.

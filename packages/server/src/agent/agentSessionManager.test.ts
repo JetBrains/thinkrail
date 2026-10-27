@@ -26,19 +26,18 @@ import {
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
-	AskUserQuestionResult,
 	ExtUiRequest,
 	ImageContent,
 	SessionStateRecord,
 	SessionSummary,
 } from "@thinkrail/contracts";
-import { isAskUserAnswersMessage } from "@thinkrail/contracts";
+import { readToolResponseMessage, TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { interactiveTools } from "../extensions";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
 	acknowledgeCompletion,
-	answerQuestion,
 	buildSessionSettings,
 	clampThinkingForModel,
 	clearQueueSession,
@@ -70,6 +69,7 @@ import {
 	removeSession,
 	removeWorkspaceSessions,
 	renameSession,
+	respondToTool,
 	setAgentReviewEnabledResolver,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -83,11 +83,13 @@ import {
 	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
-import { ASK_ACK_TEXT, ASK_STOPPED_ERROR, assessAnswerability } from "./askUserQuestion";
 import { setDisabledExtensionsResolver } from "./extensions";
 import { configurePiRuntime } from "./piRuntime";
 import { admissionContextFor } from "./skillAdmission";
+import { assessRespondability, TOOL_RESPONSE_STOPPED_ERROR } from "./toolResponses";
 import { resolveExtUi, setExtUiPublisher } from "./webUiContext";
+
+const ALL_INTERACTIVE = interactiveTools(() => false);
 
 function modelDef(id: string) {
 	return {
@@ -250,7 +252,7 @@ async function waitForPath(path: string): Promise<void> {
 	throw new Error(`Timed out waiting for ${path}`);
 }
 
-function gatedQuestionAnswer(): AskUserQuestionResult {
+function gatedQuestionAnswer() {
 	return {
 		cancelled: false,
 		answers: [
@@ -731,8 +733,8 @@ test("a length-truncated questionnaire is terminal and cannot be answered", asyn
 	try {
 		await continuationStarted;
 		await expect(
-			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
-		).rejects.toThrow("not awaiting an answer");
+			respondToTool(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting a response");
 		releaseContinuation();
 		await prompting;
 		const transcript = await getSessionMessages(session.sessionId, "ws-length-question", cwd);
@@ -1598,8 +1600,8 @@ test("graceful shutdown preserves an expected question before its tool executes"
 			)?.isStreaming,
 		).toBe(true);
 		await expect(
-			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
-		).rejects.toThrow("not awaiting an answer");
+			respondToTool(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting a response");
 		const stopping = abortSession(session.sessionId, true);
 		gate.release();
 		await stopping;
@@ -1631,7 +1633,7 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 		await waitForPath(gate.startedPath);
 		await followUpSession(session.sessionId, "QUEUED_BEFORE_SHUTDOWN");
 		const result = gatedQuestionAnswer();
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const answering = respondToTool(session.sessionId, toolCallId, result);
 		const settling = settleSessionsForShutdown(1000);
 		await followUpSession(session.sessionId, "QUEUED_DURING_SHUTDOWN");
 		gate.release();
@@ -1641,7 +1643,7 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
+		expect(persisted.details).toEqual(result);
 		expect(seen(session.sessionId)).not.toContain("SHUTDOWN_CONTINUATION_RAN");
 		expect(transcript.messages.filter((message) => message.role === "user")).toHaveLength(1);
 	} finally {
@@ -1677,7 +1679,7 @@ test.each([
 		await waitForPath(gate.startedPath);
 		await followUpSession(session.sessionId, "QUEUED_BEFORE_REMOVAL");
 		const result = gatedQuestionAnswer();
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const answering = respondToTool(session.sessionId, toolCallId, result);
 		const removing =
 			teardown === "removeSession"
 				? removeSession(session.sessionId)
@@ -1730,7 +1732,7 @@ test("an answer accepted before execute persists before Stop aborts the continua
 	try {
 		await waitForPath(gate.startedPath);
 		const result = gatedQuestionAnswer();
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const answering = respondToTool(session.sessionId, toolCallId, result);
 		await steerSession(session.sessionId, "STEER_BEFORE_STOP");
 		await followUpSession(session.sessionId, "FOLLOW_UP_BEFORE_STOP");
 		let stopResolved = false;
@@ -1754,7 +1756,7 @@ test("an answer accepted before execute persists before Stop aborts the continua
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
+		expect(persisted.details).toEqual(result);
 		expect(persisted.isError).toBe(false);
 	} finally {
 		gate.release();
@@ -1780,8 +1782,8 @@ test("Stop claims an expected question before a late answer can win", async () =
 		await waitForPath(gate.startedPath);
 		const stopping = abortSession(session.sessionId, true);
 		await expect(
-			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
-		).rejects.toThrow("not awaiting an answer");
+			respondToTool(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting a response");
 		gate.release();
 		expect(await stopping).toEqual({ steering: [], followUp: [] });
 		await prompting;
@@ -1812,12 +1814,12 @@ test("emergency session disposal rejects an accepted answer that cannot persist"
 	prompting.catch(() => {});
 	try {
 		await waitForPath(gate.startedPath);
-		const answering = answerQuestion(session.sessionId, toolCallId, {
+		const answering = respondToTool(session.sessionId, toolCallId, {
 			answers: [],
 			cancelled: true,
 		});
 		disposeAllSessions();
-		await expect(answering).rejects.toThrow("Session disposed while waiting for a question");
+		await expect(answering).rejects.toThrow("Session disposed while waiting for a tool response");
 	} finally {
 		gate.release();
 		gate.remove();
@@ -1863,7 +1865,7 @@ function askToolState(context: TranscriptContext): string {
 
 async function waitForQuestion(sessionId: string): Promise<void> {
 	for (let attempt = 0; attempt < 200; attempt++) {
-		if (getSessionState(sessionId).needsInput?.kind === "question") return;
+		if (getSessionState(sessionId).needsInput?.kind === "tool-response") return;
 		await Bun.sleep(5);
 	}
 	throw new Error("Timed out waiting for the question to need input");
@@ -1894,9 +1896,9 @@ test("our ask_user_question wins over a same-name extension tool before and afte
 					if (getSessionState(session.sessionId).needsInput) break;
 					await Bun.sleep(5);
 				}
-				expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+				expect(getSessionState(session.sessionId).needsInput?.kind).toBe("tool-response");
 				expect(dialogs.filter((request) => request.kind === "input")).toEqual([]);
-				await answerQuestion(session.sessionId, toolCallId, gatedQuestionAnswer());
+				await respondToTool(session.sessionId, toolCallId, gatedQuestionAnswer());
 				await prompting;
 				const { messages } = await getSessionMessages(
 					session.sessionId,
@@ -1962,7 +1964,7 @@ test("the ask-user-question switch drops the tool and guidance live, and the sam
 		const prompting = promptSession(sessionId, "Choose a runtime.");
 		await waitForQuestion(sessionId);
 		expect(stateWhenAsking).toBe("ASK_ON");
-		await answerQuestion(sessionId, toolCallId, gatedQuestionAnswer());
+		await respondToTool(sessionId, toolCallId, gatedQuestionAnswer());
 		await prompting;
 		expect(seen(sessionId)).toContain("ASK_BACK_CONTINUED");
 		const { messages } = await getSessionMessages(sessionId, "ws-ask-idle-toggle", cwd);
@@ -2006,7 +2008,7 @@ test("a chat created with ask-user-question off leaves a same-name package in ch
 		const dialog = dialogs.find((request) => request.kind === "input");
 		if (!dialog) throw new Error("the external questionnaire never asked");
 		expect(guidanceWhileOff).not.toContain("Call ask_user_question whenever");
-		expect(getSessionState(sessionId).needsInput?.kind).not.toBe("question");
+		expect(getSessionState(sessionId).needsInput?.kind).not.toBe("tool-response");
 		resolveExtUi({ id: dialog.id, value: "1" });
 		await externalPrompting;
 		expect(seen(sessionId)).toContain("EXTERNAL_QUESTIONNAIRE");
@@ -2039,7 +2041,7 @@ test("a chat created with ask-user-question off leaves a same-name package in ch
 		await waitForQuestion(sessionId);
 		expect(stateWhenAsking).toBe("ASK_ON");
 		expect(dialogs.filter((request) => request.kind === "input")).toHaveLength(1);
-		await answerQuestion(sessionId, toolCallId, gatedQuestionAnswer());
+		await respondToTool(sessionId, toolCallId, gatedQuestionAnswer());
 		await prompting;
 		expect(seen(sessionId)).toContain("OURS_CONTINUED");
 		const { messages } = await getSessionMessages(sessionId, "ws-ask-new-off-collision", cwd);
@@ -2105,10 +2107,10 @@ test("with ask-user-question off, a same-name package's call never becomes our l
 		prompting = promptSession(sessionId, "Choose a runtime.");
 		await waitForPath(gate.startedPath);
 		expect(getSessionState(sessionId).needsInput).toBeNull();
-		const answering = answerQuestion(sessionId, toolCallId, gatedQuestionAnswer());
+		const answering = respondToTool(sessionId, toolCallId, gatedQuestionAnswer());
 		answering.catch(() => {});
 		gate.release();
-		await expect(answering).rejects.toThrow("not awaiting an answer");
+		await expect(answering).rejects.toThrow("Unknown tool call awaiting a response");
 		await prompting;
 		expect(seen(sessionId)).toContain("FOREIGN_CONTINUED");
 	} finally {
@@ -2191,7 +2193,7 @@ test("switching ask-user-question off while a question waits still persists its 
 		await waitForQuestion(sessionId);
 		disabled = new Set(["ask-user-question"]);
 		refreshExtensionTools();
-		await answerQuestion(sessionId, toolCallId, gatedQuestionAnswer());
+		await respondToTool(sessionId, toolCallId, gatedQuestionAnswer());
 		await prompting;
 		expect(seen(sessionId)).toContain("PENDING_CONTINUED");
 		const { messages } = await getSessionMessages(sessionId, "ws-ask-off-pending", cwd);
@@ -2207,13 +2209,14 @@ test("switching ask-user-question off while a question waits still persists its 
 	}
 });
 
-test("restart repair and answering leave a foreign-shaped ask_user_question call alone", async () => {
+test("with ask-user-question off, restart repair and responding leave its dangling call alone", async () => {
+	setDisabledExtensionsResolver(() => new Set(["ask-user-question"]));
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
-	const cwd = tmpCwd("trpi-restart-foreign-");
+	const cwd = tmpCwd("trpi-restart-ask-off-");
 	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
-	const toolCallId = "restart-foreign";
+	const toolCallId = "restart-ask-off";
 	const fixture = writeFixtureSession(dir, {
-		id: "restart-foreign-session",
+		id: "restart-ask-off-session",
 		cwd,
 		messages: [
 			{ role: "user", text: "Pick a runtime.", timestamp: 1 },
@@ -2226,15 +2229,26 @@ test("restart repair and answering leave a foreign-shaped ask_user_question call
 						type: "toolCall",
 						id: toolCallId,
 						name: "ask_user_question",
-						arguments: { question: "Which runtime?", choices: ["Bun", "Node"] },
+						arguments: {
+							questions: [
+								{
+									question: "Which runtime?",
+									header: "Runtime",
+									options: [
+										{ label: "Bun", description: "fast" },
+										{ label: "Node", description: "compatible" },
+									],
+								},
+							],
+						},
 					},
 				],
 			},
 		],
 	});
 	try {
-		expect(await ensureSessionAttached(fixture.id, "ws-restart-foreign", cwd)).toBe(true);
-		const repaired = await getSessionMessages(fixture.id, "ws-restart-foreign", cwd);
+		expect(await ensureSessionAttached(fixture.id, "ws-restart-ask-off", cwd)).toBe(true);
+		const repaired = await getSessionMessages(fixture.id, "ws-restart-ask-off", cwd);
 		const result = repaired.messages.find(
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
@@ -2242,10 +2256,11 @@ test("restart repair and answering leave a foreign-shaped ask_user_question call
 		expect(result.isError).toBe(true);
 		expect(result.details).toBeUndefined();
 		expect(getSessionState(fixture.id).needsInput).toBeNull();
-		await expect(answerQuestion(fixture.id, toolCallId, gatedQuestionAnswer())).rejects.toThrow(
-			"Unknown ask_user_question tool call",
+		await expect(respondToTool(fixture.id, toolCallId, gatedQuestionAnswer())).rejects.toThrow(
+			"Unknown tool call awaiting a response",
 		);
 	} finally {
+		setDisabledExtensionsResolver(() => new Set());
 		if (hasSession(fixture.id)) removeSession(fixture.id);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
@@ -2306,7 +2321,7 @@ test("a live question blocks continuation, keeps the follow-up lane behind it, a
 		await Promise.resolve();
 		expect(continuationCalls).toBe(0);
 
-		const result: AskUserQuestionResult = {
+		const result = {
 			cancelled: false,
 			answers: [
 				{
@@ -2317,7 +2332,7 @@ test("a live question blocks continuation, keeps the follow-up lane behind it, a
 				},
 			],
 		};
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const answering = respondToTool(session.sessionId, toolCallId, result);
 		await continuationStarted;
 		await answering;
 
@@ -2327,7 +2342,7 @@ test("a live question blocks continuation, keeps the follow-up lane behind it, a
 		);
 		expect(persistedResult).toBeDefined();
 		if (persistedResult?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persistedResult.details).toEqual<AskUserQuestionResult>(result);
+		expect(persistedResult.details).toEqual(result);
 		expect(messages.some((message) => message.role === "custom")).toBe(false);
 		expect(continuationContext).toContain('"role":"toolResult"');
 		expect(continuationContext).not.toContain("QUEUED_WHILE_ASKING");
@@ -2365,7 +2380,7 @@ async function expectTypedPastTranscript(
 	typedText: string,
 ): Promise<void> {
 	await expect(
-		answerQuestion(sessionId, toolCallId, { answers: [], cancelled: true }),
+		respondToTool(sessionId, toolCallId, { answers: [], cancelled: true }),
 	).rejects.toThrow("superseded by a later message");
 	const { messages } = await getSessionMessages(sessionId, workspaceId, cwd);
 	const askIndex = messages.findIndex(
@@ -2375,11 +2390,14 @@ async function expectTypedPastTranscript(
 	if (persisted?.role !== "toolResult") throw new Error("ack result was not persisted");
 	expect(persisted.details).toEqual({ kind: "ack" });
 	expect(persisted.isError).toBe(false);
-	expect(JSON.stringify(persisted.content)).toContain(ASK_ACK_TEXT);
+	expect(JSON.stringify(persisted.content)).toContain("This turn ends here");
 	expect(messages[askIndex + 1]?.role).toBe("user");
 	expect(JSON.stringify(messages[askIndex + 1])).toContain(typedText);
 	expect(messages.some((message) => message.role === "custom")).toBe(false);
-	expect(assessAnswerability(messages, toolCallId)).toEqual({ ok: false, reason: "superseded" });
+	expect(assessRespondability(messages, toolCallId, ALL_INTERACTIVE)).toEqual({
+		ok: false,
+		reason: "superseded",
+	});
 }
 
 for (const [entryPoint, send] of [
@@ -2412,8 +2430,9 @@ for (const [entryPoint, send] of [
 			}
 			expect(seen(session.sessionId)).toContain('"toolName":"ask_user_question"');
 			expect(getSessionState(session.sessionId).needsInput).toEqual({
-				interactionId: `question:${toolCallId}`,
-				kind: "question",
+				interactionId: `tool:${toolCallId}`,
+				kind: "tool-response",
+				toolCallId,
 			});
 
 			await send(session.sessionId, "TYPED_PAST_THE_QUESTION");
@@ -2457,10 +2476,10 @@ test("input an extension handles (never queued) leaves the live question awaitin
 			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
 			await new Promise((resolve) => setTimeout(resolve, 5));
 		}
-		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("tool-response");
 
 		await steerSession(session.sessionId, "SWALLOWED_BY_EXTENSION");
-		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("tool-response");
 		const { summary } = await getSessionMessages(
 			session.sessionId,
 			"ws-handled-input-question",
@@ -2468,11 +2487,11 @@ test("input an extension handles (never queued) leaves the live question awaitin
 		);
 		expect(summary.queue).toBeUndefined();
 
-		const result: AskUserQuestionResult = {
+		const result = {
 			cancelled: false,
 			answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
 		};
-		await answerQuestion(session.sessionId, toolCallId, result);
+		await respondToTool(session.sessionId, toolCallId, result);
 		await prompting;
 		const transcript = JSON.stringify(
 			(await getSessionMessages(session.sessionId, "ws-handled-input-question", cwd)).messages,
@@ -2550,18 +2569,18 @@ test("removing a queued message while a question is live re-queues the rest with
 		}
 		await followUpSession(session.sessionId, "FOLLOW_UP_ONE");
 		await followUpSession(session.sessionId, "FOLLOW_UP_TWO");
-		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("tool-response");
 
 		const removed = await removeQueuedSession(session.sessionId, "followUp", 0);
 		expect(removed.removed).toEqual({ text: "FOLLOW_UP_ONE" });
 		expect(removed.queue).toEqual({ steering: ["PRE_QUEUED_STEER"], followUp: ["FOLLOW_UP_TWO"] });
-		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("tool-response");
 
-		const result: AskUserQuestionResult = {
+		const result = {
 			cancelled: false,
 			answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
 		};
-		await answerQuestion(session.sessionId, toolCallId, result);
+		await respondToTool(session.sessionId, toolCallId, result);
 		await prompting;
 		const transcript = JSON.stringify(
 			(await getSessionMessages(session.sessionId, "ws-live-question-queue-edit", cwd)).messages,
@@ -2607,7 +2626,7 @@ test("an accepted answer persists and its RPC settles when Stop races before tur
 			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
 			await new Promise((resolve) => setTimeout(resolve, 5));
 		}
-		const result: AskUserQuestionResult = {
+		const result = {
 			cancelled: false,
 			answers: [
 				{
@@ -2618,7 +2637,7 @@ test("an accepted answer persists and its RPC settles when Stop races before tur
 				},
 			],
 		};
-		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const answering = respondToTool(session.sessionId, toolCallId, result);
 		const stopping = abortSession(session.sessionId, true);
 		await Promise.all([answering, stopping, prompting]);
 
@@ -2627,9 +2646,9 @@ test("an accepted answer persists and its RPC settles when Stop races before tur
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("answer result was not persisted");
-		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
+		expect(persisted.details).toEqual(result);
 		expect(persisted.isError).toBe(false);
-		expect(transcript.messages.some((message) => isAskUserAnswersMessage(message))).toBe(false);
+		expect(transcript.messages.some((message) => readToolResponseMessage(message))).toBe(false);
 	} finally {
 		await prompting.catch(() => {});
 		if (hasSession(session.sessionId)) removeSession(session.sessionId);
@@ -2652,7 +2671,7 @@ test("Stop bounds a stalled post-tool hook, and the answer it persisted is still
 			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
 			await new Promise((resolve) => setTimeout(resolve, 5));
 		}
-		const answering = answerQuestion(session.sessionId, toolCallId, gatedQuestionAnswer());
+		const answering = respondToTool(session.sessionId, toolCallId, gatedQuestionAnswer());
 		await waitForPath(hook.startedPath);
 
 		const stopping = abortSession(session.sessionId, true, 25);
@@ -2665,7 +2684,7 @@ test("Stop bounds a stalled post-tool hook, and the answer it persisted is still
 		);
 		if (persisted?.role !== "toolResult") throw new Error("stopped result was not persisted");
 		expect(persisted.isError).toBe(false);
-		expect(persisted.details).toEqual<AskUserQuestionResult>(gatedQuestionAnswer());
+		expect(persisted.details).toEqual(gatedQuestionAnswer());
 		expect(persisted.content).toEqual([{ type: "text", text: "post-tool result replaced" }]);
 	} finally {
 		hook.remove();
@@ -2722,7 +2741,7 @@ test("restart repair leaves a dangling question answerable through the custom-me
 		expect(ack.details).toEqual({ kind: "ack" });
 		expect(ack.isError).toBe(false);
 
-		await answerQuestion(fixture.id, toolCallId, {
+		await respondToTool(fixture.id, toolCallId, {
 			cancelled: false,
 			answers: [
 				{
@@ -2734,11 +2753,13 @@ test("restart repair leaves a dangling question answerable through the custom-me
 			],
 		});
 		const answered = await getSessionMessages(fixture.id, "ws-restart-question", cwd);
-		expect(
-			answered.messages.some(
-				(message) => isAskUserAnswersMessage(message) && message.details.toolCallId === toolCallId,
-			),
-		).toBe(true);
+		const responseMessage = answered.messages.find(
+			(message) => readToolResponseMessage(message)?.toolCallId === toolCallId,
+		);
+		if (responseMessage?.role !== "custom") throw new Error("tool response was not persisted");
+		expect(responseMessage.customType).toBe(TOOL_RESPONSE_CUSTOM_TYPE);
+		expect(responseMessage.content).toContain("User has answered your questions");
+		expect(responseMessage.content).toContain('"Which runtime?"="Bun"');
 		expect(seen(fixture.id)).toContain("RESTART_QUESTION_CONTINUED");
 	} finally {
 		if (hasSession(fixture.id)) removeSession(fixture.id);
@@ -2794,8 +2815,8 @@ test("explicit Stop restores both queues and persists a terminal ask error", asy
 		);
 		if (result?.role !== "toolResult") throw new Error("stopped result was not persisted");
 		expect(result.isError).toBe(true);
-		expect(JSON.stringify(result.content)).toContain(ASK_STOPPED_ERROR);
-		expect(assessAnswerability(transcript.messages, toolCallId)).toEqual({
+		expect(JSON.stringify(result.content)).toContain(TOOL_RESPONSE_STOPPED_ERROR);
+		expect(assessRespondability(transcript.messages, toolCallId, ALL_INTERACTIVE)).toEqual({
 			ok: false,
 			reason: "not_awaiting",
 		});
@@ -2859,7 +2880,7 @@ test("graceful settling leaves a live question dangling for restart ack repair",
 		if (repaired?.role !== "toolResult") throw new Error("restart ack was not persisted");
 		expect(repaired.details).toEqual({ kind: "ack" });
 		expect(repaired.isError).toBe(false);
-		expect(assessAnswerability(transcript.messages, toolCallId).ok).toBe(true);
+		expect(assessRespondability(transcript.messages, toolCallId, ALL_INTERACTIVE).ok).toBe(true);
 	} finally {
 		if (hasSession(session.sessionId)) removeSession(session.sessionId);
 		setSessionManagerFactory(() => SessionManager.inMemory());

@@ -22,7 +22,6 @@ import {
 	abortSession,
 	acknowledgeCompletion,
 	admissionContextFor,
-	answerQuestion,
 	applyPiResourceTrust,
 	cancelMcpProbe,
 	clampThinkingForModel,
@@ -66,6 +65,7 @@ import {
 	renameSession,
 	replyMcpProbe,
 	resolveExtUi,
+	respondToTool,
 	sendReviewFixToSession,
 	setModelContextWindow,
 	setSessionModel,
@@ -1145,11 +1145,10 @@ const handlers: WsHandlers = {
 		resolveExtUi(params.response);
 		return { ok: true } as const;
 	},
-	"session.answerQuestion": async (p) => {
+	"session.respondToTool": async (p) => {
 		if (!hasSession(p.sessionId)) throw new Error(`Unknown session: ${p.sessionId}`);
-		if (!p.result || !Array.isArray(p.result.answers) || typeof p.result.cancelled !== "boolean")
-			throw new Error("Malformed ask_user_question result");
-		await ackSend(answerQuestion(p.sessionId, p.toolCallId, p.result));
+		if (p.response === undefined) throw new Error("A tool response must carry a value");
+		await ackSend(respondToTool(p.sessionId, p.toolCallId, p.response));
 		return { ok: true } as const;
 	},
 	"model.list": () =>

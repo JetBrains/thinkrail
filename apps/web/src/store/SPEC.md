@@ -242,8 +242,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   rejection preserves placement. There is no workspace-global `activeTerminal`: workspace attention decides
   which bodies mount, while host exclusive attach/takeover decides which client controls a PTY. The
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
-  one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
-  by tool call id — indexed by the reducer and hydration, never turned into bubbles; the sibling
+  one chat's `turns` (pi-canonical) / `toolResults` / `toolResponses` (the interactive tools' late
+  responses — `tool-response` custom messages, and `ask-user-answers` in older transcripts — keyed by tool
+  call id with an opaque value, indexed by the reducer and hydration, never turned into bubbles; the sibling
   `subagent-completion` custom message is instead **appended as a `subagentCompletion` turn** — a
   detached subagent's terminal report is transcript-positioned, rendered as `chat`'s background result
   row; it, `backgroundCommandCompletion` and `reviewFix` turns keep the message `timestamp` so the chat can

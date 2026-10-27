@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import type { AskUserQuestionAnswer, AskUserQuestionItem } from "@thinkrail/contracts";
+import type {
+	AskUserQuestionAnswer,
+	AskUserQuestionItem,
+} from "@thinkrail/pi-ask-user-question/core";
 import {
 	answerSupportsNote,
 	choiceKeyAction,

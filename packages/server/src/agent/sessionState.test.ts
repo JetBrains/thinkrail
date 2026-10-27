@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@thinkrail/contracts";
+import type { InteractiveTools } from "../extensions";
 import { deriveSessionState } from "./sessionState";
+
+const INTERACTIVE: InteractiveTools = new Map([["ask_user_question", {}]]);
 
 const QUESTION_ARGS = {
 	questions: [
@@ -52,8 +55,9 @@ function inputs(overrides: Partial<Parameters<typeof deriveSessionState>[0]> = {
 		backgroundWorkActive: false,
 		lastSettlement: undefined,
 		lifecycleCompletion: undefined,
-		liveQuestion: null,
+		liveInteraction: null,
 		liveRegistry: false,
+		interactiveTools: INTERACTIVE,
 		pendingDialog: null,
 		handledCompletionId: undefined,
 		cancelledRunId: undefined,
@@ -62,19 +66,19 @@ function inputs(overrides: Partial<Parameters<typeof deriveSessionState>[0]> = {
 }
 
 describe("deriveSessionState", () => {
-	test("a live question outranks running while retaining execution and queue facts", () => {
+	test("a live interaction outranks running while retaining execution and queue facts", () => {
 		expect(
 			deriveSessionState(
 				inputs({
 					isStreaming: true,
 					pendingMessageCount: 2,
-					liveQuestion: { interactionId: "q1", needsInput: true },
+					liveInteraction: { toolCallId: "q1", needsInput: true },
 				}),
 			),
 		).toEqual({
 			execution: "running",
 			runId: "u1",
-			needsInput: { interactionId: "question:q1", kind: "question" },
+			needsInput: { interactionId: "tool:q1", kind: "tool-response", toolCallId: "q1" },
 			completion: null,
 			completionUnread: false,
 			queuedCount: 2,
@@ -100,7 +104,7 @@ describe("deriveSessionState", () => {
 		});
 	});
 
-	test("an accepted live answer suppresses transcript fallback", () => {
+	test("an accepted live response suppresses transcript fallback", () => {
 		const ask = entry(
 			"a-ask",
 			{
@@ -122,14 +126,14 @@ describe("deriveSessionState", () => {
 			inputs({
 				entries: [user(), ask],
 				isStreaming: true,
-				liveQuestion: { interactionId: "q1", needsInput: false },
+				liveInteraction: { toolCallId: "q1", needsInput: false },
 			}),
 		);
 		expect(state.needsInput).toBeNull();
 		expect(state.execution).toBe("running");
 	});
 
-	test("a restart transcript reconstructs an unanswered question without a live registry", () => {
+	test("a restart transcript reconstructs an unanswered interactive call without a live registry", () => {
 		const ask = entry(
 			"a-ask",
 			{
@@ -148,12 +152,13 @@ describe("deriveSessionState", () => {
 			"u1",
 		);
 		expect(deriveSessionState(inputs({ entries: [user(), ask] })).needsInput).toEqual({
-			interactionId: "question:q1",
-			kind: "question",
+			interactionId: "tool:q1",
+			kind: "tool-response",
+			toolCallId: "q1",
 		});
 	});
 
-	test("an attached session's transcript awaits only an acknowledged question", () => {
+	test("an attached session's transcript awaits only a pending-acked interactive call", () => {
 		const ask = entry(
 			"a-ask",
 			{
@@ -188,8 +193,9 @@ describe("deriveSessionState", () => {
 			deriveSessionState(inputs({ entries, isStreaming: true, liveRegistry: true })).needsInput;
 		expect(attached([user(), ask])).toBeNull();
 		expect(attached([user(), ask, ack])).toEqual({
-			interactionId: "question:q1",
-			kind: "question",
+			interactionId: "tool:q1",
+			kind: "tool-response",
+			toolCallId: "q1",
 		});
 	});
 
@@ -213,7 +219,7 @@ describe("deriveSessionState", () => {
 		}
 	});
 
-	test("a crash after an unexecuted non-question tool call reconstructs as interrupted", () => {
+	test("a crash after an unexecuted non-interactive tool call reconstructs as interrupted", () => {
 		const danglingToolCall = assistant("tool-leaf", "toolUse");
 		if (danglingToolCall.type !== "message" || danglingToolCall.message.role !== "assistant") {
 			throw new Error("assistant fixture is malformed");
@@ -264,10 +270,14 @@ describe("deriveSessionState", () => {
 		const blocked = deriveSessionState(
 			inputs({
 				backgroundWorkActive: true,
-				liveQuestion: { interactionId: "q1", needsInput: true },
+				liveInteraction: { toolCallId: "q1", needsInput: true },
 			}),
 		);
-		expect(blocked.needsInput).toEqual({ interactionId: "question:q1", kind: "question" });
+		expect(blocked.needsInput).toEqual({
+			interactionId: "tool:q1",
+			kind: "tool-response",
+			toolCallId: "q1",
+		});
 	});
 
 	test("reconstruction reads the complete active branch instead of capping oversized transcripts", () => {

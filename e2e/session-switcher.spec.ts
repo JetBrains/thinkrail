@@ -1,6 +1,6 @@
 import { realpathSync, rmSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import type { AskUserQuestionArgs } from "@thinkrail/contracts";
+import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import { defaultWorkspaceRow, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";

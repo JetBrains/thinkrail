@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { ExtensionSessionServices, ToolResponse } from "@thinkrail/extension-api/server";
-import askUserQuestion, {
+import {
 	ASK_ACK_TEXT,
 	ASK_STOPPED_ERROR,
 	ASK_USER_QUESTION_TOOL_NAME,
 	buildQuestionnaireResponse,
 	isAckDetails,
-} from "./index";
+} from "@thinkrail/pi-ask-user-question/core";
+import askUserQuestion from "./index";
 
 interface CapturedTool {
 	name: string;
@@ -71,6 +72,32 @@ describe("the ask-user-question server half", () => {
 		expect(tool.description).toContain("render inline in the chat as an interactive card");
 		expect(tool.description).toContain("then the card is superseded");
 		expect(tool.promptGuidelines?.length).toBe(4);
+	});
+
+	test("declares its tool interactive under the package's own name and describes late responses", () => {
+		const interactive = askUserQuestion.interactiveTools ?? {};
+		expect(Object.keys(interactive)).toEqual([ASK_USER_QUESTION_TOOL_NAME]);
+		const describe = interactive[ASK_USER_QUESTION_TOOL_NAME]?.describeResponse;
+		const answer = {
+			cancelled: false,
+			answers: [
+				{ questionIndex: 0, question: "Which library?", kind: "option" as const, answer: "luxon" },
+			],
+		};
+		expect(describe?.(args, answer)).toBe(text(buildQuestionnaireResponse(answer, args)));
+		expect(describe?.({ question: "foreign" }, answer)).toBeUndefined();
+		expect(describe?.(args, { picked: "luxon" })).toBeUndefined();
+	});
+
+	test("the package's deferral ack is the host's pending marker", async () => {
+		const deferred = await compose(async () => ({ kind: "deferred" })).tool.execute(
+			"tc",
+			args,
+			undefined,
+			undefined,
+			{},
+		);
+		expect(deferred.details).toEqual({ kind: "ack" });
 	});
 
 	test("announces each executable ask call to the host before it runs", () => {

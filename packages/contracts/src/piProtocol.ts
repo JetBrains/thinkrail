@@ -65,10 +65,10 @@ export interface AgentSettlement {
 	errorMessage?: string;
 }
 
-export type SessionInputKind = "question" | "dialog";
+export type SessionInputKind = "tool-response" | "dialog";
 
 export type SessionInputState =
-	| { interactionId: string; kind: "question" }
+	| { interactionId: string; kind: "tool-response"; toolCallId: string }
 	| {
 			interactionId: string;
 			kind: "dialog";
@@ -299,46 +299,13 @@ export interface ExtUiResponse {
 	value: string | boolean | null;
 }
 
-export interface AskUserQuestionOption {
-	label: string;
-	description: string;
-	preview?: string;
-	recommendedReason?: string;
-}
-
-export interface AskUserQuestionItem {
-	question: string;
-	header: string;
-	options: AskUserQuestionOption[];
-	multiSelect?: boolean;
-}
-
-export interface AskUserQuestionArgs {
-	questions: AskUserQuestionItem[];
-}
-
-export interface AskUserQuestionAnswer {
-	questionIndex: number;
-	question: string;
-	kind: "option" | "custom" | "multi";
-	answer: string | null;
-	selected?: string[];
-	notes?: string;
-	preview?: string;
-}
-
-export interface AskUserQuestionResult {
-	answers: AskUserQuestionAnswer[];
-	cancelled: boolean;
-}
-
-export interface AskUserQuestionAckDetails {
+export interface ToolResponsePendingDetails {
 	kind: "ack";
 }
 
-export interface AskUserAnswersDetails {
+export interface ToolResponseDetails {
 	toolCallId: string;
-	result: AskUserQuestionResult;
+	response: unknown;
 }
 
 export interface WireCustomMessage<T = unknown> {

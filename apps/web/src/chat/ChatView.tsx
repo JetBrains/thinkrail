@@ -19,7 +19,6 @@ import {
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
-import { registerWebExtensions } from "@/extensions";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
@@ -76,8 +75,6 @@ import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
 import type { ChatAttachment } from "./types";
 import { useHistorySearch } from "./useHistorySearch";
-
-registerWebExtensions();
 
 const TRY_AGAIN_PROMPT = "Try again.";
 

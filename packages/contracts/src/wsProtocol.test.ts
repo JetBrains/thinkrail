@@ -11,7 +11,6 @@ import {
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
-	ASK_USER_ANSWERS_CUSTOM_TYPE,
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
@@ -23,10 +22,9 @@ import {
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
-	isAskUserAnswersMessage,
-	isAskUserQuestionArgs,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
+	isToolResponsePending,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
@@ -42,7 +40,7 @@ import {
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
-	readAskUserQuestionResult,
+	readToolResponseMessage,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
@@ -50,6 +48,8 @@ import {
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
+	TOOL_RESPONSE_CUSTOM_TYPE,
+	TOOL_RESPONSE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
@@ -223,19 +223,26 @@ test("local language files and the locale setting are pinned to v89", () => {
 	expect(WS_CHANNELS.localesChanged).toBe("locales.changed");
 });
 
+test("tool responses replace the ask-only answer method at v93", () => {
+	expect(PROTOCOL_VERSION).toBe(93);
+	expect(TOOL_RESPONSE_PROTOCOL_VERSION).toBe(93);
+	expect(WS_METHODS.sessionRespondToTool).toBe("session.respondToTool");
+	expect(Object.values(WS_METHODS)).not.toContain("session.answerQuestion");
+});
+
+test("user theme files are pinned to v92", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(USER_THEMES_PROTOCOL_VERSION);
+	expect(USER_THEMES_PROTOCOL_VERSION).toBe(92);
+	expect(WS_METHODS.themesList).toBe("themes.list");
+	expect(WS_METHODS.themesReveal).toBe("themes.reveal");
+	expect(WS_CHANNELS.themesChanged).toBe("themes.changed");
+});
+
 test("the stored host environment is pinned to v91", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(HOST_ENVIRONMENT_PROTOCOL_VERSION);
 	expect(HOST_ENVIRONMENT_PROTOCOL_VERSION).toBe(91);
 	expect(WS_METHODS.environmentGet).toBe("environment.get");
 	expect(WS_METHODS.environmentUpdate).toBe("environment.update");
-});
-
-test("user theme files are pinned to v92", () => {
-	expect(PROTOCOL_VERSION).toBe(92);
-	expect(USER_THEMES_PROTOCOL_VERSION).toBe(92);
-	expect(WS_METHODS.themesList).toBe("themes.list");
-	expect(WS_METHODS.themesReveal).toBe("themes.reveal");
-	expect(WS_CHANNELS.themesChanged).toBe("themes.changed");
 });
 
 test("client error reports are pinned to v90", () => {
@@ -432,44 +439,47 @@ describe("completionDelivery", () => {
 	});
 });
 
-describe("ask_user_question result guards", () => {
-	const result = { answers: [], cancelled: true };
-
-	test("readAskUserQuestionResult reads a tool-result envelope or a bare result", () => {
-		expect(
-			readAskUserQuestionResult({ content: [{ type: "text", text: "x" }], details: result }),
-		).toBe(result);
-		expect(readAskUserQuestionResult(result)).toBe(result);
+describe("tool response guards", () => {
+	test("isToolResponsePending recognises the pending marker only", () => {
+		expect(isToolResponsePending({ kind: "ack" })).toBe(true);
+		expect(isToolResponsePending({ kind: "other" })).toBe(false);
+		expect(isToolResponsePending({ answers: [], cancelled: true })).toBe(false);
+		expect(isToolResponsePending(undefined)).toBe(false);
+		expect(isToolResponsePending("ack")).toBe(false);
 	});
 
-	test("readAskUserQuestionResult rejects shapes without a questionnaire result", () => {
-		expect(readAskUserQuestionResult({ content: [{ type: "text", text: "x" }] })).toBeNull();
-		expect(readAskUserQuestionResult({ details: { kind: "ack" } })).toBeNull();
-		expect(readAskUserQuestionResult({ answers: "nope", cancelled: true })).toBeNull();
-		expect(readAskUserQuestionResult("nope")).toBeNull();
-		expect(readAskUserQuestionResult(null)).toBeNull();
-	});
-
-	test("isAskUserQuestionArgs accepts our questionnaire and rejects other shapes", () => {
-		const options = [{ label: "A", description: "a" }];
-		expect(isAskUserQuestionArgs({ questions: [{ question: "Q?", header: "H", options }] })).toBe(
-			true,
-		);
-		expect(isAskUserQuestionArgs({ questions: [] })).toBe(false);
-		expect(isAskUserQuestionArgs({ question: "Q?", choices: ["a"] })).toBe(false);
-		expect(isAskUserQuestionArgs({ questions: [{ question: "Q?", options: ["a"] }] })).toBe(false);
-		expect(isAskUserQuestionArgs(null)).toBe(false);
-	});
-
-	test("isAskUserAnswersMessage needs the custom type, a call id and a result", () => {
+	test("readToolResponseMessage reads the tool-response custom message", () => {
 		const message = {
 			role: "custom",
-			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
-			details: { toolCallId: "tc", result },
+			customType: TOOL_RESPONSE_CUSTOM_TYPE,
+			details: { toolCallId: "tc", response: { picked: "A" } },
 		};
-		expect(isAskUserAnswersMessage(message)).toBe(true);
-		expect(isAskUserAnswersMessage({ ...message, customType: "other" })).toBe(false);
-		expect(isAskUserAnswersMessage({ ...message, details: { toolCallId: "tc" } })).toBe(false);
-		expect(isAskUserAnswersMessage({ ...message, details: { result } })).toBe(false);
+		expect(readToolResponseMessage(message)).toEqual({
+			toolCallId: "tc",
+			response: { picked: "A" },
+		});
+		expect(readToolResponseMessage({ ...message, customType: "other" })).toBeNull();
+		expect(readToolResponseMessage({ ...message, details: { toolCallId: "tc" } })).toBeNull();
+		expect(readToolResponseMessage({ ...message, details: { response: {} } })).toBeNull();
+		expect(readToolResponseMessage({ ...message, role: "user" })).toBeNull();
+		expect(readToolResponseMessage(null)).toBeNull();
+	});
+
+	test("readToolResponseMessage still reads the legacy ask-user-answers shape", () => {
+		const result = { answers: [], cancelled: true };
+		expect(
+			readToolResponseMessage({
+				role: "custom",
+				customType: "ask-user-answers",
+				details: { toolCallId: "tc", result },
+			}),
+		).toEqual({ toolCallId: "tc", response: result });
+		expect(
+			readToolResponseMessage({
+				role: "custom",
+				customType: "ask-user-answers",
+				details: { toolCallId: "tc" },
+			}),
+		).toBeNull();
 	});
 });
