@@ -36,7 +36,9 @@ by tool name, so moving them later changes nothing on the wire.
 ## Invariants
 
 - Switched off, a session loads none of it: no factories (new loads), its tools withheld (live), and
-  `librarian` dropped from the session's skills, the slash-command list and Settings → Skills. A live idle
+  its skill folder left out of pi's skill inputs, so `librarian` is gone from the session, the
+  slash-command list and Settings → Skills — and a user's own `librarian` it would have shadowed loads
+  instead. A live idle
   chat that had the skill loaded reloads once to drop it ([[submodule-server-agent]]).
 - A user's own install of `pi-web-access` keeps working: while the extension is on, the registry copy
   wins the tool names; while it is off, the user's copy runs. Its own `librarian` is the user's and is not

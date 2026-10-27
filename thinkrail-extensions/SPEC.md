@@ -95,8 +95,8 @@ What a `./web` half may import:
   alike — one composition mode, no path-based dev loading. **Skill resolution is owner-scoped:** one
   shared resolver resolves the extension's entry from `specifier`, then each `skillPackages` manifest via
   `createRequire(extensionEntry)` — unbundled dev resolves at runtime; build support stages an
-  extension's roots under `skills/extensions/<name>/` (host roots stay flat; pi discovers skills
-  recursively), and the bundled runtime maps an extension to that folder of the injected staged root, so
+  extension's roots under `skills/extensions/<name>/` beside the host's under `skills/host/` (pi discovers
+  skills recursively), and the bundled runtime maps an extension to that folder of the injected staged root, so
   **ownership survives flattening** and the switch can drop exactly that extension's skills. The launcher
   infrastructure (desktop's bundled server runtime, `startDesktopHost`, `registerBundledRuntime`'s
   OAuth/Bedrock/trash registration) is unchanged by this.

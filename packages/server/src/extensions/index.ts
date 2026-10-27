@@ -17,5 +17,6 @@ export { type ServerExtensionEntry, serverExtensions } from "./registry";
 export {
 	extensionSkillRoots,
 	resolveExtensionSkillRoots,
+	STAGED_HOST_SKILLS_ROUTE,
 	stagedExtensionSkillRoute,
 } from "./skills";

@@ -713,7 +713,10 @@ re-opened transcripts provider-valid.
     skills live in the system prompt, which only a reload rebuilds, and a skill left behind would steer
     the agent at withheld tools. Skill-less extensions keep the no-reload disable. An extension counts as loadable when it has static or per-session parent
     factories. Registration applies the same reconciliation, and a completed reload reapplies
-    it without requesting another reload, so a toggle that lands mid-reload converges. Settings are the
+    it without requesting another reload. A toggle that lands **while a reload runs** marks one follow-up
+    reload pending instead of judging the old loader: that reload snapshotted the policy before the
+    toggle, so its result can be stale (re-enable during a disable reload would otherwise leave the
+    extension unloaded with Settings showing it on). Settings are the
     source of truth across restarts: Pi ≥ 1.3 restores a resumed chat's recorded tool loadout, keeping
     recorded removals inactive, so attach first re-activates every tool of an enabled registry extension
     that Pi's activated-on-registration rule would activate (declarable exposure, not `defaultActive:
@@ -827,11 +830,14 @@ re-opened transcripts provider-valid.
     `SkillCatalogEntry.group`), layered with the workspace's per-skill `skillOverrides` (the trust gate is
     checked before the toggle layer, so an "on" override can never un-gate an untrusted alias, and a per-skill
     `on` beats a group disable). `skillsGate` filters + relabels in one `skillsOverride`; only `load` skills
-    reach the system prompt / `/skill:` list. Before admission, the same `skillsOverride` drops every skill
-    under a **disabled registry extension's** skill roots (`extensionSkillRoots`: source roots in dev, the
-    `extensions/<name>` folder of the staged root when bundled), read from the disabled-extensions resolver
-    at each reload; `listSkillCatalog` applies the same drop and `listSkillCommands`' cache key includes
-    the disabled set, so a switched-off extension's skills vanish from Settings → Skills and `/skill:` too.
+    reach the system prompt / `/skill:` list. A **disabled registry extension's** skill roots
+    (`extensionSkillRoots`: source roots in dev, the `extensions/<name>` folder of the staged root when
+    bundled) are left out of `additionalSkillPaths` itself — rebuilt in place from the disabled set
+    snapshotted at each reload — never filtered from pi's result: pi resolves same-name skills first-wins
+    before any override runs, so dropping a winner afterwards would also lose the personal or project skill
+    it shadowed. `listSkillCommands` (whose cache key includes the disabled set) and `listSkillCatalog`
+    build their inputs the same way, so a switched-off extension's skills vanish from Settings → Skills and
+    `/skill:` too. Bundled host skills therefore stage under `host/`, beside `extensions/<name>/`.
     The host resolves the context via the **`setSkillAdmissionResolver`** seam (keyed by `workspaceId`, fails
     closed); `buildResourceLoader` takes the resolver as a thunk and `skillsGate` re-resolves **both** the admission
     context (`getCtx`) **and** the live compatibility source set (fresh discovery) on every `loader.reload()`, so

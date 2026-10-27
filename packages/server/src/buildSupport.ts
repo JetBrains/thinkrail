@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	resolveExtensionSkillRoots,
+	STAGED_HOST_SKILLS_ROUTE,
 	serverExtensions,
 	stagedExtensionSkillRoute,
 } from "./extensions";
@@ -51,7 +52,7 @@ export function resolveBuildRuntimeSources(): BuildRuntimeSources {
 	const skillRoots: StagedSkillRoot[] = [
 		...extensions.map((pkg) => requiredPath(join(dirname(pkg.entry), "skills"))),
 		requiredPath(fileURLToPath(new URL("../skills", import.meta.url))),
-	].map((source) => ({ source, route: "" }));
+	].map((source) => ({ source, route: STAGED_HOST_SKILLS_ROUTE }));
 	for (const entry of serverExtensions) {
 		const route = stagedExtensionSkillRoute(entry.extension.name);
 		for (const source of resolveExtensionSkillRoots(entry)) {

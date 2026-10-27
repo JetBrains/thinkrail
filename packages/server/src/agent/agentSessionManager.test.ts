@@ -1176,6 +1176,49 @@ test("switching an extension's skills off reloads the idle chat once; a skill-le
 	}
 });
 
+test("re-enabling an extension while its disable reload runs reloads again to adopt it", async () => {
+	let disabled = new Set<string>();
+	let flipDuringReload = false;
+	setDisabledExtensionsResolver(() => {
+		const current = disabled;
+		if (flipDuringReload) {
+			flipDuringReload = false;
+			queueMicrotask(() => {
+				disabled = new Set();
+				refreshExtensionTools();
+			});
+		}
+		return current;
+	});
+	const originalReload = AgentSession.prototype.reload;
+	let reloads = 0;
+	let sessionId: string | undefined;
+	AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+		if (this.sessionId === sessionId && reloads === 0) flipDuringReload = true;
+		await originalReload.apply(this, args);
+		if (this.sessionId === sessionId) reloads++;
+	};
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-extension-mid-reload-"),
+			workspaceId: "ws-extension-mid-reload",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		disabled = new Set(["web-access"]);
+		refreshExtensionTools();
+		for (let waited = 0; reloads < 2 && waited < 300; waited++) await Bun.sleep(10);
+		expect(reloads).toBe(2);
+		fauxA.setResponses([(context) => fauxAssistantMessage(`AFTER_${webAccessState(context)}`)]);
+		await promptSession(session.sessionId, "Check after the racing toggle.");
+		expect(seen(sessionId)).toContain("AFTER_WEB_ON");
+	} finally {
+		AgentSession.prototype.reload = originalReload;
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
 test.each([
 	false,
 	true,

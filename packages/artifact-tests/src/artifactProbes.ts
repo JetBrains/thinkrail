@@ -647,11 +647,20 @@ export default function syntheticExternalExtension(pi) {
 			"writing-workflow-skills",
 		]) {
 			assert(
-				existsSync(join(customHost.resources.skillsDir, skill, "SKILL.md")),
+				existsSync(join(customHost.resources.skillsDir, "host", skill, "SKILL.md")),
 				`skill file missing: ${skill}`,
 			);
 		}
-		assert(existsSync(join(customHost.resources.skillsDir, "SPEC.md")), "workflow SPEC is missing");
+		assert(
+			existsSync(join(customHost.resources.skillsDir, "host", "SPEC.md")),
+			"workflow SPEC is missing",
+		);
+		assert(
+			existsSync(
+				join(customHost.resources.skillsDir, "extensions", "web-access", "librarian", "SKILL.md"),
+			),
+			"web-access's librarian skill is not staged under its owner folder",
+		);
 		socket.close();
 		socket = undefined;
 		await customHost.stop();

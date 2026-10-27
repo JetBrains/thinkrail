@@ -207,8 +207,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
     statically, so `bun build --compile` carries them (and their deps such as `linkedom`, or
     `pi-web-access` with `unpdf`) through the normal server graph. Plus every `BuildRuntimeSources.skillRoots`
     entry (`pi-spec-graph`/`pi-thinkrail-workflow`/`pi-todos` `skills/` and the server's own host skills in
-    `packages/server/skills` at the staged root; each registry extension's `skillPackages` roots under its
-    `route`, `extensions/<name>/`, so the switch can tell them apart) embedded like web assets
+    `packages/server/skills` under the `host/` route; each registry extension's `skillPackages` roots under
+    `extensions/<name>/`, so a switched-off extension's folder can be left out of pi's skill inputs) embedded like web assets
     (matching what dev wires via `additionalSkillPaths` — parity, not a superset). Its `.d.ts` types the
     factories via the server's exported `BundledExtensionFactory`, so `cli` still never imports
     `@earendil-works/pi-coding-agent`.

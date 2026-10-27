@@ -47,8 +47,9 @@ list for registry extensions.
   keeps the tools it recorded before throwing), and `resolveExtensionSkillRoots(entry)` (the owner-scoped skill resolver: the extension's
   entry file from `specifier`, then each `skillPackages` manifest via `createRequire(extensionEntry)`,
   returning its `pi.skills` directories; a named package with no skills fails loudly),
-  `stagedExtensionSkillRoute(name)` (`extensions/<name>` — the folder of a staged skills root an extension's
-  roots are staged under, shared by build support and the runtime) and `extensionSkillRoots(entry,
+  `STAGED_HOST_SKILLS_ROUTE` (`host`) and `stagedExtensionSkillRoute(name)` (`extensions/<name>`) — the
+  folders of a staged skills root the host's and an extension's roots are staged under, shared by build
+  support and the runtime so a disabled extension's folder can be left out of pi's skill inputs and `extensionSkillRoots(entry,
   stagedSkillsDir?)` (the roots that own an extension's skills: the resolved source roots without a
   staged dir, that owner folder with one, nothing for an extension without `skillPackages`). The specifier is kept
   as a string precisely because a descriptor holds functions, which yield no module identity.
@@ -56,7 +57,8 @@ list for registry extensions.
   `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `preferRegistryTools`,
   `registryExtensionName`,
   `listExtensionCatalog`,
-  `resolveExtensionSkillRoots`, `stagedExtensionSkillRoute`, `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`, `ExtensionSessionServices`,
+  `resolveExtensionSkillRoots`, `STAGED_HOST_SKILLS_ROUTE`, `stagedExtensionSkillRoute`,
+  `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`, `ExtensionSessionServices`,
   `InteractiveTool`, `ToolResponse`.
 - **Session-seam types:** `ExtensionSessionServices`, `InteractiveTool` and `ToolResponse` are re-exported
   from `extension-api/server` so that `agent` can type the services it builds through this barrel.
@@ -76,7 +78,7 @@ list for registry extensions.
 
 `host` answers `extension.list` with `listExtensionCatalog` over the `disabledExtensions` setting.
 `agent/extensions.ts` composes the flattened parent set into every resource loader and the child set
-into the curated hidden-child extensions in dev and bundled mode alike, and drops a disabled extension's
-skills through `extensionSkillRoots`; `buildSupport.ts` hands both packagers each extension's skill roots
+into the curated hidden-child extensions in dev and bundled mode alike, and leaves a disabled extension's
+`extensionSkillRoots` out of pi's skill inputs; `buildSupport.ts` hands both packagers each extension's skill roots
 with their `stagedExtensionSkillRoute`; unbundled dev resolves the same roots at runtime, and the bundled
 runtime uses only the launcher-staged root.

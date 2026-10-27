@@ -25,6 +25,8 @@ export function resolveExtensionSkillRoots(entry: ServerExtensionEntry): string[
 	});
 }
 
+export const STAGED_HOST_SKILLS_ROUTE = "host";
+
 export function stagedExtensionSkillRoute(name: string): string {
 	return `extensions/${name}`;
 }

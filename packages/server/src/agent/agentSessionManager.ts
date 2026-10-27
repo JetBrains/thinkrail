@@ -752,10 +752,14 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	if (kept.length !== active.length || restored.length > 0) {
 		session.setActiveToolsByName([...kept, ...restored]);
 	}
+	if (!allowReload) return;
+	if (entry.reloadRunning) {
+		entry.reloadPending = true;
+		return;
+	}
 	if (
-		allowReload &&
-		(enabledExtensionMissing(session, disabled) ||
-			loadsDisabledExtensionSkills(session.resourceLoader.getSkills().skills))
+		enabledExtensionMissing(session, disabled) ||
+		loadsDisabledExtensionSkills(session.resourceLoader.getSkills().skills)
 	) {
 		void requestSessionReload(session.sessionId).catch((error) => {
 			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(session.sessionId)) {

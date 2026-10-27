@@ -3,6 +3,7 @@ import { basename, dirname, join } from "node:path";
 import { resolveBuildRuntimeSources } from "./buildSupport";
 import {
 	resolveExtensionSkillRoots,
+	STAGED_HOST_SKILLS_ROUTE,
 	serverExtensions,
 	stagedExtensionSkillRoute,
 } from "./extensions";
@@ -23,7 +24,7 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 	expect(sources.skillRoots).toEqual([
 		...[...piPackageSkillRoots, join(import.meta.dir, "..", "skills")].map((source) => ({
 			source,
-			route: "",
+			route: STAGED_HOST_SKILLS_ROUTE,
 		})),
 		...serverExtensions.flatMap((entry) =>
 			resolveExtensionSkillRoots(entry).map((source) => ({
@@ -34,10 +35,10 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 	]);
 	expect(sources.skillRoots.map(({ source, route }) => [basename(dirname(source)), route])).toEqual(
 		[
-			["spec-graph", ""],
-			["pi-thinkrail-workflow", ""],
-			["pi-todos", ""],
-			["server", ""],
+			["spec-graph", "host"],
+			["pi-thinkrail-workflow", "host"],
+			["pi-todos", "host"],
+			["server", "host"],
 			["pi-web-access", "extensions/web-access"],
 		],
 	);

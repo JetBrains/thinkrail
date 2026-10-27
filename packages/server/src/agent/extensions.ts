@@ -23,7 +23,7 @@ import {
 	omitDisabledRegistryExtensions,
 	preferRegistryTools,
 	registryInlineExtensions,
-	resolveExtensionSkillRoots,
+	STAGED_HOST_SKILLS_ROUTE,
 	serverExtensions,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
@@ -61,8 +61,8 @@ export async function registerBundledRuntime(extensions: BundledExtensions): Pro
 	setBedrockProviderModule(bedrockProviderModule);
 }
 
-let devPaths: { extensionPaths: string[]; skillPaths: string[] } | undefined;
-function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
+let devPaths: { extensionPaths: string[]; hostSkillPaths: string[] } | undefined;
+function resolveDevPaths(): { extensionPaths: string[]; hostSkillPaths: string[] } {
 	if (devPaths) return devPaths;
 	const require = createRequire(import.meta.url);
 	const specGraphPath = require.resolve("pi-spec-graph/index.ts");
@@ -70,12 +70,11 @@ function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	const todosPath = require.resolve("pi-todos/index.ts");
 	devPaths = {
 		extensionPaths: [specGraphPath, workflowPath, todosPath],
-		skillPaths: [
+		hostSkillPaths: [
 			join(dirname(specGraphPath), "skills"),
 			join(dirname(workflowPath), "skills"),
 			join(dirname(todosPath), "skills"),
 			fileURLToPath(new URL("../../skills", import.meta.url)),
-			...serverExtensions.flatMap(resolveExtensionSkillRoots),
 		],
 	};
 	return devPaths;
@@ -119,17 +118,21 @@ function extensionSkillRootsByName(): ReadonlyMap<string, readonly string[]> {
 	return devExtensionSkillRoots;
 }
 
-export function loadsDisabledExtensionSkills(skills: readonly Skill[]): boolean {
-	return withoutDisabledExtensionSkills(skills).length !== skills.length;
+function extensionSkillPaths(include: (name: string) => boolean): string[] {
+	return [...extensionSkillRootsByName()].flatMap(([name, roots]) => (include(name) ? roots : []));
 }
 
-function withoutDisabledExtensionSkills(skills: readonly Skill[]): Skill[] {
+function bundledSkillPaths(disabled: ReadonlySet<string> = new Set()): string[] {
+	const host = bundled
+		? [join(bundled.skillsDir, STAGED_HOST_SKILLS_ROUTE)]
+		: resolveDevPaths().hostSkillPaths;
+	return [...host, ...extensionSkillPaths((name) => !disabled.has(name))];
+}
+
+export function loadsDisabledExtensionSkills(skills: readonly Skill[]): boolean {
 	const disabled = disabledExtensions();
-	const roots = [...extensionSkillRootsByName()].flatMap(([name, owned]) =>
-		disabled.has(name) ? owned : [],
-	);
-	if (roots.length === 0) return [...skills];
-	return skills.filter((skill) => !roots.some((root) => isUnderPath(skill.filePath, root)));
+	const roots = extensionSkillPaths((name) => disabled.has(name));
+	return skills.some((skill) => roots.some((root) => isUnderPath(skill.filePath, root)));
 }
 
 function skillGroup(
@@ -156,7 +159,7 @@ function skillsGate(cwd: string, bundledPaths: string[], getCtx: () => SkillAdmi
 			projectAliasPaths.some((path) => isUnderPath(filePath, path));
 		return {
 			...current,
-			skills: withoutDisabledExtensionSkills(current.skills)
+			skills: current.skills
 				.map((skill) => relabelAliasProvenance(skill, sources))
 				.filter((skill) => {
 					const { group, isPlugin } = skillGroup(skill.filePath, sources, bundledPaths);
@@ -174,21 +177,31 @@ function skillsGate(cwd: string, bundledPaths: string[], getCtx: () => SkillAdmi
 function resolveSkillInputs(
 	cwd: string,
 	getCtx: () => SkillAdmissionContext,
+	disabled: ReadonlySet<string>,
 ): {
 	additionalSkillPaths: string[];
 	skillsOverride: ReturnType<typeof skillsGate>;
+	refreshSkillPaths: (disabled: ReadonlySet<string>) => void;
 } {
 	const candidates = candidateCompatibilitySkillRoots(cwd);
-	const personal = candidates.filter((source) => source.scope === "user");
-	const project = candidates.filter((source) => source.scope === "project");
-	const bundledSkillPaths = bundled ? [bundled.skillsDir] : resolveDevPaths().skillPaths;
+	const compatibilityPaths = [
+		...candidates.filter((source) => source.scope === "user"),
+		...candidates.filter((source) => source.scope === "project"),
+	].map((source) => source.path);
+	const additionalSkillPaths: string[] = [];
+	const refreshSkillPaths = (current: ReadonlySet<string>): void => {
+		additionalSkillPaths.splice(
+			0,
+			additionalSkillPaths.length,
+			...bundledSkillPaths(current),
+			...compatibilityPaths,
+		);
+	};
+	refreshSkillPaths(disabled);
 	return {
-		additionalSkillPaths: [
-			...bundledSkillPaths,
-			...personal.map((source) => source.path),
-			...project.map((source) => source.path),
-		],
-		skillsOverride: skillsGate(cwd, bundledSkillPaths, getCtx),
+		additionalSkillPaths,
+		skillsOverride: skillsGate(cwd, bundledSkillPaths(), getCtx),
+		refreshSkillPaths,
 	};
 }
 
@@ -243,7 +256,11 @@ export async function buildResourceLoader(
 		...extraFactories,
 	];
 	const extensionFactories = bundled ? [...bundled.factories, ...sharedFactories] : sharedFactories;
-	const skillInputs = resolveSkillInputs(cwd, getAdmission);
+	const { refreshSkillPaths, ...skillInputs } = resolveSkillInputs(
+		cwd,
+		getAdmission,
+		disabledAtReload,
+	);
 	const agentDir = getAgentDir();
 	const common = {
 		cwd,
@@ -258,6 +275,7 @@ export async function buildResourceLoader(
 	const applyCurrentPolicy = (): void => {
 		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
 		disabledAtReload = disabledExtensions();
+		refreshSkillPaths(disabledAtReload);
 	};
 
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
@@ -388,11 +406,17 @@ export async function listSkillCommands(
 	const settingsManager = SettingsManager.create(cwd, getAgentDir(), {
 		projectTrusted: admission.piResourceTrusted,
 	});
+	const { additionalSkillPaths, skillsOverride } = resolveSkillInputs(
+		cwd,
+		() => admission,
+		disabledExtensions(),
+	);
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),
 		settingsManager,
-		...resolveSkillInputs(cwd, () => admission),
+		additionalSkillPaths,
+		skillsOverride,
 		noExtensions: true,
 		noPromptTemplates: true,
 		noThemes: true,
@@ -434,7 +458,7 @@ export async function listSkillCatalog(
 	const discovered = discoverCompatibilitySkillSources(cwd);
 	const personal = discovered.filter((s) => s.scope === "user");
 	const project = discovered.filter((s) => s.scope === "project");
-	const bundledSkillPaths = bundled ? [bundled.skillsDir] : resolveDevPaths().skillPaths;
+	const allBundledSkillPaths = bundledSkillPaths();
 	const settingsManager = SettingsManager.create(cwd, getAgentDir(), {
 		projectTrusted: admission.piResourceTrusted,
 	});
@@ -443,15 +467,13 @@ export async function listSkillCatalog(
 		agentDir: getAgentDir(),
 		settingsManager,
 		additionalSkillPaths: [
-			...bundledSkillPaths,
+			...bundledSkillPaths(disabledExtensions()),
 			...personal.map((s) => s.path),
 			...project.map((s) => s.path),
 		],
 		skillsOverride: (current) => ({
 			...current,
-			skills: withoutDisabledExtensionSkills(current.skills).map((skill) =>
-				relabelAliasProvenance(skill, discovered),
-			),
+			skills: current.skills.map((skill) => relabelAliasProvenance(skill, discovered)),
 		}),
 		noExtensions: true,
 		noPromptTemplates: true,
@@ -462,7 +484,7 @@ export async function listSkillCatalog(
 	return loader.getSkills().skills.map((skill) => {
 		const source = discovered.find((candidate) => isUnderPath(skill.filePath, candidate.path));
 		const gated = source?.scope === "project";
-		const { group, isPlugin } = skillGroup(skill.filePath, discovered, bundledSkillPaths);
+		const { group, isPlugin } = skillGroup(skill.filePath, discovered, allBundledSkillPaths);
 		return {
 			name: skill.name,
 			description: skill.description,

@@ -558,6 +558,44 @@ describe("registry extensions", () => {
 		}
 	});
 
+	it("lets a personal skill of the same name through while the extension that shadows it is off", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-shadow-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const personalSkills = join(home, ".claude", "skills");
+		writeSkill(personalSkills, "librarian", "my own librarian");
+		const restore = stubSkillEnv(home, agentDir);
+		let disabled = new Set(["web-access"]);
+		setDisabledExtensionsResolver(() => disabled);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const librarian = () =>
+				loader.getSkills().skills.find((skill) => skill.name === "librarian")?.filePath;
+			const catalogLibrarian = async () =>
+				(await listSkillCatalog(project, ctx(true))).find((entry) => entry.name === "librarian")
+					?.sourceInfo.path;
+			expect(librarian()).toStartWith(personalSkills);
+			expect(await catalogLibrarian()).toStartWith(personalSkills);
+			expect(await listSkillCommands(project, ctx(true))).toContainEqual(
+				expect.objectContaining({ name: "skill:librarian" }),
+			);
+
+			disabled = new Set();
+			await loader.reload();
+			expect(librarian()).toBeDefined();
+			expect(librarian()).not.toStartWith(personalSkills);
+			expect(await catalogLibrarian()).not.toStartWith(personalSkills);
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("guards every child's images from the base set, not the opt-in curated set", () => {
 		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard]);
 		expect(childExtensionFactories()).not.toContain(oversizedImageGuard);
