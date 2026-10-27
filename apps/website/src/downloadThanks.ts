@@ -36,7 +36,10 @@ export function initDownloadThanks(
 	const progress = dialog?.querySelector<HTMLElement>("[data-survey-progress]");
 	const thanks = dialog?.querySelector<HTMLElement>("[data-survey-thanks]");
 	const welcome = dialog?.querySelector<HTMLElement>("[data-survey-welcome]");
-	if (!dialog || !body || !action || !progress || !thanks || !welcome) return;
+	const emailHint = dialog?.querySelector<HTMLElement>("[data-survey-email-hint]");
+	const actionRow = dialog?.querySelector<HTMLElement>("[data-survey-action-row]");
+	if (!dialog || !body || !action || !progress || !thanks || !welcome || !emailHint || !actionRow)
+		return;
 	if (dialog.dataset.downloadThanksReady === "true") return;
 	dialog.dataset.downloadThanksReady = "true";
 
@@ -65,13 +68,22 @@ export function initDownloadThanks(
 		return { selected, freeText: freeText?.value ?? "" };
 	};
 
+	const freeTextField = () =>
+		body.querySelector<HTMLInputElement | HTMLTextAreaElement>("[data-survey-free-text]");
+
+	const emailAccepted = () => {
+		const field = freeTextField();
+		return !(field instanceof HTMLInputElement && field.type === "email") || field.validity.valid;
+	};
+
 	const syncAction = () => {
 		const step = currentStep();
 		if (step === undefined) return;
 		const answer = readAnswer();
-		action.disabled = !stepCanContinue(step, answer.selected, answer.freeText);
+		action.disabled = !stepCanContinue(step, answer.selected, answer.freeText) || !emailAccepted();
 		action.textContent = step.action;
 		progress.textContent = `${step.index} of ${downloadSurveyStepCount}`;
+		emailHint.hidden = step.action !== "Finish" || !action.disabled;
 	};
 
 	const renderWelcome = () => {
@@ -79,9 +91,11 @@ export function initDownloadThanks(
 		body.hidden = true;
 		progress.hidden = true;
 		welcome.hidden = false;
+		actionRow.hidden = false;
 		action.hidden = false;
 		action.disabled = false;
 		action.textContent = "Start";
+		emailHint.hidden = true;
 	};
 
 	const renderStep = () => {
@@ -91,6 +105,7 @@ export function initDownloadThanks(
 		thanks.hidden = true;
 		welcome.hidden = true;
 		body.hidden = false;
+		actionRow.hidden = false;
 		action.hidden = false;
 		progress.hidden = false;
 		body.replaceChildren();
@@ -191,8 +206,10 @@ export function initDownloadThanks(
 	const showThanks = () => {
 		welcome.hidden = true;
 		body.hidden = true;
+		actionRow.hidden = true;
 		action.hidden = true;
 		progress.hidden = true;
+		emailHint.hidden = true;
 		thanks.hidden = false;
 		thanks.textContent = thankYou;
 	};
@@ -223,7 +240,7 @@ export function initDownloadThanks(
 			renderStep();
 			return;
 		}
-		if (advanceLocked || step === undefined || action.disabled) return;
+		if (advanceLocked || step === undefined || action.disabled || !emailAccepted()) return;
 		const answer = readAnswer();
 		if (!stepCanContinue(step, answer.selected, answer.freeText)) return;
 		advanceLocked = true;

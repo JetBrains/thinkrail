@@ -218,7 +218,9 @@ response went. Closing the dialog resets it to the welcome screen. The next open
 showing, with a new submission id and a new choice order; answers already sent stay on the
 submission that recorded them. Choice order is shuffled for each response, except a custom answer, which stays
 last. Required steps leave Continue disabled until the answer is valid. The first-try note and
-the email are optional. Opening a command-line disclosure (the hero or blog-post picker's, or the install section's) emits only
+the email are optional. A filled-in email has to satisfy the browser's email field before
+Finish enables; a blank email does not. While Finish is disabled, a muted note on the same line as the
+button reads “— please enter a valid email or leave it blank”. Opening a command-line disclosure (the hero or blog-post picker's, or the install section's) emits only
 `install_cta_clicked` (`cli`); closing it does not. That open is browsing, not install intent: a
 primary-button click on a `[data-copy]` control whose value is a known install command emits
 `install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero, install-section, or blog-post location

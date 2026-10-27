@@ -2816,6 +2816,12 @@ a.feature-card:hover {
 	font-size: 13.5px;
 }
 
+.download-survey-action {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
 .download-survey-progress,
 .download-survey-hint {
 	margin: 0;
