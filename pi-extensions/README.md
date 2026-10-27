@@ -82,14 +82,27 @@ npm publish dist/pi-packages/<tarball> --access public --provenance=false
 `--provenance=false` is required for this one manual publish: the manifest's `publishConfig` asks for
 provenance, which only a CI provider can generate. The automated release keeps provenance.
 
-Then, on npmjs.com → the package → **Settings → Trusted Publisher → GitHub Actions**:
+Then register the Trusted Publisher — from the CLI (same login):
 
-| field | value |
-| --- | --- |
-| Organization / user | `JetBrains` |
-| Repository | `thinkrail` |
-| Workflow filename | `release-pi-packages.yml` |
-| Environment | `npm-release` |
+```bash
+npm trust github @thinkrail/pi-<name> --file release-pi-packages.yml --repo JetBrains/thinkrail \
+  --env npm-release --allow-publish --allow-stage-publish
+npm trust list @thinkrail/pi-<name>             # expect permissions: publish, stage publish
+```
+
+or on npmjs.com → the package → **Settings → Trusted Publisher → GitHub Actions** with the same values
+(`JetBrains` / `thinkrail` / `release-pi-packages.yml` / `npm-release`) and **Allow `npm publish` ticked**.
+
+Two npm rules decide whether that configuration ever works:
+
+- **`npm publish` must be allowed explicitly.** Configurations created after 2026-09-03 default to
+  `npm stage publish` only; the release workflow publishes directly, so a stage-only configuration fails
+  with `ENEEDAUTH`/403. `npm trust list` shows the permissions.
+- **It expires unused after 48 hours.** A configuration is validated by its first successful OIDC publish;
+  one that has not published within 48 hours of creation shows *Expired* on npmjs.com and must be
+  revoked (`npm trust revoke <package> --id=<id>`) and recreated. The manual bootstrap publish does
+  **not** validate it (it uses the login, not OIDC), so create the configuration **when the next version
+  PR for that package is about to merge**, not at bootstrap time — the merge's publish validates it.
 
 After the first successful OIDC publish, set the package's publishing access to *Require two-factor
 authentication and disallow tokens*.
@@ -102,4 +115,6 @@ authentication and disallow tokens*.
 - **Publish job skipped everything** — the versions on `main` are already on npm (nothing to do) or
   changesets are still pending (cut the version PR first).
 - **Publish fails with `ENEEDAUTH`/403** — Trusted Publisher is not configured for that package yet (see
-  bootstrap) or the workflow/environment names do not match the npm configuration exactly.
+  bootstrap), has expired unused (48-hour rule), allows only `npm stage publish`, or the
+  workflow/environment names do not match the npm configuration exactly. `npm trust list <package>`
+  shows what npm has.
