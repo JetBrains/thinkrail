@@ -272,7 +272,7 @@ export function LayoutSettings() {
 										})}
 							</p>
 
-							<div className="mt-auto flex items-center justify-end gap-4 pt-12">
+							<div className="mt-auto flex flex-wrap items-center justify-end gap-4 pt-12">
 								{custom && (
 									<div className="mr-auto flex items-center gap-2">
 										{renaming?.id === preset.id ? (

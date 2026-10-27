@@ -161,9 +161,18 @@ export async function repairShellEnv(options: { probe?: LoginShellEnvProbe } = {
 }
 
 const pendingKey = Symbol.for("thinkrail.shellEnv.pending");
-const processState = globalThis as typeof globalThis & { [pendingKey]?: Promise<void> };
+const launchKeysKey = Symbol.for("thinkrail.shellEnv.launchKeys");
+const processState = globalThis as typeof globalThis & {
+	[pendingKey]?: Promise<void>;
+	[launchKeysKey]?: ReadonlySet<string>;
+};
 
 export function resolveShellEnv(): Promise<void> {
+	processState[launchKeysKey] ??= new Set(Object.keys(process.env));
 	processState[pendingKey] ??= repairShellEnv();
 	return processState[pendingKey];
+}
+
+export function launchEnvKeys(): ReadonlySet<string> {
+	return processState[launchKeysKey] ?? new Set(Object.keys(process.env));
 }

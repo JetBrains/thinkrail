@@ -88,13 +88,19 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     reads. Activation changes the current pointer for pre-session reads and future session creation; it never
     mutates, drains, or recreates existing sessions. A live session keeps its original runtime generation. A disk session
     attached after activation keeps its saved model when that model is available in the current runtime.
-    If it is unavailable, PI chooses the current default without changing the saved model on open.
-    PI records the replacement when the user sends a message, so later restarts restore that model.
-    Merely opening a chat preserves its original model for when that provider returns. With no available
-    model, the transcript remains readable and no placeholder model is persisted as a replacement.
+    If it is unavailable, Pi chooses its settings default, then its ordered provider defaults, then the
+    first available model; this need not match ThinkRail's AppConfig default or the saved provider.
+    The exception is a model pi still lists but the account does not serve (`modelAvailability` filtered
+    it), which pi would otherwise restore verbatim; the host passes `preferredDefaultModel` instead.
+    Opening does not change the saved model. An ordinary physical-model fallback becomes durable when
+    Pi appends an assistant response, not at send acceptance; explicit model selection persists at once.
+    Merely opening a chat preserves its original model for when that provider returns. The host exposes
+    the replacement in normal session state but discards the SDK's `modelFallbackMessage`, so there is
+    no separate fallback warning. With no available model, the transcript remains readable and no
+    placeholder model is persisted as a replacement.
 
     Every models **read** goes through **`settledAvailableModels(runtime)`** — pi's
-    `getAvailableSnapshot()`, **never `getAvailable()`**: that one awaits `refreshAvailability()`, which
+    `getAvailableSnapshot()` narrowed by `modelAvailability`, **never `getAvailable()`**: that one awaits `refreshAvailability()`, which
     returns the pending per-provider auth fan-out *or starts one*, all unsignalled — so reading through it
     would hand `model.list` (whose contract is to answer without touching the network), `model.default` and
     every inbound model-ref check an unbounded wait, and would escape the refresh deadline one line after
@@ -103,6 +109,27 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     credential or configured key is registered — config and native (`registerNativeProvider`) registrations
     alike, so a Central or delegation-mirrored provider is readable before its availability pass lands. Being
     the one read makes the picker, default, and model resolution agree within a generation.
+  - `modelAvailability` — narrows that snapshot to what the **connection** serves; pi's catalogs are
+    per-provider, not per-account, so a provider pi calls configured can still 400 on most of its catalog.
+    Two rules, each scoped by `baseUrl` so custom or rerouted models are untouched: **Sign in with ChatGPT**
+    (`openai` + OAuth against `api.openai.com/v1`) keeps only ids in pi's own `openai-codex` catalog — the
+    ChatGPT backend rejects the API-only rest (`gpt-4`, `gpt-4o`, `o1`, …) with `model_not_found`; and an
+    **opaque (Central) provider** keeps the ids its proxy advertises on `GET /models` (OpenAI wire) or
+    `GET /v1/models` (Anthropic wire), an alias matching a listed `-YYYYMMDD` / `-YYYY-MM-DD` dated id
+    (the proxy resolves `gpt-4o` to `gpt-4o-2024-11-20`). Listings are read with pi's resolved auth beside
+    `refreshCatalogs` (detached on `model.list`, awaited and forced on `model.refresh`), single-flighted,
+    5s-bounded end to end (one deadline covers credential resolution and the fetch, so a stalled OAuth
+    refresh cannot wedge the single flight), throttled to 60s per runtime, and a change publishes
+    `provider.changed` so the picker re-reads; an unknown wire or a never-read listing filters nothing,
+    and a failed re-read keeps the last listing. Failures log only a closed count, never provider ids or
+    the provider's error text. Direct API keys and other subscriptions keep pi's catalog: no listing was verified to
+    agree with pi's aliases there.
+  - `modelDefaults` — `preferredDefaultModel(available)`: pi's `defaultModelPerProvider` in pi's order,
+    then any available model whose id is one of those defaults, else the first available model. Pi does
+    not export that map, so the host mirrors it under a parity test against the installed dist; the first
+    pass is what pi's own `findInitialModel` would pick. The same-id pass covers a provider whose own
+    default the account filter removed: Sign in with ChatGPT serves `openai` models from the
+    `openai-codex` set, so it lands on the Codex default instead of catalog order.
   - `modelContext` — a narrow settings adapter for the `contextWindow` override in pi's shared
     `getAgentDir()/models.json`, not a second model registry. It lists the OpenAI Responses / Codex
     Responses models from `settledAvailableModels` whose effective budget still equals the contracts'
@@ -149,7 +176,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `tool_execution_end` / `tool_execution_update` frames drop `structuredContent` from the (partial)
     result: pi's value for programmatic callers (bash puts up to 1 MiB of raw output there), never
     persisted and never rendered, so forwarding it would only grow every live frame and the browser
-    store. The live entry retains
+    store. `entry_appended` is projected to `{ entryType }` only: extension and pi-internal entry payloads
+    never cross the wire. The live entry retains
     that settlement in `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
     context; a new `agent_start` exposes explicit `null` (no current terminal) so an older persisted failure
     cannot reappear mid-run, while disk sessions remain transcript-authoritative. A live summary also
@@ -257,11 +285,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `listAvailableModels` / `listSettledModels` (the same snapshot without starting a refresh) / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host uses it so defaults and live-session effort changes follow Pi).
     Earlier, #394 showed ThinkRail's `available[0]` differed from Pi's pick and hit a proxy 400. ThinkRail
-    now resolves defaults host-side from `AppConfig`, falling back to the first available model; it always
-    passes the chosen model explicitly so the UI and session agree. Accepted risk: the first available model
-    may not be the provider default; users can set one in Settings → Models. Plan review uses this same
-    `resolveNewChatModel({})` for unset reviewer overrides: AppConfig `defaultModel`/`defaultEffort`, with
-    the first available model and `medium` effort as fallbacks.
+    now resolves new-chat defaults host-side from `AppConfig`, falling back to `preferredDefaultModel`
+    (pi's provider default, then the first available model) when the saved default is unavailable,
+    without rewriting that setting. `available[0]` alone was catalog order — `openai/gpt-4`, an 8K-context
+    model, for a fresh OpenAI connection. An explicitly requested unavailable model is rejected rather
+    than silently substituted. The host passes the chosen model explicitly so the UI and session agree.
+    Plan review uses this same `resolveNewChatModel({})` for unset reviewer overrides: AppConfig
+    `defaultModel`/`defaultEffort`, with the preferred model and `medium` effort as fallbacks.
 
     **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
     `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl`, `headers`, extension/provider
@@ -387,8 +417,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     single `runtime.completeSimple()` — pi's canonical provider-agnostic request path, which resolves
     the model's auth itself (OAuth refresh included) and also serves providers that only implement
     `streamSimple` (extension-registered ones). `pickModel(tier)` = the model choice: `cheap` prefers a
-    curated small/fast allowlist ∩ the authenticated set, else the cheapest by per-token cost; `default`
-    = first available; `null` when nothing is authenticated. This is the primitive the `assist` tasks
+    curated small/fast allowlist ∩ the authenticated set, else the cheapest priced model by per-token cost (an unpriced catalog entry is a free, preview,
+    or stealth tier that rate-limits or disappears), else the `default` pick; `default`
+    = `preferredDefaultModel`; `null` when nothing is authenticated. This is the primitive the `assist` tasks
     (plan summaries, PR drafting) run on — the only place model **dispatch** happens outside a session.
   - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
     calls (dialogs round-trip to the browser, fire-and-forget methods push). A dialog names the tool call
@@ -566,7 +597,49 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     while parents created afterward project the new generation. The host-wide `getPiRuntime` resolver
     is passed as the core's dynamic fallback rather than captured at service creation. One
     `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
-    at bind time). A host-injected `setSubagentConcurrencyResolver` supplies each service's per-chat
+    at bind time). A parented run's spend is appended to the live parent as pi `usage` entries
+    (`kind: "subagent"`, `note` = child session id; only the cost total is known), each publishing
+    `entry_appended { entryType: "usage" }`: every `run-progress` (after each child response or tool
+    start) appends the increment of the run's usage delta over a per-run watermark, and `run-terminal`
+    appends the remainder, so the toolbar follows a running subagent and pi's own session totals include
+    delegated spend for every outcome and consumer (Agent, `request_review`), independent of completion
+    delivery. The watermark (`subagentUsage`'s run recorder) is in-memory, lives from a run's first record
+    until its `run-terminal`, and advances whenever pi took the increment into its session (even if
+    persisting it failed), so a write is never counted twice; an increment pi did not take is carried by
+    the next one, but one dropped
+    at `run-terminal` is not carried into the child's next run — reconciliation recovers it. Increments
+    record any positive token count or a cost above 1e-9. Progress events skip the listener's
+    resource/state publishes (resource summaries carry status, not usage). Progress only freshens the
+    readout; crash recovery still comes from child transcripts and reconciliation. This is
+    delegated spend's only accounting channel: delegation tools must never return `AgentToolResult.usage`,
+    which pi would sum a second time. The write is best-effort, like pi's cache warmer: a failed append is
+    logged and never fails the child run. `recordSessionUsage` reports only whether pi took the usage into
+    its session; persistence stays uncertain. pi moves the leaf to a new entry before persisting it, so a
+    failed append restores the previous leaf (later entries must never chain to an unpersisted id, or a
+    reopened chat loses its history before it) and truncates an existing transcript back to its pre-append
+    size (a torn partial line would swallow the next entry); pi's initial file creation is outside this
+    repair. A usage entry pi kept only in memory counts in this process and is restored on disk by
+    reconciliation after the chat is reopened. Closing
+    a chat keeps its entry writable until its teardown cascade settles, so runs that cascade stops are
+    still recorded; attach is refused during teardown, so the transcript keeps one writer. A deletion
+    tombstone suppresses the write, because pi's append would recreate the trashed file. Graceful host
+    shutdown records within its budget; emergency disposal (`disposeAllSessions`) revokes the teardown
+    writers together with the tombstones, so a late record can never recreate a trashed transcript, and
+    records it drops are recovered when the chat is next attached. Children cannot spawn children (`RECURSION_GUARD_TOOLS`), so deltas
+    never nest. **`subagentUsage`** makes the transcript, not the event, authoritative: every attach, and
+    a deletion rolled back after its tombstone suppressed a terminal write, asynchronously totals each
+    fresh child file without a queued or running run under the parent's delegation directory and appends
+    the shortfall against the parent's `subagent` entries for that child. This recovers runs a
+    crash or kill never finished, back-fills chats from before parent recording, and picks up child spend
+    outside runs. Parsed child totals are cached per process by file path, mtime and size, so an unchanged
+    child file version is read once (overlapping scans may repeat it); every reconciliation compares those
+    totals with the parent's current records, with no record-timestamp shortcut, so a record lost after a
+    reopen is recovered even when a later record of the same child survived. The shortfall is recomputed
+    from the live entries immediately before appending, so overlapping reconciliations cannot
+    double-count; it is appended only when no token count is negative and tokens or cost (above 1e-9, to
+    ignore floating-point noise) are missing, never as a negative correction. Forked children
+    (header `parentSession`) are skipped because their copied history carries the parent's own spend.
+    A host-injected `setSubagentConcurrencyResolver` supplies each service's per-chat
     limit at creation, and `refreshSubagentConcurrency(workspaceId?)` re-resolves and live-resizes the
     cached services (core `setMaxConcurrentPerParent`) after a global or workspace limit change; `subagentsFor(workspaceId, isEnabled, canDeliverCompletion)` creates one retained portable
     `Subagents` owner per parent; its extension is injected on every resource load. A host-injected
@@ -600,7 +673,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     disable would bust the prompt cache. The reverse is the one reload: an enabled extension the session
     never loaded (created while it was off) and that did not fail to load triggers a gated
     `requestSessionReload`. Registration applies the same reconciliation, and a completed reload reapplies
-    it without requesting another reload, so a toggle that lands mid-reload converges.
+    it without requesting another reload, so a toggle that lands mid-reload converges. Settings are the
+    source of truth across restarts: Pi ≥ 1.3 restores a resumed chat's recorded tool loadout, keeping
+    recorded removals inactive, so attach first re-activates every tool of an enabled registry extension
+    that Pi's activated-on-registration rule would activate (declarable exposure, not `defaultActive:
+    false`), then withholds disabled ones. Built-in, MCP, subagent and review tools keep Pi's restored
+    selection. A registry tool switched off by anything other than Settings therefore returns after a
+    restart, as it does on Pi `reload()`.
     The **`set_title`** tool (`titleTool.ts`) is how chats and workspaces get named: the main agent calls it
     with `chat_title?` / `workspace_name?` / `branch?` (English kebab slug). It is always registered and
     active, and listed via `promptSnippet`; toggling it off after naming would rebuild the system prompt
@@ -876,6 +955,17 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 
+## Tool output and context recovery
+
+Portable tools own bounded model-facing output ([[submodule-spec-graph-tools]],
+[[submodule-pi-todos-tools]]); the host does not wrap every tool or rewrite user input. Pi's native
+read/bash/MCP limits remain authoritative. Structured result details are presentation metadata;
+measure model-facing content, not the serialized transcript or SDK context object.
+
+Pi owns aggregate budgeting, compaction and recovery; bounded tool output does not guarantee
+whole-request admission. The host adds no compaction overrides or retry loop. Known upstream
+context-budget limitations and their upgrade checks live in [[pi-compatibility]].
+
 ## Session titles
 
 `agentSessionManager` is the only durable chat-title writer. Its `renameSession(sessionId,
@@ -892,6 +982,19 @@ handler learns the chat was already named); the manual wire mutation is uncondit
 never overwrite a durable name, and the first name is final. No generated/manual provenance or title sidecar
 belongs here: the absent-vs-present pi name is sufficient. The architecture's accepted no-cross-process
 coordination rule still applies.
+
+**First prompt beside the title.** Every `SessionSummary` and `SessionStateRecord` the manager projects
+(`summaryOf`, the disk rows of `listSessions`, the state publishes and `listSessionStates` sources) also
+carries `firstPrompt` — contracts' `firstPromptHead` of the transcript's first user message that has text
+and is not a control message — so clients can label a chat the agent has not named. One derivation,
+`firstPromptOf(entries)`, reads the **full** `SessionManager.getEntries()` for live and disk sessions alike:
+`AgentSession.messages` is the compaction-aware projection, whose first user message after a compaction
+is no longer the chat's first prompt, and pi's `SessionInfo.firstMessage` substitutes a placeholder string
+when no text exists. A live entry caches the answer either way — found or absent — and re-reads only the
+entries appended since its last scan, and only when `getEntryCount()` grew, so the per-event state publish
+never rescans a transcript whose user turns are all packages or images. The value is
+read-only: no write path accepts it, `renameSession` and `onlyIfUnnamed` are untouched, and a named chat
+still carries it so a client can show the title and keep the prompt as a tooltip.
 
 ## Chat Resources integration
 
@@ -945,7 +1048,11 @@ requires that exact registered owner, no deletion tombstone, no resource closure
 live question. A non-waking user-stop notice must not append behind an unanswered tool call and break
 tail-only restart repair. Resource inspection and cancellation remain available while delivery waits
 in the existing portable owners. The native `turn_end` result boundary clears the question phase and
-flushes both owners, as do registration, resource reload and deletion rollback. `closeSessionResources` synchronously disposes
+flushes both owners with `{ atTurnEnd: true }` — the last safe point where a result can still join the
+next request of the running parent — and `compaction_end` flushes them once pi is no longer
+compacting, as do registration, resource reload and deletion rollback; while the parent is busy any
+other flush is a no-op, because the owners deliver at step boundaries ([[module-pi-subagents]] Result
+delivery). `closeSessionResources` synchronously disposes
 the subagent owner before child cancellation or any await, including preparation failures. Permanent
 closure survives shutdown-budget expiry and suppresses late outcomes; Pi disposal does not emit extension
 shutdown, so the cascade emits `session_shutdown` itself after the synchronous owner disposal (see

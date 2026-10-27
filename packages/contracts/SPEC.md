@@ -48,10 +48,22 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
   word it in their language until it is renamed), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical
   BCP-47 tag — the `AppConfig.locale` contract; local language file shapes are `LocalLocalesSnapshot` /
-  `LocalLocaleFile` with closed error codes, served by `locales.list` from `LOCALES_PROTOCOL_VERSION`, v89),
+  `LocalLocaleFile` with closed error codes, served by `locales.list` from `LOCALES_PROTOCOL_VERSION`, v89;
+  user theme files are `UserThemesSnapshot` / `UserThemeFile`, served by `themes.list` from
+  `USER_THEMES_PROTOCOL_VERSION`, v92, with each ok file's `manifest` deliberately `unknown` because the
+  theme schema is owned by [[submodule-web-themes]]),
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
+  `FIRST_PROMPT_MAX_LENGTH` + **`firstPromptHead(text)`** + **`firstPromptOfTexts(texts)`** +
+  **`clampToCodePoints(text, maxUnits)`** (the one shared reading of a chat's first prompt for the
+  unnamed-chat label: the first user text that is not a control message and has a head; a head is the first
+  non-blank line, whitespace collapsed, clamped to 200 UTF-16 units without splitting a surrogate pair; a
+  leading skill block *or* the `/skill:<name> <request>` command it expands from reads as the request, else
+  `/skill:<name>`; a first line that is one lowercase tag alone (a package header such as `<review …>`) or
+  no text has no head and the next user text is tried — a prompt that merely starts with `<Button>` keeps
+  its head; only the first 800 units of a line are normalized —
+  host and client call the same functions over their user texts so the label never jumps),
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
   chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
@@ -114,7 +126,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
     `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `agent_settled` /
     `queue_update` / `compaction_*` / `auto_retry_*` / `summarization_retry_*` /
-    `session_info_changed` / `thinking_level_changed` members, plus `bash_execution_update` — mirrored
+    `session_info_changed` / `thinking_level_changed` / host-projected `entry_appended { entryType }`
+    members, plus `bash_execution_update` — mirrored
     for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
     Every message an event carries (`message_*`, `turn_end`, `agent_end.messages`) is typed as
     **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
@@ -180,6 +193,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     `session_info_changed { name?: string }` is the one live domain update for manual and automatic changes,
     and `session.list`/`session.getMessages` repair a missed event. No title source/provenance, uniqueness,
     workspace coupling, or new push channel crosses the wire; session ids remain canonical.
+    **`SessionSummary.firstPrompt`** and **`SessionStateRecord.firstPrompt`** (optional, additive, no
+    version gate) carry `firstPromptHead` of the transcript's first user prompt beside the title: the
+    display fallback for a chat that has no name, never a name — no mutation accepts it, nothing writes
+    it into the session, and an older host simply omits it (the client shows its generic label).
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel. A round-trip
@@ -462,7 +479,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `wsProtocol` (the value-bearing half), mirroring the ask-user-answers posture exactly: the
   **`SUBAGENT_COMPLETION_CUSTOM_TYPE`** constant (mirrors `pi-subagents`' `SUBAGENT_COMPLETION_MESSAGE`,
   never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details
-  shape) and the shared **`isSubagentCompletionMessage`** guard — wire data is untrusted, so the
+  shape, its details **`SubagentCompletionDetails`**: the run details plus the optional
+  **`CompletionDelivery`** marker mirrored from `pi-subagents`) and the shared
+  **`isSubagentCompletionMessage`** guard — wire data is untrusted, so the
   details validate through **`isDelegationRunDetails`** (domain): the **closed status union**, every
   required **numeric usage field**, `durationMs`, every present optional display field as a string, and a
   present `thinkingLevel` as one of pi's closed levels, never just "an object is present" (PR #303 review finding). That validator is the one home for the
@@ -688,6 +707,11 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `systemThemePair` are complete replacements; entering system mode requires a complete existing-or-incoming
   pair. A legacy `{ theme }` mutation without explicit `themeMode` means a fixed-theme selection and exits
   system mode; returns the merged config) /
+  **`environment.get`** / **`environment.update`** (`HOST_ENVIRONMENT_PROTOCOL_VERSION`, v91; the stored host environment — optional pi config folder
+  plus ordered `{ name, value }` variables — outside `AppConfig`, never broadcast or in `server.welcome`
+  because values may be secrets; `get` → `HostEnvironmentStatus` with `restartRequired`, `launchOverridden`
+  names and the `effectiveAgentDir`; `update` replaces the whole record and returns
+  `{ ok: false, issues }` per field/row index instead of saving anything when it is invalid) /
   **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists the automatic invitation's book,
   postpone, or permanent-dismiss result; the Settings link never calls it;
   `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction so the host does not
@@ -791,8 +815,10 @@ without importing that package. Subagents retain their Pi child session ids and 
   all currently active records plus bounded recent terminal records. The snapshot echoes workspace
   and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
   child/parent ids, role, task, status, creation time, the child's actual `model` (`provider/id`) and
-  effective `thinkingLevel` (both optional — absent from an older host), optional abort reason and — once
-  terminal — the run duration [[module-pi-delegation]] measured (`durationMs`), not usage or reports.
+  effective `thinkingLevel` (both optional — absent from an older host), optional abort reason,
+  `detached: true` for a background run (from the child's `info`; absent for a foreground run and from
+  an older host) and — once terminal — the run duration [[module-pi-delegation]] measured
+  (`durationMs`), not usage or reports.
   Subagent role/task summaries are capped at 200/2,000 characters, with the latest twenty terminal
   children by creation order retained in the projection. These are runtime catalogs; neither historical
   tool acknowledgements nor persisted PIDs supply live authority after restart.
@@ -821,7 +847,11 @@ wire-owned cancellation registry.
 
 `background-command-completion` is a displayed Pi custom message, not a catalog update. Its guarded
 wire details contain terminal snapshot metadata without the full command, plus the owner's bounded
-plain-text diagnostic excerpt and truncation flag. The conversation may render that historical notice,
+plain-text diagnostic excerpt and truncation flag, and the same optional `delivery` marker as a
+subagent completion (`wake` | `run` | `appended` — how the result reached the agent; absent in
+transcripts written before it, which keep the old round rules). The guards do not validate it; the
+shared `completionDelivery(details)` reader returns the marker or `undefined`, so an unknown value
+reads as absent everywhere. The conversation may render that historical notice,
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically
@@ -990,8 +1020,9 @@ so an already-loaded old client clears retired markers after reconnect. No activ
 - **Mirrors are not version-pinned in comments.** A shape re-declared here because its real home is
   Node-only carries *what* it mirrors, never *which pi version it was last checked against*: those
   markers had to be hand-edited across several files on every bump and nothing verified them. A
-  UI-relevant lifecycle member must be explicit here (especially the host-enriched `agent_settled`);
-  UI-irrelevant session events such as `entry_appended` may remain unmodelled and ignored. Re-audit a
+  UI-relevant lifecycle member must be explicit here (especially the host-enriched `agent_settled`, and
+  `entry_appended`, which the host projects to `{ entryType }` so the UI can refresh stats);
+  UI-irrelevant session events may remain unmodelled and ignored. Re-audit a
   mirror when a bump's changelog touches it, not because a comment names a version.
 - **Type-only, from the package roots, always** (type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths

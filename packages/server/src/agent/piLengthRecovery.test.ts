@@ -2,8 +2,13 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Model } from "@earendil-works/pi-ai";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
+import {
+	createFauxCore,
+	fauxAssistantMessage,
+	fauxToolCall,
+} from "@earendil-works/pi-ai/providers/faux";
 import {
 	type AgentSessionEvent,
 	createAgentSession,
@@ -23,8 +28,9 @@ const MODEL = {
 	maxTokens: 100,
 };
 
-async function runLengthScenario(
+async function runRecoveryScenario(
 	responses: Parameters<ReturnType<typeof createFauxCore>["setResponses"]>[0],
+	seed?: (manager: SessionManager, model: Model<string>) => void,
 ): Promise<{ events: AgentSessionEvent[]; callCount: number; finalText: string | undefined }> {
 	const cwd = mkdtempSync(join(tmpdir(), "thinkrail-pi-length-"));
 	const agentDir = join(cwd, ".pi-agent");
@@ -58,7 +64,7 @@ async function runLengthScenario(
 			(pi) => {
 				pi.on("session_before_compact", (event) => ({
 					compaction: {
-						summary: "Compacted after a premature length stop.",
+						summary: "Compacted for context recovery.",
 						firstKeptEntryId: event.preparation.firstKeptEntryId,
 						tokensBefore: event.preparation.tokensBefore,
 					},
@@ -68,6 +74,8 @@ async function runLengthScenario(
 	});
 	await resourceLoader.reload();
 	faux.setResponses(responses);
+	const sessionManager = SessionManager.inMemory(cwd);
+	seed?.(sessionManager, faux.getModel());
 	const { session } = await createAgentSession({
 		cwd,
 		agentDir,
@@ -75,7 +83,7 @@ async function runLengthScenario(
 		modelRuntime: runtime,
 		settingsManager,
 		resourceLoader,
-		sessionManager: SessionManager.inMemory(cwd),
+		sessionManager,
 	});
 	const events: AgentSessionEvent[] = [];
 	const unsubscribe = session.subscribe((event) => events.push(event));
@@ -97,9 +105,25 @@ async function runLengthScenario(
 	}
 }
 
-test("Pi compacts and retries a premature length stop before settling", async () => {
-	const result = await runLengthScenario([
-		fauxAssistantMessage("incomplete", { stopReason: "length" }),
+const RECOVERY_STOPS = [
+	{
+		name: "a premature length stop",
+		errorPrefix: "Truncated response",
+		response: { stopReason: "length" },
+	},
+	{
+		name: "a provider context overflow",
+		errorPrefix: "Context overflow",
+		response: {
+			stopReason: "error",
+			errorMessage: "400 invalid_request_error: prompt is too long: 12000 tokens > 1000 maximum",
+		},
+	},
+] as const;
+
+test.each(RECOVERY_STOPS)("Pi compacts and retries $name before settling", async ({ response }) => {
+	const result = await runRecoveryScenario([
+		fauxAssistantMessage("incomplete", response),
 		fauxAssistantMessage("completed response"),
 	]);
 
@@ -111,15 +135,60 @@ test("Pi compacts and retries a premature length stop before settling", async ()
 			.filter((event) => event.type === "compaction_end")
 			.map((event) => ({ reason: event.reason, willRetry: event.willRetry })),
 	).toEqual([{ reason: "overflow", willRetry: true }]);
+	expect(result.events.filter((event) => event.type === "agent_settled")).toHaveLength(1);
 	expect(result.events.at(-1)?.type).toBe("agent_settled");
 });
 
-test("Pi stops after one compact-and-retry attempt when length recurs", async () => {
-	const result = await runLengthScenario([
-		fauxAssistantMessage("first incomplete", { stopReason: "length" }),
+test("pre-prompt recovery omits a restored truncated call together with its result", async () => {
+	let requested = false;
+	const result = await runRecoveryScenario(
+		[
+			(context) => {
+				requested = true;
+				expect(context.messages.some((message) => message.role === "toolResult")).toBe(false);
+				expect(
+					context.messages.some(
+						(message) => message.role === "assistant" && message.stopReason === "length",
+					),
+				).toBe(false);
+				return fauxAssistantMessage("recovered");
+			},
+		],
+		(manager, model) => {
+			manager.appendMessage({ role: "user", content: "check status", timestamp: 1 });
+			manager.appendMessage({
+				...fauxAssistantMessage([fauxToolCall("bash", { command: "echo" }, { id: "truncated" })], {
+					stopReason: "length",
+					timestamp: 2,
+				}),
+				api: model.api,
+				provider: model.provider,
+				model: model.id,
+			});
+			manager.appendMessage({
+				role: "toolResult",
+				toolCallId: "truncated",
+				toolName: "bash",
+				isError: true,
+				content: [{ type: "text", text: "Not executed: output token limit reached." }],
+				timestamp: 3,
+			});
+		},
+	);
+	expect(requested).toBe(true);
+	expect(result.finalText).toBe("recovered");
+	expect(result.events.at(-1)?.type).toBe("agent_settled");
+});
+
+test.each(RECOVERY_STOPS)("Pi stops after one compact-and-retry attempt when $name recurs", async ({
+	response,
+	errorPrefix,
+}) => {
+	const result = await runRecoveryScenario([
+		fauxAssistantMessage("first incomplete", response),
 		() =>
 			fauxAssistantMessage("second incomplete", {
-				stopReason: "length",
+				...response,
 				timestamp: Date.now() + 60_000,
 			}),
 	]);
@@ -129,6 +198,9 @@ test("Pi stops after one compact-and-retry attempt when length recurs", async ()
 	expect(compactionEnds).toHaveLength(2);
 	expect(compactionEnds[0]?.willRetry).toBe(true);
 	expect(compactionEnds[1]?.willRetry).toBe(false);
-	expect(compactionEnds[1]?.errorMessage).toContain("failed after one compact-and-retry attempt");
+	expect(compactionEnds[1]?.errorMessage).toContain(
+		`${errorPrefix} recovery failed after one compact-and-retry attempt`,
+	);
+	expect(result.events.filter((event) => event.type === "agent_settled")).toHaveLength(1);
 	expect(result.events.at(-1)?.type).toBe("agent_settled");
 });

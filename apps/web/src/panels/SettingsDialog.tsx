@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
+import { EnvironmentSettings } from "./EnvironmentSettings";
 import { ExtensionsSettings } from "./ExtensionsSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
@@ -116,6 +117,8 @@ export function SettingsDialog({
 							<McpSettings />
 						) : selectedSection === SettingsSection.Templates ? (
 							<TemplatesSettings />
+						) : selectedSection === SettingsSection.Environment ? (
+							<EnvironmentSettings />
 						) : selectedSection === SettingsSection.Extensions ? (
 							<ExtensionsSettings />
 						) : selectedSection === SettingsSection.Chat ? (

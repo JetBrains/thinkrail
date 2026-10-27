@@ -1,4 +1,4 @@
-import type { editor } from "monaco-editor/esm/vs/editor/editor.api.js";
+import type { editor } from "monaco-editor/editor/editor.api.js";
 
 export function editorWrappingOptions(
 	lineWidth: number,

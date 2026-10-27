@@ -1,10 +1,10 @@
 import type {
 	AssistantMessage,
 	BackgroundCommandCompletionDetails,
-	DelegationRunDetails,
 	ExtUiRequest,
 	ImageContent,
 	ReviewFixDetails,
+	SubagentCompletionDetails,
 	UserMessage,
 } from "@thinkrail/contracts";
 import type { ToolStatus } from "@thinkrail/extension-api/web";
@@ -43,7 +43,7 @@ export type ChatTurn =
 	| {
 			kind: "subagentCompletion";
 			id: string;
-			details: DelegationRunDetails;
+			details: SubagentCompletionDetails;
 			text: string;
 			timestamp: number;
 	  }

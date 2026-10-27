@@ -247,6 +247,36 @@ test("a .git write nudges the repo-meta sink without ever becoming an fsChanged 
 	expect(nudges).toEqual(["ws1"]);
 });
 
+test("a throwing repo-meta or fsChanged subscriber never escapes the watcher's timers", async () => {
+	const escaped: unknown[] = [];
+	const onUncaught = (error: unknown) => escaped.push(error);
+	process.on("uncaughtException", onUncaught);
+	try {
+		const nudges: string[] = [];
+		setRepoMetaPublisher((id) => {
+			nudges.push(id);
+			throw new Error(`Unknown workspace: ${id}`);
+		});
+		setWatchPublisher((payload) => {
+			payloads.push(payload);
+			throw new Error("subscriber failed");
+		});
+		ensureWatch("ws1");
+		await waitFor(() => payloads.length > 0);
+		writeFileSync(join(worktree, "after.ts"), "export {};\n");
+		await waitFor(() => payloads.some((payload) => payload.paths.includes("after.ts")));
+		mkdirSync(join(worktree, ".git"), { recursive: true });
+		writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/one\n");
+		await waitFor(() => nudges.length === 1);
+		await sleep(400);
+		writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/two\n");
+		await waitFor(() => nudges.length === 2);
+		expect(escaped).toEqual([]);
+	} finally {
+		process.off("uncaughtException", onUncaught);
+	}
+}, 15_000);
+
 test("a watch-started publisher that throws leaves no half-registered watcher behind", async () => {
 	let calls = 0;
 	setWatchStartedPublisher(() => {

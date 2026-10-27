@@ -81,8 +81,11 @@ export function gitCommitPaths(
 }
 
 export function gitHeadSha(workspaceId: string): string | null {
-	const cwd = workspace(workspaceId).worktreePath;
-	const head = git(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+	return headShaAt(workspace(workspaceId).worktreePath);
+}
+
+export function headShaAt(repoPath: string): string | null {
+	const head = git(repoPath, ["rev-parse", "--verify", "--quiet", "HEAD"]);
 	return head.ok && head.out ? head.out : null;
 }
 

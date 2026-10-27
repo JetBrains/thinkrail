@@ -16,9 +16,11 @@ import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
+	completionDelivery,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
@@ -45,6 +47,7 @@ import {
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TURN_CHANGES_PROTOCOL_VERSION,
+	USER_THEMES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
@@ -216,8 +219,23 @@ test("local language files and the locale setting are pinned to v89", () => {
 	expect(WS_CHANNELS.localesChanged).toBe("locales.changed");
 });
 
+test("the stored host environment is pinned to v91", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(HOST_ENVIRONMENT_PROTOCOL_VERSION);
+	expect(HOST_ENVIRONMENT_PROTOCOL_VERSION).toBe(91);
+	expect(WS_METHODS.environmentGet).toBe("environment.get");
+	expect(WS_METHODS.environmentUpdate).toBe("environment.update");
+});
+
+test("user theme files are pinned to v92", () => {
+	expect(PROTOCOL_VERSION).toBe(92);
+	expect(USER_THEMES_PROTOCOL_VERSION).toBe(92);
+	expect(WS_METHODS.themesList).toBe("themes.list");
+	expect(WS_METHODS.themesReveal).toBe("themes.reveal");
+	expect(WS_CHANNELS.themesChanged).toBe("themes.changed");
+});
+
 test("client error reports are pinned to v90", () => {
-	expect(PROTOCOL_VERSION).toBe(90);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CLIENT_ERROR_REPORT_PROTOCOL_VERSION);
 	expect(CLIENT_ERROR_REPORT_PROTOCOL_VERSION).toBe(90);
 	expect(WS_METHODS.clientReportError).toBe("client.reportError");
 });
@@ -398,4 +416,14 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 	expect(WS_METHODS.subagentStop).toBe("subagent.stop");
 	expect(WS_METHODS.subagentStopAll).toBe("subagent.stopAll");
 	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
+});
+
+describe("completionDelivery", () => {
+	test("reads the delivery marker and treats a missing or unknown value as absent", () => {
+		expect(completionDelivery({ delivery: "wake" })).toBe("wake");
+		expect(completionDelivery({ delivery: "run" })).toBe("run");
+		expect(completionDelivery({ delivery: "appended" })).toBe("appended");
+		expect(completionDelivery({})).toBeUndefined();
+		expect(completionDelivery({ delivery: "later" })).toBeUndefined();
+	});
 });

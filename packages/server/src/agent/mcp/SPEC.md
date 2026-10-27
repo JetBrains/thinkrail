@@ -33,7 +33,10 @@ consistency, CIMD constraints, `authServerMetadataUrl`), `auth.provider` only wi
 **never in the project file**, project override entries (`enabled` / `exposure` / `toolExposure` only, on
 an existing global server, reported merged with `scope: "global"` and an `override` path), and the
 `-`/`_` namespace clash. Re-verify on every pi bump; a parity failure is a port bug, never a reason to
-relax a rule.
+relax a rule. One leading UTF-8 BOM is ignored consistently by the loader, writers, and raw-entry
+occupancy/fingerprint reads. A successful edit writes ordinary JSON without the BOM; a refused edit or
+removal of an absent name preserves the original bytes. This keeps Windows-authored files editable
+without bypassing approvals or treating an occupied name as absent.
 
 ## What's here
 

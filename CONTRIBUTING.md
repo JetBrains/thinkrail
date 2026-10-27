@@ -118,7 +118,9 @@ ThinkRail's interface strings live in one file,
 1. Copy `en.json` into `~/.thinkrail/locales/` as your language's code — `de.json`, `pt-BR.json`,
    `zh-Hant.json`. Keep the keys; translate the values. Strings you leave out stay in English.
 2. Keep every `{{placeholder}}` exactly as written (a string whose placeholders differ from English is
-   ignored) and keep `<0>…</0>` markers around the same words.
+   ignored) and keep `<0>…</0>` markers around the same words. Keep literals the user must type
+   verbatim too — a protocol answer such as OpenSSH's `yes`, a JSON key, a flag, or a command — even
+   when the prose around them is translated.
 3. Counters come in plural forms: English has `key_one` and `key_other`; write the forms your language
    uses from `_zero`, `_one`, `_two`, `_few`, `_many`, `_other`
    ([CLDR plural rules](https://www.unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html)).

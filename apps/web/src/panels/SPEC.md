@@ -432,7 +432,7 @@ degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filter
 a project picker, the prompt hero, and the reused
   `chat/ModelEffortPicker` in **pre-session** mode. It opens **following the host default**: the pill reads
   `Default · ‹model› · ‹level›` from the host's `model.default` result (the saved default when available or
-  the first available model) and the popover's Default row is checked. Any explicit pick (model, level, or
+  the host's preferred available model) and the popover's Default row is checked. Any explicit pick (model, level, or
   both) flips the dialog to an **explicit pair**; the Default row — and the unavailable-model reconcile below
   — return it to following **synchronously**, so a Create pressed right after choosing Default already
   omits the pair; the `model.default` read that follows only refreshes the displayed pair. Every such
@@ -505,7 +505,7 @@ a project picker, the prompt hero, and the reused
   to report the dropped kick-off). (`gh` status lives in `SettingsDialog`, not the
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+
-  the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates) ·
+  the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates, Environment) ·
   **Interface** (Chat, Appearance, Language, Layout, Terminal) · **System** (Workspaces, Integrations, Extensions,
   Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
@@ -737,7 +737,12 @@ a project picker, the prompt hero, and the reused
   disclosed by a warning notice under the mode control — outside the disclosure, so it is always visible —
   naming the effective same-appearance fallback, and is never silently written back. The panel never owns
   a theme list, media-query logic, pair derivation, or fallback — all come from `themes`; it derives only
-  the family/contrast counterpart the two controls move to. An **Editor** group hosts the file
+  the family/contrast counterpart the two controls move to. A **Custom themes** group
+  (`CustomThemesSettings.tsx`, props-driven like `LanguagePage`, hidden below
+  `USER_THEMES_PROTOCOL_VERSION`) gives the copy-a-bundled-file steps with a version-pinned link to
+  `dark.theme.json`, the `<dataDir>/themes` folder with **Copy path** / **Open folder** (`themes.reveal`),
+  and one warning notice per unusable file (`themes`' issue list). The page reads the catalog and issues
+  through `onThemesChange`, so a dropped file appears in the lists without reopening. An **Editor** group hosts the file
   `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
   `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
   on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch
@@ -869,7 +874,9 @@ a project picker, the prompt hero, and the reused
   Calendar booking page, opened in a new tab with `noopener noreferrer`. ThinkRail communicates the
   incentive only; attendance verification, eligibility, and credit fulfillment stay outside the app. This
   proactive Settings link is always available and deliberately does not call `feedback.respond`, alter
-  automatic-popup state, or claim that booking alone earns credits.
+  automatic-popup state, or claim that booking alone earns credits. Below it, a one-line community blurb and
+  an outline external anchor open the Discord server through the website's stable `thinkrail.ai/discord`
+  redirect (never a raw invite, so a rotated invite needs no app release).
   **`ModelsSettings`** is the **Models** section, visible only at protocol v72 or newer. It re-reads
   `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
@@ -942,8 +949,20 @@ a project picker, the prompt hero, and the reused
   the list are carried through untouched. An empty registry renders `extensions-empty`; a failed fetch
   renders `extensions-failed`. Disabling never unregisters a tool renderer
   ([[submodule-web-extensions]]), so past transcripts still render.
+  **`EnvironmentSettings`** (the **Environment** section, nav `settings-nav-environment`, listed only at
+  `protocolVersion >= HOST_ENVIRONMENT_PROTOCOL_VERSION`) edits the stored host environment
+  ([[submodule-server-environment]]): the pi config folder, the folder in use (`effectiveAgentDir`), and
+  ordered name/value rows whose values are masked until revealed per row. It fetches `environment.get` on
+  mount into section-local state — never a store slice, because values may be secrets — and keeps an
+  explicit draft (Save / Discard, not per-field writes), since nothing applies before a restart. The form is one `<fieldset disabled>` while a save is in flight, so a
+  response can never overwrite edits made after it was sent, nor attach its issues to rows it never saw. Save sends
+  the whole record through `environment.update`; `{ ok: false }` maps each issue back to its field or row
+  (blank rows are dropped client-side first so server indexes line up). A pending restart shows
+  `settings-environment-restart`; names set at launch carry a "Set at launch" badge. Pure draft helpers
+  live in `panels/environmentDraft.ts`; the props-driven `EnvironmentForm` is what tests render. No folder
+  picker: `dialog.selectDirectory` is the project-setup picker and records setup analytics.
   `ProvidersSettings`/`McpSettings`/`AppearanceSettings`/`LineWidthControl`/`ChatSettings`/`TemplatesSettings`/
-  `WorkspacesSettings`/`PrivacySettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings` and the app-wide **`InterviewPromptDialog`** are the
+  `WorkspacesSettings`/`PrivacySettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings`/`EnvironmentSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
   fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
   middle-button booking activation open Calendar immediately and record `book`; close, Escape, and backdrop record `postpone`; permanent
@@ -1186,7 +1205,8 @@ own section. The kebab menu (`plan-menu`, a
   host-side flow (push + `gh`, NEVER an agent prompt) that, **for first-time creation only**
   (`openReview` absent), goes through the **compose dialog** (`PrComposeDialog.tsx`,
   `pr-compose-dialog`): the click fetches `pr.preview` and opens editable
-  Title (`pr-compose-title`) + Description (`pr-compose-body`, prefilled from the plan) fields;
+  Title (`pr-compose-title`, prefilled from the chat's **real** name — never its first-prompt display label;
+  an unnamed chat leaves the host's branch fallback) + Description (`pr-compose-body`, prefilled from the plan) fields;
   only the submit (`pr-compose-submit`, label follows the action — Open PR / Open draft PR) runs
   `pr.open` with the edited `title`/`body`. The dialog closes on success, stays open
   on a generic failure (edits survive the toast), and hands off to `PrSetupDialog` on
@@ -1858,7 +1878,11 @@ own section. The kebab menu (`plan-menu`, a
   collapsed) — the reveal remains anchored by path while asynchronous sections determine their heights,
   until a view-mode change or user wheel, touch, pointer, or keyboard input takes over. A timeout cannot bound remote reads.
   Finding navigation hands scrolling to the thread only after the section reveal, and disables further
-  header corrections so the thread cannot be scrolled back out of view; a reveal the user takes over, a
+  header corrections so the thread cannot be scrolled back out of view. The pane brings the **section**
+  into view; the within-section reveal of a **comment** is a `reviewFocusRequest` that
+  `consumeChangesTabReveal` raises and the target section's `usePierreFocus` consumes
+  (`virtualizer.revealLine`) — the one path that can surface a line, and its thread card, not yet rendered
+  in a bounded, virtualized section. A reveal the user takes over, a
   newer reveal, or the pane unmounting withdraws its pending `reviewFocusRequest`, so a thread that mounts
   later never yanks the viewport to a finding nobody is waiting for. Each section receives only its own
   path's slice of the tab (scratch, kept keys, flags) behind `memo`, so a keystroke in one section's
@@ -1930,7 +1954,15 @@ own section. The kebab menu (`plan-menu`, a
   corresponding capability. It renders one `view-toggle-<renderer suffix>` segment per candidate when the
   registry returns more than one. Renderer choice replaces the old markdown-only `rendered` state; layout
   and whitespace remain independent diff state. The review tab's toolbar carries the same whitespace and
-  `Split | Inline` controls for every section at once, the scope and target as read-only chips (the scope
+  `Split | Inline` controls for every section at once — but, because that toggle is pane-level across every
+  section rather than per-renderer, they follow `DiffPane`'s capability gates collectively: each control
+  shows only when at least one file in the scope resolves (by path, through `diffRendererCapabilities`) to a
+  renderer advertising it, so an all-Markdown/image/PDF/rich scope hides them instead of offering inert
+  controls. The gate reads only the per-path renderer selections (`selectChangesTabRendererIds`), so draft
+  and view-state writes to a section do not re-resolve the scope. Resolution runs before content loads, so the gate infers the text/binary split from the
+  path's MIME — known binary types (images, PDF) resolve to their layout-less renderers; an
+  unknown-extension binary with no inferable MIME still reads as text until its bytes load.
+  It also carries the scope and target as read-only chips (the scope
   is chosen in the Changes header and is part of the tab's identity), the file / `+ −` totals with the
   viewed count, *Collapse all* / *Expand all*, and `Send review (N)` over the workspace's drafts.
 

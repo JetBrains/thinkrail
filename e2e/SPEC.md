@@ -85,6 +85,12 @@ across CI machines, each booting its own artifact host. A future launcher or
 deployment adds another host adapter for this same suite, never copied feature specs; shared behavior is
 therefore proven through every composition root.
 
+The focused `compaction.live` probe exercises manual compaction, continuation and restored context
+through a real provider. It lowers only the disposable lane's `keepRecentTokens` and disables automatic
+compaction to keep the request small and deterministic, restoring the settings bytes in `finally`.
+It neither changes the provider/effort selection nor proves removal of a fixed output cap; the focused
+SDK reserve-independence canary owns that assertion.
+
 ## Chat resource controls
 
 Resource wire coverage opens persisted chat fixtures through the real UI and checks the authoritative
@@ -445,7 +451,12 @@ browser-local persistence, and cross-browser isolation without involving a provi
 coverage seeds one canonical giant Markdown block and drives real coarse wheel input so initial virtual
 geometry cannot clamp before the row mounts. Chat-title coverage uses persisted Pi transcripts to prove the
 native `/name` path, open-tab and closed-history inline rename paths, keyboard focus recovery, bounded
-long-history scrolling, and reload durability without involving a provider. Visualize coverage
+long-history scrolling, and reload durability without involving a provider. First-prompt label coverage
+(`chat-title-fallback.spec.ts`) seeds unnamed transcripts to pin the host-projected label on the tab strip,
+Recently closed and the session switcher (`data-title-source="prompt"`, full line as tooltip, word-boundary
+cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
+from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
+durability is the server unit test's. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
 sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
 fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons
@@ -462,7 +473,10 @@ mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
 real Settings → Extensions switch through `settings.update`, proves it survives a reload, and seeds a
 historical `visualize` call that must still render its diagram while the extension is off; each test restores
-the switch in `afterEach` because the shard shares one host. The provider-backed counterpart in
+the switch in `afterEach` because the shard shares one host. `environment-settings.spec.ts` drives Settings →
+Environment through rejected and accepted saves and a reload; the host was launched with
+`PI_CODING_AGENT_DIR`, so it also proves the launch value stays in use and is reported as set at launch. It
+clears the stored record in `afterEach` so no later restart-based spec boots with it. The provider-backed counterpart in
 `visualize.live.spec.ts` runs first: with the extension off the agent is never offered `visualize`, and the
 existing diagram/comparison tests that follow re-prove the restored tool in the same chat; a last test
 asks for a before/after UI proposal without naming the tool and expects mockup files under

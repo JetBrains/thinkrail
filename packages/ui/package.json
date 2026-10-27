@@ -40,7 +40,7 @@
 		"react": "catalog:",
 		"react-dom": "catalog:",
 		"react-resizable-panels": "2.1.9",
-		"tailwind-merge": "3.6.0"
+		"tailwind-merge": "3.7.0"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",

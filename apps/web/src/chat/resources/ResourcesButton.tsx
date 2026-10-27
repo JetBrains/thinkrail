@@ -7,12 +7,14 @@ import type { ComponentProps } from "react";
 
 export function ResourcesButton({
 	activeCount,
+	freshCount = 0,
 	open,
 	working,
 	className,
 	...props
 }: ComponentProps<typeof Button> & {
 	activeCount: number | null;
+	freshCount?: number;
 	open: boolean;
 	working?: boolean;
 }) {
@@ -38,10 +40,13 @@ export function ResourcesButton({
 				data-testid="resources-trigger"
 				data-active-count={activeCount ?? "unknown"}
 				data-live={live || undefined}
+				data-fresh-count={freshCount || undefined}
 				aria-label={
 					activeCount === null
 						? t("resources.button.ariaUnavailable")
-						: t("resources.button.ariaActive", { count: activeCount })
+						: freshCount > 0
+							? t("resources.button.ariaActiveFresh", { count: activeCount, fresh: freshCount })
+							: t("resources.button.ariaActive", { count: activeCount })
 				}
 				aria-expanded={open}
 				{...props}
@@ -49,6 +54,14 @@ export function ResourcesButton({
 				<Icon className={cn("size-14", live && "motion-safe:animate-working")} />
 				<span className="hidden @[480px]:inline">{t("resources.button.label")}</span>
 				<span className="tabular-nums">{activeCount ?? "—"}</span>
+				{freshCount > 0 ? (
+					<span
+						data-testid="resources-trigger-fresh"
+						className="inline-flex items-center rounded-full bg-primary-subtle px-4 tr-text-label-pill text-primary tabular-nums"
+					>
+						{t("resources.button.fresh", { count: freshCount })}
+					</span>
+				) : null}
 			</Button>
 		</IconTooltip>
 	);

@@ -10,6 +10,22 @@ const VOS_NT_WINDOWS32 = 0x40004;
 const VFT_APP = 1;
 const VS_FFI_FILEFLAGSMASK = 0x3f;
 
+/** Clears the certificate directory entry, which may point past end of file, and cuts any signature bytes. */
+function withoutSignature(executableData: Uint8Array): Uint8Array {
+	const bytes = new Uint8Array(executableData);
+	const dos = ResEdit.Format.getImageDosHeader(bytes.buffer);
+	const nt = ResEdit.Format.getImageNtHeadersByDosHeader(bytes.buffer, dos);
+	const directories = ResEdit.Format.ImageDataDirectoryArray.from(
+		bytes.buffer,
+		dos.newHeaderAddress + nt.getDataDirectoryOffset(),
+	);
+	const { Certificate } = ResEdit.Format.ImageDirectoryEntry;
+	const signature = directories.get(Certificate);
+	if (signature.size === 0) return bytes;
+	directories.set(Certificate, { virtualAddress: 0, size: 0 });
+	return bytes.subarray(0, Math.min(signature.virtualAddress, bytes.length));
+}
+
 export function brandWindowsExecutable(
 	executableData: Uint8Array,
 	iconData: Uint8Array,
@@ -18,7 +34,7 @@ export function brandWindowsExecutable(
 ): Uint8Array {
 	const icon = ResEdit.Data.IconFile.from(iconData);
 	if (icon.icons.length === 0) throw new Error("ThinkRail Windows icon contains no images");
-	const executable = ResEdit.NtExecutable.from(executableData, { ignoreCert: true });
+	const executable = ResEdit.NtExecutable.from(withoutSignature(executableData));
 	const resources = ResEdit.NtExecutableResource.from(executable);
 	resources.entries = resources.entries.filter(
 		({ type }) => type !== RT_ICON && type !== RT_GROUP_ICON && type !== RT_VERSION,

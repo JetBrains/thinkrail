@@ -159,7 +159,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
    wins and the first name is final — nothing retitles automatically. While a target is unnamed, each
    turn's system prompt says so; guidelines alone were measurably skipped. While a managed workspace is
    unnamed, every call must carry its name, and the agent is asked to pass all missing names in one call
-   so chat and workspace agree, but they stay independent identities written separately — not a cascade. If the agent never calls the tool, the target stays unnamed (accepted). Clients hydrate `SessionSummary.title`, converge live on `session_info_changed`, and continue to
+   so chat and workspace agree, but they stay independent identities written separately — not a cascade. If the agent never calls the tool, the target stays unnamed (accepted); an unnamed chat is *displayed* by
+   the head of its first prompt, which the host projects beside the title (`firstPrompt`) and never writes
+   anywhere — a read-only label, not a name: rename fields start from the real (empty) title, and the
+   agent's or user's title replaces the label on every surface at once. Clients hydrate `SessionSummary.title`, converge live on `session_info_changed`, and continue to
    route by session id, so duplicate human titles are legal.
 9. **Domain state, frontend-local frame, and workspace-local views.** *Domain* state — projects,
    workspaces, **sessions + their transcripts**, terminal catalogs/PTYs, and git — is backend-owned, shared,
@@ -202,9 +205,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
     explains *why* a decision exists and never needs updating.
     **Enforced**, not just documented: `scripts/check-catalog.ts` (`bun run check:deps`, in pre-commit + CI)
     rejects any range, any catalog drift, and a lockfile graph that resolves `react` or `react-dom` outside
-    its one catalog pin (the temporary prerelease override rationale belongs to [[module-web]]). Every pi
+    its one catalog pin (the React pin rationale belongs to [[module-web]]). Every pi
     upgrade also follows [[pi-compatibility]], the architecture-owned registry of host adaptations and
-    their removal gates; detailed rationale stays in the owning module specs. Exempt:
+    their removal gates; detailed rationale stays in the owning module specs. Any other root `overrides`
+    entry is an exact security pin whose rationale and removal gate live with its owner. Exempt:
     `peerDependencies` (extension packages declare `"*"` on purpose — the host provides the dep) and local
     protocols (`workspace:` / `link:` / `file:`). An exact SemVer prerelease/build suffix is still an exact
     pin (`19.3.0-canary-a1124489-20260826`); the checker accepts the full identifier grammar, including
@@ -259,8 +263,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
     retired `vibecoding.thinkrail.ai` hostname is an edge redirect that preserves path and query, never a
     proxy to a second site.
 
-15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `2.0.1` explicitly selects
-    the pinned Bun `1.4.4` runtime and embeds the host in that process, not the default Cottontail
+15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `2.0.5` explicitly selects
+    the pinned Bun `1.4.4` runtime and embeds the host in that process, not the experimental Cottontail
     runtime; it never wraps or spawns the CLI. Its exact npm bootstrap pin selects the Hutch build
     toolchain and generated SDK; Bun remains the workspace package manager. The native window loads the
     packaged web build from the host's actual loopback port so UI, wire, files, and SPA fallback keep one
@@ -411,9 +415,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
     theme. Agent, tool, skill, prompt output and server error text are never translated. Stored and wire
     data never carry translated text: defaults ThinkRail writes (untitled chats, default terminals, the
     host-named default workspace, chat round notices) are worded at render, so a switch re-words all of
-    them, while names set by the user or the agent show verbatim. This is the
-    one runtime-loaded user resource; code extensions and themes stay compiled in (Decision 21 and the
-    themes non-goal) because a string map renders as escaped text and carries no executable surface.
+    them, while names set by the user or the agent show verbatim. Theme manifests are the one other
+    runtime-loaded user resource, on the same model (`~/.thinkrail/themes/*.theme.json`, read by
+    [[submodule-server-themes]], validated by [[submodule-web-themes]]): a manifest is colour data only
+    and is written as CSS custom-property values, never CSS or code. Code extensions stay compiled in
+    (Decision 21) because a string map or a palette carries no executable surface and an extension does.
     Rejected: English-text keys (a wording fix orphans every translation); a host-served bundled catalog
     (bundled strings belong to the web build that renders them); an in-house runtime (i18next chosen for
     its standard format and tooling); catalogs in `contracts` (data and translation logic are not wire

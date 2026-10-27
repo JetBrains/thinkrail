@@ -93,7 +93,7 @@ imports nothing, so the vibecoding island can reuse it without reaching the IDE 
   included once by every route family. `src/components/IdeShell.astro` is the one IDE shell the landing
   and blog render through — icon sprite, skip link, title bar (workspace name
   parameterized: `website` on the landing, `blog` on blog pages, each with the matching
-  `workspace/<name> · from main` branch label), the left project rail, the right files rail +
+  `workspace/<name> · from main` branch label, and GitHub + Discord icon links), the left project rail, the right files rail +
   terminal, the status bar, and the `main.ts` script import; the center column is its default slot
   and the right rail's Files rows its `filetree` slot. The left rail carries the site's real
   navigation as child rows of the `website` workspace — **Landing** (`/`) and **Blog** (`/blog/`,
@@ -362,6 +362,10 @@ sitemap derives from the same static route build and therefore covers `/`, the b
 posts, and `/vibecoding/`; `/agentic-development/` and `/agentic-ide/` are filtered out of the
 sitemap because they canonicalize to `/vibecoding/` (see [[submodule-website-vibecoding]]). Previews keep production
 canonical URLs and do not become a second search identity.
+
+`public/_redirects` maps `/discord` to the community server invite, so `thinkrail.ai/discord` is the one
+Discord link the site, blog posts, README, and app use — a rotated invite is a one-line site deploy, never
+an app release. `validateBuild` fails a build that drops it. Discord clicks emit no analytics event yet.
 
 `public/favicon.svg` is the IDE-shell landing/blog tab icon: a rounded tile in the brand primary green carrying the
 **header wordmark's TR mark** (same `viewBox` + paths, not redrawn) in black, centred with balanced

@@ -18,7 +18,11 @@ function modelDef(id: string, cost = 0) {
 }
 
 function stubAvailable(models: ReturnType<typeof withProvider>[]): void {
-	configurePiRuntime({ getAvailableSnapshot: () => models } as unknown as ModelRuntime);
+	configurePiRuntime({
+		getAvailableSnapshot: () => models,
+		getModels: () => [],
+		isUsingOAuth: () => false,
+	} as unknown as ModelRuntime);
 }
 
 function withProvider(provider: string, id: string, cost = 0) {
@@ -40,6 +44,13 @@ test("pickModel(cheap) prefers a known small model (allowlist) over a cheaper un
 test("pickModel(cheap) falls back to the cheapest by token cost when nothing is allowlisted", async () => {
 	stubAvailable([withProvider("pricey", "pricey-1", 10), withProvider("cheapo", "cheapo-1", 1)]);
 	expect((await pickModel("cheap"))?.id).toBe("cheapo-1");
+});
+
+test("pickModel(cheap) skips unpriced models and falls back to the default model when none is priced", async () => {
+	stubAvailable([withProvider("free", "free-1", 0), withProvider("cheapo", "cheapo-1", 1)]);
+	expect((await pickModel("cheap"))?.id).toBe("cheapo-1");
+	stubAvailable([withProvider("free", "free-1", 0), withProvider("openai", "gpt-5.5", 0)]);
+	expect((await pickModel("cheap"))?.id).toBe("gpt-5.5");
 });
 
 test("pickModel(default) returns the first available model; empty set → null", async () => {

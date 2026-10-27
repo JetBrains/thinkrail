@@ -1076,6 +1076,36 @@ test("custom presets synchronize while defaults and group limits remain window-l
 	);
 });
 
+test("preset-card actions wrap inside their card in a longer language", async ({ page }) => {
+	await openFixtureProject(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-language").click();
+	await page.getByTestId("language-es").click();
+	await expect(page.locator("html")).toHaveAttribute("lang", "es");
+
+	await page.getByTestId("settings-nav-layout").click();
+	const cards = page.getByTestId("layout-preset");
+	await expect(cards.first()).toBeVisible();
+	for (let index = 0; index < (await cards.count()); index += 1) {
+		const card = cards.nth(index);
+		const cardBox = await card.boundingBox();
+		expect(cardBox).not.toBeNull();
+		if (!cardBox) continue;
+		const buttons = card.getByRole("button");
+		for (let buttonIndex = 0; buttonIndex < (await buttons.count()); buttonIndex += 1) {
+			const buttonBox = await buttons.nth(buttonIndex).boundingBox();
+			expect(buttonBox).not.toBeNull();
+			if (!buttonBox) continue;
+			expect(buttonBox.x).toBeGreaterThanOrEqual(cardBox.x - 1);
+			expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1);
+		}
+	}
+
+	await page.getByTestId("settings-nav-language").click();
+	await page.getByTestId("settings-language").getByTestId("language-system").click();
+	await expect(page.locator("html")).toHaveAttribute("lang", "en");
+});
+
 test("an accepted side-group overage is grandfathered without allowing further growth", async ({
 	page,
 }) => {

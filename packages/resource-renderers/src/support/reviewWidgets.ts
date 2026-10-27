@@ -1,5 +1,5 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
-import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
+import * as monaco from "monaco-editor/editor/editor.api.js";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReviewThread } from "../registry";

@@ -23,11 +23,18 @@ import {
 } from "../store";
 import {
 	applyThemePreference,
+	clearUserThemes,
+	installUserThemes,
 	onSystemAppearanceChange,
 	readThemeHint,
 	writeThemeHint,
 } from "../themes";
-import { type ConnectionStatus, runHostUpdate, supportsHostUpdateRun } from "../transport";
+import {
+	type ConnectionStatus,
+	runHostUpdate,
+	supportsHostUpdateRun,
+	supportsUserThemes,
+} from "../transport";
 import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
@@ -90,7 +97,11 @@ export function Shell() {
 	const theme = useAppStore((s) => s.theme);
 	const themeMode = useAppStore((s) => s.themeMode);
 	const systemThemePair = useAppStore((s) => s.systemThemePair);
+	const userThemes = useAppStore((s) => s.userThemes);
+	const userThemesUnsupported = welcomeGeneration > 0 && !supportsUserThemes(protocolVersion);
 	useEffect(() => {
+		if (userThemes) installUserThemes(userThemes.files);
+		else if (userThemesUnsupported) clearUserThemes();
 		const preference =
 			welcomeGeneration === 0
 				? themeHint
@@ -99,7 +110,15 @@ export function Shell() {
 		apply();
 		if (welcomeGeneration > 0) writeThemeHint(preference);
 		return preference.themeMode === "system" ? onSystemAppearanceChange(apply) : undefined;
-	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair]);
+	}, [
+		themeHint,
+		welcomeGeneration,
+		theme,
+		themeMode,
+		systemThemePair,
+		userThemes,
+		userThemesUnsupported,
+	]);
 	useGlobalHotkeys({
 		onProjects: hasActiveWorkspace
 			? () => {

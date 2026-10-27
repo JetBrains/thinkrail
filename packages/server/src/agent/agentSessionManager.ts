@@ -1,8 +1,8 @@
-import { createReadStream, existsSync, rmSync } from "node:fs";
+import { createReadStream, existsSync, rmSync, statSync, truncateSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
-import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
+import { clampThinkingLevel, getSupportedThinkingLevels, type Usage } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	type CreateAgentSessionOptions,
@@ -48,6 +48,7 @@ import type {
 import {
 	assistantToolCallsAreExecutable,
 	canMarkCompletionUnread,
+	firstPromptOfTexts,
 	isTranscriptMessageRole,
 	normalizeSessionTitle,
 	sameModel,
@@ -89,6 +90,7 @@ import { publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
 	hasLiveSessionChildren,
+	reconcileSessionSubagentUsage,
 	removeWorkspaceDelegation,
 	stopSessionChildren,
 	subagentsFor,
@@ -111,6 +113,8 @@ import {
 	showPendingMcpReload,
 	watchMcpStatus,
 } from "./mcpSessions";
+import { refreshModelListings } from "./modelAvailability";
+import { preferredDefaultModel } from "./modelDefaults";
 import {
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
@@ -170,6 +174,8 @@ interface Entry {
 	withheldExtensionTools: Set<string>;
 	nudgePromptPending: boolean;
 	lastPublishedState: string | null;
+	firstPrompt: string | null;
+	firstPromptScanned: number;
 	askUserQuestionWaiters: AskUserQuestionWaiters;
 	mcpHost: McpSessionHost;
 }
@@ -180,6 +186,7 @@ const workspaceLifecycleGenerations = new Map<string, number>();
 const closingWorkspaces = new Map<string, number>();
 const pendingSessionPreparations = new Map<string, Set<Promise<unknown>>>();
 const sessionTeardowns = new Map<string, Promise<void>>();
+const tearingDownEntries = new Map<string, Entry>();
 
 interface WorkspaceLifecycleToken {
 	global: number;
@@ -390,12 +397,46 @@ function stateFromEntry(entry: Entry): SessionState {
 	});
 }
 
+function* userTextsOf(entries: readonly SessionEntry[]): Generator<string> {
+	for (const entry of entries) {
+		if (entry.type !== "message" || entry.message.role !== "user") continue;
+		const { content } = entry.message;
+		yield typeof content === "string"
+			? content
+			: content
+					.filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
+					.map((part) => part.text)
+					.join("");
+	}
+}
+
+function firstPromptOf(entries: readonly SessionEntry[]): { firstPrompt?: string } {
+	const head = firstPromptOfTexts(userTextsOf(entries));
+	return head ? { firstPrompt: head } : {};
+}
+
+function entryFirstPrompt(entry: Entry): { firstPrompt?: string } {
+	if (entry.firstPrompt === null) {
+		const manager = entry.session.sessionManager;
+		const count = manager.getEntryCount();
+		if (count !== entry.firstPromptScanned) {
+			const head = firstPromptOfTexts(
+				userTextsOf(manager.getEntries().slice(entry.firstPromptScanned)),
+			);
+			entry.firstPrompt = head ?? null;
+			entry.firstPromptScanned = count;
+		}
+	}
+	return entry.firstPrompt === null ? {} : { firstPrompt: entry.firstPrompt };
+}
+
 function publishEntryState(entry: Entry): void {
 	if (sessions.get(entry.session.sessionId) !== entry) return;
 	const projectId = resolveProjectId(entry.workspaceId);
 	if (!projectId) return;
 	const state = stateFromEntry(entry);
-	const serialized = JSON.stringify(state);
+	const firstPrompt = entryFirstPrompt(entry);
+	const serialized = JSON.stringify({ state, ...firstPrompt });
 	if (entry.lastPublishedState === serialized) return;
 	entry.lastPublishedState = serialized;
 	publishState({
@@ -403,6 +444,7 @@ function publishEntryState(entry: Entry): void {
 		workspaceId: entry.workspaceId,
 		projectId,
 		state,
+		...firstPrompt,
 	});
 }
 
@@ -449,6 +491,7 @@ function stateRecordForEntry(entry: Entry): SessionStateRecord {
 		workspaceId: entry.workspaceId,
 		projectId,
 		state: stateFromEntry(entry),
+		...entryFirstPrompt(entry),
 	};
 }
 
@@ -702,6 +745,26 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 			}
 		});
 	}
+}
+
+function activateRegistryTools(entry: Entry): void {
+	const { session } = entry;
+	const disabled = disabledExtensions();
+	const active = new Set(session.getActiveToolNames());
+	const inactive = session
+		.getAllTools()
+		.filter((tool) => {
+			const owner = registryExtensionName(tool.sourceInfo.path);
+			return (
+				owner !== undefined &&
+				!disabled.has(owner) &&
+				!active.has(tool.name) &&
+				(tool.exposure === "direct" || tool.exposure === "model-only") &&
+				session.getToolDefinition(tool.name)?.defaultActive !== false
+			);
+		})
+		.map((tool) => tool.name);
+	if (inactive.length > 0) session.setActiveToolsByName([...active, ...inactive]);
 }
 
 function enabledExtensionMissing(session: AgentSession, disabled: ReadonlySet<string>): boolean {
@@ -1047,6 +1110,8 @@ async function prepareSessionEntry(
 		withheldExtensionTools: new Set(),
 		nudgePromptPending: false,
 		lastPublishedState: null,
+		firstPrompt: null,
+		firstPromptScanned: 0,
 		askUserQuestionWaiters,
 		mcpHost,
 	};
@@ -1068,8 +1133,8 @@ async function prepareSessionEntry(
 		}
 		if (event.type === "turn_end") {
 			entry.askUserQuestionWaiters.persistTurn(event.toolResults);
-			entry.commands.flushCompletions();
-			entry.subagents.flushCompletions();
+			entry.commands.flushCompletions({ atTurnEnd: true });
+			entry.subagents.flushCompletions({ atTurnEnd: true });
 		}
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
@@ -1090,6 +1155,8 @@ async function prepareSessionEntry(
 		if (event.type === "compaction_end") {
 			entry.piCompactionInProgress = false;
 			reconsiderPendingReload(entry);
+			entry.commands.flushCompletions();
+			entry.subagents.flushCompletions();
 		}
 		if (event.type === "agent_start") {
 			entry.lastSettlement = null;
@@ -1232,10 +1299,12 @@ async function registerSession(
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
+	activateRegistryTools(prepared.entry);
 	applyExtensionTools(prepared.entry);
 	restartMcpStatus(session.sessionId);
 	commands.flushCompletions();
 	subagents.flushCompletions();
+	reconcileSubagentUsageInBackground(workspaceId, session.sessionId);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) {
 		publishCreated(summaryOf(session.sessionId, prepared.entry));
@@ -1440,6 +1509,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		sessionId,
 		workspaceId: entry.workspaceId,
 		title: session.sessionName ?? "",
+		...entryFirstPrompt(entry),
 		model: session.model
 			? sessionWireModel(session.model as unknown as Model<string>, entry.generation)
 			: null,
@@ -1571,18 +1641,22 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 			(info) =>
 				info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
 		)
-		.map((info) => ({
-			sessionId: info.id,
-			workspaceId,
-			title: info.name ?? "",
-			model: null,
-			thinkingLevel: "medium" as ThinkingLevel,
-			isStreaming: false,
-			messageCount: info.messageCount,
-			updatedAt: info.modified.getTime(),
-			live: false,
-			state: stateFromDisk(info.id, SessionManager.open(info.path)),
-		}));
+		.map((info) => {
+			const manager = SessionManager.open(info.path);
+			return {
+				sessionId: info.id,
+				workspaceId,
+				title: info.name ?? "",
+				...firstPromptOf(manager.getEntries()),
+				model: null,
+				thinkingLevel: "medium" as ThinkingLevel,
+				isStreaming: false,
+				messageCount: info.messageCount,
+				updatedAt: info.modified.getTime(),
+				live: false,
+				state: stateFromDisk(info.id, manager),
+			};
+		});
 	return [...live, ...disk];
 }
 
@@ -1642,6 +1716,7 @@ async function collectSessionStateSources(
 				workspaceId: entry.workspaceId,
 				projectId: workspace.projectId,
 				state: stateFromEntry(entry),
+				...entryFirstPrompt(entry),
 			},
 			branch: () => entry.session.sessionManager.getBranch(),
 			publish: () => {
@@ -1665,6 +1740,7 @@ async function collectSessionStateSources(
 				workspaceId: workspace.id,
 				projectId: workspace.projectId,
 				state: stateFromDisk(info.id, manager, baseline),
+				...firstPromptOf(manager.getEntries()),
 			};
 			records.push({
 				record,
@@ -1897,7 +1973,11 @@ async function openDiskSession(
 	if (persistedModel) {
 		try {
 			exactModel = resolvePersistedModel(generation.runtime, persistedModel);
-		} catch {}
+		} catch {
+			const pi = generation.runtime.getAvailableSnapshot();
+			if (pi.some((model) => sameModel(model, persistedModel)))
+				exactModel = preferredDefaultModel(settledAvailableModels(generation.runtime));
+		}
 	}
 	repairDanglingToolCalls(sessionManager);
 	await createParentSession(
@@ -2378,7 +2458,7 @@ export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel)
 export function getSessionStats(sessionId: string): SessionStats {
 	const session = mustGet(sessionId);
 	const stats = session.getSessionStats();
-	const contextUsage = stats.contextUsage ?? session.getContextUsage();
+	const { contextUsage } = stats;
 	return {
 		sessionId: stats.sessionId,
 		totalMessages: stats.totalMessages,
@@ -2392,6 +2472,74 @@ export function getSessionStats(sessionId: string): SessionStats {
 		cost: stats.cost,
 		...(contextUsage ? { contextUsage } : {}),
 	};
+}
+
+function reconcileSubagentUsageInBackground(workspaceId: string, sessionId: string): void {
+	void reconcileSessionSubagentUsage(workspaceId, sessionId, () =>
+		usageWritableEntry(sessionId)?.session.sessionManager.getEntries(),
+	).catch((error: unknown) =>
+		log.warn(`subagent usage was not reconciled for ${sessionId}`, error as Error),
+	);
+}
+
+function usageWritableEntry(sessionId: string): Entry | undefined {
+	if (hasDeletionTombstone(sessionId)) return undefined;
+	return sessions.get(sessionId) ?? tearingDownEntries.get(sessionId);
+}
+
+function sessionFileSize(file: string | undefined): number | undefined {
+	if (!file) return undefined;
+	try {
+		return statSync(file).size;
+	} catch {
+		return undefined;
+	}
+}
+
+function rollBackUsageAppend(
+	sessionId: string,
+	sessionManager: SessionManager,
+	leaf: string | null,
+	file: string | undefined,
+	size: number | undefined,
+): boolean {
+	const incorporated = sessionManager.getLeafId() !== leaf;
+	try {
+		if (incorporated && leaf) sessionManager.branch(leaf);
+		else if (incorporated) sessionManager.resetLeaf();
+		if (file && size !== undefined && statSync(file).size > size) truncateSync(file, size);
+	} catch (error) {
+		log.warn(`a failed usage append was not rolled back for ${sessionId}`, error as Error);
+	}
+	return incorporated;
+}
+
+/** Returns whether pi took the usage into its session totals; persisting it is best-effort. */
+export function recordSessionUsage(
+	sessionId: string,
+	record: { kind: string; provider: string; model: string; usage: Usage; note?: string },
+): boolean {
+	const entry = usageWritableEntry(sessionId);
+	if (!entry) return false;
+	const { sessionManager } = entry.session;
+	const { kind, provider, model, usage, note } = record;
+	const leaf = sessionManager.getLeafId();
+	const file = sessionManager.getSessionFile();
+	const size = sessionFileSize(file);
+	let incorporated = true;
+	try {
+		sessionManager.appendUsage(kind, provider, model, usage, note);
+	} catch (error) {
+		incorporated = rollBackUsageAppend(sessionId, sessionManager, leaf, file, size);
+		log.warn(`${kind} usage was not persisted for ${sessionId}`, error as Error);
+	}
+	if (!incorporated) return false;
+	try {
+		publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
+	} catch (error) {
+		log.warn(`usage invalidation was not published for ${sessionId}`, error as Error);
+	}
+	return true;
 }
 
 export interface McpSessionView {
@@ -2503,6 +2651,7 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 export async function listAvailableModels(): Promise<WireModel[]> {
 	const generation = await getPiRuntimeGeneration();
 	void refreshCatalogs(generation.runtime);
+	void refreshModelListings(generation.runtime, generation.opaqueProviderIds);
 	return readAvailableWireModels(generation);
 }
 
@@ -2512,7 +2661,10 @@ export async function listSettledModels(): Promise<WireModel[]> {
 
 export async function refreshAvailableModels(force = false): Promise<RefreshedModels> {
 	const generation = await getPiRuntimeGeneration();
-	const { completed } = await refreshCatalogs(generation.runtime, { force });
+	const [{ completed }] = await Promise.all([
+		refreshCatalogs(generation.runtime, { force }),
+		refreshModelListings(generation.runtime, generation.opaqueProviderIds, { force }),
+	]);
 	return { models: readAvailableWireModels(generation), complete: completed };
 }
 
@@ -2651,6 +2803,10 @@ function disposeSession(sessionId: string): Promise<void> {
 	if (!entry) return Promise.resolve();
 	entry.disposed = true;
 	const cascade = trackSessionTeardown(sessionId, closeSessionResources(entry));
+	tearingDownEntries.set(sessionId, entry);
+	void cascade.finally(() => {
+		if (tearingDownEntries.get(sessionId) === entry) tearingDownEntries.delete(sessionId);
+	});
 	cancelExtUiForSession(sessionId);
 	forgetMcpStatus(sessionId);
 	entry.askUserQuestionWaiters.abandon();
@@ -2696,6 +2852,7 @@ export function disposeAllSessions(): void {
 		disposePiSessionAfterShutdown(entry);
 	}
 	sessions.clear();
+	tearingDownEntries.clear();
 	deletedSessions.clear();
 }
 
@@ -2848,6 +3005,7 @@ async function runDeleteTransaction(
 			deletedSessions.delete(sessionId);
 			sessions.get(sessionId)?.commands.flushCompletions();
 			sessions.get(sessionId)?.subagents.flushCompletions();
+			if (sessions.has(sessionId)) reconcileSubagentUsageInBackground(workspaceId, sessionId);
 			publishSessionResourcesChanged(workspaceId, sessionId);
 		}
 		throw error;

@@ -20,7 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, memo, type ReactNode, useEffect, useRef, useState } from "react";
-import { DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
+import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
 	AuxiliaryRailIndicator,
@@ -85,6 +85,7 @@ export interface TabStripProps {
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
+	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
@@ -136,6 +137,7 @@ export const TabStrip = memo(function TabStrip({
 	onHideSide,
 	onRevealTool,
 	onRenameChat,
+	chatFirstPrompts,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	splitGeometry,
@@ -243,6 +245,7 @@ export const TabStrip = memo(function TabStrip({
 							onHideSide={onHideSide}
 							onRevealTool={onRevealTool}
 							onRenameChat={onRenameChat}
+							{...(chatFirstPrompts ? { chatFirstPrompts } : {})}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
 							draggingTab={draggingTab}
@@ -340,7 +343,7 @@ export const TabStrip = memo(function TabStrip({
 									<CommandItem
 										key={tab.id}
 										value={tab.id}
-										keywords={tabSearchKeywords(t, tab)}
+										keywords={tabSearchKeywords(t, tab, chatFirstPrompts)}
 										onSelect={() => {
 											overflowFocusTarget.current = tab.id;
 											selectTab(tab.id);
@@ -348,7 +351,7 @@ export const TabStrip = memo(function TabStrip({
 										}}
 									>
 										{tabIcon(tab)}
-										<span className="truncate">{layoutTabName(t, tab)}</span>
+										<span className="truncate">{layoutTabName(t, tab, chatFirstPrompts)}</span>
 									</CommandItem>
 								))}
 							</CommandList>
@@ -388,6 +391,7 @@ export interface WorkbenchTabProps {
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
+	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	draggingTab: LayoutTab | null;
@@ -417,6 +421,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	onHideSide,
 	onRevealTool,
 	onRenameChat,
+	chatFirstPrompts,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	draggingTab,
@@ -569,7 +574,9 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 		? document[currentAuxiliary].groups.findIndex((group) => group.id === location.groupId)
 		: -1;
 	const currentAuxiliaryLimit = currentAuxiliary === "bottom" ? maxBottomGroups : maxSideGroups;
-	const name = layoutTabName(t, tab);
+	const name = layoutTabName(t, tab, chatFirstPrompts);
+	const chatTitle =
+		tab.kind === "chat" ? chatLabel(t, tab.name, chatFirstPrompts?.[tab.sessionId]) : undefined;
 	const groupRemoval = removeLayoutGroup(t, document, location);
 
 	const move = (target: LayoutGroupLocation, targetIndex?: number) => {
@@ -603,7 +610,9 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			data-layout-tab-id={tab.id}
 			tabIndex={rail ? rail.tabIndex : active ? 0 : -1}
 			{...dragListeners}
-			title={rail ? undefined : preview ? t("workbench.tab.previewTitle") : name}
+			title={
+				rail ? undefined : preview ? t("workbench.tab.previewTitle") : (chatTitle?.tooltip ?? name)
+			}
 			onFocus={rail?.onFocus}
 			onClick={rail ? rail.onActivate : selectFromClick}
 			onDoubleClick={rail ? undefined : selectFromDoubleClick}
@@ -645,6 +654,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 					data-preview={preview}
 					data-kind={tab.kind === "document" ? "plan" : tab.kind}
 					data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
+					data-title-source={chatTitle?.source}
 					data-dragging={(isDragging && draggingTab?.id === tab.id) || undefined}
 					className={cn(
 						"group data-[dragging]:opacity-40",
@@ -689,7 +699,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 								type="text"
 								spellCheck={false}
 								aria-label={t("workbench.tab.chatName")}
-								defaultValue={name}
+								defaultValue={tab.name}
 								onKeyDown={onNameKeyDown}
 								onBlur={commitRename}
 								className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default outline-none"
@@ -727,7 +737,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 				{tab.kind === "chat" && onRenameChat ? (
 					<ContextMenuItem
 						onSelect={() => {
-							editStartNameRef.current = name;
+							editStartNameRef.current = tab.name;
 							cancelNextBlurRef.current = false;
 							restoreTabFocusRef.current = false;
 							enterRenameRef.current = true;
@@ -809,7 +819,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 				{moveTargets.map((group) => {
 					const separate = group.location.area !== "center" && !canJoinAuxiliaryGroup(group, tab);
 					const label = t(MOVE_TO_PANE_LABELS[group.location.area], {
-						group: describeLayoutGroup(t, group.tabs),
+						group: describeLayoutGroup(t, group.tabs, chatFirstPrompts),
 					});
 					return (
 						<ContextMenuItem

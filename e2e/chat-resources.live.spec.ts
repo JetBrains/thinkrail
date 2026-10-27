@@ -149,7 +149,10 @@ test("natural command completion refreshes the closed inspector and survives tra
 		"running",
 	);
 	await expect(trigger).toHaveAttribute("data-active-count", "0", { timeout: 60_000 });
-	await expect(page.getByTestId("resources-dock")).toHaveCount(0);
+	const dock = page.getByTestId("resources-dock");
+	await expect(dock.locator(commandRows)).toHaveAttribute("data-fresh", "true");
+	await expect(dock.locator(commandRows)).toHaveAttribute("data-status", "completed");
+	await expect(trigger).toHaveAttribute("data-fresh-count", "1");
 	const result = page.getByTestId("background-command-completion");
 	await expect(result).toHaveAttribute("data-status", "completed", { timeout: 60_000 });
 	await expect(result).toHaveAttribute("data-expanded", "false");
@@ -158,6 +161,8 @@ test("natural command completion refreshes the closed inspector and survives tra
 	await expect(page.getByTestId("turn-divider")).toHaveCount(2);
 	await result.getByTestId("background-result-toggle").click();
 	await expect(result.getByTestId("background-result-body")).toContainText("RESOURCE_DONE");
+	await expect(dock).toHaveCount(0);
+	await expect(trigger).not.toHaveAttribute("data-fresh-count");
 	await result.getByTestId("background-result-open").click();
 	await expect(inspector).toBeVisible();
 	const row = inspector.locator(commandRows).filter({ hasText: "resource-finish" });

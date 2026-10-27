@@ -119,6 +119,7 @@ export type PiEvent =
 	  }
 	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
 	| { type: "session_info_changed"; name: string | undefined }
+	| { type: "entry_appended"; entryType: string }
 	| { type: "thinking_level_changed"; level: ThinkingLevel }
 	| {
 			type: "compaction_end";
@@ -203,6 +204,7 @@ export interface SessionSummary {
 	sessionId: string;
 	workspaceId: string;
 	title: string;
+	firstPrompt?: string;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	isStreaming: boolean;

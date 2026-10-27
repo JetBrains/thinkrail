@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { languages } from "monaco-editor/esm/vs/editor/editor.api.js";
+import type { languages } from "monaco-editor/editor/editor.api.js";
 import type { LanguageRegistration, ThemeRegistration } from "shiki/core";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
 import { createShikiTokens, monacoThemeData } from "./shikiTokens";

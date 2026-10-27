@@ -8,9 +8,11 @@ export {
 	parseAgentDefinition,
 } from "./src/definitions";
 export {
+	type CompletionDelivery,
 	createSubagents,
 	createSubagentsExtension,
 	SUBAGENT_COMPLETION_MESSAGE,
+	type SubagentCompletionDetails,
 	type Subagents,
 	type SubagentsExtensionOptions,
 } from "./src/extension";

@@ -423,6 +423,7 @@ export function useWorkspaceChatCatalogReconciliation(
 					history.map((summary) => ({
 						sessionId: summary.sessionId,
 						title: summary.title,
+						...(summary.firstPrompt ? { firstPrompt: summary.firstPrompt } : {}),
 						closedAt: summary.updatedAt,
 					})),
 				);

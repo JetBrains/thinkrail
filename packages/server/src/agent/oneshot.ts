@@ -1,5 +1,6 @@
 import type { Api, Context, Model } from "@earendil-works/pi-ai";
 import { usePiRuntime } from "./agentSessionManager";
+import { preferredDefaultModel } from "./modelDefaults";
 import { type AvailableModelsRuntime, settledAvailableModels } from "./piRuntime";
 
 export type ModelTier = "cheap" | "default";
@@ -31,19 +32,25 @@ const CHEAP_MODELS: ReadonlyArray<readonly [provider: string, idPrefix: string]>
 function pickModelFromRuntime(runtime: AvailableModelsRuntime, tier: ModelTier): Model<Api> | null {
 	const available = settledAvailableModels(runtime);
 	if (available.length === 0) return null;
-	if (tier === "default") return available[0] ?? null;
+	if (tier === "default") return preferredDefaultModel(available) ?? null;
 	for (const [provider, prefix] of CHEAP_MODELS) {
 		const hit = available.find(
 			(model) => model.provider === provider && model.id.startsWith(prefix),
 		);
 		if (hit) return hit;
 	}
+	const priced = available.filter((model) => tokenCost(model) > 0);
 	return (
-		[...available].sort((left, right) => {
-			const byCost = left.cost.input + left.cost.output - (right.cost.input + right.cost.output);
-			return byCost !== 0 ? byCost : left.id.localeCompare(right.id);
-		})[0] ?? null
+		priced.sort(
+			(left, right) => tokenCost(left) - tokenCost(right) || left.id.localeCompare(right.id),
+		)[0] ??
+		preferredDefaultModel(available) ??
+		null
 	);
+}
+
+function tokenCost(model: Model<Api>): number {
+	return model.cost.input + model.cost.output;
 }
 
 export function pickModel(tier: ModelTier = "cheap"): Promise<Model<Api> | null> {

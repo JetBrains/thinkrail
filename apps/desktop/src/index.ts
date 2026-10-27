@@ -22,7 +22,6 @@ import {
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation } from "./externalNavigation";
-import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
 import { createKeyStateReader } from "./keyState";
 import {
 	type DesktopDialogLabels,
@@ -418,12 +417,7 @@ async function start(): Promise<void> {
 		preloadSource === null
 			? null
 			: injectInitialWindowChrome(
-					injectInitialDesktopPreferences(
-						usesNativeHostBridge(process.platform)
-							? preferNativeHostBridge(preloadSource)
-							: preloadSource,
-						initialPreferences,
-					),
+					injectInitialDesktopPreferences(preloadSource, initialPreferences),
 					windowChromePreloadSeed(windowChrome),
 				);
 	mainWindow = new BrowserWindow({

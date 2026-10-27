@@ -1,5 +1,15 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	chmodSync,
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -14,13 +24,16 @@ import {
 	type DelegationRunDetails as WireRunDetails,
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
-import type { DelegationRunDetails as CoreRunDetails } from "pi-delegation";
+import { type DelegationRunDetails as CoreRunDetails, delegationSessionDir } from "pi-delegation";
 import { SUBAGENT_COMPLETION_MESSAGE } from "pi-subagents";
+import { setTrashImplementationForTests } from "../trash";
 import {
 	createSession,
 	deleteSession,
 	disposeAllSessions,
+	getSessionStats,
 	liveParentContext,
+	recordSessionUsage,
 	removeSession,
 	removeWorkspaceSessions,
 	setSessionManagerFactory,
@@ -31,10 +44,12 @@ import {
 	delegationRootDir,
 	delegationServiceFor,
 	readChildTranscript,
+	reconcileSessionSubagentUsage,
 	refreshSubagentConcurrency,
 	setSubagentConcurrencyResolver,
 } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
+import { childFileUsage } from "./subagentUsage";
 
 const faux = createFauxCore({
 	provider: "faux",
@@ -171,6 +186,18 @@ test("host embedding: projection, per-workspace service, transcript store, casca
 	expect(errorCodeOf(missing)).toBe("SUBAGENT_TRANSCRIPT_NOT_FOUND");
 });
 
+async function createSessionWith(
+	factory: (dir: string) => SessionManager,
+	input: Parameters<typeof createSession>[0],
+) {
+	setSessionManagerFactory(factory);
+	try {
+		return await createSession(input);
+	} finally {
+		setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	}
+}
+
 async function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (!predicate()) {
@@ -192,6 +219,769 @@ function gatedChildResponse(): { release: () => void } {
 	]);
 	return { release };
 }
+
+test("a child run's usage delta lands in the parent's pi totals and invalidates its stats", async () => {
+	const cwd = tmpDir("trdel-usage-");
+	let parentManager: SessionManager | undefined;
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			parentManager = SessionManager.inMemory(dir);
+			return parentManager;
+		},
+		{ cwd, workspaceId: "ws-usage" },
+	);
+	const published: unknown[] = [];
+	setSessionPublisher((payload) => {
+		if (payload.sessionId === sessionId) published.push(payload.event);
+	});
+	try {
+		expect(getSessionStats(sessionId).tokens.total).toBe(0);
+		faux.setResponses([fauxAssistantMessage("CHILD_DONE")]);
+		const child = await delegationServiceFor("ws-usage").createChild({
+			parent: sessionId,
+			visibility: "hidden",
+			info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+			session: { systemPrompt: "You are a test scout." },
+		});
+		const { usage } = (await child.runQueued("Report.")).details;
+		expect(usage.input + usage.output).toBeGreaterThan(0);
+
+		const { tokens } = getSessionStats(sessionId);
+		expect(tokens).toMatchObject({
+			input: usage.input,
+			output: usage.output,
+			cacheRead: usage.cacheRead,
+			cacheWrite: usage.cacheWrite,
+		});
+		const recorded = parentManager?.getEntries().filter((entry) => entry.type === "usage");
+		expect(recorded).toMatchObject([
+			{ kind: "subagent", provider: "faux", model: "faux", note: child.sessionId },
+		]);
+		expect(published).toContainEqual({ type: "entry_appended", entryType: "usage" });
+
+		await child.dispose();
+		expect(
+			childFileUsage(child.sessionId, readFileSync(child.record.sessionFile, "utf8")),
+		).toMatchObject({
+			usage: {
+				input: usage.input,
+				output: usage.output,
+				cacheRead: usage.cacheRead,
+				cacheWrite: usage.cacheWrite,
+				cost: { total: usage.cost },
+			},
+		});
+		await reconcileSessionSubagentUsage("ws-usage", sessionId, () => parentManager?.getEntries());
+		expect(parentManager?.getEntries().filter((entry) => entry.type === "usage")).toHaveLength(1);
+	} finally {
+		setSessionPublisher(() => {});
+		await removeSession(sessionId);
+	}
+});
+
+test("the subagent totals mirror matches pi's own totals for every spend source", async () => {
+	const cwd = tmpDir("trdel-parity-");
+	const spend = (seed: number, total: number) => ({
+		input: seed,
+		output: seed + 1,
+		cacheRead: seed + 2,
+		cacheWrite: seed + 3,
+		totalTokens: 4 * seed + 6,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total },
+	});
+	const transcript = SessionManager.create(cwd, tmpDir("trdel-parity-sessions-"));
+	transcript.appendMessage({ role: "user", content: "Find it.", timestamp: Date.now() });
+	const askedId = transcript.appendMessage({
+		...fauxAssistantMessage([fauxToolCall("search", { q: "it" }, { id: "call-1" })], {
+			stopReason: "toolUse",
+		}),
+		usage: spend(10, 0.011),
+	});
+	transcript.appendMessage({
+		role: "toolResult",
+		toolCallId: "call-1",
+		toolName: "search",
+		content: [{ type: "text", text: "found" }],
+		isError: false,
+		usage: spend(20, 0.022),
+		timestamp: Date.now(),
+	});
+	transcript.appendCompaction("Compacted.", askedId, 1_000, undefined, false, spend(30, 0.033));
+	transcript.branchWithSummary(askedId, "Abandoned branch.", undefined, false, spend(40, 0.044));
+	transcript.appendUsage("cache_warm", "faux", "faux", spend(50, 0.055));
+	const file = transcript.getSessionFile();
+	if (!file) throw new Error("expected a persisted transcript");
+
+	const { sessionId } = await createSessionWith(() => SessionManager.open(file), {
+		cwd,
+		workspaceId: "ws-parity",
+	});
+	try {
+		const pi = getSessionStats(sessionId);
+		expect(pi.tokens).toMatchObject({ input: 150, output: 155, cacheRead: 160, cacheWrite: 165 });
+		expect(pi.cost).toBeCloseTo(0.165, 12);
+		const mirror = childFileUsage(transcript.getSessionId(), readFileSync(file, "utf8"));
+		expect(mirror?.usage).toMatchObject({
+			input: pi.tokens.input,
+			output: pi.tokens.output,
+			cacheRead: pi.tokens.cacheRead,
+			cacheWrite: pi.tokens.cacheWrite,
+		});
+		expect(mirror?.usage.cost.total).toBeCloseTo(pi.cost, 12);
+	} finally {
+		await removeSession(sessionId);
+	}
+});
+
+async function parentWithGatedChild(workspaceId: string) {
+	let parentManager: SessionManager | undefined;
+	const cwd = tmpDir(`trdel-${workspaceId}-`);
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			parentManager = SessionManager.inMemory(dir);
+			return parentManager;
+		},
+		{ cwd, workspaceId },
+	);
+	const { release } = gatedChildResponse();
+	const child = await delegationServiceFor(workspaceId).createChild({
+		parent: sessionId,
+		visibility: "hidden",
+		info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+		session: { systemPrompt: "You are a test scout." },
+	});
+	const run = child.runQueued("Long background job.");
+	await waitFor(() => child.snapshot?.status === "running");
+	const usageEntries = () =>
+		parentManager?.getEntries().filter((entry) => entry.type === "usage") ?? [];
+	return { cwd, sessionId, child, run, release, usageEntries, parentManager };
+}
+
+test("attaching a chat recovers the spend of children a crashed host never recorded", async () => {
+	const cwd = tmpDir("trdel-crash-");
+	let parentManager: SessionManager | undefined;
+	let orphanId = "";
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			parentManager = SessionManager.inMemory(dir);
+			const orphan = SessionManager.create(
+				cwd,
+				delegationSessionDir(delegationRootDir(), "ws-crash", parentManager.getSessionId()),
+			);
+			orphan.appendMessage({ role: "user", content: "Long job.", timestamp: Date.now() });
+			orphan.appendMessage({
+				...fauxAssistantMessage("partial"),
+				provider: "faux",
+				model: "faux",
+				usage: {
+					input: 120,
+					output: 30,
+					cacheRead: 4_000,
+					cacheWrite: 500,
+					totalTokens: 4_650,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.25 },
+				},
+			});
+			orphanId = orphan.getSessionId();
+			return parentManager;
+		},
+		{ cwd, workspaceId: "ws-crash" },
+	);
+	try {
+		await waitFor(() => getSessionStats(sessionId).tokens.total > 0);
+		expect(getSessionStats(sessionId)).toMatchObject({
+			tokens: { input: 120, output: 30, cacheRead: 4_000, cacheWrite: 500 },
+			cost: 0.25,
+		});
+		const usageEntries = () => parentManager?.getEntries().filter((e) => e.type === "usage");
+		expect(usageEntries()).toMatchObject([
+			{ kind: "subagent", provider: "faux", model: "faux", note: orphanId },
+		]);
+		await reconcileSessionSubagentUsage("ws-crash", sessionId, () => parentManager?.getEntries());
+		expect(usageEntries()).toHaveLength(1);
+	} finally {
+		await removeSession(sessionId);
+	}
+});
+
+test("closing a chat still records the usage of a child its cascade stops", async () => {
+	const { sessionId, child, run, release, usageEntries } = await parentWithGatedChild("ws-close");
+	const closed = removeSession(sessionId);
+	await waitFor(() => liveParentContext(sessionId) === undefined);
+	release();
+	await Promise.all([closed, run]);
+	expect(usageEntries()).toMatchObject([{ kind: "subagent", note: child.sessionId }]);
+});
+
+test("deleting a chat never appends usage to its trashed transcript", async () => {
+	const { cwd, sessionId, run, release, usageEntries } = await parentWithGatedChild("ws-delusage");
+	const deleted = deleteSession(sessionId, "ws-delusage", cwd);
+	await waitFor(() => liveParentContext(sessionId) === undefined);
+	release();
+	await Promise.all([deleted, run]);
+	expect(usageEntries()).toEqual([]);
+});
+
+test("a failed usage write never fails the child run", async () => {
+	const { sessionId, child, run, release, usageEntries, parentManager } =
+		await parentWithGatedChild("ws-enospc");
+	if (!parentManager) throw new Error("expected a parent session manager");
+	parentManager.appendUsage = () => {
+		throw new Error("ENOSPC: no space left on device");
+	};
+	try {
+		release();
+		expect((await run).status).toBe("completed");
+		expect(child.snapshot?.status).toBe("completed");
+		expect(usageEntries()).toEqual([]);
+	} finally {
+		await removeSession(sessionId);
+	}
+});
+
+const writesCanBeDenied = (() => {
+	const dir = mkdtempSync(join(tmpdir(), "trdel-perm-"));
+	const file = join(dir, "probe");
+	writeFileSync(file, "");
+	chmodSync(file, 0o444);
+	try {
+		appendFileSync(file, "x");
+		return false;
+	} catch {
+		return true;
+	} finally {
+		chmodSync(file, 0o644);
+		rmSync(dir, { recursive: true, force: true });
+	}
+})();
+
+async function persistedParent(workspaceId: string) {
+	let manager: SessionManager | undefined;
+	const cwd = tmpDir(`trdel-${workspaceId}-`);
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			manager = SessionManager.create(dir);
+			return manager;
+		},
+		{ cwd, workspaceId },
+	);
+	if (!manager) throw new Error("expected a parent session manager");
+	manager.appendMessage({ role: "user", content: "BEFORE", timestamp: Date.now() });
+	const file = manager.getSessionFile();
+	if (!file) throw new Error("expected a persisted parent transcript");
+	return { cwd, sessionId, manager, file };
+}
+
+function userTexts(manager: SessionManager): string[] {
+	return manager
+		.buildSessionContext()
+		.messages.flatMap((message) =>
+			message.role === "user" && typeof message.content === "string" ? [message.content] : [],
+		);
+}
+
+const subagentSpend = (input: number, note: string) => ({
+	kind: "subagent",
+	provider: "faux",
+	model: "faux",
+	note,
+	usage: {
+		input,
+		output: 1,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: input + 1,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.01 },
+	},
+});
+
+test.skipIf(!writesCanBeDenied)(
+	"a usage write pi kept only in memory never cuts the reopened history",
+	async () => {
+		const { sessionId, manager, file } = await persistedParent("ws-memonly");
+		const { release } = gatedChildResponse();
+		try {
+			const child = await delegationServiceFor("ws-memonly").createChild({
+				parent: sessionId,
+				visibility: "hidden",
+				info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+				session: { systemPrompt: "You are a test scout." },
+			});
+			const run = child.runQueued("Long background job.");
+			await waitFor(() => child.snapshot?.status === "running");
+			chmodSync(file, 0o444);
+			release();
+			const outcome = await run;
+			chmodSync(file, 0o644);
+			expect(outcome.status).toBe("completed");
+			expect(getSessionStats(sessionId).tokens.input).toBe(outcome.details.usage.input);
+			expect(manager.getLeafEntry()?.type).not.toBe("usage");
+
+			manager.appendMessage({ role: "user", content: "AFTER", timestamp: Date.now() });
+			const reopened = SessionManager.open(file);
+			expect(userTexts(reopened)).toEqual(["BEFORE", "AFTER"]);
+			expect(reopened.getEntries().some((entry) => entry.type === "usage")).toBe(false);
+		} finally {
+			release();
+			chmodSync(file, 0o644);
+			await removeSession(sessionId);
+		}
+	},
+);
+
+test.skipIf(!writesCanBeDenied)(
+	"reopening a chat restores subagent spend that was recorded only in memory",
+	async () => {
+		const { cwd, sessionId, file } = await persistedParent("ws-reopen");
+		faux.setResponses([fauxAssistantMessage("CHILD_DONE")]);
+		const child = await delegationServiceFor("ws-reopen").createChild({
+			parent: sessionId,
+			visibility: "hidden",
+			info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+			session: { systemPrompt: "You are a test scout." },
+		});
+		chmodSync(file, 0o444);
+		const outcome = await child.runQueued("Report.").finally(() => chmodSync(file, 0o644));
+		const { usage } = outcome.details;
+		await removeSession(sessionId);
+		expect(
+			SessionManager.open(file)
+				.getEntries()
+				.some((entry) => entry.type === "usage"),
+		).toBe(false);
+
+		const reopened = await createSessionWith(() => SessionManager.open(file), {
+			cwd,
+			workspaceId: "ws-reopen",
+		});
+		try {
+			expect(reopened.sessionId).toBe(sessionId);
+			await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+			expect(getSessionStats(sessionId).tokens).toMatchObject({
+				input: usage.input,
+				output: usage.output,
+				cacheRead: usage.cacheRead,
+				cacheWrite: usage.cacheWrite,
+			});
+		} finally {
+			await removeSession(sessionId);
+		}
+	},
+);
+
+test("a torn usage append is cut back so the next entry stays readable", async () => {
+	const { sessionId, manager, file } = await persistedParent("ws-torn");
+	const appendUsage = manager.appendUsage.bind(manager);
+	try {
+		manager.appendUsage = (...args) => {
+			appendUsage(...args);
+			appendFileSync(file, '{"type":"message","id":"torn');
+			throw Object.assign(new Error("EIO: i/o error, write"), { code: "EIO" });
+		};
+		const sizeBefore = statSync(file).size;
+		expect(recordSessionUsage(sessionId, subagentSpend(40, "child-torn"))).toBe(true);
+		expect(statSync(file).size).toBe(sizeBefore);
+		expect(getSessionStats(sessionId).tokens.input).toBe(40);
+
+		manager.appendUsage = appendUsage;
+		manager.appendMessage({ role: "user", content: "AFTER", timestamp: Date.now() });
+		const reopened = SessionManager.open(file);
+		expect(userTexts(reopened)).toEqual(["BEFORE", "AFTER"]);
+		expect(reopened.getEntries().some((entry) => entry.type === "usage")).toBe(false);
+	} finally {
+		manager.appendUsage = appendUsage;
+		await removeSession(sessionId);
+	}
+});
+
+test("usage accounting survives a throwing publisher and an unreadable transcript path", async () => {
+	const { sessionId, manager, file } = await persistedParent("ws-besteffort");
+	const getSessionFile = manager.getSessionFile.bind(manager);
+	try {
+		setSessionPublisher(() => {
+			throw new Error("socket closed");
+		});
+		expect(recordSessionUsage(sessionId, subagentSpend(10, "child-a"))).toBe(true);
+		setSessionPublisher(() => {});
+		manager.getSessionFile = () => join(file, "missing");
+		expect(recordSessionUsage(sessionId, subagentSpend(20, "child-b"))).toBe(true);
+		manager.getSessionFile = getSessionFile;
+		const onDisk = SessionManager.open(file).getEntries();
+		expect(onDisk.filter((entry) => entry.type === "usage")).toHaveLength(2);
+	} finally {
+		setSessionPublisher(() => {});
+		manager.getSessionFile = getSessionFile;
+		await removeSession(sessionId);
+	}
+});
+
+test.skipIf(!writesCanBeDenied)("a rollback that cannot truncate never throws", async () => {
+	const { sessionId, manager, file } = await persistedParent("ws-notrunc");
+	const appendUsage = manager.appendUsage.bind(manager);
+	try {
+		manager.appendUsage = (...args) => {
+			appendUsage(...args);
+			chmodSync(file, 0o444);
+			throw Object.assign(new Error("EIO: i/o error, close"), { code: "EIO" });
+		};
+		expect(recordSessionUsage(sessionId, subagentSpend(30, "child-c"))).toBe(true);
+		expect(manager.getLeafEntry()?.type).not.toBe("usage");
+	} finally {
+		chmodSync(file, 0o644);
+		manager.appendUsage = appendUsage;
+		await removeSession(sessionId);
+	}
+});
+
+test("a failed deletion recovers the usage of a child that settled while trash was pending", async () => {
+	let reportTrashStarted: () => void = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash: () => void = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
+	setTrashImplementationForTests(async () => {
+		reportTrashStarted();
+		await trashOutcome;
+	});
+	let parentManager: SessionManager | undefined;
+	const cwd = tmpDir("trdel-trashfail-");
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			parentManager = SessionManager.create(dir);
+			return parentManager;
+		},
+		{ cwd, workspaceId: "ws-trashfail" },
+	);
+	parentManager?.appendMessage({ role: "user", content: "persist", timestamp: Date.now() });
+	const { release } = gatedChildResponse();
+	try {
+		const child = await delegationServiceFor("ws-trashfail").createChild({
+			parent: sessionId,
+			visibility: "hidden",
+			info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+			session: { systemPrompt: "You are a test scout." },
+		});
+		const run = child.runQueued("Long background job.");
+		await waitFor(() => child.snapshot?.status === "running");
+		const deleting = deleteSession(sessionId, "ws-trashfail", cwd);
+		await trashStarted;
+		release();
+		await run;
+		const usageEntries = () => parentManager?.getEntries().filter((e) => e.type === "usage") ?? [];
+		expect(usageEntries()).toEqual([]);
+
+		failTrash();
+		await expect(deleting).rejects.toThrow("recycle bin unavailable");
+		await waitFor(() => usageEntries().length > 0);
+		expect(usageEntries()).toMatchObject([{ kind: "subagent", note: child.sessionId }]);
+	} finally {
+		failTrash();
+		setTrashImplementationForTests(undefined);
+		await removeSession(sessionId);
+	}
+});
+
+function twoStepChildResponses(): { release: () => void } {
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	faux.setResponses([
+		fauxAssistantMessage([fauxToolCall("no_such_tool", {})], { stopReason: "toolUse" }),
+		async () => {
+			await gate;
+			return fauxAssistantMessage("DONE");
+		},
+	]);
+	return { release };
+}
+
+function scoutChild(workspaceId: string, parent: string) {
+	return delegationServiceFor(workspaceId).createChild({
+		parent,
+		visibility: "hidden",
+		info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+		session: { systemPrompt: "You are a test scout." },
+	});
+}
+
+const tokenCounts = (usage: {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+}) => ({
+	input: usage.input,
+	output: usage.output,
+	cacheRead: usage.cacheRead,
+	cacheWrite: usage.cacheWrite,
+});
+
+async function inMemoryParent(workspaceId: string) {
+	let manager: SessionManager | undefined;
+	const { sessionId } = await createSessionWith(
+		(dir) => {
+			manager = SessionManager.inMemory(dir);
+			return manager;
+		},
+		{ cwd: tmpDir(`trdel-${workspaceId}-`), workspaceId },
+	);
+	if (!manager) throw new Error("expected a parent session manager");
+	const parent = manager;
+	const usageEntries = () => parent.getEntries().filter((entry) => entry.type === "usage");
+	return { sessionId, manager: parent, usageEntries };
+}
+
+test("a running subagent's spend reaches its parent after each response, before the run ends", async () => {
+	const { sessionId, manager, usageEntries } = await inMemoryParent("ws-live");
+	const { release } = twoStepChildResponses();
+	try {
+		const child = await scoutChild("ws-live", sessionId);
+		const run = child.runQueued("Two steps.");
+		await waitFor(() => usageEntries().length > 0);
+		expect(child.snapshot?.status).toBe("running");
+		const firstStep = getSessionStats(sessionId).tokens.total;
+		expect(firstStep).toBeGreaterThan(0);
+
+		release();
+		const { usage } = (await run).details;
+		const { tokens } = getSessionStats(sessionId);
+		expect(tokens.total).toBeGreaterThan(firstStep);
+		expect(tokenCounts(tokens)).toEqual(tokenCounts(usage));
+		const recorded = usageEntries().length;
+		expect(recorded).toBeGreaterThanOrEqual(2);
+		await child.dispose();
+		await reconcileSessionSubagentUsage("ws-live", sessionId, () => manager.getEntries());
+		expect(usageEntries()).toHaveLength(recorded);
+	} finally {
+		release();
+		await removeSession(sessionId);
+	}
+});
+
+test("a live-recorded run stays exact after its chat is reopened", async () => {
+	const { cwd, sessionId, file } = await persistedParent("ws-livereopen");
+	const { release } = twoStepChildResponses();
+	let reopened: SessionManager | undefined;
+	try {
+		const child = await scoutChild("ws-livereopen", sessionId);
+		const run = child.runQueued("Two steps.");
+		await waitFor(() => getSessionStats(sessionId).tokens.total > 0);
+		release();
+		const { usage } = (await run).details;
+		await removeSession(sessionId);
+		const onDisk = SessionManager.open(file).getEntries();
+		const recorded = onDisk.filter((entry) => entry.type === "usage").length;
+		expect(recorded).toBeGreaterThanOrEqual(2);
+
+		await createSessionWith(
+			() => {
+				reopened = SessionManager.open(file);
+				return reopened;
+			},
+			{ cwd, workspaceId: "ws-livereopen" },
+		);
+		await reconcileSessionSubagentUsage("ws-livereopen", sessionId, () => reopened?.getEntries());
+		expect(reopened?.getEntries().filter((entry) => entry.type === "usage")).toHaveLength(recorded);
+		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
+	} finally {
+		release();
+		await removeSession(sessionId);
+	}
+});
+
+test.skipIf(!writesCanBeDenied)(
+	"a progress write kept only in memory is neither recounted nor lost after reopening",
+	async () => {
+		const { cwd, sessionId, file } = await persistedParent("ws-progressfail");
+		const { release } = twoStepChildResponses();
+		try {
+			const child = await scoutChild("ws-progressfail", sessionId);
+			chmodSync(file, 0o444);
+			const run = child.runQueued("Two steps.");
+			await waitFor(() => getSessionStats(sessionId).tokens.total > 0);
+			chmodSync(file, 0o644);
+			release();
+			const { usage } = (await run).details;
+			expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
+			await removeSession(sessionId);
+			const onDisk = SessionManager.open(file).getEntries();
+			expect(onDisk.filter((entry) => entry.type === "usage").length).toBeGreaterThan(0);
+
+			await createSessionWith(() => SessionManager.open(file), {
+				cwd,
+				workspaceId: "ws-progressfail",
+			});
+			await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+			expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
+		} finally {
+			release();
+			chmodSync(file, 0o644);
+			await removeSession(sessionId);
+		}
+	},
+);
+
+test("sequential runs of one child each record only their own spend", async () => {
+	const { sessionId } = await inMemoryParent("ws-reuse");
+	faux.setResponses([fauxAssistantMessage("FIRST"), fauxAssistantMessage("SECOND")]);
+	try {
+		const child = await scoutChild("ws-reuse", sessionId);
+		const first = (await child.runQueued("One.")).details.usage;
+		const second = (await child.runQueued("Two.")).details.usage;
+		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual({
+			input: first.input + second.input,
+			output: first.output + second.output,
+			cacheRead: first.cacheRead + second.cacheRead,
+			cacheWrite: first.cacheWrite + second.cacheWrite,
+		});
+	} finally {
+		await removeSession(sessionId);
+	}
+});
+
+test("a dropped progress write is carried by the run's remainder", async () => {
+	const { sessionId, manager } = await inMemoryParent("ws-dropprogress");
+	const appendUsage = manager.appendUsage.bind(manager);
+	let failures = 1;
+	manager.appendUsage = (...args) => {
+		if (failures-- > 0) throw new Error("EAGAIN: resource temporarily unavailable");
+		return appendUsage(...args);
+	};
+	faux.setResponses([fauxAssistantMessage("DONE")]);
+	try {
+		const child = await scoutChild("ws-dropprogress", sessionId);
+		const { usage } = (await child.runQueued("One.")).details;
+		expect(failures).toBe(-1);
+		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
+	} finally {
+		manager.appendUsage = appendUsage;
+		await removeSession(sessionId);
+	}
+});
+
+test("a dropped terminal write is recovered by reconciliation, never by the child's next run", async () => {
+	const { sessionId, manager } = await inMemoryParent("ws-dropterminal");
+	const appendUsage = manager.appendUsage.bind(manager);
+	let failing = true;
+	manager.appendUsage = (...args) => {
+		if (failing) throw new Error("EAGAIN: resource temporarily unavailable");
+		return appendUsage(...args);
+	};
+	faux.setResponses([fauxAssistantMessage("FIRST"), fauxAssistantMessage("SECOND")]);
+	try {
+		const child = await scoutChild("ws-dropterminal", sessionId);
+		const first = (await child.runQueued("One.")).details.usage;
+		failing = false;
+		const second = (await child.runQueued("Two.")).details.usage;
+		expect(getSessionStats(sessionId).tokens.input).toBe(second.input);
+
+		await child.dispose();
+		await reconcileSessionSubagentUsage("ws-dropterminal", sessionId, () => manager.getEntries());
+		expect(getSessionStats(sessionId).tokens.input).toBe(first.input + second.input);
+	} finally {
+		manager.appendUsage = appendUsage;
+		await removeSession(sessionId);
+	}
+});
+
+test("a failed deletion after partial progress records only the missing remainder", async () => {
+	let reportTrashStarted: () => void = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash: () => void = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
+	setTrashImplementationForTests(async () => {
+		reportTrashStarted();
+		await trashOutcome;
+	});
+	const { cwd, sessionId, manager } = await persistedParent("ws-partialdelete");
+	const usageEntries = () => manager.getEntries().filter((entry) => entry.type === "usage");
+	const { release } = twoStepChildResponses();
+	try {
+		const child = await scoutChild("ws-partialdelete", sessionId);
+		const run = child.runQueued("Two steps.");
+		await waitFor(() => usageEntries().length > 0);
+		const partial = usageEntries().length;
+		const deleting = deleteSession(sessionId, "ws-partialdelete", cwd);
+		await trashStarted;
+		release();
+		const { usage } = (await run).details;
+		expect(usageEntries()).toHaveLength(partial);
+
+		failTrash();
+		await expect(deleting).rejects.toThrow("recycle bin unavailable");
+		await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
+	} finally {
+		failTrash();
+		release();
+		setTrashImplementationForTests(undefined);
+		await removeSession(sessionId);
+	}
+});
+
+test("emergency disposal never lets a late subagent record recreate a trashed transcript", async () => {
+	const { cwd, sessionId, file } = await persistedParent("ws-emergency");
+	setTrashImplementationForTests(async (input) => {
+		for (const path of typeof input === "string" ? [input] : input) {
+			renameSync(path, `${path}.trashed`);
+		}
+	});
+	const { release } = gatedChildResponse();
+	try {
+		const child = await scoutChild("ws-emergency", sessionId);
+		const run = child.runQueued("Long background job.");
+		await waitFor(() => child.snapshot?.status === "running");
+		const deleting = deleteSession(sessionId, "ws-emergency", cwd);
+		await waitFor(() => !existsSync(file) && liveParentContext(sessionId) === undefined);
+		disposeAllSessions();
+		release();
+		expect((await run).details.usage.input).toBeGreaterThan(0);
+		await deleting;
+		expect(existsSync(file)).toBe(false);
+	} finally {
+		release();
+		setTrashImplementationForTests(undefined);
+	}
+});
+
+test("spend dropped by emergency disposal during a close is recovered when the chat reopens", async () => {
+	const { cwd, sessionId, file } = await persistedParent("ws-closeemergency");
+	const { release } = gatedChildResponse();
+	try {
+		const child = await scoutChild("ws-closeemergency", sessionId);
+		const run = child.runQueued("Long background job.");
+		await waitFor(() => child.snapshot?.status === "running");
+		const closed = removeSession(sessionId);
+		await waitFor(() => liveParentContext(sessionId) === undefined);
+		disposeAllSessions();
+		release();
+		const { usage } = (await run).details;
+		await closed;
+		expect(usage.input).toBeGreaterThan(0);
+		expect(
+			SessionManager.open(file)
+				.getEntries()
+				.some((entry) => entry.type === "usage"),
+		).toBe(false);
+
+		await createSessionWith(() => SessionManager.open(file), {
+			cwd,
+			workspaceId: "ws-closeemergency",
+		});
+		await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+	} finally {
+		release();
+		await removeSession(sessionId);
+	}
+});
 
 test("owned children remain inspectable before and during their first provider response", async () => {
 	const cwd = tmpDir("trdel-prefile-");

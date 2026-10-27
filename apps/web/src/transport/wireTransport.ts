@@ -26,6 +26,7 @@ import {
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
+	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
@@ -36,6 +37,10 @@ let transport: WsTransport | null = null;
 
 export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= HOST_UPDATE_RUN_PROTOCOL_VERSION;
+}
+
+export function supportsUserThemes(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= USER_THEMES_PROTOCOL_VERSION;
 }
 
 export function supportsChangeMutations(protocolVersion: number | null): boolean {
@@ -152,6 +157,21 @@ function refreshLocalLocales(connectionGeneration: number): void {
 		.catch(() => {});
 }
 
+function refreshUserThemes(connectionGeneration: number): void {
+	const store = useAppStore.getState();
+	if (!supportsUserThemes(store.protocolVersion)) {
+		store.installUserThemes(null);
+		return;
+	}
+	void getTransport()
+		.request("themes.list", {})
+		.then((snapshot) => {
+			const current = useAppStore.getState();
+			if (isConnectedGeneration(current, connectionGeneration)) current.installUserThemes(snapshot);
+		})
+		.catch(() => {});
+}
+
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
 	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
@@ -211,6 +231,7 @@ export function initTransport(): WsTransport {
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);
 		refreshLocalLocales(connectionGeneration);
+		refreshUserThemes(connectionGeneration);
 		if (welcome.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION) {
 			hydrateSessionStates(connectionGeneration);
 		} else {
@@ -237,11 +258,14 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.sessionCreated, (data) => {
 		const summary = data as SessionCreatedPayload;
-		useAppStore
-			.getState()
-			.noteClosedChats(summary.workspaceId, [
-				{ sessionId: summary.sessionId, title: summary.title, closedAt: summary.updatedAt },
-			]);
+		useAppStore.getState().noteClosedChats(summary.workspaceId, [
+			{
+				sessionId: summary.sessionId,
+				title: summary.title,
+				...(summary.firstPrompt ? { firstPrompt: summary.firstPrompt } : {}),
+				closedAt: summary.updatedAt,
+			},
+		]);
 	});
 
 	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
@@ -293,6 +317,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.localesChanged, () => {
 		refreshLocalLocales(useAppStore.getState().connectionGeneration);
+	});
+
+	transport.subscribe(WS_CHANNELS.themesChanged, () => {
+		refreshUserThemes(useAppStore.getState().connectionGeneration);
 	});
 
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {

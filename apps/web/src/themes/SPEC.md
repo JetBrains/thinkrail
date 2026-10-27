@@ -10,11 +10,13 @@ tags: [ui, themes]
 
 ## Responsibility
 
-The browser-side theme engine: validates the bundled declarative theme manifests at bootstrap, owns the
-resulting fixed catalog, and resolves/applies the active palette atomically. The host owns only the opaque
+The browser-side theme engine: validates the bundled declarative theme manifests at bootstrap and the
+user's theme files when the host reports them, owns the resulting catalog, and resolves/applies the
+active palette atomically. The host owns only the opaque
 fixed id plus fixed/system mode and optional light/dark pair; this module owns what those values mean on
 this client, including operating-system color-scheme observation and same-appearance fallback. **Adding a
-theme = adding one `bundled/*.theme.json` file** (a PR + rebuild) — no code, contract, CSS, or test changes.
+theme = adding one `*.theme.json` file** — to `bundled/` (a PR + rebuild) or, for a user, to
+`~/.thinkrail/themes` (live, [[submodule-server-themes]]) — no code, contract, CSS, or test changes.
 
 Six manifests ship: the standard **Dark** and **Light** (the configured default and its pair, unchanged),
 **Minimal Dark** and **Minimal Light** (the quiet neutral surface hierarchy, restrained green accent and
@@ -27,12 +29,15 @@ cannot express through the manifest keys is a product decision for all themes, n
 ## Boundary
 
 - **Owns:** the versioned `ThemeManifest` contract + JSON schema; the bundled manifest set; catalog
-  construction and fixed/system resolution; deterministic pair derivation and same-appearance fallback;
+  construction (bundled + user) and fixed/system resolution; user-theme validation, its per-file issue
+  list and its client-side cache; deterministic pair derivation and same-appearance fallback;
   operating-system color-scheme reads/subscription; atomic CSS-custom-property application; the versioned
   first-paint preference hint; the semantic syntax-variable contract; Shiki's generic CSS-variable TextMate
   scope map; and the hex resolver + Monaco colour-key map that adapt that same definition for the strict
   desktop editor API.
-- **Public surface:** `index.ts` only — `initializeBundledThemes` (the synchronous bootstrap),
+- **Public surface:** `index.ts` only — `initializeThemes` (the synchronous bootstrap: bundled
+  catalog plus cached user themes), `installUserThemes` / `clearUserThemes` / `getUserThemeIssues` /
+  `onThemesChange` (the live user-theme catalog and its `UserThemeIssue` list),
   `applyTheme` / `resolveTheme`, preference-aware `applyThemePreference` /
   `resolveThemePreference`, `deriveSystemThemePair`, `readSystemAppearance`,
   `onSystemAppearanceChange`, `getThemes`, `readThemeHint` /
@@ -41,9 +46,9 @@ cannot express through the manifest keys is a product decision for all themes, n
 - **Allowed external deps:** `@thinkrail/contracts` for the opaque ids, theme preference shapes and
   configured default; browser DOM/media/storage APIs and Vite's build-time glob; Shiki types only, to type
   the generic registration.
-- **Forbidden:** server/shared/pi; store, transport, panels, shell, or component state; runtime theme
-  registration or discovery of any kind; executable theme code; selectors/layout or arbitrary CSS
-  supplied by a manifest.
+- **Forbidden:** server/shared/pi; store, transport, panels, shell, or component state; reading files or
+  discovering themes itself (user files arrive only through `installUserThemes`); executable theme code;
+  selectors/layout or arbitrary CSS supplied by a manifest.
 
 ## Manifest contract
 
@@ -54,6 +59,15 @@ six/eight-digit hex; the two selected-text foreground overrides may explicitly b
 consumer's native foreground. There is no inheritance or partial overlay. The engine owns appearance-level
 effects, TextMate/Monaco scope mapping, and CSS-token mapping, so those mechanics never leak into
 manifests. Typography, spacing, radii, fonts, and motion remain product tokens, not theme values.
+
+**The manifest is a user-kept file format, so its schema evolves compatibly.** The parser accepts every
+schema version released for user files (v2 is the first) and migrates older ones in code to the current
+shape before validation, so a theme a user saved never breaks on upgrade. Consequently a key added in a
+later version must be derivable from keys every earlier version already has — the way v2's `header`
+equals the v1 `content` — or it cannot be added; a value a palette genuinely needs to vary starts as a
+derived default. Compatibility is backward only: a file declaring a newer `schemaVersion` than the
+running app knows, or carrying a key it does not know, is reported as `invalid-theme` rather than
+guessed at.
 
 **A manifest supplies the palette, not the roles.** It answers *which colour*; what each colour is
 *for* is the semantic layer declared in `styles/colors.json` — `container-elevated-bg`,
@@ -112,10 +126,34 @@ all-or-nothing at bootstrap. The files are our own, so any invalid or duplicate 
 configured default, or catalog without at least one light and one dark manifest **fails loudly** (unit
 tests catch it before merge). Runtime and JSON-schema validation agree.
 
+**User theme files are held to the same schema but fail soft.** Each file is validated on its own; an
+unusable one becomes a `UserThemeIssue` (the host's read codes, `invalid-theme`, `id-too-long`, or `duplicate-id`
+between two user files) and the rest still load. The legibility and AAA gates above are merge gates for
+our files and are deliberately not applied to user files — their contrast is the user's choice. The
+user's file name carries no meaning; the id inside it does.
+
+**User ids live in their own namespace.** The catalog id of a user theme is `user.<manifest id>` (so the
+manifest id is at most 59 characters), and a bundled manifest may never use the `user.` prefix. Ids
+persist in `AppConfig.theme` and the system pair, so the namespace is what keeps both sides free to
+grow: a file copied from `dark.theme.json` without renaming its id is simply `user.dark`, never
+shadowed by or shadowing the bundled Dark, and a theme we bundle later under any name can never
+silently capture a user's saved choice. Rejected: reserving bundled ids per name (a new bundled theme
+would turn an existing user theme into an error and re-point its saved config to ours) and requiring
+authors to write the prefix themselves (the common copy-and-edit path would fail).
+
 ## Runtime contract
 
-The catalog is fixed once `initializeBundledThemes` runs (pre-React, in `main.tsx`); a new theme appears
-after a rebuild/restart. Fixed mode resolves `AppConfig.theme`. System mode reads
+`initializeThemes` runs pre-React in `main.tsx`; after it, only `installUserThemes` changes the catalog
+(the bundled set is fixed until a rebuild). The shell installs each host snapshot before re-applying the
+preference; re-applying republishes `data-theme` even for an unchanged id, so an edited active theme
+rebuilds Monaco/xterm like a swap. Writing the first-paint hint also caches the user manifests that
+preference names (the fixed id and both pair slots — at most three, never the whole folder), and
+`initializeThemes` installs them, so a user theme paints on first frame instead of flashing the default
+before the host answers; the next snapshot replaces them, and a welcomed host below the user-theme
+protocol clears them (`clearUserThemes`). A cache value over 64 K characters is dropped rather than
+written, trading a first-paint flash for staying well inside the desktop per-value cap. The bound matters on desktop, where this cache
+shares the native preference store's per-value and whole-document caps with every other preference. Deleting the active theme's file resolves
+like any unavailable id below. Fixed mode resolves `AppConfig.theme`. System mode reads
 `matchMedia("(prefers-color-scheme: dark)")` and resolves that appearance's configured slot; a missing,
 failing, or non-matching media API means light. The query is the one cross-platform path for ordinary
 browsers and native system webviews on Windows, Linux, and macOS—there is no native appearance branch and
@@ -126,6 +164,9 @@ Otherwise resolution keeps the opaque host value intact and chooses the lowest-o
 that appearance, then the lowest-order manifest of that appearance, with label/id tie-breaking. On first
 enable, the resolved fixed theme fills its own slot; the opposite slot chooses the lowest-order theme with
 matching contrast, then the same normal/any fallback. A persisted pair is reused on later enables.
+Every fallback and derived opposite slot is chosen from the **bundled** manifests only — the ones that
+passed the contrast gates — so a user theme that happens to sort first (a copy of Dark at order 10
+labelled "Arctic") never becomes the theme a user did not pick.
 
 Application is atomic from consumers' perspective: write the complete variable set, `color-scheme`, and
 semantic contrast metadata, then publish the effective manifest id through `data-theme` last, so generic
@@ -155,9 +196,14 @@ editor-specific catalog entry. Unit coverage pins exact and wrong-appearance res
 pair derivation, absent-signal light behavior, legacy/versioned hints, media-listener cleanup, and complete
 hex resolution of the shared syntax map.
 
+## Deferred
+
+Open, not excluded: partial overlays or inheritance from a bundled theme, import of external formats
+(shadcn/tweakcn CSS, VS Code themes), extension-packaged themes (the seam is a source tag on the same
+`themes.list` files, filtered by the existing extension switch), an in-app editor, and contrast warnings
+for user themes. Until then a user theme is one complete manifest.
+
 ## Non-goals (deliberate)
 
-Users cannot add themes except through a source PR. Runtime registration, extension packaging/loading,
-hot discovery, external theme formats, operating-system contrast following, schedule/time-zone UI, and
-trust/precedence models are all out of scope; if runtime themes ever change, the seam to reintroduce is a
-validated registration path in front of the same catalog.
+A user theme never replaces or shadows a bundled one — the `user.` namespace above is the decision.
+Operating-system contrast following and schedule/time-zone UI are out of scope.

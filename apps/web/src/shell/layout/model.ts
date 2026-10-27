@@ -2,7 +2,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { currentTranslator, type Translator, t } from "@thinkrail/locales/react";
 import {
 	changesTabName,
-	chatName,
+	chatDisplayName,
 	diffTabName,
 	isPreviewCompatibleTabKind,
 	type LayoutAttention,
@@ -107,12 +107,20 @@ const LAYOUT_TOOL_NAME_KEYS = {
 	plan: "workbench.tool.plan",
 } as const satisfies Record<LayoutToolId, MessageKey>;
 
-export function layoutTabName(t: Translator, tab: LayoutTab): string {
+export type ChatFirstPrompts = Readonly<Record<string, string>>;
+
+const NO_FIRST_PROMPTS: ChatFirstPrompts = {};
+
+export function layoutTabName(
+	t: Translator,
+	tab: LayoutTab,
+	chatFirstPrompts: ChatFirstPrompts = NO_FIRST_PROMPTS,
+): string {
 	switch (tab.kind) {
 		case "tool":
 			return t(LAYOUT_TOOL_NAME_KEYS[tab.tool]);
 		case "chat":
-			return chatName(t, tab.name);
+			return chatDisplayName(t, tab.name, chatFirstPrompts[tab.sessionId]);
 		case "terminal":
 			return terminalName(t, tab.name);
 		case "changes":
@@ -120,7 +128,7 @@ export function layoutTabName(t: Translator, tab: LayoutTab): string {
 		case "diff":
 			return tab.before === undefined ? diffTabName(t, tab.scope, tab.path) : tab.name;
 		case "document":
-			return planDocumentName(t, tab.name);
+			return planDocumentName(t, chatDisplayName(t, tab.name, chatFirstPrompts[tab.sourceId]));
 		case "file":
 			return tab.name;
 	}
@@ -584,9 +592,14 @@ export function separatePanesReason(t: Translator): string {
 	return t("workbench.layout.separatePanes");
 }
 
-export function describeLayoutGroup(t: Translator, tabs: readonly LayoutTab[], limit = 3): string {
+export function describeLayoutGroup(
+	t: Translator,
+	tabs: readonly LayoutTab[],
+	chatFirstPrompts: ChatFirstPrompts = NO_FIRST_PROMPTS,
+	limit = 3,
+): string {
 	if (tabs.length === 0) return t("workbench.layout.emptyGroupSummary");
-	const names = tabs.slice(0, limit).map((tab) => layoutTabName(t, tab));
+	const names = tabs.slice(0, limit).map((tab) => layoutTabName(t, tab, chatFirstPrompts));
 	const rest = tabs.length - names.length;
 	const list = names.join(", ");
 	return rest > 0

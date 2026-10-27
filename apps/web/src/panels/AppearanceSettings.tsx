@@ -24,11 +24,14 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useState, useSyncExternalStore } from "react";
+import { copyText } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import {
 	deriveSystemThemePair,
 	getThemes,
+	getUserThemeIssues,
 	onSystemAppearanceChange,
+	onThemesChange,
 	readSystemAppearance,
 	resolveTheme,
 	resolveThemePreference,
@@ -36,6 +39,7 @@ import {
 	type ThemeResolution,
 } from "@/themes";
 import { errorText, getTransport } from "@/transport";
+import { CustomThemesGroup } from "./CustomThemesSettings";
 import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
@@ -56,7 +60,9 @@ const BUNDLED_THEME_LABELS: Readonly<Record<string, MessageKey>> = {
 };
 
 function themeLabel(t: Translator, theme: Pick<ThemeDescriptor, "id" | "label">): string {
-	const key = BUNDLED_THEME_LABELS[theme.id];
+	const key = Object.hasOwn(BUNDLED_THEME_LABELS, theme.id)
+		? BUNDLED_THEME_LABELS[theme.id]
+		: undefined;
 	return key ? t(key) : theme.label;
 }
 
@@ -237,8 +243,11 @@ export function AppearanceSettings() {
 	const [pending, setPending] = useState(false);
 	const [expanded, setExpanded] = useState(false);
 	const systemAppearance = useSyncExternalStore(onSystemAppearanceChange, readSystemAppearance);
+	const themes = useSyncExternalStore(onThemesChange, getThemes);
+	const userThemeIssues = useSyncExternalStore(onThemesChange, getUserThemeIssues);
+	const userThemes = useAppStore((state) => state.userThemes);
+	const appVersion = useAppStore((state) => state.hostAppVersion);
 
-	const themes = getThemes();
 	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
 	const activeTheme = resolveTheme(theme);
 	const fixedResolution = resolveThemePreference({ theme, themeMode: "fixed" });
@@ -348,6 +357,16 @@ export function AppearanceSettings() {
 			dark: targets.dark?.id ?? pair.dark,
 		};
 		if (next.light !== pair.light || next.dark !== pair.dark) update({ systemThemePair: next });
+	};
+
+	const copyThemesFolder = async (folder: string) => {
+		if (await copyText(folder)) toast.success(t("settings.language.folderCopied"));
+	};
+
+	const revealThemesFolder = () => {
+		getTransport()
+			.request("themes.reveal", {})
+			.catch((error) => toast.error(errorText(error, t("settings.language.openFolderFailed"))));
 	};
 
 	const fallbacks = systemMode
@@ -484,6 +503,13 @@ export function AppearanceSettings() {
 					}
 				/>
 			</SettingsGroup>
+			<CustomThemesGroup
+				snapshot={userThemes}
+				issues={userThemeIssues}
+				appVersion={appVersion}
+				onCopyFolder={(folder) => void copyThemesFolder(folder)}
+				onRevealFolder={revealThemesFolder}
+			/>
 			<SettingsGroup title={t("settings.appearance.editorGroup")}>
 				<LineWidthControl kind="file" />
 			</SettingsGroup>

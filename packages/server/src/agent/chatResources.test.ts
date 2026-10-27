@@ -23,6 +23,7 @@ import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
 	answerQuestion,
+	compactSession,
 	createSession,
 	deleteSession,
 	disposeAllSessions,
@@ -591,9 +592,9 @@ test("stop-all acknowledges after signalling every sibling without awaiting sett
 		expect(acknowledged).toBe(6);
 		await waitFor(async () => children.slice(4).every((c) => c.snapshot?.status === "aborted"));
 		expect(children.slice(4).every((c) => c.snapshot?.details.abortReason === "user")).toBe(true);
-		expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents).toHaveLength(
-			6,
-		);
+		const summaries = (await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents;
+		expect(summaries).toHaveLength(6);
+		expect(summaries.every((summary) => summary.detached === undefined)).toBe(true);
 	} finally {
 		gate.resolve();
 	}
@@ -1215,7 +1216,7 @@ test.each([
 	try {
 		await inGap.promise;
 		expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents).toMatchObject([
-			{ childSessionId: job.child.sessionId, status: "running" },
+			{ childSessionId: job.child.sessionId, status: "running", detached: true },
 		]);
 		if (timing === "gap") {
 			job.finish();
@@ -1510,4 +1511,63 @@ test("stopped command completion cannot strand a live question across polite shu
 		if (hasSession(p.sessionId)) await removeSession(p.sessionId);
 		await prompting?.catch(() => {});
 	}
+});
+
+test("a command that finishes during an idle manual compaction is reported once it ends", async () => {
+	const workspaceId = `resources-${++sequence}`;
+	const cwd = mkdtempSync(join(root, "compact-"));
+	mkdirSync(join(cwd, ".pi"));
+	writeFileSync(
+		join(cwd, ".pi", "settings.json"),
+		JSON.stringify({ compaction: { enabled: false, keepRecentTokens: 1, reserveTokens: 4096 } }),
+	);
+	const p = { workspaceId, cwd, ...(await createSession({ workspaceId, cwd })) };
+	const gate = join(cwd, "finish");
+	await launch(p, `while ! test -f '${gate}'; do sleep 0.02; done; printf COMPACTED_COMMAND`);
+	faux.setResponses([fauxAssistantMessage("SEED_ANSWER")]);
+	await promptSession(p.sessionId, "Seed some context to compact.");
+	const summaryGate = deferred();
+	const summaryStarted = deferred();
+	let wokeWithReport = false;
+	const summaryOrWake = (context: { messages: unknown[] }) => {
+		const text = JSON.stringify(context.messages);
+		if (text.includes("context summarization assistant"))
+			return fauxAssistantMessage("COMPACTION_SUMMARY");
+		wokeWithReport = text.includes("COMPACTED_COMMAND");
+		return fauxAssistantMessage("AFTER_COMPACTION");
+	};
+	faux.setResponses([
+		async () => {
+			summaryStarted.resolve();
+			await summaryGate.promise;
+			return fauxAssistantMessage("COMPACTION_SUMMARY");
+		},
+		summaryOrWake,
+		summaryOrWake,
+	]);
+	const compaction = compactSession(p.sessionId);
+	await summaryStarted.promise;
+	writeFileSync(gate, "done");
+	await waitFor(async () => {
+		const resources = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
+		return resources.commands.at(-1)?.status === "completed";
+	});
+	await Bun.sleep(20);
+	const during = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+	expect(
+		during.messages.filter(
+			(m) => m.role === "custom" && m.customType === "background-command-completion",
+		),
+	).toHaveLength(0);
+	summaryGate.resolve();
+	await compaction;
+	await waitFor(async () => {
+		const { messages, summary } = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+		return !summary.isStreaming && JSON.stringify(messages).includes("AFTER_COMPACTION");
+	});
+	expect(wokeWithReport).toBe(true);
+	const { messages } = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+	expect(
+		messages.filter((m) => m.role === "custom" && m.customType === "background-command-completion"),
+	).toHaveLength(1);
 });

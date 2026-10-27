@@ -20,8 +20,11 @@ export type ResultSource =
 	| { kind: "command"; details: BackgroundCommandCompletionDetails }
 	| { kind: "subagent"; details: DelegationRunDetails };
 
+export type ResultReceipt = "received" | "awaitingReply";
+
 export interface ResultRowProps {
 	source: ResultSource;
+	receipt?: ResultReceipt | undefined;
 	expanded: boolean;
 	onToggle?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
 	toggleRef?: ((element: HTMLElement | null) => void) | undefined;
@@ -87,6 +90,7 @@ function resultFacts(source: ResultSource): {
 
 export function ResultRow({
 	source,
+	receipt,
 	expanded,
 	onToggle,
 	toggleRef,
@@ -112,6 +116,13 @@ export function ResultRow({
 				<span className="size-16 shrink-0" />
 			)}
 			<KindGlyph kind={source.kind} state={state} dotRingClassName="ring-container-workspace-bg" />
+			{receipt ? (
+				<span data-testid="background-result-receipt" className="shrink-0 text-text-subtle">
+					{receipt === "received"
+						? t("resources.result.receivedByAgent")
+						: t("resources.result.awaitingReply")}
+				</span>
+			) : null}
 			<span className="shrink-0 text-text-subtle">
 				{command ? t("resources.result.background") : t("resources.result.subagent")}
 			</span>

@@ -4,6 +4,7 @@ import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
 	DEFAULT_WORKSPACE_NAME,
+	firstPromptOfTexts,
 	type GitDiffScope,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
@@ -27,7 +28,7 @@ import {
 import type { Translator } from "@thinkrail/locales/react";
 import type { LoginState } from "../auth";
 import {
-	chatName,
+	chatDisplayName,
 	compactAge,
 	isAbsolutePath,
 	isMcpActiveState,
@@ -37,6 +38,7 @@ import {
 	normalizePath,
 	readLayoutSelection,
 	relativeTime,
+	userText,
 } from "../lib";
 import type {
 	LayoutAuxiliaryRegion,
@@ -587,9 +589,16 @@ export function selectLayoutResourcePlacement(
 	workspaceId: string,
 	resource: LayoutTab,
 ): LayoutResourcePlacement | null {
+	return selectLayoutIdentityPlacement(state, workspaceId, layoutResourceIdentity(resource));
+}
+
+export function selectLayoutIdentityPlacement(
+	state: LayoutDocumentState,
+	workspaceId: string,
+	identity: string,
+): LayoutResourcePlacement | null {
 	const document = state.layoutDocumentsByWorkspace[workspaceId];
 	if (!document) return null;
-	const identity = layoutResourceIdentity(resource);
 	return findLayoutPlacement(document, (tab) => layoutResourceIdentity(tab) === identity);
 }
 
@@ -889,6 +898,20 @@ export function selectChangesTabSection(
 	return tab?.kind === "changes" ? tab.sections[path] : undefined;
 }
 
+export function selectChangesTabRendererIds(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	tabId: string,
+): Record<string, string> {
+	const tab = state.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === tabId);
+	const ids: Record<string, string> = {};
+	if (tab?.kind !== "changes") return ids;
+	for (const [path, section] of Object.entries(tab.sections)) {
+		if (section.rendererId) ids[path] = section.rendererId;
+	}
+	return ids;
+}
+
 export function matchesWorktreePath(reported: string, rel: string): boolean {
 	const path = normalizePath(reported);
 	if (path === rel) return true;
@@ -918,13 +941,55 @@ export function selectChatName(
 	return tabs.find((tab) => tab.kind === "chat" && tab.sessionId === sessionId)?.name ?? "";
 }
 
+export interface ChatFirstPromptState {
+	sessions: Record<string, SessionRuntime>;
+	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
+	closedChatsByWorkspace: Record<string, ClosedChat[]>;
+}
+
+function* userTurnTexts(turns: SessionRuntime["turns"]): Generator<string> {
+	for (const turn of turns) if (turn.kind === "user") yield userText(turn.message.content);
+}
+
+export function selectChatFirstPrompt(
+	state: ChatFirstPromptState,
+	workspaceId: string,
+	sessionId: string,
+): string | undefined {
+	const reported =
+		state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.firstPrompt ??
+		state.closedChatsByWorkspace[workspaceId]?.find((chat) => chat.sessionId === sessionId)
+			?.firstPrompt;
+	if (reported) return reported;
+	const runtime = state.sessions[sessionId];
+	return runtime ? firstPromptOfTexts(userTurnTexts(runtime.turns)) : undefined;
+}
+
+export function selectUnnamedChatFirstPrompts(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
+	workspaceId: string,
+): Record<string, string> {
+	const prompts: Record<string, string> = {};
+	for (const tab of state.tabsByWorkspace[workspaceId] ?? []) {
+		if ((tab.kind !== "chat" && tab.kind !== "plan") || tab.name.trim()) continue;
+		if (tab.sessionId in prompts) continue;
+		const prompt = selectChatFirstPrompt(state, workspaceId, tab.sessionId);
+		if (prompt) prompts[tab.sessionId] = prompt;
+	}
+	return prompts;
+}
+
 export function selectChatTitle(
 	t: Translator,
-	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
 	workspaceId: string,
 	sessionId: string,
 ): string {
-	return chatName(t, selectChatName(state, workspaceId, sessionId));
+	return chatDisplayName(
+		t,
+		selectChatName(state, workspaceId, sessionId),
+		selectChatFirstPrompt(state, workspaceId, sessionId),
+	);
 }
 
 export function selectCompactionTurnIds(

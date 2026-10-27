@@ -4,7 +4,7 @@ type: architecture-design
 status: draft
 title: Pi compatibility — host adaptations and upgrade removal gates
 parent: architecture
-references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat]
+references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands]
 tags: [pi, compatibility]
 ---
 
@@ -17,12 +17,41 @@ The installed version comes only from the root dependency catalog, not a second 
 
 ## Last re-check
 
-Every MCP entry below was re-checked against the installed catalog version and retained: the public
-exports, the builtin MCP configuration/writer code, `openUrl`, the shutdown ordering and startup
-dispatch, and the ephemeral `structuredContent` had not changed. That upgrade widened
-`structuredContent` to any JSON value, stopped enumerating resources on connect (status wording
-`connected · N tools · resources`), cancels requests abandoned during an OAuth refresh, and added
-`reachesTools`; the status parser and result summary tests cover the two visible changes.
+The compaction output-cap upgrade ([upstream #11036](https://github.com/earendil-works/pi/pull/11036))
+was checked against the installed catalog version. **No removal gate is satisfied.**
+
+- MCP loader/writers remain private; management/status still use commands, notifications and logs.
+  `openUrl` remains the public sign-in URL seam. The one parity change is single-leading-BOM acceptance,
+  now shared by the host loader, writers and raw-entry occupancy/fingerprint reads. Config and host
+  tests cover both scopes, approved overrides, malformed occupied names and refused-write preservation.
+- `AgentSession.dispose()` still does not emit extension shutdown; reload dispatch is sequential,
+  and MCP clears its server list before awaiting closure. Keep ordered cleanup and late-start admission.
+  Codemode still needs a worker/WASM artifact surface we do not package. Raw `structuredContent` is
+  still ephemeral, not a bounded durable transcript presentation.
+- Delivered queue removal and `clearQueue()` remain text-only. SDK creation still does not initialize
+  a headless terminal theme. Extension loading still needs Jiti/virtual-module adaptation in artifacts,
+  static OAuth/Bedrock registration and the image-resize override. Artifact probes also exercise a
+  value import from `pi-ai/models` through the external extension loader.
+- Public trust detection does not replace resource-kind discovery/exclusion reloads; session discovery
+  and prompt-template APIs still do not cover the host's read/edit surfaces. Keep their parity tests.
+- Pi now sizes history, turn-prefix and branch summaries without reserve-derived output caps. Reasoning
+  inheritance and rejection of incomplete `length` summaries remain. One public-compaction canary checks
+  turn-prefix answer room across different reserves without pinning provider option policy; lifecycle
+  tests retain cancellation and incomplete-summary rejection coverage.
+  Restored truncated-call recovery now omits the paired tool result too, but does not replace
+  `sessionRepair`'s host-restart and questionnaire repair. No host summarizer, effort-default change,
+  reserve tuning, wire migration or session migration is introduced.
+- Pi 1.3's resumed tool-loadout restore adds one host seam, the registry-tool reconcile at attach below.
+- The bundled chat catalogue changes from 1,554 to 1,599 provider/model pairs: 71 removed and 116 added.
+  Removed pairs include `openai-codex/gpt-5.5` and `openai-codex/gpt-5.3-codex-spark`;
+  `openai/gpt-5.5` remains. This is a bundled-catalogue change, not a claim that providers retired those
+  APIs; stored, refreshed and custom catalogues can differ. Release notes must advise users to check
+  their default and restored-chat model before continuing. Unavailable defaults/resumed models follow
+  the existing, different host/Pi selection rules in [[submodule-server-agent]]; the host still does not
+  surface Pi's `modelFallbackMessage`. This upgrade adds no fallback or warning UI.
+- Since Pi 1.3, `kimi-coding` uses OpenAI Chat Completions at
+  `https://api.kimi.com/coding/v1`. Users with custom `models.json` base URL overrides must include
+  `/v1`; the host does not rewrite those overrides. Include this migration notice in release notes.
 
 ## Upgrade contract
 
@@ -97,6 +126,14 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
 
 ## Other pi-sensitive host seams
 
+**Registry-tool reconcile at attach** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
+restores a resumed chat's recorded tool loadout and keeps recorded removals inactive, so a tool withheld
+while its registry extension was disabled would stay off after re-enabling. Attach re-activates enabled
+registry-extension tools by mirroring Pi's private `_isActivatedOnRegistration` (declarable exposure,
+`defaultActive !== false`); re-check that rule on upgrades. If the host ever calls `navigateTree`, which
+re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way to keep host-withheld tools
+apart from the recorded selection. Run the manager's restart regressions on upgrades.
+
 - **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
   pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))
   and retains image content lost by the destructive queue API. Remove the corresponding workaround
@@ -107,6 +144,17 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
   and the image-resize override bridge resources a single-file artifact cannot discover or load.
   Replace each only when pi supplies an equivalent artifact seam; run `check:seams` and the relevant
   binary/desktop artifact probes, including extension value imports and images.
+- **Account-scoped model availability** — [[submodule-server-agent]], `modelAvailability.ts`. Pi's
+  `openai` provider lists its whole API catalog under Sign in with ChatGPT (its `filterAllModels` drops
+  only classifiers), so the host keeps the ids in pi's `openai-codex` catalog; Central proxies advertise
+  a narrower catalog than pi's, so the host intersects opaque providers with their `/models` listing.
+  Remove the ChatGPT rule when the installed `providers/openai.js` filters OAuth chat models itself, and
+  the listing rule when pi narrows a rerouted provider's catalog to what its endpoint serves; run
+  `modelAvailability.test.ts` and `runtimeGenerations.test.ts`.
+- **Default-model preference** — [[submodule-server-agent]], `modelDefaults.ts`. Pi's
+  `defaultModelPerProvider` is not exported, so the host mirrors it for new-chat, reviewer, and
+  one-shot defaults. Remove the mirror when a public export or initial-model resolver exists; until
+  then the parity test in `modelDefaults.test.ts` fails on any upstream change to the map or order.
 - **Headless theme** — [[submodule-server-agent]], `plainTextTheme`. Pi's terminal theme is not
   initialized by SDK session creation. Remove the subclass when pi supplies a usable non-TUI theme
   contract; run `webUiContext.test.ts` against the whole inherited surface.
@@ -120,6 +168,44 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
   discovery and prompt-template/frontmatter rules where public APIs cannot serve its read/edit UI.
   Prefer public discovery/parsing APIs when they meet those needs; retain parity coverage in history,
   template and composer tests until then.
+- **Subagent usage totals from child transcripts** — [[submodule-server-agent]], `subagentUsage.ts`.
+  Pi's session-total loop (`AgentSession.getSessionStats`) is not exported for a bare session file, so
+  the host mirrors which entries carry spend (`usage`, compaction/branch-summary `usage`, assistant and
+  tool-result message usage) to reconcile crashed child runs. Remove the mirror when pi exports a totals
+  helper over entries or a file. Until then `delegation.test.ts` ("the subagent totals mirror matches pi's
+  own totals for every spend source") pins parity with pi's `getSessionStats` on one transcript that
+  carries every spend source, including off-branch spend; rerun it on every pi bump.
+- **Rollback of a failed usage append** — [[submodule-server-agent]], `recordSessionUsage`.
+  `SessionManager._appendEntry` adds the entry to memory and moves the leaf before `_persist`, and a
+  failed `appendFileSync` can leave a torn partial line. The host therefore restores the previous leaf
+  and truncates an existing transcript back to its pre-append size; `delegation.test.ts` pins both
+  ("a usage write pi kept only in memory never cuts the reopened history", "a torn usage append is cut
+  back…"). Remove the leaf restore when a failed persist leaves pi's memory and leaf unchanged; remove the
+  truncation only when pi also guarantees that a failed append leaves no torn bytes.
+
+- **Detached result hold** — [[module-pi-subagents]] (Result delivery) and
+  [[module-pi-background-commands]], applied by [[submodule-server-agent]]'s `turn_end` and
+  `compaction_end` flushes. Pi drains follow-up messages only when a run would otherwise stop, offers
+  extensions no way to inspect or withdraw one queued message (`hasPendingMessages()` is a boolean,
+  `clearQueue()` is host-only and clears everything), and keeps queued messages across an abort, so a
+  pushed result duplicated one the agent had already pulled. The owners hold outcomes and send them
+  only at step boundaries or to an idle parent. **Removal gate:** a per-message queue handle an
+  extension can withdraw, delivered at the next step rather than at run end — even then, keep the
+  claim-on-pull rule. Run the `pi-subagents` and `pi-background-commands` suites and
+  `agent/chatResources.test.ts`.
+
+## Context-budget limitations
+
+**Owner:** [[submodule-server-agent]]. These are upstream limitations, not host adaptations. In the
+installed SDK, `findCutPoint` keeps a trailing tool-call/result pair whole even when it alone exceeds
+`keepRecentTokens`, and `generateSummary` serializes the whole summarized span without an input
+budget (since Pi 1.4 it requests up to the model's output limit). Bounded tool results therefore do
+not guarantee whole-request admission.
+
+**Upgrade check:** inspect those public functions in the installed compaction implementation for
+retained-batch and summary-input budgeting. Use a tool pair larger than the recent-token target and
+user text larger than the summary model's input window to assess admission, not as CI assertions that
+the limitations must persist. Do not compensate with host retries or compaction-default overrides.
 
 ## Not temporary SDK workarounds
 

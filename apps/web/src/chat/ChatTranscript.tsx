@@ -171,6 +171,7 @@ const ChatTranscript = forwardRef<
 		focusComposer: () => void;
 		openSubagentTranscript: (childSessionId: string | null) => void;
 		resultOpener: ChatActions["resultOpener"];
+		markResultSeen?: ChatActions["markResultSeen"];
 		onTryAgain: () => void;
 		historyOpen: boolean;
 		inspectorOpen: boolean;
@@ -190,6 +191,7 @@ const ChatTranscript = forwardRef<
 		focusComposer,
 		openSubagentTranscript,
 		resultOpener,
+		markResultSeen,
 		onTryAgain,
 		historyOpen,
 		inspectorOpen,
@@ -576,6 +578,7 @@ const ChatTranscript = forwardRef<
 			focusComposer,
 			openSubagentTranscript,
 			resultOpener,
+			markResultSeen,
 			revealChatElement: revealElement,
 			readMcpOutput,
 			openMcpSettings,
@@ -586,6 +589,7 @@ const ChatTranscript = forwardRef<
 			cancelAutomaticReveal,
 			findModel,
 			focusComposer,
+			markResultSeen,
 			openMcpSettings,
 			openProviderSettings,
 			openSubagentTranscript,

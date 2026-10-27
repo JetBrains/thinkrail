@@ -6,7 +6,7 @@ import type {
 	BranchList,
 	BranchStatus,
 	ChangeReceipt,
-	DelegationRunDetails,
+	CompletionDelivery,
 	DelegationRunStatus,
 	DiffStats,
 	EditorInfo,
@@ -19,6 +19,9 @@ import type {
 	GitStatus,
 	HistoryScope,
 	HistorySearchResult,
+	HostEnvironment,
+	HostEnvironmentStatus,
+	HostEnvironmentUpdateResult,
 	InterviewResponse,
 	JbcentralActionResult,
 	JbcentralConnectResult,
@@ -54,6 +57,7 @@ import type {
 	SessionResources,
 	SessionStateRecord,
 	SpecGraphSnapshot,
+	SubagentCompletionDetails,
 	SubagentOverride,
 	Template,
 	TemplateInfo,
@@ -62,6 +66,7 @@ import type {
 	TodoPlan,
 	TodoStatus,
 	TurnChangeSet,
+	UserThemesSnapshot,
 	Workspace,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
@@ -117,7 +122,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 90;
+export const PROTOCOL_VERSION = 92;
+export const USER_THEMES_PROTOCOL_VERSION = 92;
+export const HOST_ENVIRONMENT_PROTOCOL_VERSION = 91;
 export const CLIENT_ERROR_REPORT_PROTOCOL_VERSION = 90;
 export const LOCALES_PROTOCOL_VERSION = 89;
 export const REVIEW_ACTIONS_PROTOCOL_VERSION = 88;
@@ -272,6 +279,8 @@ export const WS_METHODS = {
 	extensionList: "extension.list",
 	localesList: "locales.list",
 	localesReveal: "locales.reveal",
+	themesList: "themes.list",
+	themesReveal: "themes.reveal",
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
@@ -321,6 +330,8 @@ export const WS_METHODS = {
 	providerJbcentralQuota: "provider.jbcentralQuota",
 	hostUpdate: "host.update",
 	settingsUpdate: "settings.update",
+	environmentGet: "environment.get",
+	environmentUpdate: "environment.update",
 	feedbackRespond: "feedback.respond",
 	clientReportError: "client.reportError",
 	historySearch: "history.search",
@@ -380,6 +391,7 @@ export const WS_CHANNELS = {
 	turnChanged: "turn.changed",
 	mcpStatus: "mcp.status",
 	localesChanged: "locales.changed",
+	themesChanged: "themes.changed",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -407,9 +419,18 @@ export function isAskUserAnswersMessage(message: unknown): message is AskUserAns
 
 export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";
 
-export interface SubagentCompletionMessage extends WireCustomMessage<DelegationRunDetails> {
+export interface SubagentCompletionMessage extends WireCustomMessage<SubagentCompletionDetails> {
 	customType: typeof SUBAGENT_COMPLETION_CUSTOM_TYPE;
-	details: DelegationRunDetails;
+	details: SubagentCompletionDetails;
+}
+
+export function completionDelivery(details: {
+	delivery?: unknown;
+}): CompletionDelivery | undefined {
+	const { delivery } = details;
+	return delivery === "wake" || delivery === "run" || delivery === "appended"
+		? delivery
+		: undefined;
 }
 
 export function isSubagentCompletionMessage(
@@ -788,6 +809,8 @@ export interface WsMethodMap {
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
 	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
 	"locales.reveal": { params: Record<string, never>; result: Ack };
+	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
+	"themes.reveal": { params: Record<string, never>; result: Ack };
 	"session.create": {
 		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
@@ -900,6 +923,11 @@ export interface WsMethodMap {
 	"provider.jbcentralQuota": { params: { force?: boolean }; result: JbcentralQuotaSnapshot };
 	"host.update": { params: Record<string, never>; result: Ack };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
+	"environment.get": { params: Record<string, never>; result: HostEnvironmentStatus };
+	"environment.update": {
+		params: { environment: HostEnvironment };
+		result: HostEnvironmentUpdateResult;
+	};
 	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
 	"client.reportError": { params: ClientErrorReport; result: Ack };
 	"history.search": {

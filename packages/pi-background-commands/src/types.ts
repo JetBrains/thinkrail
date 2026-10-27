@@ -50,6 +50,7 @@ export interface BackgroundCommandHandle {
 	readonly snapshot: BackgroundCommandSnapshot;
 	readonly output: BackgroundCommandOutput | undefined;
 	stop(): BackgroundCommandSnapshot;
+	claimCompletion(): void;
 }
 
 export interface BackgroundCommandCompletion {
@@ -57,9 +58,16 @@ export interface BackgroundCommandCompletion {
 	readonly output: BackgroundCommandOutput;
 }
 
+export interface BackgroundCommandFlush {
+	readonly atTurnEnd?: boolean;
+}
+
 export interface BackgroundCommandCompletionBinding {
-	deliver(completion: BackgroundCommandCompletion): void;
-	canDeliverCompletion?(): boolean;
+	deliver(
+		batch: readonly BackgroundCommandCompletion[],
+		flush: BackgroundCommandFlush,
+	): readonly BackgroundCommandCompletion[];
+	canDeliverCompletion?(flush: BackgroundCommandFlush): boolean;
 }
 
 export interface BackgroundCommands {
@@ -69,6 +77,6 @@ export interface BackgroundCommands {
 	find(id: string): BackgroundCommandHandle | undefined;
 	onChange(listener: () => void): () => void;
 	bindCompletion(binding: BackgroundCommandCompletionBinding): () => void;
-	flushCompletions(): void;
+	flushCompletions(flush?: BackgroundCommandFlush): void;
 	dispose(options?: { timeoutMs?: number }): Promise<void>;
 }

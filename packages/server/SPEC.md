@@ -30,7 +30,8 @@ e2e).
   or exposing handlers—falling back to a plain runtime with closed `load-failed` status when the configured
   Central extension fails—so every embedder gets the same bootstrap invariant — and
   `bootHost(options) → BootedHost` (the process-boot wrapper: installs crash logging, resolves the
-  login-shell environment only when the launcher opts in with `resolveShellEnv: true`, pre-warms the
+  login-shell environment only when the launcher opts in with `resolveShellEnv: true`, applies the stored
+  host environment ([[submodule-server-environment]]), pre-warms the
   same initialization before choosing a port, awaits `createServer`, and installs SIGINT/SIGTERM graceful-shutdown handlers), both re-exported from
   `host/`; plus `registerBundledRuntime` (+ its types, re-exported from `agent/`) — the compiled-binary
   seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a
@@ -71,7 +72,9 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `persistence` | JSON domain/config state under the data dir | [persistence/SPEC.md](src/persistence/SPEC.md) |
 | `log` | explicit leveled diagnostics → pretty stderr + agent-oriented JSONL under `<dataDir>/logs` (pino-roll daily/10 MB rotation, 14 rotated + active); arbitrary console output stays terminal-only | [log/SPEC.md](src/log/SPEC.md) |
 | `settings` | server-synced app config, including the shared custom-layout-preset catalog and Central quota preferences (never current/default layout) | [settings/SPEC.md](src/settings/SPEC.md) |
+| `environment` | the stored host environment (pi config folder + variables) applied to `process.env` at boot | [environment/SPEC.md](src/environment/SPEC.md) |
 | `locales` | the user's local language files in `<dataDir>/locales/`: validate, watch, `locales.list`/`changed` | [locales/SPEC.md](src/locales/SPEC.md) |
+| `themes` | the user's theme files in `<dataDir>/themes/`: read, watch, `themes.list`/`changed` (the client validates) | [themes/SPEC.md](src/themes/SPEC.md) |
 | `projects` | stable known-repo registry: open/recent views + lossless close/reopen (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
 | `workspaces` | workspaces = `git worktree`s on their own branch | [workspaces/SPEC.md](src/workspaces/SPEC.md) |
 | `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
@@ -107,7 +110,7 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `locales`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
@@ -116,7 +119,7 @@ the host from env via `bootHost` for dev/e2e.
 - `changes` → `git` (the scope→range resolver + the original side's blob at its resolved oid), `fs` (path containment + byte identity), `persistence` (workspace lookup), `trash` (a revert that removes a file)
 - `turns` → `git` (`snapshotWorktree` + the `turn` scope's `gitStatus`), `persistence` (`turns.json`), `log`; it never imports `agent` — `host` feeds it the session event stream and resolves a session to its workspace, the same composition the run analytics observer uses
 - `github` → `subprocess` (both `gh auth status` probes run under the same bounded runner as `git`/`branch-review`)
-- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `locales`, `analytics`, `feedback` → `persistence` (`locales` also → `@thinkrail/locales` root, external-style: catalog validation and file naming) (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
+- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `locales`, `themes`, `analytics`, `feedback` → `persistence` (`locales` also → `@thinkrail/locales` root, external-style: catalog validation and file naming) (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
   `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`). `persistence` never imports
@@ -130,6 +133,7 @@ the host from env via `bootHost` for dev/e2e.
   `reviewLock`, and re-attaches the review's persisted chat via `agent.ensureSessionAttached`), and the
   agent-side `resolve_comment` tool delegates back through a seam
   `host` installs (`agent.setReviewCommentHandler` → `reviews.resolveCommentFromAgent`)
+- `environment` → `persistence` (`environment.json`), `log` (+ `@thinkrail/shared/shellEnv` for the launch keys and pi's `getAgentDir`, external); never `settings`
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
 - `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations),

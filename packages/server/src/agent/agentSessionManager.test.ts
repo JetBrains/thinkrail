@@ -986,6 +986,90 @@ test("an idle chat drops a disabled extension's tool and guidance live and resto
 	}
 });
 
+async function withPersistentVisualizeChat(
+	prefix: string,
+	run: (chat: {
+		setDisabled: (names: string[]) => void;
+		prompt: (label: string) => Promise<string>;
+		restart: () => Promise<void>;
+	}) => Promise<void>,
+): Promise<void> {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const cwd = tmpCwd(`trpi-${prefix}-`);
+	const workspaceId = `ws-${prefix}`;
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
+		const id = session.sessionId;
+		sessionId = id;
+		await run({
+			setDisabled: (names) => {
+				disabled = new Set(names);
+			},
+			prompt: async (label) => {
+				let state = "";
+				fauxA.setResponses([
+					(context) => {
+						state = visualizeToolState(context);
+						return fauxAssistantMessage(`${label}_${state}`);
+					},
+				]);
+				await promptSession(id, `Check ${label}.`);
+				return state;
+			},
+			restart: async () => {
+				await removeSession(id);
+				await getSessionMessages(id, workspaceId, cwd);
+			},
+		});
+	} finally {
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+}
+test("a tool withheld in an open chat comes back after a restart once its extension is re-enabled", async () => {
+	await withPersistentVisualizeChat("extension-open-restart", async (chat) => {
+		expect(await chat.prompt("BEFORE")).toBe("VISUALIZE_ON");
+		chat.setDisabled(["visualize"]);
+		refreshExtensionTools();
+		expect(await chat.prompt("OFF")).toBe("VISUALIZE_OFF");
+		chat.setDisabled([]);
+		await chat.restart();
+		expect(await chat.prompt("AFTER_RESTART")).toBe("VISUALIZE_ON");
+	});
+});
+
+test("an extension disabled while the chat was closed comes back once re-enabled", async () => {
+	await withPersistentVisualizeChat("extension-closed-restart", async (chat) => {
+		expect(await chat.prompt("A")).toBe("VISUALIZE_ON");
+		chat.setDisabled(["visualize"]);
+		await chat.restart();
+		expect(await chat.prompt("B")).toBe("VISUALIZE_OFF");
+		chat.setDisabled([]);
+		await chat.restart();
+		expect(await chat.prompt("C")).toBe("VISUALIZE_ON");
+	});
+});
+
+test("a registry tool follows Settings across repeated toggle and restart cycles", async () => {
+	await withPersistentVisualizeChat("extension-toggle-cycles", async (chat) => {
+		for (let cycle = 0; cycle < 2; cycle++) {
+			expect(await chat.prompt(`ON_${cycle}`)).toBe("VISUALIZE_ON");
+			chat.setDisabled(["visualize"]);
+			refreshExtensionTools();
+			expect(await chat.prompt(`OFF_${cycle}`)).toBe("VISUALIZE_OFF");
+			await chat.restart();
+			expect(await chat.prompt(`STILL_OFF_${cycle}`)).toBe("VISUALIZE_OFF");
+			chat.setDisabled([]);
+			await chat.restart();
+		}
+		expect(await chat.prompt("FINAL")).toBe("VISUALIZE_ON");
+	});
+});
+
 test("a chat created with an extension off never loads it and reloads to adopt it when re-enabled", async () => {
 	let disabled = new Set(["visualize"]);
 	setDisabledExtensionsResolver(() => disabled);
@@ -1026,7 +1110,10 @@ test("a chat created with an extension off never loads it and reloads to adopt i
 	}
 });
 
-test("a streaming chat drops a disabled extension's tool only at agent_settled", async () => {
+test.each([
+	false,
+	true,
+])("a streaming chat applies only the latest extension policy at agent_settled (enabled: %s)", async (enabledAtSettlement) => {
 	const slow = createFauxCore({
 		provider: "faux-extension-policy",
 		api: "faux-extension-policy",
@@ -1074,13 +1161,21 @@ test("a streaming chat drops a disabled extension's tool only at agent_settled",
 
 		disabled = new Set(["visualize"]);
 		refreshExtensionTools();
+		disabled = new Set();
+		refreshExtensionTools();
+		if (!enabledAtSettlement) {
+			disabled = new Set(["visualize"]);
+			refreshExtensionTools();
+		}
 		expect(firstState).toBe("VISUALIZE_ON");
 		release();
 		await firstTurn;
 		expect(automaticContinuationState).toBe("VISUALIZE_ON");
 		await promptSession(sessionId, "Check the next turn.");
 
-		expect(seen(sessionId)).toContain("NEXT_TURN_VISUALIZE_OFF");
+		expect(seen(sessionId)).toContain(
+			enabledAtSettlement ? "NEXT_TURN_VISUALIZE_ON" : "NEXT_TURN_VISUALIZE_OFF",
+		);
 	} finally {
 		release();
 		setDisabledExtensionsResolver(() => new Set());
@@ -2596,6 +2691,121 @@ test("renameSession updates a disk-only transcript without attaching an agent", 
 	).toBe("New disk title");
 	expect(events.get(id)).toEqual([{ type: "session_info_changed", name: "New disk title" }]);
 });
+
+test("summaries and state records carry the first prompt's head as a display fallback, beside the real title", async () => {
+	const cwd = tmpCwd("trpi-first-prompt-");
+	const sessionDir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const long = `  Please   refactor the auth module\nand keep the tests green ${"x".repeat(300)}`;
+	const { id: named } = writeFixtureSession(sessionDir, {
+		cwd,
+		name: "Named by the agent",
+		messages: [{ role: "user", text: long, timestamp: Date.now() - 3 }],
+	});
+	const { id: unnamed } = writeFixtureSession(sessionDir, {
+		cwd,
+		messages: [{ role: "user", text: long, timestamp: Date.now() - 2 }],
+	});
+	const compacted = writeCompactedFixtureSession(sessionDir, cwd, Date.now() - 1);
+	fauxA.setResponses([fauxAssistantMessage("ok")]);
+	const live = await createSession({
+		cwd,
+		workspaceId: "ws-first-prompt",
+		model: toWireModel(fauxA.getModel()),
+	});
+	expect(
+		(await listSessions("ws-first-prompt", cwd)).find((row) => row.sessionId === live.sessionId)
+			?.firstPrompt,
+	).toBeUndefined();
+	await promptSession(live.sessionId, "Live prompt\nsecond line");
+
+	const rows = await listSessions("ws-first-prompt", cwd);
+	const byId = Object.fromEntries(rows.map((row) => [row.sessionId, row]));
+	expect(byId[named]).toMatchObject({ title: "Named by the agent" });
+	expect(byId[named]?.firstPrompt).toBe(`Please refactor the auth module`);
+	expect(byId[unnamed]).toMatchObject({
+		title: "",
+		firstPrompt: "Please refactor the auth module",
+	});
+	expect(byId[live.sessionId]).toMatchObject({ title: "", firstPrompt: "Live prompt" });
+	expect(byId[compacted]?.firstPrompt).toBe("The real first prompt");
+
+	await initializeSessionStates([{ id: "ws-first-prompt", projectId: "p-first-prompt", cwd }]);
+	const records = await listSessionStates([
+		{ id: "ws-first-prompt", projectId: "p-first-prompt", cwd },
+	]);
+	expect(records.find((record) => record.sessionId === unnamed)?.firstPrompt).toBe(
+		"Please refactor the auth module",
+	);
+	expect(records.find((record) => record.sessionId === live.sessionId)?.firstPrompt).toBe(
+		"Live prompt",
+	);
+	expect(records.find((record) => record.sessionId === compacted)?.firstPrompt).toBe(
+		"The real first prompt",
+	);
+
+	const attached = await getSessionMessages(compacted, "ws-first-prompt", cwd);
+	expect(attached.summary.firstPrompt).toBe("The real first prompt");
+	expect(attached.messages.some((message) => message.role === "user")).toBe(true);
+	expect(SessionManager.open(listedPath(unnamed, cwd)).getSessionName()).toBeUndefined();
+
+	fauxA.setResponses([fauxAssistantMessage("noted"), fauxAssistantMessage("ok")]);
+	const packaged = await createSession({
+		cwd,
+		workspaceId: "ws-first-prompt",
+		model: toWireModel(fauxA.getModel()),
+	});
+	await promptSession(packaged.sessionId, '<review id="r" branch="b" base="c" comments="0">\nbody');
+	const summaryFor = async (id: string) =>
+		(await listSessions("ws-first-prompt", cwd)).find((row) => row.sessionId === id);
+	expect((await summaryFor(packaged.sessionId))?.firstPrompt).toBeUndefined();
+	await promptSession(packaged.sessionId, "/skill:setting-up-a-project Now a real prompt");
+	expect((await summaryFor(packaged.sessionId))?.firstPrompt).toBe("Now a real prompt");
+	removeSession(live.sessionId);
+	removeSession(compacted);
+	removeSession(packaged.sessionId);
+});
+
+/** An image-only first message, a real prompt, then a compaction that keeps only the later turns. */
+function writeCompactedFixtureSession(dir: string, cwd: string, timestamp: number): string {
+	const sessionId = `sess-compacted-${timestamp}`;
+	const at = new Date(timestamp).toISOString();
+	const message = (id: string, parentId: string | null, role: string, content: unknown) =>
+		JSON.stringify({
+			type: "message",
+			id,
+			parentId,
+			timestamp: at,
+			message: { role, content, timestamp },
+		});
+	const lines = [
+		JSON.stringify({ type: "session", version: 3, id: sessionId, timestamp: at, cwd }),
+		message("u0", null, "user", [{ type: "image", data: "AA==", mimeType: "image/png" }]),
+		message("a0", "u0", "assistant", [{ type: "text", text: "I see an image" }]),
+		message("u1", "a0", "user", "The real first prompt\nwith a second line"),
+		message("a1", "u1", "assistant", [{ type: "text", text: "done" }]),
+		message("u2", "a1", "user", "A later prompt"),
+		JSON.stringify({
+			type: "compaction",
+			id: "c0",
+			parentId: "u2",
+			firstKeptEntryId: "u2",
+			summary: "earlier conversation summarized",
+			tokensBefore: 1000,
+			timestamp: at,
+		}),
+		message("a2", "c0", "assistant", [{ type: "text", text: "post-compaction answer" }]),
+	];
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, `${timestamp}_${sessionId}.jsonl`), `${lines.join("\n")}\n`);
+	return sessionId;
+}
+
+function listedPath(sessionId: string, cwd: string): string {
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const file = readdirSync(dir).find((name) => name.endsWith(`_${sessionId}.jsonl`));
+	if (!file) throw new Error(`no transcript for ${sessionId}`);
+	return join(dir, file);
+}
 
 test("renameSession serializes with a concurrent disk attach", async () => {
 	const cwd = tmpCwd("trpi-rename-attach-");

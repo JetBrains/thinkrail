@@ -105,6 +105,7 @@ export function Workbench({
 	readNavigationTick,
 	onRequestClose,
 	onRenameChat,
+	chatFirstPrompts,
 	onNewChat,
 	onNewTerminal,
 	onGestureCanceled,
@@ -777,6 +778,7 @@ export function Workbench({
 		onHideSide: hideSideRegion,
 		onRevealTool: revealMissingTool,
 		onRenameChat,
+		chatFirstPrompts,
 		canFocusAdjacentGroup,
 	};
 	const sideStack = (side: LayoutSide) => (
@@ -1041,7 +1043,7 @@ export function Workbench({
 				{draggingTab ? (
 					<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
 						{tabIcon(draggingTab)}
-						<span className="truncate">{layoutTabName(t, draggingTab)}</span>
+						<span className="truncate">{layoutTabName(t, draggingTab, chatFirstPrompts)}</span>
 					</div>
 				) : null}
 			</DragOverlay>

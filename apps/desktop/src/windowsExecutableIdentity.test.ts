@@ -9,8 +9,11 @@ const iconSizes = ResEdit.Data.IconFile.from(icon).icons.map(({ width }) => widt
 const identity = windowsFileIdentity({ version: "0.3.0-nightly.6", channel: "nightly" });
 const manifest = new TextEncoder().encode("<assembly/>").buffer;
 const { BaseRelocation, Certificate } = ResEdit.Format.ImageDirectoryEntry;
+const certificate = new Uint8Array(16).fill(0xab);
 
-function bunLikeExecutable({ signed = false } = {}): Uint8Array {
+type Signature = "none" | "attached" | "stripped";
+
+function bunLikeExecutable({ signature = "none" }: { signature?: Signature } = {}): Uint8Array {
 	const exe = ResEdit.NtExecutable.createEmpty(true, true);
 	const resources = ResEdit.NtExecutableResource.from(exe);
 	const bunIcon = ResEdit.Data.RawIconItem.from(new Uint8Array([1, 2, 3]), 256, 256, 32);
@@ -27,7 +30,7 @@ function bunLikeExecutable({ signed = false } = {}): Uint8Array {
 	version.outputToResourceEntries(resources.entries);
 	resources.entries.push({ type: 24, id: 1, lang: 1033, codepage: 0, bin: manifest });
 	resources.outputResource(exe);
-	if (!signed) return new Uint8Array(exe.generate());
+	if (signature === "none") return new Uint8Array(exe.generate());
 
 	exe.setSectionByEntry(BaseRelocation, {
 		info: {
@@ -45,16 +48,20 @@ function bunLikeExecutable({ signed = false } = {}): Uint8Array {
 		data: new Uint8Array([0, 0, 0, 0, 8, 0, 0, 0]).buffer,
 	});
 	const unsigned = new Uint8Array(exe.generate());
-	const certificate = new Uint8Array(16).fill(0xab);
-	const bytes = new Uint8Array(unsigned.length + certificate.length);
+	const bytes = new Uint8Array(
+		unsigned.length + (signature === "attached" ? certificate.length : 0),
+	);
 	bytes.set(unsigned);
-	bytes.set(certificate, unsigned.length);
+	if (signature === "attached") bytes.set(certificate, unsigned.length);
 	const dos = ResEdit.Format.getImageDosHeader(bytes.buffer);
 	const nt = ResEdit.Format.getImageNtHeadersByDosHeader(bytes.buffer, dos);
 	ResEdit.Format.ImageDataDirectoryArray.from(
 		bytes.buffer,
 		dos.newHeaderAddress + nt.getDataDirectoryOffset(),
-	).set(Certificate, { virtualAddress: unsigned.length, size: certificate.length });
+	).set(Certificate, {
+		virtualAddress: signature === "attached" ? unsigned.length : unsigned.length + 0x1000,
+		size: certificate.length,
+	});
 	return bytes;
 }
 
@@ -69,7 +76,14 @@ test("the ICO lists its largest frame first", () => {
 
 for (const [label, executable] of [
 	["replaces Bun's own icon group and file properties", bunLikeExecutable()],
-	["rebrands a signed executable whose .reloc follows .rsrc", bunLikeExecutable({ signed: true })],
+	[
+		"rebrands a signed executable whose .reloc follows .rsrc",
+		bunLikeExecutable({ signature: "attached" }),
+	],
+	[
+		"rebrands an executable whose certificate entry outlived its bytes",
+		bunLikeExecutable({ signature: "stripped" }),
+	],
 	[
 		"brands an executable that has no resources",
 		new Uint8Array(ResEdit.NtExecutable.createEmpty(true, true).generate()),
@@ -105,21 +119,23 @@ for (const [label, executable] of [
 	});
 }
 
-test("drops the stale signature and keeps the relocations after the resources", () => {
-	const signed = bunLikeExecutable({ signed: true });
-	expect(() => ResEdit.NtExecutable.from(signed)).toThrow("Parsing signed executable");
+for (const signature of ["attached", "stripped"] as const) {
+	test(`drops the ${signature} stale signature and keeps the relocations after the resources`, () => {
+		const signed = bunLikeExecutable({ signature });
+		expect(() => ResEdit.NtExecutable.from(signed)).toThrow("Parsing signed executable");
 
-	const branded = ResEdit.NtExecutable.from(
-		brandWindowsExecutable(signed, icon, identity, "bun.exe"),
-	);
-	expect(branded.newHeader.optionalHeaderDataDirectory.get(Certificate)).toEqual({
-		virtualAddress: 0,
-		size: 0,
+		const output = brandWindowsExecutable(signed, icon, identity, "bun.exe");
+		expect(Buffer.from(output).includes(Buffer.from(certificate))).toBe(false);
+		const branded = ResEdit.NtExecutable.from(output);
+		expect(branded.newHeader.optionalHeaderDataDirectory.get(Certificate)).toEqual({
+			virtualAddress: 0,
+			size: 0,
+		});
+		const resources = branded.getSectionByEntry(ResEdit.Format.ImageDirectoryEntry.Resource);
+		const relocations = branded.getSectionByEntry(BaseRelocation);
+		expect(relocations?.info.virtualAddress).toBeGreaterThan(resources?.info.virtualAddress ?? 0);
 	});
-	const resources = branded.getSectionByEntry(ResEdit.Format.ImageDirectoryEntry.Resource);
-	const relocations = branded.getSectionByEntry(BaseRelocation);
-	expect(relocations?.info.virtualAddress).toBeGreaterThan(resources?.info.virtualAddress ?? 0);
-});
+}
 
 test("keeps resources it does not brand", () => {
 	const entries = resourcesOf(

@@ -72,16 +72,17 @@ expansion) and navigation, then wraps `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
 screen, not a blank root) plus the app's single `TooltipProvider`.
 
-**React is one exact, matching `react` + `react-dom` 19.3 canary pin until the first stable release carrying
-upstream fix #34803.** React 19.2's development Performance Tracks retained every
-`performance.measure()` record; Pi-rate chat renders grew a Vite tab past 10 GB while the JS heap stayed
-flat, then Chrome killed the renderer and Vite reported the dead socket as `EPIPE` / `ECONNRESET` (React
-#34770). The selected canary contains React's own `clearMeasures` fix; ThinkRail deliberately carries no
-second measure-reaping policy. Because prereleases do not satisfy dependencies' stable React peer ranges,
-the root package-manager overrides resolve both runtime packages through their catalog entries; `check:deps`
-reads `bun.lock` and rejects any second `react` or `react-dom` version. Every React move upgrades both
-packages together and repeats the mounted-chat memory stress probe before this temporary canary pin can
-return to stable.
+**React is one exact, matching `react` + `react-dom` pin on a release that carries upstream fix #34803.**
+React 19.2's development Performance Tracks retained every `performance.measure()` record; Pi-rate chat
+renders grew a Vite tab past 10 GB while the JS heap stayed flat, then Chrome killed the renderer and Vite
+reported the dead socket as `EPIPE` / `ECONNRESET` (React #34770). ThinkRail ran a 19.3 canary with React's
+own `clearMeasures` fix until a stable release shipped it, and deliberately carries no second
+measure-reaping policy. The root package-manager overrides resolve both runtime packages through their
+catalog entries, and `check:deps` reads `bun.lock` and rejects any second `react` or `react-dom` version, so
+every React move upgrades both together. Every React move also repeats the mounted-chat measure probe: a
+development build (`NODE_ENV=development vite build --mode development`) streams replayed text deltas
+(`e2e/perf/chatReplay`) into a mounted chat and must keep `performance.getEntriesByType("measure")` flat.
+On 19.2.0 it grew by about 1,500 entries per 12 KB message; on the fixed releases it stays at zero.
 
 **Release source maps are build-only and never shipped.** With `THINKRAIL_SOURCEMAPS_RELEASE` set (a
 credentialed release build, [[module-ci-release]]), `vite.config.ts` emits hidden maps and the
@@ -169,7 +170,7 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
   the runtime graph is acyclic), `lib` (plain-HTTP-safe random page identity)
 - `components` → `lib` (`ErrorBoundary`'s `shallowEqualArrays` for its reset keys) and `constants` (`RunningIcon` draws the shared brand monogram) — both leaves, so any region can still wrap in it; presentational controls consume `ui`
 - `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration), React (the phone-viewport hook only), and `contracts` (types only, e.g. the MCP state vocabulary's `McpServerState`)
-- `themes` → `constants` (the branding storage prefix scopes the first-paint hint), `clientPreferences` (native-stable hint storage)
+- `themes` → `constants` (the branding storage prefix scopes the first-paint hint and the user-theme cache), `clientPreferences` (native-stable hint storage); `transport` hydrates the store's user-theme snapshot and `shell`'s theme effect installs it
 - `i18n` → `store`, `contracts` (types), `@thinkrail/locales`; `transport` hydrates the store's local-language snapshot, `main.tsx`'s `App` mounts `useLocaleSync` once and `panels` renders the Language page from its pure derivations
 - **Any module may → `@thinkrail/locales/react`** (`useT`, `<T>`, `currentLocale`) for its UI text — the one cross-cutting edge besides `lib`; user-facing text is never a literal ([[architecture]] Decision 23)
 - leaves (`clientPreferences`, `constants`, `utils`, `styles`) → none internal
@@ -277,6 +278,8 @@ themselves.
   only nullable color slots (`null` retains the consumer default). A build-time glob validates the set at
   bootstrap (our files — a bad one fails loudly), so adding a theme changes only that file — never
   contracts, a label map, CSS selectors, editor imports, tests, or specs — and appears after a rebuild.
+  A user adds a theme the same way at runtime: the same manifest in `~/.thinkrail/themes`, served by
+  [[submodule-server-themes]] and validated here, where an unusable file is reported, not fatal.
   Manifests are self-contained (no inheritance), contain canonical color data only, and cannot alter
   layout/type/motion or inject CSS/code. The engine derives repetitive tints/effects and atomically
   writes the mapped custom properties before changing `[data-theme]`; `@theme inline` keeps every utility

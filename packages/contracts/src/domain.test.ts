@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
+	clampToCodePoints,
 	DEFAULT_CONFIG,
+	FIRST_PROMPT_MAX_LENGTH,
+	firstPromptHead,
+	firstPromptOfTexts,
 	IMAGE_MAX_BASE64_BYTES,
 	isDelegationRunDetails,
 	isJbcentralConnected,
@@ -12,6 +16,7 @@ import {
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	REQUEST_IMAGE_BASE64_BUDGET,
+	TODO_NUDGE_PREFIX,
 } from "./domain";
 
 describe("isRetriedAttempt", () => {
@@ -253,4 +258,50 @@ test("isLocalePreference accepts system and canonical BCP-47 tags only", () => {
 	expect(isLocalePreference("")).toBe(false);
 	expect(isLocalePreference("not a tag")).toBe(false);
 	expect(isLocalePreference(7)).toBe(false);
+});
+
+describe("firstPromptHead", () => {
+	test("takes the first non-blank line, collapses whitespace and clamps on a code point", () => {
+		expect(firstPromptHead("\n\n  Fix   the\tauth bug  \nmore")).toBe("Fix the auth bug");
+		expect(firstPromptHead("x".repeat(500))?.length).toBe(FIRST_PROMPT_MAX_LENGTH);
+		expect(firstPromptHead(`${"x".repeat(FIRST_PROMPT_MAX_LENGTH - 1)}😀`)).toBe(
+			"x".repeat(FIRST_PROMPT_MAX_LENGTH - 1),
+		);
+		expect(clampToCodePoints("ab😀", 3)).toBe("ab");
+		expect(clampToCodePoints("ab😀", 4)).toBe("ab😀");
+		expect(firstPromptHead("")).toBeUndefined();
+		expect(firstPromptHead(undefined)).toBeUndefined();
+	});
+
+	test("a skill block or /skill: command reads as its request or its name, a package reads as nothing", () => {
+		const block = '<skill name="setting-up-a-project" location="/s/SKILL.md">\nbody\n</skill>';
+		expect(firstPromptHead(`${block}\n\nAnd also the docs`)).toBe("And also the docs");
+		expect(firstPromptHead(block)).toBe("/skill:setting-up-a-project");
+		expect(firstPromptHead("/skill:setting-up-a-project And also the docs")).toBe(
+			"And also the docs",
+		);
+		expect(firstPromptHead("/skill:setting-up-a-project")).toBe("/skill:setting-up-a-project");
+		expect(firstPromptHead('<review scope="branch">\n<comment …>\n</review>')).toBeUndefined();
+		expect(
+			firstPromptHead('<review id="r1" branch="b" base="main@abc" comments="2">\n<comment …>'),
+		).toBeUndefined();
+		expect(firstPromptHead("<Button> loses focus after submit")).toBe(
+			"<Button> loses focus after submit",
+		);
+		expect(firstPromptHead(`${"word ".repeat(2_000)}`)?.length).toBe(FIRST_PROMPT_MAX_LENGTH);
+	});
+
+	test("firstPromptOfTexts skips control messages and texts without a head", () => {
+		expect(
+			firstPromptOfTexts([
+				`${TODO_NUDGE_PREFIX}A TODO was added`,
+				"",
+				'<review scope="branch">\n<comment …>',
+				"  The real prompt\nsecond line",
+				"later",
+			]),
+		).toBe("The real prompt");
+		expect(firstPromptOfTexts([])).toBeUndefined();
+		expect(firstPromptOfTexts(['<review scope="branch">'])).toBeUndefined();
+	});
 });

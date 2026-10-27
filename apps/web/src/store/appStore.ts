@@ -35,6 +35,7 @@ import type {
 	ThinkingLevel,
 	TurnChangeSet,
 	UserMessage,
+	UserThemesSnapshot,
 	WireModel,
 	Workspace,
 	WorkspaceFsChangedPayload,
@@ -116,7 +117,9 @@ import {
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
 	selectChatAttended,
+	selectChatFirstPrompt,
 	selectFilesTreeView,
+	selectLayoutIdentityPlacement,
 	selectLayoutResourcePlacement,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -405,6 +408,7 @@ export const SettingsSection = {
 	Privacy: "privacy",
 	Feedback: "feedback",
 	Extensions: "extensions",
+	Environment: "environment",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -430,6 +434,7 @@ export interface TerminalTab {
 export interface ClosedChat {
 	sessionId: string;
 	title: string;
+	firstPrompt?: string;
 	closedAt: number;
 }
 
@@ -629,11 +634,14 @@ function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntim
 		: rt;
 }
 
+const STATS_ENTRY_TYPES = new Set(["usage", "compaction", "branch_summary", "context_edit"]);
+
 function invalidatesSessionStats(event: PiEvent): boolean {
 	return (
 		event.type === "message_end" ||
 		event.type === "compaction_end" ||
-		event.type === "agent_settled"
+		event.type === "agent_settled" ||
+		(event.type === "entry_appended" && STATS_ENTRY_TYPES.has(event.entryType))
 	);
 }
 
@@ -1057,6 +1065,8 @@ interface AppState {
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
 	installLocalLocales: (snapshot: LocalLocalesSnapshot | null) => void;
+	userThemes: UserThemesSnapshot | null;
+	installUserThemes: (snapshot: UserThemesSnapshot | null) => void;
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -2045,72 +2055,90 @@ function replayExtUiOrphans(
 	for (const frame of replay) get().applyExtUi(frame);
 }
 
-function renameChat(s: AppState, sessionId: string, title: string): Partial<AppState> | null {
-	let found = false;
-	for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
-		const chat = tabs.find(
-			(tab): tab is ChatTab => tab.kind === "chat" && tab.sessionId === sessionId,
-		);
-		if (!chat) continue;
-		found = true;
-		const cacheChanged = chat.name !== title;
-		const renamed = cacheChanged ? { ...chat, name: title } : chat;
+function renameSessionTabs(
+	s: AppState,
+	wsId: string,
+	sessionTabs: readonly (ChatTab | PlanTab)[],
+	title: string,
+): Pick<AppState, "layoutIntents" | "tabsByWorkspace"> | null {
+	let layoutIntents = s.layoutIntents;
+	const cached = s.tabsByWorkspace[wsId] ?? [];
+	let tabs = cached;
+	for (const tab of sessionTabs) {
+		const cacheChanged = tab.name !== title;
+		const renamed = cacheChanged ? { ...tab, name: title } : tab;
+		const identity = editorResourceIdentity(tab);
 		const matchesQueuedOpen = (
 			intent: LayoutIntent,
 		): intent is Extract<LayoutIntent, { kind: "open" }> =>
 			intent.kind === "open" &&
 			intent.workspaceId === wsId &&
-			intent.tab.kind === "chat" &&
-			intent.tab.sessionId === chat.sessionId;
-		const queuedOpen = s.layoutIntents.find(matchesQueuedOpen);
-		const placement = selectLayoutResourcePlacement(s, wsId, chat);
+			editorResourceIdentity(intent.tab) === identity;
+		const queuedOpen = layoutIntents.find(matchesQueuedOpen);
+		const placement = selectLayoutIdentityPlacement(s, wsId, identity);
 		const queuedChanged = queuedOpen !== undefined && queuedOpen.tab.name !== title;
 		const placementChanged = placement !== null && placement.tab.name !== title;
 		if (!cacheChanged && !queuedChanged && !placementChanged) continue;
-		return {
-			layoutIntents: queuedOpen
-				? queuedChanged || placementChanged
-					? s.layoutIntents.map((intent) =>
-							matchesQueuedOpen(intent)
-								? {
-										...intent,
-										tab: {
-											...intent.tab,
-											...(placementChanged && placement ? { id: placement.tabId } : {}),
-											name: title,
-										},
-									}
-								: intent,
-						)
-					: s.layoutIntents
-				: placementChanged && placement
-					? appendLayoutIntent(s.layoutIntents, {
-							kind: "open",
-							workspaceId: wsId,
-							tab: { ...renamed, id: placement.tabId },
-							intent: "keep",
-							activate: false,
-						})
-					: s.layoutIntents,
-			tabsByWorkspace: cacheChanged
-				? {
-						...s.tabsByWorkspace,
-						[wsId]: tabs.map((tab) => (tab.id === chat.id ? renamed : tab)),
-					}
-				: s.tabsByWorkspace,
-		};
+		if (queuedOpen) {
+			if (queuedChanged || placementChanged) {
+				layoutIntents = layoutIntents.map((intent) =>
+					matchesQueuedOpen(intent)
+						? {
+								...intent,
+								tab: {
+									...intent.tab,
+									...(placementChanged && placement ? { id: placement.tabId } : {}),
+									name: title,
+								},
+							}
+						: intent,
+				);
+			}
+		} else if (placementChanged && placement) {
+			layoutIntents = appendLayoutIntent(layoutIntents, {
+				kind: "open",
+				workspaceId: wsId,
+				tab: { ...renamed, id: placement.tabId },
+				intent: "keep",
+				activate: false,
+			});
+		}
+		if (cacheChanged)
+			tabs = tabs.map((candidate) => (candidate.id === tab.id ? renamed : candidate));
+	}
+	if (layoutIntents === s.layoutIntents && tabs === cached) return null;
+	return {
+		layoutIntents,
+		tabsByWorkspace: tabs === cached ? s.tabsByWorkspace : { ...s.tabsByWorkspace, [wsId]: tabs },
+	};
+}
+
+function renameChat(s: AppState, sessionId: string, title: string): Partial<AppState> | null {
+	let found = false;
+	let patch: Partial<AppState> = {};
+	for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
+		const sessionTabs = tabs.filter(
+			(tab): tab is ChatTab | PlanTab =>
+				(tab.kind === "chat" || tab.kind === "plan") && tab.sessionId === sessionId,
+		);
+		if (sessionTabs.length === 0) continue;
+		if (sessionTabs.some((tab) => tab.kind === "chat")) found = true;
+		const renamed = renameSessionTabs({ ...s, ...patch }, wsId, sessionTabs, title);
+		if (renamed) patch = { ...patch, ...renamed };
 	}
 	for (const [wsId, chats] of Object.entries(s.closedChatsByWorkspace)) {
 		if (!chats.some((chat) => chat.sessionId === sessionId)) continue;
 		found = true;
-		return {
+		patch = {
+			...patch,
 			closedChatsByWorkspace: {
 				...s.closedChatsByWorkspace,
 				[wsId]: chats.map((chat) => (chat.sessionId === sessionId ? { ...chat, title } : chat)),
 			},
 		};
+		break;
 	}
-	return found ? {} : null;
+	return found ? patch : null;
 }
 
 function withRuntime(
@@ -2295,6 +2323,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,
 	installLocalLocales: (snapshot) => set({ localLocales: snapshot }),
+	userThemes: null,
+	installUserThemes: (snapshot) => set({ userThemes: snapshot }),
 	toasts: [],
 	resourceSnapshots: {},
 	resourceRevision: 0,
@@ -3565,7 +3595,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (!tab) return {};
 			const remaining = tabs.filter((t) => t.id !== tab.id);
 			const wasActive = s.activeTabByWorkspace[wsId] === tab.id;
-			const entry: ClosedChat = { sessionId, title: tab.name, closedAt: Date.now() };
+			const firstPrompt = selectChatFirstPrompt(s, wsId, sessionId);
+			const entry: ClosedChat = {
+				sessionId,
+				title: tab.name,
+				...(firstPrompt ? { firstPrompt } : {}),
+				closedAt: Date.now(),
+			};
 			const targetsLocation =
 				s.chatLocationRequest?.workspaceId === wsId &&
 				s.chatLocationRequest.sessionId === sessionId;
@@ -3909,9 +3945,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				const replacement = incoming.get(entry.sessionId);
 				if (!replacement) return entry;
 				incoming.delete(entry.sessionId);
-				if (replacement.title === entry.title) return entry;
+				const firstPrompt = replacement.firstPrompt ?? entry.firstPrompt;
+				if (replacement.title === entry.title && firstPrompt === entry.firstPrompt) return entry;
 				changed = true;
-				return { ...entry, title: replacement.title };
+				return { ...entry, title: replacement.title, ...(firstPrompt ? { firstPrompt } : {}) };
 			});
 			if (incoming.size > 0) changed = true;
 			if (!changed) return {};

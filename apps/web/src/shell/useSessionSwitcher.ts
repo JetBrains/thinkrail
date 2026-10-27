@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
 import { hasPlatformModifier } from "../lib";
 import {
+	type SessionRuntime,
 	type SwitcherProject,
 	type SwitcherSession,
 	selectSwitcherGroups,
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
+
+const NO_SESSIONS: Record<string, SessionRuntime> = {};
 
 export interface UseSessionSwitcher {
 	groups: SwitcherProject[];
@@ -18,6 +21,7 @@ export function useSessionSwitcher(open: boolean, onClose: () => void): UseSessi
 
 	const projects = useAppStore((state) => state.projects);
 	const workspaces = useAppStore((state) => state.workspaces);
+	const sessions = useAppStore((state) => (open ? state.sessions : NO_SESSIONS));
 	const sessionStateByWorkspace = useAppStore((state) => state.sessionStateByWorkspace);
 	const layoutDocumentsByWorkspace = useAppStore((state) => state.layoutDocumentsByWorkspace);
 	const closedChatsByWorkspace = useAppStore((state) => state.closedChatsByWorkspace);
@@ -27,6 +31,7 @@ export function useSessionSwitcher(open: boolean, onClose: () => void): UseSessi
 			selectSwitcherGroups({
 				projects,
 				workspaces,
+				sessions,
 				sessionStateByWorkspace,
 				layoutDocumentsByWorkspace,
 				closedChatsByWorkspace,
@@ -34,6 +39,7 @@ export function useSessionSwitcher(open: boolean, onClose: () => void): UseSessi
 		[
 			projects,
 			workspaces,
+			sessions,
 			sessionStateByWorkspace,
 			layoutDocumentsByWorkspace,
 			closedChatsByWorkspace,

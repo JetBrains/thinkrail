@@ -314,6 +314,11 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		if (!headers.includes(required)) failures.push(`headers: missing ${required}`);
 	}
 
+	const redirects = await Bun.file(`${distDirectory}/_redirects`).text();
+	if (!/^\/discord https:\/\/discord\.gg\/\S+ 302$/m.test(redirects)) {
+		failures.push("redirects: missing /discord invite");
+	}
+
 	if (failures.length > 0) {
 		throw new Error(`Invalid website build:\n${failures.join("\n")}`);
 	}

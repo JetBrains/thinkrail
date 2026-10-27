@@ -6,6 +6,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { logger } from "../log";
+import { accountAvailableModels, type ModelAvailabilityRuntime } from "./modelAvailability";
 
 const log = logger("agent");
 
@@ -246,12 +247,12 @@ export function activatePiRuntimeGeneration(generation: PiRuntimeGeneration): vo
 	activeGeneration = Promise.resolve(generation);
 }
 
-export type AvailableModelsRuntime = Pick<ModelRuntime, "getAvailableSnapshot">;
+export type AvailableModelsRuntime = ModelAvailabilityRuntime;
 
 export function settledAvailableModels(
 	runtime: AvailableModelsRuntime,
 ): ReturnType<ModelRuntime["getAvailableSnapshot"]> {
-	return runtime.getAvailableSnapshot();
+	return accountAvailableModels(runtime);
 }
 
 export type CatalogRefreshRuntime = Pick<ModelRuntime, "refresh">;

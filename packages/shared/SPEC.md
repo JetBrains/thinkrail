@@ -19,7 +19,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 - **Owns:** host-side runtime helpers that are neither engine- nor transport-specific, and the native
   brand icon set both launchers ship (`assets/` and its generator, `scripts/generate-icons.ts`).
 - **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `repairShellEnv()`, `mergePath()`,
-  `loginShellImports()`, `parseLoginShellEnv()`, `LOGIN_ENV_MARKER`, `localeRepair()`;
+  `loginShellImports()`, `parseLoginShellEnv()`, `LOGIN_ENV_MARKER`, `localeRepair()`, `launchEnvKeys()`;
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/startupMark` → the static recursive wordmark plus the pure responsive/ANSI renderer
   and interactive-output gate used by every launcher;
@@ -67,7 +67,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
     and `models.json` / `mcp.json` `${VAR}` references (often copied from vendor docs) rely on. Skipped
     when `TERM` is set (a host launched from a terminal already carries the shell's environment). Variables
     already set for the process win; `PATH` keeps its own repair above; `PWD`/`OLDPWD`/`SHLVL`/`_` and
-    `PI_*` / `THINKRAIL_*` are never imported. One marker-delimited `env -0` probe of the login shell
+    `PI_*` / `THINKRAIL_*` are never imported (a pi config folder or `PI_*` variable the user wants comes
+    from the stored host environment instead, [[submodule-server-environment]]). One marker-delimited `env -0` probe of the login shell
     (`-l -i`, then `-l`) serves both this import and the PATH repair; rc-file chatter before the marker
     (`LOGIN_ENV_MARKER`) is ignored. Trade-off recorded: the host, every process it spawns (stdio MCP
     servers included) and every `!command` resolution then see the secrets the shell exports — the user's
@@ -245,6 +246,11 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Get right (shellEnv)
 
 - Runs **once at startup, before creating any `AgentSession`**.
+- **Launch keys are snapshotted before any repair.** The first `resolveShellEnv()` call records the
+  names already in `process.env` (same `Symbol.for` state, so bundled copies share it); `launchEnvKeys()`
+  returns that set, or the current names when no repair ever ran. The stored host environment
+  ([[submodule-server-environment]]) uses it so an explicit launch variable beats the stored record while
+  a login-shell import or locale repair does not.
 - **Async, one run per process, awaited before the first spawn.** `resolveShellEnv()` returns one
   promise cached on a `Symbol.for` global key, so every caller awaits that same run, even from a second
   bundled copy of the module (the desktop shell and its server bundle). A GUI launch pays for the login

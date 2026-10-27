@@ -109,7 +109,13 @@ not this module; the theme-aware highlighter remains app-local.
   `relativeTime`, `compactAge`, the render-time default names `chatName` / `terminalName` (+ the
   language-neutral `defaultTerminalTitle` / `defaultTerminalIndex`) / `changesTabName` / `diffTabName` /
   `turnTimeLabel` / `planDocumentName` (stored tab names carry no translated text; these word them for the
-  caller's translator), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
+  caller's translator), **`chatLabel(t, name, firstPrompt)`** → `{ text, source, tooltip? }` with its
+  projections **`chatDisplayName`** (the text) and **`fallbackChatTitle`** (the one derivation of an unnamed
+  chat's label: a trimmed real name wins as `source: "name"`; else contracts' first-prompt head cut at a word
+  boundary at 48 UTF-16 units with `…` — never inside a surrogate pair — as `source: "prompt"` with the full
+  head as `tooltip`; else `chatName`'s generic label as `source: "default"`; every surface that shows a chat
+  title renders one `chatLabel`, so trimming, the `data-title-source` marker and the tooltip agree and the
+  agent's or user's title replaces the label everywhere at once), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
   `MCP_STATE_KEY`, `mcpStateLabel`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
   `isMcpActiveState`, the `McpStateTone` type,
   `DOUBLE_CLICK_SETTLE_MS`, `firstClickOnly`, `doubleClickPendingMs`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,

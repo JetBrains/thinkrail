@@ -1,5 +1,5 @@
 import { useT } from "@thinkrail/locales/react";
-import type { editor } from "monaco-editor/esm/vs/editor/editor.api.js";
+import type { editor } from "monaco-editor/editor/editor.api.js";
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { type ResourceHost, useResourceHost, useResourcePreferences } from "../host";
 import type { ResourceDescriptor, ResourceViewProps, SurfaceReview } from "../registry";

@@ -16,6 +16,7 @@ export interface ChildInfo {
 	createdBy: string;
 	roleName?: string;
 	roleSource?: string;
+	detached?: boolean;
 }
 
 export interface SessionOptions {
@@ -117,6 +118,12 @@ export interface DelegationRunDetails {
 export type LifecycleEvent =
 	| { type: "child-created"; record: SpawnRecord }
 	| { type: "run-queued" | "run-started"; sessionId: string; parentSessionId: string }
+	| {
+			type: "run-progress";
+			sessionId: string;
+			parentSessionId: string;
+			details: DelegationRunDetails;
+	  }
 	| { type: "run-terminal"; sessionId: string; parentSessionId: string; outcome: RunOutcome }
 	| { type: "child-disposed"; sessionId: string; parentSessionId: string };
 

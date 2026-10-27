@@ -16,6 +16,7 @@ export {
 	gitHeadSha,
 	gitStatus,
 	gitUncommittedPaths,
+	headShaAt,
 	listBranches,
 	listCommits,
 	listCommitsSince,

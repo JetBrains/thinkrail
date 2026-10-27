@@ -69,6 +69,7 @@ import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useChatResources, useCommandLog } from "./useChatResources";
+import { inspectedResult, resultTargetKey, useFreshResults } from "./useFreshResults";
 import { useModelCatalog } from "./useModelCatalog";
 import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
@@ -194,6 +195,12 @@ export default function ChatView({
 	const composerRef = useRef<ComposerHandle>(null);
 	const transcriptRef = useRef<ChatTranscriptHandle>(null);
 	const resources = useChatResources(workspaceId, sessionId);
+	const freshResults = useFreshResults(
+		workspaceId,
+		sessionId,
+		resources.groups,
+		resources.visible && resources.authoritative,
+	);
 	const resourcesTrigger = useRef<HTMLButtonElement>(null);
 	const [stopAllOpen, setStopAllOpen] = useState(false);
 	const [inspector, setInspector] = useState<{
@@ -255,6 +262,12 @@ export default function ChatView({
 			? inspectorSelectedId
 			: null;
 	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommandId);
+	const markResultSeen = freshResults.markSeen;
+	const inspected = inspectedResult(resources.groups, selectedCommandId, selectedSubagentId);
+	const inspectedKey = inspected ? resultTargetKey(inspected) : null;
+	useEffect(() => {
+		if (inspected) markResultSeen(inspected);
+	}, [inspectedKey, markResultSeen]);
 	const now = useNow();
 	const returnToResources = (event: Event) => {
 		event.preventDefault();
@@ -542,6 +555,7 @@ export default function ChatView({
 		behavior: Exclude<SubmitBehavior, "interrupt">,
 	) => {
 		const queued = behavior !== "send";
+		freshResults.markAllSeen();
 		if (!queued && (text || attachments.length > 0)) {
 			transcriptRef.current?.armImmediateTurn();
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
@@ -724,6 +738,7 @@ export default function ChatView({
 											: null
 									}
 									working={resources.authoritative && resources.groups.activeCount > 0}
+									freshCount={freshResults.count}
 									open={inspectorOpen}
 									onClick={() => setInspectorOpen(!inspectorOpen)}
 								/>
@@ -751,6 +766,7 @@ export default function ChatView({
 				focusComposer={focusComposer}
 				openSubagentTranscript={setTranscriptChildId}
 				resultOpener={resultOpener}
+				markResultSeen={markResultSeen}
 				onTryAgain={onTryAgain}
 				historyOpen={historyState.open}
 				inspectorOpen={inspectorOpen}
@@ -810,6 +826,9 @@ export default function ChatView({
 				<ResourcesDock
 					commands={resources.groups.commands}
 					subagents={resources.groups.subagents}
+					freshCommands={freshResults.commands}
+					freshSubagents={freshResults.subagents}
+					onDismiss={markResultSeen}
 					now={now}
 					authoritative={resources.authoritative}
 					actions={resources.actions}

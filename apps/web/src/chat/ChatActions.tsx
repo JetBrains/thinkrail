@@ -1,5 +1,6 @@
 import type { AskUserQuestionResult, McpReadOutputResult, WireModel } from "@thinkrail/contracts";
 import { createContext, useContext } from "react";
+import type { ResourceTarget } from "./resources";
 import type { RevealBlock } from "./scrollGeometry";
 
 export interface ChatRevealOptions {
@@ -10,9 +11,7 @@ export interface ChatRevealOptions {
 	topInset?: number;
 }
 
-export type ResultTarget =
-	| { kind: "command"; id: string }
-	| { kind: "subagent"; childSessionId: string };
+export type ResultTarget = ResourceTarget;
 
 export interface ChatActions {
 	answerQuestion: (toolCallId: string, result: AskUserQuestionResult) => Promise<void>;
@@ -20,6 +19,7 @@ export interface ChatActions {
 	focusComposer: () => void;
 	openSubagentTranscript: (childSessionId: string) => void;
 	resultOpener: (target: ResultTarget) => (() => void) | undefined;
+	markResultSeen?: ((target: ResultTarget) => void) | undefined;
 	revealChatElement: (element: HTMLElement, options: ChatRevealOptions) => void;
 	readMcpOutput?: ((toolCallId: string) => Promise<McpReadOutputResult>) | undefined;
 	openMcpSettings?: (() => void) | undefined;

@@ -1,6 +1,10 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { buildSessionContext, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	buildSessionContext,
+	type SessionEntry,
+	SessionManager,
+} from "@earendil-works/pi-coding-agent";
 import {
 	type DelegationRunStatus,
 	isTranscriptMessageRole,
@@ -12,6 +16,7 @@ import {
 	type ChildHandle,
 	createDelegationService,
 	type DelegationService,
+	delegationSessionDir,
 	deriveChildSessionFile,
 	type RunStatus,
 } from "pi-delegation";
@@ -21,12 +26,19 @@ import {
 	buildSessionSettings,
 	canUseSessionResources,
 	liveParentContext,
+	recordSessionUsage,
 	scheduleSessionStatePublish,
 } from "./agentSessionManager";
 import { publishSessionResourcesChanged } from "./chatResources";
 import { childBaseExtensionFactories, childExtensionFactories } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
 import { isHostResourceId, isPiSessionId } from "./resourceIdentity";
+import {
+	createRunUsageRecorder,
+	reconcileSubagentUsage,
+	SUBAGENT_USAGE_KIND,
+	type SubagentUsage,
+} from "./subagentUsage";
 
 export function delegationRootDir(): string {
 	return join(dataDir(), "delegation");
@@ -48,6 +60,34 @@ export function refreshSubagentConcurrency(workspaceId?: string): void {
 	}
 }
 
+function recordSubagentUsage(parentSessionId: string, usage: SubagentUsage): boolean {
+	return recordSessionUsage(parentSessionId, {
+		kind: SUBAGENT_USAGE_KIND,
+		provider: usage.provider,
+		model: usage.model,
+		usage: usage.usage,
+		note: usage.childSessionId,
+	});
+}
+
+const runUsage = createRunUsageRecorder(recordSubagentUsage);
+
+export function reconcileSessionSubagentUsage(
+	workspaceId: string,
+	parentSessionId: string,
+	entries: () => readonly SessionEntry[] | undefined,
+): Promise<void> {
+	return reconcileSubagentUsage({
+		dir: delegationSessionDir(delegationRootDir(), workspaceId, parentSessionId),
+		entries,
+		isLive: (childSessionId) => {
+			const status = services.get(workspaceId)?.findChild(childSessionId)?.snapshot?.status;
+			return status === "queued" || status === "running";
+		},
+		record: (usage) => recordSubagentUsage(parentSessionId, usage),
+	});
+}
+
 export function delegationServiceFor(workspaceId: string): DelegationService {
 	let service = services.get(workspaceId);
 	if (!service) {
@@ -64,6 +104,12 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			buildChildSettings: buildSessionSettings,
 		});
 		service.onLifecycle((event) => {
+			if (event.type === "run-progress") {
+				runUsage.progress(event.parentSessionId, event.sessionId, event.details);
+				return;
+			}
+			if (event.type === "run-terminal")
+				runUsage.terminal(event.parentSessionId, event.sessionId, event.outcome.details);
 			const parentSessionId =
 				event.type === "child-created" ? event.record.parentSessionId : event.parentSessionId;
 			if (canUseSessionResources(parentSessionId, workspaceId)) {

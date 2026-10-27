@@ -6,6 +6,8 @@ import {
 	normalizeThemePreference as normalizeConfigThemePreference,
 	type SystemThemePair,
 	type ThemeId,
+	type UserThemeFile,
+	type UserThemeFileErrorCode,
 } from "@thinkrail/contracts";
 import {
 	asStablePreferenceAdapter,
@@ -18,6 +20,7 @@ import {
 	type AnsiColorKey,
 	assertThemeManifest,
 	isThemeIdSlug,
+	parseThemeManifest,
 	SYNTAX_COLOR_KEYS,
 	type SyntaxColorKey,
 	THEME_COLOR_KEYS,
@@ -41,6 +44,12 @@ export interface ThemeCatalog {
 
 export type ThemePreference = ConfigThemePreference;
 
+export interface UserThemeIssue {
+	readonly fileName: string;
+	readonly error: UserThemeFileErrorCode | "invalid-theme" | "id-too-long" | "duplicate-id";
+	readonly detail?: string;
+}
+
 export interface ThemeResolution {
 	readonly requestedId: ThemeId;
 	readonly theme: ThemeDescriptor;
@@ -56,6 +65,11 @@ interface ColorSchemeMediaQuery {
 
 const HINT_KEY = `${STORAGE_PREFIX}theme`;
 const HINT_VERSION = 1;
+const USER_THEMES_KEY = `${STORAGE_PREFIX}user-themes`;
+const MAX_USER_THEME_CACHE_CHARS = 64 * 1024;
+const USER_THEME_ID_PREFIX = "user.";
+
+const isUserThemeId = (id: ThemeId): boolean => id.startsWith(USER_THEME_ID_PREFIX);
 const SYSTEM_QUERY = "(prefers-color-scheme: dark)";
 
 const paletteVariable = (key: string) =>
@@ -104,7 +118,11 @@ export const SYNTAX_VARIABLES: Record<SyntaxColorKey, string> = {
 	changed: "--code-changed",
 };
 
-let catalog: ThemeCatalog = { byId: new Map(), list: [] };
+let bundledCatalog: ThemeCatalog = { byId: new Map(), list: [] };
+let catalog: ThemeCatalog = bundledCatalog;
+let userThemeIssues: readonly UserThemeIssue[] = [];
+let installedUserFiles: readonly UserThemeFile[] | null = null;
+const catalogListeners = new Set<() => void>();
 
 function compareText(a: string, b: string): number {
 	return a < b ? -1 : a > b ? 1 : 0;
@@ -132,6 +150,9 @@ export function buildThemeCatalog(candidates: Record<string, unknown>): ThemeCat
 			throw new Error(`Invalid bundled theme ${path}`, { cause: error });
 		}
 		if (byId.has(theme.id)) throw new Error(`Duplicate bundled theme id: ${theme.id} (${path})`);
+		if (isUserThemeId(theme.id)) {
+			throw new Error(`Bundled theme id uses the user namespace: ${theme.id} (${path})`);
+		}
 		byId.set(theme.id, theme);
 	}
 	if (!byId.has(DEFAULT_CONFIG.theme)) {
@@ -141,6 +162,10 @@ export function buildThemeCatalog(candidates: Record<string, unknown>): ThemeCat
 	if (!appearances.has("light") || !appearances.has("dark")) {
 		throw new Error("The bundled theme catalog must include light and dark themes");
 	}
+	return catalogOf(byId);
+}
+
+function catalogOf(byId: ReadonlyMap<ThemeId, ThemeManifest>): ThemeCatalog {
 	const list = Object.freeze(
 		[...byId.values()]
 			.sort((a, b) => {
@@ -153,19 +178,113 @@ export function buildThemeCatalog(candidates: Record<string, unknown>): ThemeCat
 	return { byId, list };
 }
 
-export function installThemeCatalog(next: ThemeCatalog): void {
+function publishCatalog(next: ThemeCatalog, issues: readonly UserThemeIssue[]): void {
 	catalog = next;
+	userThemeIssues = issues;
+	for (const listener of catalogListeners) listener();
+}
+
+export function installThemeCatalog(next: ThemeCatalog): void {
+	bundledCatalog = next;
+	installedUserFiles = null;
+	publishCatalog(next, []);
 }
 
 export function getThemes(): readonly ThemeDescriptor[] {
 	return catalog.list;
 }
 
+export function getUserThemeIssues(): readonly UserThemeIssue[] {
+	return userThemeIssues;
+}
+
+export function onThemesChange(listener: () => void): () => void {
+	catalogListeners.add(listener);
+	return () => catalogListeners.delete(listener);
+}
+
+const NO_USER_THEME_FILES: readonly UserThemeFile[] = Object.freeze([]);
+
+export function clearUserThemes(): void {
+	installUserThemes(NO_USER_THEME_FILES);
+}
+
+export function installUserThemes(files: readonly UserThemeFile[]): void {
+	if (files === installedUserFiles) return;
+	installedUserFiles = files;
+	const byId = new Map(bundledCatalog.byId);
+	const issues: UserThemeIssue[] = [];
+	for (const file of files) {
+		if (!file.ok) {
+			issues.push({
+				fileName: file.fileName,
+				error: file.error,
+				...(file.detail ? { detail: file.detail } : {}),
+			});
+			continue;
+		}
+		const parsed = parseThemeManifest(file.manifest);
+		const id = parsed.ok ? `${USER_THEME_ID_PREFIX}${parsed.value.id}` : "";
+		if (!parsed.ok) {
+			issues.push({
+				fileName: file.fileName,
+				error: "invalid-theme",
+				detail: parsed.issues.join("; "),
+			});
+		} else if (!isThemeIdSlug(id)) {
+			issues.push({ fileName: file.fileName, error: "id-too-long", detail: parsed.value.id });
+		} else if (byId.has(id)) {
+			issues.push({ fileName: file.fileName, error: "duplicate-id", detail: parsed.value.id });
+		} else {
+			byId.set(id, Object.freeze({ ...parsed.value, id }));
+		}
+	}
+	publishCatalog(catalogOf(byId), Object.freeze(issues));
+}
+
+function writeUserThemeCache(preference: ThemePreference): void {
+	const ids = new Set([
+		preference.theme,
+		...(preference.systemThemePair
+			? [preference.systemThemePair.light, preference.systemThemePair.dark]
+			: []),
+	]);
+	const manifests = [...ids].flatMap((id) => {
+		const theme = isUserThemeId(id) ? catalog.byId.get(id) : undefined;
+		return theme ? [{ ...theme, id: id.slice(USER_THEME_ID_PREFIX.length) }] : [];
+	});
+	const storage = themeHintStorage();
+	const serialized = JSON.stringify(manifests);
+	if (manifests.length === 0 || serialized.length > MAX_USER_THEME_CACHE_CHARS) {
+		storage?.removeItem(USER_THEMES_KEY);
+	} else {
+		storage?.setItem(USER_THEMES_KEY, serialized);
+	}
+}
+
+export function installCachedUserThemes(): void {
+	try {
+		const raw = themeHintStorage()?.getItem(USER_THEMES_KEY);
+		const parsed: unknown = typeof raw === "string" ? JSON.parse(raw) : null;
+		if (!Array.isArray(parsed)) return;
+		installUserThemes(
+			parsed.map((manifest: unknown, index) => ({
+				fileName: `cached-${index}`,
+				ok: true as const,
+				manifest,
+			})),
+		);
+	} catch {
+		return;
+	}
+}
+
 const RENAMED_THEME_IDS: Readonly<Record<string, ThemeId>> = {
 	"high-contrast": "high-contrast-dark",
 };
 
-const canonicalThemeId = (id: ThemeId): ThemeId => RENAMED_THEME_IDS[id] ?? id;
+const canonicalThemeId = (id: ThemeId): ThemeId =>
+	Object.hasOwn(RENAMED_THEME_IDS, id) ? (RENAMED_THEME_IDS[id] ?? id) : id;
 
 function exactTheme(id: ThemeId): ThemeManifest | undefined {
 	return catalog.byId.get(canonicalThemeId(id));
@@ -177,8 +296,8 @@ function requireResolvedTheme(id: ThemeId): ThemeManifest {
 	return theme;
 }
 
-function themesByAppearance(appearance: ThemeAppearance): ThemeManifest[] {
-	return [...catalog.byId.values()]
+function bundledThemesByAppearance(appearance: ThemeAppearance): ThemeManifest[] {
+	return [...bundledCatalog.byId.values()]
 		.filter((theme) => theme.appearance === appearance)
 		.sort((a, b) => a.order - b.order || compareText(a.label, b.label) || compareText(a.id, b.id));
 }
@@ -187,7 +306,7 @@ function fallbackTheme(
 	appearance: ThemeAppearance,
 	preferredContrast?: ThemeContrast,
 ): ThemeManifest {
-	const themes = themesByAppearance(appearance);
+	const themes = bundledThemesByAppearance(appearance);
 	const theme =
 		(preferredContrast
 			? themes.find((candidate) => candidate.contrast === preferredContrast)
@@ -365,6 +484,7 @@ export function writeThemeHint(preference: ThemePreference): void {
 	try {
 		const normalized = normalizeThemeHint(preference);
 		themeHintStorage()?.setItem(HINT_KEY, JSON.stringify({ version: HINT_VERSION, ...normalized }));
+		writeUserThemeCache(normalized);
 	} catch {
 		return;
 	}

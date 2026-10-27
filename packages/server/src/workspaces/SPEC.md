@@ -196,7 +196,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   writer flushes that coalesced stamp in the same save, so learning the merge cannot put newer work on the
   shelf; `backfillWorkspaceActivity(id, at)` — sets the stamp only when the record has none and touches
   no override (the upgrade path for records that predate the field); `recordWorkspaceHead(id)` — reads the
-  worktree's `HEAD` sha and calls `recordWorkspaceActivity` when it differs from the last sha observed in
+  record once (an out-of-band `workspaces.json` rewrite between two reads must not turn a removed
+  workspace into a throw) and the worktree's `HEAD` sha and calls `recordWorkspaceActivity` when it differs from the last sha observed in
   this host lifetime (a HEAD move is the commit/pull/checkout proxy; the raw git-dir watcher fires on
   index refreshes too, which is why the sha, not the event, is the signal), with `seedWorkspaceHead(id)`
   observing HEAD **whenever a worktree watcher starts**: the first observation in a host lifetime seeds,
