@@ -1,11 +1,18 @@
 import { describe, expect, test } from "bun:test";
+import type { WebsiteSurveySentProperties } from "@thinkrail/website-analytics";
 import {
+	answerSurveyStep,
 	downloadPostHogSurveyId,
 	downloadSurveySteps,
 	orderedChoices,
+	type SurveyPlace,
+	type SurveyResponse,
+	startSurveyResponse,
 	stepCanContinue,
 	surveyAnswerValue,
+	surveyDismissedProperties,
 	surveySentProperties,
+	surveyShownProperties,
 } from "./downloadSurvey";
 
 const interest = downloadSurveySteps[0];
@@ -100,5 +107,137 @@ describe("download survey", () => {
 		expect(tools.choices).toHaveLength(11);
 		expect(dissatisfaction.max).toBe(3);
 		expect(email.action).toBe("Finish");
+		expect(email.email).toBe(true);
+		expect(downloadSurveySteps.filter((step) => step.hint !== undefined)).toEqual([
+			interest,
+			tools,
+		]);
+	});
+});
+
+const place: SurveyPlace = { content_key: "landing", cta_location: "hero" };
+
+function answerAll(
+	response: SurveyResponse,
+	answers: ReadonlyArray<readonly [readonly string[], string]>,
+): WebsiteSurveySentProperties[] {
+	const sends: WebsiteSurveySentProperties[] = [];
+	let current = response;
+	for (const [position, step] of downloadSurveySteps.entries()) {
+		const [selected, freeText] = answers[position] ?? [[], ""];
+		const answered = answerSurveyStep(current, step, selected, freeText, place);
+		if (answered === undefined) throw new Error(`step ${step.index} was rejected`);
+		current = answered.response;
+		sends.push(answered.properties);
+	}
+	return sends;
+}
+
+function responseKeys(properties: WebsiteSurveySentProperties): string[] {
+	return Object.keys(properties).filter((key) => key.startsWith("$survey_response_"));
+}
+
+describe("download survey response", () => {
+	test("one submission id carries every answer so far and only the last step completes it", () => {
+		const sends = answerAll(
+			startSurveyResponse("response-1", () => 0),
+			[
+				[["pi_gui", "spec_driven"], ""],
+				[["codes_self"], ""],
+				[["cursor", "other"], "Helix"],
+				[["cost"], ""],
+				[[], "try the spec graph"],
+				[[], "ada@example.com"],
+			],
+		);
+
+		expect(sends.map((send) => send.$survey_submission_id)).toEqual(
+			Array(downloadSurveySteps.length).fill("response-1"),
+		);
+		expect(sends.map((send) => send.$survey_completed)).toEqual([
+			false,
+			false,
+			false,
+			false,
+			false,
+			true,
+		]);
+		expect(sends.map((send) => responseKeys(send).length)).toEqual([1, 2, 3, 4, 5, 6]);
+		expect(sends.at(-1)).toMatchObject({
+			$survey_id: downloadPostHogSurveyId,
+			content_key: "landing",
+			cta_location: "hero",
+			[`$survey_response_${interest.questionId}`]: [
+				"Graphical interface for Pi",
+				"Spec-driven development",
+			],
+			[`$survey_response_${tools.questionId}`]: ["Cursor", "Helix"],
+			[`$survey_response_${firstTry.questionId}`]: "try the spec graph",
+			[`$survey_response_${email.questionId}`]: "ada@example.com",
+		});
+	});
+
+	test("blank optional answers are left out of every send", () => {
+		const sends = answerAll(
+			startSurveyResponse("response-1", () => 0),
+			[
+				[["pi_gui"], ""],
+				[["codes_self"], ""],
+				[["cursor"], ""],
+				[["cost"], ""],
+				[[], "  "],
+				[[], ""],
+			],
+		);
+
+		expect(sends.map((send) => responseKeys(send).length)).toEqual([1, 2, 3, 4, 4, 4]);
+		expect(sends.at(-1)?.$survey_completed).toBe(true);
+	});
+
+	test("an invalid step sends nothing and leaves the response untouched", () => {
+		const response = startSurveyResponse("response-1", () => 0);
+
+		expect(answerSurveyStep(response, interest, [], "", place)).toBeUndefined();
+		expect(answerSurveyStep(response, interest, ["other"], "  ", place)).toBeUndefined();
+		expect(response).toMatchObject({ answers: {}, sent: false });
+	});
+
+	test("a response is dismissed only before its first send", () => {
+		const response = startSurveyResponse("response-1", () => 0);
+		const answered = answerSurveyStep(response, interest, ["pi_gui"], "", place);
+
+		expect(surveyDismissedProperties(response, place)).toEqual({
+			$survey_id: downloadPostHogSurveyId,
+			content_key: "landing",
+			cta_location: "hero",
+		});
+		expect(answered?.response.sent).toBe(true);
+		if (answered === undefined) throw new Error("expected the first step to be accepted");
+		expect(surveyDismissedProperties(answered.response, place)).toBeUndefined();
+		expect(response.sent).toBe(false);
+	});
+
+	test("each response starts with its own id, no answers, and a fresh choice order", () => {
+		const first = startSurveyResponse("response-1", () => 0);
+		const second = startSurveyResponse("response-2", () => 0.99);
+		const choiceIds = (response: SurveyResponse) =>
+			response.order.map((choices) => choices.map((choice) => choice.id));
+
+		expect([first.id, second.id]).toEqual(["response-1", "response-2"]);
+		expect(second.answers).toEqual({});
+		expect(choiceIds(first)).not.toEqual(choiceIds(second));
+		for (const response of [first, second]) {
+			for (const [position, step] of downloadSurveySteps.entries()) {
+				const custom = step.choices.find((choice) => choice.custom === true);
+				if (custom !== undefined) expect(response.order[position]?.at(-1)).toBe(custom);
+			}
+		}
+	});
+
+	test("a showing names the survey and where the download was", () => {
+		expect(surveyShownProperties({ content_key: "blog/introducing-thinkrail" })).toEqual({
+			$survey_id: downloadPostHogSurveyId,
+			content_key: "blog/introducing-thinkrail",
+		});
 	});
 });

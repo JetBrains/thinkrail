@@ -1,10 +1,11 @@
-import type { WebsiteSurveySentProperties } from "@thinkrail/website-analytics";
+import type {
+	WebsiteSurveyDismissedProperties,
+	WebsiteSurveySentProperties,
+	WebsiteSurveyShownProperties,
+} from "@thinkrail/website-analytics";
 
 export const downloadPostHogSurveyId = "01a17ce8-aae4-0000-f8c2-74cf8eb20b72";
-export const downloadSurveyStepCount = 6 as const;
 export const downloadSurveyFreeTextLimit = 500;
-
-export type SurveyStepIndex = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type SurveyChoice = {
 	id: string;
@@ -13,16 +14,27 @@ export type SurveyChoice = {
 };
 
 export type SurveyStep = {
-	index: SurveyStepIndex;
+	index: number;
 	questionId: string;
 	prompt: string;
-	kind: "single" | "multi" | "text";
+	kind: "multi" | "text";
 	required: boolean;
 	max?: number;
 	columns?: boolean;
+	hint?: string;
+	email?: true;
 	placeholder?: string;
 	action: "Continue" | "Finish";
 	choices: readonly SurveyChoice[];
+};
+
+export type SurveyPlace = Omit<WebsiteSurveyShownProperties, "$survey_id">;
+
+export type SurveyResponse = {
+	readonly id: string;
+	readonly order: readonly (readonly SurveyChoice[])[];
+	readonly answers: Readonly<Record<string, string | string[]>>;
+	readonly sent: boolean;
 };
 
 const other: SurveyChoice = { id: "other", label: "Something else", custom: true };
@@ -35,6 +47,7 @@ export const downloadSurveySteps: readonly SurveyStep[] = [
 		prompt: "What makes ThinkRail interesting to you?",
 		kind: "multi",
 		required: true,
+		hint: "Choose all that apply",
 		action: "Continue",
 		choices: [
 			{ id: "pi_gui", label: "Graphical interface for Pi" },
@@ -66,6 +79,7 @@ export const downloadSurveySteps: readonly SurveyStep[] = [
 		kind: "multi",
 		required: true,
 		columns: true,
+		hint: "Choose all that apply",
 		action: "Continue",
 		choices: [
 			{ id: "cursor", label: "Cursor" },
@@ -121,6 +135,7 @@ export const downloadSurveySteps: readonly SurveyStep[] = [
 			"If you don't mind us contacting you with product updates or further feedback questions, please enter your email",
 		kind: "text",
 		required: false,
+		email: true,
 		placeholder: "Email address",
 		action: "Finish",
 		choices: [],
@@ -175,7 +190,6 @@ export function surveyAnswerValue(
 		if (choice.custom === true) return text === "" ? [] : [text];
 		return [choice.label];
 	});
-	if (step.kind === "single") return answers[0];
 	return answers;
 }
 
@@ -198,5 +212,49 @@ export function surveySentProperties(input: {
 		content_key: input.contentKey,
 		...(input.ctaLocation === undefined ? {} : { cta_location: input.ctaLocation }),
 		...responses,
+	};
+}
+
+export function startSurveyResponse(id: string, random: () => number): SurveyResponse {
+	return {
+		id,
+		order: downloadSurveySteps.map((step) => orderedChoices(step, random)),
+		answers: {},
+		sent: false,
+	};
+}
+
+export function surveyShownProperties(place: SurveyPlace): WebsiteSurveyShownProperties {
+	return { $survey_id: downloadPostHogSurveyId, ...place };
+}
+
+export function surveyDismissedProperties(
+	response: SurveyResponse,
+	place: SurveyPlace,
+): WebsiteSurveyDismissedProperties | undefined {
+	return response.sent ? undefined : { $survey_id: downloadPostHogSurveyId, ...place };
+}
+
+export function answerSurveyStep(
+	response: SurveyResponse,
+	step: SurveyStep,
+	selected: readonly string[],
+	freeText: string,
+	place: SurveyPlace,
+): { response: SurveyResponse; properties: WebsiteSurveySentProperties } | undefined {
+	if (!stepCanContinue(step, selected, freeText)) return undefined;
+	const value = surveyAnswerValue(step, selected, freeText);
+	const answers = { ...response.answers };
+	if (value === undefined) delete answers[step.questionId];
+	else answers[step.questionId] = value;
+	return {
+		response: { ...response, answers, sent: true },
+		properties: surveySentProperties({
+			submissionId: response.id,
+			contentKey: place.content_key,
+			ctaLocation: place.cta_location,
+			answers,
+			completed: step.index === downloadSurveySteps.length,
+		}),
 	};
 }

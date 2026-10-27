@@ -6,21 +6,18 @@ import {
 	desktopArtifactForUrl,
 } from "./analyticsEvents";
 import {
-	downloadPostHogSurveyId,
+	answerSurveyStep,
 	downloadSurveyFreeTextLimit,
-	downloadSurveyStepCount,
 	downloadSurveySteps,
-	orderedChoices,
 	type SurveyChoice,
 	type SurveyStep,
+	startSurveyResponse,
 	stepCanContinue,
-	surveyAnswerValue,
-	surveySentProperties,
+	surveyDismissedProperties,
+	surveyShownProperties,
 } from "./downloadSurvey";
 
 type Capture = typeof captureAnalytics;
-
-const thankYou = "Thank you so much for taking time to answer these questions!";
 
 export function initDownloadThanks(
 	doc: Document = document,
@@ -43,31 +40,22 @@ export function initDownloadThanks(
 
 	let stepIndex = 0;
 	let started = false;
-	let submitted = false;
 	let shown = false;
-	let dismissed = false;
 	let advanceLocked = false;
-	let currentResponseId = responseId();
-	let answers: Record<string, string | string[]> = {};
+	let response = startSurveyResponse(responseId(), random);
 	let ctaLocation: WebsiteCtaLocation | undefined;
-	let order = downloadSurveySteps.map((step) => orderedChoices(step, random));
 
 	const currentStep = (): SurveyStep | undefined => downloadSurveySteps[stepIndex];
 
-	const readAnswer = (): { selected: string[]; freeText: string } => {
-		const selected = [
-			...body.querySelectorAll<HTMLInputElement>("input[type=radio], input[type=checkbox]"),
-		]
-			.filter((input) => input.checked)
-			.map((input) => input.value);
-		const freeText = body.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-			"[data-survey-free-text]",
-		);
-		return { selected, freeText: freeText?.value ?? "" };
-	};
-
 	const freeTextField = () =>
 		body.querySelector<HTMLInputElement | HTMLTextAreaElement>("[data-survey-free-text]");
+
+	const readAnswer = (): { selected: string[]; freeText: string } => {
+		const selected = [...body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")]
+			.filter((input) => input.checked)
+			.map((input) => input.value);
+		return { selected, freeText: freeTextField()?.value ?? "" };
+	};
 
 	const emailAccepted = () => {
 		const field = freeTextField();
@@ -80,7 +68,7 @@ export function initDownloadThanks(
 		const answer = readAnswer();
 		action.disabled = !stepCanContinue(step, answer.selected, answer.freeText) || !emailAccepted();
 		action.textContent = step.action;
-		progress.textContent = `${step.index} of ${downloadSurveyStepCount}`;
+		progress.textContent = `${step.index} of ${downloadSurveySteps.length}`;
 		emailHint.hidden = step.action !== "Finish" || !action.disabled;
 	};
 
@@ -90,7 +78,6 @@ export function initDownloadThanks(
 		progress.hidden = true;
 		welcome.hidden = false;
 		actionRow.hidden = false;
-		action.hidden = false;
 		action.disabled = false;
 		action.textContent = "Start";
 		emailHint.hidden = true;
@@ -98,13 +85,12 @@ export function initDownloadThanks(
 
 	const renderStep = () => {
 		const step = currentStep();
-		const choices = order[stepIndex];
+		const choices = response.order[stepIndex];
 		if (step === undefined || choices === undefined) return;
 		thanks.hidden = true;
 		welcome.hidden = true;
 		body.hidden = false;
 		actionRow.hidden = false;
-		action.hidden = false;
 		progress.hidden = false;
 		body.replaceChildren();
 		const fieldset = doc.createElement("fieldset");
@@ -122,7 +108,7 @@ export function initDownloadThanks(
 	};
 
 	const freeTextControl = (step: SurveyStep): HTMLInputElement | HTMLTextAreaElement => {
-		const field = step.index === 6 ? doc.createElement("input") : doc.createElement("textarea");
+		const field = step.email ? doc.createElement("input") : doc.createElement("textarea");
 		field.className = "download-survey-text";
 		field.dataset.surveyFreeText = "";
 		field.maxLength = downloadSurveyFreeTextLimit;
@@ -141,14 +127,10 @@ export function initDownloadThanks(
 
 	const choiceList = (step: SurveyStep, choices: readonly SurveyChoice[]): HTMLDivElement => {
 		const wrap = doc.createElement("div");
-		const needsAllHint =
-			step.kind === "multi" &&
-			step.max === undefined &&
-			!/choose all that apply/i.test(step.prompt);
-		if (needsAllHint) {
+		if (step.hint !== undefined) {
 			const hint = doc.createElement("p");
 			hint.className = "download-survey-hint";
-			hint.textContent = "Choose all that apply";
+			hint.textContent = step.hint;
 			wrap.append(hint);
 		}
 		const list = doc.createElement("div");
@@ -159,7 +141,7 @@ export function initDownloadThanks(
 			const label = doc.createElement("label");
 			label.className = "download-survey-choice";
 			const input = doc.createElement("input");
-			input.type = step.kind === "single" ? "radio" : "checkbox";
+			input.type = "checkbox";
 			input.name = `download-survey-${step.index}`;
 			input.value = choice.id;
 			const name = doc.createElement("span");
@@ -187,9 +169,7 @@ export function initDownloadThanks(
 					for (const box of boxes) box.disabled = full && !box.checked;
 				}
 				for (const field of list.querySelectorAll<HTMLInputElement>("[data-survey-free-text]")) {
-					const choiceInput = field.parentElement?.querySelector(
-						"input[type=radio], input[type=checkbox]",
-					);
+					const choiceInput = field.parentElement?.querySelector("input[type=checkbox]");
 					field.hidden = !(choiceInput instanceof HTMLInputElement && choiceInput.checked);
 				}
 				if (custom && input.checked) custom.focus();
@@ -205,11 +185,9 @@ export function initDownloadThanks(
 		welcome.hidden = true;
 		body.hidden = true;
 		actionRow.hidden = true;
-		action.hidden = true;
 		progress.hidden = true;
 		emailHint.hidden = true;
 		thanks.hidden = false;
-		thanks.textContent = thankYou;
 	};
 
 	const surveyPlace = () => ({
@@ -220,13 +198,9 @@ export function initDownloadThanks(
 	const restart = () => {
 		stepIndex = 0;
 		started = false;
-		submitted = false;
 		shown = false;
-		dismissed = false;
 		advanceLocked = false;
-		currentResponseId = responseId();
-		answers = {};
-		order = downloadSurveySteps.map((step) => orderedChoices(step, random));
+		response = startSurveyResponse(responseId(), random);
 		body.replaceChildren();
 		renderWelcome();
 	};
@@ -240,36 +214,21 @@ export function initDownloadThanks(
 		}
 		if (advanceLocked || step === undefined || action.disabled || !emailAccepted()) return;
 		const answer = readAnswer();
-		if (!stepCanContinue(step, answer.selected, answer.freeText)) return;
+		const answered = answerSurveyStep(
+			response,
+			step,
+			answer.selected,
+			answer.freeText,
+			surveyPlace(),
+		);
+		if (answered === undefined) return;
 		advanceLocked = true;
 		window.setTimeout(() => {
 			advanceLocked = false;
 		}, 400);
-		const value = surveyAnswerValue(
-			step,
-			answer.selected,
-			step.kind === "text" ||
-				answer.selected.some(
-					(id) => step.choices.find((choice) => choice.id === id)?.custom === true,
-				)
-				? answer.freeText
-				: "",
-		);
-		if (value === undefined) delete answers[step.questionId];
-		else answers[step.questionId] = value;
-		const completed = step.index === downloadSurveyStepCount;
-		capture(
-			"survey sent",
-			surveySentProperties({
-				submissionId: currentResponseId,
-				contentKey: surveyPlace().content_key,
-				ctaLocation,
-				answers,
-				completed,
-			}),
-		);
-		submitted = true;
-		if (step.index === downloadSurveyStepCount) {
+		response = answered.response;
+		capture("survey sent", answered.properties);
+		if (step.index === downloadSurveySteps.length) {
 			showThanks();
 			return;
 		}
@@ -281,13 +240,8 @@ export function initDownloadThanks(
 		dialog.close();
 	});
 	dialog.addEventListener("close", () => {
-		if (shown && !submitted && !dismissed) {
-			dismissed = true;
-			capture("survey dismissed", {
-				$survey_id: downloadPostHogSurveyId,
-				...surveyPlace(),
-			});
-		}
+		const dismissal = surveyDismissedProperties(response, surveyPlace());
+		if (shown && dismissal !== undefined) capture("survey dismissed", dismissal);
 		restart();
 	});
 
@@ -296,10 +250,7 @@ export function initDownloadThanks(
 		ctaLocation = ctaLocationForElement(anchor);
 		if (!shown) {
 			shown = true;
-			capture("survey shown", {
-				$survey_id: downloadPostHogSurveyId,
-				...surveyPlace(),
-			});
+			capture("survey shown", surveyShownProperties(surveyPlace()));
 		}
 		dialog.showModal();
 	};
