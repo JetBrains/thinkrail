@@ -29,10 +29,10 @@ import {
 	AuxiliaryRailToolButton,
 	type AuxiliaryRailToolEntry,
 } from "@/shell/layout";
-import { applyTheme, getThemes, initializeBundledThemes } from "@/themes";
+import { applyTheme, getThemes, initializeThemes } from "@/themes";
 import type { ForcedPseudo } from "../catalog/pseudo";
 
-initializeBundledThemes();
+initializeThemes();
 
 const VARIANTS: ButtonVariant[] = ["primary", "soft-primary", "outline", "ghost", "destructive"];
 const SIZES: { id: ButtonSize; h: number; px: number; icon: number; gap: number }[] = [
