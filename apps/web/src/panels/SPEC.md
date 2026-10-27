@@ -1399,7 +1399,19 @@ own section. The kebab menu (`plan-menu`, a
   intent and spends it on reconnect rather than falling back to a cache-eligible activation read. The
   workspace's `fsChanged` tick re-reads with `allowCached: true` (`reload`): the host drops its cached
   answer on a `.git` meta nudge, so a PR opened or pushed from a terminal still surfaces, while a fresh
-  read would `git fetch`, write `.git`, nudge again, and loop. The
+  read would `git fetch`, write `.git`, nudge again, and loop. Cache-eligible reads (activation,
+  reconnect, fs tick) are **single-flight** per mount: ticks during one fold into one follow-up, sent only
+  while still connected. A stalled host otherwise collected one read per tick until the transport's replay
+  cap refused every request. Fresh reads (focus, explicit refresh, CI poll) skip that lane, so a cached
+  reload never waits behind a 55s `git fetch` and a refresh is never queued behind an older cached
+  answer. Only a fresh read or `noteOpenReview` bumps the generation (`beginRequest(key, { supersede })`):
+  a cached read joins the current one, so it cannot void a refresh or poll already in flight, while a
+  fresh read voids any cached answer begun before it. Each read also carries a sequence number: a fresh
+  answer landing after a cached one requested later keeps that cached answer's branch facts and ahead /
+  behind counts, and adds only its review (the fresh PR state and checks). Otherwise a refresh measured
+  before a commit would overwrite the newer `aheadOfBase`. Since a cached and a fresh read can share a
+  generation, a failed read clears the key (`failRequest`) only when no answer has landed at that
+  generation, so a refresh that times out cannot wipe the cached answer that arrived while it ran. The
   URL is kept across refetches while the review number matches. A `compare` result opens the prefilled
   GitHub
   compare page (`window.open`); every outcome toasts, uncommitted files get a separate info toast.
