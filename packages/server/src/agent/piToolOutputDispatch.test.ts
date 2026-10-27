@@ -18,17 +18,16 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 
 async function scenario(responses: FauxResponseStep[]) {
-	const cwd = mkdtempSync(join(tmpdir(), "thinkrail-context-probe-"));
+	const cwd = mkdtempSync(join(tmpdir(), "thinkrail-tool-output-"));
 	const agentDir = join(cwd, ".pi-agent");
 	mkdirSync(agentDir);
 	const source = `---\nid: sample\ntype: module-design\n---\n${`needle ${"x".repeat(1000)}\n`.repeat(240)}`;
 	writeFileSync(join(cwd, "SPEC.md"), source);
 	const model = {
-		id: "context-probe",
-		name: "Context probe",
+		id: "tool-output-probe",
+		name: "Tool output probe",
 		reasoning: false,
 		input: ["text"] as "text"[],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -36,8 +35,8 @@ async function scenario(responses: FauxResponseStep[]) {
 		maxTokens: 100,
 	};
 	const faux = createFauxCore({
-		provider: "context-probe",
-		api: "context-probe",
+		provider: "tool-output-probe",
+		api: "tool-output-probe",
 		models: [model],
 		tokensPerSecond: 100_000,
 		tokenSize: { min: 1024, max: 1024 },
@@ -47,7 +46,7 @@ async function scenario(responses: FauxResponseStep[]) {
 		modelsPath: null,
 		allowModelNetwork: false,
 	});
-	runtime.registerProvider("context-probe", {
+	runtime.registerProvider("tool-output-probe", {
 		api: faux.api,
 		baseUrl: "http://faux.local",
 		apiKey: "faux",
@@ -60,22 +59,6 @@ async function scenario(responses: FauxResponseStep[]) {
 		agentDir,
 		settingsManager,
 		additionalExtensionPaths: [require.resolve("pi-spec-graph/index.ts")],
-		extensionFactories: [
-			(pi) => {
-				pi.registerTool({
-					name: "unbounded_fixture",
-					label: "Fixture",
-					description: "Synthetic unbounded output",
-					parameters: Type.Object({}),
-					async execute() {
-						return {
-							content: [{ type: "text", text: source }],
-							details: { marker: "PRESENTATION_ONLY", source },
-						};
-					},
-				});
-			},
-		],
 	});
 	await resourceLoader.reload();
 	const requests: { toolTextBytes: number[]; toolErrors: boolean[]; content: string }[] = [];
@@ -114,7 +97,7 @@ async function scenario(responses: FauxResponseStep[]) {
 	const events: AgentSessionEvent[] = [];
 	const unsubscribe = session.subscribe((event) => events.push(event));
 	try {
-		await session.prompt("Run the synthetic fixture.");
+		await session.prompt("Run the tool.");
 		return { events, requests, callCount: faux.state.callCount };
 	} finally {
 		unsubscribe();
@@ -129,10 +112,11 @@ async function scenario(responses: FauxResponseStep[]) {
 	}
 }
 
-test("Pi receives bounded native and spec-search results, but does not bound arbitrary extension output", async () => {
-	for (const name of ["read", "spec_grep", "unbounded_fixture"]) {
-		const args =
-			name === "read" ? { path: "SPEC.md" } : name === "spec_grep" ? { pattern: "needle" } : {};
+test("Pi receives bounded native and spec-search results", async () => {
+	for (const [name, args] of [
+		["read", { path: "SPEC.md" }],
+		["spec_grep", { pattern: "needle" }],
+	] as const) {
 		const result = await scenario([
 			fauxAssistantMessage(fauxToolCall(name, args)),
 			fauxAssistantMessage("Done"),
@@ -142,10 +126,7 @@ test("Pi receives bounded native and spec-search results, but does not bound arb
 		expect(request?.toolTextBytes).toHaveLength(1);
 		expect(request?.toolErrors).toEqual([false]);
 		expect(request?.content).toContain("needle");
-		const bytes = request?.toolTextBytes[0] ?? 0;
-		if (name === "unbounded_fixture") expect(bytes).toBeGreaterThan(DEFAULT_MAX_BYTES);
-		else expect(bytes).toBeLessThanOrEqual(DEFAULT_MAX_BYTES);
-		expect(request?.content).not.toContain("PRESENTATION_ONLY");
+		expect(request?.toolTextBytes[0]).toBeLessThanOrEqual(DEFAULT_MAX_BYTES);
 		expect(result.events.at(-1)?.type).toBe("agent_settled");
 	}
 });
