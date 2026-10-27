@@ -931,6 +931,17 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 
+## Tool output and context recovery
+
+Portable tools own bounded model-facing output ([[submodule-spec-graph-tools]],
+[[submodule-pi-todos-tools]]); the host does not wrap every tool or rewrite user input. Pi's native
+read/bash/MCP limits remain authoritative. Structured result details are presentation metadata;
+measure model-facing content, not the serialized transcript or SDK context object.
+
+Pi owns aggregate budgeting, compaction and recovery; bounded tool output does not guarantee
+whole-request admission. The host adds no compaction overrides or retry loop. Known upstream
+context-budget limitations and their upgrade checks live in [[pi-compatibility]].
+
 ## Session titles
 
 `agentSessionManager` is the only durable chat-title writer. Its `renameSession(sessionId,
