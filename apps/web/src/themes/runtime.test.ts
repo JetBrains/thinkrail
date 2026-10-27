@@ -261,3 +261,22 @@ test("an unsupported host clears user themes, and an oversized cache is dropped,
 		Reflect.deleteProperty(globalThis, "__THINKRAIL_STABLE_PREFERENCES__");
 	}
 });
+
+test("fallbacks and a derived system pair pick bundled themes, never a user theme that sorts first", () => {
+	installThemeCatalog(buildThemeCatalog(bundledCandidates()));
+	installUserThemes([
+		{
+			fileName: "arctic.theme.json",
+			ok: true,
+			manifest: userTheme("arctic", { label: "Arctic", order: 0 }),
+		},
+	]);
+	expect(deriveSystemThemePair("light")).toEqual({ light: "light", dark: "dark" });
+	expect(
+		resolveThemePreference(
+			{ theme: "light", themeMode: "system", systemThemePair: { light: "light", dark: "missing" } },
+			"dark",
+		).theme.id,
+	).toBe("dark");
+	expect(deriveSystemThemePair("user.arctic")).toEqual({ light: "light", dark: "user.arctic" });
+});

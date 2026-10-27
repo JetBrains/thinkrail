@@ -155,6 +155,9 @@ Otherwise resolution keeps the opaque host value intact and chooses the lowest-o
 that appearance, then the lowest-order manifest of that appearance, with label/id tie-breaking. On first
 enable, the resolved fixed theme fills its own slot; the opposite slot chooses the lowest-order theme with
 matching contrast, then the same normal/any fallback. A persisted pair is reused on later enables.
+Every fallback and derived opposite slot is chosen from the **bundled** manifests only — the ones that
+passed the contrast gates — so a user theme that happens to sort first (a copy of Dark at order 10
+labelled "Arctic") never becomes the theme a user did not pick.
 
 Application is atomic from consumers' perspective: write the complete variable set, `color-scheme`, and
 semantic contrast metadata, then publish the effective manifest id through `data-theme` last, so generic

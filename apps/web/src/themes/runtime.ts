@@ -300,8 +300,8 @@ function requireResolvedTheme(id: ThemeId): ThemeManifest {
 	return theme;
 }
 
-function themesByAppearance(appearance: ThemeAppearance): ThemeManifest[] {
-	return [...catalog.byId.values()]
+function bundledThemesByAppearance(appearance: ThemeAppearance): ThemeManifest[] {
+	return [...bundledCatalog.byId.values()]
 		.filter((theme) => theme.appearance === appearance)
 		.sort((a, b) => a.order - b.order || compareText(a.label, b.label) || compareText(a.id, b.id));
 }
@@ -310,7 +310,7 @@ function fallbackTheme(
 	appearance: ThemeAppearance,
 	preferredContrast?: ThemeContrast,
 ): ThemeManifest {
-	const themes = themesByAppearance(appearance);
+	const themes = bundledThemesByAppearance(appearance);
 	const theme =
 		(preferredContrast
 			? themes.find((candidate) => candidate.contrast === preferredContrast)
