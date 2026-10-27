@@ -87,7 +87,7 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 | `panels/AnalyticsConsentDialog.tsx:51` | Button default (32) | Button primary l | source unchanged; 'Saving…' label logic kept |
 | `panels/HeaderIconButton.tsx:37` | raw icon <button> size-24, active = bg-container-elevated-bg, IconTooltip | IconButton ghost m, selected={active}, aria-pressed={active}, data-active kept | API kept (testid/label/active/disabled/onClick/children-as-icon-element) because all call sites (ChangesReviewPane, DiffPane, ChangesFileSection) are outside this packet; children rendered through a stable context-backed icon component (span display:contents, aria-hidden) so no remounts; optional new `icon?: ButtonIcon` prop added for call sites to migrate to later |
 
-## settings (41 sites)
+## settings (42 sites)
 
 | Site | Before | After | Notes |
 | --- | --- | --- | --- |
@@ -99,6 +99,7 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 | `panels/ModelsSettings.tsx:117` | Button ghost sm (Retry) | Button ghost m |  |
 | `panels/GithubSettings.tsx:37` | Button outline sm, RefreshCw spinning while refreshing, disabled={refreshing} | Button outline m iconLeft=RefreshCw loading={refreshing} | unused cn import removed |
 | `panels/FeedbackSettings.tsx:17` | <a> buttonVariants() (old default/default) + size-14 icon | <a> buttonVariants primary l, self-start | icon size class removed (component sizes svg) |
+| `panels/FeedbackSettings.tsx` `feedback-join-discord` | <a> buttonVariants({ variant: 'outline' }) + size-14 icon (added on main, #945) | <a> buttonVariants outline l, self-start | icon size class removed, aria-hidden added, like the interview link above it |
 | `panels/NotificationsSettings.tsx:109` | Button outline sm (Allow in browser) | Button outline m |  |
 | `panels/ModelContextSettings.tsx:279` | Button ghost sm (Retry) | Button ghost m | disabled={pending} kept (no spinner before) |
 | `panels/AppearanceSettings.tsx:99` | Button outline default + className h-32 justify-between, ChevronDown size-16 child (DropdownMenuTrigger asChild) | Button outline l iconRight=ChevronDown | select-like trigger; h-32/justify-between removed (content-sized in SettingsRow control slot, so justify-between had no effect); truncate label span kept |

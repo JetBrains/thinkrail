@@ -31,9 +31,9 @@ export function FeedbackSettings() {
 				href={DISCORD_URL}
 				target="_blank"
 				rel="noopener noreferrer"
-				className={buttonVariants({ variant: "outline", className: "self-start" })}
+				className={buttonVariants({ variant: "outline", size: "l", className: "self-start" })}
 			>
-				<Discord className="size-14" />
+				<Discord aria-hidden />
 				{t("settings.feedback.joinDiscord")}
 			</a>
 		</section>
