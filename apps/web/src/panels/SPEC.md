@@ -1801,8 +1801,13 @@ own section. The kebab menu (`plan-menu`, a
   (workspace change, that workspace's `fsChangesByWorkspace` tick, a **`readKey`** change, or `reload()` for a manual Refresh) while
   the caller owns *what to do* with the outcome (`onResult` / `onFailure` / `onSwitch`). Centralized because
   each site was otherwise re-implementing the **stale-response guard**: an answer in flight when the caller
-  moves on must not land in the new workspace's view (reads are generation-stamped — latest wins, abandoned
-  ones stay silent). A `null` workspaceId reads nothing, which is also how a component expresses a
+  moves on must not land in the new workspace's view. Reads are **single-flight** (`createSingleFlight`,
+  unit-tested): one read in flight per mount, and ticks or `reload()` that arrive during it fold into one
+  follow-up with the latest inputs. Each tick otherwise started its own request, and a slow host (a stalled
+  `git`) let them pile up until the transport's per-client replay cap refused every request. A read whose
+  identity (workspace, `readKey`) is unchanged still delivers its result or failure even with a follow-up
+  queued; dropping it would starve the view whenever ticks arrive faster than the read. An identity change
+  or unmount silences it. A `null` workspaceId reads nothing, which is also how a component expresses a
   *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
   its compact single-directory run; descendants below the run's deepest directory mount and read only
   when that compact row is expanded. No tick has to be threaded down as a prop.
@@ -1862,7 +1867,15 @@ own section. The kebab menu (`plan-menu`, a
   older read lands last and overwrites the newer target's content while carrying its own honest — but now
   stale — stamp, so neither effect sees any drift and the pane keeps the old target's diff under the new
   target's label indefinitely. Dropping the superseded read costs nothing: the read that superseded it is
-  the one the user is waiting for. Panels are mounted only for the active workspace,
+  the one the user is waiting for. Tick reads are single-flight per tab: a tick that lands while the
+  same path is being read waits, the read applies at the tick it started for, and a newer tick re-reads once
+  after it settles. A read superseded before it applied (a remount, `reload()`, or a re-point) also
+  re-checks the tick, so the tab never stays below it with nothing in flight. `reload()` is a tracked
+  read too: it supersedes the tick read, makes later ticks wait, and applies at the workspace tick it
+  started at. Stamping the tick at settle time would mark content read before a waiting tick as current,
+  and the tab would stay stale. The read logic lives in `createTabReader`, unit-tested without React. Cancelling the slow read on every tick kept `loadedTick` from ever advancing, so each
+  tick refetched. The re-point read takes the tick from the tab when it settles, so a tick landing mid-read
+  does not cancel it. Panels are mounted only for the active workspace,
   so scoping is natural. A degraded host watcher pauses automatic invalidations until the next workspace
   read re-establishes it; editable-file conflict handling waits for `fs.writeFile` (the viewer is read-only today).
 - **`useWorkspaceSpecs` owns the `spec.graph` read** (one fetcher, one definition of "this file is a spec"):
