@@ -13,7 +13,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useState } from "react";
 import { PRODUCT_NAME } from "@/constants/branding";
 import { selectAnalyticsConsentPromptOpen, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -27,7 +27,6 @@ import { cancelUnownedLogin, type ProviderAuth, useProviderAuth } from "./usePro
 type Step = "intro" | "privacy" | "connect";
 
 const FADE_OUT_MS = 200;
-const AUTO_RECHECK_MS = 600;
 
 const INTRO_BEATS = [
 	{
@@ -286,34 +285,36 @@ function VerifyConnection({
 	const t = useT();
 	const [empty, setEmpty] = useState(false);
 	const [attempt, setAttempt] = useState(0);
-	const autoRechecked = useRef(false);
 	const name = connectedProviderName(provider, t);
 	const verified = useEffectEvent(onVerified);
 
 	useEffect(() => {
 		let cancelled = false;
-		let recheck: ReturnType<typeof setTimeout> | undefined;
 		const transport = getTransport();
-		Promise.all([
-			transport.request("model.list", {}),
-			transport.request("model.default", {}).catch(() => null),
-		]).then(
-			([models, fallback]) => {
+		const read = async () => {
+			const [models, fallback] = await Promise.all([
+				transport.request("model.list", {}),
+				transport.request("model.default", {}).catch(() => null),
+			]);
+			const settled =
+				models.length > 0
+					? models
+					: await transport.request("model.refresh", {}).then(
+							(result) => result.models,
+							() => models,
+						);
+			return { settled, fallback };
+		};
+		read().then(
+			({ settled, fallback }) => {
 				if (cancelled) return;
-				if (models.length > 0) {
+				if (settled.length === 0) setEmpty(true);
+				else
 					verified({
 						provider: name,
-						models: models.length,
+						models: settled.length,
 						defaultModel: fallback?.model?.name ?? null,
 					});
-				} else if (autoRechecked.current) {
-					setEmpty(true);
-				} else {
-					autoRechecked.current = true;
-					recheck = setTimeout(() => {
-						if (!cancelled) setAttempt((n) => n + 1);
-					}, AUTO_RECHECK_MS);
-				}
 			},
 			() => {
 				if (!cancelled) verified({ provider: name, models: null, defaultModel: null });
@@ -321,7 +322,6 @@ function VerifyConnection({
 		);
 		return () => {
 			cancelled = true;
-			clearTimeout(recheck);
 		};
 	}, [name, attempt]);
 

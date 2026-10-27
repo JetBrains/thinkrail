@@ -451,17 +451,19 @@ engine — as small cards, and **Get started**; the copy follows thinkrail.ai so
 product before a wall of providers. Then, only while analytics consent is unconfirmed, a **privacy** step (below,
 under `AnalyticsConsentDialog`); then **Connect** (`ConnectProviderOptions`); once a provider becomes
 configured, the login dialog closes and a loading **verification** covers the options in place (same box, no resize) — no
-tokens spent, one `model.list` plus `model.default` read. A non-empty list (or an unreadable one: the connection
+tokens spent, a `model.list` plus `model.default` read. `model.list` serves a cached snapshot while it refreshes the
+catalogs in the background, so an empty first read falls back to an awaited `model.refresh` (the same refresh, now
+waited on) before deciding — a just-connected provider whose catalog is still warming verifies instead of warning.
+A non-empty list (or an unreadable one: the connection
 itself succeeded) moves the wizard to **done** with no Done button, as a screen change rather than a resize: the
 whole connect screen (title, options, Skip) fades out in place over 200 ms, then the done screen fades in — the
 "You're set" hero, one `ConnectedLine` ("Anthropic connected · Claude Fable 5 is the default model") and Welcome's
 own two cards (Start a new project / Open project, passed in as `projectCards` so their menus and dialogs stay
 Welcome's). Nothing animates height, so no list is clipped mid-collapse and the centered column only re-centers
 while it is invisible; under reduced motion the swap is instant. Reaching done persists
-`onboardingDismissed`; the wizard (and with it the hidden rail and held prompts) stays until a project opens. An empty
-list is re-read once automatically (~600 ms) before warning, since the catalog can lag a just-finished login; a still-empty
-read then warns and offers **Check again**
-(re-runs the same read, e.g. after fixing the account elsewhere) and Back to the choices — Back alone could not
+`onboardingDismissed`; the wizard (and with it the hidden rail and held prompts) stays until a project opens. A still-empty
+refresh warns and offers **Check again**
+(re-runs both reads, e.g. after fixing the account elsewhere) and Back to the choices — Back alone could not
 return, since the provider is configured and so no longer listed. The wizard owns no project step of its own and shows no progress strip.
 **Skip setup** is on every screen before done except privacy, whose Continue is the only way on; skipping also cancels any
 target-less login still pending in the dialog (`cancelUnownedLogin`, shared with `ConnectProviderDialog`).

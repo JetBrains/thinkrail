@@ -74,6 +74,11 @@ async function hideModels(page: Page): Promise<{ hidden: boolean }> {
 				ws.send(JSON.stringify({ id: frame.id, ok: true, result: [] }));
 				return;
 			}
+			if (models.hidden && raw.includes('"method":"model.refresh"')) {
+				const frame = JSON.parse(raw) as { id: string };
+				ws.send(JSON.stringify({ id: frame.id, ok: true, result: { models: [], complete: true } }));
+				return;
+			}
 			server.send(message);
 		});
 		server.onMessage((message) => ws.send(message));
