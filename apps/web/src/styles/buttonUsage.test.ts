@@ -196,4 +196,10 @@ const OVERRIDES: Exception[] = [
 		reason:
 			"extension select options must wrap long labels (chat/SPEC.md); the only multi-line button",
 	},
+	{
+		file: "chat/Composer.tsx",
+		contains: 'data-testid="chat-abort"',
+		reason:
+			"container-query collapse: below @md its label hides and Stop becomes the 24px icon-only square beside the history IconButton",
+	},
 ];

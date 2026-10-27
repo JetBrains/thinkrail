@@ -673,8 +673,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								iconLeft={StopFill}
 								data-testid="chat-abort"
 								aria-label={t("chat.composer.stop")}
+								tooltip={t("chat.composer.stop")}
 								onClick={onAbort}
-								className="shrink-0"
+								className="shrink-0 @max-md:w-24 @max-md:px-0"
 							>
 								<span className={WIDE_ONLY}>{t("chat.composer.stop")}</span>
 							</Button>
