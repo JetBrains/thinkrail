@@ -31,7 +31,13 @@ The app's Tailwind sources and adoption guards include this package and extensio
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /
 `iconRight`), `IconButton` (icon only — `label` is required and becomes both the `aria-label` and the shared
-`IconTooltip`), and `buttonVariants` for a non-button element that must look like one (a link). Every
+`IconTooltip`), and `buttonVariants` for a non-button element that must look like one (a link). Neither
+component accepts a native `title`: an explanation is `tooltip` (on `IconButton` it overrides the label's
+tooltip text), rendered through the same `IconTooltip`, so it also shows on a disabled button — the
+place a reason for being unavailable matters most. A caller that passes `disabled` at all (even `false`)
+gets the `wrapTrigger` span automatically, so the tooltip survives the disabled button's
+`pointer-events: none` and the DOM shape never changes when `disabled` toggles; an explicit `wrapTrigger`
+still isolates a second Radix trigger, and `wrapTrigger={false}` opts out. Every
 ordinary action in the app, the renderer package and extension web halves renders through it; a raw
 `<button>` carrying a button skin is rejected by `apps/web/src/styles/buttonUsage.test.ts` unless that
 test's documented specialized list names it.
@@ -94,7 +100,8 @@ moved here from the app when the resource renderers became a package, because bo
   sets the delay. Native `title` remains only for non-control truncation fallbacks or surfaces outside
   the provider (the app's review widgets). `wrapTrigger` supplies the interactive flex span for a disabled
   control or another Radix trigger, isolating their `data-state` values; callers do not hand-roll that
-  wrapper. App, SDK, and extension web call-site tests enforce this convention. `IconTooltip` opens on
+  wrapper, and `Button`/`IconButton` apply it themselves whenever the caller passes `disabled`. App, SDK,
+  and extension web call-site tests enforce the no-hand-rolled-span convention. `IconTooltip` opens on
   hover and on *keyboard-visible* focus only: focus that does not match `:focus-visible` (a dialog's or
   popover's autofocus after a pointer open, focus returning to a clicked trigger) never opens it, because
   an open tooltip is the topmost dismissable layer and would swallow the Escape meant for the dialog. For

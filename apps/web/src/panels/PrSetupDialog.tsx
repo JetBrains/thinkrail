@@ -53,7 +53,7 @@ function CommandRow({ command, onRun }: { command: string; onRun: (command: stri
 				variant="outline"
 				size="m"
 				iconLeft={Play}
-				title={t("panels.prSetup.runTitle")}
+				tooltip={t("panels.prSetup.runTitle")}
 				data-testid="open-pr-setup-run"
 				onClick={() => onRun(command)}
 			>

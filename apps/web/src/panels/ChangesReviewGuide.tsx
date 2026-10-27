@@ -296,7 +296,7 @@ export function ChangesReviewGuide({
 					data-testid="changes-review-guide-apply"
 					disabled={sending || openFindingIds.length === 0}
 					onClick={() => send(() => sendReviewBatch(workspaceId, openFindingIds))}
-					title={t("changes.guide.applyTitle")}
+					tooltip={t("changes.guide.applyTitle")}
 				>
 					{t("changes.guide.apply")}
 				</Button>

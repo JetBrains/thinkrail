@@ -81,7 +81,7 @@ export function ChangesScopeMenu({
 					data-testid="changes-scope-trigger"
 					data-open={open}
 					aria-label={t("changes.scopeMenu.label")}
-					title={scopeTitle(t, scope, commits ?? [], turns)}
+					tooltip={scopeTitle(t, scope, commits ?? [], turns)}
 					className="min-w-0"
 				>
 					<span data-testid="changes-scope-label" className="truncate">

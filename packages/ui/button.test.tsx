@@ -140,6 +140,36 @@ test("selected is a persistent attribute, and an open Radix trigger counts as se
 	expect(render(<Button variant="ghost">Idle</Button>)).not.toContain("data-selected");
 });
 
+describe("a tooltip still explains a disabled button", () => {
+	const wrapped = (markup: string) => /^<span class="flex"[^>]*><button/.test(markup);
+
+	test("an IconButton whose caller controls disabled is wrapped, whatever the current value", () => {
+		expect(wrapped(render(<IconButton icon={RiAddLine} label="Next page" disabled />))).toBe(true);
+		expect(
+			wrapped(render(<IconButton icon={RiAddLine} label="Next page" disabled={false} />)),
+		).toBe(true);
+		expect(wrapped(render(<IconButton icon={RiAddLine} label="Add" />))).toBe(false);
+		expect(
+			wrapped(render(<IconButton icon={RiAddLine} label="Add" disabled wrapTrigger={false} />)),
+		).toBe(false);
+	});
+
+	test("a Button tooltip renders through IconTooltip and wraps when disabled is controlled", () => {
+		const plain = render(<Button>Check it</Button>);
+		expect(plain).not.toContain("data-state");
+		const enabled = render(<Button tooltip="Explains the action">Open PR</Button>);
+		expect(wrapped(enabled)).toBe(false);
+		expect(enabled).toContain('data-state="closed"');
+		const disabled = render(
+			<Button tooltip="Another step is being reviewed" disabled>
+				Check it
+			</Button>,
+		);
+		expect(wrapped(disabled)).toBe(true);
+		expect(disabled).not.toContain("title=");
+	});
+});
+
 test("there are exactly five variants and three sizes", () => {
 	const markup = render(<Button>x</Button>);
 	expect(markup).toContain('data-variant="primary"');

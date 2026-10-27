@@ -76,9 +76,38 @@ interface SharedProps {
 	ref?: React.Ref<HTMLButtonElement>;
 }
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, SharedProps {
+interface TooltipProps {
+	tooltip?: React.ReactNode;
+	tooltipSide?: React.ComponentProps<typeof IconTooltip>["side"];
+	tooltipAlign?: React.ComponentProps<typeof IconTooltip>["align"];
+	wrapTrigger?: boolean;
+}
+
+export interface ButtonProps
+	extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "title">,
+		SharedProps,
+		TooltipProps {
 	iconLeft?: ButtonIcon;
 	iconRight?: ButtonIcon;
+}
+
+function withTooltip(
+	trigger: React.ReactElement,
+	label: React.ReactNode,
+	side: TooltipProps["tooltipSide"] | undefined,
+	align: TooltipProps["tooltipAlign"] | undefined,
+	wrap: boolean,
+) {
+	return (
+		<IconTooltip
+			label={label}
+			{...(side ? { side } : {})}
+			{...(align ? { align } : {})}
+			{...(wrap ? { wrapTrigger: true } : {})}
+		>
+			{trigger}
+		</IconTooltip>
+	);
 }
 
 function stateProps(
@@ -105,13 +134,17 @@ export function Button({
 	selected,
 	loading,
 	spinIcon,
+	tooltip,
+	tooltipSide,
+	tooltipAlign,
+	wrapTrigger,
 	type = "button",
 	children,
 	ref,
 	...props
 }: ButtonProps) {
 	const spinnerReplacesIcon = loading && (IconLeft || IconRight);
-	return (
+	const button = (
 		<button
 			ref={ref}
 			type={type}
@@ -156,19 +189,22 @@ export function Button({
 			) : null}
 		</button>
 	);
+	if (tooltip === undefined) return button;
+	return withTooltip(
+		button,
+		tooltip,
+		tooltipSide,
+		tooltipAlign,
+		wrapTrigger ?? "disabled" in props,
+	);
 }
 
 export interface IconButtonProps
-	extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "children" | "aria-label">,
-		SharedProps {
+	extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "children" | "aria-label" | "title">,
+		SharedProps,
+		TooltipProps {
 	icon: ButtonIcon;
-	/** Accessible name; also the tooltip text unless `tooltip` overrides it. */
 	label: string;
-	tooltip?: React.ReactNode;
-	tooltipSide?: React.ComponentProps<typeof IconTooltip>["side"];
-	tooltipAlign?: React.ComponentProps<typeof IconTooltip>["align"];
-	/** Wrap the tooltip trigger in a span (disabled buttons, or another Radix trigger on the same element). */
-	wrapTrigger?: boolean;
 }
 
 export function IconButton({
@@ -188,36 +224,33 @@ export function IconButton({
 	ref,
 	...props
 }: IconButtonProps) {
-	return (
-		<IconTooltip
-			label={tooltip ?? label}
-			{...(tooltipSide ? { side: tooltipSide } : {})}
-			{...(tooltipAlign ? { align: tooltipAlign } : {})}
-			{...(wrapTrigger ? { wrapTrigger } : {})}
+	return withTooltip(
+		<button
+			ref={ref}
+			type={type}
+			aria-label={label}
+			data-slot="button"
+			data-variant={variant}
+			data-size={size}
+			data-icon-only=""
+			className={cn(buttonVariants({ variant, size, shape: "icon" }), className)}
+			{...props}
+			{...stateProps(props, selected, loading)}
 		>
-			<button
-				ref={ref}
-				type={type}
-				aria-label={label}
-				data-slot="button"
-				data-variant={variant}
-				data-size={size}
-				data-icon-only=""
-				className={cn(buttonVariants({ variant, size, shape: "icon" }), className)}
-				{...props}
-				{...stateProps(props, selected, loading)}
-			>
-				{loading ? (
-					spinIcon ? (
-						<Icon aria-hidden className={SPIN} />
-					) : (
-						<Spinner size={size} />
-					)
+			{loading ? (
+				spinIcon ? (
+					<Icon aria-hidden className={SPIN} />
 				) : (
-					<Icon aria-hidden />
-				)}
-			</button>
-		</IconTooltip>
+					<Spinner size={size} />
+				)
+			) : (
+				<Icon aria-hidden />
+			)}
+		</button>,
+		tooltip ?? label,
+		tooltipSide,
+		tooltipAlign,
+		wrapTrigger ?? "disabled" in props,
 	);
 }
 

@@ -58,7 +58,7 @@ export function PlanCommitsMenu({
 					iconRight={ChevronDown}
 					data-testid="plan-commits-trigger"
 					data-open={open}
-					title={t("plan.commitsMenu.title")}
+					tooltip={t("plan.commitsMenu.title")}
 					className="shrink-0"
 				>
 					{t("plan.commitsMenu.count", { count })}
