@@ -86,15 +86,38 @@ function Spinner({ size }: { size: ButtonSize }) {
 	);
 }
 
+export function buttonDataAttributes({
+	variant,
+	size,
+	iconOnly = false,
+	selected = false,
+}: {
+	variant: ButtonVariant;
+	size: ButtonSize;
+	iconOnly?: boolean;
+	selected?: boolean;
+}) {
+	return {
+		"data-slot": "button",
+		"data-variant": variant,
+		"data-size": size,
+		"data-icon-only": iconOnly ? "" : undefined,
+		"data-selected": selected ? true : undefined,
+	} as const;
+}
+
+export function withIconClass(Icon: ButtonIcon, extra: string): ButtonIcon {
+	return function IconWithClass({ className, ...props }) {
+		return <Icon {...props} className={cn(className, extra)} />;
+	};
+}
+
 interface SharedProps {
 	variant?: ButtonVariant;
 	size?: ButtonSize;
 	tone?: ButtonTone | undefined;
-	/** Persistent selected/open state (toggles, open menus). Never the transient pressed state. */
 	selected?: boolean;
-	/** Shows a spinner at icon size, keeps the geometry, and blocks re-activation. */
 	loading?: boolean;
-	/** With `loading`, rotate the button's own icon in place instead of swapping in the spinner (a refresh whose content stays valid). */
 	spinIcon?: boolean;
 	ref?: React.Ref<HTMLButtonElement>;
 }
@@ -172,9 +195,7 @@ export function Button({
 		<button
 			ref={ref}
 			type={type}
-			data-slot="button"
-			data-variant={variant}
-			data-size={size}
+			{...buttonDataAttributes({ variant, size })}
 			className={cn(buttonVariants({ variant, size, shape: "text", tone }), className)}
 			{...props}
 			{...stateProps(props, selected, loading)}
@@ -254,10 +275,7 @@ export function IconButton({
 			ref={ref}
 			type={type}
 			aria-label={label}
-			data-slot="button"
-			data-variant={variant}
-			data-size={size}
-			data-icon-only=""
+			{...buttonDataAttributes({ variant, size, iconOnly: true })}
 			className={cn(buttonVariants({ variant, size, shape: "icon", tone }), className)}
 			{...props}
 			{...stateProps(props, selected, loading)}

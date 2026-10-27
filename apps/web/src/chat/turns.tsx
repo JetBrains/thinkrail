@@ -20,11 +20,10 @@ import type {
 } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, withIconClass } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import {
-	type ComponentProps,
 	memo,
 	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
@@ -743,9 +742,7 @@ interface ArtifactGroup {
 	stats?: ReadonlyMap<string, { added: number; removed: number }>;
 }
 
-function WorkingStack({ className, ...props }: ComponentProps<typeof Stack>) {
-	return <Stack {...props} className={cn(className, "motion-safe:animate-working")} />;
-}
+const WorkingStack = withIconClass(Stack, "motion-safe:animate-working");
 
 function ArtifactChip({
 	group,

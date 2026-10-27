@@ -8,7 +8,7 @@ import {
 import type { GhSetupProblem, HostPlatform } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { Button, buttonVariants, IconButton } from "@thinkrail/ui/button";
+import { Button, buttonVariants, IconButton, withIconClass } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -17,17 +17,14 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { cn } from "@thinkrail/ui/utils";
-import { type ComponentProps, useState } from "react";
+import { useState } from "react";
 import { copyText } from "@/lib";
 
 export type PrSetupState =
 	| { kind: "push-auth"; detail: string }
 	| { kind: "gh"; problem: GhSetupProblem; compareUrl?: string };
 
-function CopiedIcon({ className, ...props }: ComponentProps<typeof Check>) {
-	return <Check {...props} className={cn(className, "text-feedback-success")} />;
-}
+const CopiedIcon = withIconClass(Check, "text-feedback-success");
 
 function CommandRow({ command, onRun }: { command: string; onRun: (command: string) => void }) {
 	const t = useT();

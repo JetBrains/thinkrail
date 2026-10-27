@@ -10,8 +10,8 @@ import {
 	ResourcePreview,
 	rendererImplementationKey,
 } from "@thinkrail/resource-renderers";
-import { cn } from "@thinkrail/ui/utils";
-import { type ComponentProps, useMemo, useState } from "react";
+import { withIconClass } from "@thinkrail/ui/button";
+import { useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
 import type { DiffTab, FileComparisonTab, GitDiffTab } from "../store";
 import { isFileComparison, selectDiffTabTargetRef, useAppStore } from "../store";
@@ -23,9 +23,7 @@ import { useResetViewStateOnImplementationChange } from "./resourcePane";
 import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
 
-function CopiedCheck({ className, ...props }: ComponentProps<typeof Check>) {
-	return <Check {...props} className={cn(className, "text-feedback-success")} />;
-}
+const CopiedCheck = withIconClass(Check, "text-feedback-success");
 
 export function DiffPane({ tab }: { tab: DiffTab }) {
 	return isFileComparison(tab) ? <FileComparisonPane tab={tab} /> : <GitDiffPane tab={tab} />;

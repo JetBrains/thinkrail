@@ -1,5 +1,5 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
-import { buttonVariants } from "@thinkrail/ui/button";
+import { buttonDataAttributes, buttonVariants } from "@thinkrail/ui/button";
 import * as monaco from "monaco-editor/editor/editor.api.js";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -86,9 +86,10 @@ export function attachReviewCommenting(
 	iconButton.type = "button";
 	iconButton.dataset.testid = "review-add-icon";
 	iconButton.className = buttonVariants({ variant: "outline", size: "s", shape: "icon" });
-	iconButton.dataset.slot = "button";
-	iconButton.dataset.variant = "outline";
-	iconButton.dataset.size = "s";
+	for (const [name, value] of Object.entries(
+		buttonDataAttributes({ variant: "outline", size: "s", iconOnly: true }),
+	))
+		if (value !== undefined) iconButton.setAttribute(name, String(value));
 	iconButton.innerHTML = ICON_SVG;
 	iconNode.appendChild(iconButton);
 

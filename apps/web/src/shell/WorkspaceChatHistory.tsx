@@ -6,23 +6,19 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { IconButton } from "@thinkrail/ui/button";
+import { IconButton, withIconClass } from "@thinkrail/ui/button";
 import { menuItemClass } from "@thinkrail/ui/menu-styles";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { type ComponentProps, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { useNow } from "../components/useNow";
 import { chatLabel, relativeTime } from "../lib";
 import { openChatInTab } from "../panels/openChat";
 import { type ClosedChat, selectChatFirstPrompt, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 
-function StartingIcon({ className, ...props }: ComponentProps<typeof Loader2>) {
-	return (
-		<Loader2 {...props} className={cn(className, "animate-spin motion-reduce:animate-none")} />
-	);
-}
+const StartingIcon = withIconClass(Loader2, "animate-spin motion-reduce:animate-none");
 
 export function WorkspaceChatHistory({
 	workspaceId,

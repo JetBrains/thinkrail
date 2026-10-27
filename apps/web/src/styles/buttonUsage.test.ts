@@ -3,8 +3,6 @@ import { readFileSync } from "node:fs";
 import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
 import { normalizeEol } from "../../scripts/generatedFiles";
 
-// Adoption guard for the button system; rules live in packages/ui/SPEC.md (Button system).
-
 const code = (path: string) =>
 	normalizeEol(readFileSync(path, "utf8"))
 		.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -12,7 +10,6 @@ const code = (path: string) =>
 const FILES = designSourceFiles().filter((f) => f.endsWith(".tsx"));
 const BUTTON_SOURCE = "packages/ui/button.tsx";
 
-/** Every `<Tag …>` opening tag (attributes may span lines) with its 1-based line number. */
 function openingTags(src: string, tag: string): { text: string; line: number }[] {
 	const out: { text: string; line: number }[] = [];
 	const re = new RegExp(`<${tag}(?=[\\s>/])`, "g");
@@ -30,7 +27,6 @@ function openingTags(src: string, tag: string): { text: string; line: number }[]
 	return out;
 }
 
-/** The literal class text an opening tag carries (className strings, cn()/template pieces, and resolved local consts). */
 function classText(tag: string, src: string): string {
 	const attr = tag.match(/className=(?:"([^"]*)"|\{([\s\S]*)\})/);
 	if (!attr) return "";
@@ -45,7 +41,6 @@ function classText(tag: string, src: string): string {
 }
 
 const base = (token: string) => token.split(":").pop() ?? token;
-/** Call-site className on Button/IconButton may position the button (and lift a floating one with an elevation token), never shape or skin it. */
 const SKIN =
 	/^(-?(h|size|min-h|max-h)-|p[trblxyse]?-\S|gap-|rounded|bg-|text-(?!left|right|center|start|end|wrap|nowrap|balance|pretty|ellipsis|clip)|border|tr-|ring|outline|shadow(?!-\[var\(--shadow-)|font-|leading-|tracking-|transition|duration-|cursor-|inline-flex$|items-|justify-(?!self)|whitespace-|select-)/;
 const REVEAL = /^(opacity-0|opacity-100)$/;
@@ -128,12 +123,10 @@ describe("button system adoption", () => {
 
 interface Exception {
 	file: string;
-	/** Text unique to the opening tag (usually its data-testid). */
 	contains: string;
 	reason: string;
 }
 
-/** Raw <button>s that carry a skin-like class list but are specialized controls with their own behaviour. */
 const SPECIALIZED: Exception[] = [
 	{
 		file: "auth/LoginDialog.tsx",
@@ -188,7 +181,6 @@ const SPECIALIZED: Exception[] = [
 	},
 ];
 
-/** Button / IconButton call sites allowed to carry a skin class, each with the decision that needs it. */
 const OVERRIDES: Exception[] = [
 	{
 		file: "chat/ExtUiPrompt.tsx",

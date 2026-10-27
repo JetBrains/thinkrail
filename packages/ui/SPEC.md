@@ -31,7 +31,11 @@ The app's Tailwind sources and adoption guards include this package and extensio
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /
 `iconRight`), `IconButton` (icon only — `label` is required and becomes both the `aria-label` and the shared
-`IconTooltip`), and `buttonVariants` for a non-button element that must look like one (a link). Neither
+`IconTooltip`), and `buttonVariants` for a non-button element that must look like one (a link), with
+`buttonDataAttributes` giving such an element the same `data-slot` / `data-variant` / `data-size` /
+`data-icon-only` / `data-selected` contract the components render (the panel tool rails, the Monaco
+comment widget), and `withIconClass(Icon, classes)` for a tinted or animated glyph (a success check, a
+working pulse) — created once at module scope, never during render, so the icon keeps its identity. Neither
 component accepts a native `title`: an explanation is `tooltip` (on `IconButton` it overrides the label's
 tooltip text), rendered through the same `IconTooltip`, so it also shows on a disabled button — the
 place a reason for being unavailable matters most. A caller that passes `disabled` at all (even `false`)

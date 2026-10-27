@@ -1,18 +1,12 @@
 import { RiErrorWarningLine, RiStackFill, RiStackLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { Button, type ButtonIcon, IconButton } from "@thinkrail/ui/button";
+import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import type { ComponentProps } from "react";
 
-function breathing(Icon: ButtonIcon): ButtonIcon {
-	return function BreathingIcon({ className, ...props }) {
-		return <Icon {...props} className={cn(className, "motion-safe:animate-working")} />;
-	};
-}
-
-const StackFillLive = breathing(RiStackFill);
-const StackLineLive = breathing(RiStackLine);
+const StackFillLive = withIconClass(RiStackFill, "motion-safe:animate-working");
+const StackLineLive = withIconClass(RiStackLine, "motion-safe:animate-working");
 
 export function ResourcesButton({
 	activeCount,

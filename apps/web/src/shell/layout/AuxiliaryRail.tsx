@@ -1,6 +1,6 @@
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { buttonVariants } from "@thinkrail/ui/button";
+import { buttonDataAttributes, buttonVariants } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, forwardRef, type ReactNode, useRef, useState } from "react";
@@ -39,13 +39,7 @@ export function railEntryButtonClass(region: LayoutAuxiliaryRegion | "center"): 
 }
 
 export function railEntryButtonProps(active: boolean) {
-	return {
-		"data-slot": "button",
-		"data-variant": "ghost",
-		"data-size": "m",
-		"data-icon-only": "",
-		"data-selected": active || undefined,
-	} as const;
+	return buttonDataAttributes({ variant: "ghost", size: "m", iconOnly: true, selected: active });
 }
 
 export const RAIL_ICON = "size-16 shrink-0";

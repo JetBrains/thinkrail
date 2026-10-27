@@ -20,8 +20,7 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { Button, IconButton } from "@thinkrail/ui/button";
-import { cn } from "@thinkrail/ui/utils";
+import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyText } from "@/lib";
 import { getTransport } from "@/transport";
@@ -560,9 +559,7 @@ function failureText(action: JbcentralAction, reason: JbcentralActionFailureReas
 	}
 }
 
-function CopiedCheck({ className }: { className?: string | undefined }) {
-	return <Check aria-hidden className={cn(className, "text-feedback-success")} />;
-}
+const CopiedCheck = withIconClass(Check, "text-feedback-success");
 
 function CopyableCommand({ command }: { command: string }) {
 	const t = useT();
