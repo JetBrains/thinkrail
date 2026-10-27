@@ -42,6 +42,7 @@ export function ChangesScopeMenu({
 	const generation = useRef(0);
 	const turns = useWorkspaceTurns(workspaceId);
 	const latestTurn = turns.at(-1);
+	const label = scopeLabel(t, scope, commits ?? [], turns);
 
 	const load = () => {
 		const mine = ++generation.current;
@@ -80,12 +81,12 @@ export function ChangesScopeMenu({
 					iconRight={ChevronDown}
 					data-testid="changes-scope-trigger"
 					data-open={open}
-					aria-label={t("changes.scopeMenu.label")}
+					aria-label={t("changes.scope.title", { label })}
 					tooltip={scopeTitle(t, scope, commits ?? [], turns)}
 					className="min-w-0"
 				>
 					<span data-testid="changes-scope-label" className="truncate">
-						{scopeLabel(t, scope, commits ?? [], turns)}
+						{label}
 					</span>
 				</Button>
 			</DropdownMenuTrigger>
