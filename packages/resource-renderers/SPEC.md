@@ -399,7 +399,12 @@ its mandatory `lineRange` plus `structural { scheme: "json-pointer", ref }`; a p
 or one now naming a node outside the host-reanchored line range, is reported unplaced. The collapsible
 unified diff comes from a `jsondiffpatch` instance with move detection
 and stable object hashes, tinting added/removed/changed/moved nodes and showing primitive replacements as
-old → new. Removed nodes and comments stay on `review.base` with base scanner lines; all other selections
+old → new. A branch whose subtree holds changes carries a dot, and every changed or change-holding row
+shows a hover tooltip naming its own change and listing the leaf changes beneath it (accessor-style
+relative path, kind, value or old → new; capped at eight, then "…and N more"). Removals attach to the
+nearest surviving ancestor in the rendered tree. The derivation attaches each change once to its holder
+and folds holders into parents deepest-first, so every ancestor keeps only a total and its first eight
+changes — linear in touched nodes, never changes × depth. Removed nodes and comments stay on `review.base` with base scanner lines; all other selections
 use the modified document and `review.worktree`. Invalid source renders no tree, leaving Source as the
 alternate candidate.
 

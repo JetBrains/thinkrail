@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import type { ReviewThread } from "../../registry";
-import { classifyJsonDiff, oldToRenderedJsonPointers, stableObjectHash } from "./jsonDiff";
+import {
+	classifyJsonDiff,
+	nestedJsonDiffChanges,
+	oldToRenderedJsonPointers,
+	stableObjectHash,
+} from "./jsonDiff";
 import { buildJsonDiffReviewLayout } from "./jsonDiffReview";
 import { scanJson } from "./jsonScanner";
 
@@ -117,4 +122,36 @@ test("a malformed JSON side reports no rendered thread placements", () => {
 		expect(layout.placedThreadIds).toEqual(new Set());
 		expect(layout.placements).toEqual([]);
 	}
+});
+
+test("nested changes keep each ancestor's total and its first changes in document order", () => {
+	const original = { a: { b: 1, gone: true }, list: ["x", "y", "z"], same: 1 };
+	const modified = { a: { b: 2, extra: [1] }, list: ["new", "x", "z"], same: 1 };
+	const classification = classifyJsonDiff(original, modified);
+	const lines = new Map([
+		["/a", 1],
+		["/a/b", 2],
+		["/a/extra", 3],
+		["/list", 4],
+		["/list/0", 5],
+	]);
+	const changes = nestedJsonDiffChanges(
+		classification,
+		oldToRenderedJsonPointers(original, modified, classification.delta),
+		(pointer) => lines.get(pointer) ?? 0,
+		4,
+	);
+	const summary = (pointer: string) =>
+		changes.get(pointer)?.first.map(({ mark, pointer: changed }) => `${mark.kind} ${changed}`);
+	expect(summary("/a")).toEqual(["removed /a/gone", "changed /a/b", "added /a/extra"]);
+	expect(summary("/list")).toEqual(["removed /list/1", "added /list/0"]);
+	expect(summary("")).toEqual([
+		"removed /a/gone",
+		"changed /a/b",
+		"added /a/extra",
+		"removed /list/1",
+	]);
+	expect(changes.get("")?.total).toBe(5);
+	expect(changes.has("/same")).toBe(false);
+	expect(changes.has("/a/b")).toBe(false);
 });

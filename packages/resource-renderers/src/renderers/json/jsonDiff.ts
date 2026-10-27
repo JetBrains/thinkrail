@@ -10,6 +10,17 @@ export interface JsonDiffMark {
 	newValue?: unknown;
 }
 
+export interface JsonNestedChange {
+	mark: JsonDiffMark;
+	pointer: string;
+	order: number;
+}
+
+export interface JsonNestedChanges {
+	total: number;
+	first: readonly JsonNestedChange[];
+}
+
 export interface JsonDiffClassification {
 	delta: Delta;
 	current: ReadonlyMap<string, JsonDiffMark>;
@@ -230,4 +241,93 @@ export function oldToRenderedJsonPointers(
 	};
 	visit(original, modified, delta, "", "");
 	return pointers;
+}
+
+function parentPointer(pointer: string): string | null {
+	return pointer.length === 0 ? null : pointer.slice(0, pointer.lastIndexOf("/"));
+}
+
+function mergeFirst(
+	left: readonly JsonNestedChange[],
+	right: readonly JsonNestedChange[],
+	limit: number,
+): JsonNestedChange[] {
+	const merged: JsonNestedChange[] = [];
+	let l = 0;
+	let r = 0;
+	while (merged.length < limit) {
+		const a = left[l];
+		const b = right[r];
+		if (a && (!b || a.order < b.order)) {
+			merged.push(a);
+			l += 1;
+		} else if (b) {
+			merged.push(b);
+			r += 1;
+		} else break;
+	}
+	return merged;
+}
+
+function pointerDepth(pointer: string): number {
+	let depth = 0;
+	for (const char of pointer) if (char === "/") depth += 1;
+	return depth;
+}
+
+export function nestedJsonDiffChanges(
+	classification: Omit<JsonDiffClassification, "delta">,
+	oldToCurrent: ReadonlyMap<string, string>,
+	renderedLine: (pointer: string) => number,
+	limit: number,
+): ReadonlyMap<string, JsonNestedChanges> {
+	const leaves: { mark: JsonDiffMark; pointer: string; holder: string; line: number }[] = [];
+	for (const mark of classification.current.values()) {
+		const holder = parentPointer(mark.pointer);
+		if (holder === null) continue;
+		leaves.push({ mark, pointer: mark.pointer, holder, line: renderedLine(mark.pointer) });
+	}
+	for (const mark of classification.removed.values()) {
+		let ancestor = parentPointer(mark.pointer);
+		while (ancestor !== null && !oldToCurrent.has(ancestor)) ancestor = parentPointer(ancestor);
+		const holder = ancestor === null ? undefined : oldToCurrent.get(ancestor);
+		if (ancestor === null || holder === undefined) continue;
+		leaves.push({
+			mark,
+			pointer: holder + mark.pointer.slice(ancestor.length),
+			holder,
+			line: renderedLine(holder),
+		});
+	}
+	leaves.sort((left, right) => left.line - right.line);
+	const changes = new Map<string, { total: number; first: JsonNestedChange[] }>();
+	const byDepth: string[][] = [];
+	const holderOf = (pointer: string) => {
+		let entry = changes.get(pointer);
+		if (!entry) {
+			entry = { total: 0, first: [] };
+			changes.set(pointer, entry);
+			const depth = pointerDepth(pointer);
+			const bucket = byDepth[depth] ?? [];
+			bucket.push(pointer);
+			byDepth[depth] = bucket;
+		}
+		return entry;
+	};
+	leaves.forEach(({ mark, pointer, holder }, order) => {
+		const entry = holderOf(holder);
+		entry.total += 1;
+		if (entry.first.length < limit) entry.first.push({ mark, pointer, order });
+	});
+	for (let depth = byDepth.length - 1; depth > 0; depth -= 1) {
+		for (const pointer of byDepth[depth] ?? []) {
+			const child = changes.get(pointer);
+			const parent = parentPointer(pointer);
+			if (!child || parent === null) continue;
+			const target = holderOf(parent);
+			target.total += child.total;
+			target.first = mergeFirst(target.first, child.first, limit);
+		}
+	}
+	return changes;
 }

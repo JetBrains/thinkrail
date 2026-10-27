@@ -1,6 +1,13 @@
 import type { ReviewThread } from "../../registry";
-import { type JsonDiffClassification, oldToRenderedJsonPointers } from "./jsonDiff";
+import {
+	type JsonDiffClassification,
+	type JsonNestedChanges,
+	nestedJsonDiffChanges,
+	oldToRenderedJsonPointers,
+} from "./jsonDiff";
 import { type JsonDocument, type JsonNode, jsonNodeOfAnchor } from "./jsonScanner";
+
+const NESTED_CHANGE_LIMIT = 8;
 
 export type JsonDiffSide = "base" | "worktree";
 
@@ -17,6 +24,7 @@ export interface JsonDiffReviewLayout {
 	placedThreadIds: ReadonlySet<string>;
 	removedNodes: readonly JsonNode[];
 	baseRenderedPointers: ReadonlyMap<string, string>;
+	nestedChanges: ReadonlyMap<string, JsonNestedChanges>;
 }
 
 function removedAtOrAbove(pointer: string, removed: JsonDiffClassification["removed"]): boolean {
@@ -78,6 +86,7 @@ export function buildJsonDiffReviewLayout({
 			placedThreadIds: new Set(),
 			removedNodes: [],
 			baseRenderedPointers: new Map(),
+			nestedChanges: new Map(),
 		};
 	}
 	const removedNodes = topLevelRemovedNodes(originalDocument, classification.removed);
@@ -137,5 +146,11 @@ export function buildJsonDiffReviewLayout({
 		placedThreadIds: new Set(placements.map(({ thread }) => thread.id)),
 		removedNodes,
 		baseRenderedPointers,
+		nestedChanges: nestedJsonDiffChanges(
+			classification,
+			oldToCurrent,
+			(pointer) => modifiedDocument?.nodes.get(pointer)?.startLine ?? 0,
+			NESTED_CHANGE_LIMIT,
+		),
 	};
 }
