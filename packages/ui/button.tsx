@@ -16,24 +16,24 @@ const buttonVariants = cva(
 	[
 		"relative inline-flex select-none items-center justify-center whitespace-nowrap rounded-sm border tr-text-button",
 		"outline-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary focus-visible:outline-solid",
-		"data-[disabled=true]:pointer-events-none data-[loading=true]:cursor-progress",
+		"button-disabled:pointer-events-none data-[loading=true]:cursor-progress",
 		"[&_svg]:pointer-events-none [&_svg]:shrink-0",
 	],
 	{
 		variants: {
 			variant: {
 				primary:
-					"border-transparent bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered data-[disabled=true]:bg-control-primary-disabled-bg data-[disabled=true]:text-control-primary-disabled-text active:bg-control-primary-bg-hovered",
+					"border-transparent bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered button-disabled:bg-control-primary-disabled-bg button-disabled:text-control-primary-disabled-text active:bg-control-primary-bg-hovered",
 				"soft-primary":
-					"border-primary-soft bg-primary-subtle text-primary hover:border-primary-muted hover:bg-control-soft-primary-bg-hovered data-[selected=true]:border-primary-muted data-[selected=true]:bg-control-soft-primary-bg-hovered data-[disabled=true]:border-control-disabled-border data-[disabled=true]:bg-control-disabled-bg data-[disabled=true]:text-control-disabled-text active:border-primary-muted active:bg-control-soft-primary-bg-hovered",
+					"border-primary-soft bg-primary-subtle text-primary hover:border-primary-muted hover:bg-control-soft-primary-bg-hovered data-[selected=true]:border-primary-muted data-[selected=true]:bg-control-soft-primary-bg-hovered button-disabled:border-control-disabled-border button-disabled:bg-control-disabled-bg button-disabled:text-control-disabled-text active:border-primary-muted active:bg-control-soft-primary-bg-hovered",
 				outline:
-					"border-control-border-default bg-control-bg text-text-default hover:bg-control-bg-hovered data-[selected=true]:bg-control-bg-selected data-[disabled=true]:border-control-disabled-border data-[disabled=true]:bg-control-disabled-bg data-[disabled=true]:text-control-disabled-text active:bg-control-bg-hovered",
+					"border-control-border-default bg-control-bg text-text-default hover:bg-control-bg-hovered data-[selected=true]:bg-control-bg-selected button-disabled:border-control-disabled-border button-disabled:bg-control-disabled-bg button-disabled:text-control-disabled-text active:bg-control-bg-hovered",
 				ghost: [
-					"border-transparent bg-transparent text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:bg-control-bg-hovered focus-visible:text-text-default data-[selected=true]:bg-control-bg-selected data-[selected=true]:text-text-default data-[disabled=true]:text-control-disabled-text active:bg-control-bg-hovered active:text-text-default",
+					"border-transparent bg-transparent text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:bg-control-bg-hovered focus-visible:text-text-default data-[selected=true]:bg-control-bg-selected data-[selected=true]:text-text-default button-disabled:text-control-disabled-text active:bg-control-bg-hovered active:text-text-default",
 					"[[data-row]_&]:hover:bg-container-elevated-bg [[data-row]_&]:focus-visible:bg-container-elevated-bg [[data-row]_&]:data-[selected=true]:bg-container-elevated-bg [[data-row]_&]:active:bg-container-elevated-bg",
 				],
 				destructive:
-					"border-transparent bg-control-destructive-bg text-control-destructive-text hover:bg-control-destructive-bg-hovered data-[disabled=true]:bg-control-destructive-disabled-bg data-[disabled=true]:text-control-destructive-disabled-text active:bg-control-destructive-bg-hovered",
+					"border-transparent bg-control-destructive-bg text-control-destructive-text hover:bg-control-destructive-bg-hovered button-disabled:bg-control-destructive-disabled-bg button-disabled:text-control-destructive-disabled-text active:bg-control-destructive-bg-hovered",
 			},
 			size: {
 				s: "[&_svg]:size-14",
@@ -57,6 +57,7 @@ const buttonVariants = cva(
 			{ shape: "icon", size: "s", className: "size-20" },
 			{ shape: "icon", size: "m", className: "size-24" },
 			{ shape: "icon", size: "l", className: "size-32" },
+			{ variant: "ghost", shape: "icon", className: "focus-visible:-outline-offset-2" },
 			{
 				variant: "ghost",
 				tone: "warning",
@@ -80,9 +81,22 @@ const ICON_SIZE: Record<ButtonSize, string> = { s: "size-14", m: "size-16", l: "
 
 const SPIN = "animate-spin motion-reduce:animate-none";
 
-function Spinner({ size }: { size: ButtonSize }) {
+function Spinner({ size, className }: { size: ButtonSize; className?: string }) {
 	return (
-		<RiLoader4Line aria-hidden data-slot="button-spinner" className={cn(ICON_SIZE[size], SPIN)} />
+		<RiLoader4Line
+			aria-hidden
+			data-slot="button-spinner"
+			className={cn(ICON_SIZE[size], SPIN, className)}
+		/>
+	);
+}
+
+function SpinningIcon({ icon: Icon, size }: { icon: ButtonIcon; size: ButtonSize }) {
+	return (
+		<>
+			<Icon aria-hidden className="motion-safe:animate-spin motion-reduce:hidden" />
+			<Spinner size={size} className="motion-safe:hidden" />
+		</>
 	);
 }
 
@@ -203,7 +217,7 @@ export function Button({
 			{IconLeft ? (
 				loading ? (
 					spinIcon ? (
-						<IconLeft aria-hidden className={SPIN} />
+						<SpinningIcon icon={IconLeft} size={size} />
 					) : (
 						<Spinner size={size} />
 					)
@@ -224,7 +238,7 @@ export function Button({
 			{IconRight ? (
 				loading && !IconLeft ? (
 					spinIcon ? (
-						<IconRight aria-hidden className={SPIN} />
+						<SpinningIcon icon={IconRight} size={size} />
 					) : (
 						<Spinner size={size} />
 					)
@@ -282,7 +296,7 @@ export function IconButton({
 		>
 			{loading ? (
 				spinIcon ? (
-					<Icon aria-hidden className={SPIN} />
+					<SpinningIcon icon={Icon} size={size} />
 				) : (
 					<Spinner size={size} />
 				)

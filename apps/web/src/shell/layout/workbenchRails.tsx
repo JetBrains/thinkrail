@@ -13,8 +13,8 @@ import { type LayoutAttention, tupleKey } from "../../lib";
 import {
 	AuxiliaryRail,
 	type AuxiliaryRailControlProps,
+	RAIL_ENTRY_BUTTON_CLASS,
 	RAIL_ICON,
-	railEntryButtonClass,
 	railEntryButtonProps,
 	railEntryFrameClass,
 	railTooltipSide,
@@ -151,7 +151,7 @@ export function AuxiliaryRailButton({
 					data-drop-active={isOver || undefined}
 					data-drop-hint={(dropEnabled && !isOver) || undefined}
 					className={cn(
-						railEntryButtonClass(entry.region),
+						RAIL_ENTRY_BUTTON_CLASS,
 						"data-[drop-hint]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary",
 						unplaced && "text-text-subtle",
 					)}

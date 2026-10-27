@@ -24,8 +24,8 @@ import { Fragment, memo, type ReactNode, useEffect, useRef, useState } from "rea
 import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
+	RAIL_ENTRY_BUTTON_CLASS,
 	RAIL_ICON,
-	railEntryButtonClass,
 	railEntryButtonProps,
 	railEntryFrameClass,
 	railTooltipSide,
@@ -623,7 +623,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			onKeyDown={onKeyDown}
 			className={
 				rail
-					? railEntryButtonClass(location.area)
+					? RAIL_ENTRY_BUTTON_CLASS
 					: cn(
 							"relative flex min-w-0 flex-1 items-center gap-4 self-stretch pl-8 text-left outline-none",
 							tab.kind === "tool" && "pr-8",

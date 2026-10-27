@@ -217,7 +217,7 @@ test("tone keeps a warning or danger label in every state, with disabled still w
 				`focus-visible:${token}`,
 				`active:${token}`,
 				`data-[selected=true]:${token}`,
-				"data-[disabled=true]:text-control-disabled-text",
+				"button-disabled:text-control-disabled-text",
 			]),
 		);
 		expect(ghost.some((x) => x.endsWith("text-text-default") || x === "text-text-muted")).toBe(
@@ -241,16 +241,39 @@ test("there are exactly five variants and three sizes", () => {
 	expect(markup).toContain('data-size="l"');
 });
 
-test("spinIcon keeps the button's own icon and rotates it while loading", () => {
+test("spinIcon rotates the button's own icon, and under reduced motion shows the static spinner instead", () => {
 	const text = render(
 		<Button loading spinIcon size="m" iconLeft={RiAddLine}>
 			Refresh
 		</Button>,
 	);
-	expect(text).not.toContain('data-slot="button-spinner"');
-	expect(text).toContain("animate-spin");
+	expect(text).toContain("motion-safe:animate-spin motion-reduce:hidden");
+	expect(text).toMatch(/data-slot="button-spinner"[^>]*class="[^"]*motion-safe:hidden/);
 	expect(text).toContain('aria-busy="true"');
 	const icon = render(<IconButton loading spinIcon icon={RiAddLine} label="Refresh" />);
-	expect(icon).not.toContain('data-slot="button-spinner"');
-	expect(icon).toContain("animate-spin");
+	expect(icon).toContain("motion-safe:animate-spin motion-reduce:hidden");
+	expect(icon).toMatch(/data-slot="button-spinner"[^>]*class="[^"]*motion-safe:hidden/);
+});
+
+test("the disabled skin follows a disabled fieldset too, but never a loading button", () => {
+	const c = classOf(render(<Button>Save</Button>));
+	const disabled = c.filter((x) => x.startsWith("button-disabled:"));
+	expect(disabled).toEqual(
+		expect.arrayContaining([
+			"button-disabled:pointer-events-none",
+			"button-disabled:bg-control-primary-disabled-bg",
+			"button-disabled:text-control-primary-disabled-text",
+		]),
+	);
+	expect(c.some((x) => x.startsWith("data-[disabled=true]:"))).toBe(false);
+});
+
+test("a ghost icon-only button draws its focus ring inside its square, so a flush strip never clips it", () => {
+	const ghostIcon = classOf(render(<IconButton icon={RiAddLine} label="Hide" />));
+	expect(ghostIcon).toContain("focus-visible:-outline-offset-2");
+	expect(ghostIcon).not.toContain("focus-visible:outline-offset-2");
+	const outlineIcon = classOf(
+		render(<IconButton variant="outline" icon={RiAddLine} label="Comment" />),
+	);
+	expect(outlineIcon).toContain("focus-visible:outline-offset-2");
 });

@@ -108,8 +108,8 @@ the plain pane header, and its Hide control are the one owner of edge-chrome sty
 `AuxiliaryPaneHeader` around its own geometry so a tool looks identical with or without a frame. Every
 rail entry is a `data-active` 32px frame (24px in the bottom rail) around a control that wears the shared
 `ghost` M icon-button skin (`buttonVariants`, [[module-ui]] "Button system": 24px square, 16px icon,
-shared hover — pressed looks the same — and the offset focus outline, offset 0 in the bottom rail whose
-2px margin would clip it). The control keeps its own element for the roving toolbar, drag and drop and
+shared hover — pressed looks the same — and the ghost icon-only focus ring drawn inside the square, so no
+rail margin or strip edge clips it). The control keeps its own element for the roving toolbar, drag and drop and
 adornments; the open entry sets `data-selected` (the shared `control-bg-selected` fill), while drop cues sit on the
 control. Tab
 and tool icons resolve in one place (`tabIcon`), Line at rest and Fill when active; rail tooltips open away

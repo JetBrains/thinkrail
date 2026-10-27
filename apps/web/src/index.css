@@ -10,6 +10,8 @@
 @source "../../../packages/resource-renderers/src";
 @source "../../../thinkrail-extensions/*/web/**/*.{ts,tsx}";
 
+@custom-variant button-disabled (&:is([data-disabled="true"], :disabled:not([data-loading])));
+
 /*
  * Map the ThinkRail design tokens (tokens.css) onto Tailwind's theme namespaces. `inline` makes the
  * utilities resolve to the live `var(--token)` (not a baked value), so the theme engine's atomic

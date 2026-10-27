@@ -31,12 +31,9 @@ export function railEntryFrameClass(region: LayoutAuxiliaryRegion | "center"): s
 	);
 }
 
-export function railEntryButtonClass(region: LayoutAuxiliaryRegion | "center"): string {
-	return cn(
-		buttonVariants({ variant: "ghost", size: "m", shape: "icon" }),
-		region === "bottom" && "focus-visible:outline-offset-0",
-	);
-}
+export const RAIL_ENTRY_BUTTON_CLASS = cn(
+	buttonVariants({ variant: "ghost", size: "m", shape: "icon" }),
+);
 
 export function railEntryButtonProps(active: boolean) {
 	return buttonDataAttributes({ variant: "ghost", size: "m", iconOnly: true, selected: active });
@@ -78,7 +75,7 @@ export const AuxiliaryRailToolButton = forwardRef<
 					{...railEntryButtonProps(active)}
 					{...control}
 					onClick={onActivate}
-					className={railEntryButtonClass(region)}
+					className={RAIL_ENTRY_BUTTON_CLASS}
 				>
 					{tabIcon(tab, active, RAIL_ICON)}
 				</button>

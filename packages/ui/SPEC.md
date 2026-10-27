@@ -67,9 +67,13 @@ test's documented specialized list names it.
   stays AA); pressed (`:active`, pointer down or Space held) looks exactly like hover — the same `active:` classes mirror the `hover:` ones, so a keyboard press without a pointer shows it too — and never moves geometry; focus-visible is a 2px `primary` outline with a 2px offset in every variant, so
   it stays visible over a primary or destructive fill and on every surface (`ghost`, which has no surface
   of its own, also takes its hover fill and default text while focused, so the focused button reads as a
-  control and not only as a ring around empty space); disabled keeps the element in
+  control and not only as a ring around empty space) — except a `ghost` icon-only button, which draws the
+  ring 2px inside its square, because those sit flush in 28px header strips and rails whose
+  `overflow: hidden` would clip an outer ring; disabled keeps the element in
   place on the `control-disabled-*` / `control-primary-disabled-*` / `control-destructive-disabled-*` roles
-  (never opacity, never hidden); `loading` swaps the icon (with `spinIcon`, it instead rotates the button's own icon in place — the refresh idiom of `apps/web/src/components` *Loading vocabulary*) (or, with no icon, overlays the label it keeps
+  (never opacity, never hidden) through the `button-disabled` variant the app stylesheet defines — a
+  `data-disabled` element, or a natively `:disabled` one that is not loading, so a button inside a disabled
+  `<fieldset>` takes the skin too; `loading` swaps the icon (with `spinIcon`, it instead rotates the button's own icon in place — the refresh idiom of `apps/web/src/components` *Loading vocabulary* — and under reduced motion shows the static spinner glyph instead, so the state stays visible) (or, with no icon, overlays the label it keeps
   transparent for width and the accessible name) for a spinner at the size's icon size, sets `aria-busy`, and natively disables the
   element so the action cannot run twice; `selected` — or an open Radix trigger (`data-state="open"`) — is
   the persistent toggle/open fill (`control-bg-selected`) for `outline` and `ghost`, distinct from pressed;
@@ -123,7 +127,8 @@ moved here from the app when the resource renderers became a package, because bo
   an open tooltip is the topmost dismissable layer and would swallow the Escape meant for the dialog. For
   the same reason an open `IconTooltip` closes itself synchronously on Escape in a window capture
   listener, before Radix's document-level layer handling, so one Escape dismisses the tooltip *and* the
-  dialog, popover or menu beneath it.
+  dialog, popover or menu beneath it. Tooltip content stacks at `z-150`, above dialogs and the toast
+  viewport (`z-[100]`), so a toast's own close tooltip is never painted under the toast.
 - Context and dropdown menus share menu geometry and token classes: content surface, radius/shadow,
   item/icon spacing, separators, semantic action colors, focus rows, and viewport collision behavior.
   Context menus add pointer-position right-click/touch long-press anchoring; features own enabled gestures
