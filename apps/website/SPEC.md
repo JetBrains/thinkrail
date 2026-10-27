@@ -208,7 +208,17 @@ section, quick start, final CTA, or blog post; one recognized activation emits `
 (`desktop`) followed by `download_started`. When a consented journey context is available, the activation
 creates and stores a canonical per-download bridge ID before `download_started`, and that event carries
 the same ID. A later desktop download replaces only the stored latest bridge ID; a download without
-consent remains bridge-less. Opening a command-line disclosure (the hero or blog-post picker's, or the install section's) emits only
+consent remains bridge-less. A primary click on one of those four downloads also opens the
+thank-you dialog and does not cancel the file. The dialog records the PostHog survey
+`Thanks for downloading ThinkRail`: `survey shown` when it opens, `survey dismissed` if it
+closes before an answer, and `survey sent` on each Continue or Finish. One
+`$survey_submission_id` ties those sends together, each send repeats the answers collected so
+far, and `$survey_completed` is true only on Finish, so the furthest event is how far that
+response went. Closing the dialog resets it to the welcome screen. The next open is a new
+showing, with a new submission id and a new choice order; answers already sent stay on the
+submission that recorded them. Choice order is shuffled for each response, except a custom answer, which stays
+last. Required steps leave Continue disabled until the answer is valid. The first-try note and
+the email are optional. Opening a command-line disclosure (the hero or blog-post picker's, or the install section's) emits only
 `install_cta_clicked` (`cli`); closing it does not. That open is browsing, not install intent: a
 primary-button click on a `[data-copy]` control whose value is a known install command emits
 `install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero, install-section, or blog-post location

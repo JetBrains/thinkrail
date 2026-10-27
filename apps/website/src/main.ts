@@ -1,3 +1,4 @@
+import { initDownloadThanks } from "./downloadThanks";
 import { deriveEditorTabs } from "./editorTabs";
 import { heroDownloadTarget } from "./heroDownload";
 import { installShareUrl, isMobileDevice, shareInstallLink } from "./installLinkShare";
@@ -736,3 +737,5 @@ if (mockElements.length > 0) {
 		if (currentTarget) positionTooltip(currentTarget);
 	});
 }
+
+initDownloadThanks();

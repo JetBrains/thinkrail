@@ -1,0 +1,29 @@
+<dialog class="download-thanks" data-download-thanks aria-labelledby="download-thanks-title">
+	<div class="download-thanks-head">
+		<div>
+			<h2 id="download-thanks-title">Thanks for downloading ThinkRail!</h2>
+			<p class="download-thanks-note">While it's downloading, here are more useful things:</p>
+		</div>
+		<button type="button" class="download-thanks-close" data-download-thanks-close aria-label="Close">
+			<svg class="i" aria-hidden="true"><use href="#i-x" /></svg>
+		</button>
+	</div>
+	<div class="feature-grid">
+		<a class="feature-card" href="https://discord.gg/Wybu9ceWkY" target="_blank" rel="noopener noreferrer">
+			<h3><svg class="i" aria-hidden="true"><use href="#i-chat" /></svg> Join our Discord</h3>
+			<p>Chat with the community</p>
+		</a>
+		<a class="feature-card" href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
+			<h3><svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg> View on GitHub</h3>
+			<p>Star, report issues, contribute</p>
+		</a>
+	</div>
+	<div class="feature-card download-survey">
+		<h3><svg class="i" aria-hidden="true"><use href="#i-message-square" /></svg> A two-minute survey</h3>
+		<p data-survey-welcome>Help us improve ThinkRail — tell us about your prior experience and what brought you here.</p>
+		<p class="download-survey-progress" data-survey-progress></p>
+		<div data-survey-body></div>
+		<p class="download-survey-thanks" data-survey-thanks hidden>Thank you so much for taking time to answer these questions!</p>
+		<button type="button" class="btn btn-primary" data-survey-action disabled>Continue</button>
+	</div>
+</dialog>

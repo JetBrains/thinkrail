@@ -207,6 +207,9 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	if (!pages.landing.includes("data-hero-download")) {
 		failures.push("landing: hero download is missing");
 	}
+	if (!pages.landing.includes("Thanks for downloading ThinkRail!")) {
+		failures.push("landing: download thanks dialog is missing");
+	}
 	if (
 		!/class="hero-download-other"[^>]*href="#install"|href="#install"[^>]*class="hero-download-other"/.test(
 			pages.landing,

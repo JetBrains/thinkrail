@@ -1,5 +1,6 @@
 ---
 import Copyright from "./Copyright.astro";
+import DownloadThanks from "./DownloadThanks.astro";
 
 interface Props {
 	workspace: string;
@@ -325,6 +326,8 @@ const { workspace, nav, skipHref } = Astro.props;
 		</aside>
 		<div class="rail-backdrop" id="rail-backdrop" hidden></div>
 	</div>
+
+	<DownloadThanks />
 
 	<!-- ══ Status bar ══ -->
 	<footer class="statusbar">
