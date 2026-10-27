@@ -53,6 +53,19 @@ test("resolveProject defaults to the caller's project and matches open projects 
 	expect(() => resolveProject(undefined, "closed", open)).toThrow("not open");
 });
 
+test("resolveProject never resolves or lists the Chats container, and a chat without a project must name one", () => {
+	const chats: Project = { ...project("c1", "Chats"), kind: "chats" };
+	const open = [chats, project("p1", "ThinkRail")];
+	expect(resolveProject("thinkrail", undefined, open).id).toBe("p1");
+	expect(() => resolveProject(undefined, undefined, open)).toThrow(
+		"This chat has no project: pass `project`. Open projects: ThinkRail (thinkrail).",
+	);
+	expect(() => resolveProject("chats", "p1", open)).toThrow(
+		'Unknown project "chats". Open projects: ThinkRail (thinkrail).',
+	);
+	expect(() => resolveProject(undefined, "c1", open)).toThrow("not open");
+});
+
 test("resolveModel accepts provider/id or a unique id and lists the available models otherwise", () => {
 	const models = [
 		{ provider: "anthropic", id: "claude" },
@@ -231,6 +244,25 @@ test("startWorkspace validates project, model, and attachments before any worktr
 		await expect(startWorkspace("s1", params, deps)).rejects.toThrow();
 		expect(calls.filter((call) => call.startsWith("create"))).toEqual([]);
 	}
+});
+
+test("startWorkspace from a chat without a project needs a named repository and never cuts from Chats", async () => {
+	const chats: Project = { ...project("c1", "Chats"), kind: "chats" };
+	const caller = { id: "chat-1", projectId: "c1", kind: "chat", worktreePath: dir } as Workspace;
+	const openProjects = () => [chats, project("p1", "ThinkRail"), project("p2", "Backend")];
+	const refused = startDeps({ callerWorkspace: () => caller, openProjects });
+	await expect(startWorkspace("s1", { prompt: "x" }, refused.deps)).rejects.toThrow(
+		"This chat has no project: pass `project`. Open projects: ThinkRail (thinkrail), Backend (backend).",
+	);
+	expect(refused.calls).toEqual([]);
+	const named = startDeps({ callerWorkspace: () => caller, openProjects });
+	await startWorkspace("s1", { prompt: "x", project: "backend" }, named.deps);
+	expect(named.calls).toEqual([
+		"defaultBase",
+		"create p2 origin/main",
+		"chat default default",
+		"prompt",
+	]);
 });
 
 test("startWorkspace keeps a created workspace and names it when its chat cannot start", async () => {

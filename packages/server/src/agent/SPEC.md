@@ -798,6 +798,8 @@ re-opened transcripts provider-valid.
       accepted (the host's send-ack window), and never waits for the child's turn to finish.
     - **`workspace_status { project?, workspaces? }`** reports chat states, PR state, diff stats and
       (for named workspaces) each chat's final message.
+    `project` defaults to the chat's own project. In a chat without a project it is required, and the
+    host enforces that.
     Both delegate to a host seam, `setWorkspaceToolsHost({ start, status })`, because they compose
     `agent` + `projects` + `workspaces` + `git`. Their `promptGuidelines` make the agent **always** act on
     side/separate/parallel-workspace cues, but only *suggest* splitting work the user did not ask to

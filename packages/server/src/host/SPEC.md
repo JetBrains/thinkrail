@@ -442,7 +442,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
       `ensureWatch`, and an auto `workspace-N` name that the
       child renames itself through `set_title`. The first prompt is plain text, so pi's own `/template`
       and `/skill:` expansion applies.
-    - Projects are any open registry entry, matched by id, slug or name (default: the caller's).
+    - Projects are the open repositories, matched by id, slug or name (default: the caller's). The
+      Chats container is never one ([[submodule-server-workspaces]]): it is never resolved or listed,
+      and its chats never match a named status lookup. A chat without a project has no default, so
+      both tools refuse a call without `project` and list the open repositories.
       Attachments resolve against the caller's worktree: images ride as prompt images, and other files
       are listed by absolute path, because the child's worktree only has committed refs.
     - Project, model and attachments are validated **before** any worktree exists. If the chat fails to

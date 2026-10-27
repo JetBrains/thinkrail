@@ -28,6 +28,8 @@ import { ensureWatch } from "../watch";
 import {
 	createWorkspace,
 	getWorkspace,
+	isChatsContainer,
+	isChatWorkspace,
 	listAllWorkspaceRecords,
 	listWorkspaces,
 	workspaceDiffStats,
@@ -62,17 +64,31 @@ function callerWorkspace(sessionId: string): Workspace {
 	return getWorkspace(workspaceId);
 }
 
+function ownProjectId(caller: Workspace): string | undefined {
+	return isChatWorkspace(caller) ? undefined : caller.projectId;
+}
+
+function openRepositories(projects: readonly Project[] = listProjects()): Project[] {
+	return projects.filter((project) => !isChatsContainer(project));
+}
+
 function describeProjects(projects: readonly Project[]): string {
 	return projects.map((project) => `${project.name} (${project.slug})`).join(", ") || "none";
 }
 
 export function resolveProject(
 	ref: string | undefined,
-	fallbackProjectId: string,
-	open: readonly Project[] = listProjects(),
+	fallbackProjectId: string | undefined,
+	projects: readonly Project[] = listProjects(),
 ): Project {
+	const open = openRepositories(projects);
 	const needle = ref?.trim();
 	if (!needle) {
+		if (fallbackProjectId === undefined) {
+			throw new Error(
+				`This chat has no project: pass \`project\`. Open projects: ${describeProjects(open)}.`,
+			);
+		}
 		const own = open.find((project) => project.id === fallbackProjectId);
 		if (!own) throw new Error("This chat's project is not open.");
 		return own;
@@ -196,7 +212,7 @@ export async function startWorkspace(
 	const caller = deps.callerWorkspace(callerSessionId);
 	const prompt = params.prompt.trim();
 	if (!prompt) throw new Error("Pass a non-empty prompt.");
-	const project = resolveProject(params.project, caller.projectId, deps.openProjects());
+	const project = resolveProject(params.project, ownProjectId(caller), deps.openProjects());
 	const model = params.model?.trim()
 		? resolveModel(params.model, await deps.settledModels())
 		: undefined;
@@ -370,7 +386,7 @@ async function workspaceStatus(
 	params: WorkspaceStatusParams,
 ): Promise<string> {
 	const caller = callerWorkspace(callerSessionId);
-	const open = listProjects();
+	const open = openRepositories();
 	const projectName = new Map(open.map((project) => [project.id, project.name]));
 	const refs = params.workspaces?.filter((ref) => ref.trim()) ?? [];
 
@@ -395,7 +411,7 @@ async function workspaceStatus(
 		return reports.join("\n\n");
 	}
 
-	const project = resolveProject(params.project, caller.projectId, open);
+	const project = resolveProject(params.project, ownProjectId(caller), open);
 	const workspaces = await listWorkspaces(project.id, { includeDiffStats: true });
 	const reports = await Promise.all(
 		workspaces.map((workspace) => reportWorkspace(workspace, project.name, false, callerSessionId)),
