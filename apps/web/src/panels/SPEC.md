@@ -31,7 +31,7 @@ treatment.
 - **Owns:** `ProjectTree`. Each top-level project row is a compact IDE-tree row at the shared `--panel-row-height` (`web-spacing`):
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
-  project `+`** — both are `Button variant="ghost" size="icon"`, so they render identically and their glyphs
+  project `+`** — both are `IconButton` ghost `s`, so they render identically and their glyphs
   line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+` carries a
   tooltip and accessible name naming the shell's `Mod+N` chord and its `Mod+Alt+N` browser alias through `lib`'s
   `platformShortcutLabel` (see `submodule-web-shell` global chords); the context-menu item stays plain.
@@ -301,7 +301,9 @@ treatment.
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
   shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, refreshed on every
   open with an explicit Refresh control as well) — one component for the New-Workspace dialog's *base* branch
-  and the Changes header's *target* branch. **Remote is two layers**: one `Remote` parent over a subgroup per
+  and the Changes header's *target* branch. Its trigger is a `Button ghost m` (branch icon, label, chevron)
+  unless a caller passes `triggerClassName` for its own pill family (the New-Workspace dialog's
+  composer-style pills), so the Changes header's scope and target triggers read as one pair. **Remote is two layers**: one `Remote` parent over a subgroup per
   host-identified remote (`origin`, `upstream`), whose rows show branch names without repeating the remote.
   The full ref remains every row's selection identity, search value, and `data-branch`; the browser never
   splits `remote/branch`, because Git permits `/` in a remote name. Unconfigured tracking refs live under

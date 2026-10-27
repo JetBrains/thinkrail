@@ -24,7 +24,7 @@ export function CommandLogView({
 					{error}
 					<Button
 						variant="ghost"
-						size="sm"
+						size="m"
 						data-testid="resources-retry"
 						disabled={stale}
 						onClick={onRetry}

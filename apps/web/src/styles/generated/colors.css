@@ -32,6 +32,12 @@
 	--control-disabled-border: color-mix(in srgb, var(--border) 60%, transparent); /* disabled control border = the default control border (`border`, i.e. control-border-default) at the `strong` (60%) alpha step */
 	--control-primary-disabled-bg: color-mix(in srgb, var(--accent) 60%, transparent); /* disabled primary button fill = the accent hue at the `strong` (60%) alpha step — kept on `accent` (the alpha-tint base), not the brightened solid `accentSolid`, so the disabled fill stays with the primary tint family */
 	--control-primary-disabled-text: color-mix(in srgb, var(--on-accent) 60%, transparent); /* disabled primary button label/icon = the normal primary text (`onAccent`, i.e. control-primary-text) at the `strong` (60%) alpha step */
+	--control-destructive-bg: var(--danger); /* the destructive button fill — the feedback-error hue as an opaque control surface */
+	--control-soft-primary-bg-hovered: color-mix(in srgb, var(--accent) 12%, transparent); /* the soft-primary button's hover fill: one step past its primary-subtle rest, kept below primary-soft so the accent label stays AA on tinted Light surfaces (themes/schema.test.ts); hover also swaps the border to primary-muted */
+	--control-destructive-bg-hovered: var(--danger-hover); /* the destructive button's hover fill — its own manifest key (like accentHover), so hover is a colour step, never an opacity change */
+	--control-destructive-text: var(--on-danger); /* label/icon on the destructive fill; each theme picks it to clear AA on both danger and dangerHover */
+	--control-destructive-disabled-bg: color-mix(in srgb, var(--danger) 60%, transparent); /* disabled destructive fill = the enabled fill at the `strong` (60%) alpha step */
+	--control-destructive-disabled-text: color-mix(in srgb, var(--on-danger) 60%, transparent); /* disabled destructive label = the enabled label at the `strong` (60%) alpha step */
 	--border-default: var(--border-strong);
 	--border-muted: var(--border);
 	--primary: var(--accent);
@@ -107,6 +113,12 @@
 	--color-control-disabled-border: var(--control-disabled-border);
 	--color-control-primary-disabled-bg: var(--control-primary-disabled-bg);
 	--color-control-primary-disabled-text: var(--control-primary-disabled-text);
+	--color-control-destructive-bg: var(--control-destructive-bg);
+	--color-control-soft-primary-bg-hovered: var(--control-soft-primary-bg-hovered);
+	--color-control-destructive-bg-hovered: var(--control-destructive-bg-hovered);
+	--color-control-destructive-text: var(--control-destructive-text);
+	--color-control-destructive-disabled-bg: var(--control-destructive-disabled-bg);
+	--color-control-destructive-disabled-text: var(--control-destructive-disabled-text);
 	--color-border-default: var(--border-default);
 	--color-border-muted: var(--border-muted);
 	--color-primary: var(--primary);

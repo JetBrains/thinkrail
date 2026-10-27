@@ -11,7 +11,7 @@ import type {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { T, type Translator, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -261,21 +261,19 @@ function ValueRows({
 						onChange={(event) => update(row.id, { value: event.currentTarget.value })}
 						className={cn(MCP_INPUT_CLASS, "flex-1 tr-code-text")}
 					/>
-					<Button
-						variant="ghost"
-						size="icon"
-						aria-label={t("common.remove")}
+					<IconButton
+						icon={Trash2}
+						label={t("common.remove")}
 						onClick={() =>
 							onChange({ ...draft, values: draft.values.filter((other) => other.id !== row.id) })
 						}
-					>
-						<Trash2 className="size-14" />
-					</Button>
+					/>
 				</div>
 			))}
 			<Button
 				variant="ghost"
-				size="sm"
+				size="m"
+				iconLeft={Plus}
 				data-testid="mcp-form-add-value"
 				className="self-start"
 				onClick={() =>
@@ -285,7 +283,6 @@ function ValueRows({
 					})
 				}
 			>
-				<Plus className="size-14" />
 				{http ? t("mcp.form.addHeader") : t("mcp.form.addVariable")}
 			</Button>
 		</div>
@@ -509,12 +506,12 @@ function PresetList({
 						</span>
 						<Button
 							variant="outline"
-							size="sm"
+							size="m"
+							iconLeft={Plus}
 							data-testid="mcp-preset-add"
 							disabled={disabled || existing.some((server) => server.name === preset.name)}
 							onClick={() => onAdd(preset)}
 						>
-							<Plus className="size-14" />
 							{existing.some((server) => server.name === preset.name)
 								? t("mcp.presets.added")
 								: t("common.add")}
@@ -552,7 +549,7 @@ function GithubRecipe({
 			</span>
 			<Button
 				variant="outline"
-				size="sm"
+				size="m"
 				data-testid="mcp-github-recipe-use"
 				disabled={disabled || added}
 				onClick={onUse}

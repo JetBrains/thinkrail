@@ -62,7 +62,7 @@ export function Toaster() {
 								<ToastAction altText={t.action.label} asChild>
 									<Button
 										variant="outline"
-										size="sm"
+										size="m"
 										data-testid="toast-action"
 										onClick={t.action.onClick}
 									>

@@ -18,9 +18,9 @@ export function FeedbackSettings() {
 				href={INTERVIEW_BOOKING_URL}
 				target="_blank"
 				rel="noopener noreferrer"
-				className={buttonVariants({ className: "self-start" })}
+				className={buttonVariants({ variant: "primary", size: "l", className: "self-start" })}
 			>
-				<ExternalLink className="size-14" />
+				<ExternalLink aria-hidden />
 				{t("settings.feedback.scheduleInterview")}
 			</a>
 			<p className="text-text-muted tr-text-metadata">
@@ -31,9 +31,9 @@ export function FeedbackSettings() {
 				href={DISCORD_URL}
 				target="_blank"
 				rel="noopener noreferrer"
-				className={buttonVariants({ variant: "outline", className: "self-start" })}
+				className={buttonVariants({ variant: "outline", size: "l", className: "self-start" })}
 			>
-				<Discord className="size-14" />
+				<Discord aria-hidden />
 				{t("settings.feedback.joinDiscord")}
 			</a>
 		</section>

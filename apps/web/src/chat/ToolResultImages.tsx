@@ -1,6 +1,7 @@
 import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
 import type { ImageContent } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -29,15 +30,14 @@ function ToolResultImage({ image, label }: { image: ImageContent; label: string 
 			/>
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogTrigger asChild>
-					<button
-						type="button"
+					<IconButton
+						icon={Maximize2}
+						variant="outline"
 						data-testid="tool-result-image-fullscreen"
-						aria-label={t("chat.toolImages.viewFullScreen", { label })}
-						title={t("chat.toolImages.fullScreen")}
-						className="absolute top-4 right-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						<Maximize2 className="size-14" />
-					</button>
+						label={t("chat.toolImages.viewFullScreen", { label })}
+						tooltip={t("chat.toolImages.fullScreen")}
+						className="absolute top-4 right-4"
+					/>
 				</DialogTrigger>
 				<DialogContent
 					data-testid="tool-result-image-dialog"

@@ -53,8 +53,9 @@ cannot express through the manifest keys is a product decision for all themes, n
 ## Manifest contract
 
 A theme is exactly one `*.theme.json` file. Schema version 2 is strict and self-contained: id,
-label/order, light-or-dark appearance, normal-or-high contrast metadata, a complete semantic UI palette,
-all 16 terminal ANSI colors, and a complete semantic syntax palette. Color values are canonical
+label/order, light-or-dark appearance, normal-or-high contrast metadata, a complete semantic UI palette
+(only the derived keys below may be omitted), all 16 terminal ANSI colors, and a complete semantic syntax
+palette. Color values are canonical
 six/eight-digit hex; the two selected-text foreground overrides may explicitly be `null` to retain the
 consumer's native foreground. There is no inheritance or partial overlay. The engine owns appearance-level
 effects, TextMate/Monaco scope mapping, and CSS-token mapping, so those mechanics never leak into
@@ -86,7 +87,14 @@ The primary control has an explicit opaque-fill contract: `accentSolid` is its r
 `accentHover` its hover fill, and `onAccent` the label on both. The separate `accent` remains the
 foreground/ring/border and tint source. This lets a palette vary opaque controls without silently
 changing every accent tint: the Minimal palettes align their resting fill with their accent, while the
-standard Light keeps its brighter independent solid fill.
+standard Light keeps its brighter independent solid fill. The destructive control has the same contract
+on the danger hue: `danger` is its resting fill (and the feedback colour), `dangerHover` its hover fill, and
+`onDanger` the label on both — `schema.test.ts` holds `onDanger` to AA on both fills and keeps the hover
+step distinguishable (≥ 1.15) from the resting fill. `dangerHover` and `onDanger` joined v2 after user
+files shipped, so by the compatibility rule above both are optional and derived from keys every v2 file
+has: `dangerHover` defaults to `danger` darkened 12% toward black (the step every bundled theme uses)
+and `onDanger` to the palette's own `text` or `background`, whichever reads better on both fills.
+Bundled manifests still set both explicitly.
 
 **The manifest→variable name is derived, not mapped.** A key writes to its kebab-cased name —
 `borderStrong` → `--border-strong`, `editorSelection` → `--editor-selection`. `runtime.ts` applies that

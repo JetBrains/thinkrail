@@ -140,6 +140,13 @@ export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
 		load: () => import("@shikijs/langs/kotlin"),
 	},
 	{
+		id: "scala",
+		extensions: [".scala"],
+		aliases: ["Scala"],
+		chat: true,
+		load: () => import("@shikijs/langs/scala"),
+	},
+	{
 		id: "swift",
 		extensions: [".swift"],
 		aliases: ["Swift"],

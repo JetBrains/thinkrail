@@ -88,7 +88,8 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   `@/components/preloadedLazy`; `useNow()` via `@/components/useNow` (the
   wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a render never calls `Date.now`
   itself).
-- **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `@thinkrail/locales` (UI strings), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
+- **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `@thinkrail/ui/button` (the
+  error fallback's Reload / Try again are shared buttons), `@thinkrail/locales` (UI strings), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
   rather than re-stated), `constants` (`BRAND_MARK_SEGMENTS` — the monogram regions `RunningIcon` clips to,
   shared with the shell logo rather than copied). Kept dependency-light on purpose, and both are leaves, so *any* region
   (shell, panels, `main.tsx`) can still wrap in it without creating a cycle.
@@ -117,11 +118,13 @@ third thing, never bare text, never nothing:
    to its control**: a single button, one menu item, one icon — never a whole region. Reference sites:
    the "New chat"/"Creating…" button states, `shell/WorkspaceChatHistory.tsx`'s history icon,
    `chat/ActivityGroup.tsx`/`chat/ToolCard.tsx` step icons, `panels/ProjectTree.tsx`'s "Creating worktree…"
-   pending row. A narrower named sub-idiom of this tier: **`RefreshCw` spinning in place** (icon unchanged,
-   just rotating) for a manual "Refresh" action on a control whose surrounding content stays visible and
+   pending row. On a shared button this tier is `loading` (icon-sized spinner in the icon's place). A
+   narrower named sub-idiom of this tier: **`RefreshCw` spinning in place** (icon unchanged, just rotating;
+   a shared button spells it `loading spinIcon`) for a manual "Refresh" action on a control whose surrounding content stays visible and
    valid while the refresh runs (`chat/ModelEffortPicker.tsx`, `chat/ModelSelector.tsx`, `panels/GithubSettings.tsx`,
    `panels/ProvidersSettings.tsx`, `panels/BranchPicker.tsx`) — swapping to a generic spinner there would
-   discard the "this still works, just refreshing" signal the in-place spin gives for free.
+   discard the "this still works, just refreshing" signal the in-place spin gives for free. Under reduced
+   motion a rotation cannot carry the signal, so `spinIcon` shows the static spinner glyph instead.
 
 Beyond picking the right tier:
 

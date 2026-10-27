@@ -1,5 +1,6 @@
 import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type ReactNode, useEffect, useState } from "react";
@@ -71,16 +72,15 @@ export function MermaidView({
 				className="overflow-auto [&_svg]:h-auto [&_svg]:max-w-full"
 				dangerouslySetInnerHTML={{ __html: svg }}
 			/>
-			<button
-				type="button"
+			<IconButton
+				icon={Maximize2}
+				label={t("visualize.mermaid.fullScreenLabel")}
+				tooltip={t("visualize.mermaid.fullScreen")}
+				variant="outline"
 				data-testid="mermaid-fullscreen"
-				aria-label={t("visualize.mermaid.fullScreenLabel")}
-				title={t("visualize.mermaid.fullScreen")}
 				onClick={() => setOpen(true)}
-				className="absolute top-4 right-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				<Maximize2 className="size-14" />
-			</button>
+				className="absolute top-4 right-4"
+			/>
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent
 					data-testid="mermaid-fullscreen-dialog"

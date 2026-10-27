@@ -10,6 +10,7 @@ import {
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { diffRendererCapabilities } from "@thinkrail/resource-renderers";
+import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -334,9 +335,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										Object.fromEntries(files.map((change) => [change.path, true])),
 									)
 								}
-							>
-								<ChevronUp className="size-14" />
-							</HeaderIconButton>
+								icon={ChevronUp}
+							/>
 							<HeaderIconButton
 								testid="changes-review-expand-all"
 								label={t("changes.review.expandAll")}
@@ -347,9 +347,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										Object.fromEntries(files.map((change) => [change.path, false])),
 									)
 								}
-							>
-								<ChevronDown className="size-14" />
-							</HeaderIconButton>
+								icon={ChevronDown}
+							/>
 						</>
 					) : null}
 					{guideAvailable && layout === "stacked" && !mobile ? (
@@ -358,9 +357,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							label={guideOpen ? t("changes.review.hideGuide") : t("changes.review.showGuide")}
 							active={guideOpen}
 							onClick={() => setGuideHidden((hidden) => !hidden)}
-						>
-							<Guide className="size-14" />
-						</HeaderIconButton>
+							icon={Guide}
+						/>
 					) : null}
 					{controls.whitespace ? (
 						<HeaderIconButton
@@ -368,9 +366,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							label={t("changes.review.hideWhitespace")}
 							active={ignoreWhitespace}
 							onClick={() => setIgnoreWhitespace(workspaceId, tab.id, !ignoreWhitespace)}
-						>
-							<Pilcrow className="size-14" />
-						</HeaderIconButton>
+							icon={Pilcrow}
+						/>
 					) : null}
 					{!mobile && controls.layout ? (
 						<>
@@ -409,25 +406,20 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 						{scopeGone ? error : t("changes.readFailed", { error })}
 					</p>
 					{scopeGone ? (
-						<button
-							type="button"
+						<Button
+							variant="ghost"
+							size="s"
 							data-testid="changes-review-all-changes"
 							onClick={() =>
 								useAppStore.getState().requestChangesView(workspaceId, null, { kind: "branch" })
 							}
-							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							{t("changes.review.allChanges")}
-						</button>
+						</Button>
 					) : (
-						<button
-							type="button"
-							data-testid="changes-review-retry"
-							onClick={reload}
-							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
-						>
+						<Button variant="ghost" size="s" data-testid="changes-review-retry" onClick={reload}>
 							{t("common.retry")}
-						</button>
+						</Button>
 					)}
 				</div>
 			) : status === null ? (
@@ -449,9 +441,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									label={t("changes.review.previousFile")}
 									disabled={currentIndex === 0}
 									onClick={() => step(-1)}
-								>
-									<ChevronLeft className="size-14" />
-								</HeaderIconButton>
+									icon={ChevronLeft}
+								/>
 								<span
 									data-testid="changes-review-counter"
 									className="tr-text-metadata tabular-nums text-text-muted"
@@ -463,28 +454,25 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									label={t("changes.review.nextFile")}
 									disabled={currentIndex >= files.length - 1}
 									onClick={() => step(1)}
-								>
-									<ChevronRight className="size-14" />
-								</HeaderIconButton>
-								<button
-									type="button"
+									icon={ChevronRight}
+								/>
+								<Button
+									variant="outline"
+									size="m"
+									iconLeft={Check}
 									data-testid="changes-review-mark-viewed"
 									aria-pressed={viewedSet.has(current.path)}
+									selected={viewedSet.has(current.path)}
 									onClick={markViewedAndAdvance}
-									className={`ml-auto flex h-24 items-center gap-4 rounded-sm border px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-										viewedSet.has(current.path)
-											? "border-primary text-primary"
-											: "border-control-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-									}`}
+									className="ml-auto"
 								>
-									<Check className="size-14" />
 									{viewedSet.has(current.path)
 										? t("changes.review.viewed")
 										: t("changes.review.markViewed")}
 									<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
 										{VIEWED_KEY.toUpperCase()}
 									</kbd>
-								</button>
+								</Button>
 							</div>
 							<div className="min-h-0 flex-1">
 								<ChangesFileSection
@@ -539,13 +527,14 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										>
 											{t("changes.review.switchToOneFile")}
 										</button>
-										<button
-											type="button"
+										<Button
+											variant="ghost"
+											size="s"
 											onClick={() => setLargeNoticeDismissed(true)}
-											className="ml-auto text-text-subtle hover:text-text-default"
+											className="ml-auto"
 										>
 											{t("common.dismiss")}
-										</button>
+										</Button>
 									</div>
 								) : null}
 								<Virtuoso<GitFileChange, ReviewListContext>
@@ -595,28 +584,28 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										className="h-4 w-120 min-w-0 shrink appearance-none overflow-hidden rounded-xs bg-control-bg-hovered accent-primary [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-control-bg-hovered [&::-webkit-progress-value]:bg-primary"
 									/>
 									<span className="ml-auto flex shrink-0 items-center gap-4">
-										<button
-											type="button"
+										<Button
+											variant="outline"
+											size="m"
 											data-testid="changes-review-next-unreviewed"
 											disabled={viewedCount >= files.length}
 											onClick={nextUnreviewed}
-											className="flex h-24 items-center gap-4 rounded-sm border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
 										>
 											{t("changes.review.nextUnreviewed")}
 											<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
 												{NEXT_UNREVIEWED_KEY.toUpperCase()}
 											</kbd>
-										</button>
-										<button
-											type="button"
+										</Button>
+										<Button
+											variant="outline"
+											size="m"
+											iconLeft={Check}
 											data-testid="changes-review-mark-all"
 											disabled={viewedCount >= files.length}
 											onClick={markAllViewed}
-											className="flex h-24 items-center gap-4 rounded-sm border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
 										>
-											<Check className="size-14" />
 											{t("changes.review.markAllViewed")}
-										</button>
+										</Button>
 									</span>
 								</div>
 							</div>

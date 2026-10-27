@@ -65,7 +65,7 @@ export function ConfirmDialog({
 						{cancelLabel ?? t("common.cancel")}
 					</Button>
 					<Button
-						variant={destructive ? "destructive" : "default"}
+						variant={destructive ? "destructive" : "primary"}
 						data-testid={confirmTestId}
 						onClick={() => {
 							onConfirm();

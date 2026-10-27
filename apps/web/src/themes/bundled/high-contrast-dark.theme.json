@@ -31,6 +31,8 @@
 		"info": "#6ac8ff",
 		"success": "#41cb66",
 		"danger": "#ff4b75",
+		"dangerHover": "#e04267",
+		"onDanger": "#000000",
 		"warning": "#ffd54b"
 	},
 	"ansi": {

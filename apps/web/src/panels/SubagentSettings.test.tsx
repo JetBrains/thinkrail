@@ -5,6 +5,7 @@ import {
 	type SubagentOverride,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SubagentSettings } from "./SubagentSettings";
 
@@ -36,16 +37,18 @@ function render({
 	activeWorkspace?: Workspace;
 } = {}): string {
 	return renderToStaticMarkup(
-		<SubagentSettings
-			protocolVersion={protocolVersion}
-			globalEnabled={globalEnabled}
-			globalLimit={globalLimit}
-			workspace={activeWorkspace ?? null}
-			onGlobalEnabledChange={() => {}}
-			onWorkspaceEnabledChange={() => {}}
-			onGlobalLimitChange={() => {}}
-			onWorkspaceLimitChange={() => {}}
-		/>,
+		<TooltipProvider>
+			<SubagentSettings
+				protocolVersion={protocolVersion}
+				globalEnabled={globalEnabled}
+				globalLimit={globalLimit}
+				workspace={activeWorkspace ?? null}
+				onGlobalEnabledChange={() => {}}
+				onWorkspaceEnabledChange={() => {}}
+				onGlobalLimitChange={() => {}}
+				onWorkspaceLimitChange={() => {}}
+			/>
+		</TooltipProvider>,
 	);
 }
 

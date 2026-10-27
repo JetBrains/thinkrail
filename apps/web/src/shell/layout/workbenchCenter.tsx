@@ -1,12 +1,12 @@
 import { RiChatNewLine as MessageSquarePlus, RiCloseLine as X } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import {
 	type ImperativePanelGroupHandle,
 	ResizableHandle,
 	ResizablePanel,
 	ResizablePanelGroup,
 } from "@thinkrail/ui/resizable";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { memo, useMemo, useRef } from "react";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
 import {
@@ -99,38 +99,34 @@ export const CenterGroupView = memo(function CenterGroupView({
 					<>
 						{renderCenterActions(group.id)}
 						{group.tabs.length === 0 ? (
-							<IconTooltip
-								label={
+							<IconButton
+								variant="ghost"
+								size="m"
+								icon={X}
+								label={t("workbench.group.remove")}
+								tooltip={
 									isLayoutUnavailable(groupRemoval)
 										? groupRemoval.reason
 										: t("workbench.group.remove")
 								}
-							>
-								<button
-									type="button"
-									data-testid="remove-layout-group"
-									aria-label={t("workbench.group.remove")}
-									disabled={isLayoutUnavailable(groupRemoval)}
-									onClick={() => {
-										if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
-									}}
-									className="flex w-panel-header-row shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
-								>
-									<X className="size-14" />
-								</button>
-							</IconTooltip>
+								data-testid="remove-layout-group"
+								wrapTrigger
+								disabled={isLayoutUnavailable(groupRemoval)}
+								onClick={() => {
+									if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
+								}}
+								className="shrink-0 self-center"
+							/>
 						) : null}
-						<IconTooltip label={t("workbench.center.newChat")}>
-							<button
-								type="button"
-								data-testid="new-chat"
-								aria-label={t("workbench.center.newChat")}
-								onClick={() => onNewChat(group.id)}
-								className="flex w-panel-header-row shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-							>
-								<MessageSquarePlus className="size-14" />
-							</button>
-						</IconTooltip>
+						<IconButton
+							variant="ghost"
+							size="m"
+							icon={MessageSquarePlus}
+							label={t("workbench.center.newChat")}
+							data-testid="new-chat"
+							onClick={() => onNewChat(group.id)}
+							className="shrink-0 self-center"
+						/>
 					</>
 				}
 			/>

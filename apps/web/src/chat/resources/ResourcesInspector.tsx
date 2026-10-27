@@ -12,7 +12,7 @@ import type {
 	SubagentResourceSummary,
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogPanel, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
@@ -117,7 +117,8 @@ function DetailHeader({
 				{live ? (
 					<Button
 						variant="outline"
-						size="sm"
+						size="m"
+						iconLeft={RiStopFill}
 						data-testid="resource-detail-stop"
 						disabled={
 							!authoritative ||
@@ -126,9 +127,8 @@ function DetailHeader({
 							(resource.kind === "subagent" && !!actions.all?.pending)
 						}
 						onClick={onStop}
-						className="gap-4 text-feedback-error"
+						tone="danger"
 					>
-						<RiStopFill className="size-14" />
 						{action?.pending ? t("resources.action.stopping") : t("resources.action.stop")}
 					</Button>
 				) : null}
@@ -302,16 +302,13 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 						</DialogTitle>
 						<span className="flex-1" />
 						{props.subagents.length > 0 ? (
-							<Button
+							<IconButton
 								variant="ghost"
-								size="icon"
+								size="m"
+								icon={RiStopFill}
 								data-testid="resources-stop-all"
-								aria-label={
-									props.actions.all?.pending
-										? t("resources.inspector.stoppingAll")
-										: t("resources.inspector.stopAll")
-								}
-								title={
+								wrapTrigger
+								label={
 									props.actions.all?.pending
 										? t("resources.inspector.stoppingAll")
 										: t("resources.inspector.stopAll")
@@ -324,20 +321,16 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 									)
 								}
 								onClick={props.onStopAll}
-								className="text-feedback-error hover:text-feedback-error"
-							>
-								<RiStopFill className="size-14" />
-							</Button>
+								tone="danger"
+							/>
 						) : null}
-						<button
-							type="button"
-							aria-label={t("resources.inspector.close")}
+						<IconButton
+							icon={RiCloseLine}
+							label={t("resources.inspector.close")}
 							data-testid="resources-inspector-close"
 							onClick={() => props.onOpenChange(false)}
-							className="inline-flex size-28 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-						>
-							<RiCloseLine className="size-16" />
-						</button>
+							className="shrink-0"
+						/>
 					</div>
 					{props.actions.all?.error ? (
 						<p role="alert" className="px-8 text-feedback-error tr-text-metadata">
@@ -370,7 +363,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 							<div className="flex justify-end">
 								<Button
 									variant="outline"
-									size="sm"
+									size="m"
 									data-testid="resources-retry"
 									onClick={props.onRetry}
 								>

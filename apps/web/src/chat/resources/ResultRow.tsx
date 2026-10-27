@@ -4,6 +4,7 @@ import type {
 	DelegationRunDetails,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import type { MouseEvent, ReactNode } from "react";
 import {
@@ -177,15 +178,16 @@ export function ResultRow({
 					<div className={headerClass}>{header}</div>
 				)}
 				{onOpen ? (
-					<button
-						type="button"
+					<Button
+						variant="soft-primary"
+						size="s"
+						iconLeft={RiFileList3Line}
 						data-testid="background-result-open"
 						onClick={onOpen}
-						className="flex shrink-0 items-center gap-4 rounded-sm px-4 py-2 text-primary outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+						className="shrink-0"
 					>
-						<RiFileList3Line className="size-12 shrink-0" />
 						{command ? t("resources.result.openLog") : t("resources.result.transcript")}
-					</button>
+					</Button>
 				) : null}
 			</div>
 			{expanded && children ? (

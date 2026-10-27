@@ -44,10 +44,10 @@ describe("typography source", () => {
 		}
 	});
 
-	it("holds 20 canonical definitions and 30 aliases (50 styles)", () => {
+	it("holds 21 canonical definitions and 30 aliases (51 styles)", () => {
 		const styles = allStyles(typography);
-		expect(styles).toHaveLength(50);
-		expect(styles.filter((s) => !s.ref)).toHaveLength(20);
+		expect(styles).toHaveLength(51);
+		expect(styles.filter((s) => !s.ref)).toHaveLength(21);
 		expect(styles.filter((s) => s.ref)).toHaveLength(30);
 		expect(styles.filter((s) => s.prose)).toHaveLength(28);
 	});
@@ -80,6 +80,7 @@ describe("typography source", () => {
 			medium: 500,
 			semibold: 600,
 			brand: 400,
+			button: 470,
 		});
 		for (const id of ["interface", "code", "brand"]) {
 			const family = resolveFamily(typography, id);
@@ -149,6 +150,7 @@ describe("typography source", () => {
 			labelPill: 500,
 			caption: 500,
 			action: 500,
+			button: 470,
 			emphasis: 500,
 		});
 	});

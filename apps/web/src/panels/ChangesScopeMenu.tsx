@@ -7,6 +7,7 @@ import {
 } from "@remixicon/react";
 import type { GitCommit, GitDiffScope } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -41,6 +42,7 @@ export function ChangesScopeMenu({
 	const generation = useRef(0);
 	const turns = useWorkspaceTurns(workspaceId);
 	const latestTurn = turns.at(-1);
+	const label = scopeLabel(t, scope, commits ?? [], turns);
 
 	const load = () => {
 		const mine = ++generation.current;
@@ -71,18 +73,22 @@ export function ChangesScopeMenu({
 				if (next) load();
 			}}
 		>
-			<DropdownMenuTrigger
-				data-testid="changes-scope-trigger"
-				data-open={open}
-				aria-label={t("changes.scopeMenu.label")}
-				title={scopeTitle(t, scope, commits ?? [], turns)}
-				className="flex h-panel-header-control min-w-0 items-center gap-4 rounded-sm px-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected data-[open=true]:text-text-default"
-			>
-				<GitCompare className="size-14 shrink-0" />
-				<span data-testid="changes-scope-label" className="truncate">
-					{scopeLabel(t, scope, commits ?? [], turns)}
-				</span>
-				<ChevronDown className="size-16 shrink-0" />
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="ghost"
+					size="m"
+					iconLeft={GitCompare}
+					iconRight={ChevronDown}
+					data-testid="changes-scope-trigger"
+					data-open={open}
+					aria-label={t("changes.scope.title", { label })}
+					tooltip={scopeTitle(t, scope, commits ?? [], turns)}
+					className="min-w-0"
+				>
+					<span data-testid="changes-scope-label" className="truncate">
+						{label}
+					</span>
+				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="start" className="max-w-[22rem]">
 				<DropdownMenuItem
