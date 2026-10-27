@@ -1,5 +1,14 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	chmodSync,
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -23,6 +32,7 @@ import {
 	disposeAllSessions,
 	getSessionStats,
 	liveParentContext,
+	recordSessionUsage,
 	removeSession,
 	removeWorkspaceSessions,
 	setSessionManagerFactory,
@@ -408,6 +418,158 @@ test("a failed usage write never fails the child run", async () => {
 		expect(child.snapshot?.status).toBe("completed");
 		expect(usageEntries()).toEqual([]);
 	} finally {
+		await removeSession(sessionId);
+	}
+});
+
+const writesCanBeDenied = (() => {
+	const dir = mkdtempSync(join(tmpdir(), "trdel-perm-"));
+	const file = join(dir, "probe");
+	writeFileSync(file, "");
+	chmodSync(file, 0o444);
+	try {
+		appendFileSync(file, "x");
+		return false;
+	} catch {
+		return true;
+	} finally {
+		chmodSync(file, 0o644);
+		rmSync(dir, { recursive: true, force: true });
+	}
+})();
+
+async function persistedParent(workspaceId: string) {
+	let manager: SessionManager | undefined;
+	setSessionManagerFactory((dir) => {
+		manager = SessionManager.create(dir);
+		return manager;
+	});
+	const cwd = tmpDir(`trdel-${workspaceId}-`);
+	const { sessionId } = await createSession({ cwd, workspaceId });
+	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	if (!manager) throw new Error("expected a parent session manager");
+	manager.appendMessage({ role: "user", content: "BEFORE", timestamp: Date.now() });
+	const file = manager.getSessionFile();
+	if (!file) throw new Error("expected a persisted parent transcript");
+	return { cwd, sessionId, manager, file };
+}
+
+function userTexts(manager: SessionManager): string[] {
+	return manager
+		.buildSessionContext()
+		.messages.flatMap((message) =>
+			message.role === "user" && typeof message.content === "string" ? [message.content] : [],
+		);
+}
+
+const subagentSpend = (input: number, note: string) => ({
+	kind: "subagent",
+	provider: "faux",
+	model: "faux",
+	note,
+	usage: {
+		input,
+		output: 1,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: input + 1,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.01 },
+	},
+});
+
+test.skipIf(!writesCanBeDenied)(
+	"a usage write pi kept only in memory never cuts the reopened history",
+	async () => {
+		const { sessionId, manager, file } = await persistedParent("ws-memonly");
+		const { release } = gatedChildResponse();
+		try {
+			const child = await delegationServiceFor("ws-memonly").createChild({
+				parent: sessionId,
+				visibility: "hidden",
+				info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+				session: { systemPrompt: "You are a test scout." },
+			});
+			const run = child.runQueued("Long background job.");
+			await waitFor(() => child.snapshot?.status === "running");
+			chmodSync(file, 0o444);
+			release();
+			const outcome = await run;
+			chmodSync(file, 0o644);
+			expect(outcome.status).toBe("completed");
+			expect(getSessionStats(sessionId).tokens.input).toBe(outcome.details.usage.input);
+			expect(manager.getLeafEntry()?.type).not.toBe("usage");
+
+			manager.appendMessage({ role: "user", content: "AFTER", timestamp: Date.now() });
+			const reopened = SessionManager.open(file);
+			expect(userTexts(reopened)).toEqual(["BEFORE", "AFTER"]);
+			expect(reopened.getEntries().some((entry) => entry.type === "usage")).toBe(false);
+		} finally {
+			chmodSync(file, 0o644);
+			await removeSession(sessionId);
+		}
+	},
+);
+
+test("a torn usage append is cut back so the next entry stays readable", async () => {
+	const { sessionId, manager, file } = await persistedParent("ws-torn");
+	const appendUsage = manager.appendUsage.bind(manager);
+	try {
+		manager.appendUsage = (...args) => {
+			appendUsage(...args);
+			appendFileSync(file, '{"type":"message","id":"torn');
+			throw Object.assign(new Error("EIO: i/o error, write"), { code: "EIO" });
+		};
+		const sizeBefore = statSync(file).size;
+		expect(recordSessionUsage(sessionId, subagentSpend(40, "child-torn"))).toBe(true);
+		expect(statSync(file).size).toBe(sizeBefore);
+		expect(getSessionStats(sessionId).tokens.input).toBe(40);
+
+		manager.appendUsage = appendUsage;
+		manager.appendMessage({ role: "user", content: "AFTER", timestamp: Date.now() });
+		const reopened = SessionManager.open(file);
+		expect(userTexts(reopened)).toEqual(["BEFORE", "AFTER"]);
+		expect(reopened.getEntries().some((entry) => entry.type === "usage")).toBe(false);
+	} finally {
+		manager.appendUsage = appendUsage;
+		await removeSession(sessionId);
+	}
+});
+
+test("usage accounting survives a throwing publisher and an unreadable transcript path", async () => {
+	const { sessionId, manager, file } = await persistedParent("ws-besteffort");
+	const getSessionFile = manager.getSessionFile.bind(manager);
+	try {
+		setSessionPublisher(() => {
+			throw new Error("socket closed");
+		});
+		expect(recordSessionUsage(sessionId, subagentSpend(10, "child-a"))).toBe(true);
+		setSessionPublisher(() => {});
+		manager.getSessionFile = () => join(file, "missing");
+		expect(recordSessionUsage(sessionId, subagentSpend(20, "child-b"))).toBe(true);
+		manager.getSessionFile = getSessionFile;
+		const onDisk = SessionManager.open(file).getEntries();
+		expect(onDisk.filter((entry) => entry.type === "usage")).toHaveLength(2);
+	} finally {
+		setSessionPublisher(() => {});
+		manager.getSessionFile = getSessionFile;
+		await removeSession(sessionId);
+	}
+});
+
+test.skipIf(!writesCanBeDenied)("a rollback that cannot truncate never throws", async () => {
+	const { sessionId, manager, file } = await persistedParent("ws-notrunc");
+	const appendUsage = manager.appendUsage.bind(manager);
+	try {
+		manager.appendUsage = (...args) => {
+			appendUsage(...args);
+			chmodSync(file, 0o444);
+			throw Object.assign(new Error("EIO: i/o error, close"), { code: "EIO" });
+		};
+		expect(recordSessionUsage(sessionId, subagentSpend(30, "child-c"))).toBe(true);
+		expect(manager.getLeafEntry()?.type).not.toBe("usage");
+	} finally {
+		chmodSync(file, 0o644);
+		manager.appendUsage = appendUsage;
 		await removeSession(sessionId);
 	}
 });

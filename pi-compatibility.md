@@ -127,6 +127,13 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
   helper over entries or a file. Until then `delegation.test.ts` ("the subagent totals mirror matches pi's
   own totals for every spend source") pins parity with pi's `getSessionStats` on one transcript that
   carries every spend source, including off-branch spend; rerun it on every pi bump.
+- **Rollback of a failed usage append** — [[submodule-server-agent]], `recordSessionUsage`.
+  `SessionManager._appendEntry` adds the entry to memory and moves the leaf before `_persist`, and a
+  failed `appendFileSync` can leave a torn partial line. The host therefore restores the previous leaf
+  and truncates an existing transcript back to its pre-append size; `delegation.test.ts` pins both
+  ("a usage write pi kept only in memory never cuts the reopened history", "a torn usage append is cut
+  back…"). Remove the leaf restore when a failed persist leaves pi's memory and leaf unchanged; remove the
+  truncation only when pi also guarantees that a failed append leaves no torn bytes.
 
 ## Not temporary SDK workarounds
 

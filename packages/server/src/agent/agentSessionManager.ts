@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, rmSync } from "node:fs";
+import { createReadStream, existsSync, rmSync, statSync, truncateSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -2408,20 +2408,59 @@ function usageWritableEntry(sessionId: string): Entry | undefined {
 	return sessions.get(sessionId) ?? tearingDownEntries.get(sessionId);
 }
 
+function sessionFileSize(file: string | undefined): number | undefined {
+	if (!file) return undefined;
+	try {
+		return statSync(file).size;
+	} catch {
+		return undefined;
+	}
+}
+
+function rollBackUsageAppend(
+	sessionId: string,
+	sessionManager: SessionManager,
+	leaf: string | null,
+	file: string | undefined,
+	size: number | undefined,
+): boolean {
+	const incorporated = sessionManager.getLeafId() !== leaf;
+	try {
+		if (incorporated && leaf) sessionManager.branch(leaf);
+		else if (incorporated) sessionManager.resetLeaf();
+		if (file && size !== undefined && statSync(file).size > size) truncateSync(file, size);
+	} catch (error) {
+		log.warn(`a failed usage append was not rolled back for ${sessionId}`, error as Error);
+	}
+	return incorporated;
+}
+
+/** Returns whether pi took the usage into its session totals; persisting it is best-effort. */
 export function recordSessionUsage(
 	sessionId: string,
 	record: { kind: string; provider: string; model: string; usage: Usage; note?: string },
-): void {
+): boolean {
 	const entry = usageWritableEntry(sessionId);
-	if (!entry) return;
+	if (!entry) return false;
+	const { sessionManager } = entry.session;
 	const { kind, provider, model, usage, note } = record;
+	const leaf = sessionManager.getLeafId();
+	const file = sessionManager.getSessionFile();
+	const size = sessionFileSize(file);
+	let incorporated = true;
 	try {
-		entry.session.sessionManager.appendUsage(kind, provider, model, usage, note);
+		sessionManager.appendUsage(kind, provider, model, usage, note);
 	} catch (error) {
-		log.warn(`${kind} usage was not recorded for ${sessionId}`, error as Error);
-		return;
+		incorporated = rollBackUsageAppend(sessionId, sessionManager, leaf, file, size);
+		log.warn(`${kind} usage was not persisted for ${sessionId}`, error as Error);
 	}
-	publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
+	if (!incorporated) return false;
+	try {
+		publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
+	} catch (error) {
+		log.warn(`usage invalidation was not published for ${sessionId}`, error as Error);
+	}
+	return true;
 }
 
 export interface McpSessionView {

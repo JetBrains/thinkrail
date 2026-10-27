@@ -570,7 +570,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     for every outcome and consumer (Agent, `request_review`), independent of completion delivery. This is
     delegated spend's only accounting channel: delegation tools must never return `AgentToolResult.usage`,
     which pi would sum a second time. The write is best-effort, like pi's cache warmer: a failed append is
-    logged and never fails the child run, and the next attach reconciles it. Closing
+    logged and never fails the child run. `recordSessionUsage` reports only whether pi took the usage into
+    its session; persistence stays uncertain. pi moves the leaf to a new entry before persisting it, so a
+    failed append restores the previous leaf (later entries must never chain to an unpersisted id, or a
+    reopened chat loses its history before it) and truncates an existing transcript back to its pre-append
+    size (a torn partial line would swallow the next entry); pi's initial file creation is outside this
+    repair. A usage entry pi kept only in memory counts in this process and is restored on disk by
+    reconciliation after the chat is reopened. Closing
     a chat keeps its entry writable until its teardown cascade settles, so runs that cascade stops are
     still recorded; attach is refused during teardown, so the transcript keeps one writer. A deletion
     tombstone suppresses the write, because pi's append would recreate the trashed file. Graceful host
