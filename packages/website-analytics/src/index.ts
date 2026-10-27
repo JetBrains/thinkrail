@@ -20,6 +20,7 @@ export type PostHogOptions = {
 	cookieless_mode: "always";
 	respect_dnt: true;
 	disable_session_recording: true;
+	disable_surveys: true;
 	before_send(event: PostHogCaptureResult | null): PostHogCaptureResult | null;
 };
 
@@ -206,6 +207,7 @@ const configurationFor = (
 			cookieless_mode: "always",
 			respect_dnt: true,
 			disable_session_recording: true,
+			disable_surveys: true,
 			before_send: firstPartyExceptionsOnly(productionHostname),
 		},
 	},
