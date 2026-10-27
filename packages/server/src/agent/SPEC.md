@@ -1004,6 +1004,18 @@ Pi owns aggregate budgeting, compaction and recovery; bounded tool output does n
 whole-request admission. The host adds no compaction overrides or retry loop. Known upstream
 context-budget limitations and their upgrade checks live in [[pi-compatibility]].
 
+## Provider stream framing
+
+Pi owns provider retry; the host never adds one. Pi retries a truncated Anthropic stream only when it
+fails with "stream ended before message_stop", so `patches/@earendil-works%2Fpi-ai@1.4.0.patch` (root
+`patchedDependencies`, upstream earendil-works/pi#10390, #564) makes that the outcome of every cut-off. It
+changes two things in pi-ai's `anthropic-messages` SSE parser. While chunks are still arriving, a `\r` at
+the end of the buffer waits for a possible `\n`. At end of stream, an event that no blank line finished is
+parsed strictly and dropped if it is empty or unparsable, never "repaired". A finished but malformed event
+keeps pi's non-retryable parse error. Bun skips a patch whose version doesn't match without any warning, so
+`anthropicStreamFraming.test.ts` is the guard. It runs pi-ai's real `stream()` and fails whenever the
+patched behavior is missing.
+
 ## Session titles
 
 `agentSessionManager` is the only durable chat-title writer. Its `renameSession(sessionId,
