@@ -635,11 +635,13 @@ re-opened transcripts provider-valid.
     of invoked skills: a **`context` handler** inserts ONE `thinkrail/skill-carryover` custom message
     (`display: false`) right after the `compactionSummary` in every request while the branch has a
     compaction. It restores each skill pi loaded (`before_agent_start`'s `systemPromptOptions.skills`)
-    whose latest load — a `parseSkillBlock` user block or a successful `read` resolving to that skill's
-    `filePath` (after pi's `@`/`~`/`file://` handling and symlinks) — sits before the latest cut; reads of other `SKILL.md` files do not count.
-    A complete load outranks a partial one (`offset`/`limit` or a truncated result): a partial read in
-    the kept tail proves invocation, not that the body survives, so it never hides an earlier complete
-    load, while a skill only paginated in before the cut still counts as loaded. Bodies are
+    that has a load — a `parseSkillBlock` user block or a successful `read` resolving to that skill's
+    `filePath` (after pi's `@`/`~`/`file://` handling and symlinks) — before the latest cut and no
+    complete load at or after it; reads of other `SKILL.md` files do not count. Any load before the cut,
+    partial (`offset`/`limit` or a truncated result) included, is invocation evidence; only a complete
+    load in the kept tail proves the body survives, so a partial read there never suppresses restoring
+    a skill loaded — fully or only page by page — before the cut. Skills are ordered by their latest
+    load of either kind. Bodies are
     re-read from the admitted skill file (frontmatter stripped, wrapped like pi's `/skill:` block) and
     budgeted at 5K tokens of body per skill and min(25K, 10% of the context window) for the whole
     rendered message (preamble, wrappers, truncation notices), newest first, truncated from the end

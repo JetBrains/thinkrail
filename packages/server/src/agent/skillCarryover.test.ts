@@ -182,6 +182,61 @@ test("a skill paginated in before the cut is restored, and a complete load in th
 	expect(compactedSkills(sm.getBranch(), SKILLS, "/repo")).toEqual([LEDGER]);
 });
 
+test("a skill paginated in before the cut survives an excerpt re-read in the kept tail", () => {
+	const sm = session();
+	sm.appendMessage(readCall("r1", "/skills/ledger/SKILL.md", { limit: 10 }));
+	sm.appendMessage(readResult("r1", "page 1"));
+	sm.appendMessage(readCall("r2", "/skills/ledger/SKILL.md", { offset: 11 }));
+	sm.appendMessage(readResult("r2", "page 2"));
+	sm.appendMessage(readCall("r3", "/skills/todos/SKILL.md"));
+	sm.appendMessage(readResult("r3", "head", false, { truncation: { truncated: true } }));
+	const kept = sm.appendMessage(readCall("r4", "/skills/ledger/SKILL.md", { limit: 1 }));
+	sm.appendMessage(readResult("r4", "line"));
+	sm.appendMessage(readCall("r5", "/skills/todos/SKILL.md", { offset: 2 }));
+	sm.appendMessage(readResult("r5", "rest"));
+	sm.appendCompaction("summary", kept, 100);
+
+	expect(compactedSkills(sm.getBranch(), SKILLS, "/repo")).toEqual([LEDGER, TODOS]);
+});
+
+test("only a complete load at or after the cut suppresses restoring a compacted skill", () => {
+	const sm = session();
+	sm.appendMessage(readCall("r1", "/skills/ledger/SKILL.md", { limit: 10 }));
+	sm.appendMessage(readResult("r1", "page 1"));
+	sm.appendMessage(user(skillBlock("todos")));
+	const kept = sm.appendMessage(readCall("r2", "/skills/ledger/SKILL.md", { offset: 11 }));
+	sm.appendMessage(readResult("r2", "page 2"));
+	sm.appendMessage(readCall("r3", "/skills/ledger/SKILL.md"));
+	sm.appendMessage(readResult("r3", "body"));
+	sm.appendMessage(readCall("r4", "/skills/todos/SKILL.md", { limit: 1 }));
+	sm.appendMessage(readResult("r4", "line"));
+	sm.appendCompaction("summary", kept, 100);
+
+	expect(compactedSkills(sm.getBranch(), SKILLS, "/repo")).toEqual([TODOS]);
+});
+
+test("a partial read only in the kept tail or a failed excerpt is no evidence of a compacted load", () => {
+	const sm = session();
+	sm.appendMessage(readCall("r1", "/skills/ledger/SKILL.md", { limit: 10 }));
+	sm.appendMessage(readResult("r1", "EISDIR", true));
+	const kept = sm.appendMessage(readCall("r2", "/skills/todos/SKILL.md", { limit: 1 }));
+	sm.appendMessage(readResult("r2", "line"));
+	sm.appendCompaction("summary", kept, 100);
+
+	expect(compactedSkills(sm.getBranch(), SKILLS, "/repo")).toEqual([]);
+});
+
+test("restored skills are ordered by their latest load, a kept-tail excerpt included", () => {
+	const sm = session();
+	sm.appendMessage(user(skillBlock("ledger")));
+	sm.appendMessage(user(skillBlock("todos")));
+	const kept = sm.appendMessage(readCall("r1", "/skills/ledger/SKILL.md", { limit: 1 }));
+	sm.appendMessage(readResult("r1", "line"));
+	sm.appendCompaction("summary", kept, 100);
+
+	expect(compactedSkills(sm.getBranch(), SKILLS, "/repo")).toEqual([TODOS, LEDGER]);
+});
+
 test("loads compacted by an earlier compaction stay restored after the next one", () => {
 	const sm = session();
 	sm.appendMessage(user(skillBlock("ledger")));
@@ -279,6 +334,7 @@ const isSummarizer = (context: Context) =>
 
 interface ScenarioOptions {
 	reserveTokens?: number;
+	keepRecentTokens?: number;
 	model?: "default" | "small" | "virtual";
 }
 
@@ -293,7 +349,7 @@ interface ScenarioResult {
 async function runScenario(
 	steps: (files: { skillFile: string; bigFile: string }) => Step[],
 	drive: (session: AgentSession) => Promise<void>,
-	{ reserveTokens = 190_000, model = "default" }: ScenarioOptions = {},
+	{ reserveTokens = 190_000, keepRecentTokens = 1, model = "default" }: ScenarioOptions = {},
 ): Promise<ScenarioResult> {
 	const cwd = mkdtempSync(join(tmpdir(), "thinkrail-skill-carryover-"));
 	const agentDir = join(cwd, ".pi-agent");
@@ -332,7 +388,7 @@ async function runScenario(
 		}),
 	});
 	const settingsManager = SettingsManager.inMemory({
-		compaction: { enabled: true, keepRecentTokens: 1, reserveTokens },
+		compaction: { enabled: true, keepRecentTokens, reserveTokens },
 		retry: { enabled: false },
 	});
 	const resourceLoader = new DefaultResourceLoader({
@@ -445,6 +501,36 @@ test("manual compaction restores the skill on the next prompt without writing a 
 	expect(result.requests.at(-1)).toContain(SKILL_CARRYOVER_PREAMBLE);
 	expect(result.requests.at(-1)).toContain(RULE);
 	expect(result.entries).not.toContain("custom_message");
+});
+
+test("pi's read tool paginating the skill before the cut and excerpting it after still restores it", async () => {
+	let keptTail: string[] = [];
+	const result = await runScenario(
+		({ skillFile }) => [
+			call("read", { path: skillFile, limit: 3 }),
+			call("read", { path: skillFile, offset: 4 }),
+			() => fauxAssistantMessage("loaded"),
+			call("read", { path: skillFile, limit: 1 }),
+		],
+		async (session) => {
+			await session.prompt("Load the ledger skill page by page.");
+			await session.prompt(`Check its first line.\n\n${"context ".repeat(500)}`);
+			await session.compact();
+			const branch = session.sessionManager.getBranch();
+			const compaction = branch.findLast((entry) => entry.type === "compaction");
+			const first = branch.findIndex(
+				(entry) => compaction?.type === "compaction" && entry.id === compaction.firstKeptEntryId,
+			);
+			keptTail = branch.slice(first).map((entry) => JSON.stringify(entry));
+			await session.prompt("Next task.");
+		},
+		{ keepRecentTokens: 500 },
+	);
+
+	expect(keptTail.some((entry) => entry.includes('"limit":1'))).toBe(true);
+	expect(keptTail.some((entry) => entry.includes(RULE))).toBe(false);
+	expect(result.requests.at(-1)).toContain(SKILL_CARRYOVER_PREAMBLE);
+	expect(result.requests.at(-1)).toContain(RULE);
 });
 
 test("a virtual selection gets no carry-over, while the physical model it routes to does", async () => {

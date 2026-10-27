@@ -75,6 +75,12 @@ interface ReadLoad {
 	partial: boolean;
 }
 
+interface SkillLoad {
+	skill: Skill;
+	index: number;
+	complete: boolean;
+}
+
 function isPartialResult(details: unknown): boolean {
 	const truncation = (
 		details as { truncation?: { truncated?: unknown; firstLineExceedsLimit?: unknown } }
@@ -86,12 +92,11 @@ function skillLoads(
 	entries: readonly SessionEntry[],
 	skills: readonly Skill[],
 	cwd: string,
-): Map<Skill, number> {
+): SkillLoad[] {
 	const byName = new Map(skills.map((skill) => [skill.name, skill]));
 	const byPath = new Map(skills.map((skill) => [canonicalPath(resolve(skill.filePath)), skill]));
 	const reads = new Map<string, ReadLoad>();
-	const complete = new Map<Skill, number>();
-	const partial = new Map<Skill, number>();
+	const loads: SkillLoad[] = [];
 	entries.forEach((entry, index) => {
 		if (entry.type !== "message") return;
 		const message = entry.message;
@@ -99,7 +104,7 @@ function skillLoads(
 			for (const text of texts(message.content)) {
 				const block = parseSkillBlock(text);
 				const skill = block && byName.get(block.name);
-				if (skill) complete.set(skill, index);
+				if (skill) loads.push({ skill, index, complete: true });
 			}
 		} else if (message.role === "assistant") {
 			for (const part of message.content) {
@@ -117,13 +122,11 @@ function skillLoads(
 		} else if (message.role === "toolResult" && !message.isError) {
 			const read = reads.get(message.toolCallId);
 			if (!read) return;
-			const loads = read.partial || isPartialResult(message.details) ? partial : complete;
-			loads.set(read.skill, index);
+			const complete = !read.partial && !isPartialResult(message.details);
+			loads.push({ skill: read.skill, index, complete });
 		}
 	});
-	const latest = new Map(partial);
-	for (const [skill, index] of complete) latest.set(skill, index);
-	return latest;
+	return loads;
 }
 
 export function compactedSkills(
@@ -136,8 +139,15 @@ export function compactedSkills(
 	if (entry?.type !== "compaction") return [];
 	const kept = entries.findIndex((candidate) => candidate.id === entry.firstKeptEntryId);
 	const cut = kept < 0 || kept > compaction ? compaction : kept;
-	return [...skillLoads(entries, skills, cwd)]
-		.filter(([, index]) => index < cut)
+	const loads = skillLoads(entries, skills, cwd);
+	const compacted = new Set(loads.filter((load) => load.index < cut).map((load) => load.skill));
+	const retained = new Set(
+		loads.filter((load) => load.index >= cut && load.complete).map((load) => load.skill),
+	);
+	const latest = new Map<Skill, number>();
+	for (const load of loads) latest.set(load.skill, load.index);
+	return [...latest]
+		.filter(([skill]) => compacted.has(skill) && !retained.has(skill))
 		.sort(([, a], [, b]) => a - b)
 		.map(([skill]) => skill);
 }
