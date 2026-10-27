@@ -1402,7 +1402,6 @@
 	"settings.appearance.custom.error.duplicateId": "Another theme file already uses this id.",
 	"settings.appearance.custom.error.invalidJson": "The file isn't valid JSON.",
 	"settings.appearance.custom.error.invalidTheme": "The file isn't a complete theme.",
-	"settings.appearance.custom.error.reservedId": "A built-in theme already uses this id. Pick another id.",
 	"settings.appearance.custom.error.tooLarge": "The file is larger than 256 KB.",
 	"settings.appearance.custom.error.tooMany": "Only the first 64 theme files are read.",
 	"settings.appearance.custom.error.unreadable": "The file can't be read.",

@@ -46,7 +46,7 @@ export type ThemePreference = ConfigThemePreference;
 
 export interface UserThemeIssue {
 	readonly fileName: string;
-	readonly error: UserThemeFileErrorCode | "invalid-theme" | "reserved-id" | "duplicate-id";
+	readonly error: UserThemeFileErrorCode | "invalid-theme" | "duplicate-id";
 	readonly detail?: string;
 }
 
@@ -67,6 +67,9 @@ const HINT_KEY = `${STORAGE_PREFIX}theme`;
 const HINT_VERSION = 1;
 const USER_THEMES_KEY = `${STORAGE_PREFIX}user-themes`;
 const MAX_USER_THEME_CACHE_CHARS = 64 * 1024;
+const USER_THEME_ID_PREFIX = "user.";
+
+const isUserThemeId = (id: ThemeId): boolean => id.startsWith(USER_THEME_ID_PREFIX);
 const SYSTEM_QUERY = "(prefers-color-scheme: dark)";
 
 const paletteVariable = (key: string) =>
@@ -147,6 +150,9 @@ export function buildThemeCatalog(candidates: Record<string, unknown>): ThemeCat
 			throw new Error(`Invalid bundled theme ${path}`, { cause: error });
 		}
 		if (byId.has(theme.id)) throw new Error(`Duplicate bundled theme id: ${theme.id} (${path})`);
+		if (isUserThemeId(theme.id)) {
+			throw new Error(`Bundled theme id uses the user namespace: ${theme.id} (${path})`);
+		}
 		byId.set(theme.id, theme);
 	}
 	if (!byId.has(DEFAULT_CONFIG.theme)) {
@@ -197,10 +203,6 @@ export function onThemesChange(listener: () => void): () => void {
 	return () => catalogListeners.delete(listener);
 }
 
-function isReservedThemeId(id: ThemeId): boolean {
-	return bundledCatalog.byId.has(id) || Object.hasOwn(RENAMED_THEME_IDS, id);
-}
-
 const NO_USER_THEME_FILES: readonly UserThemeFile[] = Object.freeze([]);
 
 export function clearUserThemes(): void {
@@ -222,18 +224,23 @@ export function installUserThemes(files: readonly UserThemeFile[]): void {
 			continue;
 		}
 		const parsed = parseThemeManifest(file.manifest);
+		const id = parsed.ok ? `${USER_THEME_ID_PREFIX}${parsed.value.id}` : "";
 		if (!parsed.ok) {
 			issues.push({
 				fileName: file.fileName,
 				error: "invalid-theme",
 				detail: parsed.issues.join("; "),
 			});
-		} else if (isReservedThemeId(parsed.value.id)) {
-			issues.push({ fileName: file.fileName, error: "reserved-id", detail: parsed.value.id });
-		} else if (byId.has(parsed.value.id)) {
+		} else if (!isThemeIdSlug(id)) {
+			issues.push({
+				fileName: file.fileName,
+				error: "invalid-theme",
+				detail: `theme.id must be at most ${64 - USER_THEME_ID_PREFIX.length} characters`,
+			});
+		} else if (byId.has(id)) {
 			issues.push({ fileName: file.fileName, error: "duplicate-id", detail: parsed.value.id });
 		} else {
-			byId.set(parsed.value.id, parsed.value);
+			byId.set(id, Object.freeze({ ...parsed.value, id }));
 		}
 	}
 	publishCatalog(catalogOf(byId), Object.freeze(issues));
@@ -247,8 +254,8 @@ function writeUserThemeCache(preference: ThemePreference): void {
 			: []),
 	]);
 	const manifests = [...ids].flatMap((id) => {
-		const theme = bundledCatalog.byId.has(id) ? undefined : catalog.byId.get(id);
-		return theme ? [theme] : [];
+		const theme = isUserThemeId(id) ? catalog.byId.get(id) : undefined;
+		return theme ? [{ ...theme, id: id.slice(USER_THEME_ID_PREFIX.length) }] : [];
 	});
 	const storage = themeHintStorage();
 	const serialized = JSON.stringify(manifests);

@@ -17,8 +17,6 @@ function issueLabel(t: Translator, issue: UserThemeIssue): string {
 			return t("settings.appearance.custom.error.invalidJson");
 		case "invalid-theme":
 			return t("settings.appearance.custom.error.invalidTheme");
-		case "reserved-id":
-			return t("settings.appearance.custom.error.reservedId");
 		case "duplicate-id":
 			return t("settings.appearance.custom.error.duplicateId");
 		case "too-large":

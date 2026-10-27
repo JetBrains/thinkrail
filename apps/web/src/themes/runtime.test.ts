@@ -44,6 +44,12 @@ test("a duplicate id, an invalid manifest, or a missing appearance fails the bui
 	expect(() =>
 		buildThemeCatalog({ ...candidates, "zz-copy.theme.json": structuredClone(first) }),
 	).toThrow("Duplicate bundled theme id");
+	expect(() =>
+		buildThemeCatalog({
+			...candidates,
+			"zz-user.theme.json": { ...(first as Record<string, unknown>), id: "user.mine" },
+		}),
+	).toThrow("user namespace");
 	expect(() => buildThemeCatalog({ "broken.theme.json": { schemaVersion: 1 } })).toThrow(
 		"Invalid bundled theme broken.theme.json",
 	);
@@ -147,7 +153,7 @@ function userTheme(id: string, overrides: Record<string, unknown> = {}): Record<
 	return { ...structuredClone(dark), id, label: id, ...overrides };
 }
 
-test("user themes join the catalog; invalid, reserved and duplicate files become issues", () => {
+test("user themes join the catalog under the user namespace; invalid and duplicate files become issues", () => {
 	installThemeCatalog(buildThemeCatalog(bundledCandidates()));
 	let notified = 0;
 	const stop = onThemesChange(() => notified++);
@@ -157,22 +163,27 @@ test("user themes join the catalog; invalid, reserved and duplicate files become
 			{ fileName: "copy.theme.json", ok: true, manifest: userTheme("ocean") },
 			{ fileName: "dark.theme.json", ok: true, manifest: userTheme("dark") },
 			{ fileName: "legacy.theme.json", ok: true, manifest: userTheme("high-contrast") },
+			{ fileName: "long.theme.json", ok: true, manifest: userTheme("x".repeat(60)) },
 			{ fileName: "partial.theme.json", ok: true, manifest: { schemaVersion: 2 } },
 			{ fileName: "broken.theme.json", ok: false, error: "invalid-json", detail: "bad" },
 		]);
 		expect(notified).toBe(1);
-		expect(getThemes().map((theme) => theme.id)).toContain("ocean");
+		const ids = getThemes().map((theme) => theme.id);
+		expect(ids).toEqual(expect.arrayContaining(["user.ocean", "user.dark", "user.high-contrast"]));
+		expect(ids).not.toContain("ocean");
 		expect(getThemes()[0]?.id).toBe(DEFAULT_CONFIG.theme);
-		expect(resolveThemePreference({ theme: "ocean", themeMode: "fixed" }).fallback).toBe(false);
+		expect(resolveThemePreference({ theme: "user.ocean", themeMode: "fixed" }).fallback).toBe(
+			false,
+		);
+		expect(resolveThemePreference({ theme: "dark", themeMode: "fixed" }).theme.label).toBe("Dark");
 		expect(getUserThemeIssues().map((issue) => [issue.fileName, issue.error])).toEqual([
 			["copy.theme.json", "duplicate-id"],
-			["dark.theme.json", "reserved-id"],
-			["legacy.theme.json", "reserved-id"],
+			["long.theme.json", "invalid-theme"],
 			["partial.theme.json", "invalid-theme"],
 			["broken.theme.json", "invalid-json"],
 		]);
 		installUserThemes([]);
-		expect(getThemes().map((theme) => theme.id)).not.toContain("ocean");
+		expect(getThemes().map((theme) => theme.id)).not.toContain("user.ocean");
 		expect(getUserThemeIssues()).toEqual([]);
 	} finally {
 		stop();
@@ -193,16 +204,17 @@ test("only the user themes the hint needs are cached and reinstalled before the 
 			{ fileName: "forest.theme.json", ok: true, manifest: userTheme("forest") },
 		]);
 		writeThemeHint({
-			theme: "ocean",
+			theme: "user.ocean",
 			themeMode: "system",
-			systemThemePair: { light: "light", dark: "ocean" },
+			systemThemePair: { light: "light", dark: "user.ocean" },
 		});
 		installThemeCatalog(buildThemeCatalog(bundledCandidates()));
-		expect(getThemes().map((theme) => theme.id)).not.toContain("ocean");
+		expect(getThemes().map((theme) => theme.id)).not.toContain("user.ocean");
 		installCachedUserThemes();
 		const ids = getThemes().map((theme) => theme.id);
-		expect(ids).toContain("ocean");
-		expect(ids).not.toContain("forest");
+		expect(ids).toContain("user.ocean");
+		expect(ids).not.toContain("user.user.ocean");
+		expect(ids).not.toContain("user.forest");
 		expect(getUserThemeIssues()).toEqual([]);
 		writeThemeHint({ theme: "dark", themeMode: "fixed" });
 		expect(stored.has("thinkrail-user-themes")).toBe(false);
@@ -217,8 +229,8 @@ test("a user theme id shaped like an object prototype key stays an ordinary id",
 		{ fileName: "constructor.theme.json", ok: true, manifest: userTheme("constructor") },
 	]);
 	expect(getUserThemeIssues()).toEqual([]);
-	expect(resolveThemePreference({ theme: "constructor", themeMode: "fixed" })).toMatchObject({
-		theme: { id: "constructor" },
+	expect(resolveThemePreference({ theme: "user.constructor", themeMode: "fixed" })).toMatchObject({
+		theme: { id: "user.constructor" },
 		fallback: false,
 	});
 });
@@ -239,12 +251,12 @@ test("an unsupported host clears user themes, and an oversized cache is dropped,
 				manifest: userTheme("huge", { label: "x".repeat(70_000) }),
 			},
 		]);
-		writeThemeHint({ theme: "huge", themeMode: "fixed" });
+		writeThemeHint({ theme: "user.huge", themeMode: "fixed" });
 		expect(stored.has("thinkrail-user-themes")).toBe(false);
-		expect(getThemes().map((theme) => theme.id)).toContain("huge");
+		expect(getThemes().map((theme) => theme.id)).toContain("user.huge");
 		clearUserThemes();
-		expect(getThemes().map((theme) => theme.id)).not.toContain("huge");
-		expect(resolveThemePreference({ theme: "huge", themeMode: "fixed" }).fallback).toBe(true);
+		expect(getThemes().map((theme) => theme.id)).not.toContain("user.huge");
+		expect(resolveThemePreference({ theme: "user.huge", themeMode: "fixed" }).fallback).toBe(true);
 	} finally {
 		Reflect.deleteProperty(globalThis, "__THINKRAIL_STABLE_PREFERENCES__");
 	}

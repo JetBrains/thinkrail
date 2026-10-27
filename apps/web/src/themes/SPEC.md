@@ -118,11 +118,19 @@ configured default, or catalog without at least one light and one dark manifest 
 tests catch it before merge). Runtime and JSON-schema validation agree.
 
 **User theme files are held to the same schema but fail soft.** Each file is validated on its own; an
-unusable one becomes a `UserThemeIssue` (the host's read codes, or `invalid-theme`, `reserved-id`,
-`duplicate-id`) and the rest still load. A user file can never replace a bundled id or a legacy alias
-(`reserved-id`), so the default theme and the High Contrast pair keep their contract. The legibility
-and AAA gates above are merge gates for our files and are deliberately not applied to user files —
-their contrast is the user's choice. The user's file name carries no meaning; the id inside it does.
+unusable one becomes a `UserThemeIssue` (the host's read codes, `invalid-theme`, or `duplicate-id`
+between two user files) and the rest still load. The legibility and AAA gates above are merge gates for
+our files and are deliberately not applied to user files — their contrast is the user's choice. The
+user's file name carries no meaning; the id inside it does.
+
+**User ids live in their own namespace.** The catalog id of a user theme is `user.<manifest id>` (so the
+manifest id is at most 59 characters), and a bundled manifest may never use the `user.` prefix. Ids
+persist in `AppConfig.theme` and the system pair, so the namespace is what keeps both sides free to
+grow: a file copied from `dark.theme.json` without renaming its id is simply `user.dark`, never
+shadowed by or shadowing the bundled Dark, and a theme we bundle later under any name can never
+silently capture a user's saved choice. Rejected: reserving bundled ids per name (a new bundled theme
+would turn an existing user theme into an error and re-point its saved config to ours) and requiring
+authors to write the prefix themselves (the common copy-and-edit path would fail).
 
 ## Runtime contract
 

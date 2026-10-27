@@ -20,7 +20,7 @@ function writeTheme(fileName: string, id: string, background: string): void {
 }
 
 function removeThemes(): void {
-	for (const name of ["ocean.theme.json", "dark.theme.json"]) {
+	for (const name of ["ocean.theme.json", "zz-ocean-copy.theme.json"]) {
 		rmSync(join(THEMES_DIR, name), { force: true });
 	}
 }
@@ -42,31 +42,31 @@ test("a theme file dropped into the themes folder is listed, applied, live-reloa
 	page,
 }) => {
 	writeTheme("ocean.theme.json", "ocean", "#001122");
-	writeTheme("dark.theme.json", "dark", "#000000");
+	writeTheme("zz-ocean-copy.theme.json", "ocean", "#000000");
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 
 	const dialog = await openThemeList(page);
 	await expect(dialog.getByTestId("custom-themes-folder-path")).toHaveText(THEMES_DIR);
-	await expect(dialog.getByTestId("custom-theme-issue-dark.theme.json")).toContainText(
-		"built-in theme already uses this id",
+	await expect(dialog.getByTestId("custom-theme-issue-zz-ocean-copy.theme.json")).toContainText(
+		"Another theme file already uses this id",
 	);
 
-	await dialog.getByTestId("theme-option-ocean").click();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", "ocean");
+	await dialog.getByTestId("theme-option-user.ocean").click();
+	await expect(page.locator("html")).toHaveAttribute("data-theme", "user.ocean");
 	expect(await background(page)).toBe("#001122");
 
 	writeTheme("ocean.theme.json", "ocean", "#002244");
 	await expect.poll(() => background(page)).toBe("#002244");
 
 	await page.reload();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", "ocean");
+	await expect(page.locator("html")).toHaveAttribute("data-theme", "user.ocean");
 	await expect.poll(() => background(page)).toBe("#002244");
 
 	removeThemes();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 	const restored = await openThemeList(page);
-	await expect(restored.getByTestId("theme-option-ocean")).toHaveCount(0);
+	await expect(restored.getByTestId("theme-option-user.ocean")).toHaveCount(0);
 	await expect(restored.getByTestId("theme-fallback-warning")).toBeVisible();
 	await restored.getByTestId("theme-option-dark").click();
 	await expect(restored.getByTestId("theme-fallback-warning")).toHaveCount(0);
