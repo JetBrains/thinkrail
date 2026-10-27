@@ -204,7 +204,10 @@ that run. With additional sharing on, a packaged build may open the ThinkRail bl
 link your installation to the website visit that brought you here — only where you accepted marketing cookies on the
 website or no consent is required — and that link expires after 30 days.
 
-ThinkRail website ([thinkrail.ai](https://thinkrail.ai)) and desktop apps use PostHog Inc. services for analytics and usage stats described above. PostHog Surveys used on the website and in the apps for collecting user feedback and optionally storing their email addresses. An email address is stored only if user chooses to enter one, and is used to ask for further feedback and to send product updates. PostHog privacy policy can be found here: [posthog.com/privacy](https://posthog.com/privacy)
+The ThinkRail apps and the ThinkRail website ([thinkrail.ai](https://thinkrail.ai)) use PostHog Inc. services for
+analytics. The website also uses PostHog Surveys to collect feedback after a desktop download and, only if you
+choose to enter one, your email address, which is used to ask for further feedback and to send product updates.
+PostHog's privacy policy is at [posthog.com/privacy](https://posthog.com/privacy).
 
 ## Under the hood
 
