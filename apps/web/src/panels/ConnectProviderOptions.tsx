@@ -81,7 +81,7 @@ export function ConnectProviderOptions({
 	onConnected: (provider: ProviderStatus) => void;
 }) {
 	const t = useT();
-	const { report, failed, load, startLogin, rowBusy } = auth;
+	const { report, failed, refreshing, load, startLogin, rowBusy } = auth;
 	const [search, setSearch] = useState("");
 	const baseline = useRef<Set<string> | null>(
 		configuredAtStart ? new Set(configuredAtStart) : null,
@@ -89,7 +89,7 @@ export function ConnectProviderOptions({
 	const announceConnected = useEffectEvent(onConnected);
 
 	useEffect(() => {
-		if (!report) return;
+		if (!report || refreshing || failed) return;
 		const configured = report.providers.filter((p) => p.configured);
 		if (baseline.current === null) {
 			baseline.current = new Set(configured.map((p) => p.id));
@@ -100,7 +100,7 @@ export function ConnectProviderOptions({
 		if (!fresh) return;
 		for (const p of configured) known.add(p.id);
 		announceConnected(fresh);
-	}, [report]);
+	}, [report, refreshing, failed]);
 
 	if (failed && !report) {
 		return (

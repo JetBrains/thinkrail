@@ -4290,18 +4290,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 	applyLoginFrame: (push) =>
 		set((s) => {
 			if (push.target && s.removedWorkspaceIds[push.target.workspaceId]) return {};
+			const statusChanged =
+				push.frame.kind === "success" && !push.target
+					? { providerStatusVersion: s.providerStatusVersion + 1 }
+					: {};
 			const cur = s.activeLogin;
-			if (cur && cur.loginId !== push.loginId && cur.status === "active") return {};
+			if (cur && cur.loginId !== push.loginId && cur.status === "active") return statusChanged;
 			const base =
 				cur && cur.loginId === push.loginId
 					? cur
 					: newLoginState(push.loginId, push.providerId, push.target);
-			return {
-				activeLogin: foldLoginFrame(base, push.frame),
-				...(push.frame.kind === "success" && !push.target
-					? { providerStatusVersion: s.providerStatusVersion + 1 }
-					: {}),
-			};
+			return { activeLogin: foldLoginFrame(base, push.frame), ...statusChanged };
 		}),
 	clearLoginInput: () =>
 		set((s) => {

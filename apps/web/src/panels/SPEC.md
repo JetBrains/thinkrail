@@ -386,10 +386,12 @@ it `hasProvider` and does not render it while the wizard gate is still `pending`
 the wizard. **Provider status has one owner**: the store's `providerStatus` snapshot, stamped with the
 `providerStatusVersion` it answers. The store bumps that version on every `provider.changed`, every welcome
 (a login that finished while disconnected is picked up on reconnect), and every successful untargeted login
-frame (hosts that predate a push still refresh); a local sign-out or Retry bumps it too. `useProviderStatus`
+frame — another client's too, even while this client's own login keeps the dialog (hosts that predate a push
+still refresh); a local sign-out or Retry bumps it too. `useProviderStatus`
 re-reads whenever the snapshot is behind, single-flight per version, and `useHasProvider` (connected iff any
-`configured`) derives from it — so the banner, the wizard gate, the connect surfaces and Settings never
-disagree. The banner stays hidden until the first answer lands, and a transport error degrades to *not*
+`configured`) derives from it, so the banner, the wizard gate, the connect surfaces and Settings never
+disagree. `useHasProvider` also invalidates once on mount, so returning to Welcome sees a credential change the
+host never pushes (a `pi` CLI login or logout). The banner stays hidden until the first answer lands, and a transport error degrades to *not*
 nagging (unknown or offline ≠ "no provider"). All provider **management** lives in
 Settings, not here (the always-on strip is gone).
 
@@ -423,7 +425,8 @@ connect surface (`ownsLoginDialog`), so a login never renders two stacked dialog
 when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key
 login or a Central connect alike; the surface's first report is that baseline unless it passes
 `configuredAtStart`, which the wizard does as empty (a cold start has no provider), so one connected through
-Settings during the intro or privacy step is still verified on reaching Connect — `ConnectProviderOptions` reports it once through `onConnected` and the host
+Settings during the intro or privacy step is still verified on reaching Connect — `ConnectProviderOptions` reports it once through `onConnected`, and only from a current, successful snapshot (never while a re-read is
+in flight or after a failed one, so a provider signed out a moment before Get started is not verified), and the host
 surface decides: `ConnectProviderDialog` clears the finished login, closes itself, and raises one success
 toast naming the provider and the `model.list` count ("JetBrains AI connected — 23 models available"), then
 lets Welcome switch its hero to the `ConnectedLine`; the wizard neither toasts nor closes — it verifies in place

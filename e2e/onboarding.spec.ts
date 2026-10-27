@@ -5,7 +5,7 @@ import type { AppConfig } from "@thinkrail/contracts";
 import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
 import { openAppFresh } from "./fixtures/app";
 import { openProviders } from "./fixtures/jbcentral";
-import { E2E_DATA_DIR, E2E_HOME_DIR } from "./fixtures/paths";
+import { E2E_DATA_DIR, E2E_HOME_DIR, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
 
 const PROJECTS_PARENT = join(E2E_HOME_DIR, "thinkrail");
@@ -84,6 +84,44 @@ async function hideModels(page: Page): Promise<{ hidden: boolean }> {
 		server.onMessage((message) => ws.send(message));
 	});
 	return models;
+}
+
+async function holdProviderStatus(
+	page: Page,
+): Promise<{ hold: boolean; held: () => number; release: () => void }> {
+	const queued: string[] = [];
+	let forward: (message: string) => void = () => {};
+	const status = {
+		hold: false,
+		held: () => queued.length,
+		release: () => {
+			status.hold = false;
+			for (const message of queued.splice(0)) forward(message);
+		},
+	};
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		forward = (message) => server.send(message);
+		ws.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			if (status.hold && raw.includes('"method":"provider.status"')) {
+				queued.push(raw);
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+	return status;
+}
+
+function signInOutsideThinkRail(providerId: string): void {
+	const authPath = join(E2E_PI_AGENT_DIR, "auth.json");
+	const stored = existsSync(authPath)
+		? (JSON.parse(readFileSync(authPath, "utf8")) as Record<string, unknown>)
+		: {};
+	const credential = { type: "api_key", key: "e2e-outside-key" };
+	writeFileSync(authPath, JSON.stringify({ ...stored, [providerId]: credential }), { mode: 0o600 });
 }
 
 test.afterEach(async ({ baseURL }) => {
@@ -424,6 +462,38 @@ test("a provider connected and signed out again through Settings during the intr
 	await expect(wizard.getByTestId("onboarding-verify")).toHaveCount(0);
 });
 
+test("a provider signed out while its status re-read is still in flight is not verified", {
+	tag: "@dev-seam",
+}, async ({ page, baseURL }) => {
+	await setOnboardingDismissed(baseURL, false);
+	const status = await holdProviderStatus(page);
+	await openAppFresh(page);
+	await requireColdProviders(baseURL);
+
+	const wizard = page.getByTestId("onboarding-wizard");
+	await openProviders(page);
+	const settings = page.getByTestId("settings-providers");
+	await connectE2eKeyProvider(page, settings);
+	await page.getByTestId("login-close").click();
+	const signOut = settings.locator('[data-testid="provider-signout"][data-provider="e2e-apikey"]');
+	await expect(signOut).toBeVisible();
+
+	status.hold = true;
+	await signOut.click();
+	await expect.poll(status.held).toBeGreaterThan(0);
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+	await wizard.getByTestId("onboarding-start").click();
+	await expect(wizard.getByTestId("connect-provider-options")).toBeVisible();
+	status.release();
+
+	await expect(
+		wizard.locator('[data-testid="provider-signin-row"][data-provider="e2e-apikey"]'),
+	).toBeVisible();
+	await expect(wizard.getByTestId("onboarding-verify")).toHaveCount(0);
+	await expect(wizard).toHaveAttribute("data-step", "connect");
+});
+
 test("the onboarding wizard verifies the connection in place, then collapses to one line over the two project cards", {
 	tag: "@dev-seam",
 }, async ({ page, baseURL }) => {
@@ -524,6 +594,26 @@ test("connecting from the Welcome banner closes the stack, toasts once, and hand
 	await expect(page.getByTestId("welcome-connected")).toContainText("E2E Key Provider connected");
 	await expect(banner).toHaveCount(0);
 	await expect(toast).toHaveCount(1);
+});
+
+test("Welcome re-reads provider status when it opens again, so a sign-in made outside ThinkRail shows", {
+	tag: "@dev-seam",
+}, async ({ page, baseURL }) => {
+	await openAppFresh(page);
+	await requireColdProviders(baseURL);
+	const banner = page.getByTestId("welcome-provider-warning");
+	await expect(banner).toBeVisible();
+
+	await page.getByTestId("welcome-cta").filter({ hasText: "Start a new project" }).click();
+	const dialog = page.getByTestId("create-project-dialog");
+	await dialog.getByTestId("create-project-name").fill("outside-sign-in");
+	await dialog.getByTestId("create-project-submit").click();
+	await expect(page.getByTestId("chat-input")).toHaveValue(SETUP_PROMPT);
+
+	signInOutsideThinkRail("e2e-apikey");
+	await page.getByTestId("project-item").first().getByText("outside-sign-in").click();
+	await expect(page.getByTestId("welcome-title")).toHaveText("outside-sign-in");
+	await expect(banner).toHaveCount(0);
 });
 
 test("a sign-in abandoned by a reload does not park the next attempt on Working…", async ({

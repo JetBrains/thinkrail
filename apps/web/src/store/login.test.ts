@@ -97,6 +97,31 @@ test("a target removed during startup never opens a dialog or releases another s
 	expect(state().loginStarting).toBe(true);
 });
 
+test("another login's success invalidates provider status even while this client's own dialog keeps the slot", () => {
+	state().beginLogin("provider-1", "anthropic");
+	const version = state().providerStatusVersion;
+	state().applyLoginFrame({
+		loginId: "provider-2",
+		providerId: "openai",
+		frame: { kind: "success" },
+	});
+	expect(state().activeLogin).toMatchObject({ loginId: "provider-1", status: "active" });
+	expect(state().providerStatusVersion).toBe(version + 1);
+
+	state().applyLoginFrame({
+		loginId: "mcp-1",
+		providerId: "mcp:docs",
+		target: { kind: "mcp", workspaceId: "w", serverName: "docs" },
+		frame: { kind: "success" },
+	});
+	state().applyLoginFrame({
+		loginId: "provider-3",
+		providerId: "openai",
+		frame: { kind: "progress", message: "Waiting" },
+	});
+	expect(state().providerStatusVersion).toBe(version + 1);
+});
+
 test("a late start response never replaces another active modal", () => {
 	state().beginLogin("provider-1", "anthropic");
 	state().beginLogin("mcp-2", "mcp:docs", { kind: "mcp", workspaceId: "w", serverName: "docs" });

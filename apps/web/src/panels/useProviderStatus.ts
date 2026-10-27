@@ -38,6 +38,9 @@ export function useProviderStatus(): ProviderStatusSnapshot & { refreshing: bool
 }
 
 export function useHasProvider(): boolean | null {
+	useEffect(() => {
+		void reloadProviderStatus();
+	}, []);
 	const { report, failed } = useProviderStatus();
 	if (report) return report.providers.some((p) => p.configured);
 	return failed ? true : null;

@@ -461,7 +461,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   data-free `provider.changed` generation observed from the host; **`noteProviderChanged()`** atomically
   increments it and clears `models`, freshness, and any old refresh spinner. **`providerStatus`** is the one
   `provider.status` snapshot (`{ version, report, failed }`); **`providerStatusVersion`** is its invalidation
-  generation, bumped by `noteProviderChanged`, every welcome, every successful untargeted login frame, and
+  generation, bumped by `noteProviderChanged`, every welcome, every successful untargeted login frame (also one
+  for another login that `applyLoginFrame` keeps out of this client's open dialog), and
   `invalidateProviderStatus()`. **`installProviderStatus(version, report | null)`** installs only an answer to
   the current version (`null` = failed read: keep the last report, set `failed`); the single-flight read lives in
   `panels/useProviderStatus`. Both `model.list` and
