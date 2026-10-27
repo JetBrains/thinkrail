@@ -46,7 +46,10 @@ test's documented specialized list names it.
   (accent tint + accent text; also every former transparent "green ghost"), `outline` (neutral bordered),
   `ghost` (no surface, muted text, neutral hover fill — the default for `IconButton`), `destructive` (danger
   fill; confirms irreversible actions). A call site picks the variant that matches the action's existing
-  look; there is no `soft-default` and no colour override at a call site.
+  look; there is no `soft-default` and no colour override at a call site. `tone` (`warning` | `danger`)
+  is the one sanctioned label colour: on `ghost` and `outline` it keeps the feedback colour in every state
+  (rest, hover, focus-visible, pressed, selected — disabled still wins), because a colour set at the call
+  site loses to ghost's own state text in focus and pressed, exactly when the control is used.
 - **Sizes** (exactly three; border-box, same for every variant and state, radius `rounded-sm`, type
   `tr-text-button` — the 14px interface face at weight 470, one step above ordinary UI text): `s` 20px
   high, 4px text padding, 14px icon, 4px icon↔text gap, 20px square icon-only; `m` 24 / 8 / 16 / 4 / 24;
@@ -78,7 +81,8 @@ test's documented specialized list names it.
 - **Call sites own placement only**: margins, self/flex/grid placement, `w-full`, positioning, responsive
   visibility and whole-button hover reveal. Height, padding, gap, radius, colours, borders, typography and
   state skins are rejected by the adoption guard. Documented exceptions live in that guard with a reason
-  (red-text actions that have no variant yet; extension select options that must wrap long labels).
+  (red-on-hover raw actions that `tone` does not express; extension select options that must wrap long
+  labels).
 - **Not buttons**: tabs, menu items, switches, toggle segments, radio/segmented options, tree and list rows,
   disclosure headers, chips, inline text links, the composer send pill, native window controls and large
   choice cards keep their own primitives or components.

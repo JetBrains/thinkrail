@@ -127,7 +127,7 @@ function DetailHeader({
 							(resource.kind === "subagent" && !!actions.all?.pending)
 						}
 						onClick={onStop}
-						className="text-feedback-error"
+						tone="danger"
 					>
 						{action?.pending ? t("resources.action.stopping") : t("resources.action.stop")}
 					</Button>
@@ -321,7 +321,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 									)
 								}
 								onClick={props.onStopAll}
-								className="text-feedback-error hover:text-feedback-error"
+								tone="danger"
 							/>
 						) : null}
 						<IconButton

@@ -196,19 +196,4 @@ const OVERRIDES: Exception[] = [
 		reason:
 			"extension select options must wrap long labels (chat/SPEC.md); the only multi-line button",
 	},
-	{
-		file: "chat/resources/ResourcesButton.tsx",
-		contains: 'data-testid="resources-mcp-attention"',
-		reason: "amber attention action: no button variant carries a warning-coloured label yet",
-	},
-	{
-		file: "chat/resources/ResourcesInspector.tsx",
-		contains: 'data-testid="resource-detail-stop"',
-		reason: "red-text Stop action: no button variant matches a red-text outline action yet",
-	},
-	{
-		file: "chat/resources/ResourcesInspector.tsx",
-		contains: 'data-testid="resources-stop-all"',
-		reason: "red-text Stop all action: no button variant matches a red-text ghost action yet",
-	},
 ];

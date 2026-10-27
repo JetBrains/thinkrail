@@ -6,6 +6,7 @@ import { cn } from "./utils";
 
 export type ButtonVariant = "primary" | "soft-primary" | "outline" | "ghost" | "destructive";
 export type ButtonSize = "s" | "m" | "l";
+export type ButtonTone = "warning" | "danger";
 export type ButtonIcon = React.ElementType<{
 	className?: string | undefined;
 	"aria-hidden"?: React.AriaAttributes["aria-hidden"];
@@ -43,6 +44,11 @@ const buttonVariants = cva(
 				text: "",
 				icon: "p-0",
 			},
+			tone: {
+				neutral: "",
+				warning: "",
+				danger: "",
+			},
 		},
 		compoundVariants: [
 			{ shape: "text", size: "s", className: "h-20 gap-4 px-4" },
@@ -51,8 +57,22 @@ const buttonVariants = cva(
 			{ shape: "icon", size: "s", className: "size-20" },
 			{ shape: "icon", size: "m", className: "size-24" },
 			{ shape: "icon", size: "l", className: "size-32" },
+			{
+				variant: "ghost",
+				tone: "warning",
+				className:
+					"text-feedback-warning hover:text-feedback-warning focus-visible:text-feedback-warning data-[selected=true]:text-feedback-warning active:text-feedback-warning",
+			},
+			{
+				variant: "ghost",
+				tone: "danger",
+				className:
+					"text-feedback-error hover:text-feedback-error focus-visible:text-feedback-error data-[selected=true]:text-feedback-error active:text-feedback-error",
+			},
+			{ variant: "outline", tone: "warning", className: "text-feedback-warning" },
+			{ variant: "outline", tone: "danger", className: "text-feedback-error" },
 		],
-		defaultVariants: { variant: "primary", size: "l", shape: "text" },
+		defaultVariants: { variant: "primary", size: "l", shape: "text", tone: "neutral" },
 	},
 );
 
@@ -69,6 +89,7 @@ function Spinner({ size }: { size: ButtonSize }) {
 interface SharedProps {
 	variant?: ButtonVariant;
 	size?: ButtonSize;
+	tone?: ButtonTone | undefined;
 	/** Persistent selected/open state (toggles, open menus). Never the transient pressed state. */
 	selected?: boolean;
 	/** Shows a spinner at icon size, keeps the geometry, and blocks re-activation. */
@@ -131,6 +152,7 @@ export function Button({
 	className,
 	variant = "primary",
 	size = "l",
+	tone,
 	iconLeft: IconLeft,
 	iconRight: IconRight,
 	selected,
@@ -153,7 +175,7 @@ export function Button({
 			data-slot="button"
 			data-variant={variant}
 			data-size={size}
-			className={cn(buttonVariants({ variant, size, shape: "text" }), className)}
+			className={cn(buttonVariants({ variant, size, shape: "text", tone }), className)}
 			{...props}
 			{...stateProps(props, selected, loading)}
 		>
@@ -213,6 +235,7 @@ export function IconButton({
 	className,
 	variant = "ghost",
 	size = "m",
+	tone,
 	icon: Icon,
 	label,
 	tooltip,
@@ -235,7 +258,7 @@ export function IconButton({
 			data-variant={variant}
 			data-size={size}
 			data-icon-only=""
-			className={cn(buttonVariants({ variant, size, shape: "icon" }), className)}
+			className={cn(buttonVariants({ variant, size, shape: "icon", tone }), className)}
 			{...props}
 			{...stateProps(props, selected, loading)}
 		>

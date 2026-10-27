@@ -86,7 +86,8 @@ export function ResourcesAttention({ count, onOpen }: { count: number; onOpen: (
 			data-testid="resources-mcp-attention"
 			data-count={count}
 			onClick={onOpen}
-			className="shrink-0 text-feedback-warning hover:text-feedback-warning"
+			tone="warning"
+			className="shrink-0"
 		/>
 	);
 }

@@ -198,6 +198,43 @@ test("selected has a fill in every variant that can toggle, and soft-primary sel
 	expect(selectedOf("soft-primary").sort()).toEqual(softHover.sort());
 });
 
+test("tone keeps a warning or danger label in every state, with disabled still winning", () => {
+	const textStates = (markup: string) =>
+		classOf(markup).filter((x) =>
+			/^(?:[a-z-]+:|data-\[[^\]]+\]:)*text-(?:text|feedback|control)-/.test(x),
+		);
+	for (const [tone, token] of [
+		["warning", "text-feedback-warning"],
+		["danger", "text-feedback-error"],
+	] as const) {
+		const ghost = textStates(
+			render(<IconButton variant="ghost" tone={tone} icon={RiAddLine} label="Stop all" />),
+		);
+		expect(ghost).toEqual(
+			expect.arrayContaining([
+				token,
+				`hover:${token}`,
+				`focus-visible:${token}`,
+				`active:${token}`,
+				`data-[selected=true]:${token}`,
+				"data-[disabled=true]:text-control-disabled-text",
+			]),
+		);
+		expect(ghost.some((x) => x.endsWith("text-text-default") || x === "text-text-muted")).toBe(
+			false,
+		);
+		const outline = textStates(
+			render(
+				<Button variant="outline" tone={tone}>
+					Stop
+				</Button>,
+			),
+		);
+		expect(outline).toContain(token);
+		expect(outline).not.toContain("text-text-default");
+	}
+});
+
 test("there are exactly five variants and three sizes", () => {
 	const markup = render(<Button>x</Button>);
 	expect(markup).toContain('data-variant="primary"');

@@ -142,6 +142,7 @@ export function ModelSelector({
 						}
 						aria-pressed={isPinned}
 						selected={isPinned}
+						tone={isPinned ? "warning" : undefined}
 						onClick={(event) => {
 							event.stopPropagation();
 							preferences.toggleFavorite(model);

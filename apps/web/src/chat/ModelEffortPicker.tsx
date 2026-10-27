@@ -411,6 +411,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							}
 							aria-pressed={favorite}
 							selected={favorite}
+							tone={favorite ? "warning" : undefined}
 							onClick={(event) => {
 								event.stopPropagation();
 								preferences.toggleFavorite(model);
