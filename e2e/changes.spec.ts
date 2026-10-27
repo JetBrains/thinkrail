@@ -1000,6 +1000,7 @@ test("A failed read says so — it never renders as an empty (clean) change set"
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-target-picker").click();
 	await page.locator('[data-testid="branch-option"][data-branch="doomed"]').click();
+	await expect(page.getByTestId("changes-target-picker")).toContainText("doomed");
 	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toHaveCount(1);
 	gitQuiet(worktree, "branch", "-D", "doomed");
 

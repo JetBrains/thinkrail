@@ -743,6 +743,26 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	}
 }
 
+function activateRegistryTools(entry: Entry): void {
+	const { session } = entry;
+	const disabled = disabledExtensions();
+	const active = new Set(session.getActiveToolNames());
+	const inactive = session
+		.getAllTools()
+		.filter((tool) => {
+			const owner = registryExtensionName(tool.sourceInfo.path);
+			return (
+				owner !== undefined &&
+				!disabled.has(owner) &&
+				!active.has(tool.name) &&
+				(tool.exposure === "direct" || tool.exposure === "model-only") &&
+				session.getToolDefinition(tool.name)?.defaultActive !== false
+			);
+		})
+		.map((tool) => tool.name);
+	if (inactive.length > 0) session.setActiveToolsByName([...active, ...inactive]);
+}
+
 function enabledExtensionMissing(session: AgentSession, disabled: ReadonlySet<string>): boolean {
 	const { extensions, errors } = session.resourceLoader.getExtensions();
 	const present = new Set(
@@ -1273,6 +1293,7 @@ async function registerSession(
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
+	activateRegistryTools(prepared.entry);
 	applyExtensionTools(prepared.entry);
 	restartMcpStatus(session.sessionId);
 	commands.flushCompletions();

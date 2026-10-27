@@ -2,8 +2,13 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Model } from "@earendil-works/pi-ai";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
+import {
+	createFauxCore,
+	fauxAssistantMessage,
+	fauxToolCall,
+} from "@earendil-works/pi-ai/providers/faux";
 import {
 	type AgentSessionEvent,
 	createAgentSession,
@@ -25,6 +30,7 @@ const MODEL = {
 
 async function runLengthScenario(
 	responses: Parameters<ReturnType<typeof createFauxCore>["setResponses"]>[0],
+	seed?: (manager: SessionManager, model: Model<string>) => void,
 ): Promise<{ events: AgentSessionEvent[]; callCount: number; finalText: string | undefined }> {
 	const cwd = mkdtempSync(join(tmpdir(), "thinkrail-pi-length-"));
 	const agentDir = join(cwd, ".pi-agent");
@@ -68,6 +74,8 @@ async function runLengthScenario(
 	});
 	await resourceLoader.reload();
 	faux.setResponses(responses);
+	const sessionManager = SessionManager.inMemory(cwd);
+	seed?.(sessionManager, faux.getModel());
 	const { session } = await createAgentSession({
 		cwd,
 		agentDir,
@@ -75,7 +83,7 @@ async function runLengthScenario(
 		modelRuntime: runtime,
 		settingsManager,
 		resourceLoader,
-		sessionManager: SessionManager.inMemory(cwd),
+		sessionManager,
 	});
 	const events: AgentSessionEvent[] = [];
 	const unsubscribe = session.subscribe((event) => events.push(event));
@@ -111,6 +119,47 @@ test("Pi compacts and retries a premature length stop before settling", async ()
 			.filter((event) => event.type === "compaction_end")
 			.map((event) => ({ reason: event.reason, willRetry: event.willRetry })),
 	).toEqual([{ reason: "overflow", willRetry: true }]);
+	expect(result.events.at(-1)?.type).toBe("agent_settled");
+});
+
+test("pre-prompt recovery omits a restored truncated call together with its result", async () => {
+	let requested = false;
+	const result = await runLengthScenario(
+		[
+			(context) => {
+				requested = true;
+				expect(context.messages.some((message) => message.role === "toolResult")).toBe(false);
+				expect(
+					context.messages.some(
+						(message) => message.role === "assistant" && message.stopReason === "length",
+					),
+				).toBe(false);
+				return fauxAssistantMessage("recovered");
+			},
+		],
+		(manager, model) => {
+			manager.appendMessage({ role: "user", content: "check status", timestamp: 1 });
+			manager.appendMessage({
+				...fauxAssistantMessage([fauxToolCall("bash", { command: "echo" }, { id: "truncated" })], {
+					stopReason: "length",
+					timestamp: 2,
+				}),
+				api: model.api,
+				provider: model.provider,
+				model: model.id,
+			});
+			manager.appendMessage({
+				role: "toolResult",
+				toolCallId: "truncated",
+				toolName: "bash",
+				isError: true,
+				content: [{ type: "text", text: "Not executed: output token limit reached." }],
+				timestamp: 3,
+			});
+		},
+	);
+	expect(requested).toBe(true);
+	expect(result.finalText).toBe("recovered");
 	expect(result.events.at(-1)?.type).toBe("agent_settled");
 });
 

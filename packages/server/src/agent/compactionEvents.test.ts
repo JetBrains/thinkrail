@@ -26,10 +26,15 @@ const MODEL = {
 
 interface ScenarioOptions {
 	extensionCompaction: boolean;
+	abortCompaction?: boolean;
 	responses: Parameters<ReturnType<typeof createFauxCore>["setResponses"]>[0];
 }
 
-async function runCompactionScenario({ extensionCompaction, responses }: ScenarioOptions): Promise<{
+async function runCompactionScenario({
+	extensionCompaction,
+	responses,
+	abortCompaction,
+}: ScenarioOptions): Promise<{
 	events: AgentSessionEvent[];
 	callCount: number;
 	messages: { role: string }[];
@@ -89,7 +94,10 @@ async function runCompactionScenario({ extensionCompaction, responses }: Scenari
 		sessionManager: SessionManager.inMemory(cwd),
 	});
 	const events: AgentSessionEvent[] = [];
-	const unsubscribe = session.subscribe((event) => events.push(event));
+	const unsubscribe = session.subscribe((event) => {
+		events.push(event);
+		if (abortCompaction && event.type === "compaction_start") session.abortCompaction();
+	});
 	try {
 		await session.prompt("x".repeat(5000));
 		return {
@@ -131,6 +139,41 @@ test("threshold compaction after a completed response: visible lifecycle, no uns
 
 	expect(result.messages.some((message) => message.role === "compactionSummary")).toBe(true);
 	expect(isTranscriptMessageRole("compactionSummary")).toBe(true);
+});
+
+test("cancelled compaction settles without persisting a summary", async () => {
+	const result = await runCompactionScenario({
+		extensionCompaction: false,
+		abortCompaction: true,
+		responses: [fauxAssistantMessage("all done"), fauxAssistantMessage("partial")],
+	});
+	const ends = result.events.filter((event) => event.type === "compaction_end");
+	expect(ends).toHaveLength(1);
+	expect(ends[0]?.aborted).toBe(true);
+	expect(ends[0]?.result).toBeUndefined();
+	expect(ends[0]?.willRetry).toBe(false);
+	expect(result.messages.some((message) => message.role === "compactionSummary")).toBe(false);
+	expect(result.events.at(-1)?.type).toBe("agent_settled");
+});
+
+test("a length-limited summary is never persisted as a successful compaction", async () => {
+	const result = await runCompactionScenario({
+		extensionCompaction: false,
+		responses: [
+			fauxAssistantMessage("all done"),
+			fauxAssistantMessage("partial", { stopReason: "length" }),
+		],
+	});
+	expect(result.callCount).toBe(2);
+	const ends = result.events.filter((event) => event.type === "compaction_end");
+	expect(ends).toHaveLength(1);
+	expect(ends[0]?.result).toBeUndefined();
+	expect(ends[0]?.errorMessage).toContain(
+		"generation hit the token cap and the summary is incomplete",
+	);
+	expect(ends[0]?.willRetry).toBe(false);
+	expect(result.messages.some((message) => message.role === "compactionSummary")).toBe(false);
+	expect(result.events.at(-1)?.type).toBe("agent_settled");
 });
 
 test("a failed compaction emits a visible error end and does not loop", async () => {

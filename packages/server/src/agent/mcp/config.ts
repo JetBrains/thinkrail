@@ -245,7 +245,7 @@ function readConfigFile(path: string, scope: McpConfigScope, state: LoadState): 
 	if (!existsSync(path)) return;
 	let parsed: unknown;
 	try {
-		parsed = JSON.parse(readFileSync(path, "utf8"));
+		parsed = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
 	} catch (error) {
 		fileError(error instanceof Error ? error.message : String(error));
 		return;

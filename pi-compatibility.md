@@ -17,12 +17,41 @@ The installed version comes only from the root dependency catalog, not a second 
 
 ## Last re-check
 
-Every MCP entry below was re-checked against the installed catalog version and retained: the public
-exports, the builtin MCP configuration/writer code, `openUrl`, the shutdown ordering and startup
-dispatch, and the ephemeral `structuredContent` had not changed. That upgrade widened
-`structuredContent` to any JSON value, stopped enumerating resources on connect (status wording
-`connected · N tools · resources`), cancels requests abandoned during an OAuth refresh, and added
-`reachesTools`; the status parser and result summary tests cover the two visible changes.
+The compaction output-cap upgrade ([upstream #11036](https://github.com/earendil-works/pi/pull/11036))
+was checked against the installed catalog version. **No removal gate is satisfied.**
+
+- MCP loader/writers remain private; management/status still use commands, notifications and logs.
+  `openUrl` remains the public sign-in URL seam. The one parity change is single-leading-BOM acceptance,
+  now shared by the host loader, writers and raw-entry occupancy/fingerprint reads. Config and host
+  tests cover both scopes, approved overrides, malformed occupied names and refused-write preservation.
+- `AgentSession.dispose()` still does not emit extension shutdown; reload dispatch is sequential,
+  and MCP clears its server list before awaiting closure. Keep ordered cleanup and late-start admission.
+  Codemode still needs a worker/WASM artifact surface we do not package. Raw `structuredContent` is
+  still ephemeral, not a bounded durable transcript presentation.
+- Delivered queue removal and `clearQueue()` remain text-only. SDK creation still does not initialize
+  a headless terminal theme. Extension loading still needs Jiti/virtual-module adaptation in artifacts,
+  static OAuth/Bedrock registration and the image-resize override. Artifact probes also exercise a
+  value import from `pi-ai/models` through the external extension loader.
+- Public trust detection does not replace resource-kind discovery/exclusion reloads; session discovery
+  and prompt-template APIs still do not cover the host's read/edit surfaces. Keep their parity tests.
+- Pi now sizes history, turn-prefix and branch summaries without reserve-derived output caps. Reasoning
+  inheritance and rejection of incomplete `length` summaries remain. One public-compaction canary checks
+  turn-prefix answer room across different reserves without pinning provider option policy; lifecycle
+  tests retain cancellation and incomplete-summary rejection coverage.
+  Restored truncated-call recovery now omits the paired tool result too, but does not replace
+  `sessionRepair`'s host-restart and questionnaire repair. No host summarizer, effort-default change,
+  reserve tuning, wire migration or session migration is introduced.
+- Pi 1.3's resumed tool-loadout restore adds one host seam, the registry-tool reconcile at attach below.
+- The bundled chat catalogue changes from 1,554 to 1,599 provider/model pairs: 71 removed and 116 added.
+  Removed pairs include `openai-codex/gpt-5.5` and `openai-codex/gpt-5.3-codex-spark`;
+  `openai/gpt-5.5` remains. This is a bundled-catalogue change, not a claim that providers retired those
+  APIs; stored, refreshed and custom catalogues can differ. Release notes must advise users to check
+  their default and restored-chat model before continuing. Unavailable defaults/resumed models follow
+  the existing, different host/Pi selection rules in [[submodule-server-agent]]; the host still does not
+  surface Pi's `modelFallbackMessage`. This upgrade adds no fallback or warning UI.
+- Since Pi 1.3, `kimi-coding` uses OpenAI Chat Completions at
+  `https://api.kimi.com/coding/v1`. Users with custom `models.json` base URL overrides must include
+  `/v1`; the host does not rewrite those overrides. Include this migration notice in release notes.
 
 ## Upgrade contract
 
@@ -96,6 +125,14 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
 `e2e/mcp-tool-cards.spec.ts`. Never persist the full raw result merely to delete the adapter.
 
 ## Other pi-sensitive host seams
+
+**Registry-tool reconcile at attach** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
+restores a resumed chat's recorded tool loadout and keeps recorded removals inactive, so a tool withheld
+while its registry extension was disabled would stay off after re-enabling. Attach re-activates enabled
+registry-extension tools by mirroring Pi's private `_isActivatedOnRegistration` (declarable exposure,
+`defaultActive !== false`); re-check that rule on upgrades. If the host ever calls `navigateTree`, which
+re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way to keep host-withheld tools
+apart from the recorded selection. Run the manager's restart regressions on upgrades.
 
 - **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
   pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))

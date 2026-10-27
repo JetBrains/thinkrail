@@ -986,6 +986,90 @@ test("an idle chat drops a disabled extension's tool and guidance live and resto
 	}
 });
 
+async function withPersistentVisualizeChat(
+	prefix: string,
+	run: (chat: {
+		setDisabled: (names: string[]) => void;
+		prompt: (label: string) => Promise<string>;
+		restart: () => Promise<void>;
+	}) => Promise<void>,
+): Promise<void> {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const cwd = tmpCwd(`trpi-${prefix}-`);
+	const workspaceId = `ws-${prefix}`;
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
+		const id = session.sessionId;
+		sessionId = id;
+		await run({
+			setDisabled: (names) => {
+				disabled = new Set(names);
+			},
+			prompt: async (label) => {
+				let state = "";
+				fauxA.setResponses([
+					(context) => {
+						state = visualizeToolState(context);
+						return fauxAssistantMessage(`${label}_${state}`);
+					},
+				]);
+				await promptSession(id, `Check ${label}.`);
+				return state;
+			},
+			restart: async () => {
+				await removeSession(id);
+				await getSessionMessages(id, workspaceId, cwd);
+			},
+		});
+	} finally {
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+}
+test("a tool withheld in an open chat comes back after a restart once its extension is re-enabled", async () => {
+	await withPersistentVisualizeChat("extension-open-restart", async (chat) => {
+		expect(await chat.prompt("BEFORE")).toBe("VISUALIZE_ON");
+		chat.setDisabled(["visualize"]);
+		refreshExtensionTools();
+		expect(await chat.prompt("OFF")).toBe("VISUALIZE_OFF");
+		chat.setDisabled([]);
+		await chat.restart();
+		expect(await chat.prompt("AFTER_RESTART")).toBe("VISUALIZE_ON");
+	});
+});
+
+test("an extension disabled while the chat was closed comes back once re-enabled", async () => {
+	await withPersistentVisualizeChat("extension-closed-restart", async (chat) => {
+		expect(await chat.prompt("A")).toBe("VISUALIZE_ON");
+		chat.setDisabled(["visualize"]);
+		await chat.restart();
+		expect(await chat.prompt("B")).toBe("VISUALIZE_OFF");
+		chat.setDisabled([]);
+		await chat.restart();
+		expect(await chat.prompt("C")).toBe("VISUALIZE_ON");
+	});
+});
+
+test("a registry tool follows Settings across repeated toggle and restart cycles", async () => {
+	await withPersistentVisualizeChat("extension-toggle-cycles", async (chat) => {
+		for (let cycle = 0; cycle < 2; cycle++) {
+			expect(await chat.prompt(`ON_${cycle}`)).toBe("VISUALIZE_ON");
+			chat.setDisabled(["visualize"]);
+			refreshExtensionTools();
+			expect(await chat.prompt(`OFF_${cycle}`)).toBe("VISUALIZE_OFF");
+			await chat.restart();
+			expect(await chat.prompt(`STILL_OFF_${cycle}`)).toBe("VISUALIZE_OFF");
+			chat.setDisabled([]);
+			await chat.restart();
+		}
+		expect(await chat.prompt("FINAL")).toBe("VISUALIZE_ON");
+	});
+});
+
 test("a chat created with an extension off never loads it and reloads to adopt it when re-enabled", async () => {
 	let disabled = new Set(["visualize"]);
 	setDisabledExtensionsResolver(() => disabled);
@@ -1026,7 +1110,10 @@ test("a chat created with an extension off never loads it and reloads to adopt i
 	}
 });
 
-test("a streaming chat drops a disabled extension's tool only at agent_settled", async () => {
+test.each([
+	false,
+	true,
+])("a streaming chat applies only the latest extension policy at agent_settled (enabled: %s)", async (enabledAtSettlement) => {
 	const slow = createFauxCore({
 		provider: "faux-extension-policy",
 		api: "faux-extension-policy",
@@ -1074,13 +1161,21 @@ test("a streaming chat drops a disabled extension's tool only at agent_settled",
 
 		disabled = new Set(["visualize"]);
 		refreshExtensionTools();
+		disabled = new Set();
+		refreshExtensionTools();
+		if (!enabledAtSettlement) {
+			disabled = new Set(["visualize"]);
+			refreshExtensionTools();
+		}
 		expect(firstState).toBe("VISUALIZE_ON");
 		release();
 		await firstTurn;
 		expect(automaticContinuationState).toBe("VISUALIZE_ON");
 		await promptSession(sessionId, "Check the next turn.");
 
-		expect(seen(sessionId)).toContain("NEXT_TURN_VISUALIZE_OFF");
+		expect(seen(sessionId)).toContain(
+			enabledAtSettlement ? "NEXT_TURN_VISUALIZE_ON" : "NEXT_TURN_VISUALIZE_OFF",
+		);
 	} finally {
 		release();
 		setDisabledExtensionsResolver(() => new Set());

@@ -88,10 +88,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     reads. Activation changes the current pointer for pre-session reads and future session creation; it never
     mutates, drains, or recreates existing sessions. A live session keeps its original runtime generation. A disk session
     attached after activation keeps its saved model when that model is available in the current runtime.
-    If it is unavailable, PI chooses the current default without changing the saved model on open.
-    PI records the replacement when the user sends a message, so later restarts restore that model.
-    Merely opening a chat preserves its original model for when that provider returns. With no available
-    model, the transcript remains readable and no placeholder model is persisted as a replacement.
+    If it is unavailable, Pi chooses its settings default, then its ordered provider defaults, then the
+    first available model; this need not match ThinkRail's AppConfig default or the saved provider.
+    Opening does not change the saved model. An ordinary physical-model fallback becomes durable when
+    Pi appends an assistant response, not at send acceptance; explicit model selection persists at once.
+    Merely opening a chat preserves its original model for when that provider returns. The host exposes
+    the replacement in normal session state but discards the SDK's `modelFallbackMessage`, so there is
+    no separate fallback warning. With no available model, the transcript remains readable and no
+    placeholder model is persisted as a replacement.
 
     Every models **read** goes through **`settledAvailableModels(runtime)`** — pi's
     `getAvailableSnapshot()`, **never `getAvailable()`**: that one awaits `refreshAvailability()`, which
@@ -257,8 +261,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `listAvailableModels` / `listSettledModels` (the same snapshot without starting a refresh) / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host uses it so defaults and live-session effort changes follow Pi).
     Earlier, #394 showed ThinkRail's `available[0]` differed from Pi's pick and hit a proxy 400. ThinkRail
-    now resolves defaults host-side from `AppConfig`, falling back to the first available model; it always
-    passes the chosen model explicitly so the UI and session agree. Accepted risk: the first available model
+    now resolves new-chat defaults host-side from `AppConfig`, falling back to the first available model
+    when the saved default is unavailable, without rewriting that setting. An explicitly requested
+    unavailable model is rejected rather than silently substituted. The host passes the chosen model
+    explicitly so the UI and session agree. Accepted risk: the first available model
     may not be the provider default; users can set one in Settings → Models. Plan review uses this same
     `resolveNewChatModel({})` for unset reviewer overrides: AppConfig `defaultModel`/`defaultEffort`, with
     the first available model and `medium` effort as fallbacks.
@@ -600,7 +606,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     disable would bust the prompt cache. The reverse is the one reload: an enabled extension the session
     never loaded (created while it was off) and that did not fail to load triggers a gated
     `requestSessionReload`. Registration applies the same reconciliation, and a completed reload reapplies
-    it without requesting another reload, so a toggle that lands mid-reload converges.
+    it without requesting another reload, so a toggle that lands mid-reload converges. Settings are the
+    source of truth across restarts: Pi ≥ 1.3 restores a resumed chat's recorded tool loadout, keeping
+    recorded removals inactive, so attach first re-activates every tool of an enabled registry extension
+    that Pi's activated-on-registration rule would activate (declarable exposure, not `defaultActive:
+    false`), then withholds disabled ones. Built-in, MCP, subagent and review tools keep Pi's restored
+    selection. A registry tool switched off by anything other than Settings therefore returns after a
+    restart, as it does on Pi `reload()`.
     The **`set_title`** tool (`titleTool.ts`) is how chats and workspaces get named: the main agent calls it
     with `chat_title?` / `workspace_name?` / `branch?` (English kebab slug). It is always registered and
     active, and listed via `promptSnippet`; toggling it off after naming would rebuild the system prompt

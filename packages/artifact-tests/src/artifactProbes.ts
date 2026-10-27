@@ -339,6 +339,7 @@ export async function runArtifactHostProbes(adapter: ArtifactHostAdapter): Promi
 		centralArtifact,
 		`import { createFauxCore, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
+import { clampThinkingLevel } from "@earendil-works/pi-ai/models";
 const api = "compiled-external-faux";
 const model = {
   id: "compiled-external-model",
@@ -350,6 +351,7 @@ const model = {
   maxTokens: 4096,
   api,
 };
+if (clampThinkingLevel(model, "high") !== "off") throw new Error("pi-ai/models alias failed");
 const faux = createFauxCore({ api, provider: "compiled-external", models: [model] });
 const respond = (context) => {
   faux.appendResponses([respond]);
