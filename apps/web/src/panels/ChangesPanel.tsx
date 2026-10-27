@@ -158,7 +158,7 @@ export function ChangesPanel({
 				data-testid="changes-view-toggle"
 				role="toolbar"
 				aria-label={t("changes.panel.toolbar")}
-				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
+				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-x-clip border-border-default border-b px-12"
 			>
 				<div className="mr-auto flex min-w-0 items-center gap-4">
 					<ChangesScopeMenu

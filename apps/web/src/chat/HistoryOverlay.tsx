@@ -147,7 +147,7 @@ function PromptRow({
 		<div
 			data-testid="history-item"
 			data-kind="prompt"
-			data-row
+			data-row={isSelected || undefined}
 			data-selected={isSelected}
 			className={`group flex w-full items-center gap-4 rounded-sm border-l-2 py-4 pl-8 pr-4 text-left tr-text-ui ${
 				isSelected
@@ -246,7 +246,7 @@ function MessageRow({
 		<div
 			data-testid="history-item"
 			data-kind="message"
-			data-row
+			data-row={isSelected || undefined}
 			data-selected={isSelected}
 			className={`group flex w-full items-center gap-4 rounded-sm border-l-2 pr-4 tr-text-ui ${
 				isSelected
