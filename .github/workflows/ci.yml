@@ -26,8 +26,8 @@ jobs:
       - id: classify
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_ref }}
-          OUTSIDE_APP: ^(apps/website/|packages/website-analytics/|\.github/workflows/site(-preview|-preview-cleanup)?\.yml$|\.github/readme-assets/)
-          ARTIFACT_PATHS: ^(apps/cli/|apps/desktop/|packages/artifact-tests/|packages/shared/(assets/|scripts/generate-icons\.ts$|src/(version|windowsIdentity)\.ts$)|packages/server/src/(buildSupport|agent/extensions)\.ts$|e2e/(run-binary|run-desktop|artifactPlaywright)\.ts$|playwright\.(binary|desktop)\.config\.ts$|\.github/|patches/|(package\.json|bun\.lock|turbo\.json)$)
+          OUTSIDE_APP: ^(apps/website/|packages/website-analytics/|\.github/workflows/site(-preview|-preview-cleanup)?\.yml$|\.github/(readme-assets/|pr-assets/|ISSUE_TEMPLATE/|PULL_REQUEST_TEMPLATE\.md$|CODEOWNERS$|SPEC\.md$)|(README|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|LICENSE$)
+          ARTIFACT_PATHS: ^(apps/cli/|apps/desktop/|packages/artifact-tests/|packages/shared/(assets/|scripts/generate-icons\.ts$|src/(version|windowsIdentity)\.ts$)|packages/server/src/(buildSupport|agent/extensions)\.ts$|e2e/(run-binary|run-desktop|artifactPlaywright)\.ts$|playwright\.(binary|desktop)\.config\.ts$|\.github/(workflows|actions|scripts)/|patches/|(package\.json|bun\.lock|turbo\.json)$)
         run: |
           if git fetch --no-tags --depth=1 origin "$BASE" && files=$(git diff --name-only --no-renames FETCH_HEAD HEAD); then
             if grep -qvE "$OUTSIDE_APP" <<< "$files"; then app=true; else app=false; fi

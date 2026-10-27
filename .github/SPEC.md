@@ -52,7 +52,8 @@ six-hour default.
 
 **Change classifier.** A `changes` job diffs the PR or merge group against its base, counting a rename as
 both its old and new path. When every changed path lies outside the app — the website and its analytics
-package, the website workflows, README screenshots — the classifier skips the pi-package, browser, binary,
+package, the website workflows, README and PR screenshots, the root README, CONTRIBUTING, CODE_OF_CONDUCT
+and LICENSE, and GitHub's issue/PR templates, CODEOWNERS and this spec — the classifier skips the pi-package, browser, binary,
 Windows and desktop jobs; any other path, or a failed diff, runs them all. The exclusion list is a path
 allow-list, never a file-type rule: Markdown is product input here (skills ship in the artifacts, specs feed
 conformance gates). In the merge queue it diffs against the target branch, not the event's `base_sha`: that
@@ -62,7 +63,8 @@ always run; they are cheap and cover the website too. A second output, `artifact
 and desktop suites and the Windows desktop smoke; the Linux suites replay the no-agent browser suite against built artifacts and cost over half of
 CI's runner time: on a PR they run only when a path feeds building or packaging — the CLI and desktop apps,
 artifact tests, shared's native icon set, its generator, release identity and Windows file identity, the
-server's build support and bundled-runtime registration, the artifact Playwright runners, CI definitions, patches and the root manifests and lockfile — and in a merge group they always run,
+server's build support and bundled-runtime registration, the artifact Playwright runners, CI workflows,
+actions and scripts, patches and the root manifests and lockfile — and in a merge group they always run,
 so main never lands an artifact they have not exercised. An artifact-only defect in an unrelated change
 therefore surfaces at enqueue time instead of on the PR; it was 1 in 56 failed runs before the split. That
 includes the shared no-agent specs and fixtures the artifact suites replay: only the artifact runners and
