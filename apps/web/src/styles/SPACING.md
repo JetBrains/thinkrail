@@ -103,7 +103,7 @@ The shared source scanner covers app source, `packages/ui`, and every `thinkrail
 - a spacing utility names a **canonical step** — `p-8`, `gap-4` — or a **declared rhythm role** —
   `p-panel-inset`: an `index.css` `--spacing-<role>: var(--<role>)` whose `tokens.css` value is
   `var(--space-<step>)`; the retired t-shirt aliases (`p-xs`), unknown alphabetic suffixes
-  (`p-bananas`), a sizing role used as rhythm (`p-panel-row`) and any off-scale number (`p-6`, `py-1`,
+  (`p-bananas`), a sizing role used as rhythm (`p-panel-row`) and any off-scale number (`p-10`, `py-1`,
   `gap-0.5`) are rejected; only prefix-appropriate Tailwind keywords such as `ml-auto`, `gap-px`, and
   `space-x-reverse` remain valid;
 - a length is **never a raw pixel value** at the call site (`py-[3px]`), and a step is **never re-spelled

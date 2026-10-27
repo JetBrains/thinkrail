@@ -15,7 +15,7 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 | `auth/LoginDialog.tsx:281` | Button outline default | Button outline l |  |
 | `auth/LoginDialog.tsx:285` | Button outline default | Button outline l |  |
 | `shell/Shell.tsx:178` | raw size-28 transparent muted icon button in IconTooltip | IconButton ghost m | label 'Settings' (aria), tooltip keeps the shortcut text |
-| `shell/WorkspaceChatHistory.tsx:36` | PopoverTrigger w-panel-header-row border-l muted icon trigger, manual Loader2 spinner while chatStarting, IconTooltip wrapTrigger | PopoverTrigger asChild > IconButton ghost m (wrapTrigger, loading={chatStarting}, self-center) | Not in packet rawButtons list (audit SHELL-038, Radix trigger). Manual spinner replaced by loading; loading also disables the trigger while a chat is starting (old trigger stayed clickable). border-l divider dropped. |
+| `shell/WorkspaceChatHistory.tsx:36` | PopoverTrigger w-panel-header-row border-l muted icon trigger, manual Loader2 spinner while chatStarting, IconTooltip wrapTrigger | PopoverTrigger asChild > IconButton ghost m (wrapTrigger, icon swaps to a spinning `StartingIcon` while chatStarting, self-center) | Not in packet rawButtons list (audit SHELL-038, Radix trigger). The trigger stays clickable while a chat starts, as before (no `loading`). border-l divider dropped. |
 | `shell/WorkspaceChatHistory.tsx:190` | raw cn(menuItemClass,'shrink-0 px-4 text-text-muted') icon button (~26px) | IconButton ghost m | aria name 'Rename <title>', tooltip 'Rename chat' |
 | `shell/locationBar/BranchSegment.tsx:153` | raw rowActionClass (size-24 muted ghost icon button) | IconButton ghost m | rowActionClass constant deleted |
 | `shell/locationBar/BranchSegment.tsx:217` | <a> scope-review-open with rowActionClass | <a> buttonVariants ghost m shape icon (+ shrink-0) | Not in packet list; shared the deleted rowActionClass, kept inside its IconTooltip |
@@ -73,7 +73,7 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 | `panels/ExistingWorktreeDialog.tsx:199` | Button outline (32) | Button outline l | source unchanged |
 | `panels/PrComposeDialog.tsx:69` | Button default (32), icon swapped for Loader2 while busy | Button primary l iconLeft=GitPullRequestArrow loading={busy} | manual spinner removed |
 | `panels/PrSetupDialog.tsx:41` | Button ghost icon (28), Copy/Check(success-coloured) swap, aria-label | IconButton ghost m label='Copy command' | icon={copied ? CopiedIcon : Copy}; CopiedIcon is a module-level wrapper keeping text-feedback-success on the check glyph; now also gets the shared tooltip |
-| `panels/PrSetupDialog.tsx:49` | Button outline sm + Play, title tooltip | Button outline m iconLeft=Play | explanatory title ('Run this command in a workspace terminal — answer its prompts there') dropped per rule (text button, not a truncation fallback) — see decisions |
+| `panels/PrSetupDialog.tsx:49` | Button outline sm + Play, title tooltip | Button outline m iconLeft=Play tooltip='Run this command in a workspace terminal — answer its prompts there' | native title → `tooltip` (Button/IconButton take no `title`) |
 | `panels/PrSetupDialog.tsx:205` | <a> buttonVariants({variant:'outline'}) + svg size-14 | <a> buttonVariants({variant:'outline', size:'l'}) | svg size class removed (component sizes svg), aria-hidden added |
 | `panels/PrSetupDialog.tsx:211` | Button default (32) + RefreshCw child | Button primary l iconLeft=RefreshCw |  |
 | `panels/ProjectTree.tsx:274` | Button ghost icon size-panel-row (22) inside AddProjectMenu DropdownMenuTrigger asChild, aria-label | IconButton ghost s label='Add project' | ref kept; gains shared tooltip; open menu -> selected via data-state=open |
@@ -137,8 +137,8 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 
 | Site | Before | After | Notes |
 | --- | --- | --- | --- |
-| `chat/QueueStrip.tsx:47` | raw icon button size-20 rounded-xs neutral hover (Pencil size-12) | IconButton ghost s | aria-label -> label (now also tooltip); data-testid kept; shrink-0 kept |
-| `chat/QueueStrip.tsx:56` | raw icon button size-20 rounded-xs neutral hover (X size-12) | IconButton ghost s | same as edit |
+| `chat/QueueStrip.tsx:47` | raw icon button size-20 rounded-xs neutral hover (Pencil size-12) | IconButton ghost s tooltip='Edit' | aria-label -> label (full queued text); the tooltip is the short 'Edit' so it never repeats the whole message; data-testid kept; shrink-0 kept |
+| `chat/QueueStrip.tsx:56` | raw icon button size-20 rounded-xs neutral hover (X size-12) | IconButton ghost s tooltip='Remove' | same as edit |
 | `chat/CopyButton.tsx:20` | raw icon button h-lh w-24 muted, hover wash, hover-reveal, native title | IconButton ghost s | h-lh ≈ 20px → s (m overflowed the message line); icon swaps Copy/Check via icon prop; title -> tooltip (label); data-copied kept; hover-reveal opacity-0 group-hover/focus-visible/data-[copied]:opacity-100 kept; caller layout classes (absolute z-10 position) still passed through |
 | `chat/SkillsButton.tsx:18` | raw text button px-8 py-2 tr-text-metadata muted, neutral hover (~19px), BookOpen size-14 | Button ghost s iconLeft=BookOpen | kept IconTooltip wrapper (text button with tooltip), data-testid/data-stale, stale badge dot child; className prop still merged (NewWorkspaceDialog passes ml-auto) |
 | `chat/ChatTranscript.tsx:698` | raw text button border-border-default bg-container-elevated-bg px-8 py-4 tr-text-metadata (~25px) + shadow-md, floating | Button outline m iconLeft=ArrowUp\|ArrowDown | positioning kept (-translate-x-1/2 absolute bottom-12 left-1/2); shadow-[var(--shadow-md)] dropped as non-layout — floating button no longer has elevation shadow |
@@ -146,12 +146,12 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 | `chat/SkillsDialog.tsx:293` | Button outline sm (Trust project) | Button outline m |  |
 | `chat/SkillsDialog.tsx:410` | Button default sm (Enable, ShieldCheck child) | Button primary m iconLeft=ShieldCheck |  |
 | `chat/ToolResultImages.tsx:30` | raw icon button border-border-default bg-container-elevated-bg p-4, icon 14 (~24px), native title 'Full screen' | IconButton outline m | label = old aria-label, tooltip = old title; still the DialogTrigger asChild child; absolute top-4 right-4 kept |
-| `chat/ModelEffortPicker.tsx:428` | raw icon toggle size-16, text-feedback-warning when pinned else subtle + hover-reveal | IconButton ghost s selected={favorite} | aria-pressed kept + selected; Star fill/line swap via icon prop; mt-2 shrink-0 + hover-reveal (only when not pinned) kept; yellow (feedback-warning) pinned colour dropped — pinned now reads via selected skin + filled star; grows 16->20px |
+| `chat/ModelEffortPicker.tsx:428` | raw icon toggle size-16, text-feedback-warning when pinned else subtle + hover-reveal | IconButton ghost s selected={favorite} | aria-pressed kept + selected; Star fill/line swap via icon prop; mt-2 shrink-0 + hover-reveal (only when not pinned) kept; pinned keeps its yellow through `tone="warning"`, plus the selected skin (raised inside the cmdk row) and the filled star; grows 16->20px |
 | `chat/ModelEffortPicker.tsx:658` | raw outline-look button control-border/control-bg px-8 py-4 tr-text-metadata (~25px), RefreshCw animate-spin while refreshing | Button outline m iconLeft=RefreshCw loading={refreshing} | manual spin replaced by loading; 'Updating…' label swap, disabled={refreshing}, data-refreshing kept |
 | `chat/promptImages.tsx:206` | raw icon button (remove image), no padding, X size-12, muted->default | IconButton ghost s | now has tooltip 'Remove image'; 20px square inside FileChip trailing slot makes the image chip ~30px tall instead of ~25px (see decisions) |
 | `chat/TemplateEditorDialog.tsx:219` | Button outline default-size | Button outline l | no code change needed (default size is l) |
 | `chat/TemplateEditorDialog.tsx:226` | Button default default-size | Button primary l | no code change needed (defaults) |
-| `chat/ModelSelector.tsx:130` | raw icon toggle size-16, text-feedback-warning when pinned else subtle + hover-reveal | IconButton ghost s selected={isPinned} | same as ModelEffortPicker favorite toggle (warning colour dropped) |
+| `chat/ModelSelector.tsx:130` | raw icon toggle size-16, text-feedback-warning when pinned else subtle + hover-reveal | IconButton ghost s selected={isPinned} | same as ModelEffortPicker favorite toggle (`tone="warning"` when pinned) |
 | `chat/ModelSelector.tsx:248` | raw outline-look button px-8 py-4 tr-text-metadata + shadow-sm, RefreshCw animate-spin | Button outline m iconLeft=RefreshCw loading={refreshing} | pointer-events-auto kept (needed inside pointer-events-none gradient footer); shadow-sm dropped |
 | `chat/ChatView.tsx:855` | Button ghost default-size | Button ghost l | no code change needed |
 | `chat/ChatView.tsx:858` | Button default default-size | Button primary l | no code change needed |
@@ -160,7 +160,7 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 | `chat/ExtUiPrompt.tsx:183` | Button default sm + OPTION_BUTTON (OK/Submit) | Button primary m className=max-w-full |  |
 | `chat/turns.tsx:584` | Button outline sm (Try again, RotateCw child) | Button outline m iconLeft=RotateCw |  |
 | `chat/Composer.tsx:661` | Button ghost icon rounded-full under IconTooltip 'Search history' | IconButton ghost m label='Search history' | IconTooltip wrapper folded into IconButton; aria-label same text; circle -> 24px square |
-| `chat/Composer.tsx:673` | raw STOP_PILL: h-28 rounded-full ghost pill, tr-text-action muted, hover wash, StopFill size-12; @max-md square 28 icon | Button ghost m iconLeft=StopFill className=shrink-0 | STOP_PILL constant removed; aria-label='Stop' kept; WIDE_ONLY label span kept as child; compact (@max-md) mode is now a 24px-high ~34px-wide icon-only button, no longer a 28px circle |
+| `chat/Composer.tsx:673` | raw STOP_PILL: h-28 rounded-full ghost pill, tr-text-action muted, hover wash, StopFill size-12; @max-md square 28 icon | Button ghost m iconLeft=StopFill tooltip='Stop' className=shrink-0 @max-md:w-24 @max-md:px-0 | STOP_PILL constant removed; aria-label='Stop' kept; WIDE_ONLY label span kept as child; compact (@max-md) mode is the 24px icon-only square beside the history IconButton (guard override with its reason) |
 | `chat/HistoryOverlay.tsx:168` | raw icon button p-4 icon 14 (~22px) muted, hover elevated-bg, hover-reveal, IconTooltip | IconButton ghost s | label='Save as template', tooltip='Save as template (shortcut)'; opacity reveal + isSelected opacity-100 kept |
 | `chat/HistoryOverlay.tsx:194` | raw icon button p-4 icon 14 (~22px) muted, hover-reveal, IconTooltip '⇧⏎ go to chat' | IconButton ghost s | label='Go to chat', tooltip='⇧⏎ go to chat' |
 | `chat/TodoList.tsx:124` | raw icon button size-24 muted neutral hover, IconTooltip | IconButton ghost m | label='Open the plan page', tooltip kept; no-op focus-visible:opacity-100 dropped (button was never hidden) |
@@ -233,13 +233,13 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 | `packages/resource-renderers/src/renderers/notebook/View.tsx:108` | IconTooltip + raw <button> size-24 ghost (notebook-comment-cell) | IconButton ghost m |  |
 | `packages/resource-renderers/src/support/UnplacedReviewStrip.tsx:92` | raw <button> ml-12 px-8 py-4 tr-text-action text-primary hover:bg-control-bg-hovered (≈23.6px) | Button soft-primary m className ml-12 | green ghost |
 | `packages/resource-renderers/src/support/ExpensiveDiffNotice.tsx:18` | Button outline sm | Button outline m |  |
-| `packages/resource-renderers/src/support/PreviewCommenting.tsx:197` | portal raw <button> .review-add-icon .review-add-icon-float (22px, border-default, elevated bg, primary icon, drop shadow, native title) | IconButton outline s className review-add-icon-float | title → IconButton tooltip (same text as label); ref kept; the .closest('.review-add-icon') pointerdown check now uses iconRef.current.contains(target); review-add-icon-float (fixed positioning + imperative data-visible/data-dragging visibility) kept as layout class. Skin differences vs old: icon now text-default instead of primary, no drop shadow |
+| `packages/resource-renderers/src/support/PreviewCommenting.tsx:197` | portal raw <button> .review-add-icon .review-add-icon-float (22px, border-default, elevated bg, primary icon, drop shadow, native title) | IconButton outline s className review-add-icon-float | title → IconButton tooltip (same text as label); ref kept; the .closest('.review-add-icon') pointerdown check now uses iconRef.current.contains(target); review-add-icon-float (fixed positioning + imperative data-visible/data-dragging visibility) kept as layout class. Skin differences vs old: icon now text-default instead of primary; the drop shadow is back as `shadow-[var(--shadow-sm)]` |
 | `thinkrail-extensions/visualize/web/MermaidView.tsx:67` | raw <button> absolute p-4 border-default elevated bg text-muted (≈24px), title 'Full screen' | IconButton outline m className 'absolute top-4 right-4', tooltip 'Full screen' | aria-label 'View diagram full screen' → label |
 | `thinkrail-extensions/visualize/web/PanZoomView.tsx:121` | raw <button className={btn}> p-4 ghost, icon 16 (24px) Zoom out | IconButton ghost m | local btn const removed; now has tooltip |
 | `thinkrail-extensions/visualize/web/PanZoomView.tsx:133` | raw btn Zoom in (24px) | IconButton ghost m |  |
 | `thinkrail-extensions/visualize/web/PanZoomView.tsx:139` | raw btn Reset zoom, icon 14 (22px) | IconButton ghost m | see sizeExceptions |
 | `thinkrail-extensions/visualize/web/FileCard.tsx:44` | CardAction: IconTooltip + raw <button> size-24 ghost (children icon element) | IconButton ghost m | CardAction now takes icon: ButtonIcon instead of children; both call sites (tool-visualize-open-tab, tool-visualize-fullscreen) updated |
-| `packages/resource-renderers/src/support/reviewWidgets.ts review-add-icon / thread actions (plain DOM)` | .review-add-icon / .review-thread-action CSS skins | buttonVariants({variant:'outline', size:'s', shape:'icon'}) class string + data-slot/variant/size | index.css rules removed; holder/float positioning kept |
+| `packages/resource-renderers/src/support/reviewWidgets.ts review-add-icon / thread actions (plain DOM)` | .review-add-icon / .review-thread-action CSS skins | buttonVariants({variant:'outline', size:'s', shape:'icon'}) class string + `shadow-[var(--shadow-sm)]` + `buttonDataAttributes` | index.css rules removed; holder/float positioning kept |
 
 ## Green (accent-text) ghost actions → `soft-primary`
 
@@ -264,19 +264,16 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 - `chat/HistoryOverlay.tsx:88`: red-text action (no variant) — history-delete-chat turns text-feedback-error on hover
 - `chat/promptImages.tsx:184`: red-text action (no variant) — dismiss inside tone=error FileChip inherits text-feedback-error
 - `chat/resources/resourceRow.tsx:267`: red-text action (no variant) — RowActionButton (resource-stop) is ghost with red only on hover (danger); left unchanged as raw <button>
-- `chat/resources/ResourcesInspector.tsx:107`: red-text action (no variant) — resource-detail-stop is outline with text-feedback-error. Old props no longer compile, so only the removed size name was translated (sm→m) and the icon moved to iconLeft (gap-4/size-14 dropped); the text-feedback-error colour override was KEPT. Needs a decision (e.g. a destructive-outline/destructive-ghost variant).
-- `chat/resources/ResourcesInspector.tsx:279`: red-text action (no variant) — resources-stop-all is ghost icon with text-feedback-error. Old size="icon" no longer compiles, so it became IconButton ghost m (icon=RiStopFill, label = old aria-label/title, native title → tooltip) with the className text-feedback-error hover:text-feedback-error KEPT. Needs a decision.
-- `chat/resources/ResourcesButton.tsx:58`: warning-text action (no variant) — ResourcesAttention is ghost icon with text-feedback-warning (amber, analogous to the red-text case). Old size="icon" no longer compiles, so it became IconButton ghost m (label = old IconTooltip label/aria-label) with className shrink-0 text-feedback-warning hover:text-feedback-warning KEPT. Needs a decision.
+- Resolved by `tone`: `chat/resources/ResourcesInspector.tsx` resource-detail-stop (`Button outline m tone="danger"`), resources-stop-all (`IconButton ghost m tone="danger"`) and `chat/resources/ResourcesButton.tsx` ResourcesAttention (`IconButton ghost m tone="warning"`) — their call-site colour overrides are gone from the guard.
 - `panels/ReviewPanel.tsx review-clear, review-comment-delete`: red-text action (no variant) — red on hover
 - `panels/ReviewPanel.tsx review-file-done, review-comment-resolve`: success-tinted hover icon action (no variant)
 
 ## Spec overrides retired
 
 - `shell/layout/workbenchCenter.tsx:100,115; workbenchSide.tsx:184,258; workbenchBottom.tsx:64; workbenchTabs.tsx:287; AuxiliaryPaneHeader.tsx:71; WorkspaceWorkbench.tsx:740; WorkspaceChatHistory.tsx:36`: full-height 28px (w-panel-header-row) strip/header actions, several with a border-l hairline divider; now 24px centred squares with no divider (apps/web/src/shell/layout/SPEC.md ('Full-height strip actions share that width.' in Layout grammar))
-- `shell/WorkspaceChatHistory.tsx:36`: chat-history trigger 'spins' while a chat starts but stayed clickable; `loading` now also disables it while spinning (apps/web/src/shell/SPEC.md (chat-start pending state paragraph))
 - `components/ErrorBoundary.tsx:92,101`: components module now imports @thinkrail/ui/button, which is not in its 'Allowed deps' list (React, @remixicon/react, @thinkrail/ui/utils, lib, constants) (apps/web/src/components/SPEC.md (Allowed deps))
 - `chat/Composer.tsx:661`: rounded-full 28px ghost circle (History: `Button variant="ghost" size="icon"` under IconTooltip) (apps/web/src/chat/SPEC.md (Composer trailing controls))
-- `chat/Composer.tsx:673`: Stop as rounded-full h-28 ghost pill; compact mode collapses to a 28px icon circle (@max-md:w-28 px-0) (apps/web/src/chat/SPEC.md (Composer trailing controls / Compact mode))
+- `chat/Composer.tsx:673`: Stop as rounded-full h-28 ghost pill; compact mode collapses to a 28px icon circle (@max-md:w-28 px-0) — now a ghost m button that collapses to a 24px square (@max-md:w-24 px-0) (apps/web/src/chat/SPEC.md (Composer trailing controls / Compact mode))
 - `chat/ExtUiPrompt.tsx:15`: OPTION_BUTTON h-auto min-h-28 whitespace-normal break-words justify-start text-left py-4 — 'Option buttons wrap long labels' (apps/web/src/chat/SPEC.md (Extension dialogs ask inside the chat))
 - `chat/tools/AskUserQuestionCard.tsx:667,678,688,1012`: focus-visible:ring-2 ring-primary focus ring on Skip/Next/Submit/Add note — SPEC says every focus indicator in the card is the app-wide `focus-visible:ring-2` + `ring-primary` ring; the shared Button uses an offset `outline-primary` focus outline instead (still accent) (apps/web/src/chat/tools/SPEC.md ("Every focus indicator in the card is the app-wide accent focus ring"))
 - `chat/resources/mcpRow.tsx:164`: SPEC calls the section header's Settings a "link" (`resources-mcp-settings`); it is now a soft-primary s button (wording only) (apps/web/src/chat/resources/SPEC.md (MCP servers paragraph))
@@ -404,7 +401,25 @@ Legacy names removed: variant `default` → `primary`, `soft` → `soft-primary`
 | `chat/ModelEffortPicker.tsx` `model-set-default`, `thinking-reset` | `FOOTER_LINK` ghost text buttons | `Button ghost s` (the constant removed) |
 | `prompt/SlashCommandCompletion.tsx` `slot-hint` | bordered elevated hint button | `Button outline s` + elevation shadow token |
 
-Not moved, by design: model / thinking selector triggers (select family, `data-[open]` border), the history scope chip, and every red / amber / green-text action (no variant yet).
+Not moved, by design: model / thinking selector triggers (select family, `data-[open]` border), the history scope chip, and the raw red / amber / green-on-hover actions below (`tone` colours a ghost or outline label in every state; a hover-only colour has no variant).
+
+## Review follow-ups (after the rebase onto main)
+
+System-level changes made while addressing the PR review; per-site rows above are updated where they changed.
+
+| Change | Where | Why |
+| --- | --- | --- |
+| `IconButton` wraps its tooltip trigger whenever the caller passes `disabled` (even `false`); `Button` gains `tooltip`; neither accepts `title` | `packages/ui/button.tsx`; 9 former `title` sites (PlanPane ×4, ChangesReviewGuide apply, ChangesScopeMenu, PlanCommitsMenu, PrSetupDialog run, SubagentSettings) | a disabled button's `pointer-events: none` hid both a native `title` and an unwrapped tooltip, so the reason it was unavailable never showed |
+| ghost inside a `data-row` takes `container-elevated-bg` for hover / pressed / focus / selected | project and workspace rows, change rows, todo rows, history-overlay rows, cmdk `CommandItem` | row fills and ghost fills are the same `--hover` role, so row actions and open row menus were invisible |
+| `soft-primary` selected = its hover look | turn-divider artifact chip (`selected={many && expanded}`) | an expanded "N files" chip looked collapsed |
+| `tone` (`warning` / `danger`) on ghost and outline | ResourcesAttention, Stop all, resource-detail Stop, model-picker pinned star | a call-site colour lost to ghost's own focus / pressed text |
+| `button-disabled` variant (`[data-disabled="true"]` or `:disabled:not([data-loading])`) | every disabled skin | a `<fieldset disabled>` (Environment settings while saving) left buttons looking enabled |
+| `spinIcon` shows the static spinner under reduced motion | refresh buttons | with motion reduced a loading refresh looked idle |
+| ghost icon-only focus ring drawn inside the square | header strips, rails | 28px strips with `overflow: hidden` clipped the outer ring |
+| tooltip content at `z-150` | `packages/ui/tooltip.tsx` | toast close tooltips painted under the toast (`z-[100]`) |
+| `buttonDataAttributes`, `withIconClass` helpers | rails, Monaco comment widget; six icon wrappers | one data-attribute contract and one tinted/animated icon helper instead of copies |
+| `BranchPicker` trigger is `Button ghost m` unless a pill class is passed | Changes target picker, location-bar Compare to | the Changes toolbar's scope and target triggers read as one pair again |
+| rail drop hint adds an inset ring; badges and the join droppable sit on the 32px frame | `workbenchRails.tsx`, `workbenchTabs.tsx` | the selected fill hid the hint; badges covered the smaller icon |
 
 ## Remaining raw `<button>` elements (current code)
 

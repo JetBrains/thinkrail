@@ -264,9 +264,10 @@ themselves.
   expand/collapse chat details — subordinate to chat text); `size-14` (14px) for **compact interface /
   navigation chrome** (left/right panels, panel & toolbar headers, tabs, the mobile switcher rail, menu
   items); `size-16` (16px) for **every disclosure/expand chevron** (`ChevronDown/Right/Left/Up`), which
-  are `size-16` in all contexts regardless of tier. **Icons inside buttons are not tiered by context**:
-  `Button` / `IconButton` (`@thinkrail/ui/button`) size their icon from the button size (S 12, M 16, L 20)
-  and the call site passes the icon component, never a `size-*` class. The **icon↔text gap is `gap-4` (4px)** across all icon+label rows (nav
+  are `size-16` in all contexts regardless of tier — except a chevron inside a button. **Icons inside
+  buttons are not tiered by context**: `Button` / `IconButton` (`@thinkrail/ui/button`) size their icon,
+  chevrons included, from the button size (S 14, M 16, L 20) and the call site passes the icon component,
+  never a `size-*` class. The **icon↔text gap is `gap-4` (4px)** across all icon+label rows (nav
   rows, menu/command items, tabs). A **two-line** row (e.g. a
   workspace whose branch differs from its name) **top-aligns** the icon to the first line (`items-start`
   + `mt-2`) so the glyph hangs on its title, while a single-line row stays vertically centred
@@ -365,7 +366,8 @@ themselves.
   `Button` or `IconButton`** — five variants × three sizes, states owned by the component (see
   [[module-ui]] "Button system"); call sites add placement only, and `styles/buttonUsage.test.ts` rejects
   legacy variant names, call-site skins and raw `<button>` skins. Icon-only controls get their name and the
-  shared `IconTooltip` from `IconButton`'s required `label`, never native `title`.
+  shared `IconTooltip` from `IconButton`'s required `label`; neither component takes a native `title` —
+  an explanation, including why a button is disabled, is its `tooltip`.
 
 ## Get right
 
