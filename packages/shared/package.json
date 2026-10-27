@@ -13,7 +13,8 @@
 		"./paths": "./src/paths.ts",
 		"./codedError": "./src/codedError.ts",
 		"./removeTree": "./src/removeTree.ts",
-		"./spawn": "./src/spawn.ts"
+		"./spawn": "./src/spawn.ts",
+		"./toolHomes": "./src/toolHomes.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",

@@ -72,6 +72,7 @@ import {
 	setJbcentralAppliedPublisher,
 	setJbcentralChangedPublisher,
 	setLoginPublisher,
+	setLogoutPublisher,
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
@@ -860,6 +861,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		});
 	});
 	setJbcentralChangedPublisher(publishProviderChanged);
+	setLogoutPublisher(publishProviderChanged);
 	setModelContextPublisher(publishProviderChanged);
 	setModelListingPublisher(publishProviderChanged);
 
@@ -917,6 +919,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		setModelListingPublisher(null);
 		setJbcentralAppliedPublisher(() => {});
 		setJbcentralChangedPublisher(() => {});
+		setLogoutPublisher(() => {});
 		server.stop(true);
 	};
 	const shutdown = (): Promise<void> => {

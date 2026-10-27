@@ -313,7 +313,8 @@ treatment.
   works two remotes, so a list that shows only `origin` hides the ref it branches from. The whole state
   *around* it — the list, `refreshing`, `refresh()` — is the shared
   **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
-  `listBranchesOrEmpty`), so both pickers are identical **by construction**: the list is **keyed to the
+  `listBranchesOrEmpty`; it also reports `failed` for a degraded initial read, so the picker never calls an
+  unreadable repository "local only"), so both pickers are identical **by construction**: the list is **keyed to the
   project** (it clears on a project change, and both reads are generation-stamped, so a switch can never
   offer or land the previous project's branches), **only the initial read degrades** (a *refresh* keeps its
   last good list instead of blanking the picker on a transient failure), and `refreshing` always drives the
@@ -378,12 +379,16 @@ on it. The open-project orchestration lives in the shared **`useOpenProject`** h
 (above), so the Welcome "Open project" card gets the same non-git init/notice handling as the rail.
 Above the cards, `WelcomePanel` composes **`ProviderWarningBanner`** — a slim gold banner shown **only when
 no provider is connected** ("No model provider connected — the agent can't run") with a **Connect a provider**
-CTA that opens the focused **`ConnectProviderDialog`** (below), not the full Settings takeover. "Connected"
-comes from the shared **`useHasProvider`** hook: `provider.status` (connected iff any `configured`) read on
-mount, on every `providerVersion` bump (the host's `providerChanged` push), and whenever the settings
-dialog closes — so the banner disappears the moment a provider lands, wherever it was connected; it stays
-hidden until the first answer lands, and a transport error degrades to *not* nagging (unknown or offline ≠
-"no provider"). All provider **management** lives in
+CTA that opens the focused **`ConnectProviderDialog`** (below), not the full Settings takeover. Welcome passes
+it `hasProvider` and does not render it while the wizard gate is still `pending`, so it never flashes ahead of
+the wizard. **Provider status has one owner**: the store's `providerStatus` snapshot, stamped with the
+`providerStatusVersion` it answers. The store bumps that version on every `provider.changed`, every welcome
+(a login that finished while disconnected is picked up on reconnect), and every successful untargeted login
+frame (hosts that predate a push still refresh); a local sign-out or Retry bumps it too. `useProviderStatus`
+re-reads whenever the snapshot is behind, single-flight per version, and `useHasProvider` (connected iff any
+`configured`) derives from it — so the banner, the wizard gate, the connect surfaces and Settings never
+disagree. The banner stays hidden until the first answer lands, and a transport error degrades to *not*
+nagging (unknown or offline ≠ "no provider"). All provider **management** lives in
 Settings, not here (the always-on strip is gone).
 
 **First connection.** `ConnectProviderDialog` is an onboarding overlay over `ConnectProviderOptions` — the
@@ -391,9 +396,9 @@ same body the onboarding wizard embeds: one bordered surface holding a **Detecte
 detection found something (below) — above the search, then **one
 searchable list** of every other unconfigured provider in a scroll area 240px tall, capped by the viewport
 down to a 160px floor so a short window loses list height before the page scrolls (~40 providers never grow
-the overlay, and filtering never resizes it): subscription (OAuth-capable) providers, then key-only ones, each row the Settings `ProviderRow`: a subscription row offers
-only Sign in (the API key for those providers stays in Settings → Providers, so a first-run user is steered to the
-plan they already pay for), a key-only row its API key. JetBrains AI is not a pi provider but the `central` CLI that configures several, so it keeps the real
+the overlay, and filtering never resizes it): subscription (OAuth-capable) providers, then key-only ones, each row the Settings `ProviderRow` with the same
+buttons as Settings: Sign in where the provider supports it and API key where it accepts one, so the copy's
+"or add an API key" holds for every provider. JetBrains AI is not a pi provider but the `central` CLI that configures several, so it keeps the real
 `JetBrainsAiCard` (its Central state machine is never duplicated) — placed like any other option: in **Detected**
 whenever `central` is installed (Connect, sign-in, start-proxy or update, by state), otherwise a plain
 **JetBrains AI** row at the end of the list whose **Set up** expands the card's install guidance. The unfiltered list skips detected providers; a search covers every provider,
@@ -408,9 +413,10 @@ naming a provider we know nothing about would be a guess dressed as advice. It i
 silent sign-in: the host reports which tools are signed in, and the user still authorises ThinkRail through
 pi's own flow. There is no link out to Settings — the surface already lists every connectable provider. No quota or other global
 settings appear here; the full `ProvidersSettings` stays the power-user surface. Data and login wiring are
-the shared **`useProviderAuth`** hook, which `ProvidersSettings` uses too: one `provider.status` loader
-(re-read on `providerVersion` and on a successful login), `startLogin` / `logout`, and the store-driven
-`LoginDialog` node. Exactly one surface mounts that node: Settings while it is open, otherwise the
+the shared **`useProviderAuth`** hook, which `ProvidersSettings` uses too: the store's provider status snapshot
+(above), re-read once whenever one of them opens — Central's install state and similar host-local facts change
+without a push — `startLogin` / `logout`, and the store-driven
+`LoginDialog` node. Exactly one surface mounts that node: Settings → Providers while Settings is open, otherwise the
 connect surface (`ownsLoginDialog`), so a login never renders two stacked dialogs. **Post-connect handoff:**
 when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key
 login or a Central connect alike; the surface's first report is that baseline unless it passes
@@ -426,16 +432,19 @@ because a power user there may be adding a second provider.
 `startNewProject`, so the rail "+" and Welcome share it): a project name, its derived folder name, and a
 **Location** — the parent folder, default `~/thinkrail`, editable as a host path or picked with the native
 directory picker — previewed as the final path, then `project.create` (folder + `git init` + initial commit
-+ open; there is no "skip git" choice because a non-repo cannot be a project). When offered, a **Draft the
++ open; there is no "skip git" choice because a non-repo cannot be a project). A **Draft the
 specs with the agent** switch (default **on**) makes the caller (`startProjectSetupChat`) enter the new
 project's **Default workspace** and open a fresh chat whose composer is pre-filled — not sent — with
 `/skill:setting-up-a-project`: a brand-new repo has nothing to isolate, so a second Create-workspace dialog would
-only add clicks before anything exists. The "Set up project" card on an existing repo still goes through
+only add clicks before anything exists. The continuation is fenced on navigation: it proceeds only while the
+new project's home is still what the user is looking at (selected, no workspace active) and starts the chat only
+while that Default workspace is still the active one, so wandering off during `workspace.list` drops it; a
+failed list read toasts instead of rejecting. The "Set up project" card on an existing repo still goes through
 `NewWorkspaceDialog`. A failure stays inline in the dialog.
 
 **Cold-start onboarding wizard.** `OnboardingWizard` replaces the Welcome cards only on a true cold start:
 the host supports `ONBOARDING_PROTOCOL_VERSION`, `AppConfig.onboardingDismissed` is false, there are no
-open or recent projects, and `useHasProvider` reports none. The decision is **latched in the store gate** (it survives remounts) so
+open or recent projects, and the provider status snapshot reports none. The decision is **latched in the store gate** (it survives remounts) so
 connecting a provider mid-wizard does not tear it down. It opens on an **intro**
 (the brand title, the landing page's tagline and its three "why" beats — worktrees, specs, pi as the
 engine — as small cards, and **Get started**; the copy follows thinkrail.ai so first run and landing say the same thing) — a first-time user meets the
@@ -449,8 +458,9 @@ whole connect screen (title, options, Skip) fades out in place over 200 ms, then
 own two cards (Start a new project / Open project, passed in as `projectCards` so their menus and dialogs stay
 Welcome's). Nothing animates height, so no list is clipped mid-collapse and the centered column only re-centers
 while it is invisible; under reduced motion the swap is instant. Reaching done persists
-`onboardingDismissed`; the wizard (and with it the hidden rail and held prompts) stays until a project opens. Zero models warns and offers Back to the
-choices. The wizard owns no project step of its own and shows no progress strip.
+`onboardingDismissed`; the wizard (and with it the hidden rail and held prompts) stays until a project opens. Zero models warns and offers **Check again**
+(re-runs the same read, e.g. after fixing the account elsewhere) and Back to the choices — Back alone could not
+return, since the provider is configured and so no longer listed. The wizard owns no project step of its own and shows no progress strip.
 **Skip setup** is on every screen before done except privacy, whose Continue is the only way on.
 The gate lives in the store (`onboardingWizard`: pending → shown | hidden) so shell can hold first-run
 prompts while it is undecided. Finishing or skipping writes `onboardingDismissed: true`, so a returning user — even one who later removes
@@ -952,7 +962,10 @@ a project picker, the prompt hero, and the reused
   broadcast activate the host gate while the dialog stays open. **Done**, Close, Escape, and backdrop persist
   the current draft with `analyticsConsentConfirmed: true`, so the ordinary result is on. Switching off
   immediately persists off/confirmed and the resulting config broadcast closes the dialog. Confirmed on/off
-  configurations never mount or prime. Failed persistence leaves the draft and error visible for retry. Saved
+  configurations never mount or prime. Failed persistence leaves the draft and error visible for retry.
+  Until the user flips the switch on this surface, a decision confirmed elsewhere meanwhile (Settings →
+  Privacy, another window) is adopted, not overwritten: the switch shows the saved value and Continue / Done
+  advances without a write — only a choice made here is persisted. Saved
   decisions survive restarts and change later through Settings. The dialog keeps only the short
   product-usage copy and shared switch; Settings adds the optional outcomes, report dimensions, and
   excluded content. Older hosts retain their legacy privacy control without the new consent dialog.

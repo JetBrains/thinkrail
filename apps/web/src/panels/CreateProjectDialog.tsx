@@ -34,11 +34,9 @@ export function joinHostPath(parent: string, folder: string): string {
 }
 
 export function CreateProjectDialog({
-	offerSetup,
 	onClose,
 	onCreated,
 }: {
-	offerSetup: boolean;
 	onClose: () => void;
 	onCreated: (project: Project, setup: boolean) => void;
 }) {
@@ -67,16 +65,16 @@ export function CreateProjectDialog({
 	};
 
 	const create = async () => {
-		const runSetup = offerSetup && setup;
 		setBusy(true);
 		setError(null);
 		try {
 			const project = await getTransport().request("project.create", {
 				parentPath,
 				name: folder,
+				displayName: name.trim(),
 			});
 			setBusy(false);
-			onCreated(project, runSetup);
+			onCreated(project, setup);
 			onClose();
 		} catch (err) {
 			setBusy(false);
@@ -152,24 +150,22 @@ export function CreateProjectDialog({
 						</span>
 					</div>
 
-					{offerSetup ? (
-						<div className="flex items-center gap-12">
-							<span className="min-w-0 flex-1">
-								<span className="block tr-title-compact text-text-default">
-									{t("panels.createProject.setupTitle")}
-								</span>
-								<span className="block text-text-muted tr-text-metadata">
-									{t("panels.createProject.setupDetail")}
-								</span>
+					<div className="flex items-center gap-12">
+						<span className="min-w-0 flex-1">
+							<span className="block tr-title-compact text-text-default">
+								{t("panels.createProject.setupTitle")}
 							</span>
-							<Switch
-								checked={setup}
-								onCheckedChange={setSetup}
-								label={t("panels.createProject.setupTitle")}
-								testId="create-project-setup"
-							/>
-						</div>
-					) : null}
+							<span className="block text-text-muted tr-text-metadata">
+								{t("panels.createProject.setupDetail")}
+							</span>
+						</span>
+						<Switch
+							checked={setup}
+							onCheckedChange={setSetup}
+							label={t("panels.createProject.setupTitle")}
+							testId="create-project-setup"
+						/>
+					</div>
 
 					{error ? (
 						<p

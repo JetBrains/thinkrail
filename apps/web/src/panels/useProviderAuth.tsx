@@ -1,9 +1,10 @@
 import type { ProviderStatusReport } from "@thinkrail/contracts";
 import { t as translate } from "@thinkrail/locales/react";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { selectLoginBusy, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { reloadProviderStatus, useProviderStatus } from "./useProviderStatus";
 
 export interface ProviderAuth {
 	report: ProviderStatusReport | null;
@@ -18,48 +19,15 @@ export interface ProviderAuth {
 }
 
 export function useProviderAuth({ ownsLoginDialog }: { ownsLoginDialog: boolean }): ProviderAuth {
-	const [report, setReport] = useState<ProviderStatusReport | null>(null);
-	const [failed, setFailed] = useState(false);
-	const [refreshing, setRefreshing] = useState(false);
+	const { report, failed, refreshing } = useProviderStatus();
 	const [busyProvider, setBusyProvider] = useState<string | null>(null);
 	const activeLogin = useAppStore((s) => (s.activeLogin?.target ? null : s.activeLogin));
 	const loginBusy = useAppStore(selectLoginBusy);
-	const providerVersion = useAppStore((s) => s.providerVersion);
-	const loadSequence = useRef(0);
+	const load = reloadProviderStatus;
 
-	const load = useCallback(async () => {
-		const sequence = ++loadSequence.current;
-		const providerVersion = useAppStore.getState().providerVersion;
-		const isCurrent = () =>
-			sequence === loadSequence.current &&
-			providerVersion === useAppStore.getState().providerVersion;
-		setRefreshing(true);
-		const read = async () => {
-			const next = await getTransport().request("provider.status", {});
-			if (!isCurrent()) return;
-			setReport(next);
-			setFailed(false);
-		};
-		await read()
-			.catch(() => {
-				if (isCurrent()) setFailed(true);
-			})
-			.finally(() => {
-				if (sequence === loadSequence.current) setRefreshing(false);
-			});
+	useEffect(() => {
+		void reloadProviderStatus();
 	}, []);
-
-	useEffect(() => {
-		void load();
-	}, [load]);
-
-	useEffect(() => {
-		if (providerVersion > 0) void load();
-	}, [providerVersion, load]);
-
-	useEffect(() => {
-		if (activeLogin?.status === "success") void load();
-	}, [activeLogin?.status, load]);
 
 	const startLogin = useCallback(async (providerId: string, type: "oauth" | "api_key") => {
 		if (!useAppStore.getState().reserveLogin()) return;
@@ -78,24 +46,20 @@ export function useProviderAuth({ ownsLoginDialog }: { ownsLoginDialog: boolean 
 			});
 	}, []);
 
-	const logout = useCallback(
-		async (providerId: string) => {
-			setBusyProvider(providerId);
-			const signOut = async () => {
-				await getTransport().request("provider.logout", { providerId });
-				return true;
-			};
-			const signedOut = await signOut()
-				.catch((err: unknown) => {
-					toast.error(errorText(err), translate("settings.providers.signOutFailed"));
-					return false;
-				})
-				.finally(() => setBusyProvider(null));
-			if (!signedOut) return;
-			await load();
-		},
-		[load],
-	);
+	const logout = useCallback(async (providerId: string) => {
+		setBusyProvider(providerId);
+		const signOut = async () => {
+			await getTransport().request("provider.logout", { providerId });
+			return true;
+		};
+		const signedOut = await signOut()
+			.catch((err: unknown) => {
+				toast.error(errorText(err), translate("settings.providers.signOutFailed"));
+				return false;
+			})
+			.finally(() => setBusyProvider(null));
+		if (signedOut) await reloadProviderStatus();
+	}, []);
 
 	const loginProviderName =
 		report?.providers.find((p) => p.id === activeLogin?.providerId)?.name ??

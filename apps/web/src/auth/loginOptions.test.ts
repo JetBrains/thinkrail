@@ -30,11 +30,11 @@ test("loginOptionParts turns a trailing parenthetical into a detail or the recom
 });
 
 test("loginPromptMessage turns pi's terminal hints into dialog copy", () => {
-	expect(loginPromptMessage("GitHub Enterprise URL/domain (blank for github.com)")).toBe(
+	expect(loginPromptMessage("GitHub Enterprise URL/domain (blank for github.com)", t)).toBe(
 		"GitHub Enterprise URL/domain. Leave empty for github.com.",
 	);
-	expect(loginPromptMessage("Configure AWS credentials, then press Enter to continue")).toBe(
+	expect(loginPromptMessage("Configure AWS credentials, then press Enter to continue", t)).toBe(
 		"Configure AWS credentials, then choose Continue",
 	);
-	expect(loginPromptMessage("Enter Groq API key")).toBe("Enter Groq API key");
+	expect(loginPromptMessage("Enter Groq API key", t)).toBe("Enter Groq API key");
 });

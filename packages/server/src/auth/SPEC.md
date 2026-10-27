@@ -117,7 +117,8 @@ ourselves and never surface a credential value over the wire.
       prompt (tab closed or reloaded, never cancelled) would otherwise park every later attempt behind
       it on "Working…" until the host restarts. No frame is pushed for the superseded login — an idle
       client would otherwise pop a stray error dialog for a login it never saw.
-    - `logoutProvider(id)` — `runtime.logout` (refreshes internally). (The old `setProviderApiKey` — a
+    - `logoutProvider(id)` — `runtime.logout` (refreshes internally), then the `setLogoutPublisher` seam
+      (a no-op by default) so the host can broadcast the change. (The old `setProviderApiKey` — a
       canned interaction answering exactly one secret prompt — is gone with `provider.setApiKey`: the
       dialog flow subsumes it and also serves multi-prompt providers.)
     - `setLoginPublisher(fn)` — the push seam (defaults to a no-op). Successful completion also supplies
@@ -169,7 +170,7 @@ ourselves and never surface a credential value over the wire.
 - **Public surface (barrel):** `getProviderStatus`, `buildProviderReport` (+ `ProviderStatusSources`);
   `detectAccounts`;
   `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `logoutProvider`,
-  `setLoginPublisher`; `initializeJbcentralRuntime`, `stopJbcentralRuntime`, `getJbcentralStatus`,
+  `setLoginPublisher`, `setLogoutPublisher`; `initializeJbcentralRuntime`, `stopJbcentralRuntime`, `getJbcentralStatus`,
   `getJbcentralQuota`, `connectJbcentral`, `disconnectJbcentral`, `startProxyJbcentral`,
   `updateJbcentral`, `jbcentralLogin`, the successful-action /
   runtime-changed publisher seams, and the explicit `resetJbcentralStateForTests` lifecycle seam used by

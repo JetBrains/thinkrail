@@ -20,12 +20,12 @@ export function useOpenProject(
 	openProject: (rawPath: string) => Promise<void>;
 	pickAndOpen: () => Promise<void>;
 	enterHostPath: () => void;
-	startNewProject: (options: { offerSetup: boolean }) => void;
+	startNewProject: () => void;
 	dialogs: ReactNode;
 } {
 	const t = useT();
 	const [initTarget, setInitTarget] = useState<string | null>(null);
-	const [createOffer, setCreateOffer] = useState<{ offerSetup: boolean } | null>(null);
+	const [creating, setCreating] = useState(false);
 	const [openError, setOpenError] = useState<string | null>(null);
 	const [pathEntry, setPathEntry] = useState<{ reason: string | null } | null>(null);
 
@@ -79,9 +79,9 @@ export function useOpenProject(
 		}
 	};
 
-	const startNewProject = (options: { offerSetup: boolean }) => {
+	const startNewProject = () => {
 		projectOpenIntents.begin();
-		setCreateOffer(options);
+		setCreating(true);
 	};
 
 	const enterHostPath = () => {
@@ -128,10 +128,9 @@ export function useOpenProject(
 					if (initTarget) void initProject(initTarget);
 				}}
 			/>
-			{createOffer ? (
+			{creating ? (
 				<CreateProjectDialog
-					offerSetup={createOffer.offerSetup}
-					onClose={() => setCreateOffer(null)}
+					onClose={() => setCreating(false)}
 					onCreated={(project, setup) => void adopt(project, projectOpenIntents.begin(), { setup })}
 				/>
 			) : null}

@@ -4,15 +4,15 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { useState } from "react";
 import { ConnectProviderDialog } from "./ConnectProviderDialog";
-import { useHasProvider } from "./useHasProvider";
 
 export function ProviderWarningBanner({
+	hasProvider,
 	onConnected,
 }: {
+	hasProvider: boolean | null;
 	onConnected?: (provider: ProviderStatus) => void;
 }) {
 	const t = useT();
-	const hasProvider = useHasProvider();
 	const [connecting, setConnecting] = useState(false);
 
 	return (

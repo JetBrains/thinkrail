@@ -7,7 +7,7 @@ import {
 import { useT } from "@thinkrail/locales/react";
 import { useEffect, useState } from "react";
 import { PRODUCT_NAME } from "../constants/branding";
-import { selectSupportsOnboarding, toast, useAppStore } from "../store";
+import { selectOnboardingEligible, selectSupportsOnboarding, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConnectedLine, type ConnectedSummary } from "./ConnectedLine";
@@ -22,8 +22,8 @@ import {
 	startProjectSetupChat,
 	type WorkspaceDialogRequest,
 } from "./setupPrompt";
-import { useHasProvider } from "./useHasProvider";
 import { useOpenProject } from "./useOpenProject";
+import { useHasProvider } from "./useProviderStatus";
 import { Card, CardSkeleton } from "./WelcomeCard";
 
 export function WelcomePanel() {
@@ -33,31 +33,19 @@ export function WelcomePanel() {
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const supportsOnboarding = useAppStore(selectSupportsOnboarding);
-	const onboardingDismissed = useAppStore((s) => s.onboardingDismissed);
+	const onboardingEligible = useAppStore(selectOnboardingEligible);
 	const hasProvider = useHasProvider();
 	const [dialog, setDialog] = useState<WorkspaceDialogRequest | null>(null);
 	const [hasSpecs, setHasSpecs] = useState<boolean | null>(null);
 	const wizard = useAppStore((s) => s.onboardingWizard);
 	const setWizard = useAppStore((s) => s.setOnboardingWizard);
 	const [justConnected, setJustConnected] = useState<ConnectedSummary | null>(null);
-	const coldStart = projects.length === 0 && recentProjects.length === 0;
 
 	useEffect(() => {
 		if (wizard !== "pending" || protocolVersion === null) return;
-		if (!supportsOnboarding || onboardingDismissed || !coldStart || hasProvider === true) {
-			setWizard("hidden");
-		} else if (hasProvider === false) {
-			setWizard("shown");
-		}
-	}, [
-		wizard,
-		setWizard,
-		protocolVersion,
-		supportsOnboarding,
-		onboardingDismissed,
-		coldStart,
-		hasProvider,
-	]);
+		if (!onboardingEligible || hasProvider === true) setWizard("hidden");
+		else if (hasProvider === false) setWizard("shown");
+	}, [wizard, setWizard, protocolVersion, onboardingEligible, hasProvider]);
 
 	useEffect(() => {
 		if (hasProvider === false) setJustConnected(null);
@@ -142,7 +130,7 @@ export function WelcomePanel() {
 					icon={Sparkles}
 					title={t("panels.welcome.startNewTitle")}
 					subtitle={t("panels.welcome.startNewSubtitle")}
-					onClick={() => startNewProject({ offerSetup: true })}
+					onClick={startNewProject}
 				/>
 				{openProjectCard(false)}
 			</>
@@ -182,15 +170,18 @@ export function WelcomePanel() {
 						</div>
 					) : null}
 
-					<ProviderWarningBanner
-						onConnected={(p) =>
-							setJustConnected({
-								provider: connectedProviderName(p, t),
-								models: null,
-								defaultModel: null,
-							})
-						}
-					/>
+					{wizard === "pending" ? null : (
+						<ProviderWarningBanner
+							hasProvider={hasProvider}
+							onConnected={(p) =>
+								setJustConnected({
+									provider: connectedProviderName(p, t),
+									models: null,
+									defaultModel: null,
+								})
+							}
+						/>
+					)}
 					{project ? <ProjectTrustNotice projectId={project.id} /> : null}
 
 					<div className="mt-24 flex flex-wrap justify-center gap-12">

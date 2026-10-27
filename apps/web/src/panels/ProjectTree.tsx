@@ -230,7 +230,7 @@ export function ProjectTree() {
 
 	const { openProject, pickAndOpen, enterHostPath, startNewProject, dialogs } = useOpenProject(
 		async (project, { setup }) => {
-			await selectProject(project.id);
+			await selectProject(project.id).catch(() => {});
 			if (setup) await startProjectSetupChat(project.id);
 		},
 	);
@@ -279,7 +279,7 @@ export function ProjectTree() {
 					onOpen={() => void pickAndOpen()}
 					onEnterHostPath={enterHostPath}
 					onOpenRecent={(p) => void openProject(p)}
-					{...(supportsCreate ? { onStartNew: () => startNewProject({ offerSetup: true }) } : {})}
+					{...(supportsCreate ? { onStartNew: startNewProject } : {})}
 				>
 					<Button
 						ref={addProjectButtonRef}

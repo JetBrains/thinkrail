@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -10,6 +11,14 @@ import {
 
 const NOW = Date.parse("2026-10-26T12:00:00Z");
 
+const realStat = fsPromises.stat;
+const hungPaths = new Set<string>();
+mock.module("node:fs/promises", () => ({
+	...fsPromises,
+	stat: (path: string, ...rest: []) =>
+		hungPaths.has(path) ? new Promise(() => {}) : realStat(path, ...rest),
+}));
+
 let home: string;
 
 beforeEach(() => {
@@ -17,6 +26,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	hungPaths.clear();
 	rmSync(home, { recursive: true, force: true });
 });
 
@@ -358,6 +368,16 @@ describe("file robustness", () => {
 			`{"refresh_token":"secret","pad":"${"x".repeat(1024 * 1024)}"}`,
 		);
 		expect(await detect()).toEqual([]);
+	});
+
+	test("a hung read costs its source at most 1.5 s and never the other sources", async () => {
+		hungPaths.add(join(home, ".claude", ".credentials.json"));
+		put(join(home, ".kimi", "credentials", "kimi-code.json"), { refresh_token: "secret" });
+		const started = performance.now();
+		expect(await sources()).toEqual(["kimi-cli"]);
+		const elapsed = performance.now() - started;
+		expect(elapsed).toBeGreaterThanOrEqual(1400);
+		expect(elapsed).toBeLessThan(3000);
 	});
 
 	test("the HOME environment variable locates the default home", async () => {

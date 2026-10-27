@@ -8,13 +8,11 @@ export function ProviderRow({
 	busy,
 	onSignIn,
 	onApiKey,
-	showApiKey = true,
 }: {
 	provider: ProviderStatus;
 	busy: boolean;
 	onSignIn: () => void;
 	onApiKey: () => void;
-	showApiKey?: boolean;
 }) {
 	const t = useT();
 	return (
@@ -39,7 +37,7 @@ export function ProviderRow({
 						{t("settings.providers.signIn")}
 					</Button>
 				)}
-				{provider.canApiKey && showApiKey && (
+				{provider.canApiKey && (
 					<Button
 						variant="outline"
 						size="sm"

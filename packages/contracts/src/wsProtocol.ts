@@ -125,6 +125,7 @@ export type TemplateReadLocation =
 
 export const PROTOCOL_VERSION = 94;
 export const ONBOARDING_PROTOCOL_VERSION = 94;
+export const LAYOUT_PLAN_PRESET_PROTOCOL_VERSION = 94;
 export const TOOL_RESPONSE_PROTOCOL_VERSION = 93;
 export const USER_THEMES_PROTOCOL_VERSION = 92;
 export const HOST_ENVIRONMENT_PROTOCOL_VERSION = 91;
@@ -600,7 +601,10 @@ export interface WsMethodMap {
 	"project.rename": { params: { id: string; name: string }; result: Project };
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
 	"project.init": { params: { path: string }; result: Project };
-	"project.create": { params: { parentPath: string; name: string }; result: Project };
+	"project.create": {
+		params: { parentPath: string; name: string; displayName?: string };
+		result: Project;
+	};
 	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
 	"project.setTrust": {
 		params: { id: string; trusted: boolean; resources?: boolean };

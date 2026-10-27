@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
 import { jbcentralExtensionPath } from "@thinkrail/shared/jbcentral";
+import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
 import { stripAmbientPiCredentials } from "./ambientCredentials";
 import { E2E_BASE_CONFIG } from "./fixtures/analyticsConsent";
 import { activeWorktreeRow } from "./fixtures/app";
@@ -98,11 +99,7 @@ async function startHost(): Promise<void> {
 			THINKRAIL_GH_OFFLINE: "1",
 			CI: "1",
 			[REAL_CENTRAL_E2E_ENV]: "1",
-			HOME: HOME_DIR,
-			USERPROFILE: HOME_DIR,
-			CLAUDE_CONFIG_DIR: join(HOME_DIR, ".claude"),
-			CODEX_HOME: join(HOME_DIR, ".codex"),
-			GEMINI_CLI_HOME: HOME_DIR,
+			...toolHomeEnv(HOME_DIR),
 			PI_CODING_AGENT_DIR: AGENT_DIR,
 			PI_OFFLINE: "1",
 			PATH: hostPath,

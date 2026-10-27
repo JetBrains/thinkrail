@@ -539,7 +539,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `template.get`/`template.save` shape);
   **layout preset DTO** — portable **`LayoutPreset`**, the bounded resource-free frame grammar synchronized
   in `AppConfig.customLayoutPresets`: center topology, left/right/bottom group geometry, visibility/folds,
-  bottom alignment, and singleton tools, but no workspace, file, diff, chat, document, terminal, preview,
+  bottom alignment, and singleton tools (`plan`, the TODO List, is accepted from
+  `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` = v94), but no workspace, file, diff, chat, document, terminal, preview,
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
@@ -576,8 +577,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`;
   `PROJECT_RENAME_PROTOCOL_VERSION` pins its v85 introduction so a newer client omits the action against
   an older host), **`project.inspect`** (classify a path) + **`project.init`**
-  (`git init` + commit, then open) + **`project.create`** (`{ parentPath, name }` → the opened `Project`:
-  make the folder `name` under `parentPath`, creating missing parents, then the same bootstrap as init;
+  (`git init` + commit, then open) + **`project.create`** (`{ parentPath, name, displayName? }` → the opened
+  `Project`: make the folder `name` under `parentPath`, creating missing parents, then the same bootstrap as
+  init, and name the project `displayName` — what the user typed — when it differs from the folder;
   `ONBOARDING_PROTOCOL_VERSION` pins its v94 introduction together with `AppConfig.onboardingDismissed`
   and `provider.detect`)
   + **`project.hasSpecs`** (lazy per-project "contains a registered

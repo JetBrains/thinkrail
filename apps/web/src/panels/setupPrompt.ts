@@ -1,4 +1,5 @@
 import { t } from "@thinkrail/locales/react";
+import { useAppStore } from "@/store";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 import { startChatInTab } from "./openChat";
 
@@ -11,6 +12,12 @@ export function setupDialogRequest(projectId: string): WorkspaceDialogRequest {
 }
 
 export async function startProjectSetupChat(projectId: string): Promise<void> {
-	const workspace = await enterDefaultWorkspace(projectId);
-	if (workspace) await startChatInTab(workspace.id, { draft: SETUP_PROMPT });
+	const onProjectHome = () => {
+		const state = useAppStore.getState();
+		return state.selectedProjectId === projectId && state.activeWorkspaceId === null;
+	};
+	if (!onProjectHome()) return;
+	const workspace = await enterDefaultWorkspace(projectId, onProjectHome);
+	if (!workspace || useAppStore.getState().activeWorkspaceId !== workspace.id) return;
+	await startChatInTab(workspace.id, { draft: SETUP_PROMPT });
 }

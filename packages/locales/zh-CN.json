@@ -1136,7 +1136,6 @@
 	"panels.unplacedReview.title": "未归入 {{renderer}} 的评论",
 	"panels.viewedMark.label": "已查看",
 	"panels.welcome.loading": "加载中",
-	"panels.welcome.openProjectSubtitle": "选择一个本地 git 仓库作为工作目录。",
 	"panels.welcome.openProjectTitle": "打开项目",
 	"panels.welcome.projectFolderSubtitle": "会话、改动和终端直接在您的项目文件夹中运行，不做隔离。",
 	"panels.welcome.projectFolderTitle": "在项目文件夹中工作",

@@ -259,7 +259,7 @@ export function LoginDialog({
 									</p>
 								) : state.input.message ? (
 									<p className="text-text-muted tr-text-ui">
-										{loginPromptMessage(state.input.message)}
+										{loginPromptMessage(state.input.message, t)}
 									</p>
 								) : null}
 								<input
@@ -313,7 +313,7 @@ export function LoginDialog({
 							</Button>
 							{promptOpen ? (
 								<Button data-testid="login-submit" onClick={submitPrompt}>
-									{t("auth.login.continue")}
+									{t("common.continue")}
 								</Button>
 							) : null}
 						</>

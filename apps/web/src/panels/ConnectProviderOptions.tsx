@@ -214,7 +214,6 @@ export function ConnectProviderOptions({
 							busy={rowBusy(p.id)}
 							onSignIn={() => connect(p, "oauth")}
 							onApiKey={() => connect(p, "api_key")}
-							showApiKey={!p.canOAuth}
 						/>
 					))}
 					{showJetBrainsRow ? (

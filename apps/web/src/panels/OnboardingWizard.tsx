@@ -134,10 +134,10 @@ export function OnboardingWizard({
 				>
 					<div className="flex flex-col items-center gap-8 text-center">
 						<h1 data-testid="welcome-title" className="tr-heading-xl break-words text-primary">
-							{t("panels.onboarding.connect.title")}
+							{t("panels.connectProvider.title")}
 						</h1>
 						<p className="tr-text-reading text-text-muted">
-							{t("panels.onboarding.connect.subtitle")}
+							{t("panels.connectProvider.description")}
 						</p>
 					</div>
 					<div className="relative w-full">
@@ -223,7 +223,7 @@ function PrivacyStep({ onContinue }: { onContinue: () => void }) {
 					});
 				}}
 			>
-				{t("panels.analyticsConsent.continue")}
+				{t("common.continue")}
 				<ArrowRight className="size-16" />
 			</Button>
 		</div>
@@ -241,6 +241,7 @@ function VerifyConnection({
 }) {
 	const t = useT();
 	const [empty, setEmpty] = useState(false);
+	const [attempt, setAttempt] = useState(0);
 	const name = connectedProviderName(provider, t);
 	const verified = useEffectEvent(onVerified);
 
@@ -268,7 +269,7 @@ function VerifyConnection({
 		return () => {
 			cancelled = true;
 		};
-	}, [name]);
+	}, [name, attempt]);
 
 	return (
 		<div
@@ -285,10 +286,22 @@ function VerifyConnection({
 						<Alert className="mt-2 size-16 shrink-0" />
 						{t("panels.onboarding.verify.noModels", { provider: name })}
 					</p>
-					<Button variant="outline" size="sm" data-testid="onboarding-back" onClick={onBack}>
-						<ArrowLeft className="size-16" />
-						{t("common.back")}
-					</Button>
+					<div className="flex gap-8">
+						<Button variant="outline" size="sm" data-testid="onboarding-back" onClick={onBack}>
+							<ArrowLeft className="size-16" />
+							{t("common.back")}
+						</Button>
+						<Button
+							size="sm"
+							data-testid="onboarding-recheck"
+							onClick={() => {
+								setEmpty(false);
+								setAttempt((n) => n + 1);
+							}}
+						>
+							{t("panels.onboarding.verify.recheck")}
+						</Button>
+					</div>
 				</>
 			) : (
 				<p role="status" className="flex items-center gap-8 text-text-muted tr-text-ui">

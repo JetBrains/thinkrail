@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { devices, type PlaywrightTestConfig } from "@playwright/test";
+import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
 import { hermeticE2ePath, hermeticE2eShell } from "./fixtures/executables";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
@@ -25,18 +26,7 @@ export function artifactHostEnvironment(cacheDir: string): Record<string, string
 		XDG_CACHE_HOME: cacheDir,
 		THINKRAIL_PICK_DIR: E2E_PICK_DIR_POINTER,
 		THINKRAIL_GH_OFFLINE: "1",
-		HOME: E2E_HOME_DIR,
-		USERPROFILE: E2E_HOME_DIR,
-		CLAUDE_CONFIG_DIR: `${E2E_HOME_DIR}/.claude`,
-		CODEX_HOME: `${E2E_HOME_DIR}/.codex`,
-		XDG_CONFIG_HOME: `${E2E_HOME_DIR}/.config`,
-		COPILOT_HOME: `${E2E_HOME_DIR}/.copilot`,
-		KIMI_SHARE_DIR: `${E2E_HOME_DIR}/.kimi`,
-		GROK_HOME: `${E2E_HOME_DIR}/.grok`,
-		GROK_AUTH_PATH: "",
-		CLAUDE_SECURESTORAGE_CONFIG_DIR: "",
-		CLAUDE_CODE_OAUTH_TOKEN: "",
-		GEMINI_CLI_HOME: E2E_HOME_DIR,
+		...toolHomeEnv(E2E_HOME_DIR),
 		PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
 		PI_OFFLINE: "1",
 		PATH: hostPath,

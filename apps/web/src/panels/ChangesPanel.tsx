@@ -89,6 +89,7 @@ export function ChangesPanel({
 
 	const {
 		branches,
+		failed: branchesFailed,
 		refreshing: branchesRefreshing,
 		refresh: refreshBranches,
 	} = useBranchList(workspace?.projectId ?? null);
@@ -169,6 +170,7 @@ export function ChangesPanel({
 					{workspace ? (
 						<BranchPicker
 							branches={branches}
+							failed={branchesFailed}
 							selected={baseRef}
 							refreshing={branchesRefreshing}
 							label={t("changes.panel.versus")}

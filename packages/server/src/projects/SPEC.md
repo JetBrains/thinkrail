@@ -56,7 +56,9 @@ bootstrap it into one so it can be opened.
   made — an existing **empty** folder is reused, a non-empty one or a file rejects — and then gets the same
   bootstrap as `initProject`, run in that folder even when it sits inside an enclosing repository (a
   dotfiles repo in `~` must not swallow the new project); a failed bootstrap or open removes the folder
-  this call made, or only the `.git` it added to a reused empty one.
+  this call made only while it is still empty (anything written into it meanwhile survives), and always the
+  `.git` it added. An optional display name — what the user typed, before slugging — becomes the project
+  name when it differs from the folder.
   The commit supplies a **fallback `user.name`/`user.email` only for a field git has none configured for**,
   so a real global identity is never overridden. ("Does the project have specs?" is **not** computed here
   — `host` answers the lazy `project.hasSpecs` query via `spec.projectHasSpecs`, keeping this module free

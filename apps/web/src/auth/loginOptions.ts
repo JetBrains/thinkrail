@@ -29,9 +29,13 @@ export function loginOptionParts(
 	};
 }
 
-export function loginPromptMessage(message: string): string {
+export function loginPromptMessage(message: string, t: Translator): string {
 	return message
 		.trim()
-		.replace(/\s*\(blank for ([^()]+)\)$/i, ". Leave empty for $1.")
-		.replace(/press Enter( to continue)?/gi, "choose Continue");
+		.replace(/\s*\(blank for ([^()]+)\)$/i, (_match, fallback: string) =>
+			t("auth.login.promptBlankFor", { fallback }),
+		)
+		.replace(/press Enter( to continue)?/gi, () =>
+			t("auth.login.promptPressContinue", { action: t("common.continue") }),
+		);
 }

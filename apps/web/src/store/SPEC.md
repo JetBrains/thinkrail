@@ -459,10 +459,14 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   a flag an earlier consumer set can otherwise straddle the activation and let an inherited list pass as
   this opening's own truth before its own `model.list` reply lands. **`providerVersion`** is the monotonic,
   data-free `provider.changed` generation observed from the host; **`noteProviderChanged()`** atomically
-  increments it and clears `models`, freshness, and any old refresh spinner. Both `model.list` and
+  increments it and clears `models`, freshness, and any old refresh spinner. **`providerStatus`** is the one
+  `provider.status` snapshot (`{ version, report, failed }`); **`providerStatusVersion`** is its invalidation
+  generation, bumped by `noteProviderChanged`, every welcome, every successful untargeted login frame, and
+  `invalidateProviderStatus()`. **`installProviderStatus(version, report | null)`** installs only an answer to
+  the current version (`null` = failed read: keep the last report, set `failed`); the single-flight read lives in
+  `panels/useProviderStatus`. Both `model.list` and
   `model.refresh` replies install through version-guarded store actions, so no picker or older async reply can
-  offer a removed runtime generation. Transport owns the guarded re-read; the Providers settings pane observes
-  the version and re-reads status, while shell's quota controller treats it as an immediate closed-snapshot
+  offer a removed runtime generation. Transport owns the guarded re-read; shell's quota controller treats it as an immediate closed-snapshot
   invalidation. Other catalog transport work lives in `chat/useModelCatalog`, not here (the
   store→transport edge stays type-only). The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the

@@ -97,7 +97,9 @@ export function BranchSegment({
 	const [open, setOpen] = useState(false);
 	const contentRef = useRef<HTMLDivElement>(null);
 	const diffBase = useAppStore((s) => selectDiffBaseRef(s, workspace.id));
-	const { branches, refreshing, refresh } = useBranchList(open ? workspace.projectId : null);
+	const { branches, failed, refreshing, refresh } = useBranchList(
+		open ? workspace.projectId : null,
+	);
 	const userOwned = isUserOwnedWorkspace(workspace);
 	const remoteStatus = status ? null : remoteCounts(review, reviewDetailsKnown);
 	const remote = remoteStatus === "unknown" ? null : remoteStatus;
@@ -221,6 +223,7 @@ export function BranchSegment({
 				<Row label={t("shell.location.branch.compareTo")}>
 					<BranchPicker
 						branches={branches}
+						failed={failed}
 						selected={diffBase}
 						refreshing={refreshing}
 						label=""

@@ -71,7 +71,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   record of work that finished and drops only its answer,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`), the **`provider.changed`** invalidation broadcast after auth changes the Central status or
-  current runtime generation, and after every successful in-app provider login (not an MCP sign-in) so
+  current runtime generation, after every successful in-app provider login (not an MCP sign-in), and after
+  every `provider.logout`, so
   other clients and the Welcome surfaces see the new provider (clients re-read status/models), and the `provider.*` handlers—including
   `provider.jbcentralQuota`, whose handler composes `settings`' enabled/interval values with `auth`'s closed
   cached read so the siblings never import each other—the

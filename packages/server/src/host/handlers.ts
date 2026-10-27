@@ -499,7 +499,9 @@ const handlers: WsHandlers = {
 	"project.inspect": (params) => inspectProjectPath(params.path),
 	"project.init": (params) => observeSetupAction("project_init", () => initProject(params.path)),
 	"project.create": (params) =>
-		observeSetupAction("project_create", () => createProject(params.parentPath, params.name)),
+		observeSetupAction("project_create", () =>
+			createProject(params.parentPath, params.name, params.displayName),
+		),
 	"project.list": () =>
 		observeSetupRead(listProjects, (projects) => ({
 			project_present: projects.length > 0 ? "yes" : "no",

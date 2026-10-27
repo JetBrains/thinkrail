@@ -19,6 +19,7 @@ export {
 	logoutProvider,
 	resolveLogin,
 	setLoginPublisher,
+	setLogoutPublisher,
 	startLogin,
 } from "./providerLogin";
 export {

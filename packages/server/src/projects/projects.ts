@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
@@ -377,7 +377,11 @@ export function initProject(inputPath: string): Project {
 	return openProject(path);
 }
 
-export function createProject(parentPath: string, requestedName: string): Project {
+export function createProject(
+	parentPath: string,
+	requestedName: string,
+	displayName?: string,
+): Project {
 	const name = requestedName.trim();
 	if (!name || name === "." || name === ".." || /[/\\\0]/.test(name)) {
 		throw new Error(`Invalid project folder name: ${requestedName}`);
@@ -395,13 +399,19 @@ export function createProject(parentPath: string, requestedName: string): Projec
 		mkdirSync(path);
 		created = true;
 	}
+	let project: Project;
 	try {
 		bootstrapRepository(path);
-		return openProject(path);
+		project = openProject(path);
 	} catch (err) {
-		rmSync(created ? path : join(path, ".git"), { recursive: true, force: true });
+		rmSync(join(path, ".git"), { recursive: true, force: true });
+		if (created && readdirSync(path).length === 0) rmdirSync(path);
 		throw err;
 	}
+	const label = displayName?.replace(/\s+/g, " ").trim();
+	return label && label !== project.name && label.length <= PROJECT_NAME_MAX_LENGTH
+		? renameProject(project.id, label)
+		: project;
 }
 
 function bootstrapRepository(path: string): void {

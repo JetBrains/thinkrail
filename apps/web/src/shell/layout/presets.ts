@@ -118,6 +118,12 @@ export function layoutPresetName(t: Translator, preset: LayoutPreset): string {
 	return key ? t(key) : preset.name;
 }
 
+export function presetPlacesTool(preset: LayoutPreset, tool: LayoutToolId): boolean {
+	return [preset.left, preset.right, preset.bottom].some((region) =>
+		region.groups.some((group) => group.tools.includes(tool)),
+	);
+}
+
 export function minimumSideGroupLimit(preset: LayoutPreset): number {
 	return Math.max(1, preset.left.groups.length, preset.right.groups.length);
 }

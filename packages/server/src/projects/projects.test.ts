@@ -251,9 +251,10 @@ test("initProject: an empty folder gets an empty initial commit (a HEAD), so wor
 test("createProject: makes the folder and missing parents, bootstraps a repo, and opens it", () => {
 	const parent = join(dataDir, "nested", "parent");
 
-	const project = withoutUserGitConfig(() => createProject(parent, " my-app "));
+	const project = withoutUserGitConfig(() => createProject(parent, " my-app ", " My  App "));
 	const path = join(parent, "my-app");
 	expect(project.path).toBe(realpathSync(path));
+	expect(project.name).toBe("My App");
 	expect(gitOut(path, "rev-parse", "HEAD")).not.toBe("");
 	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
 });
@@ -282,6 +283,37 @@ test("createProject: a folder inside an enclosing repo becomes its own project",
 	expect(resolve(gitOut(join(outer, "inner"), "rev-parse", "--show-toplevel"))).toBe(
 		realpathSync(join(outer, "inner")),
 	);
+});
+
+function withFailingCommitHook<T>(hookBody: string, run: () => T): T {
+	const hooks = join(dataDir, "hooks");
+	mkdirSync(hooks, { recursive: true });
+	writeFileSync(join(hooks, "pre-commit"), `#!/bin/sh\n${hookBody}\nexit 1\n`, { mode: 0o755 });
+	const config = join(dataDir, "gitconfig");
+	writeFileSync(config, `[core]\n\thooksPath = ${hooks}\n`);
+	const saved = process.env.GIT_CONFIG_GLOBAL;
+	process.env.GIT_CONFIG_GLOBAL = config;
+	try {
+		return run();
+	} finally {
+		if (saved === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+		else process.env.GIT_CONFIG_GLOBAL = saved;
+	}
+}
+
+test("createProject: a failed bootstrap removes the folder it made, but nothing written into it meanwhile", () => {
+	const parent = join(dataDir, "parent");
+	expect(() => withFailingCommitHook(":", () => createProject(parent, "clean"))).toThrow(
+		"git commit failed",
+	);
+	expect(existsSync(join(parent, "clean"))).toBe(false);
+
+	expect(() =>
+		withFailingCommitHook("echo kept > hook-output.txt", () => createProject(parent, "busy")),
+	).toThrow("git commit failed");
+	expect(existsSync(join(parent, "busy", ".git"))).toBe(false);
+	expect(readFileSync(join(parent, "busy", "hook-output.txt"), "utf8")).toBe("kept\n");
+	expect(listProjects()).toEqual([]);
 });
 
 test("createProject: rejects names that are not one plain folder name", () => {

@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
+import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import {
 	type ArtifactHostAdapter,
@@ -80,16 +81,12 @@ export function analyticsProbeEnvironment(
 	return hostEnvironment(
 		{
 			...overrides,
-			HOME: join(root, "home"),
-			USERPROFILE: join(root, "home"),
+			...toolHomeEnv(join(root, "home")),
 			LOCALAPPDATA: join(root, "local"),
 			APPDATA: join(root, "roaming"),
 			XDG_CONFIG_HOME: join(root, "config"),
 			XDG_DATA_HOME: join(root, "xdg-data"),
 			XDG_CACHE_HOME: join(root, "cache"),
-			CLAUDE_CONFIG_DIR: join(root, "home", ".claude"),
-			CODEX_HOME: join(root, "home", ".codex"),
-			GEMINI_CLI_HOME: join(root, "home"),
 			THINKRAIL_DATA_DIR: join(root, "data"),
 			PI_CODING_AGENT_DIR: join(root, "agent"),
 			PI_OFFLINE: "1",

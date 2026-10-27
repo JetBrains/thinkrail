@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 import { removeTree } from "@thinkrail/shared/removeTree";
+import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
 import { within } from "./lifecycle";
 
 export interface ArtifactResources {
@@ -497,11 +498,7 @@ export default function syntheticExternalExtension(pi) {
 
 	const baseEnv: Record<string, string> = {
 		PI_OFFLINE: "1",
-		HOME: homeDir,
-		USERPROFILE: homeDir,
-		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
-		CODEX_HOME: join(homeDir, ".codex"),
-		GEMINI_CLI_HOME: homeDir,
+		...toolHomeEnv(homeDir),
 		PATH: noPiPath,
 		THINKRAIL_NO_ANALYTICS: "1",
 		CI: "1",

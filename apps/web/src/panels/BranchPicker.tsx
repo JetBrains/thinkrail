@@ -20,6 +20,7 @@ import { hasRemoteBranches, remoteBranchPresentation } from "./branchGroups";
 
 export function BranchPicker({
 	branches,
+	failed = false,
 	selected,
 	label,
 	testid,
@@ -30,6 +31,7 @@ export function BranchPicker({
 	onRefresh,
 }: {
 	branches: BranchList | null;
+	failed?: boolean;
 	selected: string;
 	label: ReactNode;
 	testid: string;
@@ -44,7 +46,7 @@ export function BranchPicker({
 	const remote = remoteBranchPresentation(branches);
 	const local = branches?.local ?? [];
 	const defaultBranch = branches?.defaultBranch;
-	const localOnly = branches !== null && !hasRemoteBranches(remote);
+	const localOnly = branches !== null && !failed && !hasRemoteBranches(remote);
 
 	const renderItem = (ref: string, label = ref) => (
 		<CommandItem

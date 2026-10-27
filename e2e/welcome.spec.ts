@@ -65,7 +65,6 @@ test("the Welcome provider warning only shows when no provider is connected, and
 				.or(dialog.getByTestId("connect-provider-list").getByTestId("jetbrains-ai-row")),
 		).toBeVisible();
 		await expect(dialog.getByTestId("jbcentral-quota-settings")).toHaveCount(0);
-		await expect(dialog.getByTestId("connect-show-all")).toHaveCount(0);
 	}
 });
 

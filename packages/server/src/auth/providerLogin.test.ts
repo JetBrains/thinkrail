@@ -14,6 +14,7 @@ import {
 	logoutProvider,
 	resolveLogin,
 	setLoginPublisher,
+	setLogoutPublisher,
 	startLogin,
 } from "./providerLogin";
 
@@ -73,6 +74,7 @@ function install(loginImpl: LoginImpl): Harness {
 afterEach(() => {
 	cancelAllLogins();
 	setLoginPublisher(() => {});
+	setLogoutPublisher(() => {});
 	configurePiRuntime(null);
 });
 
@@ -414,9 +416,12 @@ describe("api-key login / logoutProvider", () => {
 		expect(h.loginCalls()).toEqual([["anthropic", "oauth"]]);
 	});
 
-	test("logoutProvider removes the credential through the runtime", async () => {
+	test("logoutProvider removes the credential through the runtime, then announces the change", async () => {
 		const h = install(async () => {});
+		const announced: string[][] = [];
+		setLogoutPublisher(() => announced.push([...h.logoutCalls()]));
 		await logoutProvider("anthropic");
 		expect(h.logoutCalls()).toEqual(["anthropic"]);
+		expect(announced).toEqual([["anthropic"]]);
 	});
 });

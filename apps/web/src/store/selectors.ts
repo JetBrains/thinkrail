@@ -117,21 +117,26 @@ export function selectSupportsOnboarding(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= ONBOARDING_PROTOCOL_VERSION;
 }
 
-export function selectOnboardingActive(
-	state: ProtocolState & {
-		onboardingWizard: "pending" | "shown" | "hidden";
-		onboardingDismissed: boolean;
-		projects: readonly unknown[];
-		recentProjects: readonly unknown[];
-	},
-): boolean {
-	if (state.onboardingWizard === "shown") return state.projects.length === 0;
-	if (state.onboardingDismissed || state.onboardingWizard === "hidden") return false;
+type OnboardingState = ProtocolState & {
+	onboardingDismissed: boolean;
+	projects: readonly unknown[];
+	recentProjects: readonly unknown[];
+};
+
+export function selectOnboardingEligible(state: OnboardingState): boolean {
 	return (
+		!state.onboardingDismissed &&
 		selectSupportsOnboarding(state) &&
 		state.projects.length === 0 &&
 		state.recentProjects.length === 0
 	);
+}
+
+export function selectOnboardingActive(
+	state: OnboardingState & { onboardingWizard: "pending" | "shown" | "hidden" },
+): boolean {
+	if (state.onboardingWizard === "shown") return state.projects.length === 0;
+	return state.onboardingWizard === "pending" && selectOnboardingEligible(state);
 }
 
 export function selectSupportsMcp(state: ProtocolState): boolean {

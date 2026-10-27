@@ -1,6 +1,7 @@
 import type { AppConfigUpdate } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
 type QueuedSave = { config: AppConfigUpdate; settle: ((saved: boolean) => void)[] };
@@ -55,9 +56,12 @@ export function useAnalyticsConsent() {
 }
 
 export function useConsentDraft() {
-	const [draft, setDraft] = useState(true);
+	const [choice, setChoice] = useState<boolean | null>(null);
+	const savedConfirmed = useAppStore((s) => s.analyticsConsentConfirmed);
+	const savedEnabled = useAppStore((s) => s.analyticsEnabled);
 	const primed = useRef(false);
 	const { pending, error, save, prime } = useAnalyticsConsent();
+	const draft = choice ?? (savedConfirmed ? savedEnabled : true);
 
 	useEffect(() => {
 		if (primed.current) return;
@@ -66,9 +70,11 @@ export function useConsentDraft() {
 	}, [prime]);
 
 	const toggle = (enabled: boolean) => {
-		setDraft(enabled);
+		setChoice(enabled);
 		if (!enabled) void save(false);
 	};
 
-	return { draft, toggle, pending, error, confirm: () => save(draft) };
+	const confirm = () => (choice === null && savedConfirmed ? Promise.resolve(true) : save(draft));
+
+	return { draft, toggle, pending, error, confirm };
 }

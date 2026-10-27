@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { AppConfig } from "@thinkrail/contracts";
@@ -33,46 +33,56 @@ function setOnboardingDismissed(
 	);
 }
 
-async function anyProviderConfigured(baseURL: string | undefined): Promise<boolean> {
+async function requireColdProviders(baseURL: string | undefined): Promise<void> {
 	const report = await withWire(baseURL, (wire) => wire.request("provider.status", {}));
-	return report.providers.some((p) => p.configured);
+	const configured = report.providers.filter((p) => p.configured);
+	test.skip(
+		configured.length > 0 && configured.every((p) => p.kind === "env"),
+		"an ambient env provider makes this host a warm start",
+	);
+	expect(configured.map((p) => p.id)).toEqual([]);
 }
 
-async function connectFirstApiKeyProvider(page: Page, scope: Locator): Promise<string> {
-	const fixture = scope.locator('[data-testid="provider-signin-row"][data-provider="e2e-apikey"]');
-	const row =
-		(await fixture.count()) > 0
-			? fixture
-			: scope
-					.locator('[data-testid="provider-signin-row"]:has([data-testid="provider-apikey"])')
-					.first();
-	const providerId = await row.getAttribute("data-provider");
-	expect(providerId).toBeTruthy();
+async function connectE2eKeyProvider(page: Page, scope: Locator): Promise<void> {
+	const row = scope.locator('[data-testid="provider-signin-row"][data-provider="e2e-apikey"]');
+	const showMore = scope.getByTestId("providers-show-more");
+	await expect(row.or(showMore).first()).toBeVisible();
+	if (await showMore.isVisible()) await showMore.click();
 	await row.getByTestId("provider-apikey").click();
-
-	await expect(page.getByTestId("login-dialog")).toBeVisible();
-	for (let i = 0; i < 8; i++) {
-		if (!(await page.getByTestId("login-dialog").isVisible())) break;
-		const option = page.getByTestId("login-option").first();
-		const input = page.getByTestId("login-input");
-		if (await option.isVisible()) {
-			await option.click();
-		} else if (await input.isVisible()) {
-			await input.fill(`e2e-dummy-${i}`);
-			await page.getByTestId("login-submit").click();
-		} else {
-			await page.waitForTimeout(200);
-		}
-	}
-	return providerId ?? "";
+	await expect(page.getByTestId("login-dialog")).toHaveAttribute("data-provider", "e2e-apikey");
+	await page.getByTestId("login-input").fill("e2e-onboarding-key");
+	await page.getByTestId("login-submit").click();
 }
 
-function signOut(baseURL: string | undefined, providerId: string | null): Promise<unknown> {
-	if (!providerId) return Promise.resolve();
-	return withWire(baseURL, (wire) => wire.request("provider.logout", { providerId }));
+function signOutEveryProvider(baseURL: string | undefined): Promise<void> {
+	return withWire(baseURL, async (wire) => {
+		const report = await wire.request("provider.status", {});
+		for (const p of report.providers) {
+			if (p.configured && p.canLogout) await wire.request("provider.logout", { providerId: p.id });
+		}
+	});
+}
+
+async function hideModels(page: Page): Promise<{ hidden: boolean }> {
+	const models = { hidden: false };
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			if (models.hidden && raw.includes('"method":"model.list"')) {
+				const frame = JSON.parse(raw) as { id: string };
+				ws.send(JSON.stringify({ id: frame.id, ok: true, result: [] }));
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+	return models;
 }
 
 test.afterEach(async ({ baseURL }) => {
+	await signOutEveryProvider(baseURL);
 	await setOnboardingDismissed(baseURL, true);
 	rmSync(PROJECTS_PARENT, { recursive: true, force: true });
 });
@@ -95,7 +105,7 @@ test("Start a new project creates the repo under ~/thinkrail and seeds the setup
 	await expect(page.getByTestId("chat-input")).toHaveValue(SETUP_PROMPT);
 	await expect(page.getByTestId("new-workspace-dialog")).toHaveCount(0);
 	expect(existsSync(join(PROJECTS_PARENT, "weather-app", ".git"))).toBe(true);
-	await expect(page.getByTestId("project-item").filter({ hasText: "weather-app" })).toBeVisible();
+	await expect(page.getByTestId("project-item").filter({ hasText: "Weather App" })).toBeVisible();
 });
 
 test("the rail + starts a new project without the setup chat, and a taken folder errors inline", async ({
@@ -130,10 +140,7 @@ test("a cold start shows the onboarding wizard once; Skip setup persists", async
 }) => {
 	await setOnboardingDismissed(baseURL, false);
 	await openAppFresh(page);
-	test.skip(
-		await anyProviderConfigured(baseURL),
-		"an ambient provider makes this host a warm start",
-	);
+	await requireColdProviders(baseURL);
 
 	const wizard = page.getByTestId("onboarding-wizard");
 	await expect(wizard).toHaveAttribute("data-step", "intro");
@@ -143,14 +150,13 @@ test("a cold start shows the onboarding wizard once; Skip setup persists", async
 	await wizard.getByTestId("onboarding-start").click();
 	await expect(wizard).toHaveAttribute("data-step", "connect");
 	await expect(wizard.getByTestId("connect-provider-options")).toBeVisible();
-	await expect(wizard.getByTestId("onboarding-steps")).toHaveCount(0);
 
-	await expect(wizard.getByTestId("connect-detected")).toHaveCount(0);
 	const list = wizard.getByTestId("connect-provider-list");
 	const central = wizard
 		.getByTestId("connect-detected-central")
 		.or(list.getByTestId("jetbrains-ai-row"));
 	await expect(central).toBeVisible();
+	await expect(wizard.getByTestId("connect-detected")).toHaveCount(0);
 	const rows = list.getByTestId("provider-signin-row");
 	expect(await rows.count()).toBeGreaterThan(6);
 	const anthropicRow = list.locator(
@@ -158,7 +164,7 @@ test("a cold start shows the onboarding wizard once; Skip setup persists", async
 	);
 	await expect(anthropicRow).toHaveCount(1);
 	await expect(anthropicRow.getByTestId("provider-signin")).toHaveCount(1);
-	await expect(anthropicRow.getByTestId("provider-apikey")).toHaveCount(0);
+	await expect(anthropicRow.getByTestId("provider-apikey")).toHaveCount(1);
 	const oauthFirst = await rows.evaluateAll((els) =>
 		els.map((e) => e.querySelector('[data-testid="provider-signin"]') !== null),
 	);
@@ -214,10 +220,7 @@ test("Get started detects a signed-in Claude Code and offers its sign-in above t
 	try {
 		await setOnboardingDismissed(baseURL, false);
 		await openAppFresh(page);
-		test.skip(
-			await anyProviderConfigured(baseURL),
-			"an ambient provider makes this host a warm start",
-		);
+		await requireColdProviders(baseURL);
 
 		const wizard = page.getByTestId("onboarding-wizard");
 		await wizard.getByTestId("onboarding-start").click();
@@ -251,10 +254,7 @@ test("Get started asks about usage data as its own step before the models, or th
 	await seedAnalyticsConsent(baseURL, false, false);
 	try {
 		await openAppFresh(page);
-		test.skip(
-			await anyProviderConfigured(baseURL),
-			"an ambient provider makes this host a warm start",
-		);
+		await requireColdProviders(baseURL);
 
 		const wizard = page.getByTestId("onboarding-wizard");
 		const consent = page.getByTestId("analytics-consent-dialog");
@@ -296,34 +296,37 @@ test("a failed usage-data save keeps the privacy step, its off choice and the er
 	baseURL,
 }) => {
 	const config = join(E2E_DATA_DIR, "config.json");
+	const readConfig = () => JSON.parse(readFileSync(config, "utf8")) as AppConfig;
 	await setOnboardingDismissed(baseURL, false);
 	await seedAnalyticsConsent(baseURL, false, false);
 	try {
 		await openAppFresh(page);
-		test.skip(
-			await anyProviderConfigured(baseURL),
-			"an ambient provider makes this host a warm start",
-		);
+		await requireColdProviders(baseURL);
 
 		const wizard = page.getByTestId("onboarding-wizard");
 		await wizard.getByTestId("onboarding-start").click();
 		await expect(wizard).toHaveAttribute("data-step", "privacy");
 		const toggle = wizard.getByTestId("analytics-toggle");
-		const readConfig = () => JSON.parse(readFileSync(config, "utf8")) as AppConfig;
 		await expect.poll(() => readConfig().analyticsEnabled).toBe(true);
 		const continueButton = wizard.getByTestId("onboarding-privacy-continue");
 		await expect(continueButton).toBeEnabled();
 
-		chmodSync(config, 0o400);
-		await toggle.click();
-		await expect(wizard.getByRole("alert")).toBeVisible();
-		await continueButton.click();
-		await expect(wizard.getByRole("alert")).toBeVisible();
-		await expect(wizard).toHaveAttribute("data-step", "privacy");
-		await expect(toggle).toHaveAttribute("aria-checked", "false");
+		const original = readFileSync(config, "utf8");
+		rmSync(config);
+		mkdirSync(config);
+		try {
+			await toggle.click();
+			await expect(wizard.getByRole("alert")).toBeVisible();
+			await continueButton.click();
+			await expect(wizard.getByRole("alert")).toBeVisible();
+			await expect(wizard).toHaveAttribute("data-step", "privacy");
+			await expect(toggle).toHaveAttribute("aria-checked", "false");
+		} finally {
+			rmSync(config, { recursive: true, force: true });
+			writeFileSync(config, original);
+		}
 		expect(readConfig().analyticsEnabled).toBe(true);
 
-		chmodSync(config, 0o600);
 		await continueButton.click();
 		await expect(wizard).toHaveAttribute("data-step", "connect");
 		expect([readConfig().analyticsEnabled, readConfig().analyticsConsentConfirmed]).toEqual([
@@ -331,7 +334,38 @@ test("a failed usage-data save keeps the privacy step, its off choice and the er
 			true,
 		]);
 	} finally {
-		chmodSync(config, 0o600);
+		await seedAnalyticsConsent(baseURL, false, true);
+	}
+});
+
+test("an opt-out confirmed elsewhere while the privacy step is open is adopted, not overwritten", async ({
+	page,
+	baseURL,
+}) => {
+	const readConfig = () =>
+		JSON.parse(readFileSync(join(E2E_DATA_DIR, "config.json"), "utf8")) as AppConfig;
+	await setOnboardingDismissed(baseURL, false);
+	await seedAnalyticsConsent(baseURL, false, false);
+	try {
+		await openAppFresh(page);
+		await requireColdProviders(baseURL);
+
+		const wizard = page.getByTestId("onboarding-wizard");
+		await wizard.getByTestId("onboarding-start").click();
+		await expect(wizard).toHaveAttribute("data-step", "privacy");
+		const toggle = wizard.getByTestId("analytics-toggle");
+		await expect(toggle).toHaveAttribute("aria-checked", "true");
+		await expect.poll(() => readConfig().analyticsEnabled).toBe(true);
+
+		await seedAnalyticsConsent(baseURL, false, true);
+		await expect(toggle).toHaveAttribute("aria-checked", "false");
+		await wizard.getByTestId("onboarding-privacy-continue").click();
+		await expect(wizard).toHaveAttribute("data-step", "connect");
+		expect([readConfig().analyticsEnabled, readConfig().analyticsConsentConfirmed]).toEqual([
+			false,
+			true,
+		]);
+	} finally {
 		await seedAnalyticsConsent(baseURL, false, true);
 	}
 });
@@ -341,29 +375,48 @@ test("a provider connected through Settings during the intro is verified on reac
 }, async ({ page, baseURL }) => {
 	await setOnboardingDismissed(baseURL, false);
 	await openAppFresh(page);
-	test.skip(
-		await anyProviderConfigured(baseURL),
-		"an ambient provider makes this host a warm start",
-	);
+	await requireColdProviders(baseURL);
 
 	const wizard = page.getByTestId("onboarding-wizard");
-	let providerId: string | null = null;
-	try {
-		await expect(wizard).toHaveAttribute("data-step", "intro");
-		await openProviders(page);
-		providerId = await connectFirstApiKeyProvider(page, page.getByTestId("settings-providers"));
-		await expect(page.getByTestId("login-success")).toBeVisible();
-		await page.getByTestId("login-close").click();
-		await expect(page.getByTestId("login-dialog")).toHaveCount(0);
-		await page.keyboard.press("Escape");
-		await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+	await expect(wizard).toHaveAttribute("data-step", "intro");
+	await openProviders(page);
+	await connectE2eKeyProvider(page, page.getByTestId("settings-providers"));
+	await expect(page.getByTestId("login-success")).toBeVisible();
+	await page.getByTestId("login-close").click();
+	await expect(page.getByTestId("login-dialog")).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
 
-		await wizard.getByTestId("onboarding-start").click();
-		await expect(wizard).toHaveAttribute("data-step", "done");
-		await expect(wizard.getByTestId("welcome-connected")).toContainText(" connected");
-	} finally {
-		await signOut(baseURL, providerId);
-	}
+	await wizard.getByTestId("onboarding-start").click();
+	await expect(wizard).toHaveAttribute("data-step", "done");
+	await expect(wizard.getByTestId("welcome-connected")).toContainText("E2E Key Provider connected");
+});
+
+test("a provider connected and signed out again through Settings during the intro is not verified", {
+	tag: "@dev-seam",
+}, async ({ page, baseURL }) => {
+	await setOnboardingDismissed(baseURL, false);
+	await openAppFresh(page);
+	await requireColdProviders(baseURL);
+
+	const wizard = page.getByTestId("onboarding-wizard");
+	await openProviders(page);
+	const settings = page.getByTestId("settings-providers");
+	await connectE2eKeyProvider(page, settings);
+	await page.getByTestId("login-close").click();
+	await settings.locator('[data-testid="provider-signout"][data-provider="e2e-apikey"]').click();
+	await expect(
+		settings.locator('[data-testid="provider-row"][data-provider="e2e-apikey"]'),
+	).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	await wizard.getByTestId("onboarding-start").click();
+	await expect(wizard).toHaveAttribute("data-step", "connect");
+	await expect(
+		wizard.locator('[data-testid="provider-signin-row"][data-provider="e2e-apikey"]'),
+	).toBeVisible();
+	await expect(wizard.getByTestId("onboarding-verify")).toHaveCount(0);
 });
 
 test("the onboarding wizard verifies the connection in place, then collapses to one line over the two project cards", {
@@ -371,70 +424,101 @@ test("the onboarding wizard verifies the connection in place, then collapses to 
 }, async ({ page, baseURL }) => {
 	await setOnboardingDismissed(baseURL, false);
 	await openAppFresh(page);
-	test.skip(
-		await anyProviderConfigured(baseURL),
-		"an ambient provider makes this host a warm start",
-	);
+	await requireColdProviders(baseURL);
 
 	const wizard = page.getByTestId("onboarding-wizard");
-	let providerId: string | null = null;
-	try {
-		await wizard.getByTestId("onboarding-start").click();
-		providerId = await connectFirstApiKeyProvider(page, wizard);
-		await expect(page.getByTestId("login-dialog")).toHaveCount(0);
+	await wizard.getByTestId("onboarding-start").click();
+	await connectE2eKeyProvider(page, wizard);
+	await expect(page.getByTestId("login-dialog")).toHaveCount(0);
 
-		await expect(wizard).toHaveAttribute("data-step", "done");
-		await expect(wizard.getByTestId("welcome-title")).toHaveText("You're set");
-		await expect(wizard.getByTestId("welcome-connected")).toHaveText(
-			/ connected · (.+ is the default model|\d+ models? available|the agent can run now)$/,
-		);
-		await expect(wizard.getByTestId("connect-provider-options")).toHaveCount(0);
-		await expect(wizard.getByTestId("onboarding-skip")).toHaveCount(0);
-		await expect(page.getByTestId("welcome-cta")).toContainText("Start a new project");
-		await expect(page.getByTestId("welcome-action")).toHaveCount(1);
-		await expect(page.getByTestId("welcome-action")).toContainText("Open project");
-		await expect
-			.poll(
-				() =>
-					(JSON.parse(readFileSync(join(E2E_DATA_DIR, "config.json"), "utf8")) as AppConfig)
-						.onboardingDismissed,
-			)
-			.toBe(true);
+	await expect(wizard).toHaveAttribute("data-step", "done");
+	await expect(wizard.getByTestId("welcome-title")).toHaveText("You're set");
+	await expect(wizard.getByTestId("welcome-connected")).toHaveText(
+		/^E2E Key Provider connected · (.+ is the default model|\d+ models? available)$/,
+	);
+	await expect(wizard.getByTestId("connect-provider-options")).toHaveCount(0);
+	await expect(wizard.getByTestId("onboarding-skip")).toHaveCount(0);
+	await expect(page.getByTestId("welcome-cta")).toContainText("Start a new project");
+	await expect(page.getByTestId("welcome-action")).toHaveCount(1);
+	await expect(page.getByTestId("welcome-action")).toContainText("Open project");
+	await expect
+		.poll(
+			() =>
+				(JSON.parse(readFileSync(join(E2E_DATA_DIR, "config.json"), "utf8")) as AppConfig)
+					.onboardingDismissed,
+		)
+		.toBe(true);
 
-		await page.getByTestId("welcome-cta").click();
-		const dialog = page.getByTestId("create-project-dialog");
-		await dialog.getByTestId("create-project-name").fill("wizard-app");
-		await dialog.getByTestId("create-project-submit").click();
-		await expect(dialog).toHaveCount(0);
-		await expect(page.getByTestId("chat-input")).toHaveValue(SETUP_PROMPT);
-		await expect(page.getByTestId("new-workspace-dialog")).toHaveCount(0);
-	} finally {
-		await signOut(baseURL, providerId);
-	}
+	await page.getByTestId("welcome-cta").click();
+	const dialog = page.getByTestId("create-project-dialog");
+	await dialog.getByTestId("create-project-name").fill("wizard-app");
+	await dialog.getByTestId("create-project-submit").click();
+	await expect(dialog).toHaveCount(0);
+	await expect(page.getByTestId("chat-input")).toHaveValue(SETUP_PROMPT);
+	await expect(page.getByTestId("new-workspace-dialog")).toHaveCount(0);
 });
 
-test("connecting from the Welcome banner closes the stack, toasts, and hands off", {
+test("a connection with zero models warns, and Check again verifies it once models appear", {
+	tag: "@dev-seam",
+}, async ({ page, baseURL }) => {
+	await setOnboardingDismissed(baseURL, false);
+	const models = await hideModels(page);
+	await openAppFresh(page);
+	await requireColdProviders(baseURL);
+
+	const wizard = page.getByTestId("onboarding-wizard");
+	await wizard.getByTestId("onboarding-start").click();
+	models.hidden = true;
+	await connectE2eKeyProvider(page, wizard);
+	const verify = wizard.getByTestId("onboarding-verify");
+	await expect(verify).toHaveAttribute("data-state", "warning");
+	await expect(verify.getByTestId("onboarding-no-models")).toContainText("E2E Key Provider");
+	await expect(wizard).toHaveAttribute("data-step", "connect");
+
+	models.hidden = false;
+	await verify.getByTestId("onboarding-recheck").click();
+	await expect(wizard).toHaveAttribute("data-step", "done");
+	await expect(wizard.getByTestId("welcome-connected")).toContainText("E2E Key Provider connected");
+});
+
+test("Back from a zero-model connection returns to the choices", {
+	tag: "@dev-seam",
+}, async ({ page, baseURL }) => {
+	await setOnboardingDismissed(baseURL, false);
+	const models = await hideModels(page);
+	await openAppFresh(page);
+	await requireColdProviders(baseURL);
+
+	const wizard = page.getByTestId("onboarding-wizard");
+	await wizard.getByTestId("onboarding-start").click();
+	models.hidden = true;
+	await connectE2eKeyProvider(page, wizard);
+	await expect(wizard.getByTestId("onboarding-verify")).toHaveAttribute("data-state", "warning");
+	await wizard.getByTestId("onboarding-back").click();
+	await expect(wizard.getByTestId("onboarding-verify")).toHaveCount(0);
+	await expect(wizard.getByTestId("connect-provider-options")).toBeVisible();
+	await expect(wizard).toHaveAttribute("data-step", "connect");
+});
+
+test("connecting from the Welcome banner closes the stack, toasts once, and hands off", {
 	tag: "@dev-seam",
 }, async ({ page, baseURL }) => {
 	await openAppFresh(page);
+	await requireColdProviders(baseURL);
 	const banner = page.getByTestId("welcome-provider-warning");
-	test.skip(await anyProviderConfigured(baseURL), "an ambient provider hides the banner");
 
-	let providerId: string | null = null;
-	try {
-		await page.getByTestId("welcome-connect-provider").click();
-		const dialog = page.getByTestId("connect-provider-dialog");
-		providerId = await connectFirstApiKeyProvider(page, dialog);
+	await page.getByTestId("welcome-connect-provider").click();
+	const dialog = page.getByTestId("connect-provider-dialog");
+	await connectE2eKeyProvider(page, dialog);
 
-		await expect(dialog).toHaveCount(0);
-		await expect(page.getByTestId("login-dialog")).toHaveCount(0);
-		await expect(page.getByTestId("toast").filter({ hasText: "connected" })).toBeVisible();
-		await expect(page.getByTestId("welcome-title")).toHaveText("You're set");
-		await expect(page.getByTestId("welcome-connected")).toContainText(" connected");
-		await expect(banner).toHaveCount(0);
-	} finally {
-		await signOut(baseURL, providerId);
-	}
+	await expect(dialog).toHaveCount(0);
+	await expect(page.getByTestId("login-dialog")).toHaveCount(0);
+	const toast = page.getByTestId("toast").filter({ hasText: "E2E Key Provider connected" });
+	await expect(toast).toBeVisible();
+	await expect(page.getByTestId("welcome-title")).toHaveText("You're set");
+	await expect(page.getByTestId("welcome-connected")).toContainText("E2E Key Provider connected");
+	await expect(banner).toHaveCount(0);
+	await expect(toast).toHaveCount(1);
 });
 
 test("a sign-in abandoned by a reload does not park the next attempt on Working…", async ({
@@ -442,7 +526,7 @@ test("a sign-in abandoned by a reload does not park the next attempt on Working�
 	baseURL,
 }) => {
 	await openAppFresh(page);
-	test.skip(await anyProviderConfigured(baseURL), "an ambient provider hides the banner");
+	await requireColdProviders(baseURL);
 
 	const startAnthropicSignIn = async () => {
 		await page.getByTestId("welcome-connect-provider").click();
