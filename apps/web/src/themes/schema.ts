@@ -78,6 +78,8 @@ export const NULLABLE_THEME_COLOR_KEYS = [
 	"editorSelectionForeground",
 ] as const;
 
+export const DERIVED_THEME_COLOR_KEYS = ["dangerHover", "onDanger"] as const;
+
 export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];
 export type NullableThemeColorKey = (typeof NULLABLE_THEME_COLOR_KEYS)[number];
 export type AnsiColorKey = (typeof ANSI_COLOR_KEYS)[number];
@@ -110,6 +112,40 @@ export type ThemeManifestParseResult =
 const HEX_COLOR = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/;
 const THEME_ID = /^[a-z0-9](?:[a-z0-9._-]{0,63})$/;
 const NULLABLE_KEYS: ReadonlySet<string> = new Set(NULLABLE_THEME_COLOR_KEYS);
+const DERIVED_KEYS: ReadonlySet<string> = new Set(DERIVED_THEME_COLOR_KEYS);
+const DANGER_HOVER_SCALE = 0.88;
+
+function scaleRgb(color: HexColor, factor: number): HexColor {
+	const channel = (start: number) =>
+		Math.round(Number.parseInt(color.slice(start, start + 2), 16) * factor)
+			.toString(16)
+			.padStart(2, "0");
+	return `#${channel(1)}${channel(3)}${channel(5)}${color.slice(7)}`;
+}
+
+function luminance(color: HexColor): number {
+	const [red = 0, green = 0, blue = 0] = [1, 3, 5].map((start) => {
+		const value = Number.parseInt(color.slice(start, start + 2), 16) / 255;
+		return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+	});
+	return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrast(a: HexColor, b: HexColor): number {
+	const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+	return (lighter + 0.05) / (darker + 0.05);
+}
+
+function mostReadable(
+	labels: readonly HexColor[],
+	fills: readonly HexColor[],
+): HexColor | undefined {
+	const worst = (label: HexColor) => Math.min(...fills.map((fill) => contrast(label, fill)));
+	return labels.reduce<HexColor | undefined>(
+		(best, label) => (best === undefined || worst(label) > worst(best) ? label : best),
+		undefined,
+	);
+}
 
 export function isThemeIdSlug(value: string): boolean {
 	return THEME_ID.test(value);
@@ -157,6 +193,7 @@ function parseThemeColors(value: unknown, issues: string[]): ThemeColors | null 
 			palette[key] = null;
 			continue;
 		}
+		if (color === undefined && DERIVED_KEYS.has(key)) continue;
 		if (typeof color !== "string" || !HEX_COLOR.test(color)) {
 			issues.push(
 				`theme.colors.${key} must be a canonical lowercase #rrggbb or #rrggbbaa color${nullable ? " or null" : ""}`,
@@ -164,6 +201,16 @@ function parseThemeColors(value: unknown, issues: string[]): ThemeColors | null 
 			continue;
 		}
 		palette[key] = color as HexColor;
+	}
+	const { danger, text, background } = palette;
+	if (danger) {
+		const dangerHover = palette.dangerHover ?? scaleRgb(danger, DANGER_HOVER_SCALE);
+		palette.dangerHover = dangerHover;
+		const label = mostReadable(
+			[text, background].filter((color): color is HexColor => !!color),
+			[danger, dangerHover],
+		);
+		if (label) palette.onDanger ??= label;
 	}
 	return Object.freeze(palette) as ThemeColors;
 }

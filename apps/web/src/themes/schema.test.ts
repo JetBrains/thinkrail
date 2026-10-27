@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import {
 	ANSI_COLOR_KEYS,
+	DERIVED_THEME_COLOR_KEYS,
 	parseThemeManifest,
 	SYNTAX_COLOR_KEYS,
 	THEME_COLOR_KEYS,
@@ -49,9 +50,13 @@ test("every bundled theme is complete, unique, and includes the configured defau
 
 test("runtime palette keys stay aligned with the authoring JSON schema", () => {
 	const schema = JSON.parse(readFileSync(join(import.meta.dir, "theme.schema.json"), "utf8")) as {
-		$defs: Record<string, { required: string[] }>;
+		$defs: Record<string, { required: string[]; properties: Record<string, unknown> }>;
 	};
-	expect(schema.$defs.colors?.required).toEqual([...THEME_COLOR_KEYS]);
+	const derived: readonly string[] = DERIVED_THEME_COLOR_KEYS;
+	expect(schema.$defs.colors?.required).toEqual(
+		THEME_COLOR_KEYS.filter((key) => !derived.includes(key)),
+	);
+	expect(Object.keys(schema.$defs.colors?.properties ?? {})).toEqual([...THEME_COLOR_KEYS]);
 	expect(schema.$defs.ansi?.required).toEqual([...ANSI_COLOR_KEYS]);
 	expect(schema.$defs.syntax?.required).toEqual([...SYNTAX_COLOR_KEYS]);
 });
@@ -71,6 +76,25 @@ test("the parser rejects partial, unknown, and non-canonical manifest data all-o
 	const nonCanonical = structuredClone(source) as { colors: Record<string, unknown> };
 	nonCanonical.colors.accent = "rgb(0, 0, 0)";
 	expect(parseThemeManifest(nonCanonical).ok).toBe(false);
+});
+
+test("a manifest written before the destructive keys existed still parses, with both derived", () => {
+	for (const { file, value } of bundledCandidates()) {
+		const source = value as { colors: Record<string, string> };
+		const legacy = structuredClone(source);
+		delete legacy.colors.dangerHover;
+		delete legacy.colors.onDanger;
+		const parsed = parseThemeManifest(legacy);
+		if (!parsed.ok) throw new Error(`${file}: ${parsed.issues.join("; ")}`);
+		const { danger, dangerHover, onDanger, text, background } = parsed.value.colors;
+		expect(dangerHover, `${file}: derived dangerHover`).toBe(source.colors.dangerHover);
+		expect([text, background]).toContain(onDanger);
+		for (const fill of [danger, dangerHover])
+			expect(
+				contrast(onDanger, fill),
+				`${file}: derived onDanger on ${fill}`,
+			).toBeGreaterThanOrEqual(4.5);
+	}
 });
 
 test("high-contrast manifests provide legible selected-text foregrounds", () => {

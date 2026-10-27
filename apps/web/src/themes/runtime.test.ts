@@ -190,6 +190,20 @@ test("user themes join the catalog under the user namespace; invalid and duplica
 	}
 });
 
+test("a user theme copied before dangerHover/onDanger existed still installs", () => {
+	installThemeCatalog(buildThemeCatalog(bundledCandidates()));
+	const legacy = userTheme("pre-destructive") as { colors: Record<string, unknown> };
+	delete legacy.colors.dangerHover;
+	delete legacy.colors.onDanger;
+	try {
+		installUserThemes([{ fileName: "old.theme.json", ok: true, manifest: legacy }]);
+		expect(getUserThemeIssues()).toEqual([]);
+		expect(getThemes().map((theme) => theme.id)).toContain("user.pre-destructive");
+	} finally {
+		installUserThemes([]);
+	}
+});
+
 test("only the user themes the hint needs are cached and reinstalled before the host answers", () => {
 	const stored = new Map<string, string>();
 	Reflect.set(globalThis, "__THINKRAIL_STABLE_PREFERENCES__", {
