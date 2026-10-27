@@ -59,6 +59,22 @@ import type {
 } from "./appStore";
 import type { ChatResourceRead, ChatResourceScope, ChatResourceState } from "./chatResources";
 
+export function selectOrderedProjects(state: {
+	projects: Project[];
+	projectOrder: readonly string[];
+}): Project[] {
+	if (state.projectOrder.length === 0) return state.projects;
+	const remaining = new Map(state.projects.map((project) => [project.id, project]));
+	const ordered: Project[] = [];
+	for (const id of state.projectOrder) {
+		const project = remaining.get(id);
+		if (!project) continue;
+		ordered.push(project);
+		remaining.delete(id);
+	}
+	return [...remaining.values(), ...ordered];
+}
+
 export function selectLoginBusy(state: {
 	activeLogin: LoginState | null;
 	loginStarting: boolean;

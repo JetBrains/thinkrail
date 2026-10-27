@@ -96,8 +96,8 @@ async function openProjectActions(page: Page, row: Locator): Promise<Locator> {
 	return menu;
 }
 
-function seedSecondRepo(): string {
-	const repo = join(E2E_DATA_DIR, "second-project");
+function seedSecondRepo(name = "second-project"): string {
+	const repo = join(E2E_DATA_DIR, name);
 	rmSync(repo, { recursive: true, force: true });
 	mkdirSync(repo, { recursive: true });
 	git(repo, "init", "-b", "main");
@@ -110,6 +110,192 @@ function seedSecondRepo(): string {
 	writeFileSync(E2E_PICK_DIR_POINTER, repo);
 	return repo;
 }
+
+test("project names drag whole groups without navigation and keep their order after reload", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	seedSecondRepo();
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	const names = page.getByTestId("project-name");
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	const sample = page
+		.getByTestId("project-group")
+		.filter({ has: names.filter({ hasText: "sample-project" }) });
+	const second = page
+		.getByTestId("project-group")
+		.filter({ has: names.filter({ hasText: "second-project" }) });
+	await expect(second.getByTestId("workspace-item").first()).toBeVisible();
+	const source = sample.getByTestId("project-name");
+	const activeWorkspace = sample.getByTestId("workspace-item").first();
+	await activeWorkspace.click();
+	await expect(activeWorkspace).toHaveAttribute("data-active", "true");
+	const location = page.url();
+	const children = await sample.getByTestId("workspace-item").allTextContents();
+
+	await source.dragTo(second, { targetPosition: { x: 40, y: 2 } });
+	await expect(names).toHaveText(["sample-project", "second-project"]);
+	await expect(activeWorkspace).toHaveAttribute("data-active", "true");
+	expect(page.url()).toBe(location);
+	await expect(sample.getByTestId("workspace-item")).toHaveText(children);
+
+	const secondHeight = await second.evaluate((element) => element.getBoundingClientRect().height);
+	await source.dragTo(second, { targetPosition: { x: 40, y: secondHeight - 2 } });
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	await source.dragTo(second, { targetPosition: { x: 40, y: 2 } });
+	await expect(names).toHaveText(["sample-project", "second-project"]);
+	await page.reload();
+	await expect(names).toHaveText(["sample-project", "second-project"]);
+	await expect(activeWorkspace).toHaveAttribute("data-active", "true");
+	expect(page.url()).toBe(location);
+});
+
+test("cancelled and outside project drops leave the rail unchanged", async ({ page }, testInfo) => {
+	await openFixtureProject(page);
+	seedSecondRepo();
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	const names = page.getByTestId("project-name");
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	const groups = page.getByTestId("project-group");
+	const target = groups.first();
+	const source = groups.last();
+	await expect(target.getByTestId("workspace-item").first()).toBeVisible();
+	await names.last().hover();
+	await page.mouse.down();
+	const box = await target.boundingBox();
+	if (!box) throw new Error("Project group is missing");
+	await page.mouse.move(box.x + 40, box.y + 2, { steps: 8 });
+	await page.mouse.move(box.x + 42, box.y + 3);
+	await page.mouse.move(box.x + 42, box.y + 3);
+	await expect(target).toHaveAttribute("data-drop-placement", "before");
+	const indicator = await target.evaluate((element) => {
+		const style = getComputedStyle(element, "::before");
+		return { content: style.content, height: style.height, background: style.backgroundColor };
+	});
+	expect(indicator.content).not.toBe("none");
+	expect(indicator.height).toBe("2px");
+	expect(indicator.background).not.toBe("rgba(0, 0, 0, 0)");
+	const screenshot = testInfo.outputPath("project-reorder-insertion.png");
+	await page.screenshot({ path: screenshot });
+	await testInfo.attach("project-reorder-insertion", {
+		path: screenshot,
+		contentType: "image/png",
+	});
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+	await expect(target).not.toHaveAttribute("data-drop-placement");
+	await expect(source).not.toHaveClass(/opacity-50/);
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+
+	await names.last().hover();
+	await page.mouse.down();
+	await target.hover({ position: { x: 40, y: 2 } });
+	await target.hover({ position: { x: 40, y: 2 } });
+	await expect(target).toHaveAttribute("data-drop-placement", "before");
+	await page.getByTestId("welcome-title").hover();
+	await page.getByTestId("welcome-title").hover();
+	await expect(source).toHaveClass(/opacity-50/);
+	await expect(target).not.toHaveAttribute("data-drop-placement");
+	await page.mouse.up();
+	await expect(source).not.toHaveClass(/opacity-50/);
+	await expect(target).not.toHaveAttribute("data-drop-placement");
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	await expect(page.getByTestId("welcome-title")).toHaveText("second-project");
+});
+
+test("external project drops leave the rail unchanged", async ({ page }) => {
+	await openFixtureProject(page);
+	await expect(page).toHaveURL(/#\/v1\/projects\/[^/]+$/);
+	const sourceProjectId = new URL(page.url()).hash.split("/").at(-1);
+	if (!sourceProjectId) throw new Error("Source project ID is missing");
+	seedSecondRepo();
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	const names = page.getByTestId("project-name");
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	const target = page.getByTestId("project-group").first();
+	await expect(target.getByTestId("workspace-item").first()).toBeVisible();
+	const box = await target.boundingBox();
+	if (!box) throw new Error("Project group is missing");
+	const transfer = await page.evaluateHandle((projectId) => {
+		const data = new DataTransfer();
+		data.setData("application/x-thinkrail-project", projectId);
+		return data;
+	}, sourceProjectId);
+	await target.dispatchEvent("dragover", { dataTransfer: transfer, clientY: box.y });
+	await expect(target).not.toHaveAttribute("data-drop-placement");
+	await target.dispatchEvent("drop", { dataTransfer: transfer, clientY: box.y });
+	await transfer.dispose();
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	await expect(page.getByTestId("welcome-title")).toHaveText("second-project");
+});
+
+test("project move menu preserves focus, local rank and reopen position", async ({
+	page,
+	browser,
+}) => {
+	await openFixtureProject(page);
+	const names = page.getByTestId("project-name");
+	await expect(names.first()).toHaveAttribute("draggable", "false");
+	await names.first().focus();
+	await page.keyboard.press("Shift+F10");
+	await expect(page.getByTestId("project-menu-move-up")).toHaveAttribute("aria-disabled", "true");
+	await expect(page.getByTestId("project-menu-move-down")).toHaveAttribute("aria-disabled", "true");
+	await page.keyboard.press("Escape");
+	const secondRepo = seedSecondRepo();
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	const secondName = names.filter({ hasText: "second-project" });
+	await secondName.focus();
+	await page.keyboard.press("Shift+F10");
+	await expect(page.getByTestId("project-menu-move-up")).toHaveAttribute("aria-disabled", "true");
+	await page.getByTestId("project-menu-move-down").focus();
+	await page.keyboard.press("Enter");
+	await expect(names).toHaveText(["sample-project", "second-project"]);
+	await expect(secondName).toBeFocused();
+	await expect(page.getByTestId("welcome-title")).toHaveText("second-project");
+
+	const observerContext = await browser.newContext();
+	try {
+		const observer = await observerContext.newPage();
+		await observer.goto(page.url());
+		await expect(observer.getByTestId("project-name")).toHaveText([
+			"second-project",
+			"sample-project",
+		]);
+	} finally {
+		await observerContext.close();
+	}
+	await page.reload();
+	await expect(names).toHaveText(["sample-project", "second-project"]);
+	await secondName.click({ button: "right" });
+	await expect(page.getByTestId("project-menu-move-down")).toHaveAttribute("aria-disabled", "true");
+	await page.getByTestId("project-menu-close").click();
+	await page.getByTestId("confirm-close-project").click();
+	await expect(names).toHaveText(["sample-project"]);
+	await page.getByTestId("add-project-menu").click();
+	await page.getByRole("menuitem").filter({ hasText: secondRepo }).click();
+	await expect(names).toHaveText(["sample-project", "second-project"]);
+	await secondName.click({ button: "right" });
+	await page.getByTestId("project-menu-move-up").click();
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	await expect(secondName).toBeFocused();
+
+	seedSecondRepo("third-project");
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	await expect(names).toHaveText(["third-project", "second-project", "sample-project"]);
+	await page.reload();
+	await expect(names).toHaveText(["third-project", "second-project", "sample-project"]);
+	await names.first().click({ button: "right" });
+	await page.getByTestId("project-menu-move-down").click();
+	await expect(names).toHaveText(["second-project", "third-project", "sample-project"]);
+	await page.reload();
+	await expect(names).toHaveText(["second-project", "third-project", "sample-project"]);
+});
 
 test("opens a git repo as a project via the directory picker", async ({ page }) => {
 	await page.goto("/");
@@ -362,12 +548,17 @@ test("project context actions stay compact and close/reopen is lossless across c
 	const renameFromMenu = page.getByTestId("project-menu-rename");
 	const closeFromMenu = page.getByTestId("project-menu-close");
 	const menuParts = projectActions.locator('[role="menuitem"], [role="separator"]');
-	await expect(menuParts).toHaveCount(5);
+	await expect(menuParts).toHaveCount(8);
 	await expect(menuParts.nth(0)).toHaveText("Create workspace");
 	await expect(menuParts.nth(1)).toHaveText("Open existing worktree…");
 	await expect(menuParts.nth(2)).toHaveAttribute("role", "separator");
-	await expect(menuParts.nth(3)).toHaveText("Rename");
-	await expect(menuParts.nth(4)).toHaveText("Close project");
+	await expect(menuParts.nth(3)).toHaveText("Move up");
+	await expect(menuParts.nth(3)).toHaveAttribute("aria-disabled", "true");
+	await expect(menuParts.nth(4)).toHaveText("Move down");
+	await expect(menuParts.nth(4)).toHaveAttribute("aria-disabled", "true");
+	await expect(menuParts.nth(5)).toHaveAttribute("role", "separator");
+	await expect(menuParts.nth(6)).toHaveText("Rename");
+	await expect(menuParts.nth(7)).toHaveText("Close project");
 	await expect(createFromMenu.locator("svg.remixicon")).toHaveCount(1);
 	await expect(openExistingFromMenu.locator("svg.remixicon")).toHaveCount(1);
 	await expect(renameFromMenu.locator("svg.remixicon")).toHaveCount(1);

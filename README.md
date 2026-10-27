@@ -45,7 +45,8 @@ create the tools it needs based on how you actually work.
 - **A real IDE around the agent.** A splittable workbench of Monaco editor tabs, a Files tree with live git
   change marks and a Changed view, terminals, and documents — all scoped to the active workspace. Leave
   anchored review comments on files and diffs and send them to a chat as structured context, or open the
-  worktree in your installed IDE.
+  worktree in your installed IDE. Drag project names in the sidebar to arrange them, or use Move up/down
+  in the project menu; the order is saved locally on your client.
 - **Chats that stream like the engine thinks.** Several concurrent `pi` sessions per workspace, each with
   its own model and live token and cost readout. Steer a running turn or queue a follow-up, delegate to
   subagents, and work a shared plan the agent updates and you edit — each completed step can be committed

@@ -28,6 +28,17 @@ treatment.
 
 ## Boundary
 
+The Projects rail alone supports a client-local manual project order: drag a project-name button
+(not its chevron, Create workspace button, or rename input) and drop before/after a project group.
+An insertion line marks the destination; children travel with the project without changing their own
+order, expansion, or navigation. Escape, outside/external drops and missing source/target projects
+leave order unchanged. The project context menu offers Move up/down, disabled at the boundaries,
+for keyboard and touch use, restoring focus to the same name. Native drag/drop avoids adding a second
+layout engine; touch uses the existing long-press menu rather than competing for that gesture.
+`projectOrder` mirrors the store's ID preference through the native stable adapter when available,
+otherwise host-qualified localStorage, hydrated before React mounts. Reads are untrusted and writes
+best-effort. Other project pickers and Recents keep their existing ordering; no host protocol changes.
+
 - **Owns:** `ProjectTree`. Each top-level project row is a compact IDE-tree row at the shared `--panel-row-height` (`web-spacing`):
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
@@ -41,7 +52,7 @@ treatment.
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
   The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
-  **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
+  **ArrowUp Move up**, **ArrowDown Move down**, separator, **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
   project**. Rename swaps the project name for the same inline input as workspace rename (Enter/blur
   commits a changed trimmed name via `project.rename`, Escape cancels) and waits for the `project.updated`
   push — no optimistic label; rejection raises an error toast. Create is exactly the direct `+` flow. Open existing worktree opens the
