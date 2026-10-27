@@ -124,7 +124,8 @@ test("errors keep their model-facing failure status when the message is oversize
 				?.fullOutputPath;
 			try {
 				expect(result.isError).toBe(true);
-				expect(text(result)).toStartWith("Error:");
+				if (size === 7) expect(text(result)).toBe('Error: No TODO with id "xxxxxxx".');
+				else expect(text(result).split("\n")[0]).toBe("Error:");
 				expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
 			} finally {
 				if (path) rmSync(dirname(path), { recursive: true, force: true });

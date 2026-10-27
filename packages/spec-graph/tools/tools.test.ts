@@ -82,7 +82,8 @@ test("errors keep their model-facing failure status when the message is oversize
 				?.fullOutputPath;
 			try {
 				expect(result.isError).toBe(true);
-				expect(text(result)).toStartWith("Error:");
+				if (size === 7) expect(text(result)).toBe('Error: No spec with id "xxxxxxx".');
+				else expect(text(result).split("\n")[0]).toBe("Error:");
 				expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
 			} finally {
 				if (path) rmSync(dirname(path), { recursive: true, force: true });
@@ -143,7 +144,9 @@ test("grep count limits are clamped and continuation keeps filters", async () =>
 		const last = await run("spec_grep", { pattern: "needle", tag: "target", offset: 200 }, root);
 		expect((last.details as { matches: unknown[] }).matches).toHaveLength(50);
 		expect((last.details as { nextOffset?: number }).nextOffset).toBeUndefined();
-		expect(isError(await run("spec_grep", { pattern: "needle", offset: -1 }, root))).toBe(true);
+		const invalid = await run("spec_grep", { pattern: "needle", offset: -1 }, root);
+		expect(isError(invalid)).toBe(true);
+		expect(text(invalid)).toBe("Error: Use a nonnegative integer offset.");
 	});
 });
 

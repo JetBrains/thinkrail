@@ -59,7 +59,9 @@ export async function textResult<T>(
 }
 
 export async function errorResult(message: string): Promise<AgentToolResult<{ error: string }>> {
-	return { ...(await textResult(`Error:\n${message}`, { error: message })), isError: true };
+	const inline = `Error: ${message}`;
+	const text = truncateHead(inline).truncated ? `Error:\n${message}` : inline;
+	return { ...(await textResult(text, { error: message })), isError: true };
 }
 
 const GLYPH: Record<Todo["status"], string> = {

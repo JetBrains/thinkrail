@@ -44,6 +44,9 @@ export function registerSpecGrep(pi: ExtensionAPI): void {
 			"spec_grep — search specs by content when documented decisions, contracts, or boundaries may govern the work.",
 		parameters,
 		async execute(_callId, params, _signal, _onUpdate, ctx) {
+			const offset = params.offset ?? 0;
+			if (!Number.isSafeInteger(offset) || offset < 0)
+				return errorResult("Use a nonnegative integer offset.");
 			const index = getIndex(ctx.cwd);
 			let result: GrepResult;
 			try {
@@ -56,7 +59,7 @@ export function registerSpecGrep(pi: ExtensionAPI): void {
 					...(params.parent !== undefined ? { parent: params.parent } : {}),
 					...(params.dependsOn !== undefined ? { dependsOn: params.dependsOn } : {}),
 					limit: Math.min(params.limit ?? DEFAULT_GREP_LIMIT, DEFAULT_GREP_LIMIT),
-					offset: params.offset ?? 0,
+					offset,
 					maxBytes: DEFAULT_MAX_BYTES - 2048,
 				});
 			} catch (err) {
