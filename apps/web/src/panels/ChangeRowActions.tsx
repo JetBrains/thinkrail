@@ -41,6 +41,7 @@ export function ChangeRowActions({
 		<DropdownMenu open={open} onOpenChange={setOpen}>
 			<div
 				data-testid="change-row"
+				data-row
 				data-active={active || open ? true : undefined}
 				className={`group flex min-w-0 items-center rounded-sm ${
 					active || open ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"

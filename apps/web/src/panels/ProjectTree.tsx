@@ -553,6 +553,7 @@ function ProjectRow({
 	const row = (
 		<div
 			data-testid="project-item"
+			data-row
 			data-menu-open={menuOpen}
 			data-attention={needsAttention || undefined}
 			data-running={isRunning || undefined}
@@ -859,6 +860,7 @@ function WorkspaceRow({
 			<fieldset
 				aria-label={displayName}
 				data-testid="workspace-item"
+				data-row
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
 				data-settled={settled?.kind}

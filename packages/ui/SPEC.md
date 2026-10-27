@@ -67,6 +67,12 @@ test's documented specialized list names it.
   element so the action cannot run twice; `selected` — or an open Radix trigger (`data-state="open"`) — is
   the persistent toggle/open fill (`control-bg-selected`) for `outline` and `ghost`, distinct from pressed.
   Toggles keep `aria-pressed`.
+- **Rows**: a list row that paints its own hover or selected fill uses the same roles as ghost's fills
+  (`control-bg-hovered` / `control-bg-selected`), so a ghost action on it would show no feedback. Such a
+  row carries `data-row`, and a `ghost` button inside it takes `container-elevated-bg` for hover, pressed,
+  focus-visible and selected instead — the raised look row actions had before the system — so a hovered
+  row action and an open row menu stay visible against the filled row. Marked rows: project and workspace
+  rows, change rows, todo rows, history-overlay rows and every cmdk `CommandItem`.
 - **Call sites own placement only**: margins, self/flex/grid placement, `w-full`, positioning, responsive
   visibility and whole-button hover reveal. Height, padding, gap, radius, colours, borders, typography and
   state skins are rejected by the adoption guard. Documented exceptions live in that guard with a reason

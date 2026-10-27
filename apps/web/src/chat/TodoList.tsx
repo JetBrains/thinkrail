@@ -386,6 +386,7 @@ function TodoRow({
 	return (
 		<li
 			data-testid="todo-row"
+			data-row
 			data-status={todo.status}
 			data-reviewed={reviewed}
 			data-reviewing={reviewing}

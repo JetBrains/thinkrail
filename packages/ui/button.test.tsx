@@ -63,6 +63,21 @@ test("pressed looks exactly like hover in every variant, never a border or geome
 	}
 });
 
+test("inside a data-row, ghost hover, pressed, focus and selected rise to the elevated surface", () => {
+	const inRow = (variant: ButtonVariant) =>
+		classOf(render(<Button variant={variant}>x</Button>))
+			.filter((x) => x.startsWith("[[data-row]_&]:"))
+			.map((x) => x.slice("[[data-row]_&]:".length))
+			.sort();
+	expect(inRow("ghost")).toEqual([
+		"active:bg-container-elevated-bg",
+		"data-[selected=true]:bg-container-elevated-bg",
+		"focus-visible:bg-container-elevated-bg",
+		"hover:bg-container-elevated-bg",
+	]);
+	for (const variant of VARIANTS.filter((v) => v !== "ghost")) expect(inRow(variant)).toEqual([]);
+});
+
 test("focus is an offset outline in every variant, never a ring", () => {
 	for (const variant of VARIANTS) {
 		const c = classOf(render(<Button variant={variant}>x</Button>));

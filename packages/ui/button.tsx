@@ -27,8 +27,10 @@ const buttonVariants = cva(
 					"border-primary-soft bg-primary-subtle text-primary hover:border-primary-muted hover:bg-control-soft-primary-bg-hovered data-[disabled=true]:border-control-disabled-border data-[disabled=true]:bg-control-disabled-bg data-[disabled=true]:text-control-disabled-text active:border-primary-muted active:bg-control-soft-primary-bg-hovered",
 				outline:
 					"border-control-border-default bg-control-bg text-text-default hover:bg-control-bg-hovered data-[selected=true]:bg-control-bg-selected data-[disabled=true]:border-control-disabled-border data-[disabled=true]:bg-control-disabled-bg data-[disabled=true]:text-control-disabled-text active:bg-control-bg-hovered",
-				ghost:
+				ghost: [
 					"border-transparent bg-transparent text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:bg-control-bg-hovered focus-visible:text-text-default data-[selected=true]:bg-control-bg-selected data-[selected=true]:text-text-default data-[disabled=true]:text-control-disabled-text active:bg-control-bg-hovered active:text-text-default",
+					"[[data-row]_&]:hover:bg-container-elevated-bg [[data-row]_&]:focus-visible:bg-container-elevated-bg [[data-row]_&]:data-[selected=true]:bg-container-elevated-bg [[data-row]_&]:active:bg-container-elevated-bg",
+				],
 				destructive:
 					"border-transparent bg-control-destructive-bg text-control-destructive-text hover:bg-control-destructive-bg-hovered data-[disabled=true]:bg-control-destructive-disabled-bg data-[disabled=true]:text-control-destructive-disabled-text active:bg-control-destructive-bg-hovered",
 			},
