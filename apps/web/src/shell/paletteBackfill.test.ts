@@ -205,49 +205,45 @@ describe("the palette backfill against deferred host replies", () => {
 		return { calls, backfill };
 	}
 
-	test("a rename that lands while a listing is in flight wins over the listing's older title", async () => {
+	test("a rename that lands while a listing is in flight wins, and the listing is asked again on its own", async () => {
 		connectedWorkspace();
 		const { calls, backfill } = deferredSources();
-		backfill.schedule();
+		const stop = backfill.watch();
 		expect(calls).toHaveLength(1);
 		rename("s1", "Named by the agent");
 		calls[0]?.resolve("");
 		await tick();
-		expect(title("w1", "s1")).not.toBe("");
-
-		backfill.schedule();
+		expect(title("w1", "s1")).toBeNull();
 		expect(calls).toHaveLength(2);
 		calls[1]?.resolve("Named by the agent");
 		await tick();
 		expect(title("w1", "s1")).toBe("Named by the agent");
-		backfill.schedule();
+		stop();
 		expect(calls).toHaveLength(2);
 	});
 
 	test("a reconnect lists a workspace again, so a rename missed while away is picked up", async () => {
 		connectedWorkspace();
 		const { calls, backfill } = deferredSources();
-		backfill.schedule();
+		const stop = backfill.watch();
 		calls[0]?.resolve("Before");
 		await tick();
 		expect(title("w1", "s1")).toBe("Before");
-		backfill.schedule();
 		expect(calls).toHaveLength(1);
 
 		useAppStore.setState({ connectionGeneration: 2, welcomeGeneration: 2 });
-		backfill.schedule();
 		expect(calls).toHaveLength(2);
 		calls[1]?.resolve("Renamed while away");
 		await tick();
 		expect(title("w1", "s1")).toBe("Renamed while away");
+		stop();
 	});
 
 	test("a reply from an earlier connection is dropped and the listing runs again on the new one", async () => {
 		connectedWorkspace();
 		const { calls, backfill } = deferredSources();
-		backfill.schedule();
+		const stop = backfill.watch();
 		useAppStore.setState({ connectionGeneration: 2, welcomeGeneration: 2 });
-		backfill.schedule();
 		expect(calls).toHaveLength(1);
 		calls[0]?.resolve("From the old connection");
 		await tick();
@@ -256,6 +252,24 @@ describe("the palette backfill against deferred host replies", () => {
 		calls[1]?.resolve("Current");
 		await tick();
 		expect(title("w1", "s1")).toBe("Current");
+		stop();
+	});
+
+	test("a session that joins an existing workspace is listed without reopening the palette", async () => {
+		connectedWorkspace();
+		const { calls, backfill } = deferredSources();
+		const stop = backfill.watch();
+		calls[0]?.resolve("First");
+		await tick();
+		useAppStore.setState((state) => ({
+			sessionStateByWorkspace: {
+				w1: { ...state.sessionStateByWorkspace.w1, s2: record("s2", "w1", "p1") },
+			},
+		}));
+		expect(calls).toHaveLength(2);
+		stop();
+		useAppStore.setState({ welcomeGeneration: 3 });
+		expect(calls).toHaveLength(2);
 	});
 
 	test("a refusal marks the workspace listed; a timeout leaves it for the next schedule", async () => {
