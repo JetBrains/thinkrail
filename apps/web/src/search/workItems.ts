@@ -116,6 +116,7 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 	const attentionByWorkspace = new Map<string, SessionAttention>();
 	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
 		const workspace = workspaceById.get(workspaceId);
+		if (workspace?.deletionPending === true) continue;
 		let attention: SessionAttention | undefined;
 		for (const record of Object.values(records)) {
 			const recordAttention = getSessionAttention(record.state);

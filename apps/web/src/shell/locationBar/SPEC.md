@@ -25,8 +25,9 @@ actions through the panels-owned ship runner; it owns no host state.
   (actions + sibling switcher + New workspace), the branch card (copy, based-on, compare-to picker, remote
   and review rows), the Remote and Pull request segments, and the responsive drop order. For a **chat
   without a project** the bar reads `Chats › <title>` (`data-context="chat"`): the project segment shows
-  the Chats container (its switcher lists **Chats** above the repositories — picking it opens the newest
-  chat or starts one — and offers no Project Home for it), `ChatSegment` shows the conversation's
+  the Chats container (its switcher lists **Chats** above the repositories — picking it loads the
+  container's list if this window has none, then opens the newest chat not pending deletion or starts
+  one — and offers no Project Home for it), `ChatSegment` shows the conversation's
   `chatLabel` (the host's state-record title, else the first prompt, else "Chat"; `data-title-source` on
   `scope-name`) with a menu of sibling chats worded the same way, New chat, Copy path, Reveal and Delete
   chat…, and no branch, remote or pull-request segment is rendered — there is no repository to ask.

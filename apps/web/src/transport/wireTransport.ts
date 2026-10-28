@@ -208,7 +208,7 @@ function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 				if (!isConnectedGeneration(current, connectionGeneration)) return;
 				const project = current.projects.find((candidate) => candidate.id === projectId);
 				if (!project) return;
-				if (project.kind === "chats") current.setWorkspaces(projectId, workspaces);
+				if (project.kind === "chats") current.replaceProjectMembership(projectId, workspaces);
 				else for (const workspace of workspaces) current.updateWorkspace(workspace);
 			})
 			.catch(() => {});

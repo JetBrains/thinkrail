@@ -3102,6 +3102,28 @@ test("addWorkspace is a no-op for a project whose list was never fetched", () =>
 	expect(useAppStore.getState().workspaces).toEqual({});
 });
 
+test("replaceProjectMembership removes a held workspace the list no longer has, as its removal push would, then installs the list", () => {
+	const kept = pushedWorkspace({ id: "chat-kept", name: "kept", kind: "chat" });
+	const gone = pushedWorkspace({ id: "chat-gone", name: "gone", kind: "chat" });
+	const arrived = pushedWorkspace({ id: "chat-new", name: "new", kind: "chat" });
+	useAppStore.setState({
+		projects: [project({ kind: "chats" })],
+		workspaces: { p1: [kept, gone] },
+		selectedProjectId: "p1",
+		activeWorkspaceId: "chat-gone",
+		workspaceSelectionHistory: ["chat-gone", "chat-kept"],
+		toasts: [],
+	});
+
+	useAppStore.getState().replaceProjectMembership("p1", [arrived, kept]);
+
+	const state = useAppStore.getState();
+	expect(state.workspaces.p1?.map((workspace) => workspace.id)).toEqual(["chat-new", "chat-kept"]);
+	expect(state.removedWorkspaceIds["chat-gone"]).toBe(true);
+	expect(state.activeWorkspaceId).not.toBe("chat-gone");
+	expect(state.workspaceSelectionHistory).not.toContain("chat-gone");
+});
+
 test("applyWorkspaceRemoved restores the most-recent workspace across projects", () => {
 	const removed = pushedWorkspace();
 	const previous = pushedWorkspace({ id: "w2", projectId: "p2", name: "previous" });

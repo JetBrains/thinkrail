@@ -167,7 +167,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   host dropped** (`diffBase` re-pointed back to the creation base, the last `skillOverrides` entry removed,
   or `subagentsOverride` returned to inherited),
   leaving the client labelling and keying reads off a value the host no longer has; a project never fetched or an id absent from its list is a **no-op** — the next
-  `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
+  `workspace.list` reconciles (**`replaceProjectMembership(projectId, rows)`** — the Chats container's
+  reconnect read — first removes every held row the list lacks through `applyWorkspaceRemoved`, then
+  installs the list); **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
   reaction (`removeWorkspace` drops the row + `clearWorkspaceState` drops its
   local view/attention/terminal maps and chat runtimes + recency drops the dead id,
   and **if it was this client's active workspace** → activate the most recently selected loaded workspace

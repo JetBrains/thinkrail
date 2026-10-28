@@ -1115,6 +1115,7 @@ interface AppState {
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
 	applyProjectUpdated: (project: Project) => void;
 	setWorkspaces: (projectId: string, workspaces: Workspace[]) => void;
+	replaceProjectMembership: (projectId: string, workspaces: Workspace[]) => void;
 	addWorkspace: (workspace: Workspace) => void;
 	updateWorkspace: (workspace: Workspace) => void;
 	removeWorkspace: (projectId: string, workspaceId: string) => void;
@@ -2646,6 +2647,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 				workspaces: { ...s.workspaces, [projectId]: list.filter((w) => w.id !== workspaceId) },
 			};
 		}),
+	replaceProjectMembership: (projectId, workspaces) => {
+		const listed = new Set(workspaces.map((workspace) => workspace.id));
+		for (const held of get().workspaces[projectId] ?? []) {
+			if (!listed.has(held.id)) get().applyWorkspaceRemoved(projectId, held.id);
+		}
+		get().setWorkspaces(projectId, workspaces);
+	},
 	applyWorkspaceRemoved: (projectId, workspaceId) => {
 		const s = get();
 		const wasActive = s.activeWorkspaceId === workspaceId;

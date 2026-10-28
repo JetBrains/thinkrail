@@ -55,8 +55,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `updateWorkspace`, so a pushed full workspace snapshot missed while disconnected (including a rename)
   cannot stay stale without misrepresenting this metadata repair as membership reconciliation — except
   the Chats container, whose list is its membership and is replaced whole, so chats created or deleted
-  by another window while this one was away appear and go (the host answers a socket in order, so no
-  push this reply missed can arrive before it);
+  by another window while this one was away appear and go — the store's `replaceProjectMembership`
+  removes a chat gone from the list through `applyWorkspaceRemoved` first, exactly as the missed
+  `workspace.removed` push would have, so an active or open chat falls back (the host answers a socket in order, so no push this reply missed can arrive
+  before it);
   the full host-update lifecycle snapshot via `applyHostUpdate`, project snapshots via
   `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,
