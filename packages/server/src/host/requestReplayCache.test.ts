@@ -228,7 +228,7 @@ describe("request replay cache", () => {
 		expect(lostExecutions).toBe(1);
 	});
 
-	test("a receipt for work still in flight is ignored, not obeyed", async () => {
+	test("a receipt for work still in flight abandons it: joined while running, dropped once settled", async () => {
 		const cache = new RequestReplayCache<string>();
 		const run = deferred<string>();
 		let executions = 0;
@@ -237,13 +237,34 @@ describe("request replay cache", () => {
 			return run.promise;
 		};
 
-		const inFlight = cache.run("page", "picker", "same", execute);
-		cache.acknowledge("page", ["picker"]);
+		const inFlight = cache.run("page", "picker", "same", execute, "dialog.pickDirectory");
+		expect(cache.acknowledge("page", ["picker"])).toEqual(["dialog.pickDirectory"]);
+		expect(cache.acknowledge("page", ["picker"])).toEqual([]);
 		expect(cache.run("page", "picker", "same", execute)).toBe(inFlight);
 
 		run.resolve("/picked/path");
 		expect(await inFlight).toBe("/picked/path");
 		expect(executions).toBe(1);
+		await Promise.resolve();
+		expect(await cache.run("page", "picker", "same", () => "not retained")).toBe("not retained");
+	});
+
+	test("abandoned in-flight work stops counting against admission and never blocks retirement", async () => {
+		const cache = new RequestReplayCache<string>(2);
+		const hung = deferred<string>();
+		void cache.run("page", "a", "a", () => hung.promise);
+		void cache.run("page", "b", "b", () => hung.promise);
+		expect(() => cache.run("page", "c", "c", () => "no room")).toThrow(RequestReplayOverflowError);
+
+		cache.acknowledge("page", ["a"]);
+		cache.retain("page", []);
+		expect(await cache.run("page", "c", "c", () => "room")).toBe("room");
+		cache.acknowledge("page", ["c"]);
+		expect(cache.clearClient("page")).toBe(true);
+
+		hung.resolve("late");
+		await Promise.resolve();
+		expect(await cache.run("page", "d", "d", () => "fresh")).toBe("fresh");
 	});
 
 	test("receipts for unknown ids and unknown clients are ignored", () => {
@@ -269,7 +290,7 @@ describe("request replay cache", () => {
 		expect(await cache.run("page", "fresh", "four", execute)).toBe("1");
 	});
 
-	test("reconnect reconciliation keeps in-flight work the page did not name", async () => {
+	test("reconnect reconciliation abandons in-flight work the page did not name", async () => {
 		const cache = new RequestReplayCache<string>();
 		const run = deferred<string>();
 		let executions = 0;
@@ -278,13 +299,17 @@ describe("request replay cache", () => {
 			return run.promise;
 		};
 
-		const inFlight = cache.run("page", "picker", "same", execute);
-		cache.retain("page", []);
+		const inFlight = cache.run("page", "picker", "same", execute, "git.status");
+		const named = cache.run("page", "named", "named", () => new Promise<string>(() => {}));
+		expect(cache.retain("page", ["named"])).toEqual(["git.status"]);
 		expect(cache.run("page", "picker", "same", execute)).toBe(inFlight);
+		expect(cache.run("page", "named", "named", execute)).toBe(named);
 
 		run.resolve("/picked/path");
 		expect(await inFlight).toBe("/picked/path");
 		expect(executions).toBe(1);
+		await Promise.resolve();
+		expect(await cache.run("page", "picker", "same", () => "not retained")).toBe("not retained");
 	});
 
 	test("reconciling an unknown client is a no-op", () => {
