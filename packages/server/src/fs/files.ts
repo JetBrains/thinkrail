@@ -63,7 +63,7 @@ function resolveInWorktree(
 	// does NOT fully close the TOCTOU window (a race remains between realpathSync
 	// and the subsequent file read). The full fix pairs this with O_NOFOLLOW in
 	// readFile() so the kernel refuses symlink indirection at open time.
-	// See security/SECURITY_REPORT.md (Finding-3) for details.
+	// See PR #920 (Finding-3) for details.
 	if (followLeaf) {
 		try {
 			const resolvedAbs = realpathSync(abs);

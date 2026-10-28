@@ -193,7 +193,7 @@ function Install-ThinkRail {
     # Security: Repository is hardcoded to prevent supply chain attacks via environment
     # variable poisoning. Both the binary and SHA256SUMS are downloaded from this repo,
     # so allowing override would let an attacker serve a malicious binary with matching
-    # checksums. See security/SECURITY_REPORT.md for details.
+    # checksums. See PR #920 (Finding-2) for details.
     $repo = 'JetBrains/thinkrail'
 
     # cmd's `set X=value && ...` embeds the space before && into the value -- trim every input.
