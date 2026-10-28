@@ -23,7 +23,6 @@ const { RequestError } = actualTransport;
 const { useAppStore } = await import("../store");
 const {
 	followContinuation,
-	openContinuationTarget,
 	reconcileContinuations,
 	refreshContinuation,
 	resetContinuationReadsForTests,
@@ -125,37 +124,6 @@ test("an operation the host no longer knows becomes lost, and a push that lands 
 	await settle();
 	expect(useAppStore.getState().initiatedContinuations.op4).toBeUndefined();
 	expect(useAppStore.getState().chatContinuations.op4).toBeUndefined();
-});
-
-test("a continuation opens its workspace only once a fresh list shows it, and says so when it is gone", async () => {
-	const target = { projectId: "p1", workspaceId: "w-new", sessionId: "s-new" };
-	const opened = openContinuationTarget(target, "gone");
-	take("workspace.list").resolve([destination]);
-	expect(await opened).toBe(true);
-	expect(useAppStore.getState()).toMatchObject({
-		activeWorkspaceId: "w-new",
-		routeChatTarget: { workspaceId: "w-new", sessionId: "s-new" },
-	});
-
-	useAppStore.setState({ activeWorkspaceId: null, routeChatTarget: null });
-	const removed = openContinuationTarget(target, "gone");
-	take("workspace.list").resolve([]);
-	expect(await removed).toBe(false);
-	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
-	expect(useAppStore.getState().toasts.at(-1)?.message).toBe("gone");
-
-	const closed = openContinuationTarget(target, "closed");
-	useAppStore.setState({ projects: [] });
-	take("workspace.list").resolve([destination]);
-	expect(await closed).toBe(false);
-	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
-
-	useAppStore.setState({ projects: [project] });
-	const reconnected = openContinuationTarget(target, "gone");
-	useAppStore.setState({ welcomeGeneration: 2 });
-	take("workspace.list").resolve([destination]);
-	expect(await reconnected).toBeNull();
-	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
 });
 
 test("a card's read that failed is asked again on the next connection, never twice on one", async () => {

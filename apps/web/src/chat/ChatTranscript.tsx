@@ -32,9 +32,9 @@ import {
 } from "@/store";
 import { errorText, getTransport, respondToTool } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
-import { type ChatActions, ChatActionsContext, type WorkspaceChatTarget } from "./ChatActions";
+import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
-import { openContinuationTarget, refreshContinuation, requestContinuation } from "./continuations";
+import { refreshContinuation, requestContinuation } from "./continuations";
 import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
 import { FoldGeometryProvider } from "./foldState";
 import {
@@ -43,6 +43,7 @@ import {
 	InteractionStatesContext,
 } from "./interactionState";
 import { deriveMessageActions } from "./messageActions";
+import { openWorkspace } from "./openWorkspace";
 import { turnAnchorText } from "./recentPrompts";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
 import {
@@ -157,15 +158,6 @@ function useVirtualRows(
 function LiveWorkspaceName({ workspaceId, fallback }: { workspaceId: string; fallback: string }) {
 	const name = useAppStore((state) => selectWorkspaceById(state, workspaceId)?.name);
 	return name ?? fallback;
-}
-
-function openWorkspace({ workspaceId, projectId, sessionId }: WorkspaceChatTarget): void {
-	const state = useAppStore.getState();
-	const known = selectWorkspaceById(state, workspaceId);
-	state.activateWorkspaceFromRoute(
-		{ id: workspaceId, projectId: known?.projectId ?? projectId },
-		sessionId,
-	);
 }
 
 export type ChatTranscriptHandle = {
@@ -626,17 +618,6 @@ const ChatTranscript = forwardRef<
 			openProviderSettings,
 			findModel,
 			continuationOf,
-			openContinuation: (continuation) => {
-				if (!continuation.workspaceId) return;
-				void openContinuationTarget(
-					{
-						projectId: continuation.projectId,
-						workspaceId: continuation.workspaceId,
-						...(continuation.sessionId ? { sessionId: continuation.sessionId } : {}),
-					},
-					t("chat.turn.continuation.gone"),
-				);
-			},
 			retryContinuation: (details) => {
 				void requestContinuation(workspaceId, details.projectId).catch((err: unknown) =>
 					toast.error(errorText(err), t("chat.turn.continuation.retryFailed")),
@@ -645,10 +626,10 @@ const ChatTranscript = forwardRef<
 			openHandoffSource: (details) => {
 				const container = selectChatsContainer(useAppStore.getState());
 				if (!container) return;
-				void openContinuationTarget(
+				void openWorkspace(
 					{
-						projectId: container.id,
 						workspaceId: details.sourceWorkspaceId,
+						projectId: container.id,
 						sessionId: details.sourceSessionId,
 					},
 					t("chat.turn.handoff.sourceGone"),
