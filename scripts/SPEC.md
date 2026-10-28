@@ -68,7 +68,7 @@ conditionals, `||`/`??`, `+`, and template parts; literal children inside `{…}
 properties (`label`, `title`, `description`, `detail`, `hint`, `message`, `reason`, …); and literal
 `toast.*()` messages or `errorText()` fallbacks. "Text" means a run of two or more letters after trimming
 symbols, so `⌘K`, `·`, and counts pass; the bare brand `ThinkRail` is the one allowed word. It is a
-heuristic floor, not a proof: review still owns strings returned from plain functions. It also checks
+heuristic floor, not a proof: review still owns strings returned from plain functions. 字面量检查会穿透括号、类型断言（`as` / `<T>`）、`satisfies` 和非空断言，避免这些不改变运行时值的包装隐藏硬编码文字。 It also checks
 `packages/locales/en.json`: keys sorted, values non-empty, and every key (plural base for `_one`/`_other`)
 referenced as a string literal by some UI, desktop, or locales source, so removed UI leaves no orphaned
 translations. Finally it builds the web TypeScript program and fails on any **render-time read of the global
