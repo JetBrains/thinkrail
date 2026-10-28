@@ -119,7 +119,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconstruct pre-consent work; campaign-only enrichment is inactive while off and restored from its strict
   server record when on without retrying a consumed claim.
   `shutdownAnalytics()` remains a best-effort drain in `stop()` and awaited by graceful shutdown;
-  every capture site lives here, including the existing basic events: `chat_started` in `session.create` (the host's new-chat
+  every capture site lives here, including the existing basic events: `chat_started` in `session.create` and
+  `chat.create` (the host's new-chat
   resolution decides `none` for a chat created with no usable model instead of pi's placeholder; otherwise
   the created session's actual model is reported), `message_sent` (via the
   local `trackSend(mode, text)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`
@@ -190,11 +191,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
   the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
-  model list and Pi thinking clamp; `model.default`, `session.create`, and newly-created review chats share
-  that resolver, and creation passes its model and effort explicitly. A `session.create` that **named** a
+  model list and Pi thinking clamp; `model.default`, `session.create`, `chat.create`, and newly-created
+  review chats share that resolver, and creation passes its model and effort explicitly — a chat's
+  recovery through `session.create` included. A `session.create` or `chat.create` that **named** a
   model and every `session.setModel` also record the resolved model as recent through `settings`'
   `noteRecentModel` — a default-resolved creation is the host's choice, not the user's, and is not
-  recorded. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
+  recorded; `noteNewChat` is that one bookkeeping (recent pick + `chat_started`) for both creation paths. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
   adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
   eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
   invalidate catalogs across clients. Existing review chats and plan-review

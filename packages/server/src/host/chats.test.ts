@@ -27,7 +27,7 @@ import {
 } from "../agent";
 import { loadChats, resetChatsStoreForTests } from "../persistence";
 import { openProject } from "../projects";
-import { resetConfigCache } from "../settings";
+import { getConfig, resetConfigCache } from "../settings";
 import { setTrashImplementationForTests } from "../trash";
 import { stopAllWatches } from "../watch";
 import {
@@ -52,10 +52,11 @@ const model = {
 	contextWindow: 100_000,
 	maxTokens: 4096,
 };
+const thinker = { ...model, id: "chats-thinker", name: "chats-thinker", reasoning: true };
 const faux = createFauxCore({
 	provider: "chats",
 	api: "chats",
-	models: [model],
+	models: [model, thinker],
 	tokensPerSecond: 10000,
 });
 const saved = {
@@ -143,7 +144,10 @@ beforeAll(async () => {
 		apiKey: "test",
 		baseUrl: "http://faux.local",
 		streamSimple: faux.streamSimple,
-		models: [{ ...model, api: faux.api }],
+		models: [
+			{ ...model, api: faux.api },
+			{ ...thinker, api: faux.api },
+		],
 	});
 	configurePiRuntime(runtime);
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
@@ -383,6 +387,32 @@ test("a chat whose session never started gets exactly one through session.create
 		handleRequest("session.create", { workspaceId: workspace.id }, CTX),
 	).rejects.toMatchObject({ code: "CHAT_HAS_SESSION" });
 	await handleRequest("chat.delete", { workspaceId: workspace.id }, CTX);
+}, 30_000);
+
+test("an explicit model and effort reach a chat's session on creation and on recovery, and become recent", async () => {
+	const models = (await handleRequest("model.list", {}, CTX)) as WsResult<"model.list">;
+	const picked = models.find((candidate) => candidate.id === "chats-thinker");
+	if (!picked) throw new Error("the reasoning fixture model is not listed");
+	const created = (await handleRequest(
+		"chat.create",
+		{ model: picked, thinkingLevel: "high" },
+		CTX,
+	)) as ChatCreateResult;
+	expect(created.model).toMatchObject({ provider: "chats", id: "chats-thinker" });
+	expect(created.thinkingLevel).toBe("high");
+	expect(getConfig().recentModels[0]).toMatchObject({ provider: "chats", id: "chats-thinker" });
+
+	const workspace = createChatRecord();
+	const recovered = (await handleRequest(
+		"session.create",
+		{ workspaceId: workspace.id, model: picked, thinkingLevel: "low" },
+		CTX,
+	)) as WsResult<"session.create">;
+	expect(recovered.model).toMatchObject({ provider: "chats", id: "chats-thinker" });
+	expect(recovered.thinkingLevel).toBe("low");
+	for (const id of [created.workspace.id, workspace.id]) {
+		await handleRequest("chat.delete", { workspaceId: id }, CTX);
+	}
 }, 30_000);
 
 test("two recoveries at once join the one session the first starts, with its real model", async () => {

@@ -27,9 +27,8 @@ import {
 	isUnderChatsRoot,
 	markChatDeletionPending,
 } from "../workspaces";
-import { trackChatStarted } from "./authAnalytics";
 import { provisionInitialTerminal } from "./initialTerminal";
-import { type NewChatModelRequest, resolveNewChatModel } from "./newChatModel";
+import { type NewChatModelRequest, noteNewChat, resolveNewChatModel } from "./newChatModel";
 import { runObservation } from "./runAnalytics";
 import { taskObservation } from "./taskAnalytics";
 
@@ -63,11 +62,14 @@ export function createChat(requested: NewChatModelRequest = {}): Promise<ChatCre
 }
 
 /** A chat whose session never came up (crash between folder and session) gets it here; a start in flight is joined. */
-export function recoverChatSession(workspaceId: string): Promise<ChatCreateResult> {
+export function recoverChatSession(
+	workspaceId: string,
+	requested: NewChatModelRequest = {},
+): Promise<ChatCreateResult> {
 	const claim = claims.get(workspaceId);
 	if (claim?.kind === "start") return claim.done;
 	assertChatOpen(workspaceId);
-	return claimStart(getChatWorkspace(workspaceId), {}, true);
+	return claimStart(getChatWorkspace(workspaceId), requested, true);
 }
 
 function claimStart(
@@ -115,7 +117,7 @@ async function startChatSession(
 		throw claimed() ? error : beingDeleted();
 	}
 	if (!claimed()) throw beingDeleted();
-	trackChatStarted({ sessionId: created.sessionId, model: created.model });
+	noteNewChat(requested, defaults, created);
 	return { workspace, ...created };
 }
 
