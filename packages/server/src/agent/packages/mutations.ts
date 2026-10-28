@@ -93,6 +93,21 @@ function settingsBaseDir(ctx: PiPackageHostContext, scope: PiPackageScope): stri
 	return scope === "project" && ctx.cwd ? join(ctx.cwd, ".pi") : ctx.agentDir;
 }
 
+function expandHome(path: string): string {
+	return path.replace(/^~(?=\/|$)/, process.env.HOME ?? "~");
+}
+
+/**
+ * pi stores a local source relative to its settings file but matches an *input* source against the
+ * process cwd (`getSourceMatchKeyForInput`), so a declared `../pkgs/tools` handed back as written would
+ * not be found. Rows carry the declared string; mutations hand pi its absolute path instead.
+ */
+function inputSource(ctx: PiPackageHostContext, target: PiPackageTarget): string {
+	const source = target.source.trim();
+	if (piPackageSourceKind(source) !== "local") return source;
+	return resolve(settingsBaseDir(ctx, target.scope), expandHome(source));
+}
+
 /** Installs, then persists the declaration in the scope's settings file; returns the package identity. */
 export function installPiPackage(
 	ctx: PiPackageHostContext,
@@ -104,10 +119,7 @@ export function installPiPackage(
 		assertScopeWritable(ctx, target.scope);
 		const kind = piPackageSourceKind(source);
 		if (kind === "local") {
-			const path = resolve(
-				settingsBaseDir(ctx, target.scope),
-				source.replace(/^~(?=\/|$)/, process.env.HOME ?? "~"),
-			);
+			const path = resolve(settingsBaseDir(ctx, target.scope), expandHome(source));
 			if (!existsSync(path)) {
 				throw new CodedError("PACKAGE_SOURCE_INVALID", `No such folder or file: ${path}`);
 			}
@@ -139,7 +151,8 @@ export function removePiPackage(ctx: PiPackageHostContext, target: PiPackageTarg
 		assertScopeWritable(ctx, target.scope);
 		const local = target.scope === "project";
 		const { settings, packageManager } = openSettings(ctx);
-		if (!packageManager.removeSourceFromSettings(target.source, { local })) {
+		const source = inputSource(ctx, target);
+		if (!packageManager.removeSourceFromSettings(source, { local })) {
 			throw new CodedError(
 				"PACKAGE_UNKNOWN",
 				`No package ${target.source} is declared at ${target.scope} scope.`,
@@ -149,7 +162,7 @@ export function removePiPackage(ctx: PiPackageHostContext, target: PiPackageTarg
 		invalidatePiPackageCatalog();
 		updateCache.clear();
 		try {
-			await packageManager.remove(target.source, { local });
+			await packageManager.remove(source, { local });
 		} catch (error) {
 			throw new CodedError("PACKAGE_REMOVE_FAILED", messageOf(error));
 		}
@@ -159,16 +172,16 @@ export function removePiPackage(ctx: PiPackageHostContext, target: PiPackageTarg
 /** pi's `update(source)` reconciles every declaration of that identity, at both scopes. */
 export function updatePiPackages(
 	ctx: PiPackageHostContext,
-	sources: readonly string[],
+	targets: readonly PiPackageTarget[],
 ): Promise<void> {
 	return enqueue(async () => {
 		if (isOffline()) {
 			throw new CodedError("PACKAGE_OFFLINE", "pi is in offline mode; packages cannot be updated.");
 		}
 		const { packageManager } = openSettings(ctx);
-		for (const source of sources) {
+		for (const target of targets) {
 			try {
-				await packageManager.update(source);
+				await packageManager.update(inputSource(ctx, target));
 			} catch (error) {
 				throw new CodedError("PACKAGE_UPDATE_FAILED", messageOf(error));
 			}

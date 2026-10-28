@@ -97,9 +97,9 @@ export async function piPackagesRemove(
 
 export async function piPackagesUpdate(
 	target: PiPackagesTarget,
-	sources: readonly string[],
+	packages: readonly { source: string; scope: PiPackageScope }[],
 ): Promise<void> {
-	await updatePiPackages(hostContext(target), sources);
+	await updatePiPackages(hostContext(target), packages);
 	refreshPiPackages();
 }
 

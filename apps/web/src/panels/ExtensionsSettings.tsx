@@ -244,7 +244,10 @@ export function ExtensionsSettings() {
 						getTransport()
 							.request(
 								"packages.update",
-								{ sources: [action.target.source], ...scoped },
+								{
+									packages: [{ source: action.target.source, scope: action.target.scope }],
+									...scoped,
+								},
 								{ timeoutMs: PACKAGE_MUTATION_TIMEOUT_MS },
 							)
 							.then(() => checkUpdates()),

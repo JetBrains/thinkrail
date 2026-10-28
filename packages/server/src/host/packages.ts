@@ -67,10 +67,10 @@ export async function packagesRemove(params: {
 }
 
 export async function packagesUpdate(params: {
-	sources: string[];
+	packages: { source: string; scope: PiPackageScope }[];
 	workspaceId?: string;
 }): Promise<{ ok: true }> {
-	await piPackagesUpdate(target(params.workspaceId), params.sources);
+	await piPackagesUpdate(target(params.workspaceId), params.packages);
 	return { ok: true };
 }
 

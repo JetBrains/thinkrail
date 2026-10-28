@@ -10,6 +10,7 @@ import {
 	type PiPackageHostContext,
 	removePiPackage,
 	setPiResourceEnabled,
+	updatePiPackages,
 } from "./mutations";
 
 function extensionSource(toolName: string): string {
@@ -173,6 +174,23 @@ describe("pi package mutations", () => {
 		} finally {
 			remove.mockRestore();
 		}
+	});
+
+	it("removes and updates by the declared relative source even when the host cwd is elsewhere", async () => {
+		const project = join(root, "project");
+		mkdirSync(project, { recursive: true });
+		const declared = relative(agentDir, pkg);
+		writeFileSync(settingsPath, JSON.stringify({ packages: [declared] }));
+		const elsewhere: PiPackageHostContext = { ...ctx, cwd: project };
+		const update = spyOn(DefaultPackageManager.prototype, "update").mockResolvedValue();
+		try {
+			await updatePiPackages(elsewhere, [{ source: declared, scope: "user" }]);
+			expect(update).toHaveBeenCalledWith(pkg);
+		} finally {
+			update.mockRestore();
+		}
+		await removePiPackage(elsewhere, { source: declared, scope: "user" });
+		expect(readSettings(settingsPath).packages).toEqual([]);
 	});
 
 	it("aborts a remove before disk when the settings write fails", async () => {
