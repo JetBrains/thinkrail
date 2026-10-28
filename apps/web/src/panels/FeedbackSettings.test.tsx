@@ -36,6 +36,8 @@ test("analytics off explains how to take the survey", () => {
 	expect(markup).toContain("switch it off again later.");
 	expect(markup).toContain('data-testid="survey-enable-analytics"');
 	expect(markup).toContain(String(EN["panels.survey.enableAnalytics"]));
+	expect(markup).toContain("https://github.com/JetBrains/thinkrail#analytics--privacy");
+	expect(markup).toContain("privacy policy");
 	expect(markup).not.toContain("What can we do to improve our product?");
 });
 
@@ -49,6 +51,7 @@ test("a run with --no-analytics explains that answers cannot be saved", () => {
 	expect(markup).toContain('data-testid="survey-analytics-suppressed"');
 	expect(markup).not.toContain('data-testid="survey-enable-analytics"');
 	expect(markup).not.toContain("What can we do to improve our product?");
+	expect(markup).not.toContain("https://github.com/JetBrains/thinkrail#analytics--privacy");
 });
 
 test("the --no-analytics message stays when the saved preference is also off", () => {
@@ -71,5 +74,8 @@ test("analytics on draws the current question", () => {
 		String(EN["panels.survey.progress"]).replace("{{current}}", "1").replace("{{total}}", "1"),
 	);
 	expect(markup).toContain(String(EN["panels.survey.continue"]));
+	expect(markup).toContain('data-testid="survey-privacy-policy"');
+	expect(markup).toContain("https://github.com/JetBrains/thinkrail#analytics--privacy");
+	expect(markup).toContain(String(EN["panels.survey.privacyPolicy"]));
 	expect(markup).not.toContain("feedback-join-discord");
 });

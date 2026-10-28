@@ -10,6 +10,7 @@ import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { PrivacyPolicyRowLink } from "./PrivacyPolicyLink";
 import {
 	committedAnswers,
 	emptySurveyDraft,
@@ -113,15 +114,17 @@ export function SurveyForm({
 				) : null}
 			</div>
 			<SurveyAnswer question={question} survey={survey} draft={draft} onDraft={setDraft} />
-			<Button
-				variant="primary"
-				className="self-start"
-				data-testid="survey-continue"
-				disabled={pending || !stepCanContinue(question, draft)}
-				onClick={continueStep}
-			>
-				{t("panels.survey.continue")}
-			</Button>
+			<div className="flex items-center gap-12">
+				<Button
+					variant="primary"
+					data-testid="survey-continue"
+					disabled={pending || !stepCanContinue(question, draft)}
+					onClick={continueStep}
+				>
+					{t("panels.survey.continue")}
+				</Button>
+				<PrivacyPolicyRowLink />
+			</div>
 		</div>
 	);
 }

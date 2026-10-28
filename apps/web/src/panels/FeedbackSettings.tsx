@@ -3,6 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { useState } from "react";
 import { useAppStore } from "@/store";
+import { PrivacyPolicySentence } from "./PrivacyPolicyLink";
 import { SurveyForm } from "./SurveyForm";
 import { useAnalyticsConsent } from "./useAnalyticsConsent";
 
@@ -39,7 +40,7 @@ export function SurveyAnalyticsNotice({
 		return (
 			<div className="flex flex-col items-start gap-12">
 				<p data-testid="survey-analytics-message" className="text-text-default tr-text-ui">
-					{t("panels.survey.analyticsRequired")}
+					{t("panels.survey.analyticsRequired")} <PrivacyPolicySentence />
 				</p>
 				<Button
 					variant="primary"

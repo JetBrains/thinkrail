@@ -104,6 +104,10 @@ test("the settings survey and the usage notification share one survey", async ({
 	await expect(settings.getByTestId("survey-analytics-message")).toContainText(
 		"Please enable analytics to take the survey.",
 	);
+	await expect(settings.getByTestId("privacy-policy-link")).toHaveAttribute(
+		"href",
+		"https://github.com/JetBrains/thinkrail#analytics--privacy",
+	);
 	await expect(settings.getByTestId("feedback-join-discord")).toHaveCount(0);
 	await expect(settings.getByTestId("survey-question")).toHaveCount(0);
 	await page.keyboard.press("Escape");
@@ -122,10 +126,15 @@ test("the settings survey and the usage notification share one survey", async ({
 	await suggestion.getByRole("button", { name: "Sure!" }).click();
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByTestId("survey-analytics-message")).toBeVisible();
+	await expect(dialog.getByTestId("privacy-policy-link")).toBeVisible();
 	await expect(dialog.getByTestId("survey-question")).toHaveCount(0);
 	await dialog.getByTestId("survey-enable-analytics").click();
 	await expect(dialog.getByTestId("survey-question")).toHaveText(
 		"What can we do to improve our product?",
+	);
+	await expect(dialog.getByTestId("survey-privacy-policy")).toHaveAttribute(
+		"href",
+		"https://github.com/JetBrains/thinkrail#analytics--privacy",
 	);
 	await expect.poll(() => submits.some((submit) => submit.event === "shown")).toBe(true);
 	await page.keyboard.press("Escape");

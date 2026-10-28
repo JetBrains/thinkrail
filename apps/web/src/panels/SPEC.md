@@ -973,7 +973,7 @@ a project picker, the prompt hero, and the reused
   out-of-focus event. The notification pipeline, suppression, and away-path permission preface live in
   [[submodule-web-notifications]].
   **`PrivacySettings`** manages the additional-data preference and
-  confirmation together; the event contract belongs to [[submodule-server-analytics]].
+  confirmation together; the event contract belongs to [[submodule-server-analytics]]. The pane ends with a link to the analytics section of the project readme.
   **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates,
   held back (with the interview invitation) while the cold-start onboarding wizard may still show or is
   showing (`selectOnboardingActive`): a new user meets the product before a privacy question, and sharing
@@ -1001,7 +1001,7 @@ a project picker, the prompt hero, and the reused
   save responses. It does not call `feedback.respond`.
   The usage prompt is an in-app notification, including when analytics is off or the run is suppressed. **Sure** opens
   **`SurveyPromptDialog`**. That dialog shows the same `--no-analytics` message, or asks to enable analytics before the questions when analytics is
-  off, then draws the launched survey one question at a time. Every step's button says Continue.
+  off, then draws the launched survey one question at a time. Every step's button says Continue, with a Privacy policy link at the right of that row. The request to enable analytics includes the same readme link as Settings → Privacy.
   Closing it without finishing postpones.
   **Hide and don't ask again** records dismissal and tells the user the survey stays in Settings.
   **`ModelsSettings`** is the **Models** section, visible only at protocol v72 or newer. It re-reads
