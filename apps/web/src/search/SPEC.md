@@ -124,8 +124,10 @@ rendered by the shell-injected `renderFilePreview` over `PaletteItem.file` (`{ w
 renders as markdown, the same path as a preview tab; or the local **metadata card** (`PaletteItem.preview`)
 for a project, workspace or chat without a transcript hit. A host preview is read only once the
 selection rests on its row for 150 ms, so sweeping the mouse or arrows across rows reads only the row it
-stops on, and a file or spec over 2 MiB is not read at all — the pane says it is too large to preview and
-Enter opens it. A plan row and a command have no preview. The pane never fetches a text head from the
+stops on, and a file or spec whose hit is over `MAX_SEARCH_PREVIEW_BYTES` (2 MiB) is not read at all — the
+pane says it is too large to preview and Enter opens it. Every read the pane does make, a refresh on a
+change included, asks the host for at most that cap, so a file that grows past it while shown is refused
+rather than read. A plan row and a command have no preview. The pane never fetches a text head from the
 host.
 
 ## Interaction

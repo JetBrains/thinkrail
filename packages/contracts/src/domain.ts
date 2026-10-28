@@ -1491,6 +1491,8 @@ export const MAX_SEARCH_GROUP_LIMIT = 50;
 
 export const DEFAULT_SEARCH_GROUP_LIMIT = 20;
 
+export const MAX_SEARCH_PREVIEW_BYTES = 2 * 1024 * 1024;
+
 /** Where the palette is: the active workspace, else the context project's folder, is the one root files and specs are searched in. */
 export interface SearchContext {
 	projectId?: string;

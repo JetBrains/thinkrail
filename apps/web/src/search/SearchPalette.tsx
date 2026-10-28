@@ -7,6 +7,7 @@ import {
 } from "@remixicon/react";
 import {
 	MAX_SEARCH_GROUP_LIMIT,
+	MAX_SEARCH_PREVIEW_BYTES,
 	type SearchContext,
 	type SearchHit,
 	type SearchPreviewResult,
@@ -486,7 +487,6 @@ function PaletteContent({
 }
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
-const PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
 const PREVIEW_SETTLE_MS = 150;
 
 function useSettled(key: string, ms: number): boolean {
@@ -808,7 +808,7 @@ function FilePreview({
 	host: PaletteHost;
 }) {
 	const settled = useSettled(`${file.workspaceId}:${file.path}`, PREVIEW_SETTLE_MS);
-	const tooLarge = file.size !== undefined && file.size > PREVIEW_MAX_BYTES;
+	const tooLarge = file.size !== undefined && file.size > MAX_SEARCH_PREVIEW_BYTES;
 	return (
 		<div
 			data-testid="search-file-preview"

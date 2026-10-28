@@ -1,8 +1,9 @@
-import { realpathSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
 	MATCH_TIER,
+	MAX_SEARCH_PREVIEW_BYTES,
 	SEARCH_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	type WsClientMessage,
@@ -533,6 +534,56 @@ test("host rows that land after the user moved the selection never push it or th
 		).toBeVisible();
 	} finally {
 		for (const name of [...shown, ...better]) rmSync(join(repo, name), { force: true });
+	}
+});
+
+test("the preview pane reads a file only under its cap, even one that grows while it is shown", async ({
+	page,
+}) => {
+	const notes = join(realpathSync(E2E_FIXTURE_REPO), "notes.txt");
+	const original = readFileSync(notes);
+	const reads: { maxBytes?: number; refused: boolean }[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		const asked = new Map<string, number | undefined>();
+		socket.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				id?: string;
+				method?: string;
+				params?: { path?: string; maxBytes?: number };
+			};
+			if (frame.id && frame.method === "fs.readFile" && frame.params?.path === "notes.txt") {
+				asked.set(frame.id, frame.params.maxBytes);
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as { id?: string; errorCode?: string };
+			if (frame.id && asked.has(frame.id)) {
+				reads.push({
+					maxBytes: asked.get(frame.id),
+					refused: frame.errorCode === "FILE_TOO_LARGE",
+				});
+				asked.delete(frame.id);
+			}
+			socket.send(message);
+		});
+	});
+	try {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("/notes");
+		await expect(
+			page.locator('[data-testid="search-row"][data-kind="file"]', { hasText: "notes.txt" }),
+		).toBeVisible({ timeout: 15_000 });
+		await pressPlatformShortcut(page, "i");
+		await expect(page.getByTestId("search-file-preview")).toContainText("plain-text-fixture");
+		writeFileSync(notes, "x".repeat(3 * 1024 * 1024));
+		await expect.poll(() => reads.some((read) => read.refused), { timeout: 15_000 }).toBe(true);
+		expect(reads.every((read) => read.maxBytes === MAX_SEARCH_PREVIEW_BYTES)).toBe(true);
+	} finally {
+		writeFileSync(notes, original);
 	}
 });
 
