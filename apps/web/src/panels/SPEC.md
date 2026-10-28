@@ -1093,8 +1093,8 @@ a project picker, the prompt hero, and the reused
   `ConnectProviderDialog`/`CreateProjectDialog`/`OnboardingWizard`, and the app-wide **`SurveyPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The usage suggestion is a notification; Sure opens
   the dialog, whose intro offers to enable analytics when it is off, or says this run was started with
-  `--no-analytics` and cannot save responses. Closing the dialog without finishing
-  records `postpone`; a rejected response stays open.
+  `--no-analytics` and cannot save responses.   Closing the dialog without finishing
+  records `postpone`. A rejected `survey dismissed` event still closes; a rejected postpone stays open.
   `SettingsDialog` receives the Layout section from the
   shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays presentational
   (`auth` module).

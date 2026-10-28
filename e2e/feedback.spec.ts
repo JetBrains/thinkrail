@@ -236,3 +236,59 @@ test("a --no-analytics run explains that the survey cannot save responses", asyn
 	await expect(dialog.getByTestId("survey-question")).toHaveCount(0);
 	expect(submits).toEqual([]);
 });
+
+test("closing still postpones when the survey dismissal is rejected", async ({ page }) => {
+	let browserSocket: WebSocketRoute | undefined;
+	const actions: string[] = [];
+	const submits: SurveySubmit[] = [];
+
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		browserSocket = socket;
+		const server = socket.connectToServer();
+		socket.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			let request: ClientRequest;
+			try {
+				request = JSON.parse(raw) as ClientRequest;
+			} catch {
+				server.send(message);
+				return;
+			}
+			if (request.method === "feedback.survey" && request.id) {
+				socket.send(JSON.stringify({ id: request.id, ok: true, result: { survey: SURVEY } }));
+				return;
+			}
+			if (request.method === "feedback.survey.submit" && request.id) {
+				submits.push({ event: request.params?.event });
+				socket.send(JSON.stringify({ id: request.id, ok: false, error: "Survey is unavailable" }));
+				return;
+			}
+			if (request.method === "feedback.respond" && request.id) {
+				actions.push(request.params?.action ?? "");
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => socket.send(message));
+	});
+
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page.getByTestId("open-settings").click();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	if (!browserSocket) throw new Error("expected the app WebSocket");
+	browserSocket.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} }));
+	const suggestion = page.locator('[data-toast="survey-suggestion"]');
+	await expect(suggestion).toBeVisible();
+	await suggestion.getByRole("button", { name: "Sure!" }).click();
+	const dialog = page.getByTestId("survey-prompt-dialog");
+	await expect(dialog).toBeVisible();
+	const enable = dialog.getByTestId("survey-enable-analytics");
+	if ((await enable.count()) > 0) await enable.click();
+	await expect(dialog.getByTestId("survey-question")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+	await expect.poll(() => actions.at(-1)).toBe("postpone");
+	expect(submits.some((submit) => submit.event === "dismissed")).toBe(true);
+	await expect(page.locator('[data-testid="toast"][data-variant="error"]')).toHaveCount(0);
+});

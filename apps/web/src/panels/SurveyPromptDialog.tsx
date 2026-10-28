@@ -146,10 +146,12 @@ export function SurveyPromptDialog() {
 		}
 		pendingRef.current = true;
 		const dismissed = formShownRef.current
-			? getTransport().request("feedback.survey.submit", {
-					submissionId: submissionId.current,
-					event: "dismissed",
-				})
+			? getTransport()
+					.request("feedback.survey.submit", {
+						submissionId: submissionId.current,
+						event: "dismissed",
+					})
+					.catch(() => undefined)
 			: Promise.resolve();
 		void dismissed
 			.then(() => getTransport().request("feedback.respond", { action: "postpone" }))
