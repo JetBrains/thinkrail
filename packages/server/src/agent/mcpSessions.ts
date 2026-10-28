@@ -286,10 +286,6 @@ export async function reconcileMcpSessions(
 	return dispositions;
 }
 
-/**
- * One watcher on pi's agent directory: `mcp.json` changes reconcile MCP sessions; `settings.json`
- * changes go to `onSettingsChanged` (the pi packages layer, which ignores non-package edits).
- */
 export function watchUserMcpConfig(
 	options: { onSettingsChanged?: (path: string) => void } = {},
 ): () => void {

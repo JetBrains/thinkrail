@@ -63,6 +63,10 @@ interval (`1–3600`, default 30), because those values govern host process cade
   means, so a stale entry for a removed extension never breaks boot or a later update. A malformed stored
   list keeps its valid names. Settings owns only the list; `host` turns it into the agent's resolver and the
   live tool refresh ([[module-server]] § host-mediated policy).
+- `disabledPackages` is the same shape for installed pi packages, keyed by the package identity the
+  catalog reports (`PiPackageSummary.identity`); it exists because pi has no "whole package off" setting
+  and writing pi's per-resource filters would reset a user's own filters on re-enable. Validation,
+  dedupe and unknown-key tolerance are identical to `disabledExtensions`.
 - `locale` is `"system"` (default) or a canonical BCP-47 tag (`isLocalePreference`: `pt-BR`, not
   `pt-br`). Settings never checks that a language is available — bundled catalogs belong to the web build
   and local files to [[submodule-server-locales]] — so a tag whose file was deleted persists and returns

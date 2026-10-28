@@ -97,11 +97,7 @@ function expandHome(path: string): string {
 	return path.replace(/^~(?=\/|$)/, process.env.HOME ?? "~");
 }
 
-/**
- * pi stores a local source relative to its settings file but matches an *input* source against the
- * process cwd (`getSourceMatchKeyForInput`), so a declared `../pkgs/tools` handed back as written would
- * not be found. Rows carry the declared string; mutations hand pi its absolute path instead.
- */
+// pi matches an input source against the process cwd, not the settings file a declared one is relative to.
 function inputSource(ctx: PiPackageHostContext, target: PiPackageTarget): string {
 	const source = target.source.trim();
 	if (piPackageSourceKind(source) !== "local") return source;
@@ -212,13 +208,6 @@ export function invalidatePiPackageUpdates(): void {
 	updateCache.clear();
 }
 
-/**
- * `pi config`'s write format: a package resource becomes a `±<path relative to the package root>`
- * filter on its declaration; a top-level resource (loose file, explicit settings entry, built-in)
- * becomes `±<pattern>` in the scope's array of that resource kind. One deliberate difference: a plain
- * explicit entry is kept beside its override — pi's TUI replaces it, after which the file is no longer
- * discovered and cannot be switched back on.
- */
 export function setPiResourceEnabled(
 	ctx: PiPackageHostContext,
 	toggle: PiResourceToggle,

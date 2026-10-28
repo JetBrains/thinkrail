@@ -146,11 +146,6 @@ export function setPiPackagesPublisher(fn: PiPackagesPublisher | null): void {
 
 setResolvedPackagesListener(() => publish?.());
 
-/**
- * The declared or installed package set changed (own mutation, outside edit, repository checkout):
- * every chat re-decides through the gated reload — idle ones now, busy ones when their turn ends —
- * and open pages re-list.
- */
 export function refreshPiPackages(): void {
 	bumpPackagesRevision();
 	invalidatePiPackageCatalog();
@@ -184,10 +179,6 @@ export function handleProjectPiSettingsChanged(worktreePath: string): boolean {
 	return handlePiSettingsFileChanged(join(worktreePath, ".pi", "settings.json"));
 }
 
-/**
- * A pi settings file changed on disk. Only a change to its `packages` / `extensions` / `skills` /
- * `prompts` declarations counts — an unrelated setting, or the echo of the host's own write, does not.
- */
 export function handlePiSettingsFileChanged(path: string): boolean {
 	const key = resolve(path);
 	const next = resourceFingerprint(path);

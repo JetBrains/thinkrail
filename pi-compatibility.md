@@ -142,6 +142,32 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   **Removal gate:** pi exports the predicate, or a host-consumable warning event; then drop the copy.
   On upgrades, re-diff the interactive check and its call sites, and run
   `agent/anthropicExtraUsage.test.ts`.
+- **pi package management** — [[submodule-server-agent-packages]], [[submodule-server-agent]]. The
+  Settings → Extensions package catalog and mutations build on pi's public `DefaultPackageManager`
+  (`resolve(onMissing)`, `install`, `remove`, `update`, `checkForAvailableUpdates`,
+  `listConfiguredPackages`, `addSourceToSettings` / `removeSourceFromSettings`) and `SettingsManager`
+  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Five pi facts the host compensates
+  for, each with its gate:
+  - `resolve()` without `onMissing` installs a declared-but-missing package, and
+    `DefaultResourceLoader.reload()` always calls it that way; the catalog therefore reads with
+    `onMissing → skip` and loads chips through a loader built on `SettingsManager.inMemory({})`.
+    **Gate:** a public no-install resolve or exact-path extension loader.
+  - `pi config`'s toggle writers are a TUI component, not SDK; `mutations.ts` replicates the format
+    (`±relative` top-level patterns, object-form package filters, `±builtin:<name>`) and deliberately
+    keeps a plain explicit `extensions[]` entry beside its `-` override, which the TUI replaces, losing
+    discovery. Re-run the round-trip tests through pi's resolver on every bump. **Gate:** a public
+    `setResourceEnabled`-style API.
+  - `getPackageIdentity` is private; `identity.ts` ports it for the host-wide `disabledPackages` key.
+    **Gate:** pi exporting its identity rule.
+  - `installAndPersist` persists before the caller can re-check project trust, and settings writes are
+    queued with swallowed errors; the host sequences `install → trust → addSourceToSettings → flush →
+    drainErrors`. **Gate:** a persist step that reports failure and accepts a trust predicate.
+  - A local *input* source is matched against the process cwd while a *declared* one is stored relative
+    to its settings file (`getSourceMatchKeyForInput` vs `…ForSettings`); mutations pass absolute paths.
+    **Gate:** pi matching declared strings by settings scope.
+  Also relied on: `sourceInfo.source` is assigned to skills and prompts **after** `skillsOverride` /
+  `promptsOverride` run (so the disabled-package filter keys on file paths), `PackageUpdate` carries no
+  target version, and pi skips pinned npm versions in update checks.
 - **Anthropic SSE framing patch** — [[submodule-server-agent]] (Provider stream framing),
   `patches/@earendil-works%2Fpi-ai@1.4.0.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
   streams fail with the non-retryable "Could not parse Anthropic SSE event": a valid CRLF stream whose

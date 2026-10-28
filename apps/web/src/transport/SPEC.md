@@ -95,9 +95,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
   string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice);
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named
-  `WsResponse.errorCode`. A coded response rejects with a `RequestError`, everything else (timeout or an unnamed
-  host error) with a plain `Error`, so *having* a code is exactly how a caller tells "this
-  specific failure" from "the read failed"); `skillLoad.ts` (the one app-integration coordinator for session
+  `WsResponse.errorCode`. A coded response rejects with a `RequestError`, a request that outlives its
+  `timeoutMs` with a **`RequestTimeoutError`** (the host may still finish it — a long install dialog says
+  "check the list" rather than "nothing happened"), and an unnamed host error with a plain `Error`, so *having*
+  a code is exactly how a caller tells "this specific failure" from "the read failed"); `skillLoad.ts` (the one app-integration coordinator for session
   resource loads: single-flight `workspace.watchReady` per workspace; unless the watcher was already known
   ready, fold the conservative `skillChange: "unknown"` wildcard locally as a replay-safe fallback; capture
   the store tick only afterward. Its narrow `prewarmWorkspaceSkillLoad` entry lets a workspace navigator start
@@ -151,7 +152,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
 `main.tsx` installs the listeners and injects the forwarder into `components`' error-boundary seam.
 
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
-  skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `requestMcpList`,
+  skill-load-safe session request wrappers, `errorText`, `RequestError`, `RequestTimeoutError`, `wsErrorCode`, `requestMcpList`,
   `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,

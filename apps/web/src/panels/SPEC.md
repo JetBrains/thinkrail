@@ -1076,17 +1076,47 @@ a project picker, the prompt hero, and the reused
 
   There is **no separate Review navigation section**; all review-related controls live in Models' REVIEW group.
   **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
-  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) fetches the host-registry catalog with
-  `extension.list` each time the section mounts — the catalog is static per host process, so it is
-  section-local state, not a store slice — and renders it through the props-driven `ExtensionsCatalog`:
-  per row the title, description, tool-name chips and a `@thinkrail/ui/switch` (`extension-toggle-<name>`).
-  The switch state comes from **`store.disabledExtensions`**, not the catalog's `enabled` snapshot, so it
-  follows `settings.changed` from any client; a toggle writes the whole list through
-  `settings.update { disabledExtensions }` and, like every settings switch, converges on that broadcast
-  rather than rendering optimistically (`submodule-server-settings` § Get right). Unknown names already in
-  the list are carried through untouched. An empty registry renders `extensions-empty`; a failed fetch
-  renders `extensions-failed`. Disabling never unregisters a tool renderer
-  ([[submodule-web-extensions]]), so past transcripts still render.
+  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in three groups. Its description
+  carries the page's only statement about chats — "Changes apply to open chats when their current turn
+  ends." — and a primary **Install package…** button; there is no dynamic notice about which chats are
+  pending. **Built into ThinkRail** is the host-registry catalog as before: `extension.list` each time the
+  section mounts (static per host process, so section-local state), rendered by the props-driven
+  `ExtensionsCatalog` — title, description, tool-name chips and a `@thinkrail/ui/switch`
+  (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
+  toggle writes the whole list through `settings.update { disabledExtensions }` and converges on the
+  broadcast. Unknown names already in the list are carried through. **Installed** and **pi built-in**
+  (`PiPackagesSettings.tsx`, props-driven, protocol ≥ `PI_PACKAGES_PROTOCOL_VERSION`) list `packages.list`
+  for the active workspace (user scope alone without one), re-fetched on mount, on a workspace change and
+  on the store's `packagesVersion` (the `packages.changed` push). A **package row** (`PackageRow`) is name ·
+  kind / scope tags (`npm` / `git` / `local`, Me / This repository) · an **Update available** tag when the
+  update check flagged it · one provenance line (declared source · "<version> installed" · description) ·
+  tool and `/command` chips of its enabled extensions · the **switch** · a ⋯ menu (Update, Open folder,
+  Remove…). The switch is the only state control and reads **`store.disabledPackages`**; an off row dims
+  its text and chips. There is no status column and no "installing" / "not installed" row: a row exists
+  only for something on disk, and the one row-level problem is an installed extension that failed to
+  load — one attention line, `Failed to load: <pi's error>` → **Open folder**. Expanding a row lists its
+  extensions, skills and prompts with per-resource switches (`packages.setResourceEnabled`, pi's own
+  format) plus Open folder and Remove…; themes are never shown. A **loose file** row (`LooseRow`:
+  `<agentDir>/extensions/*`, `.pi/extensions/*`, explicit `extensions[]` entries) is the file name with a
+  `local file` tag, its path, chips, a switch and Open folder — no Update or Remove, since ThinkRail did
+  not install it. **pi built-in** lists the two built-ins the host runs (MCP client, Tool search) with a
+  switch each, written as `±builtin:<name>`; the group's description names the real settings path. Every
+  row action carries `{ source, scope, workspaceId? }` and a `rowKey` the page keys busy and error state
+  on (an error renders inline on the row, never a toast); Remove goes through `ConfirmDialog`; Update and
+  Remove run with `PACKAGE_MUTATION_TIMEOUT_MS`. Updates are checked once on mount (`packages.checkUpdates`)
+  and on **Check for updates**; **Update all** acts on exactly the flagged rows. The empty state offers
+  Install and the pi.dev gallery link; an untrusted project shows one info notice; a failed list renders
+  `packages-failed`. The **`InstallPackageDialog`** (`InstallPackageDialog.tsx`; its `InstallPackageBody` is
+  props-driven so each step renders without a portal, `installStepHeader` supplies the Radix title per
+  step) is source → scope → one confirm → **Installing…** (indeterminate, no progress log, no Cancel — pi
+  has none) → **Installed** (name · version · description, chips for every tool / command / skill / prompt
+  it added, and its switch, on by default, labelled "On in all workspaces" or "On for this repository" with
+  one line: "new chats have it now; open chats pick it up when idle") or **Failed** (the host's message,
+  "Nothing was added to your settings", Back / Retry; a `RequestTimeoutError` instead says to check the
+  list, since the install may still complete). `describeSource` is a light client-side echo only — the
+  host validates; **This repository** is offered only with an active workspace whose project is pi-trusted,
+  with the reason shown otherwise, and the hints show the real settings paths from the catalog. Disabling
+  never unregisters a tool renderer ([[submodule-web-extensions]]), so past transcripts still render.
   **`EnvironmentSettings`** (the **Environment** section, nav `settings-nav-environment`, listed only at
   `protocolVersion >= HOST_ENVIRONMENT_PROTOCOL_VERSION`) edits the stored host environment
   ([[submodule-server-environment]]): the pi config folder, the folder in use (`effectiveAgentDir`), and

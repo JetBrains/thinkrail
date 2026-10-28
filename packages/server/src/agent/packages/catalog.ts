@@ -187,11 +187,7 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 	};
 }
 
-/**
- * Loads exactly these extension files through a loader that cannot install anything: empty in-memory
- * settings (no `packages` to resolve), `noExtensions` so only the explicit file paths load, and every
- * other resource kind off. Enabled factories run, as they do at every chat start.
- */
+// In-memory settings + noExtensions: this loader can never install a declared-but-missing package.
 async function loadExtensionInfo(
 	cwd: string,
 	agentDir: string,

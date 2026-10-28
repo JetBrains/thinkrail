@@ -118,6 +118,7 @@ export function ExtensionsSettings() {
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
 	const [removeTarget, setRemoveTarget] = useState<PiPackageSummary | null>(null);
 	const [installOpen, setInstallOpen] = useState(false);
+	const scoped = workspaceId ? { workspaceId } : {};
 
 	useEffect(() => {
 		let current = true;
@@ -209,7 +210,6 @@ export function ExtensionsSettings() {
 	};
 
 	const onAction = (action: PiPackageAction) => {
-		const scoped = workspaceId ? { workspaceId } : {};
 		switch (action.kind) {
 			case "togglePackage": {
 				const next = action.enabled
@@ -270,7 +270,6 @@ export function ExtensionsSettings() {
 		const target = removeTarget;
 		if (!target) return;
 		setRemoveTarget(null);
-		const scoped = workspaceId ? { workspaceId } : {};
 		void run(
 			piPackageKey(target),
 			() =>
@@ -293,7 +292,6 @@ export function ExtensionsSettings() {
 	};
 
 	const toggleBuiltin = (name: string, enabled: boolean) => {
-		const scoped = workspaceId ? { workspaceId } : {};
 		void run(
 			`builtin:${name}`,
 			() =>
@@ -388,7 +386,7 @@ export function ExtensionsSettings() {
 					getTransport()
 						.request(
 							"packages.install",
-							{ ...request, ...(workspaceId ? { workspaceId } : {}) },
+							{ ...request, ...scoped },
 							{ timeoutMs: PACKAGE_MUTATION_TIMEOUT_MS },
 						)
 						.then((summary) => {
