@@ -1197,7 +1197,7 @@ const handlers: WsHandlers = {
 	"provider.loginStart": (p) => {
 		const type = p.type ?? "oauth";
 		const capture = additionalCapture();
-		const handle = startLogin(p.providerId, type);
+		const handle = startLogin(p.providerId, type, dropLogin);
 		recordLoginStart(handle.loginId, type, capture);
 		return handle;
 	},

@@ -57,7 +57,7 @@ export function ConnectProviderDialog({
 						auth={auth}
 						detected={detected}
 						onConnected={(provider) => {
-							useAppStore.getState().clearLogin();
+							useAppStore.getState().clearSettledLogin(provider.id);
 							void announceProviderConnected(provider);
 							onClose();
 							onConnected?.(provider);

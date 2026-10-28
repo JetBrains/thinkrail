@@ -428,7 +428,7 @@ in flight (waiting for a current one would absorb a sign-in that lands first), u
 `configuredAtStart`, which the wizard does as empty (a cold start has no provider), so one connected through
 Settings during the intro or privacy step is still verified on reaching Connect — `ConnectProviderOptions` reports it once through `onConnected`, and only from a current, successful snapshot (never while a re-read is
 in flight or after a failed one, so a provider signed out a moment before Get started is not verified), and the host
-surface decides: `ConnectProviderDialog` clears the finished login, closes itself, and raises one success
+surface decides: `ConnectProviderDialog` clears that provider's finished login (never a newer one), closes itself, and raises one success
 toast naming the provider and the `model.list` count ("JetBrains AI connected — 23 models available"), then
 lets Welcome switch its hero to the `ConnectedLine`; the wizard neither toasts nor closes — it verifies in place
 (below). Settings keeps its own behavior (no auto-close),
@@ -473,6 +473,8 @@ refresh warns and offers **Check again**
 return, since the provider is configured and so no longer listed. The wizard owns no project step of its own and shows no progress strip.
 **Skip setup** is on every screen before done except privacy, whose Continue is the only way on; skipping also cancels any
 target-less login still pending in the dialog (`cancelUnownedLogin`, shared with `ConnectProviderDialog`).
+A login is owned by the start that requested it (`startReservedLogin`): when the surface closes before
+`provider.loginStart` answers, the late `loginId` is cancelled and cleared instead of running hidden.
 The gate lives in the store (`onboardingWizard`: pending → shown | hidden) so shell can hold first-run
 prompts while it is undecided. Finishing or skipping writes `onboardingDismissed: true`, so a returning user — even one who later removes
 every project and provider — gets the regular Welcome; a failed write still closes the wizard locally.

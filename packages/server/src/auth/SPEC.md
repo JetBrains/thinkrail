@@ -85,7 +85,10 @@ ourselves and never surface a credential value over the wire.
     reported only when it is a known plan name (`plus`, `pro`, `max`, `team`, `business`, `enterprise`, `edu`,
     lower-cased) — anything else, `free` included, drops the badge but not the sign-in. Files are read only
     when regular and under 1 MiB (32 MiB for Claude Code's global config, which carries per-project history),
-    BOM-tolerant; each source gets 1.5 s, so a hung mount reads as not signed in instead of stalling first run;
+    BOM-tolerant; each source gets 1.5 s, so a hung mount reads as not signed in instead of stalling first run.
+    The cap only stops waiting, so the I/O itself is bounded instead: the argument-less (host) call is
+    single-flight, and a read still pending for a path is reused until it settles, so repeated detection over
+    a hung mount never stacks file-system operations that would starve the host's shared fs thread pool;
     anything unreadable counts as not signed in. Never pi's
     `auth.json` (pi already reports that as configured) and never an OS keychain — a Keychain read raises a
     system access prompt. Detection **suggests, never borrows**: the user still signs in through pi's own
@@ -112,11 +115,13 @@ ourselves and never surface a credential value over the wire.
     - `cancelLogin(loginId)` — aborts the signal **and** settles the parked input with `undefined` (which
       makes the awaiting `prompt` throw), because the signal alone won't stop a provider's
       browser/callback-server wait; `cancelAllLogins()` sweeps them on host `stop()`.
-    - **A new `startLogin` supersedes** any unfinished login for the same provider, cancelling it
-      silently: pi runs one credential operation per provider at a time, so a login abandoned at a
-      prompt (tab closed or reloaded, never cancelled) would otherwise park every later attempt behind
-      it on "Working…" until the host restarts. No frame is pushed for the superseded login — an idle
-      client would otherwise pop a stray error dialog for a login it never saw.
+    - **A new `startLogin` supersedes** any unfinished login for the same provider: pi runs one
+      credential operation per provider at a time, so a login abandoned at a prompt (tab closed or
+      reloaded, never cancelled) would otherwise park every later attempt behind it on "Working…" until
+      the host restarts. The superseded login is cancelled, reported through the optional
+      `onSuperseded(loginId)` callback (the host drops its analytics entry), and gets a terminal `error`
+      frame, so another client still showing it stops waiting; the web store never opens a dialog from a
+      terminal frame for a login it does not hold.
     - `logoutProvider(id)` — `runtime.logout` (refreshes internally), then the `setLogoutPublisher` seam
       (a no-op by default) so the host can broadcast the change. (The old `setProviderApiKey` — a
       canned interaction answering exactly one secret prompt — is gone with `provider.setApiKey`: the

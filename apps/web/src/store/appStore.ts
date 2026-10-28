@@ -1037,6 +1037,7 @@ interface AppState {
 	skillsSyncedTickBySession: Record<string, number>;
 	activeLogin: LoginState | null;
 	loginStarting: boolean;
+	unheldLoginFrame: LoginPush | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
 	interviewPromptOpen: boolean;
@@ -1354,7 +1355,8 @@ interface AppState {
 	beginLogin: (loginId: string, providerId: string, target?: LoginPush["target"]) => void;
 	applyLoginFrame: (push: LoginPush) => void;
 	clearLoginInput: () => void;
-	clearLogin: () => void;
+	clearLogin: (loginId?: string) => void;
+	clearSettledLogin: (providerId: string) => void;
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
@@ -2302,6 +2304,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	skillsSyncedTickBySession: {},
 	activeLogin: null,
 	loginStarting: false,
+	unheldLoginFrame: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
 	interviewPromptOpen: false,
@@ -4280,11 +4283,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	beginLogin: (loginId, providerId, target) =>
 		set((s) => {
 			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
+			if (s.activeLogin?.loginId === loginId || s.activeLogin?.status === "active") return {};
+			const early = s.unheldLoginFrame?.loginId === loginId ? s.unheldLoginFrame.frame : null;
+			const fresh = newLoginState(loginId, providerId, target);
 			return {
-				activeLogin:
-					s.activeLogin?.loginId === loginId || s.activeLogin?.status === "active"
-						? s.activeLogin
-						: newLoginState(loginId, providerId, target),
+				activeLogin: early ? foldLoginFrame(fresh, early) : fresh,
+				unheldLoginFrame: null,
 			};
 		}),
 	applyLoginFrame: (push) =>
@@ -4296,6 +4300,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: {};
 			const cur = s.activeLogin;
 			if (cur && cur.loginId !== push.loginId && cur.status === "active") return statusChanged;
+			const terminal = push.frame.kind === "success" || push.frame.kind === "error";
+			if (terminal && cur?.loginId !== push.loginId)
+				return { unheldLoginFrame: push, ...statusChanged };
 			const base =
 				cur && cur.loginId === push.loginId
 					? cur
@@ -4308,7 +4315,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const { input: _drop, ...rest } = s.activeLogin;
 			return { activeLogin: rest };
 		}),
-	clearLogin: () => set({ activeLogin: null }),
+	clearLogin: (loginId) =>
+		set((s) =>
+			loginId === undefined || s.activeLogin?.loginId === loginId ? { activeLogin: null } : {},
+		),
+	clearSettledLogin: (providerId) =>
+		set((s) => {
+			const login = s.activeLogin;
+			if (!login || login.target || login.providerId !== providerId) return {};
+			return login.status === "active" ? {} : { activeLogin: null };
+		}),
 	openSettings: (section = SettingsSection.Providers) =>
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
