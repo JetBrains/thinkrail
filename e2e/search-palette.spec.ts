@@ -542,10 +542,11 @@ test("the preview pane reads a file only under its cap, even one that grows whil
 }) => {
 	const notes = join(realpathSync(E2E_FIXTURE_REPO), "notes.txt");
 	const original = readFileSync(notes);
-	const reads: { maxBytes?: number; refused: boolean }[] = [];
+	const reads: { maxBytes?: number; refused: boolean; grown: boolean }[] = [];
+	let grown = false;
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
 		const server = socket.connectToServer();
-		const asked = new Map<string, number | undefined>();
+		const asked = new Map<string, { maxBytes?: number; grown: boolean }>();
 		socket.onMessage((message) => {
 			const frame = JSON.parse(String(message)) as {
 				id?: string;
@@ -553,15 +554,17 @@ test("the preview pane reads a file only under its cap, even one that grows whil
 				params?: { path?: string; maxBytes?: number };
 			};
 			if (frame.id && frame.method === "fs.readFile" && frame.params?.path === "notes.txt") {
-				asked.set(frame.id, frame.params.maxBytes);
+				asked.set(frame.id, { maxBytes: frame.params.maxBytes, grown });
 			}
 			server.send(message);
 		});
 		server.onMessage((message) => {
 			const frame = JSON.parse(String(message)) as { id?: string; errorCode?: string };
 			if (frame.id && asked.has(frame.id)) {
+				const read = asked.get(frame.id);
 				reads.push({
-					maxBytes: asked.get(frame.id),
+					maxBytes: read?.maxBytes,
+					grown: read?.grown === true,
 					refused: frame.errorCode === "FILE_TOO_LARGE",
 				});
 				asked.delete(frame.id);
@@ -578,9 +581,22 @@ test("the preview pane reads a file only under its cap, even one that grows whil
 			page.locator('[data-testid="search-row"][data-kind="file"]', { hasText: "notes.txt" }),
 		).toBeVisible({ timeout: 15_000 });
 		await pressPlatformShortcut(page, "i");
-		await expect(page.getByTestId("search-file-preview")).toContainText("plain-text-fixture");
-		writeFileSync(notes, "x".repeat(3 * 1024 * 1024));
-		await expect.poll(() => reads.some((read) => read.refused), { timeout: 15_000 }).toBe(true);
+		const preview = page.getByTestId("search-file-preview");
+		await expect(preview).toContainText("plain-text-fixture");
+		let round = 0;
+		await expect
+			.poll(
+				async () => {
+					round += 1;
+					writeFileSync(notes, "x".repeat(3 * 1024 * 1024 + round));
+					grown = true;
+					const refused = reads.some((read) => read.grown && read.refused);
+					return refused || (await preview.getAttribute("data-state")) === "too-large";
+				},
+				{ timeout: 20_000, intervals: [500] },
+			)
+			.toBe(true);
+		expect(reads.filter((read) => read.grown).every((read) => read.refused)).toBe(true);
 		expect(reads.every((read) => read.maxBytes === MAX_SEARCH_PREVIEW_BYTES)).toBe(true);
 	} finally {
 		writeFileSync(notes, original);
