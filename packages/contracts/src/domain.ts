@@ -1542,6 +1542,8 @@ export interface SearchPreviewTarget {
 	kind: "chat";
 	sessionId: string;
 	messageIndex?: number;
+	/** The hit's `anchorText`: the focus moves to the message it starts when compaction shifted the index. */
+	anchorText?: string;
 }
 
 export interface SearchPreviewMessage {

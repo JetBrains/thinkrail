@@ -527,8 +527,8 @@ both rings rank with. The one package
   capped `hits`, the true `total`, and a `state` of `ready` / `truncated` / `indexing` / `failed` — a
   client re-asks only on `indexing`), **`SearchQueryResult`** (`seq` echoed; `superseded` when a newer
   `seq` from the same client overtook it), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (the
-  `chat` target only: a bounded transcript window or `unavailable` — files and specs render client-side
-  over `fs.readFile`), and the limits `MAX_SEARCH_QUERY_LENGTH`,
+  `chat` target only, with the hit's `anchorText` so the host can re-find a message compaction moved: a
+  bounded transcript window or `unavailable` — files and specs render client-side over `fs.readFile`), and the limits `MAX_SEARCH_QUERY_LENGTH`,
   `MAX_SEARCH_GROUP_LIMIT`, `DEFAULT_SEARCH_GROUP_LIMIT`; the matcher gains the `content` tier for
   body/transcript matches, always below every field tier;
   the **review DTOs** — **`Review`** (one open review per workspace; `baseSha` — the reviewed diff's

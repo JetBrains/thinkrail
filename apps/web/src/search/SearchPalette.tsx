@@ -468,6 +468,18 @@ function PaletteContent({
 }
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
+const PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
+const PREVIEW_SETTLE_MS = 150;
+
+/** Whether `key` has stayed the same for `ms`, so a sweep across rows reads only the row it stops on. */
+function useSettled(key: string, ms: number): boolean {
+	const [settled, setSettled] = useState<string | null>(null);
+	useEffect(() => {
+		const timer = setTimeout(() => setSettled(key), ms);
+		return () => clearTimeout(timer);
+	}, [key, ms]);
+	return settled === key;
+}
 
 function keepInputFocus(event: ReactMouseEvent): void {
 	event.preventDefault();
@@ -722,7 +734,7 @@ function Preview({
 			className="hidden w-[40%] shrink-0 flex-col overflow-y-auto border-border-muted border-l px-16 py-16 md:flex"
 		>
 			{item.file && host ? (
-				<FilePreview item={item} file={item.file} host={host} />
+				<FilePreview t={t} item={item} file={item.file} host={host} />
 			) : item.previewTarget ? (
 				<HostPreview t={t} item={item} target={item.previewTarget} previews={previews} />
 			) : preview ? (
@@ -768,20 +780,34 @@ function PreviewHeading({ item, title }: { item: PaletteItem; title?: string }) 
 }
 
 function FilePreview({
+	t,
 	item,
 	file,
 	host,
 }: {
+	t: Translator;
 	item: PaletteItem;
 	file: PaletteFile;
 	host: PaletteHost;
 }) {
+	const settled = useSettled(`${file.workspaceId}:${file.path}`, PREVIEW_SETTLE_MS);
+	const tooLarge = file.size !== undefined && file.size > PREVIEW_MAX_BYTES;
 	return (
-		<div data-testid="search-file-preview" className="flex min-h-0 flex-1 flex-col">
+		<div
+			data-testid="search-file-preview"
+			data-state={tooLarge ? "too-large" : settled ? "ready" : "loading"}
+			className="flex min-h-0 flex-1 flex-col"
+		>
 			<PreviewHeading item={item} />
-			<div className="mt-12 min-h-0 flex-1 overflow-auto rounded-sm border border-border-muted">
-				{host.renderFilePreview(file)}
-			</div>
+			{tooLarge ? (
+				<p className="mt-12 tr-text-ui text-text-subtle">{t("search.palette.previewTooLarge")}</p>
+			) : settled ? (
+				<div className="mt-12 min-h-0 flex-1 overflow-auto rounded-sm border border-border-muted">
+					{host.renderFilePreview(file)}
+				</div>
+			) : (
+				<p className="mt-12 tr-text-ui text-text-subtle">{t("search.palette.previewLoading")}</p>
+			)}
 		</div>
 	);
 }
@@ -802,11 +828,14 @@ function HostPreview({
 	useEffect(() => {
 		let current = true;
 		setResult(null);
-		void previews.load(JSON.parse(key) as SearchPreviewTarget).then((loaded) => {
-			if (current) setResult(loaded);
-		});
+		const timer = setTimeout(() => {
+			void previews.load(JSON.parse(key) as SearchPreviewTarget).then((loaded) => {
+				if (current) setResult(loaded);
+			});
+		}, PREVIEW_SETTLE_MS);
 		return () => {
 			current = false;
+			clearTimeout(timer);
 		};
 	}, [key, previews]);
 	return (

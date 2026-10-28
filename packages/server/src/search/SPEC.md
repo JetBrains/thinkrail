@@ -106,7 +106,9 @@ plan files whose session has no transcript on disk (orphans).
 
 `search.preview` has one target, `chat`: a window of `previewMessages` entries around the focused
 message from the history index (never a pi session), each entry cut at `previewMessageChars`; a session
-that is not an open project's workspace chat answers `unavailable`. Files and specs are not previewed
+that is not an open project's workspace chat answers `unavailable`. The focus is the hit's message while
+it still starts with the target's `anchorText` (cut at 120 characters), else the nearest message that
+does — compaction or a branch may have shifted the index since the search — else none. Files and specs are not previewed
 by the host — the client renders them through the shared resource renderers over `fs.readFile` (code,
 images, HTML, markdown), the same path as a preview tab; a plan has no preview.
 

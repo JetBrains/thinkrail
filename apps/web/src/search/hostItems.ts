@@ -171,6 +171,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 								kind: "chat",
 								sessionId: hit.sessionId,
 								...(hit.messageIndex === undefined ? {} : { messageIndex: hit.messageIndex }),
+								...(hit.anchorText === undefined ? {} : { anchorText: hit.anchorText }),
 							},
 						}
 					: {}),

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { SearchGroup, SearchQueryResult, WsParams } from "@thinkrail/contracts";
 import {
+	createHostPreviewLoader,
 	createHostSearchController,
 	HOST_SEARCH,
 	type HostSearchState,
@@ -271,5 +272,29 @@ describe("host search results", () => {
 		expect(state([group("indexing")], true)).toBeNull();
 		expect(state([group("truncated")])).toBe("truncated");
 		expect(state([group("failed")], false, true)).toBeNull();
+	});
+});
+
+describe("host previews", () => {
+	test("a preview is read once per connection, and a failed read is asked again", async () => {
+		let generation = 1;
+		let fail = true;
+		const asked: string[] = [];
+		const loader = createHostPreviewLoader(
+			async (target) => {
+				asked.push(`${generation}:${target.sessionId}`);
+				if (fail) throw new Error("offline");
+				return { kind: "transcript", title: "t", messages: [], truncated: false };
+			},
+			() => generation,
+		);
+		const target = { kind: "chat" as const, sessionId: "s1", messageIndex: 2, anchorText: "the" };
+		expect(await loader.load(target)).toEqual({ kind: "unavailable", reason: "missing" });
+		fail = false;
+		await loader.load(target);
+		await loader.load(target);
+		generation = 2;
+		await loader.load(target);
+		expect(asked).toEqual(["1:s1", "1:s1", "2:s1"]);
 	});
 });

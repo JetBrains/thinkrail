@@ -4,7 +4,7 @@ import {
 	RiHome4Line,
 	RiTerminalBoxLine,
 } from "@remixicon/react";
-import type { SearchContext, SearchHit, Workspace } from "@thinkrail/contracts";
+import type { SearchContext, Workspace } from "@thinkrail/contracts";
 import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -52,6 +52,7 @@ import {
 	workspaceName,
 } from "../store";
 import { errorText, getTransport, supportsHostSearch, wsErrorCode } from "../transport";
+import { type HostHitTargets, openHostHit } from "./openHostHit";
 import { createPaletteBackfill, mergeProjectWorkspaces } from "./paletteBackfill";
 import {
 	buildCommands,
@@ -100,43 +101,14 @@ function useChatTitleBackfill(): void {
 	useEffect(() => paletteBackfill.watch(), []);
 }
 
-async function openHostHit(hit: SearchHit): Promise<void> {
-	if (!hit.workspaceId) return;
-	const workspace = { id: hit.workspaceId, projectId: hit.projectId };
-	switch (hit.kind) {
-		case "file":
-			if ((await paletteNavigator.navigateToWorkspace(workspace)) && hit.path) {
-				await openFileInTab(workspace.id, hit.path, "keep");
-			}
-			return;
-		case "spec":
-			if ((await paletteNavigator.navigateToWorkspace(workspace)) && hit.path) {
-				useAppStore.getState().requestSpecView(workspace.id, hit.path);
-			}
-			return;
-		case "transcript":
-			if (hit.sessionId && hit.messageIndex !== undefined && hit.anchorText !== undefined) {
-				if (!(await paletteNavigator.loadWorkspaceRow(workspace))) return;
-				useAppStore.getState().requestChatLocation({
-					workspaceId: workspace.id,
-					projectId: workspace.projectId,
-					sessionId: hit.sessionId,
-					messageIndex: hit.messageIndex,
-					anchorText: hit.anchorText,
-				});
-			} else await paletteNavigator.navigateToWorkspace(workspace, hit.sessionId);
-			return;
-		case "plan":
-			if (await paletteNavigator.navigateToWorkspace(workspace, hit.sessionId)) {
-				useAppStore.getState().requestToolView(workspace.id, "plan");
-			}
-			return;
-		case "chat":
-		case "workspace":
-			await paletteNavigator.navigateToWorkspace(workspace, hit.sessionId);
-			return;
-	}
-}
+const hostHitTargets: HostHitTargets = {
+	navigateToWorkspace: paletteNavigator.navigateToWorkspace,
+	loadWorkspaceRow: paletteNavigator.loadWorkspaceRow,
+	openFile: (workspaceId, path) => openFileInTab(workspaceId, path, "keep"),
+	openSpec: (workspaceId, path) => useAppStore.getState().requestSpecView(workspaceId, path),
+	openChatLocation: (location) => useAppStore.getState().requestChatLocation(location),
+	openPlan: (workspaceId) => useAppStore.getState().requestToolView(workspaceId, "plan"),
+};
 
 export interface SearchPaletteOptions {
 	readonly openNewWorkspace: (projectId: string) => void;
@@ -198,7 +170,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		return {
 			context: paletteSearchContext(contextProject?.id ?? null, activeWorkspaceId, workspaces),
 			openHit: (hit) => {
-				void openHostHit(hit).catch((err: unknown) =>
+				void openHostHit(hit, hostHitTargets).catch((err: unknown) =>
 					toast.error(errorText(err, globalT("search.item.openFailed"))),
 				);
 			},

@@ -1,6 +1,8 @@
 import type { Workspace } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { createLatestOperation } from "../panels/latestOperation";
-import { selectWorkspaceById, selectWorkspaceNavTick, useAppStore } from "../store";
+import { selectWorkspaceById, selectWorkspaceNavTick, toast, useAppStore } from "../store";
+import { errorText } from "../transport";
 
 type WorkspaceTarget = Pick<Workspace, "id" | "projectId">;
 
@@ -27,8 +29,18 @@ export function createPaletteNavigator(
 	const loadWorkspaceRow = async (workspace: WorkspaceTarget): Promise<boolean> => {
 		const stillWanted = beginPick();
 		if (selectWorkspaceById(useAppStore.getState(), workspace.id)) return true;
-		await loadProjectWorkspaces(workspace.projectId).catch(() => {});
-		return stillWanted();
+		let failure: unknown = null;
+		await loadProjectWorkspaces(workspace.projectId).catch((error: unknown) => {
+			failure = error;
+		});
+		if (!stillWanted()) return false;
+		if (selectWorkspaceById(useAppStore.getState(), workspace.id)) return true;
+		toast.error(
+			failure === null
+				? t("search.item.unavailable")
+				: errorText(failure, t("search.item.openFailed")),
+		);
+		return false;
 	};
 
 	return {

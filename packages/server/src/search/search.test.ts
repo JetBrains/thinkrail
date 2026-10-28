@@ -749,6 +749,26 @@ describe("search.preview", () => {
 		});
 	});
 
+	test("a preview whose message index drifted focuses the message its anchor starts, or none", async () => {
+		const service = createSearchService(readers());
+		const focused = async (messageIndex: number, anchorText: string) => {
+			const preview = await service.preview({
+				kind: "chat",
+				sessionId: "s1",
+				messageIndex,
+				anchorText,
+			});
+			if (preview.kind !== "transcript") throw new Error("expected a transcript");
+			return preview.messages
+				.filter((message) => message.focus)
+				.map((message) => message.messageIndex);
+		};
+		expect(await focused(1, "Done: the refresh")).toEqual([1]);
+		expect(await focused(0, "Done: the refresh")).toEqual([1]);
+		expect(await focused(5, "please refresh")).toEqual([0]);
+		expect(await focused(1, "a message that is gone")).toEqual([]);
+	});
+
 	test("a chat whose folder is no open project's workspace has no preview", async () => {
 		const service = createSearchService(readers({ workspaces: () => [defaultOne] }));
 		expect(await service.preview({ kind: "chat", sessionId: "s1" })).toEqual({

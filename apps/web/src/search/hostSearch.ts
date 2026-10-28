@@ -250,15 +250,16 @@ export interface HostPreviewLoader {
 
 const PREVIEW_CACHE_LIMIT = 50;
 
-/** One per open palette: a preview is re-read the next time the palette opens, and a failed read is never kept. */
+/** One per open palette, per connection: a preview is re-read the next time the palette opens or after a reconnect, and a failed read is never kept. */
 export function createHostPreviewLoader(
 	request: (target: SearchPreviewTarget) => Promise<SearchPreviewResult> = (target) =>
 		getTransport().request("search.preview", target),
+	generation: () => number = () => useAppStore.getState().welcomeGeneration,
 ): HostPreviewLoader {
 	const cache = new Map<string, Promise<SearchPreviewResult>>();
 	return {
 		load(target) {
-			const key = JSON.stringify(target);
+			const key = `${generation()}:${JSON.stringify(target)}`;
 			const cached = cache.get(key);
 			if (cached) return cached;
 			const promise = request(target).catch((): SearchPreviewResult => {

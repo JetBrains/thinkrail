@@ -193,7 +193,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			if (!session || !chatLabeler(workspaces)(session.cwd)) {
 				return { kind: "unavailable", reason: "missing" };
 			}
-			return transcriptPreview(session, target.messageIndex);
+			return transcriptPreview(session, target.messageIndex, target.anchorText?.slice(0, 120));
 		},
 
 		invalidateRoot(root) {
@@ -207,23 +207,46 @@ export function createSearchService(readers: SearchReaders): SearchService {
 	};
 }
 
-function transcriptPreview(session: HistorySession, messageIndex?: number): SearchPreviewResult {
+/** The focused entry: the hit's message when it still starts with the anchor, else the nearest one that does. */
+function focusEntry(
+	entries: readonly HistorySession["entries"][number][],
+	messageIndex: number | undefined,
+	anchorText: string | undefined,
+): number {
+	if (messageIndex === undefined) return -1;
+	const at = entries.findIndex((entry) => entry.messageIndex === messageIndex);
+	if (anchorText === undefined || (at !== -1 && entries[at]?.text.startsWith(anchorText)))
+		return at;
+	let best = -1;
+	for (const [index, entry] of entries.entries()) {
+		if (!entry.text.startsWith(anchorText)) continue;
+		const nearer =
+			best === -1 ||
+			Math.abs(entry.messageIndex - messageIndex) <
+				Math.abs((entries[best]?.messageIndex ?? 0) - messageIndex);
+		if (nearer) best = index;
+	}
+	return best;
+}
+
+function transcriptPreview(
+	session: HistorySession,
+	messageIndex?: number,
+	anchorText?: string,
+): SearchPreviewResult {
 	const entries = session.entries;
-	const focusAt =
-		messageIndex === undefined
-			? -1
-			: entries.findIndex((entry) => entry.messageIndex === messageIndex);
+	const focusAt = focusEntry(entries, messageIndex, anchorText);
 	const half = Math.floor(SEARCH_BUDGET.previewMessages / 2);
 	const start = focusAt === -1 ? 0 : Math.max(0, focusAt - half);
 	const window = entries.slice(start, start + SEARCH_BUDGET.previewMessages);
-	const messages: SearchPreviewMessage[] = window.map((entry) => ({
+	const messages: SearchPreviewMessage[] = window.map((entry, offset) => ({
 		role: entry.role,
 		messageIndex: entry.messageIndex,
 		text:
 			entry.text.length > SEARCH_BUDGET.previewMessageChars
 				? `${entry.text.slice(0, SEARCH_BUDGET.previewMessageChars)}…`
 				: entry.text,
-		focus: entry.messageIndex === messageIndex,
+		focus: start + offset === focusAt,
 	}));
 	return {
 		kind: "transcript",

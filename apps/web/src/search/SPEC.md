@@ -106,12 +106,17 @@ project, since without one there is no root to search.
 ## Preview pane
 
 `Mod+I` opens a pane with one of three renderings, chosen by the selected row: a **transcript window**
-around a chat or transcript hit (`search.preview`, memoized per target for the open palette, with the
-focused message marked); a **file or spec** rendered by the shell-injected `renderFilePreview` over
-`PaletteItem.file` (`{ workspaceId, path }`) — the shared resource renderers, so code highlights, images
-and sandboxed HTML display, and a `SPEC.md` renders as markdown, the same path as a preview tab; or the
-local **metadata card** (`PaletteItem.preview`) for a project, workspace or chat without a transcript
-hit. A plan row and a command have no preview. The pane never fetches a text head from the host.
+around a chat or transcript hit (`search.preview`, memoized per target for the open palette and the
+connection, with the focused message marked — the hit's `anchorText` travels with the target, so a
+transcript compacted since the search still focuses the right message, or none); a **file or spec**
+rendered by the shell-injected `renderFilePreview` over `PaletteItem.file` (`{ workspaceId, path, size }`)
+— the shared resource renderers, so code highlights, images and sandboxed HTML display, and a `SPEC.md`
+renders as markdown, the same path as a preview tab; or the local **metadata card** (`PaletteItem.preview`)
+for a project, workspace or chat without a transcript hit. A host preview is read only once the
+selection rests on its row for 150 ms, so sweeping the mouse or arrows across rows reads only the row it
+stops on, and a file or spec over 2 MiB is not read at all — the pane says it is too large to preview and
+Enter opens it. A plan row and a command have no preview. The pane never fetches a text head from the
+host.
 
 ## Interaction
 
