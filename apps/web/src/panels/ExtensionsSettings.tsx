@@ -6,12 +6,14 @@ import type {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { useCallback, useEffect, useState } from "react";
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { InstallPackageDialog } from "./InstallPackageDialog";
 import {
 	PiBuiltinsGroup,
 	type PiPackageAction,
@@ -115,6 +117,7 @@ export function ExtensionsSettings() {
 	const [errors, setErrors] = useState<ReadonlyMap<string, string>>(new Map());
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
 	const [removeTarget, setRemoveTarget] = useState<PiPackageSummary | null>(null);
+	const [installOpen, setInstallOpen] = useState(false);
 
 	useEffect(() => {
 		let current = true;
@@ -311,6 +314,14 @@ export function ExtensionsSettings() {
 					<h3 className="tr-title-section text-text-default">{t("settings.extensions.title")}</h3>
 					<p className="text-text-muted tr-text-metadata">{t("settings.extensions.description")}</p>
 				</div>
+				<Button
+					variant="primary"
+					size="m"
+					data-testid="packages-install"
+					onClick={() => setInstallOpen(true)}
+				>
+					{t("settings.extensions.install")}
+				</Button>
 			</div>
 			<section data-testid="settings-bundled-extensions" className="flex flex-col">
 				<h4 className="pb-8 tr-text-label-pill text-text-subtle">
@@ -337,6 +348,7 @@ export function ExtensionsSettings() {
 				onAction={onAction}
 				onUpdateAll={updateAll}
 				onCheckUpdates={() => void checkUpdates()}
+				onInstall={() => setInstallOpen(true)}
 			/>
 			{catalog !== "loading" && catalog !== "failed" ? (
 				<PiBuiltinsGroup
@@ -363,6 +375,33 @@ export function ExtensionsSettings() {
 				destructive
 				confirmTestId="package-remove-confirm"
 				onConfirm={removeNow}
+			/>
+			<InstallPackageDialog
+				open={installOpen}
+				onOpenChange={setInstallOpen}
+				catalog={catalog === "loading" || catalog === "failed" ? null : catalog}
+				workspaceId={workspaceId ?? null}
+				install={(request) =>
+					getTransport()
+						.request(
+							"packages.install",
+							{ ...request, ...(workspaceId ? { workspaceId } : {}) },
+							{ timeoutMs: PACKAGE_MUTATION_TIMEOUT_MS },
+						)
+						.then((summary) => {
+							void listPackages();
+							return summary;
+						})
+				}
+				installedEnabled={(summary) => !disabledPackages.includes(summary.identity)}
+				onToggleInstalled={(summary, enabled) =>
+					onAction({
+						kind: "togglePackage",
+						rowKey: piPackageKey(summary),
+						identity: summary.identity,
+						enabled,
+					})
+				}
 			/>
 		</section>
 	);

@@ -79,7 +79,7 @@ export async function piPackagesInstall(
 	);
 	if (!summary) {
 		throw new CodedError(
-			"PACKAGE_INSTALL_FAILED",
+			"PACKAGE_NOTHING_LOADABLE",
 			`${request.source} was installed but contributes nothing pi can load.`,
 		);
 	}
