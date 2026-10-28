@@ -60,10 +60,12 @@ create the tools it needs based on how you actually work.
   in the chat instead of guessing, and inline diagrams, option comparisons and file previews rendered right
   in the chat — when the agent proposes a UI change it shows a before/after mockup you can comment on like
   a diff. Settings → Extensions lists the ThinkRail extensions the agent gets and lets you switch each one
-  off. The questions and visualize tools are also published as plain `pi` packages —
-  [`@thinkrail/pi-ask-user-question`](https://www.npmjs.com/package/@thinkrail/pi-ask-user-question) and
-  [`@thinkrail/pi-visualize`](https://www.npmjs.com/package/@thinkrail/pi-visualize) — so
-  `pi install npm:@thinkrail/pi-ask-user-question` gives them to a vanilla `pi` in the terminal too.
+  off. The questions and visualize tools are also published as plain `pi` packages, one each —
+  `pi install npm:@thinkrail/pi-ask-user-question` for the questions
+  ([`@thinkrail/pi-ask-user-question`](https://www.npmjs.com/package/@thinkrail/pi-ask-user-question)) and
+  `pi install npm:@thinkrail/pi-visualize` for the diagrams and previews
+  ([`@thinkrail/pi-visualize`](https://www.npmjs.com/package/@thinkrail/pi-visualize)) — so a vanilla `pi`
+  in the terminal gets the same tools.
 - **MCP servers.** Connect the MCP servers in your `pi` `mcp.json` (or add them, and a few presets, from
   Settings): ThinkRail asks in the chat before calls the server does not mark read-only (or always allows
   the tools you trust in a project), keeps servers a repository
