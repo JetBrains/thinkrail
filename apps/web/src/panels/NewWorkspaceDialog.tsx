@@ -241,6 +241,13 @@ export function NewWorkspaceDialog({
 		toast.info(i18n.t("panels.newWorkspace.projectClosed"));
 	}, [open, chat, projects, selectedProjectId, onOpenChange]);
 
+	const chooseTarget = (next: WorkspaceTarget) => {
+		setTarget(next);
+		if (next === "chat" || repoProjects.some((p) => p.id === selectedProjectId)) return;
+		const first = repoProjects[0];
+		if (first) setSelectedProjectId(first.id);
+	};
+
 	useEffect(() => {
 		if (!open) return;
 		let cancelled = false;
@@ -541,7 +548,7 @@ export function NewWorkspaceDialog({
 								name={targetGroupName}
 								active={isolated}
 								testid="ws-target-worktree"
-								onSelect={() => setTarget("worktree")}
+								onSelect={() => chooseTarget("worktree")}
 							/>
 							<TargetOption
 								icon={House}
@@ -549,7 +556,7 @@ export function NewWorkspaceDialog({
 								name={targetGroupName}
 								active={target === "default"}
 								testid="ws-target-default"
-								onSelect={() => setTarget("default")}
+								onSelect={() => chooseTarget("default")}
 							/>
 						</>
 					) : null}
@@ -560,7 +567,7 @@ export function NewWorkspaceDialog({
 							name={targetGroupName}
 							active={chat}
 							testid="ws-target-chat"
-							onSelect={() => setTarget("chat")}
+							onSelect={() => chooseTarget("chat")}
 						/>
 					) : null}
 				</fieldset>

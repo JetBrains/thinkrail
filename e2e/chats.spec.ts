@@ -8,7 +8,7 @@ import {
 	pressPlatformShortcut,
 	revealWorkbenchTool,
 } from "./fixtures/app";
-import { E2E_DATA_DIR } from "./fixtures/paths";
+import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
 
 interface ClientFrame {
@@ -112,6 +112,44 @@ test("a double click starts one chat, and a topbar Delete confirmation closes wh
 	await expect(confirm).toHaveCount(0);
 	expect(storedChats().chats.map((chat) => chat.id)).toEqual([first.id]);
 	expect(frames.filter((frame) => frame.method === "chat.delete")).toHaveLength(0);
+});
+
+test("a Create dialog opened before any repository takes one another window opens when a repository target is chosen", async ({
+	page,
+}) => {
+	const frames: (ClientFrame & { params?: { projectId?: string } })[] = [];
+	await observeClientFrames(page, frames);
+	await openAppFresh(page);
+	await expect(page.getByTestId("welcome")).toBeVisible();
+	await pressPlatformShortcut(page, "n");
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("ws-target-worktree")).toHaveCount(0);
+	await dialog.getByTestId("ws-prompt").fill("Keep this draft");
+
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	let repository: { id: string };
+	try {
+		repository = await wire.request("project.open", { path: E2E_FIXTURE_REPO });
+	} finally {
+		wire.close();
+	}
+	await dialog.getByTestId("ws-target-worktree").click();
+	await expect(dialog.getByTestId("ws-project-picker")).toBeVisible();
+	await expect
+		.poll(() =>
+			frames
+				.filter((frame) => frame.method === "git.listBranches")
+				.map((frame) => frame.params?.projectId),
+		)
+		.toContain(repository.id);
+	expect(
+		frames.filter(
+			(frame) => frame.method === "git.listBranches" && frame.params?.projectId !== repository.id,
+		),
+	).toEqual([]);
+	await expect(dialog.getByTestId("ws-prompt")).toHaveValue("Keep this draft");
+	await page.keyboard.press("Escape");
 });
 
 test("from the palette, typed text starts a chat without a project through the dialog; deleting it trashes the folder", async ({

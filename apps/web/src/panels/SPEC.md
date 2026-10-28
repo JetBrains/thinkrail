@@ -51,8 +51,9 @@ treatment.
   repository is open; it hides the project and branch pickers and Manage skills — the container is
   never trusted, so only global skills apply — scopes templates to the container and honours the
   dialog's explicit model; the dialog takes its defaults once per opening, so another window opening or
-  reordering projects never resets a draft or a creation in flight, and only a repository target closes
-  when its project does), the palette's `chat.newProjectless` command and start row, and
+  reordering projects never resets a draft or a creation in flight, choosing a repository target while no
+  repository is selected selects the first open one in the same update (so no request asks the
+  container), and only a repository target closes when its project does), the palette's `chat.newProjectless` command and start row, and
   New chat inside a chat (`openChat` turns the host's `CHAT_HAS_SESSION` refusal into a sibling chat — one
   chat = one folder; `CHAT_DELETING` / `CHAT_DELETION_PENDING` are reported, never turned into a chat). `FilesPanel` asks no git status in a chat and hides its Changed mode. Settle, and the
   automatic Settled shelf, never apply to a chat (`canSettleWorkspace`, `selectWorkspaceSettledReason`);
