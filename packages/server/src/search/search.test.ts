@@ -7,7 +7,15 @@ import { MATCH_TIER } from "@thinkrail/contracts";
 import type { HistorySession } from "../history";
 import type { SpecSnapshotEntry } from "../spec";
 import type { StoredPlanFile } from "../todos";
-import { type FileList, FileListCache, listRootFiles, parseNulList } from "./files";
+import {
+	type FileList,
+	FileListCache,
+	isTransientListFailure,
+	listRootFiles,
+	parseNulList,
+	walkFileList,
+} from "./files";
+import { searchFiles } from "./providers";
 import { createSearchService, resolveSearchRoot, type SearchReaders } from "./service";
 
 const encoder = new TextEncoder();
@@ -75,6 +83,155 @@ describe("listRootFiles", () => {
 
 	test("a plain folder falls back to a bounded walk that skips node_modules", async () => {
 		expect(await listRootFiles(plain)).toEqual({ paths: ["a.txt"], truncated: false });
+	});
+
+	test("a path git lists once per conflict stage is listed once", async () => {
+		const repo = mkdtempSync(join(tmpdir(), "thinkrail-search-conflict-"));
+		const git = (...args: string[]) =>
+			Bun.spawnSync(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...args], {
+				stdout: "ignore",
+				stderr: "ignore",
+			});
+		try {
+			git("init", "-q", "-b", "main");
+			writeFileSync(join(repo, "conflict.txt"), "base\n");
+			git("add", "conflict.txt");
+			git("commit", "-q", "-m", "base");
+			git("checkout", "-q", "-b", "other");
+			writeFileSync(join(repo, "conflict.txt"), "other\n");
+			git("commit", "-q", "-am", "other");
+			git("checkout", "-q", "main");
+			writeFileSync(join(repo, "conflict.txt"), "main\n");
+			git("commit", "-q", "-am", "main");
+			git("merge", "-q", "other");
+			expect((await listRootFiles(repo)).paths).toEqual(["conflict.txt"]);
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	test("a walk skips a folder it may not read but gives up on a failure that may pass", async () => {
+		const dirent = (name: string, directory: boolean) =>
+			({ name, isDirectory: () => directory, isFile: () => !directory }) as never;
+		const failure = (code: string) => Object.assign(new Error(code), { code });
+		const tree: Record<string, () => unknown[]> = {
+			"/r": () => [dirent("a.txt", false), dirent("locked", true), dirent("busy", true)],
+			"/r/locked": () => {
+				throw failure("EACCES");
+			},
+			"/r/busy": () => [],
+		};
+		const read = async (path: string) => (tree[path]?.() ?? []) as never;
+		expect(await walkFileList("/r", read)).toEqual({ paths: ["a.txt"], truncated: false });
+		tree["/r/busy"] = () => {
+			throw failure("EMFILE");
+		};
+		await expect(walkFileList("/r", read)).rejects.toThrow("EMFILE");
+		expect(await walkFileList("/gone", async () => Promise.reject(failure("ENOENT")))).toEqual({
+			paths: [],
+			truncated: false,
+		});
+	});
+
+	test("only a failure that may pass counts as transient", () => {
+		expect(isTransientListFailure({ timedOut: true })).toBe(true);
+		expect(isTransientListFailure({ code: "EMFILE" })).toBe(true);
+		expect(isTransientListFailure({ message: "fatal: Too many open files" })).toBe(true);
+		expect(isTransientListFailure({ message: "fatal: not a git repository" })).toBe(false);
+		expect(isTransientListFailure({ code: "EACCES" })).toBe(false);
+	});
+});
+
+describe("FileListCache", () => {
+	function deferredLoader() {
+		const pending: ((list: FileList) => void)[] = [];
+		let loads = 0;
+		const loader = () =>
+			new Promise<FileList>((resolve) => {
+				loads += 1;
+				pending.push(resolve);
+			});
+		return {
+			loader,
+			loads: () => loads,
+			finish: (paths: string[]) => pending.shift()?.({ paths, truncated: false }),
+		};
+	}
+
+	test("a change during a reload leaves the reloaded list stale, so the next ask reloads", async () => {
+		const deferred = deferredLoader();
+		const files = new FileListCache(deferred.loader);
+		const cold = files.load("/r");
+		deferred.finish(["a.ts"]);
+		await cold;
+		files.invalidate("/r");
+		expect(files.peek("/r")?.paths).toEqual(["a.ts"]);
+		expect(files.reloading("/r")).toBe(true);
+		files.invalidate("/r");
+		deferred.finish(["a.ts", "b.ts"]);
+		await Bun.sleep(0);
+		expect(files.peek("/r")?.paths).toEqual(["a.ts", "b.ts"]);
+		expect(files.reloading("/r")).toBe(true);
+		deferred.finish(["a.ts", "b.ts", "c.ts"]);
+		await Bun.sleep(0);
+		expect(files.peek("/r")?.paths).toEqual(["a.ts", "b.ts", "c.ts"]);
+		expect(files.reloading("/r")).toBe(false);
+		expect(deferred.loads()).toBe(3);
+	});
+
+	test("a change during the first load leaves it stale too", async () => {
+		const deferred = deferredLoader();
+		const files = new FileListCache(deferred.loader);
+		const cold = files.load("/r");
+		files.invalidate("/r");
+		deferred.finish(["a.ts"]);
+		await cold;
+		expect(files.peek("/r")?.paths).toEqual(["a.ts"]);
+		expect(files.reloading("/r")).toBe(true);
+	});
+
+	test("a file hit carries its size on disk so the client can decline to preview a large one", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "thinkrail-search-size-"));
+		try {
+			writeFileSync(join(dir, "big.log"), "x".repeat(4096));
+			const files = new FileListCache(async () => ({
+				paths: ["big.log", "gone.log"],
+				truncated: false,
+			}));
+			await files.load(dir);
+			const group = searchFiles({ root: dir, projectId: "p1", workspaceId: "w1" }, files, {
+				terms: [{ text: "log", literal: false }],
+				limit: 20,
+				deadline: { expired: () => false },
+			});
+			expect(Object.fromEntries(group.hits.map((hit) => [hit.path, hit.size]))).toEqual({
+				"big.log": 4096,
+				"gone.log": undefined,
+			});
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("a first load that fails answers failed and is tried again on the next ask", async () => {
+		let fail = true;
+		const files = new FileListCache(async () => {
+			if (fail) throw new Error("EMFILE");
+			return { paths: ["src/refresh.ts"], truncated: false };
+		});
+		const root = { root: "/r", projectId: "p1", workspaceId: "w1" };
+		const input = (query: string) => ({
+			terms: [{ text: query, literal: false }],
+			limit: 20,
+			deadline: { expired: () => false },
+		});
+		await files.load("/r");
+		fail = false;
+		expect(searchFiles(root, files, input("refresh"))).toMatchObject({ state: "failed", hits: [] });
+		await Bun.sleep(0);
+		expect(searchFiles(root, files, input("refresh")).hits.map((hit) => hit.path)).toEqual([
+			"src/refresh.ts",
+		]);
 	});
 });
 

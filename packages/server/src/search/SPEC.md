@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: search — the palette's host-side providers and the transcript preview
 parent: module-server
-depends-on: [module-contracts, submodule-server-history, submodule-server-spec, submodule-server-todos, submodule-server-git, submodule-server-fs]
+depends-on: [module-contracts, submodule-server-history, submodule-server-spec, submodule-server-todos, submodule-server-git, submodule-server-log]
 references: [submodule-web-search]
 tags: [search, public-surface-checked]
 ---
@@ -25,7 +25,8 @@ history index, spec snapshots, stored plans), the same shape as `host/historySco
   reached by tests per file, never through the barrel.
 - **Allowed deps:** `contracts` (DTOs + the matcher), `history` (`HistoryIndex.sessions()` — the
   narrow read of titles and entries), `spec` (`specSnapshot` / `invalidateSpecSnapshot`), `todos`
-  (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`), Node `fs/promises`.
+  (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`), `log` (a failed load or provider,
+  error type only), Node `fs` (`readdir` for a walk, `stat` for a returned file hit's size).
 - **Forbidden:** `host`, `workspaces`, `projects`, `persistence`, `agent` (projects and records are
   injected; a preview never attaches a pi session); writing anything; a second matcher.
 
@@ -62,18 +63,26 @@ plan files whose session has no transcript on disk (orphans).
   the refreshed corpus instead of taking the stale page as final.
 - **Files:** `git ls-files -co --exclude-standard -z` streamed through `gitAsyncStream` and a capped
   NUL parser (`FILE_LIST_LIMITS`: 100k names / 16 MB, then `truncated`), a bounded `readdir` walk for a
-  non-git root; `node_modules` and VCS directories are always hidden. Lists are cached per root with a
+  folder git refuses (not a repository); `node_modules` and VCS directories are always hidden, and the
+  untracked side excludes them before the cap counts them. A path git lists once per conflict stage is
+  listed once. A failure that may pass — a timeout, descriptor or memory pressure, in git or in the
+  walk — rejects the load instead of answering a partial or empty list; a folder the walk may not read
+  is skipped. Lists are cached per root with a
   twin folded by the matcher's `foldMatchCase`, so the prefilter never drops a path its case and
   diacritic folding would match (at most `maxRoots` roots, least recently asked first out, so switching workspaces
   keeps the recent ones warm; a list cut at its cap is still searched and its group reported
   `truncated`) and revalidated
   stale-while-reloading after a TTL or on `workspace.fsChanged` (`invalidateRoot`) — the old list keeps
-  answering until the reload lands, and a reload that throws (spawn failure, `EMFILE`) keeps it too,
-  left stale so the next ask retries; only a root with nothing cached falls back to an empty list.
-  A change therefore never blanks the active workspace's files. Matching is
-  two-pass: a substring prefilter over every term runs the matcher on the plain hits first, then every
-  remaining path that passes a cheap subsequence test goes through the matcher too (acronym, camel-hump
-  and subsequence tiers), both passes bounded by the deadline. 100k paths answer in tens of milliseconds.
+  answering until the reload lands, and a reload that throws keeps it too, left stale so the next ask
+  retries; a root with nothing cached answers its group `failed` while the next ask retries. A change
+  that lands while a load runs leaves the loaded list stale, so the next ask loads again (the load may
+  have enumerated the tree before the change). A change therefore never blanks the active workspace's
+  files, and none is lost. Matching is two-pass: a substring prefilter over every term runs the matcher
+  on the plain hits first, then every remaining path that passes a cheap subsequence test (a quoted term
+  must still be a substring) goes through the matcher too (acronym, camel-hump and subsequence tiers),
+  both passes bounded by the deadline. 100k paths answer in tens of milliseconds. Each returned file
+  hit carries its `size` (one `stat` per hit on the page) and each spec hit its content's byte length,
+  so the client can decline to preview a large one.
 - **Specs:** the `spec` module's per-root snapshot — built synchronously only on a root's first read,
   afterwards rebuilt off the request path (`setImmediate`) when its TTL lapses or the worktree changes,
   the previous snapshot answering meanwhile (title / id / path through the matcher; a body match from

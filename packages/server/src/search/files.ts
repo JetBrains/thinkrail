@@ -1,7 +1,11 @@
+import type { Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { foldMatchCase } from "@thinkrail/contracts";
 import { gitAsyncStream, nonInteractiveGitEnv } from "../git";
+import { logger } from "../log";
+
+const log = logger("search");
 
 export interface FileList {
 	readonly paths: readonly string[];
@@ -10,11 +14,14 @@ export interface FileList {
 
 export interface IndexedFileList extends FileList {
 	readonly folded: readonly string[];
+	readonly failed?: boolean;
 }
 
 export function indexFileList(list: FileList): IndexedFileList {
 	return { ...list, folded: list.paths.map((path) => foldMatchCase(path)) };
 }
+
+const FAILED_LIST: IndexedFileList = { paths: [], folded: [], truncated: false, failed: true };
 
 export const FILE_LIST_LIMITS = {
 	maxFiles: 100_000,
@@ -26,6 +33,29 @@ export const FILE_LIST_LIMITS = {
 } as const;
 
 const WALK_IGNORED = new Set([".git", "node_modules", ".hg", ".svn"]);
+const UNTRACKED_EXCLUDES = [...WALK_IGNORED]
+	.filter((name) => name !== ".git")
+	.flatMap((name) => ["-x", name]);
+const TRANSIENT_MESSAGE =
+	/too many open files|resource temporarily unavailable|cannot allocate memory/i;
+const TRANSIENT_CODES = new Set(["EMFILE", "ENFILE", "EAGAIN", "ENOMEM"]);
+
+/** An enumeration that failed for a reason that may pass (descriptor or memory pressure, a timeout), not a property of the folder. */
+export function isTransientListFailure(failure: {
+	readonly timedOut?: boolean | undefined;
+	readonly code?: string | undefined;
+	readonly message?: string | undefined;
+}): boolean {
+	return (
+		failure.timedOut === true ||
+		TRANSIENT_CODES.has(failure.code ?? "") ||
+		TRANSIENT_MESSAGE.test(failure.message ?? "")
+	);
+}
+
+export class FileListUnavailable extends Error {
+	override readonly name = "FileListUnavailable";
+}
 
 const decoder = new TextDecoder();
 
@@ -82,10 +112,14 @@ export function parseNulList(
 }
 
 async function gitFileList(root: string): Promise<FileList | null> {
-	const run = gitAsyncStream(root, ["ls-files", "-co", "--exclude-standard", "-z"], {
-		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
-		timeoutMs: FILE_LIST_LIMITS.gitTimeoutMs,
-	});
+	const run = gitAsyncStream(
+		root,
+		["ls-files", "-co", "--exclude-standard", ...UNTRACKED_EXCLUDES, "-z"],
+		{
+			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+			timeoutMs: FILE_LIST_LIMITS.gitTimeoutMs,
+		},
+	);
 	const reader = run.stdout.getReader();
 	const chunks = (async function* () {
 		while (true) {
@@ -94,29 +128,40 @@ async function gitFileList(root: string): Promise<FileList | null> {
 			yield next.value;
 		}
 	})();
-	let list: FileList;
+	let list: FileList | null = null;
 	try {
 		list = await parseNulList(chunks);
 	} catch {
-		await run.exited;
-		return null;
+		list = null;
 	}
-	if (list.truncated) void reader.cancel().catch(() => {});
+	if (list?.truncated) void reader.cancel().catch(() => {});
 	const exit = await run.exited;
-	if (!exit.ok && !list.truncated) return null;
-	return list;
+	if (list && (exit.ok || list.truncated)) return list;
+	if (isTransientListFailure({ timedOut: exit.timedOut, message: exit.err })) {
+		throw new FileListUnavailable(exit.timedOut ? "git ls-files timed out" : "git ls-files failed");
+	}
+	return null;
 }
 
-async function walkFileList(root: string): Promise<FileList> {
+type ReadDir = (path: string) => Promise<Dirent[]>;
+
+const readDirEntries: ReadDir = (path) => readdir(path, { withFileTypes: true });
+
+export async function walkFileList(
+	root: string,
+	read: ReadDir = readDirEntries,
+): Promise<FileList> {
 	const paths: string[] = [];
 	let truncated = false;
 	const queue: string[] = [""];
 	while (queue.length > 0 && !truncated) {
 		const rel = queue.shift() ?? "";
-		let entries: import("node:fs").Dirent[];
+		let entries: Dirent[];
 		try {
-			entries = await readdir(join(root, rel), { withFileTypes: true });
-		} catch {
+			entries = await read(join(root, rel));
+		} catch (error) {
+			const failure = error as NodeJS.ErrnoException;
+			if (isTransientListFailure({ code: failure.code, message: failure.message })) throw error;
 			continue;
 		}
 		for (const entry of entries) {
@@ -141,15 +186,20 @@ function isHiddenFromSearch(path: string): boolean {
 
 export async function listRootFiles(root: string): Promise<FileList> {
 	const list = (await gitFileList(root)) ?? (await walkFileList(root));
-	return {
-		paths: list.paths.filter((path) => !isHiddenFromSearch(path)),
-		truncated: list.truncated,
-	};
+	const seen = new Set<string>();
+	const paths: string[] = [];
+	for (const path of list.paths) {
+		if (seen.has(path) || isHiddenFromSearch(path)) continue;
+		seen.add(path);
+		paths.push(path);
+	}
+	return { paths, truncated: list.truncated };
 }
 
 export class FileListCache {
 	private readonly lists = new Map<string, { at: number; list: IndexedFileList }>();
 	private readonly loading = new Map<string, Promise<IndexedFileList>>();
+	private readonly overtaken = new Set<string>();
 
 	constructor(
 		private readonly loader: (root: string) => Promise<FileList> = listRootFiles,
@@ -176,14 +226,19 @@ export class FileListCache {
 		if (inFlight) return inFlight;
 		const promise = this.loader(root)
 			.then((list) => indexFileList(list))
-			.catch((): IndexedFileList | null => null)
+			.catch((error: unknown): IndexedFileList | null => {
+				log.warn("file list load failed", error);
+				return null;
+			})
 			.then((loaded) => {
 				this.loading.delete(root);
+				const overtaken = this.overtaken.delete(root);
 				const kept = this.lists.get(root);
 				if (loaded === null && kept) return kept.list;
-				const list = loaded ?? indexFileList({ paths: [], truncated: false });
+				const list = loaded ?? FAILED_LIST;
+				const stale = overtaken || loaded === null;
 				this.lists.delete(root);
-				this.lists.set(root, { at: this.now(), list });
+				this.lists.set(root, { at: stale ? Number.NEGATIVE_INFINITY : this.now(), list });
 				while (this.lists.size > FILE_LIST_LIMITS.maxRoots) {
 					const oldest = this.lists.keys().next().value;
 					if (oldest === undefined) break;
@@ -195,8 +250,9 @@ export class FileListCache {
 		return promise;
 	}
 
-	/** Marks a root stale: the old list keeps answering until the reload lands. */
+	/** Marks a root stale: the old list keeps answering until the reload lands; a load already running lands stale. */
 	invalidate(root: string): void {
+		if (this.loading.has(root)) this.overtaken.add(root);
 		const cached = this.lists.get(root);
 		if (cached) this.lists.set(root, { at: Number.NEGATIVE_INFINITY, list: cached.list });
 	}

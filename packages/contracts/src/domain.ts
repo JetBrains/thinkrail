@@ -1515,6 +1515,8 @@ export interface SearchHit {
 	anchorText?: string;
 	/** Root-relative POSIX path of a file or spec hit. */
 	path?: string;
+	/** Bytes on disk of a file or spec hit, so the client can decline to preview a large one. */
+	size?: number;
 	specId?: string;
 	timestamp?: number;
 }

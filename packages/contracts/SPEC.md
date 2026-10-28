@@ -522,7 +522,8 @@ both rings rank with. The one package
   host turns into its one file/spec root), **`SearchHit`** (a stable `kind:id[:locator]` id, title / subtitle / `snippet`,
   the shared matcher's `tier` + `score` and highlight `ranges` so the browser merges host hits with its
   local ones by the same rule, and the navigation target — `projectId` / `workspaceId` / `sessionId` /
-  `messageIndex` + `anchorText` / root-relative `path` / `specId`), **`SearchGroup`** (one per kind:
+  `messageIndex` + `anchorText` / root-relative `path` / `specId` — and a file or spec hit's byte `size`, so
+  the client declines to preview a large one), **`SearchGroup`** (one per kind:
   capped `hits`, the true `total`, and a `state` of `ready` / `truncated` / `indexing` / `failed` — a
   client re-asks only on `indexing`), **`SearchQueryResult`** (`seq` echoed; `superseded` when a newer
   `seq` from the same client overtook it), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (the

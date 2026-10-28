@@ -1,3 +1,5 @@
+import { statSync } from "node:fs";
+import { join } from "node:path";
 import type { SearchGroup, SearchHit, Workspace } from "@thinkrail/contracts";
 import {
 	foldMatchCase,
@@ -58,7 +60,10 @@ export function searchFiles(
 		return buildGroup("file", [], input.limit, "indexing");
 	}
 	const hits: SearchHit[] = [];
-	const foldedTerms = input.terms.map((term) => foldMatchCase(term.text));
+	const foldedTerms = input.terms.map((term) => ({
+		text: foldMatchCase(term.text),
+		literal: term.literal,
+	}));
 	let truncated = false;
 	let scanned = 0;
 	const pushHit = (path: string, match: NonNullable<ReturnType<typeof matchFields>>) => {
@@ -86,8 +91,11 @@ export function searchFiles(
 	for (let index = 0; index < list.paths.length && !truncated; index += 1) {
 		if (expired()) break;
 		const folded = list.folded[index] ?? "";
-		if (!foldedTerms.every((term) => folded.includes(term))) {
-			if (foldedTerms.every((term) => isSubsequence(folded, term))) rest.push(index);
+		if (!foldedTerms.every((term) => folded.includes(term.text))) {
+			const candidate = foldedTerms.every((term) =>
+				term.literal ? folded.includes(term.text) : isSubsequence(folded, term.text),
+			);
+			if (candidate) rest.push(index);
 			continue;
 		}
 		const path = list.paths[index] ?? "";
@@ -100,12 +108,28 @@ export function searchFiles(
 		const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
 		if (match) pushHit(path, match);
 	}
-	return buildGroup(
+	const group = buildGroup(
 		"file",
 		hits,
 		input.limit,
-		lists.reloading(root.root) ? "indexing" : truncated || list.truncated ? "truncated" : "ready",
+		list.failed
+			? "failed"
+			: lists.reloading(root.root)
+				? "indexing"
+				: truncated || list.truncated
+					? "truncated"
+					: "ready",
 	);
+	return { ...group, hits: group.hits.map((hit) => withSize(root.root, hit)) };
+}
+
+function withSize(root: string, hit: SearchHit): SearchHit {
+	if (!hit.path) return hit;
+	try {
+		return { ...hit, size: statSync(join(root, hit.path)).size };
+	} catch {
+		return hit;
+	}
 }
 
 export function searchSpecs(
@@ -132,6 +156,7 @@ export function searchSpecs(
 			kind: "spec" as const,
 			title: entry.title,
 			subtitle: entry.path,
+			size: Buffer.byteLength(entry.content),
 			projectId: root.projectId,
 			workspaceId: root.workspaceId,
 			path: entry.path,
