@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { RiChat2Line } from "@remixicon/react";
+import { parseMatchTerms } from "@thinkrail/contracts";
 import { createDoubleShiftDetector, DOUBLE_SHIFT } from "./doubleShift";
 import {
-	adaptiveCount,
+	adaptiveCounts,
 	EMPTY_LEARNING,
 	frecencyScore,
 	MAX_LEARNING_BYTES,
@@ -15,13 +16,14 @@ import { parseSearchQuery, stripScopePrefix, withScopePrefix } from "./query";
 import { pickTopHit, rankItems } from "./rank";
 
 const DAY = 86_400_000;
+const AUTH = parseMatchTerms("auth");
 
 describe("parseSearchQuery", () => {
 	test("a prefix selects its scope and is stripped from the text", () => {
 		expect(parseSearchQuery(">theme")).toMatchObject({
 			scope: "commands",
 			text: "theme",
-			terms: ["theme"],
+			terms: [{ text: "theme", literal: false }],
 		});
 		expect(parseSearchQuery("  / refresh.ts")).toMatchObject({
 			scope: "files",
@@ -31,11 +33,20 @@ describe("parseSearchQuery", () => {
 	});
 
 	test("#digits is a pull-request number, #text is the specs scope, quotes escape prefixes", () => {
-		expect(parseSearchQuery("#812")).toMatchObject({ scope: "all", terms: ["#812"] });
+		expect(parseSearchQuery("#812")).toMatchObject({
+			scope: "all",
+			terms: [{ text: "#812", literal: false }],
+		});
 		expect(parseSearchQuery("#shell")).toMatchObject({ scope: "specs", text: "shell" });
-		expect(parseSearchQuery('"@team"')).toMatchObject({ scope: "all", terms: ["@team"] });
+		expect(parseSearchQuery('"@team"')).toMatchObject({
+			scope: "all",
+			terms: [{ text: "@team", literal: true }],
+		});
 		expect(parseSearchQuery('"is:running filter" unread')).toMatchObject({
-			terms: ["is:running filter", "unread"],
+			terms: [
+				{ text: "is:running filter", literal: true },
+				{ text: "unread", literal: false },
+			],
 		});
 	});
 
@@ -139,10 +150,23 @@ describe("learning", () => {
 		const now = 10 * DAY;
 		let snapshot = recordPick(EMPTY_LEARNING, "cal", "command:calendar", now);
 		snapshot = recordPick(snapshot, "cal", "command:calendar", now);
-		expect(adaptiveCount(snapshot, "cal", "command:calendar", now)).toBeCloseTo(3.8, 5);
-		expect(adaptiveCount(snapshot, "ca", "command:calendar", now)).toBeCloseTo(1.9, 5);
-		expect(adaptiveCount(snapshot, "calx", "command:calendar", now)).toBe(0);
-		expect(adaptiveCount(snapshot, "cal", "command:calendar", now + 30 * DAY)).toBeLessThan(3.8);
+		const count = (query: string, at = now) =>
+			adaptiveCounts(snapshot, query, at).get("command:calendar") ?? 0;
+		expect(count("cal")).toBeCloseTo(3.8, 5);
+		expect(count("ca")).toBeCloseTo(1.9, 5);
+		expect(count("calx")).toBe(0);
+		expect(count("cal", now + 30 * DAY)).toBeLessThan(3.8);
+	});
+
+	test("one query keeps only its most recent picks, so a ranking pass stays bounded", () => {
+		let snapshot = EMPTY_LEARNING;
+		for (let index = 0; index < 200; index++) {
+			snapshot = recordPick(snapshot, "auth", `chat:${index}`, index * DAY);
+		}
+		const picks = Object.keys(snapshot.adaptive.auth ?? {});
+		expect(picks).toHaveLength(32);
+		expect(picks).toContain("chat:199");
+		expect(picks).not.toContain("chat:0");
 	});
 
 	test("round-trips and stays under the byte budget", () => {
@@ -182,7 +206,7 @@ describe("rankItems", () => {
 				item("b", "Auth flow follow-ups"),
 				item("c", "Unrelated"),
 			],
-			["auth"],
+			AUTH,
 			EMPTY_LEARNING,
 			"auth",
 			0,
@@ -192,11 +216,11 @@ describe("rankItems", () => {
 
 	test("a top hit needs a prefix-or-better lead or a learned latch", () => {
 		const items = [item("a", "Auth"), item("b", "Authentication")];
-		const ranked = rankItems(items, ["auth"], EMPTY_LEARNING, "auth", 0);
+		const ranked = rankItems(items, AUTH, EMPTY_LEARNING, "auth", 0);
 		expect(pickTopHit(ranked)?.item.id).toBe("a");
 		const close = rankItems(
 			[item("x", "Fix auth"), item("y", "Fix auth too")],
-			["auth"],
+			AUTH,
 			EMPTY_LEARNING,
 			"auth",
 			0,
@@ -206,7 +230,7 @@ describe("rankItems", () => {
 		learning = recordPick(learning, "auth", "y", 0);
 		const latched = rankItems(
 			[item("x", "Fix auth"), item("y", "Fix auth too")],
-			["auth"],
+			AUTH,
 			learning,
 			"auth",
 			0,

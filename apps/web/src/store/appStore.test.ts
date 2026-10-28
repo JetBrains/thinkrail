@@ -5025,3 +5025,14 @@ test("authority can be given up without replacing the list (a consumer activatin
 	expect(s().modelsFresh).toBe(false);
 	expect(s().models).toBe(refreshed);
 });
+
+test("openSearch starts a fresh palette session even when the palette is already open", () => {
+	useAppStore.setState({ searchOpen: false, searchSession: 0 });
+	useAppStore.getState().openSearch();
+	expect(useAppStore.getState()).toMatchObject({ searchOpen: true, searchSession: 1 });
+	useAppStore.getState().openSearch();
+	expect(useAppStore.getState()).toMatchObject({ searchOpen: true, searchSession: 2 });
+	useAppStore.getState().closeSearch();
+	useAppStore.getState().closeSearch();
+	expect(useAppStore.getState()).toMatchObject({ searchOpen: false, searchSession: 2 });
+});

@@ -3,6 +3,7 @@ import {
 	RiAddLine,
 	RiChatNewLine,
 	RiCheckDoubleLine,
+	RiEdit2Line,
 	RiFileList3Line,
 	RiFolderLine,
 	RiFolderOpenLine,
@@ -18,6 +19,7 @@ import {
 	RiNodeTree,
 	RiSearchEyeLine,
 	RiSettings3Line,
+	RiSparkling2Line,
 } from "@remixicon/react";
 import type { Workspace } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
@@ -49,9 +51,12 @@ export interface PaletteCatalogDeps {
 	readonly context: CommandContext;
 	readonly activeWorkspace: Workspace | null;
 	readonly historyAvailable: boolean;
+	readonly canCreateProject: boolean;
+	readonly settingsShortcut: boolean;
 	readonly readAction: "markRead" | "markUnread" | null;
 	readonly canSettle: boolean;
 	readonly settled: boolean;
+	readonly settleBlocked: boolean;
 	readonly settingsGroups: readonly SettingsNavGroup[];
 	readonly actions: PaletteCatalogActions;
 }
@@ -59,6 +64,8 @@ export interface PaletteCatalogDeps {
 export interface PaletteCatalogActions {
 	readonly newWorkspace: (projectId: string) => void;
 	readonly openProject: () => void;
+	readonly openProjectPath: () => void;
+	readonly createProject: () => void;
 	readonly newChat: (workspaceId: string) => void;
 	readonly toggleLeft: () => void;
 	readonly toggleRight: (workspaceId: string) => void;
@@ -112,6 +119,28 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			mutates: true,
 			run: () => actions.openProject(),
 		},
+		{
+			id: "project.openPath",
+			title: t("commands.project.openPath"),
+			group: "work",
+			icon: RiEdit2Line,
+			keywords: ["add", "path", "folder", "remote", "host"],
+			mutates: true,
+			run: () => actions.openProjectPath(),
+		},
+		...(deps.canCreateProject
+			? [
+					{
+						id: "project.create",
+						title: t("commands.project.create"),
+						group: "work" as const,
+						icon: RiSparkling2Line,
+						keywords: ["new", "create", "repository", "init"],
+						mutates: true,
+						run: () => actions.createProject(),
+					},
+				]
+			: []),
 		{
 			id: "chat.history",
 			title: t("commands.chat.history"),
@@ -174,6 +203,7 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			group: "settings",
 			icon: RiSettings3Line,
 			keywords: ["preferences", "options"],
+			...(deps.settingsShortcut ? { shortcut: { key: ",", mod: true } } : {}),
 			run: () => actions.openSettings(),
 		},
 	];
@@ -216,6 +246,9 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 						icon: RiInboxArchiveLine,
 						keywords: ["shelf", "archive", "park"],
 						mutates: true,
+						...(deps.settleBlocked
+							? { disabledReason: t("commands.workspace.settleBlocked") }
+							: {}),
 						run: () => actions.settle(workspaceId),
 					},
 		);

@@ -510,11 +510,14 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `host.updateAvailable` push. It remains visible through a temporary disconnect; a later welcome replaces or
   clears it. The ephemeral **`searchOpen`** plus **`openSearch()`** / **`closeSearch()`** is the render
   flag for the search palette ([[submodule-web-search]]), kept here so the global chord, the topbar button
-  and an aggregate attention notification ([[submodule-web-notifications]]) open the same instance; the
-  palette's query, scope, pages and selection are its own component state, never store state. The
+  and an aggregate attention notification ([[submodule-web-notifications]]) open the same instance;
+  **`searchSession`** advances on every `openSearch()`, so a notification click on an already-open palette
+  remounts it on the empty query (its Waiting view). The palette's query, scope and selection are its own
+  component state, never store state. The
   client-local **`doubleShiftSearch`** + **`setDoubleShiftSearch()`** mirror the double-Shift preference
   `search` persists through the stable preference adapter (not host config: Sticky Keys and single-Shift
-  IME conflicts are per machine). The
+  IME conflicts belong to the client — the desktop adapter keeps it per backend profile and window, a
+  browser per endpoint). The
   ephemeral **`notificationPromptOpen`** plus **`openNotificationPrompt()`** / **`closeNotificationPrompt()`**
   is the client-local render flag for the attention-notification permission preface (cadence/snooze and the
   trigger live in [[submodule-web-notifications]], never the store). The

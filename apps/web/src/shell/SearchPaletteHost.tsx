@@ -1,3 +1,4 @@
+import { startProjectSetupChat } from "../panels/setupPrompt";
 import { useOpenProject } from "../panels/useOpenProject";
 import { goToProjectHome } from "../panels/workspaceActions";
 import { SearchPalette } from "../search";
@@ -16,14 +17,21 @@ export function SearchPaletteHost({
 	hasUpdateSettings,
 }: SearchPaletteHostProps) {
 	const open = useAppStore((s) => s.searchOpen);
-	const openProject = useOpenProject((project) => goToProjectHome(project.id));
+	const session = useAppStore((s) => s.searchSession);
+	const openProject = useOpenProject((project, { setup }) => {
+		goToProjectHome(project.id);
+		if (setup) void startProjectSetupChat(project.id);
+	});
 	return (
 		<>
 			{open ? (
 				<OpenSearchPalette
+					key={session}
 					openNewWorkspace={onNewWorkspace}
 					toggleProjectsHome={onToggleProjectsHome}
 					pickAndOpenProject={openProject.pickAndOpen}
+					enterHostPath={openProject.enterHostPath}
+					startNewProject={openProject.startNewProject}
 					hasUpdateSettings={hasUpdateSettings}
 				/>
 			) : null}

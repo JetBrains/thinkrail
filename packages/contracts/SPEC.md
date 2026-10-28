@@ -51,9 +51,11 @@ both rings rank with. The one package
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
   **`matchFields`** + `parseMatchTerms` + `compareMatches` + `MATCH_TIER` and the `Match*` types from
   `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
-  bounded subsequence of at least three characters, every term required, a secondary field never above
-  substring, path fields matched on the basename first, field-keyed highlight ranges — the browser's
-  palette and the host's search providers rank with this one copy so their tiers cannot drift); the value
+  bounded subsequence of at least three characters, every term required, a quoted `MatchTerm` (`literal`)
+  matched contiguously only, case and Latin diacritics folded without moving offsets, a secondary field
+  never above substring, path fields matched on the basename first, field-keyed highlight ranges — the
+  browser's palette and the host's search providers rank with this one copy so their tiers cannot drift);
+  the value
   re-exports
   `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
   word it in their language until it is renamed), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical

@@ -5,6 +5,7 @@ const ADAPTIVE_DECAY_PER_DAY = 0.975;
 const ADAPTIVE_MIN_COUNT = 0.1;
 const MAX_ITEMS = 500;
 const MAX_QUERIES = 500;
+const MAX_PICKS_PER_QUERY = 32;
 const MAX_QUERY_LENGTH = 40;
 const MAX_ID_LENGTH = 200;
 export const MAX_LEARNING_BYTES = 200_000;
@@ -35,23 +36,24 @@ export function frecencyScore(snapshot: LearningSnapshot, id: string, nowMs: num
 	return stored === undefined ? 0 : Math.exp(LAMBDA * (stored - day(nowMs)));
 }
 
-export function adaptiveCount(
+export function adaptiveCounts(
 	snapshot: LearningSnapshot,
 	query: string,
-	id: string,
 	nowMs: number,
-): number {
+): ReadonlyMap<string, number> {
+	const counts = new Map<string, number>();
 	const normalized = normalizeQuery(query);
-	if (!normalized) return 0;
-	let best = 0;
+	if (!normalized) return counts;
+	const today = day(nowMs);
 	for (const [stored, picks] of Object.entries(snapshot.adaptive)) {
 		if (!stored.startsWith(normalized)) continue;
-		const entry = picks[id];
-		if (!entry) continue;
-		const decayed = entry.count * ADAPTIVE_DECAY_PER_DAY ** Math.max(0, day(nowMs) - entry.day);
-		best = Math.max(best, stored === normalized ? decayed * 2 : decayed);
+		for (const [id, entry] of Object.entries(picks)) {
+			const decayed = entry.count * ADAPTIVE_DECAY_PER_DAY ** Math.max(0, today - entry.day);
+			const count = stored === normalized ? decayed * 2 : decayed;
+			if (count > (counts.get(id) ?? 0)) counts.set(id, count);
+		}
 	}
-	return best;
+	return counts;
 }
 
 function prune<T>(record: Record<string, T>, limit: number, score: (value: T) => number) {
@@ -84,7 +86,8 @@ export function recordPick(
 			? previous.count * ADAPTIVE_DECAY_PER_DAY ** Math.max(0, today - previous.day)
 			: 0;
 		picks[id] = { count: decayed * 0.9 + 1, day: today };
-		adaptive = prune({ ...adaptive, [normalized]: picks }, MAX_QUERIES, (value) =>
+		const kept = prune(picks, MAX_PICKS_PER_QUERY, (entry) => entry.day);
+		adaptive = prune({ ...adaptive, [normalized]: kept }, MAX_QUERIES, (value) =>
 			Math.max(...Object.values(value).map((entry) => entry.day)),
 		);
 	}

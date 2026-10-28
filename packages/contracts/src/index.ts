@@ -53,7 +53,14 @@ export {
 	TODO_NUDGE_PREFIX,
 	tallyResources,
 } from "./domain";
-export type { FieldMatch, MatchField, MatchRange, MatchResult, MatchTier } from "./match";
+export type {
+	FieldMatch,
+	MatchField,
+	MatchRange,
+	MatchResult,
+	MatchTerm,
+	MatchTier,
+} from "./match";
 export { compareMatches, MATCH_TIER, matchFields, parseMatchTerms } from "./match";
 export type * from "./nativeClient";
 export type * from "./piProtocol";

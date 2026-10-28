@@ -28,6 +28,11 @@ export interface MatchResult {
 	readonly fields: readonly FieldMatch[];
 }
 
+export interface MatchTerm {
+	readonly text: string;
+	readonly literal: boolean;
+}
+
 const MAX_MATCH_TERM_LENGTH = 100;
 const MAX_MATCH_TEXT_LENGTH = 1000;
 const MIN_FUZZY_TERM_LENGTH = 3;
@@ -43,14 +48,47 @@ const UPPER = /\p{Lu}/u;
 const LOWER = /\p{Ll}/u;
 const DIGIT = /\p{N}/u;
 
-export function parseMatchTerms(query: string): string[] {
-	const terms: string[] = [];
-	const pattern = /"([^"]*)"|(\S+)/g;
+export function parseMatchTerms(query: string): MatchTerm[] {
+	const terms: MatchTerm[] = [];
+	const pattern = /"([^"]*)"?|(\S+)/g;
 	for (const match of query.matchAll(pattern)) {
-		const term = (match[1] ?? match[2] ?? "").trim().slice(0, MAX_MATCH_TERM_LENGTH);
-		if (term) terms.push(term);
+		const text = (match[1] ?? match[2] ?? "").trim().slice(0, MAX_MATCH_TERM_LENGTH);
+		if (text) terms.push({ text, literal: match[1] !== undefined });
 	}
 	return terms;
+}
+
+const DOTTED_CAPITAL_I = /\u0130/g;
+const FINAL_SIGMA = /\u03c2/g;
+const NON_ASCII = /[\u0080-\uffff]/;
+const ASCII_LETTER = /^[a-z]$/;
+const COMBINING_MARKS = /^[\u0300-\u036f]+$/;
+const latinBase = new Map<string, string>();
+
+function latinBaseOf(char: string): string {
+	let base = latinBase.get(char);
+	if (base === undefined) {
+		const decomposed = char.normalize("NFD");
+		const letter = decomposed[0] ?? "";
+		base =
+			decomposed.length > 1 &&
+			ASCII_LETTER.test(letter) &&
+			COMBINING_MARKS.test(decomposed.slice(1))
+				? letter
+				: char;
+		latinBase.set(char, base);
+	}
+	return base;
+}
+
+function foldMatchCase(text: string): string {
+	let folded = text.toLowerCase();
+	if (!NON_ASCII.test(folded)) return folded;
+	if (folded.length !== text.length) folded = text.replace(DOTTED_CAPITAL_I, "i").toLowerCase();
+	if (folded.includes("\u03c2")) folded = folded.replace(FINAL_SIGMA, "\u03c3");
+	let latin = "";
+	for (const char of folded) latin += latinBaseOf(char);
+	return latin;
 }
 
 function isWordStart(text: string, index: number): boolean {
@@ -119,10 +157,10 @@ function matchSubsequence(term: string, text: string, lower: string): TermHit | 
 	};
 }
 
-function matchText(rawTerm: string, rawText: string): TermHit | null {
-	const term = rawTerm.toLowerCase();
+function matchText(matchTerm: MatchTerm, rawText: string): TermHit | null {
+	const term = foldMatchCase(matchTerm.text);
 	const text = rawText.slice(0, MAX_MATCH_TEXT_LENGTH);
-	const lower = text.toLowerCase();
+	const lower = foldMatchCase(text);
 	if (!term || !lower) return null;
 	const lengthRatio = Math.min(1, term.length / lower.length);
 	if (lower === term) return { tier: MATCH_TIER.exact, score: 1, ranges: [[0, text.length]] };
@@ -138,7 +176,7 @@ function matchText(rawTerm: string, rawText: string): TermHit | null {
 			ranges: [[index, index + term.length]],
 		};
 	}
-	if (!term.includes(" ")) {
+	if (!matchTerm.literal) {
 		const acronym = matchAcronym(term, text, lower);
 		if (acronym) {
 			return { tier: MATCH_TIER.word, score: 0.5 * lengthRatio, ranges: acronym };
@@ -151,7 +189,7 @@ function matchText(rawTerm: string, rawText: string): TermHit | null {
 			ranges: [[firstSubstring, firstSubstring + term.length]],
 		};
 	}
-	return term.includes(" ") ? null : matchSubsequence(term, text, lower);
+	return matchTerm.literal ? null : matchSubsequence(term, text, lower);
 }
 
 function shifted(hit: TermHit, offset: number): TermHit {
@@ -164,8 +202,8 @@ function capSecondary(hit: TermHit | null): TermHit | null {
 	return { ...hit, tier: MATCH_TIER.substring };
 }
 
-function matchField(term: string, field: MatchField): TermHit | null {
-	if (field.path && !term.includes("/")) {
+function matchField(term: MatchTerm, field: MatchField): TermHit | null {
+	if (field.path && !term.text.includes("/")) {
 		const slash = field.text.lastIndexOf("/");
 		const base = matchText(term, field.text.slice(slash + 1));
 		if (base) {
@@ -190,7 +228,7 @@ function mergeRanges(ranges: readonly MatchRange[]): MatchRange[] {
 }
 
 export function matchFields(
-	terms: readonly string[],
+	terms: readonly MatchTerm[],
 	fields: readonly MatchField[],
 ): MatchResult | null {
 	if (terms.length === 0) return { tier: MATCH_TIER.exact, score: 0, fields: [] };

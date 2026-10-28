@@ -23,9 +23,11 @@ export function commandItems(
 		icon: command.icon,
 		...(command.keywords ? { keywords: command.keywords } : {}),
 		...(command.shortcut ? { shortcut: command.shortcut } : {}),
-		...(isCommandEnabled(command, context)
-			? {}
-			: { disabledReason: t("search.palette.offlineReason") }),
+		...(!isCommandEnabled(command, context)
+			? { disabledReason: t("search.palette.offlineReason") }
+			: command.disabledReason
+				? { disabledReason: command.disabledReason }
+				: {}),
 		run: () => command.run(context),
 	}));
 }

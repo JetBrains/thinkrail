@@ -36,6 +36,7 @@ export function groupLabel(t: Translator, group: string): string {
 
 const ALL_SCOPE_CAP = 4;
 const SCOPED_CAP = 30;
+const WAITING_CAP = 8;
 const RECENT_LIMIT = 5;
 
 function inScope(item: PaletteItem, scope: SearchScope): boolean {
@@ -70,15 +71,16 @@ function cappedSection(
 	rows: readonly PaletteRow[],
 	scoped: boolean,
 	expanded: ReadonlySet<string>,
+	cap = scoped ? SCOPED_CAP : ALL_SCOPE_CAP,
 ): PaletteSection {
-	const cap = expanded.has(group) ? rows.length : scoped ? SCOPED_CAP : ALL_SCOPE_CAP;
+	const shown = expanded.has(group) ? rows.length : cap;
 	const title = groupLabel(t, group);
-	if (rows.length <= cap) return { id: group, title, items: rows };
+	if (rows.length <= shown) return { id: group, title, items: rows };
 	return {
 		id: group,
 		title,
 		meta: String(rows.length),
-		items: [...rows.slice(0, cap), moreRow(t, group, rows.slice(cap), scoped)],
+		items: [...rows.slice(0, shown), moreRow(t, group, rows.slice(shown), scoped)],
 	};
 }
 
@@ -119,13 +121,16 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 			.sort((a, b) => b.frecency - a.frecency)
 			.slice(0, RECENT_LIMIT)
 			.map((entry) => plainRow(entry.item));
+		const waiting = cappedSection(
+			t,
+			"waiting",
+			input.waiting.map(plainRow),
+			true,
+			input.expanded,
+			WAITING_CAP,
+		);
 		return [
-			{
-				id: "waiting",
-				title: groupLabel(t, "waiting"),
-				meta: t("search.group.waitingMeta"),
-				items: input.waiting.map(plainRow),
-			},
+			{ ...waiting, meta: t("search.group.waitingMeta") },
 			{ id: "recent", title: groupLabel(t, "recent"), items: recent },
 			{ id: "actions", title: groupLabel(t, "actions"), items: input.actions.map(plainRow) },
 		].filter((section) => section.items.length > 0);
@@ -146,7 +151,7 @@ export function buildSections(input: SectionsInput): PaletteSection[] {
 	const { t, parsed } = input;
 	if (parsed.terms.length === 0) return emptyRootSections(input);
 	const candidates = input.rootItems.filter((item) => inScope(item, parsed.scope));
-	const ranked = rankItems(candidates, parsed.terms, input.learning, parsed.raw, input.nowMs);
+	const ranked = rankItems(candidates, parsed.terms, input.learning, parsed.text, input.nowMs);
 	const scoped = parsed.scope !== "all";
 	const top = scoped ? null : pickTopHit(ranked);
 	const rest = top ? ranked.filter((entry) => entry !== top) : ranked;

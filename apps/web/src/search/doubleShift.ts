@@ -1,3 +1,5 @@
+import { isImeComposing } from "./ime";
+
 export const DOUBLE_SHIFT = { stepMs: 300, otherKeyGuardMs: 100 } as const;
 
 export type DoubleShiftKeyEvent = Pick<
@@ -18,14 +20,13 @@ export function createDoubleShiftDetector(
 	let at = 0;
 	let lastOtherKeyAt = Number.NEGATIVE_INFINITY;
 
-	const composing = (event: DoubleShiftKeyEvent) => event.isComposing || event.keyCode === 229;
 	const otherModifier = (event: DoubleShiftKeyEvent) =>
 		event.ctrlKey || event.metaKey || event.altKey;
 
 	return {
 		keydown(event) {
 			const time = now();
-			if (event.key !== "Shift" || composing(event) || otherModifier(event)) {
+			if (event.key !== "Shift" || isImeComposing(event) || otherModifier(event)) {
 				lastOtherKeyAt = time;
 				stage = 0;
 				return;

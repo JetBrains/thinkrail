@@ -29,7 +29,9 @@ It owns no handlers: a command's `run` is supplied by whoever composes the catal
 
 - `when(context)` decides visibility (a command that cannot apply is not listed); `mutates` marks a host
   mutation, which `isCommandEnabled` refuses while `context.online` is false — the transport replays
-  pending requests on reconnect, so a mutation is never issued blind.
+  pending requests on reconnect, so a mutation is never issued blind. `disabledReason` (already
+  translated) lists a command that applies but cannot run right now, with the reason its owning surface
+  shows; the offline reason wins over it.
 - `title` is already in the user's language: the composer builds the catalog with `useT()`'s translator
   (so the palette matches what the user reads), and `COMMAND_GROUP_LABELS` carries the group keys it
   translates the same way.
@@ -47,13 +49,16 @@ does not reproduce yet.
 | `workspace.openDefault` Work in project folder | `panels/defaultWorkspace.enterDefaultWorkspace` | context project | PR1 |
 | `chat.new` New chat | `panels/openChat.startChatInTab` | active workspace, online | PR1 |
 | `project.open` Open project… | `panels/useOpenProject.pickAndOpen` (dialogs mounted by shell) | online | PR1 |
+| `project.openPath` Open a path on the host… | `panels/useOpenProject.enterHostPath` | online | PR1 |
+| `project.create` Start a new project… | `panels/useOpenProject.startNewProject` (`CreateProjectDialog`; a setup intent starts the setup chat) | a host serving `project.create` (v94), online | PR1 |
+| Reopen a recent project | `AddProjectMenu` recents | a recent path | Row UI |
 | `chat.history` Search chat history (`Ctrl+R`) | `store.requestHistoryOpen` | a chat tab | PR1 |
 | `view.show.{specs,files,review,plan}` (every `LayoutToolId` but `projects`) | `store.requestToolView` | active workspace | PR1 |
 | `view.toggleLeft/Right/Bottom` (`Mod+B`/`Mod+J`/`Mod+Shift+J`) | layout intents; Project Home pane toggle | right/bottom need a workspace | PR1 |
-| `settings.open` and every Settings section (incl. Keyboard's double-Shift row, Extensions, MCP servers) | `store.openSettings(section)` | protocol-gated sections only | PR1 |
+| `settings.open` and every Settings section (incl. Keyboard's double-Shift row, Extensions, MCP servers) | `store.openSettings(section)`; the native menu's `Mod+,` is shown where it exists | protocol-gated sections only | PR1 |
 | Theme, extension and MCP server switches | their Settings sections — the palette opens them, never flips them in place | — | Settings |
 | `workspace.markRead` / `markUnread` | `panels/workspaceActions` | `supportsWorkspaceReadState` + `selectWorkspaceReadAction` | PR1 |
-| `workspace.settle` / `unsettle` | `panels/workspaceActions` | `canSettleWorkspace` | PR1 |
+| `workspace.settle` / `unsettle` | `panels/workspaceActions` | `canSettleWorkspace`; Settle disabled while an agent works or a chat needs you, as in the tree | PR1 |
 | `workspace.reveal`, `workspace.copyPath`, `workspace.openIn.<editor>` | `panels/workspaceActions`, `lib.copyText` | active workspace | PR1 |
 | `terminal.new` New terminal | `store.addTerminal` | active workspace, online (placement reserves on the host) | PR1 |
 | Start work from typed text (`⌘↵`, targets) | shared `startWork` | context project | PR3 |
