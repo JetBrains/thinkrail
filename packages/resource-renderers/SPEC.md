@@ -147,9 +147,11 @@ stored a `lazy` there, and the first `RendererView` without a stored component s
 the in-flight load. That choice is stored once and never switched: a lazy and a direct component are
 different types, and swapping them would remount a live editor. A lazy made while a load was in flight is
 resolved for every later mount, so it does not suspend again. A failed preload, in the load or in `warm`,
-logs a warning instead of rejecting. A failed load is forgotten, together with a `lazy` a mount stored for
-it while it was in flight, so the next mount retries and a real failure reaches the pane's error
-boundary.
+logs a warning instead of rejecting. A failed load is forgotten so the next load retries it. A `lazy` that a
+mount stored while the load was in flight stays stored and failed, so every re-render of that mount throws
+to the pane's error boundary instead of making a fresh `lazy`. React retries a failed render, and an engine
+that refetches failed module imports (Chromium 156+) would otherwise loop on the chunk request. The next
+load, such as a hover or idle preload, replaces the failed `lazy` with the loaded component.
 
 **Review-draft scratch is read per slot.** A pane that keeps transient authoring across remounts provides
 `ReviewDraftContext` with a `ReviewDraftPersistence` (`rendererId`, `read(key)`, `subscribe`, `update(key,

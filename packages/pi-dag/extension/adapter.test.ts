@@ -593,60 +593,60 @@ test("standalone owners survive replaced modules and new/resume/fork, including 
 	expect(complete.nodes[0]?.attempt).toBe(1);
 });
 
-test.each([
-	"reload",
-	"quit",
-] as const)("standalone %s awaits all scopes, blocks acquisition, then restores paused", async (reason) => {
-	const first = await sessionWith(await replacedModule());
-	const entered = latch(),
-		aborted = latch(),
-		allowSettlement = latch();
-	worker.setResponses([
-		async (_context, options) => {
-			entered.release();
-			options?.signal?.addEventListener("abort", aborted.release, { once: true });
-			await allowSettlement.promise;
-			return fauxAssistantMessage("Interrupted local work");
-		},
-	]);
-	const receipt = await create(first);
-	await resume(first, receipt);
-	await entered.promise;
-	await shutdown(first, "new");
-	const second = await sessionWith(await replacedModule());
-	const secondReceipt = await create(second);
-	const pendingCreate = create(second).catch((error: unknown) => error);
-	let closed = false;
-	const closing = shutdown(second, reason).then(() => {
-		closed = true;
-	});
-	await aborted.promise;
-	expect(closed).toBe(false);
-	const during = await sessionWith(await replacedModule());
-	expect(errors.get(during)?.splice(0)).toEqual(["DAG standalone owners are closing"]);
-	expect(await tool(during, "dag_read", { query: { kind: "list" } })).toMatchObject({
-		ok: false,
-		error: { code: "revoked" },
-	});
-	allowSettlement.release();
-	await closing;
-	await pendingCreate;
-	expect(closed).toBe(true);
-	const replacement = await sessionWith(await replacedModule(), first.sessionManager.getCwd());
-	const state = await snapshot(replacement, receipt.dagId);
-	expect(state.mode).toBe("paused");
-	expect(state.executionOwner).toBe("none");
-	expect(state.lifecycle).toBe("active");
-	expect(state.nodes[0]?.status).toBe("interrupted");
-	const secondReplacement = await sessionWith(
-		await replacedModule(),
-		second.sessionManager.getCwd(),
-	);
-	expect((await snapshot(secondReplacement, secondReceipt.dagId)).executionOwner).toBe("none");
-	const calls = worker.state.callCount;
-	await Bun.sleep(30);
-	expect(worker.state.callCount).toBe(calls);
-});
+test.each(["reload", "quit"] as const)(
+	"standalone %s awaits all scopes, blocks acquisition, then restores paused",
+	async (reason) => {
+		const first = await sessionWith(await replacedModule());
+		const entered = latch(),
+			aborted = latch(),
+			allowSettlement = latch();
+		worker.setResponses([
+			async (_context, options) => {
+				entered.release();
+				options?.signal?.addEventListener("abort", aborted.release, { once: true });
+				await allowSettlement.promise;
+				return fauxAssistantMessage("Interrupted local work");
+			},
+		]);
+		const receipt = await create(first);
+		await resume(first, receipt);
+		await entered.promise;
+		await shutdown(first, "new");
+		const second = await sessionWith(await replacedModule());
+		const secondReceipt = await create(second);
+		const pendingCreate = create(second).catch((error: unknown) => error);
+		let closed = false;
+		const closing = shutdown(second, reason).then(() => {
+			closed = true;
+		});
+		await aborted.promise;
+		expect(closed).toBe(false);
+		const during = await sessionWith(await replacedModule());
+		expect(errors.get(during)?.splice(0)).toEqual(["DAG standalone owners are closing"]);
+		expect(await tool(during, "dag_read", { query: { kind: "list" } })).toMatchObject({
+			ok: false,
+			error: { code: "revoked" },
+		});
+		allowSettlement.release();
+		await closing;
+		await pendingCreate;
+		expect(closed).toBe(true);
+		const replacement = await sessionWith(await replacedModule(), first.sessionManager.getCwd());
+		const state = await snapshot(replacement, receipt.dagId);
+		expect(state.mode).toBe("paused");
+		expect(state.executionOwner).toBe("none");
+		expect(state.lifecycle).toBe("active");
+		expect(state.nodes[0]?.status).toBe("interrupted");
+		const secondReplacement = await sessionWith(
+			await replacedModule(),
+			second.sessionManager.getCwd(),
+		);
+		expect((await snapshot(secondReplacement, secondReceipt.dagId)).executionOwner).toBe("none");
+		const calls = worker.state.callCount;
+		await Bun.sleep(30);
+		expect(worker.state.callCount).toBe(calls);
+	},
+);
 
 test("standalone canonicalizes an initially absent agent root through its existing symlink ancestor", async () => {
 	const original = getAgentDir();

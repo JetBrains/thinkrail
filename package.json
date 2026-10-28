@@ -20,13 +20,13 @@
 			"@fontsource-variable/geist": "5.3.0",
 			"@fontsource-variable/jetbrains-mono": "5.3.0",
 			"@fontsource-variable/orbitron": "5.3.0",
-			"@posthog/cli": "0.18.10",
+			"@posthog/cli": "0.18.12",
 			"@remixicon/react": "4.9.0",
 			"@tailwindcss/vite": "4.3.3",
 			"@types/bun": "1.4.4",
 			"@types/react": "19.3.0",
 			"@types/react-dom": "19.3.0",
-			"astro": "7.3.3",
+			"astro": "7.4.2",
 			"diff": "9.0.0",
 			"lucide-react": "1.61.0",
 			"mermaid": "12.2.0",
@@ -108,7 +108,7 @@
 	"devDependencies": {
 		"@changesets/changelog-github": "catalog:",
 		"@changesets/cli": "catalog:",
-		"@biomejs/biome": "2.5.0",
+		"@biomejs/biome": "2.6.3",
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@thinkrail/artifact-tests": "workspace:*",
 		"@thinkrail/contracts": "workspace:*",
@@ -128,7 +128,7 @@
 		"esbuild"
 	],
 	"patchedDependencies": {
-		"@pierre/diffs@1.5.1": "patches/@pierre%2Fdiffs@1.5.1.patch",
+		"@pierre/diffs@1.6.1": "patches/@pierre%2Fdiffs@1.6.1.patch",
 		"@earendil-works/pi-ai@1.4.0": "patches/@earendil-works%2Fpi-ai@1.4.0.patch"
 	}
 }

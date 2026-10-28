@@ -299,8 +299,8 @@ reduced motion) and coexistence with
 remains a focused handler test.
 
 **Topbar chrome** (`topbar-chrome.spec.ts`) proves the web side of the desktop title-bar contract without a
-desktop: it injects the three host-published CSS properties (`--window-chrome-inset-left|right`,
-`--window-chrome-drag-region`) from the test and asserts spacer widths, logo/action-cluster offsets, an
+desktop: it injects the host-published inset properties (`--window-chrome-inset-left|right`) and the
+`data-window-chrome-drag-region` attribute from the test and asserts spacer widths, logo/action-cluster offsets, an
 unchanged 40px workbench origin, the header's resolved `-webkit-app-region`, and that Update, quota Retry
 and Settings all live inside the `no-drag` action cluster. In a plain browser the properties are unset, so
 the first scenario pins the zero-inset, `no-drag` baseline and the theme-token header colour.

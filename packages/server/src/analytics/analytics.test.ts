@@ -234,44 +234,43 @@ test("every event has exactly its closed properties plus personless transport fr
 	}
 });
 
-test.each([
-	false,
-	true,
-])("all existing basic events send with additionalEnabled=%s", async (enabled) => {
-	const sent: SentPayload[] = [];
-	boot(sent, { additionalEnabled: enabled });
-	for (const event of Object.values(BASIC_EVENTS)) track(event);
-	await shutdownAnalytics();
-	expect(allEntries(sent).map((e) => e.event)).toEqual([
-		"app_installed",
-		"app_started",
-		...Object.keys(BASIC_EVENTS),
-	]);
-});
+test.each([false, true])(
+	"all existing basic events send with additionalEnabled=%s",
+	async (enabled) => {
+		const sent: SentPayload[] = [];
+		boot(sent, { additionalEnabled: enabled });
+		for (const event of Object.values(BASIC_EVENTS)) track(event);
+		await shutdownAnalytics();
+		expect(allEntries(sent).map((e) => e.event)).toEqual([
+			"app_installed",
+			"app_started",
+			...Object.keys(BASIC_EVENTS),
+		]);
+	},
+);
 
-test.each([
-	"api_key",
-	"subscription",
-	"oauth",
-	"central",
-	"other",
-	"unknown",
-] as const)("auth_method=%s remains basic metadata without additional consent", async (auth_method) => {
-	const sent: SentPayload[] = [];
-	boot(sent, { additionalEnabled: false });
-	track({ name: "chat_started", params: { provider: "anthropic", model: "custom", auth_method } });
-	track({ name: "message_sent", params: { mode: "prompt", provider: "anthropic", auth_method } });
-	track({
-		name: "provider_login",
-		params: { provider: "anthropic", method: "oauth", auth_method },
-	});
-	await shutdownAnalytics();
-	const entries = allEntries(sent).filter(
-		(entry) => entry.event !== "app_installed" && entry.event !== "app_started",
-	);
-	expect(entries).toHaveLength(3);
-	expect(entries.every((entry) => entry.properties.auth_method === auth_method)).toBe(true);
-});
+test.each(["api_key", "subscription", "oauth", "central", "other", "unknown"] as const)(
+	"auth_method=%s remains basic metadata without additional consent",
+	async (auth_method) => {
+		const sent: SentPayload[] = [];
+		boot(sent, { additionalEnabled: false });
+		track({
+			name: "chat_started",
+			params: { provider: "anthropic", model: "custom", auth_method },
+		});
+		track({ name: "message_sent", params: { mode: "prompt", provider: "anthropic", auth_method } });
+		track({
+			name: "provider_login",
+			params: { provider: "anthropic", method: "oauth", auth_method },
+		});
+		await shutdownAnalytics();
+		const entries = allEntries(sent).filter(
+			(entry) => entry.event !== "app_installed" && entry.event !== "app_started",
+		);
+		expect(entries).toHaveLength(3);
+		expect(entries.every((entry) => entry.properties.auth_method === auth_method)).toBe(true);
+	},
+);
 
 test("there is no additional capture before consent and no replay when enabled", async () => {
 	const sent: SentPayload[] = [];
@@ -373,46 +372,49 @@ test("a grant stays stable until revoked, and old captures never revive", async 
 	).toEqual(["app_installed", "app_started", "message_sent", "review_decided"]);
 });
 
-test.each([
-	false,
-	true,
-])("revocation drops queued data even during shutdown=%s", async (duringShutdown) => {
-	const sent: SentPayload[] = [];
-	let release: (() => void) | undefined;
-	let started = false;
-	const blocked = new Promise<void>((resolve) => {
-		release = resolve;
-	});
-	const fetchImpl: typeof fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
-		const body = JSON.parse(String(init?.body));
-		if (body.batch.some((e: BatchEntry) => e.event === "agent_run_started")) {
-			started = true;
-			await blocked;
-		}
-		sent.push({ url: String(url), body });
-		return new Response("{}", { status: 200 });
-	}) as typeof fetch;
-	boot(sent, { additionalEnabled: true, fetchImpl });
-	const oldCapture = getAdditionalAnalyticsCapture();
-	oldCapture?.(ADDITIONAL_EVENTS.agent_run_started);
-	const deadline = Date.now() + 2_000;
-	while (!started && Date.now() < deadline) await Bun.sleep(5);
-	expect(started).toBe(true);
-	oldCapture?.(ADDITIONAL_EVENTS.task_completed);
-	track(BASIC_EVENTS.message_sent);
-	const stopping = duringShutdown ? shutdownAnalytics() : null;
-	setAdditionalAnalyticsEnabled(false);
-	setAdditionalAnalyticsEnabled(true);
-	getAdditionalAnalyticsCapture()?.(ADDITIONAL_EVENTS.review_decided);
-	release?.();
-	await (stopping ?? shutdownAnalytics());
-	const events = allEntries(sent).map((e) => e.event);
-	expect(events).toContain("agent_run_started");
-	if (duringShutdown) expect(events).not.toContain("review_decided");
-	else expect(events).toContain("review_decided");
-	expect(events).toContain("message_sent");
-	expect(events).not.toContain("task_completed");
-});
+test.each([false, true])(
+	"revocation drops queued data even during shutdown=%s",
+	async (duringShutdown) => {
+		const sent: SentPayload[] = [];
+		let release: (() => void) | undefined;
+		let started = false;
+		const blocked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const fetchImpl: typeof fetch = (async (
+			url: Parameters<typeof fetch>[0],
+			init?: RequestInit,
+		) => {
+			const body = JSON.parse(String(init?.body));
+			if (body.batch.some((e: BatchEntry) => e.event === "agent_run_started")) {
+				started = true;
+				await blocked;
+			}
+			sent.push({ url: String(url), body });
+			return new Response("{}", { status: 200 });
+		}) as typeof fetch;
+		boot(sent, { additionalEnabled: true, fetchImpl });
+		const oldCapture = getAdditionalAnalyticsCapture();
+		oldCapture?.(ADDITIONAL_EVENTS.agent_run_started);
+		const deadline = Date.now() + 2_000;
+		while (!started && Date.now() < deadline) await Bun.sleep(5);
+		expect(started).toBe(true);
+		oldCapture?.(ADDITIONAL_EVENTS.task_completed);
+		track(BASIC_EVENTS.message_sent);
+		const stopping = duringShutdown ? shutdownAnalytics() : null;
+		setAdditionalAnalyticsEnabled(false);
+		setAdditionalAnalyticsEnabled(true);
+		getAdditionalAnalyticsCapture()?.(ADDITIONAL_EVENTS.review_decided);
+		release?.();
+		await (stopping ?? shutdownAnalytics());
+		const events = allEntries(sent).map((e) => e.event);
+		expect(events).toContain("agent_run_started");
+		if (duringShutdown) expect(events).not.toContain("review_decided");
+		else expect(events).toContain("review_decided");
+		expect(events).toContain("message_sent");
+		expect(events).not.toContain("task_completed");
+	},
+);
 
 test("campaign-enriched basics use the revocable grant sink across 503 retry and regrant", async () => {
 	const now = Date.now();
@@ -548,28 +550,27 @@ test("failed additional requests do not retry on the network after revoke/regran
 	expect(allEntries(sent).map((e) => e.event)).toContain("review_decided");
 });
 
-test.each([
-	"source",
-	"binary",
-	"desktop",
-] as const)("%s stamps both tiers without a channel gate", async (build) => {
-	const sent: SentPayload[] = [];
-	boot(sent, { build, channel: "dev", additionalEnabled: true });
-	getAdditionalAnalyticsCapture()?.(ADDITIONAL_EVENTS.task_completed);
-	await shutdownAnalytics();
-	expect(allEntries(sent)).toHaveLength(build === "source" ? 2 : 3);
-	for (const entry of allEntries(sent)) {
-		expect(entry.properties).toMatchObject({ app_version: "1.2.3", channel: "dev", build });
-		expect(entry.properties.os).toBe(
-			process.platform === "darwin"
-				? "macos"
-				: process.platform === "win32"
-					? "windows"
-					: process.platform,
-		);
-		expect(entry.properties.arch).toBe(process.arch);
-	}
-});
+test.each(["source", "binary", "desktop"] as const)(
+	"%s stamps both tiers without a channel gate",
+	async (build) => {
+		const sent: SentPayload[] = [];
+		boot(sent, { build, channel: "dev", additionalEnabled: true });
+		getAdditionalAnalyticsCapture()?.(ADDITIONAL_EVENTS.task_completed);
+		await shutdownAnalytics();
+		expect(allEntries(sent)).toHaveLength(build === "source" ? 2 : 3);
+		for (const entry of allEntries(sent)) {
+			expect(entry.properties).toMatchObject({ app_version: "1.2.3", channel: "dev", build });
+			expect(entry.properties.os).toBe(
+				process.platform === "darwin"
+					? "macos"
+					: process.platform === "win32"
+						? "windows"
+						: process.platform,
+			);
+			expect(entry.properties.arch).toBe(process.arch);
+		}
+	},
+);
 
 test("a basic sink construction failure does not consume the install marker", async () => {
 	const target = join(dataDir, "installation.json");
@@ -668,53 +669,52 @@ test("EU destination carries the launcher-supplied key, with an injectable endpo
 	expect(retargeted[0]?.url).toBe("http://127.0.0.1:4321/batch/");
 });
 
-test.each([
-	{},
-	{ posthogApiKey: "" },
-])("unkeyed builds %j send nothing and leave the install marker unclaimed", async (key) => {
-	const sent: SentPayload[] = [];
-	initializeAnalytics({
-		appVersion: "0.0.0-dev",
-		channel: "dev",
-		build: "binary",
-		additionalEnabled: true,
-		env: {},
-		fetchImpl: makeFetch(sent),
-		...key,
-	});
-	track({ name: "app_started" });
-	await shutdownAnalytics();
-	expect(sent).toEqual([]);
-	expect(existsSync(join(dataDir, "installation.json"))).toBe(false);
-});
+test.each([{}, { posthogApiKey: "" }])(
+	"unkeyed builds %j send nothing and leave the install marker unclaimed",
+	async (key) => {
+		const sent: SentPayload[] = [];
+		initializeAnalytics({
+			appVersion: "0.0.0-dev",
+			channel: "dev",
+			build: "binary",
+			additionalEnabled: true,
+			env: {},
+			fetchImpl: makeFetch(sent),
+			...key,
+		});
+		track({ name: "app_started" });
+		await shutdownAnalytics();
+		expect(sent).toEqual([]);
+		expect(existsSync(join(dataDir, "installation.json"))).toBe(false);
+	},
+);
 
-test.each([
-	{ CI: "1" },
-	{ NODE_ENV: "test" },
-	{ CI: "1", THINKRAIL_NO_ANALYTICS: "1" },
-])("automated environment %j sends neither tier", async (env) => {
-	const sent: SentPayload[] = [];
-	boot(sent, { additionalEnabled: true, env });
-	setAdditionalAnalyticsEnabled(true);
-	for (const event of Object.values(BASIC_EVENTS)) track(event);
-	expect(getAdditionalAnalyticsCapture()).toBeNull();
-	await shutdownAnalytics();
-	expect(sent).toEqual([]);
-	expect(existsSync(join(dataDir, "installation.json"))).toBe(false);
-});
+test.each([{ CI: "1" }, { NODE_ENV: "test" }, { CI: "1", THINKRAIL_NO_ANALYTICS: "1" }])(
+	"automated environment %j sends neither tier",
+	async (env) => {
+		const sent: SentPayload[] = [];
+		boot(sent, { additionalEnabled: true, env });
+		setAdditionalAnalyticsEnabled(true);
+		for (const event of Object.values(BASIC_EVENTS)) track(event);
+		expect(getAdditionalAnalyticsCapture()).toBeNull();
+		await shutdownAnalytics();
+		expect(sent).toEqual([]);
+		expect(existsSync(join(dataDir, "installation.json"))).toBe(false);
+	},
+);
 
-test.each([
-	{ mute: true },
-	{ env: { THINKRAIL_NO_ANALYTICS: "1" } },
-])("per-run suppression %j leaves basic reporting on", async (options) => {
-	const sent: SentPayload[] = [];
-	boot(sent, { ...options, additionalEnabled: true });
-	setAdditionalAnalyticsEnabled(true);
-	expect(getAdditionalAnalyticsCapture()).toBeNull();
-	for (const event of Object.values(BASIC_EVENTS)) track(event);
-	await shutdownAnalytics();
-	expect(allEntries(sent)).toHaveLength(2 + Object.keys(BASIC_EVENTS).length);
-});
+test.each([{ mute: true }, { env: { THINKRAIL_NO_ANALYTICS: "1" } }])(
+	"per-run suppression %j leaves basic reporting on",
+	async (options) => {
+		const sent: SentPayload[] = [];
+		boot(sent, { ...options, additionalEnabled: true });
+		setAdditionalAnalyticsEnabled(true);
+		expect(getAdditionalAnalyticsCapture()).toBeNull();
+		for (const event of Object.values(BASIC_EVENTS)) track(event);
+		await shutdownAnalytics();
+		expect(allEntries(sent)).toHaveLength(2 + Object.keys(BASIC_EVENTS).length);
+	},
+);
 
 test("shutdown drains both tiers once and prevents later capture/re-enabling", async () => {
 	const sent: SentPayload[] = [];

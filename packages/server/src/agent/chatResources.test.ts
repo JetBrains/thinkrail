@@ -1120,135 +1120,141 @@ test("held trash gates detached Agent completion and rollback replays exactly on
 	}
 });
 
-test.each([
-	false,
-	true,
-])("confirmed trash closes detached completion (settled during trash: %s)", async (settledDuringTrash) => {
-	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
-	const p = await parent();
-	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
-	const job = await launchSubagent(p);
-	const trashed = join(root, `trashed-${p.sessionId}.jsonl`);
-	const moved = deferred();
-	const trashEntered = deferred();
-	const releaseTrash = deferred();
-	let transcript = "";
-	setTrashImplementationForTests(async (input) => {
-		if (typeof input !== "string") throw new Error("expected path");
-		transcript = input;
-		trashEntered.resolve();
-		await releaseTrash.promise;
-		renameSync(input, trashed);
-		moved.resolve();
-	});
-	const deleting = deleteSession(p.sessionId, p.workspaceId, p.cwd);
-	try {
-		await trashEntered.promise;
-		if (settledDuringTrash) {
-			job.finish();
-			await waitFor(async () => job.child.snapshot?.status === "completed");
-			expect(job.completionTurns()).toBe(0);
-		}
-		releaseTrash.resolve();
-		await moved.promise;
-		await Bun.sleep(0);
-		job.finish();
-		await deleting;
-		expect(job.child.snapshot?.status).toBe(settledDuringTrash ? "completed" : "aborted");
-		expect(job.completionTurns()).toBe(0);
-		expect(existsSync(transcript)).toBe(false);
-		expect(readFileSync(trashed, "utf8")).not.toContain('"customType":"subagent-completion"');
-		expect(delegationServiceFor(p.workspaceId).childrenOf(p.sessionId)).toHaveLength(0);
-	} finally {
-		releaseTrash.resolve();
-		job.finish();
-		await deleting;
-		setTrashImplementationForTests(undefined);
-	}
-});
-
-test.each([
-	false,
-	true,
-])("shutdown suppresses an idle parent's detached completion beyond budget: %s", async (expireBudget) => {
-	const p = await parent();
-	const job = await launchSubagent(p);
-	const closing = settleSessionsForShutdown(expireBudget ? 10 : 1000);
-	try {
-		if (expireBudget) {
-			await closing;
-			expect(job.child.snapshot?.status).toBe("running");
-		}
-		job.finish();
-		await closing;
-		await waitFor(async () => job.child.snapshot?.status === "aborted");
-		expect(await subagentCompletions(p)).toHaveLength(0);
-		expect(job.completionTurns()).toBe(0);
-		expect((await getSessionMessages(p.sessionId, p.workspaceId, p.cwd)).summary.isStreaming).toBe(
-			false,
-		);
-	} finally {
-		job.finish();
-		await closing;
-		await removeSession(p.sessionId);
-	}
-});
-
-test.each([
-	"gap",
-	"rebound",
-])("host resource reload retains Agent jobs and completion settling %s", async (timing) => {
-	const p = await parent();
-	const job = await launchSubagent(p);
-	const original = AgentSession.prototype.reload;
-	const inGap = deferred();
-	const resume = deferred();
-	AgentSession.prototype.reload = async function (options) {
-		await original.call(this, {
-			...options,
-			beforeSessionStart: async () => {
-				inGap.resolve();
-				await resume.promise;
-				await options?.beforeSessionStart?.();
-			},
+test.each([false, true])(
+	"confirmed trash closes detached completion (settled during trash: %s)",
+	async (settledDuringTrash) => {
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+		const p = await parent();
+		setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
+		const job = await launchSubagent(p);
+		const trashed = join(root, `trashed-${p.sessionId}.jsonl`);
+		const moved = deferred();
+		const trashEntered = deferred();
+		const releaseTrash = deferred();
+		let transcript = "";
+		setTrashImplementationForTests(async (input) => {
+			if (typeof input !== "string") throw new Error("expected path");
+			transcript = input;
+			trashEntered.resolve();
+			await releaseTrash.promise;
+			renameSync(input, trashed);
+			moved.resolve();
 		});
-	};
-	const reloading = reloadSessionResources(p.sessionId);
-	try {
-		await inGap.promise;
-		expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents).toMatchObject([
-			{ childSessionId: job.child.sessionId, status: "running", detached: true },
-		]);
-		if (timing === "gap") {
+		const deleting = deleteSession(p.sessionId, p.workspaceId, p.cwd);
+		try {
+			await trashEntered.promise;
+			if (settledDuringTrash) {
+				job.finish();
+				await waitFor(async () => job.child.snapshot?.status === "completed");
+				expect(job.completionTurns()).toBe(0);
+			}
+			releaseTrash.resolve();
+			await moved.promise;
+			await Bun.sleep(0);
 			job.finish();
-			await waitFor(async () => job.child.snapshot?.status === "completed");
+			await deleting;
+			expect(job.child.snapshot?.status).toBe(settledDuringTrash ? "completed" : "aborted");
+			expect(job.completionTurns()).toBe(0);
+			expect(existsSync(transcript)).toBe(false);
+			expect(readFileSync(trashed, "utf8")).not.toContain('"customType":"subagent-completion"');
+			expect(delegationServiceFor(p.workspaceId).childrenOf(p.sessionId)).toHaveLength(0);
+		} finally {
+			releaseTrash.resolve();
+			job.finish();
+			await deleting;
+			setTrashImplementationForTests(undefined);
+		}
+	},
+);
+
+test.each([false, true])(
+	"shutdown suppresses an idle parent's detached completion beyond budget: %s",
+	async (expireBudget) => {
+		const p = await parent();
+		const job = await launchSubagent(p);
+		const closing = settleSessionsForShutdown(expireBudget ? 10 : 1000);
+		try {
+			if (expireBudget) {
+				await closing;
+				expect(job.child.snapshot?.status).toBe("running");
+			}
+			job.finish();
+			await closing;
+			await waitFor(async () => job.child.snapshot?.status === "aborted");
 			expect(await subagentCompletions(p)).toHaveLength(0);
 			expect(job.completionTurns()).toBe(0);
+			expect(
+				(await getSessionMessages(p.sessionId, p.workspaceId, p.cwd)).summary.isStreaming,
+			).toBe(false);
+		} finally {
+			job.finish();
+			await closing;
+			await removeSession(p.sessionId);
 		}
-		resume.resolve();
-		await reloading;
-		job.finish();
-		await waitFor(
-			async () => (await subagentCompletions(p)).length === 1 && job.completionTurns() === 1,
-		);
-		await waitFor(
-			async () =>
-				!(await getSessionMessages(p.sessionId, p.workspaceId, p.cwd)).summary.isStreaming,
-		);
-		await reloadSessionResources(p.sessionId);
-		expect(await subagentCompletions(p)).toHaveLength(1);
-		expect(job.completionTurns()).toBe(1);
-		expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents).toMatchObject([
-			{ childSessionId: job.child.sessionId, status: "completed", durationMs: expect.any(Number) },
-		]);
-	} finally {
-		resume.resolve();
-		job.finish();
-		await reloading;
-		AgentSession.prototype.reload = original;
-		await removeSession(p.sessionId);
-	}
-});
+	},
+);
+
+test.each(["gap", "rebound"])(
+	"host resource reload retains Agent jobs and completion settling %s",
+	async (timing) => {
+		const p = await parent();
+		const job = await launchSubagent(p);
+		const original = AgentSession.prototype.reload;
+		const inGap = deferred();
+		const resume = deferred();
+		AgentSession.prototype.reload = async function (options) {
+			await original.call(this, {
+				...options,
+				beforeSessionStart: async () => {
+					inGap.resolve();
+					await resume.promise;
+					await options?.beforeSessionStart?.();
+				},
+			});
+		};
+		const reloading = reloadSessionResources(p.sessionId);
+		try {
+			await inGap.promise;
+			expect(
+				(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents,
+			).toMatchObject([{ childSessionId: job.child.sessionId, status: "running", detached: true }]);
+			if (timing === "gap") {
+				job.finish();
+				await waitFor(async () => job.child.snapshot?.status === "completed");
+				expect(await subagentCompletions(p)).toHaveLength(0);
+				expect(job.completionTurns()).toBe(0);
+			}
+			resume.resolve();
+			await reloading;
+			job.finish();
+			await waitFor(
+				async () => (await subagentCompletions(p)).length === 1 && job.completionTurns() === 1,
+			);
+			await waitFor(
+				async () =>
+					!(await getSessionMessages(p.sessionId, p.workspaceId, p.cwd)).summary.isStreaming,
+			);
+			await reloadSessionResources(p.sessionId);
+			expect(await subagentCompletions(p)).toHaveLength(1);
+			expect(job.completionTurns()).toBe(1);
+			expect(
+				(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents,
+			).toMatchObject([
+				{
+					childSessionId: job.child.sessionId,
+					status: "completed",
+					durationMs: expect.any(Number),
+				},
+			]);
+		} finally {
+			resume.resolve();
+			job.finish();
+			await reloading;
+			AgentSession.prototype.reload = original;
+			await removeSession(p.sessionId);
+		}
+	},
+);
 
 const resourceQuestion = {
 	questions: [
@@ -1274,139 +1280,143 @@ const resourceAnswer = {
 	],
 };
 
-test.each([
-	"command",
-	"subagent",
-])("stopped %s completion waits for the live question's native turn_end, not parent settlement", async (owner) => {
-	const p = await parent();
-	const childGate = deferred();
-	const continuationGate = deferred();
-	const toolCallId = `question-before-${owner}-stop`;
-	const customType = owner === "command" ? "background-command-completion" : "subagent-completion";
-	let askStarted = false;
-	let questionTurnEnded = false;
-	let continuationCalls = 0;
-	let prompting: Promise<void> | undefined;
-	setSessionPublisher(({ sessionId, event }) => {
-		if (sessionId !== p.sessionId) return;
-		if (event.type === "tool_execution_start" && event.toolCallId === toolCallId) askStarted = true;
-		if (
-			event.type === "turn_end" &&
-			event.toolResults.some((result) => result.toolCallId === toolCallId)
-		)
-			questionTurnEnded = true;
-	});
-	try {
-		const job = owner === "subagent" ? await launchSubagent(p, childGate) : undefined;
-		const commandId = owner === "command" ? await launch(p) : undefined;
-		if (commandId) {
-			await waitFor(async () => {
-				const output = await readBackgroundCommandOutput(
-					p.workspaceId,
-					p.sessionId,
-					commandId,
-					p.cwd,
+test.each(["command", "subagent"])(
+	"stopped %s completion waits for the live question's native turn_end, not parent settlement",
+	async (owner) => {
+		const p = await parent();
+		const childGate = deferred();
+		const continuationGate = deferred();
+		const toolCallId = `question-before-${owner}-stop`;
+		const customType =
+			owner === "command" ? "background-command-completion" : "subagent-completion";
+		let askStarted = false;
+		let questionTurnEnded = false;
+		let continuationCalls = 0;
+		let prompting: Promise<void> | undefined;
+		setSessionPublisher(({ sessionId, event }) => {
+			if (sessionId !== p.sessionId) return;
+			if (event.type === "tool_execution_start" && event.toolCallId === toolCallId)
+				askStarted = true;
+			if (
+				event.type === "turn_end" &&
+				event.toolResults.some((result) => result.toolCallId === toolCallId)
+			)
+				questionTurnEnded = true;
+		});
+		try {
+			const job = owner === "subagent" ? await launchSubagent(p, childGate) : undefined;
+			const commandId = owner === "command" ? await launch(p) : undefined;
+			if (commandId) {
+				await waitFor(async () => {
+					const output = await readBackgroundCommandOutput(
+						p.workspaceId,
+						p.sessionId,
+						commandId,
+						p.cwd,
+					);
+					return output.available && output.output.text === "ready";
+				});
+			}
+			const callsBeforeQuestion = faux.state.callCount;
+			faux.setResponses([
+				fauxAssistantMessage(
+					fauxToolCall("ask_user_question", resourceQuestion, { id: toolCallId }),
+				),
+				async () => {
+					continuationCalls++;
+					await continuationGate.promise;
+					return fauxAssistantMessage("ANSWERED_WITH_STOPPED_RESOURCE");
+				},
+			]);
+			prompting = promptSession(p.sessionId, "Ask before continuing.");
+			prompting.catch(() => {});
+			await waitFor(async () => askStarted);
+			const active = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
+			if (commandId) {
+				expect(active.commands).toMatchObject([{ id: commandId, status: "running" }]);
+				expect(
+					await readBackgroundCommandOutput(p.workspaceId, p.sessionId, commandId, p.cwd),
+				).toMatchObject({ available: true, output: { text: "ready" } });
+				await stopBackgroundCommand(p.workspaceId, p.sessionId, commandId, p.cwd);
+				await waitFor(
+					async () =>
+						(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands[0]?.status ===
+						"stopped",
 				);
-				return output.available && output.output.text === "ready";
-			});
-		}
-		const callsBeforeQuestion = faux.state.callCount;
-		faux.setResponses([
-			fauxAssistantMessage(fauxToolCall("ask_user_question", resourceQuestion, { id: toolCallId })),
-			async () => {
-				continuationCalls++;
-				await continuationGate.promise;
-				return fauxAssistantMessage("ANSWERED_WITH_STOPPED_RESOURCE");
-			},
-		]);
-		prompting = promptSession(p.sessionId, "Ask before continuing.");
-		prompting.catch(() => {});
-		await waitFor(async () => askStarted);
-		const active = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
-		if (commandId) {
-			expect(active.commands).toMatchObject([{ id: commandId, status: "running" }]);
-			expect(
-				await readBackgroundCommandOutput(p.workspaceId, p.sessionId, commandId, p.cwd),
-			).toMatchObject({ available: true, output: { text: "ready" } });
-			await stopBackgroundCommand(p.workspaceId, p.sessionId, commandId, p.cwd);
-			await waitFor(
-				async () =>
-					(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands[0]?.status ===
-					"stopped",
-			);
-		} else if (job) {
-			expect(active.subagents).toMatchObject([
-				{ childSessionId: job.child.sessionId, status: "running" },
-			]);
-			const stopping = stopSubagent(p.workspaceId, p.sessionId, job.child.sessionId, p.cwd);
-			childGate.resolve();
-			await stopping;
-			await waitFor(
-				async () =>
-					(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents[0]?.status ===
+			} else if (job) {
+				expect(active.subagents).toMatchObject([
+					{ childSessionId: job.child.sessionId, status: "running" },
+				]);
+				const stopping = stopSubagent(p.workspaceId, p.sessionId, job.child.sessionId, p.cwd);
+				childGate.resolve();
+				await stopping;
+				await waitFor(
+					async () =>
+						(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents[0]?.status ===
+						"aborted",
+				);
+				expect(
+					(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents,
+				).toMatchObject([
+					{ childSessionId: job.child.sessionId, status: "aborted", abortReason: "user" },
+				]);
+				expect(readChildTranscript(p.workspaceId, p.sessionId, job.child.sessionId).status).toBe(
 					"aborted",
-			);
+				);
+			}
+			const waiting = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+			expect(waiting.summary.isStreaming).toBe(true);
 			expect(
-				(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents,
-			).toMatchObject([
-				{ childSessionId: job.child.sessionId, status: "aborted", abortReason: "user" },
-			]);
-			expect(readChildTranscript(p.workspaceId, p.sessionId, job.child.sessionId).status).toBe(
-				"aborted",
-			);
-		}
-		const waiting = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
-		expect(waiting.summary.isStreaming).toBe(true);
-		expect(
-			waiting.messages.filter((m) => m.role === "custom" && m.customType === customType),
-		).toHaveLength(0);
-		expect(
-			waiting.messages.some((m) => m.role === "toolResult" && m.toolCallId === toolCallId),
-		).toBe(false);
-		expect(questionTurnEnded).toBe(false);
-		expect(continuationCalls).toBe(0);
+				waiting.messages.filter((m) => m.role === "custom" && m.customType === customType),
+			).toHaveLength(0);
+			expect(
+				waiting.messages.some((m) => m.role === "toolResult" && m.toolCallId === toolCallId),
+			).toBe(false);
+			expect(questionTurnEnded).toBe(false);
+			expect(continuationCalls).toBe(0);
 
-		await respondToTool(p.sessionId, toolCallId, resourceAnswer);
-		await waitFor(async () => continuationCalls === 1);
-		const answered = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
-		expect(questionTurnEnded).toBe(true);
-		expect(answered.summary.isStreaming).toBe(true);
-		expect(
-			answered.messages.filter((m) => m.role === "custom" && m.customType === customType),
-		).toHaveLength(1);
-		const resultIndex = answered.messages.findIndex(
-			(m) => m.role === "toolResult" && m.toolCallId === toolCallId,
-		);
-		expect(answered.messages[resultIndex]).toMatchObject({
-			role: "toolResult",
-			details: resourceAnswer,
-			isError: false,
-		});
-		expect(
-			answered.messages.findIndex((m) => m.role === "custom" && m.customType === customType),
-		).toBeGreaterThan(resultIndex);
-		continuationGate.resolve();
-		await prompting;
-		const settled = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
-		expect(settled.summary.isStreaming).toBe(false);
-		expect(
-			settled.messages.filter((m) => m.role === "custom" && m.customType === customType),
-		).toHaveLength(1);
-		expect(continuationCalls).toBe(1);
-		expect(faux.state.callCount).toBe(callsBeforeQuestion + 2);
-		expect(settled.messages.at(-1)).toMatchObject({
-			role: "assistant",
-			content: [{ type: "text", text: "ANSWERED_WITH_STOPPED_RESOURCE" }],
-			stopReason: "stop",
-		});
-	} finally {
-		childGate.resolve();
-		continuationGate.resolve();
-		setSessionPublisher(() => {});
-		await removeSession(p.sessionId);
-		await prompting?.catch(() => {});
-	}
-});
+			await respondToTool(p.sessionId, toolCallId, resourceAnswer);
+			await waitFor(async () => continuationCalls === 1);
+			const answered = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+			expect(questionTurnEnded).toBe(true);
+			expect(answered.summary.isStreaming).toBe(true);
+			expect(
+				answered.messages.filter((m) => m.role === "custom" && m.customType === customType),
+			).toHaveLength(1);
+			const resultIndex = answered.messages.findIndex(
+				(m) => m.role === "toolResult" && m.toolCallId === toolCallId,
+			);
+			expect(answered.messages[resultIndex]).toMatchObject({
+				role: "toolResult",
+				details: resourceAnswer,
+				isError: false,
+			});
+			expect(
+				answered.messages.findIndex((m) => m.role === "custom" && m.customType === customType),
+			).toBeGreaterThan(resultIndex);
+			continuationGate.resolve();
+			await prompting;
+			const settled = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+			expect(settled.summary.isStreaming).toBe(false);
+			expect(
+				settled.messages.filter((m) => m.role === "custom" && m.customType === customType),
+			).toHaveLength(1);
+			expect(continuationCalls).toBe(1);
+			expect(faux.state.callCount).toBe(callsBeforeQuestion + 2);
+			expect(settled.messages.at(-1)).toMatchObject({
+				role: "assistant",
+				content: [{ type: "text", text: "ANSWERED_WITH_STOPPED_RESOURCE" }],
+				stopReason: "stop",
+			});
+		} finally {
+			childGate.resolve();
+			continuationGate.resolve();
+			setSessionPublisher(() => {});
+			await removeSession(p.sessionId);
+			await prompting?.catch(() => {});
+		}
+	},
+);
 
 test("stopped command completion cannot strand a live question across polite shutdown and disk reopen", async () => {
 	let p: Awaited<ReturnType<typeof parent>>;

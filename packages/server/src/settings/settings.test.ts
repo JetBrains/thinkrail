@@ -59,22 +59,22 @@ test("getConfig falls back to DEFAULT_CONFIG when no config.json exists", () => 
 	expect(getConfig()).toEqual(DEFAULT_CONFIG);
 });
 
-test.each([
-	true,
-	false,
-])("legacy analytics preference %s seeds selection without consent", (enabled) => {
-	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ analyticsEnabled: enabled }));
-	expect(getConfig()).toMatchObject({
-		analyticsEnabled: enabled,
-		analyticsConsentConfirmed: false,
-	});
-	updateConfig({ theme: "light" });
-	resetConfigCache();
-	expect(getConfig()).toMatchObject({
-		analyticsEnabled: enabled,
-		analyticsConsentConfirmed: false,
-	});
-});
+test.each([true, false])(
+	"legacy analytics preference %s seeds selection without consent",
+	(enabled) => {
+		writeFileSync(join(dataDir, "config.json"), JSON.stringify({ analyticsEnabled: enabled }));
+		expect(getConfig()).toMatchObject({
+			analyticsEnabled: enabled,
+			analyticsConsentConfirmed: false,
+		});
+		updateConfig({ theme: "light" });
+		resetConfigCache();
+		expect(getConfig()).toMatchObject({
+			analyticsEnabled: enabled,
+			analyticsConsentConfirmed: false,
+		});
+	},
+);
 
 test("new and malformed analytics config defaults off and unconfirmed", () => {
 	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: false });
@@ -86,21 +86,24 @@ test("new and malformed analytics config defaults off and unconfirmed", () => {
 	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: false });
 });
 
-test.each([
-	true,
-	false,
-])("explicit analytics choice %s persists and broadcasts atomically", (enabled) => {
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	updateConfig({ analyticsEnabled: enabled, analyticsConsentConfirmed: true });
-	expect(published).toHaveLength(1);
-	expect(published[0]).toMatchObject({
-		analyticsEnabled: enabled,
-		analyticsConsentConfirmed: true,
-	});
-	resetConfigCache();
-	expect(getConfig()).toMatchObject({ analyticsEnabled: enabled, analyticsConsentConfirmed: true });
-});
+test.each([true, false])(
+	"explicit analytics choice %s persists and broadcasts atomically",
+	(enabled) => {
+		const published: AppConfig[] = [];
+		setSettingsPublisher((config) => published.push(config));
+		updateConfig({ analyticsEnabled: enabled, analyticsConsentConfirmed: true });
+		expect(published).toHaveLength(1);
+		expect(published[0]).toMatchObject({
+			analyticsEnabled: enabled,
+			analyticsConsentConfirmed: true,
+		});
+		resetConfigCache();
+		expect(getConfig()).toMatchObject({
+			analyticsEnabled: enabled,
+			analyticsConsentConfirmed: true,
+		});
+	},
+);
 
 test("preference-only updates cannot infer expanded consent", () => {
 	updateConfig({ analyticsEnabled: true });

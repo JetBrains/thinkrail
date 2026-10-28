@@ -1677,7 +1677,7 @@ own section. The kebab menu (`plan-menu`, a
   doing so synchronously inside a pointer handler of a text drag crashes it: a Pierre-free page reproduces
   the signature, while a moved plain element, the same slot move deferred to a frame, or a diff under
   ~100 lines does not. Invariant: a Pierre surface never inserts, removes, or moves a `<slot>`
-  synchronously from a pointer or mouse handler. `patches/@pierre%2Fdiffs@1.5.1.patch` (root
+  synchronously from a pointer or mouse handler. `patches/@pierre%2Fdiffs@1.6.1.patch` (root
   `patchedDependencies`) carries the open upstream proposal pierrecomputer/pierre#1185 (issue
   pierrecomputer/pierre#1184) plus two additions it lacks: placement is a no-op while a mouse button is
   held outside Pierre's own selection session — armed by `pointermove` and by `pointerleave`, so a drag

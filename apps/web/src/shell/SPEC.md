@@ -43,9 +43,9 @@ is three CSS custom properties on `<html>`. `--window-chrome-inset-left` / `--wi
 are consumed through the `w-window-chrome-inset-*` spacing tokens by one `aria-hidden` edge spacer on each
 side (`window-chrome-inset-left|right`); unset (any browser) they resolve to `0px` and the header looks as
 before, while the desktop publishes `64px` on macOS so content starts at 80px and collapses it to `0px` in
-fullscreen. `--window-chrome-drag-region` drives the header's `window-drag` utility, which resolves to
-`no-drag` unless the host publishes `drag`, so a browser tab or a natively decorated window never gains a
-drag strip. Padding was deliberately not used for the inset: the `spacingUsage` gate lets padding utilities
+fullscreen. The `data-window-chrome-drag-region` attribute on `<html>` drives the header's `window-drag`
+utility, which resolves to `no-drag` unless the host publishes `drag`, so a browser tab or a natively
+decorated window never gains a drag strip. Padding was deliberately not used for the inset: the `spacingUsage` gate lets padding utilities
 name only canonical steps, and a CSS `padding-left: max(…)` would need a gate exemption. The header is
 `select-none`; its whole trailing action cluster (`topbar-actions`) is `window-no-drag`, so any button
 placed inside it — the Update affordance, quota Retry, Settings — is excluded from dragging by
@@ -104,7 +104,8 @@ After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted them
 code view (2 s idle timeout, 1.5 s fallback delay), which also waits for a loading Files tree to paint. The
 preload runs once per page, not per workspace switch, and `lib`'s `whenPageActive` holds it until the page
 is visible and online, checking again right before it runs: a hidden tab would pay about 3.9 MB and a 50–70 ms task for nothing, and a preload
-that fails offline makes Chromium cache the failed chunk for the session. Once the preload has finished,
+that fails offline makes engines that cache failed module fetches (Chromium before 156) keep the failed chunk
+for the session; newer Chromium refetches it on the next load. Once the preload has finished,
 the first desktop code-view open from any surface — Files, quick open, chat links, review — renders
 without a loading fallback; other renderers still load on their first mount.
 

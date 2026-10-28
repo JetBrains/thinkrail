@@ -566,22 +566,22 @@ describe("resolveWindowsUpdatePlan", () => {
 		expect(missing.channel).toBe("nightly");
 	});
 
-	test.each([
-		"/d/current",
-		"/cygdrive/d/current",
-	])("trusts matching legacy Git Bash metadata prefix %s", (prefix) => {
-		const plan = resolveWindowsUpdatePlan({
-			build: "binary",
-			platform: "win32",
-			execPath: "D:\\current\\bin\\thinkrail.exe",
-			args: { version: "latest" },
-			installMeta: { prefix, channel: "nightly" },
-			baked: "stable",
-			home,
-		});
-		expect(plan.prefix).toBe("D:/current");
-		expect(plan.channel).toBe("nightly");
-	});
+	test.each(["/d/current", "/cygdrive/d/current"])(
+		"trusts matching legacy Git Bash metadata prefix %s",
+		(prefix) => {
+			const plan = resolveWindowsUpdatePlan({
+				build: "binary",
+				platform: "win32",
+				execPath: "D:\\current\\bin\\thinkrail.exe",
+				args: { version: "latest" },
+				installMeta: { prefix, channel: "nightly" },
+				baked: "stable",
+				home,
+			});
+			expect(plan.prefix).toBe("D:/current");
+			expect(plan.channel).toBe("nightly");
+		},
+	);
 
 	test("normalizes and trusts a slash-form UNC prefix", () => {
 		const plan = resolveWindowsUpdatePlan({

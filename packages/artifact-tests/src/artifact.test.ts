@@ -66,31 +66,23 @@ test("the public barrel exposes only the pure desktop locator", () => {
 	expect(artifactTests.locateDesktopLauncher).toBe(locateDesktopLauncher);
 });
 
-test.each(
-	desktopTargets,
-)("locates the documented dev launcher for $platform $arch, not another bundle", ({
-	platform,
-	arch,
-	launcher,
-	decoy,
-}) => {
-	const root = packageDir(decoy, launcher);
-	expect(locateDesktopLauncher(root, undefined, platform, arch)).toBe(join(root, launcher));
-});
+test.each(desktopTargets)(
+	"locates the documented dev launcher for $platform $arch, not another bundle",
+	({ platform, arch, launcher, decoy }) => {
+		const root = packageDir(decoy, launcher);
+		expect(locateDesktopLauncher(root, undefined, platform, arch)).toBe(join(root, launcher));
+	},
+);
 
-test.each(
-	desktopTargets,
-)("refuses other bundles when the dev launcher is missing for $platform $arch", ({
-	platform,
-	arch,
-	launcher,
-	decoy,
-}) => {
-	const root = packageDir(decoy);
-	expect(() => locateDesktopLauncher(root, undefined, platform, arch)).toThrow(
-		`packaged desktop launcher not found at ${join(root, launcher)}`,
-	);
-});
+test.each(desktopTargets)(
+	"refuses other bundles when the dev launcher is missing for $platform $arch",
+	({ platform, arch, launcher, decoy }) => {
+		const root = packageDir(decoy);
+		expect(() => locateDesktopLauncher(root, undefined, platform, arch)).toThrow(
+			`packaged desktop launcher not found at ${join(root, launcher)}`,
+		);
+	},
+);
 
 test("resolves an explicit desktop launcher relative to the caller, outside the default tree", () => {
 	const root = packageDir("custom-launcher");
@@ -187,13 +179,13 @@ test.each(["stable", "canary"])("selects only ThinkRail's exact %s setup name", 
 	);
 });
 
-test.each([
-	"stable",
-	"canary",
-])("refuses similarly named or nested %s setup executables", (channel) => {
-	const name = `ThinkRail${windowsSetupExecutableSuffix(channel)}`;
-	const root = packageDir(`Another${windowsSetupExecutableSuffix(channel)}`, join("other", name));
-	expect(() => locateWindowsSetupExecutable(root, channel)).toThrow(
-		`desktop ZIP does not contain ${name}`,
-	);
-});
+test.each(["stable", "canary"])(
+	"refuses similarly named or nested %s setup executables",
+	(channel) => {
+		const name = `ThinkRail${windowsSetupExecutableSuffix(channel)}`;
+		const root = packageDir(`Another${windowsSetupExecutableSuffix(channel)}`, join("other", name));
+		expect(() => locateWindowsSetupExecutable(root, channel)).toThrow(
+			`desktop ZIP does not contain ${name}`,
+		);
+	},
+);

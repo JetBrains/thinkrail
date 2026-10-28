@@ -325,39 +325,43 @@ test("refuses a missing requested installer instead of collecting a stale channe
 	expect(collect(root, "bun-darwin-arm64", "stable").exitCode).not.toBe(0);
 });
 
-test.each([
-	"stable",
-	"nightly",
-] as const)("refuses a missing requested %s macOS app archive instead of falling back to another artifact", (channel) => {
-	const root = fixture();
-	const appArchivePath = `apps/desktop/artifacts/${targets[0].updates[channel].archive}`;
-	rmSync(join(root, appArchivePath));
-	const result = collect(root, targets[0].target, channel);
-	expect(result.exitCode).not.toBe(0);
-	expect(result.stdout.toString()).toContain(
-		`::error::desktop app archive not found at ${appArchivePath}`,
-	);
-	expect(existsSync(join(root, "outputs"))).toBe(false);
-});
+test.each(["stable", "nightly"] as const)(
+	"refuses a missing requested %s macOS app archive instead of falling back to another artifact",
+	(channel) => {
+		const root = fixture();
+		const appArchivePath = `apps/desktop/artifacts/${targets[0].updates[channel].archive}`;
+		rmSync(join(root, appArchivePath));
+		const result = collect(root, targets[0].target, channel);
+		expect(result.exitCode).not.toBe(0);
+		expect(result.stdout.toString()).toContain(
+			`::error::desktop app archive not found at ${appArchivePath}`,
+		);
+		expect(existsSync(join(root, "outputs"))).toBe(false);
+	},
+);
 
 test.each([
 	["manifest", "manifest"],
 	["archive", "archive"],
-] as const)("refuses a missing requested update %s instead of falling back to another artifact", (kind, field) => {
-	const root = fixture();
-	const expected = targets[2].updates.nightly[field];
-	const expectedPath = `apps/desktop/artifacts/${expected}`;
-	rmSync(join(root, expectedPath));
-	const result = collect(root, targets[2].target, "nightly");
-	expect(result.exitCode).not.toBe(0);
-	expect(result.stdout.toString()).toContain(
-		`::error::desktop update ${kind} not found at ${expectedPath}`,
-	);
-	expect(existsSync(join(root, "outputs"))).toBe(false);
-});
+] as const)(
+	"refuses a missing requested update %s instead of falling back to another artifact",
+	(kind, field) => {
+		const root = fixture();
+		const expected = targets[2].updates.nightly[field];
+		const expectedPath = `apps/desktop/artifacts/${expected}`;
+		rmSync(join(root, expectedPath));
+		const result = collect(root, targets[2].target, "nightly");
+		expect(result.exitCode).not.toBe(0);
+		expect(result.stdout.toString()).toContain(
+			`::error::desktop update ${kind} not found at ${expectedPath}`,
+		);
+		expect(existsSync(join(root, "outputs"))).toBe(false);
+	},
+);
 
-test.each([
-	["bun-darwin-arm64", "production"],
-])("refuses an unsupported target/channel: %s %s", (target, channel) => {
-	expect(collect(fixture(), target, channel).exitCode).not.toBe(0);
-});
+test.each([["bun-darwin-arm64", "production"]])(
+	"refuses an unsupported target/channel: %s %s",
+	(target, channel) => {
+		expect(collect(fixture(), target, channel).exitCode).not.toBe(0);
+	},
+);

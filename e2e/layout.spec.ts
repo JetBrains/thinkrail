@@ -697,6 +697,9 @@ test("hiding a side or the bottom keeps focus outside it and recovers focus from
 
 		await pressPlatformShortcut(page, "b");
 		await expect(page.getByTestId("left-nav")).toBeVisible();
+		await page.evaluate(
+			() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+		);
 		const insideLeft = page.getByTestId("left-nav").getByTestId("project-expand").first();
 		await insideLeft.focus();
 		await expect(insideLeft).toBeFocused();
@@ -730,6 +733,7 @@ test("keyboard and menu commands reorder, search, recursively split, and explici
 	await page.getByTestId("tab-review").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Show Files" }).click();
 	await expect(page.getByTestId("tab-files")).toBeVisible();
+	await expect(page.getByRole("menu")).toHaveCount(0);
 	await page.getByTestId("tool-rail-specs").focus();
 	await page.keyboard.press("Delete");
 	await expect(page.getByTestId("tab-specs")).toHaveCount(0);

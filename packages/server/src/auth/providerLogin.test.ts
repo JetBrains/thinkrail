@@ -86,40 +86,40 @@ describe("startLogin", () => {
 		expect(frames).toEqual([]);
 	});
 
-	test.each([
-		"configure",
-		"activate",
-	])("delayed success retains its login generation after %s", async (cutover) => {
-		const replacement = install(async () => {});
-		const replacementGeneration = await getPiRuntimeGeneration();
-		const completion = Promise.withResolvers<void>();
-		const h = install(async (_id, i) => {
-			i.notify({ type: "progress", message: "Waiting" });
-			await completion.promise;
-			i.notify({ type: "progress", message: "Done" });
-		});
-		const originalGeneration = await getPiRuntimeGeneration();
-		const { loginId } = startLogin("anthropic");
-		await tick();
-		expect(h.loginCalls()).toEqual([["anthropic", "oauth"]]);
+	test.each(["configure", "activate"])(
+		"delayed success retains its login generation after %s",
+		async (cutover) => {
+			const replacement = install(async () => {});
+			const replacementGeneration = await getPiRuntimeGeneration();
+			const completion = Promise.withResolvers<void>();
+			const h = install(async (_id, i) => {
+				i.notify({ type: "progress", message: "Waiting" });
+				await completion.promise;
+				i.notify({ type: "progress", message: "Done" });
+			});
+			const originalGeneration = await getPiRuntimeGeneration();
+			const { loginId } = startLogin("anthropic");
+			await tick();
+			expect(h.loginCalls()).toEqual([["anthropic", "oauth"]]);
 
-		if (cutover === "configure") configurePiRuntime(replacementGeneration.runtime);
-		else activatePiRuntimeGeneration(replacementGeneration);
-		const currentGeneration = await getPiRuntimeGeneration();
-		expect(currentGeneration).not.toBe(originalGeneration);
-		expect(currentGeneration.runtime).toBe(replacementGeneration.runtime);
+			if (cutover === "configure") configurePiRuntime(replacementGeneration.runtime);
+			else activatePiRuntimeGeneration(replacementGeneration);
+			const currentGeneration = await getPiRuntimeGeneration();
+			expect(currentGeneration).not.toBe(originalGeneration);
+			expect(currentGeneration.runtime).toBe(replacementGeneration.runtime);
 
-		completion.resolve();
-		await tick();
-		expect(h.frames).toEqual([
-			{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Waiting" } },
-			{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Done" } },
-			{ loginId, providerId: "anthropic", frame: { kind: "success" } },
-		]);
-		expect(h.publications.slice(0, 2)).toEqual(h.frames.slice(0, 2).map((push) => [push]));
-		expect(h.publications.at(-1)?.[1]).toBe(originalGeneration);
-		expect(replacement.loginCalls()).toEqual([]);
-	});
+			completion.resolve();
+			await tick();
+			expect(h.frames).toEqual([
+				{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Waiting" } },
+				{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Done" } },
+				{ loginId, providerId: "anthropic", frame: { kind: "success" } },
+			]);
+			expect(h.publications.slice(0, 2)).toEqual(h.frames.slice(0, 2).map((push) => [push]));
+			expect(h.publications.at(-1)?.[1]).toBe(originalGeneration);
+			expect(replacement.loginCalls()).toEqual([]);
+		},
+	);
 
 	test("passes pi's login options so flows that need a device id (ChatGPT) can run", async () => {
 		const h = install(async () => {});

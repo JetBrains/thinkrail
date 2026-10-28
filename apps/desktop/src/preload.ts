@@ -33,9 +33,7 @@ interface DesktopPreferenceAdapter {
 }
 
 const initialWindowChrome = takePreloadGlobal(INITIAL_WINDOW_CHROME_GLOBAL);
-const windowChromeStyle = createWindowChromeStyleWriter(
-	() => document.documentElement?.style ?? null,
-);
+const windowChromeStyle = createWindowChromeStyleWriter(() => document.documentElement ?? null);
 document.addEventListener("DOMContentLoaded", windowChromeStyle.flush, { once: true });
 windowChromeStyle.update(initialWindowChrome);
 

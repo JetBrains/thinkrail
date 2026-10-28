@@ -418,36 +418,39 @@ describe("install.sh controlled installation", () => {
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Darwin", "arm64", "thinkrail-darwin-arm64"],
 		["stable", "1.2.3", "v1.2.3", "Darwin", "x86_64", "thinkrail-darwin-x64"],
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Darwin", "x86_64", "thinkrail-darwin-x64"],
-	])("selects the exact %s %s target (%s, %s/%s, %s)", (channel, version, tag, unameS, unameM, assetName) => {
-		const fixture = makeFixture();
-		const result = runInstaller(
-			fixture,
-			[
-				"--channel",
-				channel,
-				"--version",
-				version,
-				"--prefix",
-				shellPath(fixture.prefix),
-				"--no-modify-path",
-			],
-			{ FAKE_UNAME_S: unameS, FAKE_UNAME_M: unameM, FAKE_ASSET_NAME: assetName },
-		);
-		expect(result.exitCode).toBe(0);
-		const requests = curlRequests(fixture);
-		expect(requests).toHaveLength(2);
-		expect(requests[0]).toContain(`/releases/download/${tag}/${assetName}`);
-		expect(requests[1]).toContain(`/releases/download/${tag}/SHA256SUMS`);
-		const metadata = JSON.parse(
-			readFileSync(join(fixture.home, ".config", "thinkrail", "install.json"), "utf8"),
-		);
-		expect(metadata).toMatchObject({ channel, version, tag, path_entry_added: false });
-		expect(
-			readdirSync(join(fixture.home, ".config", "thinkrail")).filter((name) =>
-				name.includes(".tmp."),
-			),
-		).toEqual([]);
-	});
+	])(
+		"selects the exact %s %s target (%s, %s/%s, %s)",
+		(channel, version, tag, unameS, unameM, assetName) => {
+			const fixture = makeFixture();
+			const result = runInstaller(
+				fixture,
+				[
+					"--channel",
+					channel,
+					"--version",
+					version,
+					"--prefix",
+					shellPath(fixture.prefix),
+					"--no-modify-path",
+				],
+				{ FAKE_UNAME_S: unameS, FAKE_UNAME_M: unameM, FAKE_ASSET_NAME: assetName },
+			);
+			expect(result.exitCode).toBe(0);
+			const requests = curlRequests(fixture);
+			expect(requests).toHaveLength(2);
+			expect(requests[0]).toContain(`/releases/download/${tag}/${assetName}`);
+			expect(requests[1]).toContain(`/releases/download/${tag}/SHA256SUMS`);
+			const metadata = JSON.parse(
+				readFileSync(join(fixture.home, ".config", "thinkrail", "install.json"), "utf8"),
+			);
+			expect(metadata).toMatchObject({ channel, version, tag, path_entry_added: false });
+			expect(
+				readdirSync(join(fixture.home, ".config", "thinkrail")).filter((name) =>
+					name.includes(".tmp."),
+				),
+			).toEqual([]);
+		},
+	);
 
 	test("installs the native arm64 CLI from a Rosetta shell on Apple Silicon", () => {
 		const fixture = makeFixture();

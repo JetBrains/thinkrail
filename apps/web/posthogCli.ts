@@ -6,19 +6,19 @@ import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
 
-export const POSTHOG_CLI_VERSION = "0.18.10";
+export const POSTHOG_CLI_VERSION = "0.18.12";
 
 export const POSTHOG_CLI_BINARY_SHA256: ReadonlyMap<string, string> = new Map([
-	["2bb92e1cd4807a70b9b35507ef35cbf4f422920044238f2982f08301050c8aec", "aarch64-apple-darwin"],
-	["99229762f831aa78ddec827f2e43c3e90b197b3396be564f8f2b28102ad10278", "x86_64-apple-darwin"],
-	["6746401e700ab246c2863a842c06710633c583dd0aa298f122fb02d5eb487f22", "aarch64-unknown-linux-gnu"],
+	["78c21417f3e3d30a88af9970712ab115c303caec21ee3c8ab853a4320968adfa", "aarch64-apple-darwin"],
+	["30618b24a8225b70c69348245e155c232bf2b283ade250531c6ba1e98e924cdb", "x86_64-apple-darwin"],
+	["1d0e219d2613e06ee13239ee8876b663a04b077906ea7a7478f2a65a6261839a", "aarch64-unknown-linux-gnu"],
 	[
-		"590f09ee1816808df804e46b170d553ea65fb61c9bbe6907f6db71b424d9131d",
+		"5142a0f6650e064ad90da025758e5c976223b1456a2c93fe09afcfcb6d725120",
 		"aarch64-unknown-linux-musl",
 	],
-	["661f5cacbe426442f31ee39211b94a97a5b8b718dd13c9b7c72c125084c2d24e", "x86_64-unknown-linux-gnu"],
-	["08ceaa681db94932b2585a5c26272e46ebcae207dd817ee6f85ef5ddd71da652", "x86_64-unknown-linux-musl"],
-	["336b1fee6e84fc46164369c6e5ab5996e053e66529afe79dd5166980ba949234", "x86_64-pc-windows-msvc"],
+	["c69b03b0d604662ed9939f9017d21e75652b6efe064e0118c6c4378c2f26bc06", "x86_64-unknown-linux-gnu"],
+	["8d87bf021c3c4d1afd94e80cf82d094893e6b8f3d1f57f036108e672ed8b246a", "x86_64-unknown-linux-musl"],
+	["3ba85040aaca852ab9c65f2256fc351d84925928c9a70fdb4248f0627543d774", "x86_64-pc-windows-msvc"],
 ]);
 
 interface PosthogCliPackage {

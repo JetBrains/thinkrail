@@ -145,6 +145,12 @@ moved here from the app when the resource renderers became a package, because bo
   border (`border-feedback-*-muted`) on a neutral `bg-container-elevated-bg` background. `ToastAction` is
   unstyled: the caller supplies the control through `asChild`. Queue ownership, icons, and notification
   lifetimes stay in the app (`panels/Toaster` composes the primitives).
+  Each toast is a Radix dismissable layer, so a toast that opens over a dialog is the topmost layer: the
+  first Escape dismisses the toast and the next one closes the dialog. All Radix primitives move together,
+  because they share `react-dismissable-layer`'s layer stack.
+- `DialogContent` and `DialogPanel` ignore an Escape whose focus is inside a different dialog. Radix
+  hands the Escape listener to a newly opened higher layer in an effect, so without the guard a dialog under
+  a freshly opened modal can catch the key and close.
 - Resizable handles paint a 1 px line at their leading edge; the pointer hit area extends only into the
   following panel (fine-pointer margin 1 px), so the preceding panel's trailing-edge scrollbar stays
   usable. There is no grip variant.

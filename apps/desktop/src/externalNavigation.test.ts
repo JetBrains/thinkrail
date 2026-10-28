@@ -35,16 +35,14 @@ test("opens the serialized will-navigate payload emitted by the native SDK", () 
 	);
 });
 
-test.each([
-	"file:///tmp/private",
-	"javascript:alert(1)",
-	"data:text/html,hello",
-	"views://web",
-])("rejects unsafe protocols in every SDK payload form: %s", (url) => {
-	for (const detail of [url, { url }, JSON.stringify({ url, allowed: false })]) {
-		expect(externalNavigationUrl(detail, origin)).toBeNull();
-	}
-});
+test.each(["file:///tmp/private", "javascript:alert(1)", "data:text/html,hello", "views://web"])(
+	"rejects unsafe protocols in every SDK payload form: %s",
+	(url) => {
+		for (const detail of [url, { url }, JSON.stringify({ url, allowed: false })]) {
+			expect(externalNavigationUrl(detail, origin)).toBeNull();
+		}
+	},
+);
 
 test.each([
 	null,

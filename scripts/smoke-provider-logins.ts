@@ -22,7 +22,7 @@ interface Outcome {
 	ok: boolean;
 }
 
-function describe(frame: LoginFrame): string {
+function describeFrame(frame: LoginFrame): string {
 	switch (frame.kind) {
 		case "authUrl":
 			return `sign-in page ${new URL(frame.url).host}`;
@@ -126,7 +126,7 @@ async function runFlow(
 			for (; seen < frames.length; seen++) {
 				const frame = frames[seen];
 				if (!frame || frame.kind === "progress") continue;
-				trail.push(describe(frame));
+				trail.push(describeFrame(frame));
 				if (frame.kind === "select") {
 					const choice = choices[picked++];
 					if (choice === undefined)
