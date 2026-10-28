@@ -19,6 +19,15 @@ export class RequestReplayOverflowError extends CodedError {
 	}
 }
 
+export class RequestAbandonedError extends Error {
+	readonly code = "REQUEST_ABANDONED";
+
+	constructor() {
+		super("the page gave up on a request before its handler settled");
+		this.name = "RequestAbandonedError";
+	}
+}
+
 export class RequestReplayUnretainedError extends Error {
 	constructor(id: string) {
 		super(`request id "${id}" already executed; its response exceeded the retention budget`);

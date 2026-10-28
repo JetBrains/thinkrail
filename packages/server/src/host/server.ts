@@ -141,6 +141,7 @@ import {
 import {
 	heaviestReplayMethod,
 	type ReplayLoad,
+	RequestAbandonedError,
 	RequestReplayCache,
 	RequestReplayOverflowError,
 } from "./requestReplayCache";
@@ -215,6 +216,13 @@ const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
 const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
+
+function reportAbandoned(methods: readonly string[]): void {
+	for (const method of methods) {
+		log.warn(`request abandoned before its handler settled: ${method}`);
+		reportError(new RequestAbandonedError(), requestErrorReport(method));
+	}
+}
 
 function formatReplayLoad(load: ReplayLoad): string {
 	return Object.entries(load)
@@ -411,11 +419,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				if (typeof req !== "object" || req === null) return;
 				if ("ack" in req && Array.isArray(req.ack)) {
-					requestReplays.acknowledge(ws.data.clientKey, req.ack.filter(isRequestId));
+					reportAbandoned(
+						requestReplays.acknowledge(ws.data.clientKey, req.ack.filter(isRequestId)),
+					);
 					return;
 				}
 				if ("resume" in req && Array.isArray(req.resume)) {
-					requestReplays.retain(ws.data.clientKey, req.resume.filter(isRequestId));
+					reportAbandoned(requestReplays.retain(ws.data.clientKey, req.resume.filter(isRequestId)));
 					return;
 				}
 				if (
