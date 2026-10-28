@@ -52,6 +52,22 @@ describe("palette navigation", () => {
 		expect(useAppStore.getState().activeWorkspaceId).toBe("pb-w");
 	});
 
+	test("a begun pick stops being wanted after a later pick or a navigation elsewhere, not when its own list lands", () => {
+		useAppStore.setState({
+			projects: [project("pa"), project("pb")],
+			workspaces: { pb: [workspace("pb-w", "pb")] },
+		});
+		const navigator = createPaletteNavigator(deferredLoader().load);
+		const overtaken = navigator.beginPick();
+		const current = navigator.beginPick();
+		expect(overtaken()).toBe(false);
+		expect(current()).toBe(true);
+		useAppStore.getState().setWorkspaces("pa", [workspace("pa-default", "pa")]);
+		expect(current()).toBe(true);
+		useAppStore.getState().activateWorkspace({ id: "pb-w", projectId: "pb" });
+		expect(current()).toBe(false);
+	});
+
 	test("a workspace the store already holds opens at once", async () => {
 		useAppStore.setState({
 			projects: [project("p1")],

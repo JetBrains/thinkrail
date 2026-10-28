@@ -192,7 +192,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 							icon: RiHome4Line,
 							keywords: ["default", "project folder", "no worktree"],
 							mutates: true,
-							run: () => void enterDefaultWorkspace(contextProject.id),
+							run: () =>
+								void enterDefaultWorkspace(contextProject.id, paletteNavigator.beginPick()),
 						},
 					]
 				: []),
@@ -239,7 +240,10 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			},
 			contextProjectId: contextProject?.id ?? null,
 			firstPrompts,
-			navigateToProject: goToProjectHome,
+			navigateToProject: (projectId) => {
+				paletteNavigator.beginPick();
+				goToProjectHome(projectId);
+			},
 			navigateToWorkspace: (workspace, sessionId) =>
 				void paletteNavigator.navigateToWorkspace(workspace, sessionId),
 		});

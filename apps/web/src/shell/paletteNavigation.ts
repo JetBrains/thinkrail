@@ -18,16 +18,21 @@ export function createPaletteNavigator(
 ) {
 	const picks = createLatestOperation();
 
-	const loadWorkspaceRow = async (workspace: WorkspaceTarget): Promise<boolean> => {
+	const beginPick = (): (() => boolean) => {
 		const isLatest = picks.begin();
-		const before = useAppStore.getState();
-		if (selectWorkspaceById(before, workspace.id)) return true;
-		const marker = navigationMarker(before);
+		const marker = navigationMarker(useAppStore.getState());
+		return () => isLatest() && navigationMarker(useAppStore.getState()) === marker;
+	};
+
+	const loadWorkspaceRow = async (workspace: WorkspaceTarget): Promise<boolean> => {
+		const stillWanted = beginPick();
+		if (selectWorkspaceById(useAppStore.getState(), workspace.id)) return true;
 		await loadProjectWorkspaces(workspace.projectId).catch(() => {});
-		return isLatest() && navigationMarker(useAppStore.getState()) === marker;
+		return stillWanted();
 	};
 
 	return {
+		beginPick,
 		loadWorkspaceRow,
 		async navigateToWorkspace(workspace: WorkspaceTarget, sessionId?: string): Promise<boolean> {
 			if (!(await loadWorkspaceRow(workspace))) return false;
