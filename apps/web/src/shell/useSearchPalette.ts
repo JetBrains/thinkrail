@@ -72,20 +72,7 @@ function navigateToWorkspace(workspace: Pick<Workspace, "id" | "projectId">, ses
 }
 
 function useChatTitleBackfill(): void {
-	const snapshotKey = useAppStore((s) =>
-		[
-			s.welcomeGeneration,
-			s.projects.map((project) => project.id).join("\u0000"),
-			Object.entries(s.sessionStateByWorkspace)
-				.map(([workspaceId, records]) => `${workspaceId}:${Object.keys(records).length}`)
-				.sort()
-				.join("\u0000"),
-		].join("\u0001"),
-	);
-	useEffect(() => {
-		paletteBackfill.schedule();
-		return () => paletteBackfill.clearPending();
-	}, [snapshotKey]);
+	useEffect(() => paletteBackfill.watch(), []);
 }
 
 export interface SearchPaletteOptions {

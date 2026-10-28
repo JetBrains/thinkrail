@@ -95,6 +95,19 @@ export interface PaletteBackfillSources {
 export interface PaletteBackfill {
 	readonly schedule: () => void;
 	readonly clearPending: () => void;
+	readonly watch: () => () => void;
+}
+
+function scheduleKey(state: AppState): string {
+	return [
+		state.welcomeGeneration,
+		state.sessionTitleRevision,
+		state.projects.map((project) => project.id).join("\u0000"),
+		Object.entries(state.sessionStateByWorkspace)
+			.map(([workspaceId, records]) => `${workspaceId}:${Object.keys(records).length}`)
+			.sort()
+			.join("\u0000"),
+	].join("\u0001");
 }
 
 function listingKey(state: AppState, workspaceId: string): string {
@@ -142,17 +155,34 @@ export function createPaletteBackfill(sources: PaletteBackfillSources): PaletteB
 		},
 	});
 
+	const schedule = () => {
+		const { projectIds, workspaceIds } = backfillOrder(useAppStore.getState(), (workspaceId) =>
+			listedKeys.has(workspaceId),
+		);
+		projects.schedule(projectIds);
+		titles.schedule(workspaceIds);
+	};
+	const clearPending = () => {
+		projects.clearPending();
+		titles.clearPending();
+	};
+
 	return {
-		schedule() {
-			const { projectIds, workspaceIds } = backfillOrder(useAppStore.getState(), (workspaceId) =>
-				listedKeys.has(workspaceId),
-			);
-			projects.schedule(projectIds);
-			titles.schedule(workspaceIds);
-		},
-		clearPending() {
-			projects.clearPending();
-			titles.clearPending();
+		schedule,
+		clearPending,
+		watch() {
+			let key = scheduleKey(useAppStore.getState());
+			schedule();
+			const unsubscribe = useAppStore.subscribe((state) => {
+				const next = scheduleKey(state);
+				if (next === key) return;
+				key = next;
+				schedule();
+			});
+			return () => {
+				unsubscribe();
+				clearPending();
+			};
 		},
 	};
 }
