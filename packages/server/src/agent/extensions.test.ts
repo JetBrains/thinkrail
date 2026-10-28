@@ -7,14 +7,17 @@ import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import { registryInlineExtensions } from "../extensions";
 import {
 	buildResourceLoader,
+	bumpPackagesRevision,
 	childBaseExtensionFactories,
 	childExtensionFactories,
 	disabledExtensions,
+	isLoaderPackagePolicyStale,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
 	providerExtensionPaths,
 	setDisabledExtensionsResolver,
+	setDisabledPackagesResolver,
 } from "./extensions";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
@@ -681,5 +684,100 @@ describe("registry extensions", () => {
 		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard, skillCarryover]);
 		expect(childExtensionFactories()).not.toContain(oversizedImageGuard);
 		expect(childExtensionFactories()).not.toContain(skillCarryover);
+	});
+});
+
+describe("pi packages", () => {
+	function writePackage(root: string): string {
+		const pkg = join(root, "pkgs", "fixture-tools");
+		mkdirSync(join(pkg, "extensions"), { recursive: true });
+		mkdirSync(join(pkg, "skills", "triage"), { recursive: true });
+		mkdirSync(join(pkg, "prompts"), { recursive: true });
+		writeFileSync(
+			join(pkg, "package.json"),
+			JSON.stringify({
+				name: "@fixture/pi-tools",
+				pi: {
+					extensions: ["./extensions/*.ts"],
+					skills: ["./skills"],
+					prompts: ["./prompts/*.md"],
+				},
+			}),
+		);
+		writeFileSync(
+			join(pkg, "extensions", "hello.ts"),
+			[
+				"export default function (pi) {",
+				'  pi.registerTool({ name: "fixture_hello", label: "fixture_hello", description: "fixture",',
+				'    parameters: { type: "object", properties: {} },',
+				'    execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }) });',
+				"}",
+				"",
+			].join("\n"),
+		);
+		writeFileSync(
+			join(pkg, "skills", "triage", "SKILL.md"),
+			"---\nname: triage\ndescription: Triage fixture.\n---\n\n# triage\n",
+		);
+		writeFileSync(join(pkg, "prompts", "standup.md"), "---\ndescription: standup\n---\nstandup\n");
+		return pkg;
+	}
+
+	it("drops a switched-off package's extensions, skills and prompts and re-decides on reload", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-pi-packages-off-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const pkg = writePackage(root);
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
+		let disabled = new Set<string>();
+		setDisabledPackagesResolver(() => disabled);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const tools = () =>
+				loader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()]);
+			const skills = () => loader.getSkills().skills.map((skill) => skill.name);
+			const prompts = () => loader.getPrompts().prompts.map((prompt) => prompt.name);
+			expect(tools()).toContain("fixture_hello");
+			expect(skills()).toContain("triage");
+			expect(prompts()).toContain("standup");
+			expect(isLoaderPackagePolicyStale(loader)).toBe(false);
+
+			disabled = new Set([`local:${pkg}`]);
+			expect(isLoaderPackagePolicyStale(loader)).toBe(true);
+			await loader.reload();
+			expect(isLoaderPackagePolicyStale(loader)).toBe(false);
+			expect(tools()).not.toContain("fixture_hello");
+			expect(skills()).not.toContain("triage");
+			expect(prompts()).not.toContain("standup");
+			expect(await listSkillCommands(project, ctx(true))).not.toContainEqual(
+				expect.objectContaining({ name: "skill:triage" }),
+			);
+			expect((await listSkillCatalog(project, ctx(true))).map((entry) => entry.name)).not.toContain(
+				"triage",
+			);
+
+			disabled = new Set();
+			await loader.reload();
+			expect(tools()).toContain("fixture_hello");
+			expect(skills()).toContain("triage");
+			expect((await listSkillCatalog(project, ctx(true))).map((entry) => entry.name)).toContain(
+				"triage",
+			);
+
+			bumpPackagesRevision();
+			expect(isLoaderPackagePolicyStale(loader)).toBe(true);
+			await loader.reload();
+			expect(isLoaderPackagePolicyStale(loader)).toBe(false);
+		} finally {
+			setDisabledPackagesResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });

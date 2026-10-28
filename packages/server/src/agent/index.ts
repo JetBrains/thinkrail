@@ -24,6 +24,7 @@ export {
 	listSkillCommands,
 	registerBundledRuntime,
 	setDisabledExtensionsResolver,
+	setDisabledPackagesResolver,
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,

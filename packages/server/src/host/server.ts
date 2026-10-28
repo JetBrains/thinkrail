@@ -37,6 +37,7 @@ import {
 	refreshSubagentTools,
 	setAgentReviewEnabledResolver,
 	setDisabledExtensionsResolver,
+	setDisabledPackagesResolver,
 	setExtUiPublisher,
 	setMcpLoginPublisher,
 	setMcpPolicyResolver,
@@ -624,6 +625,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
+	setDisabledPackagesResolver(() => new Set(getConfig().disabledPackages));
 
 	setProjectPublisher((project) => {
 		const capture = additionalCapture();
@@ -747,7 +749,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (appliedUpdate.subagentsEnabled !== undefined) refreshSubagentTools();
 		if (appliedUpdate.subagentMaxConcurrent !== undefined) refreshSubagentConcurrency();
 		if (appliedUpdate.agentReviewEnabled !== undefined) refreshAgentReviewTool();
-		if (appliedUpdate.disabledExtensions !== undefined) refreshExtensionTools();
+		if (
+			appliedUpdate.disabledExtensions !== undefined ||
+			appliedUpdate.disabledPackages !== undefined
+		) {
+			refreshExtensionTools();
+		}
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {

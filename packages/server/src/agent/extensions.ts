@@ -10,6 +10,7 @@ import {
 	type InlineExtension,
 	type LoadExtensionsResult,
 	type PathMetadata,
+	type PromptTemplate,
 	type ResourceDiagnostic,
 	type ResourceLoader,
 	SettingsManager,
@@ -29,6 +30,7 @@ import {
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
+import { packageSourceIdentity } from "./packages";
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
@@ -152,9 +154,15 @@ function skillGroup(
 	return { group: "pi", isPlugin: false };
 }
 
-function skillsGate(cwd: string, bundledPaths: string[], getCtx: () => SkillAdmissionContext) {
+function skillsGate(
+	cwd: string,
+	bundledPaths: string[],
+	getCtx: () => SkillAdmissionContext,
+	getDisabledPackagePaths: () => ReadonlySet<string> = () => new Set(),
+) {
 	return (current: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => {
 		const ctx = getCtx();
+		const disabledPaths = getDisabledPackagePaths();
 		const sources = discoverCompatibilitySkillSources(cwd);
 		const projectAliasPaths = sources.filter((s) => s.scope === "project").map((s) => s.path);
 		const isProjectAlias = (filePath: string) =>
@@ -162,6 +170,7 @@ function skillsGate(cwd: string, bundledPaths: string[], getCtx: () => SkillAdmi
 		return {
 			...current,
 			skills: current.skills
+				.filter((skill) => !disabledPaths.has(resolve(skill.filePath)))
 				.map((skill) => relabelAliasProvenance(skill, sources))
 				.filter((skill) => {
 					const { group, isPlugin } = skillGroup(skill.filePath, sources, bundledPaths);
@@ -180,6 +189,7 @@ function resolveSkillInputs(
 	cwd: string,
 	getCtx: () => SkillAdmissionContext,
 	disabled: ReadonlySet<string>,
+	getDisabledPackagePaths?: () => ReadonlySet<string>,
 ): {
 	additionalSkillPaths: string[];
 	skillsOverride: ReturnType<typeof skillsGate>;
@@ -202,7 +212,7 @@ function resolveSkillInputs(
 	refreshSkillPaths(disabled);
 	return {
 		additionalSkillPaths,
-		skillsOverride: skillsGate(cwd, bundledSkillPaths(), getCtx),
+		skillsOverride: skillsGate(cwd, bundledSkillPaths(), getCtx, getDisabledPackagePaths),
 		refreshSkillPaths,
 	};
 }
@@ -269,6 +279,71 @@ export function providerExtensionPaths(
 				? [extension.resolvedPath]
 				: [],
 		);
+let disabledPackagesResolver: () => ReadonlySet<string> = () => new Set();
+export function setDisabledPackagesResolver(resolver: () => ReadonlySet<string>): void {
+	disabledPackagesResolver = resolver;
+}
+
+export function disabledPackages(): ReadonlySet<string> {
+	try {
+		return disabledPackagesResolver();
+	} catch {
+		return new Set();
+	}
+}
+
+let packagesRevision = 0;
+
+/** Marks that the set of installed pi packages changed on disk or in settings; loaders built before are stale. */
+export function bumpPackagesRevision(): void {
+	packagesRevision += 1;
+}
+
+/** The package policy a loader is built against: the disabled set and the install revision. */
+export function packagePolicyKey(): string {
+	return `${packagesRevision}\n${[...disabledPackages()].sort().join("\n")}`;
+}
+
+const loaderPackagePolicies = new WeakMap<ResourceLoader, string>();
+
+/** `true` when the loader last resolved under a package policy other than the current one. */
+export function isLoaderPackagePolicyStale(loader: ResourceLoader): boolean {
+	const recorded = loaderPackagePolicies.get(loader);
+	return recorded !== undefined && recorded !== packagePolicyKey();
+}
+
+/** The resolved paths of every resource that belongs to a switched-off package. */
+function disabledPackageResourcePaths(
+	resolved: Awaited<ReturnType<DefaultPackageManager["resolve"]>>,
+	cwd: string,
+	agentDir: string,
+	disabled: ReadonlySet<string>,
+): Set<string> {
+	const paths = new Set<string>();
+	if (disabled.size === 0) return paths;
+	for (const resources of [resolved.extensions, resolved.skills, resolved.prompts]) {
+		for (const resource of resources) {
+			const { metadata } = resource;
+			if (metadata.origin !== "package") continue;
+			const scope = metadata.scope === "project" ? "project" : "user";
+			if (disabled.has(packageSourceIdentity(metadata.source, scope, cwd, agentDir))) {
+				paths.add(resolve(resource.path));
+			}
+		}
+	}
+	return paths;
+}
+
+async function resolveDisabledPackagePaths(
+	cwd: string,
+	settingsManager: SettingsManager,
+	agentDir: string,
+): Promise<Set<string>> {
+	const disabled = disabledPackages();
+	if (disabled.size === 0) return new Set();
+	const packageManager = new DefaultPackageManager({ cwd, agentDir, settingsManager });
+	const resolved = await packageManager.resolve(async () => "skip");
+	return disabledPackageResourcePaths(resolved, cwd, agentDir, disabled);
 }
 
 export function childBaseExtensionFactories(): InlineExtension[] {
@@ -304,10 +379,12 @@ export async function buildResourceLoader(
 		...extraFactories,
 	];
 	const extensionFactories = bundled ? [...bundled.factories, ...sharedFactories] : sharedFactories;
+	let disabledPackagePaths: ReadonlySet<string> = new Set();
 	const { refreshSkillPaths, ...skillInputs } = resolveSkillInputs(
 		cwd,
 		getAdmission,
 		disabledAtReload,
+		() => disabledPackagePaths,
 	);
 	const agentDir = getAgentDir();
 	const common = {
@@ -320,28 +397,18 @@ export async function buildResourceLoader(
 			recordProviderOwners(result);
 			return preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload));
 		},
+		promptsOverride: (current: {
+			prompts: PromptTemplate[];
+			diagnostics: ResourceDiagnostic[];
+		}) => ({
+			...current,
+			prompts: current.prompts.filter(
+				(prompt) => !disabledPackagePaths.has(resolve(prompt.filePath)),
+			),
+		}),
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
-	const applyCurrentPolicy = (): void => {
-		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
-		disabledAtReload = disabledExtensions();
-		refreshSkillPaths(disabledAtReload);
-	};
-
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
-	if (excluded.size === 0) {
-		const loader = new DefaultResourceLoader({
-			...common,
-			additionalExtensionPaths: devExtensionPaths,
-		});
-		const reloadTrusted = loader.reload.bind(loader);
-		loader.reload = async (options) => {
-			applyCurrentPolicy();
-			await reloadTrusted(options);
-		};
-		await loader.reload();
-		return loader;
-	}
 
 	// pi keeps a reference to this array and reads it on every reload, so it is rebuilt in place.
 	const additionalExtensionPaths: string[] = [...devExtensionPaths];
@@ -352,9 +419,15 @@ export async function buildResourceLoader(
 		builtinExtensions: builtinExtensionNames(extensionFactories),
 	});
 	let discoveredMetadata = new Map<string, PathMetadata>();
-	const resolveExclusionPaths = async (): Promise<void> => {
+	const resolveExtensionPaths = async (): Promise<void> => {
 		await settingsManager.reload();
 		const resolvedResources = await packageManager.resolve();
+		disabledPackagePaths = disabledPackageResourcePaths(
+			resolvedResources,
+			cwd,
+			agentDir,
+			disabledPackages(),
+		);
 		const next: string[] = [];
 		const metadata = new Map<string, PathMetadata>();
 		for (const resource of resolvedResources.extensions) {
@@ -363,9 +436,10 @@ export async function buildResourceLoader(
 				next.push(resource.path);
 				continue;
 			}
-			if (excluded.has(resolve(resource.path))) continue;
+			const path = resolve(resource.path);
+			if (excluded.has(path) || disabledPackagePaths.has(path)) continue;
 			next.push(resource.path);
-			metadata.set(resolve(resource.path), resource.metadata);
+			metadata.set(path, resource.metadata);
 		}
 		additionalExtensionPaths.splice(
 			0,
@@ -382,8 +456,11 @@ export async function buildResourceLoader(
 	});
 	const reloadResolved = loader.reload.bind(loader);
 	loader.reload = async (options) => {
-		applyCurrentPolicy();
-		await resolveExclusionPaths();
+		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
+		disabledAtReload = disabledExtensions();
+		refreshSkillPaths(disabledAtReload);
+		loaderPackagePolicies.set(loader, packagePolicyKey());
+		await resolveExtensionPaths();
 		await reloadResolved(options);
 		relabelDiscoveredExtensions(loader, discoveredMetadata);
 	};
@@ -440,6 +517,7 @@ function admissionCacheKey(cwd: string, ctx: SkillAdmissionContext): string {
 		[...ctx.disabledGroups].sort(),
 		Object.entries(ctx.overrides).sort(([a], [b]) => a.localeCompare(b)),
 		[...disabledExtensions()].sort(),
+		packagePolicyKey(),
 	]);
 }
 
@@ -456,10 +534,16 @@ export async function listSkillCommands(
 	const settingsManager = SettingsManager.create(cwd, getAgentDir(), {
 		projectTrusted: admission.piResourceTrusted,
 	});
+	const disabledPackagePaths = await resolveDisabledPackagePaths(
+		cwd,
+		settingsManager,
+		getAgentDir(),
+	);
 	const { additionalSkillPaths, skillsOverride } = resolveSkillInputs(
 		cwd,
 		() => admission,
 		disabledExtensions(),
+		() => disabledPackagePaths,
 	);
 	const loader = new DefaultResourceLoader({
 		cwd,
@@ -512,6 +596,11 @@ export async function listSkillCatalog(
 	const settingsManager = SettingsManager.create(cwd, getAgentDir(), {
 		projectTrusted: admission.piResourceTrusted,
 	});
+	const disabledPackagePaths = await resolveDisabledPackagePaths(
+		cwd,
+		settingsManager,
+		getAgentDir(),
+	);
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),
@@ -523,7 +612,9 @@ export async function listSkillCatalog(
 		],
 		skillsOverride: (current) => ({
 			...current,
-			skills: current.skills.map((skill) => relabelAliasProvenance(skill, discovered)),
+			skills: current.skills
+				.filter((skill) => !disabledPackagePaths.has(resolve(skill.filePath)))
+				.map((skill) => relabelAliasProvenance(skill, discovered)),
 		}),
 		noExtensions: true,
 		noPromptTemplates: true,

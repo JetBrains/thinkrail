@@ -54,6 +54,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
 	disabledExtensions: true,
+	disabledPackages: true,
 	locale: true,
 	onboardingDismissed: true,
 	chatMessageOrder: true,
@@ -89,12 +90,12 @@ function validateFavoriteModels(value: unknown): WireModel[] {
 	return value.filter((model, index) => value.findIndex((m) => sameModel(m, model)) === index);
 }
 
-function validateDisabledExtensions(value: unknown): string[] {
+function validateNameList(value: unknown, setting: string, noun: string): string[] {
 	if (
 		!Array.isArray(value) ||
 		!value.every((name) => typeof name === "string" && name.trim().length > 0)
 	) {
-		throw new Error("disabledExtensions must be a list of extension names");
+		throw new Error(`${setting} must be a list of ${noun}`);
 	}
 	return [...new Set(value as string[])];
 }
@@ -168,10 +169,17 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
 		disabledExtensions,
+		disabledPackages,
 		...rest
 	} = runtimeUpdate;
 	const nextDisabledExtensions =
-		disabledExtensions === undefined ? undefined : validateDisabledExtensions(disabledExtensions);
+		disabledExtensions === undefined
+			? undefined
+			: validateNameList(disabledExtensions, "disabledExtensions", "extension names");
+	const nextDisabledPackages =
+		disabledPackages === undefined
+			? undefined
+			: validateNameList(disabledPackages, "disabledPackages", "package identities");
 	for (const [name, value] of [
 		["defaultModel", defaultModel],
 		["reviewModel", reviewModel],
@@ -264,6 +272,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 			? {}
 			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
 		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
+		...(nextDisabledPackages === undefined ? {} : { disabledPackages: nextDisabledPackages }),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;

@@ -448,6 +448,29 @@ test("a malformed disabled-extensions update is rejected; a malformed stored lis
 	expect(getConfig().disabledExtensions).toEqual([]);
 });
 
+test("disabled packages default empty, round-trip deduped, and reject a malformed list", () => {
+	expect(DEFAULT_CONFIG.disabledPackages).toEqual([]);
+	expect(getConfig().disabledPackages).toEqual([]);
+	const next = updateConfig({
+		disabledPackages: ["npm:@acme/pi-jira", "local:/x", "npm:@acme/pi-jira"],
+	});
+	expect(next.disabledPackages).toEqual(["npm:@acme/pi-jira", "local:/x"]);
+	resetConfigCache();
+	expect(getConfig().disabledPackages).toEqual(["npm:@acme/pi-jira", "local:/x"]);
+	for (const value of ["npm:x", [""], [1]]) {
+		const invalid = { disabledPackages: value } as unknown as AppConfigUpdate;
+		expect(() => updateConfig(invalid)).toThrow(
+			"disabledPackages must be a list of package identities",
+		);
+	}
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ disabledPackages: ["npm:x", 3, ""] }),
+	);
+	resetConfigCache();
+	expect(getConfig().disabledPackages).toEqual(["npm:x"]);
+});
+
 test("an out-of-range subagent limit is rejected before persistence or broadcast", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
