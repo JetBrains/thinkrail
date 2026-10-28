@@ -22,6 +22,7 @@ const command = (overrides: Partial<Command> = {}): Command => ({
 	title: "Test",
 	group: "work",
 	icon: RiAddLine,
+	run: () => {},
 	...overrides,
 });
 

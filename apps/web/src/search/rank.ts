@@ -1,5 +1,11 @@
-import { MATCH_TIER, type MatchField, type MatchResult, matchFields } from "@thinkrail/contracts";
-import { adaptiveCount, frecencyScore, type LearningSnapshot } from "./learning";
+import {
+	MATCH_TIER,
+	type MatchField,
+	type MatchResult,
+	type MatchTerm,
+	matchFields,
+} from "@thinkrail/contracts";
+import { adaptiveCounts, frecencyScore, type LearningSnapshot } from "./learning";
 import type { PaletteItem, PaletteRow } from "./model";
 
 export interface RankedItem {
@@ -24,11 +30,11 @@ export function itemFields(item: PaletteItem): MatchField[] {
 export function itemBoost(
 	item: PaletteItem,
 	learning: LearningSnapshot,
-	query: string,
+	adaptive: ReadonlyMap<string, number>,
 	nowMs: number,
 ): { boost: number; latched: number } {
 	const frecency = frecencyScore(learning, item.id, nowMs);
-	const latched = adaptiveCount(learning, query, item.id, nowMs);
+	const latched = adaptive.get(item.id) ?? 0;
 	const boost =
 		Math.min(30, 12 * Math.log1p(frecency)) +
 		Math.min(40, latched * 8) +
@@ -43,16 +49,17 @@ export function compareRanked(a: RankedItem, b: RankedItem): number {
 
 export function rankItems(
 	items: readonly PaletteItem[],
-	terms: readonly string[],
+	terms: readonly MatchTerm[],
 	learning: LearningSnapshot,
 	query: string,
 	nowMs: number,
 ): RankedItem[] {
 	const ranked: RankedItem[] = [];
+	const adaptive = adaptiveCounts(learning, query, nowMs);
 	for (const item of items) {
 		const match = matchFields(terms, itemFields(item));
 		if (!match) continue;
-		const { boost, latched } = itemBoost(item, learning, query, nowMs);
+		const { boost, latched } = itemBoost(item, learning, adaptive, nowMs);
 		ranked.push({ item, match, total: match.score * 100 + boost, latched });
 	}
 	return ranked.sort(compareRanked);

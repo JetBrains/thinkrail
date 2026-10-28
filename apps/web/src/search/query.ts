@@ -1,4 +1,4 @@
-import { parseMatchTerms } from "@thinkrail/contracts";
+import { type MatchTerm, parseMatchTerms } from "@thinkrail/contracts";
 
 export const SEARCH_SCOPES = ["all", "work", "files", "specs", "commands"] as const;
 export type SearchScope = (typeof SEARCH_SCOPES)[number];
@@ -14,7 +14,7 @@ export interface ParsedQuery {
 	readonly raw: string;
 	readonly scope: SearchScope;
 	readonly text: string;
-	readonly terms: readonly string[];
+	readonly terms: readonly MatchTerm[];
 }
 
 const PREFIX_SCOPE = new Map<string, Exclude<SearchScope, "all">>(

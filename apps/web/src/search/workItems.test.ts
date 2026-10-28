@@ -72,7 +72,9 @@ function items(
 const failedRead = record("s-failed", {
 	completion: { completionId: "c1", outcome: "failed", failure: "error" },
 });
-const waiting = record("s-waiting", { needsInput: { inputKind: "ask_user_question" } });
+const waiting = record("s-waiting", {
+	needsInput: { interactionId: "i1", kind: "tool-response", toolCallId: "q1" },
+});
 
 describe("buildWorkItems", () => {
 	test("a read failure is listed by title without attention, and a workspace carries its strongest chat attention", () => {
@@ -111,21 +113,23 @@ describe("buildWorkItems", () => {
 		});
 	});
 
-	test("the waiting section maps switcher sessions onto their chat rows", () => {
-		const result = items([waiting]);
+	test("the waiting section maps switcher sessions onto their chat rows, leaving running chats out", () => {
+		const running = record("s-running", { execution: "running", runId: "r1" });
+		const result = items([waiting, running], { "s-running": "Long build" });
+		const session = (sessionId: string, attention: "needs-input" | "running") => ({
+			sessionId,
+			workspaceId: "w1",
+			projectId: "p1",
+			workspaceName: "Auth refresh",
+			workspaceKind: undefined,
+			chatTitle: "",
+			attention,
+		});
 		const rows = waitingItems(
-			[
-				{
-					sessionId: "s-waiting",
-					workspaceId: "w1",
-					projectId: "p1",
-					workspaceName: "Auth refresh",
-					chatTitle: "",
-					attention: "needs-input",
-				},
-			],
+			[session("s-waiting", "needs-input"), session("s-running", "running")],
 			result,
 		);
 		expect(rows.map((item) => item.id)).toEqual(["chat:s-waiting"]);
+		expect(result.some((item) => item.id === "chat:s-running")).toBe(true);
 	});
 });

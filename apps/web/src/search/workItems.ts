@@ -229,5 +229,7 @@ export function waitingItems(
 	items: readonly PaletteItem[],
 ): PaletteItem[] {
 	const byId = new Map(items.map((item) => [item.id, item]));
-	return sessions.flatMap((session) => byId.get(`chat:${session.sessionId}`) ?? []);
+	return sessions.flatMap((session) =>
+		session.attention === "running" ? [] : (byId.get(`chat:${session.sessionId}`) ?? []),
+	);
 }

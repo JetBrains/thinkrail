@@ -68,6 +68,36 @@ describe("buildSections", () => {
 		]);
 	});
 
+	test("Waiting stays bounded: eight rows, then a more row that expands it in place", () => {
+		const waiting = Array.from({ length: 20 }, (_, index) =>
+			chat(`w${index}`, `Waiting ${index}`, { attention: "needs-input" }),
+		);
+		const collapsed = sections("", { rootItems: waiting, waiting }).find(
+			(section) => section.id === "waiting",
+		);
+		expect(collapsed?.items).toHaveLength(9);
+		expect(collapsed?.items.at(-1)?.item.more).toEqual({
+			kind: "expand",
+			group: "waiting",
+			nextId: "chat:w8",
+		});
+		const expanded = sections("", {
+			rootItems: waiting,
+			waiting,
+			expanded: new Set(["waiting"]),
+		}).find((section) => section.id === "waiting");
+		expect(expanded?.items).toHaveLength(20);
+	});
+
+	test("a pick learned under a scope prefix latches the same words typed without it", () => {
+		let learning = recordPick(EMPTY_LEARNING, "auth note", "chat:x3", 0);
+		learning = recordPick(learning, "auth note", "chat:x3", 0);
+		const scoped = sections("@auth note", { learning });
+		const plain = sections("auth note", { learning });
+		expect(scoped.find((section) => section.id === "chats")?.items[0]?.item.id).toBe("chat:x3");
+		expect(plain[0]).toMatchObject({ id: "top", items: [{ item: { id: "chat:x3" } }] });
+	});
+
 	test("a row never appears twice: Recent skips what Waiting and Actions already show", () => {
 		let learning = recordPick(EMPTY_LEARNING, "", "command:new", 0);
 		learning = recordPick(learning, "", "chat:a", 0);

@@ -35,8 +35,33 @@ async function openPalette(page: Page): Promise<void> {
 }
 
 async function doubleShift(page: Page): Promise<void> {
-	await page.keyboard.press("Shift");
-	await page.keyboard.press("Shift");
+	await page.evaluate(() => {
+		for (const type of ["keydown", "keyup", "keydown", "keyup"]) {
+			window.dispatchEvent(
+				new KeyboardEvent(type, { key: "Shift", code: "ShiftLeft", bubbles: true }),
+			);
+		}
+	});
+}
+
+async function composingKey(page: Page, key: string, sentinel = false): Promise<void> {
+	await page.getByTestId("search-input").evaluate(
+		(input, init) => {
+			const event = new KeyboardEvent("keydown", {
+				key: init.key,
+				bubbles: true,
+				cancelable: true,
+				isComposing: !init.sentinel,
+			});
+			if (init.sentinel) Object.defineProperty(event, "keyCode", { get: () => 229 });
+			input.dispatchEvent(event);
+		},
+		{ key, sentinel },
+	);
+}
+
+function chip(page: Page, scope: string) {
+	return page.locator(`[data-testid="search-chip"][data-scope="${scope}"]`);
 }
 
 function seedAttention(repo: string) {
@@ -133,7 +158,7 @@ test("commands run from the palette and show their shortcut", async ({ page }) =
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
 	const bottom = page.getByTestId("bottom-panel");
-	const before = await bottom.count();
+	await expect(bottom).toBeVisible();
 
 	await openPalette(page);
 	await page.getByTestId("search-input").fill(">bottom");
@@ -146,7 +171,7 @@ test("commands run from the palette and show their shortcut", async ({ page }) =
 	await expect(row.locator("kbd")).not.toHaveCount(0);
 	await page.keyboard.press("Enter");
 	await expect(palette(page)).toBeHidden();
-	await expect(bottom).toHaveCount(before === 0 ? 1 : 0);
+	await expect(bottom).toHaveCount(0);
 });
 
 test("a Settings section row opens that section, and Mod+K inside the palette closes it", async ({
@@ -187,14 +212,14 @@ test("double Shift toggles the palette and can be turned off in Settings › Key
 	await expect(page.getByTestId("settings-dialog")).toBeHidden();
 
 	await doubleShift(page);
-	await page.waitForTimeout(400);
+	await openPalette(page);
+	await page.keyboard.press("Escape");
 	await expect(palette(page)).toBeHidden();
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await doubleShift(page);
-	await page.waitForTimeout(400);
-	await expect(palette(page)).toBeHidden();
+	await openPalette(page);
 });
 
 test("the double-Shift row opens Settings › Keyboard, and Ctrl+R stays inert under the palette", async ({
@@ -213,4 +238,71 @@ test("the double-Shift row opens Settings › Keyboard, and Ctrl+R stays inert u
 	await expect(page.getByTestId("settings-dialog")).toBeVisible();
 	await expect(page.getByTestId("settings-nav-keyboard")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("settings-double-shift")).toBeVisible();
+});
+
+test("an active IME owns Escape, arrows, Tab and Enter in the palette input", async ({ page }) => {
+	await openFixtureProject(page);
+	await openPalette(page);
+	const input = page.getByTestId("search-input");
+	await input.fill(">settings");
+	const rows = page.getByTestId("search-row");
+	await expect(rows.first()).toHaveAttribute("aria-selected", "true");
+
+	await composingKey(page, "ArrowDown");
+	await composingKey(page, "Tab");
+	await composingKey(page, "Escape");
+	await composingKey(page, "Enter", true);
+	await expect(palette(page)).toBeVisible();
+	await expect(input).toHaveValue(">settings");
+	await expect(chip(page, "commands")).toHaveAttribute("data-active", "true");
+	await expect(rows.first()).toHaveAttribute("aria-selected", "true");
+
+	await page.keyboard.press("ArrowDown");
+	await expect(rows.nth(1)).toHaveAttribute("aria-selected", "true");
+	await page.keyboard.press("Escape");
+	await expect(input).toHaveValue("");
+});
+
+test("keys still reach the palette after a click lands outside the input", async ({ page }) => {
+	await openFixtureProject(page);
+	await openPalette(page);
+	const input = page.getByTestId("search-input");
+	await input.fill(">settings");
+	const header = page.locator('[data-testid="search-section"] [role="presentation"]').first();
+
+	await header.click();
+	await page.keyboard.press("ArrowDown");
+	await expect(page.getByTestId("search-row").nth(1)).toHaveAttribute("aria-selected", "true");
+	await expect(input).toBeFocused();
+
+	await header.click();
+	await page.keyboard.press("Escape");
+	await expect(input).toHaveValue("");
+	await expect(palette(page)).toBeVisible();
+
+	await page
+		.getByTestId("search-palette-body")
+		.locator("footer")
+		.click({ position: { x: 4, y: 4 } });
+	await pressPlatformShortcut(page, "k");
+	await expect(palette(page)).toBeHidden();
+});
+
+test("Tab, Alt+digit and the chips switch the scope and write its prefix", async ({ page }) => {
+	await openFixtureProject(page);
+	await openPalette(page);
+	const input = page.getByTestId("search-input");
+	await input.fill("auth");
+
+	await page.keyboard.press("Tab");
+	await expect(chip(page, "work")).toHaveAttribute("aria-pressed", "true");
+	await expect(input).toHaveValue("@auth");
+	await page.keyboard.press("Shift+Tab");
+	await expect(chip(page, "all")).toHaveAttribute("aria-pressed", "true");
+	await expect(input).toHaveValue("auth");
+	await page.keyboard.press("Alt+3");
+	await expect(input).toHaveValue(">auth");
+	await chip(page, "work").click();
+	await expect(input).toHaveValue("@auth");
+	await expect(input).toBeFocused();
 });

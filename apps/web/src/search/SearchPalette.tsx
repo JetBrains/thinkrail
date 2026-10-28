@@ -1,6 +1,7 @@
 import { RiCornerDownLeftLine, RiSearchLine, RiSideBarLine, RiWifiOffLine } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import {
@@ -17,6 +18,7 @@ import { shortcutKeys } from "../commands";
 import { AttentionDot } from "../components/AttentionDot";
 import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier } from "../lib";
+import { isImeComposing } from "./ime";
 import { recordPick } from "./learning";
 import type { PaletteItem, PaletteRow, PaletteSection } from "./model";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
@@ -47,7 +49,6 @@ export interface SearchPaletteProps {
 }
 
 export function SearchPalette(props: SearchPaletteProps) {
-	const t = useT();
 	return (
 		<Dialog
 			open
@@ -55,25 +56,12 @@ export function SearchPalette(props: SearchPaletteProps) {
 				if (!open) props.onClose();
 			}}
 		>
-			<DialogContent
-				hideClose
-				data-testid="search-palette"
-				aria-describedby={undefined}
-				className="top-[12vh] w-auto max-w-none translate-y-0 gap-0 overflow-visible p-0"
-				onOpenAutoFocus={(event) => {
-					event.preventDefault();
-					document.querySelector<HTMLInputElement>('[data-testid="search-input"]')?.focus();
-				}}
-				onEscapeKeyDown={(event) => event.preventDefault()}
-			>
-				<DialogTitle className="sr-only">{t("search.palette.title")}</DialogTitle>
-				<PaletteBody {...props} />
-			</DialogContent>
+			<PaletteContent {...props} />
 		</Dialog>
 	);
 }
 
-function PaletteBody({
+function PaletteContent({
 	onClose,
 	rootItems,
 	waiting,
@@ -142,7 +130,7 @@ function PaletteBody({
 	};
 
 	const remember = (item: PaletteItem) => {
-		const next = recordPick(learning, query, item.id, Date.now());
+		const next = recordPick(learning, parsed.text, item.id, Date.now());
 		setLearning(next);
 		writeLearning(next);
 	};
@@ -180,22 +168,39 @@ function PaletteBody({
 		});
 	};
 
-	const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-		const mod = hasPlatformModifier(event.nativeEvent);
-		if (event.key === "Escape") {
-			event.preventDefault();
-			event.stopPropagation();
-			if (!event.nativeEvent.isTrusted || !query) onClose();
-			else resetQuery("");
+	const onEscapeKeyDown = (event: KeyboardEvent) => {
+		event.preventDefault();
+		if (isImeComposing(event)) return;
+		if (!event.isTrusted || !query) {
+			onClose();
 			return;
 		}
+		resetQuery("");
+		inputRef.current?.focus();
+	};
+
+	const onKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+		if (event.defaultPrevented || event.key === "Escape") return;
+		if (event.target !== inputRef.current && event.target !== event.currentTarget) return;
+		if (isImeComposing(event.nativeEvent)) {
+			if (event.key === "Tab") event.preventDefault();
+			return;
+		}
+		if (event.target !== inputRef.current) inputRef.current?.focus();
+		const mod = hasPlatformModifier(event.nativeEvent);
 		if (mod && event.code === "KeyK" && !event.shiftKey && !event.altKey) {
 			event.preventDefault();
 			event.stopPropagation();
 			onClose();
 			return;
 		}
-		if (event.ctrlKey && event.code === "KeyR") {
+		if (
+			event.ctrlKey &&
+			!event.shiftKey &&
+			!event.altKey &&
+			!event.metaKey &&
+			event.code === "KeyR"
+		) {
 			event.preventDefault();
 			event.stopPropagation();
 			return;
@@ -228,7 +233,6 @@ function PaletteBody({
 				select(selectedIndexRef.current - 1);
 				return;
 			case "Enter":
-				if (event.nativeEvent.isComposing) return;
 				event.preventDefault();
 				activate(selected);
 				return;
@@ -239,97 +243,112 @@ function PaletteBody({
 	const previewItem = previewOpen ? selected?.item : undefined;
 
 	return (
-		<div
-			data-testid="search-palette-body"
-			data-preview={previewOpen}
-			className={cn(
-				"relative flex max-h-[min(76vh,720px)] flex-col rounded-lg",
-				previewOpen ? "w-[min(64rem,calc(100vw-32px))]" : "w-[min(42rem,calc(100vw-32px))]",
-			)}
+		<DialogContent
+			hideClose
+			data-testid="search-palette"
+			aria-describedby={undefined}
+			className="top-[12vh] w-auto max-w-none translate-y-0 gap-0 overflow-visible p-0"
+			onOpenAutoFocus={(event) => {
+				event.preventDefault();
+				inputRef.current?.focus();
+			}}
+			onEscapeKeyDown={onEscapeKeyDown}
+			onKeyDown={onKeyDown}
 		>
-			<div className="flex h-48 shrink-0 items-center gap-8 border-border-muted border-b px-16">
-				<RiSearchLine aria-hidden className="size-16 shrink-0 text-text-muted" />
-				<input
-					ref={inputRef}
-					data-testid="search-input"
-					role="combobox"
-					aria-expanded="true"
-					aria-controls="search-results"
-					aria-autocomplete="list"
-					aria-activedescendant={rows.length > 0 ? optionId(selectedIndex) : undefined}
-					aria-label={t("search.palette.title")}
-					autoComplete="off"
-					spellCheck={false}
-					value={query}
-					placeholder={t("search.palette.placeholder")}
-					onChange={(event) => resetQuery(event.target.value)}
-					onKeyDown={onKeyDown}
-					className="h-full min-w-0 flex-1 bg-transparent tr-text-reading text-text-default outline-none placeholder:text-text-subtle"
-				/>
-				<Keycaps keys={["esc"]} />
-			</div>
-			<ScopeChips t={t} scopes={scopes} active={parsed.scope} onSelect={changeScope} />
-			{notice ? (
-				<p
-					data-testid="search-notice"
-					className="flex shrink-0 items-center gap-8 border-border-muted border-b px-16 py-8 tr-text-metadata text-feedback-warning"
-				>
-					<RiWifiOffLine aria-hidden className="size-14 shrink-0" />
-					{notice}
-				</p>
-			) : null}
-			<div className="flex min-h-0 flex-1">
-				<div
-					ref={listRef}
-					id="search-results"
-					role="listbox"
-					aria-label={t("search.palette.results")}
-					className="min-h-0 min-w-0 flex-1 overflow-y-auto px-8 pt-4 pb-8"
-				>
-					{rows.length === 0 ? (
-						<p
-							data-testid="search-empty"
-							className="px-8 py-24 text-center tr-text-ui text-text-muted"
-						>
-							{query.trim() ? t("search.palette.noMatches") : t("search.palette.nothingYet")}
-						</p>
-					) : (
-						<Sections
-							sections={sections}
-							rows={rows}
-							selectedIndex={selectedIndex}
-							optionId={optionId}
-							onHover={(index) => select(index)}
-							onActivate={(row) => activate(row)}
-						/>
-					)}
+			<DialogTitle className="sr-only">{t("search.palette.title")}</DialogTitle>
+			<div
+				data-testid="search-palette-body"
+				data-preview={previewOpen}
+				className={cn(
+					"relative flex max-h-[min(76vh,720px)] flex-col rounded-lg",
+					previewOpen ? "w-[min(64rem,calc(100vw-32px))]" : "w-[min(42rem,calc(100vw-32px))]",
+				)}
+			>
+				<div className="flex h-48 shrink-0 items-center gap-8 border-border-muted border-b px-16">
+					<RiSearchLine aria-hidden className="size-16 shrink-0 text-text-muted" />
+					<input
+						ref={inputRef}
+						data-testid="search-input"
+						role="combobox"
+						aria-expanded="true"
+						aria-controls="search-results"
+						aria-autocomplete="list"
+						aria-activedescendant={rows.length > 0 ? optionId(selectedIndex) : undefined}
+						aria-label={t("search.palette.title")}
+						autoComplete="off"
+						spellCheck={false}
+						value={query}
+						placeholder={t("search.palette.placeholder")}
+						onChange={(event) => resetQuery(event.target.value)}
+						className="h-full min-w-0 flex-1 bg-transparent tr-text-reading text-text-default outline-none placeholder:text-text-subtle"
+					/>
+					<Keycaps keys={["esc"]} />
 				</div>
-				{previewItem ? <Preview t={t} item={previewItem} /> : null}
+				<ScopeChips t={t} scopes={scopes} active={parsed.scope} onSelect={changeScope} />
+				{notice ? (
+					<p
+						data-testid="search-notice"
+						className="flex shrink-0 items-center gap-8 border-border-muted border-b px-16 py-8 tr-text-metadata text-feedback-warning"
+					>
+						<RiWifiOffLine aria-hidden className="size-14 shrink-0" />
+						{notice}
+					</p>
+				) : null}
+				<div className="flex min-h-0 flex-1">
+					<div
+						ref={listRef}
+						id="search-results"
+						role="listbox"
+						aria-label={t("search.palette.results")}
+						className="min-h-0 min-w-0 flex-1 overflow-y-auto px-8 pt-4 pb-8"
+					>
+						{rows.length === 0 ? (
+							<p
+								data-testid="search-empty"
+								className="px-8 py-24 text-center tr-text-ui text-text-muted"
+							>
+								{query.trim() ? t("search.palette.noMatches") : t("search.palette.nothingYet")}
+							</p>
+						) : (
+							<Sections
+								sections={sections}
+								rows={rows}
+								selectedIndex={selectedIndex}
+								optionId={optionId}
+								onHover={(index) => select(index)}
+								onActivate={(row) => activate(row)}
+							/>
+						)}
+					</div>
+					{previewItem ? <Preview t={t} item={previewItem} /> : null}
+				</div>
+				<footer className="flex h-32 shrink-0 items-center gap-12 overflow-hidden border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
+					<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
+					<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
+					<Hint keys={["Tab"]} label={t("search.hint.scope")} />
+					<Hint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
+					<span className="flex-1" />
+					<Button
+						variant="ghost"
+						size="s"
+						iconLeft={RiSideBarLine}
+						selected={previewOpen}
+						aria-pressed={previewOpen}
+						tabIndex={-1}
+						data-testid="search-preview-toggle"
+						data-active={previewOpen}
+						onMouseDown={keepInputFocus}
+						onClick={togglePreview}
+					>
+						{t("search.palette.preview")}
+						<Keycaps keys={shortcutKeys({ key: "I", mod: true })} />
+					</Button>
+				</footer>
+				<p role="status" aria-live="polite" className="sr-only">
+					{t("search.palette.resultCount", { count: rows.length })}
+				</p>
 			</div>
-			<footer className="flex h-32 shrink-0 items-center gap-12 overflow-hidden border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
-				<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
-				<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
-				<Hint keys={["Tab"]} label={t("search.hint.scope")} />
-				<Hint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
-				<span className="flex-1" />
-				<button
-					type="button"
-					tabIndex={-1}
-					data-testid="search-preview-toggle"
-					data-active={previewOpen}
-					onMouseDown={keepInputFocus}
-					onClick={togglePreview}
-					className="flex items-center gap-4 text-text-muted hover:text-text-default"
-				>
-					<RiSideBarLine aria-hidden className="size-14" />
-					{t("search.palette.preview")}
-					<Keycaps keys={shortcutKeys({ key: "I", mod: true })} />
-				</button>
-			</footer>
-			<p role="status" aria-live="polite" className="sr-only">
-				{t("search.palette.resultCount", { count: rows.length })}
-			</p>
-		</div>
+		</DialogContent>
 	);
 }
 
@@ -383,28 +402,24 @@ function ScopeChips({
 	return (
 		<div className="flex shrink-0 items-center gap-8 border-border-muted border-b px-12 py-8">
 			{scopes.map((scope) => (
-				<button
+				<Button
 					key={scope}
-					type="button"
+					variant="outline"
+					size="m"
+					selected={scope === active}
+					aria-pressed={scope === active}
 					tabIndex={-1}
 					data-testid="search-chip"
 					data-scope={scope}
 					data-active={scope === active}
-					aria-pressed={scope === active}
 					onMouseDown={keepInputFocus}
 					onClick={() => onSelect(scope)}
-					className={cn(
-						"flex h-24 items-center gap-4 rounded-md border px-8 tr-text-metadata",
-						scope === active
-							? "border-control-border-active bg-control-bg-selected text-text-default"
-							: "border-border-muted text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
-					)}
 				>
 					{t(SCOPE_LABELS[scope])}
 					{scope === "all" ? null : (
 						<span className="tr-code-text-small text-text-subtle">{SCOPE_PREFIX[scope]}</span>
 					)}
-				</button>
+				</Button>
 			))}
 		</div>
 	);
@@ -427,14 +442,16 @@ function Sections({
 }) {
 	const indexOf = new Map(rows.map((row, index) => [row, index]));
 	return sections.map((section) => (
-		<div
+		<fieldset
 			key={section.id}
 			data-testid="search-section"
 			data-section={section.id}
-			role="presentation"
+			aria-labelledby={`search-group-${section.id}`}
+			className="m-0 min-w-0 border-0 p-0"
 		>
 			<div
-				aria-hidden
+				id={`search-group-${section.id}`}
+				role="presentation"
 				className="flex items-center gap-8 px-8 pt-12 pb-4 tr-text-eyebrow text-text-subtle"
 			>
 				<span className="flex-1">{section.title}</span>
@@ -454,7 +471,7 @@ function Sections({
 					/>
 				);
 			})}
-		</div>
+		</fieldset>
 	));
 }
 
