@@ -279,6 +279,38 @@ describe("search.query", () => {
 		expect(byKind.plan?.hits[0]).toMatchObject({ subtitle: "Auth refresh plan", sessionId: "s1" });
 	});
 
+	test("files fold case and diacritics like the matcher and a quoted term stays literal", async () => {
+		const files = new FileListCache(async () => ({
+			paths: ["docs/Café.md", "src/cafe/menu.ts", "src/FooBar.ts"],
+			truncated: false,
+		}));
+		await files.load("/repos/one-auth");
+		const service = createSearchService(readers({ files }));
+		const paths = async (seq: number, query: string) =>
+			(await service.query("c1", { seq, query, kinds: ["file"], context })).groups[0]?.hits
+				.map((hit) => hit.path)
+				.sort();
+		expect(await paths(1, "cafe")).toEqual(["docs/Café.md", "src/cafe/menu.ts"]);
+		expect(await paths(2, "CAFÉ")).toEqual(["docs/Café.md", "src/cafe/menu.ts"]);
+		expect(await paths(3, "fb")).toEqual(["src/FooBar.ts"]);
+		expect(await paths(4, '"fb"')).toEqual([]);
+	});
+
+	test("a quoted phrase is one term for transcripts and spec bodies", async () => {
+		const service = createSearchService(
+			readers({ files: new FileListCache(async () => ({ paths: [], truncated: false })) }),
+		);
+		const ids = async (seq: number, query: string) =>
+			(
+				await service.query("c1", { seq, query, kinds: ["transcript", "spec"], context })
+			).groups.flatMap((group) => group.hits.map((hit) => hit.id));
+		expect(await ids(1, "flow token")).toContain("transcript:s1:0");
+		expect(await ids(2, '"token flow"')).toContain("transcript:s1:0");
+		expect(await ids(3, '"flow token"')).toEqual([]);
+		expect(await ids(4, '"the token module"')).toEqual(["spec:w-feature:SPEC.md"]);
+		expect(await ids(5, '"module token"')).toEqual([]);
+	});
+
 	test("an empty query answers empty groups and `kinds` narrows the providers", async () => {
 		const service = createSearchService(
 			readers({ files: new FileListCache(async () => lists["/repos/one"] as FileList) }),

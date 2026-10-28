@@ -1,5 +1,11 @@
 import type { SearchGroup, SearchHit, Workspace } from "@thinkrail/contracts";
-import { MATCH_TIER, type MatchField, matchFields } from "@thinkrail/contracts";
+import {
+	foldMatchCase,
+	MATCH_TIER,
+	type MatchField,
+	type MatchTerm,
+	matchFields,
+} from "@thinkrail/contracts";
 import type { HistorySession } from "../history";
 import { makeSnippet, matchesTerms } from "../history";
 import type { SpecSnapshot } from "../spec";
@@ -14,7 +20,7 @@ export interface SearchRoot {
 }
 
 export interface ProviderInput {
-	readonly terms: readonly string[];
+	readonly terms: readonly MatchTerm[];
 	readonly limit: number;
 	readonly deadline: Deadline;
 }
@@ -52,7 +58,7 @@ export function searchFiles(
 		return buildGroup("file", [], input.limit, "indexing");
 	}
 	const hits: SearchHit[] = [];
-	const lowerTerms = input.terms.map((term) => term.toLowerCase());
+	const foldedTerms = input.terms.map((term) => foldMatchCase(term.text));
 	let truncated = false;
 	let scanned = 0;
 	const pushHit = (path: string, match: NonNullable<ReturnType<typeof matchFields>>) => {
@@ -79,9 +85,9 @@ export function searchFiles(
 	const rest: number[] = [];
 	for (let index = 0; index < list.paths.length && !truncated; index += 1) {
 		if (expired()) break;
-		const lower = list.lower[index] ?? "";
-		if (!lowerTerms.every((term) => lower.includes(term))) {
-			if (lowerTerms.every((term) => isSubsequence(lower, term))) rest.push(index);
+		const folded = list.folded[index] ?? "";
+		if (!foldedTerms.every((term) => folded.includes(term))) {
+			if (foldedTerms.every((term) => isSubsequence(folded, term))) rest.push(index);
 			continue;
 		}
 		const path = list.paths[index] ?? "";
@@ -108,7 +114,8 @@ export function searchSpecs(
 	input: ProviderInput,
 ): SearchGroup {
 	const hits: SearchHit[] = [];
-	const bodyTerms = input.terms.some((term) => term.length >= MIN_BODY_TERM_LENGTH);
+	const texts = input.terms.map((term) => term.text);
+	const bodyTerms = texts.some((text) => text.length >= MIN_BODY_TERM_LENGTH);
 	const { entries, rebuilding } = snapshot(root.root);
 	for (const entry of entries) {
 		if (input.deadline.expired()) {
@@ -134,15 +141,15 @@ export function searchSpecs(
 			hits.push({ ...base, tier: match.tier, score: match.score, ranges: rangesOf(match) });
 			continue;
 		}
-		if (!bodyTerms || !matchesTerms(entry.content, [...input.terms])) continue;
-		const snippet = lineSnippet(entry.content, input.terms);
+		if (!bodyTerms || !matchesTerms(entry.content, texts)) continue;
+		const snippet = lineSnippet(entry.content, texts);
 		if (snippet === null) continue;
 		hits.push({
 			...base,
 			snippet,
 			tier: MATCH_TIER.content,
 			score: 0,
-			ranges: { snippet: termRanges(snippet, input.terms) },
+			ranges: { snippet: termRanges(snippet, texts) },
 		});
 	}
 	return buildGroup("spec", hits, input.limit, rebuilding ? "indexing" : "ready");
@@ -161,7 +168,7 @@ export function searchChats(
 ): { chats: SearchGroup; transcripts: SearchGroup } {
 	const chats: SearchHit[] = [];
 	const transcripts: SearchHit[] = [];
-	const terms = [...input.terms];
+	const terms = input.terms.map((term) => term.text);
 	const primary = terms[0] ?? "";
 	let truncated = false;
 	let scanned = 0;

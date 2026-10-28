@@ -83,7 +83,7 @@ function latinBaseOf(char: string): string {
 	return base;
 }
 
-function foldMatchCase(text: string): string {
+export function foldMatchCase(text: string): string {
 	let folded = text.toLowerCase();
 	if (!NON_ASCII.test(folded)) return folded;
 	if (folded.length !== text.length) folded = text.replace(DOTTED_CAPITAL_I, "i").toLowerCase();

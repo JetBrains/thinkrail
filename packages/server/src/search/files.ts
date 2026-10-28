@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { foldMatchCase } from "@thinkrail/contracts";
 import { gitAsyncStream, nonInteractiveGitEnv } from "../git";
 
 export interface FileList {
@@ -8,12 +9,11 @@ export interface FileList {
 }
 
 export interface IndexedFileList extends FileList {
-	/** Lower-cased twin of `paths`, computed once so a keystroke never lower-cases the corpus again. */
-	readonly lower: readonly string[];
+	readonly folded: readonly string[];
 }
 
 export function indexFileList(list: FileList): IndexedFileList {
-	return { ...list, lower: list.paths.map((path) => path.toLowerCase()) };
+	return { ...list, folded: list.paths.map((path) => foldMatchCase(path)) };
 }
 
 export const FILE_LIST_LIMITS = {

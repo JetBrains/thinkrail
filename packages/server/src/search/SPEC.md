@@ -45,7 +45,9 @@ plan files whose session has no transcript on disk (orphans).
 ## Query
 
 - Terms come from `parseMatchTerms` over the query clamped to `MAX_SEARCH_QUERY_LENGTH`; an empty
-  query answers empty groups (the browser owns the empty state). `kinds` narrows the providers; the
+  query answers empty groups (the browser owns the empty state). Field matches go through the matcher
+  with the terms as parsed (a quoted term is a literal); a body or transcript match takes each term's
+  text as a case-insensitive substring, so a quoted phrase matches as one. `kinds` narrows the providers; the
   per-group `limit` is clamped to `MAX_SEARCH_GROUP_LIMIT`, `total` keeps the true count.
 - **Per-client superseding:** the service remembers the latest `seq` per `clientKey`; an older `seq`
   is answered `{ superseded: true }` immediately, and a query that was overtaken while it awaited the
@@ -61,7 +63,8 @@ plan files whose session has no transcript on disk (orphans).
 - **Files:** `git ls-files -co --exclude-standard -z` streamed through `gitAsyncStream` and a capped
   NUL parser (`FILE_LIST_LIMITS`: 100k names / 16 MB, then `truncated`), a bounded `readdir` walk for a
   non-git root; `node_modules` and VCS directories are always hidden. Lists are cached per root with a
-  lower-cased twin (at most `maxRoots` roots, least recently asked first out, so switching workspaces
+  twin folded by the matcher's `foldMatchCase`, so the prefilter never drops a path its case and
+  diacritic folding would match (at most `maxRoots` roots, least recently asked first out, so switching workspaces
   keeps the recent ones warm; a list cut at its cap is still searched and its group reported
   `truncated`) and revalidated
   stale-while-reloading after a TTL or on `workspace.fsChanged` (`invalidateRoot`) — the old list keeps
