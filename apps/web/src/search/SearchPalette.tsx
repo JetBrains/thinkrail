@@ -210,7 +210,7 @@ function PaletteContent({
 			cycleScope(event.shiftKey ? -1 : 1);
 			return;
 		}
-		if (mod && event.code === "KeyI") {
+		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
 			event.preventDefault();
 			togglePreview();
 			return;

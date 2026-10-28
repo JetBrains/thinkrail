@@ -25,7 +25,7 @@ listed as.
   `SearchScope`, `PaletteItem`, `PaletteItemKind`, `PalettePreview`.
 - **Allowed deps:** `contracts` (the shared matcher and domain types), `commands`, `store`, `transport`
   (the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`,
-  `lib`, `@thinkrail/ui/*`, `@remixicon/react`.
+  `lib`, `@thinkrail/locales` (UI strings), `@thinkrail/ui/*`, `@remixicon/react`.
 - **Forbidden:** importing `panels`, `chat` or `shell` (shell injects the commands and their handlers);
   owning a chord another module binds; sending host mutations itself outside the injected handlers and
   the store's navigation actions.

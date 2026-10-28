@@ -305,4 +305,12 @@ test("Tab, Alt+digit and the chips switch the scope and write its prefix", async
 	await chip(page, "work").click();
 	await expect(input).toHaveValue("@auth");
 	await expect(input).toBeFocused();
+
+	const preview = page.getByTestId("search-preview-toggle");
+	await page.keyboard.press("ControlOrMeta+Shift+KeyI");
+	await pressPlatformShortcut(page, "i");
+	await expect(preview).toHaveAttribute("aria-pressed", "true");
+	await page.keyboard.press("ControlOrMeta+Alt+KeyI");
+	await pressPlatformShortcut(page, "i");
+	await expect(preview).toHaveAttribute("aria-pressed", "false");
 });

@@ -47,7 +47,7 @@ import {
 	supportsWorkspaceReadState,
 	useAppStore,
 } from "../store";
-import { getTransport } from "../transport";
+import { getTransport, wsErrorCode } from "../transport";
 import { createBackfillQueue } from "./backfillQueue";
 import {
 	backfillOrder,
@@ -68,24 +68,31 @@ const BACKFILL_CONCURRENCY = 4;
 
 const listedSessionSets = new Map<string, string>();
 
-function sessionSetKey(workspaceId: string): string {
-	return Object.keys(useAppStore.getState().sessionStateByWorkspace[workspaceId] ?? {})
-		.sort()
-		.join("\u0000");
+function listingKey(workspaceId: string): string {
+	const state = useAppStore.getState();
+	const sessions = Object.keys(state.sessionStateByWorkspace[workspaceId] ?? {}).sort();
+	return `${state.welcomeGeneration}\u0001${sessions.join("\u0000")}`;
 }
 
 const titleQueue = createBackfillQueue({
 	concurrency: BACKFILL_CONCURRENCY,
-	isWanted: (workspaceId) => listedSessionSets.get(workspaceId) !== sessionSetKey(workspaceId),
+	isWanted: (workspaceId) => listedSessionSets.get(workspaceId) !== listingKey(workspaceId),
 	run: async (workspaceId) => {
-		const listed = sessionSetKey(workspaceId);
+		const listed = listingKey(workspaceId);
 		const generation = useAppStore.getState().connectionGeneration;
-		const summaries = await getTransport()
-			.request("session.list", { workspaceId })
-			.catch(() => null);
-		if (!isConnectedGeneration(useAppStore.getState(), generation)) return;
-		listedSessionSets.set(workspaceId, listed);
-		if (summaries) noteListedSessions(workspaceId, summaries);
+		try {
+			const summaries = await getTransport().request("session.list", { workspaceId });
+			if (!isConnectedGeneration(useAppStore.getState(), generation)) return;
+			listedSessionSets.set(workspaceId, listed);
+			noteListedSessions(workspaceId, summaries);
+		} catch (err) {
+			if (
+				wsErrorCode(err) !== undefined &&
+				isConnectedGeneration(useAppStore.getState(), generation)
+			) {
+				listedSessionSets.set(workspaceId, listed);
+			}
+		}
 	},
 });
 
