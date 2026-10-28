@@ -88,14 +88,21 @@ function rangesOf(fields: readonly { key: string; ranges: readonly MatchRange[] 
 /** Every term as a case-folded substring of the text, the content providers' rule, or `null`. */
 function contentRanges(text: string, terms: readonly MatchTerm[]): [number, number][] | null {
 	const lower = text.toLowerCase();
-	const ranges: [number, number][] = [];
+	const found: [number, number][] = [];
 	for (const term of terms) {
 		const needle = term.text.toLowerCase();
 		const at = lower.indexOf(needle);
 		if (at === -1) return null;
-		ranges.push([at, at + needle.length]);
+		found.push([at, at + needle.length]);
 	}
-	return ranges.sort((a, b) => a[0] - b[0]);
+	found.sort((a, b) => a[0] - b[0]);
+	const ranges: [number, number][] = [];
+	for (const [start, end] of found) {
+		const last = ranges.at(-1);
+		if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+		else ranges.push([start, end]);
+	}
+	return ranges;
 }
 
 /** A body or message hit stays in the content tier and must still contain every term; a field hit takes the host's tier for the current terms. */

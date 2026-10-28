@@ -177,6 +177,11 @@ describe("hostItems", () => {
 			false,
 		);
 		expect(items({}, "refresh nr").result.some((item) => item.kind === "transcript")).toBe(false);
+		for (const query of ["refresh ref", "refresh refresh"]) {
+			expect(
+				items({}, query).result.find((item) => item.kind === "transcript")?.match?.ranges.title,
+			).toEqual([[5, 12]]);
+		}
 		expect(
 			items({}, "now refresh").result.find((item) => item.kind === "transcript")?.match,
 		).toEqual({
