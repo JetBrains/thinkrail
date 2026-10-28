@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	RequestReplayCache,
 	RequestReplayConflictError,
@@ -79,6 +80,38 @@ describe("request replay cache", () => {
 		cache.acknowledge("page", ["first"]);
 		expect(await cache.run("page", "third", "three", execute)).toBe("3");
 		expect(() => cache.run("page", "fourth", "four", execute)).toThrow(RequestReplayOverflowError);
+	});
+
+	test("an overflow is coded and names what the namespace holds once per episode", async () => {
+		const cache = new RequestReplayCache<string>(3);
+		const hung = deferred<string>();
+		void cache.run("page", "a", "a", () => hung.promise, "git.status");
+		void cache.run("page", "b", "b", () => hung.promise, "git.status");
+		await cache.run("page", "c", "c", () => "done", "session.resources");
+
+		const overflow = (id: string) => {
+			try {
+				void cache.run("page", id, id, () => "x", "session.resources");
+			} catch (error) {
+				return error as RequestReplayOverflowError;
+			}
+			throw new Error("expected an overflow");
+		};
+		const first = overflow("d");
+		expect(first.code).toBe("REQUEST_REPLAY_OVERFLOW");
+		expect(errorCodeOf(first)).toBe("REQUEST_REPLAY_OVERFLOW");
+		expect(first.load).toEqual({
+			"git.status": { pending: 2, settled: 0 },
+			"session.resources": { pending: 0, settled: 1 },
+		});
+		expect(overflow("e").load).toBeNull();
+
+		cache.acknowledge("page", ["c"]);
+		await cache.run("page", "f", "f", () => "ok");
+		expect(overflow("g").load).toEqual({
+			"git.status": { pending: 2, settled: 0 },
+			"unknown method": { pending: 0, settled: 1 },
+		});
 	});
 
 	test("in-flight work is never evicted to make room, and counts against admission", async () => {

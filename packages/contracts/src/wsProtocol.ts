@@ -1166,7 +1166,8 @@ export type WsErrorCode =
 	| "SURVEY_UNAVAILABLE"
 	| "SURVEY_CHANGED"
 	| "SURVEY_INVALID"
-	| "SURVEY_NOT_SENT";
+	| "SURVEY_NOT_SENT"
+	| "REQUEST_REPLAY_OVERFLOW";
 
 export interface WsResponse {
 	id: string;
