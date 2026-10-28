@@ -19,8 +19,10 @@ explicit, authenticated, on-demand runs.
 ## Execution model
 
 Per-test isolation is `resetState()` in `fixtures/app.ts`: it clears the host's `projects.json`,
-`workspaces.json`, `chats.json` and the `chats/` folders, turns, reviews, worktrees and pi sessions, and
-resets the fixture repository, so a chat without a project created by one test never reaches the next.
+`workspaces.json`, every chat in `chats.json` and the `chats/` folders, turns, reviews, worktrees and pi
+sessions, and resets the fixture repository, so a chat without a project created by one test never
+reaches the next. The Chats container the host ensured at boot is kept (an empty `chats/` root and the
+record), because a fresh install always has it: a cold start in a test is the cold start a user gets.
 
 `bun run e2e` is the complete no-agent gate. It builds the web bundle once and runs machine-adaptive,
 process-level Playwright shards. A shard owns one host and one Playwright worker; serial execution inside
