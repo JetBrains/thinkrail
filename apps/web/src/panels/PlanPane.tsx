@@ -897,7 +897,7 @@ export default function PlanPane({
 	}, [connection, hasRuntime, workspaceId, sessionId]);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const workspaceSettlingSupported = useAppStore((s) => s.workspaceSettlingSupported);
-	const canReview = supportsPlanReview(protocolVersion);
+	const canReview = supportsPlanReview(protocolVersion) && !chat;
 	const {
 		review: branchReview,
 		url: branchReviewUrl,

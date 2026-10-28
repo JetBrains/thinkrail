@@ -31,7 +31,7 @@ async function createSessionOrSiblingChat(
 	try {
 		return await createSessionWithSkillBaseline({ workspaceId });
 	} catch (err) {
-		if (wsErrorCode(err) !== "CHAT_WORKSPACE") throw err;
+		if (wsErrorCode(err) !== "CHAT_HAS_SESSION") throw err;
 		await startProjectlessChat(prompt ? { text: prompt } : {});
 		return null;
 	}

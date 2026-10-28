@@ -53,8 +53,8 @@ treatment.
   dialog's explicit model; the dialog takes its defaults once per opening, so another window opening or
   reordering projects never resets a draft or a creation in flight, and only a repository target closes
   when its project does), the palette's `chat.newProjectless` command and start row, and
-  New chat inside a chat (`openChat` turns the host's `CHAT_WORKSPACE` refusal into a sibling chat — one
-  chat = one folder). `FilesPanel` asks no git status in a chat and hides its Changed mode. Settle, and the
+  New chat inside a chat (`openChat` turns the host's `CHAT_HAS_SESSION` refusal into a sibling chat — one
+  chat = one folder; `CHAT_DELETING` / `CHAT_DELETION_PENDING` are reported, never turned into a chat). `FilesPanel` asks no git status in a chat and hides its Changed mode. Settle, and the
   automatic Settled shelf, never apply to a chat (`canSettleWorkspace`, `selectWorkspaceSettledReason`);
   Recently closed and prompt history offer no per-session Trash for a chat (the host refuses
   `session.delete` there — deleting a chat is the whole-chat confirmation, never a silent broadening).

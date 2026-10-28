@@ -88,6 +88,7 @@ export function paletteSearchContext(
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const HOST_SCOPES: readonly SearchScope[] = ["all", "work", "files", "specs", "commands"];
+const CHAT_SCOPES: readonly SearchScope[] = ["all", "work", "files", "commands"];
 const BACKFILL_CONCURRENCY = 4;
 
 const paletteBackfill = createPaletteBackfill({
@@ -405,7 +406,12 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 
 	return {
 		onClose: () => useAppStore.getState().closeSearch(),
-		scopes: hostSearch && contextProject ? HOST_SCOPES : LOCAL_SCOPES,
+		scopes:
+			hostSearch && contextProject
+				? isChatsContainer(contextProject)
+					? CHAT_SCOPES
+					: HOST_SCOPES
+				: LOCAL_SCOPES,
 		...(host ? { host } : {}),
 		...(start ? { start } : {}),
 		...(online
