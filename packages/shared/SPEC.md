@@ -129,11 +129,12 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
     11 taskbar's 24 px frame and read as blurry there.
   - **Frame order.** Frames are ordered largest first, because Bun's compiler keeps a named icon group
     that maps only icon #1 (oven-sh/bun#32428, [[module-cli]]).
-- **/codedError** — `CodedError(code, message)` + `errorCodeOf(err)`: an error carrying a wire
-  `WsErrorCode`, so a failure a client must react to *specifically* travels as a name rather than a string
-  to pattern-match. It lives here because both ends of the seam need it and neither may import the other:
+- **/codedError** — `CodedError(code, message, errorParams?)` + `errorCodeOf(err)` / `errorParamsOf(err)`:
+  an error carrying a wire `WsErrorCode` and optional literal string/number display parameters, so a client
+  can react to a specific failure and localize host-owned guidance without parsing its English fallback. It lives here because both ends of the seam need it and neither may import the other:
   the module that knows the failure throws it (today `server/src/git`, for a vanished commit scope) and the
-  host's request handler reads it onto `WsResponse.errorCode`.
+  host's request handler reads it onto `WsResponse.errorCode` / `errorParams`. Only `CodedError` instances
+  supply that metadata; arbitrary third-party errors cannot opt into host wording by carrying a `code` field.
 - **/removeTree** — `removeTree(path, options?)`: delete a tree that a child process ran from, and keep
   trying while the failure is one a short wait can resolve (`EBUSY`, `EMFILE`, `ENFILE`, `ENOTEMPTY`,
   `EPERM`, `EACCES`) — ten attempts with a linear 100 ms backoff by default. It exists because Windows

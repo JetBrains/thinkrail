@@ -23,8 +23,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`,
   `NOT_GIT` and `ALREADY_OPEN` (the two `project.open` refusals: a folder that is not a repository, and a
   folder already owned by a workspace),
-  `PROJECT_CLONE_INVALID`, `PROJECT_CLONE_FAILED`, and `PROJECT_CLONE_CLEANUP_FAILED` (input
-  correction, Git failure, and incomplete cleanup requiring filesystem intervention),
+  specific `PROJECT_CLONE_*` validation codes, `PROJECT_CLONE_FAILED`, and
+  `PROJECT_CLONE_CLEANUP_FAILED` (input correction, raw Git failure, and incomplete cleanup requiring filesystem intervention),
   `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
@@ -37,8 +37,13 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   asked of a byte-only resource), **`RECEIPT_UNKNOWN`** (an undo of a receipt the host no longer
   holds — the ring is 20 deep and dies with the process), and **`UNSUPPORTED_CHANGE`** (the selected
   change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)), so a client can react to one specific failure
-  instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
-  for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
+  instead of pattern-matching an error message. A failure earns a code when a client behaves differently
+  for it or renders ThinkRail-owned guidance in its language. Specific range, unsupported-change and MCP
+  validation codes distinguish different remedies; the older broad codes remain readable for older hosts.
+  `WsResponse.errorParams` is an optional `WsErrorParams` string/number map beside the code and English
+  `error` fallback. It carries literal display values, never translated text or execution authority.
+  This is additive: old clients ignore parameters, new clients fall back when a code or required parameter
+  is missing. Git/provider/tool diagnostics remain raw, even when classified by a code. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,

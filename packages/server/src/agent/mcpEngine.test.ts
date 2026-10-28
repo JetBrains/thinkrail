@@ -805,7 +805,8 @@ test("MCP enable and disable validate file provenance even for unchanged request
 	for (const enabled of [true, false]) {
 		await expect(setSessionMcpServerEnabled(p.sessionId, "missing", enabled)).rejects.toMatchObject(
 			{
-				code: "MCP_CONFIG_INVALID",
+				code: "MCP_CHAT_SERVER_NOT_FOUND",
+				errorParams: { name: "missing" },
 			},
 		);
 	}
@@ -976,7 +977,7 @@ test("servers an extension registers are marked in the chat's resources, keep th
 		(error: Error & { code?: string }) => [error.code, error.message],
 	);
 	expect(refusal).toEqual([
-		"MCP_CONFIG_INVALID",
+		"MCP_EXTENSION_SERVER_READONLY",
 		'"ext-stdio" is registered by an extension; it can\'t be disabled per chat.',
 	]);
 	expect(await stateOf(p.sessionId, "ext-stdio")).toBe("connected");

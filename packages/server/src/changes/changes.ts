@@ -101,10 +101,6 @@ function workspace(workspaceId: string): Workspace {
 	return ws;
 }
 
-function unsupported(path: string, reason: string): never {
-	throw new CodedError("UNSUPPORTED_CHANGE", `${path} ${reason}`);
-}
-
 function worktreeState(abs: string, path: string): FileState {
 	let stat: ReturnType<typeof lstatSync>;
 	try {
@@ -116,7 +112,11 @@ function worktreeState(abs: string, path: string): FileState {
 		throw error;
 	}
 	if (stat.isSymbolicLink())
-		unsupported(path, "is a symbolic link, which change mutations do not support.");
+		throw new CodedError(
+			"CHANGE_SYMLINK",
+			`${path} is a symbolic link, which change mutations do not support.`,
+			{ path },
+		);
 	return { bytes: readFileSync(abs), mode: stat.mode & 0o777 };
 }
 
@@ -200,10 +200,18 @@ function record(change: {
 function permissionsForGitMode(path: string, mode: number | null): number | null {
 	if (mode === null) return null;
 	if ((mode & GIT_MODE_TYPE) === GIT_MODE_SYMLINK) {
-		unsupported(path, "is a symbolic link in Git, which change mutations do not support.");
+		throw new CodedError(
+			"CHANGE_GIT_SYMLINK",
+			`${path} is a symbolic link in Git, which change mutations do not support.`,
+			{ path },
+		);
 	}
 	if ((mode & GIT_MODE_TYPE) !== GIT_MODE_FILE) {
-		unsupported(path, "is not a regular Git file, which change mutations do not support.");
+		throw new CodedError(
+			"CHANGE_NOT_REGULAR",
+			`${path} is not a regular Git file, which change mutations do not support.`,
+			{ path },
+		);
 	}
 	return mode & 0o111 ? 0o755 : 0o644;
 }
@@ -260,7 +268,11 @@ function assertNotModeOnly(path: string, original: FileState, modified: FileStat
 		hashOf(original) === hashOf(modified) &&
 		original.mode !== modified.mode
 	) {
-		unsupported(path, "has only a mode change, which change mutations do not support.");
+		throw new CodedError(
+			"CHANGE_MODE_ONLY",
+			`${path} has only a mode change, which change mutations do not support.`,
+			{ path },
+		);
 	}
 }
 
@@ -272,28 +284,42 @@ function revertedRange(
 ): Uint8Array {
 	if (modified === null) {
 		throw new CodedError(
-			"RANGE_INVALID",
+			"RANGE_FILE_ABSENT",
 			`${path} is absent from the worktree — revert the whole file instead of a range.`,
+			{ path },
 		);
 	}
 	if (!classifyBytes(modified).text || (original !== null && !classifyBytes(original).text)) {
 		throw new CodedError(
-			"RANGE_INVALID",
+			"RANGE_NOT_TEXT",
 			`${path} is not text — only a whole-file revert applies.`,
+			{ path },
 		);
 	}
 	const originalLines = original === null ? [] : splitLines(decodeText(original));
 	const modifiedLines = splitLines(decodeText(modified));
 	if (!spanFits(target.original, originalLines.length)) {
 		throw new CodedError(
-			"RANGE_INVALID",
+			"RANGE_ORIGINAL_OUT_OF_BOUNDS",
 			`Lines ${target.original.start}+${target.original.count} lie outside the original side of ${path} (${originalLines.length} line(s)).`,
+			{
+				path,
+				start: target.original.start,
+				span: target.original.count,
+				lineCount: originalLines.length,
+			},
 		);
 	}
 	if (!spanFits(target.modified, modifiedLines.length)) {
 		throw new CodedError(
-			"RANGE_INVALID",
+			"RANGE_MODIFIED_OUT_OF_BOUNDS",
 			`Lines ${target.modified.start}+${target.modified.count} lie outside the worktree side of ${path} (${modifiedLines.length} line(s)).`,
+			{
+				path,
+				start: target.modified.start,
+				span: target.modified.count,
+				lineCount: modifiedLines.length,
+			},
 		);
 	}
 	return BYTES.encode(revertedText(originalLines, modifiedLines, target));
@@ -318,13 +344,16 @@ export async function revertChange(params: RevertChangeParams): Promise<ChangeRe
 		return record({ ...change, before: modified, after: next });
 	}
 	if (params.target.kind !== "file") {
-		throw new CodedError("RANGE_INVALID", `Unknown revert target for ${params.path}.`);
+		throw new CodedError("REVERT_TARGET_INVALID", `Unknown revert target for ${params.path}.`, {
+			path: params.path,
+		});
 	}
 	if (original.bytes === null) {
 		if (modified.bytes === null) {
 			throw new CodedError(
-				"RANGE_INVALID",
+				"REVERT_NO_CHANGE",
 				`There is no change to revert for ${params.path} in this scope.`,
+				{ path: params.path },
 			);
 		}
 		const claimed = claimForTrash(abs);

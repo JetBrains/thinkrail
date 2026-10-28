@@ -9,6 +9,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { McpProjectOverride, McpToolGrant, Project } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 
 // Port of pi's `core/mcp-servers.ts` and `extensions/mcp/config.ts` (MIT, Earendil Works).
 
@@ -55,49 +56,94 @@ export function isLoopbackRedirectUri(value: string): boolean {
 	);
 }
 
-function validateOAuth(value: unknown): string | undefined {
+function validateOAuth(name: string, value: unknown): CodedError | undefined {
 	if (value === undefined) return undefined;
-	if (!isRecord(value)) return "oauth must be an object";
+	if (!isRecord(value))
+		return new CodedError(
+			"MCP_FIELD_OBJECT_REQUIRED",
+			`server "${name}": oauth must be an object`,
+			{ name, field: "oauth" },
+		);
 	if (value.clientId !== undefined && typeof value.clientId !== "string") {
-		return "oauth.clientId must be a string";
+		return new CodedError(
+			"MCP_FIELD_STRING_REQUIRED",
+			`server "${name}": oauth.clientId must be a string`,
+			{ name, field: "oauth.clientId" },
+		);
 	}
 	if (value.clientSecret !== undefined && typeof value.clientSecret !== "string") {
-		return "oauth.clientSecret must be a string";
+		return new CodedError(
+			"MCP_FIELD_STRING_REQUIRED",
+			`server "${name}": oauth.clientSecret must be a string`,
+			{ name, field: "oauth.clientSecret" },
+		);
 	}
 	const port = value.callbackPort;
 	if (
 		port !== undefined &&
 		(typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535)
 	) {
-		return "oauth.callbackPort must be a port number";
+		return new CodedError(
+			"MCP_FIELD_PORT_REQUIRED",
+			`server "${name}": oauth.callbackPort must be a port number`,
+			{ name, field: "oauth.callbackPort" },
+		);
 	}
 	if (value.callbackUrl !== undefined) {
 		if (typeof value.callbackUrl !== "string" || !isLoopbackRedirectUri(value.callbackUrl)) {
-			return "oauth.callbackUrl must be an http URI on localhost, 127.0.0.1, or [::1] without query or fragment";
+			return new CodedError(
+				"MCP_FIELD_LOOPBACK_URI_REQUIRED",
+				`server "${name}": oauth.callbackUrl must be an http URI on localhost, 127.0.0.1, or [::1] without query or fragment`,
+				{ name, field: "oauth.callbackUrl" },
+			);
 		}
 		const urlPort = new URL(value.callbackUrl).port;
 		if (urlPort && port !== undefined && Number(urlPort) !== port) {
-			return "oauth.callbackUrl and oauth.callbackPort name different ports";
+			return new CodedError(
+				"MCP_OAUTH_PORT_MISMATCH",
+				`server "${name}": oauth.callbackUrl and oauth.callbackPort name different ports`,
+				{ name },
+			);
 		}
 	}
 	if (value.scope !== undefined && typeof value.scope !== "string")
-		return "oauth.scope must be a string";
+		return new CodedError(
+			"MCP_FIELD_STRING_REQUIRED",
+			`server "${name}": oauth.scope must be a string`,
+			{ name, field: "oauth.scope" },
+		);
 	if (
 		value.clientName !== undefined &&
 		(typeof value.clientName !== "string" || !value.clientName.trim())
 	) {
-		return "oauth.clientName must be a non-empty string";
+		return new CodedError(
+			"MCP_FIELD_NONEMPTY_STRING_REQUIRED",
+			`server "${name}": oauth.clientName must be a non-empty string`,
+			{ name, field: "oauth.clientName" },
+		);
 	}
 	if (value.clientRegistration !== undefined && value.clientRegistration !== "dcr") {
 		if (value.clientRegistration !== "cimd") {
-			return 'oauth.clientRegistration must be "dcr" or "cimd"';
+			return new CodedError(
+				"MCP_OAUTH_REGISTRATION_INVALID",
+				`server "${name}": oauth.clientRegistration must be "dcr" or "cimd"`,
+				{ name },
+			);
 		}
 		if (value.clientId !== undefined || value.clientName !== undefined) {
-			return 'oauth.clientRegistration "cimd" cannot be combined with oauth.clientId or oauth.clientName';
+			return new CodedError(
+				"MCP_OAUTH_CIMD_CONFLICT",
+				`server "${name}": oauth.clientRegistration "cimd" cannot be combined with oauth.clientId or oauth.clientName`,
+				{ name },
+			);
 		}
 		const callback = typeof value.callbackUrl === "string" ? new URL(value.callbackUrl) : undefined;
 		if (callback && (callback.hostname === "[::1]" || callback.pathname !== "/callback")) {
-			return 'oauth.clientRegistration "cimd" requires oauth.callbackUrl on localhost or 127.0.0.1 with path /callback';
+			return new CodedError(
+				"MCP_OAUTH_CIMD_CALLBACK_INVALID",
+				`server "${name}": oauth.clientRegistration "cimd" requires oauth.callbackUrl on localhost or 127.0.0.1 with path /callback`,
+				{ name },
+			);
 		}
 	}
 	const metadataUrl = value.authServerMetadataUrl;
@@ -113,7 +159,11 @@ function validateOAuth(value: unknown): string | undefined {
 				(url.protocol === "http:" && LOOPBACK_HOSTS.includes(url.hostname))
 			)
 		) {
-			return "oauth.authServerMetadataUrl must be an https URL, or http on localhost, 127.0.0.1, or [::1]";
+			return new CodedError(
+				"MCP_FIELD_SECURE_URL_REQUIRED",
+				`server "${name}": oauth.authServerMetadataUrl must be an https URL, or http on localhost, 127.0.0.1, or [::1]`,
+				{ name, field: "oauth.authServerMetadataUrl" },
+			);
 		}
 	}
 	return undefined;
@@ -140,58 +190,117 @@ function resolveExposureAliases(value: Record<string, unknown>): Record<string, 
 }
 
 export function validateMcpServerConfig(name: string, raw: unknown): McpServerConfig | string {
+	const result = validateMcpServerConfigResult(name, raw);
+	return result instanceof CodedError ? result.message : result;
+}
+
+export function validateMcpServerConfigResult(
+	name: string,
+	raw: unknown,
+): McpServerConfig | CodedError {
 	if (!SERVER_NAME.test(name))
-		return `invalid server name "${name}" (use letters, digits, "_" and "-")`;
-	if (!isRecord(raw)) return `server "${name}" must be an object`;
+		return new CodedError(
+			"MCP_CONFIG_NAME_INVALID",
+			`invalid server name "${name}" (use letters, digits, "_" and "-")`,
+			{ name },
+		);
+	if (!isRecord(raw))
+		return new CodedError("MCP_ENTRY_OBJECT_REQUIRED", `server "${name}" must be an object`, {
+			name,
+		});
 	const value = resolveExposureAliases(raw);
 	const { type, exposure, enabled, timeout, toolExposure, description } = value;
 	const exposures = MCP_EXPOSURES.map((entry) => `"${entry}"`).join(", ");
 	if (exposure !== undefined && !isExposure(exposure)) {
-		return `server "${name}": exposure must be one of ${exposures}`;
+		return new CodedError(
+			"MCP_FIELD_EXPOSURE_INVALID",
+			`server "${name}": exposure must be one of ${exposures}`,
+			{ name, field: "exposure" },
+		);
 	}
 	if (toolExposure !== undefined) {
 		if (!isRecord(toolExposure))
-			return `server "${name}": toolExposure must map tool names to exposures`;
+			return new CodedError(
+				"MCP_TOOL_EXPOSURE_MAP_REQUIRED",
+				`server "${name}": toolExposure must map tool names to exposures`,
+				{ name },
+			);
 		for (const [tool, entry] of Object.entries(toolExposure)) {
 			if (!isExposure(entry))
-				return `server "${name}": toolExposure "${tool}" must be one of ${exposures}`;
+				return new CodedError(
+					"MCP_TOOL_EXPOSURE_INVALID",
+					`server "${name}": toolExposure "${tool}" must be one of ${exposures}`,
+					{ name, tool },
+				);
 		}
 	}
 	if (enabled !== undefined && typeof enabled !== "boolean") {
-		return `server "${name}": enabled must be a boolean`;
+		return new CodedError(
+			"MCP_FIELD_BOOLEAN_REQUIRED",
+			`server "${name}": enabled must be a boolean`,
+			{ name, field: "enabled" },
+		);
 	}
 	if (description !== undefined && typeof description !== "string") {
-		return `server "${name}": description must be a string`;
+		return new CodedError(
+			"MCP_FIELD_STRING_REQUIRED",
+			`server "${name}": description must be a string`,
+			{ name, field: "description" },
+		);
 	}
 	if (timeout !== undefined && (typeof timeout !== "number" || !(timeout > 0))) {
-		return `server "${name}": timeout must be a positive number of seconds`;
+		return new CodedError(
+			"MCP_FIELD_POSITIVE_SECONDS_REQUIRED",
+			`server "${name}": timeout must be a positive number of seconds`,
+			{ name, field: "timeout" },
+		);
 	}
 	if (type === "sse") {
-		return `server "${name}": legacy SSE transport is not supported; use the streamable HTTP URL`;
+		return new CodedError(
+			"MCP_SSE_UNSUPPORTED",
+			`server "${name}": legacy SSE transport is not supported; use the streamable HTTP URL`,
+			{ name },
+		);
 	}
 	if (
 		typeof value.url === "string" &&
 		(type === undefined || type === "http" || type === "streamable-http")
 	) {
 		if (!URL.canParse(value.url) || !/^https?:$/.test(new URL(value.url).protocol)) {
-			return `server "${name}": url must be an http or https URL`;
+			return new CodedError(
+				"MCP_FIELD_HTTP_URL_REQUIRED",
+				`server "${name}": url must be an http or https URL`,
+				{ name, field: "url" },
+			);
 		}
 		if (value.headers !== undefined && !isStringRecord(value.headers)) {
-			return `server "${name}": headers must map names to strings`;
+			return new CodedError(
+				"MCP_FIELD_STRING_MAP_REQUIRED",
+				`server "${name}": headers must map names to strings`,
+				{ name, field: "headers" },
+			);
 		}
-		const oauthError = validateOAuth(value.oauth);
-		if (oauthError) return `server "${name}": ${oauthError}`;
+		const oauthError = validateOAuth(name, value.oauth);
+		if (oauthError) return oauthError;
 		if (value.auth !== undefined) {
 			if (
 				!isRecord(value.auth) ||
 				typeof value.auth.provider !== "string" ||
 				!value.auth.provider
 			) {
-				return `server "${name}": auth.provider must be a provider name`;
+				return new CodedError(
+					"MCP_AUTH_PROVIDER_REQUIRED",
+					`server "${name}": auth.provider must be a provider name`,
+					{ name },
+				);
 			}
 			const url = new URL(value.url);
 			if (url.protocol !== "https:" && !LOOPBACK_HOSTS.includes(url.hostname)) {
-				return `server "${name}": auth requires an https URL, or http on localhost, 127.0.0.1, or [::1]`;
+				return new CodedError(
+					"MCP_AUTH_SECURE_URL_REQUIRED",
+					`server "${name}": auth requires an https URL, or http on localhost, 127.0.0.1, or [::1]`,
+					{ name },
+				);
 			}
 		}
 		return value as unknown as McpServerConfig;
@@ -201,17 +310,32 @@ export function validateMcpServerConfig(name: string, raw: unknown): McpServerCo
 			value.args !== undefined &&
 			!(Array.isArray(value.args) && value.args.every((arg) => typeof arg === "string"))
 		) {
-			return `server "${name}": args must be an array of strings`;
+			return new CodedError(
+				"MCP_FIELD_STRING_ARRAY_REQUIRED",
+				`server "${name}": args must be an array of strings`,
+				{ name, field: "args" },
+			);
 		}
 		if (value.env !== undefined && !isStringRecord(value.env)) {
-			return `server "${name}": env must map names to strings`;
+			return new CodedError(
+				"MCP_FIELD_STRING_MAP_REQUIRED",
+				`server "${name}": env must map names to strings`,
+				{ name, field: "env" },
+			);
 		}
 		if (value.cwd !== undefined && typeof value.cwd !== "string") {
-			return `server "${name}": cwd must be a string`;
+			return new CodedError("MCP_FIELD_STRING_REQUIRED", `server "${name}": cwd must be a string`, {
+				name,
+				field: "cwd",
+			});
 		}
 		return value as unknown as McpServerConfig;
 	}
-	return `server "${name}" needs either "command" (stdio) or "url" (streamable HTTP)`;
+	return new CodedError(
+		"MCP_TRANSPORT_REQUIRED",
+		`server "${name}" needs either "command" (stdio) or "url" (streamable HTTP)`,
+		{ name },
+	);
 }
 
 export interface McpConfigFileEntry {

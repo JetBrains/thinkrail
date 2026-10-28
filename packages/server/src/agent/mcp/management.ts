@@ -10,12 +10,11 @@ import {
 	loadHostMcpConfig,
 	type McpProjectPolicy,
 	projectMcpConfigPath,
-	validateMcpServerConfig,
+	validateMcpServerConfigResult,
 } from "./config";
 import {
 	addMcpServerConfig,
 	assertProjectMcpConfigWritable,
-	McpConfigPathUnsafeError,
 	removeMcpServerConfig,
 	updateMcpServerConfig,
 } from "./writers";
@@ -34,13 +33,7 @@ export function effectiveMcpServerConfig(options: {
 function configPath(scope: McpServerScope, worktree: string): string {
 	if (scope === "user") return globalMcpConfigPath(getAgentDir());
 	const path = projectMcpConfigPath(worktree);
-	try {
-		assertProjectMcpConfigWritable(worktree, path);
-	} catch (error) {
-		if (error instanceof McpConfigPathUnsafeError)
-			throw new CodedError("MCP_PATH_UNSAFE", error.message);
-		throw error;
-	}
+	assertProjectMcpConfigWritable(worktree, path);
 	return path;
 }
 
@@ -60,10 +53,6 @@ function readEntry(path: string, name: string): Record<string, unknown> | undefi
 	return isRecord(entry) ? entry : undefined;
 }
 
-function invalid(message: string): CodedError {
-	return new CodedError("MCP_CONFIG_INVALID", message);
-}
-
 export function writeMcpServerEntry(options: {
 	scope: McpServerScope;
 	worktree: string;
@@ -72,17 +61,27 @@ export function writeMcpServerEntry(options: {
 	mode: "add" | "update";
 }): string | undefined {
 	const { scope, worktree, name, entry, mode } = options;
-	const validated = validateMcpServerConfig(name, entry);
-	if (typeof validated === "string") throw invalid(validated);
+	const validated = validateMcpServerConfigResult(name, entry);
+	if (validated instanceof CodedError) throw validated;
 	if (scope === "project" && "url" in validated && validated.auth) {
-		throw invalid(`server "${name}": auth is only allowed in the global mcp.json`);
+		throw new CodedError(
+			"MCP_PROJECT_AUTH_FORBIDDEN",
+			`server "${name}": auth is only allowed in the global mcp.json`,
+			{ name },
+		);
 	}
 	const path = configPath(scope, worktree);
 	const existing = readRawEntry(path, name);
 	if (mode === "add" && existing !== undefined)
-		throw invalid(`An MCP server named "${name}" already exists`);
+		throw new CodedError("MCP_SERVER_EXISTS", `An MCP server named "${name}" already exists`, {
+			name,
+		});
 	if (mode === "update" && !isRecord(existing))
-		throw invalid(`No MCP server named "${name}" in ${path}`);
+		throw new CodedError(
+			"MCP_SERVER_NOT_FOUND_IN_FILE",
+			`No MCP server named "${name}" in ${path}`,
+			{ name, path },
+		);
 	addMcpServerConfig(path, name, entry);
 	return scope === "project" ? fingerprintMcpEntry(name, entry) : undefined;
 }
@@ -94,7 +93,11 @@ export function removeMcpServerEntry(options: {
 }): void {
 	const path = configPath(options.scope, options.worktree);
 	if (!removeMcpServerConfig(path, options.name)) {
-		throw invalid(`No MCP server named "${options.name}" in ${path}`);
+		throw new CodedError(
+			"MCP_SERVER_NOT_FOUND_IN_FILE",
+			`No MCP server named "${options.name}" in ${path}`,
+			{ name: options.name, path },
+		);
 	}
 }
 
@@ -118,25 +121,38 @@ export function shareMcpOverrideWithRepo(options: {
 	const { name } = options;
 	const userEntry = readEntry(globalMcpConfigPath(getAgentDir()), name);
 	if (!userEntry || isOverrideEntry(userEntry)) {
-		throw invalid(`"${name}" is no longer defined in your mcp.json — nothing to share.`);
+		throw new CodedError(
+			"MCP_SHARE_SOURCE_MISSING",
+			`"${name}" is no longer defined in your mcp.json — nothing to share.`,
+			{ name },
+		);
 	}
 	const path = configPath("project", options.worktree);
 	const existing = readRawEntry(path, name);
 	if (existing !== undefined && (!isRecord(existing) || !isOverrideEntry(existing))) {
-		throw invalid(
+		throw new CodedError(
+			"MCP_SHARE_ENTRY_EXISTS",
 			`The repository's .pi/mcp.json already defines "${name}" — edit that entry instead.`,
+			{ name },
 		);
 	}
 	if (
 		existing !== undefined &&
 		fingerprintMcpEntry(name, existing) !== options.approvedFingerprint
 	) {
-		throw invalid(
+		throw new CodedError(
+			"MCP_SHARE_OVERRIDE_UNAPPROVED",
 			`The repository's override for "${name}" isn't approved — review it before sharing.`,
+			{ name },
 		);
 	}
 	updateMcpServerConfig(path, name, options.override, { override: true });
 	const written = readEntry(path, name);
-	if (!written) throw invalid(`Could not write the override for "${name}"`);
+	if (!written)
+		throw new CodedError(
+			"MCP_OVERRIDE_WRITE_FAILED",
+			`Could not write the override for "${name}"`,
+			{ name },
+		);
 	return fingerprintMcpEntry(name, written);
 }

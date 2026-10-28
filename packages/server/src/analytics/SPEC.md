@@ -147,7 +147,8 @@ own `chunkIds` (URL → id) which the host passes as the internal `$thinkrail_ch
 sanitizer consumes and never forwards. The CLI binary embeds its map, so its frames arrive already
 resolved.
 
-**No message text is ever sent.** Error messages routinely carry third-party prose — git stderr (a
+**No message text or error interpolation parameters are ever sent.** `CodedError.errorParams` is
+client display data only and never joins the classifier or exception properties. Error messages routinely carry third-party prose — git stderr (a
 pre-push hook's output reaches `pr.open`'s thrown message), DNS/TLS diagnostics with private hostnames,
 provider and extension errors — and no redaction makes arbitrary prose personal-data-free. The root
 exception's `value` is therefore a classifier built only from the validated allow-listed fields —

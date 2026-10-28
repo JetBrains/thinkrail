@@ -95,9 +95,10 @@ test("rejects existing empty folders, files and symlinks without changing them",
 	writeFileSync(join(root, "file"), "keep");
 	symlinkSync(source, join(root, "link"), process.platform === "win32" ? "junction" : "dir");
 	for (const name of ["empty", "file", "link"]) {
-		await expect(cloneProject({ url, parentPath: root, name })).rejects.toThrow(
-			"Destination already exists",
-		);
+		await expect(cloneProject({ url, parentPath: root, name })).rejects.toMatchObject({
+			code: "PROJECT_CLONE_DESTINATION_EXISTS",
+			errorParams: { path: join(root, name) },
+		});
 		expect(existsSync(join(root, name))).toBe(true);
 	}
 	expect(readFileSync(join(root, "file"), "utf8")).toBe("keep");
@@ -116,12 +117,16 @@ test("rejects invalid folder names and depths before creating anything", async (
 		"CON.txt",
 		"name.",
 	]) {
-		await expect(cloneProject({ url, parentPath: root, name })).rejects.toThrow();
+		await expect(cloneProject({ url, parentPath: root, name })).rejects.toMatchObject({
+			code: "PROJECT_CLONE_NAME_INVALID",
+		});
 	}
 	for (const depth of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648]) {
-		await expect(cloneProject({ url, parentPath: root, name: "invalid", depth })).rejects.toThrow(
-			"depth",
-		);
+		await expect(
+			cloneProject({ url, parentPath: root, name: "invalid", depth }),
+		).rejects.toMatchObject({
+			code: "PROJECT_CLONE_DEPTH_INVALID",
+		});
 	}
 	expect(existsSync(join(root, "invalid"))).toBe(false);
 	expect(() => inspectCloneDestination("relative", "copy")).toThrow("absolute");
@@ -147,6 +152,25 @@ test("rejects helpers, options and credential-bearing URLs before writing", asyn
 	}
 	expect(existsSync(join(root, "invalid"))).toBe(false);
 	expect(getProjects()).toEqual([]);
+});
+
+test.each([
+	["not a url", "PROJECT_CLONE_URL_INVALID"],
+	["C:repo", "PROJECT_CLONE_URL_LOCAL"],
+	["ftp://host/repo", "PROJECT_CLONE_URL_PROTOCOL"],
+	["https://secret@host/repo", "PROJECT_CLONE_URL_CREDENTIALS"],
+	["https://host/", "PROJECT_CLONE_URL_PATH"],
+	["file://remote/repo", "PROJECT_CLONE_FILE_HOST"],
+])("classifies rejected URL %s without echoing it", async (badUrl, code) => {
+	let failure: unknown;
+	try {
+		await cloneProject({ url: badUrl, parentPath: root, name: "invalid" });
+	} catch (error) {
+		failure = error;
+	}
+	expect(failure).toMatchObject({ code, errorParams: undefined });
+	expect(JSON.stringify(failure)).not.toContain("secret");
+	expect(existsSync(join(root, "invalid"))).toBe(false);
 });
 
 test("failed clone cleans its reservation and never registers a project", async () => {

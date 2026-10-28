@@ -432,8 +432,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
     wire; the web merges them over the bundled
     catalogs ([[submodule-web-i18n]]) with per-string fallback *local exact → bundled exact → bundled
     base → English*. The choice (`AppConfig.locale`, default `"system"`) follows the user like the
-    theme. Agent, tool, skill, prompt output and server error text are never translated. Stored and wire
-    data never carry translated text: defaults ThinkRail writes (untitled chats, default terminals, the
+    theme. Agent, tool, skill, prompt, provider and Git output are never translated. ThinkRail-owned host
+    errors carry a code and optional structured parameters; the web words known codes through its catalog,
+    falling back to the host's English message for unknown codes or incomplete parameters. Error parameters
+    are display data, never analytics properties. Stored and wire data never carry translated text: defaults ThinkRail writes (untitled chats, default terminals, the
     host-named default workspace, chat round notices) are worded at render, so a switch re-words all of
     them, while names set by the user or the agent show verbatim. Theme manifests are the one other
     runtime-loaded user resource, on the same model (`~/.thinkrail/themes/*.theme.json`, read by
