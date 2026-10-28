@@ -13,7 +13,8 @@ tags: [spec-graph, pi-extension]
 `pi-spec-graph` is a portable pi-package that teaches the `pi` agent the project's **spec-graph** and lets
 it search, navigate, and manage specs. It ships a **skill**, seven **`spec_*` custom tools**, and a
 project-wide **`before_agent_start` rule**. It depends on nothing in this monorepo, so it runs under
-vanilla `pi`; thinkrail bundles it into every session.
+vanilla `pi`; thinkrail bundles it into every session of a repository workspace (a chat without a
+project opts its sessions out of the tools and the rule, and its delegated children load no copy).
 
 It manages the frontmatter schema the repo's specs use — a file is a spec once its frontmatter carries
 `id` and `type`; the schema itself is documented in the skill. Frontmatter is handled with the `yaml`
@@ -26,7 +27,9 @@ used), and leaves every byte of the body untouched.
 
 - **Owns:** the spec model (the is-a-spec rule, the derived graph, the read index, validation), the seven
   tools, and the skill + `before_agent_start` rule.
-- **Public surface:** the extension entry `index.ts` (default `ExtensionFactory`) and the `pi` manifest in
+- **Public surface:** the extension entry `index.ts` (default `ExtensionFactory`, plus `SPEC_SECTION`, the
+  `systemPromptOptions.sections` key of the rule, so a host can drop the rule for a session after this
+  extension's `before_agent_start` handler wrote it) and the `pi` manifest in
   `package.json` (`{ extensions: ["./index.ts"], skills: ["./skills"] }`) — how vanilla `pi` (`pi install`)
   and thinkrail (`additionalExtensionPaths` / `additionalSkillPaths`) load it — plus the **`pi-spec-graph/core`
   export** (the pi-free read model), consumable by hosts (thinkrail's server) without going through the

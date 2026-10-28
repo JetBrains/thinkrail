@@ -299,6 +299,7 @@ test("a chat is created with its folder, record and one session, listed without 
 			"todo.requestFix",
 			{ workspaceId: workspace.id, sessionId: created.sessionId, id: "t1", feedback: "x" },
 		],
+		["spec.graph", { workspaceId: workspace.id }],
 	] as const) {
 		await expect(handleRequest(method, params, CTX)).rejects.toMatchObject({
 			code: "CHAT_WORKSPACE",

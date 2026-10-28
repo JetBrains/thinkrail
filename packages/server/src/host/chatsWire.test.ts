@@ -257,7 +257,7 @@ test("an older socket hears nothing of a chat's extension UI even while its sess
 	}
 }, 30_000);
 
-test("Agent review is never offered to a chat's session: neither the tool nor its guideline", async () => {
+test("neither Agent review nor the spec tools reach a chat's session: no tool, no guideline, no spec rule", async () => {
 	updateConfig({ agentReviewEnabled: true });
 	const client = await connect("review", CHATS_PROTOCOL_VERSION);
 	const requests: string[] = [];
@@ -280,6 +280,17 @@ test("Agent review is never offered to a chat's session: neither the tool nor it
 		expect(requests).toHaveLength(2);
 		expect(requests[0]).toContain("request_review");
 		expect(requests[1]).not.toContain("request_review");
+		const specTools = (request: string | undefined) => {
+			const { messages } = JSON.parse(request ?? "{}") as {
+				messages?: { role: string; sections?: { tools?: string } }[];
+			};
+			const tools = messages?.find((message) => message.role === "system")?.sections?.tools ?? "";
+			return [...tools.matchAll(/^- (spec_\w+):/gm)].map((match) => match[1]);
+		};
+		expect(specTools(requests[0])).toContain("spec_grep");
+		expect(requests[0]).toContain("Specs are this project's ground truth.");
+		expect(specTools(requests[1])).toEqual([]);
+		expect(requests[1]).not.toContain("Specs are this project");
 		await client.request("chat.delete", { workspaceId: chat.workspace.id });
 	} finally {
 		updateConfig({ agentReviewEnabled: false });

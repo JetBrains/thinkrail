@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { registerSpecTools } from "./tools/index.ts";
 
-const SPEC_SECTION = "pi-spec-graph";
+export const SPEC_SECTION = "pi-spec-graph";
 
 const SPEC_RULE = [
 	"Specs are this project's ground truth.",

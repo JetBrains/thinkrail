@@ -1608,6 +1608,7 @@ const REPOSITORY_ONLY_METHODS: ReadonlySet<WsMethodName> = new Set<WsMethodName>
 	"todo.startReview",
 	"todo.reviewAll",
 	"todo.requestFix",
+	"spec.graph",
 ]);
 
 /** Doors that start or attach a session or a terminal: a chat being deleted, or whose deletion is pending, refuses them. */

@@ -101,7 +101,7 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			scope: workspaceId,
 			modelRuntime: getPiRuntime,
 			childBaseExtensionFactories: childBaseExtensionFactories(),
-			childExtensionFactories: childExtensionFactories(),
+			childExtensionFactories: childExtensionFactories(workspaceId),
 			buildChildSettings: buildSessionSettings,
 		});
 		created.onLifecycle((event) => {
