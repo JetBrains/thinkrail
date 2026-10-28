@@ -214,6 +214,49 @@ test("an older socket hears nothing of a chat: not its records, its extension UI
 	}
 }, 30_000);
 
+test("an older socket hears nothing of a chat's extension UI even while its session is still starting", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const extensionsDir = join(agentDir, "extensions");
+	mkdirSync(extensionsDir, { recursive: true });
+	const extensionPath = join(extensionsDir, "startup-notice.ts");
+	writeFileSync(
+		extensionPath,
+		[
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			"export default function (pi: ExtensionAPI) {",
+			'\tpi.on("session_start", async (_event, ctx) => {',
+			'\t\tctx.ui.notify("a notice while the chat starts", "info");',
+			"\t});",
+			"}",
+			"",
+		].join("\n"),
+	);
+	const older = await connect("older-start", CHATS_PROTOCOL_VERSION - 1);
+	const current = await connect("current-start", CHATS_PROTOCOL_VERSION);
+	try {
+		const { workspace, sessionId } = (await current.request("chat.create", {})) as ChatCreateResult;
+		await older.request("project.list", {});
+		const notices = (client: Client) =>
+			client.frames.filter(
+				(frame) =>
+					frame.channel === WS_CHANNELS.piExtensionUi &&
+					JSON.stringify(frame.data ?? null).includes(sessionId),
+			);
+		expect(notices(current)).toContainEqual(
+			expect.objectContaining({
+				data: expect.objectContaining({ sessionId, message: "a notice while the chat starts" }),
+			}),
+		);
+		expect(notices(older)).toEqual([]);
+		await current.request("chat.delete", { workspaceId: workspace.id });
+	} finally {
+		older.close();
+		current.close();
+		rmSync(extensionPath, { force: true });
+	}
+}, 30_000);
+
 test("Agent review is never offered to a chat's session: neither the tool nor its guideline", async () => {
 	updateConfig({ agentReviewEnabled: true });
 	const client = await connect("review", CHATS_PROTOCOL_VERSION);

@@ -625,8 +625,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `turn.changed`, `mcp.status`, `session.resourcesChanged`, `pi.event`) goes through one
   `publishScoped` sender that iterates the sockets for a chat or container id and broadcasts otherwise —
   `pi.event` is scoped by the workspace the agent publishes beside each event, so a detached session's
-  disk-only rename is scoped like a live one's; `pi.extensionUi` for a chat session goes only to sockets
-  that both see chats and fall within the request's own audience (an MCP notice for clients below
+  disk-only rename is scoped like a live one's; `pi.extensionUi` for a chat session — live, or still starting
+  (an extension's `session_start` notice, an MCP startup notice; `getSessionAttribution`) — goes only to
+  sockets that both see chats and fall within the request's own audience (an MCP notice for clients below
   `MCP_PROTOCOL_VERSION` therefore reaches no socket for a chat); `recentProjects` never carries the
   container. Run analytics classify `workspace_kind: "chat"`.
 - **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created

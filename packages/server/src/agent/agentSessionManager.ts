@@ -192,6 +192,7 @@ let sessionLifecycleGeneration = 0;
 const workspaceLifecycleGenerations = new Map<string, number>();
 const closingWorkspaces = new Map<string, number>();
 const pendingSessionPreparations = new Map<string, Set<Promise<unknown>>>();
+const preparingEntries = new Map<string, Entry>();
 const sessionTeardowns = new Map<string, Promise<void>>();
 const tearingDownEntries = new Map<string, Entry>();
 
@@ -855,6 +856,10 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
 	return sessions.get(sessionId)?.workspaceId;
 }
 
+export function getSessionAttribution(sessionId: string): string | undefined {
+	return sessions.get(sessionId)?.workspaceId ?? preparingEntries.get(sessionId)?.workspaceId;
+}
+
 export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGeneration | undefined {
 	return hasSession(sessionId) ? sessions.get(sessionId)?.generation : undefined;
 }
@@ -1169,6 +1174,7 @@ async function prepareSessionEntry(
 		commands,
 		() => entry.resourcesClosing,
 	);
+	preparingEntries.set(sessionId, entry);
 	entry.unsubscribeCommands = commands.onChange(() => {
 		if (canUseSessionResources(sessionId, workspaceId))
 			publishSessionResourcesChanged(workspaceId, sessionId);
@@ -1301,6 +1307,7 @@ function soleRunningToolCall(session: AgentSession): string | undefined {
 
 function abandonPreparedEntry(entry: Entry): void {
 	const { sessionId } = entry.session;
+	if (preparingEntries.get(sessionId) === entry) preparingEntries.delete(sessionId);
 	cancelExtUiForSession(sessionId);
 	forgetMcpStatus(sessionId);
 	entry.toolResponseWaiters.abandon();
@@ -1341,6 +1348,8 @@ async function registerSession(
 	}
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
+	if (preparingEntries.get(session.sessionId) === prepared.entry)
+		preparingEntries.delete(session.sessionId);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
 	activateRegistryTools(prepared.entry);
