@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { AppConfig } from "@thinkrail/contracts";
+import { removeTree } from "@thinkrail/shared/removeTree";
 import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
 import { openAppFresh, resetApp } from "./fixtures/app";
 import { openProviders } from "./fixtures/jbcentral";
@@ -9,7 +10,16 @@ import { E2E_DATA_DIR, E2E_HOME_DIR, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
 
 const PROJECTS_PARENT = join(E2E_HOME_DIR, "thinkrail");
+const CONFIG_PATH = join(E2E_DATA_DIR, "config.json");
 const SETUP_PROMPT = "/skill:setting-up-a-project ";
+
+function readConfig(): AppConfig | undefined {
+	try {
+		return JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as AppConfig;
+	} catch {
+		return undefined;
+	}
+}
 
 async function withWire<T>(
 	baseURL: string | undefined,
@@ -138,7 +148,7 @@ test.afterEach(async ({ baseURL }) => {
 		withWire(baseURL, signOutEveryProvider),
 		setOnboardingDismissed(baseURL, true),
 	]);
-	rmSync(PROJECTS_PARENT, { recursive: true, force: true });
+	removeTree(PROJECTS_PARENT);
 	for (const step of cleanup) if (step.status === "rejected") throw step.reason;
 });
 
@@ -248,13 +258,7 @@ test("a cold start shows the onboarding wizard once; Skip setup persists", async
 	await expect(wizard).toHaveCount(0);
 	await expect(page.getByTestId("welcome-cta")).toContainText("Start a new project");
 	await expect(page.getByTestId("left-nav")).toBeVisible();
-	await expect
-		.poll(
-			() =>
-				(JSON.parse(readFileSync(join(E2E_DATA_DIR, "config.json"), "utf8")) as AppConfig)
-					.onboardingDismissed,
-		)
-		.toBe(true);
+	await expect.poll(() => readConfig()?.onboardingDismissed).toBe(true);
 
 	await page.reload();
 	await expect(page.getByTestId("welcome-cta")).toContainText("Start a new project");
@@ -325,10 +329,8 @@ test("Get started asks about usage data as its own step before the models, or th
 		await expect(consent).toHaveCount(0);
 		await expect
 			.poll(() => {
-				const config = JSON.parse(
-					readFileSync(join(E2E_DATA_DIR, "config.json"), "utf8"),
-				) as AppConfig;
-				return [config.analyticsEnabled, config.analyticsConsentConfirmed];
+				const config = readConfig();
+				return [config?.analyticsEnabled, config?.analyticsConsentConfirmed];
 			})
 			.toEqual([false, true]);
 
@@ -347,8 +349,6 @@ test("a failed usage-data save keeps the privacy step, its off choice and the er
 	page,
 	baseURL,
 }) => {
-	const config = join(E2E_DATA_DIR, "config.json");
-	const readConfig = () => JSON.parse(readFileSync(config, "utf8")) as AppConfig;
 	await setOnboardingDismissed(baseURL, false);
 	await seedAnalyticsConsent(baseURL, false, false);
 	try {
@@ -358,13 +358,13 @@ test("a failed usage-data save keeps the privacy step, its off choice and the er
 		await wizard.getByTestId("onboarding-start").click();
 		await expect(wizard).toHaveAttribute("data-step", "privacy");
 		const toggle = wizard.getByTestId("analytics-toggle");
-		await expect.poll(() => readConfig().analyticsEnabled).toBe(true);
+		await expect.poll(() => readConfig()?.analyticsEnabled).toBe(true);
 		const continueButton = wizard.getByTestId("onboarding-privacy-continue");
 		await expect(continueButton).toBeEnabled();
 
-		const original = readFileSync(config, "utf8");
-		rmSync(config);
-		mkdirSync(config);
+		const original = readFileSync(CONFIG_PATH, "utf8");
+		rmSync(CONFIG_PATH);
+		mkdirSync(CONFIG_PATH);
 		try {
 			await toggle.click();
 			await expect(wizard.getByRole("alert")).toBeVisible();
@@ -373,14 +373,14 @@ test("a failed usage-data save keeps the privacy step, its off choice and the er
 			await expect(wizard).toHaveAttribute("data-step", "privacy");
 			await expect(toggle).toHaveAttribute("aria-checked", "false");
 		} finally {
-			rmSync(config, { recursive: true, force: true });
-			writeFileSync(config, original);
+			rmSync(CONFIG_PATH, { recursive: true, force: true });
+			writeFileSync(CONFIG_PATH, original);
 		}
-		expect(readConfig().analyticsEnabled).toBe(true);
+		expect(readConfig()?.analyticsEnabled).toBe(true);
 
 		await continueButton.click();
 		await expect(wizard).toHaveAttribute("data-step", "connect");
-		expect([readConfig().analyticsEnabled, readConfig().analyticsConsentConfirmed]).toEqual([
+		expect([readConfig()?.analyticsEnabled, readConfig()?.analyticsConsentConfirmed]).toEqual([
 			false,
 			true,
 		]);
@@ -393,8 +393,6 @@ test("an opt-out confirmed elsewhere while the privacy step is open is adopted, 
 	page,
 	baseURL,
 }) => {
-	const readConfig = () =>
-		JSON.parse(readFileSync(join(E2E_DATA_DIR, "config.json"), "utf8")) as AppConfig;
 	await setOnboardingDismissed(baseURL, false);
 	await seedAnalyticsConsent(baseURL, false, false);
 	try {
@@ -405,13 +403,13 @@ test("an opt-out confirmed elsewhere while the privacy step is open is adopted, 
 		await expect(wizard).toHaveAttribute("data-step", "privacy");
 		const toggle = wizard.getByTestId("analytics-toggle");
 		await expect(toggle).toHaveAttribute("aria-checked", "true");
-		await expect.poll(() => readConfig().analyticsEnabled).toBe(true);
+		await expect.poll(() => readConfig()?.analyticsEnabled).toBe(true);
 
 		await seedAnalyticsConsent(baseURL, false, true);
 		await expect(toggle).toHaveAttribute("aria-checked", "false");
 		await wizard.getByTestId("onboarding-privacy-continue").click();
 		await expect(wizard).toHaveAttribute("data-step", "connect");
-		expect([readConfig().analyticsEnabled, readConfig().analyticsConsentConfirmed]).toEqual([
+		expect([readConfig()?.analyticsEnabled, readConfig()?.analyticsConsentConfirmed]).toEqual([
 			false,
 			true,
 		]);
@@ -519,13 +517,7 @@ test("the onboarding wizard verifies the connection in place, then collapses to 
 	await expect(page.getByTestId("welcome-cta")).toContainText("Start a new project");
 	await expect(page.getByTestId("welcome-action")).toHaveCount(1);
 	await expect(page.getByTestId("welcome-action")).toContainText("Open project");
-	await expect
-		.poll(
-			() =>
-				(JSON.parse(readFileSync(join(E2E_DATA_DIR, "config.json"), "utf8")) as AppConfig)
-					.onboardingDismissed,
-		)
-		.toBe(true);
+	await expect.poll(() => readConfig()?.onboardingDismissed).toBe(true);
 
 	await page.getByTestId("welcome-cta").click();
 	const dialog = page.getByTestId("create-project-dialog");
@@ -590,10 +582,10 @@ test("connecting from the Welcome banner closes the stack, toasts once, and hand
 	await expect(page.getByTestId("login-dialog")).toHaveCount(0);
 	const toast = page.getByTestId("toast").filter({ hasText: "E2E Key Provider connected" });
 	await expect(toast).toBeVisible();
+	await expect(toast).toHaveCount(1);
 	await expect(page.getByTestId("welcome-title")).toHaveText("You're set");
 	await expect(page.getByTestId("welcome-connected")).toContainText("E2E Key Provider connected");
 	await expect(banner).toHaveCount(0);
-	await expect(toast).toHaveCount(1);
 });
 
 test("the banner's connect dialog still hands off when its opening status re-read lands after the sign-in", {
