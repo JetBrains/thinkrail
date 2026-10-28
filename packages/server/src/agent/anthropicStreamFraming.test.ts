@@ -91,7 +91,7 @@ async function run(chunks: Uint8Array[]) {
 
 const encode = (text: string) => new TextEncoder().encode(text);
 
-describe("pi-ai's Anthropic SSE framing (patched, earendil-works/pi#10390)", () => {
+describe("pi-ai's Anthropic SSE framing: defects the patch fixes (earendil-works/pi#10390)", () => {
 	test("A: a cut right after an event: line is the retryable truncation error", async () => {
 		const { result } = await run([encode(`${head}event: content_block_start\n`)]);
 		expect(result.errorMessage).toBe("Anthropic stream ended before message_stop");
@@ -104,12 +104,6 @@ describe("pi-ai's Anthropic SSE framing (patched, earendil-works/pi#10390)", () 
 				`${head}event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"ty`,
 			),
 		]);
-		expect(result.errorMessage).toBe("Anthropic stream ended before message_stop");
-		expect(isRetryableAssistantError(result)).toBe(true);
-	});
-
-	test("B: a cut between two events stays the retryable truncation error", async () => {
-		const { result } = await run([encode(head)]);
 		expect(result.errorMessage).toBe("Anthropic stream ended before message_stop");
 		expect(isRetryableAssistantError(result)).toBe(true);
 	});
@@ -131,6 +125,14 @@ describe("pi-ai's Anthropic SSE framing (patched, earendil-works/pi#10390)", () 
 				events: completeEvents,
 			});
 		}
+	});
+});
+
+describe("pi-ai's Anthropic SSE framing: behavior the patch keeps", () => {
+	test("B: a cut between two events stays the retryable truncation error", async () => {
+		const { result } = await run([encode(head)]);
+		expect(result.errorMessage).toBe("Anthropic stream ended before message_stop");
+		expect(isRetryableAssistantError(result)).toBe(true);
 	});
 
 	test("D: a stream without the final blank line after message_stop still succeeds", async () => {
