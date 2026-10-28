@@ -118,6 +118,7 @@ export class WsTransport {
 		return new Promise<WsResult<M>>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.pending.delete(id);
+				this.queueAck(id);
 				reject(new Error(t("app.transport.timedOut", { method })));
 			}, timeoutMs);
 			this.pending.set(id, {
