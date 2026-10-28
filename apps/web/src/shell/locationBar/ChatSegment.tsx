@@ -64,11 +64,12 @@ export function ChatSegment({ workspace }: { workspace: Workspace }) {
 		),
 	);
 	const [confirming, setConfirming] = useState<string | null>(null);
+	const [continuing, setContinuing] = useState<string | null>(null);
 	const pending = workspace.deletionPending === true;
 	useEffect(() => {
 		if (confirming !== null && confirming !== workspace.id) setConfirming(null);
-	}, [confirming, workspace.id]);
-	const [continueOpen, setContinueOpen] = useState(false);
+		if (continuing !== null && continuing !== workspace.id) setContinuing(null);
+	}, [confirming, continuing, workspace.id]);
 	const canContinue = useAppStore((s) => supportsChatContinuation(s.protocolVersion));
 	return (
 		<Segment
@@ -124,12 +125,12 @@ export function ChatSegment({ workspace }: { workspace: Workspace }) {
 						<FolderOpen />
 						{t("shell.location.workspace.reveal")}
 					</DropdownMenuItem>
-					{canContinue ? (
+					{canContinue && !pending ? (
 						<>
 							<DropdownMenuSeparator />
 							<DropdownMenuItem
 								data-testid="scope-chat-continue"
-								onSelect={() => setContinueOpen(true)}
+								onSelect={() => setContinuing(workspace.id)}
 							>
 								<RiShareForwardLine />
 								{t("panels.chats.continueInWorkspace")}
@@ -158,8 +159,8 @@ export function ChatSegment({ workspace }: { workspace: Workspace }) {
 			<ContinueChatDialog
 				chat={workspace}
 				title={title}
-				open={continueOpen}
-				onOpenChange={setContinueOpen}
+				open={continuing === workspace.id}
+				onOpenChange={(open) => setContinuing(open ? workspace.id : null)}
 			/>
 		</Segment>
 	);

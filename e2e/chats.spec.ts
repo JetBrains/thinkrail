@@ -242,3 +242,37 @@ test("Continue in workspace asks the chat's agent for a summary and shows the op
 	await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
 	expect(storedChats().chats[0]?.continuedTo).toBeUndefined();
 });
+
+test("a topbar Continue dialog closes when another window deletes its chat and this one moves to a sibling", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await page.getByTestId("add-chat").click();
+	await expect(page.getByTestId("chat-item")).toHaveCount(1);
+	const [first] = storedChats().chats;
+	if (!first) throw new Error("the first chat is not stored");
+	await page.getByTestId("add-chat").click();
+	await expect(page.getByTestId("chat-item")).toHaveCount(2);
+	await expect
+		.poll(() =>
+			storedChats().chats.some((chat) => chat.id !== first.id && page.url().includes(chat.id)),
+		)
+		.toBe(true);
+	const second = storedChats().chats.find((chat) => chat.id !== first.id);
+	if (!second) throw new Error("the second chat is not stored");
+
+	await page.getByTestId("scope-workspace").click();
+	await page.getByTestId("scope-chat-continue").click();
+	const dialog = page.getByTestId("continue-chat-dialog");
+	await expect(dialog).toBeVisible();
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		await wire.request("chat.delete", { workspaceId: second.id });
+	} finally {
+		wire.close();
+	}
+	await expect(page.getByTestId("chat-item")).toHaveCount(1);
+	await expect.poll(() => page.url().includes(first.id)).toBe(true);
+	await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
+	await expect(dialog).toHaveCount(0);
+});

@@ -794,7 +794,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   answer of `selectKnownChatTitle`), `selectChatWorkspaceFirstPrompt` (the conversation's
   `selectChatFirstPrompt`, for the unnamed chat's label), `supportsProjectlessChats`; the `chatContinuations` slice
   (`applyChatContinuation` from the `chat.continuation` push or a status read — host-owned phases by
-  operation id, read by the transcript's continuation card and by the shell's follow hook) and
+  operation id, read by the transcript's continuation card and by `chat/continuations`' follow and
+  reconnect reads) and
   `initiatedContinuations` (`noteInitiatedContinuation` / `forgetInitiatedContinuation`: the gestures
   this client made, the only ones it follows) — the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),

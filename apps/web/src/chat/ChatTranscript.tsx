@@ -29,10 +29,11 @@ import {
 	toast,
 	useAppStore,
 } from "@/store";
-import { errorText, getTransport, respondToTool, wsErrorCode } from "@/transport";
+import { errorText, getTransport, respondToTool } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
+import { openContinuationTarget, refreshContinuation, requestContinuation } from "./continuations";
 import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
 import { FoldGeometryProvider } from "./foldState";
 import {
@@ -576,29 +577,25 @@ const ChatTranscript = forwardRef<
 	);
 
 	const continuations = useAppStore((s) => s.chatContinuations);
-	const askedStatus = useRef(new Set<string>());
 	const continuationOf = useCallback(
-		(operationId: string): ChatContinuation | undefined => {
-			const known = continuations[operationId];
-			if (known || askedStatus.current.has(operationId)) return known;
-			askedStatus.current.add(operationId);
-			void getTransport()
-				.request("chat.continuationStatus", { operationId })
-				.then((status) => useAppStore.getState().applyChatContinuation(status))
-				.catch((err: unknown) => {
-					if (wsErrorCode(err) !== "NOT_A_CHAT") return;
-					useAppStore.getState().applyChatContinuation({
-						operationId,
-						sourceWorkspaceId: workspaceId,
-						sourceSessionId: sessionId,
-						projectId: "",
-						phase: "lost",
-					});
-				});
-			return undefined;
-		},
-		[continuations, sessionId, workspaceId],
+		(operationId: string): ChatContinuation | undefined => continuations[operationId],
+		[continuations],
 	);
+	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
+	const cardOperations = useMemo(
+		() =>
+			runtime.turns.flatMap((turn) =>
+				turn.kind === "continuationRequest" ? [turn.details.operationId] : [],
+			),
+		[runtime.turns],
+	);
+	useEffect(() => {
+		if (welcomeGeneration === 0) return;
+		const known = useAppStore.getState().chatContinuations;
+		for (const operationId of cardOperations) {
+			if (!known[operationId]) refreshContinuation(operationId, { workspaceId, sessionId });
+		}
+	}, [cardOperations, welcomeGeneration, workspaceId, sessionId]);
 	const chatActions = useMemo<ChatActions>(
 		() => ({
 			cancelAutomaticReveal,
@@ -616,32 +613,31 @@ const ChatTranscript = forwardRef<
 			continuationOf,
 			openContinuation: (continuation) => {
 				if (!continuation.workspaceId) return;
-				const target = { id: continuation.workspaceId, projectId: continuation.projectId };
-				void getTransport()
-					.request("workspace.list", { projectId: continuation.projectId })
-					.then((rows) => useAppStore.getState().setWorkspaces(continuation.projectId, rows))
-					.catch(() => {})
-					.finally(() =>
-						useAppStore.getState().activateWorkspaceFromRoute(target, continuation.sessionId),
-					);
+				void openContinuationTarget(
+					{
+						projectId: continuation.projectId,
+						workspaceId: continuation.workspaceId,
+						...(continuation.sessionId ? { sessionId: continuation.sessionId } : {}),
+					},
+					t("chat.turn.continuation.gone"),
+				);
 			},
 			retryContinuation: (details) => {
-				void getTransport()
-					.request("chat.continue", { workspaceId, projectId: details.projectId })
-					.then(({ operationId }) => useAppStore.getState().noteInitiatedContinuation(operationId))
-					.catch((err: unknown) =>
-						toast.error(errorText(err), t("chat.turn.continuation.retryFailed")),
-					);
+				void requestContinuation(workspaceId, details.projectId).catch((err: unknown) =>
+					toast.error(errorText(err), t("chat.turn.continuation.retryFailed")),
+				);
 			},
 			openHandoffSource: (details) => {
 				const container = selectChatsContainer(useAppStore.getState());
 				if (!container) return;
-				useAppStore
-					.getState()
-					.activateWorkspaceFromRoute(
-						{ id: details.sourceWorkspaceId, projectId: container.id },
-						details.sourceSessionId,
-					);
+				void openContinuationTarget(
+					{
+						projectId: container.id,
+						workspaceId: details.sourceWorkspaceId,
+						sessionId: details.sourceSessionId,
+					},
+					t("chat.turn.handoff.sourceGone"),
+				);
 			},
 		}),
 		[

@@ -39,6 +39,8 @@ export function ContinueChatDialog({
 	const [projectId, setProjectId] = useState<string | null>(null);
 	const [sending, setSending] = useState(false);
 	const labelId = useId();
+	const valueId = useId();
+	const visible = open && chat.deletionPending !== true;
 	useEffect(() => {
 		if (open) setProjectId(preferred?.id ?? projects[0]?.id ?? null);
 	}, [open, preferred?.id, projects[0]?.id]);
@@ -52,7 +54,7 @@ export function ContinueChatDialog({
 	};
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={visible} onOpenChange={onOpenChange}>
 			<DialogContent data-testid="continue-chat-dialog" className="max-w-[28rem]">
 				<DialogHeader>
 					<DialogTitle>{t("panels.chats.continueTitle", { name: title })}</DialogTitle>
@@ -66,10 +68,12 @@ export function ContinueChatDialog({
 						<DropdownMenu>
 							<DropdownMenuTrigger
 								data-testid="continue-chat-project"
-								aria-labelledby={labelId}
+								aria-labelledby={`${labelId} ${valueId}`}
 								className="flex h-32 items-center justify-between gap-8 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 							>
-								<span className="truncate">{selected?.name ?? ""}</span>
+								<span id={valueId} className="truncate">
+									{selected?.name ?? ""}
+								</span>
 								<ChevronDown className="size-14 shrink-0 text-text-subtle" />
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="start">

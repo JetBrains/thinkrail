@@ -815,6 +815,36 @@ test("a todo-review-fix custom message_end appends a reviewFix turn", () => {
 	expect(reviewIgnored.eventRevision).toBe(reviewBefore.eventRevision + 1);
 });
 
+test("a continuation request and a handoff message_end append their cards", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	const custom = (customType: string, details: unknown) =>
+		({
+			type: "message_end",
+			message: { role: "custom", customType, content: "x", display: true, details, timestamp: 5 },
+		}) as unknown as PiEvent;
+	store.handlePiEvent(
+		custom("continue-in-workspace-request", {
+			operationId: "op1",
+			projectId: "p1",
+			projectName: "repo",
+		}),
+		"a",
+	);
+	store.handlePiEvent(
+		custom("chat-handoff", {
+			operationId: "op1",
+			sourceWorkspaceId: "chat-1",
+			sourceSessionId: "s-chat",
+			summary: "The brief.",
+		}),
+		"a",
+	);
+	const [request, handoff] = rt("a").turns.slice(-2);
+	expect(request?.kind === "continuationRequest" && request.details.projectName).toBe("repo");
+	expect(handoff?.kind === "handoff" && handoff.details.summary).toBe("The brief.");
+});
+
 test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
