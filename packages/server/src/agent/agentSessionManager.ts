@@ -167,6 +167,7 @@ interface Entry {
 	piCompactionInProgress: boolean;
 	reloadPending: boolean;
 	reloadRunning: Promise<void> | null;
+	reloadPolicyGeneration: number;
 	preflightReleases: Set<() => void>;
 	heldReservations: Set<() => void>;
 	disposed: boolean;
@@ -752,11 +753,7 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	if (kept.length !== active.length || restored.length > 0) {
 		session.setActiveToolsByName([...kept, ...restored]);
 	}
-	if (!allowReload) return;
-	if (entry.reloadRunning) {
-		entry.reloadPending = true;
-		return;
-	}
+	if (!allowReload || entry.reloadRunning) return;
 	if (
 		enabledExtensionMissing(session, disabled) ||
 		loadsDisabledExtensionSkills(session.resourceLoader.getSkills().skills)
@@ -804,7 +801,16 @@ function enabledExtensionMissing(session: AgentSession, disabled: ReadonlySet<st
 	);
 }
 
+let extensionPolicy = { key: "", generation: 0 };
+function noteExtensionPolicy(): void {
+	const key = [...disabledExtensions()].sort().join("\n");
+	if (key !== extensionPolicy.key) {
+		extensionPolicy = { key, generation: extensionPolicy.generation + 1 };
+	}
+}
+
 export function refreshExtensionTools(): void {
+	noteExtensionPolicy();
 	for (const entry of sessions.values()) {
 		if (entry.session.isStreaming) entry.extensionToolsRefreshPending = true;
 		else applyExtensionTools(entry);
@@ -908,6 +914,7 @@ function reconsiderPendingReload(entry: Entry): void {
 function runGatedReload(entry: Entry): Promise<void> {
 	if (entry.reloadRunning) return entry.reloadRunning;
 	entry.reloadPending = false;
+	entry.reloadPolicyGeneration = extensionPolicy.generation;
 	const runner = entry.session.extensionRunner;
 	const mcpWasLoaded = entry.mcpHost.loaded() !== null;
 	const beforeSessionStart = () => {
@@ -941,7 +948,9 @@ function runGatedReload(entry: Entry): Promise<void> {
 				entry.reloadRunning = null;
 				applySubagentTools(entry);
 				applyReviewTool(entry);
-				applyExtensionTools(entry, { allowReload: false });
+				applyExtensionTools(entry, {
+					allowReload: entry.reloadPolicyGeneration !== extensionPolicy.generation,
+				});
 				entry.commands.flushCompletions();
 				entry.subagents.flushCompletions();
 				publishEntryState(entry);
@@ -1123,6 +1132,7 @@ async function prepareSessionEntry(
 		piCompactionInProgress: false,
 		reloadPending: false,
 		reloadRunning: null,
+		reloadPolicyGeneration: 0,
 		preflightReleases: new Set(),
 		heldReservations: new Set(),
 		disposed: false,

@@ -69,6 +69,7 @@ import {
 	removeSession,
 	removeWorkspaceSessions,
 	renameSession,
+	requestSessionReload,
 	respondToTool,
 	setAgentReviewEnabledResolver,
 	setSessionCreatedPublisher,
@@ -1169,6 +1170,46 @@ test("switching an extension's skills off reloads the idle chat once; a skill-le
 		expect(reloads).toBe(2);
 		await check("BACK");
 		expect(seen(sessionId)).toContain("BACK_WEB_ON");
+	} finally {
+		AgentSession.prototype.reload = originalReload;
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("an unchanged or skill-less policy refresh during a reload never buys a second reload", async () => {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	const originalReload = AgentSession.prototype.reload;
+	let reloads = 0;
+	let sessionId: string | undefined;
+	let duringReload: (() => void) | undefined;
+	AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+		const run = duringReload;
+		duringReload = undefined;
+		const reloading = originalReload.apply(this, args);
+		run?.();
+		await reloading;
+		if (this.sessionId === sessionId) reloads++;
+	};
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-extension-refresh-during-reload-"),
+			workspaceId: "ws-extension-refresh-during-reload",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		duringReload = () => {
+			refreshExtensionTools();
+			disabled = new Set(["visualize"]);
+			refreshExtensionTools();
+		};
+		await requestSessionReload(session.sessionId);
+		await Bun.sleep(300);
+		expect(reloads).toBe(1);
+		fauxA.setResponses([(context) => fauxAssistantMessage(`AFTER_${visualizeToolState(context)}`)]);
+		await promptSession(session.sessionId, "Check after the refreshes.");
+		expect(seen(sessionId)).toContain("AFTER_VISUALIZE_OFF");
 	} finally {
 		AgentSession.prototype.reload = originalReload;
 		setDisabledExtensionsResolver(() => new Set());

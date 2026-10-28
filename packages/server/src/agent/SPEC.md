@@ -713,10 +713,13 @@ re-opened transcripts provider-valid.
     skills live in the system prompt, which only a reload rebuilds, and a skill left behind would steer
     the agent at withheld tools. Skill-less extensions keep the no-reload disable. An extension counts as loadable when it has static or per-session parent
     factories. Registration applies the same reconciliation, and a completed reload reapplies
-    it without requesting another reload. A toggle that lands **while a reload runs** marks one follow-up
-    reload pending instead of judging the old loader: that reload snapshotted the policy before the
-    toggle, so its result can be stale (re-enable during a disable reload would otherwise leave the
-    extension unloaded with Settings showing it on). Settings are the
+    it without requesting another reload — unless the extension policy **moved while it ran**: a running
+    reload snapshotted the policy before the toggle, so its result can be stale (re-enable during a
+    disable reload would otherwise leave the extension unloaded with Settings showing it on).
+    `refreshExtensionTools` bumps a policy generation only when the disabled set actually changes; each
+    reload records the generation it started under, and its completion reconciles with a reload allowed
+    only if the generation moved, judging the **new** loader. An unchanged resend or a skill-less toggle
+    during a reload therefore costs nothing extra. Settings are the
     source of truth across restarts: Pi ≥ 1.3 restores a resumed chat's recorded tool loadout, keeping
     recorded removals inactive, so attach first re-activates every tool of an enabled registry extension
     that Pi's activated-on-registration rule would activate (declarable exposure, not `defaultActive:
