@@ -15,6 +15,7 @@ import {
 	type Resource,
 	type ResourceActions,
 	ResourceRow,
+	type ResourcesStaleness,
 	resourceId,
 	sortLive,
 	toResources,
@@ -29,6 +30,7 @@ export function ResourcesDock({
 	freshCount = 0,
 	now,
 	authoritative,
+	staleness = null,
 	actions,
 	onInspect,
 	onOpenFinished,
@@ -41,6 +43,7 @@ export function ResourcesDock({
 	freshCount?: number;
 	now: number;
 	authoritative: boolean;
+	staleness?: ResourcesStaleness | null;
 	actions: ResourceActions;
 	onInspect: (resourceId: string) => void;
 	onOpenFinished: () => void;
@@ -71,7 +74,11 @@ export function ResourcesDock({
 			<span>
 				{authoritative
 					? t("resources.dock.active", { count: rows.length })
-					: t("resources.dock.activeReconnecting", { count: rows.length })}
+					: staleness === "disconnected"
+						? t("resources.dock.activeReconnecting", { count: rows.length })
+						: staleness === "refreshFailed"
+							? t("resources.dock.activeOutOfDate", { count: rows.length })
+							: t("resources.dock.activeUpdating", { count: rows.length })}
 			</span>
 		</>
 	);

@@ -8,6 +8,7 @@ import {
 	selectChatResourceAuthority,
 	selectChatResourceGroups,
 	selectChatResourceProjection,
+	selectChatResourcesStaleness,
 	useAppStore,
 } from "./index";
 
@@ -207,6 +208,20 @@ test("disconnect preserves stale data; reconnect fences late responses and old h
 	expect(state().resourceSnapshots).toEqual({});
 	state().installChatResources(current, snapshot);
 	expect(state().resourceSnapshots).toEqual({});
+});
+
+test("staleness names a dropped socket apart from a failed or in-flight refresh", () => {
+	const staleness = () => selectChatResourcesStaleness(state(), scope);
+	state().invalidateChatResources(scope);
+	expect(staleness()).toBeNull();
+	state().installChatResources(read(), snapshot);
+	expect(staleness()).toBeNull();
+	state().invalidateChatResources(scope);
+	expect(staleness()).toBe("refreshing");
+	state().failChatResources(read(), "replay namespace is full");
+	expect(staleness()).toBe("refreshFailed");
+	state().setStatus("disconnected");
+	expect(staleness()).toBe("disconnected");
 });
 
 test("clear and rehydrate use distinct revisions so a late read cannot resurrect a projection", () => {
