@@ -83,16 +83,22 @@ plan files whose session has no transcript on disk (orphans).
   both passes bounded by the deadline. 100k paths answer in tens of milliseconds. Each returned file
   hit carries its `size` (one `stat` per hit on the page) and each spec hit its content's byte length,
   so the client can decline to preview a large one.
-- **Specs:** the `spec` module's per-root snapshot — built synchronously only on a root's first read,
-  afterwards rebuilt off the request path (`setImmediate`) when its TTL lapses or the worktree changes,
-  the previous snapshot answering meanwhile (title / id / path through the matcher; a body match from
-  three characters becomes a `content`-tier hit with the matching line as `snippet`).
-- **Chats and transcripts:** title hits through the matcher; transcript hits are substring-AND over
-  entries (the history index's rule), one per message, `content` tier with an equal score so the
-  timestamp alone orders them newest first (a user message never outranks a newer assistant one),
-  carrying `messageIndex` / `anchorText` for the client's drift-tolerant jump.
+- **Specs:** the `spec` module's per-root snapshot — every build runs off the request path, the first
+  included (a root's first read answers `indexing` with no hits), and only on a read after its TTL lapsed
+  or the worktree changed, the previous snapshot answering meanwhile (title / id / path through the
+  matcher; a body match from three characters becomes a `content`-tier hit with the matching line as
+  `snippet`). Body matching folds case only, unlike the matcher's diacritic folding: folding every
+  body per keystroke costs too much.
+- **Chats and transcripts:** two providers with a budget each. Title hits through the matcher over every
+  chat. Transcript hits are substring-AND over entries (the history index's rule; case folded only), one
+  per message, `content` tier with an equal score so the timestamp alone orders them newest first (a
+  user message never outranks a newer assistant one), carrying `messageIndex` / `anchorText` for the
+  client's drift-tolerant jump. The scan visits the newest chat first and each chat's newest message
+  first, checking the budget before every message, so a budget that runs out (`truncated`) leaves only
+  older messages unsearched.
 - **Plans:** group and item titles through the matcher; hits carry the plan's session so the client
-  opens the chat and its plan.
+  opens the chat and its plan. A plan file is parsed again only when it changed (`todos`'
+  per-file memo).
 - **Workspaces:** name, branch and `#<pr>` through the matcher over persisted records — the client
   dedupes against the workspaces it already knows.
 
@@ -107,6 +113,7 @@ images, HTML, markdown), the same path as a preview tab; a plan has no preview.
 ## Get right
 
 - The host never blocks a keystroke on a corpus build: file lists load off the request, spec
-  snapshots rebuild off the request after their first read, and the history index keeps its cold-build
-  budget.
+  snapshots build off the request (and only when read), plans are re-parsed only when changed, and
+  the history index keeps its cold-build budget. A throwing provider or history read is logged
+  (`log`, error type only) and answers its group `failed`.
 - Hit ids are stable (`kind:id[:locator]`) so the browser can keep a selection across replies.

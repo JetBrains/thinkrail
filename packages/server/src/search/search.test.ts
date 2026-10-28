@@ -15,7 +15,7 @@ import {
 	parseNulList,
 	walkFileList,
 } from "./files";
-import { searchFiles } from "./providers";
+import { searchChatTitles, searchFiles, searchTranscripts } from "./providers";
 import { createSearchService, resolveSearchRoot, type SearchReaders } from "./service";
 
 const encoder = new TextEncoder();
@@ -139,6 +139,53 @@ describe("listRootFiles", () => {
 		expect(isTransientListFailure({ message: "fatal: Too many open files" })).toBe(true);
 		expect(isTransientListFailure({ message: "fatal: not a git repository" })).toBe(false);
 		expect(isTransientListFailure({ code: "EACCES" })).toBe(false);
+	});
+});
+
+describe("chat providers", () => {
+	const label = () => ({ projectId: "p1", workspaceId: "w1" });
+	const budget = (checks: number) => {
+		let used = 0;
+		return {
+			expired: () => {
+				used += 1;
+				return used > checks;
+			},
+		};
+	};
+	const session = (id: string, title: string, at: number, texts: string[]): HistorySession => ({
+		sessionId: id,
+		cwd: "/repos/one",
+		title,
+		entries: texts.map((text, index) => ({
+			role: "user",
+			text,
+			timestamp: at + index,
+			messageIndex: index,
+		})),
+	});
+	const input = (query: string, checks: number) => ({
+		terms: [{ text: query, literal: false }],
+		limit: 20,
+		deadline: budget(checks),
+	});
+	const old = session("old", "Token refresh, the long one", 1_000, Array(500).fill("refresh"));
+	const recent = session("recent", "Quantum banana", 9_000, ["refresh the cache"]);
+
+	test("a budget that runs out leaves older messages unsearched, never the newest chat's", () => {
+		const group = searchTranscripts([old, recent], false, label, input("refresh", 3));
+		expect(group.state).toBe("truncated");
+		expect(group.hits.map((hit) => hit.id)).toEqual([
+			"transcript:recent:0",
+			"transcript:old:499",
+			"transcript:old:498",
+		]);
+	});
+
+	test("titles are matched over every chat, apart from the transcript budget", () => {
+		const group = searchChatTitles([old, recent], false, label, input("banana", 0));
+		expect(group.state).toBe("ready");
+		expect(group.hits.map((hit) => hit.id)).toEqual(["chat:recent"]);
 	});
 });
 

@@ -349,8 +349,9 @@ before the already-enqueued replacement pass has reconciled the current plan.
   **`listStoredPlans(root) → StoredPlanFile[]`** is the Git-free reader the search palette's host
   providers use: it enumerates `<root>/.thinkrail/context/todos/<sessionId>.json` (sidecars such as
   `.baselines.json` are skipped by the id grammar) and hands each plan back as a lazy
-  `TodoStore.read()` — no artifact settling, no git, no review decoration — so a search over every
-  open project's plans costs only the JSON reads it actually needs.
+  `TodoStore.read()` — no artifact settling, no git, no review decoration. A read parses a file only when
+  its `mtime` or size changed since the last read (a bounded per-file memo), so a search over every open
+  project's plans costs one `stat` per plan per keystroke.
 - **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
   `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
   `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head;

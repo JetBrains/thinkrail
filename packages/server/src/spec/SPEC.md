@@ -40,14 +40,18 @@ core/SPEC.md), not an async wrapper — that would still block the loop in one p
   glob/parse failure so it can never break `project.open` / `project.list`.
   **`specSnapshot(root) → SpecSnapshot`** — the search palette's read: every spec of a repo
   **root** (path, id, title, type, full content) through the same per-root reused `SpecIndex`,
-  memoized for a 5 s TTL so a keystroke never re-walks the tree; a lapsed TTL or
-  `invalidateSpecSnapshot(root)` (the host calls it on `workspace.fsChanged`) keeps the old snapshot
-  answering and rebuilds it on `setImmediate`, so only a root's very first read walks on the request
-  path; the snapshot says `rebuilding` while that is pending, so a caller can report "indexing" and be
-  asked again instead of serving the stale build as final. The walk stays synchronous and bounded by the parse cache; a glob/parse failure degrades to an
-  empty snapshot.
+  memoized so a keystroke never re-walks the tree. Every build runs on `setImmediate`, the first one
+  too: a root's first read answers an empty snapshot, and a stale one keeps answering until its rebuild
+  lands; the snapshot says `rebuilding` while a build is pending, so a caller reports "indexing" and
+  asks again instead of serving the stale build as final. A build happens only on a read — after the
+  60 s TTL or after `invalidateSpecSnapshot(root)` (the host calls it on `workspace.fsChanged`) marked
+  the root stale — never eagerly, so a worktree an agent keeps writing in costs nothing while nobody
+  searches it. At most eight roots are kept (least recently read out first), and
+  **`evictSpecRoot(root)`** drops a root's snapshot, its index and a pending build (the host calls it
+  when a workspace is removed). The walk stays synchronous and bounded by the parse cache; a
+  glob/parse failure degrades to an empty snapshot.
 - **Public surface (barrel):** `specGraph`, `evictSpecIndex`, `projectHasSpecs`, `specSnapshot`,
-  `invalidateSpecSnapshot`, `SpecSnapshot`, `SpecSnapshotEntry`.
+  `invalidateSpecSnapshot`, `evictSpecRoot`, `SpecSnapshot`, `SpecSnapshotEntry`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (DTOs); **`pi-spec-graph/core`** (the
   pi-free read model — the one host-side value-import of the extension package, sanctioned in
   `module-spec-graph`).

@@ -36,7 +36,8 @@ export interface SpecSnapshotEntry {
 	readonly content: string;
 }
 
-const SNAPSHOT_TTL_MS = 5_000;
+const SNAPSHOT_TTL_MS = 60_000;
+const SNAPSHOT_ROOTS = 8;
 const snapshots = new Map<string, { at: number; entries: readonly SpecSnapshotEntry[] }>();
 const rebuilding = new Set<string>();
 
@@ -65,14 +66,15 @@ export interface SpecSnapshot {
 	readonly rebuilding: boolean;
 }
 
-/** The root's specs, memoized for a short TTL; the first read of a root builds synchronously, later rebuilds happen off the request. */
+/** The root's specs; every build, the first included, runs off the request while the previous answer (or none) is served. */
 export function specSnapshot(root: string, now = Date.now()): SpecSnapshot {
 	const cached = snapshots.get(root);
 	if (!cached) {
-		const entries = buildSnapshot(root);
-		snapshots.set(root, { at: now, entries });
-		return { entries, rebuilding: false };
+		scheduleSnapshotRebuild(root);
+		return { entries: [], rebuilding: true };
 	}
+	snapshots.delete(root);
+	snapshots.set(root, cached);
 	if (now - cached.at >= SNAPSHOT_TTL_MS) scheduleSnapshotRebuild(root);
 	return { entries: cached.entries, rebuilding: rebuilding.has(root) };
 }
@@ -81,14 +83,27 @@ function scheduleSnapshotRebuild(root: string): void {
 	if (rebuilding.has(root)) return;
 	rebuilding.add(root);
 	setImmediate(() => {
-		rebuilding.delete(root);
+		if (!rebuilding.delete(root)) return;
+		snapshots.delete(root);
 		snapshots.set(root, { at: Date.now(), entries: buildSnapshot(root) });
+		for (const oldest of snapshots.keys()) {
+			if (snapshots.size <= SNAPSHOT_ROOTS) break;
+			evictSpecRoot(oldest);
+		}
 	});
 }
 
-/** A worktree changed: keep serving the old snapshot and rebuild it off the request path. */
+/** A worktree changed: the snapshot is rebuilt on its next read, never eagerly. */
 export function invalidateSpecSnapshot(root: string): void {
-	if (snapshots.has(root)) scheduleSnapshotRebuild(root);
+	const cached = snapshots.get(root);
+	if (cached) snapshots.set(root, { at: Number.NEGATIVE_INFINITY, entries: cached.entries });
+}
+
+/** Drops a root's snapshot and spec index, and any build still pending for it. */
+export function evictSpecRoot(root: string): void {
+	snapshots.delete(root);
+	rebuilding.delete(root);
+	projectIndexes.delete(root);
 }
 
 export function projectHasSpecs(root: string): boolean {

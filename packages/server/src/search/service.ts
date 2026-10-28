@@ -17,6 +17,7 @@ import {
 	SEARCH_KINDS,
 } from "@thinkrail/contracts";
 import type { HistorySession } from "../history";
+import { logger } from "../log";
 import type { SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import { FileListCache } from "./files";
@@ -25,12 +26,15 @@ import {
 	type ChatLabel,
 	type ProviderInput,
 	type SearchRoot,
-	searchChats,
+	searchChatTitles,
 	searchFiles,
 	searchPlans,
 	searchSpecs,
+	searchTranscripts,
 	searchWorkspaces,
 } from "./providers";
+
+const log = logger("search");
 
 export interface SearchReaders {
 	readonly projects: () => Project[];
@@ -140,7 +144,8 @@ export function createSearchService(readers: SearchReaders): SearchService {
 				if (!kinds.has(kind)) return;
 				try {
 					groups.push(run());
-				} catch {
+				} catch (error) {
+					log.warn(`search provider failed (${kind})`, error);
 					groups.push(emptyGroup(kind, "failed"));
 				}
 			};
@@ -152,25 +157,22 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			if (kinds.has("chat") || kinds.has("transcript") || kinds.has("plan")) {
 				try {
 					sessions = await readers.sessions();
-				} catch {
+				} catch (error) {
+					log.warn("search could not read the chat history", error);
 					sessions = null;
 				}
 			}
 			if (superseded()) return { seq, groups: [], superseded: true };
-			if (kinds.has("chat") || kinds.has("transcript")) {
-				if (!sessions) {
-					if (kinds.has("chat")) groups.push(emptyGroup("chat", "failed"));
-					if (kinds.has("transcript")) groups.push(emptyGroup("transcript", "failed"));
-				} else {
-					const result = searchChats(
-						sessions.sessions,
-						sessions.indexing,
-						chatLabeler(workspaces),
-						input(),
-					);
-					if (kinds.has("chat")) groups.push(result.chats);
-					if (kinds.has("transcript")) groups.push(result.transcripts);
-				}
+			const history = sessions;
+			if (history) {
+				const label = chatLabeler(workspaces);
+				push("chat", () => searchChatTitles(history.sessions, history.indexing, label, input()));
+				push("transcript", () =>
+					searchTranscripts(history.sessions, history.indexing, label, input()),
+				);
+			} else {
+				if (kinds.has("chat")) groups.push(emptyGroup("chat", "failed"));
+				if (kinds.has("transcript")) groups.push(emptyGroup("transcript", "failed"));
 			}
 			push("plan", () =>
 				searchPlans(

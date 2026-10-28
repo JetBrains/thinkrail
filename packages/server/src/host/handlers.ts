@@ -181,7 +181,7 @@ import {
 	updateComment,
 } from "../reviews";
 import { getConfig, noteRecentModel, updateConfig } from "../settings";
-import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
+import { evictSpecIndex, evictSpecRoot, projectHasSpecs, specGraph } from "../spec";
 import {
 	deleteTemplate,
 	getTemplate,
@@ -698,6 +698,7 @@ const handlers: WsHandlers = {
 		const ws = forgetWorkspace(id);
 		if (ws) {
 			evictSpecIndex(ws.id);
+			evictSpecRoot(ws.worktreePath);
 			removeWorkspaceReviews(ws.id);
 			forgetWorkspaceChanges(ws.id);
 			forgetWorkspaceTurns(ws.id);

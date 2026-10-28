@@ -185,49 +185,74 @@ export interface ChatLabel {
 	readonly workspaceId: string;
 }
 
-export function searchChats(
+function lastActivity(session: HistorySession): number {
+	return session.entries[session.entries.length - 1]?.timestamp ?? 0;
+}
+
+function groupState(truncated: boolean, indexing: boolean): SearchGroup["state"] {
+	return truncated ? "truncated" : indexing ? "indexing" : "ready";
+}
+
+export function searchChatTitles(
 	sessions: readonly HistorySession[],
 	indexing: boolean,
 	label: (cwd: string) => ChatLabel | null,
 	input: ProviderInput,
-): { chats: SearchGroup; transcripts: SearchGroup } {
-	const chats: SearchHit[] = [];
-	const transcripts: SearchHit[] = [];
-	const terms = input.terms.map((term) => term.text);
-	const primary = terms[0] ?? "";
+): SearchGroup {
+	const hits: SearchHit[] = [];
 	let truncated = false;
-	let scanned = 0;
-	for (const session of sessions) {
+	for (let index = 0; index < sessions.length; index += 1) {
+		if (index % SCAN_CHECK_EVERY === SCAN_CHECK_EVERY - 1 && input.deadline.expired()) {
+			truncated = true;
+			break;
+		}
+		const session = sessions[index];
+		if (!session?.title) continue;
 		const where = label(session.cwd);
 		if (!where) continue;
-		const last = session.entries[session.entries.length - 1];
-		const timestamp = last?.timestamp ?? 0;
-		if (session.title) {
-			const match = matchFields(input.terms, [{ key: "title", text: session.title }]);
-			if (match) {
-				chats.push({
-					id: `chat:${session.sessionId}`,
-					kind: "chat",
-					title: session.title,
-					tier: match.tier,
-					score: match.score,
-					ranges: rangesOf(match),
-					projectId: where.projectId,
-					workspaceId: where.workspaceId,
-					sessionId: session.sessionId,
-					timestamp,
-				});
-			}
-		}
-		for (const entry of session.entries) {
-			scanned += 1;
-			if (scanned % SCAN_CHECK_EVERY === 0 && input.deadline.expired()) {
+		const match = matchFields(input.terms, [{ key: "title", text: session.title }]);
+		if (!match) continue;
+		hits.push({
+			id: `chat:${session.sessionId}`,
+			kind: "chat",
+			title: session.title,
+			tier: match.tier,
+			score: match.score,
+			ranges: rangesOf(match),
+			projectId: where.projectId,
+			workspaceId: where.workspaceId,
+			sessionId: session.sessionId,
+			timestamp: lastActivity(session),
+		});
+	}
+	return buildGroup("chat", hits, input.limit, groupState(truncated, indexing));
+}
+
+/** Newest chats first, each newest message first, so a budget that runs out leaves only older messages unsearched. */
+export function searchTranscripts(
+	sessions: readonly HistorySession[],
+	indexing: boolean,
+	label: (cwd: string) => ChatLabel | null,
+	input: ProviderInput,
+): SearchGroup {
+	const terms = input.terms.map((term) => term.text);
+	const primary = terms[0] ?? "";
+	const ordered = sessions
+		.map((session) => ({ session, where: label(session.cwd), last: lastActivity(session) }))
+		.filter((entry): entry is typeof entry & { where: ChatLabel } => entry.where !== null)
+		.sort((a, b) => b.last - a.last);
+	const hits: SearchHit[] = [];
+	let truncated = false;
+	scan: for (const { session, where } of ordered) {
+		for (let index = session.entries.length - 1; index >= 0; index -= 1) {
+			if (input.deadline.expired()) {
 				truncated = true;
-				break;
+				break scan;
 			}
-			if (!matchesTerms(entry.text, terms)) continue;
+			const entry = session.entries[index];
+			if (!entry || !matchesTerms(entry.text, terms)) continue;
 			const snippet = compactWhitespace(makeSnippet(entry.text, primary));
-			transcripts.push({
+			hits.push({
 				id: `transcript:${session.sessionId}:${entry.messageIndex}`,
 				kind: "transcript",
 				title: snippet.slice(0, TRANSCRIPT_TEXT_PREVIEW),
@@ -244,13 +269,8 @@ export function searchChats(
 				timestamp: entry.timestamp,
 			});
 		}
-		if (truncated) break;
 	}
-	const state = truncated ? "truncated" : indexing ? "indexing" : "ready";
-	return {
-		chats: buildGroup("chat", chats, input.limit, state),
-		transcripts: buildGroup("transcript", transcripts, input.limit, state),
-	};
+	return buildGroup("transcript", hits, input.limit, groupState(truncated, indexing));
 }
 
 export function searchPlans(
