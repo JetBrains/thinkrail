@@ -17,7 +17,7 @@ export type GitResult = {
 	ok: boolean;
 	out: string;
 	err: string;
-	failure?: "timeout" | "launch";
+	failure?: "timeout" | "launch" | "aborted";
 };
 
 export type GitBytesResult = {
@@ -26,14 +26,13 @@ export type GitBytesResult = {
 	err: string;
 };
 
-export type GitAsyncBytesResult = GitBytesResult & {
-	failure?: "timeout" | "launch";
-};
+export type GitAsyncBytesResult = GitBytesResult & Pick<GitResult, "failure">;
 
 type GitAsyncOptions = {
 	timeoutMs?: number;
 	env?: Record<string, string | undefined>;
 	network?: boolean;
+	signal?: AbortSignal;
 };
 
 export function nonInteractiveGitEnv(): Record<string, string | undefined> {
@@ -88,6 +87,18 @@ function timeoutFailure(
 	};
 }
 
+function executionDiagnostics(run: {
+	err: string;
+	aborted?: true;
+	launchFailed: boolean;
+}): Pick<GitResult, "err" | "failure"> {
+	const err = boundedStderr(run.err);
+	if (run.aborted) {
+		return { err: `git operation cancelled${err ? ` — ${err}` : ""}`, failure: "aborted" };
+	}
+	return { err, ...(run.launchFailed && { failure: "launch" as const }) };
+}
+
 export async function gitAsync(
 	cwd: string,
 	args: string[],
@@ -96,6 +107,7 @@ export async function gitAsync(
 	const run = await runBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
 		env: opts.env ?? nonInteractiveGitEnv(),
+		...(opts.signal ? { signal: opts.signal } : {}),
 	});
 	if (run.timedOut) {
 		return { ok: false, out: "", ...timeoutFailure(run, opts.network) };
@@ -103,15 +115,14 @@ export async function gitAsync(
 	return {
 		ok: run.ok,
 		out: opts.raw ? run.out : run.out.trim(),
-		err: boundedStderr(run.err),
-		...(run.launchFailed && { failure: "launch" as const }),
+		...executionDiagnostics(run),
 	};
 }
 
 export function gitAsyncStream(
 	cwd: string,
 	args: string[],
-	opts: GitAsyncOptions = {},
+	opts: Omit<GitAsyncOptions, "signal"> = {},
 ): BoundedStream {
 	return streamBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
@@ -128,6 +139,7 @@ export async function gitAsyncBytes(
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
 		env: opts.env ?? nonInteractiveGitEnv(),
 		stdout: "bytes",
+		...(opts.signal ? { signal: opts.signal } : {}),
 	});
 	if (run.timedOut) {
 		return { ok: false, out: new Uint8Array(), ...timeoutFailure(run, opts.network) };
@@ -135,7 +147,6 @@ export async function gitAsyncBytes(
 	return {
 		ok: run.ok,
 		out: run.out,
-		err: boundedStderr(run.err),
-		...(run.launchFailed && { failure: "launch" as const }),
+		...executionDiagnostics(run),
 	};
 }

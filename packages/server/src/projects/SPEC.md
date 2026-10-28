@@ -91,7 +91,26 @@ bootstrap it into one so it can be opened.
   leaving it untouched otherwise; `trusted: false` revokes both. A trust change persists and publishes the
   record, so every client shows the persisted trust even when the host request that made it then fails
   (an open chat could not reload).
-- **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`,
+## Repository cloning
+
+`inspectCloneDestination` returns the validated absolute destination for the UI preview without reserving
+it; clone repeats that check before claiming the folder. `cloneProject` accepts a repository URL, host parent path, one folder name and optional positive integer
+history depth. HTTP(S), SSH, Git, SCP-style SSH and local `file:` URLs are accepted; remote helpers,
+embedded passwords, HTTP userinfo, query strings and fragments are rejected. Git uses the host's existing
+credential helpers and SSH configuration; no credentials are collected by ThinkRail. The parent must
+already be a directory. Every existing destination (including an empty directory or symlink) rejects.
+An exclusive mkdir reserves the destination before Git starts. Failures and cancellation clean only that
+reservation, checking its filesystem identity before deletion; a replacement entry is never removed.
+Clone is asynchronous, has a 30-minute deadline, and cancellation waits for process teardown before
+cleanup. Successful cloning is followed by `openProject`; an opening failure preserves the checkout for
+recovery. No agent starts and no trust is granted implicitly.
+
+`startProjectClone` / `cancelProjectClone` pair a client-owned operation id with an AbortController only
+while the request is active. Cancellation is owner-scoped and idempotent, and the original clone response
+reports cancellation only after cleanup. Socket reconnect uses host request replay, not a new operation.
+Git errors are bounded and credential-shaped URL output is redacted before it reaches the client.
+
+- **Public surface (barrel):** `cloneProject`, `inspectCloneDestination`, `startProjectClone`, `cancelProjectClone`, `openProject`, `listProjects`, `listRecentProjects`,
   `refreshRecentProjectFolders`, `closeProject`, `renameProject`,
   `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `createProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,

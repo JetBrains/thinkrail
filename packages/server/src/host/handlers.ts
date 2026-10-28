@@ -136,9 +136,11 @@ import {
 } from "../pr";
 import {
 	acknowledgeProjectSkills,
+	cancelProjectClone,
 	closeProject,
 	createProject,
 	initProject,
+	inspectCloneDestination,
 	inspectProjectPath,
 	listProjects,
 	openProject,
@@ -146,6 +148,7 @@ import {
 	setProjectGroupEnabled,
 	setProjectSkillEnabled,
 	setProjectTrust,
+	startProjectClone,
 } from "../projects";
 import {
 	addComment,
@@ -502,6 +505,14 @@ const handlers: WsHandlers = {
 		observeSetupAction("project_create", () =>
 			createProject(params.parentPath, params.name, params.displayName),
 		),
+	"project.cloneDestination": (params) => ({
+		path: inspectCloneDestination(params.parentPath, params.name),
+	}),
+	"project.clone": (params, ctx) => startProjectClone(params, ctx.clientKey),
+	"project.cancelClone": (params, ctx) => {
+		cancelProjectClone(params.operationId, ctx.clientKey);
+		return { ok: true };
+	},
 	"project.list": () =>
 		observeSetupRead(listProjects, (projects) => ({
 			project_present: projects.length > 0 ? "yes" : "no",

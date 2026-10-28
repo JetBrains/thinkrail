@@ -25,7 +25,7 @@ function emit(project: Project): void {
 	publishProject?.(project);
 }
 
-function resolveProjectPath(path: string): string {
+export function resolveProjectPath(path: string): string {
 	const home =
 		(process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) || homedir();
 	const underHome =

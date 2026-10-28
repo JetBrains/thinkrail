@@ -277,11 +277,17 @@ test("review details and the GitHub review actions are pinned to v88", () => {
 });
 
 test("project create and the onboarding dismissal are pinned to v94", () => {
-	expect(PROTOCOL_VERSION).toBe(94);
+	expect(PROTOCOL_VERSION).toBe(95);
 	expect(ONBOARDING_PROTOCOL_VERSION).toBe(94);
 	expect(WS_METHODS.projectCreate).toBe("project.create");
 	expect(WS_METHODS.providerDetect).toBe("provider.detect");
 	expect(DEFAULT_CONFIG.onboardingDismissed).toBe(false);
+});
+
+test("repository cloning and cancellation are registered", () => {
+	expect(WS_METHODS.projectClone).toBe("project.clone");
+	expect(WS_METHODS.projectCancelClone).toBe("project.cancelClone");
+	expect(WS_METHODS.projectCloneDestination).toBe("project.cloneDestination");
 });
 
 test("MCP server management, status and chat resources are pinned to v83", () => {

@@ -16,14 +16,20 @@ never what a particular child's output means.
 
 ## Boundary
 
-- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout? })` →
-  `{ ok, out, err, timedOut, launchFailed, waitedMs }`: capture both streams and complete on the child's
+- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout?, signal? })` →
+  `{ ok, out, err, timedOut, launchFailed, waitedMs, aborted? }`: capture both streams and complete on the child's
   **exit**; stdout defaults to decoded text, while `stdout: "bytes"` preserves it as `Uint8Array` for
   callers reading opaque content (stderr remains text diagnostics). POSIX children are detached
-  process-group leaders, while Windows children retain a nonvisual console. Expiry kills the POSIX group
-  or the direct Windows child. A failed launch is a result (`ok: false`, `launchFailed: true`, the launch
-  error as `err`), never a throw; callers can distinguish infrastructure failure from a child that ran
-  and exited nonzero.
+  process-group leaders, while Windows children retain a nonvisual console. Expiry or cancellation kills
+  the POSIX group; Windows asynchronously runs `taskkill /PID <pid> /T /F`, waits for it to exit, and
+  falls back to killing the direct child if taskkill fails. A failed launch is a result (`ok: false`,
+  `launchFailed: true`, the launch error as `err`), never a throw; callers can distinguish infrastructure
+  failure from a child that ran
+  and exited nonzero. A pre-aborted `signal` launches nothing. An in-flight abort competes with exit and
+  expiry, stops the tree, and waits for the direct child's exit before returning, so callers may safely
+  clean up a partial clone directory. Only cancellation carries `aborted: true` (`ok: false`, neither
+  timeout nor launch failure), retaining captured stdout/stderr with the same drain grace. Once exit or
+  expiry wins, later aborts have no effect; the listener is removed before draining.
 - **Also owns:** `streamBounded(argv, { timeoutMs, cwd?, env? })` → `{ stdout, exited }` — the same
   spawn, deadline, group kill and stderr capture, for the one caller that must relay a child's stdout
   while it is still being produced (the host's `/blob` route). Completion is still the child's exit,
@@ -34,7 +40,8 @@ never what a particular child's output means.
   to the exit, and only the hang is bounded. The `stdout` stream **closes** only after a zero exit and
   **errors** after a nonzero exit, an expiry or a failed launch, so a consumer can never mistake a
   truncated relay for a complete one; cancelling the stream kills the child. `exited` resolves to the
-  same shape `runBounded` returns, minus `out`.
+  same shape `runBounded` returns, minus `out`. Streaming does not accept an abort signal; consumers
+  cancel its stdout stream instead.
 - **Public surface:** `runBounded`, `streamBounded`, `BoundedRun`, `BoundedBytesRun`, `BoundedRunOptions`,
   `BoundedBytesRunOptions`, `BoundedStream`, `BoundedStreamOptions`.
 - **Allowed deps:** Bun/Node process APIs. Nothing else — it knows no feature, no wire type, no
@@ -48,7 +55,7 @@ never what a particular child's output means.
     would grow this surface for one caller in another package.
   - `dialog`'s `selectDirectory` (`dialog.ts`) — still the EOF-gated shape this module replaces, around
     `zenity`/`kdialog`/`osascript`, whose forked helpers inherit stdio. Unmigrated because a picker's real
-    budget is a human at a dialog: it needs a cancellation seam, which `runBounded` does not offer.
+    budget is a human at a dialog: wiring its lifetime to the runner's cancellation seam is still deferred.
 
   `github`'s `githubAuthStatus` (`github.ts`) used to be a third — a `spawnSync` HTTPS call on the single
   event loop — until it moved onto `runBounded`, which is also why `ghSetupProblem` no longer hand-rolls its
@@ -76,7 +83,7 @@ never what a particular child's output means.
   makes the grace run to full term every time. A `git fetch` that answered at 54.9s of its 55s came back as
   the stalled wording with `ok: false`, and its healthy process group was SIGKILLed on the way out. Pinned
   by a test whose child exits immediately behind a pipe-holding grandchild under a 250ms budget.
-- **The drain grace (250ms) runs on *both* outcomes, exit and expiry.** It cannot truncate the child's own
+- **The drain grace (250ms) runs on exit, expiry and cancellation.** It cannot truncate the child's own
   output: a pipe holds at most its buffer, and a child that writes more than that is *blocked* until the
   reader drains it — so at exit everything left is already buffered and drains in microseconds; the grace
   only covers scheduler latency. Anything arriving after it can only come from a process that is not our
@@ -120,14 +127,15 @@ never what a particular child's output means.
   a fast legible failure beats a prompt only the launching shell can see. It also puts the child outside the
   host terminal's signal group, so the budget — never a `Ctrl-C` on the host — is what ends a stalled call.
   Surfacing the passphrase request in the UI (#209's headline ask, as opposed to its "at minimum" clause)
-  stays unbuilt and needs the cancellation seam `dialog` wants above.
+  stays unbuilt; the runner's cancellation seam does not itself provide a prompt UI.
 - **Windows children are hidden, not detached.** `windowsHide: true` with `detached: false` preserves a
   nonvisual console for ordinary descendants to inherit. Detachment removes that console: the immediate
   child stays hidden, but a helper it launches can allocate a visible console. This is why a focus-triggered
   `gh` lookup could still flash `tzutil`, Git, and SSH windows despite hiding the direct child. Windows
-  does not support the POSIX group-kill path; expiry still terminates only the direct child, not a promised
-  whole tree. Non-detached children participate in libuv's normal job lifetime; this runner is for bounded
-  host-owned work, not independently surviving daemons. The native Windows regression uses a no-console
+  does not support the POSIX group-kill path; expiry and stream cancellation use the same asynchronous
+  taskkill tree termination as abort. Direct-child fallback cannot guarantee termination of descendants.
+  Non-detached children participate in libuv's normal job lifetime; this runner is for bounded host-owned
+  work, not independently surviving daemons. The native Windows regression uses a no-console
   driver, the real runner, and an ordinary console grandchild, with a detached positive control. It checks
   native console ownership/window state rather than option presence, output success, or browser DOM.
 - **The env defaults to the live `process.env`, not the launch-time snapshot** — `boot`'s
