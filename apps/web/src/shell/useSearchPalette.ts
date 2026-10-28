@@ -197,13 +197,13 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		[online, contextProject, activeWorkspaceId, protocolVersion],
 	);
 	const openNewWorkspace = options.openNewWorkspace;
-	const start = useMemo<PaletteStart | undefined>(() => {
-		if (!contextProject) return undefined;
-		return {
-			openDialog: (text) => openNewWorkspace(contextProject.id, text),
-			...(online ? {} : { disabledReason: t("search.palette.offlineReason") }),
-		};
-	}, [contextProject, online, openNewWorkspace, t]);
+	const start = useMemo<PaletteStart | undefined>(
+		() =>
+			contextProject
+				? { openDialog: (text) => openNewWorkspace(contextProject.id, text) }
+				: undefined,
+		[contextProject, openNewWorkspace],
+	);
 
 	const binding = useMemo(() => {
 		const store = () => useAppStore.getState();

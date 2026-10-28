@@ -2,7 +2,6 @@ import { RiMoreLine, RiSparkling2Line } from "@remixicon/react";
 import { type MatchTerm, matchFields } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
-import { shortcutLabel } from "../commands";
 import type { HostTotal } from "./hostItems";
 import { frecencyScore, type LearningSnapshot } from "./learning";
 import type { PaletteItem, PaletteRow, PaletteSection, PaletteStart } from "./model";
@@ -245,16 +244,18 @@ export function startRow(t: Translator, input: StartInput): PaletteItem {
 		group: "start",
 		scope: "all",
 		icon: RiSparkling2Line,
-		badge: t("search.start.badge", { shortcut: shortcutLabel({ key: "N", mod: true }) }),
 		shortcut: { key: "↵", mod: true },
-		...(start.disabledReason ? { disabledReason: start.disabledReason } : {}),
 		run: () => start.openDialog(text),
 	};
 }
 
 /** The one rule for the Start work row and the `Mod+↵` shortcut: a typed query in the All or Work scope. */
 export function startEligible(parsed: ParsedQuery): boolean {
-	return parsed.text.trim().length > 0 && (parsed.scope === "all" || parsed.scope === "work");
+	return (
+		parsed.terms.length > 0 &&
+		parsed.text.trim().length > 0 &&
+		(parsed.scope === "all" || parsed.scope === "work")
+	);
 }
 
 /** The prompt is the text as typed — only the scope prefix stripped, whitespace and tokens untouched. */
@@ -263,13 +264,22 @@ export function startPrompt(raw: string, parsed: ParsedQuery): string {
 	return (parsed.scope === "all" ? trimmed : trimmed.slice(1)).trim();
 }
 
+function onlyLate(section: PaletteSection): boolean {
+	return section.items.every((row) => row.item.kind === "more" || (row.item.late ?? 0) > 0);
+}
+
 function withStart(sections: PaletteSection[], input: SectionsInput): PaletteSection[] {
 	const { start, parsed, t } = input;
 	if (!start || !startEligible(parsed)) return sections;
-	return [
-		...sections,
-		{ id: "start", title: groupLabel(t, "start"), items: [plainRow(startRow(t, start))] },
-	];
+	const row = {
+		id: "start",
+		title: groupLabel(t, "start"),
+		items: [plainRow(startRow(t, start))],
+	};
+	const late = sections.findIndex(onlyLate);
+	return late === -1
+		? [...sections, row]
+		: [...sections.slice(0, late), row, ...sections.slice(late)];
 }
 
 export function buildSections(input: SectionsInput): PaletteSection[] {

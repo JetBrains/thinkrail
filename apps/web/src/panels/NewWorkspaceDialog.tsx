@@ -624,7 +624,7 @@ export function NewWorkspaceDialog({
 							if (slashCompletion.handleKeyDown(e)) return;
 							if (e.key === "Enter" && !e.shiftKey) {
 								e.preventDefault();
-								if (submitEnabled) void create();
+								if (submitEnabled && !e.repeat) void create();
 							}
 						}}
 					/>

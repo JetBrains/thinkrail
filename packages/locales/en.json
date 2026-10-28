@@ -1602,7 +1602,6 @@
 	"search.scope.files": "Files",
 	"search.scope.specs": "Specs",
 	"search.scope.work": "Work",
-	"search.start.badge": "{{shortcut}} dialog",
 	"search.start.subtitle": "Opens Create workspace with this text — target, base branch and model are chosen there",
 	"search.start.title": "Start work with “{{text}}”…",
 	"settings.appearance.changeFailed": "Couldn't change theme",

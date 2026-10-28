@@ -641,6 +641,129 @@ test("start from the typed text: the Start work row and Mod+Enter open the Creat
 	await expect(dialog).toBeHidden();
 });
 
+test("a held Enter or Mod+Enter opens the Create-workspace dialog once and never submits it", async ({
+	page,
+}) => {
+	const creates: string[] = [];
+	page.on("websocket", (socket) =>
+		socket.on("framesent", ({ payload }) => {
+			const frame = JSON.parse(String(payload)) as { method?: string; id?: string };
+			if (frame.method === "workspace.create") creates.push(frame.id ?? "");
+		}),
+	);
+	const repeat = (key: string, mod = false) =>
+		page.evaluate(
+			({ key: name, mod: withMod }) => {
+				const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+				document.activeElement?.dispatchEvent(
+					new KeyboardEvent("keydown", {
+						key: name,
+						repeat: true,
+						bubbles: true,
+						cancelable: true,
+						metaKey: withMod && mac,
+						ctrlKey: withMod && !mac,
+					}),
+				);
+			},
+			{ key, mod },
+		);
+	await openFixtureProject(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("Refactor the auth module");
+	await expect(page.locator('[data-testid="search-row"][data-item-id="start"]')).toBeVisible();
+	await repeat("Enter", true);
+	await repeat("Enter");
+	await expect(palette(page)).toBeVisible();
+	await pressPlatformShortcut(page, "Enter");
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("ws-prompt")).toBeFocused();
+	await repeat("Enter");
+	await repeat("Enter");
+	await expect(dialog).toBeVisible();
+	await expect(page.getByTestId("create-workspace")).toBeEnabled();
+	expect(creates).toEqual([]);
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+});
+
+test("a Start row the user selected keeps its place and its Enter when host rows land after it", async ({
+	page,
+}) => {
+	const name = "zz-startprobe.ts";
+	let release = () => {};
+	const released = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		socket.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as WsClientMessage;
+			const params = "method" in frame && frame.method === "search.query" ? frame.params : null;
+			const query = params as WsParams<"search.query"> | null;
+			if (query?.query !== "startprobe") {
+				server.send(message);
+				return;
+			}
+			void released.then(() =>
+				socket.send(
+					JSON.stringify({
+						id: frame.id,
+						ok: true,
+						result: {
+							seq: query.seq,
+							groups: (query.kinds ?? []).map((kind) =>
+								kind === "file"
+									? {
+											kind,
+											state: "ready",
+											total: 1,
+											hits: [
+												{
+													id: `file:${query.context.workspaceId}:${name}`,
+													kind,
+													title: name,
+													tier: MATCH_TIER.prefix,
+													score: 1,
+													projectId: query.context.projectId,
+													workspaceId: query.context.workspaceId,
+													path: name,
+												},
+											],
+										}
+									: { kind, state: "ready", total: 0, hits: [] },
+							),
+						},
+					}),
+				),
+			);
+		});
+		server.onMessage((message) => socket.send(message));
+	});
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("startprobe");
+	const rows = page.getByTestId("search-row");
+	const start = page.locator('[data-testid="search-row"][data-item-id="start"]');
+	await expect(rows).toHaveCount(1);
+	await expect(page.getByTestId("search-host-pending")).toHaveCount(1);
+	await page.keyboard.press("ArrowDown");
+	await expect(start).toHaveAttribute("aria-selected", "true");
+	release();
+	await expect(page.locator('[data-testid="search-row"][data-kind="file"]')).toContainText(name);
+	await expect(page.getByTestId("search-host-pending")).toHaveCount(0);
+	await expect(rows.first()).toHaveAttribute("data-item-id", "start");
+	await expect(start).toHaveAttribute("aria-selected", "true");
+	await page.keyboard.press("Enter");
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("ws-prompt")).toHaveValue("startprobe");
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+});
+
 test("an older host gets the local scopes only, with a notice, and never a search.query", async ({
 	page,
 }) => {

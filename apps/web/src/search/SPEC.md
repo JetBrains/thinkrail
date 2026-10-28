@@ -17,7 +17,8 @@ topbar search button. It owns the presentation, the query grammar, ranking and l
 store-derived work items, and the host-search controller (`search.query` / `search.preview`); the
 command catalog and its handlers, the way a host hit opens and the file preview renderer are composed
 and injected by `shell`. It finds and jumps — it never mutates a setting in place (every setting row
-opens its Settings section), and every verb runs through the command it was listed as.
+opens its Settings section), and every verb runs through the command it was listed as (Start work through
+the injected `PaletteStart`).
 
 ## Boundary
 
@@ -143,15 +144,25 @@ host.
 
 ## Start from the typed text
 
-Whenever the query has text in the All or Work scope (`startEligible`, the one rule the row, the
-shortcut and its footer hint share), the last section is **Start work**: one row «Start work with
-“<text>”…», badged with the `Mod+N` dialog. `↵` on it, or `Mod+↵` from any row, closes the palette and
-calls the injected `PaletteStart.openDialog(text)` — shell opens its Create-workspace dialog with the
-text as the prompt, so the target, base branch and model are chosen where they always are. The prompt
-is the text as typed (`startPrompt`: only the scope prefix stripped — inner whitespace, quotes and
-tokens untouched), never the matcher's normalized terms. Nothing starts without the dialog (the field keeps creation out of the finder: Warp walked its
-"search and run" box back, Claude bound creation to an explicit `n:` mode). The row carries the offline
-reason like every host mutation and is never remembered by the learning store.
+Whenever the query has a term in the All or Work scope and shell injects a `PaletteStart` (a context
+project gives the dialog its project) — `startEligible`, the one rule the row, the shortcut and its
+footer hint share — the last section is **Start work**: one row «Start work with “<text>”…» showing its
+`Mod+↵` chord. `↵` on it, or `Mod+↵` from any row, closes the palette and calls the injected
+`PaletteStart.openDialog(text)` — shell opens its Create-workspace dialog with the text as the prompt,
+so the target, base branch and model are chosen where they always are, and a Create dialog already open
+is kept as it is, its draft untouched. The prompt is the text as typed (`startPrompt` over the parsed
+query's `raw`: only the scope prefix stripped, an unavailable one included — inner whitespace, quotes
+and tokens untouched), never the matcher's normalized terms. Nothing starts without the dialog: a held
+`↵` / `Mod+↵` acts once in the palette, and the dialog ignores the key's repeats, so the same press never
+submits it (the field keeps creation out of the finder: Warp walked its "search and run" box back,
+Claude bound creation to an explicit `n:` mode). Like New workspace, the row is offered offline too (the
+dialog itself needs the host to create). It is never remembered by the learning store and never counted
+as a result in the live region. Rows a host reply brings while a selection is held land after every row
+on screen, the Start row included, and never become the top hit, so a selected Start row does not move.
+An implicit selection follows the ranking as host rows land, a lone Start row's too — like any first row
+it may be overtaken while results stream in, and `Mod+↵` is the start that never depends on rows.
+Holding a lone Start row as a selection was rejected: every host-only match would then land below it,
+and plain search would open the Create dialog on `↵`.
 
 ## Interaction
 

@@ -73,7 +73,6 @@ export interface PaletteItem {
 /** Start work from the typed text: the shell opens its Create-workspace dialog with the text as the prompt. */
 export interface PaletteStart {
 	readonly openDialog: (text: string) => void;
-	readonly disabledReason?: string;
 }
 
 export interface PaletteSection {

@@ -184,7 +184,7 @@ function PaletteContent({
 		[hostState.groups, hostState.stale],
 	);
 	const hostStatus = hostSearchStatus(hostState);
-	const startText = startEligible(parsed) ? startPrompt(query, parsed) : "";
+	const startText = startEligible(parsed) ? startPrompt(parsed.raw, parsed) : "";
 	const startInput = useMemo(
 		() => (start && startText ? { start, text: startText } : undefined),
 		[start, startText],
@@ -287,7 +287,7 @@ function PaletteContent({
 	};
 
 	const startFromText = () => {
-		if (!startInput || startInput.start.disabledReason) return;
+		if (!startInput) return;
 		onClose();
 		startInput.start.openDialog(startInput.text);
 	};
@@ -348,7 +348,7 @@ function PaletteContent({
 		}
 		if (mod && event.key === "Enter" && !event.altKey && !event.shiftKey) {
 			event.preventDefault();
-			startFromText();
+			if (!event.repeat) startFromText();
 			return;
 		}
 		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
@@ -375,7 +375,7 @@ function PaletteContent({
 				return;
 			case "Enter":
 				event.preventDefault();
-				activate(selected);
+				if (!event.repeat) activate(selected);
 				return;
 		}
 	};
@@ -484,7 +484,7 @@ function PaletteContent({
 					<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
 					<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
 					<Hint keys={["Tab"]} label={t("search.hint.scope")} />
-					{startInput && !startInput.start.disabledReason ? (
+					{startInput ? (
 						<Hint keys={shortcutKeys({ key: "↵", mod: true })} label={t("search.hint.start")} />
 					) : null}
 					{hostState.pending ? (
@@ -515,7 +515,9 @@ function PaletteContent({
 					</Button>
 				</footer>
 				<p role="status" aria-live="polite" className="sr-only">
-					{t("search.palette.resultCount", { count: rows.length })}
+					{t("search.palette.resultCount", {
+						count: rows.filter((row) => row.item.kind !== "start").length,
+					})}
 					{hostState.pending ? ` ${t("search.palette.searching")}` : ""}
 					{hostStatus ? ` ${t(HOST_STATUS_LABELS[hostStatus])}` : ""}
 				</p>
