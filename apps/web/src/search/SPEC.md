@@ -109,7 +109,8 @@ the top hit nor unseat the one shown, so neither the selection nor a row above i
 "N more" row sits below with the newcomers when they alone overflow the group; while the host reports
 more than it sent for the group, the row stays with the first rows — the one way a reply can still add a
 row above the selection (or move that row back up) is a host count that grows past what the group shows.
-A row already on screen never becomes late. The selected host row never
+A newcomer is a hit neither on screen nor in the previous reply for the same search (stale groups list
+nothing), so a hit already held behind a group's cap — re-sent by an indexing poll — never becomes late. The selected host row never
 leaves the list while the same search stands — the same text, scope and root (`withPinned`): a reply
 that no longer brings it keeps it (a local twin the query misses does not stand in for it), no group's cap hides it (`keep`), and a changed root or a host that
 stops searching drops it. A group's "N more" is the host's count beyond its page less the local rows the

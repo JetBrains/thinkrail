@@ -149,11 +149,13 @@ function PaletteContent({
 	const hostState = useHostSearch(hostInput);
 	const [previews] = useState(createHostPreviewLoader);
 	useLayoutEffect(() => {
-		const landed = hostState.groups?.flatMap((group) => group.hits.map((hit) => hit.id)) ?? [];
+		const landed = hostState.stale
+			? []
+			: (hostState.groups?.flatMap((group) => group.hits.map((hit) => hit.id)) ?? []);
 		const shown = onScreen.current;
 		const holding = holdingSelection.current;
 		setArrivals((current) => noteArrivals(current, landed, shown, holding));
-	}, [hostState.groups]);
+	}, [hostState.groups, hostState.stale]);
 	const localMatches = useMemo(
 		() => matchingIds(rootItems, parsed.terms),
 		[rootItems, parsed.terms],

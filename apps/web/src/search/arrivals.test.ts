@@ -12,7 +12,8 @@ import { buildSections, flattenRows } from "./sections";
 
 describe("noteArrivals", () => {
 	test("nothing is late without a selection, and rows already on screen never become late", () => {
-		expect(noteArrivals(NO_ARRIVALS, ["a", "b"], new Set(), false)).toBe(NO_ARRIVALS);
+		expect(noteArrivals(NO_ARRIVALS, [], new Set(), false)).toBe(NO_ARRIVALS);
+		expect(noteArrivals(NO_ARRIVALS, ["a", "b"], new Set(), false).late.size).toBe(0);
 		const first = noteArrivals(NO_ARRIVALS, ["a", "b"], new Set(["a"]), true);
 		expect([...first.late]).toEqual([["b", 1]]);
 		const second = noteArrivals(first, ["a", "b", "c"], new Set(["a", "b"]), true);
@@ -20,7 +21,23 @@ describe("noteArrivals", () => {
 			["b", 1],
 			["c", 2],
 		]);
-		expect(noteArrivals(second, ["b", "c"], new Set(), true)).toBe(second);
+		expect(noteArrivals(second, ["a", "b", "c"], new Set(), true)).toBe(second);
+		expect(noteArrivals(second, ["b", "c"], new Set(), true).late).toBe(second.late);
+	});
+
+	test("a hit the last reply already listed behind a group's cap is no newcomer, one it did not list is", () => {
+		const held = noteArrivals(NO_ARRIVALS, ["a", "b", "c"], new Set(["a"]), false);
+		const poll = noteArrivals(held, ["a", "b", "c"], new Set(["a"]), true);
+		expect(poll.late.size).toBe(0);
+		const grown = noteArrivals(poll, ["a", "b", "c", "d"], new Set(["a"]), true);
+		expect([...grown.late]).toEqual([["d", 1]]);
+		const afterStale = noteArrivals(
+			noteArrivals(grown, [], new Set(["a"]), true),
+			["a", "b"],
+			new Set(["a"]),
+			true,
+		);
+		expect(afterStale.late.get("b")).toBe(2);
 	});
 });
 
@@ -147,6 +164,65 @@ describe("selection stability across host replies", () => {
 		const second = land([files("ready", MATCH_TIER.prefix, better)], true);
 		expect(second.slice(0, above.length)).toEqual(above);
 		expect(second).toContain(selected);
+	});
+
+	test("a poll that brings nothing new moves no row, a group's hidden hits and its more row included", () => {
+		const below: PaletteItem = { ...local, id: "chat:below", title: "Notes on xrefreshx" };
+		const rows = (groups: readonly SearchGroup[], arrivals: Arrivals) =>
+			flattenRows(
+				buildSections({
+					t,
+					parsed: parseSearchQuery("refresh"),
+					rootItems: [
+						below,
+						...hostItems(
+							{
+								t,
+								openHit: () => {},
+								projectName: () => "One",
+								workspaceName: () => undefined,
+								localIds: new Set([below.id]),
+								late: arrivals.late,
+								staleTerms: null,
+							},
+							groups,
+						),
+					],
+					waiting: [],
+					actions: [],
+					expanded: new Set(),
+					learning: EMPTY_LEARNING,
+					nowMs: 0,
+					keep: below.id,
+				}),
+			).map((row) => row.item.id);
+		const page = [
+			files("indexing", MATCH_TIER.prefix, [
+				"refresh-1.ts",
+				"refresh-2.ts",
+				"refresh-3.ts",
+				"refresh-4.ts",
+				"refresh-5.ts",
+				"refresh-6.ts",
+			]),
+		];
+		let arrivals = noteArrivals(
+			NO_ARRIVALS,
+			page[0]?.hits.map((hit) => hit.id) ?? [],
+			new Set(),
+			false,
+		);
+		const first = rows(page, arrivals);
+		expect(first).toContain("more:files");
+		expect(first.at(-1)).toBe(below.id);
+		arrivals = noteArrivals(
+			arrivals,
+			page[0]?.hits.map((hit) => hit.id) ?? [],
+			new Set(first),
+			true,
+		);
+		expect(arrivals.late.size).toBe(0);
+		expect(rows(page, arrivals)).toEqual(first);
 	});
 
 	test("newcomers to a group shown above the selected row continue below every row on screen, a later cohort below an earlier one", () => {
