@@ -825,8 +825,10 @@ const handlers: WsHandlers = {
 	"fs.readDir": async (p) => {
 		void ensureWatch(p.workspaceId);
 		const nodes = readDir(p.workspaceId, p.path);
+		const workspace = getWorkspace(p.workspaceId);
+		if (isChatWorkspace(workspace)) return nodes;
 		const ignored = await ignoredPaths(
-			getWorkspace(p.workspaceId).worktreePath,
+			workspace.worktreePath,
 			nodes.map((node) => node.path),
 		);
 		return ignored.size === 0
@@ -1578,7 +1580,7 @@ export function openReviewForClient(
 	return review.state === undefined || review.state === "open" ? review : null;
 }
 
-/** Git-backed methods keyed by a workspace: a chat without a project is refused at the door, before any git work. */
+/** Git- and review-backed methods keyed by a workspace: a chat without a project is refused at the door, before any git work. */
 const REPOSITORY_ONLY_METHODS: ReadonlySet<WsMethodName> = new Set<WsMethodName>([
 	"git.status",
 	"git.diffFile",
@@ -1602,6 +1604,10 @@ const REPOSITORY_ONLY_METHODS: ReadonlySet<WsMethodName> = new Set<WsMethodName>
 	"review.close",
 	"review.sendComment",
 	"review.sendBatch",
+	"todo.review",
+	"todo.startReview",
+	"todo.reviewAll",
+	"todo.requestFix",
 ]);
 
 /** Doors that start or attach a session or a terminal: a chat being deleted, or whose deletion is pending, refuses them. */

@@ -8,6 +8,7 @@ import type { HistorySession } from "../history";
 import type { SpecSnapshotEntry } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import {
+	FILE_LIST_LIMITS,
 	type FileList,
 	FileListCache,
 	isTransientListFailure,
@@ -71,7 +72,7 @@ describe("listRootFiles", () => {
 	});
 
 	test("a git root lists tracked and untracked files with odd names, never ignored ones or node_modules", async () => {
-		const list = await listRootFiles(dir);
+		const list = await listRootFiles(dir, true);
 		expect(list.truncated).toBe(false);
 		expect([...list.paths].sort()).toEqual([
 			".gitignore",
@@ -82,7 +83,7 @@ describe("listRootFiles", () => {
 	});
 
 	test("a plain folder falls back to a bounded walk that skips node_modules", async () => {
-		expect(await listRootFiles(plain)).toEqual({ paths: ["a.txt"], truncated: false });
+		expect(await listRootFiles(plain, true)).toEqual({ paths: ["a.txt"], truncated: false });
 	});
 
 	test("a path git lists once per conflict stage is listed once", async () => {
@@ -104,7 +105,7 @@ describe("listRootFiles", () => {
 			writeFileSync(join(repo, "conflict.txt"), "main\n");
 			git("commit", "-q", "-am", "main");
 			git("merge", "-q", "other");
-			expect((await listRootFiles(repo)).paths).toEqual(["conflict.txt"]);
+			expect((await listRootFiles(repo, true)).paths).toEqual(["conflict.txt"]);
 		} finally {
 			rmSync(repo, { recursive: true, force: true });
 		}
@@ -273,7 +274,7 @@ describe("FileListCache", () => {
 	test("a change during a reload leaves the reloaded list stale, so the next ask reloads", async () => {
 		const deferred = deferredLoader();
 		const files = new FileListCache(deferred.loader);
-		const cold = files.load("/r");
+		const cold = files.load("/r", true);
 		deferred.finish(["a.ts"]);
 		await cold;
 		files.invalidate("/r");
@@ -294,7 +295,7 @@ describe("FileListCache", () => {
 	test("a change during the first load leaves it stale too", async () => {
 		const deferred = deferredLoader();
 		const files = new FileListCache(deferred.loader);
-		const cold = files.load("/r");
+		const cold = files.load("/r", true);
 		files.invalidate("/r");
 		deferred.finish(["a.ts"]);
 		await cold;
@@ -307,7 +308,7 @@ describe("FileListCache", () => {
 			paths: ["a-gone.ts", "b-here.ts", "c-here.ts"],
 			truncated: false,
 		}));
-		await files.load("/r");
+		await files.load("/r", true);
 		const group = searchFiles(
 			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
 			files,
@@ -330,7 +331,7 @@ describe("FileListCache", () => {
 			paths: Array.from({ length: 50 }, (_, index) => `gone-${index}.ts`),
 			truncated: false,
 		}));
-		await files.load("/r");
+		await files.load("/r", true);
 		let checks = 0;
 		const group = searchFiles(
 			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
@@ -354,7 +355,7 @@ describe("FileListCache", () => {
 			paths: Array.from({ length: 1_500 }, (_, index) => `keep-${index}.ts`),
 			truncated: false,
 		}));
-		await files.load("/r");
+		await files.load("/r", true);
 		const group = searchFiles(
 			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
 			files,
@@ -370,7 +371,7 @@ describe("FileListCache", () => {
 			paths: ["big.log", "outside-link.log"],
 			truncated: false,
 		}));
-		await files.load("/r");
+		await files.load("/r", true);
 		const asked: string[] = [];
 		const group = searchFiles(
 			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
@@ -386,6 +387,26 @@ describe("FileListCache", () => {
 		expect(group.total).toBe(1);
 	});
 
+	test("a root keeps the git mode it was loaded with through every refresh", async () => {
+		let now = 0;
+		const modes: boolean[] = [];
+		const files = new FileListCache(
+			async (_root, git) => {
+				modes.push(git);
+				return { paths: ["notes.md"], truncated: false };
+			},
+			() => now,
+		);
+		await files.load("/chat", false);
+		now += FILE_LIST_LIMITS.ttlMs + 1;
+		files.peek("/chat");
+		await files.load("/chat", false);
+		files.invalidate("/chat");
+		files.peek("/chat");
+		await files.load("/chat", false);
+		expect(modes).toEqual([false, false, false]);
+	});
+
 	test("a first load that fails answers failed and is tried again on the next ask", async () => {
 		let fail = true;
 		const files = new FileListCache(async () => {
@@ -398,7 +419,7 @@ describe("FileListCache", () => {
 			limit: 20,
 			deadline: { expired: () => false },
 		});
-		await files.load("/r");
+		await files.load("/r", true);
 		fail = false;
 		const present = () => 1;
 		expect(searchFiles(root, files, input("refresh"), present)).toMatchObject({
@@ -605,7 +626,7 @@ const context = { projectId: "p1", workspaceId: "w-feature" };
 describe("search.query", () => {
 	test("answers every kind for a typed query: files and specs from the one root, chats from the open projects", async () => {
 		const files = new FileListCache(async (root) => lists[root] ?? { paths: [], truncated: false });
-		await Promise.all(Object.keys(lists).map((root) => files.load(root)));
+		await Promise.all(Object.keys(lists).map((root) => files.load(root, true)));
 		const service = createSearchService(readers({ files }));
 		const result = await service.query("c1", { seq: 1, query: "refresh", context });
 		expect(result.superseded).toBeUndefined();
@@ -644,7 +665,7 @@ describe("search.query", () => {
 			paths: ["docs/Café.md", "src/cafe/menu.ts", "src/FooBar.ts"],
 			truncated: false,
 		}));
-		await files.load("/repos/one-auth");
+		await files.load("/repos/one-auth", true);
 		const service = createSearchService(readers({ files }));
 		const paths = async (seq: number, query: string) =>
 			(await service.query("c1", { seq, query, kinds: ["file"], context })).groups[0]?.hits
@@ -725,7 +746,7 @@ describe("search.query", () => {
 			loads += 1;
 			return lists[root] ?? { paths: [], truncated: false };
 		});
-		await files.load("/repos/one-auth");
+		await files.load("/repos/one-auth", true);
 		const service = createSearchService(readers({ files }));
 		const warm = await service.query("c1", { seq: 1, query: "refresh", kinds: ["file"], context });
 		expect(warm.groups[0]).toMatchObject({ kind: "file", state: "ready" });
@@ -751,7 +772,7 @@ describe("search.query", () => {
 			if (fail) throw new Error("EMFILE");
 			return lists[root] ?? { paths: [], truncated: false };
 		});
-		await files.load("/repos/one-auth");
+		await files.load("/repos/one-auth", true);
 		fail = true;
 		files.invalidate("/repos/one-auth");
 		expect(files.peek("/repos/one-auth")?.paths).toHaveLength(3);
@@ -777,7 +798,7 @@ describe("search.query", () => {
 
 	test("the file-list cache keeps a bounded number of roots, and no root answers empty file and spec groups", async () => {
 		const files = new FileListCache(async () => ({ paths: ["a.ts"], truncated: false }));
-		for (let index = 0; index < 10; index += 1) await files.load(`/root-${index}`);
+		for (let index = 0; index < 10; index += 1) await files.load(`/root-${index}`, true);
 		expect(files.peek("/root-0")).toBeNull();
 		expect(files.peek("/root-9")).not.toBeNull();
 
@@ -799,7 +820,7 @@ describe("search.query", () => {
 			paths: ["src/auth/UserController.ts", "src/auth/refresh.ts"],
 			truncated: true,
 		}));
-		await files.load("/repos/one-auth");
+		await files.load("/repos/one-auth", true);
 		const service = createSearchService(
 			readers({
 				files,
@@ -824,7 +845,7 @@ describe("search.query", () => {
 			truncated: false,
 		};
 		const files = new FileListCache(async () => many);
-		await files.load("/repos/one-auth");
+		await files.load("/repos/one-auth", true);
 		let tick = 0;
 		const service = createSearchService(
 			readers({
@@ -883,7 +904,7 @@ describe("search.query", () => {
 			truncated: false,
 		};
 		const files = new FileListCache(async () => many);
-		await files.load("/repos/one-auth");
+		await files.load("/repos/one-auth", true);
 		const service = createSearchService(
 			readers({
 				files,
@@ -1045,5 +1066,31 @@ describe("chats without a project", () => {
 		expect(
 			await service.preview({ kind: "chat", sessionId: "s-chat" }, { chats: true }),
 		).toMatchObject({ kind: "transcript", title: "Refresh the garden" });
+	});
+
+	test("a chat's root answers files but never specs, and a chat record is never a workspace hit", async () => {
+		const files = new FileListCache(async () => ({ paths: ["chat-notes.md"], truncated: false }));
+		await files.load(chatRecord.worktreePath, false);
+		const service = createSearchService(
+			readers({
+				projects: () => [project, other, chatsProject],
+				workspaces: () => [defaultOne, feature, chatRecord],
+				specs: () => ({
+					entries: [{ path: "SPEC.md", id: "chat", title: "Chat notes", type: "x", content: "" }],
+					rebuilding: false,
+				}),
+				files,
+			}),
+		);
+		const result = await service.query("c1", {
+			seq: 1,
+			query: "chat",
+			kinds: ["workspace", "file", "spec"],
+			context: chatContext,
+		});
+		const byKind = Object.fromEntries(result.groups.map((group) => [group.kind, group]));
+		expect(byKind.workspace?.hits.map((hit) => hit.id)).not.toContain("workspace:w-chat");
+		expect(byKind.spec).toMatchObject({ state: "ready", hits: [], total: 0 });
+		expect(byKind.file?.hits.map((hit) => hit.path)).toEqual(["chat-notes.md"]);
 	});
 });

@@ -26,7 +26,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (`git.readBlobStreamAtAsync` behind a 40/64-hex `oid` — a diff range's `resolvedOriginalOid`, so the URL
   names immutable content and answers `Cache-Control: public, max-age=31536000, immutable`; the Git
   primitive requires a blob, so trees/commits/gitlinks are 404 alongside a bad id/oid/escape/absent
-  path). Before opening a blob body, the route performs a bounded `git cat-file -s`; objects above
+  path, and so is a chat without a project, before any git). Before opening a blob body, the route performs a bounded `git cat-file -s`; objects above
   `BLOB_SIZE_LIMIT` (64 MiB — the size of the largest image, PDF or notebook a review surface renders
   in one piece, and the bound on what one `change.revert` receipt may pin) are refused with 413. An
   accepted blob is **streamed**: only its 8 KiB sniff head is awaited for the headers and the rest relays
@@ -596,9 +596,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   The host never sweeps unknown folders under the chats root. `chat.inspect` counts the folder's files (bounded,
   symlinks not followed) for the confirmation. Every repository door refuses a chat or the container at
   the handler (`REPOSITORY_ONLY_METHODS` — git, changes, reviews, pull requests, turns, diff stats and
-  base — plus project close/rename/trust/skills, `workspace.create`/`listExisting`, `git.listBranches`/
-  `prefetch`); the settled lifecycle, turn snapshots, plan artifacts, the plan's unattributed-change and
-  adopted-commit reads, head recording and the setup funnel's `project_present` skip chats; and
+  base, and the plan's review doors `todo.review` / `startReview` / `reviewAll` / `requestFix`, which
+  would reach a git-backed review snapshot — plus project close/rename/trust/skills,
+  `workspace.create`/`listExisting`, `git.listBranches`/`prefetch`); **the capability matrix of a chat
+  is files, terminal and Plan, never git, review or specs**: `fs.readDir` lists a chat's folder without
+  the git-ignore decoration, the `/blob` route answers 404 for a chat before any git, the
+  Agent-review resolver handed to `agent` answers `false` for a chat (so its sessions get neither
+  `request_review` nor its guideline), and host search keeps a chat's root git-free and spec-free
+  ([[submodule-server-search]]); the settled lifecycle, turn snapshots, plan artifacts, the plan's
+  unattributed-change and adopted-commit reads, head recording and the setup funnel's `project_present`
+  skip chats; and
   `applyGitCeiling()` merges `<dataDir>/chats` into `GIT_CEILING_DIRECTORIES` before the server exists
   (the root created first), so git, `gh`, PTYs and pi's bash inherit a ceiling that stops any walk up
   out of a chat folder into a repository that happens to enclose the data dir. The container is ensured

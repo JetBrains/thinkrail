@@ -114,7 +114,11 @@ previews — is built without its chats before any provider ranks or pages, and 
   per-file memo). While the history index is still building, a plan whose session it has not reached yet
   is skipped and the group answers `indexing`, so the client asks again once the session is known.
 - **Workspaces:** name, branch and `#<pr>` through the matcher over persisted records — the client
-  dedupes against the workspaces it already knows.
+  dedupes against the workspaces it already knows. A chat without a project's record is never a
+  workspace hit (it has no branch or PR; its chats are found as chats and transcripts).
+- **A chat's root** (`SearchRoot.git: false`) is never a repository: its file list is always walked —
+  the cache keeps the git mode each root was loaded with through every TTL or invalidation reload — and
+  it answers no specs (an empty `spec` group), while its files, transcripts and plans stay searchable.
 
 ## Preview
 

@@ -169,11 +169,18 @@ export function createSearchService(readers: SearchReaders): SearchService {
 					groups.push(emptyGroup(kind, "failed"));
 				}
 			};
-			push("workspace", () => searchWorkspaces(workspaces, input()));
+			push("workspace", () =>
+				searchWorkspaces(
+					workspaces.filter((workspace) => workspace.kind !== "chat"),
+					input(),
+				),
+			);
 			push("file", () =>
 				root ? searchFiles(root, files, input(), readers.stat) : emptyGroup("file"),
 			);
-			push("spec", () => (root ? searchSpecs(root, readers.specs, input()) : emptyGroup("spec")));
+			push("spec", () =>
+				root?.git ? searchSpecs(root, readers.specs, input()) : emptyGroup("spec"),
+			);
 
 			let sessions: { sessions: readonly HistorySession[]; indexing: boolean } | null = null;
 			if (kinds.has("chat") || kinds.has("transcript") || kinds.has("plan")) {

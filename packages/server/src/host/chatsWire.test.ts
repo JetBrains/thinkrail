@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ChatCreateResult } from "@thinkrail/contracts";
+import type { ChatCreateResult, Workspace, WsResult } from "@thinkrail/contracts";
 import { CHATS_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import {
 	configurePiRuntime,
@@ -17,7 +17,8 @@ import {
 import { resetAnalyticsForTests } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { resetChatsStoreForTests } from "../persistence";
-import { resetConfigCache } from "../settings";
+import { openProject } from "../projects";
+import { resetConfigCache, updateConfig } from "../settings";
 import { setTrashImplementationForTests } from "../trash";
 import { resetChatIdCache } from "../workspaces";
 import { createServer, type RunningServer } from "./server";
@@ -61,6 +62,28 @@ const saved = {
 const root = realpathSync.native(mkdtempSync(join(tmpdir(), "trpi-chats-wire-")));
 let server: RunningServer;
 let nextRequest = 0;
+
+function gitRepo(path: string): string {
+	mkdirSync(path, { recursive: true });
+	for (const args of [
+		["init", "-b", "main"],
+		[
+			"-c",
+			"user.email=t@thinkrail.test",
+			"-c",
+			"user.name=test",
+			"commit",
+			"--allow-empty",
+			"-m",
+			"init",
+		],
+	]) {
+		const result = Bun.spawnSync(["git", "-C", path, ...args], { stdout: "pipe", stderr: "pipe" });
+		if (!result.success) throw new Error(`git ${args.join(" ")} failed`);
+	}
+	writeFileSync(join(path, "README.md"), "# repo\n");
+	return path;
+}
 
 async function connect(client: string, protocol: number): Promise<Client> {
 	const socket = new WebSocket(
@@ -188,5 +211,35 @@ test("an older socket hears nothing of a chat: not its records, its extension UI
 	} finally {
 		older.close();
 		current.close();
+	}
+}, 30_000);
+
+test("Agent review is never offered to a chat's session: neither the tool nor its guideline", async () => {
+	updateConfig({ agentReviewEnabled: true });
+	const client = await connect("review", CHATS_PROTOCOL_VERSION);
+	const requests: string[] = [];
+	const capture = (_context: unknown) => {
+		requests.push(JSON.stringify(_context));
+		return fauxAssistantMessage("ok");
+	};
+	try {
+		const project = openProject(gitRepo(join(root, "review-repo")));
+		const rows = (await client.request("workspace.list", {
+			projectId: project.id,
+		})) as Workspace[];
+		const repository = (await client.request("session.create", {
+			workspaceId: rows[0]?.id,
+		})) as WsResult<"session.create">;
+		const chat = (await client.request("chat.create", {})) as ChatCreateResult;
+		faux.setResponses([capture, capture]);
+		await promptSession(repository.sessionId, "review my step");
+		await promptSession(chat.sessionId, "review my step");
+		expect(requests).toHaveLength(2);
+		expect(requests[0]).toContain("request_review");
+		expect(requests[1]).not.toContain("request_review");
+		await client.request("chat.delete", { workspaceId: chat.workspace.id });
+	} finally {
+		updateConfig({ agentReviewEnabled: false });
+		client.close();
 	}
 }, 30_000);

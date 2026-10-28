@@ -183,7 +183,7 @@ function isHiddenFromSearch(path: string): boolean {
 	return path.split("/").some((segment) => WALK_IGNORED.has(segment));
 }
 
-export async function listRootFiles(root: string, git = true): Promise<FileList> {
+export async function listRootFiles(root: string, git: boolean): Promise<FileList> {
 	const list = (git ? await gitFileList(root) : null) ?? (await walkFileList(root));
 	const seen = new Set<string>();
 	const paths: string[] = [];
@@ -196,7 +196,7 @@ export async function listRootFiles(root: string, git = true): Promise<FileList>
 }
 
 export class FileListCache {
-	private readonly lists = new Map<string, { at: number; list: IndexedFileList }>();
+	private readonly lists = new Map<string, { at: number; list: IndexedFileList; git: boolean }>();
 	private readonly loading = new Map<string, Promise<IndexedFileList>>();
 	private readonly overtaken = new Set<string>();
 
@@ -210,7 +210,7 @@ export class FileListCache {
 		if (!cached) return null;
 		this.lists.delete(root);
 		this.lists.set(root, cached);
-		if (this.now() - cached.at > FILE_LIST_LIMITS.ttlMs) void this.load(root);
+		if (this.now() - cached.at > FILE_LIST_LIMITS.ttlMs) void this.load(root, cached.git);
 		return cached.list;
 	}
 
@@ -218,7 +218,7 @@ export class FileListCache {
 		return this.loading.has(root);
 	}
 
-	load(root: string, git = true): Promise<IndexedFileList> {
+	load(root: string, git: boolean): Promise<IndexedFileList> {
 		const inFlight = this.loading.get(root);
 		if (inFlight) return inFlight;
 		const promise = this.loader(root, git)
@@ -235,7 +235,7 @@ export class FileListCache {
 				const list = loaded ?? FAILED_LIST;
 				const stale = overtaken || loaded === null;
 				this.lists.delete(root);
-				this.lists.set(root, { at: stale ? Number.NEGATIVE_INFINITY : this.now(), list });
+				this.lists.set(root, { at: stale ? Number.NEGATIVE_INFINITY : this.now(), list, git });
 				while (this.lists.size > FILE_LIST_LIMITS.maxRoots) {
 					const oldest = this.lists.keys().next().value;
 					if (oldest === undefined) break;
@@ -250,6 +250,6 @@ export class FileListCache {
 	invalidate(root: string): void {
 		if (this.loading.has(root)) this.overtaken.add(root);
 		const cached = this.lists.get(root);
-		if (cached) this.lists.set(root, { at: Number.NEGATIVE_INFINITY, list: cached.list });
+		if (cached) this.lists.set(root, { ...cached, at: Number.NEGATIVE_INFINITY });
 	}
 }

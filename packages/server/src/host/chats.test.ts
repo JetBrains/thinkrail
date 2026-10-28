@@ -290,6 +290,26 @@ test("a chat is created with its folder, record and one session, listed without 
 	await expect(
 		handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
 	).rejects.toThrow("branch status");
+	for (const [method, params] of [
+		["todo.startReview", { workspaceId: workspace.id, sessionId: created.sessionId, id: "t1" }],
+		["todo.reviewAll", { workspaceId: workspace.id, sessionId: created.sessionId }],
+		["todo.review", { workspaceId: workspace.id, sessionId: created.sessionId, id: "t1" }],
+		[
+			"todo.requestFix",
+			{ workspaceId: workspace.id, sessionId: created.sessionId, id: "t1", feedback: "x" },
+		],
+	] as const) {
+		await expect(handleRequest(method, params, CTX)).rejects.toMatchObject({
+			code: "CHAT_WORKSPACE",
+		});
+	}
+	writeFileSync(join(workspace.worktreePath, "notes.md"), "notes\n");
+	const listed = (await handleRequest(
+		"fs.readDir",
+		{ workspaceId: workspace.id, path: "" },
+		CTX,
+	)) as WsResult<"fs.readDir">;
+	expect(listed.map((node) => node.path)).toContain("notes.md");
 	await expect(
 		handleRequest(
 			"session.delete",
