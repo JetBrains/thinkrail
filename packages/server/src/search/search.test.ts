@@ -211,6 +211,25 @@ describe("chat providers", () => {
 		expect([before[200]?.[1], after[200]?.[1]]).toEqual([3, 2]);
 	});
 
+	test("messages queued in the same millisecond get distinct transcript ids", () => {
+		const queued: HistorySession = {
+			sessionId: "q",
+			cwd: "/repos/one",
+			title: "Queued",
+			entries: ["first refresh", "second refresh", "third refresh"].map((text, index) => ({
+				role: "user",
+				text,
+				timestamp: 500,
+				messageIndex: index,
+			})),
+		};
+		const ids = searchTranscripts([queued], false, label, input("refresh", 10)).hits.map(
+			(hit) => hit.id,
+		);
+		expect(new Set(ids).size).toBe(3);
+		expect(ids).toContain("transcript:q:500:user");
+	});
+
 	test("titles are matched over every chat, apart from the transcript budget", () => {
 		const group = searchChatTitles([old, recent], false, label, input("banana", 0));
 		expect(group.state).toBe("ready");
@@ -287,6 +306,30 @@ describe("FileListCache", () => {
 			["c-here.ts", undefined],
 		]);
 		expect(group.total).toBe(2);
+	});
+
+	test("checking for deleted files stops at the budget and answers what it verified as truncated", async () => {
+		const files = new FileListCache(async () => ({
+			paths: Array.from({ length: 50 }, (_, index) => `gone-${index}.ts`),
+			truncated: false,
+		}));
+		await files.load("/r");
+		let checks = 0;
+		const group = searchFiles(
+			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			files,
+			{
+				terms: [{ text: "gone", literal: false }],
+				limit: 20,
+				deadline: { expired: () => checks >= 5 },
+			},
+			() => {
+				checks += 1;
+				return "missing";
+			},
+		);
+		expect(checks).toBe(5);
+		expect(group).toMatchObject({ state: "truncated", hits: [] });
 	});
 
 	test("a file hit carries its size on disk so the client can decline to preview a large one", async () => {
