@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { SearchGroup, SearchQueryResult, WsParams } from "@thinkrail/contracts";
-import { createHostSearchController, HOST_SEARCH, type HostSearchState } from "./hostSearch";
+import {
+	createHostSearchController,
+	HOST_SEARCH,
+	type HostSearchState,
+	hostSearchStatus,
+	mergeHostGroups,
+} from "./hostSearch";
 
 type Deferred = {
 	params: WsParams<"search.query">;
@@ -47,21 +53,22 @@ function harness() {
 	};
 }
 
-const input = (text: string) => ({
+const input = (text: string, kinds: SearchGroup["kind"][] = ["file"]) => ({
 	enabled: true,
 	text,
-	kinds: ["file" as const],
+	kinds,
 	context: { projectId: "p1" },
 });
 
 const group = (
 	state: SearchGroup["state"] = "ready",
 	ids: string[] = ["file:p1::a.ts"],
+	kind: SearchGroup["kind"] = "file",
 ): SearchGroup => ({
-	kind: "file",
+	kind,
 	hits: ids.map((id) => ({
 		id,
-		kind: "file",
+		kind,
 		title: id,
 		tier: 1,
 		score: 1,
@@ -72,11 +79,17 @@ const group = (
 	state,
 });
 
+const shownState = (groups: SearchGroup[] | null, pending: boolean, stale = false) => ({
+	groups,
+	pending,
+	stale,
+});
+
 describe("host search controller", () => {
 	test("debounces, keeps one request in flight and re-issues only the latest queued input", async () => {
 		const h = harness();
 		h.controller.update(input("re"));
-		expect(h.emitted.at(-1)).toEqual({ groups: null, pending: true });
+		expect(h.emitted.at(-1)).toEqual(shownState(null, true));
 		expect(h.timers.at(-1)?.ms).toBe(HOST_SEARCH.debounceMs);
 		h.fire();
 		expect(h.requests).toHaveLength(1);
@@ -97,33 +110,30 @@ describe("host search controller", () => {
 		expect(h.requests).toHaveLength(2);
 		expect(h.requests[1]?.params.query).toBe("refr");
 		expect(h.requests[1]?.params.seq).toBeGreaterThan(h.requests[0]?.params.seq ?? 0);
-		expect(h.emitted.at(-1)).toEqual({ groups: null, pending: true });
+		expect(h.emitted.at(-1)).toEqual(shownState(null, true));
 
 		h.requests[1]?.resolve({ seq: h.requests[1].params.seq, groups: [group()] });
 		await h.settle();
-		expect(h.emitted.at(-1)).toEqual({ groups: [group()], pending: false });
+		expect(h.emitted.at(-1)).toEqual(shownState([group()], false));
 
 		h.controller.update(input("refre"));
-		expect(h.emitted.at(-1)).toEqual({ groups: [group()], pending: true });
+		expect(h.emitted.at(-1)).toEqual(shownState([group()], true, true));
 		h.fire();
 		h.requests[2]?.resolve({
 			seq: h.requests[2].params.seq,
 			groups: [group("ready", ["file:p1::b.ts"])],
 		});
 		await h.settle();
-		expect(h.emitted.at(-1)).toEqual({
-			groups: [group("ready", ["file:p1::b.ts"])],
-			pending: false,
-		});
+		expect(h.emitted.at(-1)).toEqual(shownState([group("ready", ["file:p1::b.ts"])], false));
 	});
 
-	test("a superseded latest reply ends empty instead of pending forever, a stale reply never paints, a failed request paints nothing and stops", async () => {
+	test("a superseded latest reply ends empty instead of pending forever, a stale reply never paints, a failed request says so and stops", async () => {
 		const h = harness();
 		h.controller.update(input("auth"));
 		h.fire();
 		h.requests[0]?.resolve({ seq: h.requests[0].params.seq, groups: [], superseded: true });
 		await h.settle();
-		expect(h.emitted.at(-1)).toEqual({ groups: [], pending: false });
+		expect(h.emitted.at(-1)).toEqual(shownState([], false));
 
 		h.controller.update(input("auth"));
 		expect(h.requests).toHaveLength(1);
@@ -131,7 +141,11 @@ describe("host search controller", () => {
 		h.fire();
 		h.requests[1]?.reject();
 		await h.settle();
-		expect(h.emitted.at(-1)).toEqual({ groups: [], pending: false });
+		const failed = h.emitted.at(-1) as HostSearchState;
+		expect(failed).toEqual(
+			shownState([{ kind: "file", hits: [], total: 0, state: "failed" }], false),
+		);
+		expect(hostSearchStatus(failed)).toBe("failed");
 		expect(h.timers.filter((timer) => !timer.cancelled)).toHaveLength(0);
 	});
 
@@ -149,16 +163,16 @@ describe("host search controller", () => {
 		expect(h.requests).toHaveLength(2);
 
 		h.controller.dispose();
-		expect(h.emitted.at(-1)).toEqual({ groups: null, pending: false });
+		expect(h.emitted.at(-1)).toEqual(shownState(null, false));
 		h.controller.update(input("again"));
 		h.fire();
 		h.requests[1]?.resolve({ seq: h.requests[1].params.seq, groups: [group()] });
 		await h.settle();
-		expect(h.emitted.at(-1)).toEqual({ groups: null, pending: true });
+		expect(h.emitted.at(-1)).toEqual(shownState(null, true));
 		expect(h.requests).toHaveLength(3);
 		h.requests[2]?.resolve({ seq: h.requests[2].params.seq, groups: [group()] });
 		await h.settle();
-		expect(h.emitted.at(-1)).toEqual({ groups: [group()], pending: false });
+		expect(h.emitted.at(-1)).toEqual(shownState([group()], false));
 	});
 
 	test("an indexing group polls until it is ready, a reconnect re-asks, an inactive input clears", async () => {
@@ -167,13 +181,13 @@ describe("host search controller", () => {
 		h.fire();
 		h.requests[0]?.resolve({ seq: h.requests[0].params.seq, groups: [group("indexing", [])] });
 		await h.settle();
-		expect(h.emitted.at(-1)).toEqual({ groups: [group("indexing", [])], pending: true });
+		expect(h.emitted.at(-1)).toEqual(shownState([group("indexing", [])], true));
 		expect(h.timers.at(-1)?.ms).toBe(HOST_SEARCH.indexingPollMs);
 		h.fire();
 		expect(h.requests).toHaveLength(2);
 		h.requests[1]?.resolve({ seq: h.requests[1].params.seq, groups: [group("ready")] });
 		await h.settle();
-		expect(h.emitted.at(-1)).toEqual({ groups: [group("ready")], pending: false });
+		expect(h.emitted.at(-1)).toEqual(shownState([group("ready")], false));
 
 		h.setGeneration(2);
 		h.controller.update(input("spec"));
@@ -181,9 +195,81 @@ describe("host search controller", () => {
 		expect(h.requests).toHaveLength(3);
 
 		h.controller.update({ ...input("spec"), enabled: false });
-		expect(h.emitted.at(-1)).toEqual({ groups: null, pending: false });
+		expect(h.emitted.at(-1)).toEqual(shownState(null, false));
 		h.requests[2]?.resolve({ seq: h.requests[2].params.seq, groups: [group("ready")] });
 		await h.settle();
-		expect(h.emitted.at(-1)).toEqual({ groups: null, pending: false });
+		expect(h.emitted.at(-1)).toEqual(shownState(null, false));
+	});
+
+	test("a poll asks only the kinds still indexing and keeps every row the previous page showed", async () => {
+		const h = harness();
+		h.controller.update(input("auth", ["file", "spec"]));
+		h.fire();
+		h.requests[0]?.resolve({
+			seq: h.requests[0].params.seq,
+			groups: [group("indexing", ["a", "b"]), group("ready", ["s"], "spec")],
+		});
+		await h.settle();
+		h.fire();
+		expect(h.requests[1]?.params.kinds).toEqual(["file"]);
+		h.requests[1]?.resolve({
+			seq: h.requests[1].params.seq,
+			groups: [{ ...group("ready", ["c", "a"]), total: 40 }],
+		});
+		await h.settle();
+		const last = h.emitted.at(-1);
+		expect(last?.pending).toBe(false);
+		expect(last?.groups?.map((shown) => [shown.kind, shown.hits.map((hit) => hit.id)])).toEqual([
+			["file", ["c", "a", "b"]],
+			["spec", ["s"]],
+		]);
+		expect(last?.groups?.[0]?.total).toBe(40);
+	});
+
+	test("polling slows down after the first polls and stops after its window, saying the search is still indexing", async () => {
+		const h = harness();
+		h.controller.update(input("big"));
+		h.fire();
+		const delays: number[] = [];
+		for (let poll = 0; poll <= HOST_SEARCH.maxIndexingPolls; poll += 1) {
+			const request = h.requests.at(-1);
+			request?.resolve({ seq: request.params.seq, groups: [group("indexing", [])] });
+			await h.settle();
+			const timer = h.timers.at(-1);
+			if (timer && !timer.cancelled) delays.push(timer.ms);
+			h.fire();
+		}
+		expect(delays).toHaveLength(HOST_SEARCH.maxIndexingPolls);
+		expect(delays[0]).toBe(HOST_SEARCH.indexingPollMs);
+		expect(delays.at(-1)).toBe(HOST_SEARCH.slowIndexingPollMs);
+		const last = h.emitted.at(-1) as HostSearchState;
+		expect(last.pending).toBe(false);
+		expect(hostSearchStatus(last)).toBe("indexing");
+	});
+});
+
+describe("host search results", () => {
+	test("a reply for the shown input keeps the rows its page left out and the groups it did not answer", () => {
+		expect(
+			mergeHostGroups(
+				[group("ready", ["a", "b"]), group("ready", ["s"], "spec")],
+				[group("ready", ["c", "a"])],
+			).map((merged) => [merged.kind, merged.hits.map((hit) => hit.id), merged.total]),
+		).toEqual([
+			["file", ["c", "a", "b"], 3],
+			["spec", ["s"], 1],
+		]);
+		expect(mergeHostGroups(null, [group()])).toEqual([group()]);
+	});
+
+	test("the palette is told about a failed, still-indexing or cut-short search, never about rows from an earlier input", () => {
+		const state = (groups: SearchGroup[], pending = false, stale = false) =>
+			hostSearchStatus({ groups, pending, stale });
+		expect(state([group("ready")])).toBeNull();
+		expect(state([group("truncated"), group("failed", [], "spec")])).toBe("failed");
+		expect(state([group("indexing")])).toBe("indexing");
+		expect(state([group("indexing")], true)).toBeNull();
+		expect(state([group("truncated")])).toBe("truncated");
+		expect(state([group("failed")], false, true)).toBeNull();
 	});
 });

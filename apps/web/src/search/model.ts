@@ -31,6 +31,7 @@ export interface PalettePreview {
 export interface PaletteFile {
 	readonly workspaceId: string;
 	readonly path: string;
+	readonly size?: number;
 }
 
 /** A match the host already scored with the shared matcher; the client ranks it as-is. */
@@ -60,7 +61,8 @@ export interface PaletteItem {
 	readonly sessionId?: string;
 	readonly contextBoost?: number;
 	readonly match?: PaletteMatch;
-	readonly late?: boolean;
+	/** Arrival cohort of a host row that landed while the user held a selection. */
+	readonly late?: number;
 	readonly previewTarget?: SearchPreviewTarget;
 	readonly file?: PaletteFile;
 	readonly disabledReason?: string;

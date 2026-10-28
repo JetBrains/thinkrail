@@ -19,14 +19,21 @@ export const HOST_GROUP_OF_KIND: Readonly<Record<SearchKind, string>> = {
 	plan: "plans",
 };
 
-/** Per palette group, how many hits the host counted beyond the page it returned. */
-export function hostOverflow(groups: readonly SearchGroup[]): Record<string, number> {
-	const overflow: Record<string, number> = {};
+/** Per palette group, the host's true count and the ids of the page it returned. */
+export interface HostTotal {
+	readonly total: number;
+	readonly ids: ReadonlySet<string>;
+}
+
+export function hostTotals(groups: readonly SearchGroup[]): Record<string, HostTotal> {
+	const totals: Record<string, HostTotal> = {};
 	for (const group of groups) {
-		const extra = group.total - group.hits.length;
-		if (extra > 0) overflow[HOST_GROUP_OF_KIND[group.kind]] = extra;
+		totals[HOST_GROUP_OF_KIND[group.kind]] = {
+			total: group.total,
+			ids: new Set(group.hits.map((hit) => hit.id)),
+		};
 	}
-	return overflow;
+	return totals;
 }
 
 export interface HostItemContext {
@@ -35,7 +42,9 @@ export interface HostItemContext {
 	readonly projectName: (projectId: string) => string | undefined;
 	readonly workspaceName: (workspaceId: string) => string | undefined;
 	readonly localIds: ReadonlySet<string>;
-	readonly lateIds: ReadonlySet<string>;
+	readonly late: ReadonlyMap<string, number>;
+	/** The hits answered an earlier input: ranked by the client's own match of the current one. */
+	readonly stale: boolean;
 }
 
 function splitPathRanges(
@@ -56,8 +65,17 @@ function splitPathRanges(
 	return { title, subtitle };
 }
 
-function matchOf(hit: SearchHit, ranges: PaletteMatch["ranges"]): PaletteMatch {
-	return { tier: hit.tier, score: hit.score, ranges };
+function matchOf(
+	context: HostItemContext,
+	hit: SearchHit,
+	ranges: PaletteMatch["ranges"],
+): { match?: PaletteMatch } {
+	return context.stale ? {} : { match: { tier: hit.tier, score: hit.score, ranges } };
+}
+
+function lateOf(context: HostItemContext, id: string): { late?: number } {
+	const late = context.late.get(id);
+	return late === undefined ? {} : { late };
 }
 
 function where(context: HostItemContext, hit: SearchHit): string {
@@ -72,7 +90,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 		projectId: hit.projectId,
 		...(hit.workspaceId ? { workspaceId: hit.workspaceId } : {}),
 		...(hit.sessionId ? { sessionId: hit.sessionId } : {}),
-		...(context.lateIds.has(hit.id) ? { late: true } : {}),
+		...lateOf(context, hit.id),
 		run: () => context.openHit(hit),
 	};
 	switch (hit.kind) {
@@ -89,14 +107,18 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				group: "files",
 				scope: "files",
 				icon: RiFileTextLine,
-				match: matchOf(hit, {
+				...matchOf(context, hit, {
 					title: ranges.title,
 					subtitle: ranges.subtitle.map(([start, end]) => [
 						start + location.length + 3,
 						end + location.length + 3,
 					]),
 				}),
-				file: { workspaceId: hit.workspaceId, path: hit.path },
+				file: {
+					workspaceId: hit.workspaceId,
+					path: hit.path,
+					...(hit.size === undefined ? {} : { size: hit.size }),
+				},
 			};
 		}
 		case "spec":
@@ -109,13 +131,18 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				group: "specs",
 				scope: "specs",
 				icon: RiNodeTree,
-				match: matchOf(
+				...matchOf(
+					context,
 					hit,
 					hit.snippet
 						? { subtitle: hit.ranges?.snippet ?? [] }
 						: { title: hit.ranges?.title ?? [], subtitle: hit.ranges?.path ?? [] },
 				),
-				file: { workspaceId: hit.workspaceId, path: hit.path },
+				file: {
+					workspaceId: hit.workspaceId,
+					path: hit.path,
+					...(hit.size === undefined ? {} : { size: hit.size }),
+				},
 			};
 		case "plan":
 			return {
@@ -126,7 +153,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				group: "plans",
 				scope: "work",
 				icon: RiListCheck3,
-				match: matchOf(hit, { title: hit.ranges?.title ?? [] }),
+				...matchOf(context, hit, { title: hit.ranges?.title ?? [] }),
 			};
 		case "transcript":
 			return {
@@ -137,7 +164,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				group: "transcripts",
 				scope: "work",
 				icon: RiChatHistoryLine,
-				match: matchOf(hit, { title: hit.ranges?.title ?? [] }),
+				...matchOf(context, hit, { title: hit.ranges?.title ?? [] }),
 				...(hit.sessionId
 					? {
 							previewTarget: {
@@ -158,7 +185,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				group: "chats",
 				scope: "work",
 				icon: RiChat2Line,
-				match: matchOf(hit, { title: hit.ranges?.title ?? [] }),
+				...matchOf(context, hit, { title: hit.ranges?.title ?? [] }),
 				...(hit.sessionId ? { previewTarget: { kind: "chat", sessionId: hit.sessionId } } : {}),
 			};
 		case "workspace":
@@ -171,7 +198,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				group: "workspaces",
 				scope: "work",
 				icon: RiGitBranchLine,
-				match: matchOf(hit, { title: hit.ranges?.title ?? [] }),
+				...matchOf(context, hit, { title: hit.ranges?.title ?? [] }),
 			};
 	}
 }

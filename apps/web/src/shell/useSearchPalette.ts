@@ -4,7 +4,7 @@ import {
 	RiHome4Line,
 	RiTerminalBoxLine,
 } from "@remixicon/react";
-import type { SearchHit } from "@thinkrail/contracts";
+import type { SearchContext, SearchHit, Workspace } from "@thinkrail/contracts";
 import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -35,6 +35,7 @@ import {
 	waitingItems,
 } from "../search";
 import {
+	isDefaultWorkspace,
 	selectActiveWorkspace,
 	selectContextProject,
 	selectHistoryTarget,
@@ -60,6 +61,21 @@ import {
 } from "./paletteCatalog";
 import { createPaletteNavigator } from "./paletteNavigation";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
+
+/** The host's file/spec root: the active workspace, else the context project's Default once its row is loaded. */
+export function paletteSearchContext(
+	contextProjectId: string | null,
+	activeWorkspaceId: string | null,
+	workspaces: Readonly<Record<string, readonly Workspace[]>>,
+): SearchContext {
+	const workspaceId =
+		activeWorkspaceId ??
+		(contextProjectId ? workspaces[contextProjectId]?.find(isDefaultWorkspace)?.id : undefined);
+	return {
+		...(contextProjectId ? { projectId: contextProjectId } : {}),
+		...(workspaceId ? { workspaceId } : {}),
+	};
+}
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const HOST_SCOPES: readonly SearchScope[] = ["all", "work", "files", "specs", "commands"];
@@ -180,10 +196,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			for (const workspace of list) workspaceNames.set(workspace.id, workspaceName(t, workspace));
 		}
 		return {
-			context: {
-				...(contextProject ? { projectId: contextProject.id } : {}),
-				...(activeWorkspaceId ? { workspaceId: activeWorkspaceId } : {}),
-			},
+			context: paletteSearchContext(contextProject?.id ?? null, activeWorkspaceId, workspaces),
 			openHit: (hit) => {
 				void openHostHit(hit).catch((err: unknown) =>
 					toast.error(errorText(err, globalT("search.item.openFailed"))),
@@ -369,7 +382,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 
 	return {
 		onClose: () => useAppStore.getState().closeSearch(),
-		scopes: hostSearch ? HOST_SCOPES : LOCAL_SCOPES,
+		scopes: hostSearch && contextProject ? HOST_SCOPES : LOCAL_SCOPES,
 		...(host ? { host } : {}),
 		...(online
 			? hostSearch

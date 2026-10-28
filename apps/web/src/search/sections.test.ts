@@ -151,7 +151,8 @@ describe("buildSections", () => {
 
 	test("host hits beyond the returned page count into the more row in All and into the meta of a scope", () => {
 		const two = [chat("h1", "Auth one"), chat("h2", "Auth two")];
-		const all = sections("auth", { rootItems: two, hostOverflow: { chats: 18 } });
+		const hostTotals = { chats: { total: 20, ids: new Set(two.map((item) => item.id)) } };
+		const all = sections("auth", { rootItems: two, hostTotals });
 		const chats = all.find((section) => section.id === "chats");
 		expect(chats?.meta).toBe("20");
 		expect(chats?.items.at(-1)?.item).toMatchObject({
@@ -159,9 +160,21 @@ describe("buildSections", () => {
 			title: "18 more in Chats",
 			more: { kind: "scope", scope: "work" },
 		});
-		const scoped = sections("@auth", { rootItems: two, hostOverflow: { chats: 18 } });
+		const scoped = sections("@auth", { rootItems: two, hostTotals });
 		const scopedChats = scoped.find((section) => section.id === "chats");
 		expect(scopedChats?.meta).toBe("20 matches · showing 2, refine the query for the rest");
 		expect(scopedChats?.items.every((row) => row.item.kind !== "more")).toBe(true);
+	});
+
+	test("local rows the host page left out count among its overflow, so a chat shown twice is never counted twice", () => {
+		const local = Array.from({ length: 40 }, (_, index) => chat(`c${index}`, `Auth ${index}`));
+		const page = new Set(local.slice(0, 20).map((item) => item.id));
+		const all = sections("auth", {
+			rootItems: local,
+			hostTotals: { chats: { total: 40, ids: page } },
+		});
+		const chats = all.find((section) => section.id === "chats");
+		expect(chats?.meta).toBe("40");
+		expect(chats?.items.at(-1)?.item.title).toBe("36 more in Chats");
 	});
 });

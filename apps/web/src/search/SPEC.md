@@ -76,19 +76,32 @@ neither a prompt nor attention is not listed.
 flight plus the latest queued input, a monotonic `seq` seeded from the clock (a reloaded page never
 reissues a number the host has seen) for the host's per-client superseding, and fencing — a reply
 paints only when it answers the current input, its `seq` is the latest issued and the welcome
-generation is unchanged; a failed request, or a latest reply the host still marked `superseded`, paints
-an empty result and stops (never a spinner that cannot end); an `indexing` group polls every 300 ms up
-to twenty times, `truncated` and `failed` never poll. While a new request is pending the previous host
-rows stay on screen — they are replaced, never blanked, when the reply lands, so the selection does not
-jump between keystrokes. The host is asked only for the scope's kinds (`scopeKinds`) and never on a page or
-for an empty query. `hostItems` turns the host's groups into rows — files, specs, plans, transcripts, plus
-chats and workspaces the client does not already list — carrying the host's matcher result as
-`PaletteItem.match`, so `rankItems` ranks them with the local rows by the same tiers instead of
-re-matching the title. Host hits that arrive after the user moved the selection are flagged `late` and
-sort after every row that was already there — across tiers, never as the top hit — so the rows above
-the selection never reorder and the selected row never drops out of a capped group. A file or spec
-hit without a workspace is dropped (nothing could read or open it). A host row opens through the
-injected `PaletteHost.openHit`.
+generation is unchanged; a latest reply the host still marked `superseded` paints an empty result and
+stops, and a failed request paints every asked group `failed` (never a spinner that cannot end). An
+`indexing` group polls — ten times every 300 ms, then every second, about 30 s in all — asking only the
+kinds still indexing; `truncated` and `failed` never poll. The host is asked only for the scope's kinds
+(`scopeKinds`) and never on a page or for an empty query.
+
+**Result lifecycle.** A reply for the input already on screen (a poll, a reconnect's re-ask) replaces
+the groups it answers but keeps every hit the previous page showed that the new one left out
+(`mergeHostGroups`), so a refreshed corpus or a better page never pulls a row from under the
+selection; the rows go when the query changes. While a new input is pending the previous host rows stay
+on screen — replaced, never blanked — but they answered another query (`stale`): `hostItems` drops
+their host match, so `rankItems` matches them again against the current terms, a row that no longer
+matches leaves at once, and Enter can only open a row the typed text matches; their counts are ignored.
+A fresh reply's rows carry the host's matcher result as `PaletteItem.match`, ranked with the local rows
+by the same tiers instead of re-matching the title. Rows that land while the user holds a selection
+join an arrival cohort (`noteArrivals`, `PaletteItem.late`): each later reply's newcomers sort after
+every row already on screen and every earlier cohort, across tiers and never as the top hit, so no row
+above the selection moves and the selected row never leaves a capped group; a row already on screen
+never becomes late. A group's "N more" is the host's count beyond its page less the local rows the page
+left out (those are taken to be among them), so a chat both the browser and the host know is never
+counted twice. Results the palette shows as final but are not complete say so in a status line and the
+live region: part of the search failed, it is still indexing after polling stopped, or a provider ran
+out of time (`hostSearchStatus`). A file or spec hit without a workspace is dropped (nothing could read
+or open it). A host row opens through the injected `PaletteHost.openHit`. The placeholder names files
+and specs only when the host searches them; the `/` and `#` scopes are offered only with a context
+project, since without one there is no root to search.
 
 ## Preview pane
 

@@ -1,4 +1,10 @@
-import { RiCornerDownLeftLine, RiSearchLine, RiSideBarLine, RiWifiOffLine } from "@remixicon/react";
+import {
+	RiCornerDownLeftLine,
+	RiInformationLine,
+	RiSearchLine,
+	RiSideBarLine,
+	RiWifiOffLine,
+} from "@remixicon/react";
 import {
 	MAX_SEARCH_GROUP_LIMIT,
 	type SearchContext,
@@ -26,8 +32,15 @@ import { shortcutKeys } from "../commands";
 import { AttentionDot } from "../components/AttentionDot";
 import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier } from "../lib";
-import { hostItems, hostOverflow } from "./hostItems";
-import { createHostPreviewLoader, type HostPreviewLoader, useHostSearch } from "./hostSearch";
+import { NO_ARRIVALS, noteArrivals } from "./arrivals";
+import { hostItems, hostTotals } from "./hostItems";
+import {
+	createHostPreviewLoader,
+	type HostPreviewLoader,
+	type HostSearchStatus,
+	hostSearchStatus,
+	useHostSearch,
+} from "./hostSearch";
 import { isImeComposing } from "./ime";
 import { recordPick } from "./learning";
 import type { PaletteFile, PaletteItem, PaletteRow, PaletteSection } from "./model";
@@ -41,6 +54,12 @@ import {
 	withScopePrefix,
 } from "./query";
 import { buildSections, flattenRows } from "./sections";
+
+const HOST_STATUS_LABELS: Record<HostSearchStatus, MessageKey> = {
+	failed: "search.palette.hostFailed",
+	indexing: "search.palette.hostIndexing",
+	truncated: "search.palette.hostTruncated",
+};
 
 const SCOPE_LABELS: Record<SearchScope, MessageKey> = {
 	all: "search.scope.all",
@@ -95,8 +114,9 @@ function PaletteContent({
 	const [query, setQuery] = useState("");
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_GROUPS);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
-	const [lateIds, setLateIds] = useState<ReadonlySet<string>>(NO_GROUPS);
-	const seenHostIds = useRef<Set<string>>(new Set());
+	const [arrivals, setArrivals] = useState(NO_ARRIVALS);
+	const onScreen = useRef<ReadonlySet<string>>(new Set());
+	const holdingSelection = useRef(false);
 	const [previewOpen, setPreviewOpen] = useState(readPreviewOpen);
 	const [learning, setLearning] = useState(readLearning);
 	const [nowMs] = useState(Date.now);
@@ -126,20 +146,11 @@ function PaletteContent({
 	const hostState = useHostSearch(hostInput);
 	const [previews] = useState(createHostPreviewLoader);
 	useLayoutEffect(() => {
-		const seen = seenHostIds.current;
-		if (!hostState.groups) {
-			seen.clear();
-			setLateIds(NO_GROUPS);
-			return;
-		}
-		const fresh = hostState.groups.flatMap((group) =>
-			group.hits.filter((hit) => !seen.has(hit.id)).map((hit) => hit.id),
+		const landed = hostState.groups?.flatMap((group) => group.hits.map((hit) => hit.id)) ?? [];
+		setArrivals((current) =>
+			noteArrivals(current, landed, onScreen.current, holdingSelection.current),
 		);
-		for (const id of fresh) seen.add(id);
-		if (fresh.length > 0 && selectedId !== null) {
-			setLateIds((current) => new Set([...current, ...fresh]));
-		}
-	}, [hostState.groups, selectedId]);
+	}, [hostState.groups]);
 	const allItems = useMemo(() => {
 		if (!host || !hostState.groups || hostState.groups.length === 0) return rootItems;
 		const context = {
@@ -148,20 +159,22 @@ function PaletteContent({
 			projectName: host.projectName,
 			workspaceName: host.workspaceName,
 			localIds: new Set(rootItems.map((item) => item.id)),
-			lateIds,
+			late: arrivals.late,
+			stale: hostState.stale,
 		};
 		return [...rootItems, ...hostItems(context, hostState.groups)];
-	}, [host, hostState.groups, rootItems, t, lateIds]);
-	const overflow = useMemo(
-		() => (hostState.groups ? hostOverflow(hostState.groups) : {}),
-		[hostState.groups],
+	}, [host, hostState.groups, hostState.stale, rootItems, t, arrivals]);
+	const totals = useMemo(
+		() => (hostState.groups && !hostState.stale ? hostTotals(hostState.groups) : {}),
+		[hostState.groups, hostState.stale],
 	);
+	const hostStatus = hostSearchStatus(hostState);
 	const sections = useMemo(
 		() =>
 			buildSections({
 				t,
 				parsed,
-				hostOverflow: overflow,
+				hostTotals: totals,
 				rootItems: allItems,
 				waiting,
 				actions: emptyActions,
@@ -169,9 +182,13 @@ function PaletteContent({
 				learning,
 				nowMs,
 			}),
-		[t, parsed, overflow, allItems, waiting, emptyActions, expanded, learning, nowMs],
+		[t, parsed, totals, allItems, waiting, emptyActions, expanded, learning, nowMs],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
+	useLayoutEffect(() => {
+		onScreen.current = new Set(rows.map((row) => row.item.id));
+		holdingSelection.current = selectedId !== null;
+	}, [rows, selectedId]);
 	const selectedIndex = Math.max(
 		0,
 		rows.findIndex((row) => row.item.id === selectedId),
@@ -196,8 +213,7 @@ function PaletteContent({
 	const resetQuery = (next: string) => {
 		setQuery(next);
 		setSelectedId(null);
-		seenHostIds.current.clear();
-		setLateIds(NO_GROUPS);
+		setArrivals(NO_ARRIVALS);
 	};
 
 	const changeScope = (scope: SearchScope) => {
@@ -354,13 +370,23 @@ function PaletteContent({
 						autoComplete="off"
 						spellCheck={false}
 						value={query}
-						placeholder={t("search.palette.placeholder")}
+						placeholder={t(host ? "search.palette.placeholderHost" : "search.palette.placeholder")}
 						onChange={(event) => resetQuery(event.target.value)}
 						className="h-full min-w-0 flex-1 bg-transparent tr-text-reading text-text-default outline-none placeholder:text-text-subtle"
 					/>
 					<Keycaps keys={["esc"]} />
 				</div>
 				<ScopeChips t={t} scopes={scopes} active={parsed.scope} onSelect={changeScope} />
+				{hostStatus ? (
+					<p
+						data-testid="search-host-status"
+						data-status={hostStatus}
+						className="flex shrink-0 items-center gap-8 border-border-muted border-b px-16 py-8 tr-text-metadata text-text-muted"
+					>
+						<RiInformationLine aria-hidden className="size-14 shrink-0" />
+						{t(HOST_STATUS_LABELS[hostStatus])}
+					</p>
+				) : null}
 				{notice ? (
 					<p
 						data-testid="search-notice"
@@ -433,6 +459,8 @@ function PaletteContent({
 				</footer>
 				<p role="status" aria-live="polite" className="sr-only">
 					{t("search.palette.resultCount", { count: rows.length })}
+					{hostState.pending ? ` ${t("search.palette.searching")}` : ""}
+					{hostStatus ? ` ${t(HOST_STATUS_LABELS[hostStatus])}` : ""}
 				</p>
 			</div>
 		</DialogContent>

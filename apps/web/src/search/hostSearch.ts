@@ -14,7 +14,9 @@ import { getTransport } from "../transport";
 export const HOST_SEARCH = {
 	debounceMs: 100,
 	indexingPollMs: 300,
-	maxIndexingPolls: 20,
+	slowIndexingPollMs: 1_000,
+	fastIndexingPolls: 10,
+	maxIndexingPolls: 37,
 } as const;
 
 /** Seeded with the clock so a reloaded page never issues a `seq` the host has already seen from this client. */
@@ -31,9 +33,11 @@ export interface HostSearchInput {
 export interface HostSearchState {
 	readonly groups: readonly SearchGroup[] | null;
 	readonly pending: boolean;
+	/** `groups` answered an earlier input: their rows must be matched again against the current one. */
+	readonly stale: boolean;
 }
 
-export const IDLE_HOST_SEARCH: HostSearchState = { groups: null, pending: false };
+export const IDLE_HOST_SEARCH: HostSearchState = { groups: null, pending: false, stale: false };
 
 export function sameHostInput(a: HostSearchInput, b: HostSearchInput): boolean {
 	return (
@@ -48,6 +52,47 @@ export function sameHostInput(a: HostSearchInput, b: HostSearchInput): boolean {
 
 export function isActiveHostInput(input: HostSearchInput): boolean {
 	return input.enabled && input.text.trim().length > 0 && input.kinds.length > 0;
+}
+
+/**
+ * A reply for the input already on screen replaces the groups it answers, keeping every hit those
+ * groups showed that the new page left out — a refreshed corpus never pulls a row from under the
+ * selection — and every group it did not answer.
+ */
+export function mergeHostGroups(
+	shown: readonly SearchGroup[] | null,
+	reply: readonly SearchGroup[],
+): SearchGroup[] {
+	const answered = new Map(reply.map((group) => [group.kind, group]));
+	const merged: SearchGroup[] = [];
+	for (const group of shown ?? []) {
+		const next = answered.get(group.kind);
+		if (!next) {
+			merged.push(group);
+			continue;
+		}
+		answered.delete(group.kind);
+		const ids = new Set(next.hits.map((hit) => hit.id));
+		const hits = [...next.hits, ...group.hits.filter((hit) => !ids.has(hit.id))];
+		merged.push({ ...next, hits, total: Math.max(next.total, hits.length) });
+	}
+	return [...merged, ...answered.values()];
+}
+
+function failedGroups(kinds: readonly SearchKind[]): SearchGroup[] {
+	return kinds.map((kind) => ({ kind, hits: [], total: 0, state: "failed" }));
+}
+
+export type HostSearchStatus = "failed" | "indexing" | "truncated";
+
+/** What the palette must say about results it shows as final: part failed, still indexing, or cut short. */
+export function hostSearchStatus(state: HostSearchState): HostSearchStatus | null {
+	if (!state.groups || state.stale) return null;
+	const states = new Set(state.groups.map((group) => group.state));
+	if (states.has("failed")) return "failed";
+	if (!state.pending && states.has("indexing")) return "indexing";
+	if (states.has("truncated")) return "truncated";
+	return null;
 }
 
 export interface HostSearchControllerDeps {
@@ -69,26 +114,35 @@ const defaultSchedule = (run: () => void, ms: number) => {
 	return () => clearTimeout(timer);
 };
 
+function pollDelay(polls: number): number {
+	return polls < HOST_SEARCH.fastIndexingPolls
+		? HOST_SEARCH.indexingPollMs
+		: HOST_SEARCH.slowIndexingPollMs;
+}
+
 export function createHostSearchController(deps: HostSearchControllerDeps): HostSearchController {
 	const schedule = deps.schedule ?? defaultSchedule;
 	const seqOf = deps.nextSeq ?? (() => nextSeq++);
 	let current: { input: HostSearchInput; generation: number } | null = null;
 	let issued: { seq: number; generation: number } | null = null;
 	let inFlight = false;
-	let queued: HostSearchInput | null = null;
+	let queued: { input: HostSearchInput; kinds: readonly SearchKind[] } | null = null;
 	let cancelDebounce: (() => void) | null = null;
 	let cancelPoll: (() => void) | null = null;
 	let polls = 0;
-	let shown: readonly SearchGroup[] | null = null;
+	let shown: { groups: readonly SearchGroup[]; input: HostSearchInput } | null = null;
 
-	const emit = (state: HostSearchState) => {
-		shown = state.groups;
-		deps.emit(state);
+	const show = (input: HostSearchInput, groups: readonly SearchGroup[], pending: boolean) => {
+		shown = { groups, input };
+		deps.emit({ groups, pending, stale: false });
 	};
 
-	const issue = async (request: HostSearchInput): Promise<void> => {
+	const issue = async (
+		request: HostSearchInput,
+		kinds: readonly SearchKind[] = request.kinds,
+	): Promise<void> => {
 		if (inFlight) {
-			queued = request;
+			queued = { input: request, kinds };
 			return;
 		}
 		const seq = seqOf();
@@ -99,7 +153,7 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 			.request({
 				seq,
 				query: request.text,
-				kinds: [...request.kinds],
+				kinds: [...kinds],
 				context: request.context,
 				...(request.limit === undefined ? {} : { limit: request.limit }),
 			})
@@ -108,24 +162,29 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 		const next = queued;
 		queued = null;
 		if (next) {
-			void issue(next);
+			void issue(next.input, next.kinds);
 			return;
 		}
 		if (!issued || issued.seq !== seq || deps.generation() !== generation) return;
 		if (current === null || !sameHostInput(current.input, request)) return;
-		if (result === null || result.superseded) {
-			emit({ groups: [], pending: false });
+		if (result?.superseded) {
+			show(request, [], false);
 			return;
 		}
-		const indexing = result.groups.some((group) => group.state === "indexing");
-		const keepPolling = indexing && polls < HOST_SEARCH.maxIndexingPolls;
-		emit({ groups: result.groups, pending: keepPolling });
+		const previous = shown && sameHostInput(shown.input, request) ? shown.groups : null;
+		const groups = mergeHostGroups(previous, result ? result.groups : failedGroups(kinds));
+		const indexing = groups
+			.filter((group) => group.state === "indexing")
+			.map((group) => group.kind);
+		const keepPolling = indexing.length > 0 && polls < HOST_SEARCH.maxIndexingPolls;
+		show(request, groups, keepPolling);
 		if (keepPolling) {
+			const delay = pollDelay(polls);
 			polls += 1;
 			cancelPoll = schedule(() => {
 				cancelPoll = null;
-				if (issued?.seq === seq) void issue(request);
-			}, HOST_SEARCH.indexingPollMs);
+				if (issued?.seq === seq) void issue(request, indexing);
+			}, delay);
 		}
 	};
 
@@ -148,12 +207,17 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 			current = null;
 			issued = null;
 			queued = null;
-			emit(IDLE_HOST_SEARCH);
+			shown = null;
+			deps.emit(IDLE_HOST_SEARCH);
 			return;
 		}
 		current = { input, generation };
 		polls = 0;
-		emit({ groups: shown, pending: true });
+		deps.emit({
+			groups: shown?.groups ?? null,
+			pending: true,
+			stale: shown !== null && !sameHostInput(shown.input, input),
+		});
 		cancelDebounce = schedule(() => {
 			cancelDebounce = null;
 			void issue(input);

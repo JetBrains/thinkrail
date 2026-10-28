@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { MATCH_TIER, type SearchGroup, type SearchHit } from "@thinkrail/contracts";
+import {
+	MATCH_TIER,
+	parseMatchTerms,
+	type SearchGroup,
+	type SearchHit,
+} from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { hostItems } from "./hostItems";
 import { EMPTY_LEARNING } from "./learning";
@@ -79,7 +84,7 @@ const groups: SearchGroup[] = [
 	},
 ];
 
-function items(lateIds: string[] = []) {
+function items(late: Record<string, number> = {}, stale = false) {
 	const opened: SearchHit[] = [];
 	const result = hostItems(
 		{
@@ -88,12 +93,16 @@ function items(lateIds: string[] = []) {
 			projectName: () => "One",
 			workspaceName: () => "Auth refresh",
 			localIds: new Set(["chat:local"]),
-			lateIds: new Set(lateIds),
+			late: new Map(Object.entries(late)),
+			stale,
 		},
 		groups,
 	);
 	return { result, opened };
 }
+
+const rank = (result: ReturnType<typeof items>["result"], query: string) =>
+	rankItems(result, parseMatchTerms(query), EMPTY_LEARNING, query, 0);
 
 describe("hostItems", () => {
 	test("maps a file hit with its path highlight split between name and folder, and names the file to render", () => {
@@ -115,33 +124,27 @@ describe("hostItems", () => {
 	});
 
 	test("drops host chats the client already lists, keeps the rest, and flags late arrivals", () => {
-		const { result } = items(["transcript:remote:3"]);
+		const { result } = items({ "transcript:remote:3": 1 });
 		expect(result.map((item) => item.id)).toEqual([
 			"file:p1:w1:src/auth/refresh.ts",
 			"chat:remote",
 			"transcript:remote:3",
 		]);
 		expect(result.find((item) => item.kind === "transcript")).toMatchObject({
-			late: true,
+			late: 1,
 			subtitle: "Only the host knows · One › Auth refresh",
 			previewTarget: { kind: "chat", sessionId: "remote", messageIndex: 3 },
 		});
 	});
 
 	test("ranking trusts the host's match and sorts late rows after every row that was already there", () => {
-		const { result } = items(["chat:remote"]);
+		const { result } = items({ "chat:remote": 1 });
 		const extra = {
 			...(result.find((item) => item.id === "chat:remote") as object),
 			id: "chat:other",
-			late: false,
+			late: 0,
 		};
-		const ranked = rankItems(
-			[...result, extra as (typeof result)[number]],
-			["refresh"],
-			EMPTY_LEARNING,
-			"refresh",
-			0,
-		);
+		const ranked = rank([...result, extra as (typeof result)[number]], "refresh");
 		expect(ranked.map((entry) => entry.item.id)).toEqual([
 			"file:p1:w1:src/auth/refresh.ts",
 			"chat:other",
@@ -152,5 +155,23 @@ describe("hostItems", () => {
 			{ key: "title", ranges: [[0, 7]] },
 			{ key: "subtitle", ranges: [[25, 29]] },
 		]);
+	});
+
+	test("a later arrival cohort sorts after an earlier one, whatever its tier", () => {
+		const { result } = items({ "file:p1:w1:src/auth/refresh.ts": 2, "transcript:remote:3": 1 });
+		expect(rank(result, "refresh").map((entry) => entry.item.id)).toEqual([
+			"chat:remote",
+			"transcript:remote:3",
+			"file:p1:w1:src/auth/refresh.ts",
+		]);
+	});
+
+	test("rows an earlier query answered carry no host match and only stay while they match the current one", () => {
+		const { result } = items({}, true);
+		expect(result.every((item) => item.match === undefined)).toBe(true);
+		expect(rank(result, "billing")).toEqual([]);
+		const refined = rank(result, "refresh.t");
+		expect(refined.map((entry) => entry.item.id)).toEqual(["file:p1:w1:src/auth/refresh.ts"]);
+		expect(refined[0]?.match.fields[0]).toEqual({ key: "title", ranges: [[0, 9]] });
 	});
 });

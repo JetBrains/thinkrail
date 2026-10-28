@@ -1,6 +1,7 @@
 import { RiMoreLine } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
+import type { HostTotal } from "./hostItems";
 import { frecencyScore, type LearningSnapshot } from "./learning";
 import type { PaletteItem, PaletteRow, PaletteSection } from "./model";
 import type { ParsedQuery, SearchScope } from "./query";
@@ -9,8 +10,8 @@ import { compareRanked, pickTopHit, plainRow, type RankedItem, rankItems, toRow 
 export interface SectionsInput {
 	readonly t: Translator;
 	readonly parsed: ParsedQuery;
-	/** Host hits per group beyond the page the host returned (`total − hits`), so a cap can say how many more exist. */
-	readonly hostOverflow?: Readonly<Record<string, number>>;
+	/** Per group, the host's true count and its page's ids, so a cap can say how many more exist. */
+	readonly hostTotals?: Readonly<Record<string, HostTotal>>;
 	readonly rootItems: readonly PaletteItem[];
 	readonly waiting: readonly PaletteItem[];
 	readonly actions: readonly PaletteItem[];
@@ -102,12 +103,19 @@ function cappedSection(
 	};
 }
 
+/** Host hits beyond its page, less the local rows it did not return: those are taken to be among them. */
+function hostOverflow(entries: readonly RankedItem[], total: HostTotal | undefined): number {
+	if (!total) return 0;
+	const localOnly = entries.filter((entry) => !total.ids.has(entry.item.id)).length;
+	return Math.max(0, total.total - total.ids.size - localOnly);
+}
+
 function groupRanked(
 	t: Translator,
 	ranked: readonly RankedItem[],
 	scoped: boolean,
 	expanded: ReadonlySet<string>,
-	hostOverflow: Readonly<Record<string, number>>,
+	hostTotals: Readonly<Record<string, HostTotal>>,
 ): PaletteSection[] {
 	const groups = new Map<string, RankedItem[]>();
 	for (const entry of ranked) {
@@ -124,7 +132,7 @@ function groupRanked(
 				entries.map((entry) => toRow(entry)),
 				scoped,
 				expanded,
-				hostOverflow[group] ?? 0,
+				hostOverflow(entries, hostTotals[group]),
 			),
 		);
 }
@@ -176,7 +184,7 @@ export function buildSections(input: SectionsInput): PaletteSection[] {
 	const scoped = parsed.scope !== "all";
 	const top = scoped ? null : pickTopHit(ranked);
 	const rest = top ? ranked.filter((entry) => entry !== top) : ranked;
-	const sections = groupRanked(t, rest, scoped, input.expanded, input.hostOverflow ?? {});
+	const sections = groupRanked(t, rest, scoped, input.expanded, input.hostTotals ?? {});
 	return top
 		? [{ id: "top", title: groupLabel(t, "top"), items: [toRow(top, true)] }, ...sections]
 		: sections;
