@@ -13,7 +13,14 @@ import { makeSnippet, matchesTerms } from "../history";
 import type { SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import type { FileListCache } from "./files";
-import { buildGroup, compactWhitespace, type Deadline, lineSnippet, termRanges } from "./hits";
+import {
+	buildGroup,
+	compactWhitespace,
+	compareHits,
+	type Deadline,
+	lineSnippet,
+	termRanges,
+} from "./hits";
 
 export interface SearchRoot {
 	readonly root: string;
@@ -49,10 +56,22 @@ function rangesOf(match: {
 	return ranges;
 }
 
+export type FileStat = (path: string) => number | "missing" | null;
+
+export const statFile: FileStat = (path) => {
+	try {
+		return statSync(path).size;
+	} catch (error) {
+		const code = (error as NodeJS.ErrnoException).code;
+		return code === "ENOENT" || code === "ENOTDIR" ? "missing" : null;
+	}
+};
+
 export function searchFiles(
 	root: SearchRoot,
 	lists: FileListCache,
 	input: ProviderInput,
+	stat: FileStat = statFile,
 ): SearchGroup {
 	const list = lists.peek(root.root);
 	if (!list) {
@@ -108,28 +127,27 @@ export function searchFiles(
 		const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
 		if (match) pushHit(path, match);
 	}
-	const group = buildGroup(
-		"file",
-		hits,
-		input.limit,
-		list.failed
+	hits.sort(compareHits);
+	const page: SearchHit[] = [];
+	let missing = 0;
+	for (const hit of hits) {
+		if (page.length >= input.limit) break;
+		const size = hit.path ? stat(join(root.root, hit.path)) : null;
+		if (size === "missing") missing += 1;
+		else page.push(size === null ? hit : { ...hit, size });
+	}
+	return {
+		kind: "file",
+		hits: page,
+		total: hits.length - missing,
+		state: list.failed
 			? "failed"
 			: lists.reloading(root.root)
 				? "indexing"
 				: truncated || list.truncated
 					? "truncated"
 					: "ready",
-	);
-	return { ...group, hits: group.hits.map((hit) => withSize(root.root, hit)) };
-}
-
-function withSize(root: string, hit: SearchHit): SearchHit {
-	if (!hit.path) return hit;
-	try {
-		return { ...hit, size: statSync(join(root, hit.path)).size };
-	} catch {
-		return hit;
-	}
+	};
 }
 
 export function searchSpecs(
@@ -252,7 +270,7 @@ export function searchTranscripts(
 			if (!entry || !matchesTerms(entry.text, terms)) continue;
 			const snippet = compactWhitespace(makeSnippet(entry.text, primary));
 			hits.push({
-				id: `transcript:${session.sessionId}:${entry.messageIndex}`,
+				id: `transcript:${session.sessionId}:${entry.timestamp}:${entry.role}`,
 				kind: "transcript",
 				title: snippet.slice(0, TRANSCRIPT_TEXT_PREVIEW),
 				...(session.title ? { subtitle: session.title } : {}),

@@ -180,11 +180,35 @@ describe("chat providers", () => {
 	test("a budget that runs out leaves older messages unsearched, never the newest chat's", () => {
 		const group = searchTranscripts([old, recent], false, label, input("refresh", 3));
 		expect(group.state).toBe("truncated");
-		expect(group.hits.map((hit) => hit.id)).toEqual([
-			"transcript:recent:0",
-			"transcript:old:499",
-			"transcript:old:498",
+		expect(group.hits.map((hit) => [hit.sessionId, hit.messageIndex])).toEqual([
+			["recent", 0],
+			["old", 499],
+			["old", 498],
 		]);
+	});
+
+	test("a transcript hit keeps its id when compaction shifts its message's index", () => {
+		const at = (shift: number): HistorySession => ({
+			sessionId: "s",
+			cwd: "/repos/one",
+			title: "Compacted",
+			entries: [
+				{ role: "user", text: "a refresh", timestamp: 100, messageIndex: 2 - shift },
+				{ role: "assistant", text: "b refresh", timestamp: 200, messageIndex: 3 - shift },
+			],
+		});
+		const byMessage = (session: HistorySession) =>
+			Object.fromEntries(
+				searchTranscripts([session], false, label, input("refresh", 10)).hits.map((hit) => [
+					hit.timestamp,
+					[hit.id, hit.messageIndex],
+				]),
+			);
+		const before = byMessage(at(0));
+		const after = byMessage(at(1));
+		expect(after[100]?.[0]).toBe(before[100]?.[0]);
+		expect(after[200]?.[0]).toBe(before[200]?.[0]);
+		expect([before[200]?.[1], after[200]?.[1]]).toEqual([3, 2]);
 	});
 
 	test("titles are matched over every chat, apart from the transcript budget", () => {
@@ -242,6 +266,29 @@ describe("FileListCache", () => {
 		expect(files.reloading("/r")).toBe(true);
 	});
 
+	test("a file git still lists but the worktree deleted is neither a hit nor counted", async () => {
+		const files = new FileListCache(async () => ({
+			paths: ["a-gone.ts", "b-here.ts", "c-here.ts"],
+			truncated: false,
+		}));
+		await files.load("/r");
+		const group = searchFiles(
+			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			files,
+			{
+				terms: [{ text: "ts", literal: false }],
+				limit: 2,
+				deadline: { expired: () => false },
+			},
+			(path) => (path.endsWith("a-gone.ts") ? "missing" : path.endsWith("c-here.ts") ? null : 3),
+		);
+		expect(group.hits.map((hit) => [hit.path, hit.size])).toEqual([
+			["b-here.ts", 3],
+			["c-here.ts", undefined],
+		]);
+		expect(group.total).toBe(2);
+	});
+
 	test("a file hit carries its size on disk so the client can decline to preview a large one", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "thinkrail-search-size-"));
 		try {
@@ -279,11 +326,15 @@ describe("FileListCache", () => {
 		});
 		await files.load("/r");
 		fail = false;
-		expect(searchFiles(root, files, input("refresh"))).toMatchObject({ state: "failed", hits: [] });
+		const present = () => 1;
+		expect(searchFiles(root, files, input("refresh"), present)).toMatchObject({
+			state: "failed",
+			hits: [],
+		});
 		await Bun.sleep(0);
-		expect(searchFiles(root, files, input("refresh")).hits.map((hit) => hit.path)).toEqual([
-			"src/refresh.ts",
-		]);
+		expect(searchFiles(root, files, input("refresh"), present).hits.map((hit) => hit.path)).toEqual(
+			["src/refresh.ts"],
+		);
 	});
 });
 
@@ -436,6 +487,7 @@ function readers(overrides: Partial<SearchReaders> = {}): SearchReaders {
 		specs: (root) => ({ entries: specs[root] ?? [], rebuilding: false }),
 		plans: (root) => plans[root] ?? [],
 		invalidateSpecs: () => {},
+		stat: () => 1,
 		...overrides,
 	};
 }
@@ -473,8 +525,8 @@ describe("search.query", () => {
 		expect(byKind.chat?.hits.map((hit) => hit.id)).toEqual(["chat:s1"]);
 		expect(byKind.chat?.hits[0]).toMatchObject({ workspaceId: "w-feature", projectId: "p1" });
 		expect(byKind.transcript?.hits.map((hit) => hit.id)).toEqual([
-			"transcript:s1:1",
-			"transcript:s1:0",
+			"transcript:s1:11:assistant",
+			"transcript:s1:10:user",
 		]);
 		expect(byKind.transcript?.hits[1]).toMatchObject({
 			messageIndex: 0,
@@ -513,8 +565,8 @@ describe("search.query", () => {
 			(
 				await service.query("c1", { seq, query, kinds: ["transcript", "spec"], context })
 			).groups.flatMap((group) => group.hits.map((hit) => hit.id));
-		expect(await ids(1, "flow token")).toContain("transcript:s1:0");
-		expect(await ids(2, '"token flow"')).toContain("transcript:s1:0");
+		expect(await ids(1, "flow token")).toContain("transcript:s1:10:user");
+		expect(await ids(2, '"token flow"')).toContain("transcript:s1:10:user");
 		expect(await ids(3, '"flow token"')).toEqual([]);
 		expect(await ids(4, '"the token module"')).toEqual(["spec:w-feature:SPEC.md"]);
 		expect(await ids(5, '"module token"')).toEqual([]);

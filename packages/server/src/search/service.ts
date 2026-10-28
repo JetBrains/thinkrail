@@ -24,6 +24,7 @@ import { FileListCache } from "./files";
 import { deadlineAt, emptyGroup } from "./hits";
 import {
 	type ChatLabel,
+	type FileStat,
 	type ProviderInput,
 	type SearchRoot,
 	searchChatTitles,
@@ -44,6 +45,7 @@ export interface SearchReaders {
 	readonly plans: (root: string) => StoredPlanFile[];
 	readonly invalidateSpecs: (root: string) => void;
 	readonly files?: FileListCache;
+	readonly stat?: FileStat;
 	readonly now?: () => number;
 }
 
@@ -149,7 +151,9 @@ export function createSearchService(readers: SearchReaders): SearchService {
 				}
 			};
 			push("workspace", () => searchWorkspaces(workspaces, input()));
-			push("file", () => (root ? searchFiles(root, files, input()) : emptyGroup("file")));
+			push("file", () =>
+				root ? searchFiles(root, files, input(), readers.stat) : emptyGroup("file"),
+			);
 			push("spec", () => (root ? searchSpecs(root, readers.specs, input()) : emptyGroup("spec")));
 
 			let sessions: { sessions: readonly HistorySession[]; indexing: boolean } | null = null;
