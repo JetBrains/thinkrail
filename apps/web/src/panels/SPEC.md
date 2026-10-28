@@ -423,7 +423,8 @@ without a push — `startLogin` / `logout`, and the store-driven
 `LoginDialog` node. Exactly one surface mounts that node: Settings → Providers while Settings is open, otherwise the
 connect surface (`ownsLoginDialog`), so a login never renders two stacked dialogs. **Post-connect handoff:**
 when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key
-login or a Central connect alike; the surface's first report is that baseline unless it passes
+login or a Central connect alike; the surface's first report is that baseline, even one whose re-read is still
+in flight (waiting for a current one would absorb a sign-in that lands first), unless it passes
 `configuredAtStart`, which the wizard does as empty (a cold start has no provider), so one connected through
 Settings during the intro or privacy step is still verified on reaching Connect — `ConnectProviderOptions` reports it once through `onConnected`, and only from a current, successful snapshot (never while a re-read is
 in flight or after a failed one, so a provider signed out a moment before Get started is not verified), and the host

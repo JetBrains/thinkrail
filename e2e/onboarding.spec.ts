@@ -596,6 +596,29 @@ test("connecting from the Welcome banner closes the stack, toasts once, and hand
 	await expect(toast).toHaveCount(1);
 });
 
+test("the banner's connect dialog still hands off when its opening status re-read lands after the sign-in", {
+	tag: "@dev-seam",
+}, async ({ page, baseURL }) => {
+	const status = await holdProviderStatus(page);
+	await openColdStart(page, baseURL);
+	await expect(page.getByTestId("welcome-provider-warning")).toBeVisible();
+
+	status.hold = true;
+	await page.getByTestId("welcome-connect-provider").click();
+	const dialog = page.getByTestId("connect-provider-dialog");
+	await expect.poll(status.held).toBeGreaterThan(0);
+	const opening = status.held();
+	await connectE2eKeyProvider(page, dialog);
+	await expect(page.getByTestId("login-success")).toBeVisible();
+	await expect.poll(status.held).toBeGreaterThan(opening);
+	status.release();
+
+	await expect(dialog).toHaveCount(0);
+	await expect(
+		page.getByTestId("toast").filter({ hasText: "E2E Key Provider connected" }),
+	).toBeVisible();
+});
+
 test("Welcome re-reads provider status when it opens again, so a sign-in made outside ThinkRail shows", {
 	tag: "@dev-seam",
 }, async ({ page, baseURL }) => {

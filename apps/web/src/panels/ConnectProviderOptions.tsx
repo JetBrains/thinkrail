@@ -89,12 +89,13 @@ export function ConnectProviderOptions({
 	const announceConnected = useEffectEvent(onConnected);
 
 	useEffect(() => {
-		if (!report || refreshing || failed) return;
+		if (!report) return;
 		const configured = report.providers.filter((p) => p.configured);
 		if (baseline.current === null) {
 			baseline.current = new Set(configured.map((p) => p.id));
 			return;
 		}
+		if (refreshing || failed) return;
 		const known = baseline.current;
 		const fresh = configured.find((p) => !known.has(p.id));
 		if (!fresh) return;
