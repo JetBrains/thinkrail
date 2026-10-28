@@ -229,8 +229,10 @@ re-opened transcripts provider-valid.
     `backgroundWork`, so clients show the idle chat as working (contracts' `isSessionWorking`) instead of
     quietly finished.
 
-    State ids come from Pi's active session-entry chain: run/interruption from the latest user entry,
-    completion from the decisive assistant entry, questions/dialogs from their interaction ids. A question
+    State ids come from Pi's active session-entry chain: run/interruption from the latest run-opening
+    entry — a user entry, or a `chat-handoff` custom message (a continued chat's first turn has no user
+    entry; other custom messages such as tool responses never open a run) — completion from the decisive
+    assistant entry, questions/dialogs from their interaction ids. A question
     needs input from the live mailbox; without a live phase, an attached session reads it from the
     transcript only as an acknowledged call (repair ack), while disk state still reads an unanswered
     dangling call, which attach-time repair will ack. Disk state

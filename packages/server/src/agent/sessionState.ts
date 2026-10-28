@@ -1,10 +1,11 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type {
-	AgentMessage,
-	AgentSettlement,
-	ExtUiRequest,
-	SessionCompletion,
-	SessionState,
+import {
+	type AgentMessage,
+	type AgentSettlement,
+	CHAT_HANDOFF_CUSTOM_TYPE,
+	type ExtUiRequest,
+	type SessionCompletion,
+	type SessionState,
 } from "@thinkrail/contracts";
 import type { InteractiveTools } from "../extensions";
 import { awaitingToolCallId } from "./toolResponses";
@@ -55,14 +56,20 @@ export function sessionStateMessages(entries: readonly SessionEntry[]): AgentMes
 	});
 }
 
-function latestUser(
+/** Host messages that open a run as a user prompt does: a continued chat's first turn answers its handoff. */
+const RUN_OPENING_CUSTOM_TYPES: ReadonlySet<string> = new Set([CHAT_HANDOFF_CUSTOM_TYPE]);
+
+function opensRun(entry: SessionEntry | undefined): entry is SessionEntry {
+	if (entry?.type === "message") return (entry.message as MessageView).role === "user";
+	return entry?.type === "custom_message" && RUN_OPENING_CUSTOM_TYPES.has(entry.customType);
+}
+
+function latestRunStart(
 	entries: readonly SessionEntry[],
-): { entry: MessageEntry; index: number } | null {
+): { entry: SessionEntry; index: number } | null {
 	for (let index = entries.length - 1; index >= 0; index--) {
 		const entry = entries[index];
-		if (entry?.type === "message" && (entry.message as MessageView).role === "user") {
-			return { entry, index };
-		}
+		if (opensRun(entry)) return { entry, index };
 	}
 	return null;
 }
@@ -134,7 +141,7 @@ function toolResponseInput(toolCallId: string): SessionState["needsInput"] {
 }
 
 export function deriveSessionState(inputs: SessionStateInputs): SessionState {
-	const turn = latestUser(inputs.entries);
+	const turn = latestRunStart(inputs.entries);
 	const runId = turn?.entry.id ?? null;
 	let needsInput: SessionState["needsInput"] = null;
 	if (inputs.pendingDialog !== null) {
