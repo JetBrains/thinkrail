@@ -176,3 +176,63 @@ test("the settings survey and the usage notification share one survey", async ({
 	await expect.poll(() => surveyReads).toBeGreaterThan(reads);
 	await expect(page.getByTestId("settings-nav-feedback")).toHaveCount(0);
 });
+
+test("a --no-analytics run explains that the survey cannot save responses", async ({ page }) => {
+	const blockedCopy =
+		"ThinkRail is running with --no-analytics flag, so the survey can't save responses.";
+	let browserSocket: WebSocketRoute | undefined;
+	const submits: SurveySubmit[] = [];
+
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		browserSocket = socket;
+		const server = socket.connectToServer();
+		socket.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			let request: ClientRequest;
+			try {
+				request = JSON.parse(raw) as ClientRequest;
+			} catch {
+				server.send(message);
+				return;
+			}
+			if (request.method === "feedback.survey" && request.id) {
+				socket.send(
+					JSON.stringify({
+						id: request.id,
+						ok: true,
+						result: { survey: SURVEY, analyticsSuppressed: true },
+					}),
+				);
+				return;
+			}
+			if (request.method === "feedback.survey.submit" && request.id) {
+				submits.push({ event: request.params?.event });
+				socket.send(JSON.stringify({ id: request.id, ok: true, result: { ok: true } }));
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => socket.send(message));
+	});
+
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-feedback").click();
+	const settings = page.getByTestId("settings-feedback");
+	await expect(settings.getByTestId("survey-analytics-suppressed")).toContainText(blockedCopy);
+	await expect(settings.getByTestId("survey-enable-analytics")).toHaveCount(0);
+	await expect(settings.getByTestId("survey-question")).toHaveCount(0);
+	await page.keyboard.press("Escape");
+
+	if (!browserSocket) throw new Error("expected the app WebSocket");
+	browserSocket.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} }));
+	const suggestion = page.locator('[data-toast="survey-suggestion"]');
+	await expect(suggestion).toBeVisible();
+	await suggestion.getByRole("button", { name: "Sure!" }).click();
+	const dialog = page.getByTestId("survey-prompt-dialog");
+	await expect(dialog.getByTestId("survey-analytics-suppressed")).toContainText(blockedCopy);
+	await expect(dialog.getByTestId("survey-enable-analytics")).toHaveCount(0);
+	await expect(dialog.getByTestId("survey-question")).toHaveCount(0);
+	expect(submits).toEqual([]);
+});

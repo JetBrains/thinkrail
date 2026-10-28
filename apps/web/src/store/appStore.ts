@@ -1057,6 +1057,7 @@ interface AppState {
 	settingsSection: SettingsSection;
 	interviewPromptOpen: boolean;
 	inAppSurvey: AppSurvey | null;
+	surveyAnalyticsSuppressed: boolean;
 	notificationPromptOpen: boolean;
 	sessionSwitcherOpen: boolean;
 	theme: ThemeId;
@@ -1379,6 +1380,7 @@ interface AppState {
 	showInterviewPrompt: () => void;
 	hideInterviewPrompt: () => void;
 	setInAppSurvey: (survey: AppSurvey | null) => void;
+	setSurveyAnalyticsSuppressed: (suppressed: boolean) => void;
 	openNotificationPrompt: () => void;
 	closeNotificationPrompt: () => void;
 	openSessionSwitcher: () => void;
@@ -2327,6 +2329,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsSection: SettingsSection.Providers,
 	interviewPromptOpen: false,
 	inAppSurvey: null,
+	surveyAnalyticsSuppressed: false,
 	notificationPromptOpen: false,
 	sessionSwitcherOpen: false,
 	theme: DEFAULT_CONFIG.theme,
@@ -4360,6 +4363,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
 	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),
 	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
+	setSurveyAnalyticsSuppressed: (suppressed) => set({ surveyAnalyticsSuppressed: suppressed }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
 	setStreamingResponseMovement: (streamingResponseMovement) => set({ streamingResponseMovement }),
 	setChatPreferences: (chatMessageOrder, streamingResponseMovement) =>

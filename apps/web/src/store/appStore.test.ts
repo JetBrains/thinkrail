@@ -181,6 +181,7 @@ beforeEach(() => {
 		settingsSection: "providers",
 		interviewPromptOpen: false,
 		inAppSurvey: null,
+		surveyAnalyticsSuppressed: false,
 		chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 		fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 		chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,

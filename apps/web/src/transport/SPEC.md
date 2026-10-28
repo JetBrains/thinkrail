@@ -70,7 +70,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   then `feedback.interview` via the idempotent `showInterviewPrompt()` when the socket is protocol v96 and
   the analytics consent dialog is not open — additional analytics may be off (a surviving host claim
   re-delivers the addressed event immediately after welcome; the
-  client also loads `feedback.survey` after welcome and when settings opens),
+  client also loads `feedback.survey` after welcome and when settings opens, storing `analyticsSuppressed`
+  with the survey),
   `workspace.fsChanged` via `noteFsChanged(payload)`, **`mcp.status`** via the generation-guarded
   `applyMcpStatus(snapshot)`, and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
   welcome config lands in the atomic install above.

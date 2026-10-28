@@ -78,6 +78,7 @@ import {
 } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
+	additionalAnalyticsSuppressed,
 	captureSurveyEvent,
 	reportClientError,
 	type SendMode,
@@ -1273,9 +1274,12 @@ const handlers: WsHandlers = {
 	},
 	"feedback.survey": async () => {
 		await refreshInAppSurvey();
+		const analyticsSuppressed = additionalAnalyticsSuppressed();
 		const survey = currentInAppSurvey();
-		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) return { survey: null };
-		return { survey };
+		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) {
+			return { survey: null, analyticsSuppressed };
+		}
+		return { survey, analyticsSuppressed };
 	},
 	"feedback.survey.submit": async (params) => {
 		const submission = parseSurveySubmission(params);
@@ -1284,7 +1288,9 @@ const handlers: WsHandlers = {
 		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) {
 			throw new Error("Survey is unavailable");
 		}
-		if (!additionalAnalyticsEnabled(getConfig())) throw new Error("Analytics is off");
+		if (additionalAnalyticsSuppressed() || !additionalAnalyticsEnabled(getConfig())) {
+			throw new Error("Analytics is off");
+		}
 		const event = surveyCapture(survey, submission);
 		captureSurveyEvent(event.name, event.properties);
 		if (event.completed) completeSurvey(survey.id, survey.iteration);

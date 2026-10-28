@@ -39,6 +39,28 @@ test("analytics off explains how to take the survey", () => {
 	expect(markup).not.toContain("What can we do to improve our product?");
 });
 
+test("a run with --no-analytics explains that answers cannot be saved", () => {
+	const markup = renderToStaticMarkup(
+		<FeedbackSettingsView survey={SURVEY} analyticsEnabled={true} analyticsSuppressed={true} />,
+	);
+	expect(markup).toContain(
+		String(EN["panels.survey.analyticsSuppressed"]).replaceAll("'", "&#x27;"),
+	);
+	expect(markup).toContain('data-testid="survey-analytics-suppressed"');
+	expect(markup).not.toContain('data-testid="survey-enable-analytics"');
+	expect(markup).not.toContain("What can we do to improve our product?");
+});
+
+test("the --no-analytics message stays when the saved preference is also off", () => {
+	const markup = renderToStaticMarkup(
+		<FeedbackSettingsView survey={SURVEY} analyticsEnabled={false} analyticsSuppressed={true} />,
+	);
+	expect(markup).toContain(
+		String(EN["panels.survey.analyticsSuppressed"]).replaceAll("'", "&#x27;"),
+	);
+	expect(markup).not.toContain('data-testid="survey-enable-analytics"');
+});
+
 test("analytics on draws the current question", () => {
 	const markup = renderToStaticMarkup(
 		<FeedbackSettingsView survey={SURVEY} analyticsEnabled={true} />,

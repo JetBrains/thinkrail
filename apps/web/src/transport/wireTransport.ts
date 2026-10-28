@@ -414,6 +414,7 @@ export function loadInAppSurvey(): void {
 	const protocol = useAppStore.getState().protocolVersion;
 	if (protocol === null || protocol < FEEDBACK_SURVEY_PROTOCOL_VERSION) {
 		useAppStore.getState().setInAppSurvey(null);
+		useAppStore.getState().setSurveyAnalyticsSuppressed(false);
 		return;
 	}
 	const generation = ++surveyLoadGeneration;
@@ -421,6 +422,7 @@ export function loadInAppSurvey(): void {
 		.request("feedback.survey", {})
 		.then((result) => {
 			if (generation !== surveyLoadGeneration) return;
+			useAppStore.getState().setSurveyAnalyticsSuppressed(result.analyticsSuppressed === true);
 			useAppStore.getState().setInAppSurvey(result.survey);
 		})
 		.catch(() => {});

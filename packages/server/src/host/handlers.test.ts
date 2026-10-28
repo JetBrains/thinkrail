@@ -26,6 +26,7 @@ import {
 	disposeAllSessions,
 	setSessionManagerFactory,
 } from "../agent";
+import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import {
 	configureSurveySource,
 	recordAcceptedMessage,
@@ -124,6 +125,7 @@ afterEach(() => {
 	resetConfigCache();
 	resetFeedbackForTests();
 	resetSurveyForTests();
+	resetAnalyticsForTests();
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -561,7 +563,10 @@ test("feedback.respond persists a popup action through the handler", async () =>
 });
 
 test("feedback.survey stays hidden until a launched survey exists and completion hides it", async () => {
-	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({
+		survey: null,
+		analyticsSuppressed: false,
+	});
 	await expect(
 		handleRequest(
 			"feedback.survey.submit",
@@ -625,11 +630,73 @@ test("feedback.survey stays hidden until a launched survey exists and completion
 			CTX,
 		),
 	).toEqual({ ok: true });
-	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({
+		survey: null,
+		analyticsSuppressed: false,
+	});
 	expect(JSON.parse(readFileSync(join(dataDir, "feedback.json"), "utf8"))).toMatchObject({
 		submittedSurveyId: "survey-1",
 		submittedIteration: 0,
 	});
+});
+
+test("feedback.survey.submit refuses a --no-analytics run without completing the survey", async () => {
+	configureSurveySource({
+		apiKey: "phc_test",
+		fetchImpl: (() =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify({
+						surveys: [
+							{
+								id: "survey-1",
+								name: "in-app-feedback",
+								start_date: "2026-10-28T00:00:00.000Z",
+								questions: [{ id: "q1", type: "open", question: "How is it?" }],
+							},
+						],
+					}),
+					{ status: 200 },
+				),
+			)) as unknown as typeof fetch,
+	});
+	await handleRequest(
+		"settings.update",
+		{ config: { analyticsEnabled: true, analyticsConsentConfirmed: true } },
+		CTX,
+	);
+	initializeAnalytics({
+		posthogApiKey: "phc_test",
+		appVersion: "0.0.0-dev",
+		channel: "dev",
+		build: "source",
+		additionalEnabled: true,
+		mute: true,
+		env: {},
+		fetchImpl: (() =>
+			Promise.resolve(new Response("{}", { status: 200 }))) as unknown as typeof fetch,
+	});
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1" },
+		analyticsSuppressed: true,
+	});
+	await expect(
+		handleRequest(
+			"feedback.survey.submit",
+			{
+				submissionId: "00000000-0000-4000-8000-000000000001",
+				event: "sent",
+				completed: true,
+				answers: { q1: "Good" },
+			},
+			CTX,
+		),
+	).rejects.toThrow("Analytics is off");
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1" },
+		analyticsSuppressed: true,
+	});
+	await shutdownAnalytics();
 });
 
 test("feedback.respond rejects an action outside the wire union", async () => {

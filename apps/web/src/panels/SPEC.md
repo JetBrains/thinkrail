@@ -996,10 +996,11 @@ a project picker, the prompt hero, and the reused
   decisions survive restarts and change later through Settings. The dialog keeps only the short
   product-usage copy and shared switch; Settings adds the optional outcomes, report dimensions, and
   excluded content. Older hosts retain their legacy privacy control without the new consent dialog.
-  **`FeedbackSettings`** is the separated survey pane: the launched questions, or a request to enable
-  analytics before those questions. It does not call `feedback.respond`.
-  The usage prompt is an in-app notification, including when analytics is off. **Sure** opens
-  **`SurveyPromptDialog`**. That dialog asks to enable analytics before the questions when analytics is
+  **`FeedbackSettings`** is the separated survey pane: the launched questions, a request to enable
+  analytics before those questions, or a message that this run was started with `--no-analytics` and cannot
+  save responses. It does not call `feedback.respond`.
+  The usage prompt is an in-app notification, including when analytics is off or the run is suppressed. **Sure** opens
+  **`SurveyPromptDialog`**. That dialog shows the same `--no-analytics` message, or asks to enable analytics before the questions when analytics is
   off, then draws the launched survey one question at a time. Every step's button says Continue.
   Closing it without finishing postpones.
   **Hide and don't ask again** records dismissal and tells the user the survey stays in Settings.
@@ -1091,7 +1092,8 @@ a project picker, the prompt hero, and the reused
   `WorkspacesSettings`/`PrivacySettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings`/`EnvironmentSettings`, the onboarding
   `ConnectProviderDialog`/`CreateProjectDialog`/`OnboardingWizard`, and the app-wide **`SurveyPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The usage suggestion is a notification; Sure opens
-  the dialog, whose intro offers to enable analytics when it is off. Closing the dialog without finishing
+  the dialog, whose intro offers to enable analytics when it is off, or says this run was started with
+  `--no-analytics` and cannot save responses. Closing the dialog without finishing
   records `postpone`; a rejected response stays open.
   `SettingsDialog` receives the Layout section from the
   shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays presentational

@@ -1191,6 +1191,7 @@
 	"panels.specs.open": "Open {{title}}. {{role}}",
 	"panels.specs.updateFailed": "Couldn't update specs.",
 	"panels.survey.analyticsRequired": "Please enable analytics to take the survey. You'll be able to switch it off again later.",
+	"panels.survey.analyticsSuppressed": "ThinkRail is running with --no-analytics flag, so the survey can't save responses. Please launch ThinkRail without --no-analytics flag to start the survey.",
 	"panels.survey.continue": "Continue",
 	"panels.survey.enableAnalytics": "Enable analytics",
 	"panels.survey.hidden": "OK! If you decide to share feedback later, you can find it in Settings.",

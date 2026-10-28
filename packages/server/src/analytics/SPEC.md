@@ -186,7 +186,9 @@ it. Settings changes write preference and confirmation together. Window behavior
 
 Only builds stamped with a project key report (see Data boundary); unkeyed source/dev builds, CI and
 `NODE_ENV=test` create no vendor clients and claim no installation marker. `--no-analytics` / `THINKRAIL_NO_ANALYTICS` suppress only
-additional events without changing consent. Host-side analytics is the sole environment-policy reader
+additional events without changing consent. `additionalAnalyticsSuppressed()` stays true for that process,
+including when initialization returns before a client exists, so a survey cannot be submitted or marked
+complete. Host-side analytics is the sole environment-policy reader
 across launchers. Browser attribution is additionally limited to binary/desktop human runs with both
 preference and confirmation true, an injected launcher opener, and no prior attempt. Source, CI/test,
 per-run suppression, explicit off, and CLI `--no-open` do not consume the attempt. The dialog's

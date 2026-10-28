@@ -1,12 +1,11 @@
 import type { AppSurvey } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { useEffect, useRef, useState } from "react";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { SurveyAnalyticsNotice } from "./FeedbackSettings";
 import { SurveyForm } from "./SurveyForm";
-import { useAnalyticsConsent } from "./useAnalyticsConsent";
 
 const SUGGESTION = "survey-suggestion";
 
@@ -14,7 +13,7 @@ export function SurveyPromptDialog() {
 	const t = useT();
 	const open = useAppStore((state) => state.interviewPromptOpen);
 	const analyticsEnabled = useAppStore((state) => state.analyticsEnabled);
-	const consent = useAnalyticsConsent();
+	const analyticsSuppressed = useAppStore((state) => state.surveyAnalyticsSuppressed);
 	const [phase, setPhase] = useState<"toast" | "dialog">("toast");
 	const [survey, setSurvey] = useState<AppSurvey | null>(null);
 	const [thanks, setThanks] = useState<string | null>(null);
@@ -73,6 +72,7 @@ export function SurveyPromptDialog() {
 			.request("feedback.survey", {})
 			.then((result) => {
 				if (cancelled) return;
+				useAppStore.getState().setSurveyAnalyticsSuppressed(result.analyticsSuppressed === true);
 				if (!result.survey) {
 					hidePrompt();
 					return;
@@ -161,7 +161,8 @@ export function SurveyPromptDialog() {
 	};
 
 	const dialogOpen = open && phase === "dialog" && (survey !== null || thanks !== null);
-	const formVisible = dialogOpen && analyticsEnabled && survey !== null && thanks === null;
+	const formVisible =
+		dialogOpen && analyticsEnabled && !analyticsSuppressed && survey !== null && thanks === null;
 	if (formVisible) formShownRef.current = true;
 
 	return (
@@ -179,25 +180,11 @@ export function SurveyPromptDialog() {
 					<p data-testid="survey-thanks" className="text-text-default tr-text-ui">
 						{thanks}
 					</p>
-				) : survey && !analyticsEnabled ? (
-					<div className="flex flex-col items-start gap-12">
-						<p data-testid="survey-analytics-message" className="text-text-default tr-text-ui">
-							{t("panels.survey.analyticsRequired")}
-						</p>
-						<Button
-							variant="primary"
-							data-testid="survey-enable-analytics"
-							disabled={consent.pending}
-							onClick={() => void consent.save(true)}
-						>
-							{t("panels.survey.enableAnalytics")}
-						</Button>
-						{consent.error ? (
-							<p role="alert" className="tr-text-metadata text-feedback-error">
-								{consent.error}
-							</p>
-						) : null}
-					</div>
+				) : survey && (analyticsSuppressed || !analyticsEnabled) ? (
+					<SurveyAnalyticsNotice
+						analyticsEnabled={analyticsEnabled}
+						analyticsSuppressed={analyticsSuppressed}
+					/>
 				) : survey ? (
 					<SurveyForm
 						key={`${survey.id}:${survey.iteration}:${submissionId.current}`}

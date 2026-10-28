@@ -972,7 +972,10 @@ export interface WsMethodMap {
 		result: HostEnvironmentUpdateResult;
 	};
 	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
-	"feedback.survey": { params: Record<string, never>; result: { survey: AppSurvey | null } };
+	"feedback.survey": {
+		params: Record<string, never>;
+		result: { survey: AppSurvey | null; analyticsSuppressed: boolean };
+	};
 	"feedback.survey.submit": { params: SurveySubmitParams; result: Ack };
 	"client.reportError": { params: ClientErrorReport; result: Ack };
 	"history.search": {

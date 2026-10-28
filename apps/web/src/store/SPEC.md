@@ -504,8 +504,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   trigger live in [[submodule-web-notifications]], never the store). The
   ephemeral **`interviewPromptOpen`** plus
   **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
-  survey prompt. The client shows it as an in-app notification even when additional analytics is off, and
-  **Sure** opens the survey dialog. **`inAppSurvey`** is the narrowed survey the settings button and pane draw. Transport
+  survey prompt. The client shows it as an in-app notification even when additional analytics is off or this
+  run was started with `--no-analytics`, and
+  **Sure** opens the survey dialog. **`inAppSurvey`** is the narrowed survey the settings button and pane draw, and
+  **`surveyAnalyticsSuppressed`** is the host flag that replaces those questions with the `--no-analytics` message. Transport
   opens the prompt only at protocol v96 unless the analytics consent dialog is open, clears it before each valid welcome, and loads
   the survey after welcome. The notification records postpone on dismiss and permanent dismissal on
   “don't ask again”. Counts and completion

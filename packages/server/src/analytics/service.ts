@@ -87,6 +87,11 @@ interface AnalyticsState {
 }
 
 let state: AnalyticsState | null = null;
+let additionalSuppressed = false;
+
+export function additionalAnalyticsSuppressed(): boolean {
+	return additionalSuppressed;
+}
 
 function detectOs(): string {
 	if (process.platform === "darwin") return "macos";
@@ -105,6 +110,7 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 	resetAnalyticsForTests();
 	try {
 		const env = options.env ?? process.env;
+		additionalSuppressed = Boolean(options.mute) || Boolean(env.THINKRAIL_NO_ANALYTICS);
 		const apiKey = options.posthogApiKey;
 		if (!apiKey || environmentMute(env)) return;
 		readAcquisition();
@@ -458,6 +464,7 @@ export function shutdownAnalytics(): Promise<void> {
 }
 
 export function resetAnalyticsForTests(): void {
+	additionalSuppressed = false;
 	const s = state;
 	state = null;
 	if (!s) return;

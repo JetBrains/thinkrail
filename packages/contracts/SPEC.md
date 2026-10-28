@@ -740,8 +740,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists postpone, book, or the legacy
   permanent-dismiss flag; book and never no longer stop message counting;
   `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction) /
-  **`feedback.survey`** (no params → `{ survey: AppSurvey | null }`; the launched survey named
-  `in-app-feedback`, or null when it is off or this id and iteration were already submitted) /
+  **`feedback.survey`** (no params → `{ survey: AppSurvey | null, analyticsSuppressed: boolean }`; the launched survey named
+  `in-app-feedback`, or null when it is off or this id and iteration were already submitted;
+  `analyticsSuppressed` is true for a run started with `--no-analytics` or `THINKRAIL_NO_ANALYTICS`) /
   **`feedback.survey.submit`** (`SurveySubmitParams` → ack; the host fills `$survey_id` and captures
   `survey shown`, `survey sent`, or `survey dismissed` only while additional analytics is on, and records
   completion on a finished send; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the invitation

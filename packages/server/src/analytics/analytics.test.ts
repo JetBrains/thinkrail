@@ -15,6 +15,7 @@ import {
 	CUSTOM_BUCKET,
 } from "./events";
 import {
+	additionalAnalyticsSuppressed,
 	captureSurveyEvent,
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
@@ -233,6 +234,43 @@ test("every event has exactly its closed properties plus personless transport fr
 		expect(entry.properties.$process_person_profile).toBe(false);
 		expect(entry.properties.$geoip_disable).toBe(true);
 	}
+});
+
+test("--no-analytics and THINKRAIL_NO_ANALYTICS mark the run suppressed", async () => {
+	const muted: SentPayload[] = [];
+	boot(muted, { mute: true, additionalEnabled: true });
+	setAdditionalAnalyticsEnabled(true);
+	expect(additionalAnalyticsSuppressed()).toBe(true);
+	expect(getAdditionalAnalyticsCapture()).toBeNull();
+	await shutdownAnalytics();
+
+	const fromEnv: SentPayload[] = [];
+	boot(fromEnv, { additionalEnabled: true, env: { THINKRAIL_NO_ANALYTICS: "1" } });
+	expect(additionalAnalyticsSuppressed()).toBe(true);
+	await shutdownAnalytics();
+
+	const open: SentPayload[] = [];
+	boot(open, { additionalEnabled: true });
+	expect(additionalAnalyticsSuppressed()).toBe(false);
+	await shutdownAnalytics();
+
+	initializeAnalytics({
+		appVersion: "0.0.0-dev",
+		channel: "dev",
+		build: "source",
+		additionalEnabled: true,
+		env: {},
+	});
+	expect(additionalAnalyticsSuppressed()).toBe(false);
+	initializeAnalytics({
+		appVersion: "0.0.0-dev",
+		channel: "dev",
+		build: "source",
+		additionalEnabled: true,
+		mute: true,
+		env: {},
+	});
+	expect(additionalAnalyticsSuppressed()).toBe(true);
 });
 
 test("survey events leave only while additional analytics is on", async () => {
