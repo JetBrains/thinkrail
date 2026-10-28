@@ -10,6 +10,7 @@ import {
 	useState,
 } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
+import type { ChatReadingAnchor } from "@/store";
 import type { ChatRevealOptions } from "./ChatActions";
 import type { ChatMessageOrder, StreamingResponseMovement } from "./chatPreferences";
 import type { FoldAnchorResolver } from "./foldState";
@@ -33,6 +34,12 @@ interface ScrollContainerProps {
 interface RowLocation {
 	id: string;
 	index: number;
+}
+
+export interface ChatReadingPosition {
+	restore: ChatReadingAnchor | null;
+	resolveIndex: (rowId: string) => number;
+	save: (anchor: ChatReadingAnchor | null) => void;
 }
 
 type RowRevealResult = "cancelled" | "found" | "missing";
@@ -212,8 +219,11 @@ export function useChatScroll(
 	firstItemIndex: number,
 	rowHeightEstimates: readonly number[],
 	movement: StreamingResponseMovement,
+	readingPosition: ChatReadingPosition,
 ): ChatScroll {
 	const edge = latestEdge(messageOrder);
+	const readingPositionRef = useRef(readingPosition);
+	const readingRestorePending = useRef(readingPosition.restore !== null);
 	const firstItemIndexRef = useRef(firstItemIndex);
 	const rowHeightEstimatesRef = useRef(rowHeightEstimates);
 	const scrollerRef = useRef<HTMLElement | null>(null);
@@ -407,6 +417,7 @@ export function useChatScroll(
 		isStreamingRef.current = isStreaming;
 		latestRowIdRef.current = latestRow?.id ?? null;
 		recordProgrammaticScrollPositionRef.current = recordProgrammaticScrollPosition;
+		readingPositionRef.current = readingPosition;
 	});
 
 	const resumeNativeMotion = useCallback(() => {
@@ -677,6 +688,67 @@ export function useChatScroll(
 		if (!scrollerElement || !streamEdgeElement) return;
 		controller.contentChanged();
 	}, [controller, isStreaming, scrollerElement, streamEdgeElement]);
+
+	useLayoutEffect(() => {
+		const anchor = readingPositionRef.current.restore;
+		if (!scrollerElement || !anchor || !readingRestorePending.current) return;
+		readerLeft();
+		const generation = rowRevealGeneration.current;
+		const anchorTarget = () => {
+			const row = mountedChatRow(scrollerElement, anchor.rowId);
+			if (!row) return null;
+			const viewportTop = scrollerElement.getBoundingClientRect().top;
+			return (
+				scrollerElement.scrollTop + row.getBoundingClientRect().top - viewportTop - anchor.offset
+			);
+		};
+		let attempts = 0;
+		let frame: number | null = null;
+		const restore = () => {
+			frame = null;
+			if (generation !== rowRevealGeneration.current) {
+				readingRestorePending.current = false;
+				return;
+			}
+			attempts += 1;
+			const target = anchorTarget();
+			if (target !== null) {
+				readingRestorePending.current = false;
+				controller.restoreScrollTop(target);
+				controller.stabilizeAnchor(anchorTarget);
+				return;
+			}
+			if (attempts > ROW_MATERIALIZATION_FRAMES) {
+				readingRestorePending.current = false;
+				controller.returnToEdge();
+				return;
+			}
+			const index = readingPositionRef.current.resolveIndex(anchor.rowId);
+			if (index >= 0) {
+				virtuosoRef.current?.scrollToIndex({
+					index,
+					align: "start",
+					offset: -anchor.offset,
+					behavior: "auto",
+				});
+			}
+			frame = requestAnimationFrame(restore);
+		};
+		restore();
+		return () => {
+			if (frame !== null) cancelAnimationFrame(frame);
+		};
+	}, [controller, readerLeft, scrollerElement, virtuosoRef]);
+
+	useLayoutEffect(
+		() => () => {
+			if (readingRestorePending.current || controller.isMountPending()) return;
+			const scroller = scrollerRef.current;
+			const row = scroller && !controller.getSnapshot().following ? topVisibleRow(scroller) : null;
+			readingPositionRef.current.save(row ? { rowId: row.id, offset: row.top } : null);
+		},
+		[controller],
+	);
 
 	useLayoutEffect(() => {
 		if (!headerElement || edge !== "top") return;

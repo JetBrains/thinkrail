@@ -257,11 +257,14 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   received Pi event; the compare-and-install fence for an authoritative transcript read) /
   **`syncedConnectionGeneration`** (which connected host generation the runtime's transcript was last read
   from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
-  stats read) / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
+  stats read) / `commands` / `draft` / **`readingAnchor`** (browser-local detached transcript position
+  that survives the chat tab's unmount; written only by `chat` through `setChatReadingAnchor`) and its
+  **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
-  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
+  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `setChatReadingAnchor` / `clearPendingExtUi`)
+  take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
   so a failed send lands in the chat instead of being swallowed; it carries no recovery action because Pi
