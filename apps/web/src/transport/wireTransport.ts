@@ -343,6 +343,10 @@ export function initTransport(): WsTransport {
 		refreshUserThemes(useAppStore.getState().connectionGeneration);
 	});
 
+	transport.subscribe(WS_CHANNELS.packagesChanged, () => {
+		useAppStore.getState().bumpPackagesVersion();
+	});
+
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
 		const state = useAppStore.getState();
 		if ((state.protocolVersion ?? 0) < FEEDBACK_SURVEY_PROTOCOL_VERSION) return;
