@@ -68,7 +68,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   would breach the byte budget is not retained: the entry stays as proof the work ran, so its replay fails
   (`RequestReplayUnretainedError`) rather than re-executing, and the response the caller was already sent is
   unaffected. Neither limit can cost exactly-once — one refuses work that has not started, the other keeps the
-  record of work that finished and drops only its answer,
+  record of work that finished and drops only its answer. A refusal is `CodedError("REQUEST_REPLAY_OVERFLOW")`
+  in the reply's `errorCode`; the first refusal of an episode (until the namespace next admits a request) logs
+  a `warn` with what the namespace holds per method, pending vs settled, and reports the error with the
+  refused method, so a full namespace names the handler that filled it instead of vanishing into a debug
+  line (#974),
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`), the **`provider.changed`** invalidation broadcast after auth changes the Central status or
   current runtime generation, after every successful in-app provider login (not an MCP sign-in), and after

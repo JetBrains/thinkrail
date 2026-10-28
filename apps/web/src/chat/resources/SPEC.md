@@ -114,8 +114,11 @@ line and in its accessible name (`name: activity, state`), so two same-role suba
 distinguishable; the option contains no control — its Stop is a sibling inside a presentational row
 wrapper, which carries the row's test ids and `data-selected`. **Stop all subagents** sits in the roster
 header, guarded by the parent's confirmation that names the current active count; it never stops the
-main chat or disables future delegation. Stale/unavailable snapshots show a banner and disable
-controls; read failures stay visible with Retry.
+main chat or disables future delegation. A non-authoritative snapshot disables controls and says why,
+in the summary chip and the collapsed dock line alike: `disconnected` → "reconnecting" plus the stale
+banner; `refreshFailed` → "out of date" with "Couldn't refresh resources — retrying." above the error and
+Retry; a brief in-flight `refreshing` → "updating" with no banner, so a push no longer flashes the stale
+banner. "Reconnecting" is reserved for a socket that is actually down.
 
 **MCP servers.** When the snapshot carries `mcpServers` (a host at `MCP_PROTOCOL_VERSION`; `null` hides
 the list) the roster adds a third section after Finished. Rows are not listbox options and never in the

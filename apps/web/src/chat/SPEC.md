@@ -1531,8 +1531,13 @@ child stays props-only and imports no sibling tool implementation; it receives t
 integration hook and passed into its read-only view; the module never loads xterm.
 
 The hook hydrates on mount/current welcome, subscribes to `session.resourcesChanged`, and coalesces
-invalidations behind one in-flight read. An invalidation during a read requires a fresh pass;
-[[submodule-web-store]] owns generation/revision-fenced snapshot installation and failure handling.
+invalidations behind one in-flight read. An invalidation during a read requires a fresh pass; a failed
+read reschedules itself on the `detailPolling` transient backoff (capped, unbounded attempts) while the
+view stays mounted on the same connection, and any success, push, manual Retry or unmount resets it —
+otherwise one refused read (#974: a full replay namespace) left the last snapshot claiming "Working"
+until a manual Retry. [[submodule-web-store]] owns generation/revision-fenced snapshot installation and
+failure handling, and `selectChatResourcesStaleness` names why a snapshot is not authoritative
+(`disconnected` socket/old protocol, `refreshFailed`, or an in-flight `refreshing`).
 Metadata remains current while the inspector is closed; the header count is numeric only for an
 authoritative snapshot and explicitly unknown otherwise. A welcome that proves the host predates the
 capability closes the inspector and its Stop-all confirmation, while an unknown protocol during
