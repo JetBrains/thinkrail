@@ -132,13 +132,16 @@ export function searchFiles(
 	let missing = 0;
 	for (const hit of hits) {
 		if (page.length >= input.limit) break;
+		const size = hit.path ? stat(join(root.root, hit.path)) : null;
+		if (size !== "missing") {
+			page.push(size === null ? hit : { ...hit, size });
+			continue;
+		}
+		missing += 1;
 		if (input.deadline.expired()) {
 			truncated = true;
 			break;
 		}
-		const size = hit.path ? stat(join(root.root, hit.path)) : null;
-		if (size === "missing") missing += 1;
-		else page.push(size === null ? hit : { ...hit, size });
 	}
 	return {
 		kind: "file",
@@ -250,19 +253,6 @@ export function searchChatTitles(
 	return buildGroup("chat", hits, input.limit, groupState(truncated, indexing));
 }
 
-function transcriptHitId(session: HistorySession, index: number): string {
-	const entry = session.entries[index];
-	if (!entry) return `transcript:${session.sessionId}:${index}`;
-	let twin = 0;
-	for (let before = index - 1; before >= 0; before -= 1) {
-		const earlier = session.entries[before];
-		if (!earlier || earlier.timestamp !== entry.timestamp) break;
-		if (earlier.role === entry.role) twin += 1;
-	}
-	const key = `transcript:${session.sessionId}:${entry.timestamp}:${entry.role}`;
-	return twin === 0 ? key : `${key}:${twin}`;
-}
-
 export function searchTranscripts(
 	sessions: readonly HistorySession[],
 	indexing: boolean,
@@ -287,7 +277,7 @@ export function searchTranscripts(
 			if (!entry || !matchesTerms(entry.text, terms)) continue;
 			const snippet = compactWhitespace(makeSnippet(entry.text, primary));
 			hits.push({
-				id: transcriptHitId(session, index),
+				id: `transcript:${session.sessionId}:${entry.entryId}`,
 				kind: "transcript",
 				title: snippet.slice(0, TRANSCRIPT_TEXT_PREVIEW),
 				...(session.title ? { subtitle: session.title } : {}),

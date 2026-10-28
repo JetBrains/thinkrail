@@ -10,7 +10,7 @@ const header = (cwd = "/tmp/x") =>
 const entriesOf = (jsonl: string) => {
 	const session = extractSession(jsonl);
 	expect(session).not.toBeNull();
-	return session?.entries;
+	return session?.entries.map(({ entryId: _, ...entry }) => entry);
 };
 
 describe("extractSession", () => {
@@ -61,6 +61,7 @@ describe("extractSession", () => {
 			}),
 			"not json at all",
 		].join("\n");
+		expect(extractSession(jsonl)?.entries.map((entry) => entry.entryId)).toEqual(["b", "c", "f"]);
 		expect(entriesOf(jsonl)).toEqual([
 			{ text: "fix the flaky test", role: "user", timestamp: 100, messageIndex: 0 },
 			{

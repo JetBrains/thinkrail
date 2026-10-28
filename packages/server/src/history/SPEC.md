@@ -29,8 +29,10 @@ to preserve).
   `HistoryEntry[]` — all from **one parse**, so the index never needs a second source (`listAll`) for
   metadata. Pi session files are **trees** (abandoned branches) that compaction rewrites, so it resolves
   the file the way pi does before the client renders it — `parseSessionEntries` →
-  `migrateSessionEntries` → `buildSessionContext` (follow the current leaf, apply the latest compaction,
-  drop summarized/abandoned entries) — then indexes the resolved messages, filtered through contracts'
+  `migrateSessionEntries` → `buildSessionProjection` (follow the current leaf, apply the latest compaction,
+  drop summarized/abandoned entries; the same projection `buildSessionContext` returns, with each
+  message's source entry) — then indexes the resolved messages, each with its pi entry's id as `entryId`
+  (`<id>:<part>` when one entry contributes several messages), which compaction never changes, filtered through contracts'
   **`isTranscriptMessageRole`**, the very guard `getSessionMessages` sends by (one policy, not a local copy
   of it). So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
   (no raw-file-order drift), and abandoned/summarized text never becomes a hit — the compaction summary is
@@ -124,7 +126,7 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
   (package.json), the sanctioned test boundary — same pattern as `@thinkrail/server/agent`. In-package
   tests import them relatively (`./testFixtures`); the e2e seeder imports the subpath.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (`getAgentDir` — the default sessions root — plus
-  the exported session-tree helpers `parseSessionEntries`/`migrateSessionEntries`/`buildSessionContext`
+  the exported session-tree helpers `parseSessionEntries`/`migrateSessionEntries`/`buildSessionProjection`
   used by `extract.ts`; **not `SessionManager`** in production code — see Responsibility. Tests may use
   `SessionManager` to *pin* layout/format facts against the real thing), `@thinkrail/contracts`,
   `node:fs`, `node:fs/promises`, `node:path`.

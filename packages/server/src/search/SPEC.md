@@ -86,8 +86,8 @@ plan files whose session has no transcript on disk (orphans).
   hit carries its `size` (one `stat` per hit on the page) and each spec hit its content's byte length,
   so the client can decline to preview a large one. A path the `stat` finds gone — tracked, but deleted
   in the worktree and not staged — is neither a hit nor counted, and the next matches fill the page;
-  the walk checks the budget before every `stat`, so a mass of deleted paths answers `truncated` in
-  time rather than stalling the host.
+  the matches the page keeps are always checked, and the walk checks the budget after each path it
+  finds gone, so a mass of deleted paths answers `truncated` in time rather than stalling the host.
 - **Specs:** the `spec` module's per-root snapshot — every build runs off the request path, the first
   included (a root's first read answers `indexing` with no hits), and only on a read after its TTL lapsed
   or the worktree changed, the previous snapshot answering meanwhile (title / id / path through the
@@ -125,6 +125,5 @@ images, HTML, markdown), the same path as a preview tab; a plan has no preview.
   the history index keeps its cold-build budget. A throwing provider or history read is logged
   (`log`, error type only) and answers its group `failed`.
 - Hit ids are stable (`kind:id[:locator]`) so the browser can keep a selection across replies; a
-  transcript hit's locator is its message's timestamp and role — and, for messages queued in the same
-  millisecond, how many earlier ones share both — never its index, which compaction shifts
-  (`messageIndex` stays the jump target).
+  transcript hit's locator is its message's pi entry id (`HistoryEntry.entryId`), never its index,
+  which compaction shifts (`messageIndex` stays the jump target).

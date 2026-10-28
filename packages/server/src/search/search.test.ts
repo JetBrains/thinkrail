@@ -167,6 +167,7 @@ describe("chat providers", () => {
 			text,
 			timestamp: at + index,
 			messageIndex: index,
+			entryId: `${id}-${index}`,
 		})),
 	});
 	const input = (query: string, checks: number) => ({
@@ -193,8 +194,20 @@ describe("chat providers", () => {
 			cwd: "/repos/one",
 			title: "Compacted",
 			entries: [
-				{ role: "user", text: "a refresh", timestamp: 100, messageIndex: 2 - shift },
-				{ role: "assistant", text: "b refresh", timestamp: 200, messageIndex: 3 - shift },
+				{
+					role: "user",
+					text: "a refresh",
+					timestamp: 100,
+					messageIndex: 2 - shift,
+					entryId: "e-a",
+				},
+				{
+					role: "assistant",
+					text: "b refresh",
+					timestamp: 200,
+					messageIndex: 3 - shift,
+					entryId: "e-b",
+				},
 			],
 		});
 		const byMessage = (session: HistorySession) =>
@@ -211,7 +224,7 @@ describe("chat providers", () => {
 		expect([before[200]?.[1], after[200]?.[1]]).toEqual([3, 2]);
 	});
 
-	test("messages queued in the same millisecond get distinct transcript ids", () => {
+	test("messages queued in the same millisecond keep distinct ids, their pi entries'", () => {
 		const queued: HistorySession = {
 			sessionId: "q",
 			cwd: "/repos/one",
@@ -221,13 +234,17 @@ describe("chat providers", () => {
 				text,
 				timestamp: 500,
 				messageIndex: index,
+				entryId: `entry-${index}`,
 			})),
 		};
 		const ids = searchTranscripts([queued], false, label, input("refresh", 10)).hits.map(
 			(hit) => hit.id,
 		);
-		expect(new Set(ids).size).toBe(3);
-		expect(ids).toContain("transcript:q:500:user");
+		expect(ids.sort()).toEqual([
+			"transcript:q:entry-0",
+			"transcript:q:entry-1",
+			"transcript:q:entry-2",
+		]);
 	});
 
 	test("titles are matched over every chat, apart from the transcript budget", () => {
@@ -330,6 +347,22 @@ describe("FileListCache", () => {
 		);
 		expect(checks).toBe(5);
 		expect(group).toMatchObject({ state: "truncated", hits: [] });
+	});
+
+	test("a scan that ran out of time still answers the matches it found", async () => {
+		const files = new FileListCache(async () => ({
+			paths: Array.from({ length: 1_500 }, (_, index) => `keep-${index}.ts`),
+			truncated: false,
+		}));
+		await files.load("/r");
+		const group = searchFiles(
+			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			files,
+			{ terms: [{ text: "keep", literal: false }], limit: 20, deadline: { expired: () => true } },
+			() => 1,
+		);
+		expect(group.state).toBe("truncated");
+		expect(group.hits).toHaveLength(20);
 	});
 
 	test("a file hit carries its size on disk so the client can decline to preview a large one", async () => {
@@ -441,12 +474,19 @@ const sessions: HistorySession[] = [
 		cwd: "/repos/one-auth",
 		title: "Fix auth token refresh",
 		entries: [
-			{ role: "user", text: "please refresh the token flow", timestamp: 10, messageIndex: 0 },
+			{
+				role: "user",
+				text: "please refresh the token flow",
+				timestamp: 10,
+				messageIndex: 0,
+				entryId: "m0",
+			},
 			{
 				role: "assistant",
 				text: "Done: the refresh now retries once.",
 				timestamp: 11,
 				messageIndex: 1,
+				entryId: "m1",
 			},
 		],
 	},
@@ -454,13 +494,15 @@ const sessions: HistorySession[] = [
 		sessionId: "s2",
 		cwd: "/repos/one",
 		title: "Billing redesign",
-		entries: [{ role: "user", text: "billing page", timestamp: 20, messageIndex: 0 }],
+		entries: [
+			{ role: "user", text: "billing page", timestamp: 20, messageIndex: 0, entryId: "b0" },
+		],
 	},
 	{
 		sessionId: "s-cli",
 		cwd: "/somewhere/else",
 		title: "Refresh notes",
-		entries: [{ role: "user", text: "refresh", timestamp: 30, messageIndex: 0 }],
+		entries: [{ role: "user", text: "refresh", timestamp: 30, messageIndex: 0, entryId: "c0" }],
 	},
 ];
 
@@ -568,8 +610,8 @@ describe("search.query", () => {
 		expect(byKind.chat?.hits.map((hit) => hit.id)).toEqual(["chat:s1"]);
 		expect(byKind.chat?.hits[0]).toMatchObject({ workspaceId: "w-feature", projectId: "p1" });
 		expect(byKind.transcript?.hits.map((hit) => hit.id)).toEqual([
-			"transcript:s1:11:assistant",
-			"transcript:s1:10:user",
+			"transcript:s1:m1",
+			"transcript:s1:m0",
 		]);
 		expect(byKind.transcript?.hits[1]).toMatchObject({
 			messageIndex: 0,
@@ -608,8 +650,8 @@ describe("search.query", () => {
 			(
 				await service.query("c1", { seq, query, kinds: ["transcript", "spec"], context })
 			).groups.flatMap((group) => group.hits.map((hit) => hit.id));
-		expect(await ids(1, "flow token")).toContain("transcript:s1:10:user");
-		expect(await ids(2, '"token flow"')).toContain("transcript:s1:10:user");
+		expect(await ids(1, "flow token")).toContain("transcript:s1:m0");
+		expect(await ids(2, '"token flow"')).toContain("transcript:s1:m0");
 		expect(await ids(3, '"flow token"')).toEqual([]);
 		expect(await ids(4, '"the token module"')).toEqual(["spec:w-feature:SPEC.md"]);
 		expect(await ids(5, '"module token"')).toEqual([]);
