@@ -31,18 +31,23 @@ interface ReplayEntry<T> {
 	readonly label: string;
 	result: Promise<T> | null;
 	settled: boolean;
+	abandoned: boolean;
 	weight: number;
 }
 
 interface ClientNamespace<T> {
 	readonly requests: Map<string, ReplayEntry<T>>;
 	weight: number;
+	abandoned: number;
 	overflowing: boolean;
 }
 
-function replayLoad(entries: Iterable<{ label: string; settled: boolean }>): ReplayLoad {
+function replayLoad(
+	entries: Iterable<{ label: string; settled: boolean; abandoned: boolean }>,
+): ReplayLoad {
 	const load: ReplayLoad = {};
 	for (const entry of entries) {
+		if (entry.abandoned) continue;
 		const counts = load[entry.label] ?? { pending: 0, settled: 0 };
 		if (entry.settled) counts.settled++;
 		else counts.pending++;
@@ -80,7 +85,7 @@ export class RequestReplayCache<T> {
 	): Promise<T> {
 		let namespace = this.clients.get(clientKey);
 		if (!namespace) {
-			namespace = { requests: new Map(), weight: 0, overflowing: false };
+			namespace = { requests: new Map(), weight: 0, abandoned: 0, overflowing: false };
 			this.clients.set(clientKey, namespace);
 		}
 		const requests = namespace.requests;
@@ -92,7 +97,7 @@ export class RequestReplayCache<T> {
 			return existing.result;
 		}
 
-		if (requests.size >= this.maxRequestsPerClient) {
+		if (requests.size - namespace.abandoned >= this.maxRequestsPerClient) {
 			const load = namespace.overflowing ? null : replayLoad(requests.values());
 			namespace.overflowing = true;
 			throw new RequestReplayOverflowError(load);
@@ -100,32 +105,45 @@ export class RequestReplayCache<T> {
 		if (requests.size < this.overflowLowWater) namespace.overflowing = false;
 
 		const result = Promise.resolve().then(execute);
-		const entry: ReplayEntry<T> = { fingerprint, label, result, settled: false, weight: 0 };
+		const entry: ReplayEntry<T> = {
+			fingerprint,
+			label,
+			result,
+			settled: false,
+			abandoned: false,
+			weight: 0,
+		};
 		requests.set(requestId, entry);
 		result.then(
-			(value) => this.markSettled(clientKey, namespace, entry, this.resultWeight(value)),
-			() => this.markSettled(clientKey, namespace, entry, 1),
+			(value) => this.markSettled(clientKey, namespace, requestId, entry, this.resultWeight(value)),
+			() => this.markSettled(clientKey, namespace, requestId, entry, 1),
 		);
 		return result;
 	}
 
-	acknowledge(clientKey: string, requestIds: readonly string[]): void {
+	acknowledge(clientKey: string, requestIds: readonly string[]): string[] {
 		const namespace = this.clients.get(clientKey);
-		if (!namespace) return;
-		for (const id of requestIds) this.free(namespace, id);
+		if (!namespace) return [];
+		const abandoned: string[] = [];
+		for (const id of requestIds) this.release(namespace, id, abandoned);
+		return abandoned;
 	}
 
-	retain(clientKey: string, unresolvedIds: readonly string[]): void {
+	retain(clientKey: string, unresolvedIds: readonly string[]): string[] {
 		const namespace = this.clients.get(clientKey);
-		if (!namespace) return;
+		if (!namespace) return [];
 		const keep = new Set(unresolvedIds);
-		for (const id of namespace.requests.keys()) if (!keep.has(id)) this.free(namespace, id);
+		const abandoned: string[] = [];
+		for (const id of namespace.requests.keys())
+			if (!keep.has(id)) this.release(namespace, id, abandoned);
+		return abandoned;
 	}
 
 	clearClient(clientKey: string): boolean {
 		const namespace = this.clients.get(clientKey);
 		if (!namespace) return true;
-		for (const entry of namespace.requests.values()) if (!entry.settled) return false;
+		for (const entry of namespace.requests.values())
+			if (!entry.settled && !entry.abandoned) return false;
 		this.clients.delete(clientKey);
 		return true;
 	}
@@ -134,21 +152,33 @@ export class RequestReplayCache<T> {
 		this.clients.clear();
 	}
 
-	private free(namespace: ClientNamespace<T>, requestId: string): void {
+	private release(namespace: ClientNamespace<T>, requestId: string, abandoned: string[]): void {
 		const entry = namespace.requests.get(requestId);
-		if (!entry?.settled) return;
-		namespace.requests.delete(requestId);
-		namespace.weight -= entry.weight;
+		if (!entry) return;
+		if (entry.settled) {
+			namespace.requests.delete(requestId);
+			namespace.weight -= entry.weight;
+		} else if (!entry.abandoned) {
+			entry.abandoned = true;
+			namespace.abandoned++;
+			abandoned.push(entry.label);
+		}
 	}
 
 	private markSettled(
 		clientKey: string,
 		namespace: ClientNamespace<T>,
+		requestId: string,
 		entry: ReplayEntry<T>,
 		weight: number,
 	): void {
 		if (this.clients.get(clientKey) !== namespace) return;
 		entry.settled = true;
+		if (entry.abandoned) {
+			namespace.requests.delete(requestId);
+			namespace.abandoned--;
+			return;
+		}
 
 		if (namespace.weight + weight > this.maxWeightPerClient) {
 			entry.result = null;
