@@ -746,10 +746,10 @@ re-opened transcripts provider-valid.
     settings edge; a throwing resolver means nothing disabled) is read by `buildResourceLoader` at **every
     loader reload** (snapshotted beside project trust), so the gated registry factories skip a disabled
     extension and `extensionsOverride` omits its `<inline:…>` entry — new parents never load it — and by
-    `childExtensionFactories()` when a hidden child's loader runs. `refreshExtensionTools()` updates live
-    sessions: tools whose `sourceInfo.path` belongs to a disabled registry extension leave the active set
-    (remembered per entry so re-enabling restores exactly the withheld tools, never ones that were inactive
-    by default) idle-sync / streaming-deferred to `agent_settled`, latest policy wins, and
+    `childExtensionFactories(workspaceId)` when a hidden child's loader runs. `refreshExtensionTools()`
+    updates live sessions: tools whose `sourceInfo.path` belongs to a disabled registry extension leave
+    the active set (remembered per entry so re-enabling restores exactly the withheld tools, never ones
+    that were inactive by default) idle-sync / streaming-deferred to `agent_settled`, latest policy wins, and
     `setActiveToolsByName` drops their guidance with them. Hooks of a disabled extension keep running in an
     open session until its next resource reload — pi cannot unload an extension, and reloading on every
     disable would bust the prompt cache. Two cases do reload, gated through `requestSessionReload`: an
