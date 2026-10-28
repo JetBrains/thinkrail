@@ -135,6 +135,7 @@ test("rejects helpers, options and credential-bearing URLs before writing", asyn
 		"foo::https://host/repo",
 		"-host:repo",
 		"https://token@host/repo",
+		"http://DOMAIN\\user:synthetic-secret@127.0.0.1/repo",
 		"https://host/repo?token=secret",
 		"ssh://git:secret@host/repo",
 		"https://host/",
@@ -158,6 +159,43 @@ test("failed clone cleans its reservation and never registers a project", async 
 	).rejects.toThrow("Git clone failed");
 	expect(existsSync(join(root, "failed"))).toBe(false);
 	expect(getProjects()).toEqual([]);
+});
+
+test("rewritten credential URLs are redacted before long diagnostics are truncated", async () => {
+	const server = Bun.serve({
+		hostname: "127.0.0.1",
+		port: 0,
+		fetch: () => new Response("failed", { status: 500 }),
+	});
+	const secret = "SYNTHETIC_SECRET_MUST_NOT_LEAK";
+	try {
+		const target = `http://127.0.0.1:${server.port}/${"a".repeat(2300)}?token=${secret}`;
+		git(
+			root,
+			"config",
+			"--file",
+			join(root, "no-global-config"),
+			`url.${target}.insteadOf`,
+			"https://example.invalid/repo",
+		);
+		let failure: unknown;
+		try {
+			await cloneProject({
+				url: "https://example.invalid/repo",
+				parentPath: root,
+				name: "redacted",
+			});
+		} catch (error) {
+			failure = error;
+		}
+		expect(failure).toBeInstanceOf(Error);
+		const message = failure instanceof Error ? failure.message : "";
+		expect(message).toContain("[redacted]");
+		expect(message).not.toContain(secret);
+		expect(existsSync(join(root, "redacted"))).toBe(false);
+	} finally {
+		await server.stop(true);
+	}
 });
 
 test("pre-cancelled clone creates no directory", async () => {

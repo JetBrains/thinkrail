@@ -21,13 +21,13 @@ never what a particular child's output means.
   **exit**; stdout defaults to decoded text, while `stdout: "bytes"` preserves it as `Uint8Array` for
   callers reading opaque content (stderr remains text diagnostics). POSIX children are detached
   process-group leaders, while Windows children retain a nonvisual console. Expiry or cancellation kills
-  the POSIX group; Windows asynchronously runs `taskkill /PID <pid> /T /F`, waits for it to exit, and
-  falls back to killing the direct child if taskkill fails. A failed launch is a result (`ok: false`,
+  the POSIX group; Windows asynchronously runs `taskkill /PID <pid> /T /F` with a five-second budget,
+  waits for it to exit, and falls back to killing the direct child if taskkill fails. A failed launch is a result (`ok: false`,
   `launchFailed: true`, the launch error as `err`), never a throw; callers can distinguish infrastructure
   failure from a child that ran
   and exited nonzero. A pre-aborted `signal` launches nothing. An in-flight abort competes with exit and
-  expiry, stops the tree, and waits for the direct child's exit before returning, so callers may safely
-  clean up a partial clone directory. Only cancellation carries `aborted: true` (`ok: false`, neither
+  expiry. Both abort and expiry stop the tree and wait for the direct child's exit before returning,
+  so callers may safely clean up a partial clone directory. Only cancellation carries `aborted: true` (`ok: false`, neither
   timeout nor launch failure), retaining captured stdout/stderr with the same drain grace. Once exit or
   expiry wins, later aborts have no effect; the listener is removed before draining.
 - **Also owns:** `streamBounded(argv, { timeoutMs, cwd?, env? })` → `{ stdout, exited }` — the same

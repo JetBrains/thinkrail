@@ -24,7 +24,9 @@ ref off the workspace-create critical path.
   preserves stdout as `Uint8Array`, while stderr remains decoded diagnostics. They keep network-bound ops
   like `fetch` **and request-path historical reads** off the event loop: this module owns only the
   git-shaped 55s budget and stalled/stderr wording, never child-lifetime mechanics. `opts.env` lets a
-  caller run prompt-free with its own environment and pins blob diagnostics to English; `opts.network`
+  caller run prompt-free with its own environment and pins blob diagnostics to English; the captured runners'
+  optional `opts.redactStderr` transforms diagnostics before any truncation or timeout wording (clone uses
+  it for credential-bearing URL rewrites). `opts.network`
   marks fetch/push solely so a no-output timeout can name the remote. **A timeout keeps whatever git wrote
   before the kill**: the runner drains continuously, so on
   expiry its `err` already holds the real diagnosis — a publickey rejection, a proxy's refusal, `remote:`

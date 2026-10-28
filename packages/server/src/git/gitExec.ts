@@ -33,6 +33,7 @@ type GitAsyncOptions = {
 	env?: Record<string, string | undefined>;
 	network?: boolean;
 	signal?: AbortSignal;
+	redactStderr?: (text: string) => string;
 };
 
 export function nonInteractiveGitEnv(): Record<string, string | undefined> {
@@ -109,6 +110,7 @@ export async function gitAsync(
 		env: opts.env ?? nonInteractiveGitEnv(),
 		...(opts.signal ? { signal: opts.signal } : {}),
 	});
+	if (opts.redactStderr) run.err = opts.redactStderr(run.err);
 	if (run.timedOut) {
 		return { ok: false, out: "", ...timeoutFailure(run, opts.network) };
 	}
@@ -122,7 +124,7 @@ export async function gitAsync(
 export function gitAsyncStream(
 	cwd: string,
 	args: string[],
-	opts: Omit<GitAsyncOptions, "signal"> = {},
+	opts: Omit<GitAsyncOptions, "signal" | "redactStderr"> = {},
 ): BoundedStream {
 	return streamBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
@@ -141,6 +143,7 @@ export async function gitAsyncBytes(
 		stdout: "bytes",
 		...(opts.signal ? { signal: opts.signal } : {}),
 	});
+	if (opts.redactStderr) run.err = opts.redactStderr(run.err);
 	if (run.timedOut) {
 		return { ok: false, out: new Uint8Array(), ...timeoutFailure(run, opts.network) };
 	}

@@ -17,7 +17,7 @@ function invalid(message: string): never {
 function repositoryUrl(value: string): string {
 	if (typeof value !== "string" || value.length > 8192) invalid("Enter a Git repository URL.");
 	const url = value.trim();
-	if (!url || /[\s\p{Cc}]/u.test(url)) invalid("Enter a valid Git repository URL.");
+	if (!url || /[\\\s\p{Cc}]/u.test(url)) invalid("Enter a valid Git repository URL.");
 	if (!url.includes("://") && /^(?:[\w.-]+@)?[a-zA-Z0-9][\w.-]*:[^\s]+$/.test(url)) {
 		if (/^[a-zA-Z]:/.test(url) || url.includes("::"))
 			invalid("Use a file URL for a local repository.");
@@ -140,12 +140,17 @@ export async function cloneProject(
 				url,
 				path,
 			],
-			{ timeoutMs: CLONE_TIMEOUT_MS, network: true, ...(signal ? { signal } : {}) },
+			{
+				timeoutMs: CLONE_TIMEOUT_MS,
+				network: true,
+				redactStderr: cloneDiagnostic,
+				...(signal ? { signal } : {}),
+			},
 		);
 		if (!signal?.aborted && !result.ok)
 			throw new CodedError(
 				"PROJECT_CLONE_FAILED",
-				`Git clone failed: ${cloneDiagnostic(result.err) || "Git exited without a diagnostic."}`,
+				`Git clone failed: ${result.err || "Git exited without a diagnostic."}`,
 			);
 	} catch (error) {
 		await removeIncompleteClone(path, reserved);

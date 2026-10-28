@@ -96,7 +96,9 @@ bootstrap it into one so it can be opened.
 `inspectCloneDestination` returns the validated absolute destination for the UI preview without reserving
 it; clone repeats that check before claiming the folder. `cloneProject` accepts a repository URL, host parent path, one folder name and optional positive integer
 history depth. HTTP(S), SSH, Git, SCP-style SSH and local `file:` URLs are accepted; remote helpers,
-embedded passwords, HTTP userinfo, query strings and fragments are rejected. Git uses the host's existing
+embedded passwords, HTTP userinfo, query strings, fragments and backslashes are rejected. Backslashes
+are ambiguous between the web URL parser and Git, so validation never accepts one spelling while Git
+executes another. Git uses the host's existing
 credential helpers and SSH configuration; no credentials are collected by ThinkRail. The parent must
 already be a directory. Every existing destination (including an empty directory or symlink) rejects.
 An exclusive mkdir reserves the destination before Git starts. Failures and cancellation clean only that
@@ -108,7 +110,8 @@ recovery. No agent starts and no trust is granted implicitly.
 `startProjectClone` / `cancelProjectClone` pair a client-owned operation id with an AbortController only
 while the request is active. Cancellation is owner-scoped and idempotent, and the original clone response
 reports cancellation only after cleanup. Socket reconnect uses host request replay, not a new operation.
-Git errors are bounded and credential-shaped URL output is redacted before it reaches the client.
+Git diagnostics are redacted before truncation: user-configured URL rewrites can introduce credentials,
+and truncating first can separate a secret suffix from the URL prefix needed to recognize it.
 
 - **Public surface (barrel):** `cloneProject`, `inspectCloneDestination`, `startProjectClone`, `cancelProjectClone`, `openProject`, `listProjects`, `listRecentProjects`,
   `refreshRecentProjectFolders`, `closeProject`, `renameProject`,

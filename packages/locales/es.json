@@ -856,6 +856,8 @@
 	"panels.cloneProject.title": "Clonar repositorio",
 	"panels.cloneProject.url": "URL del repositorio",
 	"panels.cloneProject.urlPlaceholder": "https://github.com/owner/repository.git",
+	"panels.createProject.browse": "Examinar",
+	"panels.createProject.pickFailed": "No se pudo abrir el selector de carpetas en el equipo anfitrión. Introduce la ruta manualmente.",
 	"panels.defaultWorkspace.missing": "Este host no tiene el espacio de trabajo Default para este proyecto.",
 	"panels.defaultWorkspace.openFailed": "No se pudo abrir la carpeta del proyecto",
 	"panels.diffPane.copyContents": "Copiar el contenido del archivo",

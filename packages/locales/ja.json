@@ -773,6 +773,8 @@
 	"panels.cloneProject.title": "リポジトリをクローン",
 	"panels.cloneProject.url": "リポジトリ URL",
 	"panels.cloneProject.urlPlaceholder": "https://github.com/owner/repository.git",
+	"panels.createProject.browse": "参照",
+	"panels.createProject.pickFailed": "ホストでフォルダー選択画面を開けませんでした。パスを直接入力してください。",
 	"panels.defaultWorkspace.missing": "このホストには、このプロジェクトのデフォルトのワークスペースがありません。",
 	"panels.defaultWorkspace.openFailed": "プロジェクトフォルダーを開けませんでした",
 	"panels.diffPane.copyContents": "ファイルの内容をコピー",

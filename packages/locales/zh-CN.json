@@ -815,6 +815,8 @@
 	"panels.cloneProject.title": "克隆仓库",
 	"panels.cloneProject.url": "仓库 URL",
 	"panels.cloneProject.urlPlaceholder": "https://github.com/owner/repository.git",
+	"panels.createProject.browse": "浏览",
+	"panels.createProject.pickFailed": "无法在主机上打开文件夹选择器，请手动输入路径。",
 	"panels.defaultWorkspace.missing": "此 host 上没有该项目的默认工作区。",
 	"panels.defaultWorkspace.openFailed": "无法打开项目文件夹",
 	"panels.diffPane.copyContents": "复制文件内容",
