@@ -787,6 +787,78 @@ export interface McpListResult {
 	handledElsewhere?: { by: string };
 }
 
+export type PiPackageScope = "user" | "project";
+
+export type PiPackageSourceKind = "npm" | "git" | "local";
+
+/** The pi resource kinds the Extensions page lists and toggles; themes are terminal-only and never shown. */
+export type PiPackageResourceType = "extensions" | "skills" | "prompts";
+
+/** One file a pi package contributes, in pi's resolved `enabled` state; `path` is the toggle target. */
+export interface PiPackageResource {
+	type: PiPackageResourceType;
+	path: string;
+	/** pi's `pi config` display rule: `parent/file.ts` for a nested extension, the folder for a skill, else the file name. */
+	displayName: string;
+	enabled: boolean;
+	/** Extensions only, when the host could load the file: the tool and command names it registered. */
+	tools?: string[];
+	commands?: string[];
+	/** Extensions only: pi's load error. */
+	error?: string;
+}
+
+/** One installed pi package as declared in a settings file; every summary is on disk. */
+export interface PiPackageSummary {
+	/** Host-wide identity the package switch keys on: npm by name, git by repo without ref, local by resolved path. */
+	identity: string;
+	/** The source string exactly as declared (`npm:@scope/pkg@1.2.0`, `git:host/owner/repo@ref`, a path). */
+	source: string;
+	kind: PiPackageSourceKind;
+	scope: PiPackageScope;
+	name: string;
+	version?: string;
+	description?: string;
+	installedPath: string;
+	/** The host-wide switch: `false` when `identity` is in `disabledPackages`. */
+	enabled: boolean;
+	resources: PiPackageResource[];
+}
+
+/** An extension pi discovers outside any package: a file under `<agentDir>/extensions`, `.pi/extensions`, or an explicit `extensions[]` settings path. */
+export interface PiLooseExtension {
+	path: string;
+	displayName: string;
+	scope: PiPackageScope;
+	/** `true` for an `extensions[]` settings entry, `false` for an auto-discovered directory file. */
+	explicit: boolean;
+	enabled: boolean;
+	tools?: string[];
+	commands?: string[];
+	error?: string;
+}
+
+/** One of pi's built-in extensions the host runs (`mcp`, `tool-search`), toggled through `±builtin:<name>` in pi settings. */
+export interface PiBuiltinExtension {
+	name: string;
+	enabled: boolean;
+	/** `project` when a `.pi/settings.json` entry decides it, else `user`. */
+	scope: PiPackageScope;
+}
+
+export interface PiPackagesCatalog {
+	/** The effective pi folder; every path shown derives from it, never from a hardcoded `~/.pi/agent`. */
+	agentDir: string;
+	settingsPath: string;
+	/** Present when the catalog was read for a workspace. */
+	projectSettingsPath?: string;
+	/** pi-level trust of that workspace's project; repository packages are read only when `true`. */
+	projectTrusted: boolean;
+	packages: PiPackageSummary[];
+	loose: PiLooseExtension[];
+	builtins: PiBuiltinExtension[];
+}
+
 export type BackgroundCommandOutputResult =
 	| {
 			available: true;
