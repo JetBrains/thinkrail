@@ -789,9 +789,12 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   absolute paths, one per line, separated from adjacent text. The agent decides how to read those paths;
   the composer does not inline documents or upload/copy files. No path is invented from a filename.
   Without a native path, unsupported files show the existing dismissible error chip. Ordinary text
-  retains its contents. Drag/drop never reads the clipboard. Pending native reads/decodes hold sends;
-  completion after an edited, reset or unmounted draft cannot overwrite that draft or attach to another
-  chat. Native paths refer to the client filesystem; remote translation is not provided.
+  is inserted immediately even while native lookup is pending; an empty file result never reapplies it.
+  A native file result may replace that provisional text only while the draft and selection remain
+  unchanged. Drag/drop never reads the clipboard. Pending native reads/decodes hold sends;
+  input, selection or focus changes invalidate a pending file insertion, and completion after a reset
+  or unmount cannot attach to another chat. Native paths refer to the client filesystem; remote
+  translation is not provided.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions (`mentionLookup` splits the typed
   query into the folder `fs.readDir` lists and the name prefix, reading a typed `\` as a separator), `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet

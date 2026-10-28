@@ -37,12 +37,16 @@ async function nativeFiles(page: Page, files: NativeClipboardFile[]): Promise<vo
 
 async function holdNativeFiles(page: Page): Promise<void> {
 	await page.evaluate(() => {
+		const pending: ((files: NativeClipboardFile[]) => void)[] = [];
 		const bridge: NativeClipboardBridge = {
 			readFiles: () =>
 				new Promise<NativeClipboardFile[]>((resolve) => {
-					Reflect.set(globalThis, "__resolveClipboardFiles", resolve);
+					pending.push(resolve);
 				}),
 		};
+		Reflect.set(globalThis, "__resolveClipboardFiles", (files: NativeClipboardFile[]) => {
+			for (const resolve of pending.splice(0)) resolve(files);
+		});
 		Reflect.set(globalThis, "__THINKRAIL_NATIVE_CLIPBOARD__", bridge);
 	});
 }
@@ -217,7 +221,9 @@ test.describe("web clipboard behavior with an injected bridge (not native API co
 		const input = await openChatComposer(page);
 		await holdNativeFiles(page);
 		await input.fill("Review");
-		await paste(input, { text: "/tmp/report.pdf" });
+		await paste(input, {
+			file: { name: "report.pdf", data: "JVBERi0xLjc=", mimeType: "application/pdf" },
+		});
 		await expect(page.getByTestId("composer-image-pending")).toBeVisible();
 		await expect(page.getByTestId("chat-send")).toBeDisabled();
 		await input.press("Enter");
@@ -249,6 +255,55 @@ test.describe("web clipboard behavior with an injected bridge (not native API co
 		await expect(page.getByTestId("composer-image")).toHaveCount(0);
 		await expect(page.getByTestId("chat-send")).toBeEnabled();
 	});
+
+	test("ordinary text pastes are applied immediately even during a slow native lookup", async ({
+		page,
+	}) => {
+		const input = await openChatComposer(page);
+		await holdNativeFiles(page);
+		await input.fill("Start ");
+		await paste(input, { text: "first " });
+		await expect(input).toHaveValue("Start first ");
+		await input.pressSequentially("typed ");
+		await paste(input, { text: "second" });
+		await expect(input).toHaveValue("Start first typed second");
+		await resolveNativeFiles(page, []);
+		await expect(page.getByTestId("composer-image-pending")).toHaveCount(0);
+		await expect(input).toHaveValue("Start first typed second");
+		await expect(page.getByTestId("composer-image-error")).toHaveCount(0);
+	});
+
+	test("a copied image exposed as clipboard text does not leave a duplicate filename", async ({
+		page,
+	}) => {
+		const input = await openChatComposer(page);
+		await nativeFiles(page, [{ path: "/tmp/photo.png", image: await png(page, 320, 180) }]);
+		await input.fill("Describe this ");
+		await paste(input, { text: "photo.png" });
+		await expect(page.getByTestId("composer-image")).toHaveCount(1);
+		await expect(input).toHaveValue("Describe this ");
+	});
+
+	for (const change of ["selection", "edit and restore"] as const) {
+		test(`a pending file paste is cancelled after ${change}`, async ({ page }) => {
+			const input = await openChatComposer(page);
+			await holdNativeFiles(page);
+			await input.fill("original draft");
+			await paste(input, {
+				file: { name: "report.pdf", data: "JVBERi0xLjc=", mimeType: "application/pdf" },
+			});
+			await expect(page.getByTestId("composer-image-pending")).toBeVisible();
+			if (change === "selection") await input.press("ArrowLeft");
+			else {
+				await input.fill("changed");
+				await input.fill("original draft");
+			}
+			await resolveNativeFiles(page, [{ path: "/tmp/report.pdf" }]);
+			await expect(page.getByTestId("composer-image-pending")).toHaveCount(0);
+			await expect(input).toHaveValue("original draft");
+			await expect(page.getByTestId("composer-image-error")).toContainText("draft changed");
+		});
+	}
 
 	test("the workspace dialog uses the same mixed-file paste behavior and pending guard", async ({
 		page,

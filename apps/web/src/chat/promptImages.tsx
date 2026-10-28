@@ -58,7 +58,9 @@ export function usePromptPasteDropHandlers(
 	onDrop: (e: DragEvent<HTMLElement>) => void;
 } {
 	const changeRef = useRef(change);
-	useInsertionEffect(() => { changeRef.current = change; });
+	useInsertionEffect(() => {
+		changeRef.current = change;
+	});
 	return {
 		onPaste: (e) => controller.paste(e, (value, caret) => changeRef.current(value, caret)),
 		onDrop: (e) => {
@@ -136,9 +138,10 @@ export function usePromptImages(): PromptImagesController {
 
 	const run = useCallback(
 		(
-			prepare: () => Promise<{ files: PreparedPromptFile[]; text: string }>,
+			prepare: () => Promise<{ files: PreparedPromptFile[]; text: string; replaceText?: boolean }>,
 			isCurrent: () => boolean,
 			insert: (text: string, paths: string[]) => void,
+			cleanup?: () => void,
 		) => {
 			const startedGeneration = generation.current;
 			pendingRef.current += 1;
@@ -146,18 +149,20 @@ export function usePromptImages(): PromptImagesController {
 			void prepare()
 				.then((result) => {
 					if (startedGeneration !== generation.current) return;
+					if (result.files.length === 0 && !result.text) return;
 					if (!isCurrent()) {
 						reportError(translate("chat.promptImages.draftChanged"));
 						return;
 					}
 					const paths = receiveFiles(result.files);
-					if (result.text || paths.length > 0) insert(result.text, paths);
+					if (result.text || paths.length > 0 || result.replaceText) insert(result.text, paths);
 				})
 				.catch(() => {
 					if (startedGeneration === generation.current)
 						reportError(translate("chat.promptImages.clipboardFailed"));
 				})
 				.finally(() => {
+					cleanup?.();
 					if (startedGeneration !== generation.current) return;
 					pendingRef.current -= 1;
 					setPending(pendingRef.current);
@@ -187,7 +192,9 @@ export function usePromptImages(): PromptImagesController {
 			const bridge = nativeClipboardBridge();
 			if (files.length === 0 && !bridge) return;
 			event.preventDefault();
-			if (pendingRef.current > 0) {
+			const text = event.clipboardData.getData("text/plain");
+			const immediateText = files.length === 0 && text.length > 0;
+			if (pendingRef.current > 0 && !immediateText) {
 				reportError(translate("chat.promptImages.pastePending"));
 				return;
 			}
@@ -195,13 +202,42 @@ export function usePromptImages(): PromptImagesController {
 			const value = target.value;
 			const start = target.selectionStart;
 			const end = target.selectionEnd;
-			const text = event.clipboardData.getData("text/plain");
+			const pasted = insertPromptText(value, start, end, text, []);
+			const expectedValue = immediateText ? pasted.value : value;
+			const expectedStart = immediateText ? pasted.caret : start;
+			const expectedEnd = immediateText ? pasted.caret : end;
+			if (immediateText) change(pasted.value, pasted.caret);
+			let edited = false;
+			const invalidate = () => {
+				edited = true;
+			};
+			const selectionMatches = () =>
+				target.selectionStart === expectedStart && target.selectionEnd === expectedEnd;
+			const onSelect = () => {
+				if (!selectionMatches()) invalidate();
+			};
+			target.addEventListener("input", invalidate);
+			target.addEventListener("blur", invalidate);
+			target.addEventListener("select", onSelect);
 			run(
-				() => prepareClipboardPaste(files, text, bridge),
-				() => target.isConnected && target.value === value,
+				async () => {
+					const result = await prepareClipboardPaste(files, text, bridge);
+					return immediateText
+						? { ...result, text: "", replaceText: result.files.length > 0 }
+						: result;
+				},
+				() => !edited && target.isConnected && target.value === expectedValue && selectionMatches(),
 				(content, paths) => {
-					const next = insertPromptText(value, start, end, content, paths);
+					const next =
+						immediateText && !content && paths.length === 0
+							? { value, caret: end }
+							: insertPromptText(value, start, end, content, paths);
 					change(next.value, next.caret);
+				},
+				() => {
+					target.removeEventListener("input", invalidate);
+					target.removeEventListener("blur", invalidate);
+					target.removeEventListener("select", onSelect);
 				},
 			);
 		},

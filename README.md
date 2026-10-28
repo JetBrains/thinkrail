@@ -49,7 +49,10 @@ create the tools it needs based on how you actually work.
 - **Chats that stream like the engine thinks.** Several concurrent `pi` sessions per workspace, each with
   its own model and live token and cost readout. Steer a running turn or queue a follow-up, delegate to
   subagents, and work a shared plan the agent updates and you edit — each completed step can be committed
-  and reviewed on its own.
+  and reviewed on its own. In the desktop app, paste copied files or folders into a prompt: images stay
+  attachments, while other files and folders become paths for the agent to read. Linux file paste needs
+  `wl-clipboard` on Wayland or `xclip` on X11. A browser that cannot obtain the original path asks you to
+  copy and paste the full path instead.
 - **Specs as ground truth.** A connected graph of `SPEC.md` files lives beside the code; the agent reads,
   searches, and maintains it through dedicated `spec_*` tools, so intent survives the session. The
   read-only Specs tool renders the graph as a tree in the workbench.

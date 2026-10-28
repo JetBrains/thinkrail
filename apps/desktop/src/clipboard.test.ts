@@ -31,18 +31,7 @@ const jsonRunner =
 test("JSON paths preserve spaces, Unicode, order, and duplicates; reject relative and control paths", () => {
 	expect(
 		parseClipboardFiles(
-			JSON.stringify([
-				"/tmp/  文档.txt ",
-				"relative",
-				"https://example.com/a",
-				"/tmp/a\nb",
-				"/tmp/a\u0085b",
-				"file:///tmp/a%20b",
-				"file:///tmp/a%0Ab",
-				"file://remote/tmp/a",
-				"file:///tmp/a?b",
-				"/tmp/  文档.txt ",
-			]),
+			JSON.stringify(["/tmp/  文档.txt ", "file:///tmp/a%20b", "/tmp/  文档.txt "]),
 			"json",
 			"darwin",
 		),
@@ -54,14 +43,9 @@ test("Windows drive paths, UNC and file URLs are accepted, drive-relative and de
 		parseClipboardFiles(
 			JSON.stringify([
 				"C:\\My Files\\文档.txt",
-				"C:relative",
-				"\\rooted",
 				"\\\\server\\share\\a b",
-				"\\\\?\\C:\\secret",
-				"\\\\.\\PhysicalDrive0",
 				"file:///D:/My%20Files/p.png",
 				"file://server/share/a%20b",
-				"C:\\a\u0000b",
 			]),
 			"json",
 			"win32",
@@ -77,7 +61,7 @@ test("Windows drive paths, UNC and file URLs are accepted, drive-relative and de
 test("URI and GNOME copied-files lists preserve names and reject invalid URLs", () => {
 	expect(
 		parseClipboardFiles(
-			"# comment\r\nfile:///tmp/a%20b\r\nfile:///tmp/%E4%B8%AD\r\nfile:///tmp/%zz\r\n",
+			"# comment\r\nfile:///tmp/a%20b\r\nfile:///tmp/%E4%B8%AD\r\n",
 			"uri-list",
 			"linux",
 		),
@@ -89,6 +73,39 @@ test("URI and GNOME copied-files lists preserve names and reject invalid URLs", 
 	for (const output of ["", "null", "{}", '"/tmp/a"', "[broken"]) {
 		expect(() => parseClipboardFiles(output, "json", "darwin")).toThrow();
 	}
+});
+
+test("rejected file paths fail closed instead of enabling clipboard icon fallback", () => {
+	for (const [platform, invalid] of [
+		[
+			"darwin",
+			[
+				"relative",
+				"https://example.com/a",
+				"/tmp/a\nb",
+				"/tmp/a\u0085b",
+				"file:///tmp/a%0Ab",
+				"file://remote/tmp/a",
+				"file:///tmp/a?b",
+			],
+		],
+		[
+			"win32",
+			["C:relative", "\\rooted", "\\\\?\\C:\\secret", "\\\\.\\PhysicalDrive0", "C:\\a\u0000b"],
+		],
+	] as const) {
+		for (const path of invalid) {
+			expect(() => parseClipboardFiles(JSON.stringify([path]), "json", platform)).toThrow(
+				"Native clipboard file read failed",
+			);
+		}
+	}
+	expect(() =>
+		parseClipboardFiles("file:///tmp/good\nfile:///tmp/%zz", "uri-list", "linux"),
+	).toThrow();
+	expect(() =>
+		parseClipboardFiles(JSON.stringify(["/tmp/good", "/tmp/a\nb"]), "json", "darwin"),
+	).toThrow();
 });
 
 test("file lists are bounded instead of silently truncated", () => {

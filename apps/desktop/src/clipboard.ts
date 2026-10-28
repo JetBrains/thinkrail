@@ -110,9 +110,10 @@ export function parseClipboardFiles(
 		values = lines.filter((line) => /^file:/i.test(line));
 	}
 	if (values.length > MAX_FILES) throw new ClipboardError("CLIPBOARD_FILE_LIMIT");
-	return values.flatMap((value) => {
+	return values.map((value) => {
 		const path = filePath(value, platform);
-		return path === null ? [] : [path];
+		if (path === null) throw new ClipboardError("CLIPBOARD_INVALID_PATH");
+		return path;
 	});
 }
 

@@ -229,12 +229,15 @@ The optional frozen `__THINKRAIL_NATIVE_CLIPBOARD__` bridge exposes only payload
 through the main window's RPC. It reads the local clipboard on an explicit paste, never on a timer.
 macOS reads AppKit file URLs through JXA; Windows reads the STA clipboard file-drop list; Linux reads
 URI-list targets through `wl-paste` (Wayland) or `xclip` (X11). These fixed commands never interpolate
-clipboard contents and have bounded time/output. A missing Linux helper or clipboard read failure is
+clipboard contents and are bounded to 3 seconds, 1 MiB output and 256 entries. A malformed native file
+path fails the read rather than becoming an empty list that could fall through to a Finder icon.
+A missing Linux helper or clipboard read failure is
 reported, not silently treated as successful file paste. No arbitrary-path RPC or host WS method exists.
 
 Native file URLs take priority over browser image representations, which can contain only a Finder
 icon. Regular candidate image files carry bounded original bytes (32 MiB total per read); directories,
-other formats and images that cannot be read within that bound carry only their original paths. The web
+other formats and images that cannot be read within that bound carry only their original paths.
+Symlinks and Windows UNC images are path-only to avoid following links or reading remote shares in the shell. The web
 owns decoding and attachment limits; the shell neither interprets documents nor copies files into a
 workspace. This capability describes the client's filesystem and ships only with the local-host profile.
 
