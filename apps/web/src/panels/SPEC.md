@@ -388,9 +388,10 @@ the wizard. **Provider status has one owner**: the store's `providerStatus` snap
 (a login that finished while disconnected is picked up on reconnect), and every successful untargeted login
 frame — another client's too, even while this client's own login keeps the dialog (hosts that predate a push
 still refresh); a local sign-out or Retry bumps it too. `useProviderStatus`
-re-reads whenever the snapshot is behind, single-flight per version, and `useHasProvider` (connected iff any
-`configured`) derives from it, so the banner, the wizard gate, the connect surfaces and Settings never
-disagree. `useHasProvider` also invalidates once on mount, so returning to Welcome sees a credential change the
+re-reads whenever the snapshot is behind, single-flight per version, and `useHasProvider` (connected iff
+`reportHasModelSource`: any standard provider `configured` **or** JetBrains Central connected, so Central
+alone does not trip the warning) derives from it, so the banner, the wizard gate, the connect surfaces and
+Settings never disagree. `useHasProvider` also invalidates once on mount, so returning to Welcome sees a credential change the
 host never pushes (a `pi` CLI login or logout). The banner stays hidden until the first answer lands, and a transport error degrades to *not*
 nagging (unknown or offline ≠ "no provider"). All provider **management** lives in
 Settings, not here (the always-on strip is gone).
