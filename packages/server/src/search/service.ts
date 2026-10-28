@@ -45,7 +45,7 @@ export interface SearchReaders {
 	readonly plans: (root: string) => StoredPlanFile[];
 	readonly invalidateSpecs: (root: string) => void;
 	readonly files?: FileListCache;
-	readonly stat?: FileStat;
+	readonly stat: FileStat;
 	readonly now?: () => number;
 }
 

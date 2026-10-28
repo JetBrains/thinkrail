@@ -113,7 +113,7 @@ the host from env via `bootHost` for dev/e2e.
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
 - `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `history`, `search`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
-- `search` → `history` (`HistoryIndex.sessions()`), `spec` (`specSnapshot`), `todos` (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`); projects and workspace records are injected by `host/search.ts`, never imported; it reads no file content (files and specs preview client-side over `fs.readFile`)
+- `search` → `history` (`HistoryIndex.sessions()`), `spec` (`specSnapshot`), `todos` (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`); projects, workspace records and the file check (`fs.readableFileSize`) are injected by `host/search.ts`, never imported; it reads no file content (files and specs preview client-side over `fs.readFile`)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)

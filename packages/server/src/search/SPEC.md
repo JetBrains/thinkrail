@@ -16,7 +16,8 @@ file names, spec titles and bodies, TODO plans, chat titles and transcripts, and
 projects the client has not expanded — ranking them with the one matcher from [[module-contracts]] so
 the browser can merge host hits with its own by tier and score. Registry-free: `host/search.ts`
 composes `createSearchService` with injected readers (open projects, persisted workspace records, the
-history index, spec snapshots, stored plans), the same shape as `host/historyScope.ts`.
+history index, spec snapshots, stored plans, and the file check — `fs`'s `readableFileSize`, the
+reader's own containment rule), the same shape as `host/historyScope.ts`.
 
 ## Boundary
 
@@ -26,7 +27,8 @@ history index, spec snapshots, stored plans), the same shape as `host/historySco
 - **Allowed deps:** `contracts` (DTOs + the matcher), `history` (`HistoryIndex.sessions()` — the
   narrow read of titles and entries), `spec` (`specSnapshot` / `invalidateSpecSnapshot`), `todos`
   (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`), `log` (a failed load or provider,
-  error type only), Node `fs` (`readdir` for a walk, `stat` for a returned file hit's size).
+  error type only), Node `fs` (`readdir` for a walk). A file hit's size and readability come from the
+  injected `stat`, never a second containment rule here.
 - **Forbidden:** `host`, `workspaces`, `projects`, `persistence`, `agent` (projects and records are
   injected; a preview never attaches a pi session); writing anything; a second matcher.
 
@@ -83,10 +85,11 @@ plan files whose session has no transcript on disk (orphans).
   on the plain hits first, then every remaining path that passes a cheap subsequence test (a quoted term
   must still be a substring) goes through the matcher too (acronym, camel-hump and subsequence tiers),
   both passes bounded by the deadline. 100k paths answer in tens of milliseconds. Each returned file
-  hit carries its `size` (one `stat` per hit on the page) and each spec hit its content's byte length,
-  so the client can decline to preview a large one. A path the `stat` finds gone — tracked, but deleted
-  in the worktree and not staged — or not a regular file (a checked-out submodule, a tracked symlink to a
-  directory) is neither a hit nor counted, and the next matches fill the page;
+  hit carries its `size` (one injected `stat` per hit on the page) and each spec hit its content's byte
+  length, so the client can decline to preview a large one. A path the `stat` finds gone — tracked, but
+  deleted in the worktree and not staged — not a regular file (a checked-out submodule, a tracked symlink
+  to a directory) or refused by the file reader (a tracked symlink out of the worktree or into `.git`) is
+  neither a hit nor counted — every hit previews and opens — and the next matches fill the page;
   the matches the page keeps are always checked, and the walk checks the budget after each path it
   finds gone, so a mass of deleted paths answers `truncated` in time rather than stalling the host.
 - **Specs:** the `spec` module's per-root snapshot — every build runs off the request path, the first

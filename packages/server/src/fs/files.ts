@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
@@ -45,6 +45,14 @@ function assertExistingAncestorContained(root: string, abs: string): void {
 	}
 }
 
+function resolveUnderRoot(root: string, path: string, followLeaf: boolean): string {
+	const abs = resolve(root, path);
+	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
+	if (isGitMetadataPath(resolve(root), abs)) throw new Error("The .git directory is not readable");
+	assertExistingAncestorContained(root, followLeaf ? abs : dirname(abs));
+	return abs;
+}
+
 function resolveInWorktree(
 	workspaceId: string,
 	path: string,
@@ -52,13 +60,20 @@ function resolveInWorktree(
 ): { root: string; abs: string } {
 	const ws = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
+	return { root: ws.worktreePath, abs: resolveUnderRoot(ws.worktreePath, path, followLeaf) };
+}
 
-	const root = ws.worktreePath;
-	const abs = resolve(root, path);
-	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
-	if (isGitMetadataPath(resolve(root), abs)) throw new Error("The .git directory is not readable");
-	assertExistingAncestorContained(root, followLeaf ? abs : dirname(abs));
-	return { root, abs };
+export function readableFileSize(root: string, path: string): number | "missing" | null {
+	try {
+		const stats = statSync(resolveUnderRoot(root, path, true));
+		return stats.isFile() ? stats.size : "missing";
+	} catch (error) {
+		const code =
+			typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+		return code === undefined || code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP"
+			? "missing"
+			: null;
+	}
 }
 
 export function readDir(workspaceId: string, path: string): FileNode[] {

@@ -15,7 +15,7 @@ import {
 	parseNulList,
 	walkFileList,
 } from "./files";
-import { searchChatTitles, searchFiles, searchTranscripts, statFile } from "./providers";
+import { searchChatTitles, searchFiles, searchTranscripts } from "./providers";
 import { createSearchService, resolveSearchRoot, type SearchReaders } from "./service";
 
 const encoder = new TextEncoder();
@@ -316,7 +316,7 @@ describe("FileListCache", () => {
 				limit: 2,
 				deadline: { expired: () => false },
 			},
-			(path) => (path.endsWith("a-gone.ts") ? "missing" : path.endsWith("c-here.ts") ? null : 3),
+			(_root, path) => (path === "a-gone.ts" ? "missing" : path === "c-here.ts" ? null : 3),
 		);
 		expect(group.hits.map((hit) => [hit.path, hit.size])).toEqual([
 			["b-here.ts", 3],
@@ -365,40 +365,25 @@ describe("FileListCache", () => {
 		expect(group.hits).toHaveLength(20);
 	});
 
-	test("a listed path that is a directory on disk counts as no file", () => {
-		const dir = mkdtempSync(join(tmpdir(), "thinkrail-search-dir-"));
-		try {
-			mkdirSync(join(dir, "submodule"));
-			writeFileSync(join(dir, "file.ts"), "abc");
-			expect(statFile(join(dir, "submodule"))).toBe("missing");
-			expect(statFile(join(dir, "file.ts"))).toBe(3);
-			expect(statFile(join(dir, "gone.ts"))).toBe("missing");
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	test("a file hit carries its size on disk so the client can decline to preview a large one", async () => {
-		const dir = mkdtempSync(join(tmpdir(), "thinkrail-search-size-"));
-		try {
-			writeFileSync(join(dir, "big.log"), "x".repeat(4096));
-			const files = new FileListCache(async () => ({
-				paths: ["big.log", "gone.log"],
-				truncated: false,
-			}));
-			await files.load(dir);
-			const group = searchFiles({ root: dir, projectId: "p1", workspaceId: "w1" }, files, {
-				terms: [{ text: "log", literal: false }],
-				limit: 20,
-				deadline: { expired: () => false },
-			});
-			expect(Object.fromEntries(group.hits.map((hit) => [hit.path, hit.size]))).toEqual({
-				"big.log": 4096,
-				"gone.log": undefined,
-			});
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
+	test("a file hit carries the size the injected stat reports for its root and path, so the client can decline to preview a large one", async () => {
+		const files = new FileListCache(async () => ({
+			paths: ["big.log", "outside-link.log"],
+			truncated: false,
+		}));
+		await files.load("/r");
+		const asked: string[] = [];
+		const group = searchFiles(
+			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			files,
+			{ terms: [{ text: "log", literal: false }], limit: 20, deadline: { expired: () => false } },
+			(root, path) => {
+				asked.push(`${root}|${path}`);
+				return path === "big.log" ? 4096 : "missing";
+			},
+		);
+		expect(asked).toEqual(["/r|big.log", "/r|outside-link.log"]);
+		expect(group.hits.map((hit) => [hit.path, hit.size])).toEqual([["big.log", 4096]]);
+		expect(group.total).toBe(1);
 	});
 
 	test("a first load that fails answers failed and is tried again on the next ask", async () => {

@@ -1,3 +1,4 @@
+import { readableFileSize } from "../fs";
 import { getHistoryIndex } from "../history";
 import { listProjects } from "../projects";
 import { createSearchService, type SearchService } from "../search";
@@ -16,6 +17,7 @@ export function hostSearch(): SearchService {
 			specs: specSnapshot,
 			plans: listStoredPlans,
 			invalidateSpecs: invalidateSpecSnapshot,
+			stat: readableFileSize,
 		});
 	}
 	return service;

@@ -1,5 +1,3 @@
-import { statSync } from "node:fs";
-import { join } from "node:path";
 import type { SearchGroup, SearchHit, Workspace } from "@thinkrail/contracts";
 import {
 	foldMatchCase,
@@ -56,23 +54,13 @@ function rangesOf(match: {
 	return ranges;
 }
 
-export type FileStat = (path: string) => number | "missing" | null;
-
-export const statFile: FileStat = (path) => {
-	try {
-		const stats = statSync(path);
-		return stats.isFile() ? stats.size : "missing";
-	} catch (error) {
-		const code = (error as NodeJS.ErrnoException).code;
-		return code === "ENOENT" || code === "ENOTDIR" ? "missing" : null;
-	}
-};
+export type FileStat = (root: string, path: string) => number | "missing" | null;
 
 export function searchFiles(
 	root: SearchRoot,
 	lists: FileListCache,
 	input: ProviderInput,
-	stat: FileStat = statFile,
+	stat: FileStat,
 ): SearchGroup {
 	const list = lists.peek(root.root);
 	if (!list) {
@@ -133,7 +121,7 @@ export function searchFiles(
 	let missing = 0;
 	for (const hit of hits) {
 		if (page.length >= input.limit) break;
-		const size = hit.path ? stat(join(root.root, hit.path)) : null;
+		const size = hit.path ? stat(root.root, hit.path) : null;
 		if (size !== "missing") {
 			page.push(size === null ? hit : { ...hit, size });
 			continue;
