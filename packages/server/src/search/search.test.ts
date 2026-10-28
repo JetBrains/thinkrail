@@ -15,7 +15,7 @@ import {
 	parseNulList,
 	walkFileList,
 } from "./files";
-import { searchChatTitles, searchFiles, searchTranscripts } from "./providers";
+import { searchChatTitles, searchFiles, searchTranscripts, statFile } from "./providers";
 import { createSearchService, resolveSearchRoot, type SearchReaders } from "./service";
 
 const encoder = new TextEncoder();
@@ -363,6 +363,19 @@ describe("FileListCache", () => {
 		);
 		expect(group.state).toBe("truncated");
 		expect(group.hits).toHaveLength(20);
+	});
+
+	test("a listed path that is a directory on disk counts as no file", () => {
+		const dir = mkdtempSync(join(tmpdir(), "thinkrail-search-dir-"));
+		try {
+			mkdirSync(join(dir, "submodule"));
+			writeFileSync(join(dir, "file.ts"), "abc");
+			expect(statFile(join(dir, "submodule"))).toBe("missing");
+			expect(statFile(join(dir, "file.ts"))).toBe(3);
+			expect(statFile(join(dir, "gone.ts"))).toBe("missing");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
 	test("a file hit carries its size on disk so the client can decline to preview a large one", async () => {

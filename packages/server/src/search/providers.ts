@@ -60,7 +60,8 @@ export type FileStat = (path: string) => number | "missing" | null;
 
 export const statFile: FileStat = (path) => {
 	try {
-		return statSync(path).size;
+		const stats = statSync(path);
+		return stats.isFile() ? stats.size : "missing";
 	} catch (error) {
 		const code = (error as NodeJS.ErrnoException).code;
 		return code === "ENOENT" || code === "ENOTDIR" ? "missing" : null;

@@ -85,7 +85,8 @@ plan files whose session has no transcript on disk (orphans).
   both passes bounded by the deadline. 100k paths answer in tens of milliseconds. Each returned file
   hit carries its `size` (one `stat` per hit on the page) and each spec hit its content's byte length,
   so the client can decline to preview a large one. A path the `stat` finds gone — tracked, but deleted
-  in the worktree and not staged — is neither a hit nor counted, and the next matches fill the page;
+  in the worktree and not staged — or not a regular file (a checked-out submodule, a tracked symlink to a
+  directory) is neither a hit nor counted, and the next matches fill the page;
   the matches the page keeps are always checked, and the walk checks the budget after each path it
   finds gone, so a mass of deleted paths answers `truncated` in time rather than stalling the host.
 - **Specs:** the `spec` module's per-root snapshot — every build runs off the request path, the first
