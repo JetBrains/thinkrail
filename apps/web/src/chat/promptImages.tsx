@@ -8,11 +8,20 @@ import {
 	type DragEvent,
 	type ReactNode,
 	useCallback,
+	useEffect,
+	useInsertionEffect,
 	useRef,
 	useState,
 } from "react";
 import { FileChip } from "./FileChip";
-import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
+import type { AttachedImage } from "./imageAttachment";
+import {
+	insertPromptText,
+	nativeClipboardBridge,
+	type PreparedPromptFile,
+	prepareClipboardPaste,
+	preparePromptFiles,
+} from "./promptFiles";
 import type { ChatAttachment } from "./types";
 
 export interface PromptImage extends AttachedImage {
@@ -31,26 +40,27 @@ export interface PromptImagesController {
 	pending: number;
 	errors: PromptImageError[];
 	addFiles: (files: File[]) => void;
+	paste: (
+		event: ClipboardEvent<HTMLTextAreaElement>,
+		change: (value: string, caret: number) => void,
+	) => void;
 	removeImage: (id: string) => void;
 	dismissError: (id: string) => void;
 	restore: (attachments: ChatAttachment[]) => void;
 	reset: () => void;
 }
 
-// Adapt a prompt input's paste/drop events onto the controller: forward dropped/pasted image files
-// (preventing the default insertion) while leaving text paste/drop untouched. Shared by every
-// prompt surface so image attachment behaves identically in the chat composer and the dialogs.
-export function imagePasteDropHandlers(controller: Pick<PromptImagesController, "addFiles">): {
-	onPaste: (e: ClipboardEvent<HTMLElement>) => void;
+export function usePromptPasteDropHandlers(
+	controller: Pick<PromptImagesController, "addFiles" | "paste">,
+	change: (value: string, caret: number) => void,
+): {
+	onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
 	onDrop: (e: DragEvent<HTMLElement>) => void;
 } {
+	const changeRef = useRef(change);
+	useInsertionEffect(() => { changeRef.current = change; });
 	return {
-		onPaste: (e) => {
-			const files = [...e.clipboardData.files];
-			if (files.length === 0) return;
-			e.preventDefault();
-			controller.addFiles(files);
-		},
+		onPaste: (e) => controller.paste(e, (value, caret) => changeRef.current(value, caret)),
 		onDrop: (e) => {
 			const files = [...e.dataTransfer.files];
 			if (files.length === 0) return;
@@ -65,54 +75,137 @@ export function usePromptImages(): PromptImagesController {
 	const imagesRef = useRef<PromptImage[]>([]);
 	const [pending, setPending] = useState(0);
 	const [errors, setErrors] = useState<PromptImageError[]>([]);
-	// Bumped on reset; a stale-generation decode discards its results (still balancing pending).
 	const generation = useRef(0);
+	const pendingRef = useRef(0);
+	useEffect(
+		() => () => {
+			generation.current += 1;
+		},
+		[],
+	);
 
 	const commit = useCallback((next: PromptImage[]) => {
 		imagesRef.current = next;
 		setImages(next);
 	}, []);
 
-	const addFiles = useCallback(
-		(files: File[]) => {
-			const picked = files.filter((f) => f.type.startsWith("image/"));
-			if (picked.length === 0) return;
-			const startedGeneration = generation.current;
-			setPending((n) => n + picked.length);
-			const decode = async () => {
-				const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
-				if (startedGeneration !== generation.current) return;
-				let used = imagesRef.current.reduce((sum, p) => sum + p.content.data.length, 0);
-				const additions: PromptImage[] = [];
-				const nextErrors: PromptImageError[] = [];
-				settled.forEach((result, i) => {
-					const name = picked[i]?.name || translate("chat.promptImages.fallbackName");
-					if (result.status !== "fulfilled" || result.value === null) {
-						nextErrors.push({
-							id: crypto.randomUUID(),
-							name,
-							reason: translate("chat.promptImages.unsupported"),
-						});
-						return;
-					}
-					const size = result.value.content.data.length;
-					if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
-						nextErrors.push({
-							id: crypto.randomUUID(),
-							name,
-							reason: translate("chat.promptImages.limitReached"),
-						});
-						return;
-					}
+	const reportError = useCallback((reason: string) => {
+		setErrors((prev) => [
+			...prev,
+			{
+				id: crypto.randomUUID(),
+				name: translate("chat.promptImages.clipboard"),
+				reason,
+			},
+		]);
+	}, []);
+
+	const receiveFiles = useCallback(
+		(files: PreparedPromptFile[]) => {
+			let used = imagesRef.current.reduce((sum, image) => sum + image.content.data.length, 0);
+			const additions: PromptImage[] = [];
+			const paths: string[] = [];
+			const nextErrors: PromptImageError[] = [];
+			for (const file of files) {
+				const size = file.image?.content.data.length ?? 0;
+				if (file.image && used + size <= REQUEST_IMAGE_BASE64_BUDGET) {
 					used += size;
-					additions.push({ id: crypto.randomUUID(), name, ...result.value });
-				});
-				if (additions.length > 0) commit([...imagesRef.current, ...additions]);
-				if (nextErrors.length > 0) setErrors((prev) => [...prev, ...nextErrors]);
-			};
-			void decode().finally(() => setPending((n) => n - picked.length));
+					additions.push({ id: crypto.randomUUID(), name: file.name, ...file.image });
+				} else if (file.path) {
+					paths.push(file.path);
+				} else {
+					nextErrors.push({
+						id: crypto.randomUUID(),
+						name: file.name || translate("chat.promptImages.fallbackName"),
+						reason: translate(
+							file.image
+								? "chat.promptImages.limitReached"
+								: file.error === "unsupported"
+									? "chat.promptImages.unsupported"
+									: "chat.promptImages.pathUnavailable",
+						),
+					});
+				}
+			}
+			if (additions.length > 0) commit([...imagesRef.current, ...additions]);
+			if (nextErrors.length > 0) setErrors((prev) => [...prev, ...nextErrors]);
+			return paths;
 		},
 		[commit],
+	);
+
+	const run = useCallback(
+		(
+			prepare: () => Promise<{ files: PreparedPromptFile[]; text: string }>,
+			isCurrent: () => boolean,
+			insert: (text: string, paths: string[]) => void,
+		) => {
+			const startedGeneration = generation.current;
+			pendingRef.current += 1;
+			setPending(pendingRef.current);
+			void prepare()
+				.then((result) => {
+					if (startedGeneration !== generation.current) return;
+					if (!isCurrent()) {
+						reportError(translate("chat.promptImages.draftChanged"));
+						return;
+					}
+					const paths = receiveFiles(result.files);
+					if (result.text || paths.length > 0) insert(result.text, paths);
+				})
+				.catch(() => {
+					if (startedGeneration === generation.current)
+						reportError(translate("chat.promptImages.clipboardFailed"));
+				})
+				.finally(() => {
+					if (startedGeneration !== generation.current) return;
+					pendingRef.current -= 1;
+					setPending(pendingRef.current);
+				});
+		},
+		[receiveFiles, reportError],
+	);
+
+	const addFiles = useCallback(
+		(files: File[]) => {
+			if (files.length === 0) return;
+			run(
+				async () => ({ files: await preparePromptFiles(files), text: "" }),
+				() => true,
+				() => {},
+			);
+		},
+		[run],
+	);
+
+	const paste = useCallback(
+		(
+			event: ClipboardEvent<HTMLTextAreaElement>,
+			change: (value: string, caret: number) => void,
+		) => {
+			const files = [...event.clipboardData.files];
+			const bridge = nativeClipboardBridge();
+			if (files.length === 0 && !bridge) return;
+			event.preventDefault();
+			if (pendingRef.current > 0) {
+				reportError(translate("chat.promptImages.pastePending"));
+				return;
+			}
+			const target = event.currentTarget;
+			const value = target.value;
+			const start = target.selectionStart;
+			const end = target.selectionEnd;
+			const text = event.clipboardData.getData("text/plain");
+			run(
+				() => prepareClipboardPaste(files, text, bridge),
+				() => target.isConnected && target.value === value,
+				(content, paths) => {
+					const next = insertPromptText(value, start, end, content, paths);
+					change(next.value, next.caret);
+				},
+			);
+		},
+		[run, reportError],
 	);
 
 	const removeImage = useCallback(
@@ -138,11 +231,13 @@ export function usePromptImages(): PromptImagesController {
 
 	const reset = useCallback(() => {
 		generation.current += 1;
+		pendingRef.current = 0;
+		setPending(0);
 		commit([]);
 		setErrors([]);
 	}, [commit]);
 
-	return { images, pending, errors, addFiles, removeImage, dismissError, restore, reset };
+	return { images, pending, errors, addFiles, paste, removeImage, dismissError, restore, reset };
 }
 
 // Padding presets for the chip strip. Both surfaces align the strip with the input field's left

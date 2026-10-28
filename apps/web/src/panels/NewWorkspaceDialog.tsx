@@ -47,10 +47,10 @@ import {
 	untrustedNoticeText,
 } from "@/chat/projectTrust";
 import {
-	imagePasteDropHandlers,
 	PROMPT_IMAGE_CHIPS_PADDING,
 	PromptImageChips,
 	usePromptImages,
+	usePromptPasteDropHandlers,
 } from "@/chat/promptImages";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
@@ -153,6 +153,15 @@ export function NewWorkspaceDialog({
 	);
 
 	const focusPromptSelection = usePendingSelection(promptRef);
+	const editPrompt = (next: string, caret: number) => {
+		const nextSlots = slotSession ? applyTemplateSlotEdit(prompt, next, caret, slotSession) : null;
+		updatePromptDraft(next, nextSlots);
+	};
+
+	const pasteDropHandlers = usePromptPasteDropHandlers(attachedImages, (next, caret) => {
+		editPrompt(next, caret);
+		focusPromptSelection(caret);
+	});
 
 	const supportsProjectTemplatePreview =
 		protocolVersion !== null && protocolVersion >= PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION;
@@ -593,14 +602,8 @@ export function NewWorkspaceDialog({
 						data-testid="ws-prompt"
 						value={prompt}
 						disabled={creating}
-						{...imagePasteDropHandlers(attachedImages)}
-						onChange={(e) => {
-							const next = e.target.value;
-							const nextSlotSession = slotSession
-								? applyTemplateSlotEdit(prompt, next, e.target.selectionStart, slotSession)
-								: null;
-							updatePromptDraft(next, nextSlotSession);
-						}}
+						{...pasteDropHandlers}
+						onChange={(e) => editPrompt(e.target.value, e.target.selectionStart)}
 						placeholder={t("panels.newWorkspace.promptPlaceholder")}
 						spellCheck={false}
 						rows={6}
