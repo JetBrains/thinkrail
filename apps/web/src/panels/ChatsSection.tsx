@@ -24,7 +24,7 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { cn } from "@thinkrail/ui/utils";
-import { type MouseEvent, useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
@@ -42,8 +42,8 @@ import {
 	useAppStore,
 	type WorkspaceReadAction,
 } from "../store";
-import { ConfirmDialog } from "./ConfirmDialog";
-import { deleteProjectlessChat, inspectProjectlessChat, startProjectlessChat } from "./chatActions";
+import { ChatDeleteDialog } from "./ChatDeleteDialog";
+import { deleteProjectlessChat, startProjectlessChat } from "./chatActions";
 import {
 	loadProjectWorkspaces,
 	markWorkspaceRead,
@@ -146,34 +146,13 @@ function ChatRow({
 	const firstPrompt = useAppStore((s) => selectChatWorkspaceFirstPrompt(s, workspace.id));
 	const label = chatLabel(t, title, firstPrompt);
 	const [menuOpen, setMenuOpen] = useState(false);
-	const [confirmOpen, setConfirmOpen] = useState(false);
-	const [files, setFiles] = useState<{ files: number; truncated: boolean } | null>(null);
-	const inspecting = useRef(false);
+	const [confirming, setConfirming] = useState(false);
 	const pending = workspace.deletionPending === true;
 	const Icon = isActive ? RiChat3Fill : RiChat3Line;
-
-	const openConfirm = () => {
-		setFiles(null);
-		setConfirmOpen(true);
-		if (inspecting.current) return;
-		inspecting.current = true;
-		void inspectProjectlessChat(workspace.id)
-			.then((result) => setFiles(result))
-			.finally(() => {
-				inspecting.current = false;
-			});
-	};
 	const openMenuFromContext = (event: MouseEvent) => {
 		event.preventDefault();
 		setMenuOpen(true);
 	};
-	const description =
-		files === null
-			? t("panels.chats.deleteDescription")
-			: files.truncated
-				? t("panels.chats.deleteDescriptionFilesMany", { count: files.files })
-				: t("panels.chats.deleteDescriptionFiles", { count: files.files });
-
 	return (
 		<li>
 			<fieldset
@@ -283,7 +262,7 @@ function ChatRow({
 							onSelect={(event) => {
 								event.preventDefault();
 								if (pending) void deleteProjectlessChat(workspace.id);
-								else openConfirm();
+								else setConfirming(true);
 							}}
 						>
 							<Trash2 />
@@ -292,15 +271,10 @@ function ChatRow({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</fieldset>
-			<ConfirmDialog
-				open={confirmOpen}
-				onOpenChange={setConfirmOpen}
-				title={t("panels.chats.deleteTitle", { name: label.text })}
-				description={description}
-				confirmLabel={t("common.delete")}
-				destructive
-				confirmTestId="confirm-delete-chat"
-				onConfirm={() => void deleteProjectlessChat(workspace.id)}
+			<ChatDeleteDialog
+				workspaceId={confirming ? workspace.id : null}
+				name={label.text}
+				onClose={() => setConfirming(false)}
 			/>
 		</li>
 	);

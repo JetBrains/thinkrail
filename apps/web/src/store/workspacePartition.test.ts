@@ -73,6 +73,14 @@ describe("selectWorkspaceSettledReason", () => {
 		expect(selectWorkspaceSettledReason({ ...base, settleIdleDays: 7 }, idle, NOW)).toBeNull();
 	});
 
+	test("a chat without a project never settles — not idle, not by an override", () => {
+		const chat = ws("chat", { kind: "chat", lastActiveAt: NOW - 30 * DAY });
+		expect(selectWorkspaceSettledReason(base, chat, NOW)).toBeNull();
+		expect(
+			selectWorkspaceSettledReason(base, { ...chat, settledOverride: "settled" }, NOW),
+		).toBeNull();
+	});
+
 	test("an unstamped legacy row stays live until the host backfills it", () => {
 		expect(
 			selectWorkspaceSettledReason(base, ws("legacy", { lastActiveAt: undefined }), NOW),

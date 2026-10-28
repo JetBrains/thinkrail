@@ -15,11 +15,11 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { RunningIcon } from "../../components/RunningIcon";
 import { chatDisplayName, chatLabel, copyText } from "../../lib";
-import { ConfirmDialog } from "../../panels/ConfirmDialog";
+import { ChatDeleteDialog } from "../../panels/ChatDeleteDialog";
 import { deleteProjectlessChat, startProjectlessChat } from "../../panels/chatActions";
 import { revealWorkspace } from "../../panels/workspaceActions";
 import {
@@ -39,7 +39,13 @@ export function ChatSegment({ workspace }: { workspace: Workspace }) {
 	const label = chatLabel(t, realTitle, firstPrompt);
 	const title = label.text;
 	const running = useAppStore((s) => selectWorkspaceIsRunning(s, workspace.id));
-	const siblings = useAppStore(useShallow(selectChatWorkspaces));
+	const siblings = useAppStore(
+		useShallow((s) =>
+			selectChatWorkspaces(s).filter(
+				(chat) => chat.id === workspace.id || chat.deletionPending !== true,
+			),
+		),
+	);
 	const titles = useAppStore(
 		useShallow((s) =>
 			siblings.map((chat) =>
@@ -51,7 +57,11 @@ export function ChatSegment({ workspace }: { workspace: Workspace }) {
 			),
 		),
 	);
-	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [confirming, setConfirming] = useState<string | null>(null);
+	const pending = workspace.deletionPending === true;
+	useEffect(() => {
+		if (confirming !== null && confirming !== workspace.id) setConfirming(null);
+	}, [confirming, workspace.id]);
 	return (
 		<Segment
 			caption={t("shell.location.chat.caption")}
@@ -110,22 +120,20 @@ export function ChatSegment({ workspace }: { workspace: Workspace }) {
 					<DropdownMenuItem
 						data-testid="scope-chat-delete"
 						className="text-feedback-error focus:bg-feedback-error-subtle [&_svg]:text-feedback-error"
-						onSelect={() => setConfirmOpen(true)}
+						onSelect={() => {
+							if (pending) void deleteProjectlessChat(workspace.id);
+							else setConfirming(workspace.id);
+						}}
 					>
 						<Trash2 />
-						{t("panels.chats.delete")}
+						{pending ? t("panels.chats.retryDelete") : t("panels.chats.delete")}
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
-			<ConfirmDialog
-				open={confirmOpen}
-				onOpenChange={setConfirmOpen}
-				title={t("panels.chats.deleteTitle", { name: title })}
-				description={t("panels.chats.deleteDescription")}
-				confirmLabel={t("common.delete")}
-				destructive
-				confirmTestId="confirm-delete-chat"
-				onConfirm={() => void deleteProjectlessChat(workspace.id)}
+			<ChatDeleteDialog
+				workspaceId={confirming === workspace.id ? confirming : null}
+				name={title}
+				onClose={() => setConfirming(null)}
 			/>
 		</Segment>
 	);

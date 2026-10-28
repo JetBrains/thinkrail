@@ -11,15 +11,22 @@ export interface ProjectlessChatStart {
 	readonly model?: { readonly model: WireModel; readonly thinkingLevel: ThinkingLevel };
 }
 
-/** The host of this protocol holds chats without a project; the container itself appears with the first chat. */
+/** The host of this protocol holds chats without a project, in the built-in container it ensures at boot. */
 export function canStartProjectlessChat(state: { protocolVersion: number | null }): boolean {
 	return supportsProjectlessChats(state.protocolVersion);
 }
 
-/** `chat.create` makes the folder, the record and the one session; this makes it the active chat and sends the first prompt. */
-export async function startProjectlessChat(
-	start: ProjectlessChatStart = {},
-): Promise<Workspace | null> {
+let starting: Promise<Workspace | null> | null = null;
+
+/** `chat.create` makes the folder, the record and the one session; this makes it the active chat and sends the first prompt. A start already in flight is joined, so a double click makes one chat. */
+export function startProjectlessChat(start: ProjectlessChatStart = {}): Promise<Workspace | null> {
+	starting ??= runProjectlessChatStart(start).finally(() => {
+		starting = null;
+	});
+	return starting;
+}
+
+async function runProjectlessChatStart(start: ProjectlessChatStart): Promise<Workspace | null> {
 	if (!canStartProjectlessChat(useAppStore.getState())) return null;
 	let created: Awaited<ReturnType<typeof requestChatCreate>>;
 	try {
@@ -30,6 +37,7 @@ export async function startProjectlessChat(
 	}
 	const { workspace } = created;
 	const next = useAppStore.getState();
+	if (next.onboardingWizard !== "hidden") next.setOnboardingWizard("hidden");
 	next.expandProject(workspace.projectId);
 	const listed = next.workspaces[workspace.projectId];
 	if (listed) {

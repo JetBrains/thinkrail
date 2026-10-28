@@ -29,25 +29,37 @@ treatment.
 ## Boundary
 
 - **Owns:** `ChatsSection` + `chatActions.ts` — the **Chats without a project** home. The section tops the
-  Projects panel whenever the host speaks `CHATS_PROTOCOL_VERSION` (the container record itself appears
-  with the first chat, so an empty section reads "Chats without a project appear here" and `+` works
-  before any container exists): one row per `kind: "chat"` workspace, newest activity first, labelled by
+  Projects panel whenever the host speaks `CHATS_PROTOCOL_VERSION` (the host ensures the container at boot;
+  an empty section reads "Chats without a project appear here", and the container never counts as a
+  project — not for the first-run wizard either): one row per `kind: "chat"` workspace, newest activity first, labelled by
   `lib`'s `chatLabel` over the host's `SessionStateRecord.title` and the conversation's first prompt
   (`selectChatWorkspaceFirstPrompt`) — an unnamed chat reads as its first prompt, with `data-title-source`
   and the full first line as tooltip, else "Chat" — with the shared attention dot / running icon, the
   active highlight, and a menu of Open in / Copy path / Reveal / Mark read / **Delete chat…** — the
-  confirmation names the folder's file count from `chat.inspect` ("…with 3 files move to the Trash"),
-  a chat whose deletion did not finish shows "Deletion incomplete" and offers only Retry. `chatActions`
+  confirmation (`ChatDeleteDialog`, shared with the topbar's chat menu) names the folder's file count
+  from `chat.inspect` ("…with 3 files move to the Trash"), is bound to the chat it was opened for and
+  closes when that chat is removed, starts deleting elsewhere, or (topbar) stops being the active chat;
+  a chat whose deletion did not finish shows "Deletion incomplete" and offers only Retry, and no
+  navigating surface (topbar Chats entry, sibling menu) opens it. `chatActions`
   owns the three host calls: `startProjectlessChat({ text?, images?, model? })` (`chat.create` → put the
   workspace under its container in the store, activate it, open the host-created session, prewarm the
-  watcher, send the first prompt), `deleteProjectlessChat`, `inspectProjectlessChat`;
+  watcher, send the first prompt, end a first-run wizard still showing; a start already in flight is
+  joined, so a double click makes one chat), `deleteProjectlessChat`, `inspectProjectlessChat`;
   `canStartProjectlessChat` is the protocol gate every start surface shares. Start surfaces: the Chats
   `+`, the Welcome's "Chat without a project" card (next to Open project when no repository is open),
   the Create dialog's **Chat without a project** target (`ws-target-chat` — the only target when no
-  repository is open; it hides the project and branch pickers, scopes skills/templates to the container
-  and honours the dialog's explicit model), the palette's `chat.newProjectless` command and start row, and
+  repository is open; it hides the project and branch pickers and Manage skills — the container is
+  never trusted, so only global skills apply — scopes templates to the container and honours the
+  dialog's explicit model; the dialog takes its defaults once per opening, so another window opening or
+  reordering projects never resets a draft or a creation in flight, and only a repository target closes
+  when its project does), the palette's `chat.newProjectless` command and start row, and
   New chat inside a chat (`openChat` turns the host's `CHAT_WORKSPACE` refusal into a sibling chat — one
-  chat = one folder). `FilesPanel` asks no git status in a chat and hides its Changed mode. Repository
+  chat = one folder). `FilesPanel` asks no git status in a chat and hides its Changed mode. Settle, and the
+  automatic Settled shelf, never apply to a chat (`canSettleWorkspace`, `selectWorkspaceSettledReason`);
+  Recently closed and prompt history offer no per-session Trash for a chat (the host refuses
+  `session.delete` there — deleting a chat is the whole-chat confirmation, never a silent broadening).
+  The topbar's Chats entry loads the container's list before it decides there is no chat to open.
+  Repository
   listings and fallbacks (`ProjectTree`, `WelcomePanel`, the dialog's project picker) read
   `selectRepoProjects`, never `s.projects`, so the container is never offered as a project.
 - **Owns:** `ProjectTree`. Each top-level project row is a compact IDE-tree row at the shared `--panel-row-height` (`web-spacing`):

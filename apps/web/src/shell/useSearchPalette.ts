@@ -10,7 +10,7 @@ import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Command, CommandContext } from "../commands";
-import { copyText } from "../lib";
+import { chatDisplayName, copyText } from "../lib";
 import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
@@ -38,14 +38,19 @@ import {
 	waitingItems,
 } from "../search";
 import {
+	isChatsContainer,
+	isChatWorkspace,
 	isDefaultWorkspace,
 	selectActiveWorkspace,
+	selectChatWorkspaceFirstPrompt,
+	selectChatWorkspaceTitle,
 	selectContextProject,
 	selectContextRepoProject,
 	selectHistoryTarget,
 	selectRecordFirstPrompts,
 	selectSupportsOnboarding,
 	selectSwitcherGroups,
+	selectWorkspaceById,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspaceReadAction,
@@ -167,11 +172,29 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const hostSearch = online && supportsHostSearch(protocolVersion);
 	const host = useMemo<PaletteHost | undefined>(() => {
 		if (!hostSearch) return undefined;
-		const names = new Map(projects.map((project) => [project.id, project.name]));
+		const names = new Map(
+			projects.map((project) => [
+				project.id,
+				isChatsContainer(project) ? t("panels.chats.title") : project.name,
+			]),
+		);
 		const workspaceNames = new Map<string, string>();
 		for (const list of Object.values(workspaces)) {
-			for (const workspace of list) workspaceNames.set(workspace.id, workspaceName(t, workspace));
+			for (const workspace of list) {
+				if (!isChatWorkspace(workspace))
+					workspaceNames.set(workspace.id, workspaceName(t, workspace));
+			}
 		}
+		const chatName = (workspaceId: string) => {
+			const state = useAppStore.getState();
+			const workspace = selectWorkspaceById(state, workspaceId);
+			if (!workspace || !isChatWorkspace(workspace)) return undefined;
+			return chatDisplayName(
+				t,
+				selectChatWorkspaceTitle(state, workspaceId),
+				selectChatWorkspaceFirstPrompt(state, workspaceId),
+			);
+		};
 		return {
 			context: paletteSearchContext(contextProject?.id ?? null, activeWorkspaceId, workspaces),
 			openHit: (hit) => {
@@ -180,7 +203,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				);
 			},
 			projectName: (projectId) => names.get(projectId),
-			workspaceName: (workspaceId) => workspaceNames.get(workspaceId),
+			workspaceName: (workspaceId) => workspaceNames.get(workspaceId) ?? chatName(workspaceId),
 			renderFilePreview: options.renderFilePreview,
 		};
 	}, [

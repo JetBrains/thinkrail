@@ -53,7 +53,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   every welcome it re-reads each project whose workspace list this surface already holds with
   `includeDiffStats: false`, generation-fencing the result and folding only already-known rows through
   `updateWorkspace`, so a pushed full workspace snapshot missed while disconnected (including a rename)
-  cannot stay stale without misrepresenting this metadata repair as membership reconciliation;
+  cannot stay stale without misrepresenting this metadata repair as membership reconciliation — except
+  the Chats container, whose list is its membership and is replaced whole, so chats created or deleted
+  by another window while this one was away appear and go (the host answers a socket in order, so no
+  push this reply missed can arrive before it);
   the full host-update lifecycle snapshot via `applyHostUpdate`, project snapshots via
   `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,

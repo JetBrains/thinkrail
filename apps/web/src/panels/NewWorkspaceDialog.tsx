@@ -222,30 +222,24 @@ export function NewWorkspaceDialog({
 
 	useEffect(() => {
 		if (!open) return;
-		setSelectedProjectId(projectId ?? repoProjects[0]?.id ?? chatsContainer?.id ?? "");
+		const opened = useAppStore.getState();
+		setSelectedProjectId(
+			projectId ?? selectRepoProjects(opened)[0]?.id ?? selectChatsContainer(opened)?.id ?? "",
+		);
 		updatePromptDraft(initialPrompt ?? "", null);
 		setTarget(initialTarget);
 		setCreating(false);
 		attachedImages.reset();
 		hostDefaultAsked.current = false;
 		setExplicitPair(false);
-	}, [
-		open,
-		projectId,
-		initialTarget,
-		repoProjects[0]?.id,
-		chatsContainer?.id,
-		initialPrompt,
-		updatePromptDraft,
-		attachedImages.reset,
-	]);
+	}, [open, projectId, initialTarget, initialPrompt, updatePromptDraft, attachedImages.reset]);
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open || chat) return;
 		if (projects.some((p) => p.id === selectedProjectId)) return;
 		onOpenChange(false);
 		toast.info(i18n.t("panels.newWorkspace.projectClosed"));
-	}, [open, projects, selectedProjectId, onOpenChange]);
+	}, [open, chat, projects, selectedProjectId, onOpenChange]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -594,11 +588,13 @@ export function NewWorkspaceDialog({
 							onRefresh={refreshBranches}
 						/>
 					) : null}
-					<SkillsButton
-						onOpen={() => setManageSkills(true)}
-						testId="ws-manage-skills"
-						className="ml-auto"
-					/>
+					{chat ? null : (
+						<SkillsButton
+							onOpen={() => setManageSkills(true)}
+							testId="ws-manage-skills"
+							className="ml-auto"
+						/>
+					)}
 				</div>
 
 				{trustNotice.kind === "untrusted" ? (

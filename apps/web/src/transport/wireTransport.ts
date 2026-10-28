@@ -206,8 +206,10 @@ function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 			.then((workspaces) => {
 				const current = useAppStore.getState();
 				if (!isConnectedGeneration(current, connectionGeneration)) return;
-				if (!current.projects.some((project) => project.id === projectId)) return;
-				for (const workspace of workspaces) current.updateWorkspace(workspace);
+				const project = current.projects.find((candidate) => candidate.id === projectId);
+				if (!project) return;
+				if (project.kind === "chats") current.setWorkspaces(projectId, workspaces);
+				else for (const workspace of workspaces) current.updateWorkspace(workspace);
 			})
 			.catch(() => {});
 	}

@@ -47,7 +47,11 @@ export function canRenameWorkspace(protocolVersion: number | null, workspace: Wo
 }
 
 export function canSettleWorkspace(protocolVersion: number | null, workspace: Workspace): boolean {
-	return supportsWorkspaceSettling(protocolVersion) && workspace.kind !== "default";
+	return (
+		supportsWorkspaceSettling(protocolVersion) &&
+		workspace.kind !== "default" &&
+		workspace.kind !== "chat"
+	);
 }
 
 export function settleWorkspace(workspaceId: string): void {

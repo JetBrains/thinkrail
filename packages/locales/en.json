@@ -844,6 +844,7 @@
 	"panels.chats.deleteTitle": "Delete “{{name}}”?",
 	"panels.chats.deletionPending": "Deletion incomplete",
 	"panels.chats.empty": "Chats without a project appear here",
+	"panels.chats.loadFailed": "Could not load the chats",
 	"panels.chats.newChat": "New chat without a project",
 	"panels.chats.notAvailable": "Not available in a chat without a project",
 	"panels.chats.retryDelete": "Retry deletion",
