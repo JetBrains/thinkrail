@@ -6,7 +6,16 @@ import {
 	RiListCheck3,
 	RiNodeTree,
 } from "@remixicon/react";
-import type { MatchRange, SearchGroup, SearchHit, SearchKind } from "@thinkrail/contracts";
+import {
+	MATCH_TIER,
+	type MatchField,
+	type MatchRange,
+	type MatchTerm,
+	matchFields,
+	type SearchGroup,
+	type SearchHit,
+	type SearchKind,
+} from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import type { PaletteItem, PaletteMatch } from "./model";
 
@@ -43,8 +52,53 @@ export interface HostItemContext {
 	readonly workspaceName: (workspaceId: string) => string | undefined;
 	readonly localIds: ReadonlySet<string>;
 	readonly late: ReadonlyMap<string, number>;
-	/** The hits answered an earlier input: ranked by the client's own match of the current one. */
-	readonly stale: boolean;
+	/** The current terms when the hits answered an earlier input, so each is matched again first. */
+	readonly staleTerms: readonly MatchTerm[] | null;
+}
+
+/** The fields the host providers match a hit on, so a row an earlier query answered is matched again as the host would. */
+function hostFields(hit: SearchHit): MatchField[] {
+	switch (hit.kind) {
+		case "file":
+			return hit.path ? [{ key: "path", text: hit.path, path: true }] : [];
+		case "spec":
+			return [
+				{ key: "title", text: hit.title },
+				...(hit.specId ? [{ key: "id", text: hit.specId, secondary: true }] : []),
+				...(hit.path ? [{ key: "path", text: hit.path, path: true, secondary: true }] : []),
+			];
+		case "workspace":
+			return [
+				{ key: "title", text: hit.title },
+				...(hit.subtitle ? [{ key: "subtitle", text: hit.subtitle, secondary: true }] : []),
+			];
+		case "chat":
+		case "plan":
+		case "transcript":
+			return [{ key: "title", text: hit.title }];
+	}
+}
+
+function rangesOf(fields: readonly { key: string; ranges: readonly MatchRange[] }[]) {
+	const ranges: Record<string, [number, number][]> = {};
+	for (const field of fields) ranges[field.key] = field.ranges.map(([a, b]) => [a, b]);
+	return ranges;
+}
+
+/** A body or message hit stays in the content tier and must still show every term; a field hit takes the host's tier for the current terms. */
+export function rematchHit(hit: SearchHit, terms: readonly MatchTerm[]): SearchHit | null {
+	if (hit.tier === MATCH_TIER.content) {
+		const field =
+			hit.kind === "spec"
+				? { key: "snippet", text: hit.snippet ?? "" }
+				: { key: "title", text: hit.title };
+		const match = matchFields(terms, [field]);
+		if (!match || match.tier > MATCH_TIER.substring) return null;
+		return { ...hit, score: 0, ranges: rangesOf(match.fields) };
+	}
+	const match = matchFields(terms, hostFields(hit));
+	if (!match) return null;
+	return { ...hit, tier: match.tier, score: match.score, ranges: rangesOf(match.fields) };
 }
 
 function splitPathRanges(
@@ -65,12 +119,8 @@ function splitPathRanges(
 	return { title, subtitle };
 }
 
-function matchOf(
-	context: HostItemContext,
-	hit: SearchHit,
-	ranges: PaletteMatch["ranges"],
-): { match?: PaletteMatch } {
-	return context.stale ? {} : { match: { tier: hit.tier, score: hit.score, ranges } };
+function matchOf(hit: SearchHit, ranges: PaletteMatch["ranges"]): { match: PaletteMatch } {
+	return { match: { tier: hit.tier, score: hit.score, ranges } };
 }
 
 function lateOf(context: HostItemContext, id: string): { late?: number } {
@@ -107,7 +157,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				group: "files",
 				scope: "files",
 				icon: RiFileTextLine,
-				...matchOf(context, hit, {
+				...matchOf(hit, {
 					title: ranges.title,
 					subtitle: ranges.subtitle.map(([start, end]) => [
 						start + location.length + 3,
@@ -132,7 +182,6 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				scope: "specs",
 				icon: RiNodeTree,
 				...matchOf(
-					context,
 					hit,
 					hit.snippet
 						? { subtitle: hit.ranges?.snippet ?? [] }
@@ -153,7 +202,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				group: "plans",
 				scope: "work",
 				icon: RiListCheck3,
-				...matchOf(context, hit, { title: hit.ranges?.title ?? [] }),
+				...matchOf(hit, { title: hit.ranges?.title ?? [] }),
 			};
 		case "transcript":
 			return {
@@ -164,7 +213,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				group: "transcripts",
 				scope: "work",
 				icon: RiChatHistoryLine,
-				...matchOf(context, hit, { title: hit.ranges?.title ?? [] }),
+				...matchOf(hit, { title: hit.ranges?.title ?? [] }),
 				...(hit.sessionId
 					? {
 							previewTarget: {
@@ -186,7 +235,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				group: "chats",
 				scope: "work",
 				icon: RiChat2Line,
-				...matchOf(context, hit, { title: hit.ranges?.title ?? [] }),
+				...matchOf(hit, { title: hit.ranges?.title ?? [] }),
 				...(hit.sessionId ? { previewTarget: { kind: "chat", sessionId: hit.sessionId } } : {}),
 			};
 		case "workspace":
@@ -199,7 +248,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				group: "workspaces",
 				scope: "work",
 				icon: RiGitBranchLine,
-				...matchOf(context, hit, { title: hit.ranges?.title ?? [] }),
+				...matchOf(hit, { title: hit.ranges?.title ?? [] }),
 			};
 	}
 }
@@ -208,7 +257,8 @@ export function hostItems(context: HostItemContext, groups: readonly SearchGroup
 	const items: PaletteItem[] = [];
 	for (const group of groups) {
 		for (const hit of group.hits) {
-			const item = hostItem(context, hit);
+			const current = context.staleTerms ? rematchHit(hit, context.staleTerms) : hit;
+			const item = current ? hostItem(context, current) : null;
 			if (item) items.push(item);
 		}
 	}

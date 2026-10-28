@@ -114,19 +114,24 @@ describe("listRootFiles", () => {
 		const dirent = (name: string, directory: boolean) =>
 			({ name, isDirectory: () => directory, isFile: () => !directory }) as never;
 		const failure = (code: string) => Object.assign(new Error(code), { code });
+		const root = join(tmpdir(), "walk-root");
 		const tree: Record<string, () => unknown[]> = {
-			"/r": () => [dirent("a.txt", false), dirent("locked", true), dirent("busy", true)],
-			"/r/locked": () => {
+			[join(root, "")]: () => [
+				dirent("a.txt", false),
+				dirent("locked", true),
+				dirent("busy", true),
+			],
+			[join(root, "locked")]: () => {
 				throw failure("EACCES");
 			},
-			"/r/busy": () => [],
+			[join(root, "busy")]: () => [],
 		};
 		const read = async (path: string) => (tree[path]?.() ?? []) as never;
-		expect(await walkFileList("/r", read)).toEqual({ paths: ["a.txt"], truncated: false });
-		tree["/r/busy"] = () => {
+		expect(await walkFileList(root, read)).toEqual({ paths: ["a.txt"], truncated: false });
+		tree[join(root, "busy")] = () => {
 			throw failure("EMFILE");
 		};
-		await expect(walkFileList("/r", read)).rejects.toThrow("EMFILE");
+		await expect(walkFileList(root, read)).rejects.toThrow("EMFILE");
 		expect(await walkFileList("/gone", async () => Promise.reject(failure("ENOENT")))).toEqual({
 			paths: [],
 			truncated: false,

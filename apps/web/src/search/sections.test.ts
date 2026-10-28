@@ -177,4 +177,26 @@ describe("buildSections", () => {
 		expect(chats?.meta).toBe("40");
 		expect(chats?.items.at(-1)?.item.title).toBe("36 more in Chats");
 	});
+
+	test("a local row that only its subtitle matches is not taken to be one of the host's hits", () => {
+		const page = Array.from({ length: 50 }, (_, index) => chat(`h${index}`, `Auth ${index}`));
+		const local = Array.from({ length: 5 }, (_, index) =>
+			chat(`l${index}`, `Notes ${index}`, { subtitle: "Auth project" }),
+		);
+		const scoped = sections("@auth", {
+			rootItems: [...page, ...local],
+			hostTotals: { chats: { total: 55, ids: new Set(page.map((item) => item.id)) } },
+		});
+		expect(scoped.find((section) => section.id === "chats")?.meta).toBe(
+			"60 matches · showing 55, refine the query for the rest",
+		);
+	});
+
+	test("the selected row is never hidden under a group's cap", () => {
+		const many = Array.from({ length: 8 }, (_, index) => chat(`k${index}`, `Keep ${index}`));
+		const rows = (keep: string | null) =>
+			flattenRows(sections("keep", { rootItems: many, keep })).map((row) => row.item.id);
+		expect(rows(null)).not.toContain("chat:k6");
+		expect(rows("chat:k6")).toContain("chat:k6");
+	});
 });

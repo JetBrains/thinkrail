@@ -115,6 +115,7 @@ function PaletteContent({
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_GROUPS);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [arrivals, setArrivals] = useState(NO_ARRIVALS);
+	const [pinned, setPinned] = useState<PaletteItem | null>(null);
 	const onScreen = useRef<ReadonlySet<string>>(new Set());
 	const holdingSelection = useRef(false);
 	const [previewOpen, setPreviewOpen] = useState(readPreviewOpen);
@@ -147,12 +148,12 @@ function PaletteContent({
 	const [previews] = useState(createHostPreviewLoader);
 	useLayoutEffect(() => {
 		const landed = hostState.groups?.flatMap((group) => group.hits.map((hit) => hit.id)) ?? [];
-		setArrivals((current) =>
-			noteArrivals(current, landed, onScreen.current, holdingSelection.current),
-		);
+		const shown = onScreen.current;
+		const holding = holdingSelection.current;
+		setArrivals((current) => noteArrivals(current, landed, shown, holding));
 	}, [hostState.groups]);
-	const allItems = useMemo(() => {
-		if (!host || !hostState.groups || hostState.groups.length === 0) return rootItems;
+	const hostRows = useMemo(() => {
+		if (!host || !hostState.groups || hostState.groups.length === 0) return [];
 		const context = {
 			t,
 			openHit: host.openHit,
@@ -160,10 +161,14 @@ function PaletteContent({
 			workspaceName: host.workspaceName,
 			localIds: new Set(rootItems.map((item) => item.id)),
 			late: arrivals.late,
-			stale: hostState.stale,
+			staleTerms: hostState.stale ? parsed.terms : null,
 		};
-		return [...rootItems, ...hostItems(context, hostState.groups)];
-	}, [host, hostState.groups, hostState.stale, rootItems, t, arrivals]);
+		return hostItems(context, hostState.groups);
+	}, [host, hostState.groups, hostState.stale, parsed.terms, rootItems, t, arrivals]);
+	const allItems = useMemo(() => {
+		const items = [...rootItems, ...hostRows];
+		return pinned && !items.some((item) => item.id === pinned.id) ? [...items, pinned] : items;
+	}, [rootItems, hostRows, pinned]);
 	const totals = useMemo(
 		() => (hostState.groups && !hostState.stale ? hostTotals(hostState.groups) : {}),
 		[hostState.groups, hostState.stale],
@@ -181,8 +186,9 @@ function PaletteContent({
 				expanded,
 				learning,
 				nowMs,
+				keep: selectedId,
 			}),
-		[t, parsed, totals, allItems, waiting, emptyActions, expanded, learning, nowMs],
+		[t, parsed, totals, allItems, waiting, emptyActions, expanded, learning, nowMs, selectedId],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
 	useLayoutEffect(() => {
@@ -207,12 +213,15 @@ function PaletteContent({
 
 	const select = (index: number) => {
 		const row = rows[(index + rows.length) % rows.length];
-		if (row) setSelectedId(row.item.id);
+		if (!row) return;
+		setSelectedId(row.item.id);
+		setPinned(row.item === pinned || hostRows.includes(row.item) ? row.item : null);
 	};
 
 	const resetQuery = (next: string) => {
 		setQuery(next);
 		setSelectedId(null);
+		setPinned(null);
 		setArrivals(NO_ARRIVALS);
 	};
 

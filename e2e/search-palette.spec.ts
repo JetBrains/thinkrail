@@ -1,4 +1,5 @@
-import { realpathSync, rmSync } from "node:fs";
+import { realpathSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { SEARCH_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
@@ -445,6 +446,81 @@ test("host search: a transcript hit jumps to its message and the preview shows t
 		await expect(flashed).toContainText("quantum banana");
 	} finally {
 		rmSync(seeded.path, { force: true });
+	}
+});
+
+test("host rows that land after the user moved the selection never push it or the rows above it", async ({
+	page,
+}) => {
+	const repo = realpathSync(E2E_FIXTURE_REPO);
+	const shown = ["a", "b", "c", "d"].map((name) => `zz-${name}-zqxprobe.ts`);
+	const better = ["1", "2", "3", "4", "5"].map((name) => `zqxprobe-${name}.ts`);
+	for (const name of [...shown, ...better]) writeFileSync(join(repo, name), "probe\n");
+	let release = () => {};
+	const released = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		const searches = new Set<string>();
+		socket.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				id?: string;
+				method?: string;
+				params?: { query?: string };
+			};
+			if (frame.method === "search.query" && frame.params?.query === "zqxprobe" && frame.id) {
+				searches.add(frame.id);
+			}
+			server.send(message);
+		});
+		let phase: "cold" | "partial" | "held" = "cold";
+		server.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				id?: string;
+				result?: {
+					groups: { kind: string; hits: { path?: string }[]; total: number; state: string }[];
+				};
+			};
+			if (!frame.id || !searches.has(frame.id) || !frame.result || phase === "held") {
+				socket.send(message);
+				return;
+			}
+			const files = frame.result.groups.find((group) => group.kind === "file");
+			if (phase === "cold" && files && files.hits.length > 0) {
+				phase = "partial";
+				files.hits = files.hits.filter((hit) => hit.path?.startsWith("zz-"));
+				files.total = files.hits.length;
+				files.state = "indexing";
+				socket.send(JSON.stringify(frame));
+			} else if (phase === "partial") {
+				phase = "held";
+				void released.then(() => socket.send(message));
+			} else socket.send(message);
+		});
+	});
+	try {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("zqxprobe");
+		const files = page.locator('[data-testid="search-row"][data-kind="file"]');
+		await expect(files).toHaveCount(4, { timeout: 15_000 });
+		await page.keyboard.press("ArrowDown");
+		const selected = page.locator('[data-testid="search-row"][aria-selected="true"]');
+		await expect(selected).toContainText("zz-b-zqxprobe.ts");
+		release();
+		await expect(page.getByTestId("search-host-pending")).toHaveCount(0, { timeout: 15_000 });
+		await expect(page.locator('[data-testid="search-row"][data-kind="more"]')).toContainText("5");
+		await expect(files.nth(0)).toContainText("zz-a-zqxprobe.ts");
+		await expect(files.nth(1)).toContainText("zz-b-zqxprobe.ts");
+		await expect(selected).toContainText("zz-b-zqxprobe.ts");
+		await page.keyboard.press("Enter");
+		await expect(
+			page.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "zz-b-zqxprobe.ts" }),
+		).toBeVisible();
+	} finally {
+		for (const name of [...shown, ...better]) rmSync(join(repo, name), { force: true });
 	}
 });
 

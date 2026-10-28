@@ -1,4 +1,5 @@
 import { RiMoreLine } from "@remixicon/react";
+import { type MatchTerm, matchFields } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { HostTotal } from "./hostItems";
@@ -18,6 +19,8 @@ export interface SectionsInput {
 	readonly expanded: ReadonlySet<string>;
 	readonly learning: LearningSnapshot;
 	readonly nowMs: number;
+	/** The selected row, never hidden under a group's cap. */
+	readonly keep?: string | null;
 }
 
 const GROUP_LABELS: Readonly<Record<string, MessageKey>> = {
@@ -79,9 +82,11 @@ function cappedSection(
 	scoped: boolean,
 	expanded: ReadonlySet<string>,
 	overflow: number,
+	keep: string | null = null,
 	cap = scoped ? SCOPED_CAP : ALL_SCOPE_CAP,
 ): PaletteSection {
-	const visible = expanded.has(group) ? rows.length : cap;
+	const kept = keep === null ? -1 : rows.findIndex((row) => row.item.id === keep);
+	const visible = expanded.has(group) ? rows.length : Math.max(cap, kept + 1);
 	const title = groupLabel(t, group);
 	if (rows.length <= visible && overflow === 0) return { id: group, title, items: rows };
 	const scope = rows[0]?.item.scope ?? "all";
@@ -103,20 +108,28 @@ function cappedSection(
 	};
 }
 
-/** Host hits beyond its page, less the local rows it did not return: those are taken to be among them. */
-function hostOverflow(entries: readonly RankedItem[], total: HostTotal | undefined): number {
+/** Host hits beyond its page, less the local rows it did not return that its own rule (the title) also matches. */
+function hostOverflow(
+	entries: readonly RankedItem[],
+	total: HostTotal | undefined,
+	terms: readonly MatchTerm[],
+): number {
 	if (!total) return 0;
-	const localOnly = entries.filter((entry) => !total.ids.has(entry.item.id)).length;
-	return Math.max(0, total.total - total.ids.size - localOnly);
+	const counted = entries.filter(
+		(entry) =>
+			!total.ids.has(entry.item.id) &&
+			matchFields(terms, [{ key: "title", text: entry.item.title }]) !== null,
+	).length;
+	return Math.max(0, total.total - total.ids.size - counted);
 }
 
 function groupRanked(
 	t: Translator,
 	ranked: readonly RankedItem[],
 	scoped: boolean,
-	expanded: ReadonlySet<string>,
-	hostTotals: Readonly<Record<string, HostTotal>>,
+	input: SectionsInput,
 ): PaletteSection[] {
+	const hostTotals = input.hostTotals ?? {};
 	const groups = new Map<string, RankedItem[]>();
 	for (const entry of ranked) {
 		const bucket = groups.get(entry.item.group) ?? [];
@@ -131,8 +144,9 @@ function groupRanked(
 				group,
 				entries.map((entry) => toRow(entry)),
 				scoped,
-				expanded,
-				hostOverflow(entries, hostTotals[group]),
+				input.expanded,
+				hostOverflow(entries, hostTotals[group], input.parsed.terms),
+				input.keep ?? null,
 			),
 		);
 }
@@ -156,6 +170,7 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 			true,
 			input.expanded,
 			0,
+			input.keep ?? null,
 			WAITING_CAP,
 		);
 		return [
@@ -172,7 +187,7 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 		groups.set(item.group, rows);
 	}
 	return [...groups.entries()].map(([group, rows]) =>
-		cappedSection(t, group, rows, true, input.expanded, 0),
+		cappedSection(t, group, rows, true, input.expanded, 0, input.keep ?? null),
 	);
 }
 
@@ -184,7 +199,7 @@ export function buildSections(input: SectionsInput): PaletteSection[] {
 	const scoped = parsed.scope !== "all";
 	const top = scoped ? null : pickTopHit(ranked);
 	const rest = top ? ranked.filter((entry) => entry !== top) : ranked;
-	const sections = groupRanked(t, rest, scoped, input.expanded, input.hostTotals ?? {});
+	const sections = groupRanked(t, rest, scoped, input);
 	return top
 		? [{ id: "top", title: groupLabel(t, "top"), items: [toRow(top, true)] }, ...sections]
 		: sections;

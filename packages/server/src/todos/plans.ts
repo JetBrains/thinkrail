@@ -24,6 +24,7 @@ function readPlan(store: TodoStore): StoredPlan {
 	if (cached && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) return cached.plan;
 	const plan = store.read();
 	parsedPlans.delete(store.file);
+	if (plan.todos.length === 0 && plan.groups.length === 0) return plan;
 	parsedPlans.set(store.file, { mtimeMs: stats.mtimeMs, size: stats.size, plan });
 	if (parsedPlans.size > PLAN_CACHE_LIMIT) {
 		const oldest = parsedPlans.keys().next().value;

@@ -86,17 +86,22 @@ kinds still indexing; `truncated` and `failed` never poll. The host is asked onl
 the groups it answers but keeps every hit the previous page showed that the new one left out
 (`mergeHostGroups`), so a refreshed corpus or a better page never pulls a row from under the
 selection; the rows go when the query changes. While a new input is pending the previous host rows stay
-on screen — replaced, never blanked — but they answered another query (`stale`): `hostItems` drops
-their host match, so `rankItems` matches them again against the current terms, a row that no longer
-matches leaves at once, and Enter can only open a row the typed text matches; their counts are ignored.
+on screen — replaced, never blanked — but they answered another query (`stale`): `rematchHit` matches
+each again against the current terms on the fields the host matches it on (a file's path, a spec's
+title / id / path, a chat's or plan's title, a workspace's name and branch), so it takes the tier the
+host's answer will give it, and a body or message hit stays in the `content` tier and must still show
+every term in its snippet; a row that no longer matches leaves at once, and Enter can only open a row
+the typed text matches; their counts are ignored.
 A fresh reply's rows carry the host's matcher result as `PaletteItem.match`, ranked with the local rows
 by the same tiers instead of re-matching the title. Rows that land while the user holds a selection
 join an arrival cohort (`noteArrivals`, `PaletteItem.late`): each later reply's newcomers sort after
 every row already on screen and every earlier cohort, across tiers and never as the top hit, so no row
-above the selection moves and the selected row never leaves a capped group; a row already on screen
-never becomes late. A group's "N more" is the host's count beyond its page less the local rows the page
-left out (those are taken to be among them), so a chat both the browser and the host know is never
-counted twice. Results the palette shows as final but are not complete say so in a status line and the
+above the selection moves; a row already on screen never becomes late. The selected host row never
+leaves the list while the query stands: a reply that no longer brings it keeps it (`pinned`), and no
+group's cap hides it (`keep`). A group's "N more" is the host's count beyond its page less the local rows
+the page left out that the host's own rule (the title) also matches, so a chat both the browser and the
+host know is never counted twice, while a local row only its subtitle matches is not taken for one of
+the host's hits. Results the palette shows as final but are not complete say so in a status line and the
 live region: part of the search failed, it is still indexing after polling stopped, or a provider ran
 out of time (`hostSearchStatus`). A file or spec hit without a workspace is dropped (nothing could read
 or open it). A host row opens through the injected `PaletteHost.openHit`. The placeholder names files

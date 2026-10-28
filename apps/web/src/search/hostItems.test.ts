@@ -84,7 +84,7 @@ const groups: SearchGroup[] = [
 	},
 ];
 
-function items(late: Record<string, number> = {}, stale = false) {
+function items(late: Record<string, number> = {}, staleQuery: string | null = null) {
 	const opened: SearchHit[] = [];
 	const result = hostItems(
 		{
@@ -94,7 +94,7 @@ function items(late: Record<string, number> = {}, stale = false) {
 			workspaceName: () => "Auth refresh",
 			localIds: new Set(["chat:local"]),
 			late: new Map(Object.entries(late)),
-			stale,
+			staleTerms: staleQuery === null ? null : parseMatchTerms(staleQuery),
 		},
 		groups,
 	);
@@ -166,12 +166,15 @@ describe("hostItems", () => {
 		]);
 	});
 
-	test("rows an earlier query answered carry no host match and only stay while they match the current one", () => {
-		const { result } = items({}, true);
-		expect(result.every((item) => item.match === undefined)).toBe(true);
-		expect(rank(result, "billing")).toEqual([]);
-		const refined = rank(result, "refresh.t");
-		expect(refined.map((entry) => entry.item.id)).toEqual(["file:p1:w1:src/auth/refresh.ts"]);
-		expect(refined[0]?.match.fields[0]).toEqual({ key: "title", ranges: [[0, 9]] });
+	test("rows an earlier query answered are matched again the way the host matches them", () => {
+		expect(items({}, "billing").result).toEqual([]);
+		const file = items({}, "refresh.t").result;
+		expect(file.map((item) => item.id)).toEqual(["file:p1:w1:src/auth/refresh.ts"]);
+		expect(file[0]?.match?.ranges.title).toEqual([[0, 9]]);
+		const transcript = items({}, "retries").result.find((item) => item.kind === "transcript");
+		expect(transcript?.match).toMatchObject({ tier: MATCH_TIER.content, score: 0 });
+		expect(items({}, "refresh banana").result.some((item) => item.kind === "transcript")).toBe(
+			false,
+		);
 	});
 });

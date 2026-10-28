@@ -1,5 +1,13 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	utimesSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { STORE_DIR } from "pi-todos/core";
@@ -36,6 +44,25 @@ describe("listStoredPlans", () => {
 
 		writePlan("s1", "second", 2_000);
 		expect(listStoredPlans(root)[0]?.read().todos[0]?.title).toBe("second");
+	});
+
+	test("a read that failed is not remembered, so the plan appears once the file can be read", () => {
+		writePlan("s2", "readable later", 3_000);
+		const file = join(root, STORE_DIR, "s2.json");
+		chmodSync(file, 0o000);
+		const blocked = listStoredPlans(root).find((stored) => stored.sessionId === "s2");
+		const unreadable = (() => {
+			try {
+				readFileSync(file);
+				return false;
+			} catch {
+				return true;
+			}
+		})();
+		expect(blocked?.read().todos.length).toBe(unreadable ? 0 : 1);
+		chmodSync(file, 0o644);
+		const readable = listStoredPlans(root).find((stored) => stored.sessionId === "s2");
+		expect(readable?.read().todos[0]?.title).toBe("readable later");
 	});
 
 	test("a root without plans lists none", () => {
