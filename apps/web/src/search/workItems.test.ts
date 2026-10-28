@@ -55,14 +55,18 @@ function state(records: SessionStateRecord[], extra: Partial<WorkItemsState> = {
 
 function items(
 	records: SessionStateRecord[],
-	chatTitles: Record<string, string> = {},
+	knownTitles: Record<string, string> = {},
 	firstPrompts: Record<string, string> = {},
 ) {
+	const closed = Object.entries(knownTitles).map(([sessionId, title]) => ({
+		sessionId,
+		title,
+		closedAt: 0,
+	}));
 	return buildWorkItems({
 		t: currentTranslator(),
-		state: state(records),
+		state: state(records, { closedChatsByWorkspace: { w1: closed } }),
 		contextProjectId: null,
-		chatTitles,
 		firstPrompts,
 		navigateToProject: () => {},
 		navigateToWorkspace: () => {},

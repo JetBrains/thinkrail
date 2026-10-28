@@ -360,8 +360,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   intent. No peer can restore placement remotely. **`reopenChat(workspaceId, …)`** restores runtime/history
   membership in its captured workspace even after another workspace becomes active; shell adds placement to
   that workspace's locally chosen center group through the one transition path. **`noteClosedChats`** records
-  disk-only sessions (from `session.list`) and peer-created sessions (from the `session.created` summary)
-  there too—idempotently, skipping live/open sessions while refreshing an existing history row from a newer
+  disk-only sessions (from `session.list` — the active workspace's reconciliation, or the search palette's
+  title backfill for a workspace this client never opened) and peer-created sessions (from the
+  `session.created` summary) there too—idempotently, skipping live/open sessions while refreshing an existing history row from a newer
   summary—so a chat that survived a host restart or was created in another frontend is reopenable without
   gaining local placement. A `ClosedChat` keeps the summary's `firstPrompt` beside its `title`, and the
   close transition copies the open chat's (`selectChatFirstPrompt`); history rows still read through

@@ -36,7 +36,6 @@ export interface WorkItemsInput {
 	t: Translator;
 	state: WorkItemsState;
 	contextProjectId: string | null;
-	chatTitles: Readonly<Record<string, string>>;
 	firstPrompts: Readonly<Record<string, string>>;
 	navigateToProject: (projectId: string) => void;
 	navigateToWorkspace: (workspace: Pick<Workspace, "id" | "projectId">, sessionId?: string) => void;
@@ -118,9 +117,7 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 		for (const record of Object.values(records)) {
 			const recordAttention = getSessionAttention(record.state);
 			attention = strongest(attention, recordAttention);
-			const knownTitle =
-				selectKnownChatTitle(state, workspaceId, record.sessionId) ||
-				input.chatTitles[record.sessionId];
+			const knownTitle = selectKnownChatTitle(state, workspaceId, record.sessionId);
 			const firstPrompt = input.firstPrompts[record.sessionId];
 			if (!knownTitle && !firstPrompt && !recordAttention) continue;
 			const projectName = projectNames.get(record.projectId);

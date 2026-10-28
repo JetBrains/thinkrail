@@ -33,10 +33,10 @@ import {
 	waitingItems,
 } from "../search";
 import {
+	isConnectedGeneration,
 	selectActiveWorkspace,
 	selectContextProject,
 	selectHistoryTarget,
-	selectKnownChatTitle,
 	selectRecordFirstPrompts,
 	selectSupportsOnboarding,
 	selectSwitcherGroups,
@@ -50,6 +50,12 @@ import {
 import { getTransport } from "../transport";
 import { createBackfillQueue } from "./backfillQueue";
 import {
+	backfillOrder,
+	mergeProjectWorkspaces,
+	noteListedSessions,
+	projectNeedsWorkspaceList,
+} from "./paletteBackfill";
+import {
 	buildCommands,
 	buildSettingsItems,
 	emptyStateActionIds,
@@ -60,9 +66,7 @@ import { readSettingsShortcutLabel } from "./useAppShortcuts";
 const SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const BACKFILL_CONCURRENCY = 4;
 
-const backfilledTitles = new Map<string, string>();
 const listedSessionSets = new Map<string, string>();
-const titleListeners = new Set<() => void>();
 
 function sessionSetKey(workspaceId: string): string {
 	return Object.keys(useAppStore.getState().sessionStateByWorkspace[workspaceId] ?? {})
@@ -75,32 +79,27 @@ const titleQueue = createBackfillQueue({
 	isWanted: (workspaceId) => listedSessionSets.get(workspaceId) !== sessionSetKey(workspaceId),
 	run: async (workspaceId) => {
 		const listed = sessionSetKey(workspaceId);
-		try {
-			const summaries = await getTransport().request("session.list", { workspaceId });
-			for (const summary of summaries) {
-				if (summary.title) backfilledTitles.set(summary.sessionId, summary.title);
-			}
-			for (const listener of titleListeners) listener();
-		} finally {
-			listedSessionSets.set(workspaceId, listed);
-		}
+		const generation = useAppStore.getState().connectionGeneration;
+		const summaries = await getTransport()
+			.request("session.list", { workspaceId })
+			.catch(() => null);
+		if (!isConnectedGeneration(useAppStore.getState(), generation)) return;
+		listedSessionSets.set(workspaceId, listed);
+		if (summaries) noteListedSessions(workspaceId, summaries);
 	},
 });
 
 const projectQueue = createBackfillQueue({
 	concurrency: BACKFILL_CONCURRENCY,
-	isWanted: (projectId) => useAppStore.getState().workspaces[projectId] === undefined,
+	isWanted: (projectId) => projectNeedsWorkspaceList(useAppStore.getState(), projectId),
 	run: async (projectId) => {
+		const generation = useAppStore.getState().connectionGeneration;
 		const rows = await getTransport().request("workspace.list", {
 			projectId,
 			includeDiffStats: false,
 		});
-		const store = useAppStore.getState();
-		if (
-			store.workspaces[projectId] === undefined &&
-			store.projects.some((project) => project.id === projectId)
-		) {
-			store.setWorkspaces(projectId, rows);
+		if (isConnectedGeneration(useAppStore.getState(), generation)) {
+			mergeProjectWorkspaces(projectId, rows);
 		}
 	},
 });
@@ -109,47 +108,7 @@ function navigateToWorkspace(workspace: Pick<Workspace, "id" | "projectId">, ses
 	useAppStore.getState().activateWorkspaceFromRoute(workspace, sessionId);
 }
 
-export function backfillOrder(
-	state: ReturnType<typeof useAppStore.getState>,
-	knownTitles: ReadonlyMap<string, string>,
-) {
-	const contextProjectId = selectContextProject(state)?.id ?? null;
-	const openProjects = new Set(state.projects.map((project) => project.id));
-	const known = new Set(
-		state.projects.flatMap((project) => (state.workspaces[project.id] ?? []).map((ws) => ws.id)),
-	);
-	const missingProjects = new Set(
-		state.projects
-			.filter((project) => state.workspaces[project.id] === undefined)
-			.map((project) => project.id),
-	);
-	const untitled: { workspaceId: string; rank: number }[] = [];
-	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
-		const list = Object.values(records);
-		const projectId = list[0]?.projectId;
-		if (projectId === undefined || !openProjects.has(projectId)) continue;
-		if (!known.has(workspaceId)) missingProjects.add(projectId);
-		if (
-			list.every(
-				(record) =>
-					knownTitles.has(record.sessionId) ||
-					selectKnownChatTitle(state, workspaceId, record.sessionId),
-			)
-		)
-			continue;
-		const rank =
-			workspaceId === state.activeWorkspaceId ? 0 : projectId === contextProjectId ? 1 : 2;
-		untitled.push({ workspaceId, rank });
-	}
-	untitled.sort((a, b) => a.rank - b.rank);
-	return {
-		projectIds: [...missingProjects],
-		workspaceIds: untitled.map((entry) => entry.workspaceId),
-	};
-}
-
-function useChatTitleBackfill(): Record<string, string> {
-	const [titles, setTitles] = useState(() => Object.fromEntries(backfilledTitles));
+function useChatTitleBackfill(): void {
 	const snapshotKey = useAppStore((s) =>
 		[
 			s.welcomeGeneration,
@@ -158,18 +117,14 @@ function useChatTitleBackfill(): Record<string, string> {
 		].join("\u0001"),
 	);
 	useEffect(() => {
-		const listener = () => setTitles(Object.fromEntries(backfilledTitles));
-		titleListeners.add(listener);
-		const { projectIds, workspaceIds } = backfillOrder(useAppStore.getState(), backfilledTitles);
+		const { projectIds, workspaceIds } = backfillOrder(useAppStore.getState());
 		projectQueue.schedule(projectIds);
 		titleQueue.schedule(workspaceIds);
 		return () => {
-			titleListeners.delete(listener);
 			projectQueue.clearPending();
 			titleQueue.clearPending();
 		};
 	}, [snapshotKey]);
-	return titles;
 }
 
 export interface SearchPaletteOptions {
@@ -210,7 +165,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			(selectWorkspaceIsRunning(s, s.activeWorkspaceId) ||
 				selectWorkspaceNeedsAttention(s, s.activeWorkspaceId)),
 	);
-	const chatTitles = useChatTitleBackfill();
+	useChatTitleBackfill();
 	const firstPrompts = useAppStore(useShallow(selectRecordFirstPrompts));
 	const settingsGroups = useMemo(
 		() => settingsNavGroups(protocolVersion, options.hasUpdateSettings),
@@ -332,7 +287,6 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				activeWorkspaceId,
 			},
 			contextProjectId: contextProject?.id ?? null,
-			chatTitles,
 			firstPrompts,
 			navigateToProject: goToProjectHome,
 			navigateToWorkspace,
@@ -378,7 +332,6 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		closedChatsByWorkspace,
 		layoutDocumentsByWorkspace,
 		activeWorkspaceId,
-		chatTitles,
 		firstPrompts,
 	]);
 
