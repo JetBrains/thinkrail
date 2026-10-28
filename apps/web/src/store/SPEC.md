@@ -513,7 +513,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   flag for the search palette ([[submodule-web-search]]), kept here so the global chord, the topbar button
   and an aggregate attention notification ([[submodule-web-notifications]]) open the same instance;
   **`searchSession`** advances on every `openSearch()`, so a notification click on an already-open palette
-  remounts it on the empty query (its Waiting view). The palette's query, scope and selection are its own
+  remounts it on the empty query (its Waiting view). **`sessionTitleRevision`** advances on every
+  `session_info_changed` (routed to a tab or history row or not), so the palette's title backfill can drop a
+  `session.list` reply that a rename overtook. The palette's query, scope and selection are its own
   component state, never store state. The
   client-local **`doubleShiftSearch`** + **`setDoubleShiftSearch()`** mirror the double-Shift preference
   `search` persists through the stable preference adapter (not host config: Sticky Keys and single-Shift

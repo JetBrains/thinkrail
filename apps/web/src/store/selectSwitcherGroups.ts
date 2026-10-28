@@ -70,7 +70,7 @@ export function selectKnownChatTitle(
 			return null;
 		};
 		const fromLayout = visit(document.center);
-		if (fromLayout !== null) return fromLayout;
+		if (fromLayout) return fromLayout;
 	}
 	const closed = state.closedChatsByWorkspace[workspaceId] ?? [];
 	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
