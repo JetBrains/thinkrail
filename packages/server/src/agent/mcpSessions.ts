@@ -7,7 +7,7 @@ import {
 	readSync,
 	watch,
 } from "node:fs";
-import { basename, isAbsolute } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
 import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-agent";
 import {
 	MCP_PROTOCOL_VERSION,
@@ -286,9 +286,17 @@ export async function reconcileMcpSessions(
 	return dispositions;
 }
 
-export function watchUserMcpConfig(): () => void {
+/**
+ * One watcher on pi's agent directory: `mcp.json` changes reconcile MCP sessions; `settings.json`
+ * changes go to `onSettingsChanged` (the pi packages layer, which ignores non-package edits).
+ */
+export function watchUserMcpConfig(
+	options: { onSettingsChanged?: (path: string) => void } = {},
+): () => void {
 	const agentDir = getAgentDir();
+	const settingsPath = join(agentDir, "settings.json");
 	let timer: ReturnType<typeof setTimeout> | undefined;
+	let settingsTimer: ReturnType<typeof setTimeout> | undefined;
 	let retry: ReturnType<typeof setTimeout> | undefined;
 	let watcher: FSWatcher | undefined;
 	let stopped = false;
@@ -308,10 +316,18 @@ export function watchUserMcpConfig(): () => void {
 		try {
 			mkdirSync(agentDir, { recursive: true });
 			watcher = watch(agentDir, (event, filename) => {
-				if (filename !== null && filename !== "mcp.json" && filename !== basename(agentDir)) {
-					return;
-				}
+				const isDir = filename === null || filename === basename(agentDir);
+				const isSettings = filename === "settings.json";
+				if (!isDir && !isSettings && filename !== "mcp.json") return;
 				if (event === "rename") restart();
+				if (isSettings || isDir) {
+					clearTimeout(settingsTimer);
+					settingsTimer = setTimeout(
+						() => options.onSettingsChanged?.(settingsPath),
+						USER_CONFIG_DEBOUNCE_MS,
+					);
+				}
+				if (isSettings) return;
 				clearTimeout(timer);
 				timer = setTimeout(
 					() => void reconcileMcpSessions(liveSessionIdsOf()),
@@ -329,6 +345,7 @@ export function watchUserMcpConfig(): () => void {
 	return () => {
 		stopped = true;
 		clearTimeout(timer);
+		clearTimeout(settingsTimer);
 		clearTimeout(retry);
 		watcher?.close();
 	};

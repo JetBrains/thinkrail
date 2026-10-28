@@ -25,11 +25,14 @@ import {
 	cancelMcpProbesOwnedBy,
 	disposeAllSessions,
 	getSessionWorkspaceId,
+	handlePiSettingsFileChanged,
+	handleProjectPiSettingsChanged,
 	initializeSessionStates,
 	isProjectSkillPath,
 	liveSessionIdsOf,
 	mcpPolicyOf,
 	piTrustsProjectPath,
+	primeUserPiSettings,
 	reconcileMcpSessions,
 	refreshAgentReviewTool,
 	refreshExtensionTools,
@@ -121,6 +124,7 @@ import {
 } from "../watch";
 import {
 	getWorkspace,
+	listAllWorkspaceRecords,
 	recordWorkspaceHead,
 	refreshUserOwnedWorkspace,
 	seedWorkspaceHead,
@@ -674,8 +678,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		) {
 			void reconcileMcpSessions(liveSessionIdsOf(payload.workspaceId));
 		}
+		if (
+			payload.truncated ||
+			payload.paths.some((path) => path === ".pi" || path === ".pi/settings.json")
+		) {
+			const workspace = listAllWorkspaceRecords().find((ws) => ws.id === payload.workspaceId);
+			if (workspace) handleProjectPiSettingsChanged(workspace.worktreePath);
+		}
 	};
-	const stopUserMcpWatch = watchUserMcpConfig();
+	primeUserPiSettings();
+	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
 	const stopLocalesWatch = watchLocalLocales({
 		onChange: () =>
 			server.publish(

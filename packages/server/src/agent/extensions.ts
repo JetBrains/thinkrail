@@ -30,7 +30,7 @@ import {
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
-import { packageSourceIdentity } from "./packages";
+import { invalidatePiPackageCatalog, packageSourceIdentity } from "./packages";
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
@@ -306,6 +306,33 @@ export function packagePolicyKey(): string {
 
 const loaderPackagePolicies = new WeakMap<ResourceLoader, string>();
 
+let resolvedPackagesListener: (() => void) | null = null;
+/** Called when a session's resolve sees a different installed package set than the last resolve did. */
+export function setResolvedPackagesListener(listener: (() => void) | null): void {
+	resolvedPackagesListener = listener;
+}
+
+let lastResolvedPackagesFingerprint: string | undefined;
+function noteResolvedPackages(
+	resolved: Awaited<ReturnType<DefaultPackageManager["resolve"]>>,
+): void {
+	const paths: string[] = [];
+	for (const resources of [resolved.extensions, resolved.skills, resolved.prompts]) {
+		for (const resource of resources) {
+			if (resource.metadata.origin === "package") {
+				paths.push(`${resource.metadata.scope}:${resource.path}:${resource.enabled ? 1 : 0}`);
+			}
+		}
+	}
+	const fingerprint = paths.sort().join("\n");
+	if (fingerprint === lastResolvedPackagesFingerprint) return;
+	const first = lastResolvedPackagesFingerprint === undefined;
+	lastResolvedPackagesFingerprint = fingerprint;
+	if (first) return;
+	invalidatePiPackageCatalog();
+	resolvedPackagesListener?.();
+}
+
 /** `true` when the loader last resolved under a package policy other than the current one. */
 export function isLoaderPackagePolicyStale(loader: ResourceLoader): boolean {
 	const recorded = loaderPackagePolicies.get(loader);
@@ -422,6 +449,7 @@ export async function buildResourceLoader(
 	const resolveExtensionPaths = async (): Promise<void> => {
 		await settingsManager.reload();
 		const resolvedResources = await packageManager.resolve();
+		noteResolvedPackages(resolvedResources);
 		disabledPackagePaths = disabledPackageResourcePaths(
 			resolvedResources,
 			cwd,
