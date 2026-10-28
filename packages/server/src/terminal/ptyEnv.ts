@@ -21,6 +21,10 @@ const INHERITED_NAMES: ReadonlySet<string> = new Set([
 	"CLICOLOR_FORCE",
 	"DEBUG_COLORS",
 	"CLAUDECODE",
+	"WINDOW",
+	"TERMCAP",
+	"COLUMNS",
+	"LINES",
 ]);
 
 const INHERITED_PREFIXES = [
@@ -38,8 +42,26 @@ const INHERITED_PREFIXES = [
 	"CLAUDE_CODE_",
 ];
 
+const PAIRED_ASKPASS: ReadonlyArray<{ support: string; overrides: readonly string[] }> = [
+	{ support: "VSCODE_GIT_ASKPASS_", overrides: ["GIT_ASKPASS"] },
+	{ support: "VSCODE_SSH_ASKPASS_", overrides: ["SSH_ASKPASS", "SSH_ASKPASS_REQUIRE"] },
+];
+
+const ID_SEARCH_PATH = "/usr/bin:/bin:/run/current-system/sw/bin";
+const ID_TIMEOUT_MS = 2_000;
+
 function isInherited(name: string): boolean {
 	return INHERITED_NAMES.has(name) || INHERITED_PREFIXES.some((prefix) => name.startsWith(prefix));
+}
+
+function pairedAskpassOverrides(names: readonly string[]): Set<string> {
+	const dropped = new Set<string>();
+	for (const { support, overrides } of PAIRED_ASKPASS) {
+		if (names.some((name) => name.startsWith(support))) {
+			for (const name of overrides) dropped.add(name);
+		}
+	}
+	return dropped;
 }
 
 let cachedAccountName: string | null | undefined;
@@ -47,8 +69,15 @@ let cachedAccountName: string | null | undefined;
 export function uidAccountName(): string | null {
 	if (cachedAccountName === undefined) {
 		try {
-			const id = Bun.spawnSync(["id", "-un"], { stdin: "ignore", stderr: "ignore" });
-			cachedAccountName = (id.success && id.stdout.toString().trim()) || null;
+			const idPath = Bun.which("id", { PATH: ID_SEARCH_PATH });
+			const id = idPath
+				? Bun.spawnSync([idPath, "-un"], {
+						stdin: "ignore",
+						stderr: "ignore",
+						timeout: ID_TIMEOUT_MS,
+					})
+				: null;
+			cachedAccountName = (id?.success && id.stdout.toString().trim()) || null;
 		} catch {
 			cachedAccountName = null;
 		}
@@ -62,8 +91,11 @@ export function terminalPtyEnv(
 	accountName: () => string | null = uidAccountName,
 ): Record<string, string> {
 	const result: Record<string, string> = {};
+	const askpassOverrides = pairedAskpassOverrides(Object.keys(env));
 	for (const [name, value] of Object.entries(env)) {
-		if (typeof value === "string" && !isInherited(name)) result[name] = value;
+		if (typeof value === "string" && !isInherited(name) && !askpassOverrides.has(name)) {
+			result[name] = value;
+		}
 	}
 	result.TERM = "xterm-256color";
 	result.COLORTERM = "truecolor";

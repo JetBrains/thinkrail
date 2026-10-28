@@ -59,6 +59,63 @@ test("host-internal variables stay out of the shell", () => {
 	expect(Object.keys(env).sort()).toEqual(["COLORTERM", "LOGNAME", "TERM", "TERM_PROGRAM", "USER"]);
 });
 
+test("parent-terminal size and screen variables bun-pty would otherwise strip stay out of the shell", () => {
+	const env = terminalPtyEnv(
+		"linux",
+		{ WINDOW: "0", TERMCAP: "SC|screen:", COLUMNS: "120", LINES: "40", HOME: "/home/u" },
+		() => "u",
+	);
+	expect(env.HOME).toBe("/home/u");
+	for (const name of ["WINDOW", "TERMCAP", "COLUMNS", "LINES"]) expect(env[name]).toBeUndefined();
+});
+
+test("VS Code's askpass overrides leave together with the support variables they need", () => {
+	const env = terminalPtyEnv(
+		"darwin",
+		{
+			GIT_ASKPASS: "/vscode/askpass.sh",
+			VSCODE_GIT_ASKPASS_NODE: "/vscode/node",
+			VSCODE_GIT_ASKPASS_MAIN: "/vscode/askpass-main.js",
+			VSCODE_GIT_IPC_HANDLE: "/tmp/vscode-git.sock",
+			SSH_ASKPASS: "/vscode/ssh-askpass.sh",
+			SSH_ASKPASS_REQUIRE: "force",
+			VSCODE_SSH_ASKPASS_NODE: "/vscode/node",
+			VSCODE_SSH_ASKPASS_MAIN: "/vscode/ssh-askpass-main.js",
+		},
+		() => "u",
+	);
+	expect(Object.keys(env).sort()).toEqual(["COLORTERM", "LOGNAME", "TERM", "TERM_PROGRAM", "USER"]);
+});
+
+test("a user's own askpass helpers are kept when VS Code did not install them", () => {
+	const env = terminalPtyEnv(
+		"linux",
+		{
+			GIT_ASKPASS: "/usr/lib/ssh/x11-ssh-askpass",
+			SSH_ASKPASS: "/usr/lib/ssh/x11-ssh-askpass",
+			SSH_ASKPASS_REQUIRE: "prefer",
+		},
+		() => "u",
+	);
+	expect(env.GIT_ASKPASS).toBe("/usr/lib/ssh/x11-ssh-askpass");
+	expect(env.SSH_ASKPASS).toBe("/usr/lib/ssh/x11-ssh-askpass");
+	expect(env.SSH_ASKPASS_REQUIRE).toBe("prefer");
+});
+
+test("only the askpass pair VS Code owns is dropped", () => {
+	const env = terminalPtyEnv(
+		"linux",
+		{
+			GIT_ASKPASS: "/vscode/askpass.sh",
+			VSCODE_GIT_ASKPASS_MAIN: "/vscode/askpass-main.js",
+			SSH_ASKPASS: "/usr/lib/ssh/x11-ssh-askpass",
+		},
+		() => "u",
+	);
+	expect(env.GIT_ASKPASS).toBeUndefined();
+	expect(env.SSH_ASKPASS).toBe("/usr/lib/ssh/x11-ssh-askpass");
+});
+
 test("USER and LOGNAME come from the account, never the inherited or utmp-derived value", () => {
 	const env = terminalPtyEnv("darwin", { USER: "root", LOGNAME: "root" }, () => "commander");
 	expect(env.USER).toBe("commander");

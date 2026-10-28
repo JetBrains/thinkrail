@@ -83,15 +83,21 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   that context: `TERM_PROGRAM`/`TERMINAL_EMULATOR`/`ITERM_*`/`VSCODE_*`/`TMUX`/`CLAUDECODE` made tools adapt
   to a terminal that isn't there, and runner-set `FORCE_COLOR`/`CLICOLOR_FORCE`/`DEBUG_COLORS` could
   override a tool's own colour detection. Those, the host's own variables (`THINKRAIL_*`, `PI_*`,
-  `ELECTROBUN_*`, `JITI_*`, `BUN_PTY_LIB`) and per-shell bookkeeping (`PWD`, `OLDPWD`, `SHLVL`, `_`) are
-  dropped; the terminal identifies itself as `TERM=xterm-256color`, `COLORTERM=truecolor`,
+  `ELECTROBUN_*`, `JITI_*`, `BUN_PTY_LIB`), per-shell bookkeeping (`PWD`, `OLDPWD`, `SHLVL`, `_`) and the
+  parent terminal's `WINDOW`/`TERMCAP`/`COLUMNS`/`LINES` (bun-pty strips those itself only from its own
+  `process.env` default, which a copied map bypasses) are dropped. VS Code's askpass overrides go with their
+  support variables: a `VSCODE_GIT_ASKPASS_*` variable drops `GIT_ASKPASS`, a `VSCODE_SSH_ASKPASS_*` variable
+  drops `SSH_ASKPASS`/`SSH_ASKPASS_REQUIRE` — otherwise the orphaned `askpass.sh` exits 0 with empty output
+  and Git accepts blank credentials instead of prompting. A helper with no VS Code support variables is the
+  user's own and is kept; the terminal identifies itself as `TERM=xterm-256color`, `COLORTERM=truecolor`,
   `TERM_PROGRAM=ThinkRail`. `NO_COLOR` is kept: it is the user's standing preference, not a runner's
   override. Dropping is safe on Unix because the shell re-sources the user's own startup files. The
   filtered map is the child's *whole* environment: bun-pty >= 0.5 does not merge it over the host's native
   environment (0.4 did, so a variable the host started with reached the shell whatever the filter said).
-  On Unix, `USER` and `LOGNAME` are stamped from `id -un`, resolved once per process: the PTY registers no
-  utmpx session, so a shell without them asks `getlogin()`, which reads a reused pty device's stale record
-  and can report another user (#427). Bun's `os.userInfo().username` is not a substitute — it reads `$USER`
+  On Unix, `USER` and `LOGNAME` are stamped from `id -un`, resolved once per process from a fixed system
+  path (`/usr/bin:/bin:/run/current-system/sw/bin`, never the launcher's `PATH`) under a short timeout: the
+  PTY registers no utmpx session, so a shell without them asks `getlogin()`, which reads a reused pty
+  device's stale record and can report another user (#427). Bun's `os.userInfo().username` is not a substitute — it reads `$USER`
   and falls back to `unknown` instead of resolving the uid. When `id` fails, the inherited values are kept
   rather than replaced by a guess.
 - **A shell is keyed by `(workspaceId, tabKey)`**, never by a socket, a client, or a component. `tabKey` is
@@ -200,10 +206,12 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   arguments; `auto`'s pwsh-then-powershell resolution via an injected `WhichFn`; every explicit preference
   is a literal pin regardless of what `which` reports; `ComSpec`/`COMSPEC` no longer influence the result.
 - `ptyEnv.test.ts` — launcher identity, colour forcing and host-internal variables are dropped while the
-  user's own variables (incl. `NO_COLOR`) survive; `USER`/`LOGNAME` come from the account on Unix only and
-  are kept when no account resolves; the resolved name maps back to the host uid; a real PTY spawned by a
-  host *started* with leaked variables and no `USER` sees only the filtered environment, its account
-  checked through `id -u` rather than the implementation's own lookup.
+  user's own variables (incl. `NO_COLOR`) survive; parent-terminal `WINDOW`/`TERMCAP`/`COLUMNS`/`LINES` are
+  dropped; VS Code's askpass overrides leave with their support variables, per pair, while standalone
+  helpers stay; `USER`/`LOGNAME` come from the account on Unix only and are kept when no account
+  resolves; the resolved name maps back to the host uid; a real PTY spawned by a host *started* with
+  leaked variables and no `USER` sees only the filtered environment, its account checked through `id -u`
+  rather than the implementation's own lookup.
 - `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, rejection
   of malformed write data and out-of-range or non-integer grid sizes on resize and attach, attach
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
