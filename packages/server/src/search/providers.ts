@@ -277,12 +277,17 @@ export function searchPlans(
 	plans: (root: string) => StoredPlanFile[],
 	knownSessions: ReadonlySet<string> | null,
 	input: ProviderInput,
+	historyIndexing = false,
 ): SearchGroup {
 	const hits: SearchHit[] = [];
+	let unindexed = false;
 	for (const workspace of workspaces) {
 		for (const file of plans(workspace.worktreePath)) {
 			if (input.deadline.expired()) return buildGroup("plan", hits, input.limit, "truncated");
-			if (knownSessions && !knownSessions.has(file.sessionId)) continue;
+			if (knownSessions && !knownSessions.has(file.sessionId)) {
+				unindexed = true;
+				continue;
+			}
 			const plan = file.read();
 			const push = (itemId: string, title: string, subtitle: string | undefined) => {
 				const match = matchFields(input.terms, [{ key: "title", text: title }]);
@@ -307,7 +312,7 @@ export function searchPlans(
 			}
 		}
 	}
-	return buildGroup("plan", hits, input.limit);
+	return buildGroup("plan", hits, input.limit, historyIndexing && unindexed ? "indexing" : "ready");
 }
 
 export function searchWorkspaces(

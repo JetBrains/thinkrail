@@ -53,6 +53,7 @@ import {
 	stripScopePrefix,
 	withScopePrefix,
 } from "./query";
+import { matchingIds } from "./rank";
 import { buildSections, flattenRows } from "./sections";
 
 const HOST_STATUS_LABELS: Record<HostSearchStatus, MessageKey> = {
@@ -158,7 +159,7 @@ function PaletteContent({
 			openHit: host.openHit,
 			projectName: host.projectName,
 			workspaceName: host.workspaceName,
-			localIds: new Set(rootItems.map((item) => item.id)),
+			localIds: matchingIds(rootItems, parsed.terms),
 			late: arrivals.late,
 			staleTerms: hostState.stale ? parsed.terms : null,
 		};

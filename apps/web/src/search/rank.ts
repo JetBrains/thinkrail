@@ -27,6 +27,15 @@ export function itemFields(item: PaletteItem): MatchField[] {
 	return fields;
 }
 
+export function matchingIds(
+	items: readonly PaletteItem[],
+	terms: readonly MatchTerm[],
+): ReadonlySet<string> {
+	return new Set(
+		items.filter((item) => matchFields(terms, itemFields(item)) !== null).map((item) => item.id),
+	);
+}
+
 export function itemBoost(
 	item: PaletteItem,
 	learning: LearningSnapshot,

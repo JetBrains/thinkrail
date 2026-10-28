@@ -94,7 +94,10 @@ contain every term in its snippet as a case-folded substring — the content pro
 acronym; a row that no longer matches leaves at once, and Enter can only open a row
 the typed text matches; their counts are ignored.
 A fresh reply's rows carry the host's matcher result as `PaletteItem.match`, ranked with the local rows
-by the same tiers instead of re-matching the title. Rows that land while the user holds a selection
+by the same tiers instead of re-matching the title. A host chat or workspace hit is dropped only when
+its local twin matches the query too (`matchingIds`), so a twin the query misses — a Default workspace
+whose branch its row does not show, a chat still labelled by its first prompt — never hides the host's
+hit, and either way one row per id remains. Rows that land while the user holds a selection
 join an arrival cohort (`noteArrivals`, `PaletteItem.late`): each later reply's newcomers sort after
 every row already on screen and every earlier cohort, across tiers and never as the top hit, so no row
 above the selection moves; a row already on screen never becomes late. The selected host row never

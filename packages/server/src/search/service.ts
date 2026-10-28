@@ -179,6 +179,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 					readers.plans,
 					sessions ? new Set(sessions.sessions.map((session) => session.sessionId)) : null,
 					input(),
+					sessions?.indexing ?? false,
 				),
 			);
 			if (superseded()) return { seq, groups: [], superseded: true };

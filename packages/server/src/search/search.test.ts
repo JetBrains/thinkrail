@@ -520,6 +520,23 @@ describe("search.query", () => {
 		expect(await ids(5, '"module token"')).toEqual([]);
 	});
 
+	test("a plan whose session the history has not reached yet answers indexing, so it is asked again", async () => {
+		const building = createSearchService(
+			readers({
+				files: new FileListCache(async () => ({ paths: [], truncated: false })),
+				sessions: async () => ({ sessions: [], indexing: true }),
+			}),
+		);
+		const cold = await building.query("c1", { seq: 1, query: "refresh", kinds: ["plan"], context });
+		expect(cold.groups[0]).toMatchObject({ kind: "plan", state: "indexing", hits: [] });
+		const built = createSearchService(
+			readers({ files: new FileListCache(async () => ({ paths: [], truncated: false })) }),
+		);
+		const warm = await built.query("c1", { seq: 1, query: "refresh", kinds: ["plan"], context });
+		expect(warm.groups[0]?.state).toBe("ready");
+		expect(warm.groups[0]?.hits.map((hit) => hit.id)).toContain("plan:w-feature:s1:t1");
+	});
+
 	test("an empty query answers empty groups and `kinds` narrows the providers", async () => {
 		const service = createSearchService(
 			readers({ files: new FileListCache(async () => lists["/repos/one"] as FileList) }),

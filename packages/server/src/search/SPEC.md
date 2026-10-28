@@ -100,7 +100,8 @@ plan files whose session has no transcript on disk (orphans).
   older messages unsearched.
 - **Plans:** group and item titles through the matcher; hits carry the plan's session so the client
   opens the chat and its plan. A plan file is parsed again only when it changed (`todos`'
-  per-file memo).
+  per-file memo). While the history index is still building, a plan whose session it has not reached yet
+  is skipped and the group answers `indexing`, so the client asks again once the session is known.
 - **Workspaces:** name, branch and `#<pr>` through the matcher over persisted records — the client
   dedupes against the workspaces it already knows.
 

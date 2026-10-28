@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { RiGitBranchLine } from "@remixicon/react";
 import {
 	MATCH_TIER,
 	parseMatchTerms,
@@ -8,7 +9,10 @@ import {
 import { currentTranslator } from "@thinkrail/locales/react";
 import { hostItems } from "./hostItems";
 import { EMPTY_LEARNING } from "./learning";
-import { rankItems } from "./rank";
+import type { PaletteItem } from "./model";
+import { parseSearchQuery } from "./query";
+import { matchingIds, rankItems } from "./rank";
+import { buildSections, flattenRows } from "./sections";
 
 const hit = (
 	overrides: Partial<SearchHit> & Pick<SearchHit, "id" | "kind" | "title">,
@@ -194,5 +198,61 @@ describe("hostItems", () => {
 				],
 			},
 		});
+	});
+
+	test("a host hit whose local twin does not match the query is kept, still one row per id", () => {
+		const local: PaletteItem = {
+			id: "workspace:w-def",
+			kind: "workspace",
+			title: "project folder",
+			subtitle: "One · project folder",
+			group: "workspaces",
+			scope: "work",
+			icon: RiGitBranchLine,
+		};
+		const host: SearchGroup = {
+			kind: "workspace",
+			state: "ready",
+			total: 1,
+			hits: [
+				hit({
+					id: "workspace:w-def",
+					kind: "workspace",
+					title: "project folder",
+					subtitle: "release-zqx",
+					workspaceId: "w-def",
+					ranges: { subtitle: [[0, 11]] },
+				}),
+			],
+		};
+		const rowsFor = (query: string) => {
+			const parsed = parseSearchQuery(query);
+			const rows = hostItems(
+				{
+					t: currentTranslator(),
+					openHit: () => {},
+					projectName: () => "One",
+					workspaceName: () => undefined,
+					localIds: matchingIds([local], parsed.terms),
+					late: new Map(),
+					staleTerms: null,
+				},
+				[host],
+			);
+			return flattenRows(
+				buildSections({
+					t: currentTranslator(),
+					parsed,
+					rootItems: [local, ...rows],
+					waiting: [],
+					actions: [],
+					expanded: new Set(),
+					learning: EMPTY_LEARNING,
+					nowMs: 0,
+				}),
+			).map((row) => row.item.id);
+		};
+		expect(rowsFor("release-zqx")).toEqual(["workspace:w-def"]);
+		expect(rowsFor("project folder")).toEqual(["workspace:w-def"]);
 	});
 });
