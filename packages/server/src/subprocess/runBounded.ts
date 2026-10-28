@@ -3,6 +3,7 @@ type BoundedRunBase = {
 	err: string;
 	timedOut: boolean;
 	launchFailed: boolean;
+	aborted?: true;
 	waitedMs: number;
 };
 
@@ -14,13 +15,14 @@ export type BoundedRunOptions = {
 	cwd?: string;
 	env?: Record<string, string | undefined>;
 	stdout?: "text";
+	signal?: AbortSignal;
 };
 
 export type BoundedBytesRunOptions = Omit<BoundedRunOptions, "stdout"> & {
 	stdout: "bytes";
 };
 
-export type BoundedStreamOptions = Omit<BoundedRunOptions, "stdout">;
+export type BoundedStreamOptions = Omit<BoundedRunOptions, "stdout" | "signal">;
 export type BoundedStream = {
 	stdout: ReadableStream<Uint8Array>;
 	exited: Promise<BoundedRunBase>;
@@ -98,7 +100,7 @@ function delay(ms: number): { promise: Promise<void>; cancel: () => void } {
 	return { promise, cancel: () => clearTimeout(timer) };
 }
 
-function killTree(proc: Bun.Subprocess): void {
+async function killTree(proc: Bun.Subprocess): Promise<void> {
 	if (process.platform !== "win32") {
 		try {
 			process.kill(-proc.pid, "SIGKILL");
@@ -108,6 +110,16 @@ function killTree(proc: Bun.Subprocess): void {
 			return;
 		}
 	}
+	try {
+		const killer = Bun.spawn(["taskkill", "/PID", String(proc.pid), "/T", "/F"], {
+			timeout: 5_000,
+			stdin: "ignore",
+			stdout: "ignore",
+			stderr: "ignore",
+			windowsHide: true,
+		});
+		if ((await killer.exited) === 0) return;
+	} catch {}
 	proc.kill("SIGKILL");
 }
 
@@ -164,7 +176,7 @@ export function streamBounded(argv: string[], opts: BoundedStreamOptions): Bound
 			deadline.promise.then(() => "timed-out" as const),
 		]);
 		deadline.cancel();
-		if (outcome === "timed-out") killTree(proc);
+		if (outcome === "timed-out") await killTree(proc);
 		const grace = delay(DRAIN_GRACE_MS);
 		await Promise.race([err.done, grace.promise]);
 		grace.cancel();
@@ -222,7 +234,7 @@ export function streamBounded(argv: string[], opts: BoundedStreamOptions): Bound
 		},
 		cancel() {
 			void reader.cancel().catch(() => {});
-			killTree(proc);
+			return killTree(proc);
 		},
 	});
 	return { stdout, exited };
@@ -237,6 +249,20 @@ export async function runBounded(
 	const startedAt = performance.now();
 	const waitedMs = () => performance.now() - startedAt;
 
+	if (opts.signal?.aborted) {
+		const aborted: BoundedRunBase = {
+			ok: false,
+			err: "",
+			timedOut: false,
+			launchFailed: false,
+			aborted: true,
+			waitedMs: waitedMs(),
+		};
+		return opts.stdout === "bytes"
+			? { ...aborted, out: new Uint8Array() }
+			: { ...aborted, out: "" };
+	}
+
 	let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
 	try {
 		proc = Bun.spawn(argv, spawnOptions(opts));
@@ -250,12 +276,23 @@ export async function runBounded(
 	const drained = Promise.all([out.done, err.done]);
 	const deadline = delay(boundedTimeout(opts.timeoutMs));
 
+	let onAbort: (() => void) | undefined;
+	const aborted = new Promise<"aborted">((resolve) => {
+		onAbort = () => resolve("aborted");
+		opts.signal?.addEventListener("abort", onAbort, { once: true });
+		if (opts.signal?.aborted) onAbort();
+	});
 	const outcome = await Promise.race([
 		proc.exited.then(() => "exited" as const),
 		deadline.promise.then(() => "timed-out" as const),
+		aborted,
 	]);
 	deadline.cancel();
-	if (outcome === "timed-out") killTree(proc);
+	if (onAbort) opts.signal?.removeEventListener("abort", onAbort);
+	if (outcome !== "exited") {
+		await killTree(proc);
+		await proc.exited;
+	}
 	const grace = delay(DRAIN_GRACE_MS);
 	await Promise.race([drained, grace.promise]);
 	grace.cancel();
@@ -267,6 +304,7 @@ export async function runBounded(
 		err: err.value(),
 		timedOut: outcome === "timed-out",
 		launchFailed: false,
+		...(outcome === "aborted" && { aborted: true as const }),
 		waitedMs: waitedMs(),
 	};
 	return out.kind === "bytes" ? { ...result, out: out.value() } : { ...result, out: out.value() };

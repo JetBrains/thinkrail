@@ -145,7 +145,11 @@ thinkrail ~/code/my-repo
 `thinkrail` needs `git` on your PATH and a model provider — sign in with JetBrains AI from the app or use
 your own provider credentials. The first launch walks you through connecting a provider and picking a
 project; **Start a new project** creates an empty git repository (under `~/thinkrail` by default), so you
-don't need one ready. `thinkrail --help` lists the flags; `thinkrail --version` prints the build.
+don't need one ready. **Add project → Clone repository…** clones a Git URL into a new folder on the
+computer running ThinkRail and opens it as a project. Choose the parent folder and folder name, optionally
+limit the history depth, or cancel an in-progress clone. GitHub and other Git hosts work with the host's
+existing Git credentials and SSH keys; existing destination folders are never overwritten.
+`thinkrail --help` lists the flags; `thinkrail --version` prints the build.
 
 <details>
 <summary><strong>Nightly builds, pinned versions, updates, and uninstall</strong></summary>

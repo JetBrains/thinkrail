@@ -24,6 +24,8 @@ that must agree across the independently shipped client and host. The one packag
   names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`,
   `NOT_GIT` and `ALREADY_OPEN` (the two `project.open` refusals: a folder that is not a repository, and a
   folder already owned by a workspace),
+  `PROJECT_CLONE_INVALID`, `PROJECT_CLONE_FAILED`, and `PROJECT_CLONE_CLEANUP_FAILED` (input
+  correction, Git failure, and incomplete cleanup requiring filesystem intervention),
   `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
@@ -585,7 +587,13 @@ that must agree across the independently shipped client and host. The one packag
   `Project`: make the folder `name` under `parentPath`, creating missing parents, then the same bootstrap as
   init, and name the project `displayName` — what the user typed — when it differs from the folder;
   `ONBOARDING_PROTOCOL_VERSION` pins its v94 introduction together with `AppConfig.onboardingDismissed`
-  and `provider.detect`)
+  and `provider.detect`). **`PROJECT_CLONE_PROTOCOL_VERSION`** (v95) gates
+  **`project.cloneDestination`** (`{ parentPath, name }` → `{ path }`, resolved absolute destination
+  after host validation), **`project.clone`** (`{ operationId, url, parentPath, name, depth? }` →
+  opened `Project`, or `null` after cancellation and cleanup), and **`project.cancelClone`**
+  (`{ operationId }` → ack). Operation ids are scoped to the requesting client; cancelling an absent
+  operation is harmless. Clone revalidates the destination, so preview never reserves it. Reconnect
+  replays the original request; a 30-minute host deadline is shorter than the client's 31-minute wait.
   + **`project.hasSpecs`** (lazy per-project "contains a registered
   spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
   never eagerly for every project) / `workspace.*` — notably **`workspace.list { projectId,

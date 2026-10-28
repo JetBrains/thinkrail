@@ -88,7 +88,7 @@ pi-native prompt influence through an extension, not host prompt assembly.
 ## thinkrail integration
 
 `packages/server/src/agent/extensions.ts` layers this package into every session's
-`DefaultResourceLoader` the same way as `pi-web-access`: `require.resolve("pi-spec-graph/index.ts")` on
+`DefaultResourceLoader` in source mode: `require.resolve("pi-spec-graph/index.ts")` on
 `additionalExtensionPaths`, the package's `skills` dir on `additionalSkillPaths`. Server references it only
 by resolved path (no value import), so it stays out of server's typecheck graph. Separately,
 `packages/server/src/spec/` value-imports **`pi-spec-graph/core`** (the pi-free model — no pi packages in

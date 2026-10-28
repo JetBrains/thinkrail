@@ -227,12 +227,11 @@ export function ProjectTree() {
 		if (willExpand) void loadWorkspaces(projectId);
 	};
 
-	const { openProject, pickAndOpen, enterHostPath, startNewProject, dialogs } = useOpenProject(
-		async (project, { setup }) => {
+	const { openProject, pickAndOpen, enterHostPath, startNewProject, cloneRepository, dialogs } =
+		useOpenProject(async (project, { setup }) => {
 			await selectProject(project.id).catch(() => {});
 			if (setup) await startProjectSetupChat(project.id);
-		},
-	);
+		});
 
 	const onExistingWorktreeOpened = async (workspace: Workspace) => {
 		const rows = await getTransport().request("workspace.list", {
@@ -277,6 +276,7 @@ export function ProjectTree() {
 					recentProjects={recentProjects}
 					onOpen={() => void pickAndOpen()}
 					onEnterHostPath={enterHostPath}
+					onClone={cloneRepository}
 					onOpenRecent={(p) => void openProject(p)}
 					{...(supportsCreate ? { onStartNew: startNewProject } : {})}
 				>

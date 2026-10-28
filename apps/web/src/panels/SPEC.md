@@ -348,7 +348,7 @@ project folder"; **project + no specs** → a spec-first **"Set up project"** (p
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Start a new project… (when the
 caller passes `onStartNew`, i.e. the host supports `project.create`) / Open project / Enter host
-path… / Open GitHub (soon) / Recents). Recents is the store's `recentProjects`: one last-opened path list
+path… / Clone repository… (from `PROJECT_CLONE_PROTOCOL_VERSION`) / Recents). Recents is the store's `recentProjects`: one last-opened path list
 containing open + closed records with no status badge (the server omits closed records
 whose folders are gone); selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
@@ -388,12 +388,13 @@ the wizard. **Provider status has one owner**: the store's `providerStatus` snap
 (a login that finished while disconnected is picked up on reconnect), and every successful untargeted login
 frame — another client's too, even while this client's own login keeps the dialog (hosts that predate a push
 still refresh); a local sign-out or Retry bumps it too. `useProviderStatus`
-re-reads whenever the snapshot is behind, single-flight per version, and `useHasProvider` (connected iff any
-`configured`) derives from it, so the banner, the wizard gate, the connect surfaces and Settings never
-disagree. `useHasProvider` also invalidates once on mount, so returning to Welcome sees a credential change the
-host never pushes (a `pi` CLI login or logout). The banner stays hidden until the first answer lands, and a transport error degrades to *not*
-nagging (unknown or offline ≠ "no provider"). All provider **management** lives in
-Settings, not here (the always-on strip is gone).
+re-reads whenever the snapshot is behind, single-flight per version, and `useHasProvider` (connected iff
+`reportHasModelSource`: any standard provider `configured` **or** JetBrains Central connected, so Central
+alone does not trip the warning) derives from it, so the banner, the wizard gate, the connect surfaces and
+Settings never disagree. `useHasProvider` also invalidates once on mount, so returning to Welcome sees a
+credential change the host never pushes (a `pi` CLI login or logout). The banner stays hidden until the first
+answer lands, and a transport error degrades to *not* nagging (unknown or offline ≠ "no provider"). All
+provider **management** lives in Settings, not here (the always-on strip is gone).
 
 **First connection.** `ConnectProviderDialog` is an onboarding overlay over `ConnectProviderOptions` — the
 same body the onboarding wizard embeds: one bordered surface holding a **Detected** block — only when account
@@ -428,7 +429,7 @@ in flight (waiting for a current one would absorb a sign-in that lands first), u
 `configuredAtStart`, which the wizard does as empty (a cold start has no provider), so one connected through
 Settings during the intro or privacy step is still verified on reaching Connect — `ConnectProviderOptions` reports it once through `onConnected`, and only from a current, successful snapshot (never while a re-read is
 in flight or after a failed one, so a provider signed out a moment before Get started is not verified), and the host
-surface decides: `ConnectProviderDialog` clears the finished login, closes itself, and raises one success
+surface decides: `ConnectProviderDialog` clears that provider's finished login (never a newer one), closes itself, and raises one success
 toast naming the provider and the `model.list` count ("JetBrains AI connected — 23 models available"), then
 lets Welcome switch its hero to the `ConnectedLine`; the wizard neither toasts nor closes — it verifies in place
 (below). Settings keeps its own behavior (no auto-close),
@@ -447,6 +448,19 @@ new project's home is still what the user is looking at (selected, no workspace 
 while that Default workspace is still the active one, so wandering off during `workspace.list` drops it; a
 failed list read toasts instead of rejecting. The "Set up project" card on an existing repo still goes through
 `NewWorkspaceDialog`. A failure stays inline in the dialog.
+
+**Cloning a repository.** `CloneProjectDialog`, opened by `useOpenProject` from either add-project menu,
+accepts a Git URL, an editable URL-derived folder name, a host parent path (default `~`, editable or chosen
+with Browse), and optional positive history depth (empty = full history). `project.cloneDestination`
+provides the absolute path preview and rejects existing destinations; only a preview matching the current
+fields enables submission, and clone validates again before writing. The dialog uses host Git credentials,
+not GitHub login. During cloning fields are locked, status is announced, and Cancel requests
+`project.cancelClone`; the original request settles only after process exit and cleanup. Cancel returns to
+the editable form, with values retained. Errors stay inline; cleanup failures explicitly require manual
+removal. Closing an idle dialog dismisses it, while Escape/backdrop cannot dismiss an active clone. Unmount
+requests cancellation. A reconnect replays the pending operation. Success adopts Project Home through the
+same last-intent fence as opening a local project, without starting a chat. A late result cannot steal a
+newer open-project selection.
 
 **Cold-start onboarding wizard.** `OnboardingWizard` replaces the Welcome cards only on a true cold start:
 the host supports `ONBOARDING_PROTOCOL_VERSION`, `AppConfig.onboardingDismissed` is false, there are no
@@ -473,6 +487,8 @@ refresh warns and offers **Check again**
 return, since the provider is configured and so no longer listed. The wizard owns no project step of its own and shows no progress strip.
 **Skip setup** is on every screen before done except privacy, whose Continue is the only way on; skipping also cancels any
 target-less login still pending in the dialog (`cancelUnownedLogin`, shared with `ConnectProviderDialog`).
+A login is owned by the start that requested it (`startReservedLogin`): when the surface closes before
+`provider.loginStart` answers, the late `loginId` is cancelled and cleared instead of running hidden.
 The gate lives in the store (`onboardingWizard`: pending → shown | hidden) so shell can hold first-run
 prompts while it is undecided. Finishing or skipping writes `onboardingDismissed: true`, so a returning user — even one who later removes
 every project and provider — gets the regular Welcome; a failed write still closes the wizard locally.

@@ -1,33 +1,25 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LoginFrame, LoginPush, ProviderStatusReport } from "@thinkrail/contracts";
+import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
 
 const repoRoot = join(import.meta.dir, "..");
 const FLOW_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 10_000;
+const BOOT_TIMEOUT_MS = 30_000;
 const MAX_SELECT_DEPTH = 3;
+const FIRST_USER_STEPS: ReadonlySet<LoginFrame["kind"]> = new Set([
+	"authUrl",
+	"deviceCode",
+	"prompt",
+]);
 
 interface Outcome {
 	flow: string;
 	trail: string[];
 	ok: boolean;
-}
-
-function freePort(): Promise<number> {
-	return new Promise((resolve, reject) => {
-		const server = createServer();
-		server.once("error", reject);
-		server.listen(0, () => {
-			const address = server.address();
-			server.close(() =>
-				typeof address === "object" && address
-					? resolve(address.port)
-					: reject(new Error("no port")),
-			);
-		});
-	});
 }
 
 function describe(frame: LoginFrame): string {
@@ -47,16 +39,25 @@ function describe(frame: LoginFrame): string {
 	}
 }
 
+interface Reply {
+	resolve: (m: { ok: boolean; result?: unknown }) => void;
+	reject: (error: Error) => void;
+}
+
 class Wire {
 	private seq = 0;
-	private readonly replies = new Map<string, (m: { ok: boolean; result?: unknown }) => void>();
+	private readonly replies = new Map<string, Reply>();
 	readonly frames = new Map<string, LoginFrame[]>();
 
 	private constructor(private readonly socket: WebSocket) {
+		socket.addEventListener("close", () => {
+			for (const reply of this.replies.values()) reply.reject(new Error("host connection closed"));
+			this.replies.clear();
+		});
 		socket.addEventListener("message", (event) => {
 			const message = JSON.parse(String(event.data));
 			if (message.id && this.replies.has(message.id)) {
-				this.replies.get(message.id)?.(message);
+				this.replies.get(message.id)?.resolve(message);
 				this.replies.delete(message.id);
 			} else if (message.channel === "provider.login") {
 				const push = message.data as LoginPush;
@@ -78,8 +79,21 @@ class Wire {
 
 	async request<T>(method: string, params: unknown): Promise<T> {
 		const id = `smoke_${++this.seq}`;
-		const reply = await new Promise<{ ok: boolean; result?: unknown }>((resolve) => {
-			this.replies.set(id, resolve);
+		const reply = await new Promise<{ ok: boolean; result?: unknown }>((resolve, reject) => {
+			const timer = setTimeout(() => {
+				this.replies.delete(id);
+				reject(new Error(`${method} timed out after ${REQUEST_TIMEOUT_MS / 1000}s`));
+			}, REQUEST_TIMEOUT_MS);
+			this.replies.set(id, {
+				resolve: (message) => {
+					clearTimeout(timer);
+					resolve(message);
+				},
+				reject: (error) => {
+					clearTimeout(timer);
+					reject(error);
+				},
+			});
 			this.socket.send(JSON.stringify({ id, method, params }));
 		});
 		if (!reply.ok) throw new Error(`${method} failed`);
@@ -119,7 +133,7 @@ async function runFlow(
 						return { trail, ok: true, select: frame.options.map((o) => o.id) };
 					await wire.request("provider.loginReply", { loginId, value: choice });
 				} else {
-					return { trail, ok: frame.kind !== "error" };
+					return { trail, ok: FIRST_USER_STEPS.has(frame.kind) };
 				}
 			}
 		}
@@ -151,31 +165,41 @@ async function probeMethod(
 
 const sandbox = mkdtempSync(join(tmpdir(), "thinkrail-smoke-logins-"));
 for (const dir of ["data", "home", "pi-agent"]) mkdirSync(join(sandbox, dir));
-const port = await freePort();
-const home = join(sandbox, "home");
-const host = spawn("bun", [join(repoRoot, "packages/server/src/dev.ts")], {
+const host = spawn("bun", ["--no-env-file", join(repoRoot, "packages/server/src/dev.ts")], {
+	cwd: sandbox,
 	env: {
 		PATH: process.env.PATH ?? "",
-		HOME: home,
-		THINKRAIL_PORT: String(port),
+		...toolHomeEnv(join(sandbox, "home")),
+		THINKRAIL_PORT: "0",
 		THINKRAIL_DATA_DIR: join(sandbox, "data"),
 		PI_CODING_AGENT_DIR: join(sandbox, "pi-agent"),
-		CLAUDE_CONFIG_DIR: join(home, ".claude"),
-		CODEX_HOME: join(home, ".codex"),
-		GEMINI_CLI_HOME: home,
 		THINKRAIL_NO_ANALYTICS: "1",
 	},
-	stdio: "ignore",
+	stdio: ["ignore", "pipe", "ignore"],
 });
+const exited = new Promise<void>((resolve) => host.once("exit", () => resolve()));
+
+function hostPort(): Promise<number> {
+	return new Promise((resolve, reject) => {
+		let output = "";
+		const timer = setTimeout(() => reject(new Error("host did not come up")), BOOT_TIMEOUT_MS);
+		host.stdout?.on("data", (chunk: Buffer) => {
+			output += chunk.toString();
+			const match = /thinkrail host: http:\/\/[^\s:]+:(\d+)/.exec(output);
+			if (!match) return;
+			clearTimeout(timer);
+			resolve(Number(match[1]));
+		});
+		void exited.then(() => {
+			clearTimeout(timer);
+			reject(new Error("host exited before it came up"));
+		});
+	});
+}
 
 let failures = 0;
 try {
-	let wire: Wire | null = null;
-	for (let attempt = 0; attempt < 60 && !wire; attempt++) {
-		await Bun.sleep(500);
-		wire = await Wire.connect(port).catch(() => null);
-	}
-	if (!wire) throw new Error(`host did not come up on port ${port}`);
+	const wire = await Wire.connect(await hostPort());
 
 	const report = await wire.request<ProviderStatusReport>("provider.status", {});
 	const outcomes: Outcome[] = [];
@@ -189,12 +213,14 @@ try {
 	for (const outcome of outcomes) {
 		console.log(`${outcome.ok ? "ok  " : "FAIL"}  ${outcome.flow}: ${outcome.trail.join(" → ")}`);
 	}
-	failures = outcomes.filter((o) => !o.ok).length;
+	const failed = outcomes.filter((o) => !o.ok).length;
+	failures = outcomes.length === 0 ? 1 : failed;
 	console.log(
-		`\nsmoke-provider-logins: ${outcomes.length - failures}/${outcomes.length} sign-in flows reached their first user step`,
+		`\nsmoke-provider-logins: ${outcomes.length - failed}/${outcomes.length} sign-in flows reached their first user step`,
 	);
 } finally {
-	host.kill();
+	if (host.exitCode === null && host.signalCode === null) host.kill();
+	await exited;
 	rmSync(sandbox, { recursive: true, force: true });
 }
 process.exit(failures === 0 ? 0 : 1);

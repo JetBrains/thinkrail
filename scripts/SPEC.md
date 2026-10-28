@@ -21,9 +21,12 @@ Repository-wide development orchestration and conformance gates that do not belo
 - **Forbidden:** product runtime logic, a second source of package or feature behavior, editing source as part of a check, or application-internal imports outside focused root contract tests. A root contract test may compose implementations but must not become the protocol source or a product dependency.
 
 `smoke:logins` boots a throwaway host in a temp HOME/data/pi-agent sandbox (no ambient credentials, real
-network) and, for every provider `provider.status` lists, starts each offered sign-in method over the wire,
-walks every branch of pi's select prompts, and passes when each flow reaches its first user step (a sign-in
-page, a device code, or a prompt); an error frame or a 15 s stall fails it. It cancels every flow, so nothing
+network): it runs from the sandbox with `--no-env-file` and `toolHomeEnv`, so neither the repo `.env` nor a
+real tool home leaks in, and the host binds port 0 and reports it. For every provider `provider.status` lists,
+it starts each offered sign-in method over the wire, walks every branch of pi's select prompts, and passes
+only when each flow reaches its first user step (a sign-in page, a device code, or a prompt); any other
+terminal frame (an immediate `success` included), a 15 s stall, a 10 s request timeout, a dropped host
+connection, or zero flows fails it. It waits for the host to exit before deleting the sandbox. It cancels every flow, so nothing
 is ever stored, and needs no accounts — it catches a pi upgrade or registry change that breaks how a sign-in
 starts, not whether a real credential is accepted. It is on demand, never a commit or CI gate, because it
 depends on providers' live endpoints.

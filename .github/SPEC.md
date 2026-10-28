@@ -153,11 +153,23 @@ Supported desktop assets:
 
 | Target | Native runner | Published asset |
 | --- | --- | --- |
-| `bun-darwin-arm64` | `macos-14` | `thinkrail-desktop-darwin-arm64.dmg` |
+| `bun-darwin-arm64` | `macos-15` | `thinkrail-desktop-darwin-arm64.dmg` |
 | `bun-darwin-x64` | `macos-15-intel` | `thinkrail-desktop-darwin-x64.dmg` |
-| `bun-windows-x64` | `windows-latest` | `thinkrail-desktop-windows-x64.zip` |
+| `bun-windows-x64` | `windows-2022` | `thinkrail-desktop-windows-x64.zip` |
 | `bun-linux-x64` | `ubuntu-24.04` | `thinkrail-desktop-linux-x64.tar.gz` |
 | `bun-linux-arm64` | `ubuntu-24.04-arm` | `thinkrail-desktop-linux-arm64.tar.gz` |
+
+The private pipeline owns these runner baselines. **Intel runner watch:** `macos-15-intel` runs only the
+x64 build and the finalized-DMG install smoke. Stapling, DMG creation and signature checks for both
+architectures stay on arm64 `macos-15`, because `xcrun stapler` fails on the Intel image
+([runner-images#14924](https://github.com/actions/runner-images/issues/14924)). `macos-26-intel` is avoided
+because its `iconservicesagent` crash-loop hangs app-launch tests
+([#14751](https://github.com/actions/runner-images/issues/14751)); Electrobun keeps its own Intel desktop
+validation on `macos-15-intel` for the same reason. Also watch Intel GPU hangs
+([#14836](https://github.com/actions/runner-images/issues/14836)) and slow Intel runners
+([#13358](https://github.com/actions/runner-images/issues/13358)). GitHub calls `macos-15-intel` its last
+hosted x86_64 image, available until about August 2027; before then, choose between a self-hosted Intel
+runner and dropping the Intel builds. Re-check these issues whenever a macOS runner image changes.
 
 Linux aliases name untouched framework installers. The Windows ZIP contains its setup executable and
 adjacent payload; the private pipeline signs both and repacks the payload (see Signing). Linux's tarball

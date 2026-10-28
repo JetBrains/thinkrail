@@ -20,8 +20,8 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 
 - **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` or `apps/desktop`
   in local-host mode): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
-  (`pi-web-access`, `pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) and the ThinkRail extensions
-  from its server registry (`visualize`, `ask-user-question`) into every session.
+  (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) and the ThinkRail extensions from its server
+  registry (`visualize`, `ask-user-question`, `web-access`) into every session.
 - **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
   and host.
 - **UI client** (`apps/web`): a mobile-first React client, transport-driven and endpoint-configurable,
@@ -368,8 +368,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     deleted — none of which changes anything a user can observe. **Enable/disable has shipped:** Settings →
     Extensions lists the server registry (`extension.list`) with a switch per extension; the global
     `AppConfig.disabledExtensions` reaches `agent` through a host-injected resolver (no `agent` → settings
-    edge), which filters registry factories at every loader (re)load and withholds a disabled extension's
-    tools from live sessions through pi's active-tool API, while web renderers stay registered so past
+    edge), which filters registry factories **and their skills** at every loader (re)load and withholds a
+    disabled extension's tools from live sessions through pi's active-tool API — reloading an idle session
+    only when that extension's skills are loaded in it — while web renderers stay registered so past
     transcripts render. Install UX, marketplace, per-extension settings, a per-workspace on/off override
     and runtime-loaded third-party extensions remain explicit deferrals. Rejected: runtime-loaded
     bundles now (React singleton, versioned UI API, security story first), a logical extension inside
@@ -392,7 +393,12 @@ dependency. This keeps test process drivers outside both launchers and the serve
     package then falls back to pi's `ctx.ui` dialogs, which the host already renders). Product rule: a
     built-in (registry) extension wins a same-name tool collision with a user package while it is
     enabled; switched off, the package's tool runs ([[pi-compatibility]] holds the pi-level mechanism).
-    Detail: [[module-thinkrail-extensions]].
+    Third: web-access — the first wrap of a **third-party** pi package (`pi-web-access`), so there is no
+    package of ours to publish and delivery collapses to the server half; its renderers stay app-local
+    until the components they use join the SDK. It loads everything the package declares, as `pi install`
+    would — tools and its `librarian` skill — and is the first extension with skills, so the switch now
+    drops an extension's skills with its tools (launchers stage them under an owner folder so ownership
+    survives flattening). Detail: [[module-thinkrail-extensions]].
 
 22. **A path's spelling follows its kind.** A directory identity (`Project.path`,
     `Workspace.worktreePath`) is the host's **resolved** spelling (`path.resolve`), exactly what pi records as a

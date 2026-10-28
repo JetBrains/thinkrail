@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
@@ -123,6 +124,24 @@ afterEach(() => {
 test("every contract method has a registered handler", () => {
 	const unregistered = Object.values(WS_METHODS).filter((m) => requestMethodDiagnostic(m) !== m);
 	expect(unregistered).toEqual([]);
+});
+
+test("clone handlers resolve the destination and return an opened local project", async () => {
+	const input = {
+		operationId: "clone-handler",
+		url: pathToFileURL(repo).href,
+		parentPath: dataDir,
+		name: "cloned",
+	};
+	const destination = (await handleRequest("project.cloneDestination", input, CTX)) as {
+		path: string;
+	};
+	const project = (await handleRequest("project.clone", input, CTX)) as Project;
+	expect(project.path).toBe(destination.path);
+	expect(gitText(project.path, "rev-parse", "HEAD")).toBe(gitText(repo, "rev-parse", "HEAD"));
+	expect(
+		await handleRequest("project.cancelClone", { operationId: input.operationId }, CTX),
+	).toEqual({ ok: true });
 });
 
 test("open-review cache reuse is opt-in so older clients remain fresh", () => {
@@ -483,20 +502,30 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["ask_user_question"],
 			hasChildExtensions: false,
 		},
+		{
+			name: "web-access",
+			title: "Web access",
+			description: expect.any(String),
+			enabled: true,
+			tools: ["web_search", "fetch_content", "get_search_content"],
+			hasChildExtensions: true,
+		},
 	]);
 	await handleRequest(
 		"settings.update",
-		{ config: { disabledExtensions: ["visualize", "retired"] } },
+		{ config: { disabledExtensions: ["visualize", "web-access", "retired"] } },
 		CTX,
 	);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: false },
 		{ name: "ask-user-question", enabled: true },
+		{ name: "web-access", enabled: false },
 	]);
 	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: true },
 		{ name: "ask-user-question", enabled: true },
+		{ name: "web-access", enabled: true },
 	]);
 });
 

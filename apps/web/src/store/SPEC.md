@@ -484,7 +484,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   if the frame arrived first; ignoring frames for a different live login); both keep an MCP
   push's `target`, which is how Providers and MCP settings each open only their own logins,
   **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
-  and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
+  and **`clearLogin(loginId?)`** dismisses it — only that login when an id is given, so a stale surface
+  never drops a newer one; **`clearSettledLogin(providerId)`** is the post-connect handoff, clearing only that
+  provider's finished (success/error) target-less login. A terminal frame for a login this client does not
+  hold opens nothing (a superseded login's error reaches every client); it is kept as **`unheldLoginFrame`**
+  so `beginLogin` can replay it when it was this client's own fast failure beating the start response. The **settings surface** state — **`settingsOpen`** +
   **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`Chat`/`Layout`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`;
   the `LineWidth` and `Review` keys are retained so old deep links still type-check but are not navigation
   sections — `panels/settingsNav` resolves them to an available section, and their controls now live in

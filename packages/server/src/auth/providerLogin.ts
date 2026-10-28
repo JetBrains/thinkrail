@@ -50,9 +50,22 @@ function frameForPrompt(prompt: AuthPrompt): LoginFrame {
 	};
 }
 
-export function startLogin(providerId: string, type: AuthType = "oauth"): { loginId: string } {
+const SUPERSEDED_LOGIN_MESSAGE = "Another sign-in for this provider replaced this one.";
+
+export function startLogin(
+	providerId: string,
+	type: AuthType = "oauth",
+	onSuperseded: (loginId: string) => void = () => {},
+): { loginId: string } {
 	for (const [id, pending] of [...logins]) {
-		if (pending.providerId === providerId) cancelLogin(id);
+		if (pending.providerId !== providerId) continue;
+		onSuperseded(id);
+		cancelLogin(id);
+		publish({
+			loginId: id,
+			providerId,
+			frame: { kind: "error", message: SUPERSEDED_LOGIN_MESSAGE },
+		});
 	}
 	const loginId = nextId();
 	const entry: Pending = { providerId, abort: new AbortController(), settled: false };

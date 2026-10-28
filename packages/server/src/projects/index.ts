@@ -1,4 +1,10 @@
 export {
+	cancelProjectClone,
+	cloneProject,
+	inspectCloneDestination,
+	startProjectClone,
+} from "./clone";
+export {
 	acknowledgeProjectSkills,
 	approveProjectMcpServer,
 	closeProject,

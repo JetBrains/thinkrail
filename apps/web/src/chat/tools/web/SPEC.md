@@ -6,12 +6,14 @@ title: web tool renderers (search / fetch / stored content)
 parent: submodule-web-chat-tools
 depends-on: [module-contracts]
 tags: [chat, web-tools]
+references: [module-ext-web-access]
 ---
 
 ## Responsibility
 
-Presentational renderers for all three tools exposed by the pinned **`pi-web-access`** extension, joined to
-that capability by **tool name**: `WebSearchCard` (`web_search`), `WebFetchCard` (`fetch_content`), and
+Presentational renderers for all three tools exposed by **`pi-web-access`** — composed on the server by
+the `web-access` ThinkRail extension ([[module-ext-web-access]]), which has no `./web` half yet — joined
+to that capability by **tool name**: `WebSearchCard` (`web_search`), `WebFetchCard` (`fetch_content`), and
 `WebStoredContentCard` (`get_search_content`). `register.ts` wires all three via `registerToolRenderer`
 (+ collapsed-header summaries) and is imported for its side effect by the parent `tools/register`.
 

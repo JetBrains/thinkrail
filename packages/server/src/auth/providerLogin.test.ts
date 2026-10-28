@@ -334,22 +334,25 @@ describe("cancelLogin", () => {
 		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt"]);
 	});
 
-	test("a new login for the same provider supersedes an abandoned one, silently", async () => {
+	test("a new login for the same provider supersedes an abandoned one with a terminal frame", async () => {
 		const signals: (AbortSignal | undefined)[] = [];
 		const h = install(async (_id, i) => {
 			signals.push(i.signal);
 			await i.prompt({ type: "select", message: "method", options: [{ id: "a", label: "A" }] });
 		});
+		const superseded: string[] = [];
 		const first = startLogin("anthropic");
 		const other = startLogin("openai-codex");
 		await tick();
-		const second = startLogin("anthropic");
+		const second = startLogin("anthropic", "oauth", (id) => superseded.push(id));
 		await tick();
 
 		expect(signals.map((s) => s?.aborted)).toEqual([true, false, false]);
+		expect(superseded).toEqual([first.loginId]);
 		expect(h.frames.map((f) => [f.loginId, f.frame.kind])).toEqual([
 			[first.loginId, "select"],
 			[other.loginId, "select"],
+			[first.loginId, "error"],
 			[second.loginId, "select"],
 		]);
 		resolveLogin({ loginId: first.loginId, value: "a" });

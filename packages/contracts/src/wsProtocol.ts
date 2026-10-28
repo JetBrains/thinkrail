@@ -123,7 +123,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 94;
+export const PROTOCOL_VERSION = 95;
+export const PROJECT_CLONE_PROTOCOL_VERSION = 95;
 export const ONBOARDING_PROTOCOL_VERSION = 94;
 export const LAYOUT_PLAN_PRESET_PROTOCOL_VERSION = 94;
 export const TOOL_RESPONSE_PROTOCOL_VERSION = 93;
@@ -213,6 +214,9 @@ export const WS_METHODS = {
 	projectInspect: "project.inspect",
 	projectInit: "project.init",
 	projectCreate: "project.create",
+	projectCloneDestination: "project.cloneDestination",
+	projectClone: "project.clone",
+	projectCancelClone: "project.cancelClone",
 	projectHasSpecs: "project.hasSpecs",
 	projectSetTrust: "project.setTrust",
 	projectAcknowledgeSkills: "project.acknowledgeSkills",
@@ -605,6 +609,15 @@ export interface WsMethodMap {
 		params: { parentPath: string; name: string; displayName?: string };
 		result: Project;
 	};
+	"project.cloneDestination": {
+		params: { parentPath: string; name: string };
+		result: { path: string };
+	};
+	"project.clone": {
+		params: { operationId: string; url: string; parentPath: string; name: string; depth?: number };
+		result: Project | null;
+	};
+	"project.cancelClone": { params: { operationId: string }; result: Ack };
 	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
 	"project.setTrust": {
 		params: { id: string; trusted: boolean; resources?: boolean };
@@ -1107,6 +1120,9 @@ export type WsErrorCode =
 	| "PUSH_AUTH_FAILED"
 	| "NOT_GIT"
 	| "ALREADY_OPEN"
+	| "PROJECT_CLONE_INVALID"
+	| "PROJECT_CLONE_FAILED"
+	| "PROJECT_CLONE_CLEANUP_FAILED"
 	| "SUBAGENT_TRANSCRIPT_NOT_FOUND"
 	| "RESOURCE_UNAVAILABLE"
 	| "STALE_VIEW"
