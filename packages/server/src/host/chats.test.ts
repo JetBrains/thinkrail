@@ -575,11 +575,20 @@ test("deleting a chat while its first session is still starting leaves no sessio
 	}
 }, 30_000);
 
-test("a chat whose deletion did not finish refuses attach, terminals and sessions after a restart, and Retry completes it", async () => {
+test("a chat whose deletion did not finish refuses attach, terminals, sessions and history after a restart, and Retry completes it", async () => {
 	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
 	const { workspace, sessionId } = created;
 	faux.setResponses([fauxAssistantMessage("kept")]);
 	await promptSession(sessionId, "keep this");
+	const historyHits = async () => {
+		const result = (await handleRequest(
+			"history.search",
+			{ query: "keep this", scope: { kind: "all" } },
+			NEW_CLIENT,
+		)) as WsResult<"history.search">;
+		return result.prompts.filter((hit) => hit.sessionId === sessionId).length;
+	};
+	expect(await historyHits()).toBe(1);
 	setTrashImplementationForTests(async () => {
 		throw new Error("trash unavailable");
 	});
@@ -592,6 +601,7 @@ test("a chat whose deletion did not finish refuses attach, terminals and session
 	}
 	expect(getChatWorkspace(workspace.id).deletionPending).toBe(true);
 	expect(hasSession(sessionId)).toBe(false);
+	expect(await historyHits()).toBe(0);
 
 	disposeAllSessions();
 	resetChatIdCache();

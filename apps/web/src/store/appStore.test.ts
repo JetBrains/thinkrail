@@ -2957,6 +2957,57 @@ test("installWelcomeSnapshot reconciles stale project navigation", () => {
 	expect(useAppStore.getState().selectedProjectId).toBe("p1");
 });
 
+test("no route enters a chat whose deletion did not finish, while the one already open stays open", () => {
+	const repo = pushedWorkspace();
+	const pending = pushedWorkspace({
+		id: "c1",
+		projectId: "chats",
+		kind: "chat",
+		deletionPending: true,
+	});
+	useAppStore.setState({
+		projects: [
+			{ id: "p1", name: "p1", path: "/p1", slug: "p1", lastOpened: 0 },
+			{ id: "chats", name: "Chats", path: "/chats", slug: "chats", lastOpened: 0, kind: "chats" },
+		],
+		workspaces: { p1: [repo], chats: [pending] },
+		selectedProjectId: "p1",
+		activeWorkspaceId: "w1",
+		chatLocationRequest: null,
+		historyOpenRequest: null,
+	});
+	const store = useAppStore.getState();
+	store.activateWorkspace(pending);
+	store.activateWorkspaceFromRoute(pending, "s1");
+	store.requestChatLocation({
+		workspaceId: "c1",
+		projectId: "chats",
+		sessionId: "s1",
+		messageIndex: 0,
+		anchorText: "keep this",
+	});
+	store.requestHistoryOpen({ workspaceId: "c1", sessionId: "s1", tabId: "s1" });
+	expect(useAppStore.getState()).toMatchObject({
+		activeWorkspaceId: "w1",
+		routeChatTarget: null,
+		chatLocationRequest: null,
+		historyOpenRequest: null,
+	});
+
+	useAppStore.setState({ selectedProjectId: "chats", activeWorkspaceId: "c1" });
+	useAppStore.getState().activateWorkspaceFromRoute(pending, "s1");
+	expect(useAppStore.getState().routeChatTarget?.workspaceId).toBe("c1");
+
+	useAppStore.setState({
+		selectedProjectId: "p1",
+		activeWorkspaceId: "w1",
+		workspaceSelectionHistory: ["w1", "c1", "w2"],
+		workspaces: { p1: [repo, pushedWorkspace({ id: "w2" })], chats: [pending] },
+	});
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+	expect(useAppStore.getState().activeWorkspaceId).toBe("w2");
+});
+
 test("activateWorkspaceFromRoute atomically stamps exact-chat intent", () => {
 	const workspace = pushedWorkspace();
 	useAppStore.setState({ workspaces: { p1: [workspace] }, navTickByWorkspace: { w1: 3 } });

@@ -22,6 +22,7 @@ import { trashFile } from "../trash";
 import { forgetWorkspaceTurns } from "../turns";
 import { stopWatch } from "../watch";
 import {
+	chatWorkspaces,
 	createChatRecord,
 	dropChatRecord,
 	ensureWorkspaceScratchDir,
@@ -43,6 +44,17 @@ export const CHAT_INSPECT_BUDGET = { entries: 10_000, ms: 250 } as const;
 /** The one visibility policy: a client below `CHATS_PROTOCOL_VERSION` never learns of the Chats container, its chats or their sessions. */
 export function seesChats(protocolVersion: number | undefined): boolean {
 	return protocolVersion === undefined || protocolVersion >= CHATS_PROTOCOL_VERSION;
+}
+
+/** The transcripts no history read may show: a chat's whose deletion did not finish, and every chat's to an older client. */
+export function historyHiddenCwd(protocolVersion: number | undefined): (cwd: string) => boolean {
+	const pending = new Set(
+		chatWorkspaces()
+			.filter((chat) => chat.deletionPending === true)
+			.map((chat) => chat.worktreePath),
+	);
+	const everyChat = !seesChats(protocolVersion);
+	return (cwd) => pending.has(cwd) || (everyChat && isUnderChatsRoot(cwd));
 }
 
 type ChatClaim =

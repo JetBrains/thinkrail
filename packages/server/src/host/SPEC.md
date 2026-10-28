@@ -621,8 +621,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   container answers `[]` and `session.list` of a chat answers as for an unknown workspace; `search.query`
   and `search.preview` hand the search service the audience, which drops the container (so its chats'
   records, files, plans and transcripts) from the corpora before any provider ranks or pages
-  ([[submodule-server-search]]); `history.search` passes `isUnderChatsRoot` as the hidden-cwd predicate,
-  so chat transcripts are out of every scope, not just unlabelled. Every id-carrying push
+  ([[submodule-server-search]]); `history.search` takes its hidden-cwd predicate from `historyHiddenCwd`,
+  which holds every chat folder for such a client and, for every client, a chat whose deletion did not
+  finish (its transcript may outlive a failed trash), so those transcripts are out of every scope, not
+  just unlabelled. Every id-carrying push
   (`project.updated`, `workspace.*`, `session.*`, `terminal.tabs`, `workspace.fsChanged`,
   `turn.changed`, `mcp.status`, `session.resourcesChanged`, `pi.event`) goes through one
   `publishScoped` sender that iterates the sockets for a chat or container id and broadcasts otherwise —
