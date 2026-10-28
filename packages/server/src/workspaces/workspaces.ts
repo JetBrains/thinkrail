@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import {
 	DEFAULT_WORKSPACE_NAME,
@@ -9,6 +10,8 @@ import {
 	type OpenBranchReview,
 	type Project,
 	type SubagentOverride,
+	WORKSPACE_CREATE_CLEANUP_TIMEOUT_MS,
+	WORKSPACE_CREATE_GIT_TIMEOUT_MS,
 	type Workspace,
 } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
@@ -73,12 +76,19 @@ function toDisplayName(raw: string): string | null {
 	return name.length > 0 ? name : null;
 }
 
+const creatingBranches = new Set<string>();
+
+function branchReservationKey(project: Project, branch: string): string {
+	return `${canonicalPath(project.path)}\0${branch}`;
+}
+
 function branchExists(repoPath: string, branch: string): boolean {
 	return git(repoPath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).ok;
 }
 
 function nameTaken(project: Project, candidate: string): boolean {
 	return (
+		creatingBranches.has(branchReservationKey(project, candidate)) ||
 		branchExists(project.path, candidate) ||
 		existsSync(join(dataDir(), "worktrees", project.slug, candidate))
 	);
@@ -230,6 +240,26 @@ async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
 	}
 }
 
+async function cleanupTimedOutWorktree(repoPath: string, worktreePath: string): Promise<void> {
+	if (!existsSync(worktreePath)) return;
+	const removed = await gitAsync(repoPath, ["worktree", "remove", "--force", worktreePath], {
+		timeoutMs: WORKSPACE_CREATE_CLEANUP_TIMEOUT_MS,
+	});
+	if (removed.ok) return;
+	try {
+		await rm(worktreePath, { recursive: true, force: true });
+	} catch (error) {
+		const detail = error instanceof Error ? error.message : String(error);
+		log.warn(
+			`failed to remove partial worktree ${worktreePath} after git worktree remove failed: ${removed.err}; ${detail}`,
+		);
+		return;
+	}
+	log.warn(
+		`git worktree remove failed for partial checkout ${worktreePath}; removed the directory as a fallback, but Git may retain prunable metadata: ${removed.err || "git failed"}`,
+	);
+}
+
 export async function createWorkspace(
 	projectId: string,
 	name?: string,
@@ -241,65 +271,81 @@ export async function createWorkspace(
 	const branch = displayName
 		? uniqueBranch(project, toBranch(displayName))
 		: nextAutoBranch(project);
+	const reservation = branchReservationKey(project, branch);
+	creatingBranches.add(reservation);
 	const wsName = displayName ?? branch;
 
-	const base = baseRef?.trim();
-	let baseBranch: string;
-	if (base) baseBranch = base;
-	else {
-		const head = git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]);
-		baseBranch = head.ok ? head.out : "HEAD";
-	}
-	assertSafeRef(baseBranch);
-	const remotes = listRemotes(project.path);
-	const remoteName = remoteNameOf(baseBranch, remotes);
-	const remoteBase = remoteTrackingRef(baseBranch, remotes);
-	const baseMissing = () => remoteRefOid(project.path, baseBranch) === null;
-	if (remoteName && baseMissing()) {
-		const fetched = await gitAsync(
-			project.path,
-			["fetch", remoteName, "--", baseBranch.slice(`${remoteName}/`.length)],
-			{ network: true },
-		);
-		if (baseMissing())
-			throw new Error(
-				fetched.ok
-					? `Could not fetch ${baseBranch}: ${remoteName} does not map it into refs/remotes — check remote.${remoteName}.fetch`
-					: `Could not fetch ${baseBranch}: ${fetched.err || "git wrote no error output"}`,
+	try {
+		const base = baseRef?.trim();
+		let baseBranch: string;
+		if (base) baseBranch = base;
+		else {
+			const head = git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]);
+			baseBranch = head.ok ? head.out : "HEAD";
+		}
+		assertSafeRef(baseBranch);
+		const remotes = listRemotes(project.path);
+		const remoteName = remoteNameOf(baseBranch, remotes);
+		const remoteBase = remoteTrackingRef(baseBranch, remotes);
+		const baseMissing = () => remoteRefOid(project.path, baseBranch) === null;
+		if (remoteName && baseMissing()) {
+			const fetched = await gitAsync(
+				project.path,
+				["fetch", remoteName, "--", baseBranch.slice(`${remoteName}/`.length)],
+				{ network: true },
 			);
+			if (baseMissing())
+				throw new Error(
+					fetched.ok
+						? `Could not fetch ${baseBranch}: ${remoteName} does not map it into refs/remotes — check remote.${remoteName}.fetch`
+						: `Could not fetch ${baseBranch}: ${fetched.err || "git wrote no error output"}`,
+				);
+		}
+
+		const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
+		mkdirSync(dirname(worktreePath), { recursive: true });
+		if (existsSync(worktreePath)) throw new Error(`Workspace path already exists: ${worktreePath}`);
+		const added = await gitAsync(
+			project.path,
+			[
+				"worktree",
+				"add",
+				worktreePath,
+				"-b",
+				branch,
+				"--no-track",
+				"--end-of-options",
+				remoteBase ?? baseBranch,
+			],
+			{ timeoutMs: WORKSPACE_CREATE_GIT_TIMEOUT_MS },
+		);
+		if (!added.ok) {
+			const detail = added.err || "git exited unsuccessfully";
+			log.warn(`git worktree add failed for ${worktreePath}: ${detail}`);
+			if (added.failure === "timeout") await cleanupTimedOutWorktree(project.path, worktreePath);
+			throw new Error(`git worktree add failed: ${detail}`);
+		}
+
+		const workspace: Workspace = {
+			id: randomUUID(),
+			projectId,
+			name: wsName,
+			branch,
+			worktreePath,
+			baseBranch,
+			initialTerminalPending: true,
+			lastActiveAt: Date.now(),
+			...(displayName ? { renamed: true } : {}),
+		};
+		ensureWorkspaceScratchDir(workspace);
+		const all = loadWorkspaces();
+		all.push(workspace);
+		saveWorkspaces(all);
+		emit({ kind: "created", workspace });
+		return workspace;
+	} finally {
+		creatingBranches.delete(reservation);
 	}
-
-	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
-	mkdirSync(dirname(worktreePath), { recursive: true });
-	const added = git(project.path, [
-		"worktree",
-		"add",
-		worktreePath,
-		"-b",
-		branch,
-		"--no-track",
-		"--end-of-options",
-		remoteBase ?? baseBranch,
-	]);
-	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
-
-	const workspace: Workspace = {
-		id: randomUUID(),
-		projectId,
-		name: wsName,
-		branch,
-		worktreePath,
-		baseBranch,
-		initialTerminalPending: true,
-		lastActiveAt: Date.now(),
-		...(displayName ? { renamed: true } : {}),
-	};
-	ensureWorkspaceScratchDir(workspace);
-	const all = loadWorkspaces();
-	all.push(workspace);
-	saveWorkspaces(all);
-	emit({ kind: "created", workspace });
-	return workspace;
 }
 
 export function ensureWorkspaceScratchDir(ws: Workspace): void {

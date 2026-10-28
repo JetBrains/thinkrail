@@ -192,10 +192,12 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
 
 ## Get right
 
-- **`DEFAULT_TIMEOUT_MS` is the ceiling a host-side budget has to fit under, and nothing enforces it.**
+- **`DEFAULT_TIMEOUT_MS` is the ceiling for requests that do not raise it, and nothing enforces the host-side budget.**
   The server bounds network `git` at 55s precisely so its own error — naming the ref, carrying git's
   stderr — wins the race against the causeless `request "…" timed out` this side raises at 60s (issue #209;
   `packages/server/src/git/SPEC.md`). Lower this number below that budget and every stalled fetch silently
   reverts to the generic timeout, with no test or type failing to say so. The two constants live in
-  independently-shipped artifacts and are correct by agreement; deriving them from one another belongs in
-  `contracts`. Raising a per-request `timeoutMs` is safe, lowering the default is not.
+  independently-shipped artifacts. Raising a per-request `timeoutMs` is safe, lowering the default is not.
+  Long local worktree checkouts are a separate exception: `workspace.create` uses
+  `WORKSPACE_CREATE_REQUEST_TIMEOUT_MS` from `contracts`, whose budget covers the bounded fetch, asynchronous
+  checkout, best-effort cleanup, and reply.

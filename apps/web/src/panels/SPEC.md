@@ -582,9 +582,11 @@ a project picker, the prompt hero, and the reused
   so `resources: true` travels only when the notice named pi-level resources; it folds the updated project
   back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active,
-  and the dialog itself expands the project and refreshes its authoritative `workspace.list` (fire-and-forget;
-  the `workspace.created` push is not relied on because an unloaded project list drops it) — there is no
+  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` with
+  the shared `WORKSPACE_CREATE_REQUEST_TIMEOUT_MS` budget — a long checkout keeps the host responsive while
+  the existing button remains in its loading/“Creating…” state — → set active, and the dialog itself expands
+  the project and refreshes its authoritative `workspace.list` (fire-and-forget; the `workspace.created` push
+  is not relied on because an unloaded project list drops it) — there is no
   `onCreated` callback, so every mount site (`ProjectTree`, `WelcomePanel`, the shell's keyboard-opened
   instance) gets the same post-create fold → **always open a
   fresh chat** (`session.create({ workspaceId, model?, thinkingLevel? })` — a held model + effort apply even

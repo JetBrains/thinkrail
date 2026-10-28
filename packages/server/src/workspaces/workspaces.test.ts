@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
+	chmodSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -40,6 +41,8 @@ import {
 	type WorkspaceLifecycleEvent,
 } from "./workspaces";
 
+const posix = test.skipIf(process.platform === "win32");
+
 function gitOut(cwd: string, ...args: string[]): string {
 	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
 	return new TextDecoder().decode(r.stdout).trim();
@@ -75,6 +78,15 @@ function git(cwd: string, ...args: string[]): void {
 
 async function worktrees(projectId = "p1") {
 	return (await listWorkspaces(projectId)).filter((w) => w.kind !== "default");
+}
+
+function installSlowCheckoutHook(delayMs = 350): void {
+	const hooks = join(dataDir, "hooks");
+	mkdirSync(hooks);
+	const postCheckout = join(hooks, "post-checkout");
+	writeFileSync(postCheckout, `#!/bin/sh\nnode -e 'setTimeout(() => {}, ${delayMs})'\n`);
+	chmodSync(postCheckout, 0o755);
+	git(repo, "config", "core.hooksPath", hooks);
 }
 
 beforeEach(() => {
@@ -117,6 +129,51 @@ test("createWorkspace cuts a fresh branch from baseRef and records it as the bas
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(baseSha);
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
 	expect(ws.branch).not.toBe("feature/base");
+});
+
+posix("createWorkspace keeps the event loop responsive during a slow checkout", async () => {
+	installSlowCheckoutHook();
+
+	let settled = false;
+	const creation = createWorkspace("p1");
+	void creation.then(
+		() => {
+			settled = true;
+		},
+		() => {
+			settled = true;
+		},
+	);
+	await new Promise((resolve) => setTimeout(resolve, 50));
+	expect(settled).toBe(false);
+	const workspace = await creation;
+	expect(existsSync(workspace.worktreePath)).toBe(true);
+});
+
+posix("a concurrent Default ensure survives the asynchronous worktree add", async () => {
+	installSlowCheckoutHook(700);
+	const creation = createWorkspace("p1");
+	const listed = await listWorkspaces("p1");
+	expect(listed.some((workspace) => workspace.kind === "default")).toBe(true);
+
+	const created = await creation;
+	const records = listWorkspaceRecords("p1");
+	expect(records.some((workspace) => workspace.kind === "default")).toBe(true);
+	expect(records.some((workspace) => workspace.id === created.id)).toBe(true);
+});
+
+test("concurrent creates reserve distinct branch names while their checkouts run", async () => {
+	const [first, second] = await Promise.all([
+		createWorkspace("p1", "Concurrent Feature"),
+		createWorkspace("p1", "Concurrent Feature"),
+	]);
+
+	expect(new Set([first.branch, second.branch]).size).toBe(2);
+	expect([first.branch, second.branch].sort()).toEqual([
+		"concurrent-feature",
+		"concurrent-feature-2",
+	]);
+	expect(await worktrees()).toHaveLength(2);
 });
 
 test("a relative data dir still creates and records a managed worktree at one absolute path", async () => {
@@ -207,6 +264,21 @@ test("createWorkspace fails with git's own words when the base fetch fails", asy
 	await expect(create).rejects.toThrow(/Could not fetch origin\/main/);
 	await expect(create).rejects.toThrow(/does not appear to be a git repository/);
 	expect(existsSync(join(dataDir, "worktrees", "repo"))).toBe(false);
+	expect(await worktrees()).toHaveLength(0);
+});
+
+test("createWorkspace preserves checkout errors and leaves no failed worktree", async () => {
+	writeFileSync(join(repo, ".gitattributes"), "z-fail.txt filter=fail\n");
+	writeFileSync(join(repo, "a.txt"), "checkout starts\n");
+	writeFileSync(join(repo, "z-fail.txt"), "checkout fails\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "add required checkout filter");
+	git(repo, "config", "filter.fail.smudge", 'node -e "process.exit(1)"');
+	git(repo, "config", "filter.fail.required", "true");
+
+	await expect(createWorkspace("p1")).rejects.toThrow(/smudge filter fail failed/);
+	expect(existsSync(join(dataDir, "worktrees", "repo", "workspace-1"))).toBe(false);
+	expect(registeredWorktrees(repo)).toHaveLength(1);
 	expect(await worktrees()).toHaveLength(0);
 });
 

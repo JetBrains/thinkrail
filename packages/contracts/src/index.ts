@@ -52,4 +52,5 @@ export {
 } from "./piProtocol";
 export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
+export * from "./workspaceTimeouts";
 export * from "./wsProtocol";

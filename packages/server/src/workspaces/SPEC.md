@@ -65,19 +65,25 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   have landed it while the fetch was in flight, and a create that would have succeeded must not lose that race;
   `Workspace.baseBranch` records **creation provenance** — the ref the worktree was cut from, which never
   moves afterwards (what the diff is measured *against* is the separate, re-pointable `diffBase`; see
-  `setWorkspaceDiffBase`); **branch name made unique
-  against refs *and* worktree dirs** — archiving leaves the branch behind and renaming frees a branch
-  name whose worktree directory stays occupied, so candidate names skip both; path
-  `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
+  `setWorkspaceDiffBase`); **branch name made unique against refs, worktree dirs, and in-flight creates** —
+  archiving leaves the branch behind and renaming frees a branch name whose worktree directory stays
+  occupied, so candidate names skip both; a selected name is reserved before the first await so concurrent
+  creates and renames cannot claim it while checkout runs; the `worktree add` subprocess runs through
+  `gitAsync` with the shared 10-minute checkout budget, keeping the host event loop free. A failed/timed-out
+  checkout reports Git's stderr or the runner's timeout and logs the failure; a runner timeout also triggers
+  best-effort asynchronous removal of its partial worktree before releasing the reservation. The shared
+  15-minute client budget leaves room
+  for the fallback fetch and cleanup; the Create button stays in its existing loading/“Creating…” state.
+  Path `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
   (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
   new worktree, the home for temp docs (task-specs / working files) that stay out of git yet remain
   scannable by the spec tools (the path convention lives in `@thinkrail/shared/paths`; see
   [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name is the display name** (casing +
   punctuation preserved via `toDisplayName`; the branch is derived from it) and **sets `renamed: true`** at
   create — the user already chose, so automatic naming never touches it; auto-`workspace-N` leaves it unset,
-  where `name === branch`; **re-reads the registry after the awaited fallback fetch** before appending —
-  the pre-await snapshot is stale by then, and saving it would clobber a concurrent list's Default-ensure
-  (same discipline as `renameWorkspace`'s re-load after its git subprocess)),
+  where `name === branch`; **re-reads the registry after the awaited fallback fetch and worktree add** before
+  appending — a snapshot taken before either await could be stale, and saving it would clobber a concurrent
+  list's Default-ensure (same discipline as `renameWorkspace`'s re-load after its Git subprocess)),
   `renameWorkspace` (**sync**; sets the sanitized, casing- and script-preserving display `name` and always
   sets `renamed: true`, so automatic naming never touches it again. **`opts.branch`** is the agent's English
   slug from `set_title`: when present, the branch becomes the slug's ASCII kebab form, clamped to 60 (the display name

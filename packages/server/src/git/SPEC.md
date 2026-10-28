@@ -75,9 +75,12 @@ ref off the workspace-create critical path.
   **Request-path reads run through `gitAsync`** — `resolveDiffRange`,
   `gitStatus`, `gitDiffFile`, `listCommits`, `listBranches` and the workspace badge fan-out are async, so a
   multi-spawn read can never freeze the host's single cooperative event loop (profiled at 119–246ms of
-  frozen loop per `workspace.list` before the migration). The sync runner stays for **writers** (their
-  load→mutate→save atomicity depends on not interleaving — `gitCommitPaths`' index snapshot/restore, the
-  `workspaces` writers) and for **micro-plumbing leaf helpers** shared with those writers
+  frozen loop per `workspace.list` before the migration). The sync runner stays for **writers** whose
+  load→mutate→save atomicity depends on not interleaving — `gitCommitPaths`' index snapshot/restore and
+  the synchronous metadata sections of `workspaces` writers. The potentially long `createWorkspace`
+  `worktree add` is the exception: its branch is reserved before the first await, the checkout runs through
+  `gitAsync`, and the workspace registry is re-read after it completes. The sync runner also stays for
+  **micro-plumbing leaf helpers** shared with those writers
   (`currentBranch`/`tryCurrentBranch`/`resolveDefaultBranch`/`resolveCommitOid`/`readBlobAt`/`gitHeadSha`
   — single fast local ref reads), plus `gitUncommittedPaths`, the deliberate lifecycle exception that
   snapshots a TODO work window before the agent can continue past its `in_progress` tool end;
@@ -337,22 +340,21 @@ ref off the workspace-create critical path.
   workspace (its branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot
   self-heals only at list time; the Changes header must not lag).
 - **A network git call is bounded by us, not talked out of waiting.** A `fetch` whose remote wants a
-  passphrase blocks on `/dev/tty` forever, and the only thing that ever ended that wait was the *client's*
-  60s request timeout (`transport.ts` `DEFAULT_TIMEOUT_MS`, not overridden for `workspace.create`) — which
-  by construction carries no cause, so the user got `request "workspace.create" timed out` (issue #209).
-  `gitAsync` therefore races the child against a **55s budget** (`opts.timeoutMs` overrides; the tests
-  drive it at 500ms): on expiry it kills the child and resolves with `timed out after <actual>s — the
+  passphrase blocks on `/dev/tty` forever, and the original `workspace.create` path was ended by the
+  *client's* 60s request timeout (`transport.ts` `DEFAULT_TIMEOUT_MS`) — which by construction carries no
+  cause, so the user got `request "workspace.create" timed out` (issue #209).
+  `gitAsync` therefore races the fallback fetch against a **55s budget** (`opts.timeoutMs` overrides; the
+  tests drive it at 500ms): on expiry it kills the child and resolves with `timed out after <actual>s — the
   remote never answered`, which `workspaces` carries into the create failure.
-  **The budget is set as high as the client's 60s allows, on purpose.** Any budget below the client's turns
-  a *slow but healthy* operation that used to finish into a hard failure — the first fetch of a large
-  repository over a slow link is the real case. That window is **not closed, only narrowed** to roughly
-  55–58s, and it cannot be closed: a budget at or above the client's would hand the race back to the
-  causeless `request … timed out` this bullet exists to remove. The remaining ~5s is what the throw needs
-  to travel back and still beat the client; if a blocked loop overshoots it, the client's generic timeout
-  fires — the pre-fix behaviour, a degradation rather than a new failure. The ordering itself is **pinned
-  by nothing**: `transport.ts`'s 60s and this 55s are hand-kept numbers in two independently-shipped
-  artifacts, correct by agreement rather than by construction. Deriving one from the other belongs in
-  `contracts`, and is deliberately out of this change's scope.
+  **The default request budget remains 60s.** For requests that use it, a network-Git budget below the
+  client's turns a *slow but healthy* operation into a hard failure — the first fetch of a large repository
+  over a slow link is the real case. That default-bound window remains **55–58s**; the remaining ~5s is what
+  the error needs to travel back and still beat the client. A blocked loop can still overshoot it, so the
+  generic timeout remains a degradation rather than a new failure. `workspace.create` instead uses the
+  shared longer request budget in `contracts`; its fallback fetch keeps the existing 55s network-Git budget,
+  while the potentially slow local `worktree add` has a 10-minute cap and runs through `gitAsync`, so checkout
+  no longer holds the host event loop. The workspace-specific checkout, cleanup, and request budgets are
+  shared in `contracts`; unrelated default-bound network operations keep the existing 55s/60s agreement.
   **The message never names a cause we did not observe.** All we know on expiry is that the remote did not
   answer; an unloaded SSH key is offered as *a* likely cause, conditional on the remote using SSH, because
   asserting it outright mis-diagnosed every `https://` stall and every slow-link fetch as an auth problem.

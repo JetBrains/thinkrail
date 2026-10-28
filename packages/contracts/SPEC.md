@@ -13,7 +13,8 @@ tags: [wire]
 
 The browser↔host wire spine: the single source of truth for the protocol. Types plus a small
 dependency-free runtime: the WS method/channel constants, protocol/feature versions, the small config
-default, narrow cross-ring guards, and the quit-confirmation rule both clients drive. The one package
+default, narrow cross-ring guards, the quit-confirmation rule both clients drive, and operation time budgets
+that must agree across the independently shipped client and host. The one package
 `apps/web` may depend on—which is what lets the UI ship independently of the host.
 
 ## Boundary
@@ -43,9 +44,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
   `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
   labels), the optional shell-local desktop capabilities);
-  `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`; the value
-  re-exports
-  `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
+  `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
+  **workspace.create budgets** (`WORKSPACE_CREATE_GIT_TIMEOUT_MS`, `WORKSPACE_CREATE_CLEANUP_TIMEOUT_MS`,
+  `WORKSPACE_CREATE_REQUEST_TIMEOUT_MS`) from `workspaceTimeouts`; the value
+  re-exports `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
   word it in their language until it is renamed), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical
   BCP-47 tag — the `AppConfig.locale` contract; local language file shapes are `LocalLocalesSnapshot` /
   `LocalLocaleFile` with closed error codes, served by `locales.list` from `LOCALES_PROTOCOL_VERSION`, v89;
@@ -567,6 +569,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   quit fires only once the chord is released. It lives here, not in `shared`, because `apps/web` may import
   only contracts and two copies of the gesture would drift; it is framework-free and touches no global,
   so it stays within the no-runtime-deps rule. Each client keeps only a thin key-state adapter.
+- **workspaceTimeouts.ts** — the cross-ring time budgets for `workspace.create`: the shared checkout,
+  cleanup, and browser request budgets leave room for the host's existing bounded fallback fetch and the reply.
 - **`HostUpdateNotice`** — the optional host-wire CLI lifecycle: current version, newer available version,
   channel, and an optional closed `available | running | succeeded | failed` status (absent means the legacy
   v64 advisory). `host.updateAvailable` publishes full replacements. Protocol v70 adds parameterless
