@@ -134,19 +134,55 @@ function groupRanked(
 		bucket.push(entry);
 		groups.set(entry.item.group, bucket);
 	}
-	return [...groups.entries()]
-		.sort(([, a], [, b]) => (a[0] && b[0] ? compareRanked(a[0], b[0]) : 0))
-		.map(([group, entries]) =>
-			cappedSection(
-				t,
-				group,
-				entries.map((entry) => toRow(entry)),
-				scoped,
-				input.expanded,
-				hostOverflow(entries, hostTotals[group], input.parsed.terms),
-				input.keep ?? null,
-			),
+	const parts: { first: RankedItem; section: PaletteSection }[] = [];
+	for (const [group, entries] of groups) {
+		const overflow = hostOverflow(entries, hostTotals[group], input.parsed.terms);
+		const section = cappedSection(
+			t,
+			group,
+			entries.map((entry) => toRow(entry)),
+			scoped,
+			input.expanded,
+			overflow,
+			input.keep ?? null,
 		);
+		parts.push(...cohortParts(section, entries, overflow));
+	}
+	return parts.sort((a, b) => compareRanked(a.first, b.first)).map((part) => part.section);
+}
+
+function cohortParts(
+	section: PaletteSection,
+	entries: readonly RankedItem[],
+	overflow: number,
+): { first: RankedItem; section: PaletteSection }[] {
+	const cohortOf = (entry: RankedItem) => entry.item.late ?? 0;
+	const rows = new Map(section.items.map((row) => [row.item.id, row]));
+	const parts = new Map<number, { first: RankedItem; items: PaletteRow[] }>();
+	const partOf = (entry: RankedItem) => {
+		const part = parts.get(cohortOf(entry)) ?? { first: entry, items: [] };
+		parts.set(cohortOf(entry), part);
+		return part;
+	};
+	for (const entry of entries) {
+		const row = rows.get(entry.item.id);
+		if (row) partOf(entry).items.push(row);
+	}
+	const more = section.items.find((row) => row.item.kind === "more");
+	const hidden = entries.filter((entry) => !rows.has(entry.item.id));
+	const first = entries[0];
+	if (more && first) {
+		const newcomers = overflow === 0 && hidden.length > 0 && hidden.every((e) => cohortOf(e) > 0);
+		partOf(newcomers ? (hidden[0] ?? first) : first).items.push(more);
+	}
+	const lowest = Math.min(...parts.keys());
+	return [...parts.entries()].map(([cohort, part]) => ({
+		first: part.first,
+		section:
+			cohort === lowest
+				? { ...section, items: part.items }
+				: { id: `${section.id}:${cohort}`, title: section.title, items: part.items },
+	}));
 }
 
 function emptyRootSections(input: SectionsInput): PaletteSection[] {

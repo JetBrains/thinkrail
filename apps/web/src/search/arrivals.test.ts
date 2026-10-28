@@ -148,4 +148,55 @@ describe("selection stability across host replies", () => {
 		expect(second.slice(0, above.length)).toEqual(above);
 		expect(second).toContain(selected);
 	});
+
+	test("newcomers to a group shown above the selected row continue below every row on screen, a later cohort below an earlier one", () => {
+		const chats = (titles: readonly string[]): SearchGroup => ({
+			kind: "chat",
+			state: "ready",
+			total: titles.length,
+			hits: titles.map((title, index) => ({
+				id: `chat:w1:s${index}-${title}`,
+				kind: "chat",
+				title,
+				tier: MATCH_TIER.prefix,
+				score: 1,
+				projectId: "p1",
+				workspaceId: "w1",
+				sessionId: `s${index}-${title}`,
+			})),
+		});
+		let shown: SearchGroup[] | null = null;
+		let arrivals = NO_ARRIVALS;
+		let onScreen = new Set<string>(rowsOf([], arrivals));
+		const land = (reply: SearchGroup[]) => {
+			shown = mergeHostGroups(shown, reply);
+			arrivals = noteArrivals(
+				arrivals,
+				shown.flatMap((group) => group.hits.map((hit) => hit.id)),
+				onScreen,
+				true,
+			);
+			const rows = rowsOf(shown, arrivals);
+			onScreen = new Set(rows);
+			return rows;
+		};
+		const names = ["a-refresh.ts", "b-refresh.ts"];
+		const first = land([files("ready", MATCH_TIER.substring, names), chats(["Refresh early"])]);
+		const selected = "file:p1:w1:b-refresh.ts";
+		expect(first.indexOf("chat:w1:s0-Refresh early")).toBeLessThan(first.indexOf(selected));
+
+		const second = land([
+			files("ready", MATCH_TIER.substring, names),
+			chats(["Refresh early", "Refresh late"]),
+		]);
+		expect(second.slice(0, first.length)).toEqual(first);
+		const third = land([
+			files("ready", MATCH_TIER.substring, [...names, "c-refresh.ts"]),
+			chats(["Refresh early", "Refresh late", "Refresh later"]),
+		]);
+		expect(third.slice(0, second.length)).toEqual(second);
+		expect(third.slice(second.length).sort()).toEqual(
+			["chat:w1:s2-Refresh later", "file:p1:w1:c-refresh.ts"].sort(),
+		);
+	});
 });

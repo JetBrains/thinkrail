@@ -83,7 +83,7 @@ export function rankItems(
 }
 
 export function pickTopHit(ranked: readonly RankedItem[]): RankedItem | null {
-	const [best, second] = ranked;
+	const [best, second] = ranked.filter((entry) => (entry.item.late ?? 0) === 0);
 	if (!best) return null;
 	if (best.latched >= 2) return best;
 	if (best.match.tier > MATCH_TIER.prefix) return null;

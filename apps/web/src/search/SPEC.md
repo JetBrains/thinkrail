@@ -103,8 +103,13 @@ its local twin matches the query too (`matchingIds`), so a twin the query misses
 whose branch its row does not show, a chat still labelled by its first prompt — never hides the host's
 hit, and either way one row per id remains. Rows that land while the user holds a selection
 join an arrival cohort (`noteArrivals`, `PaletteItem.late`): each later reply's newcomers sort after
-every row already on screen and every earlier cohort, across tiers and never as the top hit, so no row
-above the selection moves; a row already on screen never becomes late. The selected host row never
+every row already on screen and every earlier cohort, across tiers and groups — a group that already
+shows rows continues below all of them in a section of its own (`cohortParts`) — and they neither take
+the top hit nor unseat the one shown, so neither the selection nor a row above it moves. A group's
+"N more" row sits below with the newcomers when they alone overflow the group; while the host reports
+more than it sent for the group, the row stays with the first rows — the one way a reply can still add a
+row above the selection (or move that row back up) is a host count that grows past what the group shows.
+A row already on screen never becomes late. The selected host row never
 leaves the list while the same search stands — the same text, scope and root (`withPinned`): a reply
 that no longer brings it keeps it (a local twin the query misses does not stand in for it), no group's cap hides it (`keep`), and a changed root or a host that
 stops searching drops it. A group's "N more" is the host's count beyond its page less the local rows the
