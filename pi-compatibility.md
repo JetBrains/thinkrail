@@ -135,14 +135,17 @@ re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way t
 apart from the recorded selection. Run the manager's restart regressions on upgrades.
 
 - **Anthropic SSE framing patch** — [[submodule-server-agent]] (Provider stream framing),
-  `patches/@earendil-works%2Fpi-ai@1.4.0.patch` on `dist/api/anthropic-messages.js`. Pi-ai dispatches an
-  event that no blank line finished when the stream ends. It also ends a line on a `\r` split from its `\n`.
-  Either way a cut-off fails with the non-retryable "Could not parse Anthropic SSE event" instead of
-  "stream ended before message_stop". **Removal gate:** an installed pi-ai release that fixes both cases
-  (track [upstream #10390](https://github.com/earendil-works/pi/issues/10390)). Bun silently skips a patch
-  whose version doesn't match, so every pi bump runs `agent/anthropicStreamFraming.test.ts` against the
-  unpatched release. Delete the patch and its `patchedDependencies` entry only when that test passes.
-  Otherwise, port the patch to the new version.
+  `patches/@earendil-works%2Fpi-ai@1.4.0.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
+  streams fail with the non-retryable "Could not parse Anthropic SSE event": a valid CRLF stream whose
+  `\r\n` is split across network chunks, and a stream cut off mid-event. Patched, the first succeeds and
+  the second ends with a retryable truncation error such as "stream ended before message_stop".
+  **Removal gate:** an installed pi-ai release that fixes both (track
+  [upstream #10390](https://github.com/earendil-works/pi/issues/10390)). Bun silently skips a patch whose
+  version doesn't match, so every pi bump runs `agent/anthropicStreamFraming.test.ts` against the
+  unpatched release. Its "defects the patch fixes" group decides: when it passes, delete the patch and its
+  `patchedDependencies` entry; when it fails, port the patch to the new version. If only the "behavior
+  the patch keeps" group fails, pi changed that behavior: decide whether to follow it before porting
+  anything.
 - **Registry tool precedence** — [[submodule-server-extensions]], `preferRegistryTools` in the session
   loader's `extensionsOverride`. It relies on three pi facts:
   - pi keeps every extension and gives a tool name to its first registration

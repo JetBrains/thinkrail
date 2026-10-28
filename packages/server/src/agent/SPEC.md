@@ -1006,15 +1006,26 @@ context-budget limitations and their upgrade checks live in [[pi-compatibility]]
 
 ## Provider stream framing
 
-Pi owns provider retry; the host never adds one. Pi retries a truncated Anthropic stream only when it
-fails with "stream ended before message_stop", so `patches/@earendil-works%2Fpi-ai@1.4.0.patch` (root
-`patchedDependencies`, upstream earendil-works/pi#10390, #564) makes that the outcome of every cut-off. It
-changes two things in pi-ai's `anthropic-messages` SSE parser. While chunks are still arriving, a `\r` at
-the end of the buffer waits for a possible `\n`. At end of stream, an event that no blank line finished is
-parsed strictly and dropped if it is empty or unparsable, never "repaired". A finished but malformed event
-keeps pi's non-retryable parse error. Bun skips a patch whose version doesn't match without any warning, so
-`anthropicStreamFraming.test.ts` is the guard. It runs pi-ai's real `stream()` and fails whenever the
-patched behavior is missing.
+Pi owns provider retry; the host never adds one. Pi retries only errors that match its retryable
+patterns: "Anthropic stream ended before message_stop" does, "Could not parse Anthropic SSE event" does
+not. `patches/@earendil-works%2Fpi-ai@1.4.0.patch` (root `patchedDependencies`, upstream
+earendil-works/pi#10390, #564) fixes two defects in pi-ai's `anthropic-messages` SSE parser that end a
+turn with that parse error. The two fixes have different outcomes:
+
+- **Split CRLF.** A `\r\n` after an `event:` line, split across two network chunks, read as two line
+  breaks. The blank line dispatched the event without its `data:` line, so a complete, valid CRLF stream
+  failed. A trailing `\r` now waits for the next chunk, and the stream succeeds. The final drain still
+  ends a line on a lone `\r`.
+- **Cut-off stream.** The event that a cut left without its blank line was dispatched with empty or
+  partial data. It is now parsed strictly, never "repaired", and dropped when empty, unparsable or not an
+  object, so the cut ends with a retryable truncation error such as "stream ended before message_stop".
+  An unfinished event that does parse is still yielded, so a stream missing the final blank line after
+  `message_stop` still succeeds.
+
+A finished but malformed event keeps the non-retryable parse error. Observed failures carry an empty
+`data=` and only the `event:` line in `raw=`. A split CRLF always leaves that signature and a random cut
+rarely does, so the split CRLF is likely what users hit. Unconfirmed: whether api.anthropic.com or a
+proxy on the path sends CRLF. The guard test and removal gate live in [[pi-compatibility]].
 
 ## Session titles
 
