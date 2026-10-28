@@ -8,6 +8,7 @@ import {
 	createSession,
 	deleteSession,
 	listSessions,
+	trashWorkspaceDelegation,
 } from "../agent";
 import { forgetWorkspaceChanges } from "../changes";
 import { logger } from "../log";
@@ -153,12 +154,7 @@ export function inspectChat(workspaceId: string): ChatInspection {
 	return { files, truncated: false };
 }
 
-/**
- * The only teardown door for a chat. It takes over the chat's claim (an in-flight start fails as
- * `CHAT_DELETING`) and marks the record before anything destructive; the agent's admission stays closed
- * while every transcript goes to the Trash; then what runs in the folder stops, the folder goes to the
- * Trash and the record is dropped. Concurrent calls join; a failure leaves the pending record for Retry.
- */
+/** The only teardown door for a chat; concurrent calls join, a failure leaves the pending record for Retry. */
 export function deleteChat(workspaceId: string): Promise<void> {
 	const current = claims.get(workspaceId);
 	if (current?.kind === "delete") return current.done;
@@ -183,6 +179,7 @@ async function runChatDeletion(workspace: Workspace): Promise<void> {
 			taskObservation.forget(summary.sessionId);
 			await deleteSession(summary.sessionId, id, cwd);
 		}
+		await trashWorkspaceDelegation(id);
 	});
 	closeWorkspaceTerminals(id);
 	stopWatch(id);

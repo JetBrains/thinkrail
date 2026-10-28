@@ -475,6 +475,16 @@ test("a chat whose deletion did not finish refuses attach, terminals and session
 	expect(loadChats().chats.some((chat) => chat.id === workspace.id)).toBe(false);
 }, 30_000);
 
+test("a chat's delegated conversations go to the Trash with it", async () => {
+	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
+	const store = join(dataDir, "delegation", created.workspace.id);
+	mkdirSync(join(store, created.sessionId), { recursive: true });
+	writeFileSync(join(store, created.sessionId, "child.jsonl"), "{}\n");
+	await handleRequest("chat.delete", { workspaceId: created.workspace.id }, CTX);
+	expect(trashed).toContain(store);
+	expect(existsSync(store)).toBe(false);
+}, 30_000);
+
 test("chat.inspect counts the files in a chat's folder", async () => {
 	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
 	const inspected = (await handleRequest(

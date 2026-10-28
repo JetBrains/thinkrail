@@ -1,4 +1,4 @@
-import { rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
 	buildSessionContext,
@@ -22,6 +22,7 @@ import {
 } from "pi-delegation";
 import { createSubagents, type Subagents } from "pi-subagents";
 import { dataDir } from "../persistence";
+import { trashFile } from "../trash";
 import {
 	buildSessionSettings,
 	canUseSessionResources,
@@ -180,6 +181,14 @@ export async function disposeSessionChildren(
 export function removeWorkspaceDelegation(workspaceId: string): void {
 	services.delete(workspaceId);
 	rmSync(join(delegationRootDir(), workspaceId), { recursive: true, force: true });
+}
+
+/** Recoverable twin of `removeWorkspaceDelegation`: the store goes to the Trash, then the service is released. */
+export async function trashWorkspaceDelegation(workspaceId: string): Promise<void> {
+	assertWorkspaceStorageId(workspaceId);
+	const store = join(delegationRootDir(), workspaceId);
+	if (existsSync(store)) await trashFile(store);
+	services.delete(workspaceId);
 }
 
 function assertWorkspaceStorageId(value: string): void {

@@ -582,7 +582,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the record `deletionPending` before anything destructive, then runs the Trash moves inside the agent's
   `closeWorkspaceSessions` barrier (admission closed, in-flight preparations drained, live sessions
   stopped and disposed, child cascades settled) — only then are the sessions listed, and each transcript
-  goes through the agent's trash-based transaction (file by file, never the encoded directory); then it
+  goes through the agent's trash-based transaction (file by file, never the encoded directory), then the
+  chat's delegated conversations (`trashWorkspaceDelegation`, the store to the Trash); then it
   closes terminals, stops the watcher, evicts the spec, review, change and turn sidecars, trashes the
   folder (only one under the chats root), drops the record and publishes the removal; a failure leaves
   the pending record visible with Retry. While a delete runs (`CHAT_DELETING`) or after one that did not

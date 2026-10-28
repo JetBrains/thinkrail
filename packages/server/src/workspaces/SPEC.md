@@ -34,8 +34,8 @@ and chat records: `ensureChatsContainer`, `createChatRecord`, `chatWorkspaces`, 
 host's per-event push scoping (`isChatWorkspaceId` / `isChatsContainerId` — only this process writes the
 store), and the refusal helpers (`assertNotChatsContainer`, `assertNotChatWorkspace`) the doors below use.
 The session, the terminal and the teardown are composed in `host` (`host/chats.ts`): a chat owns exactly
-one top-level session, a second one is a new chat, and deleting trashes the transcripts file by file and
-then the folder (`trash` is not this module's dependency). Refused here: `renameWorkspace`, settle /
+one top-level session, a second one is a new chat, and deleting trashes the transcripts file by file, the
+delegated conversations and then the folder (`trash` is not this module's dependency). Refused here: `renameWorkspace`, settle /
 unsettle, `setWorkspaceDiffBase`, `forgetWorkspace` / `removeWorkspace` (delete the chat instead),
 `workspaceDiffStats`; `reclaimWorktree`, `recordWorkspaceHead` and `setWorkspaceReview` are no-ops;
 `listWorkspaces(container)` returns the chat rows without Default ensure, external refresh or diff stats;
