@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { RequestError } from "./requestError";
 import { WsTransport } from "./transport";
 
 class TestWebSocket {
@@ -77,6 +78,47 @@ test("advertises the client protocol version in the WebSocket handshake", () => 
 	expect(socketUrl.searchParams.get("existing")).toBe("value");
 	expect(socketUrl.searchParams.get("protocol")).toBe(String(PROTOCOL_VERSION));
 	expect(socketUrl.searchParams.get("client")).toStartWith("client-");
+});
+
+test("preserves coded error parameters and English fallback across the wire", async () => {
+	const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+	transport.connect();
+	const socket = TestWebSocket.instances[0];
+	socket?.open();
+	const result = transport
+		.request("project.open", { path: "/tmp/not-git" })
+		.catch((error: unknown) => error);
+	const id = requestsIn(socket?.sent ?? [])[0]?.id;
+	socket?.message(
+		JSON.stringify({
+			id,
+			ok: false,
+			error: "Not a git repository: /tmp/not-git",
+			errorCode: "NOT_GIT",
+			errorParams: { path: "/tmp/not-git" },
+		}),
+	);
+	const error = await result;
+	expect(error).toBeInstanceOf(RequestError);
+	expect(error).toMatchObject({
+		code: "NOT_GIT",
+		message: "Not a git repository: /tmp/not-git",
+		errorParams: { path: "/tmp/not-git" },
+	});
+});
+
+test("legacy unclassified failures stay plain Errors", async () => {
+	const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+	transport.connect();
+	const socket = TestWebSocket.instances[0];
+	socket?.open();
+	const result = transport.request("project.list", {}).catch((error: unknown) => error);
+	const id = requestsIn(socket?.sent ?? [])[0]?.id;
+	socket?.message(JSON.stringify({ id, ok: false, error: "external diagnostic" }));
+	const error = await result;
+	expect(error).toBeInstanceOf(Error);
+	expect(error).not.toBeInstanceOf(RequestError);
+	expect(error).toMatchObject({ message: "external diagnostic" });
 });
 
 describe("WsTransport channel replay", () => {

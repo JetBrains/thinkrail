@@ -129,14 +129,9 @@ export function useDiffSurface({
 	const handleMutationError = useCallback(
 		(error: unknown, title: string) => {
 			const code = wsErrorCode(error);
-			if (code === "STALE_VIEW") {
+			if (code === "STALE_VIEW" || code === "RECEIPT_UNKNOWN") {
 				reload();
-				toast.info(i18n.t("panels.diffSurface.staleView"));
-				return;
-			}
-			if (code === "RECEIPT_UNKNOWN") {
-				reload();
-				toast.info(i18n.t("panels.diffSurface.receiptUnknown"));
+				toast.info(errorText(error));
 				return;
 			}
 			toast.error(errorText(error), title);

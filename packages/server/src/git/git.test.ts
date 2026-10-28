@@ -614,8 +614,8 @@ test("a vanished turn snapshot retains UNKNOWN_COMMIT and identifies the missing
 		)
 		.trim();
 	for (const scope of [
-		{ kind: "turn", baseTree: "deadbeef", headTree: tree },
-		{ kind: "turn", baseTree: tree, headTree: "deadbeef" },
+		{ kind: "turn", id: "turn-1", startedAt: 1, baseTree: "deadbeef", headTree: tree },
+		{ kind: "turn", id: "turn-1", startedAt: 1, baseTree: tree, headTree: "deadbeef" },
 	] as const) {
 		await expect(resolveDiffRange(ws, scope)).rejects.toMatchObject({
 			code: "UNKNOWN_COMMIT",

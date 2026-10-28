@@ -120,8 +120,8 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   to date ([[submodule-server-editors]], [[submodule-web-updates]]).
 - **Interface language** — the UI follows the system language or the user's choice; English and
   a set of translations ship built-in (an untranslated string shows in English), and a user adds or
-  overrides a language with a flat JSON file in `~/.thinkrail/locales`, live on save. Agent and tool
-  output is never translated ([[module-locales]], [[submodule-web-i18n]]).
+  overrides a language with a flat JSON file in `~/.thinkrail/locales`, live on save. ThinkRail-owned
+  coded errors use the selected language; Git, provider, agent and tool output is never translated ([[module-locales]], [[submodule-web-i18n]]).
 - **Themes** — light, dark, minimal and high-contrast themes ship built-in, following the system
   appearance or a fixed choice; a user adds a theme by saving a copy of a bundled theme file with new
   colours in `~/.thinkrail/themes`, live on save ([[submodule-web-themes]]).

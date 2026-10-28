@@ -81,8 +81,8 @@ create the tools it needs based on how you actually work.
   browser. Both embed the same engine host; app state lives under `~/.thinkrail`.
 - **Your language.** Settings → Language follows your system language or a language you pick; English,
   Japanese, Simplified Chinese, and Spanish are built in. Add a language ThinkRail doesn't ship yet by
-  dropping a translated `en.json` into `~/.thinkrail/locales` — it applies as you save. Agent replies and
-  tool output stay as the agent wrote them.
+  dropping a translated `en.json` into `~/.thinkrail/locales` — it applies as you save. ThinkRail's own
+  coded error messages use your language too; Git, provider, agent and tool output stay verbatim.
 - **Your themes.** Settings → Appearance ships dark, light, minimal and high-contrast themes. Make your own
   by copying a bundled `*.theme.json`, changing its id and colors, and saving it to `~/.thinkrail/themes`.
 

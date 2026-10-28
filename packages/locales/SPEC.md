@@ -75,6 +75,10 @@ indexed markup only for `<T>` strings. No metadata block. The instance runs with
 `applyLocale` publishes a new translator. It initializes **synchronously with English at import**, so any surface — including tests with
 no setup — renders English.
 
+Host-owned request guidance uses `errors.<wire-code>` keys, selected by [[submodule-web-transport]].
+The catalog has no wire dependency: unsupported codes keep the host's English message, and raw external
+diagnostics have no error key. Every bundled language covers these error keys with identical placeholders.
+
 Keys are named by surface (`settings.language.title`, `chat.composer.placeholder`), never English text: a
 wording fix must not orphan translations. `en.json` stays sorted; a bundled translation holds a sorted
 subset of its keys plus the CLDR categories its language needs that English lacks (Spanish adds `_many`),
@@ -133,5 +137,4 @@ Loading bundled translations on demand (each is imported into every consumer's b
 number formats (token
 counts, cost and context percentages still use English separators), composite phrases that embed a
 translated count fragment (`chat.trust.untrustedNotice` interpolates a "1 skill" list), RTL layout (`dir`), a first-paint locale
-hint (until the host answers `locales.list`, a local language renders English for a moment), and
-translating server error text (errors would move to codes the client renders).
+hint (until the host answers `locales.list`, a local language renders English for a moment).
