@@ -4,7 +4,6 @@ import {
 	RiHome4Line,
 	RiTerminalBoxLine,
 } from "@remixicon/react";
-import type { Workspace } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -16,7 +15,6 @@ import { settingsNavGroups } from "../panels/settingsNav";
 import {
 	canSettleWorkspace,
 	goToProjectHome,
-	loadProjectWorkspaces,
 	markWorkspaceRead,
 	markWorkspaceUnread,
 	openWorkspaceIn,
@@ -40,7 +38,6 @@ import {
 	selectRecordFirstPrompts,
 	selectSupportsOnboarding,
 	selectSwitcherGroups,
-	selectWorkspaceById,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspaceReadAction,
@@ -49,13 +46,14 @@ import {
 	useAppStore,
 } from "../store";
 import { getTransport, wsErrorCode } from "../transport";
-import { createPaletteBackfill } from "./paletteBackfill";
+import { createPaletteBackfill, mergeProjectWorkspaces } from "./paletteBackfill";
 import {
 	buildCommands,
 	buildSettingsItems,
 	emptyStateActionIds,
 	type PaletteTool,
 } from "./paletteCatalog";
+import { createPaletteNavigator } from "./paletteNavigation";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
 
 const SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
@@ -69,15 +67,12 @@ const paletteBackfill = createPaletteBackfill({
 	concurrency: BACKFILL_CONCURRENCY,
 });
 
-async function navigateToWorkspace(
-	workspace: Pick<Workspace, "id" | "projectId">,
-	sessionId?: string,
-): Promise<void> {
-	if (!selectWorkspaceById(useAppStore.getState(), workspace.id)) {
-		await loadProjectWorkspaces(workspace.projectId).catch(() => {});
-	}
-	useAppStore.getState().activateWorkspaceFromRoute(workspace, sessionId);
-}
+const paletteNavigator = createPaletteNavigator(async (projectId) =>
+	mergeProjectWorkspaces(
+		projectId,
+		await getTransport().request("workspace.list", { projectId, includeDiffStats: false }),
+	),
+);
 
 function useChatTitleBackfill(): void {
 	useEffect(() => paletteBackfill.watch(), []);
@@ -245,7 +240,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			contextProjectId: contextProject?.id ?? null,
 			firstPrompts,
 			navigateToProject: goToProjectHome,
-			navigateToWorkspace: (workspace, sessionId) => void navigateToWorkspace(workspace, sessionId),
+			navigateToWorkspace: (workspace, sessionId) =>
+				void paletteNavigator.navigateToWorkspace(workspace, sessionId),
 		});
 		const rootItems: PaletteItem[] = [
 			...commandItems(t, commands, context),
