@@ -87,10 +87,12 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   This dispatch barrier preserves cross-message order and the store's transcript-revision fence while still
   collapsing consecutive stream frames. All subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — the event-time presenter for rejected requests:
-  a `RequestError` whose `errors.<code>` key exists in English uses the current locale, interpolating
+  a `RequestError` whose code has a catalog mapping uses the current locale, interpolating
   only the scalar parameters that template requires. Missing/malformed parameters or unknown codes
   preserve the English host message; external diagnostics and uncoded errors stay verbatim. Parameters
-  are interpolation data, never i18next options. Existing event-time notices/turns retain the string
+  are interpolation data, never i18next options. The single typed code-to-key map keeps the existing
+  catalog-reference lint gate effective; a coverage test pins every `errors.<code>` key to that map.
+  Existing event-time notices/turns retain the string
   they were presented with; the error object itself always keeps its original message and metadata);
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named
   `WsResponse.errorCode` and optional `errorParams`. A coded response rejects with a `RequestError`, everything else (timeout or an unnamed

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { homedir, hostname, tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { EXTERNAL_FRAME } from "./errors";
 import {
 	initializeAnalyticsWithSinkFactoryForTests,
@@ -131,6 +132,33 @@ test("a reported error reaches PostHog as a classifier with no personal data in 
 		build: "binary",
 		$process_person_profile: false,
 	});
+});
+
+test("localizable errors report the code but never their display parameters", async () => {
+	const sent: BatchEntry[] = [];
+	boot(sent);
+	reportError(
+		new CodedError("NOT_GIT", "Not a git repository: private-project", {
+			path: "/Users/private-owner/private-project",
+		}),
+		{ source: "request", handled: true, requestMethod: "project.open" },
+	);
+	await shutdownAnalytics();
+	const entries = exceptions(sent);
+	expect(entries).toHaveLength(1);
+	const wire = JSON.stringify(entries);
+	for (const forbidden of [
+		"errorParams",
+		"private-owner",
+		"private-project",
+		"Not a git repository",
+	]) {
+		expect(wire).not.toContain(forbidden);
+	}
+	expect(entries[0]?.properties.code).toBe("NOT_GIT");
+	expect(entries[0]?.properties.$exception_list).toEqual(
+		expect.arrayContaining([expect.objectContaining({ value: "request project.open NOT_GIT" })]),
+	);
 });
 
 test("third-party diagnostics in a message never leave the host", async () => {

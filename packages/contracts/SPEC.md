@@ -29,14 +29,14 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
   written yet instead returns empty messages with its current status, so a live run remains pollable;
-  transport blips stay plain-`error` transients worth retrying — and the four `change.*` outcomes a
+  transport blips stay plain-`error` transients worth retrying — and the `change.*` outcomes a
   reviewer's UI must distinguish:
   **`STALE_VIEW`** (an `expect` hash no longer matches what the host reads → re-read the diff and
   re-offer), **`SCOPE_IMMUTABLE`** (the scope's modified side is a commit, so nothing in the worktree is
-  being described), **`RANGE_INVALID`** (a span lies outside the side it names, or a range revert was
-  asked of a byte-only resource), **`RECEIPT_UNKNOWN`** (an undo of a receipt the host no longer
-  holds — the ring is 20 deep and dies with the process), and **`UNSUPPORTED_CHANGE`** (the selected
-  change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)), so a client can react to one specific failure
+  being described), specific **`RANGE_*` / `REVERT_*`** refusals (invalid spans, byte-only or absent
+  resources, or no applicable change), **`RECEIPT_UNKNOWN`** (an undo of a receipt the host no longer
+  holds — the ring is 20 deep and dies with the process), and **`CHANGE_*`** refusals (symlinks,
+  non-regular files or mode-only mutations this byte-oriented path deliberately refuses)), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code when a client behaves differently
   for it or renders ThinkRail-owned guidance in its language. Specific range, unsupported-change and MCP
   validation codes distinguish different remedies; the older broad codes remain readable for older hosts.

@@ -234,7 +234,9 @@ export function setProjectMcpOverride(
 ): Project {
 	if (patch !== null) {
 		if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") {
-			throw new CodedError("MCP_ENABLED_INVALID", "MCP server enabled must be a boolean", { field: "enabled" });
+			throw new CodedError("MCP_ENABLED_INVALID", "MCP server enabled must be a boolean", {
+				field: "enabled",
+			});
 		}
 		if (
 			patch.exposure !== undefined &&

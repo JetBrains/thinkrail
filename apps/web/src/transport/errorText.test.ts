@@ -18,6 +18,17 @@ test.each([
 	expect(wsErrorCode(error)).toBe("NOT_GIT");
 });
 
+test("every error catalog entry is reachable through the code mapping", () => {
+	for (const [key, template] of Object.entries(EN)) {
+		if (!key.startsWith("errors.")) continue;
+		const params = Object.fromEntries(
+			[...template.matchAll(/\{\{(\w+)\}\}/g)].map((match) => [match[1], "literal"]),
+		);
+		const error = new RequestError(key.slice("errors.".length) as WsErrorCode, "unmapped", params);
+		expect(errorText(error)).toBe(template.replace(/\{\{\w+\}\}/g, "literal"));
+	}
+});
+
 test("all bundled languages cover every host error with the same placeholders", () => {
 	const keys = Object.keys(EN).filter((key) => key.startsWith("errors."));
 	expect(keys.length).toBeGreaterThan(50);
