@@ -26,7 +26,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   while the host deduplicates `(clientKey, requestId)`, so an accepted mutation cannot become a false failure or
   execute twice —, the two frames that are this side's half of that bargain — **`{ ack: [id] }` receipts**
   (every response read is acknowledged, batched on a microtask; until one arrives the host must assume the reply
-  died with the socket and keep it replayable) and the **`{ resume: [ids] }` reconciliation** sent on every
+  died with the socket and keep it replayable; a request whose own deadline fires is acknowledged too, which tells
+  the host to abandon it rather than hold its slot for a reply nobody awaits) and the **`{ resume: [ids] }` reconciliation** sent on every
   (re)connect *before* the replays (the complete still-unresolved set, so the host releases everything else).
   Receipts are deliberately best-effort and never retransmitted — one can die in a socket buffer exactly like a
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;

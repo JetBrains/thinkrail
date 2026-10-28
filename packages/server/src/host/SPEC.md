@@ -49,16 +49,25 @@ channel fan-out, and the process-boot wrapper both launchers share.
   **request replay cache** keyed by `(clientKey, requestId)` (the first frame
   owns one handler promise + its
   serialized response, a reconnect replay awaits/returns that same result, a mismatched duplicate is rejected,
-  and reaping the client clears its cache — but **only once nothing is in flight**: an unresolved request
-  outlives the socket grace window, since the page holds that frame until its *own* deadline (30 minutes for
-  the folder picker) and replays it on reconnect, so `clearClient` declines and the reap re-arms rather than
-  let the replay start a second execution of a handler that has not finished). **Nothing in that cache is ever evicted**, because a
+  and reaping the client clears its cache — but **only once nothing the page still awaits is in flight**: an
+  unresolved request outlives the socket grace window, since the page holds that frame until its *own* deadline
+  (30 minutes for the folder picker) and replays it on reconnect, so `clearClient` declines and the reap re-arms
+  rather than let the replay start a second execution of a handler that has not finished; work the page has
+  abandoned (below) never blocks it). **Nothing in that cache is ever evicted**, because a
   successful `send` says the bytes were queued, not that the page read them, and a socket that dies holding a
   reply is indistinguishable from one that flushed it — so any result dropped on the host's own initiative may
   be the one a replay is about to ask for. A result leaves only on the client's own word, via two frames handled
-  here and never routed to a handler: `{ ack: [id] }` names responses it has **read** (the steady state), and
-  `{ resume: [id] }` on each reconnect names everything it still considers **unresolved**, freeing all other
-  settled results. `resume` is what makes receipts safe to lose — an ack can die in a socket buffer exactly like
+  here and never routed to a handler: `{ ack: [id] }` names responses it has **read** (the steady state) and
+  requests whose own deadline fired, and `{ resume: [id] }` on each reconnect names everything it still
+  considers **unresolved**, freeing all other settled results. A still-running entry that an `ack` names, or a
+  `resume` omits, is **abandoned**: the page will never replay that id (ids only grow, and a timed-out id has left
+  its queue), so the entry stops counting toward admission, is dropped — never retained — the moment its handler
+  settles, and does not hold the reap; a duplicate frame arriving while it runs still joins the same promise, so
+  abandonment cannot cost exactly-once. Before this (#974), a handler that never settled pinned its slot forever
+  and a result settling after a reconnect went to the dead socket and sat until the next `resume`, so enough
+  hung requests filled the namespace and refused every later request from that window. Each abandonment of
+  running work logs a `warn` and reports `RequestAbandonedError` (`code: "REQUEST_ABANDONED"`) with the method,
+  the signal that names a handler outliving the page's deadline. `resume` is what makes receipts safe to lose — an ack can die in a socket buffer exactly like
   a response can, and nothing would ever re-send it, so each reconnect restates the whole truth instead of
   confirming the confirmations. Cost is bounded instead by **two hard limits, each enforced where its size becomes
   known**: the entry count on the way *in* — a full namespace refuses new ids (`RequestReplayOverflowError` → a
