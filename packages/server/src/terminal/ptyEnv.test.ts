@@ -49,7 +49,6 @@ test("host-internal variables stay out of the shell", () => {
 		"linux",
 		{
 			THINKRAIL_PORT: "24242",
-			PI_OFFLINE: "1",
 			ELECTROBUN_LAUNCHER_PID: "1",
 			JITI_TRY_NATIVE: "false",
 			BUN_PTY_LIB: "/app/librust_pty.dylib",
@@ -57,6 +56,34 @@ test("host-internal variables stay out of the shell", () => {
 		() => "u",
 	);
 	expect(Object.keys(env).sort()).toEqual(["COLORTERM", "LOGNAME", "TERM", "TERM_PROGRAM", "USER"]);
+});
+
+test("a host launched from inside pi does not hand its session markers to the shell", () => {
+	const env = terminalPtyEnv(
+		"linux",
+		{
+			PI_CODING_AGENT: "true",
+			AI_AGENT: "pi",
+			PI_SESSION_ID: "s1",
+			PI_SESSION_FILE: "/tmp/s1.jsonl",
+			PI_PROVIDER: "anthropic",
+			PI_MODEL: "claude-fable-5-1",
+			PI_REASONING_LEVEL: "high",
+		},
+		() => "u",
+	);
+	expect(Object.keys(env).sort()).toEqual(["COLORTERM", "LOGNAME", "TERM", "TERM_PROGRAM", "USER"]);
+});
+
+test("the user's pi configuration reaches the shell, so a terminal pi uses the host's agent folder", () => {
+	const env = terminalPtyEnv(
+		"darwin",
+		{ PI_CODING_AGENT_DIR: "/Users/u/pi-work", PI_OFFLINE: "1", PI_SKIP_VERSION_CHECK: "1" },
+		() => "u",
+	);
+	expect(env.PI_CODING_AGENT_DIR).toBe("/Users/u/pi-work");
+	expect(env.PI_OFFLINE).toBe("1");
+	expect(env.PI_SKIP_VERSION_CHECK).toBe("1");
 });
 
 test("parent-terminal size and screen variables bun-pty would otherwise strip stay out of the shell", () => {

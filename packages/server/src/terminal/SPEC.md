@@ -82,8 +82,9 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   started it — a terminal emulator, an IDE, `turbo`, Claude Code — and a verbatim copy handed every shell
   that context: `TERM_PROGRAM`/`TERMINAL_EMULATOR`/`ITERM_*`/`VSCODE_*`/`TMUX`/`CLAUDECODE` made tools adapt
   to a terminal that isn't there, and runner-set `FORCE_COLOR`/`CLICOLOR_FORCE`/`DEBUG_COLORS` could
-  override a tool's own colour detection. Those, the host's own variables (`THINKRAIL_*`, `PI_*`,
-  `ELECTROBUN_*`, `JITI_*`, `BUN_PTY_LIB`), per-shell bookkeeping (`PWD`, `OLDPWD`, `SHLVL`, `_`) and the
+  override a tool's own colour detection. Those, a launching pi's markers (`PI_CODING_AGENT`, `AI_AGENT`, and
+  the bash tool's `PI_SESSION_ID`/`PI_SESSION_FILE`/`PI_PROVIDER`/`PI_MODEL`/`PI_REASONING_LEVEL`), the
+  host's own variables (`THINKRAIL_*`, `ELECTROBUN_*`, `JITI_*`, `BUN_PTY_LIB`), per-shell bookkeeping (`PWD`, `OLDPWD`, `SHLVL`, `_`) and the
   parent terminal's `WINDOW`/`TERMCAP`/`COLUMNS`/`LINES` (bun-pty strips those itself only from its own
   `process.env` default, which a copied map bypasses) are dropped. VS Code's askpass overrides go with their
   support variables: a `VSCODE_GIT_ASKPASS_*` variable drops `GIT_ASKPASS`, a `VSCODE_SSH_ASKPASS_*` variable
@@ -91,7 +92,10 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   and Git accepts blank credentials instead of prompting. A helper with no VS Code support variables is the
   user's own and is kept; the terminal identifies itself as `TERM=xterm-256color`, `COLORTERM=truecolor`,
   `TERM_PROGRAM=ThinkRail`. `NO_COLOR` is kept: it is the user's standing preference, not a runner's
-  override. Dropping is safe on Unix because the shell re-sources the user's own startup files. The
+  override. Other `PI_*` names are user pi configuration and are kept, never filtered by prefix:
+  `PI_CODING_AGENT_DIR` set at launch or by Settings → Environment must reach a `pi` run in the terminal,
+  or it would silently switch to `~/.pi/agent` (auth, models, settings, sessions) while the host uses the
+  configured folder ([[submodule-server-environment]]). Dropping is safe on Unix because the shell re-sources the user's own startup files. The
   filtered map is the child's *whole* environment: bun-pty >= 0.5 does not merge it over the host's native
   environment (0.4 did, so a variable the host started with reached the shell whatever the filter said).
   On Unix, `USER` and `LOGNAME` are stamped from `id -un`, resolved once per process from a fixed system
@@ -205,8 +209,9 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific
   arguments; `auto`'s pwsh-then-powershell resolution via an injected `WhichFn`; every explicit preference
   is a literal pin regardless of what `which` reports; `ComSpec`/`COMSPEC` no longer influence the result.
-- `ptyEnv.test.ts` — launcher identity, colour forcing and host-internal variables are dropped while the
-  user's own variables (incl. `NO_COLOR`) survive; parent-terminal `WINDOW`/`TERMCAP`/`COLUMNS`/`LINES` are
+- `ptyEnv.test.ts` — launcher identity (incl. a launching pi's markers), colour forcing and host-internal
+  variables are dropped while the user's own variables (incl. `NO_COLOR`, `PI_CODING_AGENT_DIR` and other
+  pi configuration) survive; parent-terminal `WINDOW`/`TERMCAP`/`COLUMNS`/`LINES` are
   dropped; VS Code's askpass overrides leave with their support variables, per pair, while standalone
   helpers stay; `USER`/`LOGNAME` come from the account on Unix only and are kept when no account
   resolves; the resolved name maps back to the host uid; a real PTY spawned by a host *started* with
@@ -215,7 +220,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, rejection
   of malformed write data and out-of-range or non-integer grid sizes on resize and attach, attach
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
-  revive, and a real shell whose `USER`/`LOGNAME` map back to the host uid despite a leaked `LOGNAME=root`.
+  revive, and a real shell whose `USER`/`LOGNAME` map back to the host uid despite a leaked `LOGNAME=root` and
+  which still sees the host's `PI_CODING_AGENT_DIR`.
   Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
   readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
   input, so terminal echo cannot impersonate command execution. "Any output" is not a replay readiness edge:

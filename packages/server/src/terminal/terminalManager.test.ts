@@ -484,9 +484,14 @@ test("the attached client is not told it is displaced", async () => {
 });
 
 test.skipIf(process.platform === "win32")(
-	"a shell runs as the real user, without the launching terminal's identity",
+	"a shell runs as the real user with the host's pi folder, without the launching terminal's identity",
 	async () => {
-		const leaked = { LOGNAME: "root", TERM_PROGRAM: "Apple_Terminal", FORCE_COLOR: "0" };
+		const leaked = {
+			LOGNAME: "root",
+			TERM_PROGRAM: "Apple_Terminal",
+			FORCE_COLOR: "0",
+			PI_CODING_AGENT_DIR: "/configured/pi-agent",
+		};
 		const saved = Object.fromEntries(
 			[...Object.keys(leaked), "USER"].map((name) => [name, process.env[name]]),
 		);
@@ -497,11 +502,14 @@ test.skipIf(process.platform === "win32")(
 			await waitForTerminalOutput(attached.id);
 			writeTerminal(
 				attached.id,
-				`printf 'TR_%s=%s|%s|%s|%s\\n' ENV "$(id -u "$LOGNAME")" "$(id -u "$USER")" "$TERM_PROGRAM" "\${FORCE_COLOR-unset}"\r`,
+				`printf 'TR_%s=%s|%s|%s|%s|%s\\n' ENV "$(id -u "$LOGNAME")" "$(id -u "$USER")" "$TERM_PROGRAM" "\${FORCE_COLOR-unset}" "$PI_CODING_AGENT_DIR"\r`,
 				"client-1",
 			);
 			const uid = process.getuid?.();
-			await waitForTerminalOutput(attached.id, `TR_ENV=${uid}|${uid}|ThinkRail|unset`);
+			await waitForTerminalOutput(
+				attached.id,
+				`TR_ENV=${uid}|${uid}|ThinkRail|unset|/configured/pi-agent`,
+			);
 		} finally {
 			for (const [name, value] of Object.entries(saved)) {
 				if (value === undefined) delete process.env[name];

@@ -21,6 +21,13 @@ const INHERITED_NAMES: ReadonlySet<string> = new Set([
 	"CLICOLOR_FORCE",
 	"DEBUG_COLORS",
 	"CLAUDECODE",
+	"PI_CODING_AGENT",
+	"AI_AGENT",
+	"PI_SESSION_ID",
+	"PI_SESSION_FILE",
+	"PI_PROVIDER",
+	"PI_MODEL",
+	"PI_REASONING_LEVEL",
 	"WINDOW",
 	"TERMCAP",
 	"COLUMNS",
@@ -29,7 +36,6 @@ const INHERITED_NAMES: ReadonlySet<string> = new Set([
 
 const INHERITED_PREFIXES = [
 	"THINKRAIL_",
-	"PI_",
 	"ELECTROBUN_",
 	"JITI_",
 	"ITERM_",
