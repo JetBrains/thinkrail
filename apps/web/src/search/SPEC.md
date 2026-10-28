@@ -44,8 +44,12 @@ specs scope — it matches the `#N` keyword of the workspace that carries that r
 contiguous literal term — never matched as an acronym or a subsequence — and escapes a prefix; an
 unterminated quote runs to the end of the query, so a phrase matches while it is typed. Terms AND-combine
 through the shared matcher in [[module-contracts]], which folds case and Latin diacritics
-(`configuracion` finds `Configuración`) without moving highlight offsets. There is no filter grammar:
-triage happens through the empty state's grouping and the status dots every row carries.
+(`configuracion` finds `Configuración`) without moving highlight offsets. Typing and pasting stop at
+`MAX_SEARCH_QUERY_LENGTH` characters (the input's `maxLength`; a chip may add its prefix beyond it) and
+`parseSearchQuery` cuts the text after the prefix to the same length, so the palette's terms and the
+host's are parsed from the same characters — a host row can never
+answer terms the palette does not show. There is no filter grammar: triage happens through the empty
+state's grouping and the status dots every row carries.
 
 ## Ranking
 

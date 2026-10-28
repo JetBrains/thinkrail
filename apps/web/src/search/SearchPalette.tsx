@@ -8,6 +8,7 @@ import {
 import {
 	MAX_SEARCH_GROUP_LIMIT,
 	MAX_SEARCH_PREVIEW_BYTES,
+	MAX_SEARCH_QUERY_LENGTH,
 	type SearchContext,
 	type SearchHit,
 	type SearchPreviewResult,
@@ -385,6 +386,7 @@ function PaletteContent({
 						autoComplete="off"
 						spellCheck={false}
 						value={query}
+						maxLength={MAX_SEARCH_QUERY_LENGTH}
 						placeholder={t(
 							scopes.includes("files")
 								? "search.palette.placeholderHost"

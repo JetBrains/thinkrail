@@ -4,6 +4,7 @@ import { expect, type Page, test } from "@playwright/test";
 import {
 	MATCH_TIER,
 	MAX_SEARCH_PREVIEW_BYTES,
+	MAX_SEARCH_QUERY_LENGTH,
 	SEARCH_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	type WsClientMessage,
@@ -140,7 +141,9 @@ test("the empty palette lists the chats waiting for you; arrows, Enter, click an
 	}
 });
 
-test("typing finds chats by title and Escape clears before it closes", async ({ page }) => {
+test("typing finds chats by title, a paste is cut to the host's query length, and Escape clears before it closes", async ({
+	page,
+}) => {
 	const repo = realpathSync(E2E_FIXTURE_REPO);
 	await openFixtureProject(page);
 	const seeded = seedAttention(repo);
@@ -152,6 +155,10 @@ test("typing finds chats by title and Escape clears before it closes", async ({ 
 		const chats = page.locator('[data-testid="search-row"][data-kind="chat"]');
 		await expect(chats.first()).toContainText("Unread result chat");
 		await expect(page.locator("mark").first()).toBeVisible();
+
+		await page.getByTestId("search-input").fill("");
+		await page.keyboard.insertText("x".repeat(MAX_SEARCH_QUERY_LENGTH + 20));
+		await expect(page.getByTestId("search-input")).toHaveValue("x".repeat(MAX_SEARCH_QUERY_LENGTH));
 
 		await page.keyboard.press("Escape");
 		await expect(page.getByTestId("search-input")).toHaveValue("");
