@@ -137,15 +137,19 @@ export function selectSupportsOnboarding(state: ProtocolState): boolean {
 
 type OnboardingState = ProtocolState & {
 	onboardingDismissed: boolean;
-	projects: readonly unknown[];
+	projects: readonly Pick<Project, "kind">[];
 	recentProjects: readonly unknown[];
 };
+
+function hasRepoProject(projects: readonly Pick<Project, "kind">[]): boolean {
+	return projects.some((project) => !isChatsContainer(project));
+}
 
 export function selectOnboardingEligible(state: OnboardingState): boolean {
 	return (
 		!state.onboardingDismissed &&
 		selectSupportsOnboarding(state) &&
-		state.projects.length === 0 &&
+		!hasRepoProject(state.projects) &&
 		state.recentProjects.length === 0
 	);
 }
@@ -153,7 +157,7 @@ export function selectOnboardingEligible(state: OnboardingState): boolean {
 export function selectOnboardingActive(
 	state: OnboardingState & { onboardingWizard: "pending" | "shown" | "hidden" },
 ): boolean {
-	if (state.onboardingWizard === "shown") return state.projects.length === 0;
+	if (state.onboardingWizard === "shown") return !hasRepoProject(state.projects);
 	return state.onboardingWizard === "pending" && selectOnboardingEligible(state);
 }
 
@@ -420,7 +424,12 @@ export function selectWorkspaceSettledReason(
 	workspace: Workspace,
 	now: number,
 ): SettledReason | null {
-	if (!state.workspaceSettlingSupported || isDefaultWorkspace(workspace)) return null;
+	if (
+		!state.workspaceSettlingSupported ||
+		isDefaultWorkspace(workspace) ||
+		isChatWorkspace(workspace)
+	)
+		return null;
 	if (
 		selectWorkspaceIsRunning(state, workspace.id) ||
 		selectWorkspaceNeedsAttention(state, workspace.id)
