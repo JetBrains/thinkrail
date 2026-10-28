@@ -339,6 +339,14 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   `src/youTubeEmbeds.ts` (Astro 7's native Markdown processor — the unified/rehype pipeline is a
   separate legacy package we don't carry) rewrites `youtube.com/embed` → `youtube-nocookie.com` and
   adds `title` + `loading="lazy"` when omitted. This keeps the no-consent-banner stance intact.
+- **Original post images are published as-is**: Astro rewrites only `img` sources to fingerprinted
+  WebP assets, so a Markdown link to `./images/<file>` would otherwise 404.
+  `src/pages/blog/[slug]/images/[file].ts` emits every image in a published post's `images/` folder
+  byte-for-byte at `/blog/<slug>/images/<file>`. It walks `publishedPosts()`, so draft images never ship.
+- **Table images are thumbnails**: an image in a Markdown table renders at a fixed thumbnail width.
+  When it is wrapped in a link, `src/imageZoom.ts` turns a plain click (or Enter on the link) into a
+  modal `<dialog>` showing the link target. Modified clicks, middle-clicks and no-JS visits follow the
+  link instead.
 - **Chrome: blog pages live inside the IDE shell**, not a separate page frame (decision, 2026-08 —
   the prior standalone blog header/footer is deleted). `BlogLayout.astro` renders through
   `IdeShell.astro`: the content sits in the same scrolling editor pane as the landing sections, in a

@@ -2595,6 +2595,48 @@ html:not(.anim) .term-caret {
 	border: 1px solid var(--blog-border);
 }
 
+.blog-post-content table {
+	width: 100%;
+	margin: var(--space-lg) 0;
+	border-collapse: collapse;
+}
+
+.blog-post-content th,
+.blog-post-content td {
+	padding: var(--space-sm) var(--space-md);
+	border-bottom: 1px solid var(--blog-border);
+	text-align: left;
+	vertical-align: middle;
+}
+
+.blog-post-content table img {
+	display: block;
+	width: min(280px, 40vw);
+	max-width: none;
+	margin: 0;
+	cursor: zoom-in;
+}
+
+.image-zoom {
+	max-width: 95vw;
+	max-height: 95vh;
+	padding: 0;
+	border: none;
+	background: transparent;
+	cursor: zoom-out;
+}
+
+.image-zoom::backdrop {
+	background: rgb(0 0 0 / 0.8);
+}
+
+.image-zoom img {
+	display: block;
+	max-width: 95vw;
+	max-height: 95vh;
+	border-radius: 0.5rem;
+}
+
 .blog-post-content iframe {
 	max-width: 100%;
 	margin: var(--space-lg) 0;
