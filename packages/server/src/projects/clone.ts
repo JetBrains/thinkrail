@@ -66,7 +66,13 @@ export function inspectCloneDestination(parentPath: string, requestedName: strin
 		/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)
 	)
 		invalid("Enter a single valid folder name, without path separators.");
-	const parent = realpathSync.native(resolveProjectPath(parentPath.trim()));
+	const resolved = resolveProjectPath(parentPath.trim());
+	let parent: string;
+	try {
+		parent = realpathSync.native(resolved);
+	} catch {
+		invalid("Choose a parent folder on the host.");
+	}
 	if (!statSync(parent).isDirectory()) invalid("The parent path is not a folder.");
 	const path = join(parent, name);
 	try {
@@ -116,7 +122,13 @@ export async function cloneProject(
 		invalid("Clone depth must be a positive integer.");
 	const path = inspectCloneDestination(input.parentPath, input.name);
 	if (signal?.aborted) return null;
-	mkdirSync(path);
+	try {
+		mkdirSync(path);
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "EEXIST")
+			invalid(`Destination already exists: ${path}`);
+		throw error;
+	}
 	const reserved = lstatSync(path);
 	try {
 		const result = await gitAsync(
