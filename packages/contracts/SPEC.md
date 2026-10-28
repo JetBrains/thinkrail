@@ -44,7 +44,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
   `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
-  labels), the optional shell-local desktop capabilities);
+  labels), and `NativeClipboardBridge` / `NativeClipboardFile` (clipboard paths and bounded image bytes), the optional shell-local desktop capabilities);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`; the value
   re-exports
   `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
@@ -100,6 +100,15 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
   importing `server` / `shared` / `web`.
+
+## Native clipboard capability
+
+`NativeClipboardBridge.readFiles()` is a payload-free shell-local read, not a host WS method. It returns
+ordered absolute paths from the client's clipboard, optionally with base64 bytes and a MIME type for
+candidate image files. It accepts no caller-provided path and exposes no general filesystem access.
+An empty list means no copied files; failures reject. The desktop bounds image reads to 32 MiB total;
+the web owns image decoding, provider budgets and path fallback. Paths describe the client filesystem,
+not a remote host. No upload or path translation is implied.
 
 ## Contents
 

@@ -223,6 +223,21 @@ Each chord has exactly one owner: a native menu accelerator (forwarded as a `Nat
 keydown, never both, because the webview still receives keydown for accelerator chords. Native owns chords
 the OS or browser reserves (Command-Q/W/H/M); web owns Ctrl+Q/W/F4 where no native menu claims them.
 
+## Native clipboard files
+
+The optional frozen `__THINKRAIL_NATIVE_CLIPBOARD__` bridge exposes only payload-free `readFiles()`
+through the main window's RPC. It reads the local clipboard on an explicit paste, never on a timer.
+macOS reads AppKit file URLs through JXA; Windows reads the STA clipboard file-drop list; Linux reads
+URI-list targets through `wl-paste` (Wayland) or `xclip` (X11). These fixed commands never interpolate
+clipboard contents and have bounded time/output. A missing Linux helper or clipboard read failure is
+reported, not silently treated as successful file paste. No arbitrary-path RPC or host WS method exists.
+
+Native file URLs take priority over browser image representations, which can contain only a Finder
+icon. Regular candidate image files carry bounded original bytes (32 MiB total per read); directories,
+other formats and images that cannot be read within that bound carry only their original paths. The web
+owns decoding and attachment limits; the shell neither interprets documents nor copies files into a
+workspace. This capability describes the client's filesystem and ships only with the local-host profile.
+
 ## Native page zoom
 
 Command/Ctrl-`+` (`=`), `-`, and `0` zoom as a browser's default action: the desktop preload listens after

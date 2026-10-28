@@ -1,4 +1,5 @@
 import type {
+	NativeClipboardBridge,
 	NativeMenuBridge,
 	NativeNotificationBridge,
 	NativeNotificationInput,
@@ -77,6 +78,15 @@ installPageZoomGestures(window, navigator.platform, (gesture) => {
 	electroview.rpc?.send.pageZoomGestureRequested(gesture);
 });
 const globals = globalThis as typeof globalThis & Record<string, unknown>;
+const clipboardBridge: NativeClipboardBridge = Object.freeze({
+	readFiles: () => rpc.request.readClipboardFiles(),
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_CLIPBOARD__", {
+	value: clipboardBridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
 const updateBridge: NativeUpdateBridge = Object.freeze({
 	getState: () => rpc.request.getUpdateState(),
 	checkForUpdates: () => rpc.request.checkForUpdates(),

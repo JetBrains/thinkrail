@@ -1,4 +1,5 @@
 import type {
+	NativeClipboardFile,
 	NativeCommand,
 	NativeNotificationInput,
 	NativeQuitHint,
@@ -11,6 +12,7 @@ import type { WindowChromeGeometry } from "./windowChrome";
 export type DesktopRpc = {
 	bun: {
 		requests: {
+			readClipboardFiles: { params: undefined; response: NativeClipboardFile[] };
 			getUpdateState: { params: undefined; response: NativeUpdateState };
 			getWindowState: { params: undefined; response: NativeWindowState };
 			minimizeWindow: { params: undefined; response: undefined };
