@@ -379,7 +379,11 @@ function PaletteContent({
 						autoComplete="off"
 						spellCheck={false}
 						value={query}
-						placeholder={t(host ? "search.palette.placeholderHost" : "search.palette.placeholder")}
+						placeholder={t(
+							scopes.includes("files")
+								? "search.palette.placeholderHost"
+								: "search.palette.placeholder",
+						)}
 						onChange={(event) => resetQuery(event.target.value)}
 						className="h-full min-w-0 flex-1 bg-transparent tr-text-reading text-text-default outline-none placeholder:text-text-subtle"
 					/>

@@ -1368,7 +1368,10 @@ const handlers: WsHandlers = {
 		});
 	},
 
-	"search.query": (p, ctx) => hostSearch().query(ctx.clientKey, p),
+	"search.query": (p, ctx) => {
+		if (p.context.workspaceId) void ensureWatch(p.context.workspaceId);
+		return hostSearch().query(ctx.clientKey, p);
+	},
 	"search.preview": (p) => hostSearch().preview(p),
 
 	"review.get": async (p) => {

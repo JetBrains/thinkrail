@@ -1,7 +1,13 @@
 import { realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { SEARCH_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	MATCH_TIER,
+	SEARCH_PROTOCOL_VERSION,
+	WS_CHANNELS,
+	type WsClientMessage,
+	type WsParams,
+} from "@thinkrail/contracts";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
 	defaultWorkspaceRow,
@@ -460,44 +466,50 @@ test("host rows that land after the user moved the selection never push it or th
 	const released = new Promise<void>((resolve) => {
 		release = resolve;
 	});
+	const groups = (params: WsParams<"search.query">, names: readonly string[], state: string) =>
+		(params.kinds ?? []).map((kind) =>
+			kind === "file"
+				? {
+						kind,
+						state,
+						total: names.length,
+						hits: names.map((name) => ({
+							id: `file:${params.context.workspaceId}:${name}`,
+							kind,
+							title: name,
+							tier: name.startsWith("zqxprobe") ? MATCH_TIER.prefix : MATCH_TIER.substring,
+							score: 1,
+							projectId: params.context.projectId,
+							workspaceId: params.context.workspaceId,
+							path: name,
+						})),
+					}
+				: { kind, state: "ready", total: 0, hits: [] },
+		);
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
 		const server = socket.connectToServer();
-		const searches = new Set<string>();
+		let answered = 0;
 		socket.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as {
-				id?: string;
-				method?: string;
-				params?: { query?: string };
-			};
-			if (frame.method === "search.query" && frame.params?.query === "zqxprobe" && frame.id) {
-				searches.add(frame.id);
-			}
-			server.send(message);
-		});
-		let phase: "cold" | "partial" | "held" = "cold";
-		server.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as {
-				id?: string;
-				result?: {
-					groups: { kind: string; hits: { path?: string }[]; total: number; state: string }[];
-				};
-			};
-			if (!frame.id || !searches.has(frame.id) || !frame.result || phase === "held") {
-				socket.send(message);
+			const frame = JSON.parse(String(message)) as WsClientMessage;
+			const params = "method" in frame && frame.method === "search.query" ? frame.params : null;
+			if (!params || (params as WsParams<"search.query">).query !== "zqxprobe") {
+				server.send(message);
 				return;
 			}
-			const files = frame.result.groups.find((group) => group.kind === "file");
-			if (phase === "cold" && files && files.hits.length > 0) {
-				phase = "partial";
-				files.hits = files.hits.filter((hit) => hit.path?.startsWith("zz-"));
-				files.total = files.hits.length;
-				files.state = "indexing";
-				socket.send(JSON.stringify(frame));
-			} else if (phase === "partial") {
-				phase = "held";
-				void released.then(() => socket.send(message));
-			} else socket.send(message);
+			const query = params as WsParams<"search.query">;
+			const reply = (names: readonly string[], state: string) =>
+				socket.send(
+					JSON.stringify({
+						id: frame.id,
+						ok: true,
+						result: { seq: query.seq, groups: groups(query, names, state) },
+					}),
+				);
+			answered += 1;
+			if (answered === 1) reply(shown, "indexing");
+			else void released.then(() => reply([...shown, ...better], "ready"));
 		});
+		server.onMessage((message) => socket.send(message));
 	});
 	try {
 		await openFixtureProject(page);

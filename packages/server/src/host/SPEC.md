@@ -574,7 +574,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   history index's `sessions()`, `specSnapshot` and `listStoredPlans`; the handler passes the socket's
   `clientKey` so the service can supersede an older `seq` per client. The `workspace.fsChanged`
   publisher also calls `invalidateRoot(worktreePath)` so a watched workspace's file list and spec
-  snapshot refresh on the next keystroke; unwatched roots fall back to the module's TTLs.
+  snapshot refresh on the next keystroke, and `search.query` watches its context workspace
+  (`ensureWatch`), so the root it searches is watched from its first search on.
 
 `RunningServer.startAttributionClaim()` is the explicit launcher-readiness signal and rechecks the saved
 enabled/confirmed choice before entering analytics attribution.

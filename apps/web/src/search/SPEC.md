@@ -104,9 +104,9 @@ host know is never counted twice, while a local row only its subtitle matches is
 the host's hits. Results the palette shows as final but are not complete say so in a status line and the
 live region: part of the search failed, it is still indexing after polling stopped, or a provider ran
 out of time (`hostSearchStatus`). A file or spec hit without a workspace is dropped (nothing could read
-or open it). A host row opens through the injected `PaletteHost.openHit`. The placeholder names files
-and specs only when the host searches them; the `/` and `#` scopes are offered only with a context
-project, since without one there is no root to search.
+or open it). A host row opens through the injected `PaletteHost.openHit`. The `/` and `#` scopes are
+offered only when the host searches files and specs and a context project gives them a root, and the
+placeholder names files and specs exactly then.
 
 ## Preview pane
 

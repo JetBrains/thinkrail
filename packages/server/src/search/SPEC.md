@@ -72,7 +72,9 @@ plan files whose session has no transcript on disk (orphans).
   diacritic folding would match (at most `maxRoots` roots, least recently asked first out, so switching workspaces
   keeps the recent ones warm; a list cut at its cap is still searched and its group reported
   `truncated`) and revalidated
-  stale-while-reloading after a TTL or on `workspace.fsChanged` (`invalidateRoot`) — the old list keeps
+  stale-while-reloading after a TTL or on `workspace.fsChanged` (`invalidateRoot`; the host's
+  `search.query` handler watches the context workspace, so a root searched from Project Home or before
+  any panel asked for it still hears its changes) — the old list keeps
   answering until the reload lands, and a reload that throws keeps it too, left stale so the next ask
   retries; a root with nothing cached answers its group `failed` while the next ask retries. A change
   that lands while a load runs leaves the loaded list stale, so the next ask loads again (the load may
