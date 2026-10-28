@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
@@ -543,6 +543,7 @@ test("the preview pane reads a file only under its cap, even one that grows whil
 	const notes = join(realpathSync(E2E_FIXTURE_REPO), "notes.txt");
 	const original = readFileSync(notes);
 	const reads: { maxBytes?: number; refused: boolean; grown: boolean }[] = [];
+	const outstanding = new Set<string>();
 	let grown = false;
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
 		const server = socket.connectToServer();
@@ -555,6 +556,7 @@ test("the preview pane reads a file only under its cap, even one that grows whil
 			};
 			if (frame.id && frame.method === "fs.readFile" && frame.params?.path === "notes.txt") {
 				asked.set(frame.id, { maxBytes: frame.params.maxBytes, grown });
+				if (grown) outstanding.add(frame.id);
 			}
 			server.send(message);
 		});
@@ -562,6 +564,7 @@ test("the preview pane reads a file only under its cap, even one that grows whil
 			const frame = JSON.parse(String(message)) as { id?: string; errorCode?: string };
 			if (frame.id && asked.has(frame.id)) {
 				const read = asked.get(frame.id);
+				outstanding.delete(frame.id);
 				reads.push({
 					maxBytes: read?.maxBytes,
 					grown: read?.grown === true,
@@ -583,19 +586,19 @@ test("the preview pane reads a file only under its cap, even one that grows whil
 		await pressPlatformShortcut(page, "i");
 		const preview = page.getByTestId("search-file-preview");
 		await expect(preview).toContainText("plain-text-fixture");
-		let round = 0;
+		writeFileSync(notes, "x".repeat(3 * 1024 * 1024));
+		grown = true;
 		await expect
 			.poll(
 				async () => {
-					round += 1;
-					writeFileSync(notes, "x".repeat(3 * 1024 * 1024 + round));
-					grown = true;
+					appendFileSync(notes, "x");
 					const refused = reads.some((read) => read.grown && read.refused);
 					return refused || (await preview.getAttribute("data-state")) === "too-large";
 				},
 				{ timeout: 20_000, intervals: [500] },
 			)
 			.toBe(true);
+		await expect.poll(() => outstanding.size, { timeout: 10_000 }).toBe(0);
 		expect(reads.filter((read) => read.grown).every((read) => read.refused)).toBe(true);
 		expect(reads.every((read) => read.maxBytes === MAX_SEARCH_PREVIEW_BYTES)).toBe(true);
 	} finally {
