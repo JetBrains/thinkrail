@@ -91,6 +91,15 @@ compaction to keep the request small and deterministic, restoring the settings b
 It neither changes the provider/effort selection nor proves removal of a fixed output cap; the focused
 SDK reserve-independence canary owns that assertion.
 
+## Repository cloning
+
+`clone-project.spec.ts` clones disposable local `file:` repositories through the Welcome and rail menus,
+checking shallow/full history, project-home adoption without an agent, destination collision protection,
+URL correction, the parent picker, preview gating and old-host hiding. Cancellation UI coverage holds a
+wire reply to prove that an ack does not unlock the form before cleanup completes; real process teardown
+and cleanup are exercised separately by the projects and subprocess unit tests. No production Git
+credentials or remote repositories are used.
+
 ## Chat resource controls
 
 Resource wire coverage opens persisted chat fixtures through the real UI and checks the authoritative

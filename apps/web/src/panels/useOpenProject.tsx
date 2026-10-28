@@ -1,8 +1,9 @@
 import type { Project } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { type ReactNode, useState } from "react";
-import { useAppStore } from "../store";
+import { selectSupportsProjectClone, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
+import { CloneProjectDialog } from "./CloneProjectDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { CreateProjectDialog } from "./CreateProjectDialog";
 import { createLatestOperation } from "./latestOperation";
@@ -21,9 +22,12 @@ export function useOpenProject(
 	pickAndOpen: () => Promise<void>;
 	enterHostPath: () => void;
 	startNewProject: () => void;
+	cloneRepository: (() => void) | undefined;
 	dialogs: ReactNode;
 } {
 	const t = useT();
+	const supportsClone = useAppStore(selectSupportsProjectClone);
+	const [cloneIntent, setCloneIntent] = useState<{ isCurrent: () => boolean } | null>(null);
 	const [initTarget, setInitTarget] = useState<string | null>(null);
 	const [creating, setCreating] = useState(false);
 	const [openError, setOpenError] = useState<string | null>(null);
@@ -84,6 +88,12 @@ export function useOpenProject(
 		setCreating(true);
 	};
 
+	const cloneRepository = supportsClone
+		? () => {
+				setCloneIntent({ isCurrent: projectOpenIntents.begin() });
+			}
+		: undefined;
+
 	const enterHostPath = () => {
 		projectOpenIntents.begin();
 		setPathEntry({ reason: null });
@@ -128,6 +138,12 @@ export function useOpenProject(
 					if (initTarget) void initProject(initTarget);
 				}}
 			/>
+			{cloneIntent ? (
+				<CloneProjectDialog
+					onClose={() => setCloneIntent(null)}
+					onCloned={(project) => void adopt(project, cloneIntent.isCurrent)}
+				/>
+			) : null}
 			{creating ? (
 				<CreateProjectDialog
 					onClose={() => setCreating(false)}
@@ -154,5 +170,5 @@ export function useOpenProject(
 		</>
 	);
 
-	return { openProject, pickAndOpen, enterHostPath, startNewProject, dialogs };
+	return { openProject, pickAndOpen, enterHostPath, startNewProject, cloneRepository, dialogs };
 }

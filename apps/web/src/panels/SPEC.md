@@ -348,7 +348,7 @@ project folder"; **project + no specs** → a spec-first **"Set up project"** (p
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Start a new project… (when the
 caller passes `onStartNew`, i.e. the host supports `project.create`) / Open project / Enter host
-path… / Open GitHub (soon) / Recents). Recents is the store's `recentProjects`: one last-opened path list
+path… / Clone repository… (from `PROJECT_CLONE_PROTOCOL_VERSION`) / Recents). Recents is the store's `recentProjects`: one last-opened path list
 containing open + closed records with no status badge (the server omits closed records
 whose folders are gone); selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
@@ -447,6 +447,19 @@ new project's home is still what the user is looking at (selected, no workspace 
 while that Default workspace is still the active one, so wandering off during `workspace.list` drops it; a
 failed list read toasts instead of rejecting. The "Set up project" card on an existing repo still goes through
 `NewWorkspaceDialog`. A failure stays inline in the dialog.
+
+**Cloning a repository.** `CloneProjectDialog`, opened by `useOpenProject` from either add-project menu,
+accepts a Git URL, an editable URL-derived folder name, a host parent path (default `~`, editable or chosen
+with Browse), and optional positive history depth (empty = full history). `project.cloneDestination`
+provides the absolute path preview and rejects existing destinations; only a preview matching the current
+fields enables submission, and clone validates again before writing. The dialog uses host Git credentials,
+not GitHub login. During cloning fields are locked, status is announced, and Cancel requests
+`project.cancelClone`; the original request settles only after process exit and cleanup. Cancel returns to
+the editable form, with values retained. Errors stay inline; cleanup failures explicitly require manual
+removal. Closing an idle dialog dismisses it, while Escape/backdrop cannot dismiss an active clone. Unmount
+requests cancellation. A reconnect replays the pending operation. Success adopts Project Home through the
+same last-intent fence as opening a local project, without starting a chat. A late result cannot steal a
+newer open-project selection.
 
 **Cold-start onboarding wizard.** `OnboardingWizard` replaces the Welcome cards only on a true cold start:
 the host supports `ONBOARDING_PROTOCOL_VERSION`, `AppConfig.onboardingDismissed` is false, there are no

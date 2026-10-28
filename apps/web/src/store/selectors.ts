@@ -11,6 +11,7 @@ import {
 	type McpServerResourceSummary,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	ONBOARDING_PROTOCOL_VERSION,
+	PROJECT_CLONE_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
 	SESSION_RENAME_PROTOCOL_VERSION,
@@ -111,6 +112,10 @@ export function selectCanRenameChat(state: ProtocolState): boolean {
 
 export function selectSupportsProjectTrust(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= PROJECT_TRUST_PROTOCOL_VERSION;
+}
+
+export function selectSupportsProjectClone(state: ProtocolState): boolean {
+	return state.protocolVersion !== null && state.protocolVersion >= PROJECT_CLONE_PROTOCOL_VERSION;
 }
 
 export function selectSupportsOnboarding(state: ProtocolState): boolean {

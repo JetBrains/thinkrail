@@ -74,7 +74,8 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   [[module-cli]]).
 - **Projects → workspaces** — a git repo is a project; a workspace is a git worktree, plus the built-in
   Default workspace (the project folder itself) and existing worktrees attached in place
-  ([[submodule-server-workspaces]]).
+  ([[submodule-server-workspaces]]). A Git repository URL can be cloned into a chosen new host folder and
+  opened as a project, with optional shallow history and cancellation ([[submodule-server-projects]]).
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
   and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]).
 - **Chats** — concurrent `pi` sessions per workspace, each with its own model, pi-reported token/cost,
