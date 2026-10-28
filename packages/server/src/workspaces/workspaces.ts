@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import {
 	DEFAULT_WORKSPACE_NAME,
@@ -10,7 +9,6 @@ import {
 	type OpenBranchReview,
 	type Project,
 	type SubagentOverride,
-	WORKSPACE_CREATE_CLEANUP_TIMEOUT_MS,
 	WORKSPACE_CREATE_GIT_TIMEOUT_MS,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -34,6 +32,7 @@ import {
 import { logger } from "../log";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects, listProjects } from "../projects";
+import { cleanupTimedOutWorktree } from "./timeoutCleanup";
 
 const log = logger("workspaces");
 
@@ -77,9 +76,41 @@ function toDisplayName(raw: string): string | null {
 }
 
 const creatingBranches = new Set<string>();
+const creatingWorktreePaths = new Set<string>();
+
+type PendingWorkspaceCreate = {
+	commonGitDir: string;
+	baseBranch: string;
+};
+
+const pendingWorkspaceCreates = new Set<PendingWorkspaceCreate>();
+const commonGitDirsByCheckout = new Map<string, string>();
+
+function pathKey(path: string): string {
+	let existing = resolve(path);
+	const suffix: string[] = [];
+	while (!existsSync(existing)) {
+		const parent = dirname(existing);
+		if (parent === existing) break;
+		suffix.unshift(basename(existing));
+		existing = parent;
+	}
+	const canonical = resolve(canonicalPath(existing), ...suffix);
+	return process.platform === "win32" ? canonical.toLowerCase() : canonical;
+}
+
+function commonGitDirKey(project: Project): string {
+	const checkoutPath = pathKey(project.path);
+	const cached = commonGitDirsByCheckout.get(checkoutPath);
+	if (cached) return cached;
+	const result = git(project.path, ["rev-parse", "--git-common-dir"]);
+	const commonDir = pathKey(result.ok ? resolve(project.path, result.out) : project.path);
+	commonGitDirsByCheckout.set(checkoutPath, commonDir);
+	return commonDir;
+}
 
 function branchReservationKey(project: Project, branch: string): string {
-	return `${canonicalPath(project.path)}\0${branch}`;
+	return `${commonGitDirKey(project)}\0${branch}`;
 }
 
 function branchExists(repoPath: string, branch: string): boolean {
@@ -144,13 +175,14 @@ export async function listExistingWorktrees(
 ): Promise<ExistingWorktreeCandidate[]> {
 	const project = openProjectById(projectId);
 	const entries = await gitWorktreeEntries(project.path);
-	const projectPath = canonicalPath(project.path);
+	const projectPath = pathKey(project.path);
 	const representedPaths = new Set([
-		...loadProjects().map((knownProject) => canonicalPath(knownProject.path)),
-		...loadWorkspaces().map((workspace) => canonicalPath(workspace.worktreePath)),
+		...loadProjects().map((knownProject) => pathKey(knownProject.path)),
+		...loadWorkspaces().map((workspace) => pathKey(workspace.worktreePath)),
+		...creatingWorktreePaths,
 	]);
 	return entries.flatMap((entry): ExistingWorktreeCandidate[] => {
-		const path = canonicalPath(entry.path);
+		const path = pathKey(entry.path);
 		if (entry.prunable || path === projectPath || representedPaths.has(path)) return [];
 		return entry.branch
 			? [{ path: entry.path, branch: entry.branch, status: "available" }]
@@ -164,27 +196,36 @@ export async function openExistingWorktree(
 ): Promise<Workspace> {
 	const project = openProjectById(projectId);
 	if (!requestedPath) throw new Error("An existing worktree path is required");
-	const wantedPath = canonicalPath(requestedPath);
-	const projectPath = canonicalPath(project.path);
+	const wantedPath = pathKey(requestedPath);
+	const projectPath = pathKey(project.path);
 	if (wantedPath === projectPath) return ensureDefaultWorkspace(project);
+	if (creatingWorktreePaths.has(wantedPath)) {
+		throw new Error("This worktree is still being created and cannot be opened yet");
+	}
 
 	const entries = await gitWorktreeEntries(project.path);
+	if (creatingWorktreePaths.has(wantedPath)) {
+		throw new Error("This worktree is still being created and cannot be opened yet");
+	}
 	const entry = entries.find(
-		(candidate) => !candidate.prunable && canonicalPath(candidate.path) === wantedPath,
+		(candidate) => !candidate.prunable && pathKey(candidate.path) === wantedPath,
 	);
 	if (!entry) throw new Error("The selected path is not a registered worktree of this project");
 	if (!entry.branch)
 		throw new Error("Detached HEAD worktrees cannot be opened; create a branch first");
 	const baseBranch = resolveDefaultBranch(project.path);
 
+	if (creatingWorktreePaths.has(wantedPath)) {
+		throw new Error("This worktree is still being created and cannot be opened yet");
+	}
 	const projectOwner = loadProjects().find(
-		(candidate) => candidate.id !== projectId && canonicalPath(candidate.path) === wantedPath,
+		(candidate) => candidate.id !== projectId && pathKey(candidate.path) === wantedPath,
 	);
 	if (projectOwner)
 		throw new Error("This worktree is already open under another ThinkRail project");
 
 	const all = loadWorkspaces();
-	const existing = all.find((workspace) => canonicalPath(workspace.worktreePath) === wantedPath);
+	const existing = all.find((workspace) => pathKey(workspace.worktreePath) === wantedPath);
 	if (existing) {
 		if (existing.projectId === projectId) return existing;
 		throw new Error("This worktree is already open under another ThinkRail project");
@@ -240,26 +281,6 @@ async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
 	}
 }
 
-async function cleanupTimedOutWorktree(repoPath: string, worktreePath: string): Promise<void> {
-	if (!existsSync(worktreePath)) return;
-	const removed = await gitAsync(repoPath, ["worktree", "remove", "--force", worktreePath], {
-		timeoutMs: WORKSPACE_CREATE_CLEANUP_TIMEOUT_MS,
-	});
-	if (removed.ok) return;
-	try {
-		await rm(worktreePath, { recursive: true, force: true });
-	} catch (error) {
-		const detail = error instanceof Error ? error.message : String(error);
-		log.warn(
-			`failed to remove partial worktree ${worktreePath} after git worktree remove failed: ${removed.err}; ${detail}`,
-		);
-		return;
-	}
-	log.warn(
-		`git worktree remove failed for partial checkout ${worktreePath}; removed the directory as a fallback, but Git may retain prunable metadata: ${removed.err || "git failed"}`,
-	);
-}
-
 export async function createWorkspace(
 	projectId: string,
 	name?: string,
@@ -272,10 +293,22 @@ export async function createWorkspace(
 		? uniqueBranch(project, toBranch(displayName))
 		: nextAutoBranch(project);
 	const reservation = branchReservationKey(project, branch);
-	creatingBranches.add(reservation);
 	const wsName = displayName ?? branch;
+	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
+	let pathReservation: string | undefined;
+	let pendingCreate: PendingWorkspaceCreate | undefined;
+	creatingBranches.add(reservation);
 
 	try {
+		mkdirSync(dirname(worktreePath), { recursive: true });
+		if (existsSync(worktreePath)) throw new Error(`Workspace path already exists: ${worktreePath}`);
+		const candidatePath = pathKey(worktreePath);
+		if (creatingWorktreePaths.has(candidatePath)) {
+			throw new Error(`Workspace path is already being created: ${worktreePath}`);
+		}
+		pathReservation = candidatePath;
+		creatingWorktreePaths.add(candidatePath);
+
 		const base = baseRef?.trim();
 		let baseBranch: string;
 		if (base) baseBranch = base;
@@ -284,6 +317,12 @@ export async function createWorkspace(
 			baseBranch = head.ok ? head.out : "HEAD";
 		}
 		assertSafeRef(baseBranch);
+		pendingCreate = {
+			commonGitDir: commonGitDirKey(project),
+			baseBranch,
+		};
+		pendingWorkspaceCreates.add(pendingCreate);
+
 		const remotes = listRemotes(project.path);
 		const remoteName = remoteNameOf(baseBranch, remotes);
 		const remoteBase = remoteTrackingRef(baseBranch, remotes);
@@ -302,9 +341,7 @@ export async function createWorkspace(
 				);
 		}
 
-		const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
-		mkdirSync(dirname(worktreePath), { recursive: true });
-		if (existsSync(worktreePath)) throw new Error(`Workspace path already exists: ${worktreePath}`);
+		const checkoutBase = remoteBase ?? pendingCreate.baseBranch;
 		const added = await gitAsync(
 			project.path,
 			[
@@ -315,7 +352,7 @@ export async function createWorkspace(
 				branch,
 				"--no-track",
 				"--end-of-options",
-				remoteBase ?? baseBranch,
+				checkoutBase,
 			],
 			{ timeoutMs: WORKSPACE_CREATE_GIT_TIMEOUT_MS },
 		);
@@ -332,18 +369,27 @@ export async function createWorkspace(
 			name: wsName,
 			branch,
 			worktreePath,
-			baseBranch,
+			baseBranch: pendingCreate.baseBranch,
 			initialTerminalPending: true,
 			lastActiveAt: Date.now(),
 			...(displayName ? { renamed: true } : {}),
 		};
-		ensureWorkspaceScratchDir(workspace);
 		const all = loadWorkspaces();
+		const pathOwner = all.find((candidate) => pathKey(candidate.worktreePath) === pathReservation);
+		if (pathOwner) throw new Error(`Workspace path is already managed: ${worktreePath}`);
+		const projectOwner = loadProjects().find(
+			(candidate) => pathKey(candidate.path) === pathReservation,
+		);
+		if (projectOwner)
+			throw new Error(`Workspace path is already a project folder: ${worktreePath}`);
+		ensureWorkspaceScratchDir(workspace);
 		all.push(workspace);
 		saveWorkspaces(all);
 		emit({ kind: "created", workspace });
 		return workspace;
 	} finally {
+		if (pendingCreate) pendingWorkspaceCreates.delete(pendingCreate);
+		if (pathReservation) creatingWorktreePaths.delete(pathReservation);
 		creatingBranches.delete(reservation);
 	}
 }
@@ -461,8 +507,14 @@ export function renameWorkspace(
 	const branch = !wanted || wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
 	const branchChanged = branch !== ws.branch;
 	if (branchChanged) {
+		const commonGitDir = commonGitDirKey(project);
 		const moved = git(project.path, ["branch", "-m", ws.branch, branch]);
 		if (!moved.ok) throw new Error(`git branch -m failed: ${moved.err}`);
+		for (const pending of pendingWorkspaceCreates) {
+			if (pending.commonGitDir === commonGitDir && pending.baseBranch === ws.branch) {
+				pending.baseBranch = branch;
+			}
+		}
 	}
 
 	const all = loadWorkspaces();

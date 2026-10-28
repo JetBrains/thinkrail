@@ -27,13 +27,14 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   through `gitAsync`, the same request-path-read rule `git/SPEC.md` states for `gitStatus`/`listCommits`:
   this is the Existing-Worktree dialog's populate call, so a slow/large registry must not freeze the host's
   event loop; each listed path is resolved, since git prints `C:/…` on Windows and the row's path becomes the
-  stored `worktreePath` (architecture Decision 22); drop the project folder, prunable registrations, and every
-  path already represented in ThinkRail; branch-backed rows are `available`, detached-HEAD ones `detached`),
+  stored `worktreePath` (architecture Decision 22); drop the project folder, prunable registrations, every
+  path already represented in ThinkRail, and paths reserved by an in-flight create; branch-backed rows are
+  `available`, detached-HEAD ones `detached`),
   `openExistingWorktree(projectId, path)`
   (**async** for the same worktree-list read; revalidate against
   the Git registry at the mutation door, comparing canonicalized paths; same-project retries are
-  idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
-  directory-basename display name, `renamed: true`, and the repo default as its initial review target —
+  idempotent, cross-project cwd reuse and in-flight create paths are rejected; persist + emit `created`
+  with `kind: "external"`, a directory-basename display name, `renamed: true`, and the repo default as its initial review target —
   **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b`, never a detached
   remote checkout, and **`--no-track`**: a remote-tracking base would otherwise become the new branch's
   upstream (git's `autoSetupMerge` default), aiming the workspace terminal's `git push`/`git pull` at the
@@ -65,13 +66,19 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   have landed it while the fetch was in flight, and a create that would have succeeded must not lose that race;
   `Workspace.baseBranch` records **creation provenance** — the ref the worktree was cut from, which never
   moves afterwards (what the diff is measured *against* is the separate, re-pointable `diffBase`; see
-  `setWorkspaceDiffBase`); **branch name made unique against refs, worktree dirs, and in-flight creates** —
+  `setWorkspaceDiffBase`); **branch name made unique against refs, worktree dirs, and in-flight creates
+  across linked checkouts sharing the Git common directory** —
   archiving leaves the branch behind and renaming frees a branch name whose worktree directory stays
-  occupied, so candidate names skip both; a selected name is reserved before the first await so concurrent
-  creates and renames cannot claim it while checkout runs; the `worktree add` subprocess runs through
+  occupied, so candidate names skip both; a selected name and canonical target path are reserved before
+  the first await, so concurrent creates cannot claim either while checkout runs; the path is hidden from
+  candidate listing, rejected by `openExistingWorktree`, and ownership is revalidated against current
+  project/workspace records immediately before persistence. The `worktree add` subprocess runs through
   `gitAsync` with the shared 10-minute checkout budget, keeping the host event loop free. A failed/timed-out
-  checkout reports Git's stderr or the runner's timeout and logs the failure; a runner timeout also triggers
-  best-effort asynchronous removal of its partial worktree before releasing the reservation. The shared
+  checkout reports Git's stderr or the runner's timeout and logs the failure; on timeout the runner reaps the
+  killed `git worktree add` child before cleanup. Cleanup uses `git worktree remove --force --force`, then
+  unlock/retry if needed, and only removes a leftover directory after verifying Git no longer registers it —
+  never raw-deleting a path that could leave locked worktree metadata. The path reservation remains held
+  through cleanup and is released with the branch reservation. The shared
   15-minute client budget leaves room
   for the fallback fetch and cleanup; the Create button stays in its existing loading/“Creating…” state.
   Path `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
@@ -90,9 +97,11 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   may be any script, so the branch is never derived from it), uniqued against refs + worktree dirs, and moved with
   `git branch -m`, while the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact
   cwd); a slug that sanitizes to nothing keeps the current branch. The branch-moving path re-points sibling
-  records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry after the Git
-  subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for every changed
-  record. Without `opts.branch` — the manual wire method — only the display label changes: `branch`,
+  records whose `baseBranch` or `diffBase` named the old branch and reconciles matching in-flight creates
+  in the same Git common directory; those creates persist the updated `baseBranch` only after checkout
+  completes. It re-loads the registry after the Git subprocess so a concurrent removal is not resurrected,
+  saves once, and emits `updated` for every changed record. Without `opts.branch` — the manual wire method —
+  only the display label changes: `branch`,
   `worktreePath`, `baseBranch`, and `diffBase` stay untouched, no Git mutation runs, and one full-snapshot
   `updated` is emitted.
   **`name` and `branch` deliberately differ** after such a rename — the name is display-only and may repeat;
