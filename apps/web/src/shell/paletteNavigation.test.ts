@@ -74,7 +74,7 @@ describe("palette navigation", () => {
 		expect(useAppStore.getState().activeWorkspaceId).toBe("p1-w");
 	});
 
-	test("a later pick or a navigation elsewhere wins over a pick still loading its project", async () => {
+	test("a later pick or a navigation elsewhere wins over a pick still loading its project, a tab opening on its own does not", async () => {
 		useAppStore.setState({
 			projects: [project("p1"), project("p2")],
 			workspaces: { p2: [workspace("w2", "p2")] },
@@ -85,6 +85,21 @@ describe("palette navigation", () => {
 		expect(await navigator.navigateToWorkspace({ id: "w2", projectId: "p2" })).toBe(true);
 		loader.finish("p1");
 		expect(await stale).toBe(false);
+		expect(useAppStore.getState().activeWorkspaceId).toBe("w2");
+
+		const late = navigator.navigateToWorkspace({ id: "p1-y", projectId: "p1-tab" });
+		useAppStore.setState((state) => ({
+			activeTabByWorkspace: { ...state.activeTabByWorkspace, w2: "a-chat-tab-that-just-opened" },
+		}));
+		loader.finish("p1-tab");
+		expect(await late).toBe(true);
+		expect(useAppStore.getState().activeWorkspaceId).toBe("p1-y");
+
+		useAppStore.getState().activateWorkspaceFromRoute({ id: "w2", projectId: "p2" });
+		const switched = navigator.navigateToWorkspace({ id: "p1-z", projectId: "p1-switch" });
+		useAppStore.getState().noteNavigation("w2");
+		loader.finish("p1-switch");
+		expect(await switched).toBe(false);
 		expect(useAppStore.getState().activeWorkspaceId).toBe("w2");
 
 		const again = navigator.navigateToWorkspace({ id: "p1-x", projectId: "p1-later" });

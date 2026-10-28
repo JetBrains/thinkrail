@@ -1,14 +1,16 @@
 import type { Workspace } from "@thinkrail/contracts";
 import { createLatestOperation } from "../panels/latestOperation";
-import { selectWorkspaceById, useAppStore } from "../store";
+import { selectWorkspaceById, selectWorkspaceNavTick, useAppStore } from "../store";
 
 type WorkspaceTarget = Pick<Workspace, "id" | "projectId">;
 
 function navigationMarker(state: ReturnType<typeof useAppStore.getState>): string {
 	const active = state.activeWorkspaceId;
-	return [active, state.selectedProjectId, active ? state.activeTabByWorkspace[active] : null].join(
-		"\u0000",
-	);
+	return [
+		active,
+		state.selectedProjectId,
+		active ? selectWorkspaceNavTick(state, active) : null,
+	].join("\u0000");
 }
 
 export function createPaletteNavigator(
