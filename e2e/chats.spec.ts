@@ -9,6 +9,7 @@ import {
 	revealWorkbenchTool,
 } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
+import { E2eWire } from "./fixtures/wire";
 
 interface ClientFrame {
 	method?: string;
@@ -72,6 +73,45 @@ test("with no project open, the Welcome starts a chat without a project: its own
 	await revealWorkbenchTool(page, "files");
 	await expect(page.getByTestId("files-mode-all")).toBeVisible();
 	await expect(page.getByTestId("files-mode-changed")).toHaveCount(0);
+});
+
+test("a double click starts one chat, and a topbar Delete confirmation closes when another window deletes its chat", async ({
+	page,
+}) => {
+	const frames: ClientFrame[] = [];
+	await observeClientFrames(page, frames);
+	await openAppFresh(page);
+	await page.getByTestId("welcome-action").filter({ hasText: "Chat without a project" }).dblclick();
+	await expect(page.getByTestId("chat-item")).toHaveCount(1);
+	await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
+	expect(frames.filter((frame) => frame.method === "chat.create")).toHaveLength(1);
+
+	const [first] = storedChats().chats;
+	if (!first) throw new Error("the first chat is not stored");
+	await page.getByTestId("add-chat").click();
+	await expect(page.getByTestId("chat-item")).toHaveCount(2);
+	await expect
+		.poll(() =>
+			storedChats().chats.some((chat) => chat.id !== first.id && page.url().includes(chat.id)),
+		)
+		.toBe(true);
+	const second = storedChats().chats.find((chat) => chat.id !== first.id);
+	if (!second) throw new Error("the second chat is not stored");
+	await page.getByTestId("scope-workspace").click();
+	await page.getByTestId("scope-chat-delete").click();
+	const confirm = page.getByTestId("confirm-delete-chat");
+	await expect(confirm).toBeVisible();
+
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		await wire.request("chat.delete", { workspaceId: second.id });
+	} finally {
+		wire.close();
+	}
+	await expect(page.getByTestId("chat-item")).toHaveCount(1);
+	await expect(confirm).toHaveCount(0);
+	expect(storedChats().chats.map((chat) => chat.id)).toEqual([first.id]);
+	expect(frames.filter((frame) => frame.method === "chat.delete")).toHaveLength(0);
 });
 
 test("from the palette, typed text starts a chat without a project through the dialog; deleting it trashes the folder", async ({
