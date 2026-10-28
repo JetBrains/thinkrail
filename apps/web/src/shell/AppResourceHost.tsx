@@ -17,14 +17,18 @@ import { openFileComparisonInTab, openFileInTab } from "../panels/openTabs";
 import { resourceBytesUrl } from "../panels/resourcePane";
 import { SendReviewButton } from "../panels/SendReviewButton";
 import { useFileReview } from "../panels/useReviewCommenting";
-import { selectFileChangeSince, useAppStore } from "../store";
+import { selectFileChangeSince, selectWorkspaceById, useAppStore } from "../store";
 import { resolveThinkrailShikiTheme } from "../themes";
 import { getTransport } from "../transport";
 
 registerBundledResourceRenderers();
 
 function FileReview({ workspaceId, path, kind, sessionId, children }: ResourceFileReviewProps) {
-	return children(useFileReview(workspaceId, path, kind, undefined, sessionId).worktree);
+	const review = useFileReview(workspaceId, path, kind, undefined, sessionId).worktree;
+	const reviewable = useAppStore(
+		(state) => selectWorkspaceById(state, workspaceId)?.kind !== "chat",
+	);
+	return children(reviewable ? review : undefined);
 }
 
 function ReviewSend({ workspaceId, paths, sessionId }: ResourceReviewSendProps) {
