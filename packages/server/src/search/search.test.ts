@@ -950,3 +950,100 @@ describe("search.preview", () => {
 		});
 	});
 });
+
+describe("chats without a project", () => {
+	const chatsProject: Project = {
+		id: "c",
+		name: "Chats",
+		path: "/data/chats",
+		slug: "chats",
+		lastOpened: 3,
+		kind: "chats",
+	};
+	const chatRecord: Workspace = {
+		id: "w-chat",
+		projectId: "c",
+		kind: "chat",
+		name: "Chat",
+		branch: "",
+		worktreePath: "/data/chats/2026-10-26-ab12cd",
+		baseBranch: "",
+	};
+	const chatSession: HistorySession = {
+		sessionId: "s-chat",
+		cwd: chatRecord.worktreePath,
+		title: "Refresh the garden",
+		entries: [
+			{
+				role: "user",
+				text: "refresh the garden beds",
+				timestamp: 40,
+				messageIndex: 0,
+				entryId: "g0",
+			},
+		],
+	};
+	const chatPlan: StoredPlanFile = {
+		sessionId: "s-chat",
+		path: `${chatRecord.worktreePath}/.thinkrail/context/todos/s-chat.json`,
+		read: () => ({
+			todos: [
+				{
+					id: "tg",
+					title: "Refresh the soil",
+					status: "pending",
+					origin: "agent",
+					createdAt: "",
+					updatedAt: "",
+				},
+			],
+			groups: [],
+		}),
+	};
+	const withChats = () =>
+		createSearchService(
+			readers({
+				projects: () => [project, other, chatsProject],
+				workspaces: () => [defaultOne, feature, chatRecord],
+				sessions: async () => ({ sessions: [...sessions, chatSession], indexing: false }),
+				plans: (root) => (root === chatRecord.worktreePath ? [chatPlan] : (plans[root] ?? [])),
+				files: new FileListCache(async () => ({ paths: ["garden.md"], truncated: false })),
+			}),
+		);
+	const chatContext = { projectId: "c", workspaceId: "w-chat" };
+	const aboutTheChat = (hit: { workspaceId?: string; sessionId?: string; projectId?: string }) =>
+		hit.workspaceId === "w-chat" || hit.sessionId === "s-chat" || hit.projectId === "c";
+
+	test("a client older than them learns nothing of the container, its chats or their sessions, before ranking", async () => {
+		const service = withChats();
+		const older = await service.query(
+			"old",
+			{ seq: 1, query: "refresh", context: chatContext },
+			{ chats: false },
+		);
+		const byKind = Object.fromEntries(older.groups.map((group) => [group.kind, group]));
+		expect(older.groups.flatMap((group) => group.hits).filter(aboutTheChat)).toEqual([]);
+		expect(byKind.file).toMatchObject({ state: "ready", hits: [], total: 0 });
+		expect(byKind.transcript?.total).toBe(
+			byKind.transcript?.hits.filter((hit) => hit.sessionId !== "s-chat").length,
+		);
+		expect(await service.preview({ kind: "chat", sessionId: "s-chat" }, { chats: false })).toEqual({
+			kind: "unavailable",
+			reason: "missing",
+		});
+
+		const current = await service.query(
+			"new",
+			{ seq: 1, query: "refresh", context: chatContext },
+			{ chats: true },
+		);
+		const ids = current.groups.flatMap((group) => group.hits.map((hit) => hit.id));
+		expect(ids).toContain("transcript:s-chat:g0");
+		expect(ids).toContain("chat:s-chat");
+		expect(ids).toContain("plan:w-chat:s-chat:tg");
+		expect(current.groups.find((group) => group.kind === "file")?.state).toBe("indexing");
+		expect(
+			await service.preview({ kind: "chat", sessionId: "s-chat" }, { chats: true }),
+		).toMatchObject({ kind: "transcript", title: "Refresh the garden" });
+	});
+});

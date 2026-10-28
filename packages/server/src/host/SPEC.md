@@ -602,16 +602,27 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `applyGitCeiling()` merges `<dataDir>/chats` into `GIT_CEILING_DIRECTORIES` before the server exists
   (the root created first), so git, `gh`, PTYs and pi's bash inherit a ceiling that stops any walk up
   out of a chat folder into a repository that happens to enclose the data dir. The container is ensured
-  at boot. **Older clients:** sockets below `CHATS_PROTOCOL_VERSION` get a welcome, `project.list` and
-  `session.stateList` without the container, its chats and their records, and every id-carrying push
+  at boot. **Older clients:** one visibility policy, `seesChats(protocolVersion)` (`chats.ts`), decides
+  what a socket below `CHATS_PROTOCOL_VERSION` may learn — nothing of the container, its chats or their
+  sessions. Its welcome, `project.list` and `session.stateList` omit them; `workspace.list` of the
+  container answers `[]` and `session.list` of a chat answers as for an unknown workspace; `search.query`
+  and `search.preview` hand the search service the audience, which drops the container (so its chats'
+  records, files, plans and transcripts) from the corpora before any provider ranks or pages
+  ([[submodule-server-search]]); `history.search` passes `isUnderChatsRoot` as the hidden-cwd predicate,
+  so chat transcripts are out of every scope, not just unlabelled. Every id-carrying push
   (`project.updated`, `workspace.*`, `session.*`, `terminal.tabs`, `workspace.fsChanged`,
   `turn.changed`, `mcp.status`, `session.resourcesChanged`, `pi.event`) goes through one
-  `publishScoped` sender that iterates the sockets for a chat or container id and broadcasts otherwise;
-  `recentProjects` never carries the container. Run analytics classify `workspace_kind: "chat"`.
+  `publishScoped` sender that iterates the sockets for a chat or container id and broadcasts otherwise —
+  `pi.event` is scoped by the workspace the agent publishes beside each event, so a detached session's
+  disk-only rename is scoped like a live one's; `pi.extensionUi` for a chat session goes only to sockets
+  that both see chats and fall within the request's own audience (an MCP notice for clients below
+  `MCP_PROTOCOL_VERSION` therefore reaches no socket for a chat); `recentProjects` never carries the
+  container. Run analytics classify `workspace_kind: "chat"`.
 - **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
   `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
   history index's `sessions()`, `specSnapshot` and `listStoredPlans`; the handler passes the socket's
-  `clientKey` so the service can supersede an older `seq` per client. The `workspace.fsChanged`
+  `clientKey` so the service can supersede an older `seq` per client, and its audience
+  (`{ chats: seesChats(protocolVersion) }`). The `workspace.fsChanged`
   publisher also calls `invalidateRoot(worktreePath)` so a watched workspace's file list and spec
   snapshot refresh on the next keystroke, and `search.query` watches its context workspace
   (`ensureWatch`), so the root it searches is watched from its first search on.

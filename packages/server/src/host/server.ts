@@ -11,7 +11,6 @@ import type {
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
 import {
-	CHATS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
@@ -132,6 +131,7 @@ import {
 	setWorkspacePublisher,
 	type WorkspaceLifecycleEvent,
 } from "../workspaces";
+import { seesChats } from "./chats";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
 import { applyGitCeiling } from "./gitCeiling";
@@ -379,11 +379,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 						? process.platform
 						: "linux";
 				const setupCapture = additionalCapture();
-				const seesChats = ws.data.protocolVersion >= CHATS_PROTOCOL_VERSION;
+				const chats = seesChats(ws.data.protocolVersion);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					hostPlatform,
-					projects: listProjects().filter((project) => seesChats || !isChatsContainer(project)),
+					projects: listProjects().filter((project) => chats || !isChatsContainer(project)),
 					recentProjects: listRecentProjects().filter((project) => !isChatsContainer(project)),
 					config: getConfig(),
 					...(appVersion ? { appVersion } : {}),
@@ -651,20 +651,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const publishScoped = (
 		channel: string,
 		data: unknown,
-		scope: { workspaceId?: string; projectId?: string; sessionId?: string },
+		scope: { workspaceId?: string; projectId?: string },
 	) => {
 		const frame = JSON.stringify({ channel, data });
-		const workspaceId =
-			scope.workspaceId ?? (scope.sessionId ? getSessionWorkspaceId(scope.sessionId) : undefined);
 		const aboutChats =
-			(workspaceId !== undefined && isChatWorkspaceId(workspaceId)) ||
+			(scope.workspaceId !== undefined && isChatWorkspaceId(scope.workspaceId)) ||
 			(scope.projectId !== undefined && isChatsContainerId(scope.projectId));
 		if (!aboutChats) {
 			server.publish(channel, frame);
 			return;
 		}
 		for (const socket of sockets.values()) {
-			if (socket.data.protocolVersion < CHATS_PROTOCOL_VERSION) continue;
+			if (!seesChats(socket.data.protocolVersion)) continue;
 			try {
 				socket.send(frame);
 			} catch {}
@@ -846,19 +844,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setTurnPublisher((turn) => {
 		publishScoped(WS_CHANNELS.turnChanged, turn, { workspaceId: turn.workspaceId });
 	});
-	setSessionPublisher((payload) => {
+	setSessionPublisher((payload, workspaceId) => {
 		runObservation.observe(payload.sessionId, payload.event);
 		void turnTracker.observe(payload.sessionId, payload.event);
 		if (payload.event.type === "tool_execution_start") {
-			const workspaceId = getSessionWorkspaceId(payload.sessionId);
-			if (workspaceId) taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
+			taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
 		}
-		publishScoped(WS_CHANNELS.piEvent, payload, { sessionId: payload.sessionId });
+		publishScoped(WS_CHANNELS.piEvent, payload, { workspaceId });
 		if (isTodoToolEnd(payload.event)) {
-			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			const observeCompletion = taskObservation.toolFinished(payload.sessionId, payload.event);
-			if (workspaceId && isChatWorkspaceId(workspaceId)) void observeCompletion();
-			else if (workspaceId)
+			if (isChatWorkspaceId(workspaceId)) void observeCompletion();
+			else
 				void maybeAttachChangeArtifacts(workspaceId, payload.sessionId).then(async () => {
 					await observeCompletion();
 					maybeAutoReReview(workspaceId, payload.sessionId);
@@ -868,12 +864,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setExtUiPublisher((request, audience) => {
 		const frame = JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request });
-		if (!audience) {
+		const workspaceId = getSessionWorkspaceId(request.sessionId);
+		const aboutChat = workspaceId !== undefined && isChatWorkspaceId(workspaceId);
+		if (!audience && !aboutChat) {
 			server.publish(WS_CHANNELS.piExtensionUi, frame);
 			return;
 		}
 		for (const ws of sockets.values()) {
-			if (ws.data.protocolVersion >= audience.belowProtocol) continue;
+			if (audience && ws.data.protocolVersion >= audience.belowProtocol) continue;
+			if (aboutChat && !seesChats(ws.data.protocolVersion)) continue;
 			try {
 				ws.send(frame);
 			} catch {}

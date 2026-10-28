@@ -188,3 +188,51 @@ test("unknown scope kind: filter always returns false, never throws", () => {
 	expect(filter("/some/cwd", "session1")).toBe(false);
 	expect(filter("/another/cwd", "session2")).toBe(false);
 });
+
+test("a cwd the client may not learn of is out of every scope, whatever the scope names", () => {
+	const repo: Project = { id: "p1", name: "repo", path: "/repo", slug: "repo", lastOpened: 0 };
+	const container: Project = {
+		id: "c",
+		name: "Chats",
+		path: "/data/chats",
+		slug: "chats",
+		lastOpened: 0,
+		kind: "chats",
+	};
+	const repoDefault: Workspace = {
+		id: "w-repo",
+		projectId: "p1",
+		kind: "default",
+		name: "Default",
+		branch: "main",
+		worktreePath: "/repo",
+		baseBranch: "main",
+	};
+	const chat: Workspace = {
+		id: "w-chat",
+		projectId: "c",
+		kind: "chat",
+		name: "Chat",
+		branch: "",
+		worktreePath: "/data/chats/2026-10-26-ab12cd",
+		baseBranch: "",
+	};
+	const records = (projectId: string) =>
+		[repoDefault, chat].filter((workspace) => workspace.projectId === projectId);
+	const hidden = (cwd: string) => cwd.startsWith("/data/chats/");
+	for (const scope of [
+		{ kind: "all" },
+		{ kind: "chat", sessionId: "s-chat" },
+		{ kind: "workspace", workspaceId: "w-chat" },
+		{ kind: "project", projectId: "c" },
+	] as const) {
+		const visible = buildHistoryScope(scope, [repo, container], records);
+		const older = buildHistoryScope(scope, [repo, container], records, hidden);
+		expect(visible.filter(chat.worktreePath, "s-chat")).toBe(true);
+		expect(older.filter(chat.worktreePath, "s-chat")).toBe(false);
+		expect(older.filter("/data/chats/2026-10-25-orphan", "s-chat")).toBe(false);
+	}
+	const older = buildHistoryScope({ kind: "all" }, [repo, container], records, hidden);
+	expect(older.filter("/repo", "s-repo")).toBe(true);
+	expect(older.filter("/somewhere/else", "s-cli")).toBe(true);
+});

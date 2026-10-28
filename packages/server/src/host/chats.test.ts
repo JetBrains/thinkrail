@@ -42,6 +42,7 @@ import { handleRequest } from "./handlers";
 
 const CTX = { clientKey: "chats-test" };
 const OLD_CLIENT = { clientKey: "old-client", protocolVersion: CHATS_PROTOCOL_VERSION - 1 };
+const NEW_CLIENT = { clientKey: "new-client", protocolVersion: CHATS_PROTOCOL_VERSION };
 
 const model = {
 	id: "chats-model",
@@ -326,27 +327,61 @@ test("a chat is created with its folder, record and one session, listed without 
 	expect(gitUnderChats()).toEqual([]);
 }, 30_000);
 
-test("an older client never sees the container, its chats or their session states", async () => {
+test("an older client never reads the container, its chats or their session states", async () => {
 	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
+	const { workspace } = created;
 	faux.setResponses([fauxAssistantMessage("hello")]);
 	await promptSession(created.sessionId, "say hello");
 	try {
-		const newProjects = (await handleRequest("project.list", {}, CTX)) as Project[];
+		const newProjects = (await handleRequest("project.list", {}, NEW_CLIENT)) as Project[];
 		const oldProjects = (await handleRequest("project.list", {}, OLD_CLIENT)) as Project[];
 		expect(newProjects.some((project) => project.kind === "chats")).toBe(true);
 		expect(oldProjects.some((project) => project.kind === "chats")).toBe(false);
 
-		const newStates = (await handleRequest("session.stateList", {}, CTX)) as {
+		const newStates = (await handleRequest("session.stateList", {}, NEW_CLIENT)) as {
 			workspaceId: string;
-			title?: string;
 		}[];
 		const oldStates = (await handleRequest("session.stateList", {}, OLD_CLIENT)) as {
 			workspaceId: string;
 		}[];
-		expect(newStates.some((record) => record.workspaceId === created.workspace.id)).toBe(true);
-		expect(oldStates.some((record) => record.workspaceId === created.workspace.id)).toBe(false);
+		expect(newStates.some((record) => record.workspaceId === workspace.id)).toBe(true);
+		expect(oldStates.some((record) => record.workspaceId === workspace.id)).toBe(false);
+
+		const list = { projectId: workspace.projectId };
+		expect(
+			((await handleRequest("workspace.list", list, NEW_CLIENT)) as Workspace[]).map(
+				(row) => row.id,
+			),
+		).toContain(workspace.id);
+		expect(await handleRequest("workspace.list", list, OLD_CLIENT)).toEqual([]);
+		expect(
+			(
+				(await handleRequest(
+					"session.list",
+					{ workspaceId: workspace.id },
+					NEW_CLIENT,
+				)) as WsResult<"session.list">
+			).map((summary) => summary.sessionId),
+		).toEqual([created.sessionId]);
+		await expect(
+			handleRequest("session.list", { workspaceId: workspace.id }, OLD_CLIENT),
+		).rejects.toThrow("Unknown workspace");
+
+		const search = (seq: number, ctx: typeof OLD_CLIENT) =>
+			handleRequest(
+				"search.query",
+				{
+					seq,
+					query: "notes",
+					kinds: ["file"],
+					context: { projectId: workspace.projectId, workspaceId: workspace.id },
+				},
+				ctx,
+			) as Promise<WsResult<"search.query">>;
+		expect((await search(1, OLD_CLIENT)).groups[0]).toMatchObject({ state: "ready", hits: [] });
+		expect((await search(1, NEW_CLIENT)).groups[0]?.state).toBe("indexing");
 	} finally {
-		await handleRequest("chat.delete", { workspaceId: created.workspace.id }, CTX);
+		await handleRequest("chat.delete", { workspaceId: workspace.id }, CTX);
 	}
 }, 30_000);
 

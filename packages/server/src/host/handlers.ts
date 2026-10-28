@@ -15,7 +15,6 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
-	CHATS_PROTOCOL_VERSION,
 	isControlMessage,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
@@ -224,7 +223,10 @@ import {
 	forgetWorkspace,
 	getWorkspace,
 	isChatsContainer,
+	isChatsContainerId,
 	isChatWorkspace,
+	isChatWorkspaceId,
+	isUnderChatsRoot,
 	listAllWorkspaceRecords,
 	listExistingWorktrees,
 	listWorkspaceRecords,
@@ -252,6 +254,7 @@ import {
 	deleteChat,
 	inspectChat,
 	recoverChatSession,
+	seesChats,
 } from "./chats";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
@@ -489,11 +492,6 @@ function sessionStateWorkspace(workspace: Workspace) {
 	return { id: workspace.id, projectId: workspace.projectId, cwd: workspace.worktreePath };
 }
 
-/** Sockets below `CHATS_PROTOCOL_VERSION` never learn about the Chats container or its chats. */
-export function seesChats(protocolVersion: number | undefined): boolean {
-	return protocolVersion === undefined || protocolVersion >= CHATS_PROTOCOL_VERSION;
-}
-
 function repositoryProject(projectId: string) {
 	const project = listProjects().find((candidate) => candidate.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
@@ -658,7 +656,8 @@ const handlers: WsHandlers = {
 	"workspace.rename": (p) => {
 		return renameWorkspace(p.id, p.name);
 	},
-	"workspace.list": async (p) => {
+	"workspace.list": async (p, ctx) => {
+		if (!seesChats(ctx.protocolVersion) && isChatsContainerId(p.projectId)) return [];
 		const rows = (
 			await listWorkspaces(p.projectId, { includeDiffStats: p.includeDiffStats ?? true })
 		).map((workspace) => ({ ...workspace, ...provisionInitialTerminal(workspace) }));
@@ -1186,8 +1185,11 @@ const handlers: WsHandlers = {
 	},
 	"session.getStats": (params) => getSessionStats(params.sessionId),
 	"session.getCommands": (params) => getSessionCommands(params.sessionId),
-	"session.list": async (params) => {
+	"session.list": async (params, ctx) => {
 		const { workspaceId } = params;
+		if (!seesChats(ctx.protocolVersion) && isChatWorkspaceId(workspaceId)) {
+			throw new Error(`Unknown workspace: ${workspaceId}`);
+		}
 		const summaries = await listSessions(workspaceId, getWorkspace(workspaceId).worktreePath);
 		return summaries.map((summary) => {
 			try {
@@ -1425,9 +1427,12 @@ const handlers: WsHandlers = {
 		reportClientError(typeof params === "object" && params !== null ? params : {});
 		return { ok: true } as const;
 	},
-	"history.search": (p) => {
-		const { filter, labels } = buildHistoryScope(p.scope, listProjects(), (projectId) =>
-			listWorkspaceRecords(projectId),
+	"history.search": (p, ctx) => {
+		const { filter, labels } = buildHistoryScope(
+			p.scope,
+			listProjects(),
+			(projectId) => listWorkspaceRecords(projectId),
+			seesChats(ctx.protocolVersion) ? undefined : isUnderChatsRoot,
 		);
 		return getHistoryIndex().search({
 			query: p.query,
@@ -1439,9 +1444,9 @@ const handlers: WsHandlers = {
 
 	"search.query": (p, ctx) => {
 		if (p.context.workspaceId) void ensureWatch(p.context.workspaceId);
-		return hostSearch().query(ctx.clientKey, p);
+		return hostSearch().query(ctx.clientKey, p, { chats: seesChats(ctx.protocolVersion) });
 	},
-	"search.preview": (p) => hostSearch().preview(p),
+	"search.preview": (p, ctx) => hostSearch().preview(p, { chats: seesChats(ctx.protocolVersion) }),
 
 	"review.get": async (p) => {
 		ensureWatch(p.workspaceId);

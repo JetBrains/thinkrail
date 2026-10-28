@@ -1097,7 +1097,9 @@ length limit, resolves the session strictly inside the supplied workspace/cwd, a
 normalized title is already current. A live session writes through `AgentSession.setSessionName`; a disk-only
 session opens its exact transcript with `SessionManager.open(...).appendSessionInfo(...)` without attaching an
 agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
-`SessionSummary.title` remains the hydration projection. The title is also **exposed, not copied, on the
+`SessionSummary.title` remains the hydration projection. Every `pi.event` publication hands the
+host its workspace beside the payload (`setSessionPublisher`'s second argument, never on the wire), so a
+detached session's event is attributable without a live entry to look it up by. The title is also **exposed, not copied, on the
 state record**: `SessionStateRecord.title` carries pi's current session name (live entries from
 `sessionName`, disk records from the transcript header), the publication fingerprint includes it so a
 title-only change republishes `session.state`, and the disk-only rename path publishes a fresh record

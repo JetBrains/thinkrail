@@ -337,8 +337,11 @@ function sessionCanAttach(sessionId: string, workspaceId: string): boolean {
 
 export type { SessionEventPayload };
 
-let publish: (payload: SessionEventPayload) => void = () => {};
-export function setSessionPublisher(fn: (payload: SessionEventPayload) => void): void {
+type SessionEventPublisher = (payload: SessionEventPayload, workspaceId: string) => void;
+
+let publish: SessionEventPublisher = () => {};
+/** Every event carries its workspace, so a detached session's publication can be scoped as well as a live one's. */
+export function setSessionPublisher(fn: SessionEventPublisher): void {
 	publish = fn;
 }
 
@@ -1183,7 +1186,7 @@ async function prepareSessionEntry(
 				entry.stuckEmptyDeliveries[lane]++;
 				synchronizeQueueFromSession(entry);
 				if (sessions.get(sessionId) === entry) {
-					publish({ sessionId, event: queueUpdateEventOf(entry) });
+					publish({ sessionId, event: queueUpdateEventOf(entry) }, workspaceId);
 					publishEntryState(entry);
 				}
 			}
@@ -1241,7 +1244,7 @@ async function prepareSessionEntry(
 			void reconcileMcpSessions([sessionId]);
 		}
 		if (sessions.get(sessionId) === entry) {
-			publish({ sessionId, event: projected });
+			publish({ sessionId, event: projected }, workspaceId);
 			publishEntryState(entry);
 		}
 		if (event.type === "agent_settled") terminal = null;
@@ -1953,7 +1956,7 @@ export function renameSession(
 		const current = manager.getSessionName();
 		if ((options.onlyIfUnnamed && current !== undefined) || current === normalized) return false;
 		manager.appendSessionInfo(normalized);
-		publish({ sessionId, event: { type: "session_info_changed", name: normalized } });
+		publish({ sessionId, event: { type: "session_info_changed", name: normalized } }, workspaceId);
 		const projectId = resolveProjectId(workspaceId);
 		if (projectId) {
 			publishState({
@@ -2594,7 +2597,10 @@ export function recordSessionUsage(
 	}
 	if (!incorporated) return false;
 	try {
-		publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
+		publish(
+			{ sessionId, event: { type: "entry_appended", entryType: "usage" } },
+			entry.workspaceId,
+		);
 	} catch (error) {
 		log.warn(`usage invalidation was not published for ${sessionId}`, error as Error);
 	}

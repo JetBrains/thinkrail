@@ -49,9 +49,20 @@ export interface SearchReaders {
 	readonly now?: () => number;
 }
 
+/** What the asking client may learn of; one older than chats without a project never sees the Chats container, its chats or their sessions. */
+export interface SearchAudience {
+	readonly chats: boolean;
+}
+
+const EVERY_CLIENT: SearchAudience = { chats: true };
+
 export interface SearchService {
-	query(clientKey: string, params: WsParams<"search.query">): Promise<SearchQueryResult>;
-	preview(target: SearchPreviewTarget): Promise<SearchPreviewResult>;
+	query(
+		clientKey: string,
+		params: WsParams<"search.query">,
+		audience?: SearchAudience,
+	): Promise<SearchQueryResult>;
+	preview(target: SearchPreviewTarget, audience?: SearchAudience): Promise<SearchPreviewResult>;
 	invalidateRoot(root: string): void;
 	forgetClient(clientKey: string): void;
 }
@@ -103,6 +114,9 @@ export function createSearchService(readers: SearchReaders): SearchService {
 	const now = readers.now ?? (() => performance.now());
 	const latestSeq = new Map<string, number>();
 
+	const visibleProjects = (audience: SearchAudience): Project[] =>
+		readers.projects().filter((project) => audience.chats || project.kind !== "chats");
+
 	const openWorkspaces = (projects: readonly Project[]) => {
 		const open = new Set(projects.map((project) => project.id));
 		return readers.workspaces().filter((workspace) => open.has(workspace.projectId));
@@ -120,7 +134,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 	};
 
 	return {
-		async query(clientKey, params) {
+		async query(clientKey, params, audience = EVERY_CLIENT) {
 			const seq = params.seq;
 			const previous = latestSeq.get(clientKey) ?? Number.NEGATIVE_INFINITY;
 			if (seq < previous) return { seq, groups: [], superseded: true };
@@ -141,7 +155,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 					now,
 				),
 			});
-			const projects = readers.projects();
+			const projects = visibleProjects(audience);
 			const workspaces = openWorkspaces(projects);
 			const root = resolveSearchRoot(projects, workspaces, params.context);
 
@@ -195,8 +209,8 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			return { seq, groups };
 		},
 
-		async preview(target) {
-			const workspaces = openWorkspaces(readers.projects());
+		async preview(target, audience = EVERY_CLIENT) {
+			const workspaces = openWorkspaces(visibleProjects(audience));
 			const { sessions } = await readers.sessions();
 			const session = sessions.find((candidate) => candidate.sessionId === target.sessionId);
 			if (!session || !chatLabeler(workspaces)(session.cwd)) {

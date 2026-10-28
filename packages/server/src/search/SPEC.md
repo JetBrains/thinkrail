@@ -43,7 +43,11 @@ open projects' folders and sibling worktrees are never searched (the field walke
 multi-root file search: one root is faster and predictable). Chats and transcripts come from sessions
 whose `cwd` is a persisted worktree of an open project (pi-CLI sessions and closed projects are
 dropped, like `history.search`'s labels); plans from every open project's workspace records, skipping
-plan files whose session has no transcript on disk (orphans).
+plan files whose session has no transcript on disk (orphans). **Audience:** `query` and `preview` take
+what the asking client may learn of (`{ chats }`, from the host's one visibility policy; in-process callers
+see everything). A client older than chats without a project gets the projects without the Chats
+container, so every corpus — workspace records, the root, files, plans, chat titles, transcripts and
+previews — is built without its chats before any provider ranks or pages, and totals never count them.
 
 ## Query
 

@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ChatCreateResult, ChatInspection, Workspace } from "@thinkrail/contracts";
+import { CHATS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	type CreateSessionResult,
@@ -35,6 +36,11 @@ import { taskObservation } from "./taskAnalytics";
 const log = logger("host");
 
 export const CHAT_INSPECT_FILE_LIMIT = 10_000;
+
+/** The one visibility policy: a client below `CHATS_PROTOCOL_VERSION` never learns of the Chats container, its chats or their sessions. */
+export function seesChats(protocolVersion: number | undefined): boolean {
+	return protocolVersion === undefined || protocolVersion >= CHATS_PROTOCOL_VERSION;
+}
 
 type ChatClaim =
 	| { kind: "start"; done: Promise<ChatCreateResult> }
