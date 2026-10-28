@@ -83,9 +83,13 @@ function createCheckHarness<T>(): CheckHarness<T> {
 	};
 }
 
-async function collectSocket(port: number, client: string): Promise<SocketCollector> {
+async function collectSocket(
+	port: number,
+	client: string,
+	token: string,
+): Promise<SocketCollector> {
 	const socket = new WebSocket(
-		`ws://localhost:${port}/ws?client=${client}&protocol=${PROTOCOL_VERSION}`,
+		`ws://localhost:${port}/ws?client=${client}&protocol=${PROTOCOL_VERSION}&token=${token}`,
 	);
 	const frames: SocketFrame[] = [];
 	const waiters = new Set<{
@@ -364,7 +368,7 @@ test("failed wire requests and logged host errors become sanitized exception rep
 		}) as typeof fetch,
 	});
 	const missing = join(process.env.THINKRAIL_DATA_DIR ?? tmpdir(), "private-client-project");
-	const collector = await collectSocket(b.port, "error-reports");
+	const collector = await collectSocket(b.port, "error-reports", b.authToken);
 	try {
 		collector.socket.send(
 			JSON.stringify({ id: "fail", method: "project.open", params: { path: missing } }),
@@ -518,7 +522,7 @@ test("welcome omits closed projects whose folders are gone", async () => {
 		]),
 	);
 	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
-	const collector = await collectSocket(b.port, "recents");
+	const collector = await collectSocket(b.port, "recents", b.authToken);
 	const frame = await collector.waitForFrame(
 		(candidate) => candidate.channel === WS_CHANNELS.serverWelcome,
 	);
@@ -546,7 +550,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 		hostUpdate: { intervalMs: 5, check: checks.check, run: async () => {} },
 	});
 	const firstCheck = await checks.waitForCheck(0);
-	const collector = await collectSocket(b.port, "updates-first");
+	const collector = await collectSocket(b.port, "updates-first", b.authToken);
 	const welcomeFrame = await collector.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
@@ -567,7 +571,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 	);
 	expect(firstPush.data).toEqual(availableFirstNotice);
 
-	const retained = await collectSocket(b.port, "updates-retained");
+	const retained = await collectSocket(b.port, "updates-retained", b.authToken);
 	const retainedWelcome = await retained.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
@@ -608,7 +612,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 	expect(
 		collector.frames.filter((frame) => frame.channel === WS_CHANNELS.hostUpdateAvailable),
 	).toHaveLength(2);
-	const afterSilentChecks = await collectSocket(b.port, "updates-after-silent-checks");
+	const afterSilentChecks = await collectSocket(b.port, "updates-after-silent-checks", b.authToken);
 	const latestWelcome = await afterSilentChecks.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
@@ -630,8 +634,8 @@ test("host update runs are detached, single-flight, retryable, and success-latch
 		hostUpdate: { intervalMs: 50, check: checks.check, run: runs.check },
 	});
 	const firstCheck = await checks.waitForCheck(0);
-	const firstClient = await collectSocket(b.port, "updates-run-first");
-	const secondClient = await collectSocket(b.port, "updates-run-second");
+	const firstClient = await collectSocket(b.port, "updates-run-first", b.authToken);
+	const secondClient = await collectSocket(b.port, "updates-run-second", b.authToken);
 	await Promise.all([
 		firstClient.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome),
 		secondClient.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome),
@@ -692,7 +696,7 @@ test("host update runs are detached, single-flight, retryable, and success-latch
 		channel: "stable",
 	});
 	await sameReleaseCheck.promise;
-	const afterSameRelease = await collectSocket(b.port, "updates-run-failed-snapshot");
+	const afterSameRelease = await collectSocket(b.port, "updates-run-failed-snapshot", b.authToken);
 	const failedWelcome = await afterSameRelease.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
@@ -756,7 +760,7 @@ test("shutdown makes a late host update run result inert", async () => {
 		portMode: "exact",
 		hostUpdate: { intervalMs: 1_000, check: checks.check, run: runs.check },
 	});
-	const collector = await collectSocket(b.port, "updates-run-shutdown");
+	const collector = await collectSocket(b.port, "updates-run-shutdown", b.authToken);
 	await collector.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome);
 	const firstCheck = await checks.waitForCheck(0);
 	firstCheck.resolve({
@@ -801,7 +805,7 @@ test("shutdown clears periodic checks and makes a late result inert", async () =
 		portMode: "exact",
 		hostUpdate: { intervalMs: 5, check: checks.check, run: async () => {} },
 	});
-	const collector = await collectSocket(b.port, "updates-shutdown");
+	const collector = await collectSocket(b.port, "updates-shutdown", b.authToken);
 	await collector.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome);
 	const firstCheck = await checks.waitForCheck(0);
 
@@ -853,3 +857,67 @@ test.skipIf(process.platform === "win32")(
 		});
 	},
 );
+
+async function upgradeStatus(url: string, headers?: Record<string, string>): Promise<number> {
+	const res = await fetch(url, {
+		headers: {
+			connection: "Upgrade",
+			upgrade: "websocket",
+			"sec-websocket-version": "13",
+			"sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
+			...headers,
+		},
+	});
+	await res.body?.cancel();
+	return res.status;
+}
+
+test("the websocket upgrade requires the per-instance token", async () => {
+	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const base = `http://127.0.0.1:${b.port}/ws?client=c&protocol=${PROTOCOL_VERSION}`;
+	expect(await upgradeStatus(base)).toBe(401);
+	expect(await upgradeStatus(`${base}&token=wrong`)).toBe(401);
+	// A valid token upgrades (101) rather than being refused.
+	expect(await upgradeStatus(`${base}&token=${b.authToken}`)).toBe(101);
+});
+
+test("a cross-site origin is refused before the token is even considered", async () => {
+	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const url = `http://127.0.0.1:${b.port}/ws?client=c&protocol=${PROTOCOL_VERSION}&token=${b.authToken}`;
+	expect(await upgradeStatus(url, { origin: "https://evil.example" })).toBe(403);
+	// Loopback origins on a loopback-bound host are trusted.
+	expect(await upgradeStatus(url, { origin: `http://127.0.0.1:${b.port}` })).toBe(101);
+	expect(await upgradeStatus(url, { origin: "http://localhost:5173" })).toBe(101);
+});
+
+test("a wildcard bind trusts the token and does not restrict origin (Decision 4)", async () => {
+	const b = await boot({ port: 0, host: "0.0.0.0", portMode: "exact" });
+	const url = `http://127.0.0.1:${b.port}/ws?client=c&protocol=${PROTOCOL_VERSION}&token=${b.authToken}`;
+	expect(await upgradeStatus(url, { origin: "https://device.tailnet.ts.net" })).toBe(101);
+	expect(await upgradeStatus(url)).toBe(101);
+});
+
+test("the file and blob routes require the per-instance token", async () => {
+	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const files = `http://127.0.0.1:${b.port}/files/ws/missing.txt`;
+	const blob = `http://127.0.0.1:${b.port}/blob/ws/${"0".repeat(40)}/missing.txt`;
+	expect((await fetch(files)).status).toBe(401);
+	expect((await fetch(blob)).status).toBe(401);
+	// With the token the route runs (a missing file is 404, not 401).
+	expect((await fetch(`${files}?token=${b.authToken}`)).status).toBe(404);
+	expect((await fetch(`${blob}?token=${b.authToken}`)).status).toBe(404);
+});
+
+test("the served client carries the token meta so the same-origin UI can authenticate", async () => {
+	const staticDir = mkdtempSync(join(tmpdir(), "thinkrail-static-"));
+	tmpDirs.push(staticDir);
+	writeFileSync(
+		join(staticDir, "index.html"),
+		"<html><head><title>t</title></head><body></body></html>",
+	);
+	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact", staticDir });
+	const res = await fetch(`http://127.0.0.1:${b.port}/`);
+	const html = await res.text();
+	expect(html).toContain(`content="${b.authToken}"`);
+	expect(html).toContain('name="thinkrail-instance-token"');
+});

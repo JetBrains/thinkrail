@@ -125,6 +125,16 @@ export type TemplateReadLocation =
 
 export const PROTOCOL_VERSION = 95;
 export const PROJECT_CLONE_PROTOCOL_VERSION = 95;
+
+/**
+ * Per-instance credential that gates the WebSocket upgrade and the HTTP resource routes against
+ * cross-site WebSocket hijacking. The host serves its own client with the token embedded in this
+ * `<meta>` tag; a cross-origin page cannot read it, and a client presents it as this query param on
+ * `/ws`, `/files` and `/blob`. See `packages/server/src/host/SPEC.md`.
+ */
+export const INSTANCE_TOKEN_META = "thinkrail-instance-token";
+export const INSTANCE_TOKEN_PARAM = "token";
+
 export const ONBOARDING_PROTOCOL_VERSION = 94;
 export const LAYOUT_PLAN_PRESET_PROTOCOL_VERSION = 94;
 export const TOOL_RESPONSE_PROTOCOL_VERSION = 93;

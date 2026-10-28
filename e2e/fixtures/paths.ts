@@ -49,6 +49,10 @@ const PORT_BASE = resolvePortBase();
 
 export const E2E_PORT = PORT_BASE;
 
+// Fixed per-instance token the e2e host boots with (via THINKRAIL_DEV_AUTH_TOKEN). The served page
+// carries it for the browser; the direct `E2eWire` setup socket presents it on the `/ws` URL.
+export const E2E_AUTH_TOKEN = "e2e-instance-token";
+
 export const E2E_BINARY_PORT = PORT_BASE + 2;
 
 export const E2E_RESTART_PORT = PORT_BASE + 4;

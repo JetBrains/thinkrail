@@ -118,7 +118,10 @@ async function requestOverWire<T>(
 	return page.evaluate(
 		async ({ requestMethod, requestParams }) => {
 			const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-			const socket = new WebSocket(`${protocol}//${location.host}/ws`);
+			const token =
+				document.querySelector('meta[name="thinkrail-instance-token"]')?.getAttribute("content") ??
+				"";
+			const socket = new WebSocket(`${protocol}//${location.host}/ws?token=${token}`);
 			await new Promise<void>((resolve) => {
 				socket.onopen = () => resolve();
 			});
@@ -183,7 +186,10 @@ async function readLocalSideWidths(page: Page): Promise<{ left: number; right: n
 async function createWorkspaceWithoutOpening(page: Page): Promise<{ id: string; name: string }> {
 	return page.evaluate(async () => {
 		const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-		const socket = new WebSocket(`${protocol}//${location.host}/ws`);
+		const token =
+			document.querySelector('meta[name="thinkrail-instance-token"]')?.getAttribute("content") ??
+			"";
+		const socket = new WebSocket(`${protocol}//${location.host}/ws?token=${token}`);
 		await new Promise<void>((resolve) => {
 			socket.onopen = () => resolve();
 		});

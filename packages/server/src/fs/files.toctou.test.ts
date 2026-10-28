@@ -45,9 +45,7 @@ beforeEach(() => {
 
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
-		JSON.stringify([
-			{ id: "w1", projectId: "p1", name: "w1", worktreePath: root, createdAt: 1 },
-		]),
+		JSON.stringify([{ id: "w1", projectId: "p1", name: "w1", worktreePath: root, createdAt: 1 }]),
 	);
 });
 
@@ -75,16 +73,12 @@ describe("Production readFile: TOCTOU symlink protection", () => {
 	});
 
 	test("blocks ../ path traversal", () => {
-		expect(() => readFile("w1", "../outside/secret.txt")).toThrow(
-			/Path escapes the worktree/,
-		);
+		expect(() => readFile("w1", "../outside/secret.txt")).toThrow(/Path escapes the worktree/);
 	});
 
 	test("blocks symlink directories pointing outside the worktree", () => {
 		symlinkSync(outsideDir, join(root, "outside-link"));
-		expect(() => readFile("w1", "outside-link/secret.txt")).toThrow(
-			/Path escapes the worktree/,
-		);
+		expect(() => readFile("w1", "outside-link/secret.txt")).toThrow(/Path escapes the worktree/);
 	});
 
 	test("allows internal symlinks within the worktree", () => {
@@ -162,9 +156,7 @@ describe("Production resolveWorktreeFile: symlink protection", () => {
 
 	test("blocks symlinks pointing outside the worktree", () => {
 		symlinkSync(join(outsideDir, "secret.txt"), join(root, "evil-link"));
-		expect(() => resolveWorktreeFile("w1", "evil-link")).toThrow(
-			/Path escapes the worktree/,
-		);
+		expect(() => resolveWorktreeFile("w1", "evil-link")).toThrow(/Path escapes the worktree/);
 	});
 
 	test("blocks path traversal", () => {

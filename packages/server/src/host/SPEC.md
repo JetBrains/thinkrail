@@ -17,7 +17,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 - **Owns:** `server.ts` (async `createServer` first asks auth to start Central artifact watching and publish
   the initial current PI runtime, falling back to plain PI with closed `load-failed` state when needed, then creates
-  `Bun.serve` with `/health`, `/ws` upgrade, a
+  `Bun.serve` with `/health` (unauthenticated liveness), `/ws` upgrade, a
   **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes from `Bun.file`
   after classifying only its bounded 8 KiB head (via `fs`'s `resolveWorktreeFile` — path-contained; bad
   id/escape/miss → 404; `Cache-Control: no-store`, because the worktree moves under the URL) so the
@@ -42,7 +42,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `application/xhtml+xml`, `image/svg+xml`) additionally receive
   `Content-Security-Policy: sandbox; default-src 'none'`, so direct navigation cannot execute repository
   script, static serving with
-  `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
+  `index.html` fallback (the served `index.html` is rewritten once per process to carry the instance token as a
+  `<meta name="thinkrail-instance-token">`; it keeps the default caching so reloads stay fast — the token is stable for the host's lifetime), the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
   retention timer** that outlives a reconnect (terminals are deliberately untouched by it); the
@@ -565,7 +566,7 @@ enabled/confirmed choice before entering analytics attribution.
 
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`.
-- **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
+- **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`, `INSTANCE_TOKEN_META`/`INSTANCE_TOKEN_PARAM`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`; `codedError`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
@@ -622,6 +623,18 @@ enabled/confirmed choice before entering analytics attribution.
 
 ## Get right
 
+- **The `/ws` upgrade and the `/files` + `/blob` routes require a per-instance token.** `createServer`
+  mints a fresh 256-bit token each boot (overridable via `authToken`, which the dev launcher sets so vite's
+  injected `<meta>` matches the proxied host); it is exposed on `RunningServer.authToken`/`BootedHost` and
+  injected into the served `index.html`, so the same-origin client reads it back and presents it as the
+  `token` query param. A cross-origin page is served by someone else and cannot read our HTML, so it never
+  obtains the token; this is the defense against cross-site WebSocket hijacking, where a browser would
+  otherwise reach `terminal.*` and run commands. The upgrade additionally applies a **defense-in-depth Origin
+  check** (`isTrustedOrigin`): a present `Origin` must match the configured endpoint host or loopback
+  (`localhost`/`127.0.0.1`/`[::1]`); a missing `Origin` (native clients) passes to the token check; a wildcard
+  bind (`--host 0.0.0.0`) cannot enumerate its reachable LAN/Tailscale origins (architecture Decision 4) so it
+  does not restrict `Origin` and lets the token carry the trust. `/health` stays open for liveness. The token
+  is never logged.
 - Every registered WS command is debug-traced by **method name only** (`ws <method>` / `ws <method>
   failed`); a name absent from the closed handler registry is traced as fixed `ws unknown method` instead.
   Never trace raw unregistered method names, params, or handler error text, which can reflect credentials

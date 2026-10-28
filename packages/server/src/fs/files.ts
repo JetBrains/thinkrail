@@ -68,8 +68,7 @@ function resolveInWorktree(
 		try {
 			const resolvedAbs = realpathSync(abs);
 			const resolvedRoot = realpathSync(root);
-			if (!isContained(resolvedRoot, resolvedAbs))
-				throw new Error("Path escapes the worktree");
+			if (!isContained(resolvedRoot, resolvedAbs)) throw new Error("Path escapes the worktree");
 			if (isGitMetadataPath(resolvedRoot, resolvedAbs))
 				throw new Error("The .git directory is not readable");
 			return { root: resolvedRoot, abs: resolvedAbs };

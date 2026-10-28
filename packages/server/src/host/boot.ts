@@ -18,6 +18,7 @@ export interface BootHostOptions {
 	hostUpdate?: CreateServerOptions["hostUpdate"];
 	verbose?: boolean;
 	resolveShellEnv?: boolean;
+	authToken?: string;
 }
 
 const log = logger("host");
@@ -26,6 +27,7 @@ export interface BootedHost {
 	readonly server: RunningServer;
 	readonly port: number;
 	readonly requested: number;
+	readonly authToken: string;
 }
 
 function attachProcessSignals(server: RunningServer): RunningServer {
@@ -53,6 +55,7 @@ function attachProcessSignals(server: RunningServer): RunningServer {
 		get port() {
 			return server.port;
 		},
+		authToken: server.authToken,
 		startAttributionClaim: () => server.startAttributionClaim(),
 		stop,
 		shutdown,
@@ -81,10 +84,11 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 		...(options.appVersion ? { appVersion: options.appVersion } : {}),
 		...(options.analytics ? { analytics: options.analytics } : {}),
 		...(options.hostUpdate ? { hostUpdate: options.hostUpdate } : {}),
+		...(options.authToken ? { authToken: options.authToken } : {}),
 	});
 	const server = attachProcessSignals(running);
 	log.info(`listening on port ${server.port}`);
-	return { server, port: server.port, requested };
+	return { server, port: server.port, requested, authToken: server.authToken };
 }
 
 export function reportDesktopError(error: unknown, scope: string): void {
