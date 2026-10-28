@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
@@ -53,10 +53,37 @@ export function chatsRoot(): string {
 	return join(dataDir(), "chats");
 }
 
+function within(root: string, path: string): boolean {
+	return path === root || path.startsWith(root + sep);
+}
+
+/** Lexical, for the spellings ThinkRail stored or pi recorded (both resolved, architecture Decision 22). */
 export function isUnderChatsRoot(path: string): boolean {
-	const root = chatsRoot();
-	const resolved = resolve(path);
-	return resolved === root || resolved.startsWith(root + sep);
+	return within(chatsRoot(), resolve(path));
+}
+
+function realThroughAncestors(path: string): string {
+	const rest: string[] = [];
+	for (let current = resolve(path); ; ) {
+		try {
+			return join(realpathSync.native(current), ...rest);
+		} catch {
+			const parent = dirname(current);
+			if (parent === current) return resolve(path);
+			rest.unshift(basename(current));
+			current = parent;
+		}
+	}
+}
+
+/**
+ * The reserved-root policy for a path someone typed or picked: inside the chats root lexically, or once
+ * the nearest existing ancestor of each is resolved through `realpath` (an alias spelling, a symlink).
+ */
+export function landsInChatsRoot(path: string): boolean {
+	return (
+		isUnderChatsRoot(path) || within(realThroughAncestors(chatsRoot()), realThroughAncestors(path))
+	);
 }
 
 function storedDirectory(path: string): string {

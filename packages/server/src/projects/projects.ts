@@ -11,7 +11,7 @@ import type {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { canonicalPath, git } from "../git";
-import { isUnderChatsRoot, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import { landsInChatsRoot, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -86,11 +86,12 @@ export function getProjects(): Project[] {
 	return projects;
 }
 
-function assertOutsideChatsRoot(path: string): void {
-	if (isUnderChatsRoot(path)) {
+/** The one reserved-root door check, before any filesystem or git side effect; the path keeps its spelling. */
+export function assertOutsideChatsRoot(path: string, use = "opened as a project"): void {
+	if (landsInChatsRoot(path)) {
 		throw new CodedError(
 			"CHATS_CONTAINER",
-			"Chats without a project live here; this folder cannot be opened as a project.",
+			`Chats without a project live here; this folder cannot be ${use}.`,
 		);
 	}
 }
@@ -375,7 +376,9 @@ function inspectResolvedProjectPath(path: string): ProjectPathStatus {
 }
 
 export function inspectProjectPath(inputPath: string): ProjectPathStatus {
-	return inspectResolvedProjectPath(resolveProjectPath(inputPath));
+	const path = resolveProjectPath(inputPath);
+	assertOutsideChatsRoot(path);
+	return inspectResolvedProjectPath(path);
 }
 
 export function initProject(inputPath: string): Project {

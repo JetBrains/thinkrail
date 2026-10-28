@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { Project, WsParams } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { gitAsync } from "../git";
-import { openProject, resolveProjectPath } from "./projects";
+import { assertOutsideChatsRoot, openProject, resolveProjectPath } from "./projects";
 
 const CLONE_TIMEOUT_MS = 30 * 60_000;
 const activeClones = new Map<string, Map<string, AbortController>>();
@@ -67,6 +67,7 @@ export function inspectCloneDestination(parentPath: string, requestedName: strin
 	)
 		invalid("Enter a single valid folder name, without path separators.");
 	const resolved = resolveProjectPath(parentPath.trim());
+	assertOutsideChatsRoot(join(resolved, name), "used as a clone destination");
 	let parent: string;
 	try {
 		parent = realpathSync.native(resolved);

@@ -29,8 +29,14 @@ import {
 	tryCurrentBranch,
 } from "../git";
 import { logger } from "../log";
-import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
-import { getProjects, listProjects } from "../projects";
+import {
+	dataDir,
+	landsInChatsRoot,
+	loadProjects,
+	loadWorkspaces,
+	saveWorkspaces,
+} from "../persistence";
+import { assertOutsideChatsRoot, getProjects, listProjects } from "../projects";
 import {
 	assertNotChatsContainer,
 	assertNotChatWorkspace,
@@ -149,6 +155,7 @@ export async function listExistingWorktrees(
 	return entries.flatMap((entry): ExistingWorktreeCandidate[] => {
 		const path = canonicalPath(entry.path);
 		if (entry.prunable || path === projectPath || representedPaths.has(path)) return [];
+		if (landsInChatsRoot(entry.path)) return [];
 		return entry.branch
 			? [{ path: entry.path, branch: entry.branch, status: "available" }]
 			: [{ path: entry.path, status: "detached" }];
@@ -161,6 +168,7 @@ export async function openExistingWorktree(
 ): Promise<Workspace> {
 	const project = openProjectById(projectId);
 	if (!requestedPath) throw new Error("An existing worktree path is required");
+	assertOutsideChatsRoot(requestedPath, "attached as a workspace");
 	const wantedPath = canonicalPath(requestedPath);
 	const projectPath = canonicalPath(project.path);
 	if (wantedPath === projectPath) return ensureDefaultWorkspace(project);

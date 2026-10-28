@@ -39,7 +39,9 @@ delegated conversations and then the folder (`trash` is not this module's depend
 unsettle, `setWorkspaceDiffBase`, `forgetWorkspace` / `removeWorkspace` (delete the chat instead),
 `workspaceDiffStats`; `reclaimWorktree`, `recordWorkspaceHead` and `setWorkspaceReview` are no-ops;
 `listWorkspaces(container)` returns the chat rows without Default ensure, external refresh or diff stats;
-`openProjectById` never hands the container to `createWorkspace` / `openExistingWorktree`.
+`openProjectById` never hands the container to `createWorkspace` / `openExistingWorktree`, and a worktree
+registered under the chats root is neither offered by `listExistingWorktrees` nor admitted by
+`openExistingWorktree` (the projects barrel's reserved-root check, before any Git read).
 
 ## Boundary
 

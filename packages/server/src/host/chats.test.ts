@@ -6,10 +6,12 @@ import {
 	readFileSync,
 	realpathSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
@@ -382,6 +384,58 @@ test("an older client never reads the container, its chats or their session stat
 		expect((await search(1, NEW_CLIENT)).groups[0]?.state).toBe("indexing");
 	} finally {
 		await handleRequest("chat.delete", { workspaceId: workspace.id }, CTX);
+	}
+}, 30_000);
+
+test("the Chats root is reserved at every project door, also through an alias, before any side effect", async () => {
+	const repo = gitRepo(join(root, "reserved-repo"));
+	const project = openProject(repo);
+	const worktree = join(chatsRoot(), "registered-worktree");
+	expect(git(repo, "worktree", "add", "-b", "stray", worktree).ok).toBe(true);
+	const alias = join(root, "chats-alias");
+	symlinkSync(chatsRoot(), alias);
+	const touching = () =>
+		gitSpawns.filter((spawn) =>
+			[spawn.cwd ?? "", ...spawn.argv].some(
+				(arg) => arg.startsWith(chatsRoot()) || arg.startsWith(alias),
+			),
+		);
+	try {
+		for (const [method, params] of [
+			["project.inspect", { path: join(alias, "not-yet") }],
+			["project.open", { path: alias }],
+			["project.init", { path: join(alias, "not-yet") }],
+			["project.create", { parentPath: alias, name: "made" }],
+			["project.cloneDestination", { parentPath: alias, name: "cloned" }],
+			[
+				"project.clone",
+				{ url: pathToFileURL(repo).href, parentPath: alias, name: "cloned", operationId: "op-1" },
+			],
+			[
+				"workspace.openExisting",
+				{ projectId: project.id, path: join(alias, "registered-worktree") },
+			],
+		] as const) {
+			await expect(handleRequest(method, params, CTX)).rejects.toMatchObject({
+				code: "CHATS_CONTAINER",
+			});
+		}
+		expect(existsSync(join(chatsRoot(), "made"))).toBe(false);
+		expect(existsSync(join(chatsRoot(), "cloned"))).toBe(false);
+		expect(existsSync(join(chatsRoot(), "not-yet"))).toBe(false);
+		expect(touching()).toEqual([]);
+		const offered = (await handleRequest(
+			"workspace.listExisting",
+			{ projectId: project.id },
+			CTX,
+		)) as WsResult<"workspace.listExisting">;
+		expect(offered.map((candidate) => candidate.path)).not.toContain(worktree);
+		expect(
+			((await handleRequest("project.inspect", { path: repo }, CTX)) as { kind: string }).kind,
+		).toBe("repo");
+	} finally {
+		rmSync(alias, { force: true });
+		git(repo, "worktree", "remove", "--force", worktree);
 	}
 }, 30_000);
 
