@@ -27,14 +27,12 @@ export interface PalettePreview {
 	readonly fields: readonly (readonly [label: string, value: string])[];
 }
 
-/** A workspace file the shell renders in the preview pane through the shared resource renderers. */
 export interface PaletteFile {
 	readonly workspaceId: string;
 	readonly path: string;
 	readonly size?: number;
 }
 
-/** A match the host already scored with the shared matcher; the client ranks it as-is. */
 export interface PaletteMatch {
 	readonly tier: number;
 	readonly score: number;
@@ -61,9 +59,7 @@ export interface PaletteItem {
 	readonly sessionId?: string;
 	readonly contextBoost?: number;
 	readonly match?: PaletteMatch;
-	/** Arrival cohort of a host row that landed while the user held a selection. */
 	readonly late?: number;
-	/** The fields the host matches this row's corpus on, when not the title alone. */
 	readonly hostFields?: readonly MatchField[];
 	readonly previewTarget?: SearchPreviewTarget;
 	readonly file?: PaletteFile;

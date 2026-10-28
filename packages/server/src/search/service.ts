@@ -70,7 +70,6 @@ function isDefaultRecord(workspace: Workspace, project: Project): boolean {
 	return workspace.kind === "default" || workspace.worktreePath === project.path;
 }
 
-/** The one root files and specs are searched in: the active workspace, else the context project's folder through its default record. */
 export function resolveSearchRoot(
 	projects: readonly Project[],
 	workspaces: readonly Workspace[],
@@ -207,7 +206,6 @@ export function createSearchService(readers: SearchReaders): SearchService {
 	};
 }
 
-/** The focused entry: the hit's message when it still starts with the anchor, else the nearest one that does. */
 function focusEntry(
 	entries: readonly HistorySession["entries"][number][],
 	messageIndex: number | undefined,

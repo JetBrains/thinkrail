@@ -28,7 +28,6 @@ export const HOST_GROUP_OF_KIND: Readonly<Record<SearchKind, string>> = {
 	plan: "plans",
 };
 
-/** Per palette group, the host's true count and the ids of the page it returned. */
 export interface HostTotal {
 	readonly total: number;
 	readonly ids: ReadonlySet<string>;
@@ -52,11 +51,9 @@ export interface HostItemContext {
 	readonly workspaceName: (workspaceId: string) => string | undefined;
 	readonly localIds: ReadonlySet<string>;
 	readonly late: ReadonlyMap<string, number>;
-	/** The current terms when the hits answered an earlier input, so each is matched again first. */
 	readonly staleTerms: readonly MatchTerm[] | null;
 }
 
-/** The fields the host providers match a hit on, so a row an earlier query answered is matched again as the host would. */
 function hostFields(hit: SearchHit): MatchField[] {
 	switch (hit.kind) {
 		case "file":
@@ -85,7 +82,6 @@ function rangesOf(fields: readonly { key: string; ranges: readonly MatchRange[] 
 	return ranges;
 }
 
-/** Every term as a case-folded substring of the text, the content providers' rule, or `null`. */
 function contentRanges(text: string, terms: readonly MatchTerm[]): [number, number][] | null {
 	const lower = text.toLowerCase();
 	const found: [number, number][] = [];
@@ -105,7 +101,6 @@ function contentRanges(text: string, terms: readonly MatchTerm[]): [number, numb
 	return ranges;
 }
 
-/** A body or message hit stays in the content tier and must still contain every term; a field hit takes the host's tier for the current terms. */
 export function rematchHit(hit: SearchHit, terms: readonly MatchTerm[]): SearchHit | null {
 	if (hit.tier === MATCH_TIER.content) {
 		const key = hit.kind === "spec" ? "snippet" : "title";

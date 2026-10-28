@@ -228,7 +228,6 @@ export function searchChatTitles(
 	return buildGroup("chat", hits, input.limit, groupState(truncated, indexing));
 }
 
-/** Newest chats first, each newest message first, so a budget that runs out leaves only older messages unsearched. */
 export function searchTranscripts(
 	sessions: readonly HistorySession[],
 	indexing: boolean,

@@ -19,7 +19,6 @@ export const HOST_SEARCH = {
 	maxIndexingPolls: 37,
 } as const;
 
-/** Seeded with the clock so a reloaded page never issues a `seq` the host has already seen from this client. */
 let nextSeq = Date.now();
 
 export interface HostSearchInput {
@@ -33,7 +32,6 @@ export interface HostSearchInput {
 export interface HostSearchState {
 	readonly groups: readonly SearchGroup[] | null;
 	readonly pending: boolean;
-	/** `groups` answered an earlier input: their rows must be matched again against the current one. */
 	readonly stale: boolean;
 }
 
@@ -54,11 +52,6 @@ export function isActiveHostInput(input: HostSearchInput): boolean {
 	return input.enabled && input.text.trim().length > 0 && input.kinds.length > 0;
 }
 
-/**
- * A reply for the input already on screen replaces the groups it answers, keeping every hit those
- * groups showed that the new page left out — a refreshed corpus never pulls a row from under the
- * selection — and every group it did not answer.
- */
 export function mergeHostGroups(
 	shown: readonly SearchGroup[] | null,
 	reply: readonly SearchGroup[],
@@ -85,7 +78,6 @@ function failedGroups(kinds: readonly SearchKind[]): SearchGroup[] {
 
 export type HostSearchStatus = "failed" | "indexing" | "truncated";
 
-/** What the palette must say about results it shows as final: part failed, still indexing, or cut short. */
 export function hostSearchStatus(state: HostSearchState): HostSearchStatus | null {
 	if (!state.groups || state.stale) return null;
 	const states = new Set(state.groups.map((group) => group.state));
@@ -104,7 +96,6 @@ export interface HostSearchControllerDeps {
 }
 
 export interface HostSearchController {
-	/** The palette's current query; `null` or an inactive input clears the host results. */
 	update(input: HostSearchInput | null): void;
 	dispose(): void;
 }
@@ -250,7 +241,6 @@ export interface HostPreviewLoader {
 
 const PREVIEW_CACHE_LIMIT = 50;
 
-/** One per open palette, per connection: a preview is re-read the next time the palette opens or after a reconnect, and a failed read is never kept. */
 export function createHostPreviewLoader(
 	request: (target: SearchPreviewTarget) => Promise<SearchPreviewResult> = (target) =>
 		getTransport().request("search.preview", target),

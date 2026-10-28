@@ -69,7 +69,6 @@ const SCOPE_LABELS: Record<SearchScope, MessageKey> = {
 	commands: "search.scope.commands",
 };
 
-/** What the host adds to the palette: its search providers, how a host hit opens, and how a file renders. */
 export interface PaletteHost {
 	readonly context: SearchContext;
 	readonly openHit: (hit: SearchHit) => void;
@@ -485,7 +484,6 @@ const NO_GROUPS: ReadonlySet<string> = new Set();
 const PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
 const PREVIEW_SETTLE_MS = 150;
 
-/** Whether `key` has stayed the same for `ms`, so a sweep across rows reads only the row it stops on. */
 function useSettled(key: string, ms: number): boolean {
 	const [settled, setSettled] = useState<string | null>(null);
 	useEffect(() => {

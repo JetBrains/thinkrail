@@ -10,7 +10,6 @@ export interface ChatLocation {
 	readonly anchorText: string;
 }
 
-/** Where a host hit lands; navigation resolves `false` when a later pick overtook it or its workspace is gone. */
 export interface HostHitTargets {
 	readonly navigateToWorkspace: (
 		workspace: WorkspaceTarget,

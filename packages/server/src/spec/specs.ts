@@ -62,11 +62,9 @@ function buildSnapshot(root: string): SpecSnapshotEntry[] {
 
 export interface SpecSnapshot {
 	readonly entries: readonly SpecSnapshotEntry[];
-	/** The entries are the previous build; a rebuild is scheduled, so a caller may ask again shortly. */
 	readonly rebuilding: boolean;
 }
 
-/** The root's specs; every build, the first included, runs off the request while the previous answer (or none) is served. */
 export function specSnapshot(root: string, now = Date.now()): SpecSnapshot {
 	const cached = snapshots.get(root);
 	if (!cached) {
@@ -93,13 +91,11 @@ function scheduleSnapshotRebuild(root: string): void {
 	});
 }
 
-/** A worktree changed: the snapshot is rebuilt on its next read, never eagerly. */
 export function invalidateSpecSnapshot(root: string): void {
 	const cached = snapshots.get(root);
 	if (cached) snapshots.set(root, { at: Number.NEGATIVE_INFINITY, entries: cached.entries });
 }
 
-/** Drops a root's snapshot and spec index, and any build still pending for it. */
 export function evictSpecRoot(root: string): void {
 	snapshots.delete(root);
 	rebuilding.delete(root);

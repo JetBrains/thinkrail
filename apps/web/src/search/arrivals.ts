@@ -1,13 +1,11 @@
 import { type HostSearchInput, sameHostInput } from "./hostSearch";
 import type { PaletteItem } from "./model";
 
-/** The selected host row and the search it was picked from. */
 export interface PinnedRow {
 	readonly item: PaletteItem;
 	readonly input: HostSearchInput;
 }
 
-/** The pinned row stays listed while the same search stands, even when a reply no longer brings it. */
 export function withPinned(
 	items: readonly PaletteItem[],
 	pinned: PinnedRow | null,
@@ -17,7 +15,6 @@ export function withPinned(
 	return items.some((item) => item.id === pinned.item.id) ? items : [...items, pinned.item];
 }
 
-/** Host rows that landed while the user held a selection, by arrival cohort. */
 export interface Arrivals {
 	readonly late: ReadonlyMap<string, number>;
 	readonly cohort: number;
@@ -25,7 +22,6 @@ export interface Arrivals {
 
 export const NO_ARRIVALS: Arrivals = { late: new Map(), cohort: 0 };
 
-/** While the user holds a selection, ids a reply brings that were not on screen join a new cohort. */
 export function noteArrivals(
 	arrivals: Arrivals,
 	landed: readonly string[],

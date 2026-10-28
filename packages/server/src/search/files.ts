@@ -40,7 +40,6 @@ const TRANSIENT_MESSAGE =
 	/too many open files|resource temporarily unavailable|cannot allocate memory/i;
 const TRANSIENT_CODES = new Set(["EMFILE", "ENFILE", "EAGAIN", "ENOMEM"]);
 
-/** An enumeration that failed for a reason that may pass (descriptor or memory pressure, a timeout), not a property of the folder. */
 export function isTransientListFailure(failure: {
 	readonly timedOut?: boolean | undefined;
 	readonly code?: string | undefined;
@@ -206,7 +205,6 @@ export class FileListCache {
 		private readonly now: () => number = Date.now,
 	) {}
 
-	/** The cached list, stale or fresh; a stale one is served while its reload runs. `null` only before the first load. */
 	peek(root: string): IndexedFileList | null {
 		const cached = this.lists.get(root);
 		if (!cached) return null;
@@ -216,7 +214,6 @@ export class FileListCache {
 		return cached.list;
 	}
 
-	/** A reload is in flight: `peek` still answers, but the answer is about to change. */
 	reloading(root: string): boolean {
 		return this.loading.has(root);
 	}
@@ -250,7 +247,6 @@ export class FileListCache {
 		return promise;
 	}
 
-	/** Marks a root stale: the old list keeps answering until the reload lands; a load already running lands stale. */
 	invalidate(root: string): void {
 		if (this.loading.has(root)) this.overtaken.add(root);
 		const cached = this.lists.get(root);

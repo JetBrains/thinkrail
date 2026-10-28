@@ -11,7 +11,6 @@ import { compareRanked, pickTopHit, plainRow, type RankedItem, rankItems, toRow 
 export interface SectionsInput {
 	readonly t: Translator;
 	readonly parsed: ParsedQuery;
-	/** Per group, the host's true count and its page's ids, so a cap can say how many more exist. */
 	readonly hostTotals?: Readonly<Record<string, HostTotal>>;
 	readonly rootItems: readonly PaletteItem[];
 	readonly waiting: readonly PaletteItem[];
@@ -19,7 +18,6 @@ export interface SectionsInput {
 	readonly expanded: ReadonlySet<string>;
 	readonly learning: LearningSnapshot;
 	readonly nowMs: number;
-	/** The selected row, never hidden under a group's cap. */
 	readonly keep?: string | null;
 }
 
@@ -108,7 +106,6 @@ function cappedSection(
 	};
 }
 
-/** Host hits beyond its page, less the local rows it did not return that its own fields also match. */
 function hostOverflow(
 	entries: readonly RankedItem[],
 	total: HostTotal | undefined,

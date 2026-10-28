@@ -63,7 +63,6 @@ import {
 import { createPaletteNavigator } from "./paletteNavigation";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
 
-/** The host's file/spec root: the active workspace, else the context project's Default once its row is loaded. */
 export function paletteSearchContext(
 	contextProjectId: string | null,
 	activeWorkspaceId: string | null,
