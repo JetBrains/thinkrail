@@ -623,7 +623,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   switching chat tabs unmounts the transcript (#971). On unmount, once placement has finished, the
   transcript writes the session runtime's `readingAnchor`: the topmost visible row id and its viewport
   offset while detached, or `null` while following. A mount that finds an anchor detaches instead of
-  placing at the latest edge, materializes the row through Virtuoso `scrollToIndex`, writes the exact
+  placing at the latest edge, materializes the row through the same cancellable measured-size
+  materialization as row reveal (never Virtuoso's retrying `scrollToIndex`), writes the exact
   offset at once, and holds it with the anchor-stabilization motion through measurement frames. Reader
   input during that wait wins; a row that never materializes within the bounded wait returns to the
   latest edge. A following reader is never restored, so a streaming chat keeps following on return.

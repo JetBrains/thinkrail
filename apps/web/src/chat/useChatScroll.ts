@@ -410,6 +410,51 @@ export function useChatScroll(
 		headerAnchorScrollTop.current = actual;
 		rebaseGuard();
 	}, [rebaseGuard]);
+
+	const materializeRow = useCallback(
+		(
+			generation: number,
+			resolveIndex: () => number,
+			align: "start" | "center" | "end",
+			offset = 0,
+		) => {
+			const scroller = scrollerRef.current;
+			if (!scroller) return;
+			virtuosoRef.current?.getState(({ ranges }) => {
+				if (generation !== rowRevealGeneration.current) return;
+				const index = resolveIndex();
+				if (index < 0) return;
+				const viewport = scroller.getBoundingClientRect();
+				const anchor = Array.from(
+					scroller.querySelectorAll<HTMLElement>("[data-chat-row-index]"),
+				).find((row) => Number.isInteger(Number(row.dataset.chatRowIndex)));
+				if (!anchor) return;
+				const heights = [...rowHeightEstimatesRef.current];
+				const currentFirstItemIndex = firstItemIndexRef.current;
+				const rangeOffset =
+					currentFirstItemIndex > 0 &&
+					ranges.some((range) => range.startIndex >= currentFirstItemIndex)
+						? currentFirstItemIndex
+						: 0;
+				for (const range of ranges) {
+					const start = Math.max(0, range.startIndex - rangeOffset);
+					const end = Math.min(heights.length - 1, range.endIndex - rangeOffset);
+					for (let measuredIndex = start; measuredIndex <= end; measuredIndex += 1) {
+						heights[measuredIndex] = range.size;
+					}
+				}
+				const anchorIndex = Number(anchor.dataset.chatRowIndex);
+				const anchorTop = scroller.scrollTop + anchor.getBoundingClientRect().top - viewport.top;
+				const rowTop = estimatedRowTop(heights, anchorIndex, anchorTop, index);
+				const target =
+					alignedRowScrollTop(rowTop, heights[index] ?? 40, scroller.clientHeight, align) - offset;
+				scroller.scrollTop = Math.min(scrollBounds(scroller).maxScrollTop, Math.max(0, target));
+				recordProgrammaticScrollPosition();
+			});
+		},
+		[recordProgrammaticScrollPosition, virtuosoRef],
+	);
+
 	useInsertionEffect(() => {
 		firstItemIndexRef.current = firstItemIndex;
 		rowHeightEstimatesRef.current = rowHeightEstimates;
@@ -723,14 +768,13 @@ export function useChatScroll(
 				controller.returnToEdge();
 				return;
 			}
-			const index = readingPositionRef.current.resolveIndex(anchor.rowId);
-			if (index >= 0) {
-				virtuosoRef.current?.scrollToIndex({
-					index,
-					align: "start",
-					offset: -anchor.offset,
-					behavior: "auto",
-				});
+			if (attempts === 1 || attempts % 5 === 0) {
+				materializeRow(
+					generation,
+					() => readingPositionRef.current.resolveIndex(anchor.rowId),
+					"start",
+					anchor.offset,
+				);
 			}
 			frame = requestAnimationFrame(restore);
 		};
@@ -738,7 +782,7 @@ export function useChatScroll(
 		return () => {
 			if (frame !== null) cancelAnimationFrame(frame);
 		};
-	}, [controller, readerLeft, scrollerElement, virtuosoRef]);
+	}, [controller, materializeRow, readerLeft, scrollerElement]);
 
 	useLayoutEffect(
 		() => () => {
@@ -1105,43 +1149,6 @@ export function useChatScroll(
 					return current ? rowAlignmentTarget(scroller, current, align) : null;
 				}, true);
 			};
-			const materialize = () => {
-				virtuosoRef.current?.getState(({ ranges }) => {
-					if (generation !== rowRevealGeneration.current) return;
-					const index = resolveIndex();
-					if (index < 0) return;
-					const viewport = scroller.getBoundingClientRect();
-					const anchor = Array.from(
-						scroller.querySelectorAll<HTMLElement>("[data-chat-row-index]"),
-					).find((row) => Number.isInteger(Number(row.dataset.chatRowIndex)));
-					if (!anchor) return;
-					const heights = [...rowHeightEstimatesRef.current];
-					const currentFirstItemIndex = firstItemIndexRef.current;
-					const rangeOffset =
-						currentFirstItemIndex > 0 &&
-						ranges.some((range) => range.startIndex >= currentFirstItemIndex)
-							? currentFirstItemIndex
-							: 0;
-					for (const range of ranges) {
-						const start = Math.max(0, range.startIndex - rangeOffset);
-						const end = Math.min(heights.length - 1, range.endIndex - rangeOffset);
-						for (let measuredIndex = start; measuredIndex <= end; measuredIndex += 1) {
-							heights[measuredIndex] = range.size;
-						}
-					}
-					const anchorIndex = Number(anchor.dataset.chatRowIndex);
-					const anchorTop = scroller.scrollTop + anchor.getBoundingClientRect().top - viewport.top;
-					const rowTop = estimatedRowTop(heights, anchorIndex, anchorTop, index);
-					const target = alignedRowScrollTop(
-						rowTop,
-						heights[index] ?? 40,
-						scroller.clientHeight,
-						align,
-					);
-					scroller.scrollTop = Math.min(scrollBounds(scroller).maxScrollTop, Math.max(0, target));
-					recordProgrammaticScrollPosition();
-				});
-			};
 			const waitForAlignedRow = () => {
 				if (generation !== rowRevealGeneration.current) return;
 				attempts += 1;
@@ -1149,7 +1156,7 @@ export function useChatScroll(
 				if (!row) {
 					revealStarted = false;
 					alignedFrames = 0;
-					if (attempts === 1 || attempts % 5 === 0) materialize();
+					if (attempts === 1 || attempts % 5 === 0) materializeRow(generation, resolveIndex, align);
 				} else if (!revealStarted) {
 					startMeasuredReveal();
 				} else if (!controller.getSnapshot().moving) {
@@ -1178,7 +1185,7 @@ export function useChatScroll(
 				controller.cancelReveal();
 			};
 		},
-		[cancelRowReveal, controller, readerLeft, recordProgrammaticScrollPosition, virtuosoRef],
+		[cancelRowReveal, controller, materializeRow, readerLeft],
 	);
 
 	const scrollToLatest = useCallback(() => {

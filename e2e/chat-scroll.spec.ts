@@ -732,6 +732,31 @@ for (const testCase of orderCases) {
 		}
 	});
 
+	test(`${testCase.order} lets the reader move right after a restored tab switch`, async ({
+		page,
+	}) => {
+		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		try {
+			await moveIntoStableHistory(page, chatScroll, testCase.order, testCase.historyWheel);
+			for (let step = 0; step < 3; step += 1) {
+				await page.mouse.wheel(0, testCase.historyWheel);
+				await waitForScrollStability(chatScroll);
+			}
+			const reading = await readTopVisibleRow(chatScroll);
+
+			await switchAwayAndBack(page);
+			await moveMouseToChatViewport(page, chatScroll);
+			await page.mouse.wheel(0, -testCase.historyWheel);
+
+			await waitForScrollStability(chatScroll);
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			const moved = await readTopVisibleRow(chatScroll);
+			expect(moved.id === reading.id && Math.abs(moved.top - reading.top) <= 2).toBe(false);
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
+
 	test(`${testCase.order} keeps following the latest edge across a tab switch`, async ({
 		page,
 	}) => {
