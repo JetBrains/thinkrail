@@ -15,13 +15,15 @@ PostHog EU. The module owns the closed event vocabulary, catalog bucketing, inst
 exception sanitization, delivery, consent gates and bounded shutdown. Host alone observes feature outcomes and captures events; feature
 modules remain analytics-free. Sibling dependency edges belong to [[module-server]].
 
-- **Public surface:** initialization, basic capture, consent-scoped additional capture, additional-data
+- **Public surface:** initialization, basic capture, consent-scoped additional capture, survey capture
+  (`captureSurveyEvent`, `SurveyAnalyticsEvent`), additional-data
   enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ErrorReport`, `ErrorSource`),
   shutdown/test reset, event types, bucket helpers and `BuildKind`.
 - **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
   inside the sink only (`errors.ts` is SDK-free; the sink adapts it into `before_send`).
 - **Forbidden:** importing host/feature siblings; being imported outside host; exposing the installation
-  UUID on the wire; copying rich feature payloads into telemetry; browser autocapture or a native-only sink.
+  UUID on the wire; copying rich feature payloads into telemetry except the survey responses documented
+  below; browser autocapture or a native-only sink.
 
 ## Events
 
@@ -63,6 +65,15 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | `review_comment_resolved` | A comment's terminal outcome, by `actor` (`user`/`agent`) and `outcome` (`resolved`/`dismissed`); the human update and the agent `resolve_comment` tool, not draft deletes or Clear. An agent `resolved` is the agent's claim, never proof the concern was fixed. |
 | `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs; `source` = `plan_page` when driven from the plan page's PR stage, else `other`. |
 | `acquisition_linked` | One successful browser-claim redemption, carrying the transient journey/bridge ids and normalized first/last acquisition fields. |
+
+Survey events stay outside that union. `captureSurveyEvent` accepts only `survey shown`, `survey dismissed`,
+and `survey sent`, and sends them through the current additional sink. They leave only while additional
+analytics is on, stay personless (`$process_person_profile: false`), and are dropped when the run is muted
+or the grant is off. `shown` and `dismissed` carry `$survey_id`, `$survey_iteration`, and
+`$survey_submission_id`. `sent` also carries `$survey_completed`, `$survey_questions` (`id` and question
+text), and `$survey_response_<question id>` — the answer text, rating, or choice. That response is the one
+additional payload allowed to contain what the user wrote. The host is the only caller and may pass only
+the object built by `surveyCapture`.
 
 The review-comment funnel is host-observed off existing wire/tool actions: `review_comment_added`
 off the `review.commentAdd` handler (human, `author:user`) and each plan-review finding the host files

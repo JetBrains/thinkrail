@@ -178,7 +178,12 @@ export function track(event: BasicAnalyticsEvent): void {
 	if (s && !s.shutdownPromise) send(s, s.basic, event);
 }
 
-export function captureSurveyEvent(event: string, properties: Record<string, unknown>): void {
+export type SurveyAnalyticsEvent = "survey shown" | "survey sent" | "survey dismissed";
+
+export function captureSurveyEvent(
+	event: SurveyAnalyticsEvent,
+	properties: Record<string, unknown>,
+): void {
 	const s = state;
 	const sink = s?.additional?.sink;
 	if (!s || s.shutdownPromise || !sink?.sendProperties) return;

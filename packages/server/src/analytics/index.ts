@@ -43,6 +43,7 @@ export {
 	reportError,
 	reportFatalError,
 	resetAnalyticsForTests,
+	type SurveyAnalyticsEvent,
 	setAdditionalAnalyticsEnabled,
 	shutdownAnalytics,
 	startAttributionClaim,
