@@ -1211,7 +1211,10 @@ export type WsErrorCode =
 	| "CHATS_CONTAINER"
 	| "CHAT_WORKSPACE"
 	| "CHATS_STORE_UNAVAILABLE"
-	| "NOT_A_CHAT";
+	| "NOT_A_CHAT"
+	| "CHAT_HAS_SESSION"
+	| "CHAT_DELETING"
+	| "CHAT_DELETION_PENDING";
 
 export interface WsResponse {
 	id: string;

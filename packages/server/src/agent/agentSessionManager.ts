@@ -2961,7 +2961,14 @@ export async function settleSessionsForShutdown(
 	}
 }
 
-async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string): Promise<void> {
+/**
+ * Closes the workspace's session admission, drains in-flight preparations, stops and disposes its live
+ * sessions and awaits their child cascades, then runs `teardown` before admission reopens.
+ */
+export async function closeWorkspaceSessions<T>(
+	workspaceId: string,
+	teardown: () => Promise<T>,
+): Promise<T> {
 	workspaceLifecycleGenerations.set(
 		workspaceId,
 		(workspaceLifecycleGenerations.get(workspaceId) ?? 0) + 1,
@@ -2979,9 +2986,7 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 			Promise.all(removals),
 		]);
 		await Promise.all([...(pendingCascades.get(workspaceId) ?? [])]);
-		removeWorkspaceDelegation(workspaceId);
-		removeWorkspaceResourceHistory(workspaceId);
-		if (cwd) await purgeDiskSessions(cwd);
+		return await teardown();
 	} finally {
 		const remainingClosures = (closingWorkspaces.get(workspaceId) ?? 1) - 1;
 		if (remainingClosures === 0) closingWorkspaces.delete(workspaceId);
@@ -2990,7 +2995,11 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 }
 
 export function removeWorkspaceSessions(workspaceId: string, cwd?: string): Promise<void> {
-	return removeWorkspaceSessionsInternal(workspaceId, cwd);
+	return closeWorkspaceSessions(workspaceId, async () => {
+		removeWorkspaceDelegation(workspaceId);
+		removeWorkspaceResourceHistory(workspaceId);
+		if (cwd) await purgeDiskSessions(cwd);
+	});
 }
 
 async function purgeDiskSessions(cwd: string): Promise<void> {

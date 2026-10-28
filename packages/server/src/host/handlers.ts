@@ -246,12 +246,12 @@ import {
 import { ackSend } from "./ackSend";
 import { sessionProviderAnalytics, trackChatStarted } from "./authAnalytics";
 import {
-	assertChatAcceptsSession,
+	assertChatOpen,
 	assertSessionDeletable,
 	createChat,
 	deleteChat,
-	ensureChatSession,
 	inspectChat,
+	recoverChatSession,
 } from "./chats";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
@@ -1100,8 +1100,7 @@ const handlers: WsHandlers = {
 	"session.create": async (p) => {
 		const ws = getWorkspace(p.workspaceId);
 		if (isChatWorkspace(ws)) {
-			await assertChatAcceptsSession(ws.id);
-			const { workspace: _workspace, ...created } = await ensureChatSession(ws.id);
+			const { workspace: _workspace, ...created } = await recoverChatSession(ws.id);
 			return created;
 		}
 		ensureWorkspaceScratchDir(ws);
@@ -1604,11 +1603,30 @@ const REPOSITORY_ONLY_METHODS: ReadonlySet<WsMethodName> = new Set<WsMethodName>
 	"review.sendBatch",
 ]);
 
-function refuseRepositoryOnlyForChats(method: WsMethodName, params: unknown): void {
-	if (!REPOSITORY_ONLY_METHODS.has(method) || !params || typeof params !== "object") return;
+/** Doors that start or attach a session or a terminal: a chat being deleted, or whose deletion is pending, refuses them. */
+const CHAT_RESOURCE_DOORS: ReadonlySet<WsMethodName> = new Set<WsMethodName>([
+	"session.create",
+	"session.getMessages",
+	"session.nudge",
+	"session.resources",
+	"backgroundCommand.output",
+	"backgroundCommand.stop",
+	"subagent.stop",
+	"subagent.stopAll",
+	"terminal.reserve",
+	"terminal.attach",
+]);
+
+function paramWorkspaceId(params: unknown, orId: boolean): string | null {
+	if (!params || typeof params !== "object") return null;
 	const { workspaceId, id } = params as { workspaceId?: unknown; id?: unknown };
-	const candidate =
-		typeof workspaceId === "string" ? workspaceId : typeof id === "string" ? id : null;
+	if (typeof workspaceId === "string") return workspaceId;
+	return orId && typeof id === "string" ? id : null;
+}
+
+function refuseRepositoryOnlyForChats(method: WsMethodName, params: unknown): void {
+	if (!REPOSITORY_ONLY_METHODS.has(method)) return;
+	const candidate = paramWorkspaceId(params, true);
 	if (candidate === null) return;
 	let workspace: Workspace;
 	try {
@@ -1626,5 +1644,9 @@ export async function handleRequest(
 ): Promise<unknown> {
 	if (!isWsMethod(method)) throw new Error(`Unknown method: ${method}`);
 	refuseRepositoryOnlyForChats(method, params);
+	if (CHAT_RESOURCE_DOORS.has(method)) {
+		const workspaceId = paramWorkspaceId(params, false);
+		if (workspaceId !== null) assertChatOpen(workspaceId);
+	}
 	return dispatch(method, params as WsParams<typeof method>, ctx);
 }

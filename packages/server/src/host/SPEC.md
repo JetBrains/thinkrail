@@ -573,13 +573,24 @@ channel fan-out, and the process-boot wrapper both launchers share.
   ([[submodule-server-workspaces]]), reserves the initial terminal and starts the one session the chat
   owns (host default model, or the dialog's explicit pick) in one call — a chat with no session yet (a
   crash between folder and session) gets it through `session.create`, which otherwise refuses a second
-  top-level chat (`CHAT_WORKSPACE`: a new chat is a new folder). `chat.delete` is the **only teardown
-  door** (`session.delete` on a chat is refused): it claims the id (concurrent calls join), marks the
-  record `deletionPending` before anything destructive, deletes every session through the agent's
-  trash-based transaction (transcripts file by file, never the encoded directory), closes terminals,
-  stops the watcher, evicts the spec, review, change and turn sidecars, trashes the folder, drops the
-  record and publishes the removal; a failure leaves the pending record visible with Retry. The host
-  never sweeps unknown folders under the chats root. `chat.inspect` counts the folder's files (bounded,
+  top-level chat (`CHAT_HAS_SESSION`: a new chat is a new folder). **One lifecycle claim per chat**
+  serializes its first session and its deletion: `chat.create`'s start and a recovery hold it, a
+  recovery that finds a start in flight joins it (same session, real model and effort — the record is
+  published before its session exists), and `chat.delete` takes it over — a start that has not reached
+  the agent yet fails `CHAT_DELETING`, one that has is fenced by the agent's barrier below. `chat.delete`
+  is the **only teardown door** (`session.delete` on a chat is refused): concurrent calls join; it marks
+  the record `deletionPending` before anything destructive, then runs the Trash moves inside the agent's
+  `closeWorkspaceSessions` barrier (admission closed, in-flight preparations drained, live sessions
+  stopped and disposed, child cascades settled) — only then are the sessions listed, and each transcript
+  goes through the agent's trash-based transaction (file by file, never the encoded directory); then it
+  closes terminals, stops the watcher, evicts the spec, review, change and turn sidecars, trashes the
+  folder (only one under the chats root), drops the record and publishes the removal; a failure leaves
+  the pending record visible with Retry. While a delete runs (`CHAT_DELETING`) or after one that did not
+  finish (`CHAT_DELETION_PENDING`, persisted, so also after a restart) every door that would start or
+  attach something in the chat refuses before dispatch (`CHAT_RESOURCE_DOORS`: `session.create`,
+  `session.getMessages`, `session.nudge`, the session-resource reads and stops — they attach a persisted
+  parent — `terminal.reserve`, `terminal.attach`), and initial-terminal provisioning skips the record.
+  The host never sweeps unknown folders under the chats root. `chat.inspect` counts the folder's files (bounded,
   symlinks not followed) for the confirmation. Every repository door refuses a chat or the container at
   the handler (`REPOSITORY_ONLY_METHODS` — git, changes, reviews, pull requests, turns, diff stats and
   base — plus project close/rename/trust/skills, `workspace.create`/`listExisting`, `git.listBranches`/

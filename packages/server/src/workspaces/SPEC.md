@@ -275,7 +275,7 @@ unsettle, `setWorkspaceDiffBase`, `forgetWorkspace` / `removeWorkspace` (delete 
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
   `setWorkspaceSubagentsOverride`, `setWorkspaceSubagentMaxConcurrent`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
   `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
-  `CHATS_CONTAINER_NAME`, `CHAT_WORKSPACE_NAME`, `chatsRoot`, `isChatsContainer`, `isChatWorkspace`,
+  `CHATS_CONTAINER_NAME`, `CHAT_WORKSPACE_NAME`, `chatsRoot`, `isUnderChatsRoot`, `isChatsContainer`, `isChatWorkspace`,
   `isChatsContainerId`, `isChatWorkspaceId`, `resetChatIdCache`, `ensureChatsContainer`, `findChatsContainer`,
   `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`, `markChatDeletionPending`, `dropChatRecord`,
   `setChatPublishers`, `assertNotChatsContainer`, `assertNotChatWorkspace`.

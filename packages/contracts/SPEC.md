@@ -28,8 +28,11 @@ both rings rank with. The one package
   correction, Git failure, and incomplete cleanup requiring filesystem intervention),
   `CHATS_CONTAINER` / `CHAT_WORKSPACE` / `NOT_A_CHAT` /
   `CHATS_STORE_UNAVAILABLE` (a repository door asked of the Chats container or a chat without a project,
-  a chat method asked of something else, and the chats store set aside as corrupt — a client offers a
-  new chat instead of a second session, and names the retry),
+  a chat method asked of something else, and the chats store unavailable — names the retry), and the three
+  ways a chat refuses to start something, which a client must not confuse: **`CHAT_HAS_SESSION`** (a second
+  conversation asked of a chat — the client starts a new chat instead), **`CHAT_DELETING`** (a delete of
+  this chat is running — wait for its `workspace.removed`, never start a sibling) and
+  **`CHAT_DELETION_PENDING`** (a delete did not finish — offer Retry, nothing else),
   `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not

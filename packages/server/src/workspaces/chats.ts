@@ -8,13 +8,14 @@ import {
 	chatsStoreWritable,
 	isChatsContainer,
 	isChatWorkspace,
+	isUnderChatsRoot,
 	loadProjects,
 	loadWorkspaces,
 	saveProjects,
 	saveWorkspaces,
 } from "../persistence";
 
-export { chatsRoot, isChatsContainer, isChatWorkspace };
+export { chatsRoot, isChatsContainer, isChatWorkspace, isUnderChatsRoot };
 
 export const CHATS_CONTAINER_NAME = "Chats";
 export const CHAT_WORKSPACE_NAME = "Chat";

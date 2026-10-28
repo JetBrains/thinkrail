@@ -1183,7 +1183,12 @@ workspace archive close command admission and signal command/child work before a
 under the existing host shutdown budget. A per-session teardown tombstone prevents a persisted parent
 from reattaching until its previous resource cascade settles. Workspace archive closes a generation and
 awaits in-flight parent preparation before removing delegation/transcript storage, so stale preparation
-cannot register after teardown. Resource closure runs for every captured workspace parent before
+cannot register after teardown. That barrier is public on its own as **`closeWorkspaceSessions(workspaceId,
+teardown)`**: generation bump and closed admission, drained preparations, stopped and disposed live
+sessions and settled child cascades, then `teardown` before admission reopens. Archive's
+`removeWorkspaceSessions` runs its permanent purge inside it; deleting a chat without a project runs its
+Trash moves inside it ([[submodule-server-host]]), so no session can start in a folder being trashed and
+the transcripts are listed only once nothing can still write one. Resource closure runs for every captured workspace parent before
 any parent abort is awaited; individual removal likewise signals resources before waiting for the main turn.
 Streaming destructive removal reuses the manager's queue-draining Stop path, discarding the drained
 input while retaining the same bounded accepted-answer persistence grace before the parent is disposed.

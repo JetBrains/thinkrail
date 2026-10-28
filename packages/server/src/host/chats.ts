@@ -2,7 +2,13 @@ import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ChatCreateResult, ChatInspection, Workspace } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { createSession, deleteSession, getSessionWorkspaceId, listSessions } from "../agent";
+import {
+	type CreateSessionResult,
+	closeWorkspaceSessions,
+	createSession,
+	deleteSession,
+	listSessions,
+} from "../agent";
 import { forgetWorkspaceChanges } from "../changes";
 import { logger } from "../log";
 import { removeWorkspaceReviews } from "../reviews";
@@ -17,6 +23,7 @@ import {
 	ensureWorkspaceScratchDir,
 	getChatWorkspace,
 	isChatWorkspaceId,
+	isUnderChatsRoot,
 	markChatDeletionPending,
 } from "../workspaces";
 import { trackChatStarted } from "./authAnalytics";
@@ -29,65 +36,86 @@ const log = logger("host");
 
 export const CHAT_INSPECT_FILE_LIMIT = 10_000;
 
-const deleting = new Map<string, Promise<void>>();
+type ChatClaim =
+	| { kind: "start"; done: Promise<ChatCreateResult> }
+	| { kind: "delete"; done: Promise<void> };
 
-function assertNotDeleting(workspaceId: string): void {
-	if (deleting.has(workspaceId)) {
-		throw new CodedError("CHAT_WORKSPACE", "This chat is being deleted.");
+/** One lifecycle claim per chat: its first session (create or recovery) and its deletion never overlap. */
+const claims = new Map<string, ChatClaim>();
+
+function beingDeleted(): CodedError {
+	return new CodedError("CHAT_DELETING", "This chat is being deleted.");
+}
+
+/** A chat being deleted, or whose deletion did not finish, starts nothing: no session, attach or terminal. */
+export function assertChatOpen(workspaceId: string): void {
+	if (!isChatWorkspaceId(workspaceId)) return;
+	if (claims.get(workspaceId)?.kind === "delete") throw beingDeleted();
+	if (getChatWorkspace(workspaceId).deletionPending) {
+		throw new CodedError("CHAT_DELETION_PENDING", "This chat's deletion did not finish; retry it.");
 	}
 }
 
 /** The chat's folder, record and the one session that owns it, in one operation. */
-export async function createChat(requested: NewChatModelRequest = {}): Promise<ChatCreateResult> {
-	return startChatSession(provisionInitialTerminal(createChatRecord()), requested);
+export function createChat(requested: NewChatModelRequest = {}): Promise<ChatCreateResult> {
+	return claimStart(provisionInitialTerminal(createChatRecord()), requested, false);
 }
 
-/** A chat whose session never came up (crash between folder and session) gets its session here; idempotent. */
-export async function ensureChatSession(workspaceId: string): Promise<ChatCreateResult> {
-	const workspace = getChatWorkspace(workspaceId);
-	assertNotDeleting(workspaceId);
-	if (workspace.deletionPending) {
-		throw new CodedError("CHAT_WORKSPACE", "This chat's deletion did not finish; retry it.");
-	}
-	const existing = (await listSessions(workspace.id, workspace.worktreePath))[0];
-	if (existing) {
-		return {
-			workspace,
-			sessionId: existing.sessionId,
-			model: null,
-			thinkingLevel: "medium",
-		};
-	}
-	return startChatSession(workspace);
+/** A chat whose session never came up (crash between folder and session) gets it here; a start in flight is joined. */
+export function recoverChatSession(workspaceId: string): Promise<ChatCreateResult> {
+	const claim = claims.get(workspaceId);
+	if (claim?.kind === "start") return claim.done;
+	assertChatOpen(workspaceId);
+	return claimStart(getChatWorkspace(workspaceId), {}, true);
+}
+
+function claimStart(
+	workspace: Workspace,
+	requested: NewChatModelRequest,
+	recovering: boolean,
+): Promise<ChatCreateResult> {
+	const claim: ChatClaim = {
+		kind: "start",
+		done: Promise.resolve()
+			.then(async () => {
+				if (recovering && (await listSessions(workspace.id, workspace.worktreePath)).length > 0) {
+					throw new CodedError(
+						"CHAT_HAS_SESSION",
+						"A chat without a project holds one conversation; start a new chat instead.",
+					);
+				}
+				return startChatSession(workspace, requested, () => claims.get(workspace.id) === claim);
+			})
+			.finally(() => {
+				if (claims.get(workspace.id) === claim) claims.delete(workspace.id);
+			}),
+	};
+	claims.set(workspace.id, claim);
+	return claim.done;
 }
 
 async function startChatSession(
 	workspace: Workspace,
-	requested: NewChatModelRequest = {},
+	requested: NewChatModelRequest,
+	claimed: () => boolean,
 ): Promise<ChatCreateResult> {
-	ensureWorkspaceScratchDir(workspace);
 	const defaults = await resolveNewChatModel(requested);
-	const created = await createSession({
-		cwd: workspace.worktreePath,
-		workspaceId: workspace.id,
-		...(defaults.model ? { model: defaults.model } : {}),
-		thinkingLevel: defaults.thinkingLevel,
-	});
+	if (!claimed()) throw beingDeleted();
+	ensureWorkspaceScratchDir(workspace);
+	let created: CreateSessionResult;
+	try {
+		created = await createSession({
+			cwd: workspace.worktreePath,
+			workspaceId: workspace.id,
+			...(defaults.model ? { model: defaults.model } : {}),
+			thinkingLevel: defaults.thinkingLevel,
+		});
+	} catch (error) {
+		throw claimed() ? error : beingDeleted();
+	}
+	if (!claimed()) throw beingDeleted();
 	trackChatStarted({ sessionId: created.sessionId, model: created.model });
 	return { workspace, ...created };
-}
-
-/** A chat owns exactly one top-level session; a second one is refused — a new chat is a new folder. */
-export async function assertChatAcceptsSession(workspaceId: string): Promise<void> {
-	if (!isChatWorkspaceId(workspaceId)) return;
-	assertNotDeleting(workspaceId);
-	const workspace = getChatWorkspace(workspaceId);
-	if ((await listSessions(workspace.id, workspace.worktreePath)).length > 0) {
-		throw new CodedError(
-			"CHAT_WORKSPACE",
-			"A chat without a project holds one conversation; start a new chat instead.",
-		);
-	}
 }
 
 export function assertSessionDeletable(workspaceId: string): void {
@@ -126,34 +154,43 @@ export function inspectChat(workspaceId: string): ChatInspection {
 }
 
 /**
- * The only teardown door for a chat: claim it, mark the record, dispose every session (their transcripts go
- * to the trash file by file), stop what runs in the folder, trash the folder, drop the record.
+ * The only teardown door for a chat. It takes over the chat's claim (an in-flight start fails as
+ * `CHAT_DELETING`) and marks the record before anything destructive; the agent's admission stays closed
+ * while every transcript goes to the Trash; then what runs in the folder stops, the folder goes to the
+ * Trash and the record is dropped. Concurrent calls join; a failure leaves the pending record for Retry.
  */
 export function deleteChat(workspaceId: string): Promise<void> {
-	const inFlight = deleting.get(workspaceId);
-	if (inFlight) return inFlight;
-	const done = runChatDeletion(workspaceId).finally(() => deleting.delete(workspaceId));
-	deleting.set(workspaceId, done);
-	return done;
+	const current = claims.get(workspaceId);
+	if (current?.kind === "delete") return current.done;
+	const workspace = markChatDeletionPending(workspaceId);
+	const claim: ChatClaim = {
+		kind: "delete",
+		done: Promise.resolve()
+			.then(() => runChatDeletion(workspace))
+			.finally(() => {
+				if (claims.get(workspaceId) === claim) claims.delete(workspaceId);
+			}),
+	};
+	claims.set(workspaceId, claim);
+	return claim.done;
 }
 
-async function runChatDeletion(workspaceId: string): Promise<void> {
-	const workspace = markChatDeletionPending(workspaceId);
-	const cwd = workspace.worktreePath;
-	for (const summary of await listSessions(workspace.id, cwd)) {
-		if (getSessionWorkspaceId(summary.sessionId) !== undefined) {
+async function runChatDeletion(workspace: Workspace): Promise<void> {
+	const { id, worktreePath: cwd } = workspace;
+	await closeWorkspaceSessions(id, async () => {
+		for (const summary of await listSessions(id, cwd)) {
 			runObservation.forget(summary.sessionId);
 			taskObservation.forget(summary.sessionId);
+			await deleteSession(summary.sessionId, id, cwd);
 		}
-		await deleteSession(summary.sessionId, workspace.id, cwd);
-	}
-	closeWorkspaceTerminals(workspace.id);
-	stopWatch(workspace.id);
-	evictSpecIndex(workspace.id);
-	removeWorkspaceReviews(workspace.id);
-	forgetWorkspaceChanges(workspace.id);
-	forgetWorkspaceTurns(workspace.id);
-	if (existsSync(cwd)) await trashFile(cwd);
-	dropChatRecord(workspace.id);
-	log.info(`deleted chat ${workspace.id}`);
+	});
+	closeWorkspaceTerminals(id);
+	stopWatch(id);
+	evictSpecIndex(id);
+	removeWorkspaceReviews(id);
+	forgetWorkspaceChanges(id);
+	forgetWorkspaceTurns(id);
+	if (isUnderChatsRoot(cwd) && existsSync(cwd)) await trashFile(cwd);
+	dropChatRecord(id);
+	log.info(`deleted chat ${id}`);
 }

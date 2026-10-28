@@ -12,23 +12,31 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
-import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ChatCreateResult, Project, Workspace } from "@thinkrail/contracts";
+import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { ChatCreateResult, Project, Workspace, WsResult } from "@thinkrail/contracts";
 import { CHATS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import {
 	configurePiRuntime,
 	disposeAllSessions,
+	hasSession,
 	initializeSessionStates,
+	listSessions,
 	promptSession,
 	setSessionManagerFactory,
 	settleSessionsForShutdown,
 } from "../agent";
-import { loadChats } from "../persistence";
+import { loadChats, resetChatsStoreForTests } from "../persistence";
 import { openProject } from "../projects";
 import { resetConfigCache } from "../settings";
 import { setTrashImplementationForTests } from "../trash";
 import { stopAllWatches } from "../watch";
-import { chatsRoot, ensureChatsContainer, resetChatIdCache } from "../workspaces";
+import {
+	chatsRoot,
+	createChatRecord,
+	ensureChatsContainer,
+	getChatWorkspace,
+	resetChatIdCache,
+} from "../workspaces";
 import { applyGitCeiling } from "./gitCeiling";
 import { handleRequest } from "./handlers";
 
@@ -58,6 +66,12 @@ const saved = {
 };
 const root = realpathSync.native(mkdtempSync(join(tmpdir(), "trpi-chats-host-")));
 const trashed: string[] = [];
+const recordTrash = async (input: string | readonly string[]) => {
+	for (const path of typeof input === "string" ? [input] : input) {
+		trashed.push(path);
+		rmSync(path, { recursive: true, force: true });
+	}
+};
 const gitSpawns: { argv: string[]; cwd: string | undefined }[] = [];
 const realSpawn = Bun.spawn;
 const realSpawnSync = Bun.spawnSync;
@@ -134,12 +148,7 @@ beforeAll(async () => {
 	configurePiRuntime(runtime);
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	await initializeSessionStates([]);
-	setTrashImplementationForTests(async (input) => {
-		for (const path of typeof input === "string" ? [input] : input) {
-			trashed.push(path);
-			rmSync(path, { recursive: true, force: true });
-		}
-	});
+	setTrashImplementationForTests(recordTrash);
 	recordGitSpawns();
 });
 
@@ -167,6 +176,48 @@ afterAll(async () => {
 	}
 	rmSync(root, { recursive: true, force: true });
 });
+
+function deferred(): { promise: Promise<void>; resolve(): void } {
+	let resolve = () => {};
+	const promise = new Promise<void>((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
+
+/** Holds every session preparation inside pi's extension binding until released: a first session still starting. */
+function holdSessionPreparations(): {
+	entered: Promise<void>;
+	release(): void;
+	sessionIds: string[];
+	restore(): void;
+} {
+	const original = AgentSession.prototype.bindExtensions;
+	const entered = deferred();
+	const release = deferred();
+	const sessionIds: string[] = [];
+	AgentSession.prototype.bindExtensions = async function (bindings) {
+		await original.call(this, bindings);
+		sessionIds.push(this.sessionId);
+		entered.resolve();
+		await release.promise;
+	};
+	return {
+		entered: entered.promise,
+		release: release.resolve,
+		sessionIds,
+		restore: () => {
+			release.resolve();
+			AgentSession.prototype.bindExtensions = original;
+		},
+	};
+}
+
+function newChatId(known: ReadonlySet<string>): string {
+	const chat = loadChats().chats.find((candidate) => !known.has(candidate.id));
+	if (!chat) throw new Error("no new chat record");
+	return chat.id;
+}
 
 function gitUnderChats(): typeof gitSpawns {
 	return gitSpawns.filter(
@@ -295,7 +346,7 @@ test("an older client never sees the container, its chats or their session state
 	}
 }, 30_000);
 
-test("a chat whose session never started gets one through session.create, and a repository stays a repository", async () => {
+test("a chat whose session never started gets exactly one through session.create, while a repository takes many", async () => {
 	const repo = gitRepo(join(root, "repo"));
 	const project = openProject(repo);
 	const rows = (await handleRequest(
@@ -303,12 +354,129 @@ test("a chat whose session never started gets one through session.create, and a 
 		{ projectId: project.id },
 		CTX,
 	)) as Workspace[];
+	const defaultId = rows[0]?.id ?? "";
 	expect(rows[0]?.kind).toBe("default");
+	const first = (await handleRequest(
+		"session.create",
+		{ workspaceId: defaultId },
+		CTX,
+	)) as WsResult<"session.create">;
+	const second = (await handleRequest(
+		"session.create",
+		{ workspaceId: defaultId },
+		CTX,
+	)) as WsResult<"session.create">;
+	expect(second.sessionId).not.toBe(first.sessionId);
 
+	const workspace = createChatRecord();
+	expect(await listSessions(workspace.id, workspace.worktreePath)).toEqual([]);
+	const recovered = (await handleRequest(
+		"session.create",
+		{ workspaceId: workspace.id },
+		CTX,
+	)) as WsResult<"session.create">;
+	expect(recovered.model).toMatchObject({ provider: "chats", id: "chats-model" });
+	expect(
+		(await listSessions(workspace.id, workspace.worktreePath)).map((summary) => summary.sessionId),
+	).toEqual([recovered.sessionId]);
+	await expect(
+		handleRequest("session.create", { workspaceId: workspace.id }, CTX),
+	).rejects.toMatchObject({ code: "CHAT_HAS_SESSION" });
+	await handleRequest("chat.delete", { workspaceId: workspace.id }, CTX);
+}, 30_000);
+
+test("two recoveries at once join the one session the first starts, with its real model", async () => {
+	const workspace = createChatRecord();
+	const hold = holdSessionPreparations();
+	try {
+		const first = handleRequest("session.create", { workspaceId: workspace.id }, CTX);
+		await hold.entered;
+		const second = handleRequest("session.create", { workspaceId: workspace.id }, CTX);
+		hold.release();
+		const [a, b] = (await Promise.all([first, second])) as [
+			WsResult<"session.create">,
+			WsResult<"session.create">,
+		];
+		expect(b).toEqual(a);
+		expect(b.model).toMatchObject({ provider: "chats", id: "chats-model" });
+		expect(hold.sessionIds).toHaveLength(1);
+		expect(
+			(await listSessions(workspace.id, workspace.worktreePath)).map(
+				(summary) => summary.sessionId,
+			),
+		).toEqual([a.sessionId]);
+	} finally {
+		hold.restore();
+		await handleRequest("chat.delete", { workspaceId: workspace.id }, CTX);
+	}
+}, 30_000);
+
+test("deleting a chat while its first session is still starting leaves no session behind", async () => {
+	const known = new Set(loadChats().chats.map((chat) => chat.id));
+	const hold = holdSessionPreparations();
+	try {
+		const creating = handleRequest("chat.create", {}, CTX);
+		creating.catch(() => {});
+		await hold.entered;
+		const workspaceId = newChatId(known);
+		const folder = getChatWorkspace(workspaceId).worktreePath;
+		const deleting = handleRequest("chat.delete", { workspaceId }, CTX);
+		hold.release();
+		await deleting;
+		await expect(creating).rejects.toMatchObject({ code: "CHAT_DELETING" });
+		expect(hold.sessionIds).toHaveLength(1);
+		expect(hasSession(hold.sessionIds[0] ?? "")).toBe(false);
+		expect(existsSync(folder)).toBe(false);
+		expect(trashed).toContain(folder);
+		expect(loadChats().chats.some((chat) => chat.id === workspaceId)).toBe(false);
+	} finally {
+		hold.restore();
+	}
+}, 30_000);
+
+test("a chat whose deletion did not finish refuses attach, terminals and sessions after a restart, and Retry completes it", async () => {
 	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
-	await handleRequest("session.delete", { workspaceId: rows[0]?.id, sessionId: "none" }, CTX).catch(
-		() => {},
-	);
+	const { workspace, sessionId } = created;
+	faux.setResponses([fauxAssistantMessage("kept")]);
+	await promptSession(sessionId, "keep this");
+	setTrashImplementationForTests(async () => {
+		throw new Error("trash unavailable");
+	});
+	try {
+		await expect(handleRequest("chat.delete", { workspaceId: workspace.id }, CTX)).rejects.toThrow(
+			"trash unavailable",
+		);
+	} finally {
+		setTrashImplementationForTests(recordTrash);
+	}
+	expect(getChatWorkspace(workspace.id).deletionPending).toBe(true);
+	expect(hasSession(sessionId)).toBe(false);
+
+	disposeAllSessions();
+	resetChatIdCache();
+	resetChatsStoreForTests();
+	for (const [method, params] of [
+		["session.getMessages", { workspaceId: workspace.id, sessionId }],
+		["session.resources", { workspaceId: workspace.id, sessionId }],
+		["session.create", { workspaceId: workspace.id }],
+		["terminal.attach", { workspaceId: workspace.id, tabKey: "after-restart" }],
+		["terminal.reserve", { workspaceId: workspace.id, tabKey: "after-restart", title: "Shell" }],
+	] as const) {
+		await expect(handleRequest(method, params, CTX)).rejects.toMatchObject({
+			code: "CHAT_DELETION_PENDING",
+		});
+	}
+	expect(hasSession(sessionId)).toBe(false);
+
+	await handleRequest("chat.delete", { workspaceId: workspace.id }, CTX);
+	expect(existsSync(workspace.worktreePath)).toBe(false);
+	expect(trashed).toContain(workspace.worktreePath);
+	expect(trashed.some((path) => path.endsWith(`_${sessionId}.jsonl`))).toBe(true);
+	expect(loadChats().chats.some((chat) => chat.id === workspace.id)).toBe(false);
+}, 30_000);
+
+test("chat.inspect counts the files in a chat's folder", async () => {
+	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
 	const inspected = (await handleRequest(
 		"chat.inspect",
 		{ workspaceId: created.workspace.id },
