@@ -53,6 +53,7 @@ import {
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
+	TEXT_SEARCH_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TOOL_RESPONSE_CUSTOM_TYPE,
@@ -265,8 +266,15 @@ test("host search and its previews are pinned to v99", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
+test("find in files is pinned to v102", () => {
+	expect(PROTOCOL_VERSION).toBe(102);
+	expect(TEXT_SEARCH_PROTOCOL_VERSION).toBe(102);
+	expect(WS_METHODS.searchText).toBe("search.text");
+	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");
+});
+
 test("continue in workspace is pinned to v101", () => {
-	expect(PROTOCOL_VERSION).toBe(101);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTINUATION_PROTOCOL_VERSION);
 	expect(CONTINUATION_PROTOCOL_VERSION).toBe(101);
 	expect(WS_METHODS.chatContinue).toBe("chat.continue");
 	expect(WS_METHODS.chatContinuationStatus).toBe("chat.continuationStatus");

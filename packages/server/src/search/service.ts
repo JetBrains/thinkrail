@@ -6,8 +6,10 @@ import type {
 	SearchPreviewResult,
 	SearchPreviewTarget,
 	SearchQueryResult,
+	TextSearchBatch,
 	Workspace,
 	WsParams,
+	WsResult,
 } from "@thinkrail/contracts";
 import {
 	DEFAULT_SEARCH_GROUP_LIMIT,
@@ -15,6 +17,7 @@ import {
 	MAX_SEARCH_QUERY_LENGTH,
 	parseMatchTerms,
 	SEARCH_KINDS,
+	TEXT_SEARCH_LIMITS,
 } from "@thinkrail/contracts";
 import type { HistorySession } from "../history";
 import { logger } from "../log";
@@ -34,6 +37,7 @@ import {
 	searchTranscripts,
 	searchWorkspaces,
 } from "./providers";
+import { searchText } from "./text";
 
 const log = logger("search");
 
@@ -63,6 +67,11 @@ export interface SearchService {
 		audience?: SearchAudience,
 	): Promise<SearchQueryResult>;
 	preview(target: SearchPreviewTarget, audience?: SearchAudience): Promise<SearchPreviewResult>;
+	text(
+		clientKey: string,
+		params: WsParams<"search.text">,
+		emit: (batch: TextSearchBatch) => void,
+	): WsResult<"search.text">;
 	invalidateRoot(root: string): void;
 	forgetClient(clientKey: string): void;
 }
@@ -113,6 +122,8 @@ export function createSearchService(readers: SearchReaders): SearchService {
 	const files = readers.files ?? new FileListCache();
 	const now = readers.now ?? (() => performance.now());
 	const latestSeq = new Map<string, number>();
+	const latestTextSeq = new Map<string, number>();
+	const textRuns = new Map<string, AbortController>();
 
 	const visibleProjects = (audience: SearchAudience): Project[] =>
 		readers.projects().filter((project) => audience.chats || project.kind !== "chats");
@@ -228,12 +239,57 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			return transcriptPreview(session, target.messageIndex, target.anchorText?.slice(0, 120));
 		},
 
+		text(clientKey, params, emit) {
+			const seq = params.seq;
+			if (seq < (latestTextSeq.get(clientKey) ?? Number.NEGATIVE_INFINITY)) {
+				return { seq, superseded: true };
+			}
+			latestTextSeq.set(clientKey, seq);
+			textRuns.get(clientKey)?.abort();
+			const controller = new AbortController();
+			textRuns.set(clientKey, controller);
+			const send = (batch: Omit<TextSearchBatch, "seq">) => {
+				if (!controller.signal.aborted) emit({ seq, ...batch });
+			};
+			const settle = () => {
+				if (textRuns.get(clientKey) === controller) textRuns.delete(clientKey);
+			};
+			const nothing = () => {
+				send({ files: [], done: { reason: "complete", files: 0, lines: 0 } });
+				settle();
+			};
+			const query = params.query.slice(0, TEXT_SEARCH_LIMITS.maxQuery);
+			if (query.trim().length < TEXT_SEARCH_LIMITS.minQuery) {
+				nothing();
+				return { seq };
+			}
+			const projects = readers.projects();
+			const root = resolveSearchRoot(projects, openWorkspaces(projects), params.context);
+			if (!root) {
+				nothing();
+				return { seq };
+			}
+			const scope = { projectId: root.projectId, workspaceId: root.workspaceId };
+			void searchText(
+				root,
+				{ query, caseSensitive: params.caseSensitive, wholeWord: params.wholeWord },
+				(batch) => send({ root: scope, ...batch }),
+				controller.signal,
+			)
+				.catch(() => send({ files: [], done: { reason: "failed", files: 0, lines: 0 } }))
+				.finally(settle);
+			return { seq };
+		},
+
 		invalidateRoot(root) {
 			files.invalidate(root);
 			readers.invalidateSpecs(root);
 		},
 
 		forgetClient(clientKey) {
+			textRuns.get(clientKey)?.abort();
+			textRuns.delete(clientKey);
+			latestTextSeq.delete(clientKey);
 			latestSeq.delete(clientKey);
 		},
 	};
