@@ -23,12 +23,13 @@ import { useShallow } from "zustand/react/shallow";
 import {
 	EMPTY_RUNTIME,
 	selectChatAttended,
+	selectChatsContainer,
 	selectReadyCompletionAck,
 	specPathMatcher,
 	toast,
 	useAppStore,
 } from "@/store";
-import { getTransport, respondToTool } from "@/transport";
+import { errorText, getTransport, respondToTool } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
@@ -574,6 +575,7 @@ const ChatTranscript = forwardRef<
 		[interactionStates, interactionFocusScope, awaitingToolCallId],
 	);
 
+	const continuations = useAppStore((s) => s.chatContinuations);
 	const chatActions = useMemo<ChatActions>(
 		() => ({
 			cancelAutomaticReveal,
@@ -588,9 +590,39 @@ const ChatTranscript = forwardRef<
 			openMcpSettings,
 			openProviderSettings,
 			findModel,
+			continuationOf: (operationId) => continuations[operationId],
+			openContinuation: (continuation) => {
+				if (!continuation.workspaceId) return;
+				const target = { id: continuation.workspaceId, projectId: continuation.projectId };
+				void getTransport()
+					.request("workspace.list", { projectId: continuation.projectId })
+					.then((rows) => useAppStore.getState().setWorkspaces(continuation.projectId, rows))
+					.catch(() => {})
+					.finally(() =>
+						useAppStore.getState().activateWorkspaceFromRoute(target, continuation.sessionId),
+					);
+			},
+			retryContinuation: (details) => {
+				void getTransport()
+					.request("chat.continue", { workspaceId, projectId: details.projectId })
+					.catch((err: unknown) =>
+						toast.error(errorText(err), t("chat.turn.continuation.retryFailed")),
+					);
+			},
+			openHandoffSource: (details) => {
+				const container = selectChatsContainer(useAppStore.getState());
+				if (!container) return;
+				useAppStore
+					.getState()
+					.activateWorkspaceFromRoute(
+						{ id: details.sourceWorkspaceId, projectId: container.id },
+						details.sourceSessionId,
+					);
+			},
 		}),
 		[
 			cancelAutomaticReveal,
+			continuations,
 			findModel,
 			focusComposer,
 			markResultSeen,
@@ -601,6 +633,8 @@ const ChatTranscript = forwardRef<
 			resultOpener,
 			revealElement,
 			sessionId,
+			t,
+			workspaceId,
 		],
 	);
 	const resourceScope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);

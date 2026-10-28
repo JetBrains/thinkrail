@@ -1,5 +1,12 @@
-import type { ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
+import {
+	type ChatContinuation,
+	CONTINUATION_PROTOCOL_VERSION,
+	type ThinkingLevel,
+	type WireModel,
+	type Workspace,
+} from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
+import { useEffect } from "react";
 import type { ChatAttachment } from "../chat/types";
 import { selectWorkspaceTick, supportsProjectlessChats, toast, useAppStore } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
@@ -101,4 +108,60 @@ export async function inspectProjectlessChat(
 	} catch {
 		return null;
 	}
+}
+
+export function supportsChatContinuation(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= CONTINUATION_PROTOCOL_VERSION;
+}
+
+const initiatedContinuations = new Set<string>();
+
+/**
+ * Asks the host to continue a chat in a new workspace of `projectId`; this client remembers the
+ * operation so that, alone among clients, it follows the new chat when the host reports `started`.
+ */
+export async function continueChatInWorkspace(
+	workspaceId: string,
+	projectId: string,
+): Promise<string | null> {
+	try {
+		const { operationId } = await getTransport().request("chat.continue", {
+			workspaceId,
+			projectId,
+		});
+		initiatedContinuations.add(operationId);
+		return operationId;
+	} catch (err) {
+		toast.error(errorText(err), t("panels.chats.continueFailed"));
+		return null;
+	}
+}
+
+/** Called for every `chat.continuation` push: only the initiating client navigates, once, when the new chat exists. */
+export function followContinuation(continuation: ChatContinuation): void {
+	if (!initiatedContinuations.has(continuation.operationId)) return;
+	if (continuation.phase === "failed" || continuation.phase === "lost") {
+		initiatedContinuations.delete(continuation.operationId);
+		toast.error(
+			continuation.reason ?? t("panels.chats.continueFailed"),
+			t("panels.chats.continueFailed"),
+		);
+		return;
+	}
+	if (continuation.phase !== "started" || !continuation.workspaceId) return;
+	initiatedContinuations.delete(continuation.operationId);
+	const { workspaceId, projectId, sessionId } = continuation;
+	void loadProjectWorkspaces(projectId)
+		.catch(() => {})
+		.finally(() => {
+			useAppStore.getState().activateWorkspaceFromRoute({ id: workspaceId, projectId }, sessionId);
+		});
+}
+
+/** Mounted once by the shell: every continuation push the store records is offered to `followContinuation`. */
+export function useFollowContinuations(): void {
+	const continuations = useAppStore((s) => s.chatContinuations);
+	useEffect(() => {
+		for (const continuation of Object.values(continuations)) followContinuation(continuation);
+	}, [continuations]);
 }

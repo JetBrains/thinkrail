@@ -1,6 +1,8 @@
 import type {
 	AssistantMessage,
 	BackgroundCommandCompletionDetails,
+	ChatHandoffDetails,
+	ContinueInWorkspaceRequestDetails,
 	ExtUiRequest,
 	ImageContent,
 	ReviewFixDetails,
@@ -48,6 +50,13 @@ export type ChatTurn =
 			timestamp: number;
 	  }
 	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string; timestamp: number }
+	| {
+			kind: "continuationRequest";
+			id: string;
+			details: ContinueInWorkspaceRequestDetails;
+			timestamp: number;
+	  }
+	| { kind: "handoff"; id: string; details: ChatHandoffDetails; timestamp: number }
 	| {
 			kind: "retry";
 			id: string;

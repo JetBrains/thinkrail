@@ -1,6 +1,8 @@
 import {
 	assistantToolCallsAreExecutable,
 	type BackgroundCommandCompletionDetails,
+	type ChatHandoffDetails,
+	type ContinueInWorkspaceRequestDetails,
 	completionDelivery,
 	type GitDiffScope,
 	type GitFileChange,
@@ -64,6 +66,8 @@ export type ChatRow =
 	| { kind: "backgroundCommandCompletion"; id: string; details: BackgroundCommandCompletionDetails }
 	| { kind: "subagentCompletion"; id: string; details: SubagentCompletionDetails; text: string }
 	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string }
+	| { kind: "continuationRequest"; id: string; details: ContinueInWorkspaceRequestDetails }
+	| { kind: "handoff"; id: string; details: ChatHandoffDetails }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
 			kind: "activity";
@@ -130,6 +134,8 @@ export function opensRound(turn: ChatTurn): boolean {
 	switch (turn.kind) {
 		case "user":
 		case "reviewFix":
+		case "continuationRequest":
+		case "handoff":
 			return true;
 		case "backgroundCommandCompletion":
 		case "subagentCompletion":
@@ -270,6 +276,12 @@ export function deriveRows(
 					break;
 				case "reviewFix":
 					rows.push({ kind: "reviewFix", id: turn.id, details: turn.details, text: turn.text });
+					break;
+				case "continuationRequest":
+					rows.push({ kind: "continuationRequest", id: turn.id, details: turn.details });
+					break;
+				case "handoff":
+					rows.push({ kind: "handoff", id: turn.id, details: turn.details });
 					break;
 			}
 		}

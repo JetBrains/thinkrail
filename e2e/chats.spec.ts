@@ -200,3 +200,32 @@ test("from the palette, typed text starts a chat without a project through the d
 	expect(storedChats().chats).toEqual([]);
 	await expect(page.getByTestId("scope-context")).not.toHaveAttribute("data-context", "chat");
 });
+
+test("Continue in workspace asks the chat's agent for a summary and shows the operation's phases in the chat", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await page.getByTestId("add-chat").click();
+	await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
+	await page.getByTestId("chat-input").fill("Remember: the answer is 42.");
+	await page.getByTestId("chat-send").click();
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(1);
+
+	const row = page.getByTestId("chat-item");
+	await row.getByTestId("chat-menu").click();
+	await page.getByTestId("chat-continue").click();
+	const dialog = page.getByTestId("continue-chat-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("continue-chat-project")).toContainText("sample-project");
+	await dialog.getByTestId("continue-chat-confirm").click();
+	await expect(dialog).toBeHidden();
+
+	const card = page.getByTestId("continuation-card");
+	await expect(card).toBeVisible({ timeout: 15_000 });
+	await expect(card).toContainText("Continue in workspace — sample-project");
+	await expect(card).toHaveAttribute("data-phase", "failed", { timeout: 30_000 });
+	await expect(card.getByTestId("continuation-status")).toContainText("without a summary");
+	await expect(card.getByTestId("continuation-retry")).toBeVisible();
+	await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
+	expect(storedChats().chats[0]?.continuedTo).toBeUndefined();
+});

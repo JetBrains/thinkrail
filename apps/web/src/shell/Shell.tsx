@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { shortcutLabel } from "../commands";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
-import { canStartProjectlessChat } from "../panels/chatActions";
+import { canStartProjectlessChat, useFollowContinuations } from "../panels/chatActions";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { SurveyInvitationDialog } from "../panels/SurveyInvitationDialog";
@@ -75,6 +75,7 @@ export function Shell() {
 	const t = useT();
 	useLocalLayoutState();
 	useAttentionNotifications();
+	useFollowContinuations();
 	const status = useAppStore((s) => s.status);
 	const analyticsConsentOpen = useAppStore(selectAnalyticsConsentPromptOpen);
 	const onboardingActive = useAppStore(selectOnboardingActive);

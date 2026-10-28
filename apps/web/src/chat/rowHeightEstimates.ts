@@ -154,6 +154,10 @@ export function estimateChatRowHeight(row: ChatRow): number {
 					(row.details.note ? wrappedLines(row.details.note) * PROSE_LINE_HEIGHT : 0) +
 					row.details.comments.length * 28,
 			);
+		case "continuationRequest":
+			return 72;
+		case "handoff":
+			return clampHeight(56 + wrappedLines(row.details.summary) * PROSE_LINE_HEIGHT);
 		case "tool":
 			return estimateToolHeight(row);
 		case "activity":
