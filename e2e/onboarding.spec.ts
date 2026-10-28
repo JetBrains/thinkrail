@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { AppConfig } from "@thinkrail/contracts";
 import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
-import { openAppFresh } from "./fixtures/app";
+import { openAppFresh, resetApp } from "./fixtures/app";
 import { openProviders } from "./fixtures/jbcentral";
 import { E2E_DATA_DIR, E2E_HOME_DIR, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
@@ -33,14 +33,32 @@ function setOnboardingDismissed(
 	);
 }
 
-async function requireColdProviders(baseURL: string | undefined): Promise<void> {
-	const report = await withWire(baseURL, (wire) => wire.request("provider.status", {}));
+async function signOutEveryProvider(wire: E2eWire): Promise<void> {
+	const report = await wire.request("provider.status", {});
+	for (const p of report.providers) {
+		if (p.canLogout) await wire.request("provider.logout", { providerId: p.id });
+	}
+}
+
+async function openColdStart(page: Page, baseURL: string | undefined): Promise<void> {
+	await resetApp(page);
+	const report = await withWire(baseURL, async (wire) => {
+		await expect
+			.poll(async () => (await wire.request("provider.status", {})).jbcentral.state, {
+				timeout: 15_000,
+			})
+			.not.toBe("configuring");
+		await signOutEveryProvider(wire);
+		return wire.request("provider.status", {});
+	});
 	const configured = report.providers.filter((p) => p.configured);
 	test.skip(
 		configured.length > 0 && configured.every((p) => p.kind === "env"),
 		"an ambient env provider makes this host a warm start",
 	);
 	expect(configured.map((p) => p.id)).toEqual([]);
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 }
 
 async function connectE2eKeyProvider(page: Page, scope: Locator): Promise<void> {
@@ -52,15 +70,6 @@ async function connectE2eKeyProvider(page: Page, scope: Locator): Promise<void> 
 	await expect(page.getByTestId("login-dialog")).toHaveAttribute("data-provider", "e2e-apikey");
 	await page.getByTestId("login-input").fill("e2e-onboarding-key");
 	await page.getByTestId("login-submit").click();
-}
-
-function signOutEveryProvider(baseURL: string | undefined): Promise<void> {
-	return withWire(baseURL, async (wire) => {
-		const report = await wire.request("provider.status", {});
-		for (const p of report.providers) {
-			if (p.configured && p.canLogout) await wire.request("provider.logout", { providerId: p.id });
-		}
-	});
 }
 
 async function hideModels(page: Page): Promise<{ hidden: boolean }> {
@@ -125,9 +134,12 @@ function signInOutsideThinkRail(providerId: string): void {
 }
 
 test.afterEach(async ({ baseURL }) => {
-	await signOutEveryProvider(baseURL);
-	await setOnboardingDismissed(baseURL, true);
+	const cleanup = await Promise.allSettled([
+		withWire(baseURL, signOutEveryProvider),
+		setOnboardingDismissed(baseURL, true),
+	]);
 	rmSync(PROJECTS_PARENT, { recursive: true, force: true });
+	for (const step of cleanup) if (step.status === "rejected") throw step.reason;
 });
 
 test("Start a new project creates the repo under ~/thinkrail and seeds the setup chat", async ({
@@ -182,8 +194,7 @@ test("a cold start shows the onboarding wizard once; Skip setup persists", async
 	baseURL,
 }) => {
 	await setOnboardingDismissed(baseURL, false);
-	await openAppFresh(page);
-	await requireColdProviders(baseURL);
+	await openColdStart(page, baseURL);
 
 	const wizard = page.getByTestId("onboarding-wizard");
 	await expect(wizard).toHaveAttribute("data-step", "intro");
@@ -262,8 +273,7 @@ test("Get started detects a signed-in Claude Code and offers its sign-in above t
 	);
 	try {
 		await setOnboardingDismissed(baseURL, false);
-		await openAppFresh(page);
-		await requireColdProviders(baseURL);
+		await openColdStart(page, baseURL);
 
 		const wizard = page.getByTestId("onboarding-wizard");
 		await wizard.getByTestId("onboarding-start").click();
@@ -296,8 +306,7 @@ test("Get started asks about usage data as its own step before the models, or th
 	await setOnboardingDismissed(baseURL, false);
 	await seedAnalyticsConsent(baseURL, false, false);
 	try {
-		await openAppFresh(page);
-		await requireColdProviders(baseURL);
+		await openColdStart(page, baseURL);
 
 		const wizard = page.getByTestId("onboarding-wizard");
 		const consent = page.getByTestId("analytics-consent-dialog");
@@ -343,8 +352,7 @@ test("a failed usage-data save keeps the privacy step, its off choice and the er
 	await setOnboardingDismissed(baseURL, false);
 	await seedAnalyticsConsent(baseURL, false, false);
 	try {
-		await openAppFresh(page);
-		await requireColdProviders(baseURL);
+		await openColdStart(page, baseURL);
 
 		const wizard = page.getByTestId("onboarding-wizard");
 		await wizard.getByTestId("onboarding-start").click();
@@ -390,8 +398,7 @@ test("an opt-out confirmed elsewhere while the privacy step is open is adopted, 
 	await setOnboardingDismissed(baseURL, false);
 	await seedAnalyticsConsent(baseURL, false, false);
 	try {
-		await openAppFresh(page);
-		await requireColdProviders(baseURL);
+		await openColdStart(page, baseURL);
 
 		const wizard = page.getByTestId("onboarding-wizard");
 		await wizard.getByTestId("onboarding-start").click();
@@ -417,8 +424,7 @@ test("a provider connected through Settings during the intro is verified on reac
 	tag: "@dev-seam",
 }, async ({ page, baseURL }) => {
 	await setOnboardingDismissed(baseURL, false);
-	await openAppFresh(page);
-	await requireColdProviders(baseURL);
+	await openColdStart(page, baseURL);
 
 	const wizard = page.getByTestId("onboarding-wizard");
 	await expect(wizard).toHaveAttribute("data-step", "intro");
@@ -439,8 +445,7 @@ test("a provider connected and signed out again through Settings during the intr
 	tag: "@dev-seam",
 }, async ({ page, baseURL }) => {
 	await setOnboardingDismissed(baseURL, false);
-	await openAppFresh(page);
-	await requireColdProviders(baseURL);
+	await openColdStart(page, baseURL);
 
 	const wizard = page.getByTestId("onboarding-wizard");
 	await openProviders(page);
@@ -467,8 +472,7 @@ test("a provider signed out while its status re-read is still in flight is not v
 }, async ({ page, baseURL }) => {
 	await setOnboardingDismissed(baseURL, false);
 	const status = await holdProviderStatus(page);
-	await openAppFresh(page);
-	await requireColdProviders(baseURL);
+	await openColdStart(page, baseURL);
 
 	const wizard = page.getByTestId("onboarding-wizard");
 	await openProviders(page);
@@ -498,8 +502,7 @@ test("the onboarding wizard verifies the connection in place, then collapses to 
 	tag: "@dev-seam",
 }, async ({ page, baseURL }) => {
 	await setOnboardingDismissed(baseURL, false);
-	await openAppFresh(page);
-	await requireColdProviders(baseURL);
+	await openColdStart(page, baseURL);
 
 	const wizard = page.getByTestId("onboarding-wizard");
 	await wizard.getByTestId("onboarding-start").click();
@@ -538,8 +541,7 @@ test("a connection with zero models warns, and Check again verifies it once mode
 }, async ({ page, baseURL }) => {
 	await setOnboardingDismissed(baseURL, false);
 	const models = await hideModels(page);
-	await openAppFresh(page);
-	await requireColdProviders(baseURL);
+	await openColdStart(page, baseURL);
 
 	const wizard = page.getByTestId("onboarding-wizard");
 	await wizard.getByTestId("onboarding-start").click();
@@ -561,8 +563,7 @@ test("Back from a zero-model connection returns to the choices", {
 }, async ({ page, baseURL }) => {
 	await setOnboardingDismissed(baseURL, false);
 	const models = await hideModels(page);
-	await openAppFresh(page);
-	await requireColdProviders(baseURL);
+	await openColdStart(page, baseURL);
 
 	const wizard = page.getByTestId("onboarding-wizard");
 	await wizard.getByTestId("onboarding-start").click();
@@ -578,8 +579,7 @@ test("Back from a zero-model connection returns to the choices", {
 test("connecting from the Welcome banner closes the stack, toasts once, and hands off", {
 	tag: "@dev-seam",
 }, async ({ page, baseURL }) => {
-	await openAppFresh(page);
-	await requireColdProviders(baseURL);
+	await openColdStart(page, baseURL);
 	const banner = page.getByTestId("welcome-provider-warning");
 
 	await page.getByTestId("welcome-connect-provider").click();
@@ -599,8 +599,7 @@ test("connecting from the Welcome banner closes the stack, toasts once, and hand
 test("Welcome re-reads provider status when it opens again, so a sign-in made outside ThinkRail shows", {
 	tag: "@dev-seam",
 }, async ({ page, baseURL }) => {
-	await openAppFresh(page);
-	await requireColdProviders(baseURL);
+	await openColdStart(page, baseURL);
 	const banner = page.getByTestId("welcome-provider-warning");
 	await expect(banner).toBeVisible();
 
@@ -620,8 +619,7 @@ test("a sign-in abandoned by a reload does not park the next attempt on Workingâ
 	page,
 	baseURL,
 }) => {
-	await openAppFresh(page);
-	await requireColdProviders(baseURL);
+	await openColdStart(page, baseURL);
 
 	const startAnthropicSignIn = async () => {
 		await page.getByTestId("welcome-connect-provider").click();

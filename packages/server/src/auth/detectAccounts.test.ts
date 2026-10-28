@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -373,11 +373,22 @@ describe("file robustness", () => {
 	test("a hung read costs its source at most 1.5 s and never the other sources", async () => {
 		hungPaths.add(join(home, ".claude", ".credentials.json"));
 		put(join(home, ".kimi", "credentials", "kimi-code.json"), { refresh_token: "secret" });
-		const started = performance.now();
-		expect(await sources()).toEqual(["kimi-cli"]);
-		const elapsed = performance.now() - started;
-		expect(elapsed).toBeGreaterThanOrEqual(1400);
-		expect(elapsed).toBeLessThan(3000);
+		jest.useFakeTimers();
+		try {
+			let found: string[] | undefined;
+			const detecting = sources().then((result) => {
+				found = result;
+			});
+			while (jest.getTimerCount() > 1) await realStat(home);
+			jest.advanceTimersByTime(1499);
+			await realStat(home);
+			expect(found).toBeUndefined();
+			jest.advanceTimersByTime(1);
+			await detecting;
+			expect(found).toEqual(["kimi-cli"]);
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 
 	test("the HOME environment variable locates the default home", async () => {

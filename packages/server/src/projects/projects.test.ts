@@ -291,13 +291,19 @@ function withFailingCommitHook<T>(hookBody: string, run: () => T): T {
 	writeFileSync(join(hooks, "pre-commit"), `#!/bin/sh\n${hookBody}\nexit 1\n`, { mode: 0o755 });
 	const config = join(dataDir, "gitconfig");
 	writeFileSync(config, `[core]\n\thooksPath = "${hooks.replaceAll("\\", "/")}"\n`);
-	const saved = process.env.GIT_CONFIG_GLOBAL;
+	const keys = ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"] as const;
+	const saved = keys.map((key) => process.env[key]);
 	process.env.GIT_CONFIG_GLOBAL = config;
+	delete process.env.GIT_CONFIG_COUNT;
+	delete process.env.GIT_CONFIG_PARAMETERS;
 	try {
 		return run();
 	} finally {
-		if (saved === undefined) delete process.env.GIT_CONFIG_GLOBAL;
-		else process.env.GIT_CONFIG_GLOBAL = saved;
+		keys.forEach((key, index) => {
+			const value = saved[index];
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		});
 	}
 }
 

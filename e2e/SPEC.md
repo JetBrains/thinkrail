@@ -351,8 +351,12 @@ unrelated scenarios stay unblocked. They also seed the automatic interview invit
 dismissed: the serial agent lane intentionally accumulates accepted prompts across scenarios, while dedicated
 feedback coverage injects and asserts the addressed invitation channel directly. The cold-start onboarding
 wizard is likewise seeded dismissed (`onboardingDismissed: true`, in the config file and again over the
-settings wire, since the host may have loaded its config first) — every reset is a cold start with no
-provider — and only `onboarding.spec.ts` re-arms it over the settings wire, restoring it afterwards. Before any fixture reset
+settings wire, since the host may have loaded its config first), and only `onboarding.spec.ts` re-arms it
+over the settings wire, restoring it afterwards. The wizard gate decides once per page load, so that spec's
+cold starts settle the host before the first load: after the reset they wait out a provider-runtime
+replacement still in flight (`jbcentral` `configuring` keeps reporting the previous runtime's providers),
+sign out every stored credential, and fail unless at most ambient env providers remain (those skip). Its
+teardown attempts every cleanup step even when one fails. Before any fixture reset
 deletes transcript storage, it lists and disposes every live session through the public wire; disposal aborts
 and settles an unfinished provider turn first, so a test ending mid-turn cannot recreate a headerless JSONL
 behind the next scenario. Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,
