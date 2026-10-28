@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	readFileSync,
+	realpathSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import {
@@ -323,55 +331,174 @@ export interface PersistedChats {
 
 const EMPTY_CHATS: PersistedChats = { version: CHATS_FILE_VERSION, container: null, chats: [] };
 
+const isText = (value: unknown): value is string => typeof value === "string";
+const isAbsolutePath = (value: unknown): value is string => isText(value) && isAbsolute(value);
+const optional = (value: unknown, valid: (value: unknown) => boolean): boolean =>
+	value === undefined || valid(value);
+
+function isChatsContainerRecord(raw: unknown): raw is Project {
+	return (
+		isRecord(raw) &&
+		raw.kind === "chats" &&
+		isText(raw.id) &&
+		raw.id !== "" &&
+		isText(raw.name) &&
+		isAbsolutePath(raw.path) &&
+		isText(raw.slug) &&
+		Number.isFinite(raw.lastOpened) &&
+		optional(raw.closed, (value) => value === true) &&
+		optional(raw.trusted, (value) => typeof value === "boolean")
+	);
+}
+
+function isChatRecord(raw: unknown, containerId: string): raw is Workspace {
+	return (
+		isRecord(raw) &&
+		raw.kind === "chat" &&
+		isText(raw.id) &&
+		raw.id !== "" &&
+		raw.projectId === containerId &&
+		isText(raw.name) &&
+		isText(raw.branch) &&
+		isText(raw.baseBranch) &&
+		isAbsolutePath(raw.worktreePath) &&
+		optional(raw.renamed, (value) => typeof value === "boolean") &&
+		optional(raw.deletionPending, (value) => value === true) &&
+		optional(raw.initialTerminalPending, (value) => value === true) &&
+		optional(raw.lastActiveAt, Number.isFinite)
+	);
+}
+
 function parseChats(raw: unknown): PersistedChats | null {
-	if (!isRecord(raw) || raw.version !== CHATS_FILE_VERSION || !Array.isArray(raw.chats))
+	if (!isRecord(raw) || raw.version !== CHATS_FILE_VERSION || !Array.isArray(raw.chats)) {
 		return null;
-	const container = raw.container;
-	if (container !== null && (!isRecord(container) || container.kind !== "chats")) return null;
-	if (!raw.chats.every((chat) => isRecord(chat) && chat.kind === "chat")) return null;
+	}
+	const { container, chats } = raw;
+	if (container === null) return chats.length === 0 ? EMPTY_CHATS : null;
+	if (!isChatsContainerRecord(container)) return null;
+	if (!chats.every((chat) => isChatRecord(chat, container.id))) return null;
+	if (new Set(chats.map((chat) => chat.id)).size !== chats.length) return null;
 	return {
 		version: CHATS_FILE_VERSION,
-		container: container as Project | null,
-		chats: raw.chats as Workspace[],
+		container: { ...container, path: storedDirectory(container.path) },
+		chats: chats.map((chat) => ({ ...chat, worktreePath: storedDirectory(chat.worktreePath) })),
 	};
 }
 
-/** `null` until the first load; `false` once a corrupt file was set aside — chat writes are refused until restart. */
-let chatsWritable: boolean | null = null;
+/** Why chat writes are refused: set aside as unreadable (until restart), written by a newer host, or a read that failed now. */
+export type ChatsStoreProblem = "set-aside" | "newer" | "unreadable";
 
-export function chatsStoreWritable(): boolean {
-	if (chatsWritable === null) loadChats();
-	return chatsWritable === true;
-}
+type FileIdentity = { ino: number; size: number; mtimeMs: number } | null;
+
+type ChatsStore =
+	| { kind: "ready"; value: PersistedChats; identity: FileIdentity }
+	| { kind: "newer"; identity: FileIdentity }
+	| { kind: "set-aside" }
+	| { kind: "unreadable" };
+
+/**
+ * The parsed store, valid while `chats.json` keeps the identity it was read at. `unreadable` is no cache:
+ * the next load reads again, but no partitioning save builds on a read that failed.
+ */
+let chatsStore: { root: string; store: ChatsStore } | null = null;
 
 /** Tests swap data dirs under one process; the next ask re-reads the store instead of keeping a set-aside latch. */
 export function resetChatsStoreForTests(): void {
-	chatsWritable = null;
+	chatsStore = null;
+}
+
+function chatsFileIdentity(path: string): FileIdentity | undefined {
+	try {
+		const { ino, size, mtimeMs } = statSync(path);
+		return { ino, size, mtimeMs };
+	} catch (error) {
+		return (error as NodeJS.ErrnoException).code === "ENOENT" ? null : undefined;
+	}
+}
+
+function sameIdentity(a: FileIdentity, b: FileIdentity): boolean {
+	return (
+		a === b ||
+		(a !== null && b !== null && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs)
+	);
+}
+
+function remember(root: string, store: ChatsStore): ChatsStore {
+	chatsStore = { root, store };
+	return store;
+}
+
+function readChatsStore(): ChatsStore {
+	const root = dataDir();
+	const path = join(root, "chats.json");
+	const cached = chatsStore?.root === root ? chatsStore.store : null;
+	if (cached?.kind === "set-aside") return cached;
+	const identity = chatsFileIdentity(path);
+	if (identity === undefined) return remember(root, { kind: "unreadable" });
+	if (cached && cached.kind !== "unreadable" && sameIdentity(cached.identity, identity)) {
+		return cached;
+	}
+	if (identity === null) return remember(root, { kind: "ready", value: EMPTY_CHATS, identity });
+	let text: string;
+	try {
+		text = readFileSync(path, "utf8");
+	} catch {
+		return remember(root, { kind: "unreadable" });
+	}
+	let raw: unknown;
+	try {
+		raw = JSON.parse(text);
+	} catch {
+		return setAsideChats(root, path);
+	}
+	const version = isRecord(raw) ? raw.version : undefined;
+	if (typeof version === "number" && Number.isInteger(version) && version > CHATS_FILE_VERSION) {
+		return remember(root, { kind: "newer", identity });
+	}
+	const value = parseChats(raw);
+	return value ? remember(root, { kind: "ready", value, identity }) : setAsideChats(root, path);
+}
+
+function setAsideChats(root: string, path: string): ChatsStore {
+	try {
+		renameSync(path, `${path}.corrupt-${Date.now()}`);
+	} catch {}
+	return remember(root, { kind: "set-aside" });
+}
+
+export function chatsStoreProblem(): ChatsStoreProblem | null {
+	const store = readChatsStore();
+	return store.kind === "ready" ? null : store.kind;
 }
 
 export function loadChats(): PersistedChats {
-	const loaded = loadSessionMetadata("chats.json", parseChats);
-	if (loaded.kind === "set-aside") {
-		chatsWritable = false;
-		return EMPTY_CHATS;
+	const store = readChatsStore();
+	return structuredClone(store.kind === "ready" ? store.value : EMPTY_CHATS);
+}
+
+/** What a partitioning save may build on: the store as last read, only while the file still is what was read. */
+function writableChats(): PersistedChats | null {
+	const root = dataDir();
+	const cached = chatsStore?.root === root ? chatsStore.store : null;
+	if (cached === null) {
+		const store = readChatsStore();
+		return store.kind === "ready" ? store.value : null;
 	}
-	chatsWritable ??= true;
-	if (loaded.kind === "missing") return EMPTY_CHATS;
-	return {
-		...loaded.value,
-		container: loaded.value.container
-			? { ...loaded.value.container, path: storedDirectory(loaded.value.container.path) }
-			: null,
-		chats: loaded.value.chats.map((chat) => ({
-			...chat,
-			worktreePath: storedDirectory(chat.worktreePath),
-		})),
-	};
+	if (cached.kind !== "ready") return null;
+	const identity = chatsFileIdentity(join(root, "chats.json"));
+	return identity !== undefined && sameIdentity(cached.identity, identity) ? cached.value : null;
 }
 
 function saveChats(chats: PersistedChats): void {
-	if (!chatsStoreWritable()) return;
 	writeJsonAtomic("chats.json", chats);
+	const root = dataDir();
+	const identity = chatsFileIdentity(join(root, "chats.json"));
+	remember(
+		root,
+		identity === undefined
+			? { kind: "unreadable" }
+			: { kind: "ready", value: structuredClone(chats), identity },
+	);
 }
 
 export function isChatsContainer(project: Pick<Project, "kind">): boolean {
@@ -398,8 +525,8 @@ export function saveProjects(projects: Project[]): void {
 		projects.filter((project) => !isChatsContainer(project)),
 	);
 	const container = projects.find(isChatsContainer) ?? null;
-	const stored = loadChats();
-	if ((stored.container?.id ?? null) === (container?.id ?? null) && !container) return;
+	const stored = writableChats();
+	if (!stored || (!container && !stored.container)) return;
 	saveChats({ ...stored, container });
 }
 
@@ -418,8 +545,8 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 		workspaces.filter((workspace) => !isChatWorkspace(workspace)),
 	);
 	const chats = workspaces.filter(isChatWorkspace);
-	const stored = loadChats();
-	if (chats.length === 0 && stored.chats.length === 0) return;
+	const stored = writableChats();
+	if (!stored || (chats.length === 0 && stored.chats.length === 0)) return;
 	saveChats({ ...stored, chats });
 }
 

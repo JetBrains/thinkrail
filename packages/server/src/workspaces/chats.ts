@@ -4,8 +4,9 @@ import { join } from "node:path";
 import type { Project, Workspace } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
+	type ChatsStoreProblem,
 	chatsRoot,
-	chatsStoreWritable,
+	chatsStoreProblem,
 	isChatsContainer,
 	isChatWorkspace,
 	isUnderChatsRoot,
@@ -33,13 +34,16 @@ export function setChatPublishers(next: ChatPublishers | null): void {
 	publishers = next;
 }
 
+const CHATS_STORE_PROBLEMS: Record<ChatsStoreProblem, string> = {
+	"set-aside":
+		"The chats store was unreadable and was set aside; restart ThinkRail to write chats again.",
+	newer: "The chats store was written by a newer ThinkRail; update ThinkRail to write chats.",
+	unreadable: "The chats store could not be read; try again.",
+};
+
 function assertChatsWritable(): void {
-	if (!chatsStoreWritable()) {
-		throw new CodedError(
-			"CHATS_STORE_UNAVAILABLE",
-			"The chats store was set aside as corrupt; restart ThinkRail to write chats again.",
-		);
-	}
+	const problem = chatsStoreProblem();
+	if (problem) throw new CodedError("CHATS_STORE_UNAVAILABLE", CHATS_STORE_PROBLEMS[problem]);
 }
 
 /** The one Chats container, found by kind or created with an opaque id; its root exists afterwards. */

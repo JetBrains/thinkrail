@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import {
 	existsSync,
+	mkdirSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
@@ -12,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Project, Workspace } from "@thinkrail/contracts";
 import {
-	chatsStoreWritable,
+	chatsStoreProblem,
 	loadChats,
 	loadProjects,
 	loadWorkspaces,
@@ -99,15 +100,81 @@ test("a repository-only save never creates chats.json, and dropping every chat e
 	expect(loadWorkspaces()).toEqual([worktree]);
 });
 
-test("a corrupt chats.json is set aside, loads as empty and refuses chat writes until restart", () => {
-	writeFileSync(join(root, "chats.json"), "{not json");
+const setAside = () => readdirSync(root).filter((name) => name.startsWith("chats.json.corrupt-"));
+
+for (const [label, contents] of [
+	["not JSON", "{not json"],
+	[
+		"a version-1 store of the wrong shape",
+		JSON.stringify({ version: 1, container: { kind: "chats" }, chats: [] }),
+	],
+	[
+		"a version-1 store whose chat names another container",
+		JSON.stringify({ version: 1, container, chats: [{ ...chat, projectId: "elsewhere" }] }),
+	],
+] as const) {
+	test(`${label} is set aside, loads as empty and refuses chat writes until restart`, () => {
+		writeFileSync(join(root, "chats.json"), contents);
+		expect(loadChats()).toEqual({ version: 1, container: null, chats: [] });
+		expect(chatsStoreProblem()).toBe("set-aside");
+		expect(setAside()).toHaveLength(1);
+
+		saveProjects([repo, container]);
+		saveWorkspaces([worktree, chat]);
+		expect(existsSync(join(root, "chats.json"))).toBe(false);
+		expect(legacy("projects.json")).toEqual([repo]);
+		expect(legacy("workspaces.json")).toEqual([worktree]);
+		expect(chatsStoreProblem()).toBe("set-aside");
+	});
+}
+
+test("a store a newer host wrote is left untouched: it loads as empty and refuses chat writes", () => {
+	const newer = `${JSON.stringify({ version: 2, chats: [{ kind: "chat", shape: "future" }] })}\n`;
+	writeFileSync(join(root, "chats.json"), newer);
 	expect(loadChats()).toEqual({ version: 1, container: null, chats: [] });
-	expect(chatsStoreWritable()).toBe(false);
-	expect(readdirSync(root).some((name) => name.startsWith("chats.json.corrupt-"))).toBe(true);
+	expect(chatsStoreProblem()).toBe("newer");
 
 	saveProjects([repo, container]);
 	saveWorkspaces([worktree, chat]);
-	expect(existsSync(join(root, "chats.json"))).toBe(false);
-	expect(legacy("projects.json")).toEqual([repo]);
+	expect(readFileSync(join(root, "chats.json"), "utf8")).toBe(newer);
+	expect(setAside()).toEqual([]);
 	expect(legacy("workspaces.json")).toEqual([worktree]);
+});
+
+test("a store that cannot be read right now is reported unavailable, never renamed, and read again next time", () => {
+	saveProjects([repo, container]);
+	saveWorkspaces([worktree, chat]);
+	const stored = readFileSync(join(root, "chats.json"), "utf8");
+	rmSync(join(root, "chats.json"));
+	mkdirSync(join(root, "chats.json"));
+	expect(loadChats()).toEqual({ version: 1, container: null, chats: [] });
+	expect(chatsStoreProblem()).toBe("unreadable");
+	saveWorkspaces([worktree]);
+	expect(setAside()).toEqual([]);
+
+	rmSync(join(root, "chats.json"), { recursive: true });
+	writeFileSync(join(root, "chats.json"), stored);
+	expect(chatsStoreProblem()).toBeNull();
+	expect(loadChats()).toEqual({ version: 1, container, chats: [chat] });
+});
+
+test("the parsed store is cached until the file changes, and a caller's edits never reach the cache", () => {
+	saveProjects([repo, container]);
+	saveWorkspaces([worktree, chat]);
+	const parse = spyOn(JSON, "parse");
+	try {
+		const loaded = loadChats();
+		const first = parse.mock.calls.length;
+		(loaded.chats[0] as Workspace).name = "edited in memory";
+		expect(loadChats().chats[0]?.name).toBe("Chat");
+		expect(parse.mock.calls.length).toBe(first);
+
+		writeFileSync(
+			join(root, "chats.json"),
+			JSON.stringify({ version: 1, container, chats: [{ ...chat, name: "edited on disk" }] }),
+		);
+		expect(loadChats().chats[0]?.name).toBe("edited on disk");
+	} finally {
+		parse.mockRestore();
+	}
 });
