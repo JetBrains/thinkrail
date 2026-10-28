@@ -150,7 +150,7 @@ export async function cloneProject(
 				...(input.depth === undefined ? [] : ["--depth", String(input.depth)]),
 				"--",
 				url,
-				path,
+				".",
 			],
 			{
 				timeoutMs: CLONE_TIMEOUT_MS,
@@ -172,6 +172,14 @@ export async function cloneProject(
 		await removeIncompleteClone(path, reserved);
 		return null;
 	}
+	let checkout: ReturnType<typeof lstatSync> | null = null;
+	try {
+		checkout = lstatSync(path);
+	} catch {
+		checkout = null;
+	}
+	if (!checkout || checkout.dev !== reserved.dev || checkout.ino !== reserved.ino)
+		throw new CodedError("PROJECT_CLONE_FAILED", "The clone destination changed during the clone.");
 	return openProject(path);
 }
 
