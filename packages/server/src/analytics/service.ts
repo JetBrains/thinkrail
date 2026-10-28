@@ -172,6 +172,17 @@ export function track(event: BasicAnalyticsEvent): void {
 	if (s && !s.shutdownPromise) send(s, s.basic, event);
 }
 
+export function captureSurveyEvent(event: string, properties: Record<string, unknown>): void {
+	const s = state;
+	const sink = s?.additional?.sink;
+	if (!s || s.shutdownPromise || !sink?.sendProperties) return;
+	try {
+		sink.sendProperties(s.clientId, event, properties);
+	} catch {
+		log.debug("survey capture failed");
+	}
+}
+
 export interface ErrorReport {
 	source: ErrorSource;
 	handled: boolean;

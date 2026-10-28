@@ -9,9 +9,9 @@ import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
-import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { SettingsDialog } from "../panels/SettingsDialog";
+import { SurveyPromptDialog } from "../panels/SurveyPromptDialog";
 import { Toaster } from "../panels/Toaster";
 import { useBranchStatus } from "../panels/useBranchStatus";
 import {
@@ -258,7 +258,7 @@ export function Shell() {
 			{onboardingActive ? null : analyticsConsentOpen ? (
 				<AnalyticsConsentDialog />
 			) : (
-				<InterviewPromptDialog />
+				<SurveyPromptDialog />
 			)}
 			<SessionSwitcher
 				open={sessionSwitcherOpen}

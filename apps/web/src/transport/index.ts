@@ -16,6 +16,7 @@ export type { ConnectionStatus, TransportOptions } from "./transport";
 export {
 	getTransport,
 	initTransport,
+	loadInAppSurvey,
 	respondToTool,
 	runHostUpdate,
 	supportsChangeMutations,

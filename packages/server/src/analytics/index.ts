@@ -34,6 +34,7 @@ export {
 } from "./events";
 export {
 	type AnalyticsOptions,
+	captureSurveyEvent,
 	type ErrorReport,
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,

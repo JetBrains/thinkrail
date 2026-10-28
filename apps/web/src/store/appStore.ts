@@ -1,5 +1,6 @@
 import type {
 	AppConfig,
+	AppSurvey,
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
@@ -412,13 +413,27 @@ export const SettingsSection = {
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
+export interface ToastButton {
+	label: string;
+	onClick: () => void;
+	variant?: "primary" | "outline";
+}
+
 export interface Toast {
 	id: string;
 	variant: "error" | "success" | "info" | "warning";
 	message: string;
 	title?: string;
 	durationMs?: number;
-	action?: { label: string; onClick: () => void };
+	/** Keeps one logical notification identifiable when its message changes. */
+	marker?: string;
+	action?: ToastButton;
+	actions?: ToastButton[];
+	onDismiss?: () => void;
+}
+
+function plainToast(toast: Pick<Toast, "action" | "actions" | "onDismiss" | "marker">): boolean {
+	return !toast.action && !toast.actions?.length && !toast.onDismiss && !toast.marker;
 }
 
 const MAX_TOASTS = 5;
@@ -1041,6 +1056,7 @@ interface AppState {
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
 	interviewPromptOpen: boolean;
+	inAppSurvey: AppSurvey | null;
 	notificationPromptOpen: boolean;
 	sessionSwitcherOpen: boolean;
 	theme: ThemeId;
@@ -1362,6 +1378,7 @@ interface AppState {
 	setSettingsSection: (section: SettingsSection) => void;
 	showInterviewPrompt: () => void;
 	hideInterviewPrompt: () => void;
+	setInAppSurvey: (survey: AppSurvey | null) => void;
 	openNotificationPrompt: () => void;
 	closeNotificationPrompt: () => void;
 	openSessionSwitcher: () => void;
@@ -1387,6 +1404,7 @@ interface AppState {
 	clearReviewFocus: (commentId?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
+	updateToast: (id: string, patch: Partial<Omit<Toast, "id">>) => void;
 	dismissToast: (id: string) => void;
 }
 
@@ -2308,6 +2326,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
 	interviewPromptOpen: false,
+	inAppSurvey: null,
 	notificationPromptOpen: false,
 	sessionSwitcherOpen: false,
 	theme: DEFAULT_CONFIG.theme,
@@ -4340,6 +4359,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	showInterviewPrompt: () =>
 		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
 	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),
+	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
 	setStreamingResponseMovement: (streamingResponseMovement) => set({ streamingResponseMovement }),
 	setChatPreferences: (chatMessageOrder, streamingResponseMovement) =>
@@ -4495,8 +4515,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) =>
-				!t.action &&
-				!toast.action &&
+				plainToast(t) &&
+				plainToast(toast) &&
 				t.variant === toast.variant &&
 				t.title === toast.title &&
 				t.message === toast.message &&
@@ -4509,7 +4529,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			let actionlessToDrop = Math.max(0, next.length - MAX_TOASTS);
 			return {
 				toasts: next.filter((candidate) => {
-					if (candidate.action || actionlessToDrop === 0) return true;
+					if (!plainToast(candidate) || actionlessToDrop === 0) return true;
 					actionlessToDrop -= 1;
 					return false;
 				}),
@@ -4517,6 +4537,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 		});
 		return id;
 	},
+	updateToast: (id, patch) =>
+		set((s) =>
+			s.toasts.some((t) => t.id === id)
+				? { toasts: s.toasts.map((t) => (t.id === id ? { ...t, ...patch } : t)) }
+				: {},
+		),
 	dismissToast: (id) =>
 		set((s) =>
 			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},

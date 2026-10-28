@@ -504,9 +504,12 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   trigger live in [[submodule-web-notifications]], never the store). The
   ephemeral **`interviewPromptOpen`** plus
   **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
-  invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so
-  a host restart cannot leave a stale projection, and the panel hides it after `feedback.respond` is
-  acknowledged. Counts, postponement, dismissal, and client claims never live in the store. The **theme**
+  survey prompt. The client shows it as an in-app notification even when additional analytics is off, and
+  **Sure** opens the survey dialog. **`inAppSurvey`** is the narrowed survey the settings button and pane draw. Transport
+  opens the prompt only at protocol v96 unless the analytics consent dialog is open, clears it before each valid welcome, and loads
+  the survey after welcome. The notification records postpone on dismiss and permanent dismissal on
+  “don't ask again”. Counts and completion
+  stay in host `feedback.json`. The **theme**
   preference state — **`theme: ThemeId`** (the retained opaque fixed choice), **`themeMode: ThemeMode`**,
   and optional **`systemThemePair: SystemThemePair`** — arrives through **`applyConfig(config)`** from
   `server.welcome` / the `settings.changed` broadcast. A welcome from a pre-feature host (or any malformed

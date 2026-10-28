@@ -19,6 +19,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -30,7 +31,7 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
-import { isConnectedGeneration, useAppStore } from "../store";
+import { isConnectedGeneration, selectAnalyticsConsentPromptOpen, useAppStore } from "../store";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
@@ -255,6 +256,7 @@ export function initTransport(): WsTransport {
 			sessionStateHydration = null;
 			useAppStore.getState().installSessionStateSnapshot([]);
 		}
+		loadInAppSurvey();
 	});
 
 	transport.subscribe(WS_CHANNELS.hostUpdateAvailable, (data) => {
@@ -341,7 +343,15 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
-		useAppStore.getState().showInterviewPrompt();
+		const state = useAppStore.getState();
+		if (
+			state.protocolVersion === null ||
+			state.protocolVersion < FEEDBACK_SURVEY_PROTOCOL_VERSION ||
+			selectAnalyticsConsentPromptOpen(state)
+		) {
+			return;
+		}
+		state.showInterviewPrompt();
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
@@ -396,4 +406,22 @@ export function initTransport(): WsTransport {
 export function getTransport(): WsTransport {
 	if (!transport) throw new Error("transport not initialized — call initTransport() first");
 	return transport;
+}
+
+let surveyLoadGeneration = 0;
+
+export function loadInAppSurvey(): void {
+	const protocol = useAppStore.getState().protocolVersion;
+	if (protocol === null || protocol < FEEDBACK_SURVEY_PROTOCOL_VERSION) {
+		useAppStore.getState().setInAppSurvey(null);
+		return;
+	}
+	const generation = ++surveyLoadGeneration;
+	void getTransport()
+		.request("feedback.survey", {})
+		.then((result) => {
+			if (generation !== surveyLoadGeneration) return;
+			useAppStore.getState().setInAppSurvey(result.survey);
+		})
+		.catch(() => {});
 }

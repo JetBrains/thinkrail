@@ -26,7 +26,13 @@ import {
 	disposeAllSessions,
 	setSessionManagerFactory,
 } from "../agent";
-import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
+import {
+	configureSurveySource,
+	recordAcceptedMessage,
+	resetFeedbackForTests,
+	resetSurveyForTests,
+	setFeedbackPublisher,
+} from "../feedback";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
@@ -97,6 +103,7 @@ beforeEach(() => {
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	resetConfigCache();
 	resetFeedbackForTests();
+	resetSurveyForTests();
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);
 	git(repo, "init", "-b", "main");
@@ -116,6 +123,7 @@ afterEach(() => {
 	stopAllWatches();
 	resetConfigCache();
 	resetFeedbackForTests();
+	resetSurveyForTests();
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -547,6 +555,80 @@ test("feedback.respond persists a popup action through the handler", async () =>
 		acceptedMessages: 10,
 		nextInvitationAt: 20,
 		dismissed: false,
+		submittedSurveyId: null,
+		submittedIteration: null,
+	});
+});
+
+test("feedback.survey stays hidden until a launched survey exists and completion hides it", async () => {
+	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	await expect(
+		handleRequest(
+			"feedback.survey.submit",
+			{
+				submissionId: "00000000-0000-4000-8000-000000000001",
+				event: "shown",
+			},
+			CTX,
+		),
+	).rejects.toThrow("Survey is unavailable");
+
+	configureSurveySource({
+		apiKey: "phc_test",
+		fetchImpl: (() =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify({
+						surveys: [
+							{
+								id: "survey-1",
+								name: "in-app-feedback",
+								start_date: "2026-10-28T00:00:00.000Z",
+								questions: [{ id: "q1", type: "open", question: "How is it?" }],
+							},
+						],
+					}),
+					{ status: 200 },
+				),
+			)) as unknown as typeof fetch,
+	});
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1", iteration: 0 },
+	});
+	await expect(
+		handleRequest(
+			"feedback.survey.submit",
+			{
+				submissionId: "00000000-0000-4000-8000-000000000001",
+				event: "sent",
+				completed: true,
+				answers: { q1: "Good" },
+			},
+			CTX,
+		),
+	).rejects.toThrow("Analytics is off");
+
+	await handleRequest(
+		"settings.update",
+		{ config: { analyticsEnabled: true, analyticsConsentConfirmed: true } },
+		CTX,
+	);
+	expect(
+		await handleRequest(
+			"feedback.survey.submit",
+			{
+				submissionId: "00000000-0000-4000-8000-000000000001",
+				event: "sent",
+				completed: true,
+				answers: { q1: "Good" },
+			},
+			CTX,
+		),
+	).toEqual({ ok: true });
+	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	expect(JSON.parse(readFileSync(join(dataDir, "feedback.json"), "utf8"))).toMatchObject({
+		submittedSurveyId: "survey-1",
+		submittedIteration: 0,
 	});
 });
 

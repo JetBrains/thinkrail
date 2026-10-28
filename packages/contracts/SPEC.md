@@ -737,10 +737,15 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   because values may be secrets; `get` → `HostEnvironmentStatus` with `restartRequired`, `launchOverridden`
   names and the `effectiveAgentDir`; `update` replaces the whole record and returns
   `{ ok: false, issues }` per field/row index instead of saving anything when it is invalid) /
-  **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists the automatic invitation's book,
-  postpone, or permanent-dismiss result; the Settings link never calls it;
-  `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction so the host does not
-  claim an independently shipped older client that omits the current `?protocol=` socket capability) /
+  **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists postpone, book, or the legacy
+  permanent-dismiss flag; book and never no longer stop message counting;
+  `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction) /
+  **`feedback.survey`** (no params → `{ survey: AppSurvey | null }`; the launched survey named
+  `in-app-feedback`, or null when it is off or this id and iteration were already submitted) /
+  **`feedback.survey.submit`** (`SurveySubmitParams` → ack; the host fills `$survey_id` and captures
+  `survey shown`, `survey sent`, or `survey dismissed` only while additional analytics is on, and records
+  completion on a finished send; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the invitation
+  channel to v96) /
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
@@ -784,8 +789,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   other frontends can list it in history without opening local placement) / **`session.deleted`** (workspace +
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) / **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
-  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
-  frontend; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
+  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to a protocol v96
+  client when the launched in-app survey is eligible; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
   before any session exists) / **`provider.changed`** — a data-free invalidation broadcast after a watched

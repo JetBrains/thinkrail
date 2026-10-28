@@ -2,11 +2,14 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node
 import { join } from "node:path";
 import type { InterviewResponse } from "@thinkrail/contracts";
 import { dataDir } from "../persistence";
+import { refreshInAppSurvey, surveyRefreshDue } from "./survey";
 
 interface FeedbackState {
 	acceptedMessages: number;
 	nextInvitationAt: number;
 	dismissed: boolean;
+	submittedSurveyId: string | null;
+	submittedIteration: number | null;
 }
 
 type FeedbackPublisher = (clientKey: string) => boolean;
@@ -16,11 +19,14 @@ const DEFAULT_STATE: FeedbackState = {
 	acceptedMessages: 0,
 	nextInvitationAt: INVITATION_INTERVAL,
 	dismissed: false,
+	submittedSurveyId: null,
+	submittedIteration: null,
 };
 
 let cachedState: FeedbackState | null = null;
 let claimedClient: string | null = null;
 let publishInterview: FeedbackPublisher | null = null;
+let surveyOffer: (() => boolean) | null = null;
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
 	return Number.isSafeInteger(value) && (value as number) >= 0;
@@ -36,11 +42,32 @@ function parseState(value: unknown): FeedbackState | null {
 	) {
 		return null;
 	}
+	const submittedSurveyId = completionId(value);
+	const submittedIteration = completionIteration(value);
+	if (submittedSurveyId === undefined || submittedIteration === undefined) return null;
 	return {
 		acceptedMessages: candidate.acceptedMessages,
 		nextInvitationAt: candidate.nextInvitationAt,
 		dismissed: candidate.dismissed,
+		submittedSurveyId,
+		submittedIteration,
 	};
+}
+
+function completionId(record: object): string | null | undefined {
+	if (!Object.hasOwn(record, "submittedSurveyId")) return null;
+	const id: unknown = Reflect.get(record, "submittedSurveyId");
+	if (id === null) return null;
+	if (typeof id === "string" && id.length > 0 && id.length <= 128) return id;
+	return undefined;
+}
+
+function completionIteration(record: object): number | null | undefined {
+	if (!Object.hasOwn(record, "submittedIteration")) return null;
+	const iteration: unknown = Reflect.get(record, "submittedIteration");
+	if (iteration === null) return null;
+	if (isNonNegativeSafeInteger(iteration)) return iteration;
+	return undefined;
 }
 
 function loadState(): FeedbackState {
@@ -87,9 +114,24 @@ export function setFeedbackPublisher(publisher: FeedbackPublisher | null): void 
 	if (publisher === null) claimedClient = null;
 }
 
+export function setSurveyOffer(check: (() => boolean) | null): void {
+	surveyOffer = check;
+}
+
+export function surveyIsCompleted(id: string, iteration: number): boolean {
+	const current = loadState();
+	return current.submittedSurveyId === id && current.submittedIteration === iteration;
+}
+
+export function completeSurvey(id: string, iteration: number): void {
+	if (!id || !isNonNegativeSafeInteger(iteration)) throw new Error("Invalid survey completion");
+	const current = loadState();
+	saveState({ ...current, submittedSurveyId: id, submittedIteration: iteration });
+	claimedClient = null;
+}
+
 export function recordAcceptedMessage(clientKey: string): void {
 	const current = loadState();
-	if (current.dismissed) return;
 	const next = {
 		...current,
 		acceptedMessages: addWithinSafeRange(current.acceptedMessages, 1),
@@ -100,10 +142,30 @@ export function recordAcceptedMessage(clientKey: string): void {
 	} catch {
 		return;
 	}
-	if (next.acceptedMessages < next.nextInvitationAt || claimedClient !== null) return;
+	maybeOffer(clientKey);
+	if (surveyRefreshDue()) void refreshInAppSurvey().then(() => maybeOffer(clientKey));
+}
 
+function maybeOffer(clientKey: string): void {
+	const current = loadState();
+	if (
+		current.dismissed ||
+		!surveyOfferAvailable() ||
+		current.acceptedMessages < current.nextInvitationAt ||
+		claimedClient !== null
+	) {
+		return;
+	}
 	claimedClient = clientKey;
 	deliverInterview(clientKey);
+}
+
+function surveyOfferAvailable(): boolean {
+	try {
+		return surveyOffer?.() === true;
+	} catch {
+		return false;
+	}
 }
 
 function deliverInterview(clientKey: string): void {
@@ -147,4 +209,5 @@ export function resetFeedbackForTests(): void {
 	cachedState = null;
 	claimedClient = null;
 	publishInterview = null;
+	surveyOffer = null;
 }

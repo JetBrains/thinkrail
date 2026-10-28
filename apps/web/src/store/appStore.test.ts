@@ -180,6 +180,7 @@ beforeEach(() => {
 		settingsOpen: false,
 		settingsSection: "providers",
 		interviewPromptOpen: false,
+		inAppSurvey: null,
 		chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 		fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 		chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
@@ -3835,6 +3836,27 @@ test("pushToast coalesces an identical live actionless toast", () => {
 	const fresh = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
 	expect(fresh).not.toBe(id1);
 	expect(useAppStore.getState().toasts).toHaveLength(3);
+});
+
+test("updateToast replaces the message and actions of one notification", () => {
+	const store = useAppStore.getState();
+	const id = store.pushToast({
+		variant: "info",
+		message: "Ask",
+		marker: "survey-suggestion",
+		durationMs: Number.POSITIVE_INFINITY,
+		actions: [{ label: "Sure", onClick: () => {} }],
+	});
+	store.updateToast(id, {
+		message: "Later",
+		actions: [{ label: "OK", onClick: () => {} }],
+	});
+	const toast = useAppStore.getState().toasts.find((item) => item.id === id);
+	expect(toast?.message).toBe("Later");
+	expect(toast?.actions?.map((action) => action.label)).toEqual(["OK"]);
+	expect(toast?.marker).toBe("survey-suggestion");
+	store.updateToast("missing", { message: "Nope" });
+	expect(useAppStore.getState().toasts).toHaveLength(1);
 });
 
 test("actionable toasts retain their inverse and never coalesce", () => {

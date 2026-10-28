@@ -625,8 +625,8 @@ a project picker, the prompt hero, and the reused
   **Interface** (Chat, Appearance, Language, Layout, Terminal) · **System** (Workspaces, Integrations, Extensions,
   Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
-  Feedback card (`settings-nav-feedback`, “Get 100 credits for a user interview”) belongs to that list at
-  every width, pinned to the rail's bottom at `md`+. The pure nav data — groups, protocol and
+  Feedback card (`settings-nav-feedback`, “Share feedback”) belongs to that list at
+  every width when a survey is available, pinned to the rail's bottom at `md`+. The pure nav data — groups, protocol and
   injected-content gating, and resolving a requested section to an available one (a gated or retired id,
   e.g. an old `review` / `line-width` deep link, falls back to Appearance) — lives in `panels/settingsNav.ts`,
   so the dialog only renders it. `settingsOpen`/`settingsSection` live in the store so the gear AND the
@@ -996,16 +996,13 @@ a project picker, the prompt hero, and the reused
   decisions survive restarts and change later through Settings. The dialog keeps only the short
   product-usage copy and shared switch; Settings adds the optional outcomes, report dimensions, and
   excluded content. Older hosts retain their legacy privacy control without the new consent dialog.
-  **`FeedbackSettings`** is the final
-  live section after Privacy: the same interview copy as the automatic prompt, stating that completing a
-  user interview about the participant's ThinkRail experience earns 100 bonus credits in Central
-  (JetBrains AI) — credits, never a currency amount — plus a real external anchor to the fixed Google
-  Calendar booking page, opened in a new tab with `noopener noreferrer`. ThinkRail communicates the
-  incentive only; attendance verification, eligibility, and credit fulfillment stay outside the app. This
-  proactive Settings link is always available and deliberately does not call `feedback.respond`, alter
-  automatic-popup state, or claim that booking alone earns credits. Below it, a one-line community blurb and
-  an outline external anchor open the Discord server through the website's stable `thinkrail.ai/discord`
-  redirect (never a raw invite, so a rotated invite needs no app release).
+  **`FeedbackSettings`** is the separated survey pane: the launched questions, or a request to enable
+  analytics before those questions. It does not call `feedback.respond`.
+  The usage prompt is an in-app notification, including when analytics is off. **Sure** opens
+  **`SurveyPromptDialog`**. That dialog asks to enable analytics before the questions when analytics is
+  off, then draws the launched survey one question at a time. Every step's button says Continue.
+  Closing it without finishing postpones.
+  **Hide and don't ask again** records dismissal and tells the user the survey stays in Settings.
   **`ModelsSettings`** is the **Models** section, visible only at protocol v72 or newer. It re-reads
   `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
@@ -1092,12 +1089,11 @@ a project picker, the prompt hero, and the reused
   picker: `dialog.selectDirectory` is the project-setup picker and records setup analytics.
   `ProvidersSettings`/`McpSettings`/`AppearanceSettings`/`LineWidthControl`/`ChatSettings`/`TemplatesSettings`/
   `WorkspacesSettings`/`PrivacySettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings`/`EnvironmentSettings`, the onboarding
-  `ConnectProviderDialog`/`CreateProjectDialog`/`OnboardingWizard`, and the app-wide **`InterviewPromptDialog`** are the
-  panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
-  fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
-  middle-button booking activation open Calendar immediately and record `book`; close, Escape, and backdrop record `postpone`; permanent
-  dismissal records `never`. The controlled dialog closes only after the host acks, and reports a rejected
-  action without discarding the still-open choice. `SettingsDialog` receives the Layout section from the
+  `ConnectProviderDialog`/`CreateProjectDialog`/`OnboardingWizard`, and the app-wide **`SurveyPromptDialog`** are the
+  panels-owned **integration pieces** (store + transport). The usage suggestion is a notification; Sure opens
+  the dialog, whose intro offers to enable analytics when it is off. Closing the dialog without finishing
+  records `postpone`; a rejected response stays open.
+  `SettingsDialog` receives the Layout section from the
   shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays presentational
   (`auth` module).
 

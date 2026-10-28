@@ -20,6 +20,7 @@ import {
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
@@ -277,11 +278,18 @@ test("review details and the GitHub review actions are pinned to v88", () => {
 });
 
 test("project create and the onboarding dismissal are pinned to v94", () => {
-	expect(PROTOCOL_VERSION).toBe(95);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(95);
 	expect(ONBOARDING_PROTOCOL_VERSION).toBe(94);
 	expect(WS_METHODS.projectCreate).toBe("project.create");
 	expect(WS_METHODS.providerDetect).toBe("provider.detect");
 	expect(DEFAULT_CONFIG.onboardingDismissed).toBe(false);
+});
+
+test("in-app surveys are pinned to v96", () => {
+	expect(FEEDBACK_SURVEY_PROTOCOL_VERSION).toBe(96);
+	expect(PROTOCOL_VERSION).toBe(96);
+	expect(WS_METHODS.feedbackSurvey).toBe("feedback.survey");
+	expect(WS_METHODS.feedbackSurveySubmit).toBe("feedback.survey.submit");
 });
 
 test("repository cloning and cancellation are registered", () => {

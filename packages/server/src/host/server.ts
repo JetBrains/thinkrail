@@ -11,7 +11,7 @@ import type {
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
 import {
-	FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
+	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
@@ -76,7 +76,16 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
-import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
+import {
+	configureSurveySource,
+	currentInAppSurvey,
+	redeliverInterview,
+	refreshInAppSurvey,
+	releaseInterview,
+	setFeedbackPublisher,
+	setSurveyOffer,
+	surveyIsCompleted,
+} from "../feedback";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -566,7 +575,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setFeedbackPublisher((clientKey) => {
 		const ws = sockets.get(clientKey);
-		if (!ws || ws.data.protocolVersion < FEEDBACK_INTERVIEW_PROTOCOL_VERSION) return false;
+		if (!ws || ws.data.protocolVersion < FEEDBACK_SURVEY_PROTOCOL_VERSION) return false;
 		try {
 			return ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} })) !== 0;
 		} catch {
@@ -866,6 +875,21 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setModelListingPublisher(publishProviderChanged);
 
 	const initialConfig = getConfig();
+	setSurveyOffer(() => {
+		const survey = currentInAppSurvey();
+		if (!survey) return false;
+		return !surveyIsCompleted(survey.id, survey.iteration);
+	});
+	configureSurveySource(
+		analytics?.posthogApiKey
+			? {
+					apiKey: analytics.posthogApiKey,
+					...(analytics.posthogHost ? { host: analytics.posthogHost } : {}),
+					...(analytics.fetchImpl ? { fetchImpl: analytics.fetchImpl } : {}),
+				}
+			: null,
+	);
+	void refreshInAppSurvey();
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),
@@ -914,6 +938,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		persistTerminalSessions();
 		closeAllTerminals();
 		setFeedbackPublisher(null);
+		setSurveyOffer(null);
+		configureSurveySource(null);
 		setSettingsPublisher(null);
 		setModelContextPublisher(null);
 		setModelListingPublisher(null);

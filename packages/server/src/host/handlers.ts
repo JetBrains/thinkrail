@@ -78,6 +78,7 @@ import {
 } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
+	captureSurveyEvent,
 	reportClientError,
 	type SendMode,
 	track,
@@ -103,7 +104,16 @@ import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
 import { listExtensionCatalog } from "../extensions";
-import { recordAcceptedMessage, respondToInterview } from "../feedback";
+import {
+	completeSurvey,
+	currentInAppSurvey,
+	parseSurveySubmission,
+	recordAcceptedMessage,
+	refreshInAppSurvey,
+	respondToInterview,
+	surveyCapture,
+	surveyIsCompleted,
+} from "../feedback";
 import { readDir, readFile } from "../fs";
 import {
 	commitsAheadOf,
@@ -251,6 +261,7 @@ import {
 import { resolveNewChatModel } from "./newChatModel";
 import { planReviewRunning } from "./planReviewQueue";
 import {
+	additionalAnalyticsEnabled,
 	additionalCapture,
 	captureAdditional,
 	captureReviewCommentAdded,
@@ -1258,6 +1269,25 @@ const handlers: WsHandlers = {
 	"environment.update": (params) => updateHostEnvironment(params.environment),
 	"feedback.respond": (params) => {
 		respondToInterview(params.action);
+		return { ok: true } as const;
+	},
+	"feedback.survey": async () => {
+		await refreshInAppSurvey();
+		const survey = currentInAppSurvey();
+		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) return { survey: null };
+		return { survey };
+	},
+	"feedback.survey.submit": async (params) => {
+		const submission = parseSurveySubmission(params);
+		await refreshInAppSurvey();
+		const survey = currentInAppSurvey();
+		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) {
+			throw new Error("Survey is unavailable");
+		}
+		if (!additionalAnalyticsEnabled(getConfig())) throw new Error("Analytics is off");
+		const event = surveyCapture(survey, submission);
+		captureSurveyEvent(event.name, event.properties);
+		if (event.completed) completeSurvey(survey.id, survey.iteration);
 		return { ok: true } as const;
 	},
 	"client.reportError": (params) => {

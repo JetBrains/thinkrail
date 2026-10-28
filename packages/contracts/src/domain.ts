@@ -1073,6 +1073,64 @@ export type AppConfigUpdate = Partial<
 
 export type InterviewResponse = "book" | "postpone" | "never";
 
+export const SURVEY_OPEN_TEXT_LIMIT = 2000;
+
+export type SurveyRatingScale = 3 | 5 | 7 | 10;
+
+export function surveyRatingValues(scale: SurveyRatingScale): number[] {
+	if (scale === 10) return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+	return Array.from({ length: scale }, (_, index) => index + 1);
+}
+
+interface SurveyQuestionBase {
+	id: string;
+	question: string;
+	description?: string;
+	optional?: true;
+	buttonText?: string;
+}
+
+export interface SurveyOpenQuestion extends SurveyQuestionBase {
+	type: "open";
+}
+
+export interface SurveyChoiceQuestion extends SurveyQuestionBase {
+	type: "single_choice" | "multiple_choice";
+	choices: string[];
+	hasOpenChoice?: true;
+	shuffleOptions?: true;
+}
+
+export interface SurveyRatingQuestion extends SurveyQuestionBase {
+	type: "rating";
+	display: "number" | "emoji";
+	scale: SurveyRatingScale;
+	lowerBoundLabel: string;
+	upperBoundLabel: string;
+}
+
+export type SurveyQuestion = SurveyOpenQuestion | SurveyChoiceQuestion | SurveyRatingQuestion;
+
+/** A launched in-app survey, narrowed to the questions the product can draw. */
+export interface AppSurvey {
+	id: string;
+	iteration: number;
+	questions: SurveyQuestion[];
+	placeholder?: string;
+	/** Present when PostHog asks for a thank-you. An empty string uses the app fallback. */
+	thankYou?: string;
+	shuffleQuestions?: true;
+}
+
+export type SurveyAnswerValue = string | string[];
+
+export interface SurveySubmitParams {
+	submissionId: string;
+	event: "shown" | "dismissed" | "sent";
+	completed?: boolean;
+	answers?: Record<string, SurveyAnswerValue>;
+}
+
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
 
 export const TERMINAL_WINDOWS_SHELLS = ["auto", "pwsh", "powershell", "cmd"] as const;

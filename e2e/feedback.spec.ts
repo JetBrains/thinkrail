@@ -1,29 +1,41 @@
 import { expect, test, type WebSocketRoute } from "@playwright/test";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { type AppSurvey, WS_CHANNELS } from "@thinkrail/contracts";
 
-const BOOKING_URL = "https://calendar.app.google/5suMJdDEBFvYJ4zN9";
-const INVITATION_COPY =
-	"Tell us about your experience with ThinkRail in a user interview. After you complete the interview, you will receive 100 bonus credits in Central (JetBrains AI).";
+const SURVEY: AppSurvey = {
+	id: "01a17d9c-e8d7-0000-dbbb-79aad51d2281",
+	iteration: 1,
+	placeholder: "Start typing...",
+	thankYou: "Thank you for your feedback!",
+	questions: [
+		{
+			id: "98283ced-ad26-4913-ab32-ab56441ff1ed",
+			type: "open",
+			question: "What can we do to improve our product?",
+			description: "Test",
+		},
+	],
+};
+
+type SurveySubmit = {
+	event?: string;
+	completed?: boolean;
+	answers?: Record<string, string | string[]>;
+};
 
 type ClientRequest = {
 	id?: string;
 	method?: string;
-	params?: { action?: string };
+	params?: { action?: string } & SurveySubmit;
 };
 
-function sendInvitation(socket: WebSocketRoute | undefined): void {
-	if (!socket) throw new Error("expected the app WebSocket");
-	socket.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} }));
-}
-
-test("feedback settings and the addressed interview prompt preserve the approved lifecycle", async ({
-	context,
-	page,
-}) => {
+test("the settings survey and the usage notification share one survey", async ({ page }) => {
 	let browserSocket: WebSocketRoute | undefined;
 	let welcomeFrame: string | undefined;
 	let rejectNextResponse = false;
 	const actions: string[] = [];
+	const submits: SurveySubmit[] = [];
+	let available: AppSurvey | null = SURVEY;
+	let surveyReads = 0;
 
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
 		browserSocket = socket;
@@ -35,6 +47,21 @@ test("feedback settings and the addressed interview prompt preserve the approved
 				request = JSON.parse(raw) as ClientRequest;
 			} catch {
 				server.send(message);
+				return;
+			}
+			if (request.method === "feedback.survey" && request.id) {
+				surveyReads += 1;
+				socket.send(JSON.stringify({ id: request.id, ok: true, result: { survey: available } }));
+				return;
+			}
+			if (request.method === "feedback.survey.submit" && request.id) {
+				submits.push({
+					event: request.params?.event,
+					completed: request.params?.completed,
+					answers: request.params?.answers,
+				});
+				if (request.params?.completed === true) available = null;
+				socket.send(JSON.stringify({ id: request.id, ok: true, result: { ok: true } }));
 				return;
 			}
 			if (request.method === "feedback.respond" && request.id) {
@@ -58,106 +85,94 @@ test("feedback settings and the addressed interview prompt preserve the approved
 			socket.send(message);
 		});
 	});
-	await context.route("https://calendar.app.google/**", (route) => route.abort());
 
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 
+	const sendInvitation = () => {
+		if (!browserSocket) throw new Error("expected the app WebSocket");
+		browserSocket.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} }));
+	};
+
 	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-feedback").click();
+	const nav = page.getByTestId("settings-nav-feedback");
+	await expect(nav).toBeVisible();
+	await expect(nav).toHaveClass(/md:mt-auto/);
+	await expect(nav).toHaveText("Share feedback");
+	await nav.click();
 	const settings = page.getByTestId("settings-feedback");
-	await expect(settings).toContainText(INVITATION_COPY);
-	const settingsLink = settings.getByTestId("feedback-schedule-interview");
-	await expect(settingsLink).toHaveAttribute("href", BOOKING_URL);
-	await expect(settingsLink).toHaveAttribute("target", "_blank");
-	await expect(settingsLink).toHaveAttribute("rel", "noopener noreferrer");
-	const discordLink = settings.getByTestId("feedback-join-discord");
-	await expect(discordLink).toHaveAttribute("href", "https://thinkrail.ai/discord");
-	await expect(discordLink).toHaveAttribute("target", "_blank");
-	await expect(discordLink).toHaveAttribute("rel", "noopener noreferrer");
-	const primaryTextColor = await page.evaluate(() => {
-		const probe = document.createElement("span");
-		probe.className = "text-control-primary-text";
-		document.body.append(probe);
-		const color = getComputedStyle(probe).color;
-		probe.remove();
-		return color;
-	});
-	await expect(settingsLink).toHaveCSS("color", primaryTextColor);
-	const settingsPopupPromise = page.waitForEvent("popup");
-	await settingsLink.click();
-	const settingsPopup = await settingsPopupPromise;
-	await settingsPopup.close();
-	await expect.poll(() => actions).toEqual([]);
+	await expect(settings.getByTestId("survey-analytics-message")).toContainText(
+		"Please enable analytics to take the survey.",
+	);
+	await expect(settings.getByTestId("feedback-join-discord")).toHaveCount(0);
+	await expect(settings.getByTestId("survey-question")).toHaveCount(0);
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("settings-dialog")).toBeHidden();
 
-	sendInvitation(browserSocket);
-	const dialog = page.getByTestId("interview-prompt-dialog");
-	await expect(dialog).toBeVisible();
-	await expect(dialog).toContainText("Help shape ThinkRail");
-	await expect(dialog).toContainText(INVITATION_COPY);
-	await expect(dialog.getByTestId("interview-postpone")).toBeFocused();
+	const suggestion = page.locator('[data-toast="survey-suggestion"]');
+	const dialog = page.getByTestId("survey-prompt-dialog");
 
-	rejectNextResponse = true;
-	await dialog.getByTestId("interview-postpone").click();
-	await expect(dialog).toBeVisible();
-	await expect(
-		page
-			.locator('[data-testid="toast"][data-variant="error"]')
-			.filter({ hasText: "feedback response failed" }),
-	).toBeVisible();
-	await dialog.getByTestId("interview-postpone").click();
+	sendInvitation();
+	await expect(suggestion).toBeVisible();
+	await expect(suggestion).toContainText("Great news");
+	await expect(suggestion.getByRole("button", { name: "Sure!" })).toBeVisible();
+	await expect(suggestion.getByRole("button", { name: "Hide and don't ask again" })).toBeVisible();
 	await expect(dialog).toBeHidden();
-	await expect.poll(() => actions).toEqual(["postpone", "postpone"]);
 
-	sendInvitation(browserSocket);
+	await suggestion.getByRole("button", { name: "Sure!" }).click();
 	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("survey-analytics-message")).toBeVisible();
+	await expect(dialog.getByTestId("survey-question")).toHaveCount(0);
+	await dialog.getByTestId("survey-enable-analytics").click();
+	await expect(dialog.getByTestId("survey-question")).toHaveText(
+		"What can we do to improve our product?",
+	);
+	await expect.poll(() => submits.some((submit) => submit.event === "shown")).toBe(true);
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
 	await expect.poll(() => actions.at(-1)).toBe("postpone");
+	expect(submits.some((submit) => submit.event === "dismissed")).toBe(true);
 
-	sendInvitation(browserSocket);
-	await expect(dialog).toBeVisible();
-	await dialog.getByRole("button", { name: "Close" }).click();
-	await expect(dialog).toBeHidden();
-	await expect.poll(() => actions.at(-1)).toBe("postpone");
-
-	sendInvitation(browserSocket);
-	await expect(dialog).toBeVisible();
-	await page.getByTestId("dialog-overlay").click({ position: { x: 4, y: 4 } });
-	await expect(dialog).toBeHidden();
-	await expect.poll(() => actions.at(-1)).toBe("postpone");
-
-	sendInvitation(browserSocket);
-	await expect(dialog).toBeVisible();
-	await dialog.getByTestId("interview-never").click();
-	await expect(dialog).toBeHidden();
+	sendInvitation();
+	await expect(suggestion).toBeVisible();
+	rejectNextResponse = true;
+	await suggestion.getByRole("button", { name: "Hide and don't ask again" }).click();
+	await expect(suggestion).toContainText("Great news");
+	await expect(page.locator('[data-testid="toast"][data-variant="error"]')).toBeVisible();
+	await suggestion.getByRole("button", { name: "Hide and don't ask again" }).click();
+	await expect(suggestion).toContainText("find it in Settings");
 	await expect.poll(() => actions.at(-1)).toBe("never");
+	const responses = actions.length;
+	await suggestion.getByRole("button", { name: "OK" }).click();
+	await expect(suggestion).toBeHidden();
+	expect(actions).toHaveLength(responses);
 
-	sendInvitation(browserSocket);
-	await expect(dialog).toBeVisible();
+	sendInvitation();
+	await expect(suggestion).toBeVisible();
 	if (!welcomeFrame) throw new Error("expected the host welcome frame");
 	browserSocket?.send(welcomeFrame);
-	await expect(dialog).toBeHidden();
+	await expect(suggestion).toBeHidden();
+	expect(actions).toHaveLength(responses);
 
-	sendInvitation(browserSocket);
+	sendInvitation();
+	await expect(suggestion).toBeVisible();
+	await suggestion.getByRole("button", { name: "Sure!" }).click();
 	await expect(dialog).toBeVisible();
-	const bookingLink = dialog.getByTestId("interview-book");
-	await expect(bookingLink).toHaveAttribute("href", BOOKING_URL);
-	await expect(bookingLink).toHaveAttribute("target", "_blank");
-	await expect(bookingLink).toHaveAttribute("rel", "noopener noreferrer");
-	await expect(bookingLink).toHaveCSS("color", primaryTextColor);
-	await bookingLink.dispatchEvent("auxclick", { button: 1 });
+	const enable = dialog.getByTestId("survey-enable-analytics");
+	if ((await enable.count()) > 0) await enable.click();
+	await expect(dialog.getByTestId("survey-question")).toBeVisible();
+	await dialog.getByRole("textbox").fill("Clearer diffs");
+	await dialog.getByTestId("survey-continue").click();
+	await expect(dialog.getByTestId("survey-thanks")).toHaveText("Thank you for your feedback!");
+	await expect
+		.poll(() => submits.some((submit) => submit.event === "sent" && submit.completed === true))
+		.toBe(true);
+	const afterFinish = actions.length;
+	await dialog.getByRole("button", { name: "Close" }).click();
 	await expect(dialog).toBeHidden();
-	await expect.poll(() => actions.at(-1)).toBe("book");
-
-	sendInvitation(browserSocket);
-	await expect(dialog).toBeVisible();
-	const bookingPopupPromise = page.waitForEvent("popup");
-	await bookingLink.click();
-	const bookingPopup = await bookingPopupPromise;
-	await bookingPopup.close();
-	await expect(dialog).toBeHidden();
-	await expect.poll(() => actions.at(-1)).toBe("book");
+	expect(actions).toHaveLength(afterFinish);
+	const reads = surveyReads;
+	await page.getByTestId("open-settings").click();
+	await expect.poll(() => surveyReads).toBeGreaterThan(reads);
+	await expect(page.getByTestId("settings-nav-feedback")).toHaveCount(0);
 });

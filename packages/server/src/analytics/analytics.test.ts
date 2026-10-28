@@ -15,6 +15,7 @@ import {
 	CUSTOM_BUCKET,
 } from "./events";
 import {
+	captureSurveyEvent,
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
 	initializeAnalyticsWithSinkFactoryForTests,
@@ -232,6 +233,39 @@ test("every event has exactly its closed properties plus personless transport fr
 		expect(entry.properties.$process_person_profile).toBe(false);
 		expect(entry.properties.$geoip_disable).toBe(true);
 	}
+});
+
+test("survey events leave only while additional analytics is on", async () => {
+	const off: SentPayload[] = [];
+	boot(off, { additionalEnabled: false });
+	captureSurveyEvent("survey shown", { $survey_id: "survey-1" });
+	await shutdownAnalytics();
+	expect(allEntries(off).some((entry) => entry.event === "survey shown")).toBe(false);
+
+	const on: SentPayload[] = [];
+	boot(on, { additionalEnabled: true });
+	captureSurveyEvent("survey sent", {
+		$survey_id: "survey-1",
+		$survey_iteration: 1,
+		$survey_completed: true,
+		$survey_response_q1: "Faster search",
+		$survey_questions: [{ id: "q1", question: "How is it?" }],
+	});
+	await shutdownAnalytics();
+	const surveys = allEntries(on).filter((entry) => entry.event.startsWith("survey "));
+	expect(surveys.map((entry) => entry.event)).toEqual(["survey sent"]);
+	expect(surveys[0]?.properties).toMatchObject({
+		$survey_response_q1: "Faster search",
+		$process_person_profile: false,
+		$survey_completed: true,
+	});
+
+	const revoked: SentPayload[] = [];
+	boot(revoked, { additionalEnabled: true });
+	setAdditionalAnalyticsEnabled(false);
+	captureSurveyEvent("survey shown", { $survey_id: "survey-1" });
+	await shutdownAnalytics();
+	expect(allEntries(revoked).some((entry) => entry.event === "survey shown")).toBe(false);
 });
 
 test.each([
