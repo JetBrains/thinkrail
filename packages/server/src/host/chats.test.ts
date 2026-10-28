@@ -663,5 +663,14 @@ test("chat.inspect answers truncated at its entry budget, folders included, and 
 	expect(await inspectChat(id, { entries: 1_000, ms: 25 }, () => (clock += 10))).toMatchObject({
 		truncated: true,
 	});
+	for (let index = 2; index < 20; index += 1)
+		rmSync(join(worktreePath, `empty-${index}`), { recursive: true });
+	rmSync(join(worktreePath, ".thinkrail"), { recursive: true, force: true });
+	let calls = 0;
+	const lateAfterTheRoot = () => (++calls > 4 ? 1_000 : 0);
+	expect(await inspectChat(id, { entries: 1_000, ms: 10 }, lateAfterTheRoot)).toEqual({
+		files: 0,
+		truncated: true,
+	});
 	await handleRequest("chat.delete", { workspaceId: id }, CTX);
 }, 30_000);

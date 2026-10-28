@@ -152,6 +152,7 @@ export async function inspectChat(
 	let entries = 0;
 	const queue = [root];
 	for (let dir = queue.shift(); dir !== undefined; dir = queue.shift()) {
+		if (now() > deadline) return { files, truncated: true };
 		try {
 			for await (const entry of await opendir(dir)) {
 				entries += 1;
