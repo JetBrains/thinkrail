@@ -797,7 +797,8 @@ both rings rank with. The one package
   **`create`** (`{ model?, thinkingLevel? }` → `ChatCreateResult`: the `kind: "chat"` workspace plus the
   one session it owns, created by the host in one call), **`delete`** (`{ workspaceId }` → ack; the only
   teardown door — transcripts and folder to the Trash, `session.delete` refuses a chat) and **`inspect`**
-  (`{ workspaceId }` → `ChatInspection { files, truncated }`, the confirmation's bounded file count) /
+  (`{ workspaceId }` → `ChatInspection { files, truncated }`, the confirmation's file count — `truncated`
+  when the host's walk stopped at its entry or time budget, so the folder may hold more) /
   **`search.query`** + **`search.preview`** (the palette's host
   providers from `SEARCH_PROTOCOL_VERSION`, v99: `{ seq, query, kinds?, context, limit? }` → per-kind
   groups with the shared matcher's tiers, or `superseded` for an overtaken `seq`; a preview is a bounded

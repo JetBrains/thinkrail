@@ -219,7 +219,7 @@ export interface ChatCreateResult {
 /** What deleting a chat would trash besides its transcripts: the files its folder holds (bounded count). */
 export interface ChatInspection {
 	files: number;
-	/** The count stopped at the bound; the folder holds more. */
+	/** The walk stopped at its entry or time budget; the folder may hold more. */
 	truncated: boolean;
 }
 

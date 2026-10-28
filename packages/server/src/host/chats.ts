@@ -1,8 +1,10 @@
-import { existsSync, lstatSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { opendir } from "node:fs/promises";
 import { join } from "node:path";
 import type { ChatCreateResult, ChatInspection, Workspace } from "@thinkrail/contracts";
 import { CHATS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	type CreateSessionResult,
 	closeWorkspaceSessions,
@@ -35,7 +37,8 @@ import { taskObservation } from "./taskAnalytics";
 
 const log = logger("host");
 
-export const CHAT_INSPECT_FILE_LIMIT = 10_000;
+/** Entries visited (files and folders alike) and wall time one inspection may spend before it answers `truncated`. */
+export const CHAT_INSPECT_BUDGET = { entries: 10_000, ms: 250 } as const;
 
 /** The one visibility policy: a client below `CHATS_PROTOCOL_VERSION` never learns of the Chats container, its chats or their sessions. */
 export function seesChats(protocolVersion: number | undefined): boolean {
@@ -136,28 +139,28 @@ export function assertSessionDeletable(workspaceId: string): void {
 	}
 }
 
-/** How many files the chat's folder holds, bounded and without following symlinks. */
-export function inspectChat(workspaceId: string): ChatInspection {
-	const workspace = getChatWorkspace(workspaceId);
+/** How many files the chat's folder holds: an asynchronous walk within the budget, symlinks never followed. */
+export async function inspectChat(
+	workspaceId: string,
+	budget: { entries: number; ms: number } = CHAT_INSPECT_BUDGET,
+	now: () => number = () => performance.now(),
+): Promise<ChatInspection> {
+	const root = getChatWorkspace(workspaceId).worktreePath;
+	const scaffold = join(root, WORKSPACE_CONTEXT_DIR, ".gitignore");
+	const deadline = now() + budget.ms;
 	let files = 0;
-	const queue = [workspace.worktreePath];
+	let entries = 0;
+	const queue = [root];
 	for (let dir = queue.shift(); dir !== undefined; dir = queue.shift()) {
-		let entries: string[];
 		try {
-			entries = readdirSync(dir);
-		} catch {
-			continue;
-		}
-		for (const name of entries) {
-			const path = join(dir, name);
-			const entry = lstatSync(path, { throwIfNoEntry: false });
-			if (!entry) continue;
-			if (entry.isDirectory()) queue.push(path);
-			else {
-				files += 1;
-				if (files >= CHAT_INSPECT_FILE_LIMIT) return { files, truncated: true };
+			for await (const entry of await opendir(dir)) {
+				entries += 1;
+				if (entries > budget.entries || now() > deadline) return { files, truncated: true };
+				const path = join(dir, entry.name);
+				if (entry.isDirectory()) queue.push(path);
+				else if (path !== scaffold) files += 1;
 			}
-		}
+		} catch {}
 	}
 	return { files, truncated: false };
 }

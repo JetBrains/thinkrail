@@ -593,8 +593,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   attach something in the chat refuses before dispatch (`CHAT_RESOURCE_DOORS`: `session.create`,
   `session.getMessages`, `session.nudge`, the session-resource reads and stops — they attach a persisted
   parent — `terminal.reserve`, `terminal.attach`), and initial-terminal provisioning skips the record.
-  The host never sweeps unknown folders under the chats root. `chat.inspect` counts the folder's files (bounded,
-  symlinks not followed) for the confirmation. Every repository door refuses a chat or the container at
+  The host never sweeps unknown folders under the chats root. `chat.inspect` counts the folder's files
+  for the confirmation as an **asynchronous, yielding walk** (`opendir`, so a directory-heavy scratch tree
+  cannot stall the in-process host) within `CHAT_INSPECT_BUDGET` — entries visited, folders included,
+  and wall time — answering `truncated` when either runs out; symlinks are counted, never followed, and
+  ThinkRail's own `.thinkrail/context/.gitignore` scaffolding is not counted (an empty chat holds no
+  files). Every repository door refuses a chat or the container at
   the handler (`REPOSITORY_ONLY_METHODS` — git, changes, reviews, pull requests, turns, diff stats and
   base, and the plan's review doors `todo.review` / `startReview` / `reviewAll` / `requestFix`, which
   would reach a git-backed review snapshot — plus project close/rename/trust/skills,
@@ -640,7 +644,7 @@ enabled/confirmed choice before entering analytics attribution.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
-  `boot.ts`; `codedError`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
+  `boot.ts`; `codedError`; `paths` — the scratch-dir convention `chat.inspect` leaves uncounted); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
   routes); Bun/Node.

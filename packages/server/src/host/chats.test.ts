@@ -39,6 +39,7 @@ import {
 	getChatWorkspace,
 	resetChatIdCache,
 } from "../workspaces";
+import { inspectChat } from "./chats";
 import { applyGitCeiling } from "./gitCeiling";
 import { handleRequest } from "./handlers";
 
@@ -624,21 +625,43 @@ test("a chat's delegated conversations go to the Trash with it", async () => {
 	expect(existsSync(store)).toBe(false);
 }, 30_000);
 
-test("chat.inspect counts the files in a chat's folder", async () => {
+test("chat.inspect counts a chat's own files, not ThinkRail's scaffolding, never follows a symlink and yields while it walks", async () => {
 	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
-	const inspected = (await handleRequest(
-		"chat.inspect",
-		{ workspaceId: created.workspace.id },
-		CTX,
-	)) as { files: number; truncated: boolean };
-	expect(inspected.truncated).toBe(false);
-	writeFileSync(join(created.workspace.worktreePath, "notes.md"), "notes\n");
-	expect(
-		(
-			(await handleRequest("chat.inspect", { workspaceId: created.workspace.id }, CTX)) as {
-				files: number;
-			}
-		).files,
-	).toBe(inspected.files + 1);
+	const folder = created.workspace.worktreePath;
+	const inspect = () =>
+		handleRequest("chat.inspect", { workspaceId: created.workspace.id }, CTX) as Promise<
+			WsResult<"chat.inspect">
+		>;
+	let yielded = false;
+	setImmediate(() => {
+		yielded = true;
+	});
+	expect(await inspect()).toEqual({ files: 0, truncated: false });
+	expect(yielded).toBe(true);
+
+	writeFileSync(join(folder, "notes.md"), "notes\n");
+	mkdirSync(join(folder, "drafts"));
+	writeFileSync(join(folder, "drafts", "outline.md"), "outline\n");
+	const elsewhere = join(root, "linked-tree");
+	mkdirSync(elsewhere, { recursive: true });
+	for (let index = 0; index < 5; index += 1) writeFileSync(join(elsewhere, `f${index}`), "x");
+	symlinkSync(elsewhere, join(folder, "linked"));
+	expect(await inspect()).toEqual({ files: 3, truncated: false });
 	await handleRequest("chat.delete", { workspaceId: created.workspace.id }, CTX);
+}, 30_000);
+
+test("chat.inspect answers truncated at its entry budget, folders included, and at its time budget", async () => {
+	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
+	const { id, worktreePath } = created.workspace;
+	for (let index = 0; index < 20; index += 1) mkdirSync(join(worktreePath, `empty-${index}`));
+	expect(await inspectChat(id, { entries: 10, ms: 60_000 })).toEqual({ files: 0, truncated: true });
+	expect(await inspectChat(id, { entries: 1_000, ms: 60_000 })).toEqual({
+		files: 0,
+		truncated: false,
+	});
+	let clock = 0;
+	expect(await inspectChat(id, { entries: 1_000, ms: 25 }, () => (clock += 10))).toMatchObject({
+		truncated: true,
+	});
+	await handleRequest("chat.delete", { workspaceId: id }, CTX);
 }, 30_000);
