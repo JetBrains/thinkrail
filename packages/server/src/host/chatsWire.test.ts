@@ -5,8 +5,12 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ChatCreateResult, Workspace, WsResult } from "@thinkrail/contracts";
-import { CHATS_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import type { ChatContinuation, ChatCreateResult, Workspace, WsResult } from "@thinkrail/contracts";
+import {
+	CHATS_PROTOCOL_VERSION,
+	CONTINUATION_PROTOCOL_VERSION,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import {
 	configurePiRuntime,
 	configurePiRuntimeFactory,
@@ -35,6 +39,8 @@ interface Frame {
 interface Client {
 	frames: Frame[];
 	request(method: string, params: unknown): Promise<unknown>;
+	/** The first frame, past or future, that matches. */
+	next(match: (frame: Frame) => boolean): Promise<Frame>;
 	close(): void;
 }
 
@@ -91,6 +97,7 @@ async function connect(client: string, protocol: number): Promise<Client> {
 	);
 	const frames: Frame[] = [];
 	const waiting = new Map<string, (frame: Frame) => void>();
+	const watchers = new Set<{ match: (frame: Frame) => boolean; resolve: (frame: Frame) => void }>();
 	let welcomed: () => void = () => {};
 	const welcome = new Promise<void>((resolve) => {
 		welcomed = resolve;
@@ -98,6 +105,11 @@ async function connect(client: string, protocol: number): Promise<Client> {
 	socket.addEventListener("message", (event) => {
 		const frame = JSON.parse(String(event.data)) as Frame;
 		frames.push(frame);
+		for (const watcher of watchers) {
+			if (!watcher.match(frame)) continue;
+			watchers.delete(watcher);
+			watcher.resolve(frame);
+		}
 		if (frame.channel === WS_CHANNELS.serverWelcome) welcomed();
 		if (frame.id) waiting.get(frame.id)?.(frame);
 	});
@@ -112,6 +124,11 @@ async function connect(client: string, protocol: number): Promise<Client> {
 				if (!frame.ok) throw new Error(frame.error);
 				return frame.result;
 			});
+		},
+		next: (match) => {
+			const seen = frames.find(match);
+			if (seen) return Promise.resolve(seen);
+			return new Promise((resolve) => watchers.add({ match, resolve }));
 		},
 		close: () => socket.close(),
 	};
@@ -295,5 +312,48 @@ test("neither Agent review nor the spec tools reach a chat's session: no tool, n
 	} finally {
 		updateConfig({ agentReviewEnabled: false });
 		client.close();
+	}
+}, 30_000);
+
+test("continuation phases reach only sockets at the continuation protocol, and nothing reaches one older than chats", async () => {
+	const project = openProject(gitRepo(join(root, "repo-continue")));
+	const oldest = await connect("oldest", CHATS_PROTOCOL_VERSION - 1);
+	const chatsOnly = await connect("chats-only", CONTINUATION_PROTOCOL_VERSION - 1);
+	const current = await connect("continuing", CONTINUATION_PROTOCOL_VERSION);
+	try {
+		const created = (await current.request("chat.create", {})) as ChatCreateResult;
+		faux.setResponses([fauxAssistantMessage("ready")]);
+		await promptSession(created.sessionId, "start");
+		faux.setResponses([fauxAssistantMessage("No summary this time.")]);
+		const { operationId } = (await current.request("chat.continue", {
+			workspaceId: created.workspace.id,
+			projectId: project.id,
+		})) as { operationId: string };
+		await current.next(
+			(frame) =>
+				frame.channel === WS_CHANNELS.chatContinuation &&
+				(frame.data as ChatContinuation).operationId === operationId &&
+				(frame.data as ChatContinuation).phase === "failed",
+		);
+		await oldest.request("project.list", {});
+		await chatsOnly.request("project.list", {});
+		const continuations = (client: Client) =>
+			client.frames.filter((frame) => frame.channel === WS_CHANNELS.chatContinuation);
+		expect(continuations(current).map((frame) => (frame.data as ChatContinuation).phase)).toEqual([
+			"requested",
+			"summarizing",
+			"failed",
+		]);
+		expect(continuations(chatsOnly)).toEqual([]);
+		expect(
+			oldest.frames.filter((frame) =>
+				JSON.stringify(frame.data ?? null).includes(created.workspace.id),
+			),
+		).toEqual([]);
+		await current.request("chat.delete", { workspaceId: created.workspace.id });
+	} finally {
+		oldest.close();
+		chatsOnly.close();
+		current.close();
 	}
 }, 30_000);

@@ -155,6 +155,8 @@ export interface Workspace {
 }
 
 export interface ChatContinuationLink {
+	/** The gesture that made the link: a continuation card finds its outcome here after a host restart. */
+	operationId: string;
 	projectId: string;
 	workspaceId: string;
 	sessionId: string;

@@ -1616,6 +1616,7 @@ const REPOSITORY_ONLY_METHODS: ReadonlySet<WsMethodName> = new Set<WsMethodName>
 
 /** Doors that start or attach a session or a terminal: a chat being deleted, or whose deletion is pending, refuses them. */
 const CHAT_RESOURCE_DOORS: ReadonlySet<WsMethodName> = new Set<WsMethodName>([
+	"chat.continue",
 	"session.create",
 	"session.getMessages",
 	"session.nudge",

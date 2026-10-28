@@ -9,6 +9,7 @@ import {
 	revealWorkbenchTool,
 } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { seedWorkspaceSession } from "./fixtures/sessions";
 import { E2eWire } from "./fixtures/wire";
 
 interface ClientFrame {
@@ -205,10 +206,22 @@ test("Continue in workspace asks the chat's agent for a summary and shows the op
 	page,
 }) => {
 	await openFixtureProject(page);
-	await page.getByTestId("add-chat").click();
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		const { workspace, sessionId } = await wire.request("chat.create", {});
+		await wire.request("session.dispose", { sessionId });
+		seedWorkspaceSession(workspace.worktreePath, {
+			id: sessionId,
+			messages: [
+				{ role: "user", text: "Remember: the answer is 42.", timestamp: Date.now() - 2_000 },
+				{ role: "assistant", text: "Noted: 42.", timestamp: Date.now() - 1_000 },
+			],
+		});
+	} finally {
+		wire.close();
+	}
+	await page.getByTestId("chat-item").click();
 	await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
-	await page.getByTestId("chat-input").fill("Remember: the answer is 42.");
-	await page.getByTestId("chat-send").click();
 	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(1);
 
 	const row = page.getByTestId("chat-item");

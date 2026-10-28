@@ -1311,7 +1311,9 @@ export type WsErrorCode =
 	| "NOT_A_CHAT"
 	| "CHAT_HAS_SESSION"
 	| "CHAT_DELETING"
-	| "CHAT_DELETION_PENDING";
+	| "CHAT_DELETION_PENDING"
+	| "CONTINUATION_UNKNOWN"
+	| "CONTINUATION_IN_FLIGHT";
 
 export interface WsResponse {
 	id: string;

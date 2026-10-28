@@ -23,6 +23,7 @@ import {
 import { logger } from "../log";
 import { listProjects } from "../projects";
 import {
+	chatWorkspaces,
 	createWorkspace,
 	ensureWorkspaceScratchDir,
 	getChatWorkspace,
@@ -31,9 +32,9 @@ import {
 	recordChatContinuation,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
-import { trackChatStarted } from "./authAnalytics";
+import { assertChatOpen } from "./chats";
 import { provisionInitialTerminal } from "./initialTerminal";
-import { resolveNewChatModel } from "./newChatModel";
+import { noteNewChat, resolveNewChatModel } from "./newChatModel";
 
 const log = logger("host");
 
@@ -46,10 +47,14 @@ interface Operation {
 	state: ChatContinuation;
 	project: Project;
 	sourceTitle?: string;
+	/** The operation's one apply: every later tool call joins it (pi runs one response's calls in parallel). */
+	applying?: Promise<string>;
 }
 
 const operations = new Map<string, Operation>();
 const bySource = new Map<string, string>();
+/** A gesture still being admitted, per source chat: a concurrent gesture for its project joins it instead of racing it. */
+const admissions = new Map<string, { projectId: string; done: Promise<{ operationId: string }> }>();
 let publish: Publisher | null = null;
 
 export function setContinuationPublisher(next: Publisher | null): void {
@@ -62,12 +67,41 @@ function emit(operation: Operation, patch: Partial<ChatContinuation>): ChatConti
 	return operation.state;
 }
 
-function pendingFor(sessionId: string): Operation | null {
+function fail(operation: Operation, error: unknown): void {
+	emit(operation, { phase: "failed", reason: String(error) });
+}
+
+function boundTo(sessionId: string): Operation | undefined {
 	const operationId = bySource.get(sessionId);
-	const operation = operationId ? operations.get(operationId) : undefined;
-	if (!operation) return null;
-	const { phase } = operation.state;
-	return phase === "summarizing" || phase === "creating" || phase === "started" ? operation : null;
+	return operationId ? operations.get(operationId) : undefined;
+}
+
+function inFlight({ state }: Operation): boolean {
+	return state.phase === "requested" || state.phase === "summarizing" || state.phase === "creating";
+}
+
+/** A second gesture for another project is refused rather than silently following the first. */
+function continuingElsewhere(projectId: string): CodedError {
+	const name =
+		listProjects().find((project) => project.id === projectId)?.name ?? "another project";
+	return new CodedError(
+		"CONTINUATION_IN_FLIGHT",
+		`This chat is already being continued in ${name}.`,
+	);
+}
+
+function openRepository(projectId: string): Project | null {
+	const project = listProjects().find((candidate) => candidate.id === projectId);
+	return project && !isChatsContainer(project) ? project : null;
+}
+
+function projectWorkspace(workspaceId: string, projectId: string): Workspace | null {
+	try {
+		const workspace = getWorkspace(workspaceId);
+		return workspace.projectId === projectId ? workspace : null;
+	} catch {
+		return null;
+	}
 }
 
 function requestText(project: Project): string {
@@ -89,29 +123,47 @@ function handoffText(details: ChatHandoffDetails): string {
 	].join("\n");
 }
 
-/** Binds one operation to the source chat and asks its agent for the summary; a busy chat queues the request. */
-export async function startContinuation(
+/**
+ * Binds one operation to the source chat and asks its agent for the summary; a busy chat queues the request.
+ * A gesture for the same project while the chat's operation is still in flight, or still being admitted,
+ * joins it; one for another project is refused.
+ */
+export function startContinuation(
+	sourceWorkspaceId: string,
+	projectId: string,
+): Promise<{ operationId: string }> {
+	const admitting = admissions.get(sourceWorkspaceId);
+	if (admitting) {
+		return admitting.projectId === projectId
+			? admitting.done
+			: Promise.reject(continuingElsewhere(admitting.projectId));
+	}
+	const done = admitContinuation(sourceWorkspaceId, projectId).finally(() => {
+		if (admissions.get(sourceWorkspaceId)?.done === done) admissions.delete(sourceWorkspaceId);
+	});
+	admissions.set(sourceWorkspaceId, { projectId, done });
+	return done;
+}
+
+async function admitContinuation(
 	sourceWorkspaceId: string,
 	projectId: string,
 ): Promise<{ operationId: string }> {
 	const source = getChatWorkspace(sourceWorkspaceId);
-	if (source.deletionPending) {
-		throw new CodedError("CHAT_WORKSPACE", "This chat is being deleted.");
-	}
-	const project = listProjects().find((candidate) => candidate.id === projectId);
-	if (!project || isChatsContainer(project)) {
-		throw new CodedError("CHATS_CONTAINER", "Pick an open project to continue in.");
-	}
+	assertChatOpen(source.id);
+	const project = openRepository(projectId);
+	if (!project) throw new CodedError("CHATS_CONTAINER", "Pick an open project to continue in.");
 	const summary = (await listSessions(source.id, source.worktreePath))[0];
-	if (!summary) throw new CodedError("NOT_A_CHAT", "This chat has no conversation to continue.");
+	assertChatOpen(source.id);
+	if (!summary || summary.messageCount === 0) {
+		throw new CodedError("NOT_A_CHAT", "This chat has no conversation to continue.");
+	}
 	const sourceSessionId = summary.sessionId;
-	const existingId = bySource.get(sourceSessionId);
-	const existing = existingId ? operations.get(existingId) : undefined;
-	if (
-		existing &&
-		(existing.state.phase === "requested" || existing.state.phase === "summarizing")
-	) {
-		return { operationId: existing.state.operationId };
+	const previous = boundTo(sourceSessionId);
+	if (previous && inFlight(previous)) {
+		if (previous.state.projectId !== project.id)
+			throw continuingElsewhere(previous.state.projectId);
+		return { operationId: previous.state.operationId };
 	}
 	if (
 		getSessionWorkspaceId(sourceSessionId) === undefined &&
@@ -119,9 +171,12 @@ export async function startContinuation(
 	) {
 		throw new CodedError("NOT_A_CHAT", "This chat's conversation could not be opened.");
 	}
+	assertChatOpen(source.id);
 	const leftover =
-		existing?.state.phase === "failed" && existing.state.projectId === project.id
-			? existing.state
+		previous?.state.phase === "failed" &&
+		previous.state.projectId === project.id &&
+		previous.state.workspaceId
+			? projectWorkspace(previous.state.workspaceId, project.id)
 			: null;
 	const operation: Operation = {
 		state: {
@@ -130,8 +185,7 @@ export async function startContinuation(
 			sourceSessionId,
 			projectId: project.id,
 			phase: "requested",
-			...(leftover?.workspaceId ? { workspaceId: leftover.workspaceId } : {}),
-			...(leftover?.sessionId ? { sessionId: leftover.sessionId } : {}),
+			...(leftover ? { workspaceId: leftover.id } : {}),
 		},
 		project,
 		...(summary.title ? { sourceTitle: summary.title } : {}),
@@ -156,69 +210,89 @@ export async function startContinuation(
 			REQUEST_ACK_MS,
 		);
 	} catch (error) {
-		emit(operation, { phase: "failed", reason: String(error) });
+		fail(operation, error);
 		throw error;
 	}
 	return { operationId: operation.state.operationId };
 }
 
-export function continuationStatus(operationId: string): ChatContinuation {
+/** The host's phases while it holds the operation; after a restart a linked one reads `started` from its link. */
+export async function continuationStatus(operationId: string): Promise<ChatContinuation> {
 	const operation = operations.get(operationId);
-	if (!operation) throw new CodedError("NOT_A_CHAT", "Unknown continuation.");
-	return operation.state;
+	if (operation) return operation.state;
+	for (const chat of chatWorkspaces()) {
+		const link = chat.continuedTo?.find((candidate) => candidate.operationId === operationId);
+		if (!link) continue;
+		const source = (await listSessions(chat.id, chat.worktreePath))[0];
+		return {
+			operationId,
+			sourceWorkspaceId: chat.id,
+			sourceSessionId: source?.sessionId ?? "",
+			projectId: link.projectId,
+			workspaceId: link.workspaceId,
+			sessionId: link.sessionId,
+			phase: "started",
+		};
+	}
+	throw new CodedError("CONTINUATION_UNKNOWN", "The host no longer knows this continuation.");
 }
 
-/** The tool's host side: revalidate, create the workspace and its chat, hand the summary over, remember the link. */
-export async function applyContinuation(sessionId: string, summary: string): Promise<string> {
-	const operation = pendingFor(sessionId);
-	if (!operation) {
-		throw new Error(
-			"No continuation is pending for this chat. ThinkRail asks for one with a card in the chat; if the host restarted since, the user has to ask again.",
+/** The tool's host side: one apply per operation, joined by every later call for it. */
+export function applyContinuation(sessionId: string, summary: string): Promise<string> {
+	const operation = boundTo(sessionId);
+	const phase = operation?.state.phase;
+	if (!operation || (phase !== "summarizing" && phase !== "creating" && phase !== "started")) {
+		return Promise.reject(
+			new Error(
+				"No continuation is pending for this chat. ThinkRail asks for one with a card in the chat; if the host restarted since, the user has to ask again.",
+			),
 		);
 	}
-	const { state } = operation;
-	if (state.phase === "started" && state.workspaceId && state.sessionId) {
-		return `Already continued in workspace ${state.workspaceId} (chat ${state.sessionId}).`;
-	}
-	const project = listProjects().find((candidate) => candidate.id === state.projectId);
-	if (!project || isChatsContainer(project)) {
+	operation.applying ??= runContinuation(operation, summary);
+	return operation.applying;
+}
+
+/** Revalidate, create the workspace and its chat (or reuse what a failed attempt left), hand over, link. */
+async function runContinuation(operation: Operation, summary: string): Promise<string> {
+	const { operationId, projectId, sourceWorkspaceId, sourceSessionId } = operation.state;
+	const project = openRepository(projectId);
+	if (!project) {
 		emit(operation, { phase: "failed", reason: "The project is no longer open." });
 		throw new Error("The project to continue in is no longer open.");
 	}
 	emit(operation, { phase: "creating" });
+	const leftover = operation.state.workspaceId
+		? projectWorkspace(operation.state.workspaceId, project.id)
+		: null;
 	let workspace: Workspace;
 	try {
-		workspace = state.workspaceId
-			? knownWorkspace(state.workspaceId)
-			: provisionInitialTerminal(await createWorkspace(project.id));
+		workspace = leftover ?? provisionInitialTerminal(await createWorkspace(project.id));
 	} catch (error) {
-		emit(operation, { phase: "failed", reason: String(error) });
+		fail(operation, error);
 		throw error;
 	}
 	emit(operation, { workspaceId: workspace.id });
-	let targetSessionId = state.sessionId;
-	if (!targetSessionId) {
-		try {
-			ensureWorkspaceScratchDir(workspace);
-			const defaults = await resolveNewChatModel({});
-			const created = await createSession({
-				cwd: workspace.worktreePath,
-				workspaceId: workspace.id,
-				...(defaults.model ? { model: defaults.model } : {}),
-				thinkingLevel: defaults.thinkingLevel,
-			});
-			trackChatStarted({ sessionId: created.sessionId, model: created.model });
-			targetSessionId = created.sessionId;
-		} catch (error) {
-			emit(operation, { phase: "failed", reason: String(error) });
-			throw error;
-		}
+	let targetSessionId: string;
+	try {
+		ensureWorkspaceScratchDir(workspace);
+		const defaults = await resolveNewChatModel({});
+		const created = await createSession({
+			cwd: workspace.worktreePath,
+			workspaceId: workspace.id,
+			...(defaults.model ? { model: defaults.model } : {}),
+			thinkingLevel: defaults.thinkingLevel,
+		});
+		noteNewChat({}, defaults, created);
+		targetSessionId = created.sessionId;
+	} catch (error) {
+		fail(operation, error);
+		throw error;
 	}
 	emit(operation, { sessionId: targetSessionId });
 	const details: ChatHandoffDetails = {
-		operationId: state.operationId,
-		sourceWorkspaceId: state.sourceWorkspaceId,
-		sourceSessionId: state.sourceSessionId,
+		operationId,
+		sourceWorkspaceId,
+		sourceSessionId,
 		...(operation.sourceTitle ? { sourceTitle: operation.sourceTitle } : {}),
 		summary,
 	};
@@ -234,34 +308,26 @@ export async function applyContinuation(sessionId: string, summary: string): Pro
 		);
 	} catch (error) {
 		firstMessage = "failed";
-		log.warn(`handoff message failed for continuation ${state.operationId}: ${String(error)}`);
+		log.warn(`handoff message failed for continuation ${operationId}`, error);
 	}
 	try {
-		recordChatContinuation(state.sourceWorkspaceId, {
+		recordChatContinuation(sourceWorkspaceId, {
+			operationId,
 			projectId: project.id,
 			workspaceId: workspace.id,
 			sessionId: targetSessionId,
 		});
 	} catch (error) {
-		log.warn(`continuation link not recorded for ${state.sourceWorkspaceId}: ${String(error)}`);
+		log.warn(`continuation link not recorded for ${sourceWorkspaceId}`, error);
 	}
 	emit(operation, { phase: "started", firstMessage });
-	return `Continued in workspace "${workspace.name}" of ${project.name} (workspace ${workspace.id}, chat ${targetSessionId}); the handoff ${firstMessage === "sent" ? "was delivered" : "could not be delivered — the user can resend it"}.`;
-}
-
-function knownWorkspace(workspaceId: string): Workspace {
-	try {
-		return getWorkspace(workspaceId);
-	} catch {
-		throw new Error("The workspace created earlier is gone; ask to continue again.");
-	}
+	return `Continued in workspace "${workspace.name}" of ${project.name} (workspace ${workspace.id}, chat ${targetSessionId}); the handoff ${firstMessage === "sent" ? "was delivered" : "could not be delivered"}.`;
 }
 
 /** A source turn that settles without the tool call ends the operation: the user sees "No summary" and may retry. */
 export function observeContinuation(sessionId: string, event: PiEvent): void {
 	if (event.type !== "agent_settled") return;
-	const operationId = bySource.get(sessionId);
-	const operation = operationId ? operations.get(operationId) : undefined;
+	const operation = boundTo(sessionId);
 	if (operation?.state.phase !== "summarizing") return;
 	emit(operation, { phase: "failed", reason: "The agent finished without a summary." });
 }
@@ -273,4 +339,5 @@ export const continueToolHost: ContinueToolHost = {
 export function resetContinuationsForTests(): void {
 	operations.clear();
 	bySource.clear();
+	admissions.clear();
 }

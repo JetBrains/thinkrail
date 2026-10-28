@@ -590,8 +590,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   folder (only one under the chats root), drops the record and publishes the removal; a failure leaves
   the pending record visible with Retry. While a delete runs (`CHAT_DELETING`) or after one that did not
   finish (`CHAT_DELETION_PENDING`, persisted, so also after a restart) every door that would start or
-  attach something in the chat refuses before dispatch (`CHAT_RESOURCE_DOORS`: `session.create`,
-  `session.getMessages`, `session.nudge`, the session-resource reads and stops — they attach a persisted
+  attach something in the chat refuses before dispatch (`CHAT_RESOURCE_DOORS`: `chat.continue`,
+  `session.create`, `session.getMessages`, `session.nudge`, the session-resource reads and stops — they attach a persisted
   parent — `terminal.reserve`, `terminal.attach`), and initial-terminal provisioning skips the record.
   The host never sweeps unknown folders under the chats root. `chat.inspect` counts the folder's files
   for the confirmation as an **asynchronous, yielding walk** (`opendir`, so a directory-heavy scratch tree
@@ -634,28 +634,41 @@ channel fan-out, and the process-boot wrapper both launchers share.
   sockets that both see chats and fall within the request's own audience (an MCP notice for clients below
   `MCP_PROTOCOL_VERSION` therefore reaches no socket for a chat); `recentProjects` never carries the
   container. Run analytics classify `workspace_kind: "chat"`.
-- **Continue in workspace (`continuations.ts`):** one **in-memory** operation per user gesture and
-  source chat (`chat.continue { workspaceId, projectId } → { operationId }`; a second gesture while one
-  is `requested`/`summarizing` joins it). The host validates the source (a chat without a project with a
-  conversation) and the target (an open repository, never the container), publishes `requested`, then
-  delivers a `continue-in-workspace-request` custom message to the source session as a **follow-up**
-  (`sendHostMessageToSession` — a card in the transcript, queued behind a running turn, never a steer),
-  moving to `summarizing`; the request's acceptance is awaited only for `REQUEST_ACK_MS` (a refusal
-  before the turn fails the operation; the turn itself is not awaited). The agent answers through the
-  `continue_in_workspace({ summary })` tool ([[submodule-server-agent]]): `applyContinuation` revalidates
-  the binding and the project, moves to `creating`, creates the workspace (default base, the shared
-  initial-terminal provisioning) and records its id at once, then the chat (host default model) and its
-  id, then sends the `chat-handoff` custom message — the clamped summary plus a link back, the new chat's
-  first turn — reporting `firstMessage: sent | failed` apart from the phase, remembers the link on the
-  source record (`continuedTo`, [[submodule-server-workspaces]]) and ends `started`; a second call returns
-  the recorded ids, and a new gesture after a failure for the same project inherits the ids the failed
-  operation had already created, so a same-host retry reuses partial work instead of leaving an empty
-  workspace behind. A source turn that settles without the call (`observeContinuation` on
-  `agent_settled`) fails the operation ("…without a summary"); a host restart loses every binding, so
-  the tool refuses, `chat.continuationStatus` answers `NOT_A_CHAT` (the client renders the card as
-  `lost`) and the UI offers Retry. Phases travel on the scoped `chat.continuation` push (sockets ≥
-  `CONTINUATION_PROTOCOL_VERSION`); `chat.continuationStatus` answers a client that missed the pushes
-  (a reload). Only the initiating client navigates — a web-side rule.
+- **Continue in workspace (`continuations.ts`):** one **in-memory** operation per user gesture and source
+  chat (`chat.continue { workspaceId, projectId } → { operationId }`). A gesture for the same project
+  joins the chat's operation while it is `requested`/`summarizing`/`creating`, and one still being
+  admitted (the admission is reserved per source chat before its first await, so two windows on a chat
+  whose session is only on disk get one operation); a gesture for another project meanwhile is refused
+  (`CONTINUATION_IN_FLIGHT`), never silently folded into the first; after `started` or `failed` a gesture
+  starts a new one. The host validates the source (a chat without a project holding a conversation — an
+  empty chat has nothing to hand over; and open, per the chat lifecycle above: `chat.continue` is a chat
+  resource door, and `assertChatOpen` runs again after every await before the session is attached or
+  asked, so a delete that began or failed meanwhile refuses with `CHAT_DELETING` /
+  `CHAT_DELETION_PENDING`) and the target (an open repository, never the container), publishes
+  `requested`, then delivers a `continue-in-workspace-request` custom message to the source session as a
+  **follow-up** (`sendHostMessageToSession` — a card in the transcript, queued behind a running turn,
+  never a steer), moving to `summarizing`; the request's acceptance is awaited only for `REQUEST_ACK_MS`
+  (a refusal before the turn fails the operation; the turn itself is not awaited). The agent answers
+  through the `continue_in_workspace({ summary })` tool ([[submodule-server-agent]]). `applyContinuation`
+  is **single-flight**: the operation's one apply promise is stored before its first await, and every
+  later call for it — pi runs one response's tool calls in parallel — joins it and gets its result, so one
+  gesture makes at most one workspace, chat, handoff and link. The apply revalidates the project, moves to
+  `creating`, creates the workspace (default base, the shared initial-terminal provisioning) and records
+  its id at once, then the chat (host default model, `noteNewChat`'s bookkeeping) and its id, then sends
+  the `chat-handoff` custom message — the clamped summary plus a link back, the new chat's first turn and
+  run ([[submodule-server-agent]]'s run boundary) — reporting `firstMessage: sent | failed` apart from the
+  phase, remembers the link on the source record (`continuedTo` with the `operationId`,
+  [[submodule-server-workspaces]]) and ends `started`. A failure after the workspace exists keeps its id:
+  a new gesture for the same project inherits it while that workspace still exists in that project, so a
+  same-host retry reuses it instead of leaving it empty, and a workspace removed in between is simply
+  created again. Both swallowed failures (handoff delivery, the link) are logged with their error. A
+  source turn that settles without the call (`observeContinuation` on `agent_settled`) fails the operation
+  ("…without a summary"). A host restart loses every binding, so the tool refuses;
+  `chat.continuationStatus` answers a linked operation `started` from its `continuedTo` link and any other
+  `CONTINUATION_UNKNOWN` (the client renders the card as `lost` and offers Retry). Phases travel on the
+  scoped `chat.continuation` push (sockets ≥ `CONTINUATION_PROTOCOL_VERSION`, and only those that see
+  chats); `chat.continuationStatus` answers a client that missed the pushes (a reload, a reconnect). Only
+  the initiating client navigates — a web-side rule.
 - **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
   `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
   history index's `sessions()`, `specSnapshot` and `listStoredPlans`; the handler passes the socket's
