@@ -471,7 +471,7 @@ run-scoped signal. Non-user paths retain their behavior.
     skipped). The one unconditional set is `DelegationBindings.childBaseExtensionFactories`: every
     child — ordinary or resource, opted in or not — loads it ahead of the curated set. It carries
     tool-less infrastructure hooks an embedder needs on every child request (ThinkRail: the
-    oversized-image guard, made necessary by decision #31's raw-image settings — PR #657 review:
+    oversized-image guard and the post-compaction skill carry-over; the guard was made necessary by decision #31's raw-image settings — PR #657 review:
     custom agents default to no extensions, so an opt-in guard left them unguarded). A tool
     registered there would reach children that never opted in, so keeping the set tool-free is the
     embedder's contract; the core does not police it. Literal "inherit the parent's extensions" is
