@@ -102,7 +102,7 @@ join an arrival cohort (`noteArrivals`, `PaletteItem.late`): each later reply's 
 every row already on screen and every earlier cohort, across tiers and never as the top hit, so no row
 above the selection moves; a row already on screen never becomes late. The selected host row never
 leaves the list while the same search stands — the same text, scope and root (`withPinned`): a reply
-that no longer brings it keeps it, no group's cap hides it (`keep`), and a changed root or a host that
+that no longer brings it keeps it (a local twin the query misses does not stand in for it), no group's cap hides it (`keep`), and a changed root or a host that
 stops searching drops it. A group's "N more" is the host's count beyond its page less the local rows the
 page left out that the host's own fields also match (a chat's title; a workspace's name, branch and PR
 number — `PaletteItem.hostFields`), so a chat both the browser and the host know is never counted twice,

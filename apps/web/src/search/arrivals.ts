@@ -10,9 +10,10 @@ export function withPinned(
 	items: readonly PaletteItem[],
 	pinned: PinnedRow | null,
 	input: HostSearchInput,
+	listed: ReadonlySet<string>,
 ): readonly PaletteItem[] {
 	if (!pinned || !sameHostInput(pinned.input, input)) return items;
-	return items.some((item) => item.id === pinned.item.id) ? items : [...items, pinned.item];
+	return listed.has(pinned.item.id) ? items : [...items, pinned.item];
 }
 
 export interface Arrivals {

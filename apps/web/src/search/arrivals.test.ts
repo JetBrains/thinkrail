@@ -42,15 +42,26 @@ describe("withPinned", () => {
 	const pinned = { item: item("file:w1:a.ts"), input: input("w1") };
 
 	test("the selected host row stays while the same search stands, never in another root's results", () => {
-		expect(withPinned([item("file:w1:b.ts")], pinned, input("w1")).map((row) => row.id)).toEqual([
-			"file:w1:b.ts",
+		const listed = (...ids: string[]) => new Set(ids);
+		expect(
+			withPinned([item("file:w1:b.ts")], pinned, input("w1"), listed("file:w1:b.ts")).map(
+				(row) => row.id,
+			),
+		).toEqual(["file:w1:b.ts", "file:w1:a.ts"]);
+		const shown = [item("file:w1:a.ts")];
+		expect(withPinned(shown, pinned, input("w1"), listed("file:w1:a.ts"))).toBe(shown);
+		expect(withPinned([], pinned, input("w2"), listed())).toEqual([]);
+		expect(withPinned([], pinned, { ...input("w1"), enabled: false }, listed())).toEqual([]);
+		expect(withPinned([], null, input("w1"), listed())).toEqual([]);
+	});
+
+	test("a local twin that the query misses never takes the pinned host row's place", () => {
+		const twin = item("file:w1:a.ts");
+		expect(withPinned([twin], pinned, input("w1"), new Set()).map((row) => row.id)).toEqual([
+			"file:w1:a.ts",
 			"file:w1:a.ts",
 		]);
-		const listed = [item("file:w1:a.ts")];
-		expect(withPinned(listed, pinned, input("w1"))).toBe(listed);
-		expect(withPinned([], pinned, input("w2"))).toEqual([]);
-		expect(withPinned([], pinned, { ...input("w1"), enabled: false })).toEqual([]);
-		expect(withPinned([], null, input("w1"))).toEqual([]);
+		expect(withPinned([twin], pinned, input("w1"), new Set())[1]).toBe(pinned.item);
 	});
 });
 

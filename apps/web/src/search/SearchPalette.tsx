@@ -152,6 +152,10 @@ function PaletteContent({
 		const holding = holdingSelection.current;
 		setArrivals((current) => noteArrivals(current, landed, shown, holding));
 	}, [hostState.groups]);
+	const localMatches = useMemo(
+		() => matchingIds(rootItems, parsed.terms),
+		[rootItems, parsed.terms],
+	);
 	const hostRows = useMemo(() => {
 		if (!host || !hostState.groups || hostState.groups.length === 0) return [];
 		const context = {
@@ -159,16 +163,16 @@ function PaletteContent({
 			openHit: host.openHit,
 			projectName: host.projectName,
 			workspaceName: host.workspaceName,
-			localIds: matchingIds(rootItems, parsed.terms),
+			localIds: localMatches,
 			late: arrivals.late,
 			staleTerms: hostState.stale ? parsed.terms : null,
 		};
 		return hostItems(context, hostState.groups);
-	}, [host, hostState.groups, hostState.stale, parsed.terms, rootItems, t, arrivals]);
-	const allItems = useMemo(
-		() => withPinned([...rootItems, ...hostRows], pinned, hostInput),
-		[rootItems, hostRows, pinned, hostInput],
-	);
+	}, [host, hostState.groups, hostState.stale, parsed.terms, localMatches, t, arrivals]);
+	const allItems = useMemo(() => {
+		const listed = new Set([...localMatches, ...hostRows.map((item) => item.id)]);
+		return withPinned([...rootItems, ...hostRows], pinned, hostInput, listed);
+	}, [rootItems, hostRows, localMatches, pinned, hostInput]);
 	const totals = useMemo(
 		() => (hostState.groups && !hostState.stale ? hostTotals(hostState.groups) : {}),
 		[hostState.groups, hostState.stale],
