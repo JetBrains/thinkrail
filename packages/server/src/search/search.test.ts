@@ -1068,6 +1068,32 @@ describe("chats without a project", () => {
 		).toMatchObject({ kind: "transcript", title: "Refresh the garden" });
 	});
 
+	test("a chat whose deletion did not finish is in no corpus for any audience and has no preview", async () => {
+		const service = createSearchService(
+			readers({
+				projects: () => [project, other, chatsProject],
+				workspaces: () => [defaultOne, feature, { ...chatRecord, deletionPending: true }],
+				sessions: async () => ({ sessions: [...sessions, chatSession], indexing: false }),
+				plans: (root) => (root === chatRecord.worktreePath ? [chatPlan] : (plans[root] ?? [])),
+				files: new FileListCache(async () => ({ paths: ["refresh.md"], truncated: false })),
+			}),
+		);
+		const result = await service.query(
+			"new",
+			{ seq: 1, query: "refresh", context: chatContext },
+			{ chats: true },
+		);
+		expect(result.groups.flatMap((group) => group.hits).filter(aboutTheChat)).toEqual([]);
+		expect(result.groups.find((group) => group.kind === "file")).toMatchObject({
+			hits: [],
+			total: 0,
+		});
+		expect(await service.preview({ kind: "chat", sessionId: "s-chat" }, { chats: true })).toEqual({
+			kind: "unavailable",
+			reason: "missing",
+		});
+	});
+
 	test("a chat's root answers files but never specs, and a chat record is never a workspace hit", async () => {
 		const files = new FileListCache(async () => ({ paths: ["chat-notes.md"], truncated: false }));
 		await files.load(chatRecord.worktreePath, false);

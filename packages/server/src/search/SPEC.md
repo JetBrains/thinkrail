@@ -48,6 +48,8 @@ what the asking client may learn of (`{ chats }`, from the host's one visibility
 see everything). A client older than chats without a project gets the projects without the Chats
 container, so every corpus — workspace records, the root, files, plans, chat titles, transcripts and
 previews — is built without its chats before any provider ranks or pages, and totals never count them.
+A chat whose deletion did not finish (`deletionPending`) is out of every corpus for every audience: its
+transcript may still be on disk, but nothing may reopen it.
 
 ## Query
 

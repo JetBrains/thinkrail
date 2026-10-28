@@ -119,7 +119,9 @@ export function createSearchService(readers: SearchReaders): SearchService {
 
 	const openWorkspaces = (projects: readonly Project[]) => {
 		const open = new Set(projects.map((project) => project.id));
-		return readers.workspaces().filter((workspace) => open.has(workspace.projectId));
+		return readers
+			.workspaces()
+			.filter((workspace) => open.has(workspace.projectId) && workspace.deletionPending !== true);
 	};
 
 	const chatLabeler = (workspaces: readonly Workspace[]) => {

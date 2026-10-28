@@ -143,4 +143,22 @@ describe("palette navigation", () => {
 		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
 		expect(useAppStore.getState().toasts.at(-1)?.message).toBe("socket closed");
 	});
+
+	test("a chat whose deletion did not finish does not open from a result, held or loaded", async () => {
+		const pending: Workspace = { ...workspace("c1", "chats"), kind: "chat", deletionPending: true };
+		useAppStore.setState({ projects: [project("chats")], workspaces: { chats: [pending] } });
+		const navigator = createPaletteNavigator(() => Promise.resolve());
+		expect(await navigator.navigateToWorkspace({ id: "c1", projectId: "chats" }, "s1")).toBe(false);
+		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
+		expect(useAppStore.getState().toasts.at(-1)?.message).toBe(
+			"This result is no longer available",
+		);
+
+		useAppStore.setState({ workspaces: {} });
+		const loading = createPaletteNavigator(async (projectId) => {
+			useAppStore.getState().setWorkspaces(projectId, [pending]);
+		});
+		expect(await loading.navigateToWorkspace({ id: "c1", projectId: "chats" })).toBe(false);
+		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
+	});
 });
