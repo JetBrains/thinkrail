@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
@@ -14,6 +15,7 @@ import {
 	listSkillCommands,
 	setDisabledExtensionsResolver,
 } from "./extensions";
+import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
 import type { SkillAdmissionContext } from "./skillAdmission";
 
@@ -496,12 +498,13 @@ describe("registry extensions", () => {
 
 	it("keeps the curated child set and appends registry children", () => {
 		const children = childExtensionFactories();
-		expect(children).toHaveLength(1 + registryInlineExtensions("childExtensions").length);
-		expect(typeof children[0]).toBe("function");
+		expect(children).toHaveLength(2 + registryInlineExtensions("childExtensions").length);
+		expect(children[0]).toBe(headlessSearchPolicy);
+		expect(typeof children[1]).toBe("function");
 		const names = (inlines: typeof children) =>
 			inlines.map((inline) => (typeof inline === "function" ? "fn" : inline.name));
-		expect(names(children.slice(1))).toEqual(names(registryInlineExtensions("childExtensions")));
-		expect(names(children.slice(1))).toEqual(["web-access#1", "web-access#2"]);
+		expect(names(children.slice(2))).toEqual(names(registryInlineExtensions("childExtensions")));
+		expect(names(children.slice(2))).toEqual(["web-access"]);
 	});
 
 	it("loads web access with its skill and drops both while the extension is off", async () => {
@@ -522,9 +525,7 @@ describe("registry extensions", () => {
 			const tools = () =>
 				loader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()]);
 			const skills = () => loader.getSkills().skills.map((skill) => skill.name);
-			expect(paths()).toEqual(
-				expect.arrayContaining(["<inline:web-access#1>", "<inline:web-access#2>"]),
-			);
+			expect(paths()).toEqual(expect.arrayContaining(["<inline:web-access>"]));
 			expect(tools()).toEqual(
 				expect.arrayContaining(["web_search", "fetch_content", "get_search_content"]),
 			);
@@ -589,6 +590,48 @@ describe("registry extensions", () => {
 			expect(librarian()).toBeDefined();
 			expect(librarian()).not.toStartWith(personalSkills);
 			expect(await catalogLibrarian()).not.toStartWith(personalSkills);
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps a user's own pi-web-access headless while the web-access extension is off", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-user-web-access-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(join(agentDir, "extensions"), { recursive: true });
+		const extensionEntry = createRequire(import.meta.url).resolve(
+			"@thinkrail/ext-web-access/server",
+		);
+		const packageEntry = createRequire(extensionEntry).resolve("pi-web-access/index.ts");
+		writeFileSync(
+			join(agentDir, "extensions", "user-web-access.ts"),
+			`export { default } from ${JSON.stringify(packageEntry)};\n`,
+		);
+		const restore = stubSkillEnv(home, agentDir);
+		setDisabledExtensionsResolver(() => new Set(["web-access"]));
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const { extensions } = loader.getExtensions();
+			expect(extensions.find((extension) => extension.tools.has("web_search"))?.path).toContain(
+				"user-web-access",
+			);
+			const input: Record<string, unknown> = { query: "q" };
+			for (const extension of extensions) {
+				for (const handler of extension.handlers.get("tool_call") ?? []) {
+					await handler(
+						{ type: "tool_call", toolName: "web_search", toolCallId: "call", input },
+						{} as never,
+					);
+				}
+			}
+			expect(input.workflow).toBe("none");
 		} finally {
 			setDisabledExtensionsResolver(() => new Set());
 			restore();

@@ -65,8 +65,10 @@ list for registry extensions.
 - **Interactive tools (`interactive.ts`):** `interactiveTools(isDisabled)` folds the enabled registry
   extensions' `interactiveTools` declarations into one name → `InteractiveTool` map (first declaration of a
   name wins). It is the only tool knowledge `agent` holds for restart repair, transcript-derived
-  needs-input and late-response wording; nothing in `packages/server` names a tool or imports an extension
-  outside `registry.ts`.
+  needs-input and late-response wording; nothing in `packages/server` names an extension's tool or imports an
+  extension outside `registry.ts`. The one tool name the host knows is `web_search`, in `agent`'s
+  headless-search policy: it compensates for the host's UI for any copy of `pi-web-access`, so it is not
+  the extension's to own.
 - **Allowed deps:** `@thinkrail/extension-api/server` (types), every `@thinkrail/ext-*/server`,
   `@earendil-works/pi-coding-agent` (types only), `@thinkrail/contracts` (the `ExtensionCatalogEntry` type),
   Node `module`/`fs`/`path`.

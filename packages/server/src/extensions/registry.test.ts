@@ -38,18 +38,18 @@ describe("server extension registry", () => {
 			registryInlineExtensions("extensions", undefined, serverExtensions, session).map((inline) =>
 				typeof inline === "function" ? "fn" : inline.name,
 			);
-		expect(names()).toEqual(["visualize", "web-access#1", "web-access#2"]);
+		expect(names()).toEqual(["visualize", "web-access"]);
 		expect(
 			names({
 				expectToolResponse: () => {},
 				awaitToolResponse: () => Promise.resolve({ kind: "deferred" as const }),
 			}),
-		).toEqual(["visualize", "ask-user-question", "web-access#1", "web-access#2"]);
+		).toEqual(["visualize", "ask-user-question", "web-access"]);
 		expect(
 			registryInlineExtensions("childExtensions").map((inline) =>
 				typeof inline === "function" ? "fn" : inline.name,
 			),
-		).toEqual(["web-access#1", "web-access#2"]);
+		).toEqual(["web-access"]);
 	});
 });
 

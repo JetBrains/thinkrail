@@ -27,6 +27,7 @@ import {
 	serverExtensions,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
+import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
@@ -234,7 +235,11 @@ export function childBaseExtensionFactories(): InlineExtension[] {
 }
 
 export function childExtensionFactories(): InlineExtension[] {
-	return [specGraphExtension, ...registryInlineExtensions("childExtensions", isExtensionDisabled)];
+	return [
+		headlessSearchPolicy,
+		specGraphExtension,
+		...registryInlineExtensions("childExtensions", isExtensionDisabled),
+	];
 }
 
 export async function buildResourceLoader(
@@ -249,6 +254,7 @@ export async function buildResourceLoader(
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
 	const sharedFactories: InlineExtension[] = [
 		...registryInlineExtensions("extensions", isDisabledAtReload, serverExtensions, session),
+		headlessSearchPolicy,
 		reviewToolExtension,
 		requestReviewExtension,
 		setTitleExtension,

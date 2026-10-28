@@ -778,9 +778,10 @@ re-opened transcripts provider-valid.
     `@thinkrail/shared/codedError` edge, shared with Chat Resources and mirroring `git`'s use).
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
-    (`childExtensionFactories` in `extensions`, pi `InlineExtension`s): `pi-spec-graph` + every registry
-    extension's `childExtensions` (named inline, from [[submodule-server-extensions]]; today `web-access`'s
-    headless-search policy and `pi-web-access`) — deliberately not the parent's full set
+    (`childExtensionFactories` in `extensions`, pi `InlineExtension`s): the headless-search policy +
+    `pi-spec-graph` + every registry extension's `childExtensions` (named inline, from
+    [[submodule-server-extensions]]; today `web-access`'s `pi-web-access`) — deliberately not the parent's
+    full set
     (rationale + the listed-children carve-out: core decision #25). **Every** child, opted in or not,
     also loads the core's base set (`childBaseExtensionFactories`, same decision): just
     `oversizedImageGuard`, since a child's `read` returns raw images under the shared settings (see the
@@ -905,7 +906,11 @@ re-opened transcripts provider-valid.
     filename is only a name.
     In every mode, the optional Central artifact remains an external filesystem path loaded by PI's public
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
-    `extensionFactories`:
+    `extensionFactories`: a **headless-search policy** (`headlessSearch.ts`, a `tool_call` hook defaulting
+    `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator on
+    the host machine and block on it). It is host-owned and unconditional, never part of the `web-access`
+    extension, because it compensates for the host's UI and must also cover a user's own install of
+    `pi-web-access`, which runs exactly when that extension is switched off;
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
