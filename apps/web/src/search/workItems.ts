@@ -177,6 +177,11 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 				? t("search.item.projectFolder", { project: projectName })
 				: `${projectName} · ${workspace.branch}`,
 			keywords: reviewRef ? [reviewRef] : [],
+			hostFields: [
+				{ key: "title", text: workspace.name },
+				{ key: "subtitle", text: workspace.branch, secondary: true },
+				...(reviewRef ? [{ key: "keywords", text: reviewRef, secondary: true }] : []),
+			],
 			group: "workspaces",
 			scope: "work",
 			icon: isDefault ? RiHome4Line : RiGitBranchLine,

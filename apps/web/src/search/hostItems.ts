@@ -85,16 +85,25 @@ function rangesOf(fields: readonly { key: string; ranges: readonly MatchRange[] 
 	return ranges;
 }
 
-/** A body or message hit stays in the content tier and must still show every term; a field hit takes the host's tier for the current terms. */
+/** Every term as a case-folded substring of the text, the content providers' rule, or `null`. */
+function contentRanges(text: string, terms: readonly MatchTerm[]): [number, number][] | null {
+	const lower = text.toLowerCase();
+	const ranges: [number, number][] = [];
+	for (const term of terms) {
+		const needle = term.text.toLowerCase();
+		const at = lower.indexOf(needle);
+		if (at === -1) return null;
+		ranges.push([at, at + needle.length]);
+	}
+	return ranges.sort((a, b) => a[0] - b[0]);
+}
+
+/** A body or message hit stays in the content tier and must still contain every term; a field hit takes the host's tier for the current terms. */
 export function rematchHit(hit: SearchHit, terms: readonly MatchTerm[]): SearchHit | null {
 	if (hit.tier === MATCH_TIER.content) {
-		const field =
-			hit.kind === "spec"
-				? { key: "snippet", text: hit.snippet ?? "" }
-				: { key: "title", text: hit.title };
-		const match = matchFields(terms, [field]);
-		if (!match || match.tier > MATCH_TIER.substring) return null;
-		return { ...hit, score: 0, ranges: rangesOf(match.fields) };
+		const key = hit.kind === "spec" ? "snippet" : "title";
+		const ranges = contentRanges(key === "snippet" ? (hit.snippet ?? "") : hit.title, terms);
+		return ranges ? { ...hit, score: 0, ranges: { [key]: ranges } } : null;
 	}
 	const match = matchFields(terms, hostFields(hit));
 	if (!match) return null;

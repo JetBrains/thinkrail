@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { RiChat2Line } from "@remixicon/react";
 import { MATCH_TIER, type SearchGroup } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
-import { type Arrivals, NO_ARRIVALS, noteArrivals } from "./arrivals";
+import { type Arrivals, NO_ARRIVALS, noteArrivals, withPinned } from "./arrivals";
 import { hostItems } from "./hostItems";
 import { mergeHostGroups } from "./hostSearch";
 import { EMPTY_LEARNING } from "./learning";
@@ -21,6 +21,36 @@ describe("noteArrivals", () => {
 			["c", 2],
 		]);
 		expect(noteArrivals(second, ["b", "c"], new Set(), true)).toBe(second);
+	});
+});
+
+describe("withPinned", () => {
+	const item = (id: string): PaletteItem => ({
+		id,
+		kind: "file",
+		title: id,
+		group: "files",
+		scope: "files",
+		icon: RiChat2Line,
+	});
+	const input = (workspaceId: string) => ({
+		enabled: true,
+		text: "refresh",
+		kinds: ["file" as const],
+		context: { projectId: "p1", workspaceId },
+	});
+	const pinned = { item: item("file:w1:a.ts"), input: input("w1") };
+
+	test("the selected host row stays while the same search stands, never in another root's results", () => {
+		expect(withPinned([item("file:w1:b.ts")], pinned, input("w1")).map((row) => row.id)).toEqual([
+			"file:w1:b.ts",
+			"file:w1:a.ts",
+		]);
+		const listed = [item("file:w1:a.ts")];
+		expect(withPinned(listed, pinned, input("w1"))).toBe(listed);
+		expect(withPinned([], pinned, input("w2"))).toEqual([]);
+		expect(withPinned([], pinned, { ...input("w1"), enabled: false })).toEqual([]);
+		expect(withPinned([], null, input("w1"))).toEqual([]);
 	});
 });
 

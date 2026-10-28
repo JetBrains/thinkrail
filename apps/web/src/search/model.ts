@@ -1,5 +1,5 @@
 import type { RemixiconComponentType } from "@remixicon/react";
-import type { MatchRange, SearchPreviewTarget } from "@thinkrail/contracts";
+import type { MatchField, MatchRange, SearchPreviewTarget } from "@thinkrail/contracts";
 import type { CommandShortcut } from "../commands";
 import type { ChatTitleSource } from "../lib";
 import type { SessionAttention } from "../store";
@@ -63,6 +63,8 @@ export interface PaletteItem {
 	readonly match?: PaletteMatch;
 	/** Arrival cohort of a host row that landed while the user held a selection. */
 	readonly late?: number;
+	/** The fields the host matches this row's corpus on, when not the title alone. */
+	readonly hostFields?: readonly MatchField[];
 	readonly previewTarget?: SearchPreviewTarget;
 	readonly file?: PaletteFile;
 	readonly disabledReason?: string;

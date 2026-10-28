@@ -199,4 +199,22 @@ describe("buildSections", () => {
 		expect(rows(null)).not.toContain("chat:k6");
 		expect(rows("chat:k6")).toContain("chat:k6");
 	});
+
+	test("a local workspace the host matches by its branch counts among the host's hits", () => {
+		const local = Array.from({ length: 60 }, (_, index) =>
+			workspace(`w${index}`, `Notes ${index}`, {
+				subtitle: `One · auth-${index}`,
+				hostFields: [
+					{ key: "title", text: `Notes ${index}` },
+					{ key: "subtitle", text: `auth-${index}`, secondary: true },
+				],
+			}),
+		);
+		const page = new Set(local.slice(0, 50).map((item) => item.id));
+		const scoped = sections("@auth", {
+			rootItems: local,
+			hostTotals: { workspaces: { total: 60, ids: page } },
+		});
+		expect(scoped.find((section) => section.id === "workspaces")?.meta).toBe("60");
+	});
 });

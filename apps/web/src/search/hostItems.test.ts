@@ -176,5 +176,18 @@ describe("hostItems", () => {
 		expect(items({}, "refresh banana").result.some((item) => item.kind === "transcript")).toBe(
 			false,
 		);
+		expect(items({}, "refresh nr").result.some((item) => item.kind === "transcript")).toBe(false);
+		expect(
+			items({}, "now refresh").result.find((item) => item.kind === "transcript")?.match,
+		).toEqual({
+			tier: MATCH_TIER.content,
+			score: 0,
+			ranges: {
+				title: [
+					[5, 12],
+					[13, 16],
+				],
+			},
+		});
 	});
 });

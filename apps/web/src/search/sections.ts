@@ -108,7 +108,7 @@ function cappedSection(
 	};
 }
 
-/** Host hits beyond its page, less the local rows it did not return that its own rule (the title) also matches. */
+/** Host hits beyond its page, less the local rows it did not return that its own fields also match. */
 function hostOverflow(
 	entries: readonly RankedItem[],
 	total: HostTotal | undefined,
@@ -118,7 +118,8 @@ function hostOverflow(
 	const counted = entries.filter(
 		(entry) =>
 			!total.ids.has(entry.item.id) &&
-			matchFields(terms, [{ key: "title", text: entry.item.title }]) !== null,
+			matchFields(terms, entry.item.hostFields ?? [{ key: "title", text: entry.item.title }]) !==
+				null,
 	).length;
 	return Math.max(0, total.total - total.ids.size - counted);
 }

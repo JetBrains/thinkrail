@@ -32,7 +32,7 @@ import { shortcutKeys } from "../commands";
 import { AttentionDot } from "../components/AttentionDot";
 import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier } from "../lib";
-import { NO_ARRIVALS, noteArrivals } from "./arrivals";
+import { NO_ARRIVALS, noteArrivals, type PinnedRow, withPinned } from "./arrivals";
 import { hostItems, hostTotals } from "./hostItems";
 import {
 	createHostPreviewLoader,
@@ -115,7 +115,7 @@ function PaletteContent({
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_GROUPS);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [arrivals, setArrivals] = useState(NO_ARRIVALS);
-	const [pinned, setPinned] = useState<PaletteItem | null>(null);
+	const [pinned, setPinned] = useState<PinnedRow | null>(null);
 	const onScreen = useRef<ReadonlySet<string>>(new Set());
 	const holdingSelection = useRef(false);
 	const [previewOpen, setPreviewOpen] = useState(readPreviewOpen);
@@ -165,10 +165,10 @@ function PaletteContent({
 		};
 		return hostItems(context, hostState.groups);
 	}, [host, hostState.groups, hostState.stale, parsed.terms, rootItems, t, arrivals]);
-	const allItems = useMemo(() => {
-		const items = [...rootItems, ...hostRows];
-		return pinned && !items.some((item) => item.id === pinned.id) ? [...items, pinned] : items;
-	}, [rootItems, hostRows, pinned]);
+	const allItems = useMemo(
+		() => withPinned([...rootItems, ...hostRows], pinned, hostInput),
+		[rootItems, hostRows, pinned, hostInput],
+	);
 	const totals = useMemo(
 		() => (hostState.groups && !hostState.stale ? hostTotals(hostState.groups) : {}),
 		[hostState.groups, hostState.stale],
@@ -215,7 +215,8 @@ function PaletteContent({
 		const row = rows[(index + rows.length) % rows.length];
 		if (!row) return;
 		setSelectedId(row.item.id);
-		setPinned(row.item === pinned || hostRows.includes(row.item) ? row.item : null);
+		const hostRow = row.item === pinned?.item || hostRows.includes(row.item);
+		setPinned(hostRow ? { item: row.item, input: hostInput } : null);
 	};
 
 	const resetQuery = (next: string) => {
