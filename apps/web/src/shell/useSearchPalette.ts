@@ -16,6 +16,7 @@ import { settingsNavGroups } from "../panels/settingsNav";
 import {
 	canSettleWorkspace,
 	goToProjectHome,
+	loadProjectWorkspaces,
 	markWorkspaceRead,
 	markWorkspaceUnread,
 	openWorkspaceIn,
@@ -39,6 +40,7 @@ import {
 	selectRecordFirstPrompts,
 	selectSupportsOnboarding,
 	selectSwitcherGroups,
+	selectWorkspaceById,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspaceReadAction,
@@ -67,7 +69,13 @@ const paletteBackfill = createPaletteBackfill({
 	concurrency: BACKFILL_CONCURRENCY,
 });
 
-function navigateToWorkspace(workspace: Pick<Workspace, "id" | "projectId">, sessionId?: string) {
+async function navigateToWorkspace(
+	workspace: Pick<Workspace, "id" | "projectId">,
+	sessionId?: string,
+): Promise<void> {
+	if (!selectWorkspaceById(useAppStore.getState(), workspace.id)) {
+		await loadProjectWorkspaces(workspace.projectId).catch(() => {});
+	}
 	useAppStore.getState().activateWorkspaceFromRoute(workspace, sessionId);
 }
 
@@ -237,7 +245,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			contextProjectId: contextProject?.id ?? null,
 			firstPrompts,
 			navigateToProject: goToProjectHome,
-			navigateToWorkspace,
+			navigateToWorkspace: (workspace, sessionId) => void navigateToWorkspace(workspace, sessionId),
 		});
 		const rootItems: PaletteItem[] = [
 			...commandItems(t, commands, context),
