@@ -2609,11 +2609,25 @@ html:not(.anim) .term-caret {
 	vertical-align: middle;
 }
 
+.blog-post-content thead:not(:has(th:not(:empty))) {
+	display: none;
+}
+
 .blog-post-content table img {
 	display: block;
-	width: min(280px, 40vw);
+	width: min(400px, 45vw);
 	max-width: none;
+	max-height: 240px;
 	margin: 0;
+	border: none;
+	border-radius: 0;
+	object-fit: contain;
+	object-position: left center;
+	filter: drop-shadow(1px 0 0 var(--blog-border)) drop-shadow(-1px 0 0 var(--blog-border))
+		drop-shadow(0 1px 0 var(--blog-border)) drop-shadow(0 -1px 0 var(--blog-border));
+}
+
+.blog-post-content table a > img {
 	cursor: zoom-in;
 }
 
