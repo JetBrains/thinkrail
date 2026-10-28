@@ -1,4 +1,12 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
@@ -125,7 +133,9 @@ function resetChats(): void {
 		return;
 	}
 	mkdirSync(join(E2E_DATA_DIR, "chats"), { recursive: true });
-	writeFileSync(file, `${JSON.stringify({ version: 1, container, chats: [] })}\n`);
+	const staged = `${file}.reset`;
+	writeFileSync(staged, `${JSON.stringify({ version: 1, container, chats: [] })}\n`);
+	renameSync(staged, file);
 }
 
 export async function stagePlainFolder(page: Page): Promise<string> {
