@@ -14,6 +14,7 @@ import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
+	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -48,6 +49,7 @@ import {
 	setMcpToolGrantWriter,
 	setModelContextPublisher,
 	setModelListingPublisher,
+	setPiPackagesPublisher,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -363,6 +365,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.localesChanged);
 				if (ws.data.protocolVersion >= USER_THEMES_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.themesChanged);
+				if (ws.data.protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.packagesChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -687,6 +691,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	};
 	primeUserPiSettings();
+	setPiPackagesPublisher(() =>
+		server.publish(
+			WS_CHANNELS.packagesChanged,
+			JSON.stringify({ channel: WS_CHANNELS.packagesChanged, data: {} }),
+		),
+	);
 	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
 	const stopLocalesWatch = watchLocalLocales({
 		onChange: () =>
