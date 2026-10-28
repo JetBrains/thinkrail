@@ -391,10 +391,10 @@ still refresh); a local sign-out or Retry bumps it too. `useProviderStatus`
 re-reads whenever the snapshot is behind, single-flight per version, and `useHasProvider` (connected iff
 `reportHasModelSource`: any standard provider `configured` **or** JetBrains Central connected, so Central
 alone does not trip the warning) derives from it, so the banner, the wizard gate, the connect surfaces and
-Settings never disagree. `useHasProvider` also invalidates once on mount, so returning to Welcome sees a credential change the
-host never pushes (a `pi` CLI login or logout). The banner stays hidden until the first answer lands, and a transport error degrades to *not*
-nagging (unknown or offline ≠ "no provider"). All provider **management** lives in
-Settings, not here (the always-on strip is gone).
+Settings never disagree. `useHasProvider` also invalidates once on mount, so returning to Welcome sees a
+credential change the host never pushes (a `pi` CLI login or logout). The banner stays hidden until the first
+answer lands, and a transport error degrades to *not* nagging (unknown or offline ≠ "no provider"). All
+provider **management** lives in Settings, not here (the always-on strip is gone).
 
 **First connection.** `ConnectProviderDialog` is an onboarding overlay over `ConnectProviderOptions` — the
 same body the onboarding wizard embeds: one bordered surface holding a **Detected** block — only when account

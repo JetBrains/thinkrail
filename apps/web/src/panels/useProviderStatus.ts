@@ -3,7 +3,6 @@ import { useEffect } from "react";
 import { type ProviderStatusSnapshot, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
-/** A model source is available when any standard provider is configured or JetBrains Central is connected. */
 export function reportHasModelSource(report: ProviderStatusReport): boolean {
 	return report.providers.some((p) => p.configured) || isJbcentralConnected(report.jbcentral);
 }
