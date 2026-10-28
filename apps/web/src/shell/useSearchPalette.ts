@@ -33,7 +33,6 @@ import {
 	waitingItems,
 } from "../search";
 import {
-	isConnectedGeneration,
 	selectActiveWorkspace,
 	selectContextProject,
 	selectHistoryTarget,
@@ -48,13 +47,7 @@ import {
 	useAppStore,
 } from "../store";
 import { getTransport, wsErrorCode } from "../transport";
-import { createBackfillQueue } from "./backfillQueue";
-import {
-	backfillOrder,
-	mergeProjectWorkspaces,
-	noteListedSessions,
-	projectNeedsWorkspaceList,
-} from "./paletteBackfill";
+import { createPaletteBackfill } from "./paletteBackfill";
 import {
 	buildCommands,
 	buildSettingsItems,
@@ -66,49 +59,12 @@ import { readSettingsShortcutLabel } from "./useAppShortcuts";
 const SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const BACKFILL_CONCURRENCY = 4;
 
-const listedSessionSets = new Map<string, string>();
-
-function listingKey(workspaceId: string): string {
-	const state = useAppStore.getState();
-	const sessions = Object.keys(state.sessionStateByWorkspace[workspaceId] ?? {}).sort();
-	return `${state.welcomeGeneration}\u0001${sessions.join("\u0000")}`;
-}
-
-const titleQueue = createBackfillQueue({
+const paletteBackfill = createPaletteBackfill({
+	listSessions: (workspaceId) => getTransport().request("session.list", { workspaceId }),
+	listWorkspaces: (projectId) =>
+		getTransport().request("workspace.list", { projectId, includeDiffStats: false }),
+	isRefusal: (error) => wsErrorCode(error) !== undefined,
 	concurrency: BACKFILL_CONCURRENCY,
-	isWanted: (workspaceId) => listedSessionSets.get(workspaceId) !== listingKey(workspaceId),
-	run: async (workspaceId) => {
-		const listed = listingKey(workspaceId);
-		const generation = useAppStore.getState().connectionGeneration;
-		try {
-			const summaries = await getTransport().request("session.list", { workspaceId });
-			if (!isConnectedGeneration(useAppStore.getState(), generation)) return;
-			listedSessionSets.set(workspaceId, listed);
-			noteListedSessions(workspaceId, summaries);
-		} catch (err) {
-			if (
-				wsErrorCode(err) !== undefined &&
-				isConnectedGeneration(useAppStore.getState(), generation)
-			) {
-				listedSessionSets.set(workspaceId, listed);
-			}
-		}
-	},
-});
-
-const projectQueue = createBackfillQueue({
-	concurrency: BACKFILL_CONCURRENCY,
-	isWanted: (projectId) => projectNeedsWorkspaceList(useAppStore.getState(), projectId),
-	run: async (projectId) => {
-		const generation = useAppStore.getState().connectionGeneration;
-		const rows = await getTransport().request("workspace.list", {
-			projectId,
-			includeDiffStats: false,
-		});
-		if (isConnectedGeneration(useAppStore.getState(), generation)) {
-			mergeProjectWorkspaces(projectId, rows);
-		}
-	},
 });
 
 function navigateToWorkspace(workspace: Pick<Workspace, "id" | "projectId">, sessionId?: string) {
@@ -120,17 +76,15 @@ function useChatTitleBackfill(): void {
 		[
 			s.welcomeGeneration,
 			s.projects.map((project) => project.id).join("\u0000"),
-			Object.keys(s.sessionStateByWorkspace).sort().join("\u0000"),
+			Object.entries(s.sessionStateByWorkspace)
+				.map(([workspaceId, records]) => `${workspaceId}:${Object.keys(records).length}`)
+				.sort()
+				.join("\u0000"),
 		].join("\u0001"),
 	);
 	useEffect(() => {
-		const { projectIds, workspaceIds } = backfillOrder(useAppStore.getState());
-		projectQueue.schedule(projectIds);
-		titleQueue.schedule(workspaceIds);
-		return () => {
-			projectQueue.clearPending();
-			titleQueue.clearPending();
-		};
+		paletteBackfill.schedule();
+		return () => paletteBackfill.clearPending();
 	}, [snapshotKey]);
 }
 

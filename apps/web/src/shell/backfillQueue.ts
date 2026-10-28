@@ -12,6 +12,7 @@ export interface BackfillQueue {
 export function createBackfillQueue(options: BackfillQueueOptions): BackfillQueue {
 	const pending: string[] = [];
 	const inFlight = new Set<string>();
+	const rerun = new Set<string>();
 	const wanted = (key: string) => options.isWanted?.(key) ?? true;
 
 	const pump = (): void => {
@@ -25,6 +26,7 @@ export function createBackfillQueue(options: BackfillQueueOptions): BackfillQueu
 				.catch(() => {})
 				.finally(() => {
 					inFlight.delete(key);
+					if (rerun.delete(key) && !pending.includes(key)) pending.push(key);
 					pump();
 				});
 		}
@@ -33,13 +35,16 @@ export function createBackfillQueue(options: BackfillQueueOptions): BackfillQueu
 	return {
 		schedule(keys) {
 			pending.length = 0;
+			rerun.clear();
 			for (const key of keys) {
-				if (!inFlight.has(key) && !pending.includes(key) && wanted(key)) pending.push(key);
+				if (inFlight.has(key)) rerun.add(key);
+				else if (!pending.includes(key) && wanted(key)) pending.push(key);
 			}
 			pump();
 		},
 		clearPending() {
 			pending.length = 0;
+			rerun.clear();
 		},
 	};
 }

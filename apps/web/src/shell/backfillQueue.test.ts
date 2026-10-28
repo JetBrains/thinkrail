@@ -19,9 +19,14 @@ function deferredRuns() {
 }
 
 describe("backfill queue", () => {
-	test("the concurrency budget holds across reschedules, and an in-flight key is never requested twice", async () => {
+	test("the concurrency budget holds across reschedules, and a key is never requested twice at once", async () => {
 		const runs = deferredRuns();
-		const queue = createBackfillQueue({ concurrency: 2, run: runs.run });
+		const done = new Set<string>();
+		const queue = createBackfillQueue({
+			concurrency: 2,
+			run: (key) => runs.run(key).then(() => done.add(key)),
+			isWanted: (key) => !done.has(key),
+		});
 		queue.schedule(["a", "b", "c"]);
 		queue.schedule(["a", "b", "c"]);
 		queue.clearPending();
@@ -60,6 +65,22 @@ describe("backfill queue", () => {
 		done.add("b");
 		await runs.finish("a");
 		expect(runs.started).toEqual(["a"]);
+	});
+
+	test("a key rescheduled while in flight runs once more after it lands, if it is still wanted", async () => {
+		const runs = deferredRuns();
+		let wanted = true;
+		const queue = createBackfillQueue({ concurrency: 2, run: runs.run, isWanted: () => wanted });
+		queue.schedule(["a"]);
+		queue.schedule(["a"]);
+		queue.schedule(["a"]);
+		expect(runs.started).toEqual(["a"]);
+		await runs.finish("a");
+		expect(runs.started).toEqual(["a", "a"]);
+		wanted = false;
+		queue.schedule(["a"]);
+		await runs.finish("a");
+		expect(runs.started).toEqual(["a", "a"]);
 	});
 
 	test("a failed run frees its lane", async () => {

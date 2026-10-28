@@ -56,8 +56,8 @@ former session switcher's attention set without running chats — a chat that ne
 finished unread — across every open project, eight rows before an in-place "Show N more"), **Recent** (by
 frecency), and **Actions**.
 
-A chat row is worded by `lib`'s `chatLabel` over the known title (a layout tab or a history row — the
-title backfill installs listed chats into the history projection, so a rename broadcast updates them
+A chat row is worded by `lib`'s `chatLabel` over the known title (a named layout tab, else a history row
+— the title backfill installs listed chats into the history projection, so a rename broadcast updates them
 like any other row) and the host-reported first prompt (`selectRecordFirstPrompts`): an unnamed chat reads as
 its first prompt, carries `data-title-source` and the full first line as its tooltip, and is matchable by
 the whole prompt (a keyword), so words past the 48-character cut still find it; an unnamed chat with
