@@ -1886,6 +1886,37 @@ describe("reading-band on-screen restoration", () => {
 		expect(harness.readGeometry().scrollTop).toBe(282);
 	});
 
+	it("re-applies the pin after restoring an anchor that Virtuoso compensated", () => {
+		const harness = createHarness();
+		startPinned(harness);
+		const before = harness.readGeometry();
+		harness.setGeometry({
+			maxScrollTop: before.maxScrollTop + 70,
+			scrollTop: before.scrollTop + 70,
+		});
+		harness.controller.contentChanged();
+		const writes = harness.writes.length;
+		harness.controller.restoreScrollTop(before.scrollTop);
+		expect(harness.writes.slice(writes)).toEqual([before.scrollTop, before.scrollTop + 70]);
+		expect(harness.readGeometry()).toMatchObject({
+			scrollTop: before.scrollTop + 70,
+			edgeBottom: 600,
+		});
+	});
+
+	it("restores without pinning once the reader is detached", () => {
+		const harness = createHarness();
+		startPinned(harness);
+		harness.controller.readerLeft();
+		const before = harness.readGeometry();
+		harness.setGeometry({
+			maxScrollTop: before.maxScrollTop + 70,
+			scrollTop: before.scrollTop + 70,
+		});
+		harness.controller.restoreScrollTop(before.scrollTop);
+		expect(harness.readGeometry()).toMatchObject({ scrollTop: before.scrollTop, edgeBottom: 670 });
+	});
+
 	it("reports its active motion kind and pending native input", () => {
 		const harness = createHarness();
 		expect(harness.controller.getMotionKind()).toBeNull();
