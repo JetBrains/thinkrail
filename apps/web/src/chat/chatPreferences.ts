@@ -67,13 +67,16 @@ export function moveStreamingResponseHandle(
 			trigger: current.trigger,
 		};
 	}
+	const trigger = Math.max(
+		STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMin,
+		Math.min(STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMax, stepped),
+	);
 	return {
-		settle: current.settle,
-		trigger: Math.max(
-			STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMin,
-			current.settle + STREAMING_RESPONSE_MOVEMENT_LIMITS.minimumGap,
-			Math.min(STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMax, stepped),
+		settle: Math.max(
+			STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMin,
+			Math.min(current.settle, trigger - STREAMING_RESPONSE_MOVEMENT_LIMITS.minimumGap),
 		),
+		trigger,
 	};
 }
 

@@ -38,14 +38,22 @@ describe("streaming response movement preference", () => {
 		});
 	});
 
-	test("moving one handle clamps to its legal range and never pushes the other", () => {
+	test("Settle clamps below Trigger; a lower Trigger pushes Settle down to keep the gap", () => {
 		expect(moveStreamingResponseHandle({ settle: 75, trigger: 100 }, "settle", 95)).toEqual({
 			settle: 90,
 			trigger: 100,
 		});
 		expect(moveStreamingResponseHandle({ settle: 55, trigger: 90 }, "trigger", 60)).toEqual({
+			settle: 50,
+			trigger: 60,
+		});
+		expect(moveStreamingResponseHandle({ settle: 75, trigger: 100 }, "trigger", 35)).toEqual({
+			settle: 25,
+			trigger: 35,
+		});
+		expect(moveStreamingResponseHandle({ settle: 55, trigger: 90 }, "trigger", 80)).toEqual({
 			settle: 55,
-			trigger: 65,
+			trigger: 80,
 		});
 		expect(moveStreamingResponseHandle({ settle: 75, trigger: 100 }, "settle", 63)).toEqual({
 			settle: 65,

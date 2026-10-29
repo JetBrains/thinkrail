@@ -102,10 +102,7 @@ function StreamingResponseMovementControl({
 					type="range"
 					data-testid="streaming-movement-trigger"
 					aria-label={t("settings.chat.movement.triggerPosition")}
-					aria-valuemin={Math.max(
-						STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMin,
-						value.settle + STREAMING_RESPONSE_MOVEMENT_LIMITS.minimumGap,
-					)}
+					aria-valuemin={STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMin}
 					aria-valuemax={STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMax}
 					aria-valuetext={t("settings.chat.movement.fromTop", { value: value.trigger })}
 					min={0}

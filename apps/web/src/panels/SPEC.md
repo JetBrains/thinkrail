@@ -871,7 +871,9 @@ a project picker, the prompt hero, and the reused
   over `store.streamingResponseMovement`. The movement row's
   copy is “When the chat moves while an answer grows, and where its newest edge lands”; one axis runs
   Top → Message box, Settle is 25–90, Trigger is 35–100, both step by 5 with a 10-point minimum gap, and
-  the displayed default is 75%→100%. It exposes no runway/tail/lifecycle controls. Message order and
+  the displayed default is 75%→100%. Only Trigger affects streaming: it is the pin line where a following
+  reader's response edge is held. Settle is stored but unused, and a lower Trigger pushes it down (see
+  `apps/web/src/chat/SPEC.md`). It exposes no runway/tail/lifecycle controls. Message order and
   movement both apply immediately and persist only in this client through the chat preference seam:
   browsers use current-host-qualified keys, while a native shell may inject its stable
   backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
