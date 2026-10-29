@@ -3,7 +3,13 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
-import { createWorkspace, getWorkspace, listWorkspaces, renameWorkspace } from "../workspaces";
+import {
+	createWorkspace,
+	getWorkspace,
+	listWorkspaces,
+	renameWorkspace,
+	syncWorkspaceBranch,
+} from "../workspaces";
 import { type AgentTitleDeps, applyAgentTitle } from "./titleTool";
 
 let dataDir: string;
@@ -104,6 +110,108 @@ test("a manual rename always wins over the agent", async () => {
 		"Chat title kept: this chat is already named.\nWorkspace name kept: this workspace is already named.",
 	);
 	expect(getWorkspace(ws.id)).toMatchObject({ name: "Mine", branch: ws.branch });
+});
+
+test.each([
+	["before", true],
+	["after", false],
+])("the agent names a workspace whose terminal checked out a branch (nudge %s naming), but never moves that branch", async (_order, nudged) => {
+	const ws = await createWorkspace("p1");
+	git(ws.worktreePath, "switch", "-c", "feature/mine");
+	if (nudged) syncWorkspaceBranch(ws.id);
+	const refs = () =>
+		Bun.spawnSync(["git", "-C", repo, "for-each-ref", "--format=%(refname:short)", "refs/heads"])
+			.stdout.toString()
+			.trim();
+	const before = refs();
+
+	const text = await applyAgentTitle(
+		"s1",
+		{ chat_title: "Agent title", workspace_name: "Agent name", branch: "agent-name" },
+		fakeChat(ws.id).deps,
+	);
+
+	expect(text).toContain(
+		'Workspace renamed to "Agent name" (branch feature/mine unchanged: it was checked out in this worktree outside ThinkRail. To rename the branch, call set_title again with workspace_name and branch after HEAD is back on the workspace\'s own branch).',
+	);
+	expect(getWorkspace(ws.id)).toMatchObject({
+		name: "Agent name",
+		branch: "feature/mine",
+		renamed: true,
+	});
+	expect(refs()).toBe(before);
+});
+
+test("a detached HEAD still names the workspace and says the branch was kept", async () => {
+	const ws = await createWorkspace("p1");
+	git(ws.worktreePath, "switch", "--detach");
+
+	const text = await applyAgentTitle(
+		"s1",
+		{ chat_title: "Agent title", workspace_name: "Agent name", branch: "agent-name" },
+		fakeChat(ws.id).deps,
+	);
+
+	expect(text).toContain(
+		`Workspace renamed to "Agent name" (branch ${ws.branch} unchanged: HEAD is detached or unreadable. To rename the branch, call set_title again with workspace_name and branch after HEAD is back on the workspace's own branch).`,
+	);
+	expect(getWorkspace(ws.id)).toMatchObject({
+		name: "Agent name",
+		branch: ws.branch,
+		renamed: true,
+		branchNamePending: "s1",
+	});
+});
+
+test("a kept branch moves on a later call from the same chat once HEAD is back on the own branch", async () => {
+	const ws = await createWorkspace("p1");
+	const chat = fakeChat(ws.id);
+	git(ws.worktreePath, "switch", "-c", "peek");
+	await applyAgentTitle(
+		"s1",
+		{ chat_title: "Agent title", workspace_name: "First", branch: "first" },
+		chat.deps,
+	);
+	git(ws.worktreePath, "switch", ws.branch);
+	expect(await applyAgentTitle("s1", { chat_title: "Again" }, chat.deps)).toContain(
+		"Chat title kept",
+	);
+
+	const text = await applyAgentTitle(
+		"s1",
+		{ workspace_name: "Second", branch: "second" },
+		chat.deps,
+	);
+
+	expect(text).toBe('Workspace name kept as "First" (branch second).');
+	const after = getWorkspace(ws.id);
+	expect(after).toMatchObject({ name: "First", branch: "second", renamed: true });
+	expect(after.branchNamePending).toBeUndefined();
+	expect(await applyAgentTitle("s1", { workspace_name: "Third", branch: "third" }, chat.deps)).toBe(
+		"Workspace name kept: this workspace is already named.",
+	);
+});
+
+test("a kept branch never moves for another chat or after a manual rename", async () => {
+	const ws = await createWorkspace("p1");
+	git(ws.worktreePath, "switch", "-c", "peek");
+	await applyAgentTitle(
+		"s1",
+		{ chat_title: "Agent title", workspace_name: "First", branch: "first" },
+		fakeChat(ws.id).deps,
+	);
+	git(ws.worktreePath, "switch", ws.branch);
+	const later = { chat_title: "Later chat", workspace_name: "Other task", branch: "other-task" };
+
+	expect(await applyAgentTitle("s2", later, fakeChat(ws.id).deps)).toBe(
+		'Chat title set to "Later chat".\nWorkspace name kept: this workspace is already named.',
+	);
+	renameWorkspace(ws.id, "User picked");
+	expect(getWorkspace(ws.id).branchNamePending).toBeUndefined();
+	expect(await applyAgentTitle("s1", later, fakeChat(ws.id, true).deps)).toBe(
+		"Chat title kept: this chat is already named.\nWorkspace name kept: this workspace is already named.",
+	);
+	expect(getWorkspace(ws.id)).toMatchObject({ name: "User picked", branch: ws.branch });
 });
 
 test("the Default workspace keeps its name while the chat still gets one", async () => {
