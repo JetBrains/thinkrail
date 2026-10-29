@@ -347,9 +347,11 @@ may inject the same narrow string-storage adapter under its stable backend-profi
 dynamic loopback port cannot erase the preference on restart. It never enters `AppConfig`, so choosing
 newest-first cannot change another browser, device, host, or native window. The same persistence seam owns
 **Streaming response movement**, one `{ settle, trigger }` client-local preference rather than a second
-adapter/subscription path (Trigger is the pin line a following reader's response edge is held at; the
-reading band does not read Settle): both values use 5-point steps, Settle is 25–90, Trigger is 35–100, the gap is at
-least 10 points, and the default is `{ settle: 75, trigger: 100 }`. Invalid storage falls back atomically to
+adapter/subscription path. Trigger is the pin line a following reader's response edge is held at; the
+reading band does not read Settle, which stays stored so old values still parse. Both values use 5-point
+steps, Settle is 25–90, Trigger is 35–100, and Settle stays at least 10 points below Trigger: moving Trigger
+lower pushes Settle down, so the unused Settle never limits the pin line. The default is
+`{ settle: 75, trigger: 100 }`. Invalid storage falls back atomically to
 the default pair. It likewise never enters `AppConfig` or crosses the wire.
 
 **Sticky activity breadcrumb.** While the transcript's top visible content remains inside expanded
@@ -673,12 +675,12 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   same frame; a write in the next animation frame paints one frame late and reads as jitter. Virtuoso answers
   some growth of the streaming row with its own `scrollBy`, because the row's top is above the viewport; the
   on-screen guard below restores that unowned move and the controller then re-applies the pin in the same
-  call. Restoring without re-pinning painted the edge 20–70 px below the line for a frame, in about half of the
-  Chromium replay runs. Window steps
-  (hold until Trigger, then one eased ~220 ms move to a Settle line) were tried and rejected: with a fast
-  model they measured as a 120–240 px jump every ~0.5 s, growth landing in a step's last frame became a
-  20–100 px snap, and WebKit showed three times more snaps. Peers (shadcn Message Scroller, T3 Code, Zed,
-  OpenCode) pin per frame. The trade-off is that the line being read moves with the stream; a reader who
+  call, from the same geometry read, as one `scrollTop` write. Restoring without re-pinning painted the edge
+  20–70 px below the line for a frame, in about half of the Chromium replay runs. Window steps (hold until
+  Trigger, then one eased ~220 ms move to a Settle line) were tried and rejected: with a fast model they
+  measured as a 120–240 px jump every ~0.5 s, growth landing in a step's last frame became a 20–100 px snap,
+  and WebKit showed three times more snaps. Peers (shadcn Message Scroller, T3 Code, Zed, OpenCode) pin per
+  frame. The trade-off is that the line being read moves with the stream; a reader who
   wants it still scrolls away and detaches. The pin publishes no state: following, moving, and runway change
   only on real transitions, so the pin itself adds no React commits. It never moves backward. Synthetic room
   is **derived, never accumulated**: while pinned it is exactly the part of the pin destination beyond the
@@ -699,20 +701,22 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   settlement that lands while native input is still pending defers its return until that input resolves, and
   drops the return if the input detached.
 - **A tall arrival shows its start** — in oldest-first the controller treats the response edge as it stood
-  100 ms ago (the newest edge position at least that old) as the edge the reader has seen. When the follow
-  destination would carry that edge above the turn inset — content taller than the reading space (the pin line
-  minus the turn inset) arrived within that window, typically a diagram or card that renders at once, possibly
-  in several quick layout steps — the destination is capped so that point lands at the turn inset, the same
-  place an own prompt lands. Counting every pinned edge as seen let a card that lands in several quick steps
-  pin past at full speed, because no single step exceeded the reading space. A 300 ms window capped plain
-  text: a fast replay (≈900 px/s) in the ≈300 px chat viewport of a 1280×720 window crossed the reading space
-  and stalled the pin every few lines; streamed text needs over 2k px/s to do that within 100 ms. Growth within 300 ms of the cap engaging belongs to the
-  arrival; each later growth releases the cap by twice its own height until it reaches the pin line, and the
-  pin moves to the capped destination on that same content change without easing, so the block advances at
-  twice reading pace instead of flying by (one mermaid card measured a 1.5k px glide in under a second). A
-  cap release resets the seen edge to the edge on the pin line. A second tall arrival never pushes an active
-  cap further. The cap is evaluated wherever the follow destination is, so it
-  also bounds an explicit return already in flight. Positions are kept relative to the
+  100 ms ago (the newest edge position at least that old) as the edge the reader has seen. When content taller
+  than the visible space (the viewport minus the turn inset) arrived within that window — typically a diagram
+  or card that renders at once, possibly in several quick layout steps — the follow destination is capped so
+  the seen edge lands at the turn inset, the same place an own prompt lands. Counting every pinned edge as
+  seen let a card that lands in several quick steps pin past at full speed, because no single step was tall.
+  A 300 ms seen-edge look-back capped plain text: a fast replay (≈900 px/s) in the ≈300 px chat viewport of a
+  1280×720 window crossed the threshold and stalled the pin every few lines; streamed text needs over 2k px/s
+  to do that within 100 ms. Judging against the reading space (the pin line minus the turn inset) did the same
+  on a low pin line: at Trigger 35% that viewport leaves 57 px, so text over ≈570 px/s capped. Growth within
+  300 ms of the cap engaging belongs to the arrival; each later growth no taller than the reading space
+  releases the cap by twice its own height until it reaches the pin line, and the pin moves to the capped
+  destination on that same content change without easing, so the block advances at twice reading pace instead
+  of flying by (one mermaid card measured a 1.5k px glide in under a second). A cap release resets the seen
+  edge to the edge on the pin line. A second tall arrival never pushes an active cap further. The cap is
+  evaluated wherever the follow destination is, so it also bounds an explicit return already in flight.
+  Positions are kept relative to the
   topmost visible row rather than document coordinates, and each evaluation re-expresses them relative to the
   current one, so height changes above the viewport (Virtuoso replacing an estimate, a code block highlighting)
   neither trigger nor misplace the cap, rows may unmount, and a block that grows above rows that already follow
@@ -782,7 +786,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   New-turn placement, contextual-button returns, settlement, and explicit reveals share one
   non-overlapping channel whose destination can retarget as Virtuoso measurements, status geometry, or
   runway changes land; the streaming pin writes only while that channel is idle. Corrections continue the
-  current motion instead of launching overlapping eases or alternating hard writes. The first real reader movement cancels it synchronously and native physics win.
+  current motion instead of launching overlapping eases or alternating hard writes. The first real reader
+  movement cancels it synchronously and native physics win.
   Newest-first header deltas preserve a detached historical anchor; viewport resize re-evaluates the live
   pin line without moving a response still below it. Initial/order placement is direct, and reduced motion
   makes every programmatic destination immediate while preserving identical state and final geometry.
