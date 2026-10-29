@@ -48,6 +48,9 @@ import type {
 	ProjectTrustSummary,
 	ProviderStatusReport,
 	PrPreview,
+	ResourceHistoryCursor,
+	ResourceHistoryPage,
+	ResourceKind,
 	ResourceMeta,
 	RevertTarget,
 	ReviewAnchor,
@@ -125,7 +128,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 96;
+export const PROTOCOL_VERSION = 97;
+export const RESOURCE_HISTORY_PROTOCOL_VERSION = 96;
 export const PROJECT_CLONE_PROTOCOL_VERSION = 95;
 export const ONBOARDING_PROTOCOL_VERSION = 94;
 export const LAYOUT_PLAN_PRESET_PROTOCOL_VERSION = 94;
@@ -173,7 +177,7 @@ export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
 export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
-export const FEEDBACK_SURVEY_PROTOCOL_VERSION = 96;
+export const FEEDBACK_SURVEY_PROTOCOL_VERSION = 97;
 export const FEEDBACK_INTERVIEW_PROTOCOL_VERSION = 56;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
@@ -320,6 +324,7 @@ export const WS_METHODS = {
 	sessionGetMessages: "session.getMessages",
 	subagentGetTranscript: "subagent.getTranscript",
 	sessionResources: "session.resources",
+	sessionResourceHistory: "session.resourceHistory",
 	backgroundCommandOutput: "backgroundCommand.output",
 	backgroundCommandStop: "backgroundCommand.stop",
 	subagentStop: "subagent.stop",
@@ -916,6 +921,16 @@ export interface WsMethodMap {
 	"session.resources": {
 		params: { workspaceId: string; sessionId: string };
 		result: SessionResources;
+	};
+	"session.resourceHistory": {
+		params: {
+			workspaceId: string;
+			sessionId: string;
+			kind: ResourceKind;
+			before?: ResourceHistoryCursor;
+			limit?: number;
+		};
+		result: ResourceHistoryPage;
 	};
 	"backgroundCommand.output": {
 		params: { workspaceId: string; sessionId: string; commandId: string };

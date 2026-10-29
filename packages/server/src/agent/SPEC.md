@@ -1118,14 +1118,37 @@ live session context, effective shell settings and lifecycle in source and packa
 first version loads this capability into parent chats only, not the curated hidden-child extension
 set; ordinary child Bash remains visible in its transcript.
 
-A small agent-barrel facade serves the resource snapshot, command output/stop and subagent
-stop/stop-all operations defined in [[module-contracts]]. It projects command services plus
-`DelegationService.childrenOf(parent)`; no aggregate registry owns copies of their lifecycles.
-Subagent summaries include direct foreground and background children and omit handles with no run
-snapshot yet. Keep all active children and the latest twenty terminal children by record creation order,
-without disposing older handles or transcripts. Task and role summaries are capped at 2,000 and 200
+A small agent-barrel facade serves the resource snapshot, history pages, command output/stop and
+subagent stop/stop-all operations defined in [[module-contracts]]. Live rows come from the command
+services plus `DelegationService.childrenOf(parent)`; no aggregate registry owns copies of their
+lifecycles. Finished rows come from [[submodule-server-resource-history]], merged with whatever the
+owners still hold — an owner's own terminal record wins over an archived in-flight one, so a failed
+archive write never turns finished work into Interrupted. The snapshot carries every live record plus
+the newest twenty finished per kind and the per-kind outcome tallies; older ones page through
+`session.resourceHistory`, and `backgroundCommand.output` falls back to the archived log tail once the
+owner has evicted or lost the command. Subagent summaries include direct foreground and background
+children (the plan reviewer too) and omit handles with no run snapshot yet; older handles and
+transcripts are never disposed for the window. Task and role summaries are capped at 2,000 and 200
 characters. One lifecycle subscription per workspace service and each command service's change subscription
 publish scoped invalidations through a host-injected publisher; no per-token/output broadcast is added.
+
+The same subscriptions feed the archive synchronously: command admission, stop request and terminal edges
+(with the retained log tail), subagent queued/started/terminal edges (with the terminal time). A command's
+archive subscription outlives the manager's own and closes only once the command service's disposal settles
+(or its budget expires), so the terminal edges that teardown itself causes are still recorded. A failed
+archive write is logged and never retried for the same status; the owner's record still wins while it lives. **Interrupted** is decided here, once:
+a command that ends `stopped` while its chat's resources are closing, without a stop requested before
+the closing began, is archived `interrupted`, and so is a command still unsettled when the cascade gives
+up (in flight, with its log so far). For subagents the closing cascade marks its own cancellation: before
+`disposeChildrenOf` it aborts every child with the reason `interrupted`, and since [[module-pi-delegation]]
+keeps a run's first cancellation reason, only a run that teardown cancelled first is archived `interrupted`.
+A run already cancelled when teardown lands keeps its own provenance and reads Stopped — a user stop
+(`"user"`) as well as a foreground child the parent's own Stop cancelled through its tool signal, which
+carries no reason (an AIR review finding on PR #1004: inferring teardown from a missing reason mislabelled
+exactly that run). A user or tool stop that merely settles during teardown stays Stopped. Interrupted work is shown to the user only: it never wakes the parent and nothing tells the
+agent its acknowledged run is gone (user-settled, 2026-10). Work a dead host left in flight is the archive's own derivation. Workspace archive removes the
+workspace's history after its delegation store; late lifecycle events of a retired delegation service are not
+archived, so they cannot recreate it. Chat deletion leaves the history in place.
 
 Each operation validates actual workspace/session membership, child lineage and the manager's deletion
 gate before touching a handle. Persisted parents use the existing single-flighted attachment path;

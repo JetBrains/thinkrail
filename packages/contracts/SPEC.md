@@ -746,7 +746,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   **`feedback.survey.submit`** (`SurveySubmitParams` → ack; the host fills `$survey_id` and captures
   `survey shown`, `survey sent`, or `survey dismissed` only while additional analytics is on, and records
   completion on a finished send; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the invitation
-  channel to v96) /
+  channel to v97) /
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
@@ -790,7 +790,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   other frontends can list it in history without opening local placement) / **`session.deleted`** (workspace +
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) / **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
-  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to a protocol v96
+  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to a protocol v97
   client when the launched in-app survey is eligible; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
@@ -844,20 +844,33 @@ v70 must not receive these requests. No native Pi background-task protocol is im
 without importing that package. Subagents retain their Pi child session ids and delegation statuses.
 
 - `session.resources({workspaceId, sessionId})` returns separate command and subagent summaries:
-  all currently active records plus bounded recent terminal records. The snapshot echoes workspace
+  every live record plus the newest twenty finished ones per kind. The snapshot echoes workspace
   and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
   child/parent ids, role, task, status, creation time, the child's actual `model` (`provider/id`) and
   effective `thinkingLevel` (both optional — absent from an older host), optional abort reason,
   `detached: true` for a background run (from the child's `info`; absent for a foreground run and from
   an older host) and — once terminal — the run duration [[module-pi-delegation]] measured
-  (`durationMs`), not usage or reports.
-  Subagent role/task summaries are capped at 200/2,000 characters, with the latest twenty terminal
-  children by creation order retained in the projection. These are runtime catalogs; neither historical
-  tool acknowledgements nor persisted PIDs supply live authority after restart.
+  (`durationMs`) and, from a v96 host, the finish time (`finishedAt`); not usage or reports.
+  Subagent role/task summaries are capped at 200/2,000 characters. Finished records outlive the host
+  ([[submodule-server-resource-history]]) but never carry authority: neither archived records,
+  historical tool acknowledgements nor persisted PIDs make anything stoppable after a restart.
+- **History (v96, `RESOURCE_HISTORY_PROTOCOL_VERSION`).** The snapshot adds `history`: per kind, a
+  `ResourceTally` of every finished record by `ResourceOutcome` (`done` / `failed` / `stopped` /
+  `interrupted`). `interrupted: true` on either summary means the host or the chat's teardown ended the
+  run, and such a run always travels with a terminal status — the owner's, or `stopped` / `aborted` when the
+  owner never settled it (`interruptedResource`) — so an older client reads it as Stopped, never as a live
+  row it cannot stop. `isLiveResource` is false for it whatever status it last reported.
+  `session.resourceHistory({workspaceId, sessionId, kind, before?, limit?})` pages one kind's finished
+  records newest first (default 20, at most 100) after an opaque-to-the-UI `{at, id}` cursor taken from
+  the last row it holds and answers `{kind, items, hasMore}`. Order, outcome and cursor are the shared
+  pure helpers `resourceHistoryCursor` / `compareResourceHistory` (finish time, else start time; id breaks
+  ties), `resourceOutcome`, `isLiveResource` and `resourceRecordId` over the `ResourceRecord` union, so the
+  host and the UI never derive them twice.
 - `backgroundCommand.output({workspaceId, sessionId, commandId})` returns the current bounded
-  `{available: true, command, output: {text, truncated}}`, or `{available: false}` for an unknown,
-  foreign or evicted command after validating its parent. Output REPLACES the previous snapshot;
-  truncation is explicit. It accepts no filesystem path or PID.
+  `{available: true, command, output: {text, truncated}}` — from a v96 host also the archived tail of a
+  finished command the owner no longer holds — or `{available: false}` for an unknown, foreign or
+  unarchived command after validating its parent. Output REPLACES the previous snapshot; truncation is
+  explicit. It accepts no filesystem path or PID.
 - `backgroundCommand.stop({workspaceId, sessionId, commandId})` and
   `subagent.stop({workspaceId, parentSessionId, childSessionId})` request cancellation of one owned
   resource. Known terminal resources are idempotent successes; unknown, expired or foreign ids

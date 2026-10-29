@@ -32,6 +32,7 @@ import {
 	deleteSession,
 	ensureSessionAttached,
 	followUpSession,
+	getResourceHistoryPage,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionResources,
@@ -496,6 +497,35 @@ function resourceParams<K extends string>(params: unknown, keys: K[]): Record<K,
 		result[key] = value;
 	}
 	return result;
+}
+
+function resourceHistoryParams(params: unknown): WsParams<"session.resourceHistory"> {
+	if (!params || typeof params !== "object" || Array.isArray(params))
+		throw new Error("Invalid resource history request");
+	const { kind, before, limit, ...scope } = params as Record<string, unknown>;
+	const { workspaceId, sessionId } = resourceParams(scope, ["workspaceId", "sessionId"]);
+	if (kind !== "command" && kind !== "subagent") throw new Error("Invalid resource history kind");
+	if (limit !== undefined && (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1))
+		throw new Error("Invalid resource history limit");
+	const request: WsParams<"session.resourceHistory"> = {
+		workspaceId,
+		sessionId,
+		kind,
+		...(limit === undefined ? {} : { limit }),
+	};
+	if (before === undefined) return request;
+	if (!before || typeof before !== "object" || Array.isArray(before))
+		throw new Error("Invalid resource history cursor");
+	const { at, id, ...extra } = before as Record<string, unknown>;
+	if (
+		Object.keys(extra).length > 0 ||
+		typeof at !== "number" ||
+		!Number.isFinite(at) ||
+		typeof id !== "string" ||
+		!(kind === "subagent" ? isPiSessionId(id) : isHostResourceId(id))
+	)
+		throw new Error("Invalid resource history cursor");
+	return { ...request, before: { at, id } };
 }
 
 async function deliverToolResponse(
@@ -1139,6 +1169,10 @@ const handlers: WsHandlers = {
 	"session.resources": (params) => {
 		const p = resourceParams(params, ["workspaceId", "sessionId"]);
 		return getSessionResources(p.workspaceId, p.sessionId, resourceCwd(p.workspaceId));
+	},
+	"session.resourceHistory": (params) => {
+		const { workspaceId, sessionId, ...request } = resourceHistoryParams(params);
+		return getResourceHistoryPage(workspaceId, sessionId, resourceCwd(workspaceId), request);
 	},
 	"backgroundCommand.output": (params) => {
 		const p = resourceParams(params, ["workspaceId", "sessionId", "commandId"]);

@@ -67,7 +67,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
   restore a removed generation's models; provider settings observes the same version and re-reads
   `provider.status`), each valid `server.welcome` first clearing any popup projection left by a host restart,
-  then `feedback.interview` via the idempotent `showInterviewPrompt()` when the socket is protocol v96 and
+  then `feedback.interview` via the idempotent `showInterviewPrompt()` when the socket is protocol v97 and
   the analytics consent dialog is not open — additional analytics may be off (a surviving host claim
   re-delivers the addressed event immediately after welcome; the
   client also loads `feedback.survey` after welcome and when settings opens, storing `analyticsSuppressed`
