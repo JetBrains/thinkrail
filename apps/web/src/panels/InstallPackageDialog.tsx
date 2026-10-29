@@ -14,7 +14,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
 import { errorText, RequestTimeoutError, wsErrorCode } from "@/transport";
@@ -123,8 +122,6 @@ export interface InstallPackageBodyProps {
 	onCancel: () => void;
 	onBack: () => void;
 	onDone: () => void;
-	onToggleInstalled: (summary: PiPackageSummary, enabled: boolean) => void;
-	installedEnabled: (summary: PiPackageSummary) => boolean;
 }
 
 /** The dialog's content, props-driven so each step renders without a portal. */
@@ -140,8 +137,6 @@ export function InstallPackageBody({
 	onCancel,
 	onBack,
 	onDone,
-	onToggleInstalled,
-	installedEnabled,
 }: InstallPackageBodyProps) {
 	const t = useT();
 	const projectAvailable = workspaceId !== null && catalog?.projectTrusted === true;
@@ -265,26 +260,16 @@ export function InstallPackageBody({
 								</code>
 							))}
 						</span>
-						<div className="flex items-center justify-between gap-12 rounded-sm border border-border-default px-12 py-8">
-							<span className="flex min-w-0 flex-col">
-								<span className="tr-text-ui text-text-default">
-									{t(
-										step.summary.scope === "project"
-											? "settings.packages.installDialog.installedOnProject"
-											: "settings.packages.installDialog.installedOnUser",
-									)}
-								</span>
-								<span className="tr-text-metadata text-text-muted">
-									{t("settings.packages.installDialog.installedApplies")}
-								</span>
-							</span>
-							<Switch
-								checked={installedEnabled(step.summary)}
-								label={t("settings.packages.enable", { name: step.summary.name })}
-								testId="install-package-installed-toggle"
-								onCheckedChange={(enabled) => onToggleInstalled(step.summary, enabled)}
-							/>
-						</div>
+						<span
+							className="tr-text-metadata text-text-muted"
+							data-testid="install-package-applies"
+						>
+							{t(
+								step.summary.scope === "project"
+									? "settings.packages.installDialog.installedOnProject"
+									: "settings.packages.installDialog.installedOnUser",
+							)}
+						</span>
 					</div>
 					<DialogFooter>
 						<Button data-testid="install-package-done" onClick={onDone}>
@@ -328,9 +313,6 @@ export interface InstallPackageDialogProps {
 	/** `null` when no workspace is active: the repository scope is then unavailable. */
 	workspaceId: string | null;
 	install: (request: { source: string; scope: PiPackageScope }) => Promise<PiPackageSummary>;
-	onToggleInstalled: (summary: PiPackageSummary, enabled: boolean) => void;
-	/** The installed package's switch reflects the synced setting, never a guess. */
-	installedEnabled: (summary: PiPackageSummary) => boolean;
 }
 
 export function InstallPackageDialog({
@@ -339,8 +321,6 @@ export function InstallPackageDialog({
 	catalog,
 	workspaceId,
 	install,
-	onToggleInstalled,
-	installedEnabled,
 }: InstallPackageDialogProps) {
 	const t = useT();
 	const [source, setSource] = useState("");
@@ -397,8 +377,6 @@ export function InstallPackageDialog({
 					onCancel={() => close(false)}
 					onBack={() => setStep({ kind: "form" })}
 					onDone={() => close(false)}
-					onToggleInstalled={onToggleInstalled}
-					installedEnabled={installedEnabled}
 				/>
 			</DialogContent>
 		</Dialog>

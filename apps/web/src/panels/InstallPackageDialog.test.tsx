@@ -77,8 +77,6 @@ function render(
 				onCancel={() => {}}
 				onBack={() => {}}
 				onDone={() => {}}
-				onToggleInstalled={() => {}}
-				installedEnabled={() => true}
 			/>
 		</TooltipProvider>,
 	);
@@ -134,12 +132,13 @@ test("installing, installed and failed steps", () => {
 			],
 		},
 	});
-	expect(installed).toContain("On in all workspaces");
+	expect(installed).toContain("Installed globally");
 	expect(installed).toContain("jira_search");
 	expect(installed).toContain("/jira");
 	expect(installed).toContain("skill: triage");
 	expect(installed).toContain("/standup");
-	expect(installed).toContain('data-testid="install-package-installed-toggle" data-active="true"');
+	expect(installed).not.toContain("install-package-installed-toggle");
+	expect(installed).toContain("Installed globally");
 	expect(installed).toContain('data-testid="install-package-done"');
 
 	const failed = render("w1", CATALOG, {

@@ -86,10 +86,7 @@ test("a pi package installed from Settings reaches a chat, switches off and on, 
 		await expect(dialog.getByTestId("install-package-chips")).toContainText("fixture_hello");
 		await expect(dialog.getByTestId("install-package-chips")).toContainText("/fixture-hello");
 		await expect(dialog.getByTestId("install-package-chips")).toContainText("skill: triage");
-		await expect(dialog.getByTestId("install-package-installed-toggle")).toHaveAttribute(
-			"data-active",
-			"true",
-		);
+		await expect(dialog.getByTestId("install-package-applies")).toContainText("Installed globally");
 		await dialog.getByTestId("install-package-done").click();
 		await expect(dialog).toBeHidden();
 

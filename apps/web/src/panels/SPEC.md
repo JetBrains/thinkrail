@@ -1092,7 +1092,7 @@ a project picker, the prompt hero, and the reused
   never overwrites a newer one), re-run on mount, on a workspace change and on the store's
   `packagesVersion` (the `packages.changed` push, which the host also sends after a package switch so a
   re-enabled row regains its chips). A **package row** (`PackageRow`) is name ·
-  kind / scope tags (`npm` / `git` / `local`, Me / This repository) · an **Update available** tag when the
+  kind / scope tags (`npm` / `git` / `local`, Global / Repository) · an **Update available** tag when the
   update check flagged it · one provenance line (declared source · "<version> installed" · description) ·
   tool and `/command` chips of its enabled extensions · the **switch** · a ⋯ menu (Update, Open folder,
   Remove…). The switch is the only state control and reads **`store.disabledPackages`**; an off row dims
@@ -1118,10 +1118,12 @@ a project picker, the prompt hero, and the reused
   Install and the pi.dev gallery link; an untrusted project shows one info notice; a failed list renders
   `packages-failed`. The **`InstallPackageDialog`** (`InstallPackageDialog.tsx`; its `InstallPackageBody` is
   props-driven so each step renders without a portal, `installStepHeader` supplies the Radix title per
-  step) is source → scope → one confirm → **Installing…** (indeterminate, no progress log, no Cancel — pi
-  has none) → **Installed** (name · version · description, chips for every tool / command / skill / prompt
-  it added, and its switch, on by default, labelled "On in all workspaces" or "On for this repository" with
-  one line: "new chats have it now; open chats pick it up when idle") or **Failed** (the host's message,
+  step) is source → scope (**Global** / **This repository only**; there is no per-workspace choice, a
+  package is on wherever its declaration loads) → one confirm → **Installing…** (indeterminate, no
+  progress log, no Cancel — pi has none) → **Installed** (name · version · description, chips for every
+  tool / command / skill / prompt it added, and one line: "Installed globally — new chats have it now;
+  open chats pick it up when idle"; no switch here — the row in the list is the only state control) or
+  **Failed** (the host's message,
   "Nothing was added to your settings" only for the codes the host raises before it writes
   (`installFailureOutcome`), "It may have been added anyway — check the list" for any other error, Back /
   Retry; a `RequestTimeoutError` instead says to check the list, since the install may still complete). A package that installs but contributes nothing loadable

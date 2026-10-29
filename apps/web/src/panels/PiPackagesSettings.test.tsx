@@ -112,7 +112,7 @@ test("a package row shows name, kind and scope tags, provenance, chips and an on
 	expect(markup).toContain('data-identity="npm:@acme/pi-jira"');
 	expect(markup).toContain("@acme/pi-jira");
 	expect(markup).toMatch(/data-testid="package-kind"[^>]*>npm</);
-	expect(markup).toMatch(/data-testid="package-scope"[^>]*>Me</);
+	expect(markup).toMatch(/data-testid="package-scope"[^>]*>Global</);
 	expect(markup).toContain("1.4.2 installed");
 	expect(markup).toContain('data-testid="package-chip-jira_search"');
 	expect(markup).toContain('data-testid="package-chip-/jira"');

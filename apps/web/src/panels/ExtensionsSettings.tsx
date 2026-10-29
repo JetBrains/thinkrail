@@ -437,15 +437,6 @@ export function ExtensionsSettings() {
 									return summary;
 								})
 						}
-						installedEnabled={(summary) => !disabledPackages.includes(summary.identity)}
-						onToggleInstalled={(summary, enabled) =>
-							onAction({
-								kind: "togglePackage",
-								rowKey: piPackageKey(summary),
-								identity: summary.identity,
-								enabled,
-							})
-						}
 					/>
 				</>
 			) : null}
