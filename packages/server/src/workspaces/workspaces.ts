@@ -25,6 +25,7 @@ import {
 	remoteNameOf,
 	remoteRefOid,
 	remoteTrackingRef,
+	resolveCommitOid,
 	resolveDefaultBranch,
 	resolveDiffRange,
 	tryCurrentBranch,
@@ -32,7 +33,7 @@ import {
 import { logger } from "../log";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects, listProjects } from "../projects";
-import { cleanupTimedOutWorktree } from "./timeoutCleanup";
+import { cleanupFailedWorktreeCreate } from "./timeoutCleanup";
 
 const log = logger("workspaces");
 
@@ -300,7 +301,6 @@ export async function createWorkspace(
 	creatingBranches.add(reservation);
 
 	try {
-		mkdirSync(dirname(worktreePath), { recursive: true });
 		if (existsSync(worktreePath)) throw new Error(`Workspace path already exists: ${worktreePath}`);
 		const candidatePath = pathKey(worktreePath);
 		if (creatingWorktreePaths.has(candidatePath)) {
@@ -342,6 +342,16 @@ export async function createWorkspace(
 		}
 
 		const checkoutBase = remoteBase ?? pendingCreate.baseBranch;
+		const checkoutBaseOid = resolveCommitOid(project.path, checkoutBase);
+		if (!checkoutBaseOid)
+			throw new Error(`Could not resolve workspace base ${checkoutBase} to a commit`);
+
+		mkdirSync(dirname(worktreePath), { recursive: true });
+		if (pathKey(worktreePath) !== candidatePath) {
+			throw new Error(`Workspace path changed while it was being created: ${worktreePath}`);
+		}
+		if (existsSync(worktreePath)) throw new Error(`Workspace path already exists: ${worktreePath}`);
+
 		const added = await gitAsync(
 			project.path,
 			[
@@ -352,14 +362,14 @@ export async function createWorkspace(
 				branch,
 				"--no-track",
 				"--end-of-options",
-				checkoutBase,
+				checkoutBaseOid,
 			],
 			{ timeoutMs: WORKSPACE_CREATE_GIT_TIMEOUT_MS },
 		);
 		if (!added.ok) {
 			const detail = added.err || "git exited unsuccessfully";
 			log.warn(`git worktree add failed for ${worktreePath}: ${detail}`);
-			if (added.failure === "timeout") await cleanupTimedOutWorktree(project.path, worktreePath);
+			await cleanupFailedWorktreeCreate(project.path, worktreePath, branch, checkoutBaseOid);
 			throw new Error(`git worktree add failed: ${detail}`);
 		}
 

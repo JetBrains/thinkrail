@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
-import { cleanupTimedOutWorktree } from "./timeoutCleanup";
+import { cleanupFailedWorktreeCreate } from "./timeoutCleanup";
 import {
 	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
@@ -337,10 +337,11 @@ posix("linked project checkouts reserve names in their common Git directory", as
 	);
 });
 
-test("timed-out checkout cleanup clears a locked initializing worktree registration", async () => {
+test("timed-out checkout cleanup clears a locked registration and its new branch", async () => {
 	const path = join(dataDir, "worktrees", "repo", "interrupted-checkout");
 	mkdirSync(join(dataDir, "worktrees", "repo"), { recursive: true });
-	git(repo, "worktree", "add", path, "-b", "interrupted-checkout", "main");
+	const baseOid = gitOut(repo, "rev-parse", "HEAD");
+	git(repo, "worktree", "add", path, "-b", "interrupted-checkout", baseOid);
 	git(repo, "worktree", "lock", "--reason", "initializing", path);
 
 	const oneForce = Bun.spawnSync(["git", "-C", repo, "worktree", "remove", "--force", path], {
@@ -350,9 +351,30 @@ test("timed-out checkout cleanup clears a locked initializing worktree registrat
 	expect(oneForce.success).toBe(false);
 	expect(registeredWorktrees(repo)).toContain(resolve(path));
 
-	await cleanupTimedOutWorktree(repo, path);
+	await cleanupFailedWorktreeCreate(repo, path, "interrupted-checkout", baseOid);
 	expect(registeredWorktrees(repo)).not.toContain(resolve(path));
 	expect(existsSync(path)).toBe(false);
+	expect(gitOut(repo, "show-ref", "--verify", "--hash", "refs/heads/interrupted-checkout")).toBe(
+		"",
+	);
+});
+
+test("failed checkout cleanup preserves a moved branch", async () => {
+	const path = join(dataDir, "worktrees", "repo", "moved-branch-checkout");
+	mkdirSync(join(dataDir, "worktrees", "repo"), { recursive: true });
+	const baseOid = gitOut(repo, "rev-parse", "HEAD");
+	git(repo, "worktree", "add", path, "-b", "moved-after-create", baseOid);
+	git(repo, "worktree", "remove", "--force", "--force", path);
+
+	writeFileSync(join(repo, "moved.txt"), "advance the ref\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "advance base after branch creation");
+	const movedOid = gitOut(repo, "rev-parse", "HEAD");
+	git(repo, "update-ref", "refs/heads/moved-after-create", movedOid);
+
+	await cleanupFailedWorktreeCreate(repo, path, "moved-after-create", baseOid);
+
+	expect(gitOut(repo, "rev-parse", "refs/heads/moved-after-create")).toBe(movedOid);
 });
 
 test("a relative data dir still creates and records a managed worktree at one absolute path", async () => {
@@ -458,6 +480,7 @@ test("createWorkspace preserves checkout errors and leaves no failed worktree", 
 	await expect(createWorkspace("p1")).rejects.toThrow(/smudge filter fail failed/);
 	expect(existsSync(join(dataDir, "worktrees", "repo", "workspace-1"))).toBe(false);
 	expect(registeredWorktrees(repo)).toHaveLength(1);
+	expect(gitOut(repo, "show-ref", "--verify", "--hash", "refs/heads/workspace-1")).toBe("");
 	expect(await worktrees()).toHaveLength(0);
 });
 

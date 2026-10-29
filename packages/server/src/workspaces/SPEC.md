@@ -53,10 +53,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `fatal: invalid reference` this bullet claims to have removed. **The probe names
   `refs/remotes/<base>` in full**, exactly as `git`'s `prefetchBranch` does — a shorthand such as
   `origin/<b>` can also resolve a local branch literally named `origin/main`; the two sides of this race
-  must ask about the same ref. **`worktree add` is handed that same full name**, not the shorthand: checking
-  one ref and checking out another leaves Git's disambiguation to choose or reject the wrong object.
-  `baseBranch` still records the user-visible `<remote>/<branch>`; only the revision handed to Git is
-  qualified. **The message splits on the same distinction**: a fetch that *failed* carries
+  must ask about the same ref. **The selected checkout ref is resolved with `rev-parse` to one commit OID,
+  and that immutable OID is handed to `worktree add`** — no later ref movement or name disambiguation can
+  make the new branch start elsewhere. `baseBranch` still records the user-visible `<remote>/<branch>`;
+  only the revision handed to Git is the resolved OID. **The message splits on the same distinction**: a fetch that *failed* carries
   git's stderr, while a fetch that *succeeded* without landing the ref names the refspec instead — its
   stderr is a progress log (`* branch release -> FETCH_HEAD`), so pasting it after "Could not fetch"
   showed the user a successful fetch as the reason a fetch failed. It is the step that knows *why*
@@ -75,12 +75,15 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   project/workspace records immediately before persistence. The `worktree add` subprocess runs through
   `gitAsync` with the shared 10-minute checkout budget, keeping the host event loop free. A failed/timed-out
   checkout reports Git's stderr or the runner's timeout and logs the failure; on timeout the runner reaps the
-  killed `git worktree add` child before cleanup. Cleanup uses `git worktree remove --force --force`, then
-  unlock/retry if needed, and only removes a leftover directory after verifying Git no longer registers it —
-  never raw-deleting a path that could leave locked worktree metadata. The path reservation remains held
-  through cleanup and is released with the branch reservation. The shared
-  15-minute client budget leaves room
-  for the fallback fetch and cleanup; the Create button stays in its existing loading/“Creating…” state.
+  killed `git worktree add` child before cleanup. Cleanup runs for every failed add: it uses
+  `git worktree remove --force --force`, then unlock/retry if needed, and only removes a leftover directory
+  after verifying Git no longer registers it — never raw-deleting a path that could leave locked worktree
+  metadata. Once the failed path is no longer registered (and the branch is not checked out elsewhere),
+  cleanup compare-and-deletes `refs/heads/<branch>` with the same resolved base OID passed to `worktree add`;
+  if the ref moved, Git refuses the deletion and cleanup leaves it intact. Worktree and branch cleanup share
+  the 2-minute budget. The path reservation remains held through cleanup and is released with the branch
+  reservation. The shared 15-minute client budget leaves room for the fallback fetch and cleanup; the Create
+  button stays in its existing loading/“Creating…” state.
   Path `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
   (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
   new worktree, the home for temp docs (task-specs / working files) that stay out of git yet remain
