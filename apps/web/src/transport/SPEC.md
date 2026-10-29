@@ -15,7 +15,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 ## Boundary
 
 - **Owns:** `transport.ts` (`WsTransport`: id-correlated `request` — replies time out after 60s unless the
-  caller raises `timeoutMs`, which a request the host answers *only once a human has* must do (an open
+  caller raises `timeoutMs` (capped at contracts' `LONGEST_REQUEST_TIMEOUT_MS`), which a request the host answers *only once a human has* must do (an open
   folder dialog: a fired timeout also drops the reply that follows it) —, the **`?client=` page identity** and
   **`?protocol=` current wire version** it appends to the socket URL (the identity is minted lazily and *not*
   via the secure-context-only `crypto.randomUUID`, so a plain-http remote origin still boots; it spans

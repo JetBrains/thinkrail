@@ -145,6 +145,7 @@ import {
 	RequestAbandonedError,
 	RequestReplayCache,
 	RequestReplayOverflowError,
+	RequestStuckError,
 } from "./requestReplayCache";
 import {
 	installRequestReviewSeam,
@@ -286,13 +287,24 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
 	const abandonmentReports = new AbandonmentReportBudget();
+	const stuckReports = new AbandonmentReportBudget();
+	const reportOnce = (
+		budget: AbandonmentReportBudget,
+		methods: readonly string[],
+		Failure: new () => Error,
+	): void => {
+		for (const method of new Set(methods))
+			if (budget.admit(method)) reportError(new Failure(), requestErrorReport(method));
+	};
 	const reportAbandoned = (methods: readonly string[]): void => {
 		if (methods.length === 0) return;
 		log.warn(`requests abandoned before their handlers settled: ${countMethods(methods)}`);
-		for (const method of new Set(methods)) {
-			if (abandonmentReports.admit(method))
-				reportError(new RequestAbandonedError(), requestErrorReport(method));
-		}
+		reportOnce(abandonmentReports, methods, RequestAbandonedError);
+	};
+	const reportStuck = (methods: readonly string[]): void => {
+		if (methods.length === 0) return;
+		log.warn(`client retired with handlers past every page deadline: ${countMethods(methods)}`);
+		reportOnce(stuckReports, methods, RequestStuckError);
 	};
 	const terminalBackpressured = new Set<string>();
 	let hostUpdateNotice: HostUpdateNotice | undefined;
@@ -313,19 +325,22 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
 
+	const releaseClient = (clientKey: string): void => {
+		if (stopping || sockets.has(clientKey) || reapTimers.has(clientKey)) return;
+		clearTerminalClient(clientKey);
+		releaseInvitation(clientKey);
+		cancelMcpProbesOwnedBy(clientKey);
+	};
+
 	const armClientReap = (clientKey: string): void => {
 		reapTimers.set(
 			clientKey,
 			setTimeout(() => {
 				reapTimers.delete(clientKey);
 				if (sockets.has(clientKey)) return;
-				if (!requestReplays.clearClient(clientKey)) {
-					armClientReap(clientKey);
-					return;
-				}
-				clearTerminalClient(clientKey);
-				releaseInvitation(clientKey);
-				cancelMcpProbesOwnedBy(clientKey);
+				const stuck = requestReplays.clearClient(clientKey, () => releaseClient(clientKey));
+				if (stuck) reportStuck(stuck);
+				else armClientReap(clientKey);
 			}, CLIENT_REPLAY_RETENTION_MS),
 		);
 	};

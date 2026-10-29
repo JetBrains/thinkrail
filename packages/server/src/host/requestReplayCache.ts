@@ -1,3 +1,4 @@
+import { LONGEST_REQUEST_TIMEOUT_MS } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 
 export class RequestReplayConflictError extends Error {
@@ -28,6 +29,15 @@ export class RequestAbandonedError extends Error {
 	}
 }
 
+export class RequestStuckError extends Error {
+	readonly code = "REQUEST_STUCK";
+
+	constructor() {
+		super("a request handler outlived every page deadline and its client was retired");
+		this.name = "RequestStuckError";
+	}
+}
+
 export class AbandonmentReportBudget {
 	private readonly reported = new Set<string>();
 
@@ -50,6 +60,7 @@ export class RequestReplayUnretainedError extends Error {
 interface ReplayEntry<T> {
 	readonly fingerprint: string;
 	readonly label: string;
+	readonly startedAt: number;
 	result: Promise<T> | null;
 	settled: boolean;
 	abandoned: boolean;
@@ -61,6 +72,7 @@ interface ClientNamespace<T> {
 	weight: number;
 	abandoned: number;
 	overflowing: boolean;
+	release?: () => void;
 }
 
 function replayLoad(
@@ -96,6 +108,7 @@ export class RequestReplayCache<T> {
 		private readonly maxRequestsPerClient = 512,
 		private readonly maxWeightPerClient = 16 * 1024 * 1024,
 		private readonly maxTrackedPerClient = 2048,
+		private readonly now = () => performance.now(),
 	) {
 		this.liveLowWater = Math.floor(maxRequestsPerClient * 0.9);
 		this.trackedLowWater = Math.floor(maxTrackedPerClient * 0.9);
@@ -135,6 +148,7 @@ export class RequestReplayCache<T> {
 		const entry: ReplayEntry<T> = {
 			fingerprint,
 			label,
+			startedAt: this.now(),
 			result,
 			settled: false,
 			abandoned: false,
@@ -166,12 +180,21 @@ export class RequestReplayCache<T> {
 		return abandoned;
 	}
 
-	clearClient(clientKey: string): boolean {
+	clearClient(clientKey: string, release: () => void = () => {}): string[] | null {
 		const namespace = this.clients.get(clientKey);
-		if (!namespace) return true;
-		for (const entry of namespace.requests.values()) if (!entry.settled) return false;
-		this.clients.delete(clientKey);
-		return true;
+		const stuck: string[] = [];
+		if (namespace) {
+			const now = this.now();
+			for (const entry of namespace.requests.values()) {
+				if (entry.settled) continue;
+				if (now - entry.startedAt < LONGEST_REQUEST_TIMEOUT_MS) return null;
+				stuck.push(entry.label);
+			}
+			this.clients.delete(clientKey);
+			namespace.release = release;
+		}
+		release();
+		return stuck;
 	}
 
 	clear(): void {
@@ -198,7 +221,10 @@ export class RequestReplayCache<T> {
 		entry: ReplayEntry<T>,
 		weight: number,
 	): void {
-		if (this.clients.get(clientKey) !== namespace) return;
+		if (this.clients.get(clientKey) !== namespace) {
+			namespace.release?.();
+			return;
+		}
 		entry.settled = true;
 		if (entry.abandoned) {
 			namespace.requests.delete(requestId);

@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { LONGEST_REQUEST_TIMEOUT_MS, PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { WsTransport } from "./transport";
 
 class TestWebSocket {
@@ -297,5 +297,26 @@ describe("WsTransport response receipts", () => {
 		replacement?.open();
 		expect(resumesIn(replacement?.sent ?? [])).toEqual([[]]);
 		expect(requestsIn(replacement?.sent ?? [])).toEqual([]);
+	});
+
+	test("no request waits past the longest page deadline the host's reap horizon trusts", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = TestWebSocket.instances[0];
+		socket?.open();
+		const timers = spyOn(globalThis, "setTimeout");
+		try {
+			const result = transport.request(
+				"project.list",
+				{},
+				{ timeoutMs: LONGEST_REQUEST_TIMEOUT_MS * 2 },
+			);
+			expect(timers.mock.calls.map((call) => call[1])).toEqual([LONGEST_REQUEST_TIMEOUT_MS]);
+			const id = requestsIn(socket?.sent ?? [])[0]?.id;
+			socket?.message(JSON.stringify({ id, ok: true, result: [] }));
+			expect(await result).toEqual([]);
+		} finally {
+			timers.mockRestore();
+		}
 	});
 });

@@ -44,6 +44,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   latter — the host's replay namespace for this page is full ([[submodule-server-host]]), and the page treats
   it as an ordinary retryable failure. Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
+  **`LONGEST_REQUEST_TIMEOUT_MS`** (31 min, the `project.clone` wait) is the ceiling for any page
+  `timeoutMs`: the web transport caps each request at it, and the host's reap horizon
+  ([[submodule-server-host]]) trusts that no page still waits on a request older than it.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and

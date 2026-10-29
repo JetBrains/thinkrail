@@ -1142,6 +1142,8 @@ export interface WsResume {
 	resume: string[];
 }
 
+export const LONGEST_REQUEST_TIMEOUT_MS = 31 * 60_000;
+
 export type WsClientMessage = WsRequest | WsAck | WsResume;
 
 export type WsErrorCode =

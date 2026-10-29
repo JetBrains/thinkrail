@@ -53,9 +53,17 @@ channel fan-out, and the process-boot wrapper both launchers share.
   outlives the socket grace window, since the page holds that frame until its *own* deadline (30 minutes for
   the folder picker) and replays it on reconnect, so `clearClient` declines and the reap re-arms rather than
   let the replay start a second execution of a handler that has not finished. Abandoned work (below) still
-  holds the reap: the reap's owner cleanup (terminals, interview, MCP probes) must not run while one of the
-  client's handlers can still act for it — an `mcp.login` awaiting its ownership guard would otherwise start a
-  probe owned by an already-cleaned client.) **Nothing in that cache is ever evicted**, because a
+  holds the reap while it is young: the reap's owner cleanup (terminals, invitation, MCP probes) must not run
+  while one of the client's handlers can still act for it — an `mcp.login` awaiting its ownership guard would
+  otherwise start a probe owned by an already-cleaned client. A page that reloads or closes never returns its
+  `clientKey`, so a handler that never settles would hold that cleanup forever. Past the **reap horizon** —
+  the entry is older than `LONGEST_REQUEST_TIMEOUT_MS` (contracts), so every page deadline has passed and no
+  page can replay it — an unfinished entry, abandoned or not, no longer holds the reap: `clearClient` retires
+  the client, runs the owner cleanup, and runs it again each time one of the retired client's handlers settles
+  late, so whatever that handler created for the client is released when it finishes. The rerun skips a key
+  that is live again (socket open or reap pending), whose own reap will release it. A handler that never
+  settles holds nothing but its own work. Each method is reported once per launch as `RequestStuckError`
+  (`code: "REQUEST_STUCK"`), rationed like abandonment below.) **Nothing in that cache is ever evicted**, because a
   successful `send` says the bytes were queued, not that the page read them, and a socket that dies holding a
   reply is indistinguishable from one that flushed it — so any result dropped on the host's own initiative may
   be the one a replay is about to ask for. A result leaves only on the client's own word, via two frames handled

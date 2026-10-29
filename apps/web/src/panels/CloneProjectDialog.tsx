@@ -1,5 +1,5 @@
 import { RiFolderOpenLine as FolderOpen } from "@remixicon/react";
-import type { Project } from "@thinkrail/contracts";
+import { LONGEST_REQUEST_TIMEOUT_MS, type Project } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -124,7 +124,7 @@ export function CloneProjectDialog({
 					name,
 					...(depth === undefined ? {} : { depth }),
 				},
-				{ timeoutMs: 31 * 60_000 },
+				{ timeoutMs: LONGEST_REQUEST_TIMEOUT_MS },
 			)
 			.then(
 				(project) => {

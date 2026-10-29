@@ -1,5 +1,5 @@
 import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { LONGEST_REQUEST_TIMEOUT_MS, PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { randomId } from "../lib";
 import { RequestError } from "./requestError";
@@ -113,6 +113,7 @@ export class WsTransport {
 		options: RequestOptions = {},
 	): Promise<WsResult<M>> {
 		const { sessionId, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+		const deadline = Math.min(timeoutMs, LONGEST_REQUEST_TIMEOUT_MS);
 		const id = `trpi_${++this.seq}`;
 		const frame = JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) });
 		return new Promise<WsResult<M>>((resolve, reject) => {
@@ -120,7 +121,7 @@ export class WsTransport {
 				this.pending.delete(id);
 				if (this.ws?.readyState === WebSocket.OPEN) this.queueAck(id);
 				reject(new Error(t("app.transport.timedOut", { method })));
-			}, timeoutMs);
+			}, deadline);
 			this.pending.set(id, {
 				frame,
 				resolve: resolve as (v: unknown) => void,

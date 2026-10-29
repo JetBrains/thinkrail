@@ -11,7 +11,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { McpListResult, McpServerLog, McpServerSummary } from "@thinkrail/contracts";
+import {
+	LONGEST_REQUEST_TIMEOUT_MS,
+	type LoginPush,
+	type McpListResult,
+	type McpServerLog,
+	type McpServerSummary,
+} from "@thinkrail/contracts";
+import { cancelMcpProbesOwnedBy, setMcpLoginPublisher } from "../agent";
 import {
 	approveProjectMcpServer,
 	getProjects,
@@ -20,6 +27,7 @@ import {
 	setProjectTrust,
 } from "../projects";
 import { handleRequest } from "./handlers";
+import { RequestReplayCache } from "./requestReplayCache";
 
 const CTX = { clientKey: "test-client" };
 const malformedEntries = [42, "invalid", 0, false, null, []];
@@ -1116,4 +1124,43 @@ test("probes refuse names with no admitted valid config", async () => {
 			expect(await codeOf(request(method, { workspaceId: "w1", name }))).toBe("MCP_CONFIG_INVALID");
 		}
 	}
+});
+
+test("a probe that a retired client's late handler starts is cancelled once the handler settles", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { retired: { url: "http://127.0.0.1:1/mcp" } } }),
+	);
+	const pushes: LoginPush[] = [];
+	setMcpLoginPublisher((push) => pushes.push(push));
+	let now = 0;
+	const replays = new RequestReplayCache<string>(512, undefined, undefined, () => now);
+	const started = replays.run(
+		"gone",
+		"test",
+		"test",
+		async () => {
+			const result = (await handleRequest(
+				"mcp.testConnection",
+				{ workspaceId: "w1", name: "retired" },
+				{ clientKey: "gone" },
+			)) as { loginId: string };
+			return result.loginId;
+		},
+		"mcp.testConnection",
+	);
+
+	now = LONGEST_REQUEST_TIMEOUT_MS;
+	expect(replays.clearClient("gone", () => cancelMcpProbesOwnedBy("gone"))).toEqual([
+		"mcp.testConnection",
+	]);
+	const loginId = await started;
+	const until = Date.now() + 15_000;
+	let last: LoginPush["frame"] | undefined;
+	while (!last && Date.now() < until) {
+		last = pushes.find((push) => push.loginId === loginId && push.frame.kind !== "progress")?.frame;
+		await Bun.sleep(20);
+	}
+	setMcpLoginPublisher(() => {});
+	expect(last).toEqual({ kind: "error", message: "Sign-in cancelled." });
 });

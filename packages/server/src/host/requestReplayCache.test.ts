@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { LONGEST_REQUEST_TIMEOUT_MS } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	AbandonmentReportBudget,
@@ -315,11 +316,11 @@ describe("request replay cache", () => {
 		const hung = deferred<string>();
 		const run = cache.run("page", "probe", "probe", () => hung.promise, "mcp.testConnection");
 		cache.acknowledge("page", ["probe"]);
-		expect(cache.clearClient("page")).toBe(false);
+		expect(cache.clearClient("page")).toBeNull();
 		hung.resolve("done");
 		await run;
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		expect(cache.clearClient("page")).toBe(true);
+		expect(cache.clearClient("page")).toEqual([]);
 	});
 
 	test("abandonment reports admit each method once and stop at a fixed allowance", () => {
@@ -402,7 +403,7 @@ describe("request replay cache", () => {
 		const execute = () => String(++executions);
 
 		expect(await cache.run("page", "req-1", "same", execute)).toBe("1");
-		expect(cache.clearClient("page")).toBe(true);
+		expect(cache.clearClient("page")).toEqual([]);
 		expect(await cache.run("page", "req-1", "same", execute)).toBe("2");
 	});
 
@@ -419,18 +420,140 @@ describe("request replay cache", () => {
 		expect(await settled).toBe("cached");
 		const inFlight = cache.run("page", "picker", "same", execute);
 
-		expect(cache.clearClient("page")).toBe(false);
+		expect(cache.clearClient("page")).toBeNull();
 		expect(cache.run("page", "picker", "same", execute)).toBe(inFlight);
 		expect(await cache.run("page", "settled", "one", () => "reran")).toBe("cached");
 		expect(executions).toBe(1);
 
 		run.resolve("/picked/path");
 		expect(await inFlight).toBe("/picked/path");
-		expect(cache.clearClient("page")).toBe(true);
+		expect(cache.clearClient("page")).toEqual([]);
 		expect(await cache.run("page", "picker", "same", () => "fresh")).toBe("fresh");
 	});
 
+	test("a client whose hung request no page names is retired once it passes every page deadline", () => {
+		let now = 0;
+		const cache = new RequestReplayCache<string>(512, undefined, undefined, () => now);
+		void cache.run(
+			"page",
+			"hung",
+			"hung",
+			() => new Promise<string>(() => {}),
+			"session.resources",
+		);
+
+		now = LONGEST_REQUEST_TIMEOUT_MS - 1;
+		expect(cache.clearClient("page")).toBeNull();
+		now = LONGEST_REQUEST_TIMEOUT_MS;
+		expect(cache.clearClient("page")).toEqual(["session.resources"]);
+	});
+
+	test("the horizon counts from each request's own start", () => {
+		let now = 0;
+		const cache = new RequestReplayCache<string>(512, undefined, undefined, () => now);
+		const never = () => new Promise<string>(() => {});
+		void cache.run("page", "old", "old", never, "git.status");
+		now = 10 * 60_000;
+		void cache.run("page", "young", "young", never, "session.resources");
+
+		now = LONGEST_REQUEST_TIMEOUT_MS;
+		expect(cache.clearClient("page")).toBeNull();
+		now = 10 * 60_000 + LONGEST_REQUEST_TIMEOUT_MS;
+		expect(cache.clearClient("page")).toEqual(["git.status", "session.resources"]);
+	});
+
+	test("a hung request settling after its client was retired leaves the next namespace alone", async () => {
+		let now = 0;
+		const cache = new RequestReplayCache<string>(1, undefined, undefined, () => now);
+		const hung = deferred<string>();
+		const late = cache.run("page", "hung", "hung", () => hung.promise, "git.status");
+
+		now = LONGEST_REQUEST_TIMEOUT_MS;
+		expect(cache.clearClient("page")).toEqual(["git.status"]);
+		expect(await cache.run("page", "next", "next", () => "fresh")).toBe("fresh");
+
+		hung.resolve("late");
+		expect(await late).toBe("late");
+		expect(await cache.run("page", "next", "next", () => "reran")).toBe("fresh");
+		expect(() => cache.run("page", "other", "other", () => "no room")).toThrow(
+			RequestReplayOverflowError,
+		);
+		cache.acknowledge("page", ["next"]);
+		expect(await cache.run("page", "hung", "hung", () => "new run")).toBe("new run");
+	});
+
+	test("abandoned work past the horizon no longer holds the reap", () => {
+		let now = 0;
+		const cache = new RequestReplayCache<string>(512, undefined, undefined, () => now);
+		void cache.run("page", "probe", "probe", () => new Promise<string>(() => {}), "mcp.login");
+		cache.acknowledge("page", ["probe"]);
+
+		now = LONGEST_REQUEST_TIMEOUT_MS - 1;
+		expect(cache.clearClient("page")).toBeNull();
+		now = LONGEST_REQUEST_TIMEOUT_MS;
+		expect(cache.clearClient("page")).toEqual(["mcp.login"]);
+	});
+
+	test("retiring a client releases it now and again each time one of its handlers settles late", async () => {
+		let now = 0;
+		let releases = 0;
+		const release = () => releases++;
+		const cache = new RequestReplayCache<string>(512, undefined, undefined, () => now);
+		const resolved = deferred<string>();
+		const rejected = deferred<string>();
+		const resolving = cache.run("page", "a", "a", () => resolved.promise, "git.status");
+		const rejecting = cache.run("page", "b", "b", () => rejected.promise, "fs.readFile");
+		void cache.run("page", "c", "c", () => new Promise<string>(() => {}), "session.resources");
+
+		expect(cache.clearClient("page", release)).toBeNull();
+		expect(releases).toBe(0);
+		now = LONGEST_REQUEST_TIMEOUT_MS;
+		expect(cache.clearClient("page", release)).toEqual([
+			"git.status",
+			"fs.readFile",
+			"session.resources",
+		]);
+		expect(releases).toBe(1);
+
+		resolved.resolve("late");
+		await resolving;
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(releases).toBe(2);
+		rejected.reject(new Error("late failure"));
+		await rejecting.catch(() => {});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(releases).toBe(3);
+	});
+
+	test("what a retired client's late handler creates for it is released once the handler settles", async () => {
+		let now = 0;
+		const cache = new RequestReplayCache<string>(512, undefined, undefined, () => now);
+		const probes = new Map<string, string>();
+		const release = () => {
+			for (const [id, owner] of probes) if (owner === "page") probes.delete(id);
+		};
+		const guard = deferred<void>();
+		const login = cache.run(
+			"page",
+			"login",
+			"login",
+			async () => {
+				await guard.promise;
+				probes.set("mcplogin_1", "page");
+				return "mcplogin_1";
+			},
+			"mcp.login",
+		);
+
+		now = LONGEST_REQUEST_TIMEOUT_MS;
+		expect(cache.clearClient("page", release)).toEqual(["mcp.login"]);
+		guard.resolve();
+		expect(await login).toBe("mcplogin_1");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect([...probes.keys()]).toEqual([]);
+	});
+
 	test("retiring a client that was never seen is a no-op, not a retry", () => {
-		expect(new RequestReplayCache<string>().clearClient("ghost")).toBe(true);
+		expect(new RequestReplayCache<string>().clearClient("ghost")).toEqual([]);
 	});
 });
