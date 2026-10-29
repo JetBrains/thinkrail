@@ -346,13 +346,11 @@ read/write a host-qualified localStorage key and synchronize that key across sam
 may inject the same narrow string-storage adapter under its stable backend-profile/window identity so a
 dynamic loopback port cannot erase the preference on restart. It never enters `AppConfig`, so choosing
 newest-first cannot change another browser, device, host, or native window. The same persistence seam owns
-**Streaming response movement**, one `{ settle, trigger }` client-local preference rather than a second
-adapter/subscription path. Trigger is the pin line a following reader's response edge is held at; the
-reading band does not read Settle, which stays stored so old values still parse. Both values use 5-point
-steps, Settle is 25–90, Trigger is 35–100, and Settle stays at least 10 points below Trigger: moving Trigger
-lower pushes Settle down, so the unused Settle never limits the pin line. The default is
-`{ settle: 75, trigger: 100 }`. Invalid storage falls back atomically to the default pair. It likewise never
-enters `AppConfig` or crosses the wire.
+**Streaming response movement**, one `{ trigger }` client-local preference rather than a second
+adapter/subscription path. `trigger` is the pin line a following reader's response edge is held at,
+labelled **Pin line** in Settings: 35–100% from the top in 5-point steps, default 100%. Parsing reads only
+`trigger` and ignores extra fields, so a saved value carrying other keys keeps its pin line; an invalid
+`trigger` falls back to the default. It likewise never enters `AppConfig` or crosses the wire.
 
 **Sticky activity breadcrumb.** While the transcript's top visible content remains inside expanded
 Activity → Thinking → tool disclosures whose original headers have scrolled above the viewport, one
@@ -668,7 +666,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   queued/background continuation preserves a detached reader when it starts.
 - **Streaming response movement exists only during work, and it pins the response edge** — while following,
   the view stands still while the active response fills the room below its prompt. Once the response edge
-  reaches the pin line (Trigger, default 100%), the view is pinned: each content change moves it by exactly
+  reaches the pin line (`trigger`, default 100%), the view is pinned: each content change moves it by exactly
   the growth, so the edge stays on the line. The pin runs in the before-paint content-change path (the
   Virtuoso height callback and the scroller resize observer, both inside `ResizeObserver` delivery) as one
   instant `scrollTop` write with no easing and no threshold, so growth and its compensation paint in the
@@ -677,7 +675,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   on-screen guard below restores that unowned move and the controller then re-applies the pin in the same
   call, from the same geometry read, as one `scrollTop` write. Restoring without re-pinning painted the edge
   20–70 px below the line for a frame, in about half of the Chromium replay runs. Window steps (hold until
-  Trigger, then one eased ~220 ms move to a Settle line) were tried and rejected: with a fast model they
+  the pin line, then one eased ~220 ms move to a higher line) were tried and rejected: with a fast model they
   measured as a 120–240 px jump every ~0.5 s, growth landing in a step's last frame became a 20–100 px snap,
   and WebKit showed three times more snaps. Peers (shadcn Message Scroller, T3 Code, Zed, OpenCode) pin per
   frame. The trade-off is that the line being read moves with the stream; a reader who
@@ -707,12 +705,12 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   is capped so the seen edge lands at the turn inset, the same place an own prompt lands. One content
   change that grows the edge by more than the reading space (the pin line minus the turn inset) caps the
   same way at the previous edge, because the pin would push that block's start above the inset; below
-  Trigger 100 the reading space is smaller than the visible space, so a card between the two would
+  a 100% pin line the reading space is smaller than the visible space, so a card between the two would
   otherwise lose its start. Counting every pinned edge as seen let a card that lands in several quick
   steps pin past at full speed, because no single step was tall. A 300 ms seen-edge look-back capped plain
   text: a fast replay (≈900 px/s) in the ≈300 px chat viewport of a 1280×720 window crossed the threshold
   and stalled the pin every few lines; streamed text needs over 2k px/s to do that within 100 ms. Judging
-  the 100 ms window against the reading space did the same on a low pin line: at Trigger 35% that viewport
+  the 100 ms window against the reading space did the same on a low pin line: at a 35% pin line that viewport
   leaves 57 px, so text over ≈570 px/s capped. A burst of text deltas or a Markdown re-render can still
   exceed that reading space in one delivery, so the per-change check stays off within 300 ms of a cap
   release or another such growth: a run of bursts caps at most once, while a card after a quiet moment or

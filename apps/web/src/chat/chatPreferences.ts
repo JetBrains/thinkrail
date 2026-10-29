@@ -17,11 +17,8 @@ export const DEFAULT_CHAT_MESSAGE_ORDER: ChatMessageOrder = "oldest-first";
 export const CHAT_MESSAGE_ORDER_PREFERENCE_KEY = "chat-message-order";
 export const STREAMING_RESPONSE_MOVEMENT_PREFERENCE_KEY = "streaming-response-movement";
 export const STREAMING_RESPONSE_MOVEMENT_LIMITS = {
-	settleMin: 25,
-	settleMax: 90,
 	triggerMin: 35,
 	triggerMax: 100,
-	minimumGap: 10,
 	step: 5,
 } as const;
 function defaultStreamingResponseMovement(): StreamingResponseMovement {
@@ -44,62 +41,37 @@ export function parseChatMessageOrder(value: unknown): ChatMessageOrder {
 	return isChatMessageOrder(value) ? value : DEFAULT_CHAT_MESSAGE_ORDER;
 }
 
-function isFivePointStep(value: number): boolean {
-	return Number.isInteger(value) && value % STREAMING_RESPONSE_MOVEMENT_LIMITS.step === 0;
-}
-
-export function moveStreamingResponseHandle(
+export function moveStreamingResponseTrigger(
 	current: StreamingResponseMovement,
-	handle: "settle" | "trigger",
 	value: number,
 ): StreamingResponseMovement {
 	if (!Number.isFinite(value)) return current;
 	const stepped =
 		Math.round(value / STREAMING_RESPONSE_MOVEMENT_LIMITS.step) *
 		STREAMING_RESPONSE_MOVEMENT_LIMITS.step;
-	if (handle === "settle") {
-		return {
-			settle: Math.min(
-				STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMax,
-				current.trigger - STREAMING_RESPONSE_MOVEMENT_LIMITS.minimumGap,
-				Math.max(STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMin, stepped),
-			),
-			trigger: current.trigger,
-		};
-	}
-	const trigger = Math.max(
-		STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMin,
-		Math.min(STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMax, stepped),
-	);
 	return {
-		settle: Math.max(
-			STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMin,
-			Math.min(current.settle, trigger - STREAMING_RESPONSE_MOVEMENT_LIMITS.minimumGap),
+		trigger: Math.max(
+			STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMin,
+			Math.min(STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMax, stepped),
 		),
-		trigger,
 	};
 }
 
 export function isStreamingResponseMovement(value: unknown): value is StreamingResponseMovement {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-	const settle = Reflect.get(value, "settle");
 	const trigger = Reflect.get(value, "trigger");
 	return (
-		typeof settle === "number" &&
 		typeof trigger === "number" &&
-		isFivePointStep(settle) &&
-		isFivePointStep(trigger) &&
-		settle >= STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMin &&
-		settle <= STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMax &&
+		Number.isInteger(trigger) &&
+		trigger % STREAMING_RESPONSE_MOVEMENT_LIMITS.step === 0 &&
 		trigger >= STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMin &&
-		trigger <= STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMax &&
-		trigger - settle >= STREAMING_RESPONSE_MOVEMENT_LIMITS.minimumGap
+		trigger <= STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMax
 	);
 }
 
 export function parseStreamingResponseMovement(value: unknown): StreamingResponseMovement {
 	return isStreamingResponseMovement(value)
-		? { settle: value.settle, trigger: value.trigger }
+		? { trigger: value.trigger }
 		: defaultStreamingResponseMovement();
 }
 
@@ -113,17 +85,14 @@ function parseStoredStreamingResponseMovement(value: string | null): StreamingRe
 }
 
 function isDefaultStreamingResponseMovement(value: StreamingResponseMovement): boolean {
-	return (
-		value.settle === DEFAULT_STREAMING_RESPONSE_MOVEMENT.settle &&
-		value.trigger === DEFAULT_STREAMING_RESPONSE_MOVEMENT.trigger
-	);
+	return value.trigger === DEFAULT_STREAMING_RESPONSE_MOVEMENT.trigger;
 }
 
 function sameStreamingResponseMovement(
 	left: StreamingResponseMovement,
 	right: StreamingResponseMovement,
 ): boolean {
-	return left.settle === right.settle && left.trigger === right.trigger;
+	return left.trigger === right.trigger;
 }
 
 function readBrowserMessageOrder(storage: Storage | null, key: string): ChatMessageOrder {

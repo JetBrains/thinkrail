@@ -8,7 +8,7 @@ import {
 	DEFAULT_CHAT_MESSAGE_ORDER,
 	initChatPreferencesPersistence,
 	isChatMessageOrder,
-	moveStreamingResponseHandle,
+	moveStreamingResponseTrigger,
 	parseChatMessageOrder,
 	parseStreamingResponseMovement,
 	STREAMING_RESPONSE_MOVEMENT_PREFERENCE_KEY,
@@ -18,85 +18,61 @@ import {
 } from "./chatPreferences";
 
 describe("streaming response movement preference", () => {
-	test("defaults to the approved 75%→100% window and accepts only legal five-point pairs", () => {
-		expect(parseStreamingResponseMovement({ settle: 65, trigger: 95 })).toEqual({
-			settle: 65,
-			trigger: 95,
-		});
-		expect(parseStreamingResponseMovement(null)).toEqual({ settle: 75, trigger: 100 });
-		expect(parseStreamingResponseMovement({ settle: 20, trigger: 100 })).toEqual({
-			settle: 75,
-			trigger: 100,
-		});
-		expect(parseStreamingResponseMovement({ settle: 75, trigger: 80 })).toEqual({
-			settle: 75,
-			trigger: 100,
-		});
-		expect(parseStreamingResponseMovement({ settle: 76, trigger: 100 })).toEqual({
-			settle: 75,
-			trigger: 100,
-		});
+	test("defaults the pin line to 100% and accepts only legal five-point values", () => {
+		expect(parseStreamingResponseMovement({ trigger: 95 })).toEqual({ trigger: 95 });
+		expect(parseStreamingResponseMovement(null)).toEqual({ trigger: 100 });
+		expect(parseStreamingResponseMovement({ trigger: 30 })).toEqual({ trigger: 100 });
+		expect(parseStreamingResponseMovement({ trigger: 96 })).toEqual({ trigger: 100 });
+		expect(parseStreamingResponseMovement({ trigger: "95" })).toEqual({ trigger: 100 });
 	});
 
-	test("Settle clamps below Trigger; a lower Trigger pushes Settle down to keep the gap", () => {
-		expect(moveStreamingResponseHandle({ settle: 75, trigger: 100 }, "settle", 95)).toEqual({
-			settle: 90,
-			trigger: 100,
-		});
-		expect(moveStreamingResponseHandle({ settle: 55, trigger: 90 }, "trigger", 60)).toEqual({
-			settle: 50,
-			trigger: 60,
-		});
-		expect(moveStreamingResponseHandle({ settle: 75, trigger: 100 }, "trigger", 35)).toEqual({
-			settle: 25,
-			trigger: 35,
-		});
-		expect(moveStreamingResponseHandle({ settle: 55, trigger: 90 }, "trigger", 80)).toEqual({
-			settle: 55,
-			trigger: 80,
-		});
-		expect(moveStreamingResponseHandle({ settle: 75, trigger: 100 }, "settle", 63)).toEqual({
-			settle: 65,
-			trigger: 100,
-		});
-		expect(moveStreamingResponseHandle({ settle: 75, trigger: 100 }, "settle", Number.NaN)).toEqual(
-			{
-				settle: 75,
-				trigger: 100,
-			},
-		);
+	test("a saved value with an extra settle field keeps its pin line", () => {
+		expect(parseStreamingResponseMovement({ settle: 65, trigger: 95 })).toEqual({ trigger: 95 });
+		expect(parseStreamingResponseMovement({ settle: 90, trigger: 95 })).toEqual({ trigger: 95 });
+		expect(parseStreamingResponseMovement({ settle: 66, trigger: 40 })).toEqual({ trigger: 40 });
 	});
 
-	test("the store exposes the approved client-local default and an atomic setter", () => {
+	test("moving the pin line rounds to five points and clamps to 35–100", () => {
+		expect(moveStreamingResponseTrigger({ trigger: 100 }, 63)).toEqual({ trigger: 65 });
+		expect(moveStreamingResponseTrigger({ trigger: 100 }, 10)).toEqual({ trigger: 35 });
+		expect(moveStreamingResponseTrigger({ trigger: 60 }, 120)).toEqual({ trigger: 100 });
+		expect(moveStreamingResponseTrigger({ trigger: 60 }, Number.NaN)).toEqual({ trigger: 60 });
+	});
+
+	test("the store exposes the client-local default and an atomic setter", () => {
 		const state = useAppStore.getState();
-		expect(state.streamingResponseMovement).toEqual({ settle: 75, trigger: 100 });
-		state.setStreamingResponseMovement({ settle: 60, trigger: 90 });
-		expect(useAppStore.getState().streamingResponseMovement).toEqual({
-			settle: 60,
-			trigger: 90,
-		});
-		useAppStore.getState().setStreamingResponseMovement({ settle: 75, trigger: 100 });
+		expect(state.streamingResponseMovement).toEqual({ trigger: 100 });
+		state.setStreamingResponseMovement({ trigger: 90 });
+		expect(useAppStore.getState().streamingResponseMovement).toEqual({ trigger: 90 });
+		useAppStore.getState().setStreamingResponseMovement({ trigger: 100 });
 	});
 
-	test("host-qualified storage events synchronize the complete movement pair atomically", () => {
+	test("host-qualified storage events synchronize the movement", () => {
 		const storage = {} as Storage;
 		const key = streamingResponseMovementStorageKey("http://localhost:31415");
 
 		expect(key).toBe(`${STORAGE_PREFIX}streaming-response-movement:http://localhost:31415`);
 		expect(
 			streamingResponseMovementFromStorageEvent(
+				{ key, newValue: '{"trigger":95}', storageArea: storage },
+				storage,
+				key,
+			),
+		).toEqual({ trigger: 95 });
+		expect(
+			streamingResponseMovementFromStorageEvent(
 				{ key, newValue: '{"settle":65,"trigger":95}', storageArea: storage },
 				storage,
 				key,
 			),
-		).toEqual({ settle: 65, trigger: 95 });
+		).toEqual({ trigger: 95 });
 		expect(
 			streamingResponseMovementFromStorageEvent(
-				{ key, newValue: '{"settle":66,"trigger":95}', storageArea: storage },
+				{ key, newValue: '{"trigger":96}', storageArea: storage },
 				storage,
 				key,
 			),
-		).toEqual({ settle: 75, trigger: 100 });
+		).toEqual({ trigger: 100 });
 	});
 
 	test("one injected preference seam hydrates and persists message order plus movement", () => {
@@ -116,21 +92,15 @@ describe("streaming response movement preference", () => {
 		const dispose = initChatPreferencesPersistence(adapter);
 		try {
 			expect(useAppStore.getState().chatMessageOrder).toBe("newest-first");
-			expect(useAppStore.getState().streamingResponseMovement).toEqual({
-				settle: 65,
-				trigger: 95,
-			});
-			useAppStore.getState().setStreamingResponseMovement({ settle: 60, trigger: 90 });
-			expect(writes).toContainEqual([
-				STREAMING_RESPONSE_MOVEMENT_PREFERENCE_KEY,
-				'{"settle":60,"trigger":90}',
-			]);
-			useAppStore.getState().setStreamingResponseMovement({ settle: 75, trigger: 100 });
+			expect(useAppStore.getState().streamingResponseMovement).toEqual({ trigger: 95 });
+			useAppStore.getState().setStreamingResponseMovement({ trigger: 90 });
+			expect(writes).toContainEqual([STREAMING_RESPONSE_MOVEMENT_PREFERENCE_KEY, '{"trigger":90}']);
+			useAppStore.getState().setStreamingResponseMovement({ trigger: 100 });
 			expect(removals).toContain(STREAMING_RESPONSE_MOVEMENT_PREFERENCE_KEY);
 		} finally {
 			dispose();
 			useAppStore.getState().setChatMessageOrder(DEFAULT_CHAT_MESSAGE_ORDER);
-			useAppStore.getState().setStreamingResponseMovement({ settle: 75, trigger: 100 });
+			useAppStore.getState().setStreamingResponseMovement({ trigger: 100 });
 		}
 	});
 });

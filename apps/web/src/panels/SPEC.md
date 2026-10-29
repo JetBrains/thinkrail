@@ -867,12 +867,10 @@ a project picker, the prompt hero, and the reused
   toast without changing geometry); **`ChatSettings`** (one **Appearance and behavior** group of rows —
   **Message order** segmented over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), **Composer size** segmented over the composer-growth limit (Compact / Roomy /
-  Half chat), the chat `LineWidthControl`, and the **Streaming response movement** row, a two-handle range
-  over `store.streamingResponseMovement`. The movement row's
-  copy is “When the chat moves while an answer grows, and where its newest edge lands”; one axis runs
-  Top → Message box, Settle is 25–90, Trigger is 35–100, both step by 5 with a 10-point minimum gap, and
-  the displayed default is 75%→100%. Only Trigger affects streaming: it is the pin line where a following
-  reader's response edge is held. Settle is stored but unused, and a lower Trigger pushes it down (see
+  Half chat), the chat `LineWidthControl`, and the **Streaming response movement** row, one range
+  over `store.streamingResponseMovement.trigger`. The row's copy is “Where the newest line of a streaming
+  answer stays as the chat follows it”; its axis runs Top → Message box, the handle is the **Pin line**
+  (35–100%, step 5, default 100%), and the track fills from Top to it (see
   `apps/web/src/chat/SPEC.md`). It exposes no runway/tail/lifecycle controls. Message order and
   movement both apply immediately and persist only in this client through the chat preference seam:
   browsers use current-host-qualified keys, while a native shell may inject its stable

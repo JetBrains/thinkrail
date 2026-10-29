@@ -20,24 +20,17 @@ async function selectMessageOrder(page: Page, order: "oldest-first" | "newest-fi
 	await page.keyboard.press("Escape");
 }
 
-async function setStreamingResponseMovement(page: Page, settle: number, trigger: number) {
+async function setStreamingResponsePinLine(page: Page, trigger: number) {
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-chat").click();
-	const settleInput = page.getByTestId("streaming-movement-settle");
-	const triggerInput = page.getByTestId("streaming-movement-trigger");
-	for (const [input, target] of [
-		[settleInput, settle],
-		[triggerInput, trigger],
-	] as const) {
-		await input.focus();
-		const current = Number(await input.inputValue());
-		const key = target < current ? "ArrowLeft" : "ArrowRight";
-		for (let value = current; value !== target; value += target < current ? -5 : 5) {
-			await input.press(key);
-		}
+	const input = page.getByTestId("streaming-movement-trigger");
+	await input.focus();
+	const current = Number(await input.inputValue());
+	const key = trigger < current ? "ArrowLeft" : "ArrowRight";
+	for (let value = current; value !== trigger; value += trigger < current ? -5 : 5) {
+		await input.press(key);
 	}
-	await expect(settleInput).toHaveValue(String(settle));
-	await expect(triggerInput).toHaveValue(String(trigger));
+	await expect(input).toHaveValue(String(trigger));
 	await page.keyboard.press("Escape");
 }
 
@@ -59,7 +52,7 @@ test("browser-local chat preferences persist without changing another browser", 
 
 	try {
 		await selectMessageOrder(page, "oldest-first");
-		await setStreamingResponseMovement(page, 65, 95);
+		await setStreamingResponsePinLine(page, 95);
 		await enterDefaultWorkspace(page);
 		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
@@ -90,7 +83,6 @@ test("browser-local chat preferences persist without changing another browser", 
 		]);
 		await page.getByTestId("open-settings").click();
 		await page.getByTestId("settings-nav-chat").click();
-		await expect(page.getByTestId("streaming-movement-settle")).toHaveValue("65");
 		await expect(page.getByTestId("streaming-movement-trigger")).toHaveValue("95");
 		await page.keyboard.press("Escape");
 
@@ -108,7 +100,6 @@ test("browser-local chat preferences persist without changing another browser", 
 				"data-active",
 				"true",
 			);
-			await expect(isolatedPage.getByTestId("streaming-movement-settle")).toHaveValue("75");
 			await expect(isolatedPage.getByTestId("streaming-movement-trigger")).toHaveValue("100");
 		} finally {
 			await isolatedContext.close();
