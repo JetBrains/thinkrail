@@ -187,7 +187,7 @@ export function searchSections(
 		kind: "section",
 		hits: hits.map(
 			(hit): SearchHit => ({
-				id: `section:${root.workspaceId}:${hit.path}:${hit.line}`,
+				id: `section:${root.workspaceId}:${hit.path}:${hit.heading}#${hit.occurrence}`,
 				kind: "section",
 				title: hit.title,
 				subtitle: hit.path,

@@ -111,8 +111,9 @@ transcript may still be on disk, but nothing may reopen it.
   tokenizer; the matcher's terms would lose a phrase), and maps each hit to a `section` hit: one per
   section, `content` tier with the engine's score (so `buildGroup`'s order is the engine's), the spec
   title as `title`, the path as `subtitle`, the best line as `snippet`, `ranges` for the title, the
-  heading and the snippet, and `section: { heading, line, matched, terms }`; the id carries the heading
-  line as its locator. The group is `indexing` until the root's first index lands and while the
+  heading and the snippet, and `section: { heading, line, matched, terms }`; the id names the section by
+  its heading trail and its occurrence among same-named sections of the file, never by its line, so a
+  re-index after an edit replaces a kept row instead of listing the section twice. The group is `indexing` until the root's first index lands and while the
   snapshot is being re-read. Sections replaced the old line-substring `content` spec hits — a body hit
   is a section, never a line.
 - **Chats and transcripts:** two providers with a budget each. Title hits through the matcher over every

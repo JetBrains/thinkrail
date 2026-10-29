@@ -574,6 +574,7 @@ const sectionHit: SpecSectionHit = {
 	title: "Root",
 	type: "goal-and-requirements",
 	heading: "Tokens › Refresh",
+	occurrence: 1,
 	line: 3,
 	endLine: 4,
 	snippet: "The auth refresh lives in the token module.",
@@ -679,7 +680,7 @@ describe("search.query", () => {
 			kind: "section",
 			hits: [
 				{
-					id: "section:w-feature:SPEC.md:3",
+					id: "section:w-feature:SPEC.md:Tokens › Refresh#1",
 					kind: "section",
 					title: "Root",
 					subtitle: "SPEC.md",
