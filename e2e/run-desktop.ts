@@ -23,12 +23,13 @@ const desktopDir = fileURLToPath(new URL("../apps/desktop", import.meta.url));
 const launcher = locateDesktopLauncher(desktopDir, process.env.THINKRAIL_E2E_DESKTOP);
 
 function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	return Promise.race([
 		promise,
-		new Promise<never>((_, reject) =>
-			setTimeout(() => reject(new Error(`timed out after ${ms}ms: ${what}`)), ms),
-		),
-	]);
+		new Promise<never>((_, reject) => {
+			timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms: ${what}`)), ms);
+		}),
+	]).finally(() => clearTimeout(timer));
 }
 
 async function waitForReady(exited: Promise<number>): Promise<string> {
