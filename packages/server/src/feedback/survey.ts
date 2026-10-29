@@ -68,6 +68,7 @@ export function configureSurveySource(next: SurveySource | null): void {
 }
 
 export function currentInAppSurvey(): AppSurvey | null {
+	if (cached && clock() - succeededAt >= SURVEY_STALE_MS) cached = null;
 	return cached;
 }
 
@@ -92,8 +93,8 @@ export function resetSurveyForTests(): void {
 
 export function refreshInAppSurvey(): Promise<AppSurvey | null> {
 	const active = source;
-	if (!active || !surveyRefreshDue()) return Promise.resolve(cached);
-	return load(active).catch(() => cached);
+	if (!active || !surveyRefreshDue()) return Promise.resolve(currentInAppSurvey());
+	return load(active).catch(() => currentInAppSurvey());
 }
 
 export function confirmInAppSurvey(): Promise<AppSurvey | null> {
@@ -115,10 +116,7 @@ function load(active: ActiveSource): Promise<AppSurvey | null> {
 				return next;
 			},
 			(error: unknown) => {
-				if (stamp === generation) {
-					attemptedAt = clock();
-					if (attemptedAt - succeededAt >= SURVEY_STALE_MS) cached = null;
-				}
+				if (stamp === generation) attemptedAt = clock();
 				throw error;
 			},
 		)

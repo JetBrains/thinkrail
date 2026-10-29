@@ -120,9 +120,10 @@ export function surveyIsCompleted(id: string, iteration: number): boolean {
 
 export function completeSurvey(id: string, iteration: number): void {
 	if (!id || !isNonNegativeSafeInteger(iteration)) throw new Error("Invalid survey completion");
-	const current = loadState();
-	saveState({ ...current, submittedSurveyId: id, submittedIteration: iteration });
+	const next = { ...loadState(), submittedSurveyId: id, submittedIteration: iteration };
+	cachedState = next;
 	claimedClient = null;
+	writeState(next);
 }
 
 export function recordAcceptedMessage(clientKey: string): void {
@@ -137,8 +138,8 @@ export function recordAcceptedMessage(clientKey: string): void {
 	} catch {
 		return;
 	}
-	maybeOffer(clientKey);
 	if (surveyRefreshDue()) void refreshInAppSurvey().then(() => maybeOffer(clientKey));
+	else maybeOffer(clientKey);
 }
 
 function maybeOffer(clientKey: string): void {

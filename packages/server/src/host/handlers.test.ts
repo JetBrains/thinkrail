@@ -689,6 +689,27 @@ test("feedback.survey.submit re-reads PostHog instead of trusting the displayed 
 	expect(existsSync(join(dataDir, "feedback.json"))).toBe(false);
 });
 
+test("a completion that cannot be saved still counts as sent and never sends the answers twice", async () => {
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent);
+	launchSurvey();
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1" },
+	});
+	const blocked = join(dataDir, "blocked");
+	writeFileSync(blocked, "not a directory");
+	process.env.THINKRAIL_DATA_DIR = blocked;
+	try {
+		expect(await submitSurvey()).toEqual({ ok: true });
+		await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_UNAVAILABLE" });
+		expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	} finally {
+		process.env.THINKRAIL_DATA_DIR = dataDir;
+	}
+	await shutdownAnalytics();
+	expect(sent.filter((body) => body.includes('"survey sent"'))).toHaveLength(1);
+});
+
 test("feedback.survey.submit does not complete a survey whose answers were not sent", async () => {
 	launchSurvey();
 	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_NOT_SENT" });

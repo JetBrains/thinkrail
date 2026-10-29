@@ -1334,7 +1334,11 @@ const handlers: WsHandlers = {
 		if (!captureSurveyResponse(properties)) {
 			throw new CodedError("SURVEY_NOT_SENT", "Survey answers were not sent");
 		}
-		completeSurvey(survey.id, survey.iteration);
+		try {
+			completeSurvey(survey.id, survey.iteration);
+		} catch (error) {
+			log.warn("survey completion was not persisted", error);
+		}
 		return { ok: true } as const;
 	},
 	"client.reportError": (params) => {

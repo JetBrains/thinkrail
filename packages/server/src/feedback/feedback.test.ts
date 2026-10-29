@@ -12,7 +12,12 @@ import {
 	setFeedbackPublisher,
 	surveyIsCompleted,
 } from "./feedback";
-import { configureSurveySource, refreshInAppSurvey, resetSurveyForTests } from "./survey";
+import {
+	configureSurveySource,
+	refreshInAppSurvey,
+	resetSurveyForTests,
+	setSurveyClockForTests,
+} from "./survey";
 
 interface StoredFeedback {
 	acceptedMessages: number;
@@ -361,4 +366,48 @@ test("a malformed survey completion resets the file to the defaults", () => {
 	resetFeedbackForTests();
 	recordAcceptedMessage("client-a");
 	expect(stored()).toEqual(feedback({ acceptedMessages: 1 }));
+});
+
+test("an idle host does not invite from a copy it can no longer refresh", async () => {
+	let status = 200;
+	let at = 1_000;
+	setSurveyClockForTests(() => at);
+	configureSurveySource({
+		apiKey: "phc_test",
+		fetchImpl: (async () =>
+			status === 200
+				? new Response(
+						JSON.stringify([
+							{
+								id: "survey-1",
+								name: "in-app-feedback",
+								start_date: "2026-10-28T00:00:00.000Z",
+								questions: [{ id: "q1", type: "open", question: "How is it going?" }],
+							},
+						]),
+					)
+				: new Response("down", { status })) as unknown as typeof fetch,
+	});
+	await refreshInAppSurvey();
+	const delivered: string[] = [];
+	setFeedbackPublisher((clientKey) => {
+		delivered.push(clientKey);
+		return true;
+	});
+	for (let count = 0; count < 9; count += 1) recordAcceptedMessage("client-a");
+
+	status = 503;
+	at += 2 * 60 * 60 * 1000;
+	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	await refreshInAppSurvey();
+	expect(delivered).toEqual([]);
+
+	status = 200;
+	at += 15 * 60 * 1000;
+	recordAcceptedMessage("client-a");
+	await Bun.sleep(0);
+	await refreshInAppSurvey();
+	await Bun.sleep(0);
+	expect(delivered).toEqual(["client-a"]);
 });

@@ -320,3 +320,24 @@ test("a failed refresh drops a copy older than the stale lifetime, and confirm a
 	expect(await refreshInAppSurvey()).toBeNull();
 	expect(currentInAppSurvey()).toBeNull();
 });
+
+test("a cached copy expires an hour after its last successful read, even between retries", async () => {
+	let status = 200;
+	const fetchImpl = (() =>
+		Promise.resolve(
+			status === 200
+				? new Response(JSON.stringify({ surveys: [launched()] }), { status: 200 })
+				: new Response("nope", { status }),
+		)) as unknown as typeof fetch;
+	let at = 1_000;
+	setSurveyClockForTests(() => at);
+	configureSurveySource({ apiKey: "phc_test", fetchImpl });
+	expect(await refreshInAppSurvey()).not.toBeNull();
+
+	status = 500;
+	at += 59 * 60 * 1000;
+	expect(await refreshInAppSurvey()).not.toBeNull();
+	at += 2 * 60 * 1000;
+	expect(currentInAppSurvey()).toBeNull();
+	expect(await refreshInAppSurvey()).toBeNull();
+});

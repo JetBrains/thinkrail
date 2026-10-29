@@ -4,6 +4,7 @@ import { Button } from "@thinkrail/ui/button";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
 import { useRef, useState } from "react";
+import { randomUuid } from "@/lib";
 import { getTransport, wsErrorCode } from "@/transport";
 import {
 	committedAnswers,
@@ -32,7 +33,7 @@ export function SurveyForm({
 }) {
 	const t = useT();
 	const [questions] = useState(() => presentSurvey(survey));
-	const [submissionId] = useState(() => crypto.randomUUID());
+	const [submissionId] = useState(randomUuid);
 	const [step, setStep] = useState(0);
 	const [draft, setDraft] = useState<SurveyDraft>(emptySurveyDraft);
 	const [pending, setPending] = useState(false);
