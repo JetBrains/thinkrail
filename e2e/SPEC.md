@@ -114,7 +114,13 @@ using real responses; the old-host probe changes only the advertised protocol ve
 retirement focus probe supplies a completed child and persisted-form transcript at the wire seam, selects
 it in the inspector, then downgrades the next welcome; the UI, reconnect, capability retirement and Radix
 focus teardown remain real. This terminal-only fixture is not evidence of
-agent resource execution. Tagged provider-backed probes launch real commands and
+agent resource execution. The history probe writes a chat's resource archive (finished commands with one
+log tail, subagents, and runs a dead host left in flight) to the lane's data dir at the wire seam, just
+before the host's first resource read of that chat, so the real host loads it the way it would after a
+restart; it proves the dock's finished total, the inspector's per-kind fold, a real `session.resourceHistory`
+page, the archived log and an interrupted run's missing log. An archived in-flight record carries no
+authority — the host reads it as interrupted — so this is not a seeded running resource. `resetApp` clears
+the archive with the rest of the lane's state. Tagged provider-backed probes launch real commands and
 children through agent tools, inspect bounded plain-text logs/transcripts in the inspector, verify chat
 isolation, reload and closed-inspector completion, and exercise individual Stop and confirmed Stop all. They never
 select a model or seed a running-resource catalog. SDK faux-provider unit tests are not evidence of
