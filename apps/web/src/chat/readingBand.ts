@@ -10,10 +10,6 @@ const SCROLL_REQUEST_EPSILON = 1e-6;
 
 export type ReadingBandLatestEdge = "top" | "bottom";
 
-export interface ReadingBandMovement {
-	trigger: number;
-}
-
 export interface ReadingBandScrollBounds {
 	scrollTop: number;
 	maxScrollTop: number;
@@ -73,7 +69,6 @@ export interface ReadingBandController {
 	reconcileRoom: () => void;
 	settle: () => void;
 	setStreaming: (streaming: boolean) => void;
-	setMovement: (movement: ReadingBandMovement) => void;
 	setLatestEdge: (edge: ReadingBandLatestEdge) => void;
 	dispose: () => void;
 }
@@ -151,16 +146,13 @@ export function createReadingBandController(
 	{
 		streaming,
 		latestEdge = "bottom",
-		movement: initialMovement,
 		mountPending: initialMountPending = false,
 	}: {
 		streaming: boolean;
 		latestEdge?: ReadingBandLatestEdge;
-		movement: ReadingBandMovement;
 		mountPending?: boolean;
 	},
 ): ReadingBandController {
-	let movement = initialMovement;
 	let state: ReadingBandState = {
 		following: true,
 		moving: false,
@@ -180,7 +172,6 @@ export function createReadingBandController(
 	let lastEdgeRef: EdgeRef | null = null;
 	const edgeHistory: EdgeRef[] = [];
 	let capRef: { id: string; offset: number; released: number; since: number } | null = null;
-	let burstUntil = Number.NEGATIVE_INFINITY;
 	let nativeInputPending = false;
 	let settlementAfterInput = false;
 	let nativeInputToken = 0;
@@ -453,7 +444,6 @@ export function createReadingBandController(
 		lastEdgeRef = null;
 		edgeHistory.length = 0;
 		capRef = null;
-		burstUntil = Number.NEGATIVE_INFINITY;
 	};
 
 	const rebaseFollowCap = () => {
@@ -485,10 +475,7 @@ export function createReadingBandController(
 
 	const pinLineTarget = (geometry: ReadingBandGeometry): number | null => {
 		if (geometry.edgeBottom === null) return null;
-		return Math.max(
-			0,
-			geometry.scrollTop + geometry.edgeBottom - geometry.viewportHeight * (movement.trigger / 100),
-		);
+		return Math.max(0, geometry.scrollTop + geometry.edgeBottom - geometry.viewportHeight);
 	};
 
 	const followTarget = (geometry: ReadingBandGeometry): number | null => {
@@ -496,13 +483,11 @@ export function createReadingBandController(
 		if (pinned === null || geometry.edgeBottom === null || latestEdge !== "bottom") return pinned;
 		const edgeDoc = geometry.scrollTop + geometry.edgeBottom;
 		const inset = turnInset(geometry.viewportHeight);
-		const pinLine = geometry.viewportHeight * (movement.trigger / 100);
-		const readingSpace = pinLine - inset;
-		const previousRef = lastEdgeRef;
+		const readingSpace = geometry.viewportHeight - inset;
 		let growth = 0;
-		if (previousRef !== null) {
-			const referenceTop = environment.readRowTop(previousRef.id);
-			if (referenceTop !== null) growth = edgeDoc - referenceTop - previousRef.offset;
+		if (lastEdgeRef !== null) {
+			const referenceTop = environment.readRowTop(lastEdgeRef.id);
+			if (referenceTop !== null) growth = edgeDoc - referenceTop - lastEdgeRef.offset;
 		}
 		const referenceRow = environment.readReferenceRow();
 		const now = environment.now();
@@ -511,30 +496,23 @@ export function createReadingBandController(
 			: null;
 		const seenRef = seenEdge(now);
 		if (lastEdgeRef !== null) edgeHistory.push(lastEdgeRef);
-		const tallGrowth = growth > readingSpace + GEOMETRY_EPSILON;
 		if (capRef !== null) {
 			const arriving = now - capRef.since < TALL_ARRIVAL_SETTLE_MS;
 			if (!arriving && growth > 0) capRef.released += 2 * Math.min(growth, readingSpace);
-		} else if (previousRef !== null && tallGrowth && now >= burstUntil) {
-			capRef = { id: previousRef.id, offset: previousRef.offset - inset, released: 0, since: now };
 		} else if (seenRef !== null) {
 			const seenTop = environment.readRowTop(seenRef.id);
 			if (
 				seenTop !== null &&
-				edgeDoc - (seenTop + seenRef.offset) > geometry.viewportHeight - inset + GEOMETRY_EPSILON
+				edgeDoc - (seenTop + seenRef.offset) > readingSpace + GEOMETRY_EPSILON
 			) {
 				capRef = { id: seenRef.id, offset: seenRef.offset - inset, released: 0, since: now };
 			}
 		}
-		if (capRef === null) {
-			if (tallGrowth) burstUntil = now + TALL_ARRIVAL_SETTLE_MS;
-			return pinned;
-		}
+		if (capRef === null) return pinned;
 		const capTop = environment.readRowTop(capRef.id);
 		const capped = capTop === null ? null : capTop + capRef.offset + capRef.released;
 		if (capped === null || capped >= pinned - GEOMETRY_EPSILON) {
 			capRef = null;
-			burstUntil = now + TALL_ARRIVAL_SETTLE_MS;
 			edgeHistory.length = 0;
 			if (lastEdgeRef !== null) edgeHistory.push(lastEdgeRef);
 			return pinned;
@@ -1002,10 +980,6 @@ export function createReadingBandController(
 			immediateTurnPending = false;
 			runwaySuppressed = false;
 			publish({ streaming: true, runway: runwayHeight > GEOMETRY_EPSILON || state.following });
-		},
-		setMovement: (nextMovement) => {
-			movement = nextMovement;
-			contentChanged();
 		},
 		setLatestEdge: (edge) => {
 			if (edge === latestEdge) return;
