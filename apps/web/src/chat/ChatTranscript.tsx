@@ -52,7 +52,7 @@ import {
 } from "./rows";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
 import { ChatTurnView } from "./turns";
-import { useChatScroll } from "./useChatScroll";
+import { type ChatReadingPosition, useChatScroll } from "./useChatScroll";
 import { useTranscriptSync } from "./useTranscriptSync";
 import { useWindowFocused } from "./useWindowFocused";
 import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
@@ -312,6 +312,26 @@ const ChatTranscript = forwardRef<
 		return row ? { id: row.id, index } : null;
 	}, [chatMessageOrder, rows]);
 
+	const locationRowsRef = useRef(rows);
+	const locationTurnsRef = useRef(turns);
+	const locationTurnMapRef = useRef(runtime.turnIdByMessageIndex);
+	useInsertionEffect(() => {
+		locationRowsRef.current = rows;
+		locationTurnsRef.current = turns;
+		locationTurnMapRef.current = runtime.turnIdByMessageIndex;
+	});
+	const [readingRestore] = useState(
+		() => useAppStore.getState().sessions[sessionId]?.readingAnchor ?? null,
+	);
+	const readingPosition = useMemo<ChatReadingPosition>(
+		() => ({
+			restore: readingRestore,
+			resolveIndex: (rowId) => locationRowsRef.current.findIndex((row) => row.id === rowId),
+			save: (anchor) => useAppStore.getState().setChatReadingAnchor(sessionId, anchor),
+		}),
+		[readingRestore, sessionId],
+	);
+
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const {
 		followOutput,
@@ -344,6 +364,7 @@ const ChatTranscript = forwardRef<
 		firstItemIndex,
 		rowHeightEstimates,
 		streamingResponseMovement,
+		readingPosition,
 	);
 
 	const readyCompletionId = useAppStore((state) =>
@@ -418,14 +439,6 @@ const ChatTranscript = forwardRef<
 
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const activeChatLocationReveal = useRef<typeof chatLocationRequest>(null);
-	const locationRowsRef = useRef(rows);
-	const locationTurnsRef = useRef(turns);
-	const locationTurnMapRef = useRef(runtime.turnIdByMessageIndex);
-	useInsertionEffect(() => {
-		locationRowsRef.current = rows;
-		locationTurnsRef.current = turns;
-		locationTurnMapRef.current = runtime.turnIdByMessageIndex;
-	});
 	const locationRowsReady = rows.length > 0;
 	const [flashRowId, setFlashRowId] = useState<string | null>(null);
 

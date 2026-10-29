@@ -208,6 +208,32 @@ async function moveIntoStableHistory(
 	throw new Error("chat did not remain positioned in history");
 }
 
+const chatTabs = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+
+async function readTopVisibleRow(chatScroll: Locator): Promise<{ id: string; top: number }> {
+	return chatScroll.evaluate((root) => {
+		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+		if (!scroller) throw new Error("missing Virtuoso scroller");
+		const viewportTop = scroller.getBoundingClientRect().top;
+		for (const row of scroller.querySelectorAll<HTMLElement>("[data-chat-row-id]")) {
+			const rect = row.getBoundingClientRect();
+			if (rect.bottom > viewportTop + 1) {
+				return { id: row.dataset.chatRowId ?? "", top: rect.top - viewportTop };
+			}
+		}
+		throw new Error("no visible chat row");
+	});
+}
+
+async function switchAwayAndBack(page: Page): Promise<void> {
+	await expect(chatTabs(page)).toHaveCount(1);
+	await page.getByTestId("new-chat").first().click();
+	await expect(chatTabs(page)).toHaveCount(2);
+	await expect(chatTabs(page).first()).toHaveAttribute("data-active", "false");
+	await chatTabs(page).first().getByRole("tab").click();
+	await expect(chatTabs(page).first()).toHaveAttribute("data-active", "true");
+}
+
 async function openTallChat(
 	page: Page,
 	order: MessageOrder,
@@ -676,6 +702,73 @@ for (const testCase of orderCases) {
 				);
 			}
 			await expect(page.getByTestId("stream-indicator")).toHaveCount(0);
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
+
+	test(`${testCase.order} restores a history reading position across a tab switch`, async ({
+		page,
+	}) => {
+		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		try {
+			await moveIntoStableHistory(page, chatScroll, testCase.order, testCase.historyWheel);
+			for (let step = 0; step < 3; step += 1) {
+				await page.mouse.wheel(0, testCase.historyWheel);
+				await waitForScrollStability(chatScroll);
+			}
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			const reading = await readTopVisibleRow(chatScroll);
+
+			await switchAwayAndBack(page);
+
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			await waitForScrollStability(chatScroll);
+			const restored = await readTopVisibleRow(chatScroll);
+			expect(restored.id).toBe(reading.id);
+			expect(Math.abs(restored.top - reading.top)).toBeLessThanOrEqual(2);
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
+
+	test(`${testCase.order} lets the reader move right after a restored tab switch`, async ({
+		page,
+	}) => {
+		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		try {
+			await moveIntoStableHistory(page, chatScroll, testCase.order, testCase.historyWheel);
+			for (let step = 0; step < 3; step += 1) {
+				await page.mouse.wheel(0, testCase.historyWheel);
+				await waitForScrollStability(chatScroll);
+			}
+			const reading = await readTopVisibleRow(chatScroll);
+
+			await switchAwayAndBack(page);
+			await moveMouseToChatViewport(page, chatScroll);
+			await page.mouse.wheel(0, -testCase.historyWheel);
+
+			await waitForScrollStability(chatScroll);
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			const moved = await readTopVisibleRow(chatScroll);
+			expect(moved.id === reading.id && Math.abs(moved.top - reading.top) <= 2).toBe(false);
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
+
+	test(`${testCase.order} keeps following the latest edge across a tab switch`, async ({
+		page,
+	}) => {
+		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		try {
+			await switchAwayAndBack(page);
+
+			await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+			await waitForScrollStability(chatScroll);
+			expect(
+				latestDistance(testCase.order, await readChatScrollGeometry(chatScroll)),
+			).toBeLessThanOrEqual(1);
 		} finally {
 			rmSync(session.path, { force: true });
 		}

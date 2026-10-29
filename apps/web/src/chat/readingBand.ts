@@ -50,6 +50,7 @@ export interface ReadingBandController {
 	getSnapshot: () => ReadingBandSnapshot;
 	getMotionKind: () => "alignment" | "mount" | "anchor" | "reveal" | "settlement" | "follow" | null;
 	isNativeInputPending: () => boolean;
+	isMountPending: () => boolean;
 	restoreScrollTop: (desired: number) => void;
 	reserveRoom: (height: number) => void;
 	armImmediateTurn: () => void;
@@ -821,6 +822,7 @@ export function createReadingBandController(
 		getSnapshot: () => snapshotOf(state),
 		getMotionKind: () => motion?.kind ?? null,
 		isNativeInputPending: () => nativeInputPending,
+		isMountPending: () => mountPending,
 		reserveRoom: (height) => {
 			if (!(height > GEOMETRY_EPSILON)) return;
 			writeRunwayHeight(runwayHeight + height);

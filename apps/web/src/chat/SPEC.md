@@ -618,7 +618,18 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   a new turn, or any controller reveal or anchor stabilization (jump-to-message, automatic card reveal,
   fold) cancels a pending placement; that motion then owns the position. Switching order re-arms placement
   because preserving a pixel position across total reversal has no stable meaning. There is no
-  intermediate wrong-edge paint or cross-order animation. Initial virtual geometry is
+  intermediate wrong-edge paint or cross-order animation.
+- **A detached reader keeps their place across remounts** — only the selected tab's body is mounted, so
+  switching chat tabs unmounts the transcript (#971). On unmount, once placement has finished, the
+  transcript writes the session runtime's `readingAnchor`: the topmost visible row id and its viewport
+  offset while detached, or `null` while following. A mount that finds an anchor detaches instead of
+  placing at the latest edge, materializes the row through the same cancellable measured-size
+  materialization as row reveal (never Virtuoso's retrying `scrollToIndex`), writes the exact
+  offset at once, and holds it with the anchor-stabilization motion through measurement frames. Reader
+  input during that wait wins; a row that never materializes within the bounded wait returns to the
+  latest edge. A following reader is never restored, so a streaming chat keeps following on return.
+  Neither a pending placement nor a pending restore writes an anchor, so a StrictMode re-mount or a
+  quick switch away cannot overwrite the reader's place with a transient position. Initial virtual geometry is
   **row-aware**: each projected row receives a conservative estimate derived from prose wrapping, block
   breaks, and physical fenced-code lines without splitting one canonical Markdown block. The estimates mirror the
   rendered row chrome (row and bubble padding, paragraph gaps, the prose line height, the height floor) and move with it: a density
