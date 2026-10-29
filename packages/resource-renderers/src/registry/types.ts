@@ -72,6 +72,7 @@ export interface ResourceViewProps {
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
 	reveal?: ResourceReveal;
+	onRevealHandled?(tick: number): void;
 }
 
 export interface HunkActions {

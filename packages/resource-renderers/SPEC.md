@@ -53,11 +53,13 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   text view that receives `ResourceViewProps.reveal` (`{ line, column?, length?, tick }`) scrolls that line
   into view and marks it (the Pierre file view through its virtualizer's `revealLine`, retried over a few
   frames until the line is laid out, then `selectedLines`; the desktop Monaco view through
-  `revealLineNow` on a fresh mount — the same immediate-scroll rule as a review focus — or
-  `revealLineInCenter` later, selecting `column`..`column + length`); a caller repeats a reveal of the same
-  line by bumping `tick`, and names the source renderer by id so a Markdown or HTML file opens at a line
-  rather than as its rendered document. Only the code renderer's views honour `reveal`; the others ignore
-  it, so a reveal through a rich renderer is a plain open;
+  `revealLineNow`, an immediate scroll on a fresh mount and later alike — a smooth scroll to a far line is
+  cut short by the next layout — selecting `column`..`column + length`) and then reports the applied `tick`
+  through `ResourceViewProps.onRevealHandled`, so a caller that keeps the reveal (a tab) can drop it and a
+  remount restores the saved view state rather than the old hit; a caller repeats a reveal of the same line
+  by bumping `tick`, and names the source renderer by id so a Markdown or HTML file opens at a line rather
+  than as its rendered document. Only the code renderer's views honour `reveal`; the others ignore it, so
+  a reveal through a rich renderer is a plain open;
 - the pieces every surface composes a renderer from, so a file tab, a diff tab, a Changes section and
   `ResourcePreview` run one sequence:
   - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the

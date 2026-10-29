@@ -30,7 +30,7 @@ const { useAppStore } = await import("../store");
 type WorkspaceLayoutDocument = ReturnType<
 	typeof useAppStore.getState
 >["layoutDocumentsByWorkspace"][string];
-const { openChangesTab, openDiffInTab } = await import("./openTabs");
+const { openChangesTab, openDiffInTab, openFileAtLine } = await import("./openTabs");
 
 const workspace = (overrides: Partial<Workspace> = {}): Workspace => ({
 	id: "w1",
@@ -114,6 +114,22 @@ test("a dblclick arriving while the read is in flight publishes only the final k
 		.layoutIntents.filter((intent) => intent.kind === "open" && intent.workspaceId === "w1");
 	expect(opens).toHaveLength(1);
 	expect(opens[0]).toMatchObject({ kind: "open", intent: "keep", claimPreview: true });
+});
+
+test("a second open at a line while the file's read is in flight waits for it and reveals last", async () => {
+	const first = openFileAtLine("w1", "src/a.ts", { line: 3 }, "keep");
+	const second = openFileAtLine("w1", "src/a.ts", { line: 20, column: 2, length: 4 }, "keep");
+	expect(requests.map((request) => request.method)).toEqual(["fs.readFile"]);
+	pending?.resolve({
+		content: { kind: "text", text: "x" },
+		meta: { hash: "h", byteLength: 1, text: true },
+	});
+	await Promise.all([first, second]);
+
+	const tabs = useAppStore.getState().tabsByWorkspace.w1 ?? [];
+	expect(tabs).toHaveLength(1);
+	const [tab] = tabs;
+	expect(tab?.kind === "file" && tab.reveal).toEqual({ line: 20, column: 2, length: 4, tick: 2 });
 });
 
 const cacheKeptDiffTab = () => {

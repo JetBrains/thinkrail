@@ -1,6 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import type { editor } from "monaco-editor/editor/editor.api.js";
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffectEvent, useId, useLayoutEffect, useRef, useState } from "react";
 import { type ResourceHost, useResourceHost, useResourcePreferences } from "../host";
 import type { ResourceDescriptor, ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
@@ -45,6 +45,7 @@ export default function MonacoEditor({
 	viewState,
 	onViewState,
 	reveal,
+	onRevealHandled,
 }: ResourceViewProps) {
 	const t = useT();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
@@ -60,7 +61,6 @@ export default function MonacoEditor({
 	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
 	const decorationsRef = useRef<string[]>([]);
 	const freshMountRef = useRef(false);
-	const revealMountRef = useRef(false);
 	const appliedRef = useRef({ scope, path, text, options });
 	const latestRef = useRef({
 		scope,
@@ -97,7 +97,6 @@ export default function MonacoEditor({
 		const codeEditor = createFileEditor(container, mount);
 		editorRef.current = codeEditor;
 		freshMountRef.current = true;
-		revealMountRef.current = true;
 		appliedRef.current = {
 			scope: mount.scope,
 			path: mount.path,
@@ -175,13 +174,11 @@ export default function MonacoEditor({
 	const revealColumn = reveal?.column;
 	const revealLength = reveal?.length;
 	const revealTick = reveal?.tick;
+	const revealHandled = useEffectEvent((tick: number) => onRevealHandled?.(tick));
 	useLayoutEffect(() => {
 		const codeEditor = editorRef.current;
-		const freshMount = revealMountRef.current;
-		revealMountRef.current = false;
 		if (!codeEditor || revealLine === undefined || revealTick === undefined) return;
-		if (freshMount) revealLineNow(codeEditor, revealLine);
-		else codeEditor.revealLineInCenter(revealLine);
+		revealLineNow(codeEditor, revealLine);
 		const column = revealColumn ?? 1;
 		codeEditor.setSelection({
 			startLineNumber: revealLine,
@@ -189,6 +186,7 @@ export default function MonacoEditor({
 			endLineNumber: revealLine,
 			endColumn: column + (revealLength ?? 0),
 		});
+		revealHandled(revealTick);
 	}, [revealLine, revealColumn, revealLength, revealTick]);
 
 	return (

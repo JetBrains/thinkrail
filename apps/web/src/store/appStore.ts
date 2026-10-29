@@ -1215,6 +1215,7 @@ interface AppState {
 		at: Omit<FileReveal, "tick">,
 		rendererId?: string,
 	) => void;
+	clearFileTabReveal: (workspaceId: string, id: string, tick: number) => void;
 	setTabViewState: (workspaceId: string, id: string, viewState: unknown) => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
 	setDiffTabIgnoreWhitespace: (id: string, ignoreWhitespace: boolean) => void;
@@ -3160,6 +3161,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 					next.rendererId = rendererId;
 					delete next.viewState;
 				}
+				return next;
+			});
+		}),
+	clearFileTabReveal: (workspaceId, id, tick) =>
+		set((s) => {
+			const tab = (s.tabsByWorkspace[workspaceId] ?? []).find((candidate) => candidate.id === id);
+			if (tab?.kind !== "file" || tab.reveal?.tick !== tick) return {};
+			return patchResourceTab(s, workspaceId, id, (current) => {
+				if (current.kind !== "file") return current;
+				const next: FileTab = { ...current };
+				delete next.reveal;
 				return next;
 			});
 		}),

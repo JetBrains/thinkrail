@@ -2278,10 +2278,13 @@ own section. The kebab menu (`plan-menu`, a
   download. The candidate list alone determines whether the resource toggle exists. No format predicate or
   preview/source field remains in the pane or tab. A tab's `reveal` (the store's `FileReveal`) is passed
   through to the mounted view as the renderer contract's `reveal`, so the code renderer scrolls to and marks
-  that line; `openTabs.ts`' **`openFileAtLine(workspaceId, path, at, intent)`** is the one open-at-a-line
-  entry (Find in Files' `↵` / `⌘↵`): the ordinary `openFileInTab` at the caller's intent, then
-  `revealFileTab` naming `SOURCE_RENDERER_ID`, so a Markdown or HTML file opens as source at the line rather
-  than as its rendered document.
+  that line, and the view's `onRevealHandled` clears it (`clearFileTabReveal`) so a later remount keeps the
+  reading position; `openTabs.ts`' **`openFileAtLine(workspaceId, path, at, intent)`** is the one
+  open-at-a-line entry (Find in Files' `↵` / `⌘↵`): the ordinary `openFileInTab` at the caller's intent,
+  then `revealFileTab` naming `SOURCE_RENDERER_ID`, so a Markdown or HTML file opens as source at the line
+  rather than as its rendered document. An open that finds a read of the same file in flight joins it —
+  `openReadTab` hands every caller that read's completion — so each caller reveals after the tab is
+  installed, in call order, and the latest hit wins.
 
   `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
   source-line stamps, review commenting, and bounded reading measure described above. These are renderer

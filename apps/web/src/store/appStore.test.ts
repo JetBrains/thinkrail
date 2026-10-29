@@ -5166,3 +5166,16 @@ test("revealFileTab stamps a reveal on the file tab, repeats through tick, and s
 	s().revealFileTab("ws1", "src/missing.ts", { line: 1 });
 	expect(s().tabsByWorkspace.ws1).toHaveLength(1);
 });
+
+test("a reveal the view handled is cleared, and only for its own tick, so a remount keeps the reading position", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	s().openTab(fileTab("ws1", "src/a.ts"), "keep");
+	s().revealFileTab("ws1", "src/a.ts", { line: 4 });
+	s().revealFileTab("ws1", "src/a.ts", { line: 9 });
+	const before = s().tabsByWorkspace;
+	s().clearFileTabReveal("ws1", "ws1:src/a.ts", 1);
+	expect(s().tabsByWorkspace).toBe(before);
+	s().clearFileTabReveal("ws1", "ws1:src/a.ts", 2);
+	expect(s().tabsByWorkspace.ws1?.[0]).not.toHaveProperty("reveal");
+});

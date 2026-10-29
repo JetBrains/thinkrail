@@ -29,15 +29,15 @@ function baseName(path: string): string {
 	return path.split("/").pop() || path;
 }
 
-const inFlight = new Map<
-	string,
-	{
-		intent: TabIntent;
-		claimPreview: boolean;
-		navigation: CenterNavigationStamp | null;
-		requestedAt: number;
-	}
->();
+interface ReadFlight {
+	intent: TabIntent;
+	claimPreview: boolean;
+	navigation: CenterNavigationStamp | null;
+	requestedAt: number;
+	done: Promise<void>;
+}
+
+const inFlight = new Map<string, ReadFlight>();
 
 function navTick(workspaceId: string): number {
 	return selectWorkspaceNavTick(useAppStore.getState(), workspaceId);
@@ -66,7 +66,7 @@ async function openReadTab<T>(
 		if (intent === "keep") pending.intent = "keep";
 		pending.navigation = navigation;
 		pending.requestedAt = navTick(workspaceId);
-		return;
+		return pending.done;
 	}
 	const cached = (store.tabsByWorkspace[workspaceId] ?? []).find(
 		(tab) =>
@@ -82,14 +82,28 @@ async function openReadTab<T>(
 		store.openTab(cached, intent, true, claim ? { ...options, claimPreview: true } : options);
 		return;
 	}
-	const flight = {
+	const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
+	const flight: ReadFlight = {
 		intent,
 		claimPreview: intent === "preview" || claimPreview,
 		navigation,
 		requestedAt: navTick(workspaceId),
+		done: Promise.resolve(),
 	};
 	inFlight.set(id, flight);
-	const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
+	flight.done = installRead(workspaceId, id, resourceIdentity, flight, loadedTick, read, build);
+	return flight.done;
+}
+
+async function installRead<T>(
+	workspaceId: string,
+	id: string,
+	resourceIdentity: string,
+	flight: ReadFlight,
+	loadedTick: number,
+	read: () => Promise<T>,
+	build: (payload: T, loadedTick: number) => EditorTab,
+): Promise<void> {
 	try {
 		const payload = await read();
 		const currentState = useAppStore.getState();
