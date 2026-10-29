@@ -87,7 +87,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   convergences for a git-metadata write in a watched worktree: `recordWorkspaceHead` (the settled
   lifecycle's commit proxy — stamps activity only when the sha actually moved, see
   [[submodule-server-workspaces]]),
-  `refreshUserOwnedWorkspace` (**re-sync a user-owned workspace's folder-truth branch** — host-mediated,
+  `syncWorkspaceBranch` (**re-sync a workspace's branch to its live checkout**, any kind — host-mediated,
   since `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
   pathless, skill-neutral `fsChanged` frame (`paths: []`, `truncated: false`, `skillChange: "none"`) so the
   clients' `HEAD`-relative reads
@@ -418,7 +418,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
     subagent child — gets an error result.
   - `chat_title` → `renameSession(…, { onlyIfUnnamed: true })`. `workspace_name` → only when the workspace
     is managed (not `default`/`external`) and not `renamed`, via `renameWorkspace(id, name, { branch })`
-    (locks it, moves the branch once). There is no branch-shape gate, so records an older host's
+    (locks the name; moves the branch only while the workspace is on its own branch, never an adopted one or a
+    detached `HEAD`; when the branch is kept the name is still set and the result text says which branch
+    was kept, why, and that a later call can still move it — see [[submodule-server-workspaces]]). A `renamed` record whose `branchNamePending`
+    is this chat's session id accepts one more call with a `branch` (`branchMoveOwed`): the name stays, only
+    the branch moves. Other chats get "already named". There is no branch-shape gate, so records an older host's
     provisional pass left unlocked are still nameable.
   - The result text states, per target, whether it was applied or kept because it was already named, so
     the agent stops. A `branch` without a usable `workspace_name` is rejected before any write (the slug
@@ -426,7 +430,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
     `workspace_name` while the workspace is still nameable is rejected the same way: a success result
     that asked the agent to "call again" was ignored live (Opus named the chat, then moved on), and one
     call keeps chat and workspace names in agreement. The first name is final, and a manual rename always wins.
-  - `workspaceNeedsName(sessionId)` uses the same eligibility rule (managed, not `renamed`), so agent's
+  - `workspaceNeedsName(sessionId)` and the chat-only guard use one pure rule (managed and not `renamed`;
+    an owed branch move never counts as unnamed and never re-prompts), so agent's
     turn-start `pending-naming` reminder and the write policy can't disagree.
   - A target the agent never names stays unnamed; there is no fallback.
   - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
@@ -596,7 +601,10 @@ enabled/confirmed choice before entering analytics attribution.
   so switching branches never inherits the old branch's 30-minute delay; a fresh
   `workspace.openReview` or `workspace.branchStatus` for the active workspace also writes the snapshot, so the
   active row is always current. Both writers pass the branch the lookup was made for, and `workspaces` drops an answer whose
-  branch has moved underneath it. **Protocol skew:** `RequestContext.protocolVersion` is the socket's
+  branch has moved underneath it. All three go through `findWorkspaceReviewOutcome`, which **never looks up
+  a review while a workspace of any kind sits on its base branch** (`pr`'s `onBaseBranch`): `gh pr list
+  --head main` matches any fork's `main` and would mark the row settled with a foreign PR. It answers a
+  reliable `null`, so a foreign snapshot stored earlier is cleared. **Protocol skew:** `RequestContext.protocolVersion` is the socket's
   advertised protocol (absent for in-process callers, who speak the current one); `workspace.openReview`
   (and `workspace.branchStatus`, whose callers are always newer) answers a client older than `WORKSPACE_SETTLE_PROTOCOL_VERSION` with `null` for a merged or closed
   review, because such a client reads any review as an open PR and its plan pane would offer *Push

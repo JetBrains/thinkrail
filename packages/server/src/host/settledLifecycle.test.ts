@@ -11,14 +11,22 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SETTLE_IDLE_DAYS, type SessionStateRecord, type Workspace } from "@thinkrail/contracts";
+import { onBaseBranch } from "../pr";
 import { resetConfigCache, updateConfig } from "../settings";
 import {
 	createWorkspace,
 	listWorkspaceRecords,
 	openExistingWorktree,
 	settleWorkspace,
+	setWorkspaceReview,
+	syncWorkspaceBranch,
 } from "../workspaces";
-import { reviewRefreshRows, scheduleLifecyclePass, stampSessionActivity } from "./settledLifecycle";
+import {
+	findWorkspaceReviewOutcome,
+	reviewRefreshRows,
+	scheduleLifecyclePass,
+	stampSessionActivity,
+} from "./settledLifecycle";
 
 let dataDir: string;
 let repo: string;
@@ -126,6 +134,43 @@ test("the lifecycle pass backfills an external worktree from its gitfile, not fr
 
 	const after = listWorkspaceRecords("p1").find((r) => r.id === attached.id);
 	expect(after?.lastActiveAt).toBe(gitfileAt);
+});
+
+test("no review lookup runs on the base branch, and the lifecycle pass clears a stored foreign review", async () => {
+	expect(await findWorkspaceReviewOutcome(row({ branch: "main" }), { fresh: true })).toEqual({
+		reliable: true,
+		value: null,
+	});
+	expect(
+		await findWorkspaceReviewOutcome(
+			row({ kind: "default", branch: "main", baseBranch: "origin/main" }),
+			{ fresh: true },
+		),
+	).toEqual({ reliable: true, value: null });
+
+	const ws = await createWorkspace("p1");
+	git(repo, "switch", "-c", "elsewhere");
+	git(ws.worktreePath, "switch", "main");
+	syncWorkspaceBranch(ws.id);
+	setWorkspaceReview(ws.id, { kind: "pull-request", number: 501, state: "open" }, "main");
+
+	await scheduleLifecyclePass("p1");
+
+	const after = listWorkspaceRecords("p1").find((r) => r.id === ws.id);
+	expect(after).toMatchObject({ branch: "main" });
+	expect(after?.review).toBeUndefined();
+});
+
+test("a base on a non-origin remote still counts as the base branch", async () => {
+	git(repo, "remote", "add", "upstream", repo);
+	const base = { worktreePath: repo, branch: "main" };
+	expect(onBaseBranch({ ...base, baseBranch: "upstream/main" })).toBe(true);
+	expect(onBaseBranch({ ...base, baseBranch: "fork/main" })).toBe(false);
+	expect(
+		await findWorkspaceReviewOutcome(row({ ...base, baseBranch: "upstream/main" }), {
+			fresh: true,
+		}),
+	).toEqual({ reliable: true, value: null });
 });
 
 test("a running session stamps its workspace; idle state changes do not", async () => {

@@ -75,12 +75,13 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     *linked worktree* (every workspace this app creates) `.git` is a *file* (`gitdir: <path>`) pointing at
     `<repo>/.git/worktrees/<name>`, i.e. **outside the watched root**, so a commit made in that worktree's
     terminal would otherwise produce no signal at all. Resolved with plain fs (stat + parse the gitfile
-    line), never by shelling out — this module has no `git` sibling edge. Non-recursive because only the
+    line), never by shelling out — this module has no `git` sibling edge (`git`'s `headBranchAt` mirrors
+    the same gitfile parse for the same reason). Non-recursive because only the
     dir's top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) while `objects/`/`logs/` are
     pure storms; a missing/unreadable git dir (non-git folder) or a failed start degrades silently.
 
-  `host` fans the nudge out to two convergences: `refreshUserOwnedWorkspace` (a user-owned workspace's
-  folder-truth branch labels) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
+  `host` fans the nudge out to two convergences: `syncWorkspaceBranch` (a workspace's branch label follows
+  its live checkout) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
   `truncated: false`, `skillChange: "none"`) so the clients' git-derived reads re-read — `git.status` and an
   open `uncommitted`-scope diff tab are relative to `HEAD`, and would otherwise keep reporting a committed
   change as uncommitted until the next file edit.

@@ -19,6 +19,7 @@ import {
 	currentBranch,
 	git,
 	gitAsync,
+	headBranchAt,
 	headShaAt,
 	listRemotes,
 	remoteNameOf,
@@ -212,6 +213,10 @@ function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: st
 	return true;
 }
 
+function adoptBranch(ws: Workspace, branch: string | null): boolean {
+	return branch !== null && applyFolderTruth(ws, { branch, baseBranch: ws.baseBranch });
+}
+
 async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
 	try {
 		const result = await gitAsync(
@@ -371,9 +376,37 @@ export function completeInitialTerminalReservation(workspaceId: string): Workspa
 	return workspace;
 }
 
-export function refreshUserOwnedWorkspace(workspaceId: string): void {
+function adoptManagedBranches(projectId: string): void {
+	const all = loadWorkspaces();
+	const changed: Workspace[] = [];
+	for (const workspace of all) {
+		if (workspace.kind !== undefined || workspace.projectId !== projectId) continue;
+		if (adoptBranch(workspace, headBranchAt(workspace.worktreePath))) changed.push(workspace);
+	}
+	if (changed.length === 0) return;
+	saveWorkspaces(all);
+	for (const workspace of changed) emit({ kind: "updated", workspace });
+}
+
+function syncManagedBranch(workspaceId: string): string | null {
+	const all = loadWorkspaces();
+	const workspace = all.find((candidate) => candidate.id === workspaceId);
+	if (!workspace || workspace.kind !== undefined) return null;
+	const live = headBranchAt(workspace.worktreePath);
+	if (adoptBranch(workspace, live)) {
+		saveWorkspaces(all);
+		emit({ kind: "updated", workspace });
+	}
+	return live;
+}
+
+export function syncWorkspaceBranch(workspaceId: string): void {
 	const peek = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
-	if (peek?.kind !== "default" && peek?.kind !== "external") return;
+	if (!peek) return;
+	if (peek.kind === undefined) {
+		syncManagedBranch(workspaceId);
+		return;
+	}
 	const truth =
 		peek.kind === "default"
 			? { kind: "default" as const, ...folderTruth(peek.worktreePath) }
@@ -385,33 +418,54 @@ export function refreshUserOwnedWorkspace(workspaceId: string): void {
 
 	const all = loadWorkspaces();
 	const workspace = all.find((candidate) => candidate.id === workspaceId);
-	if (workspace?.kind !== truth.kind) return;
-	if (truth.kind === "default") {
-		if (!applyFolderTruth(workspace, truth)) return;
-	} else {
-		if (!applyFolderTruth(workspace, { branch: truth.branch, baseBranch: workspace.baseBranch }))
-			return;
-	}
+	const drifted =
+		workspace?.kind === truth.kind &&
+		(truth.kind === "default"
+			? applyFolderTruth(workspace, truth)
+			: adoptBranch(workspace, truth.branch));
+	if (!drifted) return;
 	saveWorkspaces(all);
 	emit({ kind: "updated", workspace });
+}
+
+function onOwnBranch(workspace: Pick<Workspace, "branch" | "worktreePath">): boolean {
+	return workspace.branch === basename(workspace.worktreePath);
+}
+
+export function branchMoveOwed(
+	workspace: Pick<Workspace, "renamed" | "branchNamePending">,
+	by: string | undefined,
+): boolean {
+	return !workspace.renamed || (by !== undefined && workspace.branchNamePending === by);
+}
+
+function keptBranchReason(workspace: Workspace, live: string | null) {
+	if (live === null) return "detached" as const;
+	if (!onOwnBranch(workspace)) return "not-own" as const;
+	return undefined;
 }
 
 export function renameWorkspace(
 	id: string,
 	requestedName: string,
-	opts: { branch?: string } = {},
-): Workspace {
+	opts: { branch?: string; by?: string } = {},
+) {
+	const peek = loadWorkspaces().find((w) => w.id === id);
+	if (peek?.kind === "default") throw new Error("The Default workspace cannot be renamed");
+	if (peek?.kind === "external")
+		throw new Error("An existing worktree cannot be renamed by ThinkRail");
+	const live = syncManagedBranch(id);
 	const ws = loadWorkspaces().find((w) => w.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
 	const project = getProjects().find((p) => p.id === ws.projectId);
 	if (!project) throw new Error(`Unknown project: ${ws.projectId}`);
 
-	if (ws.kind === "default") throw new Error("The Default workspace cannot be renamed");
-	if (ws.kind === "external")
-		throw new Error("An existing worktree cannot be renamed by ThinkRail");
 	const displayName = toDisplayName(requestedName);
 	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
-	const wanted = opts.branch === undefined ? "" : branchSlug(opts.branch);
+	const requested = opts.branch?.trim() ? opts.branch : undefined;
+	const movable = requested !== undefined && branchMoveOwed(ws, opts.by);
+	const branchKept = movable ? keptBranchReason(ws, live) : undefined;
+	const wanted = movable && !branchKept ? branchSlug(requested) : "";
 	const branch = !wanted || wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
 	const branchChanged = branch !== ws.branch;
 	if (branchChanged) {
@@ -438,10 +492,12 @@ export function renameWorkspace(
 	if (branchChanged) delete target.review;
 	target.branch = branch;
 	target.renamed = true;
+	if (branchKept && opts.by) target.branchNamePending = opts.by;
+	else delete target.branchNamePending;
 	saveWorkspaces(all);
 	emit({ kind: "updated", workspace: target });
 	for (const w of repointed) emit({ kind: "updated", workspace: w });
-	return target;
+	return { workspace: target, branchKept };
 }
 
 export function setWorkspaceSkillOverride(
@@ -629,9 +685,10 @@ export async function listWorkspaces(
 	if (project) ensureDefaultWorkspace(project);
 	for (const workspace of loadWorkspaces()) {
 		if (workspace.projectId === projectId && workspace.kind === "external") {
-			refreshUserOwnedWorkspace(workspace.id);
+			syncWorkspaceBranch(workspace.id);
 		}
 	}
+	adoptManagedBranches(projectId);
 	const rows = projectRows(projectId);
 	if (opts.includeDiffStats === false) return rows;
 	const statsByKey = new Map(

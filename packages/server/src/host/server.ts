@@ -114,9 +114,9 @@ import {
 import {
 	getWorkspace,
 	recordWorkspaceHead,
-	refreshUserOwnedWorkspace,
 	seedWorkspaceHead,
 	setWorkspacePublisher,
+	syncWorkspaceBranch,
 } from "../workspaces";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
@@ -688,7 +688,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setWatchStartedPublisher(seedWorkspaceHead);
 	setRepoMetaPublisher((workspaceId) => {
 		recordWorkspaceHead(workspaceId);
-		refreshUserOwnedWorkspace(workspaceId);
+		syncWorkspaceBranch(workspaceId);
 		const workspace = loadWorkspaces().find((w) => w.id === workspaceId);
 		if (workspace) forgetOpenBranchReview(workspace.worktreePath);
 		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
