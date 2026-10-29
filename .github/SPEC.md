@@ -81,7 +81,10 @@ no job is re-run automatically. They install Chromium without `--with-deps`: the
 carries its shared libraries, and the extra apt packages (CJK/Thai/X fonts) feed no assertion while their
 Ubuntu-mirror download was the slowest step of the job, often for minutes. A missing library fails
 Chromium's launch loudly. The browsers themselves are not cached: the Playwright CDN download takes seconds,
-no slower than an Actions-cache restore of the same bytes.
+no slower than an Actions-cache restore of the same bytes. Linux jobs, here and in the website workflows,
+install dependencies without the Actions cache for the same reason: a cold `bun install --frozen-lockfile` on a hosted runner takes 3–4 s,
+while restoring the ~600 MB Bun cache took 12–16 s before an install of 1–3 s, and every PR and merge-group
+ref saved its own copy, crowding the 10 GB quota the apt cache depends on.
 
 Every web build inside a browser or artifact job skips the web `tsc --noEmit` its build script otherwise
 runs (`THINKRAIL_WEB_BUILD_TYPECHECK=0` at workflow level): the identical command already gates the run in
