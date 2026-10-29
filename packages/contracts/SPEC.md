@@ -653,7 +653,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   this action omits it against an older host) / **`workspace.openReview`** (the active
   branch's optional `OpenBranchReview` metadata; optional `allowCached: true` permits a settled host
   cache hit while omission preserves the original force-fresh behavior for older independently shipped
-  clients; either form still joins a lookup already in flight) / **`workspace.branchStatus`** (v87, same
+  clients; ordinary concurrent lookups share the in-flight generation; a fresh lookup starts a new generation, and callers of the superseded generation adopt the newer generation's answer) / **`workspace.branchStatus`** (v87, same
   params and freshness rules → `BranchStatus`; supersedes `openReview` for v87 clients, which stays for
   older ones; v88 adds `skipFetch: true` — a CI poll: a fresh review lookup without fetching origin) /
   **`workspace.push`** (v87, `{ workspaceId, branch, confirmBase? }` → `{ dirtyFiles }`: publish or
