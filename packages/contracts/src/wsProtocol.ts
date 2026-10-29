@@ -987,7 +987,7 @@ export interface WsMethodMap {
 	};
 	"feedback.respond": { params: { action: SurveyInvitationResponse }; result: Ack };
 	"feedback.survey": {
-		params: Record<string, never>;
+		params: { language?: string };
 		result: { survey: AppSurvey | null };
 	};
 	"feedback.survey.submit": { params: SurveySubmitParams; result: Ack };

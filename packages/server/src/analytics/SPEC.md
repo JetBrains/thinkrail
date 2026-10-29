@@ -71,7 +71,8 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 the additional preference or grant and under `--no-analytics`, but never from unkeyed, CI or `NODE_ENV=test`
 runs (no client exists). It is personless (`$process_person_profile: false`), keyed by the installation ID,
 carries the standard environment properties plus `$survey_id`, `$survey_iteration`, `$survey_submission_id`,
-`$survey_completed`, `$survey_questions` (`id` and question text) and `$survey_response_<question id>` — the
+`$survey_completed`, `$survey_language` (the PostHog translation shown, when one was), `$survey_questions`
+(`id` and original question text) and `$survey_response_<question id>` — the
 answer text, rating or choice. It is the one payload allowed to contain what the user wrote; the survey
 window says so before the first question. It returns whether the client accepted the event (queued, not
 delivered), so the host records completion only then. No `survey shown` or `survey dismissed` is sent.

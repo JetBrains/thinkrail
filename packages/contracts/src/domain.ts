@@ -1240,6 +1240,7 @@ export interface AppSurvey {
 	placeholder?: string;
 	thankYou?: string;
 	shuffleQuestions?: true;
+	language?: string;
 }
 
 export type SurveyAnswerValue = string | string[];
@@ -1248,6 +1249,7 @@ export interface SurveySubmitParams {
 	submissionId: string;
 	surveyId: string;
 	iteration: number;
+	language?: string;
 	answers: Record<string, SurveyAnswerValue>;
 }
 

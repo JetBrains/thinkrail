@@ -4,6 +4,7 @@ export {
 	configureSurveySource,
 	confirmInAppSurvey,
 	currentInAppSurvey,
+	localizeSurvey,
 	parseSurveySubmission,
 	refreshInAppSurvey,
 	resetSurveyForTests,
