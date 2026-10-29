@@ -36,6 +36,7 @@ test("Remote publishes, then pushes new commits, with no PR involved", async ({
 	const remoteValue = page.getByTestId("scope-remote-value");
 	const remoteAction = page.getByTestId("scope-ship-remote-primary");
 	await expect(remoteValue).toHaveAttribute("data-kind", "noOrigin");
+	await revalidate(page);
 	await expect(page.getByTestId("scope-review-value")).toHaveText("No PR");
 
 	commitFile(workspace.worktreePath, "ship.ts", "export const ship = 1;\n", "feat: ship it");
