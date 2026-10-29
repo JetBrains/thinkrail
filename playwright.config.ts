@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
@@ -10,6 +8,7 @@ import {
 	REAL_CENTRAL_E2E_ENV,
 } from "./e2e/fixtures/centralAgent";
 import {
+	executableOnPath,
 	hermeticE2ePath,
 	hermeticE2eShell,
 	resolveBunExecutable,
@@ -40,8 +39,7 @@ const centralMode = isRealCentralE2e();
 assertCentralPlaywrightRunner(process.env, process.argv);
 const bunExecutable = resolveBunExecutable();
 const hostPath = hermeticE2ePath(E2E_FAKE_BIN_DIR);
-if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi"))))
-	throw new Error("e2e host PATH must not contain pi");
+if (executableOnPath(hostPath, "pi")) throw new Error("e2e host PATH must not contain pi");
 const isShardLane =
 	process.env.THINKRAIL_E2E_LANE !== undefined || !!process.env.THINKRAIL_E2E_JOB_SHARD;
 const hostCommand =

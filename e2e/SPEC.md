@@ -71,7 +71,8 @@ headless workflow suite keeps its local PI-auth mode. Concurrent provider turns 
 cost, and determinism, so neither is sharded. The agent runner builds the web artifact under the caller's
 normal environment, then removes PI's complete ambient provider/cloud credential environment surface before
 starting Playwright or any host. The hosts also receive the same complete hermetic `PATH` as the default
-suite (on Windows: the fake bin, `git.exe`'s directory and `System32`, since `/usr/bin` does not exist there). This split is load-bearing: build
+suite (on Windows: the fake bin, `git.exe`'s directory and `System32`, since `/usr/bin` does not exist there;
+setup fails if those directories hold a `pi`, `central` or `code` under any `PATHEXT` suffix). This split is load-bearing: build
 tooling may need developer-installed executables and caller environment, while exact-model preflight must
 prove Central without an API key, token, Google ADC/project/location, or AWS profile/key/token/container/
 web-identity/config source making another provider available. A drift canary derives every uppercase
