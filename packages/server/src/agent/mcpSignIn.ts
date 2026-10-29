@@ -19,6 +19,7 @@ import {
 	redactMcpText,
 } from "./mcp";
 import { reconnectMcpServer, refreshMcpStatus } from "./mcpSessions";
+import { withoutPackages } from "./packages";
 import { getPiRuntimeGeneration } from "./piRuntime";
 import { createWebUiContext } from "./webUiContext";
 
@@ -124,7 +125,9 @@ async function openProbe(
 ): Promise<AgentSession> {
 	const { cwd, projectTrusted, policy } = options;
 	const agentDir = getAgentDir();
-	const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+	const settingsManager = withoutPackages(
+		SettingsManager.create(cwd, agentDir, { projectTrusted }),
+	);
 	const loadConfig = () => {
 		const loaded = loadHostMcpConfig({ agentDir, cwd, projectTrusted, policy });
 		return {

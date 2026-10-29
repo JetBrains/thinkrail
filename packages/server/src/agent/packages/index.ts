@@ -5,6 +5,7 @@ export {
 	type PiPackageCatalogOptions,
 	packageSourceIdentity,
 } from "./catalog";
+export { advancePiExtensionCache } from "./extensionCache";
 export {
 	isOfflineMode,
 	npmPackageName,
@@ -24,3 +25,9 @@ export {
 	togglePackageFilter,
 	updatePiPackages,
 } from "./mutations";
+export {
+	type PackageDeclarationFilter,
+	type PackageDeclarationScope,
+	withoutPackages,
+	withPackageDeclarations,
+} from "./settingsView";

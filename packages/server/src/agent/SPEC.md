@@ -767,11 +767,16 @@ re-opened transcripts provider-valid.
     (the `disabledPackages` setting; keys are [[submodule-server-agent-packages]] identities, since pi has
     no "whole package off" concept and the user chose a ThinkRail setting over writing pi filter entries).
     It is applied where pi reads declarations, not where it emits resources: `withoutDisabledPackages`
-    patches a `SettingsManager`'s `getGlobalSettings` / `getProjectSettings` to hide the declarations of
-    switched-off packages (re-evaluated on every read, idempotent per instance). `buildSessionSettings`
-    applies it, so parents and delegated children share it; `buildResourceLoader` applies it again
-    defensively; `listSkillCommands` / `listSkillCatalog` build their settings through it. pi therefore
-    never installs, loads or lists a disabled package's extensions, skills or prompts — including a
+    (on [[submodule-server-agent-packages]]' `withPackageDeclarations`) patches a `SettingsManager`'s
+    `getGlobalSettings` / `getProjectSettings` to hide the declarations of switched-off packages
+    (re-evaluated on every read, idempotent per instance). `buildSessionSettings` applies it, so parents
+    and delegated children share it; `buildResourceLoader` applies it again defensively;
+    `listSkillCommands` / `listSkillCatalog` build their settings through it. Every other loader the host
+    opens resolves nothing from packages and gets `withoutPackages` instead — the boot runtime and the
+    extension-cache advance in `piRuntime`, the MCP sign-in probe, `listProjectAliasSkillNames` — since
+    pi's `reload()` resolves (and installs) declared packages whatever else is switched off. Invariant:
+    **no `SettingsManager` reaches a pi loader without one of the two views.** pi therefore never
+    installs, loads or lists a disabled package's extensions, skills or prompts — including a
     declared-but-missing one that its install-while-loading would otherwise fetch and whose lifecycle
     scripts would run — while the files on disk and the user's own per-resource filters stay untouched.
     *Rejected:* filtering resolved paths and `skillsOverride` / `promptsOverride` after pi resolved (the

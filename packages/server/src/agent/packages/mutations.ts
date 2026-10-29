@@ -1,5 +1,5 @@
 import { existsSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import {
 	DefaultPackageManager,
 	type PackageSource,
@@ -71,14 +71,17 @@ function assertToggleShape(toggle: PiResourceToggle): void {
 }
 
 /** A fresh settings read; pre-existing load errors are drained so only this mutation's write is judged. */
-function openSettings(ctx: PiPackageHostContext): {
+function openSettings(
+	ctx: PiPackageHostContext,
+	writeScope?: PiPackageScope,
+): {
 	settings: SettingsManager;
 	packageManager: DefaultPackageManager;
 } {
 	const settings = SettingsManager.create(ctx.cwd ?? ctx.agentDir, ctx.agentDir, {
 		projectTrusted: ctx.projectTrusted(),
 	});
-	settings.drainErrors();
+	assertScopeLoaded(settings, writeScope);
 	const packageManager = new DefaultPackageManager({
 		cwd: ctx.cwd ?? ctx.agentDir,
 		agentDir: ctx.agentDir,
@@ -86,6 +89,24 @@ function openSettings(ctx: PiPackageHostContext): {
 		builtinExtensions: [...ctx.builtinExtensions],
 	});
 	return { settings, packageManager };
+}
+
+// pi's save() silently skips a scope whose file failed to parse; only that scope's error blocks a write.
+function assertScopeLoaded(
+	settings: SettingsManager,
+	writeScope: PiPackageScope | undefined,
+): void {
+	const loadErrors = settings.drainErrors();
+	if (writeScope === undefined) return;
+	const blocking = loadErrors.find(
+		(entry) => entry.scope === (writeScope === "project" ? "project" : "global"),
+	);
+	if (blocking) {
+		throw new CodedError(
+			"PACKAGE_SETTINGS_WRITE_FAILED",
+			`The ${writeScope} settings file cannot be read: ${blocking.error.message}`,
+		);
+	}
 }
 
 function assertScopeWritable(ctx: PiPackageHostContext, scope: PiPackageScope): void {
@@ -146,7 +167,7 @@ export function installPiPackage(
 			);
 		}
 		const local = target.scope === "project";
-		const { settings, packageManager } = openSettings(ctx);
+		const { settings, packageManager } = openSettings(ctx, target.scope);
 		try {
 			await packageManager.install(source, { local });
 		} catch (error) {
@@ -154,7 +175,7 @@ export function installPiPackage(
 		}
 		assertScopeWritable(ctx, target.scope);
 		await settings.reload();
-		settings.drainErrors();
+		assertScopeLoaded(settings, target.scope);
 		packageManager.addSourceToSettings(source, { local });
 		await persist(ctx, settings, target.scope);
 		invalidatePiPackageCatalog();
@@ -169,7 +190,7 @@ export function removePiPackage(ctx: PiPackageHostContext, target: PiPackageTarg
 		assertScope(target.scope);
 		assertScopeWritable(ctx, target.scope);
 		const local = target.scope === "project";
-		const { settings, packageManager } = openSettings(ctx);
+		const { settings, packageManager } = openSettings(ctx, target.scope);
 		const source = declaredAsInput(ctx, target);
 		if (!packageManager.removeSourceFromSettings(source, { local })) {
 			throw new CodedError(
@@ -190,7 +211,9 @@ export function removePiPackage(ctx: PiPackageHostContext, target: PiPackageTarg
 
 /**
  * pi's `update(source)` reconciles every declaration of that identity, at both scopes. When the
- * targets cover every installed declaration, pi's own `update()` runs once and batches npm per scope.
+ * targets cover every declaration, pi's own `update()` runs once and batches npm per scope; it would
+ * also install a declaration that is missing on disk, so a missing one that was not asked for keeps
+ * the per-target path.
  */
 export function updatePiPackages(
 	ctx: PiPackageHostContext,
@@ -203,9 +226,7 @@ export function updatePiPackages(
 		}
 		const { packageManager } = openSettings(ctx);
 		const requested = new Set(targets.map((target) => `${target.scope}\0${target.source}`));
-		const configured = packageManager
-			.listConfiguredPackages()
-			.filter((entry) => entry.installedPath !== undefined);
+		const configured = packageManager.listConfiguredPackages();
 		const coversEverything =
 			configured.length > 0 &&
 			configured.every((entry) => requested.has(`${entry.scope}\0${entry.source}`));
@@ -252,7 +273,7 @@ export function setPiResourceEnabled(
 	return enqueue(async () => {
 		assertToggleShape(toggle);
 		assertScopeWritable(ctx, toggle.scope);
-		const { settings, packageManager } = openSettings(ctx);
+		const { settings, packageManager } = openSettings(ctx, toggle.scope);
 		const resolved = await packageManager.resolve(async () => "skip");
 		const resource = findResource(resolved[toggle.type], toggle.path, toggle.scope);
 		if (!resource) {
@@ -282,18 +303,22 @@ function findResource(
 	});
 }
 
-function isOverride(entry: string): boolean {
-	return entry.startsWith("!") || entry.startsWith("+") || entry.startsWith("-");
+function isExactOverrideOf(entry: string, pattern: string): boolean {
+	if (!entry.startsWith("+") && !entry.startsWith("-")) return false;
+	return normalizeExactPattern(entry.slice(1)) === pattern;
 }
 
-function patternTarget(entry: string): string {
-	return isOverride(entry) ? entry.slice(1) : entry;
+function normalizeExactPattern(pattern: string): string {
+	const trimmed =
+		pattern.startsWith("./") || pattern.startsWith(".\\") ? pattern.slice(2) : pattern;
+	return trimmed.split(sep).join("/");
 }
 
 /**
  * pi's filter semantics for one package: `undefined` = everything, `[]` = nothing, plain entries form
- * an allowlist, and an array of overrides alone starts from everything. The toggle keeps whatever the
- * user had and changes only the named resource's admission.
+ * an allowlist, `!` excludes, and `±path` are exact overrides that beat everything before them. The
+ * toggle therefore only replaces this resource's own exact override and never rewrites what the user
+ * wrote for the others.
  */
 export function togglePackageFilter(
 	current: readonly string[] | undefined,
@@ -302,15 +327,9 @@ export function togglePackageFilter(
 ): string[] | undefined {
 	if (current === undefined) return enabled ? undefined : [`-${pattern}`];
 	if (current.length === 0) return enabled ? [pattern] : [];
-	const plain = current.filter((entry) => !isOverride(entry));
-	const others = current.filter((entry) => isOverride(entry) && patternTarget(entry) !== pattern);
-	if (enabled) return [...plain, ...others, `+${pattern}`];
-	const remainingPlain = plain.filter((entry) => entry !== pattern);
-	if (plain.length > 0 && remainingPlain.length === 0) {
-		const forced = others.filter((entry) => entry.startsWith("+")).map((entry) => entry.slice(1));
-		return [...forced, ...others.filter((entry) => !entry.startsWith("+"))];
-	}
-	return [...remainingPlain, ...others, `-${pattern}`];
+	const kept = current.filter((entry) => !isExactOverrideOf(entry, pattern));
+	if (enabled && kept.length === 0) return undefined;
+	return [...kept, `${enabled ? "+" : "-"}${pattern}`];
 }
 
 function togglePackageResource(
@@ -340,7 +359,7 @@ function togglePackageResource(
 	const current = packages[index] ?? resource.metadata.source;
 	const pkg: Exclude<PackageSource, string> =
 		typeof current === "string" ? { source: current } : { ...current, source: current.source };
-	const pattern = relative(packageRoot, resource.path);
+	const pattern = normalizeExactPattern(relative(packageRoot, resource.path));
 	const next = togglePackageFilter(pkg[toggle.type], pattern, toggle.enabled);
 	if (next === undefined) delete pkg[toggle.type];
 	else pkg[toggle.type] = next;
@@ -361,16 +380,19 @@ function toggleTopLevelResource(
 	const isBuiltin = resource.metadata.source === "builtin";
 	const pattern = isBuiltin
 		? resource.path
-		: relative(
-				resource.metadata.baseDir ?? settingsBaseDir(ctx.cwd, ctx.agentDir, toggle.scope),
-				resource.path,
+		: normalizeExactPattern(
+				relative(
+					resource.metadata.baseDir ?? settingsBaseDir(ctx.cwd, ctx.agentDir, toggle.scope),
+					resource.path,
+				),
 			);
 	const scoped =
 		toggle.scope === "project" ? settings.getProjectSettings() : settings.getGlobalSettings();
-	const current: string[] = [...(scoped[toggle.type] ?? [])];
-	const kept = current.filter((entry) => !(isOverride(entry) && patternTarget(entry) === pattern));
-	kept.push(`${toggle.enabled ? "+" : "-"}${pattern}`);
-	writeTopLevelPaths(settings, toggle.type, toggle.scope, kept);
+	const kept = (scoped[toggle.type] ?? []).filter((entry) => !isExactOverrideOf(entry, pattern));
+	writeTopLevelPaths(settings, toggle.type, toggle.scope, [
+		...kept,
+		`${toggle.enabled ? "+" : "-"}${pattern}`,
+	]);
 }
 
 function writeTopLevelPaths(

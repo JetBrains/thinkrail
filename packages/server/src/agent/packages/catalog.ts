@@ -14,6 +14,7 @@ import type {
 	PiPackageSummary,
 	PiPackagesCatalog,
 } from "@thinkrail/contracts";
+import { advancePiExtensionCache } from "./extensionCache";
 import {
 	BUILTIN_PREFIX,
 	expandHome,
@@ -49,6 +50,7 @@ const cache = new Map<string, { at: number; value: Promise<PiPackagesCatalog> }>
 
 export function invalidatePiPackageCatalog(): void {
 	cache.clear();
+	extensionInfoMemo.clear();
 }
 
 export function listPiPackageCatalog(options: PiPackageCatalogOptions): Promise<PiPackagesCatalog> {
@@ -227,6 +229,7 @@ async function loadExtensionInfo(
 		else pending.push(path);
 	}
 	if (pending.length === 0) return info;
+	await advancePiExtensionCache(agentDir);
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir,

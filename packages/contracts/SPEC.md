@@ -1088,7 +1088,10 @@ and what it loaded, never pi's own types.
 - Error codes: `PACKAGE_SOURCE_INVALID` (also an unsupported `type` / `scope`, validated at the boundary),
   `PACKAGE_OFFLINE` (npm/git only; local installs work offline), `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
   `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
-  `PACKAGE_SETTINGS_WRITE_FAILED`.
+  `PACKAGE_SETTINGS_WRITE_FAILED`, and `PACKAGE_INSTALLED_UNLISTED` — the declaration was persisted but
+  the host could not produce the row; of the install codes only `PACKAGE_SOURCE_INVALID`,
+  `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_INSTALL_FAILED` and `PACKAGE_SETTINGS_WRITE_FAILED`
+  are raised before anything is written, and a client may claim "nothing was added" only for those.
 
 ## Normalized session state
 

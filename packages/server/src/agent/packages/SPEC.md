@@ -47,11 +47,21 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   runs for chips, and a file's factory runs once per content change (a memo keyed by mtime). The
   catalog cache is long-lived because every change path invalidates it explicitly
   (`invalidatePiPackageCatalog()`); `listPiPackageRevealTargets` validates a reveal path from the same
-  reads without executing any extension. Known limitation: a probe loader is never sent
-  `session_shutdown`, so a factory that allocates at registration time (a watcher, a timer) leaks once
+  reads without executing any extension. Before a probe runs, `advancePiExtensionCache` (an empty
+  loader reloaded twice — pi clears its process-wide factory cache only on a loaded loader's reload,
+  and exports no clearer) makes it read the files as they are now, so an update's new names show
+  without waiting for a chat to reload; `invalidatePiPackageCatalog()` drops the memo too, so the memo
+  only spares unchanged files across workspaces and TTL expiry. Known limitation: a probe loader is
+  never sent `session_shutdown`, so a factory that allocates at registration time (a watcher, a timer) leaks once
   per content change of its file — pi's contract for a factory is to register, not to allocate. `packageSourceIdentity(source, scope, cwd, agentDir)`
   resolves a local source against the settings file that declares it (user → `agentDir`, project →
   `<cwd>/.pi`), as pi does.
+- `settingsView.ts` — `withPackageDeclarations(settings, keep)`: patches one `SettingsManager`'s
+  `getGlobalSettings` / `getProjectSettings` to drop the declarations `keep` rejects (once per instance;
+  re-evaluated per read). `withoutPackages` drops them all — for a loader that resolves nothing from
+  packages (the boot runtime, the extension-cache advance, the MCP sign-in probe, alias discovery), so
+  pi's resolve-time install never runs there. `agent/extensions.ts` builds the disabled-set view on it.
+- `extensionCache.ts` — `advancePiExtensionCache(agentDir)`, shared by the boot runtime and the catalog probe.
 - `identity.ts` — `piPackageSourceKind` (npm by `npm:`; git only by `git:` or a `scheme://` URL — pi
   treats `git@host:…` and `github:…` as local paths, so does this), `piPackageIdentity` (a simplified
   port of pi's git parsing, no `hosted-git-info`, splitting the ref at the first `@`/`#` inside the
@@ -85,26 +95,37 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   `±<path relative to its base dir>` in the scope's array of that kind (a plain explicit entry stays
   beside its override — pi's TUI replaces it, after which the file is no longer discovered and cannot be
   switched back on); a built-in → `±builtin:<name>` in the scope that decides it; a package resource →
-  `togglePackageFilter` on its declaration's object form, which keeps pi's filter semantics intact:
-  `undefined` = everything, `[]` = nothing, plain entries form an allowlist, an array of overrides alone
-  starts from everything. Disabling removes the resource's plain entry and adds `-path` (an allowlist
-  that becomes empty is written as `[]`, with any `+` entries promoted to plain ones); enabling from
-  `[]` writes `[path]`, otherwise `+path`. pi's TUI drops plain entries, which turns an allowlist of one
-  into "everything but one". A single-file local package has no filters pi honours; toggling one is
-  refused. **Input vs declared source:** pi stores a local source relative to its settings
+  `togglePackageFilter` on its declaration's object form, which leaves pi's filter semantics
+  (`undefined` = everything, `[]` = nothing, plain entries form an allowlist, `!` excludes, `±path` are
+  exact overrides that beat everything before them) to pi: it replaces only this resource's own exact
+  `±` override and appends the new one, never touching plain, glob or `!` entries — a disabled allowlist
+  member becomes `["a", "-a"]`, not an allowlist without `a` (which would admit every sibling). The
+  two baselines are the only special cases: enabling from `[]` writes `[path]`, and an override set
+  that empties on enable goes back to `undefined`. pi's TUI drops plain entries instead, which turns an
+  allowlist of one into "everything but one". A single-file local package has no filters pi honours;
+  toggling one is refused. *Rejected:* rewriting the allowlist (first fix) — collapsing its last member
+  flips the baseline from "only these" to "everything". **Input vs declared source:** pi stores a local source relative to its settings
   file but matches an *input* source against the process cwd (`getSourceMatchKeyForInput`), so a
   declared `../pkgs/tools` handed back as written is not found; rows carry the declared string and
   `inputSource` hands pi the absolute path for Remove and Update (pinned by a test with a foreign cwd).
-  Error codes: `PACKAGE_SOURCE_INVALID`, `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
-  `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
-  `PACKAGE_SETTINGS_WRITE_FAILED`; messages carry pi's text and never reach analytics.
+  **Load errors are scoped:** pi's `save()` / `saveProjectSettings()` silently skip a scope whose
+  file failed to parse, so a mutation refuses up front (`PACKAGE_SETTINGS_WRITE_FAILED`) when the scope
+  it writes has a load error — at open and again after the install's reload — and ignores the other
+  scope's. **Batched update** runs only when the targets cover every *declaration*, installed or not:
+  pi's `update()` also installs a missing one, which must not happen for a package the user did not
+  ask about (a disabled one, say). Error codes: `PACKAGE_SOURCE_INVALID`, `PACKAGE_OFFLINE`,
+  `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`, `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`,
+  `PACKAGE_UPDATE_FAILED`, `PACKAGE_SETTINGS_WRITE_FAILED`, and `PACKAGE_INSTALLED_UNLISTED` (raised by
+  the `piPackages` façade when the declaration is persisted but the row cannot be produced — the
+  client must not claim nothing changed); messages carry pi's text and never reach analytics.
 
 ## Consumers
 
 `agent/piPackages.ts` orchestrates the catalog and mutations: it adds the agent dir, the Central
 exclusion, the host built-ins, the watcher priming and the apply-to-chats step; `host/packages.ts` maps
-a `workspaceId` onto a `PiPackagesTarget`. `agent/extensions.ts` uses the pure `packageSourceIdentity`
-to hide switched-off declarations from pi's settings view. Known limitations of the whole feature (concurrent resolves, on-disk changes under a
+a `workspaceId` onto a `PiPackagesTarget`. `agent/extensions.ts` builds `withoutDisabledPackages` on
+`withPackageDeclarations` + `packageSourceIdentity`; `agent/piRuntime.ts`, `agent/mcpSignIn.ts` and the
+alias discovery use `withoutPackages`. Known limitations of the whole feature (concurrent resolves, on-disk changes under a
 busy chat) are recorded in [[submodule-server-agent]] beside the orchestration that accepts them.
 
 ## Boundary

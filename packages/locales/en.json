@@ -1798,6 +1798,7 @@
 	"settings.packages.failedToLoad": "Failed to load: {{error}}",
 	"settings.packages.gallery": "Browse the pi package gallery",
 	"settings.packages.installDialog.description": "Packages add tools, skills and prompt templates to every chat.",
+	"settings.packages.installDialog.failedCheckList": "It may have been added anyway — check the list.",
 	"settings.packages.installDialog.failedNothingAdded": "Nothing was added to your settings.",
 	"settings.packages.installDialog.failedTitle": "Couldn't install {{name}}",
 	"settings.packages.installDialog.installedApplies": "New chats have it now; open chats pick it up when idle.",

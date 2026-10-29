@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { DefaultPackageManager } from "@earendil-works/pi-coding-agent";
 import type { PiPackageSummary, PiPackagesCatalog } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import { setPiPackagesPublisher } from "../agent";
@@ -158,6 +159,29 @@ test("install returns the new row, turns the package on, and publishes a change"
 
 	await handleRequest("packages.remove", { source: relative(agentDir, pkg), scope: "user" }, CTX);
 	expect((await list()).packages).toHaveLength(0);
+});
+
+test("a failure after the declaration was written is not reported as an install failure", async () => {
+	const listConfigured = spyOn(
+		DefaultPackageManager.prototype,
+		"listConfiguredPackages",
+	).mockImplementationOnce(() => {
+		throw new Error("catalog exploded");
+	});
+	try {
+		const error = await handleRequest(
+			"packages.install",
+			{ source: pkg, scope: "user" },
+			CTX,
+		).catch((e) => e);
+		expect(errorCodeOf(error)).toBe("PACKAGE_INSTALLED_UNLISTED");
+		expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")).packages).toEqual([
+			relative(agentDir, pkg),
+		]);
+	} finally {
+		listConfigured.mockRestore();
+	}
+	expect((await list()).packages).toHaveLength(1);
 });
 
 test("a repository install needs a trusted project", async () => {

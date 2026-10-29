@@ -153,6 +153,37 @@ describe("listPiPackageCatalog", () => {
 		expect(hello?.tools).toBeUndefined();
 	});
 
+	it("re-probes an unchanged entry file after an explicit invalidation", async () => {
+		const sibling = join(pkg, "extensions", "names.ts");
+		writeFileSync(sibling, 'export const toolName = "fixture_first";\n');
+		writeFileSync(
+			join(pkg, "extensions", "hello.ts"),
+			[
+				'import { toolName } from "./names.ts";',
+				"export default function (pi) {",
+				'  pi.registerTool({ name: toolName, label: toolName, description: "fixture",',
+				'    parameters: { type: "object", properties: {} },',
+				'    execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }) });',
+				"}",
+			].join("\n"),
+		);
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
+		const options = {
+			agentDir,
+			projectTrusted: false,
+			builtinExtensions: [],
+			disabledPackages: new Set<string>(),
+		};
+		const toolsOfHello = async () =>
+			(await listPiPackageCatalog(options)).packages[0]?.resources.find(
+				(r) => r.displayName === "hello.ts",
+			)?.tools;
+		expect(await toolsOfHello()).toEqual(["fixture_first"]);
+		writeFileSync(sibling, 'export const toolName = "fixture_second";\n');
+		invalidatePiPackageCatalog();
+		expect(await toolsOfHello()).toEqual(["fixture_second"]);
+	});
+
 	it("never installs a declared package that is missing on disk, even online", async () => {
 		delete process.env.PI_OFFLINE;
 		writeFileSync(

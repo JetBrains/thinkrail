@@ -1,4 +1,9 @@
-import type { PiPackageScope, PiPackageSummary, PiPackagesCatalog } from "@thinkrail/contracts";
+import type {
+	PiPackageScope,
+	PiPackageSummary,
+	PiPackagesCatalog,
+	WsErrorCode,
+} from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -12,7 +17,7 @@ import {
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
-import { errorText, RequestTimeoutError } from "@/transport";
+import { errorText, RequestTimeoutError, wsErrorCode } from "@/transport";
 import { CHIP_CLASS, GalleryLink, packageChips } from "./PiPackagesSettings";
 import { SegmentedControl } from "./SegmentedControl";
 import { SettingsNotice } from "./SettingsNotice";
@@ -59,7 +64,24 @@ export type InstallStep =
 	| { kind: "form" }
 	| { kind: "installing"; name: string }
 	| { kind: "installed"; summary: PiPackageSummary }
-	| { kind: "failed"; name: string; message: string; timedOut: boolean };
+	| { kind: "failed"; name: string; message: string; outcome: InstallFailureOutcome };
+
+/** What the failure says about the settings: nothing changed, or the install may have landed anyway. */
+export type InstallFailureOutcome = "nothingAdded" | "unknown" | "timedOut";
+
+const NOTHING_ADDED_CODES: ReadonlySet<WsErrorCode> = new Set<WsErrorCode>([
+	"PACKAGE_SOURCE_INVALID",
+	"PACKAGE_OFFLINE",
+	"PACKAGE_UNTRUSTED",
+	"PACKAGE_INSTALL_FAILED",
+	"PACKAGE_SETTINGS_WRITE_FAILED",
+]);
+
+export function installFailureOutcome(error: unknown): InstallFailureOutcome {
+	if (error instanceof RequestTimeoutError) return "timedOut";
+	const code = wsErrorCode(error);
+	return code !== undefined && NOTHING_ADDED_CODES.has(code) ? "nothingAdded" : "unknown";
+}
 
 /** Title and description of each step, rendered by the dialog chrome (Radix needs them inside the Dialog). */
 export function installStepHeader(
@@ -277,9 +299,11 @@ export function InstallPackageBody({
 						<SettingsNotice variant="error" testId="install-package-error">
 							<span className="break-words">{step.message}</span>
 						</SettingsNotice>
-						{step.timedOut ? null : (
+						{step.outcome === "timedOut" ? null : (
 							<span className="tr-text-metadata text-text-muted">
-								{t("settings.packages.installDialog.failedNothingAdded")}
+								{step.outcome === "nothingAdded"
+									? t("settings.packages.installDialog.failedNothingAdded")
+									: t("settings.packages.installDialog.failedCheckList")}
 							</span>
 						)}
 					</div>
@@ -345,11 +369,12 @@ export function InstallPackageDialog({
 			const summary = await install({ source: trimmed, scope: effectiveScope });
 			setStep({ kind: "installed", summary });
 		} catch (error) {
-			const timedOut = error instanceof RequestTimeoutError;
-			const message = timedOut
-				? t("settings.packages.installDialog.timedOut")
-				: errorText(error, t("settings.packages.actionFailed"));
-			setStep({ kind: "failed", name, message, timedOut });
+			const outcome = installFailureOutcome(error);
+			const message =
+				outcome === "timedOut"
+					? t("settings.packages.installDialog.timedOut")
+					: errorText(error, t("settings.packages.actionFailed"));
+			setStep({ kind: "failed", name, message, outcome });
 		}
 	};
 

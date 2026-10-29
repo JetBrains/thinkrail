@@ -101,14 +101,24 @@ export async function piPackagesInstall(
 	refreshPiPackages();
 	const enabledFromNowOn = new Set(disabledPackages());
 	enabledFromNowOn.delete(identity);
-	const catalog = await piPackagesCatalog(target, enabledFromNowOn);
-	const summary =
-		catalog.packages.find((e) => e.identity === identity && e.scope === request.scope) ??
-		catalog.packages.find((e) => e.identity === identity);
+	let summary: PiPackageSummary | undefined;
+	try {
+		const catalog = await piPackagesCatalog(target, enabledFromNowOn);
+		summary =
+			catalog.packages.find((e) => e.identity === identity && e.scope === request.scope) ??
+			catalog.packages.find((e) => e.identity === identity);
+	} catch (error) {
+		throw new CodedError(
+			"PACKAGE_INSTALLED_UNLISTED",
+			`${request.source} was added to your settings, but the package list could not be read: ${
+				error instanceof Error ? error.message : String(error)
+			}`,
+		);
+	}
 	if (!summary) {
 		throw new CodedError(
-			"PACKAGE_INSTALL_FAILED",
-			`${request.source} was declared but ThinkRail cannot find it on disk afterwards.`,
+			"PACKAGE_INSTALLED_UNLISTED",
+			`${request.source} was added to your settings, but ThinkRail cannot find it on disk.`,
 		);
 	}
 	return { identity, summary };

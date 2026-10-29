@@ -3,10 +3,12 @@ import type { PiPackageSummary, PiPackagesCatalog } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
+import { RequestError, RequestTimeoutError } from "@/transport";
 import {
 	describeSource,
 	InstallPackageBody,
 	type InstallStep,
+	installFailureOutcome,
 	installStepHeader,
 	sourceDisplayName,
 } from "./InstallPackageDialog";
@@ -144,18 +146,41 @@ test("installing, installed and failed steps", () => {
 		kind: "failed",
 		name: "pi-gone",
 		message: "npm ERR! 404 Not Found",
-		timedOut: false,
+		outcome: "nothingAdded",
 	});
 	expect(failed).toContain("npm ERR! 404 Not Found");
 	expect(failed).toContain("Nothing was added to your settings.");
 	expect(failed).toContain('data-testid="install-package-retry"');
+	const unknown = render("w1", CATALOG, {
+		kind: "failed",
+		name: "x",
+		message: "socket closed",
+		outcome: "unknown",
+	});
+	expect(unknown).not.toContain("Nothing was added to your settings.");
+	expect(unknown).toContain("It may have been added anyway — check the list.");
 	const timedOut = render("w1", CATALOG, {
 		kind: "failed",
 		name: "x",
 		message: "slow",
-		timedOut: true,
+		outcome: "timedOut",
 	});
 	expect(timedOut).not.toContain("Nothing was added to your settings.");
+	expect(timedOut).not.toContain("check the list.");
+});
+
+test("only a failure the host raised before persisting means nothing was added", () => {
+	expect(installFailureOutcome(new RequestError("PACKAGE_INSTALL_FAILED", "npm ERR!"))).toBe(
+		"nothingAdded",
+	);
+	expect(installFailureOutcome(new RequestError("PACKAGE_UNTRUSTED", "trust"))).toBe(
+		"nothingAdded",
+	);
+	expect(installFailureOutcome(new RequestError("PACKAGE_INSTALLED_UNLISTED", "added"))).toBe(
+		"unknown",
+	);
+	expect(installFailureOutcome(new Error("socket closed"))).toBe("unknown");
+	expect(installFailureOutcome(new RequestTimeoutError("slow"))).toBe("timedOut");
 });
 
 test("each step has its dialog title", () => {
@@ -165,7 +190,7 @@ test("each step has its dialog title", () => {
 		"Installed @acme/pi-jira · 1.4.2",
 	);
 	expect(
-		installStepHeader(t, { kind: "failed", name: "x", message: "m", timedOut: false }),
+		installStepHeader(t, { kind: "failed", name: "x", message: "m", outcome: "nothingAdded" }),
 	).toEqual({
 		title: "Couldn't install x",
 	});

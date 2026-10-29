@@ -121,15 +121,20 @@ describe("pi package mutations", () => {
 	});
 
 	it("surfaces a swallowed settings write error as a coded error", async () => {
-		const drain = spyOn(SettingsManager.prototype, "drainErrors").mockImplementation(() => [
-			{ scope: "global", error: new Error("disk full") },
-		]);
+		let flushed = false;
+		const flush = spyOn(SettingsManager.prototype, "flush").mockImplementation(async () => {
+			flushed = true;
+		});
+		const drain = spyOn(SettingsManager.prototype, "drainErrors").mockImplementation(() =>
+			flushed ? [{ scope: "global", error: new Error("disk full") }] : [],
+		);
 		try {
 			await expect(installPiPackage(ctx, { source: pkg, scope: "user" })).rejects.toMatchObject({
 				code: "PACKAGE_SETTINGS_WRITE_FAILED",
 				message: "disk full",
 			});
 		} finally {
+			flush.mockRestore();
 			drain.mockRestore();
 		}
 	});
@@ -171,11 +176,41 @@ describe("pi package mutations", () => {
 			]);
 			expect(update).toHaveBeenCalledTimes(1);
 			expect(update).toHaveBeenCalledWith();
+			update.mockClear();
+			writeFileSync(
+				settingsPath,
+				JSON.stringify({ packages: [declared, other, join(root, "pkgs", "missing")] }),
+			);
+			await updatePiPackages(elsewhere, [
+				{ source: declared, scope: "user" },
+				{ source: other, scope: "user" },
+			]);
+			expect(update).toHaveBeenCalledTimes(2);
+			expect(update).not.toHaveBeenCalledWith();
+			writeFileSync(settingsPath, JSON.stringify({ packages: [declared, other] }));
 		} finally {
 			update.mockRestore();
 		}
 		await removePiPackage(elsewhere, { source: declared, scope: "user" });
 		expect(readSettings(settingsPath).packages).toEqual([other]);
+	});
+
+	it("refuses to write a scope whose settings file cannot be parsed, which pi would skip silently", async () => {
+		writeFileSync(settingsPath, "{ not json");
+		const error = await setPiResourceEnabled(ctx, {
+			path: "builtin:mcp",
+			type: "extensions",
+			scope: "user",
+			enabled: false,
+		}).catch((e) => e);
+		expect(errorCodeOf(error)).toBe("PACKAGE_SETTINGS_WRITE_FAILED");
+		expect(readFileSync(settingsPath, "utf8")).toBe("{ not json");
+
+		const installError = await installPiPackage(ctx, { source: pkg, scope: "user" }).catch(
+			(e) => e,
+		);
+		expect(errorCodeOf(installError)).toBe("PACKAGE_SETTINGS_WRITE_FAILED");
+		expect(readFileSync(settingsPath, "utf8")).toBe("{ not json");
 	});
 
 	it("reads a relative install source from the workspace, like `pi install ./tools` there", async () => {
@@ -280,18 +315,33 @@ describe("pi package mutations", () => {
 		await toggle(legacy, true);
 		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(true);
 		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(true);
+
+		writeFileSync(
+			settingsPath,
+			JSON.stringify({
+				packages: [{ source: pkg, extensions: ["extensions/hello.ts", "-extensions/legacy.ts"] }],
+			}),
+		);
+		await toggle(hello, false);
+		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(false);
+		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
+		await toggle(hello, true);
+		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(true);
+		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
 	});
 
-	it("togglePackageFilter keeps what the user had and changes one resource", () => {
+	it("togglePackageFilter replaces only the resource's own exact override", () => {
 		expect(togglePackageFilter(undefined, "a", false)).toEqual(["-a"]);
 		expect(togglePackageFilter(undefined, "a", true)).toBeUndefined();
 		expect(togglePackageFilter([], "a", true)).toEqual(["a"]);
 		expect(togglePackageFilter([], "a", false)).toEqual([]);
-		expect(togglePackageFilter(["a"], "a", false)).toEqual([]);
-		expect(togglePackageFilter(["a", "+b"], "a", false)).toEqual(["b"]);
-		expect(togglePackageFilter(["a", "b"], "a", false)).toEqual(["b", "-a"]);
+		expect(togglePackageFilter(["a"], "a", false)).toEqual(["a", "-a"]);
+		expect(togglePackageFilter(["a", "-b"], "a", false)).toEqual(["a", "-b", "-a"]);
+		expect(togglePackageFilter(["a", "+b"], "b", false)).toEqual(["a", "-b"]);
+		expect(togglePackageFilter(["a", "-a"], "a", true)).toEqual(["a", "+a"]);
 		expect(togglePackageFilter(["a"], "b", true)).toEqual(["a", "+b"]);
-		expect(togglePackageFilter(["-a"], "a", true)).toEqual(["+a"]);
+		expect(togglePackageFilter(["-a"], "a", true)).toBeUndefined();
+		expect(togglePackageFilter(["-./a", "-b"], "a", true)).toEqual(["-b", "+a"]);
 		expect(togglePackageFilter(["!**/*.ts", "-a"], "a", true)).toEqual(["!**/*.ts", "+a"]);
 	});
 
@@ -346,7 +396,7 @@ describe("pi package mutations", () => {
 			enabled: true,
 		});
 		expect(readSettings(settingsPath).packages).toEqual([
-			{ source: pkg, extensions: ["+extensions/legacy.ts"], skills: ["-skills/triage/SKILL.md"] },
+			{ source: pkg, skills: ["-skills/triage/SKILL.md"] },
 		]);
 		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(true);
 	});

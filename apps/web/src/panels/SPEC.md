@@ -1122,8 +1122,9 @@ a project picker, the prompt hero, and the reused
   has none) → **Installed** (name · version · description, chips for every tool / command / skill / prompt
   it added, and its switch, on by default, labelled "On in all workspaces" or "On for this repository" with
   one line: "new chats have it now; open chats pick it up when idle") or **Failed** (the host's message,
-  "Nothing was added to your settings", Back / Retry; a `RequestTimeoutError` instead says to check the
-  list, since the install may still complete). A package that installs but contributes nothing loadable
+  "Nothing was added to your settings" only for the codes the host raises before it writes
+  (`installFailureOutcome`), "It may have been added anyway — check the list" for any other error, Back /
+  Retry; a `RequestTimeoutError` instead says to check the list, since the install may still complete). A package that installs but contributes nothing loadable
   is a success with an empty chip list — it has a row, so it can be removed. `describeSource` is a light client-side echo only — the
   host validates; **This repository** is offered only with an active workspace whose project is pi-trusted,
   with the reason shown otherwise, and the hints show the real settings paths from the catalog. Disabling

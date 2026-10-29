@@ -1,12 +1,12 @@
 import {
 	createAgentSessionServices,
-	DefaultResourceLoader,
 	getAgentDir,
 	ModelRuntime,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { logger } from "../log";
 import { accountAvailableModels, type ModelAvailabilityRuntime } from "./modelAvailability";
+import { advancePiExtensionCache, withoutPackages } from "./packages";
 
 const log = logger("agent");
 
@@ -115,25 +115,10 @@ async function createRuntimeOfflineByDefault(): Promise<ModelRuntime> {
 	}
 }
 
-async function advanceExtensionCacheGeneration(): Promise<void> {
-	const agentDir = getAgentDir();
-	const loader = new DefaultResourceLoader({
-		cwd: agentDir,
-		agentDir,
-		noExtensions: true,
-		noSkills: true,
-		noPromptTemplates: true,
-		noThemes: true,
-		noContextFiles: true,
-	});
-	await loader.reload();
-	await loader.reload();
-}
-
 async function createRuntimeWithExtensions(
 	additionalExtensionPaths: readonly string[],
 ): Promise<PreparedRuntime> {
-	await advanceExtensionCacheGeneration();
+	await advancePiExtensionCache(getAgentDir());
 	const runtime = await createRuntimeOfflineByDefault();
 	await generationInitializer(runtime);
 	const providerStatus = captureProviderStatus(runtime);
@@ -154,6 +139,7 @@ async function createRuntimeWithExtensions(
 	try {
 		services = await createAgentSessionServices({
 			cwd: getAgentDir(),
+			settingsManager: withoutPackages(SettingsManager.create(getAgentDir(), getAgentDir())),
 			modelRuntime: runtime,
 			resourceLoaderOptions: {
 				noExtensions: true,

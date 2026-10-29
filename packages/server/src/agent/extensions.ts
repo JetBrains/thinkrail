@@ -9,7 +9,6 @@ import {
 	getAgentDir,
 	type InlineExtension,
 	type LoadExtensionsResult,
-	type PackageSource,
 	type PathMetadata,
 	type ResourceDiagnostic,
 	type ResourceLoader,
@@ -30,7 +29,7 @@ import {
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
-import { packageSourceIdentity } from "./packages";
+import { packageSourceIdentity, withoutPackages, withPackageDeclarations } from "./packages";
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
@@ -321,42 +320,14 @@ function installedDeclarations(packageManager: DefaultPackageManager): Set<strin
 	);
 }
 
-/**
- * The settings every loader reads: pi's `SettingsManager`, with the declarations of switched-off
- * packages hidden from `packages`. pi therefore never installs, loads or lists a disabled package's
- * resources — in the parent, a delegated child, or a skills catalog — while the files on disk and the
- * user's own filters stay untouched. The hide is re-evaluated on every read, so a reload sees the
- * current switch set.
- */
-const packageHidingSettings = new WeakSet<SettingsManager>();
-
 export function withoutDisabledPackages(settings: SettingsManager, cwd: string): SettingsManager {
-	if (packageHidingSettings.has(settings)) return settings;
-	packageHidingSettings.add(settings);
 	const agentDir = getAgentDir();
-	const hide = (packages: PackageSource[] | undefined, scope: "user" | "project") => {
+	return withPackageDeclarations(settings, (declaration, scope) => {
 		const disabled = disabledPackages();
-		if (!packages || disabled.size === 0) return packages;
-		return packages.filter(
-			(pkg) =>
-				!disabled.has(
-					packageSourceIdentity(typeof pkg === "string" ? pkg : pkg.source, scope, cwd, agentDir),
-				),
-		);
-	};
-	const getGlobalSettings = settings.getGlobalSettings.bind(settings);
-	const getProjectSettings = settings.getProjectSettings.bind(settings);
-	settings.getGlobalSettings = () => {
-		const current = getGlobalSettings();
-		const packages = hide(current.packages, "user");
-		return !packages || packages === current.packages ? current : { ...current, packages };
-	};
-	settings.getProjectSettings = () => {
-		const current = getProjectSettings();
-		const packages = hide(current.packages, "project");
-		return !packages || packages === current.packages ? current : { ...current, packages };
-	};
-	return settings;
+		if (disabled.size === 0) return true;
+		const source = typeof declaration === "string" ? declaration : declaration.source;
+		return !disabled.has(packageSourceIdentity(source, scope, cwd, agentDir));
+	});
 }
 
 export function childBaseExtensionFactories(): InlineExtension[] {
@@ -564,7 +535,9 @@ export async function listProjectAliasSkillNames(cwd: string): Promise<string[]>
 		.filter((source) => source.scope === "project")
 		.map((source) => source.path);
 	if (projectPaths.length === 0) return [];
-	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: false });
+	const settingsManager = withoutPackages(
+		SettingsManager.create(cwd, getAgentDir(), { projectTrusted: false }),
+	);
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),

@@ -139,7 +139,11 @@ test("a pi package installed from Settings reaches a chat, switches off and on, 
 		await resources.getByTestId("package-resource-toggle-hello.ts").click();
 		await expect
 			.poll(() => JSON.stringify(readSettings().packages), { timeout: 15_000 })
-			.toContain("+extensions/hello.ts");
+			.toBe(JSON.stringify(["../pi-package-fixture"]));
+		await expect(resources.getByTestId("package-resource-toggle-hello.ts")).toHaveAttribute(
+			"data-active",
+			"true",
+		);
 
 		await page.getByTestId("builtin-toggle-tool-search").click();
 		await expect
