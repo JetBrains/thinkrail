@@ -2615,7 +2615,7 @@ html:not(.anim) .term-caret {
 }
 
 .blog-post-content td:has(> a > img) {
-	width: 60%;
+	width: 67%;
 }
 
 @container (max-width: 520px) {
