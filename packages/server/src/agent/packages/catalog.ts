@@ -13,8 +13,10 @@ import type {
 import { knownExtensionInfo } from "./extensionInfo";
 import {
 	BUILTIN_PREFIX,
+	disabledDeclarationIdentities,
 	npmPackageName,
 	packageSourceIdentity,
+	piDeclarationIdentity,
 	piPackageSourceKind,
 } from "./identity";
 import { createPiSettings } from "./settingsView";
@@ -77,35 +79,49 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 	const configured = packageManager
 		.listConfiguredPackages()
 		.filter((entry) => !(entry.scope === "project" && !projectTrusted));
-	const identityOf = (source: string, scope: PiPackageScope) =>
+	// Two keys per declaration: pi's own identity decides shadowing, deltas and which rows a switch
+	// covers; the switch key is what the row carries and `disabledPackages` stores.
+	const piIdentityOf = (source: string, scope: PiPackageScope) =>
+		piDeclarationIdentity(source, scope, options.cwd, agentDir);
+	const switchKeyOf = (source: string, scope: PiPackageScope) =>
 		packageSourceIdentity(source, scope, options.cwd, agentDir);
+	const off = disabledDeclarationIdentities(
+		configured.map((entry) => ({ source: entry.source, scope: entry.scope })),
+		options.disabledPackages,
+		options.cwd,
+		agentDir,
+	);
 	// pi keeps a project `autoload: false` declaration as a delta over the user's install, not a
 	// replacement: its resources belong on the user row, and that row is not shadowed.
 	const projectDeltas = new Set(
 		(projectTrusted ? (settingsManager.getProjectSettings().packages ?? []) : [])
 			.filter((pkg) => typeof pkg === "object" && pkg.autoload === false)
-			.map((pkg) => identityOf(typeof pkg === "string" ? pkg : pkg.source, "project")),
+			.map((pkg) => piIdentityOf(typeof pkg === "string" ? pkg : pkg.source, "project")),
 	);
 	const projectIdentities = new Set(
 		configured
 			.filter((entry) => entry.scope === "project")
-			.map((entry) => identityOf(entry.source, "project"))
+			.map((entry) => piIdentityOf(entry.source, "project"))
 			.filter((identity) => !projectDeltas.has(identity)),
 	);
 	const userIdentities = new Set(
 		configured
 			.filter((entry) => entry.scope === "user" && entry.installedPath !== undefined)
-			.map((entry) => identityOf(entry.source, "user")),
+			.map((entry) => piIdentityOf(entry.source, "user")),
 	);
 	const rowByIdentity = new Map<string, PiPackageSummary>();
 	for (const entry of configured) {
-		const identity = identityOf(entry.source, entry.scope);
-		if (entry.scope === "project" && projectDeltas.has(identity) && userIdentities.has(identity)) {
+		const piIdentity = piIdentityOf(entry.source, entry.scope);
+		if (
+			entry.scope === "project" &&
+			projectDeltas.has(piIdentity) &&
+			userIdentities.has(piIdentity)
+		) {
 			continue;
 		}
-		const shadowed = entry.scope === "user" && projectIdentities.has(identity);
+		const shadowed = entry.scope === "user" && projectIdentities.has(piIdentity);
 		const summary: PiPackageSummary = {
-			identity,
+			identity: switchKeyOf(entry.source, entry.scope),
 			source: entry.source,
 			kind: piPackageSourceKind(entry.source),
 			scope: entry.scope,
@@ -115,12 +131,12 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 						installedPath: entry.installedPath,
 					}
 				: { name: fallbackName(entry.source, entry.source) }),
-			enabled: !options.disabledPackages.has(identity),
+			enabled: !off.has(piIdentity),
 			...(shadowed ? { shadowed: true } : {}),
 			resources: [],
 		};
 		packages.set(declarationKey(entry.scope, entry.source), summary);
-		if (!shadowed) rowByIdentity.set(identity, summary);
+		if (!shadowed) rowByIdentity.set(piIdentity, summary);
 	}
 
 	const loose: PiLooseExtension[] = [];
@@ -133,7 +149,7 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 				const scope: PiPackageScope = metadata.scope === "project" ? "project" : "user";
 				const row =
 					packages.get(declarationKey(scope, metadata.source)) ??
-					rowByIdentity.get(identityOf(metadata.source, scope));
+					rowByIdentity.get(piIdentityOf(metadata.source, scope));
 				row?.resources.push({
 					type,
 					path: resource.path,

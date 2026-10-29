@@ -494,6 +494,21 @@ describe("parsePiPackageInput", () => {
 		expect(source("pi install")).toBe("");
 	});
 
+	test("a pasted command keeps a quoted source whole and names nothing when it is ambiguous", () => {
+		expect(parsePiPackageInput('pi install "npm:foo"')).toEqual({
+			source: "npm:foo",
+			local: false,
+		});
+		expect(parsePiPackageInput("pi install -l './my tools'")).toEqual({
+			source: "./my tools",
+			local: true,
+		});
+		expect(parsePiPackageInput('"npm:foo"')).toEqual({ source: "npm:foo", local: false });
+		expect(source("pi install a b")).toBe("");
+		expect(source("pi install --local")).toBe("");
+		expect(source('"unbalanced')).toBe('"unbalanced');
+	});
+
 	test("never throws on a half-typed or malformed URL", () => {
 		for (const raw of [
 			"https://pi.dev/packages/%",

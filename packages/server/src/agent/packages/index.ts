@@ -11,11 +11,14 @@ export {
 	type LoadedExtensionInfo,
 	probeExtensionInfo,
 	recordLoadedExtensions,
+	setExtensionInfoListener,
 } from "./extensionInfo";
 export {
+	disabledDeclarationIdentities,
 	isOfflineMode,
 	npmPackageName,
 	packageSourceIdentity,
+	piDeclarationIdentity,
 	piPackageIdentity,
 	piPackageSourceKind,
 	settingsBaseDir,

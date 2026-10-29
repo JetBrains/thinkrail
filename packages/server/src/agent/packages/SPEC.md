@@ -37,10 +37,14 @@ this module never spawns npm or git itself.
 - `identity.ts` — `piPackageSourceKind` (pi's rule: `npm:` is npm; `git:` or a `scheme://` URL is git;
   everything else, including `git@host:…` and `github:…`, is a path), `piPackageIdentity` (a port of
   pi's private `getPackageIdentity`: npm by name, git by `host/path` with the ref split at the first
-  `@`/`#` inside the repository path, local by resolved path), `packageSourceIdentity` (adds the
-  ThinkRail refinement: a repository declaration's local source inside the worktree is keyed by its
-  worktree-relative path, `local:project:tools`, so every worktree of the project shares the switch as
-  they share its npm/git declarations), `resolveLocalSource` (pi's private `resolvePath` for a local
+  `@`/`#` inside the repository path, local by resolved path), `piDeclarationIdentity` (pi's
+  equivalence of two declarations — what decides shadowing, deltas and dedupe), `packageSourceIdentity`
+  (the **switch key**: the same, except a repository declaration's local source inside the worktree is
+  keyed by its worktree-relative path, `local:project:tools`, so every worktree of the project shares
+  the switch as they share its npm/git declarations) and `disabledDeclarationIdentities` (the switch
+  set closed over pi's equivalence: when any declaration of a pi identity is switched off, every alias
+  is — hiding one must never let pi load the package through another; the `enabled` view and the
+  catalog's `enabled` both use it), `resolveLocalSource` (pi's private `resolvePath` for a local
   source: trim, `~`, `file://`, then the base dir), `settingsBaseDir`, `isOfflineMode` (`PI_OFFLINE`).
 - `settingsView.ts` — `createPiSettings(cwd, agentDir, { projectTrusted?, packages })` and the
   `disabledPackages` resolver the host sets from its config. `enabled` hides the switched-off
@@ -51,6 +55,9 @@ this module never spawns npm or git itself.
   step, over the new package's enabled extension files, through a loader on `SettingsManager.inMemory({})`
   with `noExtensions` and the explicit paths — nothing to install). A changed file loses its chips until
   the next load records them; a row without chips is a file no load has seen, not an empty extension.
+  A record that changes what a row would show (`setExtensionInfoListener`) invalidates the catalog's
+  result cache and publishes `packages.changed`, without touching the package revision, so an open page
+  re-lists after a chat's load and no chat reloads.
 - `extensionCache.ts` — `advancePiExtensionCache`: pi clears its process-wide factory cache only on a
   loaded loader's reload and exports no clearer; an empty loader reloaded twice does it. Used before the
   boot runtime and before the install probe.
@@ -79,7 +86,8 @@ this module never spawns npm or git itself.
     `pi install name` would → a relative local source resolves against the workspace (else the agent dir)
     and must exist → npm/git refused offline → `install()` → fresh trust re-check → `settings.reload()`
     (an npm install can take minutes; an outside edit must survive) → `addSourceToSettings()` → persist.
-    Not `installAndPersist`, which persists before anything can be re-checked.
+    Not `installAndPersist`, which persists before anything can be re-checked. The façade then requires
+    the new row to carry `installedPath` (a Not installed row is not a success) before it probes it.
   - `removePiPackage` persists the removal **before** `remove()` touches disk, so a resolve that starts
     meanwhile cannot re-install it. `updatePiPackages(targets)` runs pi's `update(source)` per target, or
     the batched `update()` once only when the targets cover every *declaration* (it would install a

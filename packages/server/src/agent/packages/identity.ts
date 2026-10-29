@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { PackageSource } from "@earendil-works/pi-coding-agent";
 import type { PiPackageScope, PiPackageSourceKind } from "@thinkrail/contracts";
 
 export const BUILTIN_PREFIX = "builtin:";
@@ -78,8 +79,19 @@ export function piPackageIdentity(source: string, resolveLocal: (path: string) =
 	return `local:${resolveLocal(source.trim())}`;
 }
 
-// A repository's local package is keyed by its path inside the worktree, so every worktree of the
-// project shares its switch like they share its npm and git declarations.
+/** pi's own equivalence of two declarations: the key `dedupePackages` and the delta lookup use. */
+export function piDeclarationIdentity(
+	source: string,
+	scope: PiPackageScope,
+	cwd: string | undefined,
+	agentDir: string,
+): string {
+	const baseDir = settingsBaseDir(cwd, agentDir, scope);
+	return piPackageIdentity(source, (path) => resolveLocalSource(path, baseDir));
+}
+
+// The switch key: pi's identity, except that a repository's local package is keyed by its path inside
+// the worktree, so every worktree of the project shares its switch like its npm and git declarations.
 export function packageSourceIdentity(
 	source: string,
 	scope: PiPackageScope,
@@ -95,4 +107,39 @@ export function packageSourceIdentity(
 			? `project:${inside.split(sep).join("/")}`
 			: absolute;
 	});
+}
+
+export interface PackageDeclaration {
+	source: string;
+	scope: PiPackageScope;
+}
+
+/**
+ * The declarations the switch set turns off, closed over pi's equivalence: when any declaration of a
+ * pi identity is switched off, every declaration of that identity is — hiding one alias must never let
+ * pi load the package through another.
+ */
+export function disabledDeclarationIdentities(
+	declarations: readonly PackageDeclaration[],
+	disabled: ReadonlySet<string>,
+	cwd: string | undefined,
+	agentDir: string,
+): ReadonlySet<string> {
+	const off = new Set<string>();
+	for (const { source, scope } of declarations) {
+		if (disabled.has(packageSourceIdentity(source, scope, cwd, agentDir))) {
+			off.add(piDeclarationIdentity(source, scope, cwd, agentDir));
+		}
+	}
+	return off;
+}
+
+export function declarationsOf(
+	packages: readonly PackageSource[] | undefined,
+	scope: PiPackageScope,
+): PackageDeclaration[] {
+	return (packages ?? []).map((pkg) => ({
+		source: typeof pkg === "string" ? pkg : pkg.source,
+		scope,
+	}));
 }

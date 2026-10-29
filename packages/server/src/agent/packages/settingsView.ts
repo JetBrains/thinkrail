@@ -1,5 +1,5 @@
 import { getAgentDir, type PackageSource, SettingsManager } from "@earendil-works/pi-coding-agent";
-import { packageSourceIdentity } from "./identity";
+import { declarationsOf, disabledDeclarationIdentities, piDeclarationIdentity } from "./identity";
 
 export type PackageDeclarationScope = "user" | "project";
 
@@ -43,11 +43,22 @@ export function createPiSettings(
 	if (options.packages === "all") return settings;
 	if (options.packages === "none") return withPackageDeclarations(settings, () => false);
 	const resolvedAgentDir = agentDir ?? getAgentDir();
+	const getGlobalSettings = settings.getGlobalSettings.bind(settings);
+	const getProjectSettings = settings.getProjectSettings.bind(settings);
 	return withPackageDeclarations(settings, (declaration, scope) => {
 		const disabled = disabledPackages();
 		if (disabled.size === 0) return true;
+		const off = disabledDeclarationIdentities(
+			[
+				...declarationsOf(getGlobalSettings().packages, "user"),
+				...declarationsOf(getProjectSettings().packages, "project"),
+			],
+			disabled,
+			cwd,
+			resolvedAgentDir,
+		);
 		const source = typeof declaration === "string" ? declaration : declaration.source;
-		return !disabled.has(packageSourceIdentity(source, scope, cwd, resolvedAgentDir));
+		return !off.has(piDeclarationIdentity(source, scope, cwd, resolvedAgentDir));
 	});
 }
 

@@ -4,8 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DefaultPackageManager } from "@earendil-works/pi-coding-agent";
 import { invalidatePiPackageCatalog, listPiPackageCatalog } from "./catalog";
-import { forgetExtensionInfo, probeExtensionInfo, recordLoadedExtensions } from "./extensionInfo";
+import {
+	forgetExtensionInfo,
+	probeExtensionInfo,
+	recordLoadedExtensions,
+	setExtensionInfoListener,
+} from "./extensionInfo";
 import { piPackageIdentity, piPackageSourceKind } from "./identity";
+import { createPiSettings, setDisabledPackagesResolver } from "./settingsView";
 import { fixtureExtensionSource, writeFixturePiPackage } from "./testFixtures";
 
 const extensionSource = fixtureExtensionSource;
@@ -291,6 +297,84 @@ describe("listPiPackageCatalog", () => {
 		const byName = Object.fromEntries((user?.resources ?? []).map((r) => [r.displayName, r]));
 		expect(byName["legacy.ts"]).toMatchObject({ enabled: false });
 		expect(byName["hello.ts"]).toMatchObject({ enabled: true });
+	});
+
+	it("switching off a repository's local package also covers a user declaration of the same folder", async () => {
+		const project = join(root, "project");
+		mkdirSync(join(project, ".pi"), { recursive: true });
+		writeFixturePiPackage(join(project, "tools"));
+		writeFileSync(
+			join(agentDir, "settings.json"),
+			JSON.stringify({ packages: [join(project, "tools")] }),
+		);
+		writeFileSync(
+			join(project, ".pi", "settings.json"),
+			JSON.stringify({
+				packages: [{ source: "../tools", autoload: false, extensions: ["-extensions/legacy.ts"] }],
+			}),
+		);
+		const options = { cwd: project, agentDir, projectTrusted: true, builtinExtensions: [] };
+		const on = await listPiPackageCatalog({ ...options, disabledPackages: new Set() });
+		expect(on.packages).toHaveLength(1);
+		expect(on.packages[0]).toMatchObject({
+			scope: "user",
+			identity: `local:${join(project, "tools")}`,
+			enabled: true,
+		});
+		expect(on.packages[0]?.resources.find((r) => r.displayName === "legacy.ts")?.enabled).toBe(
+			false,
+		);
+		invalidatePiPackageCatalog();
+		const off = await listPiPackageCatalog({
+			...options,
+			disabledPackages: new Set(["local:project:tools"]),
+		});
+		expect(off.packages[0]?.enabled).toBe(false);
+		const view = createPiSettings(project, agentDir, { projectTrusted: true, packages: "enabled" });
+		setDisabledPackagesResolver(() => new Set(["local:project:tools"]));
+		try {
+			expect(view.getGlobalSettings().packages).toEqual([]);
+			expect(view.getProjectSettings().packages).toEqual([]);
+		} finally {
+			setDisabledPackagesResolver(() => new Set());
+		}
+	});
+
+	it("re-lists after a chat records a file it already showed without chips", async () => {
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
+		const hello = join(pkg, "extensions", "hello.ts");
+		const options = {
+			agentDir,
+			projectTrusted: false,
+			builtinExtensions: [],
+			disabledPackages: new Set<string>(),
+		};
+		let published = 0;
+		setExtensionInfoListener(() => {
+			invalidatePiPackageCatalog();
+			published += 1;
+		});
+		try {
+			expect(
+				(await listPiPackageCatalog(options)).packages[0]?.resources[0]?.tools,
+			).toBeUndefined();
+			recordLoadedExtensions({
+				extensions: [{ resolvedPath: hello, tools: new Map([["late", 1]]), commands: new Map() }],
+				errors: [],
+			});
+			expect(published).toBe(1);
+			const hello2 = (await listPiPackageCatalog(options)).packages[0]?.resources.find(
+				(r) => r.displayName === "hello.ts",
+			);
+			expect(hello2?.tools).toEqual(["late"]);
+			recordLoadedExtensions({
+				extensions: [{ resolvedPath: hello, tools: new Map([["late", 1]]), commands: new Map() }],
+				errors: [],
+			});
+			expect(published).toBe(1);
+		} finally {
+			setExtensionInfoListener(null);
+		}
 	});
 
 	it("keys a repository's local package by its path inside the worktree, shared across worktrees", async () => {

@@ -21,6 +21,7 @@ import {
 	type PiPackageHostContext,
 	probeExtensionInfo,
 	removePiPackage,
+	setExtensionInfoListener,
 	setPiResourceEnabled,
 	updatePiPackages,
 } from "./packages";
@@ -41,7 +42,12 @@ export function setPiPackagesPublisher(fn: PiPackagesPublisher | null): void {
 	publish = fn;
 }
 
+// A chat's load installed a declared package, or recorded new chips for a file: pages re-list, no reload.
 setInstalledPackagesListener(() => {
+	invalidatePiPackageCatalog();
+	publish?.();
+});
+setExtensionInfoListener(() => {
 	invalidatePiPackageCatalog();
 	publish?.();
 });
@@ -104,7 +110,7 @@ export async function piPackagesInstall(
 	let summary: PiPackageSummary | undefined;
 	try {
 		summary = find(await piPackagesCatalog(target, enabledFromNowOn));
-		if (summary) {
+		if (summary?.installedPath !== undefined) {
 			await probeExtensionInfo(
 				target.cwd ?? getAgentDir(),
 				getAgentDir(),
@@ -123,7 +129,7 @@ export async function piPackagesInstall(
 			}`,
 		);
 	}
-	if (!summary) {
+	if (summary?.installedPath === undefined) {
 		throw new CodedError(
 			"PACKAGE_INSTALLED_UNLISTED",
 			`${request.source} was added to your settings, but ThinkRail cannot find it on disk.`,

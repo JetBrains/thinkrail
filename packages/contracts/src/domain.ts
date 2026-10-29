@@ -812,15 +812,13 @@ export interface PiPackageInput {
  * everything else — `npm:` / `git:` sources, git URLs, paths — is returned trimmed. Never throws.
  */
 export function parsePiPackageInput(raw: string): PiPackageInput {
-	let source = raw
-		.trim()
-		.replace(/^[`'"]+|[`'"]+$/g, "")
-		.trim();
+	let source = unwrapQuotes(raw.trim());
 	let local = false;
 	if (PI_INSTALL_COMMAND.test(source)) {
-		const words = source.split(/\s+/).slice(2);
+		const words = shellWords(source).slice(2);
 		local = words.some((word) => PI_INSTALL_LOCAL_FLAGS.has(word));
-		source = words.filter((word) => !word.startsWith("-")).at(-1) ?? "";
+		const sources = words.filter((word) => !word.startsWith("-"));
+		source = sources.length === 1 ? (sources[0] ?? "") : "";
 	}
 	const fromUrl = packageUrlSource(source);
 	if (fromUrl !== null) return { source: fromUrl, local };
@@ -832,6 +830,45 @@ export function parsePiPackageInput(raw: string): PiPackageInput {
 		return { source: `npm:${source}`, local, bareName: source };
 	}
 	return { source, local };
+}
+
+/** Strips one balanced pair of surrounding quotes or backticks — a pasted `\`pi install …\`` or `"npm:x"`. */
+function unwrapQuotes(text: string): string {
+	const first = text[0];
+	if (first && "`'\"".includes(first) && text.length >= 2 && text.endsWith(first)) {
+		return text.slice(1, -1).trim();
+	}
+	return text;
+}
+
+/** Whitespace-separated words, where a quoted span is one word without its quotes. */
+function shellWords(text: string): string[] {
+	const words: string[] = [];
+	let current = "";
+	let quote: string | null = null;
+	let inWord = false;
+	for (const char of text) {
+		if (quote) {
+			if (char === quote) quote = null;
+			else current += char;
+			continue;
+		}
+		if (char === '"' || char === "'") {
+			quote = char;
+			inWord = true;
+			continue;
+		}
+		if (/\s/.test(char)) {
+			if (inWord) words.push(current);
+			current = "";
+			inWord = false;
+			continue;
+		}
+		current += char;
+		inWord = true;
+	}
+	if (inWord) words.push(current);
+	return words;
 }
 
 function packageUrlSource(source: string): string | null {

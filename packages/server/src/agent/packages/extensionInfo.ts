@@ -19,6 +19,20 @@ interface LoadedExtensions {
 }
 
 const memo = new Map<string, { mtimeMs: number; info: LoadedExtensionInfo }>();
+let changedListener: (() => void) | null = null;
+
+/** Called when a recorded load changed what the catalog would show for some file. */
+export function setExtensionInfoListener(listener: (() => void) | null): void {
+	changedListener = listener;
+}
+
+function sameInfo(a: LoadedExtensionInfo, b: LoadedExtensionInfo): boolean {
+	return (
+		a.error === b.error &&
+		(a.tools ?? []).join("\0") === (b.tools ?? []).join("\0") &&
+		(a.commands ?? []).join("\0") === (b.commands ?? []).join("\0")
+	);
+}
 
 function fileMtime(path: string): number | undefined {
 	try {
@@ -41,10 +55,15 @@ export function recordLoadedExtensions(result: LoadedExtensions): void {
 		const key = resolve(failure.path);
 		fresh.set(key, { ...fresh.get(key), error: failure.error });
 	}
+	let changed = false;
 	for (const [key, info] of fresh) {
 		const mtimeMs = fileMtime(key);
-		if (mtimeMs !== undefined) memo.set(key, { mtimeMs, info });
+		if (mtimeMs === undefined) continue;
+		const previous = memo.get(key);
+		if (!previous || previous.mtimeMs !== mtimeMs || !sameInfo(previous.info, info)) changed = true;
+		memo.set(key, { mtimeMs, info });
 	}
+	if (changed) changedListener?.();
 }
 
 /** The last recorded load of this file, as long as the file has not changed since. */
