@@ -546,7 +546,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   host restart and does not shut down or relaunch the unsupervised process; failure permits retry and exposes no
   child output or arbitrary diagnostic. Discovery failures preserve known state, shutdown makes late results
   inert, and the host never learns feed, installer, command, path, channel, or version selection.
-- **Interview invitation delivery:** the three user-send handlers share one post-`ackSend` path that
+- **Survey invitation delivery:** the three user-send handlers share one post-`ackSend` path that
   filters control traffic once, tracks anonymous `message_sent`, and records the local feedback count. The
   feedback module's injected publisher maps an eligible claim to addressed `feedback.interview` delivery
   for that request's opaque client key only when its socket-advertised protocol version supports the channel;
@@ -554,6 +554,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
   replay-safe requests and never alter the Settings link.
+- **Survey submission:** after `initializeAnalytics` the host configures the feedback survey source from
+  analytics' `surveyEndpoint()`, so unkeyed, CI and test runs never fetch and `THINKRAIL_POSTHOG_HOST`
+  applies. `feedback.survey.submit` refreshes the survey, refuses with `SURVEY_INVALID`,
+  `SURVEY_UNAVAILABLE` (none launched, or already completed) or `SURVEY_CHANGED` (another id or
+  iteration), hands the built payload to `captureSurveyResponse`, and records completion only when that
+  capture is accepted (`SURVEY_NOT_SENT` otherwise).
 - **Chat titles:** `session.rename` resolves `workspaceId` to its cwd and delegates title validation plus the
   unconditional durable write to `agent`; it never patches one client directly. Automatic titles come only
   from the agent's `set_title` (above); sends carry no naming work. Both manual and automatic

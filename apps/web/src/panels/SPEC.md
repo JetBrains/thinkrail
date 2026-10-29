@@ -626,7 +626,7 @@ a project picker, the prompt hero, and the reused
   Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
   Feedback card (`settings-nav-feedback`, “Share feedback”) belongs to that list at
-  every width when a survey is available, pinned to the rail's bottom at `md`+. The pure nav data — groups, protocol and
+  every width, pinned to the rail's bottom at `md`+. The pure nav data — groups, protocol and
   injected-content gating, and resolving a requested section to an available one (a gated or retired id,
   e.g. an old `review` / `line-width` deep link, falls back to Appearance) — lives in `panels/settingsNav.ts`,
   so the dialog only renders it. `settingsOpen`/`settingsSection` live in the store so the gear AND the
@@ -975,7 +975,7 @@ a project picker, the prompt hero, and the reused
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]]. The pane ends with a link to the analytics section of the project readme.
   **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates,
-  held back (with the interview invitation) while the cold-start onboarding wizard may still show or is
+  held back (with the survey invitation) while the cold-start onboarding wizard may still show or is
   showing (`selectOnboardingActive`): a new user meets the product before a privacy question, and sharing
   stays off until the dialog mounts, so holding it never collects without asking. The wizard itself asks at
   its natural seam — **Get started** leads to its own **privacy** step (same `AnalyticsConsentChoice` body,
@@ -996,14 +996,19 @@ a project picker, the prompt hero, and the reused
   decisions survive restarts and change later through Settings. The dialog keeps only the short
   product-usage copy and shared switch; Settings adds the optional outcomes, report dimensions, and
   excluded content. Older hosts retain their legacy privacy control without the new consent dialog.
-  **`FeedbackSettings`** is the separated survey pane: the launched questions, a request to enable
-  analytics before those questions, or a message that this run was started with `--no-analytics` and cannot
-  save responses. It does not call `feedback.respond`.
-  The usage prompt is an in-app notification, including when analytics is off or the run is suppressed. **Sure** opens
-  **`SurveyPromptDialog`**. That dialog shows the same `--no-analytics` message, or asks to enable analytics before the questions when analytics is
-  off, then draws the launched survey one question at a time. Every step's button says Continue, with a Privacy policy link at the right of that row. The request to enable analytics includes the same readme link as Settings → Privacy.
-  Closing it without finishing postpones.
-  **Hide and don't ask again** records dismissal and tells the user the survey stays in Settings.
+  **`FeedbackSettings`** is the always-present Feedback pane: **Take the survey** (only while a survey is
+  launched and unfinished) opens the survey window, beside the Discord link and `info@thinkrail.ai`. Settings
+  never draws the questions itself and never calls `feedback.respond`.
+  **`SurveyInvitationDialog`** is the automatic invitation: **Never show again** records `never`, **Not
+  now** and closing record `postpone`, and **Take the survey** opens the window and records `postpone`, so
+  leaving the survey unsent re-invites later. Each action closes the dialog at once; a failed response is a
+  toast, never a trapped modal.
+  **`SurveyWindow`** is the one survey UI. Its first page carries the data notice (what is sent, linked
+  to a random installation ID, no secrets/code/personal data, deletion via `info@thinkrail.ai`; no links)
+  above the first question; `SurveyForm` then draws one question per step (rating points are real radio
+  inputs) with **Continue**, and **Send** on the last. Nothing is sent before Send, closing never calls the
+  host, and the analytics setting plays no part. `SURVEY_CHANGED` reloads the survey and restarts it with a
+  short notice; other refusals stay inline; success shows PostHog's thank-you header or the app's.
   **`ModelsSettings`** is the **Models** section, visible only at protocol v72 or newer. It re-reads
   `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
@@ -1090,11 +1095,8 @@ a project picker, the prompt hero, and the reused
   picker: `dialog.selectDirectory` is the project-setup picker and records setup analytics.
   `ProvidersSettings`/`McpSettings`/`AppearanceSettings`/`LineWidthControl`/`ChatSettings`/`TemplatesSettings`/
   `WorkspacesSettings`/`PrivacySettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings`/`EnvironmentSettings`, the onboarding
-  `ConnectProviderDialog`/`CreateProjectDialog`/`OnboardingWizard`, and the app-wide **`SurveyPromptDialog`** are the
-  panels-owned **integration pieces** (store + transport). The usage suggestion is a notification; Sure opens
-  the dialog, whose intro offers to enable analytics when it is off, or says this run was started with
-  `--no-analytics` and cannot save responses.   Closing the dialog without finishing
-  records `postpone`. A rejected `survey dismissed` event still closes; a rejected postpone stays open.
+  `ConnectProviderDialog`/`CreateProjectDialog`/`OnboardingWizard`, and the app-wide **`SurveyInvitationDialog`** /
+  **`SurveyWindow`** are the panels-owned **integration pieces** (store + transport).
   `SettingsDialog` receives the Layout section from the
   shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays presentational
   (`auth` module).

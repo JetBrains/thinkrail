@@ -15,14 +15,14 @@ PostHog EU. The module owns the closed event vocabulary, catalog bucketing, inst
 exception sanitization, delivery, consent gates and bounded shutdown. Host alone observes feature outcomes and captures events; feature
 modules remain analytics-free. Sibling dependency edges belong to [[module-server]].
 
-- **Public surface:** initialization, basic capture, consent-scoped additional capture, survey capture
-  (`captureSurveyEvent`, `SurveyAnalyticsEvent`), additional-data
+- **Public surface:** initialization, basic capture, consent-scoped additional capture, the survey endpoint
+  and response capture (`surveyEndpoint`, `SurveyEndpoint`, `captureSurveyResponse`), additional-data
   enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ErrorReport`, `ErrorSource`),
   shutdown/test reset, event types, bucket helpers and `BuildKind`.
 - **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
   inside the sink only (`errors.ts` is SDK-free; the sink adapts it into `before_send`).
 - **Forbidden:** importing host/feature siblings; being imported outside host; exposing the installation
-  UUID on the wire; copying rich feature payloads into telemetry except the survey responses documented
+  UUID on the wire; copying rich feature payloads into telemetry except the survey response documented
   below; browser autocapture or a native-only sink.
 
 ## Events
@@ -66,14 +66,17 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs; `source` = `plan_page` when driven from the plan page's PR stage, else `other`. |
 | `acquisition_linked` | One successful browser-claim redemption, carrying the transient journey/bridge ids and normalized first/last acquisition fields. |
 
-Survey events stay outside that union. `captureSurveyEvent` accepts only `survey shown`, `survey dismissed`,
-and `survey sent`, and sends them through the current additional sink. They leave only while additional
-analytics is on, stay personless (`$process_person_profile: false`), and are dropped when the run is muted
-or the grant is off. `shown` and `dismissed` carry `$survey_id`, `$survey_iteration`, and
-`$survey_submission_id`. `sent` also carries `$survey_completed`, `$survey_questions` (`id` and question
-text), and `$survey_response_<question id>` — the answer text, rating, or choice. That response is the one
-additional payload allowed to contain what the user wrote. The host is the only caller and may pass only
-the object built by `surveyCapture`.
+`survey sent` stays outside both unions: it is the user's explicit submission, not usage telemetry.
+`captureSurveyResponse` sends it once per finished survey through the **basic** client, so it leaves whatever
+the additional preference or grant and under `--no-analytics`, but never from unkeyed, CI or `NODE_ENV=test`
+runs (no client exists). It is personless (`$process_person_profile: false`), keyed by the installation ID,
+carries the standard environment properties plus `$survey_id`, `$survey_iteration`, `$survey_submission_id`,
+`$survey_completed`, `$survey_questions` (`id` and question text) and `$survey_response_<question id>` — the
+answer text, rating or choice. It is the one payload allowed to contain what the user wrote; the survey
+window says so before the first question. It returns whether the client accepted the event (queued, not
+delivered), so the host records completion only then. No `survey shown` or `survey dismissed` is sent.
+`surveyEndpoint()` exposes the key, host (`THINKRAIL_POSTHOG_HOST` wins) and fetch the survey list must use,
+or null whenever no client exists; the host is the only caller of both.
 
 The review-comment funnel is host-observed off existing wire/tool actions: `review_comment_added`
 off the `review.commentAdd` handler (human, `author:user`) and each plan-review finding the host files
@@ -197,9 +200,8 @@ it. Settings changes write preference and confirmation together. Window behavior
 
 Only builds stamped with a project key report (see Data boundary); unkeyed source/dev builds, CI and
 `NODE_ENV=test` create no vendor clients and claim no installation marker. `--no-analytics` / `THINKRAIL_NO_ANALYTICS` suppress only
-additional events without changing consent. `additionalAnalyticsSuppressed()` stays true for that process,
-including when initialization returns before a client exists, so a survey cannot be submitted or marked
-complete. Host-side analytics is the sole environment-policy reader
+additional events without changing consent; they do not suppress an explicitly sent survey. Host-side
+analytics is the sole environment-policy reader
 across launchers. Browser attribution is additionally limited to binary/desktop human runs with both
 preference and confirmation true, an injected launcher opener, and no prior attempt. Source, CI/test,
 per-run suppression, explicit off, and CLI `--no-open` do not consume the attempt. The dialog's

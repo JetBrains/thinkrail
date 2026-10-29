@@ -36,7 +36,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   being described), **`RANGE_INVALID`** (a span lies outside the side it names, or a range revert was
   asked of a byte-only resource), **`RECEIPT_UNKNOWN`** (an undo of a receipt the host no longer
   holds — the ring is 20 deep and dies with the process), and **`UNSUPPORTED_CHANGE`** (the selected
-  change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)), so a client can react to one specific failure
+  change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses), plus
+  the four `feedback.survey.submit` refusals `SURVEY_INVALID`, `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` and
+  `SURVEY_NOT_SENT`), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
@@ -443,8 +445,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `server.welcome`, mutated via `settings.update`). Every new user chat receives the resolved model and
   effort explicitly, so the session agrees with `model.default`; explicit request fields win individually,
   while an effort-only request uses the configured or fallback model. Plan-review subagents keep their own model policy.
-  **`SurveyInvitationResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
-  feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
+  **`SurveyInvitationResponse`** is the closed `"postpone" | "never"` action accepted from the automatic
+  survey invitation. No usage count, eligibility, dismissal state, or client identity crosses the wire.
   Contracts deliberately exports no theme catalog enum/list/labels: a future manifest can mint an id
   unknown when the host was built, and a client missing it resolves a same-appearance bundled fallback;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
@@ -737,16 +739,15 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   because values may be secrets; `get` → `HostEnvironmentStatus` with `restartRequired`, `launchOverridden`
   names and the `effectiveAgentDir`; `update` replaces the whole record and returns
   `{ ok: false, issues }` per field/row index instead of saving anything when it is invalid) /
-  **`feedback.respond`** (`{ action: SurveyInvitationResponse }` → ack; persists postpone, book, or the legacy
-  permanent-dismiss flag; book and never no longer stop message counting;
-  `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction) /
-  **`feedback.survey`** (no params → `{ survey: AppSurvey | null, analyticsSuppressed: boolean }`; the launched survey named
-  `in-app-feedback`, or null when it is off or this id and iteration were already submitted;
-  `analyticsSuppressed` is true for a run started with `--no-analytics` or `THINKRAIL_NO_ANALYTICS`) /
-  **`feedback.survey.submit`** (`SurveySubmitParams` → ack; the host fills `$survey_id` and captures
-  `survey shown`, `survey sent`, or `survey dismissed` only while additional analytics is on, and records
-  completion on a finished send; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the invitation
-  channel to v97) /
+  **`feedback.respond`** (`{ action: SurveyInvitationResponse }` → ack; persists postpone or the permanent
+  dismissal; neither stops message counting) /
+  **`feedback.survey`** (no params → `{ survey: AppSurvey | null }`; the launched survey named
+  `in-app-feedback`, or null when it is off or this id and iteration were already submitted) /
+  **`feedback.survey.submit`** (`SurveySubmitParams { submissionId, surveyId, iteration, answers }` → ack;
+  one call when the user presses Send, whatever the analytics setting; fails with `SURVEY_INVALID`,
+  `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` (the survey moved to another id or iteration — the client reloads
+  and restarts) or `SURVEY_NOT_SENT`; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the
+  invitation channel to v97) /
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a

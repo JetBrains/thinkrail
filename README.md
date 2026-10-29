@@ -215,6 +215,12 @@ that run. With additional sharing on, a packaged build may open the ThinkRail bl
 link your installation to the website visit that brought you here — only where you accepted marketing cookies on the
 website or no consent is required — and that link expires after 30 days.
 
+Feedback surveys are separate from usage analytics. ThinkRail may invite you to a short survey, and you can
+also open it from **Settings → Feedback**. Your answers, including anything you type, are sent to the
+ThinkRail team only when you press **Send**, whatever your analytics settings, and are tied to the same
+random installation ID — not to your name or account. Please don't include secrets, code, or personal data;
+to have your answers deleted, email info@thinkrail.ai.
+
 The ThinkRail apps and the ThinkRail website ([thinkrail.ai](https://thinkrail.ai)) use PostHog Inc. services for
 analytics. The website also uses PostHog Surveys to collect feedback after a desktop download and, only if you
 choose to enter one, your email address, which is used to ask for further feedback and to send product updates.

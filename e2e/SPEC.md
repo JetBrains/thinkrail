@@ -362,7 +362,7 @@ convergence with draft invalidation, sanitized read/write failures with Retry, m
 and pre-v76 hiding.
 
 General and private-restart fixtures seed additional analytics off with consent already confirmed, so
-unrelated scenarios stay unblocked. They also seed the automatic interview invitation as permanently
+unrelated scenarios stay unblocked. They also seed the automatic survey invitation as permanently
 dismissed: the serial agent lane intentionally accumulates accepted prompts across scenarios, while dedicated
 feedback coverage injects and asserts the addressed invitation channel directly. The cold-start onboarding
 wizard is likewise seeded dismissed (`onboardingDismissed: true`, in the config file and again over the

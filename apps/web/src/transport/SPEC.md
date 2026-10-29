@@ -67,11 +67,11 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
   restore a removed generation's models; provider settings observes the same version and re-reads
   `provider.status`), each valid `server.welcome` first clearing any popup projection left by a host restart,
-  then `feedback.interview` via the idempotent `showInterviewPrompt()` when the socket is protocol v97 and
-  the analytics consent dialog is not open — additional analytics may be off (a surviving host claim
-  re-delivers the addressed event immediately after welcome; the
-  client also loads `feedback.survey` after welcome and when settings opens, storing `analyticsSuppressed`
-  with the survey),
+  then `feedback.interview` via the idempotent `showSurveyInvitation()` — the shell holds the invitation
+  behind onboarding and the consent dialog, and additional analytics may be off (a surviving host claim
+  re-delivers the addressed event immediately after welcome). `loadInAppSurvey()` installs `feedback.survey`
+  into the store after welcome, when Settings opens, when the survey window opens, and after a
+  `SURVEY_CHANGED` refusal; it never rejects, and a stale reply is dropped by generation,
   `workspace.fsChanged` via `noteFsChanged(payload)`, **`mcp.status`** via the generation-guarded
   `applyMcpStatus(snapshot)`, and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
   welcome config lands in the atomic install above.
