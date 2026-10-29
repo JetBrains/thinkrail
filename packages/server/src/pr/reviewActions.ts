@@ -5,7 +5,7 @@ import {
 	githubSlug,
 	runProviderCommand,
 } from "../branch-review";
-import { git, gitAsync, originUrls, remoteRefOidAsync, throwOnTimeout } from "../git";
+import { git, gitAsync, originUrls, remoteRefOidAsync } from "../git";
 import {
 	MUTATION_TIMEOUT_MS,
 	onBaseBranch,
@@ -198,7 +198,7 @@ export async function mergePr(
 		params,
 		["OPEN"],
 		(worktree, repo) => {
-			const head = git(worktree, ["rev-parse", "HEAD"]);
+			const head = git(worktree, ["rev-parse", "HEAD"], { action: "read HEAD" });
 			if (!head.ok) throw new Error(`Couldn't read HEAD: ${head.err || "git failed"}`);
 			mergedHead = head.out;
 			return [
@@ -303,11 +303,10 @@ export async function deleteRemoteBranch(
 			`Couldn't tell which commit origin/${ws.branch} points at — refresh and try again. Nothing was deleted.`,
 		);
 	}
-	const contained = throwOnTimeout(
-		git(ws.worktreePath, ["merge-base", "--is-ancestor", tip, "HEAD"]),
-		`check origin/${ws.branch} against this checkout`,
-		"Nothing was deleted.",
-	);
+	const contained = git(ws.worktreePath, ["merge-base", "--is-ancestor", tip, "HEAD"], {
+		action: `check origin/${ws.branch} against this checkout`,
+		consequence: "Nothing was deleted.",
+	});
 	if (!contained.ok) {
 		throw new Error(
 			`origin/${ws.branch} has commits this checkout doesn't — integrate or review them first. Nothing was deleted.`,

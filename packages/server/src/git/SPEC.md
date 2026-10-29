@@ -23,8 +23,8 @@ ref off the workspace-create critical path.
   (`opts.timeoutMs`, default 10s): a sync spawn holds the host's single event loop for as long as git
   runs, so an unbounded one turned a hung git (a stuck fsmonitor, a dead network mount, a held lock) into
   a frozen host. On expiry git gets `SIGTERM` (so it removes its `.lock` files; a `SIGKILL` would leave
-  `index.lock` and lock the repo for every later write) and the result is `ok: false`, `failure: "timeout"`,
-  with the same `timed out after <n>s — …` wording as the async runners; the rest of git's process group is
+  `index.lock` and lock the repo for every later write) and the call **throws** (see below), with the same
+  `timed out after <n>s — …` wording as the async runners; the rest of git's process group is
   then killed, so hooks, filters and credential helpers do not outlive it. `worktree remove` and whole-tree
   reads (`gitUncommittedPaths`' tracked diff and untracked listing) pass **`SLOW_GIT_TIMEOUT_MS`** (5 minutes)
   instead, so a large but healthy repository still finishes. Index writers (the initial `add -A` + `commit` of
@@ -32,15 +32,18 @@ ref off the workspace-create critical path.
   `null` (no deadline) on Windows, where the timeout kill is `TerminateProcess` and git cannot remove
   `index.lock`. `createWorkspace`'s `worktree add` passes `timeoutMs: null`: a large checkout legitimately
   runs for minutes. Known gap: a Windows read that refreshes the index (`status`, `diff`) and hits its deadline
-  can still leave `index.lock` behind. **A timeout is not an answer:** helpers that map git's exit to a fact (`tryCurrentBranch` /
-  `currentBranch`, `resolveDefaultBranch`, `remoteRefOid` / `remoteRefOidAsync`, `resolveCommitOid` and its async twin in `resolveDiffRange`,
-  `gitUncommittedPaths`,
-  `gitStatus`' live branch, and `projects`' top-level probe, where a timeout read as "not a repo" would offer
-  to `git init` a real repository)
-  pass the result through **`throwOnTimeout(result, action)`**, which throws a **`GitTimeoutError`**
-  (`CodedError("GIT_TIMEOUT")`, so error tracking tells a hung git apart without message text) worded
-  `Could not <action>: timed out …`, instead of reading a killed git as detached, unpublished or missing — callers that persist such
-  facts must not save a guess. `setSyncGitTimeoutForTests(ms)` shortens the 10s default so hang tests finish
+  can still leave `index.lock` behind. **A timeout is not an answer, so sync git throws on it by default:**
+  `git`/`gitBytes` throw a **`GitTimeoutError`** (`CodedError("GIT_TIMEOUT")`, so error tracking tells a
+  hung git apart without message text) worded `Could not <opts.action>: timed out …` (default action
+  `run git <subcommand>`; `opts.consequence` appends a sentence). Most sync callers read `!ok` or empty
+  output as a fact ("no remotes", "identity unset", "unborn HEAD"); a killed git returning that would make
+  them create a workspace from a local decoy ref, push with the wrong SSH command, or commit as ThinkRail.
+  **`opts.onTimeout: "return"`** opts out and returns `ok: false`, `failure: "timeout"` — only for a caller
+  that must act on the timeout itself or for which any failure is a soft skip: `gitCommitPaths`' staging
+  and commit (they must restore the index or inspect HEAD first), `readBlobAt` (optional review context),
+  `workspaces`' `recordWorkspaceHead` (a background activity sample) and `reclaimWorktree`'s
+  `worktree remove` / `prune` (cleanup that falls back to `rm` + prune). The async runners still return the
+  timeout; their fact readers pass it through **`throwOnTimeout(result, action, consequence?)`**. `setSyncGitTimeoutForTests(ms)` shortens the 10s default so hang tests finish
   fast; `undefined` restores it. `gitAsync(cwd, args, opts?)` and
   **`gitAsyncBytes(cwd, args, opts?)`** are the bounded async twins over `subprocess.runBounded`; the latter
   preserves stdout as `Uint8Array`, while stderr remains decoded diagnostics. They keep network-bound ops
@@ -300,21 +303,29 @@ ref off the workspace-create critical path.
   magic or a glob (`:(top)*`) can't expand beyond the proved delta and defeat the exact-path guarantee or
   the `.thinkrail/` exclusion. **The index is preserved across failure:** the
   checkout's real index **file** (`rev-parse --git-path index` — per-worktree in a linked worktree) is
-  snapshotted byte-for-byte before staging and written back on every failure path, so a skipped commit
-  leaves the user's staging area exactly as it was — *including index-only state a tree round-trip would
+  snapshotted byte-for-byte before staging and written back on every failure path where HEAD did not
+  move, so a skipped commit leaves the user's staging area exactly as it was — *including index-only state a tree round-trip would
   drop* (an intent-to-add entry from `git add -N` has no tree representation, so a `write-tree`/`read-tree`
   snapshot would silently unstage it). Staging succeeds but committing is fallible (an unset identity, an
   unavailable signing key), and a best-effort feature must not leave the user's next commit carrying files
   they never staged. An index with unmerged entries (a conflicted merge in flight) bails out untouched; a
   half-merged worktree is nothing to auto-commit anyway. A commit that **landed** before git reported
   failure (a `post-commit` hook killed at the deadline: HEAD moved to a child of the old HEAD) is kept and
-  its sha returned; restoring the old index there would stage a reversal of the commit. Returns `null` for an empty path set, when those paths had nothing to commit
-  (`git diff --cached --quiet -- <paths>`), or on any git failure — the caller (`todos/artifacts`) treats
-  that as "fall back to path-list artifacts" and never lets it throw. It is the one git primitive that
-  **writes** the user's branch; the caller serializes it per workspace.
+  its sha returned. **The index is restored only when HEAD is proven unchanged** (the post-commit read
+  succeeded and equals the pre-staging HEAD): if HEAD moved to a commit that is not provably ours (a
+  `prepare-commit-msg` hook rewrote the subject, another writer committed), the index is kept and `null`
+  returned — restoring there would stage a reversal of that commit; at worst the paths stay staged.
+  Returns `null` for an empty path set, when those paths had nothing to commit
+  (`git diff --cached --quiet -- <paths>`), or on a git failure — the caller (`todos/artifacts`) treats
+  that as "fall back to path-list artifacts". A **timeout throws `GIT_TIMEOUT`** instead (after restoring
+  the index when HEAD is unchanged), and the caller's reconcile catch keeps its baselines so the next
+  settle retries or adopts a commit that landed. The exception is a commit that timed out after HEAD moved
+  to a commit that is not ours: it returns `null` with the index kept, like any other failure there. It is
+  the one git primitive that **writes** the user's branch; the caller serializes it per workspace.
   **`gitHeadSha(workspaceId)`** → `string | null` — `rev-parse HEAD` (`null` on an unborn HEAD), recorded
-  into the todos baseline sidecar at `in_progress`. **`headShaAt(repoPath)`** is the same read for a caller
-  that already holds the workspace record, so it never re-resolves an id another writer may have removed.
+  into the todos baseline sidecar at `in_progress`. **`headShaAt(repoPath, opts?)`** is the same read for a caller
+  that already holds the workspace record, so it never re-resolves an id another writer may have removed;
+  `opts` pass through to `git` (a background caller passes `onTimeout: "return"` and reads `null`).
   **`readCommitSubject(workspaceId, sha)`** → `string | null` — a commit's subject line (`null` when the
   sha is malformed or unresolvable), the sync read behind the todos module's adopted-commit review
   resolver (`base..HEAD` commits owned by no plan item).

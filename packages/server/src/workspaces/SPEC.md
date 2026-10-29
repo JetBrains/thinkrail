@@ -169,8 +169,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   Drift is **not** only a list-time discovery: `refreshUserOwnedWorkspace(workspaceId)` is the same
   re-sync **without** the diff-stat listing (an external workspace re-syncs only its `branch`, and an
   unreadable checkout is never persisted as a fake detached `HEAD`; nor is a git that timed out — a
-  timeout is no answer, so the stored fields stay and only a warning is logged, and an existing Default
-  is returned as stored for the same reason; unknown id / a managed workspace /
+  timeout is no answer, so the stored fields stay and only a warning is logged — unless the caller passes
+  `{ strict: true }`, which rethrows instead (the `pr` push/PR/branch-action guards, which must not
+  validate against a stale stored branch) — and an existing Default is returned as stored for the same reason; unknown id / a managed workspace /
   no drift → no save, no emit), which the host wires to `watch`'s **repo-metadata nudge** (host-mediated,
   `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in the Default
   workspace's terminal converges the rail, the top bar and the empty receipt live, instead of leaving
