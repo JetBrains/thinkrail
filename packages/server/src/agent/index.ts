@@ -74,7 +74,9 @@ export {
 	piPackagesRevealTarget,
 	piPackagesSetResourceEnabled,
 	piPackagesUpdate,
+	primeProjectPiSettings,
 	primeUserPiSettings,
+	publishPiPackagesChanged,
 	refreshPiPackages,
 	setPiPackagesPublisher,
 } from "./piPackages";

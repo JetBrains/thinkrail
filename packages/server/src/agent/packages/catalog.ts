@@ -3,7 +3,6 @@ import { basename, dirname, join, resolve } from "node:path";
 import {
 	DefaultPackageManager,
 	DefaultResourceLoader,
-	type ResolvedResource,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
@@ -15,11 +14,18 @@ import type {
 	PiPackageSummary,
 	PiPackagesCatalog,
 } from "@thinkrail/contracts";
-import { npmPackageName, piPackageIdentity, piPackageSourceKind } from "./identity";
+import {
+	BUILTIN_PREFIX,
+	expandHome,
+	npmPackageName,
+	piPackageIdentity,
+	piPackageSourceKind,
+	settingsBaseDir,
+} from "./identity";
 
-const BUILTIN_PREFIX = "builtin:";
 const RESOURCE_TYPES: readonly PiPackageResourceType[] = ["extensions", "skills", "prompts"];
-const CATALOG_TTL_MS = 5_000;
+/** Every change path invalidates explicitly; the TTL only bounds a change the host did not see. */
+const CATALOG_TTL_MS = 5 * 60_000;
 
 export interface PiPackageCatalogOptions {
 	/** The workspace path; absent → user scope only, no repository resources. */
@@ -68,14 +74,8 @@ export function packageSourceIdentity(
 	cwd: string | undefined,
 	agentDir: string,
 ): string {
-	const baseDir = scope === "project" && cwd ? join(cwd, ".pi") : agentDir;
+	const baseDir = settingsBaseDir(cwd, agentDir, scope);
 	return piPackageIdentity(source, (path) => resolve(baseDir, expandHome(path)));
-}
-
-function expandHome(path: string): string {
-	if (path === "~") return process.env.HOME ?? path;
-	if (path.startsWith("~/")) return join(process.env.HOME ?? "~", path.slice(2));
-	return path;
 }
 
 async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackagesCatalog> {
@@ -93,39 +93,44 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 	const isExcluded = (path: string) => excluded.has(resolve(path));
 
 	const packages = new Map<string, PiPackageSummary>();
+	const declarationKey = (scope: PiPackageScope, source: string) => `${scope}\0${source}`;
+	const configured = packageManager
+		.listConfiguredPackages()
+		.filter((entry) => !(entry.scope === "project" && !projectTrusted));
+	const identityOf = (source: string, scope: PiPackageScope) =>
+		packageSourceIdentity(source, scope, options.cwd, agentDir);
+	const projectIdentities = new Set(
+		configured
+			.filter((entry) => entry.scope === "project")
+			.map((entry) => identityOf(entry.source, "project")),
+	);
+	for (const entry of configured) {
+		if (!entry.installedPath) continue;
+		const identity = identityOf(entry.source, entry.scope);
+		const shadowed = entry.scope === "user" && projectIdentities.has(identity);
+		packages.set(declarationKey(entry.scope, entry.source), {
+			identity,
+			source: entry.source,
+			kind: piPackageSourceKind(entry.source),
+			scope: entry.scope,
+			...readPackageMetadata(entry.installedPath, entry.source),
+			installedPath: entry.installedPath,
+			singleFile: !isDirectory(entry.installedPath),
+			enabled: !options.disabledPackages.has(identity),
+			...(shadowed ? { shadowed: true } : {}),
+			resources: [],
+		});
+	}
+
 	const loose: PiLooseExtension[] = [];
 	const builtins: PiBuiltinExtension[] = [];
-	const packageOf = (resource: ResolvedResource): PiPackageSummary | undefined => {
-		const { metadata } = resource;
-		if (metadata.origin !== "package") return undefined;
-		const scope: PiPackageScope = metadata.scope === "project" ? "project" : "user";
-		const key = `${scope}\0${metadata.source}`;
-		const existing = packages.get(key);
-		if (existing) return existing;
-		const installedPath =
-			metadata.packageRoot ?? packageManager.getInstalledPath(metadata.source, scope);
-		if (!installedPath) return undefined;
-		const summary: PiPackageSummary = {
-			identity: packageSourceIdentity(metadata.source, scope, options.cwd, agentDir),
-			source: metadata.source,
-			kind: piPackageSourceKind(metadata.source),
-			scope,
-			...readPackageMetadata(installedPath, metadata.source),
-			installedPath,
-			enabled: true,
-			resources: [],
-		};
-		summary.enabled = !options.disabledPackages.has(summary.identity);
-		packages.set(key, summary);
-		return summary;
-	};
-
 	for (const type of RESOURCE_TYPES) {
 		for (const resource of resolved[type]) {
 			if (type === "extensions" && isExcluded(resource.path)) continue;
-			const owner = packageOf(resource);
-			if (owner) {
-				owner.resources.push({
+			const { metadata } = resource;
+			if (metadata.origin === "package") {
+				const scope: PiPackageScope = metadata.scope === "project" ? "project" : "user";
+				packages.get(declarationKey(scope, metadata.source))?.resources.push({
 					type,
 					path: resource.path,
 					displayName: resourceDisplayName(resource.path, type),
@@ -134,21 +139,21 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 				continue;
 			}
 			if (type !== "extensions") continue;
-			if (resource.metadata.source === "builtin") {
+			if (metadata.source === "builtin") {
 				const name = resource.path.slice(BUILTIN_PREFIX.length);
 				if (!options.builtinExtensions.includes(name)) continue;
 				builtins.push({
 					name,
 					enabled: resource.enabled,
-					scope: resource.metadata.scope === "project" ? "project" : "user",
+					scope: metadata.scope === "project" ? "project" : "user",
 				});
 				continue;
 			}
 			loose.push({
 				path: resource.path,
 				displayName: resourceDisplayName(resource.path, type),
-				scope: resource.metadata.scope === "project" ? "project" : "user",
-				explicit: resource.metadata.source === "local",
+				scope: metadata.scope === "project" ? "project" : "user",
+				explicit: metadata.source === "local",
 				enabled: resource.enabled,
 			});
 		}
@@ -187,20 +192,47 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 	};
 }
 
+function isDirectory(path: string): boolean {
+	try {
+		return statSync(path).isDirectory();
+	} catch {
+		return false;
+	}
+}
+
+const extensionInfoMemo = new Map<string, { mtimeMs: number; info: LoadedExtensionInfo }>();
+
+function fileMtime(path: string): number | undefined {
+	try {
+		return statSync(path).mtimeMs;
+	} catch {
+		return undefined;
+	}
+}
+
 // In-memory settings + noExtensions: this loader can never install a declared-but-missing package.
+// A file's factory runs once per content change: the memo is keyed by its mtime.
 async function loadExtensionInfo(
 	cwd: string,
 	agentDir: string,
 	paths: readonly string[],
 ): Promise<Map<string, LoadedExtensionInfo>> {
 	const info = new Map<string, LoadedExtensionInfo>();
-	if (paths.length === 0) return info;
+	const pending: string[] = [];
+	for (const path of paths) {
+		const key = resolve(path);
+		const memo = extensionInfoMemo.get(key);
+		const mtimeMs = fileMtime(key);
+		if (memo && mtimeMs !== undefined && memo.mtimeMs === mtimeMs) info.set(key, memo.info);
+		else pending.push(path);
+	}
+	if (pending.length === 0) return info;
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir,
 		settingsManager: SettingsManager.inMemory({}),
 		noExtensions: true,
-		additionalExtensionPaths: [...paths],
+		additionalExtensionPaths: pending,
 		noSkills: true,
 		noPromptTemplates: true,
 		noThemes: true,
@@ -208,17 +240,52 @@ async function loadExtensionInfo(
 	});
 	await loader.reload();
 	const result = loader.getExtensions();
+	const fresh = new Map<string, LoadedExtensionInfo>();
 	for (const extension of result.extensions) {
-		info.set(resolve(extension.resolvedPath), {
+		fresh.set(resolve(extension.resolvedPath), {
 			tools: [...extension.tools.keys()],
 			commands: [...extension.commands.keys()],
 		});
 	}
 	for (const failure of result.errors) {
 		const key = resolve(failure.path);
-		info.set(key, { ...info.get(key), error: failure.error });
+		fresh.set(key, { ...fresh.get(key), error: failure.error });
+	}
+	for (const [key, value] of fresh) {
+		info.set(key, value);
+		const mtimeMs = fileMtime(key);
+		if (mtimeMs !== undefined) extensionInfoMemo.set(key, { mtimeMs, info: value });
 	}
 	return info;
+}
+
+/** The on-disk targets a reveal may open, read without executing any extension. */
+export async function listPiPackageRevealTargets(options: {
+	cwd?: string;
+	agentDir: string;
+	projectTrusted: boolean;
+	builtinExtensions: readonly string[];
+}): Promise<{ packageRoots: string[]; looseFiles: string[] }> {
+	const cwd = options.cwd ?? options.agentDir;
+	const settingsManager = SettingsManager.create(cwd, options.agentDir, {
+		projectTrusted: options.projectTrusted,
+	});
+	const packageManager = new DefaultPackageManager({
+		cwd,
+		agentDir: options.agentDir,
+		settingsManager,
+		builtinExtensions: [...options.builtinExtensions],
+	});
+	const packageRoots = packageManager
+		.listConfiguredPackages()
+		.filter((entry) => entry.installedPath !== undefined)
+		.filter((entry) => !(entry.scope === "project" && !options.projectTrusted))
+		.map((entry) => entry.installedPath as string);
+	const resolved = await packageManager.resolve(async () => "skip");
+	const looseFiles = resolved.extensions
+		.filter((r) => r.metadata.origin !== "package" && r.metadata.source !== "builtin")
+		.map((r) => r.path);
+	return { packageRoots, looseFiles };
 }
 
 function resourceDisplayName(path: string, type: PiPackageResourceType): string {

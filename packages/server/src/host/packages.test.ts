@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import type { PiPackageSummary, PiPackagesCatalog } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import { setPiPackagesPublisher } from "../agent";
+import { writeFixturePiPackage } from "../agent/packages/testFixtures";
 import { getConfig, resetConfigCache, updateConfig } from "../settings";
 import { handleRequest } from "./handlers";
 
@@ -20,35 +21,6 @@ let agentDir: string;
 let pkg: string;
 let published = 0;
 
-function writeFixturePackage(dir: string): void {
-	mkdirSync(join(dir, "extensions"), { recursive: true });
-	mkdirSync(join(dir, "skills", "triage"), { recursive: true });
-	writeFileSync(
-		join(dir, "package.json"),
-		JSON.stringify({
-			name: "@fixture/pi-tools",
-			version: "0.1.0",
-			description: "Fixture tools",
-			pi: { extensions: ["./extensions/*.ts"], skills: ["./skills"] },
-		}),
-	);
-	writeFileSync(
-		join(dir, "extensions", "hello.ts"),
-		[
-			"export default function (pi) {",
-			'  pi.registerTool({ name: "fixture_hello", label: "fixture_hello", description: "fixture",',
-			'    parameters: { type: "object", properties: {} },',
-			'    execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }) });',
-			"}",
-			"",
-		].join("\n"),
-	);
-	writeFileSync(
-		join(dir, "skills", "triage", "SKILL.md"),
-		"---\nname: triage\ndescription: Triage fixture.\n---\n\n# triage\n",
-	);
-}
-
 beforeEach(() => {
 	root = mkdtempSync(join(tmpdir(), "host-packages-"));
 	repo = join(root, "repo");
@@ -56,7 +28,7 @@ beforeEach(() => {
 	pkg = join(root, "pkgs", "fixture-tools");
 	mkdirSync(repo, { recursive: true });
 	mkdirSync(agentDir, { recursive: true });
-	writeFixturePackage(pkg);
+	writeFixturePiPackage(pkg, { description: "Fixture tools", prompts: [] });
 	process.env.THINKRAIL_DATA_DIR = join(root, "data");
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	process.env.PI_OFFLINE = "1";
@@ -129,7 +101,42 @@ test("lists user scope without a workspace and repository scope with a trusted o
 	const withWorkspace = await list("w1");
 	expect(withWorkspace.projectTrusted).toBe(true);
 	expect(withWorkspace.projectSettingsPath).toBe(join(repo, ".pi", "settings.json"));
-	expect(withWorkspace.packages.map((p) => p.scope)).toEqual(["project"]);
+	expect(withWorkspace.packages.map((p) => [p.scope, p.shadowed ?? false])).toEqual([
+		["user", true],
+		["project", false],
+	]);
+});
+
+test("installing for me a package the repository already declares returns a row instead of failing", async () => {
+	mkdirSync(join(repo, ".pi"), { recursive: true });
+	writeFileSync(join(repo, ".pi", "settings.json"), JSON.stringify({ packages: [pkg] }));
+	const summary = (await handleRequest(
+		"packages.install",
+		{ source: pkg, scope: "user", workspaceId: "w1" },
+		CTX,
+	)) as PiPackageSummary;
+	expect(summary).toMatchObject({ scope: "user", shadowed: true, enabled: true });
+});
+
+test("reveal opens a single-file package's folder, not the file, and a forced check bypasses the cache", async () => {
+	const single = join(root, "pkgs", "single.ts");
+	writeFileSync(single, "export default function () {}\n");
+	writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [single] }));
+	const revealed: string[] = [];
+	const editors = await import("../editors");
+	const reveal = spyOn(editors, "revealInFileManager").mockImplementation((path: string) => {
+		revealed.push(path);
+	});
+	try {
+		await handleRequest("packages.reveal", { path: single }, CTX);
+		expect(revealed).toEqual([join(root, "pkgs")]);
+	} finally {
+		reveal.mockRestore();
+	}
+	const first = await handleRequest("packages.checkUpdates", {}, CTX);
+	const forced = await handleRequest("packages.checkUpdates", { force: true }, CTX);
+	expect(first).toEqual([]);
+	expect(forced).toEqual([]);
 });
 
 test("install returns the new row, turns the package on, and publishes a change", async () => {

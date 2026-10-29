@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type {
@@ -9,7 +9,7 @@ import type {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { refreshExtensionTools } from "./agentSessionManager";
-import { bumpPackagesRevision, setResolvedPackagesListener } from "./extensions";
+import { bumpPackagesRevision, setInstalledPackagesListener } from "./extensions";
 import { HOST_BUILTIN_EXTENSION_NAMES } from "./mcp";
 import {
 	checkPiPackageUpdates,
@@ -17,6 +17,7 @@ import {
 	invalidatePiPackageCatalog,
 	invalidatePiPackageUpdates,
 	listPiPackageCatalog,
+	listPiPackageRevealTargets,
 	type PiPackageHostContext,
 	removePiPackage,
 	setPiResourceEnabled,
@@ -31,21 +32,45 @@ export interface PiPackagesTarget {
 	projectTrusted: () => boolean;
 }
 
+type PiPackagesPublisher = () => void;
+
+let publish: PiPackagesPublisher | null = null;
+
+export function setPiPackagesPublisher(fn: PiPackagesPublisher | null): void {
+	publish = fn;
+}
+
+setInstalledPackagesListener(() => {
+	invalidatePiPackageCatalog();
+	publish?.();
+});
+
+/** Open pages re-list; nothing about what chats load changed (a switch flip, a package pi installed itself). */
+export function publishPiPackagesChanged(): void {
+	publish?.();
+}
+
+/** The declared or installed set changed: every registered chat re-decides through the gated reload, pages re-list. */
+export function refreshPiPackages(): void {
+	bumpPackagesRevision();
+	invalidatePiPackageCatalog();
+	invalidatePiPackageUpdates();
+	refreshExtensionTools();
+	publish?.();
+}
+
 function hostContext(target: PiPackagesTarget): PiPackageHostContext {
 	return {
 		...(target.cwd ? { cwd: target.cwd } : {}),
 		agentDir: getAgentDir(),
 		projectTrusted: target.projectTrusted,
 		builtinExtensions: HOST_BUILTIN_EXTENSION_NAMES,
+		onPersisted: primePiSettingsFile,
 	};
 }
 
 async function excludedExtensionPaths(): Promise<readonly string[]> {
-	try {
-		return (await getPiRuntimeGeneration()).excludedSessionExtensionPaths;
-	} catch {
-		return [];
-	}
+	return (await getPiRuntimeGeneration()).excludedSessionExtensionPaths;
 }
 
 export async function piPackagesCatalog(
@@ -62,25 +87,28 @@ export async function piPackagesCatalog(
 	});
 }
 
-/** Installs, then applies to chats and pages; returns the new row. The caller clears its `disabledPackages` entry. */
+/**
+ * Installs, applies to chats and pages, and returns the new row. `disabledPackages` is read after the
+ * install finished — it can take minutes — so another client's switch flips are honoured; the caller
+ * clears the installed identity from the setting.
+ */
 export async function piPackagesInstall(
 	target: PiPackagesTarget,
 	request: { source: string; scope: PiPackageScope },
-	disabledPackages: ReadonlySet<string>,
+	disabledPackages: () => ReadonlySet<string>,
 ): Promise<{ identity: string; summary: PiPackageSummary }> {
 	const identity = await installPiPackage(hostContext(target), request);
-	primeUserPiSettings();
 	refreshPiPackages();
-	const enabledFromNowOn = new Set(disabledPackages);
+	const enabledFromNowOn = new Set(disabledPackages());
 	enabledFromNowOn.delete(identity);
 	const catalog = await piPackagesCatalog(target, enabledFromNowOn);
-	const summary = catalog.packages.find(
-		(entry) => entry.identity === identity && entry.scope === request.scope,
-	);
+	const summary =
+		catalog.packages.find((e) => e.identity === identity && e.scope === request.scope) ??
+		catalog.packages.find((e) => e.identity === identity);
 	if (!summary) {
 		throw new CodedError(
-			"PACKAGE_NOTHING_LOADABLE",
-			`${request.source} was installed but contributes nothing pi can load.`,
+			"PACKAGE_INSTALL_FAILED",
+			`${request.source} was declared but ThinkRail cannot find it on disk afterwards.`,
 		);
 	}
 	return { identity, summary };
@@ -91,7 +119,6 @@ export async function piPackagesRemove(
 	request: { source: string; scope: PiPackageScope },
 ): Promise<void> {
 	await removePiPackage(hostContext(target), request);
-	primeUserPiSettings();
 	refreshPiPackages();
 }
 
@@ -105,8 +132,9 @@ export async function piPackagesUpdate(
 
 export function piPackagesCheckUpdates(
 	target: PiPackagesTarget,
+	options: { force?: boolean } = {},
 ): Promise<{ source: string; scope: PiPackageScope }[]> {
-	return checkPiPackageUpdates(hostContext(target));
+	return checkPiPackageUpdates(hostContext(target), options);
 }
 
 export async function piPackagesSetResourceEnabled(
@@ -114,44 +142,28 @@ export async function piPackagesSetResourceEnabled(
 	toggle: { path: string; type: PiPackageResourceType; scope: PiPackageScope; enabled: boolean },
 ): Promise<void> {
 	await setPiResourceEnabled(hostContext(target), toggle);
-	primeUserPiSettings();
 	refreshPiPackages();
 }
 
-/** The folder to open for a catalog path: a package's install folder, or a loose file's directory. */
+/** The folder to open for a catalog path — a package's install folder or a file's directory — read without running extension code. */
 export async function piPackagesRevealTarget(
 	target: PiPackagesTarget,
 	path: string,
-	disabledPackages: ReadonlySet<string>,
 ): Promise<string> {
-	const catalog = await piPackagesCatalog(target, disabledPackages);
+	const { packageRoots, looseFiles } = await listPiPackageRevealTargets({
+		...(target.cwd ? { cwd: target.cwd } : {}),
+		agentDir: getAgentDir(),
+		projectTrusted: target.projectTrusted(),
+		builtinExtensions: HOST_BUILTIN_EXTENSION_NAMES,
+	});
 	const wanted = resolve(path);
-	const pkg = catalog.packages.find((entry) => resolve(entry.installedPath) === wanted);
-	if (pkg) return pkg.installedPath;
-	const loose = catalog.loose.find((entry) => resolve(entry.path) === wanted);
-	if (loose) return dirname(loose.path);
+	const root = packageRoots.find((candidate) => resolve(candidate) === wanted);
+	if (root) return statSync(root).isDirectory() ? root : dirname(root);
+	if (looseFiles.some((candidate) => resolve(candidate) === wanted)) return dirname(path);
 	throw new CodedError(
 		"PACKAGE_UNKNOWN",
 		"That path is not an installed package or extension file.",
 	);
-}
-
-type PiPackagesPublisher = () => void;
-
-let publish: PiPackagesPublisher | null = null;
-
-export function setPiPackagesPublisher(fn: PiPackagesPublisher | null): void {
-	publish = fn;
-}
-
-setResolvedPackagesListener(() => publish?.());
-
-export function refreshPiPackages(): void {
-	bumpPackagesRevision();
-	invalidatePiPackageCatalog();
-	invalidatePiPackageUpdates();
-	refreshExtensionTools();
-	publish?.();
 }
 
 const RESOURCE_KEYS = ["packages", "extensions", "skills", "prompts"] as const;
@@ -168,10 +180,18 @@ function resourceFingerprint(path: string): string {
 
 const seenSettings = new Map<string, string>();
 
+function primePiSettingsFile(path: string): void {
+	seenSettings.set(resolve(path), resourceFingerprint(path));
+}
+
 /** Records the user settings file's current declarations so only a later semantic change refreshes. */
 export function primeUserPiSettings(): void {
-	const path = join(getAgentDir(), "settings.json");
-	seenSettings.set(resolve(path), resourceFingerprint(path));
+	primePiSettingsFile(join(getAgentDir(), "settings.json"));
+}
+
+/** Records a worktree's `.pi/settings.json` (present or not) so its first watched change is judged against it. */
+export function primeProjectPiSettings(worktreePath: string): void {
+	primePiSettingsFile(join(worktreePath, ".pi", "settings.json"));
 }
 
 /** A workspace change touched its repository's `.pi/settings.json` (or `.pi` itself). */
@@ -179,10 +199,15 @@ export function handleProjectPiSettingsChanged(worktreePath: string): boolean {
 	return handlePiSettingsFileChanged(join(worktreePath, ".pi", "settings.json"));
 }
 
+/**
+ * A pi settings file changed on disk. Only a change to its `packages` / `extensions` / `skills` /
+ * `prompts` declarations counts — an unrelated setting, the echo of the host's own write, or the first
+ * sight of a file that does not exist does not.
+ */
 export function handlePiSettingsFileChanged(path: string): boolean {
 	const key = resolve(path);
 	const next = resourceFingerprint(path);
-	const previous = seenSettings.get(key);
+	const previous = seenSettings.get(key) ?? "";
 	seenSettings.set(key, next);
 	if (previous === next) return false;
 	refreshPiPackages();

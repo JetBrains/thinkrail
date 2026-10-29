@@ -12,7 +12,7 @@ import {
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
-import { RequestTimeoutError, wsErrorCode } from "@/transport";
+import { errorText, RequestTimeoutError } from "@/transport";
 import { CHIP_CLASS, GalleryLink, packageChips } from "./PiPackagesSettings";
 import { SegmentedControl } from "./SegmentedControl";
 import { SettingsNotice } from "./SettingsNotice";
@@ -233,7 +233,7 @@ export function InstallPackageBody({
 								...packageChips(step.summary.resources),
 								...step.summary.resources
 									.filter((r) => r.type === "skills")
-									.map((r) => `skill: ${r.displayName}`),
+									.map((r) => t("settings.packages.skillChip", { name: r.displayName })),
 								...step.summary.resources
 									.filter((r) => r.type === "prompts")
 									.map((r) => `/${r.displayName.replace(/\.md$/, "")}`),
@@ -348,11 +348,7 @@ export function InstallPackageDialog({
 			const timedOut = error instanceof RequestTimeoutError;
 			const message = timedOut
 				? t("settings.packages.installDialog.timedOut")
-				: wsErrorCode(error) === "PACKAGE_NOTHING_LOADABLE"
-					? t("settings.packages.installDialog.nothingLoadable")
-					: error instanceof Error && error.message
-						? error.message
-						: t("settings.packages.actionFailed");
+				: errorText(error, t("settings.packages.actionFailed"));
 			setStep({ kind: "failed", name, message, timedOut });
 		}
 	};

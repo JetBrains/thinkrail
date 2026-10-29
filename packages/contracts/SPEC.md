@@ -1054,16 +1054,18 @@ and what it loaded, never pi's own types.
 
 - **`PiPackagesCatalog`** — `agentDir` and `settingsPath` (the effective pi folder; a client never hardcodes
   `~/.pi/agent`), `projectSettingsPath` + `projectTrusted` when read for a workspace, then three groups:
-  `packages: PiPackageSummary[]` (one per declared package that is **on disk**; a package pi deduplicated
-  away, declared at both scopes, is not a row), `loose: PiLooseExtension[]` (extensions pi discovers outside
+  `packages: PiPackageSummary[]` (one per declared package that is **on disk**, with or without
+  loadable resources; a user declaration pi leaves aside because the repository declares the same
+  identity is a row marked `shadowed`), `loose: PiLooseExtension[]` (extensions pi discovers outside
   any package — `<agentDir>/extensions`, `.pi/extensions`, explicit `extensions[]` entries) and `builtins:
   PiBuiltinExtension[]` (the two pi built-ins the host runs, `mcp` and `tool-search`). There is no
   "installing" or "not installed" row: installing is the Install dialog's request, and a source declared
   but absent from disk is pi's to install at a chat's next load.
 - **`PiPackageSummary`** — `identity` (the host-wide switch key: npm by name, git by repo without ref, local
   by resolved path), `source` **as declared** (`npm:@scope/pkg@1.2.0`, `../pkgs/tools`), `kind`, `scope`,
-  `name` / `version` / `description` from its `package.json`, `installedPath`, `enabled`
-  (`!disabledPackages.includes(identity)`), and `resources: PiPackageResource[]` — every extension, skill and
+  `name` / `version` / `description` from its `package.json`, `installedPath`, `singleFile` (a local
+  source that is one extension file — pi loads it whole and ignores filters, so it has no per-resource
+  switches), `enabled` (`!disabledPackages.includes(identity)`), and `resources: PiPackageResource[]` — every extension, skill and
   prompt file (themes are terminal-only and never listed) with pi's `enabled`, pi's `pi config` display
   name, and for a loaded extension the `tools` and `commands` it registered or its load `error`. Every row
   action names its target as `{ source, scope, workspaceId? }`: the same npm package may be declared at
@@ -1075,16 +1077,18 @@ and what it loaded, never pi's own types.
   install may still complete on the host) / **`packages.remove`** / **`packages.update { packages }`**
   (pi updates every declaration of an identity at both scopes together) / **`packages.checkUpdates`**
   (the `{ source, scope }` declarations pi reports a newer version for — pi reports no target version
-  and skips pinned npm versions) / **`packages.setResourceEnabled { path, type, scope, enabled }`**
-  (written in pi's own format: a `±` filter on the package's declaration, a `±` pattern in the scope's
-  resource array for a loose file, `±builtin:<name>` for a built-in) / **`packages.reveal { path }`**
+  and skips pinned npm versions; `force` bypasses the host's short cache for the manual check) / **`packages.setResourceEnabled { path, type, scope, enabled }`**
+  (written in pi's own format without changing any sibling's admission: a filter on the package's
+  declaration, a `±` pattern in the scope's resource array for a loose file, `±builtin:<name>` in the
+  scope that decides a built-in — the catalog's `PiBuiltinExtension.scope`, which a client must send back) / **`packages.reveal { path }`**
   (opens the install folder or a loose file's folder; the path must be in the current catalog). The
   package switch is `settings.update { disabledPackages }`, converging on `settings.changed` like the
   extension switches. **`packages.changed`** (no payload) tells an open page to re-list after an outside
   edit, a chat load that installed something, or an update.
-- Error codes: `PACKAGE_SOURCE_INVALID`, `PACKAGE_OFFLINE` (npm/git only; local installs work offline),
-  `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`, `PACKAGE_INSTALL_FAILED`, `PACKAGE_NOTHING_LOADABLE`,
-  `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`, `PACKAGE_SETTINGS_WRITE_FAILED`.
+- Error codes: `PACKAGE_SOURCE_INVALID` (also an unsupported `type` / `scope`, validated at the boundary),
+  `PACKAGE_OFFLINE` (npm/git only; local installs work offline), `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
+  `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
+  `PACKAGE_SETTINGS_WRITE_FAILED`.
 
 ## Normalized session state
 

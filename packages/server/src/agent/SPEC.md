@@ -766,22 +766,23 @@ re-opened transcripts provider-valid.
     **Installed pi packages** have a switch of the same global shape, `setDisabledPackagesResolver`
     (the `disabledPackages` setting; keys are [[submodule-server-agent-packages]] identities, since pi has
     no "whole package off" concept and the user chose a ThinkRail setting over writing pi filter entries).
-    It is applied where pi cannot be: a disabled package's extension paths are left out of the
-    host-owned path list before pi loads anything, and its skills and prompts — resolved inside pi's
-    loader — are dropped in `skillsGate` and a `promptsOverride` **by file path** through the path →
-    identity map the same resolve yields, never by `sourceInfo.source`, which pi assigns only *after* the
-    override callbacks run (`resource-loader.js`: inside them a package skill still reads `source:
-    "local"`). The same path set filters `listSkillCommands` / `listSkillCatalog`, so `/skill:` and
-    Settings → Skills agree. Accepted edge: pi resolves same-name skills first-wins before any override,
-    so a personal skill shadowed by a disabled package's same-name skill stays hidden until the package is
-    removed. The **package policy** (`packagePolicyKey`: the disabled set plus a `packagesRevision`
-    that `refreshPiPackages` bumps on every install, remove, update or outside settings change) joins the
-    extension policy generation above, and each session loader records the key it last resolved under;
-    `isLoaderPackagePolicyStale` is one more predicate of the reconciliation `applyExtensionTools` runs at
-    registration, after every reload and on `refreshExtensionTools`, so a session prepared under an older
-    policy reloads when it registers and a change mid-reload re-reloads — the fan-out alone would miss
-    both. A disabled package is simply not installed by pi's install-while-loading either, since its
-    declaration still resolves but its paths are dropped.
+    It is applied where pi reads declarations, not where it emits resources: `withoutDisabledPackages`
+    patches a `SettingsManager`'s `getGlobalSettings` / `getProjectSettings` to hide the declarations of
+    switched-off packages (re-evaluated on every read, idempotent per instance). `buildSessionSettings`
+    applies it, so parents and delegated children share it; `buildResourceLoader` applies it again
+    defensively; `listSkillCommands` / `listSkillCatalog` build their settings through it. pi therefore
+    never installs, loads or lists a disabled package's extensions, skills or prompts — including a
+    declared-but-missing one that its install-while-loading would otherwise fetch and whose lifecycle
+    scripts would run — while the files on disk and the user's own per-resource filters stay untouched.
+    *Rejected:* filtering resolved paths and `skillsOverride` / `promptsOverride` after pi resolved (the
+    first implementation): pi had already installed the package by then, pi assigns `sourceInfo.source`
+    only after the overrides run, and delegated children bypass those overrides. The **package policy**
+    (`packagePolicyKey`: the disabled set plus a `packagesRevision` that `refreshPiPackages` bumps on
+    every install, remove, update or outside settings change) joins the extension policy generation
+    above, and each session loader records the key it last resolved under; `isLoaderPackagePolicyStale`
+    is one more predicate of the reconciliation `applyExtensionTools` runs at registration, after every
+    reload and on `refreshExtensionTools`, so a session prepared under an older policy reloads when it
+    registers and a change mid-reload re-reloads — the fan-out alone would miss both.
     The **`set_title`** tool (`titleTool.ts`) is how chats and workspaces get named: the main agent calls it
     with `chat_title?` / `workspace_name?` / `branch?` (English kebab slug). It is always registered and
     active, and listed via `promptSnippet`; toggling it off after naming would rebuild the system prompt
@@ -867,9 +868,13 @@ re-opened transcripts provider-valid.
     count only when the `packages` / `extensions` / `skills` / `prompts` arrays differ semantically from
     the last seen (an unrelated edit or the echo of the host's own write is ignored; a mutation primes
     the file right after persisting), and a workspace nudge touching `.pi/settings.json` goes through
-    the same comparison per worktree. A declared-but-missing package gets no host handling: pi
-    installs it the next time a chat loads its resources, as it always did. **Known limitations,
-    accepted:** several chats reloading at once can each resolve and install the same missing package
+    the same comparison per worktree — only for a pi-trusted project, and only after the host primed the
+    file (at boot for every workspace record, and right after each of its own writes through the
+    mutations' `onPersisted` hook), so an untrusted repository's edits, the echo of the host's own
+    project-scope write, or the first sight of a worktree without the file never fan out a reload. A
+    declared-but-missing *enabled* package gets no host handling: pi installs it the next time a chat
+    loads its resources, as it always did (a disabled one is hidden from pi, so it is never installed).
+    **Known limitations, accepted:** several chats reloading at once can each resolve and install the same missing package
     (pre-existing, as in pi CLI with two terminals; settings-first Remove narrows but does not close the
     window for a resolve already in flight); Remove and Update change files on disk at once, so a busy
     chat whose extension lazily imports or reads package files mid-turn may fail until its turn ends —
@@ -994,11 +999,13 @@ re-opened transcripts provider-valid.
     In every mode and whether or not a Central path is excluded, the loader composes extensions from
     **one host-owned path list** (`noExtensions` + `additionalExtensionPaths`, rebuilt in place from
     pi's `resolve()` at every reload — the earlier branch that let pi discover extensions itself when
-    nothing was excluded is gone, because the package switch and the resolved-package fingerprint need
-    that list in every session). Each resolve also compares the resolved package path set with the last
-    one; a difference (an install finished during a chat's load, an update that rewrote files without
-    touching settings) invalidates the package catalog and publishes `packages.changed`, without
-    bumping the revision — so a reload never triggers another reload.
+    nothing was excluded is gone, so every session builds its extension set the same way). Each resolve
+    also compares which declared packages were on disk before and after it ran; when pi's
+    install-while-loading fetched one, the packages layer is told (`setInstalledPackagesListener`) so
+    the catalog is invalidated and `packages.changed` published — without bumping the revision, so a
+    reload never triggers another reload. *Rejected:* a fingerprint of the resolved package set — it was
+    process-global while `resolve()` output is per cwd, so two workspaces flapped it on alternating
+    reloads, and its first observation had to be suppressed, hiding exactly the first-chat install.
     In every mode, the optional Central artifact remains an external filesystem path loaded by PI's public
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (`headlessSearch.ts`, a `tool_call` hook defaulting

@@ -7,6 +7,7 @@ import { watchUserMcpConfig } from "./mcpSessions";
 import {
 	handlePiSettingsFileChanged,
 	handleProjectPiSettingsChanged,
+	primeProjectPiSettings,
 	primeUserPiSettings,
 	setPiPackagesPublisher,
 } from "./piPackages";
@@ -69,6 +70,18 @@ describe("pi package settings changes", () => {
 		expect(handleProjectPiSettingsChanged(worktree)).toBe(false);
 		writeFileSync(join(worktree, ".pi", "settings.json"), JSON.stringify({ skills: [] }));
 		expect(handleProjectPiSettingsChanged(worktree)).toBe(true);
+	});
+
+	it("a first sight of a worktree without .pi/settings.json, or a primed one, is not a change", () => {
+		const bare = join(root, "bare");
+		mkdirSync(bare, { recursive: true });
+		expect(handleProjectPiSettingsChanged(bare)).toBe(false);
+		const primed = join(root, "primed");
+		mkdirSync(join(primed, ".pi"), { recursive: true });
+		writeFileSync(join(primed, ".pi", "settings.json"), JSON.stringify({ packages: ["npm:x"] }));
+		primeProjectPiSettings(primed);
+		expect(handleProjectPiSettingsChanged(primed)).toBe(false);
+		expect(published).toBe(0);
 	});
 
 	it("the agent-dir watcher hands settings.json edits to the packages layer", async () => {

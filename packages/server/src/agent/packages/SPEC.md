@@ -1,7 +1,7 @@
 ---
 id: submodule-server-agent-packages
 type: submodule-design
-status: draft
+status: active
 title: "agent/packages — pi packages: read-only catalog, identity, mutations"
 parent: submodule-server-agent
 depends-on: [module-contracts]
@@ -13,8 +13,8 @@ tags: [pi, extensions]
 
 What ThinkRail owns around pi's package manager so Settings → Extensions can list and manage the pi
 packages, loose extension files and built-ins a chat loads: a **read-only catalog** that can never
-install as a side effect, pi's **package identity rule** for the host-wide package switch, and (next)
-the install / remove / update / toggle mutations in pi's own settings format. Installing and resolving
+install as a side effect, pi's **package identity rule** for the host-wide package switch, and the
+install / remove / update / toggle mutations in pi's own settings format. Installing and resolving
 stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
 
 ## pi facts (`@earendil-works/pi-coding-agent`, the catalog-pinned version)
@@ -34,52 +34,77 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
 
 ## What's here
 
-- `catalog.ts` — `listPiPackageCatalog(options)`: `resolve(async () => "skip")` + `listConfiguredPackages()`
-  grouped into `PiPackagesCatalog` (packages by `scope + source`, loose extensions, the host-supplied
-  built-ins only); the Central artifact path is excluded like the session loader excludes it; a
-  package pi deduplicated away (declared at both scopes) is not a row, as in `pi config`. Tool and
-  command names and load errors come from a `DefaultResourceLoader` over exactly the **enabled**
-  extension file paths with `SettingsManager.inMemory({})` (nothing to install), `noExtensions` (only
-  those paths load), and every other resource kind off — enabled factories run, as at every chat start;
-  disabled code never runs for chips. Short TTL cache; `invalidatePiPackageCatalog()` is the explicit
-  invalidation mutations and reloads call. `packageSourceIdentity(source, scope, cwd, agentDir)`
+- `catalog.ts` — `listPiPackageCatalog(options)`: rows are seeded from `listConfiguredPackages()` — every
+  declaration whose install is **on disk**, so a package that contributes nothing still has a row with
+  Remove, and a user declaration pi deduplicates behind the repository's same-identity declaration stays
+  a row marked `shadowed` — then `resolve(async () => "skip")` attaches each resource to its declaration
+  and yields the loose extensions and the host-supplied built-ins; the Central artifact path is excluded
+  like the session loader excludes it. `singleFile` marks a local source that is one extension file: pi
+  loads it whole and ignores filters, so it gets no per-resource switches. Tool and command names and
+  load errors come from a `DefaultResourceLoader` over exactly the **enabled** extension file paths with
+  `SettingsManager.inMemory({})` (nothing to install), `noExtensions` (only those paths load), and
+  every other resource kind off — enabled factories run, as at every chat start; disabled code never
+  runs for chips, and a file's factory runs once per content change (a memo keyed by mtime). The
+  catalog cache is long-lived because every change path invalidates it explicitly
+  (`invalidatePiPackageCatalog()`); `listPiPackageRevealTargets` validates a reveal path from the same
+  reads without executing any extension. Known limitation: a probe loader is never sent
+  `session_shutdown`, so a factory that allocates at registration time (a watcher, a timer) leaks once
+  per content change of its file — pi's contract for a factory is to register, not to allocate. `packageSourceIdentity(source, scope, cwd, agentDir)`
   resolves a local source against the settings file that declares it (user → `agentDir`, project →
   `<cwd>/.pi`), as pi does.
-- `identity.ts` — `piPackageSourceKind` (npm / git / local, pi's prefix rules) and `piPackageIdentity`.
-  A simplified port of pi's git parsing (no `hosted-git-info`): good enough for a ThinkRail-only key,
-  never written into pi settings. Changing a declared source's version or ref keeps the identity;
+- `identity.ts` — `piPackageSourceKind` (npm by `npm:`; git only by `git:` or a `scheme://` URL — pi
+  treats `git@host:…` and `github:…` as local paths, so does this), `piPackageIdentity` (a simplified
+  port of pi's git parsing, no `hosted-git-info`, splitting the ref at the first `@`/`#` inside the
+  repository path so a `feature/x` branch keeps the identity — good enough for a ThinkRail-only key,
+  never written into pi settings), the shared `settingsBaseDir`, `expandHome` and `isOfflineMode`
+  (pi's `PI_OFFLINE` rule, which pi does not export). Changing a declared source's version or ref keeps the identity;
   renaming a local folder makes a new one (the old switch entry becomes inert, like an unknown
   `disabledExtensions` name).
-- `mutations.ts` — every write, serialized through one module queue (pi's `SettingsManager` merges only
-  modified fields, but two instances racing on one field would still lose one), each ending in
-  `flush()` + `drainErrors()` → `PACKAGE_SETTINGS_WRITE_FAILED` (pi's setters only enqueue; a failed
-  write is otherwise swallowed). `installPiPackage` is `install()` → fresh trust check for a project
-  scope → `addSourceToSettings()` → persist, **not** `installAndPersist`, which persists before the
-  caller can re-check anything; a local source must exist (pi would happily declare a missing path);
+- `mutations.ts` — every write validates `scope` / `type` at the boundary (the wire carries no runtime
+  schema; an unknown type would otherwise fall through to pi's prompts setter), is serialized through
+  one module queue (pi's `SettingsManager` merges only modified fields, but two instances racing on one
+  field would still lose one), and ends in `flush()` + `drainErrors()` → `PACKAGE_SETTINGS_WRITE_FAILED`
+  (pi's setters only enqueue; a failed write is otherwise swallowed; load errors recorded when the
+  settings were opened or reloaded are drained first so another scope's malformed file is not reported
+  as this write's failure). `onPersisted(settingsPath)` fires right after each successful persist so
+  the packages layer primes its watcher before any further disk work. `installPiPackage` is
+  `install()` → fresh trust check for a project scope → `settings.reload()` (an npm install can take
+  minutes; an outside edit of `packages` meanwhile must survive) → `addSourceToSettings()` → persist,
+  **not** `installAndPersist`, which persists before the caller can re-check anything. A relative local
+  source is the user's *input* and reads like `pi install ./tools` from the workspace (`cwd`, else the
+  agent dir); it must exist (pi would happily declare a missing path), and the same absolute path is
+  installed, declared (pi stores it relative to the settings file) and turned into the identity.
   npm/git are refused offline (`PACKAGE_OFFLINE`), local is not. `removePiPackage` removes the
   declaration and persists **before** `remove()` touches disk, aborting on a write error, so a resolve
-  that starts afterwards cannot re-install it. `updatePiPackages(sources)` runs pi's `update(source)`,
-  which reconciles every declaration of that identity at both scopes; `checkPiPackageUpdates` wraps
-  `checkForAvailableUpdates()` (no target version, pinned npm never reported) behind a five-minute
-  cache. `setPiResourceEnabled` re-resolves, finds the resource by path and scope, and writes `pi
-  config`'s format: a package resource → `±<path relative to the package root>` on its declaration's
-  object form; a top-level resource → `±<path relative to its base dir>` in the scope's array of that
-  kind; a built-in → `±builtin:<name>`. One deliberate difference from pi's TUI: a plain explicit entry
-  stays beside its override — pi replaces it, after which the file is no longer discovered and cannot be
-  switched back on. **Input vs declared source:** pi stores a local source relative to its settings
+  that starts afterwards cannot re-install it. `updatePiPackages(targets)` runs pi's `update(source)` per target —
+  which reconciles every declaration of that identity at both scopes — or pi's batched `update()` once
+  when the targets cover every installed declaration (Update all), so npm runs once per scope;
+  `checkPiPackageUpdates` wraps `checkForAvailableUpdates()` (no target version, pinned npm never
+  reported) behind a five-minute cache that `force` bypasses for the manual check. `setPiResourceEnabled`
+  re-resolves, finds the resource by path and scope, and writes pi's format: a top-level resource →
+  `±<path relative to its base dir>` in the scope's array of that kind (a plain explicit entry stays
+  beside its override — pi's TUI replaces it, after which the file is no longer discovered and cannot be
+  switched back on); a built-in → `±builtin:<name>` in the scope that decides it; a package resource →
+  `togglePackageFilter` on its declaration's object form, which keeps pi's filter semantics intact:
+  `undefined` = everything, `[]` = nothing, plain entries form an allowlist, an array of overrides alone
+  starts from everything. Disabling removes the resource's plain entry and adds `-path` (an allowlist
+  that becomes empty is written as `[]`, with any `+` entries promoted to plain ones); enabling from
+  `[]` writes `[path]`, otherwise `+path`. pi's TUI drops plain entries, which turns an allowlist of one
+  into "everything but one". A single-file local package has no filters pi honours; toggling one is
+  refused. **Input vs declared source:** pi stores a local source relative to its settings
   file but matches an *input* source against the process cwd (`getSourceMatchKeyForInput`), so a
   declared `../pkgs/tools` handed back as written is not found; rows carry the declared string and
   `inputSource` hands pi the absolute path for Remove and Update (pinned by a test with a foreign cwd).
   Error codes: `PACKAGE_SOURCE_INVALID`, `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
-  `PACKAGE_INSTALL_FAILED`, `PACKAGE_NOTHING_LOADABLE` (installed, but pi finds nothing to load — raised
-  by the `piPackages` façade), `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
+  `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
   `PACKAGE_SETTINGS_WRITE_FAILED`; messages carry pi's text and never reach analytics.
 
 ## Consumers
 
-`agent/piPackages.ts` is the only caller: it adds the agent dir, the Central exclusion, the host
-built-ins and the apply-to-chats step, and `host/packages.ts` maps a `workspaceId` onto a
-`PiPackagesTarget`. Known limitations of the whole feature (concurrent resolves, on-disk changes under a
+`agent/piPackages.ts` orchestrates the catalog and mutations: it adds the agent dir, the Central
+exclusion, the host built-ins, the watcher priming and the apply-to-chats step; `host/packages.ts` maps
+a `workspaceId` onto a `PiPackagesTarget`. `agent/extensions.ts` uses the pure `packageSourceIdentity`
+to hide switched-off declarations from pi's settings view. Known limitations of the whole feature (concurrent resolves, on-disk changes under a
 busy chat) are recorded in [[submodule-server-agent]] beside the orchestration that accepts them.
 
 ## Boundary

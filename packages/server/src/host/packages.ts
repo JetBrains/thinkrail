@@ -45,7 +45,7 @@ export async function packagesInstall(params: {
 	const { identity, summary } = await piPackagesInstall(
 		target(params.workspaceId),
 		{ source: params.source, scope: params.scope },
-		disabledPackages(),
+		disabledPackages,
 	);
 	const disabled = getConfig().disabledPackages;
 	if (disabled.includes(identity)) {
@@ -76,8 +76,9 @@ export async function packagesUpdate(params: {
 
 export function packagesCheckUpdates(params: {
 	workspaceId?: string;
+	force?: boolean;
 }): Promise<{ source: string; scope: PiPackageScope }[]> {
-	return piPackagesCheckUpdates(target(params.workspaceId));
+	return piPackagesCheckUpdates(target(params.workspaceId), { force: params.force === true });
 }
 
 export async function packagesSetResourceEnabled(params: {
@@ -100,11 +101,7 @@ export async function packagesReveal(params: {
 	path: string;
 	workspaceId?: string;
 }): Promise<{ ok: true }> {
-	const folder = await piPackagesRevealTarget(
-		target(params.workspaceId),
-		params.path,
-		disabledPackages(),
-	);
+	const folder = await piPackagesRevealTarget(target(params.workspaceId), params.path);
 	revealInFileManager(folder);
 	return { ok: true };
 }

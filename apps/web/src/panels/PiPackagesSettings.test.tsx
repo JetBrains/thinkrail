@@ -21,6 +21,7 @@ const JIRA: PiPackageSummary = {
 	version: "1.4.2",
 	description: "Jira issues and search for the agent",
 	installedPath: "/home/me/.pi/agent/npm/node_modules/@acme/pi-jira",
+	singleFile: false,
 	enabled: true,
 	resources: [
 		{
@@ -200,4 +201,67 @@ test("built-ins render with their copy and switches; a row error shows inline", 
 	expect(markup).toContain('data-testid="builtin-toggle-tool-search" data-active="true"');
 	expect(markup).toContain('data-testid="package-action-error"');
 	expect(markup).toContain(CATALOG.settingsPath);
+});
+
+test("a built-in switch reports the deciding scope so a repository override is written where it lives", () => {
+	const seen: [string, string, boolean][] = [];
+	renderToStaticMarkup(
+		<PiBuiltinsGroup
+			builtins={[{ name: "mcp", enabled: false, scope: "project" }]}
+			settingsPath="/home/me/.pi/agent/settings.json"
+			projectSettingsPath="/repo/.pi/settings.json"
+			busy={none}
+			errors={noErrors}
+			onToggle={(builtin, enabled) => seen.push([builtin.name, builtin.scope, enabled])}
+		/>,
+	);
+	const markup = renderToStaticMarkup(
+		<PiBuiltinsGroup
+			builtins={[{ name: "mcp", enabled: false, scope: "project" }]}
+			settingsPath="/home/me/.pi/agent/settings.json"
+			projectSettingsPath="/repo/.pi/settings.json"
+			busy={none}
+			errors={noErrors}
+			onToggle={noop}
+		/>,
+	);
+	expect(markup).toContain("/repo/.pi/settings.json");
+	expect(seen).toEqual([]);
+});
+
+test("a shadowed declaration says so and a single-file package shows its resources without switches", () => {
+	const shadowed = renderToStaticMarkup(
+		<PackageRow
+			summary={{ ...JIRA, shadowed: true }}
+			updateAvailable={false}
+			expanded={false}
+			busy={false}
+			error={undefined}
+			onToggleExpanded={noop}
+			onAction={noop}
+		/>,
+	);
+	expect(shadowed).toContain('data-testid="package-shadowed"');
+	const single = renderToStaticMarkup(
+		<PackageRow
+			summary={{
+				...JIRA,
+				singleFile: true,
+				resources: [JIRA.resources[0] as PiPackageSummary["resources"][number]],
+			}}
+			updateAvailable={false}
+			expanded
+			busy={false}
+			error={undefined}
+			onToggleExpanded={noop}
+			onAction={noop}
+		/>,
+	);
+	expect(single).toContain('data-testid="package-resource-jira.ts"');
+	expect(single).not.toContain("package-resource-toggle-jira.ts");
+});
+
+test("a failed update check renders under the group header", () => {
+	const markup = renderGroup(CATALOG, { checkError: "Couldn't check for updates" });
+	expect(markup).toContain('data-testid="packages-check-error"');
 });

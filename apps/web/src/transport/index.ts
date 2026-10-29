@@ -22,6 +22,7 @@ export {
 	runHostUpdate,
 	supportsChangeMutations,
 	supportsHostUpdateRun,
+	supportsPiPackages,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
 	supportsRichAnchors,

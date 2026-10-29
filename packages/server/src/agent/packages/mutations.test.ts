@@ -10,41 +10,15 @@ import {
 	type PiPackageHostContext,
 	removePiPackage,
 	setPiResourceEnabled,
+	togglePackageFilter,
 	updatePiPackages,
 } from "./mutations";
+import { fixtureExtensionSource, writeFixturePiPackage } from "./testFixtures";
 
-function extensionSource(toolName: string): string {
-	return [
-		"export default function (pi) {",
-		"  pi.registerTool({",
-		`    name: ${JSON.stringify(toolName)}, label: ${JSON.stringify(toolName)}, description: "fixture",`,
-		'    parameters: { type: "object", properties: {} },',
-		'    execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),',
-		"  });",
-		"}",
-		"",
-	].join("\n");
-}
+const extensionSource = fixtureExtensionSource;
 
 function writeFixturePackage(root: string): string {
-	const pkg = join(root, "pkgs", "fixture-tools");
-	mkdirSync(join(pkg, "extensions"), { recursive: true });
-	mkdirSync(join(pkg, "skills", "triage"), { recursive: true });
-	writeFileSync(
-		join(pkg, "package.json"),
-		JSON.stringify({
-			name: "@fixture/pi-tools",
-			version: "0.1.0",
-			pi: { extensions: ["./extensions/*.ts"], skills: ["./skills"] },
-		}),
-	);
-	writeFileSync(join(pkg, "extensions", "hello.ts"), extensionSource("fixture_hello"));
-	writeFileSync(join(pkg, "extensions", "legacy.ts"), extensionSource("fixture_legacy"));
-	writeFileSync(
-		join(pkg, "skills", "triage", "SKILL.md"),
-		"---\nname: triage\ndescription: Triage fixture.\n---\n\n# triage\n",
-	);
-	return pkg;
+	return writeFixturePiPackage(join(root, "pkgs", "fixture-tools"), { prompts: [] });
 }
 
 function readSettings(path: string): Record<string, unknown> {
@@ -182,15 +156,143 @@ describe("pi package mutations", () => {
 		const declared = relative(agentDir, pkg);
 		writeFileSync(settingsPath, JSON.stringify({ packages: [declared] }));
 		const elsewhere: PiPackageHostContext = { ...ctx, cwd: project };
+		const other = join(root, "pkgs", "other");
+		mkdirSync(other, { recursive: true });
+		writeFileSync(join(other, "package.json"), JSON.stringify({ name: "other", pi: {} }));
+		writeFileSync(settingsPath, JSON.stringify({ packages: [declared, other] }));
 		const update = spyOn(DefaultPackageManager.prototype, "update").mockResolvedValue();
 		try {
 			await updatePiPackages(elsewhere, [{ source: declared, scope: "user" }]);
 			expect(update).toHaveBeenCalledWith(pkg);
+			update.mockClear();
+			await updatePiPackages(elsewhere, [
+				{ source: declared, scope: "user" },
+				{ source: other, scope: "user" },
+			]);
+			expect(update).toHaveBeenCalledTimes(1);
+			expect(update).toHaveBeenCalledWith();
 		} finally {
 			update.mockRestore();
 		}
 		await removePiPackage(elsewhere, { source: declared, scope: "user" });
-		expect(readSettings(settingsPath).packages).toEqual([]);
+		expect(readSettings(settingsPath).packages).toEqual([other]);
+	});
+
+	it("reads a relative install source from the workspace, like `pi install ./tools` there", async () => {
+		const project = join(root, "project");
+		mkdirSync(join(project, "tools", "extensions"), { recursive: true });
+		writeFileSync(
+			join(project, "tools", "package.json"),
+			JSON.stringify({ name: "tools", pi: { extensions: ["./extensions/*.ts"] } }),
+		);
+		writeFileSync(join(project, "tools", "extensions", "t.ts"), extensionSource("tools_tool"));
+		const inWorkspace: PiPackageHostContext = { ...ctx, cwd: project };
+		const identity = await installPiPackage(inWorkspace, { source: "./tools", scope: "user" });
+		expect(identity).toBe(`local:${join(project, "tools")}`);
+		expect(readSettings(settingsPath).packages).toEqual([
+			relative(agentDir, join(project, "tools")),
+		]);
+	});
+
+	it("re-reads settings after the install so a concurrent outside edit survives", async () => {
+		const install = spyOn(DefaultPackageManager.prototype, "install").mockImplementation(
+			async () => {
+				writeFileSync(settingsPath, JSON.stringify({ packages: ["npm:added-meanwhile"] }));
+			},
+		);
+		try {
+			await installPiPackage(ctx, { source: pkg, scope: "user" });
+			expect(readSettings(settingsPath).packages).toEqual([
+				"npm:added-meanwhile",
+				relative(agentDir, pkg),
+			]);
+		} finally {
+			install.mockRestore();
+		}
+	});
+
+	it("rejects an unsupported resource type or scope before touching settings", async () => {
+		writeFileSync(settingsPath, JSON.stringify({ packages: [pkg] }));
+		await expect(
+			setPiResourceEnabled(ctx, {
+				path: join(pkg, "extensions", "hello.ts"),
+				type: "themes" as never,
+				scope: "user",
+				enabled: false,
+			}),
+		).rejects.toMatchObject({ code: "PACKAGE_SOURCE_INVALID" });
+		await expect(
+			installPiPackage(ctx, { source: pkg, scope: "temporary" as never }),
+		).rejects.toMatchObject({ code: "PACKAGE_SOURCE_INVALID" });
+		expect(readSettings(settingsPath)).toEqual({ packages: [pkg] });
+	});
+
+	it("does not report a pre-existing load error of another scope as a write failure", async () => {
+		const project = join(root, "project");
+		mkdirSync(join(project, ".pi"), { recursive: true });
+		writeFileSync(join(project, ".pi", "settings.json"), "{ not json");
+		const trustedCtx: PiPackageHostContext = { ...ctx, cwd: project, projectTrusted: () => true };
+		await installPiPackage(trustedCtx, { source: pkg, scope: "user" });
+		expect(readSettings(settingsPath).packages).toEqual([relative(agentDir, pkg)]);
+	});
+
+	it("refuses a resource toggle on a single-file package, which pi loads whole", async () => {
+		const single = join(root, "pkgs", "single.ts");
+		writeFileSync(single, extensionSource("single_tool"));
+		writeFileSync(settingsPath, JSON.stringify({ packages: [single] }));
+		await expect(
+			setPiResourceEnabled(ctx, {
+				path: single,
+				type: "extensions",
+				scope: "user",
+				enabled: false,
+			}),
+		).rejects.toMatchObject({ code: "PACKAGE_SOURCE_INVALID" });
+	});
+
+	it("never changes a sibling's admission: allowlists and explicit empty filters keep their meaning", async () => {
+		const legacy = join(pkg, "extensions", "legacy.ts");
+		const hello = join(pkg, "extensions", "hello.ts");
+		const toggle = (path: string, enabled: boolean) =>
+			setPiResourceEnabled(ctx, { path, type: "extensions", scope: "user", enabled });
+
+		writeFileSync(
+			settingsPath,
+			JSON.stringify({ packages: [{ source: pkg, extensions: ["extensions/hello.ts"] }] }),
+		);
+		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
+		await toggle(hello, false);
+		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(false);
+		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
+		await toggle(hello, true);
+		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(true);
+		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
+
+		writeFileSync(settingsPath, JSON.stringify({ packages: [{ source: pkg, extensions: [] }] }));
+		await toggle(legacy, true);
+		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(true);
+		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(false);
+
+		writeFileSync(
+			settingsPath,
+			JSON.stringify({ packages: [{ source: pkg, extensions: ["-extensions/legacy.ts"] }] }),
+		);
+		await toggle(legacy, true);
+		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(true);
+		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(true);
+	});
+
+	it("togglePackageFilter keeps what the user had and changes one resource", () => {
+		expect(togglePackageFilter(undefined, "a", false)).toEqual(["-a"]);
+		expect(togglePackageFilter(undefined, "a", true)).toBeUndefined();
+		expect(togglePackageFilter([], "a", true)).toEqual(["a"]);
+		expect(togglePackageFilter([], "a", false)).toEqual([]);
+		expect(togglePackageFilter(["a"], "a", false)).toEqual([]);
+		expect(togglePackageFilter(["a", "+b"], "a", false)).toEqual(["b"]);
+		expect(togglePackageFilter(["a", "b"], "a", false)).toEqual(["b", "-a"]);
+		expect(togglePackageFilter(["a"], "b", true)).toEqual(["a", "+b"]);
+		expect(togglePackageFilter(["-a"], "a", true)).toEqual(["+a"]);
+		expect(togglePackageFilter(["!**/*.ts", "-a"], "a", true)).toEqual(["!**/*.ts", "+a"]);
 	});
 
 	it("aborts a remove before disk when the settings write fails", async () => {

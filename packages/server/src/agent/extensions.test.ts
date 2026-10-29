@@ -1,9 +1,9 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SettingsManager } from "@earendil-works/pi-coding-agent";
+import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { registryInlineExtensions } from "../extensions";
 import {
 	buildResourceLoader,
@@ -18,9 +18,11 @@ import {
 	providerExtensionPaths,
 	setDisabledExtensionsResolver,
 	setDisabledPackagesResolver,
+	setInstalledPackagesListener,
 } from "./extensions";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
+import { writeFixturePiPackage } from "./packages/testFixtures";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { skillCarryover } from "./skillCarryover";
 
@@ -688,40 +690,10 @@ describe("registry extensions", () => {
 });
 
 describe("pi packages", () => {
-	function writePackage(root: string): string {
-		const pkg = join(root, "pkgs", "fixture-tools");
-		mkdirSync(join(pkg, "extensions"), { recursive: true });
-		mkdirSync(join(pkg, "skills", "triage"), { recursive: true });
-		mkdirSync(join(pkg, "prompts"), { recursive: true });
-		writeFileSync(
-			join(pkg, "package.json"),
-			JSON.stringify({
-				name: "@fixture/pi-tools",
-				pi: {
-					extensions: ["./extensions/*.ts"],
-					skills: ["./skills"],
-					prompts: ["./prompts/*.md"],
-				},
-			}),
-		);
-		writeFileSync(
-			join(pkg, "extensions", "hello.ts"),
-			[
-				"export default function (pi) {",
-				'  pi.registerTool({ name: "fixture_hello", label: "fixture_hello", description: "fixture",',
-				'    parameters: { type: "object", properties: {} },',
-				'    execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }) });',
-				"}",
-				"",
-			].join("\n"),
-		);
-		writeFileSync(
-			join(pkg, "skills", "triage", "SKILL.md"),
-			"---\nname: triage\ndescription: Triage fixture.\n---\n\n# triage\n",
-		);
-		writeFileSync(join(pkg, "prompts", "standup.md"), "---\ndescription: standup\n---\nstandup\n");
-		return pkg;
-	}
+	const writePackage = (root: string) =>
+		writeFixturePiPackage(join(root, "pkgs", "fixture-tools"), {
+			extensions: [{ file: "hello.ts", tool: "fixture_hello" }],
+		});
 
 	it("drops a switched-off package's extensions, skills and prompts and re-decides on reload", async () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-pi-packages-off-"));
@@ -776,6 +748,81 @@ describe("pi packages", () => {
 			expect(isLoaderPackagePolicyStale(loader)).toBe(false);
 		} finally {
 			setDisabledPackagesResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("never installs a switched-off package that is missing on disk, and hides it from a child's settings too", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-pi-packages-missing-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const offline = process.env.PI_OFFLINE;
+		delete process.env.PI_OFFLINE;
+		writeFileSync(
+			join(agentDir, "settings.json"),
+			JSON.stringify({ packages: ["npm:@fixture/switched-off@1.0.0"] }),
+		);
+		setDisabledPackagesResolver(() => new Set(["npm:@fixture/switched-off"]));
+		const prototype = DefaultPackageManager.prototype as unknown as {
+			installNpm: () => Promise<void>;
+		};
+		const installNpm = spyOn(prototype, "installNpm").mockResolvedValue();
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			expect(installNpm).not.toHaveBeenCalled();
+			expect(settingsManager.getGlobalSettings().packages).toEqual([]);
+			expect(loader.getExtensions().errors).toEqual([]);
+		} finally {
+			installNpm.mockRestore();
+			setDisabledPackagesResolver(() => new Set());
+			if (offline === undefined) delete process.env.PI_OFFLINE;
+			else process.env.PI_OFFLINE = offline;
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("tells the packages layer when a chat's load installed a declared package", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-pi-packages-installed-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const pkg = join(root, "pkgs", "late");
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
+		let installed = 0;
+		const previousListener = setInstalledPackagesListener(() => {
+			installed += 1;
+		});
+		const original = DefaultPackageManager.prototype.resolve;
+		const resolveSpy = spyOn(DefaultPackageManager.prototype, "resolve").mockImplementation(
+			async function (this: DefaultPackageManager, ...args) {
+				if (!existsSync(pkg)) {
+					mkdirSync(pkg, { recursive: true });
+					writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "late", pi: {} }));
+				}
+				return original.apply(this, args);
+			},
+		);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			expect(installed).toBe(1);
+			await loader.reload();
+			expect(installed).toBe(1);
+		} finally {
+			resolveSpy.mockRestore();
+			setInstalledPackagesListener(previousListener);
 			restore();
 			rmSync(root, { recursive: true, force: true });
 		}

@@ -75,13 +75,15 @@ const BUILTIN_COPY: Record<string, { title: MessageKey; description: MessageKey 
 	},
 };
 
+/** The tool and `/command` names one loaded extension registered. */
+export function resourceChips(resource: { tools?: string[]; commands?: string[] }): string[] {
+	return [...(resource.tools ?? []), ...(resource.commands ?? []).map((command) => `/${command}`)];
+}
+
 export function packageChips(resources: readonly PiPackageResource[]): string[] {
 	return resources
 		.filter((resource) => resource.type === "extensions" && resource.enabled)
-		.flatMap((resource) => [
-			...(resource.tools ?? []),
-			...(resource.commands ?? []).map((command) => `/${command}`),
-		]);
+		.flatMap(resourceChips);
 }
 
 function firstLoadError(
@@ -173,29 +175,28 @@ function ResourceList({
 								</span>
 								{resource.type === "extensions" && resource.enabled ? (
 									<span className="truncate tr-text-metadata text-text-muted">
-										{[
-											...(resource.tools ?? []),
-											...(resource.commands ?? []).map((command) => `/${command}`),
-										].join(" · ")}
+										{resourceChips(resource).join(" · ")}
 									</span>
 								) : null}
 							</span>
-							<Switch
-								checked={resource.enabled}
-								label={t("settings.packages.enableResource", { name: resource.displayName })}
-								testId={`package-resource-toggle-${resource.displayName}`}
-								disabled={busy}
-								onCheckedChange={(enabled) =>
-									onAction({
-										kind: "toggleResource",
-										rowKey: piPackageKey(summary),
-										path: resource.path,
-										type: resource.type,
-										scope: summary.scope,
-										enabled,
-									})
-								}
-							/>
+							{summary.singleFile ? null : (
+								<Switch
+									checked={resource.enabled}
+									label={t("settings.packages.enableResource", { name: resource.displayName })}
+									testId={`package-resource-toggle-${resource.displayName}`}
+									disabled={busy}
+									onCheckedChange={(enabled) =>
+										onAction({
+											kind: "toggleResource",
+											rowKey: piPackageKey(summary),
+											path: resource.path,
+											type: resource.type,
+											scope: summary.scope,
+											enabled,
+										})
+									}
+								/>
+							)}
 						</div>
 					))}
 				</div>
@@ -375,6 +376,11 @@ export function PackageRow({
 					.filter((part): part is string => part !== null)
 					.join(" · ")}
 			</span>
+			{summary.shadowed ? (
+				<span data-testid="package-shadowed" className="tr-text-metadata text-text-subtle">
+					{t("settings.packages.shadowed")}
+				</span>
+			) : null}
 			<Chips chips={packageChips(summary.resources)} dim={off} />
 			{loadError ? (
 				<LoadError
@@ -468,10 +474,7 @@ export function LooseRow({
 				<span className="tr-code-text-small">{entry.path}</span> ·{" "}
 				{t("settings.packages.looseHint")}
 			</span>
-			<Chips
-				chips={[...(entry.tools ?? []), ...(entry.commands ?? []).map((c) => `/${c}`)]}
-				dim={off}
-			/>
+			<Chips chips={resourceChips(entry)} dim={off} />
 			{!off && entry.error ? (
 				<LoadError
 					error={entry.error}
@@ -494,6 +497,8 @@ export interface PiPackagesGroupProps {
 	/** `scope\0source` keys the last update check flagged. */
 	updates: ReadonlySet<string>;
 	checkingUpdates: boolean;
+	/** The last manual or on-mount update check's failure, shown under the group header. */
+	checkError?: string | undefined;
 	busy: ReadonlySet<string>;
 	errors: ReadonlyMap<string, string>;
 	expanded: ReadonlySet<string>;
@@ -509,6 +514,7 @@ export function PiPackagesGroup({
 	disabledPackages,
 	updates,
 	checkingUpdates,
+	checkError,
 	busy,
 	errors,
 	expanded,
@@ -585,6 +591,11 @@ export function PiPackagesGroup({
 					{t("settings.packages.projectUntrusted")}
 				</SettingsNotice>
 			) : null}
+			{checkError ? (
+				<SettingsNotice variant="error" testId="packages-check-error" className="mb-8">
+					{checkError}
+				</SettingsNotice>
+			) : null}
 			{ordered.length === 0 && catalog.loose.length === 0 ? (
 				<div
 					data-testid="packages-empty"
@@ -655,7 +666,7 @@ export function GalleryLink() {
 	);
 }
 
-export function builtinTitle(t: Translator, name: string): string {
+function builtinTitle(t: Translator, name: string): string {
 	const copy = BUILTIN_COPY[name];
 	return copy ? t(copy.title) : name;
 }
@@ -663,15 +674,18 @@ export function builtinTitle(t: Translator, name: string): string {
 export function PiBuiltinsGroup({
 	builtins,
 	settingsPath,
+	projectSettingsPath,
 	busy,
 	errors,
 	onToggle,
 }: {
 	builtins: readonly PiBuiltinExtension[];
 	settingsPath: string;
+	/** Named instead of `settingsPath` when a repository entry decides a built-in. */
+	projectSettingsPath?: string | undefined;
 	busy: ReadonlySet<string>;
 	errors: ReadonlyMap<string, string>;
-	onToggle: (name: string, enabled: boolean) => void;
+	onToggle: (builtin: PiBuiltinExtension, enabled: boolean) => void;
 }) {
 	const t = useT();
 	if (builtins.length === 0) return null;
@@ -682,7 +696,11 @@ export function PiBuiltinsGroup({
 					{t("settings.extensions.group.builtin")}
 				</h4>
 				<p className="tr-text-metadata text-text-muted">
-					{t("settings.extensions.group.builtinDescription", { path: settingsPath })}
+					{t("settings.extensions.group.builtinDescription", {
+						path: builtins.some((b) => b.scope === "project")
+							? (projectSettingsPath ?? settingsPath)
+							: settingsPath,
+					})}
 				</p>
 			</div>
 			<ul className="flex flex-col divide-y divide-border-default rounded-sm border border-border-default bg-control-bg">
@@ -717,7 +735,7 @@ export function PiBuiltinsGroup({
 								label={t("settings.packages.enable", { name: builtinTitle(t, builtin.name) })}
 								testId={`builtin-toggle-${builtin.name}`}
 								disabled={busy.has(key)}
-								onCheckedChange={(enabled) => onToggle(builtin.name, enabled)}
+								onCheckedChange={(enabled) => onToggle(builtin, enabled)}
 							/>
 						</li>
 					);

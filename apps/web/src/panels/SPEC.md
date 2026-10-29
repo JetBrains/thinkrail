@@ -1085,14 +1085,19 @@ a project picker, the prompt hero, and the reused
   (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
   toggle writes the whole list through `settings.update { disabledExtensions }` and converges on the
   broadcast. Unknown names already in the list are carried through. **Installed** and **pi built-in**
-  (`PiPackagesSettings.tsx`, props-driven, protocol ≥ `PI_PACKAGES_PROTOCOL_VERSION`) list `packages.list`
-  for the active workspace (user scope alone without one), re-fetched on mount, on a workspace change and
-  on the store's `packagesVersion` (the `packages.changed` push). A **package row** (`PackageRow`) is name ·
+  (`PiPackagesSettings.tsx`, props-driven) exist only while `supportsPiPackages(protocolVersion)` holds —
+  against an older host the page is the bundled group alone with its former description, no Install
+  button and no package request — and list `packages.list` for the active workspace (user scope alone
+  without one) through **one** request path (`listPackages`, generation-guarded so a slow older response
+  never overwrites a newer one), re-run on mount, on a workspace change and on the store's
+  `packagesVersion` (the `packages.changed` push, which the host also sends after a package switch so a
+  re-enabled row regains its chips). A **package row** (`PackageRow`) is name ·
   kind / scope tags (`npm` / `git` / `local`, Me / This repository) · an **Update available** tag when the
   update check flagged it · one provenance line (declared source · "<version> installed" · description) ·
   tool and `/command` chips of its enabled extensions · the **switch** · a ⋯ menu (Update, Open folder,
   Remove…). The switch is the only state control and reads **`store.disabledPackages`**; an off row dims
-  its text and chips. There is no status column and no "installing" / "not installed" row: a row exists
+  its text and chips; a user declaration the repository shadows says so under its provenance line; a
+  single-file package lists its resource without a switch (pi ignores filters for it). There is no status column and no "installing" / "not installed" row: a row exists
   only for something on disk, and the one row-level problem is an installed extension that failed to
   load — one attention line, `Failed to load: <pi's error>` → **Open folder**. Expanding a row lists its
   extensions, skills and prompts with per-resource switches (`packages.setResourceEnabled`, pi's own
@@ -1100,11 +1105,16 @@ a project picker, the prompt hero, and the reused
   `<agentDir>/extensions/*`, `.pi/extensions/*`, explicit `extensions[]` entries) is the file name with a
   `local file` tag, its path, chips, a switch and Open folder — no Update or Remove, since ThinkRail did
   not install it. **pi built-in** lists the two built-ins the host runs (MCP client, Tool search) with a
-  switch each, written as `±builtin:<name>`; the group's description names the real settings path. Every
-  row action carries `{ source, scope, workspaceId? }` and a `rowKey` the page keys busy and error state
-  on (an error renders inline on the row, never a toast); Remove goes through `ConfirmDialog`; Update and
-  Remove run with `PACKAGE_MUTATION_TIMEOUT_MS`. Updates are checked once on mount (`packages.checkUpdates`)
-  and on **Check for updates**; **Update all** acts on exactly the flagged rows. The empty state offers
+  switch each, written as `±builtin:<name>` in the **scope the catalog reports** (a repository entry
+  overrides the user file in pi, so flipping a project-decided row writes `.pi/settings.json`); the
+  group's description names the settings file that decides. Every
+  row action — switch, resource toggle, Update, Open folder, Remove — carries `{ source, scope,
+  workspaceId? }` and a `rowKey` the page keys busy and error state on (an error renders inline on the
+  row, never a toast; the bundled group's switch keeps its older toast); Remove goes through
+  `ConfirmDialog`; Update and Remove run with a ten-minute `timeoutMs`. Updates are checked once on mount
+  (`packages.checkUpdates`, cached by the host) and on **Check for updates** (`force: true`); a failed
+  check renders under the group header; **Update all** sends the flagged rows as **one**
+  `packages.update` request and marks them busy together. The empty state offers
   Install and the pi.dev gallery link; an untrusted project shows one info notice; a failed list renders
   `packages-failed`. The **`InstallPackageDialog`** (`InstallPackageDialog.tsx`; its `InstallPackageBody` is
   props-driven so each step renders without a portal, `installStepHeader` supplies the Radix title per
@@ -1113,7 +1123,8 @@ a project picker, the prompt hero, and the reused
   it added, and its switch, on by default, labelled "On in all workspaces" or "On for this repository" with
   one line: "new chats have it now; open chats pick it up when idle") or **Failed** (the host's message,
   "Nothing was added to your settings", Back / Retry; a `RequestTimeoutError` instead says to check the
-  list, since the install may still complete). `describeSource` is a light client-side echo only — the
+  list, since the install may still complete). A package that installs but contributes nothing loadable
+  is a success with an empty chip list — it has a row, so it can be removed. `describeSource` is a light client-side echo only — the
   host validates; **This repository** is offered only with an active workspace whose project is pi-trusted,
   with the reason shown otherwise, and the hints show the real settings paths from the catalog. Disabling
   never unregisters a tool renderer ([[submodule-web-extensions]]), so past transcripts still render.

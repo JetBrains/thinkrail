@@ -1,11 +1,13 @@
-import type { PiPackageSourceKind } from "@thinkrail/contracts";
+import { join } from "node:path";
+import type { PiPackageScope, PiPackageSourceKind } from "@thinkrail/contracts";
 
-const NON_LOCAL_PREFIXES = ["npm:", "git:", "github:", "http:", "https:", "ssh:", "git@"];
+export const BUILTIN_PREFIX = "builtin:";
 
+/** pi's own rule: a `git:` prefix or a `scheme://` URL is git; `npm:` is npm; anything else is a local path. */
 export function piPackageSourceKind(source: string): PiPackageSourceKind {
 	const trimmed = source.trim();
 	if (trimmed.startsWith("npm:")) return "npm";
-	if (NON_LOCAL_PREFIXES.some((prefix) => trimmed.startsWith(prefix))) return "git";
+	if (trimmed.startsWith("git:") || /^(https?|ssh|git):\/\//i.test(trimmed)) return "git";
 	return "local";
 }
 
@@ -14,22 +16,28 @@ export function npmPackageName(spec: string): string {
 	return match?.[1] ?? spec;
 }
 
-function splitRef(url: string): string {
-	const scp = url.match(/^git@([^:]+):(.+)$/);
-	if (scp) {
-		const path = scp[2] ?? "";
-		const at = path.indexOf("@");
-		return at > 0 && at < path.length - 1 ? `git@${scp[1]}:${path.slice(0, at)}` : url;
-	}
-	const hash = url.indexOf("#");
-	const withoutHash = hash >= 0 ? url.slice(0, hash) : url;
-	const lastSlash = withoutHash.lastIndexOf("/");
-	const at = withoutHash.indexOf("@", lastSlash + 1);
-	return at > lastSlash + 1 && at < withoutHash.length - 1 ? withoutHash.slice(0, at) : withoutHash;
+export function expandHome(path: string): string {
+	return path.replace(/^~(?=\/|$)/, process.env.HOME ?? "~");
 }
 
+/** pi's offline switch (`PI_OFFLINE` ∈ 1 | true | yes), which pi does not export. */
+export function isOfflineMode(): boolean {
+	const value = process.env.PI_OFFLINE?.toLowerCase();
+	return value === "1" || value === "true" || value === "yes";
+}
+
+/** The directory a scope's declared local sources are relative to: the folder of its settings file. */
+export function settingsBaseDir(
+	cwd: string | undefined,
+	agentDir: string,
+	scope: PiPackageScope,
+): string {
+	return scope === "project" && cwd ? join(cwd, ".pi") : agentDir;
+}
+
+/** `host/owner/repo` without ref, `.git` or credentials; the ref is the first `@` (or `#`) inside the path. */
 function gitHostAndPath(source: string): string {
-	const url = splitRef(source.startsWith("git:") ? source.slice(4).trim() : source.trim());
+	const url = source.startsWith("git:") ? source.slice(4).trim() : source.trim();
 	let host = "";
 	let path = "";
 	const scp = url.match(/^git@([^:]+):(.+)$/);
@@ -50,9 +58,15 @@ function gitHostAndPath(source: string): string {
 		host = url.slice(0, slash);
 		path = url.slice(slash + 1);
 	}
+	const ref = path.search(/[@#]/);
+	if (ref >= 0) path = path.slice(0, ref);
 	return `${host.toLowerCase()}/${path.replace(/\/+$/, "").replace(/\.git$/, "")}`;
 }
 
+/**
+ * pi's package identity rule (`DefaultPackageManager.getPackageIdentity`, not exported): npm by name,
+ * git by host/path without ref, local by resolved absolute path.
+ */
 export function piPackageIdentity(source: string, resolveLocal: (path: string) => string): string {
 	const kind = piPackageSourceKind(source);
 	if (kind === "npm") return `npm:${npmPackageName(source.trim().slice(4).trim())}`;

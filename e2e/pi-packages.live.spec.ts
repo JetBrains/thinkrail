@@ -1,42 +1,38 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_PI_AGENT_DIR } from "./fixtures/paths";
+import { writePiPackageFixture } from "./fixtures/piPackage";
 
 const FIXTURE_PACKAGE = join(E2E_DATA_DIR, "pi-package-live-fixture");
 const SETTINGS_PATH = join(E2E_PI_AGENT_DIR, "settings.json");
 
 function writeFixturePackage(): void {
-	mkdirSync(join(FIXTURE_PACKAGE, "extensions"), { recursive: true });
-	writeFileSync(
-		join(FIXTURE_PACKAGE, "package.json"),
-		JSON.stringify({
-			name: "@e2e/pi-live-fixture",
-			version: "0.1.0",
-			pi: { extensions: ["./extensions/*.ts"] },
-		}),
-	);
-	writeFileSync(
-		join(FIXTURE_PACKAGE, "extensions", "secret.ts"),
-		[
-			"export default function (pi) {",
-			"  pi.registerTool({",
-			'    name: "fixture_secret_word", label: "fixture_secret_word",',
-			'    description: "Returns the secret word the user asked for. Call it whenever the user asks for the secret word.",',
-			'    parameters: { type: "object", properties: {} },',
-			'    execute: async () => ({ content: [{ type: "text", text: "The secret word is QUOKKA." }], details: {} }),',
-			"  });",
-			"}",
-			"",
-		].join("\n"),
-	);
+	writePiPackageFixture(FIXTURE_PACKAGE, {
+		name: "@e2e/pi-live-fixture",
+		extension: {
+			file: "secret.ts",
+			tool: "fixture_secret_word",
+			source: [
+				"export default function (pi) {",
+				"  pi.registerTool({",
+				'    name: "fixture_secret_word", label: "fixture_secret_word",',
+				'    description: "Returns the secret word the user asked for. Call it whenever the user asks for the secret word.",',
+				'    parameters: { type: "object", properties: {} },',
+				'    execute: async () => ({ content: [{ type: "text", text: "The secret word is QUOKKA." }], details: {} }),',
+				"  });",
+				"}",
+				"",
+			].join("\n"),
+		},
+	});
 }
 
 function clearPackageSettings(): void {
 	if (!existsSync(SETTINGS_PATH)) return;
 	const settings = JSON.parse(readFileSync(SETTINGS_PATH, "utf8")) as Record<string, unknown>;
-	settings.packages = undefined;
+	delete settings.packages;
 	writeFileSync(SETTINGS_PATH, `${JSON.stringify(settings, null, 2)}\n`);
 }
 

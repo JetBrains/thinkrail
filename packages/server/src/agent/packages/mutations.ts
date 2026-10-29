@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { existsSync, statSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import {
 	DefaultPackageManager,
 	type PackageSource,
@@ -9,10 +9,17 @@ import {
 import type { PiPackageResourceType, PiPackageScope } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { invalidatePiPackageCatalog, packageSourceIdentity } from "./catalog";
-import { piPackageSourceKind } from "./identity";
+import {
+	BUILTIN_PREFIX,
+	expandHome,
+	isOfflineMode,
+	piPackageSourceKind,
+	settingsBaseDir,
+} from "./identity";
 
-const BUILTIN_PREFIX = "builtin:";
 const UPDATE_CHECK_TTL_MS = 5 * 60_000;
+const RESOURCE_TYPES: ReadonlySet<string> = new Set(["extensions", "skills", "prompts"]);
+const SCOPES: ReadonlySet<string> = new Set(["user", "project"]);
 
 export interface PiPackageHostContext {
 	/** The workspace path; absent → user scope only. */
@@ -21,6 +28,8 @@ export interface PiPackageHostContext {
 	/** Read fresh at every use: an npm install can outlast a trust change. */
 	projectTrusted: () => boolean;
 	builtinExtensions: readonly string[];
+	/** Called right after a settings file was written, before any further disk work. */
+	onPersisted?: (settingsPath: string) => void;
 }
 
 export interface PiPackageTarget {
@@ -36,6 +45,7 @@ export interface PiResourceToggle {
 }
 
 let chain: Promise<unknown> = Promise.resolve();
+const updateCache = new Map<string, { at: number; value: Promise<PiPackageTarget[]> }>();
 
 function enqueue<T>(task: () => Promise<T>): Promise<T> {
 	const run = chain.then(task, task);
@@ -43,15 +53,24 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
 	return run;
 }
 
-function isOffline(): boolean {
-	const value = process.env.PI_OFFLINE?.toLowerCase();
-	return value === "1" || value === "true" || value === "yes";
-}
-
 function messageOf(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+function assertScope(scope: unknown): asserts scope is PiPackageScope {
+	if (typeof scope !== "string" || !SCOPES.has(scope)) {
+		throw new CodedError("PACKAGE_SOURCE_INVALID", "Unsupported package scope.");
+	}
+}
+
+function assertToggleShape(toggle: PiResourceToggle): void {
+	assertScope(toggle.scope);
+	if (!RESOURCE_TYPES.has(toggle.type) || typeof toggle.path !== "string" || !toggle.path) {
+		throw new CodedError("PACKAGE_SOURCE_INVALID", "Unsupported resource type or path.");
+	}
+}
+
+/** A fresh settings read; pre-existing load errors are drained so only this mutation's write is judged. */
 function openSettings(ctx: PiPackageHostContext): {
 	settings: SettingsManager;
 	packageManager: DefaultPackageManager;
@@ -59,6 +78,7 @@ function openSettings(ctx: PiPackageHostContext): {
 	const settings = SettingsManager.create(ctx.cwd ?? ctx.agentDir, ctx.agentDir, {
 		projectTrusted: ctx.projectTrusted(),
 	});
+	settings.drainErrors();
 	const packageManager = new DefaultPackageManager({
 		cwd: ctx.cwd ?? ctx.agentDir,
 		agentDir: ctx.agentDir,
@@ -78,7 +98,11 @@ function assertScopeWritable(ctx: PiPackageHostContext, scope: PiPackageScope): 
 	}
 }
 
-async function persist(settings: SettingsManager): Promise<void> {
+async function persist(
+	ctx: PiPackageHostContext,
+	settings: SettingsManager,
+	scope: PiPackageScope,
+): Promise<void> {
 	await settings.flush();
 	const errors = settings.drainErrors();
 	if (errors.length > 0) {
@@ -87,39 +111,35 @@ async function persist(settings: SettingsManager): Promise<void> {
 			errors.map((entry) => entry.error.message).join("; "),
 		);
 	}
-}
-
-function settingsBaseDir(ctx: PiPackageHostContext, scope: PiPackageScope): string {
-	return scope === "project" && ctx.cwd ? join(ctx.cwd, ".pi") : ctx.agentDir;
-}
-
-function expandHome(path: string): string {
-	return path.replace(/^~(?=\/|$)/, process.env.HOME ?? "~");
+	ctx.onPersisted?.(join(settingsBaseDir(ctx.cwd, ctx.agentDir, scope), "settings.json"));
 }
 
 // pi matches an input source against the process cwd, not the settings file a declared one is relative to.
-function inputSource(ctx: PiPackageHostContext, target: PiPackageTarget): string {
+function declaredAsInput(ctx: PiPackageHostContext, target: PiPackageTarget): string {
 	const source = target.source.trim();
 	if (piPackageSourceKind(source) !== "local") return source;
-	return resolve(settingsBaseDir(ctx, target.scope), expandHome(source));
+	return resolve(settingsBaseDir(ctx.cwd, ctx.agentDir, target.scope), expandHome(source));
 }
 
-/** Installs, then persists the declaration in the scope's settings file; returns the package identity. */
+/**
+ * Installs, then persists the declaration in the scope's settings file; returns the package identity.
+ * A relative local source is the user's input, read like `pi install ./tools` from the workspace.
+ */
 export function installPiPackage(
 	ctx: PiPackageHostContext,
 	target: PiPackageTarget,
 ): Promise<string> {
 	return enqueue(async () => {
-		const source = target.source.trim();
-		if (!source) throw new CodedError("PACKAGE_SOURCE_INVALID", "A package source is required.");
+		assertScope(target.scope);
+		const raw = target.source.trim();
+		if (!raw) throw new CodedError("PACKAGE_SOURCE_INVALID", "A package source is required.");
 		assertScopeWritable(ctx, target.scope);
-		const kind = piPackageSourceKind(source);
-		if (kind === "local") {
-			const path = resolve(settingsBaseDir(ctx, target.scope), expandHome(source));
-			if (!existsSync(path)) {
-				throw new CodedError("PACKAGE_SOURCE_INVALID", `No such folder or file: ${path}`);
-			}
-		} else if (isOffline()) {
+		const kind = piPackageSourceKind(raw);
+		const source = kind === "local" ? resolve(ctx.cwd ?? ctx.agentDir, expandHome(raw)) : raw;
+		if (kind === "local" && !existsSync(source)) {
+			throw new CodedError("PACKAGE_SOURCE_INVALID", `No such folder or file: ${source}`);
+		}
+		if (kind !== "local" && isOfflineMode()) {
 			throw new CodedError(
 				"PACKAGE_OFFLINE",
 				"pi is in offline mode; npm and git packages cannot be installed.",
@@ -133,8 +153,10 @@ export function installPiPackage(
 			throw new CodedError("PACKAGE_INSTALL_FAILED", messageOf(error));
 		}
 		assertScopeWritable(ctx, target.scope);
+		await settings.reload();
+		settings.drainErrors();
 		packageManager.addSourceToSettings(source, { local });
-		await persist(settings);
+		await persist(ctx, settings, target.scope);
 		invalidatePiPackageCatalog();
 		updateCache.clear();
 		return packageSourceIdentity(source, target.scope, ctx.cwd, ctx.agentDir);
@@ -144,17 +166,18 @@ export function installPiPackage(
 /** Removes the declaration first (so a later resolve cannot re-install), then the installed files. */
 export function removePiPackage(ctx: PiPackageHostContext, target: PiPackageTarget): Promise<void> {
 	return enqueue(async () => {
+		assertScope(target.scope);
 		assertScopeWritable(ctx, target.scope);
 		const local = target.scope === "project";
 		const { settings, packageManager } = openSettings(ctx);
-		const source = inputSource(ctx, target);
+		const source = declaredAsInput(ctx, target);
 		if (!packageManager.removeSourceFromSettings(source, { local })) {
 			throw new CodedError(
 				"PACKAGE_UNKNOWN",
 				`No package ${target.source} is declared at ${target.scope} scope.`,
 			);
 		}
-		await persist(settings);
+		await persist(ctx, settings, target.scope);
 		invalidatePiPackageCatalog();
 		updateCache.clear();
 		try {
@@ -165,35 +188,49 @@ export function removePiPackage(ctx: PiPackageHostContext, target: PiPackageTarg
 	});
 }
 
-/** pi's `update(source)` reconciles every declaration of that identity, at both scopes. */
+/**
+ * pi's `update(source)` reconciles every declaration of that identity, at both scopes. When the
+ * targets cover every installed declaration, pi's own `update()` runs once and batches npm per scope.
+ */
 export function updatePiPackages(
 	ctx: PiPackageHostContext,
 	targets: readonly PiPackageTarget[],
 ): Promise<void> {
 	return enqueue(async () => {
-		if (isOffline()) {
+		for (const target of targets) assertScope(target.scope);
+		if (isOfflineMode()) {
 			throw new CodedError("PACKAGE_OFFLINE", "pi is in offline mode; packages cannot be updated.");
 		}
 		const { packageManager } = openSettings(ctx);
-		for (const target of targets) {
-			try {
-				await packageManager.update(inputSource(ctx, target));
-			} catch (error) {
-				throw new CodedError("PACKAGE_UPDATE_FAILED", messageOf(error));
+		const requested = new Set(targets.map((target) => `${target.scope}\0${target.source}`));
+		const configured = packageManager
+			.listConfiguredPackages()
+			.filter((entry) => entry.installedPath !== undefined);
+		const coversEverything =
+			configured.length > 0 &&
+			configured.every((entry) => requested.has(`${entry.scope}\0${entry.source}`));
+		try {
+			if (coversEverything) {
+				await packageManager.update();
+			} else {
+				for (const target of targets) await packageManager.update(declaredAsInput(ctx, target));
 			}
+		} catch (error) {
+			throw new CodedError("PACKAGE_UPDATE_FAILED", messageOf(error));
 		}
 		invalidatePiPackageCatalog();
 		updateCache.clear();
 	});
 }
 
-const updateCache = new Map<string, { at: number; value: Promise<PiPackageTarget[]> }>();
-
-/** The declarations pi reports a newer version for; pinned npm versions are never reported. Cached briefly. */
-export function checkPiPackageUpdates(ctx: PiPackageHostContext): Promise<PiPackageTarget[]> {
+/** The declarations pi reports a newer version for; pinned npm versions are never reported. Cached briefly unless forced. */
+export function checkPiPackageUpdates(
+	ctx: PiPackageHostContext,
+	options: { force?: boolean } = {},
+): Promise<PiPackageTarget[]> {
 	const key = JSON.stringify([ctx.cwd ?? null, ctx.agentDir, ctx.projectTrusted()]);
 	const cached = updateCache.get(key);
-	if (cached && Date.now() - cached.at < UPDATE_CHECK_TTL_MS) return cached.value;
+	if (!options.force && cached && Date.now() - cached.at < UPDATE_CHECK_TTL_MS) return cached.value;
 	const value = (async () => {
 		const { packageManager } = openSettings(ctx);
 		const updates = await packageManager.checkForAvailableUpdates();
@@ -213,6 +250,7 @@ export function setPiResourceEnabled(
 	toggle: PiResourceToggle,
 ): Promise<void> {
 	return enqueue(async () => {
+		assertToggleShape(toggle);
 		assertScopeWritable(ctx, toggle.scope);
 		const { settings, packageManager } = openSettings(ctx);
 		const resolved = await packageManager.resolve(async () => "skip");
@@ -225,7 +263,7 @@ export function setPiResourceEnabled(
 		} else {
 			toggleTopLevelResource(ctx, settings, resource, toggle);
 		}
-		await persist(settings);
+		await persist(ctx, settings, toggle.scope);
 		invalidatePiPackageCatalog();
 	});
 }
@@ -252,11 +290,41 @@ function patternTarget(entry: string): string {
 	return isOverride(entry) ? entry.slice(1) : entry;
 }
 
+/**
+ * pi's filter semantics for one package: `undefined` = everything, `[]` = nothing, plain entries form
+ * an allowlist, and an array of overrides alone starts from everything. The toggle keeps whatever the
+ * user had and changes only the named resource's admission.
+ */
+export function togglePackageFilter(
+	current: readonly string[] | undefined,
+	pattern: string,
+	enabled: boolean,
+): string[] | undefined {
+	if (current === undefined) return enabled ? undefined : [`-${pattern}`];
+	if (current.length === 0) return enabled ? [pattern] : [];
+	const plain = current.filter((entry) => !isOverride(entry));
+	const others = current.filter((entry) => isOverride(entry) && patternTarget(entry) !== pattern);
+	if (enabled) return [...plain, ...others, `+${pattern}`];
+	const remainingPlain = plain.filter((entry) => entry !== pattern);
+	if (plain.length > 0 && remainingPlain.length === 0) {
+		const forced = others.filter((entry) => entry.startsWith("+")).map((entry) => entry.slice(1));
+		return [...forced, ...others.filter((entry) => !entry.startsWith("+"))];
+	}
+	return [...remainingPlain, ...others, `-${pattern}`];
+}
+
 function togglePackageResource(
 	settings: SettingsManager,
 	resource: ResolvedResource,
 	toggle: PiResourceToggle,
 ): void {
+	const packageRoot = resource.metadata.packageRoot;
+	if (packageRoot === undefined || !statSync(packageRoot).isDirectory()) {
+		throw new CodedError(
+			"PACKAGE_SOURCE_INVALID",
+			"A single-file package has no resource filters; use its package switch.",
+		);
+	}
 	const scoped =
 		toggle.scope === "project" ? settings.getProjectSettings() : settings.getGlobalSettings();
 	const packages: PackageSource[] = [...(scoped.packages ?? [])];
@@ -272,11 +340,14 @@ function togglePackageResource(
 	const current = packages[index] ?? resource.metadata.source;
 	const pkg: Exclude<PackageSource, string> =
 		typeof current === "string" ? { source: current } : { ...current, source: current.source };
-	const pattern = relative(resource.metadata.baseDir ?? dirname(resource.path), resource.path);
-	const kept = (pkg[toggle.type] ?? []).filter((entry) => patternTarget(entry) !== pattern);
-	kept.push(`${toggle.enabled ? "+" : "-"}${pattern}`);
-	pkg[toggle.type] = kept;
-	packages[index] = pkg;
+	const pattern = relative(packageRoot, resource.path);
+	const next = togglePackageFilter(pkg[toggle.type], pattern, toggle.enabled);
+	if (next === undefined) delete pkg[toggle.type];
+	else pkg[toggle.type] = next;
+	const hasFilters = (["extensions", "skills", "prompts", "themes"] as const).some(
+		(key) => pkg[key] !== undefined,
+	);
+	packages[index] = hasFilters || pkg.autoload !== undefined ? pkg : pkg.source;
 	if (toggle.scope === "project") settings.setProjectPackages(packages);
 	else settings.setPackages(packages);
 }
@@ -290,7 +361,10 @@ function toggleTopLevelResource(
 	const isBuiltin = resource.metadata.source === "builtin";
 	const pattern = isBuiltin
 		? resource.path
-		: relative(resource.metadata.baseDir ?? settingsBaseDir(ctx, toggle.scope), resource.path);
+		: relative(
+				resource.metadata.baseDir ?? settingsBaseDir(ctx.cwd, ctx.agentDir, toggle.scope),
+				resource.path,
+			);
 	const scoped =
 		toggle.scope === "project" ? settings.getProjectSettings() : settings.getGlobalSettings();
 	const current: string[] = [...(scoped[toggle.type] ?? [])];

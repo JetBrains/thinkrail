@@ -5,45 +5,14 @@ import { join } from "node:path";
 import { DefaultPackageManager } from "@earendil-works/pi-coding-agent";
 import { invalidatePiPackageCatalog, listPiPackageCatalog } from "./catalog";
 import { piPackageIdentity, piPackageSourceKind } from "./identity";
+import { fixtureExtensionSource, writeFixturePiPackage } from "./testFixtures";
 
-function extensionSource(toolName: string, command?: string): string {
-	return [
-		"export default function (pi) {",
-		"  pi.registerTool({",
-		`    name: ${JSON.stringify(toolName)}, label: ${JSON.stringify(toolName)}, description: "fixture",`,
-		'    parameters: { type: "object", properties: {} },',
-		'    execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),',
-		"  });",
-		command
-			? `  pi.registerCommand(${JSON.stringify(command)}, { description: "fixture", handler: async () => {} });`
-			: "",
-		"}",
-		"",
-	].join("\n");
-}
+const extensionSource = fixtureExtensionSource;
 
 function writeFixturePackage(root: string): string {
-	const pkg = join(root, "pkgs", "fixture-tools");
-	mkdirSync(join(pkg, "extensions"), { recursive: true });
-	mkdirSync(join(pkg, "skills", "triage"), { recursive: true });
-	mkdirSync(join(pkg, "prompts"), { recursive: true });
-	writeFileSync(
-		join(pkg, "package.json"),
-		JSON.stringify({
-			name: "@fixture/pi-tools",
-			version: "0.1.0",
-			description: "Fixture tools for the catalog",
-			pi: { extensions: ["./extensions/*.ts"], skills: ["./skills"], prompts: ["./prompts/*.md"] },
-		}),
-	);
-	writeFileSync(join(pkg, "extensions", "hello.ts"), extensionSource("fixture_hello", "hello"));
-	writeFileSync(join(pkg, "extensions", "legacy.ts"), extensionSource("fixture_legacy"));
-	writeFileSync(
-		join(pkg, "skills", "triage", "SKILL.md"),
-		"---\nname: triage\ndescription: Triage fixture.\n---\n\n# triage\n",
-	);
-	writeFileSync(join(pkg, "prompts", "standup.md"), "---\ndescription: standup\n---\nstandup\n");
-	return pkg;
+	return writeFixturePiPackage(join(root, "pkgs", "fixture-tools"), {
+		description: "Fixture tools for the catalog",
+	});
 }
 
 describe("piPackageIdentity", () => {
@@ -54,19 +23,27 @@ describe("piPackageIdentity", () => {
 		expect(piPackageIdentity("git:github.com/acme/pi-tools@v2", resolveLocal)).toBe(
 			"git:github.com/acme/pi-tools",
 		);
+		expect(piPackageIdentity("git:github.com/acme/pi-tools@feature/foo", resolveLocal)).toBe(
+			"git:github.com/acme/pi-tools",
+		);
 		expect(piPackageIdentity("https://GitHub.com/acme/pi-tools.git", resolveLocal)).toBe(
 			"git:github.com/acme/pi-tools",
 		);
-		expect(piPackageIdentity("git@github.com:acme/pi-tools@main", resolveLocal)).toBe(
+		expect(
+			piPackageIdentity("https://user:token@github.com/acme/pi-tools@feature/x", resolveLocal),
+		).toBe("git:github.com/acme/pi-tools");
+		expect(piPackageIdentity("git:git@github.com:acme/pi-tools@main", resolveLocal)).toBe(
 			"git:github.com/acme/pi-tools",
 		);
 		expect(piPackageIdentity("./tools", resolveLocal)).toBe("local:/abs/./tools");
 	});
-	it("classifies sources the way pi does", () => {
+	it("classifies sources the way pi does: only git: and scheme URLs are git, everything else is a path", () => {
 		expect(piPackageSourceKind("npm:x")).toBe("npm");
 		expect(piPackageSourceKind("git:github.com/a/b")).toBe("git");
 		expect(piPackageSourceKind("https://github.com/a/b")).toBe("git");
-		expect(piPackageSourceKind("git@github.com:a/b")).toBe("git");
+		expect(piPackageSourceKind("ssh://git@github.com/a/b")).toBe("git");
+		expect(piPackageSourceKind("git@github.com:a/b")).toBe("local");
+		expect(piPackageSourceKind("github:a/b")).toBe("local");
 		expect(piPackageSourceKind("~/pi/tools")).toBe("local");
 		expect(piPackageSourceKind("./tools")).toBe("local");
 	});
@@ -130,8 +107,10 @@ describe("listPiPackageCatalog", () => {
 			version: "0.1.0",
 			description: "Fixture tools for the catalog",
 			installedPath: pkg,
+			singleFile: false,
 			enabled: true,
 		});
+		expect(summary?.shadowed).toBeUndefined();
 		const byName = Object.fromEntries((summary?.resources ?? []).map((r) => [r.displayName, r]));
 		expect(byName["hello.ts"]).toMatchObject({
 			type: "extensions",
@@ -197,6 +176,47 @@ describe("listPiPackageCatalog", () => {
 			installNpm.mockRestore();
 			install.mockRestore();
 		}
+	});
+
+	it("lists a declared package even when it contributes nothing, and marks a single-file package", async () => {
+		const empty = join(root, "pkgs", "empty");
+		mkdirSync(empty, { recursive: true });
+		writeFileSync(join(empty, "package.json"), JSON.stringify({ name: "@fixture/empty", pi: {} }));
+		const single = join(root, "pkgs", "single.ts");
+		writeFileSync(single, extensionSource("single_tool"));
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [empty, single] }));
+		const catalog = await listPiPackageCatalog({
+			agentDir,
+			projectTrusted: false,
+			builtinExtensions: [],
+			disabledPackages: new Set(),
+		});
+		const byName = Object.fromEntries(catalog.packages.map((p) => [p.name, p]));
+		expect(byName["@fixture/empty"]).toMatchObject({ resources: [], singleFile: false });
+		expect(byName["single.ts"]).toMatchObject({ singleFile: true, installedPath: single });
+		expect(byName["single.ts"]?.resources[0]).toMatchObject({
+			type: "extensions",
+			tools: ["single_tool"],
+		});
+	});
+
+	it("keeps a user declaration pi shadows behind the repository's, marked as such", async () => {
+		const project = join(root, "project");
+		mkdirSync(join(project, ".pi"), { recursive: true });
+		writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({ packages: [pkg] }));
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
+		const catalog = await listPiPackageCatalog({
+			cwd: project,
+			agentDir,
+			projectTrusted: true,
+			builtinExtensions: [],
+			disabledPackages: new Set(),
+		});
+		const user = catalog.packages.find((p) => p.scope === "user");
+		const repo = catalog.packages.find((p) => p.scope === "project");
+		expect(user).toMatchObject({ shadowed: true, resources: [] });
+		expect(repo?.shadowed).toBeUndefined();
+		expect(repo?.resources.length).toBeGreaterThan(0);
 	});
 
 	it("excludes the host's excluded extension path and reads repository packages only when trusted", async () => {

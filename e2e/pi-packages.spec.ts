@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./fixtures/paths";
+import { piExtensionSource, writePiPackageFixture } from "./fixtures/piPackage";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 import { E2eWire } from "./fixtures/wire";
 
@@ -10,33 +11,12 @@ const FIXTURE_PACKAGE = join(E2E_DATA_DIR, "pi-package-fixture");
 const SETTINGS_PATH = join(E2E_PI_AGENT_DIR, "settings.json");
 
 function writeFixturePackage(): void {
-	mkdirSync(join(FIXTURE_PACKAGE, "extensions"), { recursive: true });
-	mkdirSync(join(FIXTURE_PACKAGE, "skills", "triage"), { recursive: true });
-	writeFileSync(
-		join(FIXTURE_PACKAGE, "package.json"),
-		JSON.stringify({
-			name: "@e2e/pi-fixture-tools",
-			version: "0.1.0",
-			description: "Fixture tools for the e2e lane",
-			pi: { extensions: ["./extensions/*.ts"], skills: ["./skills"] },
-		}),
-	);
-	writeFileSync(
-		join(FIXTURE_PACKAGE, "extensions", "hello.ts"),
-		[
-			"export default function (pi) {",
-			'  pi.registerTool({ name: "fixture_hello", label: "fixture_hello", description: "fixture",',
-			'    parameters: { type: "object", properties: {} },',
-			'    execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }) });',
-			'  pi.registerCommand("fixture-hello", { description: "fixture", handler: async () => {} });',
-			"}",
-			"",
-		].join("\n"),
-	);
-	writeFileSync(
-		join(FIXTURE_PACKAGE, "skills", "triage", "SKILL.md"),
-		"---\nname: fixture-triage\ndescription: Fixture triage skill.\n---\n\n# fixture-triage\n",
-	);
+	writePiPackageFixture(FIXTURE_PACKAGE, {
+		name: "@e2e/pi-fixture-tools",
+		description: "Fixture tools for the e2e lane",
+		extension: { file: "hello.ts", tool: "fixture_hello", command: "fixture-hello" },
+		skill: { name: "triage", description: "Fixture triage skill." },
+	});
 }
 
 function readSettings(): Record<string, unknown> {
@@ -47,8 +27,8 @@ function readSettings(): Record<string, unknown> {
 function clearPackageSettings(): void {
 	if (!existsSync(SETTINGS_PATH)) return;
 	const settings = readSettings();
-	settings.packages = undefined;
-	settings.extensions = undefined;
+	delete settings.packages;
+	delete settings.extensions;
 	writeFileSync(SETTINGS_PATH, `${JSON.stringify(settings, null, 2)}\n`);
 }
 
@@ -192,17 +172,7 @@ test("a hand-dropped extension file is listed as a local file with its tools and
 }) => {
 	const loose = join(E2E_PI_AGENT_DIR, "extensions", "loose-e2e.ts");
 	mkdirSync(join(E2E_PI_AGENT_DIR, "extensions"), { recursive: true });
-	writeFileSync(
-		loose,
-		[
-			"export default function (pi) {",
-			'  pi.registerTool({ name: "loose_tool", label: "loose_tool", description: "fixture",',
-			'    parameters: { type: "object", properties: {} },',
-			'    execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }) });',
-			"}",
-			"",
-		].join("\n"),
-	);
+	writeFileSync(loose, piExtensionSource("loose_tool"));
 	try {
 		await openFixtureProject(page);
 		const section = await openExtensionsSettings(page);

@@ -33,7 +33,9 @@ import {
 	liveSessionIdsOf,
 	mcpPolicyOf,
 	piTrustsProjectPath,
+	primeProjectPiSettings,
 	primeUserPiSettings,
+	publishPiPackagesChanged,
 	reconcileMcpSessions,
 	refreshAgentReviewTool,
 	refreshExtensionTools,
@@ -687,10 +689,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			payload.paths.some((path) => path === ".pi" || path === ".pi/settings.json")
 		) {
 			const workspace = listAllWorkspaceRecords().find((ws) => ws.id === payload.workspaceId);
-			if (workspace) handleProjectPiSettingsChanged(workspace.worktreePath);
+			const trusted =
+				workspace &&
+				getProjects().find((project) => project.id === workspace.projectId)?.piResourceTrust ===
+					"granted";
+			if (workspace && trusted) handleProjectPiSettingsChanged(workspace.worktreePath);
 		}
 	};
 	primeUserPiSettings();
+	for (const workspace of listAllWorkspaceRecords()) primeProjectPiSettings(workspace.worktreePath);
 	setPiPackagesPublisher(() =>
 		server.publish(
 			WS_CHANNELS.packagesChanged,
@@ -777,6 +784,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		) {
 			refreshExtensionTools();
 		}
+		if (appliedUpdate.disabledPackages !== undefined) publishPiPackagesChanged();
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {

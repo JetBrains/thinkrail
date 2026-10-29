@@ -22,6 +22,7 @@ import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
+	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
@@ -44,6 +45,10 @@ export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 
 export function supportsUserThemes(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= USER_THEMES_PROTOCOL_VERSION;
+}
+
+export function supportsPiPackages(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION;
 }
 
 export function supportsToolResponses(protocolVersion: number | null): boolean {
