@@ -5,6 +5,10 @@ type NavigationEvent = ReturnType<
 	(typeof Electrobun.events.events.webview)["willNavigate" | "newWindowOpen"]
 >;
 
+type LinkRoutingWindow = Pick<Window, "addEventListener" | "open"> & {
+	location: Pick<Location, "origin" | "assign">;
+};
+
 const MAX_NAVIGATION_DETAIL_LENGTH = 64 * 1024;
 
 export function externalNavigationUrl(value: unknown, origin: string): string | null {
@@ -37,6 +41,45 @@ export function externalNavigationUrl(value: unknown, origin: string): string | 
 	} catch {
 		return null;
 	}
+}
+
+export function windowNavigationRules(origin: string): string[] {
+	return ["^*", `${origin}/*`, "about:srcdoc", `blob:${origin}/*`];
+}
+
+function isElement(target: EventTarget | null): target is Element {
+	return (
+		target !== null && typeof target === "object" && "nodeType" in target && target.nodeType === 1
+	);
+}
+
+function activatedLinkHref(target: EventTarget | null): string | null {
+	if (!isElement(target)) return null;
+	const anchor = target.closest("a[href]");
+	if (!anchor || anchor.hasAttribute("download") || !("href" in anchor)) return null;
+	return typeof anchor.href === "string" ? anchor.href : null;
+}
+
+export function installExternalLinkRouting(view: LinkRoutingWindow): void {
+	const route = (event: Event) => {
+		const click = event as MouseEvent;
+		if (click.defaultPrevented || click.button > 1 || click.ctrlKey || click.metaKey) return;
+		const href = activatedLinkHref(click.target);
+		const url = href === null ? null : externalNavigationUrl(href, view.location.origin);
+		if (!url) return;
+		click.preventDefault();
+		view.location.assign(url);
+	};
+	view.addEventListener("click", route);
+	view.addEventListener("auxclick", route);
+	const open = view.open.bind(view);
+	view.open = (url?: string | URL, target?: string, features?: string) => {
+		const external =
+			url === undefined ? null : externalNavigationUrl(String(url), view.location.origin);
+		if (!external) return open(url, target, features);
+		view.location.assign(external);
+		return null;
+	};
 }
 
 export function installExternalNavigation(
