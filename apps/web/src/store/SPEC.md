@@ -586,8 +586,10 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   complementing `appendErrorTurn` (which handles the in-chat case).
   **`packagesVersion`** + **`bumpPackagesVersion()`** is the same shape for installed pi packages: the
   transport bumps it on `packages.changed`, and `panels/ExtensionsSettings.tsx` re-lists off it.
-  **`disabledPackages: string[]`** mirrors `disabledExtensions` from the settings broadcast — the
-  Extensions page's package switches read it rather than the catalog's snapshot.
+  **`disabledPackages: string[]`** mirrors `disabledExtensions` from the settings broadcast; the
+  Extensions page uses it only to compute the next whole list for `settings.update` — what a package
+  row *shows* is the catalog's `enabled` (the host's effective state, which a `packages.changed` push
+  refreshes after every switch flip), never a client-side reading of this list.
   The host-wide **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare
   invalidation signal, the same shape as `fsChangesByWorkspace`'s `tick` below — **`panels/TemplatesSettings.tsx`**
   and **`chat/TemplateEditorDialog.tsx`** call it after a `template.save`/`delete`, and the Templates
