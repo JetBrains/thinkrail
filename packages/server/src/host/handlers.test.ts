@@ -874,12 +874,21 @@ test("resource handlers scope every read/control to a registered workspace and a
 			CTX,
 		)) as CreateSessionResult;
 		const scope = { workspaceId: workspace.id, sessionId: parent.sessionId };
+		const none = { done: 0, failed: 0, stopped: 0, interrupted: 0 };
 		expect(await handleRequest("session.resources", scope, CTX)).toEqual({
 			...scope,
 			commands: [],
 			subagents: [],
 			mcpServers: [],
+			history: { commands: none, subagents: none },
 		});
+		expect(
+			await handleRequest(
+				"session.resourceHistory",
+				{ ...scope, kind: "command", before: { at: 1, id: "older" }, limit: 5 },
+				CTX,
+			),
+		).toEqual({ kind: "command", items: [], hasMore: false });
 		expect(
 			await handleRequest("backgroundCommand.output", { ...scope, commandId: "missing" }, CTX),
 		).toEqual({ available: false });
@@ -897,6 +906,7 @@ test("resource handlers scope every read/control to a registered workspace and a
 		for (const workspaceId of [other.id, "missing-workspace"]) {
 			const calls = [
 				["session.resources", { ...scope, workspaceId }],
+				["session.resourceHistory", { ...scope, workspaceId, kind: "subagent" }],
 				["backgroundCommand.output", { ...scope, workspaceId, commandId: "missing" }],
 				["backgroundCommand.stop", { ...scope, workspaceId, commandId: "missing" }],
 				["subagent.stop", { ...children, workspaceId, childSessionId: "missing" }],
@@ -921,6 +931,19 @@ test("resource handlers scope every read/control to a registered workspace and a
 		]) {
 			await expect(handleRequest("session.resources", params, CTX)).rejects.toThrow(
 				"Invalid resource ids",
+			);
+		}
+		for (const params of [
+			{ ...scope, kind: "terminal" },
+			{ ...scope, kind: "command", limit: 0 },
+			{ ...scope, kind: "command", limit: 1.5 },
+			{ ...scope, kind: "command", before: { at: 1, id: "../secret" } },
+			{ ...scope, kind: "command", before: { at: "1", id: "older" } },
+			{ ...scope, kind: "command", before: { at: 1, id: "older", path: "/tmp" } },
+			{ ...scope, kind: "subagent", path: "/tmp/secret" },
+		]) {
+			await expect(handleRequest("session.resourceHistory", params, CTX)).rejects.toThrow(
+				/Invalid resource (?:history|ids)/,
 			);
 		}
 		for (const commandId of ["/tmp/output", "..", "C:\\output", "bad\u0000id"]) {

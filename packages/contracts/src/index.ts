@@ -7,11 +7,11 @@ export {
 	compareResourceHistory,
 	DEFAULT_CONFIG,
 	DEFAULT_WORKSPACE_NAME,
-	emptyResourceTally,
 	FIRST_PROMPT_MAX_LENGTH,
 	firstPromptHead,
 	firstPromptOfTexts,
 	IMAGE_MAX_BASE64_BYTES,
+	interruptedResource,
 	isComposerGrowthLimit,
 	isControlMessage,
 	isDelegationRunDetails,
@@ -41,6 +41,7 @@ export {
 	resourceHistoryCursor,
 	resourceOutcome,
 	resourceRecordId,
+	resourceTallyTotal,
 	SETTLE_IDLE_DAYS,
 	SUBAGENT_MAX_CONCURRENT,
 	SYSTEM_LOCALE_PREFERENCE,
@@ -48,6 +49,7 @@ export {
 	TERMINAL_WINDOWS_SHELLS,
 	THEME_MODES,
 	TODO_NUDGE_PREFIX,
+	tallyResources,
 } from "./domain";
 export type * from "./nativeClient";
 export type * from "./piProtocol";

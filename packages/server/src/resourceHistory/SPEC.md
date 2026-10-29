@@ -21,7 +21,7 @@ never grants control: nothing here is live authority.
 
 - **Owns:** `<dataDir>/resource-history/<workspaceId>/<sessionId>/` — `index.jsonl` plus `logs/<commandId>.json`
   (`{ text, truncated }`) — and a bounded in-memory cache of loaded indexes.
-- **Public surface (barrel):** `recordResource`, `finishedResources`, `pageResources`, `tallyResources`,
+- **Public surface (barrel):** `recordResource`, `finishedResources`, `pageResources`,
   `archivedCommandOutput`, `removeWorkspaceResourceHistory`, `resourceHistoryRoot`, and the
   `ResourceHistoryScope` / `ArchivedOutput` types.
 - **Allowed deps:** `contracts` (the resource record vocabulary and ordering), `persistence` (`dataDir`),
@@ -38,11 +38,13 @@ never grants control: nothing here is live authority.
 - Writes are synchronous: a graceful shutdown's terminal edges arrive right before the process exits, and an
   awaited write could be lost. A finished command's log is written atomically before its index line, so a crash
   between the two leaves an unclaimed log rather than a claimed missing one. Write failures are logged, never
-  thrown into the owners' lifecycle.
+  thrown into the owners' lifecycle; after a failed append the next one starts on a fresh line, in case the
+  failure left a partial one.
 - **Interrupted is derived, never stored by a reader:** an archived record still in flight whose id no live
-  owner reports was cut off — the host died or the chat was torn down — and reads with `interrupted: true`
-  (no finish time, ordered by its start). A crash-interrupted command therefore has no log; one cut off by a
-  graceful teardown was already recorded terminal, with its log, by `agent`.
+  owner reports was cut off — the host died or the chat was torn down — and reads in the wire form
+  `interruptedResource` defines (terminal status plus `interrupted: true`; no finish time, ordered by its
+  start). A crash-interrupted command therefore has no log; one cut off by a graceful teardown was already
+  recorded, with its log, by `agent`, which alone decides when a teardown cut a run off.
 - Storage ids are validated before any path is built; an unsafe workspace, session or command id is
   ignored, never escaped.
 - History is unbounded per chat by decision (user-settled, 2026-10): every record and every log tail lives as
@@ -50,9 +52,11 @@ never grants control: nothing here is live authority.
   back, as its subagent transcripts do — and workspace archive removes the workspace's directory.
 - Several hosts may share a data dir but not a live chat (as pi's transcripts already assume); concurrent
   writers to one chat are last-writer-wins.
+- History starts with the host that introduced the archive: runs from before it are not reconstructed
+  from transcripts, whose status, role and timing cannot be recovered faithfully (user-settled, 2026-10).
 
 ## Verification obligations
 
 Upsert/dedupe, survival across a fresh module instance (the restart), derived interruption against a live
-set, log round-trip and its absence for a crash, torn/foreign line tolerance, newest-first paging from a
-cursor, outcome tallies, unsafe-id refusal, and workspace removal on disk and in cache.
+set, log round-trip and its absence for a crash, torn/foreign line tolerance and recovery after a failed append, newest-first paging from a
+cursor, unsafe-id refusal, and workspace removal on disk and in cache.

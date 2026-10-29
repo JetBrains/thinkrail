@@ -10,14 +10,12 @@ import {
 import { join, sep } from "node:path";
 import {
 	compareResourceHistory,
-	emptyResourceTally,
+	interruptedResource,
 	isLiveResource,
 	type ResourceHistoryCursor,
 	type ResourceKind,
 	type ResourceRecord,
-	type ResourceTally,
 	resourceHistoryCursor,
-	resourceOutcome,
 	resourceRecordId,
 } from "@thinkrail/contracts";
 import { logger } from "../log";
@@ -161,19 +159,18 @@ export function recordResource(
 				JSON.stringify({ text: output.text, truncated: output.truncated }),
 			);
 		const line = `${JSON.stringify({ kind: record.kind, summary: record.summary })}\n`;
-		appendFileSync(join(dir, "index.jsonl"), history.needsNewline ? `\n${line}` : line);
+		try {
+			appendFileSync(join(dir, "index.jsonl"), history.needsNewline ? `\n${line}` : line);
+		} catch (error) {
+			history.needsNewline = true;
+			throw error;
+		}
 		history.needsNewline = false;
 		history.records.set(key, record);
 		history.serialized.set(key, serialized);
 	} catch (error) {
 		log.warn("resource history could not be written", error);
 	}
-}
-
-function interrupted(record: ResourceRecord): ResourceRecord {
-	return record.kind === "command"
-		? { kind: "command", summary: { ...record.summary, interrupted: true } }
-		: { kind: "subagent", summary: { ...record.summary, interrupted: true } };
 }
 
 export function finishedResources(
@@ -186,7 +183,9 @@ export function finishedResources(
 	const finished: ResourceRecord[] = [];
 	for (const record of load(dir).records.values()) {
 		if (record.kind !== kind || live.has(resourceRecordId(record))) continue;
-		finished.push(isLiveResource(record) ? interrupted(record) : record);
+		finished.push(
+			record.summary.interrupted || isLiveResource(record) ? interruptedResource(record) : record,
+		);
 	}
 	return finished.sort((a, b) =>
 		compareResourceHistory(resourceHistoryCursor(a), resourceHistoryCursor(b)),
@@ -202,15 +201,6 @@ export function pageResources(
 		? records.filter((record) => compareResourceHistory(before, resourceHistoryCursor(record)) < 0)
 		: records;
 	return { items: older.slice(0, limit), hasMore: older.length > limit };
-}
-
-export function tallyResources(records: readonly ResourceRecord[]): ResourceTally {
-	const tally = emptyResourceTally();
-	for (const record of records) {
-		const outcome = resourceOutcome(record);
-		if (outcome) tally[outcome]++;
-	}
-	return tally;
 }
 
 export function archivedCommandOutput(

@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -7,6 +15,7 @@ import {
 	type ResourceRecord,
 	resourceRecordId,
 	type SubagentResourceSummary,
+	tallyResources,
 } from "@thinkrail/contracts";
 import {
 	archivedCommandOutput,
@@ -15,7 +24,6 @@ import {
 	recordResource,
 	removeWorkspaceResourceHistory,
 	resourceHistoryRoot,
-	tallyResources,
 } from "./resourceHistory";
 
 type Archive = typeof import("./resourceHistory");
@@ -111,7 +119,7 @@ test("records upsert by id and survive a host restart", async () => {
 	expect(restarted.finishedResources(scope, "subagent", none)).toEqual([subagent("child-1")]);
 });
 
-test("a run still in flight that no live owner reports reads as interrupted; a live one is left to its owner", async () => {
+test("a run still in flight that no live owner reports reads as interrupted with a terminal status; a live one is left to its owner", async () => {
 	const running = inFlight("dev", { startedAt: 3_000 });
 	recordResource(scope, running);
 	const {
@@ -129,10 +137,13 @@ test("a run still in flight that no live owner reports reads as interrupted; a l
 	]);
 	const restarted = await restartedArchive();
 	expect(restarted.finishedResources(scope, "command", none)).toEqual([
-		{ kind: "command", summary: { ...running.summary, interrupted: true } },
+		{ kind: "command", summary: { ...running.summary, status: "stopped", interrupted: true } },
 		command("tests", { finishedAt: 2_500 }),
 	]);
-	expect(restarted.finishedResources(scope, "subagent", none)[0]?.summary.interrupted).toBe(true);
+	expect(restarted.finishedResources(scope, "subagent", none)[0]?.summary).toMatchObject({
+		status: "aborted",
+		interrupted: true,
+	});
 });
 
 test("a finished command keeps its log tail across a restart; a crash-interrupted one has none", async () => {
@@ -172,6 +183,28 @@ test("a torn or foreign line is skipped and the next record still lands on its o
 		"old",
 	]);
 });
+
+test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+	"a failed append never glues the next record onto a possibly torn line",
+	async () => {
+		recordResource(scope, command("before"));
+		const index = join(resourceHistoryRoot(), "w1", "chat-1", "index.jsonl");
+		chmodSync(index, 0o444);
+		try {
+			recordResource(scope, command("lost"));
+		} finally {
+			chmodSync(index, 0o644);
+		}
+		recordResource(scope, command("after", { finishedAt: 3_000 }));
+
+		expect(readFileSync(index, "utf8")).toContain("\n\n");
+		const restarted = await restartedArchive();
+		expect(restarted.finishedResources(scope, "command", none).map(resourceRecordId)).toEqual([
+			"after",
+			"before",
+		]);
+	},
+);
 
 test("pages walk newest first from a cursor and tallies count every outcome", () => {
 	for (let index = 0; index < 5; index++)

@@ -9,6 +9,7 @@ import {
 	firstPromptHead,
 	firstPromptOfTexts,
 	IMAGE_MAX_BASE64_BYTES,
+	interruptedResource,
 	isDelegationRunDetails,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
@@ -21,7 +22,9 @@ import {
 	type ResourceRecord,
 	resourceHistoryCursor,
 	resourceOutcome,
+	resourceTallyTotal,
 	TODO_NUDGE_PREFIX,
+	tallyResources,
 } from "./domain";
 
 describe("isRetriedAttempt", () => {
@@ -354,12 +357,44 @@ describe("resource history vocabulary", () => {
 		expect(resourceOutcome(subagent({ status: "queued" }))).toBeNull();
 	});
 
-	test("live means a run the owner still reports in flight", () => {
+	test("live means a run the owner still reports in flight, never an interrupted one", () => {
 		expect(isLiveResource(command({ status: "running" }))).toBe(true);
 		expect(isLiveResource(command({ status: "stopping" }))).toBe(true);
+		expect(isLiveResource(command({ status: "running", interrupted: true }))).toBe(false);
 		expect(isLiveResource(command({}))).toBe(false);
 		expect(isLiveResource(subagent({ status: "queued" }))).toBe(true);
+		expect(isLiveResource(subagent({ status: "running", interrupted: true }))).toBe(false);
 		expect(isLiveResource(subagent({ status: "aborted" }))).toBe(false);
+	});
+
+	test("an interrupted run goes on the wire with a terminal status an older client reads as stopped", () => {
+		expect(interruptedResource(command({ status: "stopping" })).summary).toMatchObject({
+			status: "stopped",
+			interrupted: true,
+		});
+		expect(interruptedResource(command({ status: "error", exitCode: 1 })).summary).toMatchObject({
+			status: "error",
+			interrupted: true,
+		});
+		expect(interruptedResource(subagent({ status: "queued" })).summary).toMatchObject({
+			status: "aborted",
+			interrupted: true,
+		});
+		expect(resourceOutcome(interruptedResource(subagent({ status: "running" })))).toBe(
+			"interrupted",
+		);
+	});
+
+	test("tallies count settled runs by outcome and skip live ones", () => {
+		const tally = tallyResources([
+			command({}),
+			command({ exitCode: 3 }),
+			command({ status: "running" }),
+			subagent({ status: "aborted" }),
+			subagent({ status: "running", interrupted: true }),
+		]);
+		expect(tally).toEqual({ done: 1, failed: 1, stopped: 1, interrupted: 1 });
+		expect(resourceTallyTotal(tally)).toBe(4);
 	});
 
 	test("history orders newest finish first, falls back to the start, and breaks ties by id", () => {

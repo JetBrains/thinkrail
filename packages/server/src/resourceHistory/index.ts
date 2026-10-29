@@ -7,5 +7,4 @@ export {
 	recordResource,
 	removeWorkspaceResourceHistory,
 	resourceHistoryRoot,
-	tallyResources,
 } from "./resourceHistory";
