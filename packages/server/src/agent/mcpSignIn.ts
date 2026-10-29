@@ -5,7 +5,6 @@ import {
 	type ExtensionUIContext,
 	getAgentDir,
 	SessionManager,
-	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { LoginFrame, LoginPush } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -19,7 +18,7 @@ import {
 	redactMcpText,
 } from "./mcp";
 import { reconnectMcpServer, refreshMcpStatus } from "./mcpSessions";
-import { withoutPackages } from "./packages";
+import { createPiSettings } from "./packages";
 import { getPiRuntimeGeneration } from "./piRuntime";
 import { createWebUiContext } from "./webUiContext";
 
@@ -125,9 +124,7 @@ async function openProbe(
 ): Promise<AgentSession> {
 	const { cwd, projectTrusted, policy } = options;
 	const agentDir = getAgentDir();
-	const settingsManager = withoutPackages(
-		SettingsManager.create(cwd, agentDir, { projectTrusted }),
-	);
+	const settingsManager = createPiSettings(cwd, agentDir, { projectTrusted, packages: "none" });
 	const loadConfig = () => {
 		const loaded = loadHostMcpConfig({ agentDir, cwd, projectTrusted, policy });
 		return {

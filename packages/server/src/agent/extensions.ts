@@ -12,7 +12,7 @@ import {
 	type PathMetadata,
 	type ResourceDiagnostic,
 	type ResourceLoader,
-	SettingsManager,
+	type SettingsManager,
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
@@ -29,7 +29,10 @@ import {
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
-import { packageSourceIdentity, withoutPackages, withPackageDeclarations } from "./packages";
+import { createPiSettings, disabledPackages, setDisabledPackagesResolver } from "./packages";
+
+export { disabledPackages, setDisabledPackagesResolver };
+
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
@@ -272,19 +275,6 @@ export function providerExtensionPaths(
 		);
 }
 
-let disabledPackagesResolver: () => ReadonlySet<string> = () => new Set();
-export function setDisabledPackagesResolver(resolver: () => ReadonlySet<string>): void {
-	disabledPackagesResolver = resolver;
-}
-
-export function disabledPackages(): ReadonlySet<string> {
-	try {
-		return disabledPackagesResolver();
-	} catch {
-		return new Set();
-	}
-}
-
 let packagesRevision = 0;
 
 /** Marks that the set of installed pi packages changed on disk or in settings; loaders built before are stale. */
@@ -322,16 +312,6 @@ function installedDeclarations(packageManager: DefaultPackageManager): Set<strin
 	);
 }
 
-export function withoutDisabledPackages(settings: SettingsManager, cwd: string): SettingsManager {
-	const agentDir = getAgentDir();
-	return withPackageDeclarations(settings, (declaration, scope) => {
-		const disabled = disabledPackages();
-		if (disabled.size === 0) return true;
-		const source = typeof declaration === "string" ? declaration : declaration.source;
-		return !disabled.has(packageSourceIdentity(source, scope, cwd, agentDir));
-	});
-}
-
 export function childBaseExtensionFactories(): InlineExtension[] {
 	return [oversizedImageGuard, skillCarryover];
 }
@@ -352,7 +332,6 @@ export async function buildResourceLoader(
 	extraFactories: InlineExtension[] = [],
 	session?: ExtensionSessionServices,
 ): Promise<ResourceLoader> {
-	withoutDisabledPackages(settingsManager, cwd);
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
 	const sharedFactories: InlineExtension[] = [
@@ -451,7 +430,7 @@ export async function isBuiltinExtensionEnabled(
 	name: string,
 ): Promise<boolean> {
 	const agentDir = getAgentDir();
-	const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+	const settingsManager = createPiSettings(cwd, agentDir, { projectTrusted, packages: "none" });
 	const packageManager = new DefaultPackageManager({
 		cwd,
 		agentDir,
@@ -506,10 +485,10 @@ export async function listSkillCommands(
 	const cacheKey = admissionCacheKey(cwd, admission);
 	const cached = skillListCache.get(cacheKey);
 	if (cached && Date.now() - cached.at < SKILL_LIST_TTL_MS) return cached.value;
-	const settingsManager = withoutDisabledPackages(
-		SettingsManager.create(cwd, getAgentDir(), { projectTrusted: admission.piResourceTrusted }),
-		cwd,
-	);
+	const settingsManager = createPiSettings(cwd, getAgentDir(), {
+		projectTrusted: admission.piResourceTrusted,
+		packages: "enabled",
+	});
 	const { additionalSkillPaths, skillsOverride } = resolveSkillInputs(
 		cwd,
 		() => admission,
@@ -537,9 +516,10 @@ export async function listProjectAliasSkillNames(cwd: string): Promise<string[]>
 		.filter((source) => source.scope === "project")
 		.map((source) => source.path);
 	if (projectPaths.length === 0) return [];
-	const settingsManager = withoutPackages(
-		SettingsManager.create(cwd, getAgentDir(), { projectTrusted: false }),
-	);
+	const settingsManager = createPiSettings(cwd, getAgentDir(), {
+		projectTrusted: false,
+		packages: "none",
+	});
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),
@@ -565,10 +545,10 @@ export async function listSkillCatalog(
 	const personal = discovered.filter((s) => s.scope === "user");
 	const project = discovered.filter((s) => s.scope === "project");
 	const allBundledSkillPaths = bundledSkillPaths();
-	const settingsManager = withoutDisabledPackages(
-		SettingsManager.create(cwd, getAgentDir(), { projectTrusted: admission.piResourceTrusted }),
-		cwd,
-	);
+	const settingsManager = createPiSettings(cwd, getAgentDir(), {
+		projectTrusted: admission.piResourceTrusted,
+		packages: "enabled",
+	});
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),

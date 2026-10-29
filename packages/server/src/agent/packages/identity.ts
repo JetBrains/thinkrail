@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PiPackageScope, PiPackageSourceKind } from "@thinkrail/contracts";
 
@@ -76,4 +76,23 @@ export function piPackageIdentity(source: string, resolveLocal: (path: string) =
 	if (kind === "npm") return `npm:${npmPackageName(source.trim().slice(4).trim())}`;
 	if (kind === "git") return `git:${gitHostAndPath(source)}`;
 	return `local:${resolveLocal(source.trim())}`;
+}
+
+// A repository's local package is keyed by its path inside the worktree, so every worktree of the
+// project shares its switch like they share its npm and git declarations.
+export function packageSourceIdentity(
+	source: string,
+	scope: PiPackageScope,
+	cwd: string | undefined,
+	agentDir: string,
+): string {
+	const baseDir = settingsBaseDir(cwd, agentDir, scope);
+	return piPackageIdentity(source, (path) => {
+		const absolute = resolveLocalSource(path, baseDir);
+		if (scope !== "project" || cwd === undefined) return absolute;
+		const inside = relative(resolve(cwd), absolute);
+		return inside && !inside.startsWith("..") && !isAbsolute(inside)
+			? `project:${inside.split(sep).join("/")}`
+			: absolute;
+	});
 }

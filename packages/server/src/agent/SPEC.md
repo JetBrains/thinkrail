@@ -766,19 +766,22 @@ re-opened transcripts provider-valid.
     **Installed pi packages** have a switch of the same global shape, `setDisabledPackagesResolver`
     (the `disabledPackages` setting; keys are [[submodule-server-agent-packages]] identities, since pi has
     no "whole package off" concept and the user chose a ThinkRail setting over writing pi filter entries).
-    It is applied where pi reads declarations, not where it emits resources: `withoutDisabledPackages`
-    (on [[submodule-server-agent-packages]]' `withPackageDeclarations`) patches a `SettingsManager`'s
-    `getGlobalSettings` / `getProjectSettings` to hide the declarations of switched-off packages
-    (re-evaluated on every read, idempotent per instance). `buildSessionSettings` applies it, so parents
-    and delegated children share it; `buildResourceLoader` applies it again defensively;
-    `listSkillCommands` / `listSkillCatalog` build their settings through it. Every other loader the host
-    opens resolves nothing from packages and gets `withoutPackages` instead — the boot runtime and the
-    extension-cache advance in `piRuntime`, the MCP sign-in probe, `listProjectAliasSkillNames` — since
-    pi's `reload()` resolves (and installs) declared packages whatever else is switched off. Invariant:
-    **no `SettingsManager` reaches a pi loader without one of the two views.** pi therefore never
-    installs, loads or lists a disabled package's extensions, skills or prompts — including a
-    declared-but-missing one that its install-while-loading would otherwise fetch and whose lifecycle
-    scripts would run — while the files on disk and the user's own per-resource filters stay untouched.
+    It is applied where pi reads declarations, not where it emits resources: every `SettingsManager`
+    the host opens comes from [[submodule-server-agent-packages]]' **`createPiSettings(cwd, agentDir,
+    { projectTrusted, packages })`**, whose `packages` view is `all` (the host's own reads and writes:
+    the catalog, the mutations), `enabled` (anything that loads resources for a chat —
+    `buildSessionSettings`, so parents and delegated children share it, `listSkillCommands`,
+    `listSkillCatalog`; the switched-off declarations are hidden from `getGlobalSettings` /
+    `getProjectSettings`, re-evaluated on every read) or `none` (a loader that resolves nothing from
+    packages — the boot runtime and extension-cache advance in `piRuntime`, the MCP sign-in probe,
+    `listProjectAliasSkillNames`, `isBuiltinExtensionEnabled`, the trust default read — since pi's
+    `reload()` resolves and installs declared packages whatever else is switched off). A view refuses
+    `setPackages` / `setProjectPackages`, so pi's `addSourceToSettings` can never persist a filtered
+    list, and a settings-view unit test fails on any other `SettingsManager.create` in the server
+    sources. pi therefore never installs, loads or lists a disabled package's extensions, skills or
+    prompts — including a declared-but-missing one that its install-while-loading would otherwise fetch
+    and whose lifecycle scripts would run — while the files on disk and the user's own per-resource
+    filters stay untouched.
     *Rejected:* filtering resolved paths and `skillsOverride` / `promptsOverride` after pi resolved (the
     first implementation): pi had already installed the package by then, pi assigns `sourceInfo.source`
     only after the overrides run, and delegated children bypass those overrides. The **package policy**

@@ -18,7 +18,7 @@ import {
 	type SessionEntry,
 	type SessionInfo,
 	SessionManager,
-	SettingsManager,
+	type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
@@ -98,7 +98,6 @@ import {
 	packagePolicyKey,
 	providerExtensionPaths,
 	toSkillCommands,
-	withoutDisabledPackages,
 } from "./extensions";
 import {
 	createMcpSessionHost,
@@ -119,6 +118,7 @@ import {
 } from "./mcpSessions";
 import { refreshModelListings } from "./modelAvailability";
 import { preferredDefaultModel } from "./modelDefaults";
+import { createPiSettings } from "./packages";
 import {
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
@@ -1006,10 +1006,7 @@ function releasePreflights(entry: Entry): void {
 const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
 
 export function buildSessionSettings(cwd: string, projectTrusted: boolean): SettingsManager {
-	const settings = withoutDisabledPackages(
-		SettingsManager.create(cwd, undefined, { projectTrusted }),
-		cwd,
-	);
+	const settings = createPiSettings(cwd, undefined, { projectTrusted, packages: "enabled" });
 	const reload = settings.reload.bind(settings);
 	settings.reload = async () => {
 		await reload();

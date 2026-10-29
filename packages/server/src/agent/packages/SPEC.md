@@ -60,11 +60,13 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   per content change of its file — pi's contract for a factory is to register, not to allocate. `packageSourceIdentity(source, scope, cwd, agentDir)`
   resolves a local source against the settings file that declares it (user → `agentDir`, project →
   `<cwd>/.pi`), as pi does.
-- `settingsView.ts` — `withPackageDeclarations(settings, keep)`: patches one `SettingsManager`'s
-  `getGlobalSettings` / `getProjectSettings` to drop the declarations `keep` rejects (once per instance;
-  re-evaluated per read). `withoutPackages` drops them all — for a loader that resolves nothing from
-  packages (the boot runtime, the extension-cache advance, the MCP sign-in probe, alias discovery), so
-  pi's resolve-time install never runs there. `agent/extensions.ts` builds the disabled-set view on it.
+- `settingsView.ts` — `createPiSettings(cwd, agentDir, { projectTrusted?, packages })`, the only
+  place the host calls `SettingsManager.create` (a unit test scans the server sources). `packages:
+  "all"` is pi's manager untouched; `"enabled"` and `"none"` patch that instance's `getGlobalSettings`
+  / `getProjectSettings` to hide the switched-off declarations (keyed by `packageSourceIdentity`,
+  re-evaluated per read) or every declaration, and make `setPackages` / `setProjectPackages` throw —
+  a filtered list must never be written back. Also owns the `disabledPackages` resolver the host sets
+  from its config (`setDisabledPackagesResolver`).
 - `extensionCache.ts` — `advancePiExtensionCache(agentDir)`, shared by the boot runtime and the catalog probe.
 - `identity.ts` — `piPackageSourceKind` (npm by `npm:`; git only by `git:` or a `scheme://` URL — pi
   treats `git@host:…` and `github:…` as local paths, so does this), `piPackageIdentity` (a simplified
@@ -142,9 +144,8 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
 
 `agent/piPackages.ts` orchestrates the catalog and mutations: it adds the agent dir, the Central
 exclusion, the host built-ins, the watcher priming and the apply-to-chats step; `host/packages.ts` maps
-a `workspaceId` onto a `PiPackagesTarget`. `agent/extensions.ts` builds `withoutDisabledPackages` on
-`withPackageDeclarations` + `packageSourceIdentity`; `agent/piRuntime.ts`, `agent/mcpSignIn.ts` and the
-alias discovery use `withoutPackages`. Known limitations of the whole feature (concurrent resolves, on-disk changes under a
+a `workspaceId` onto a `PiPackagesTarget`. Every other `agent/` module opens pi settings through
+`createPiSettings` (`agent/SPEC.md` lists which view each loader gets). Known limitations of the whole feature (concurrent resolves, on-disk changes under a
 busy chat) are recorded in [[submodule-server-agent]] beside the orchestration that accepts them.
 
 ## Boundary

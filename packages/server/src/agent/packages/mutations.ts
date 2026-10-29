@@ -4,7 +4,7 @@ import {
 	DefaultPackageManager,
 	type PackageSource,
 	type ResolvedResource,
-	SettingsManager,
+	type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import {
 	type PiPackageResourceType,
@@ -12,14 +12,16 @@ import {
 	parsePiPackageInput,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { invalidatePiPackageCatalog, packageSourceIdentity } from "./catalog";
+import { invalidatePiPackageCatalog } from "./catalog";
 import {
 	BUILTIN_PREFIX,
 	isOfflineMode,
+	packageSourceIdentity,
 	piPackageSourceKind,
 	resolveLocalSource,
 	settingsBaseDir,
 } from "./identity";
+import { createPiSettings } from "./settingsView";
 
 const UPDATE_CHECK_TTL_MS = 5 * 60_000;
 const RESOURCE_TYPES: ReadonlySet<string> = new Set(["extensions", "skills", "prompts"]);
@@ -82,8 +84,9 @@ function openSettings(
 	settings: SettingsManager;
 	packageManager: DefaultPackageManager;
 } {
-	const settings = SettingsManager.create(ctx.cwd ?? ctx.agentDir, ctx.agentDir, {
+	const settings = createPiSettings(ctx.cwd ?? ctx.agentDir, ctx.agentDir, {
 		projectTrusted: ctx.projectTrusted(),
+		packages: "all",
 	});
 	assertScopeLoaded(settings, writeScope);
 	const packageManager = new DefaultPackageManager({

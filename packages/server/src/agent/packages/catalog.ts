@@ -1,5 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
 	DefaultPackageManager,
 	DefaultResourceLoader,
@@ -18,11 +18,10 @@ import { advancePiExtensionCache } from "./extensionCache";
 import {
 	BUILTIN_PREFIX,
 	npmPackageName,
-	piPackageIdentity,
+	packageSourceIdentity,
 	piPackageSourceKind,
-	resolveLocalSource,
-	settingsBaseDir,
 } from "./identity";
+import { createPiSettings } from "./settingsView";
 
 const RESOURCE_TYPES: readonly PiPackageResourceType[] = ["extensions", "skills", "prompts"];
 /** Every change path invalidates explicitly; the TTL only bounds a change the host did not see. */
@@ -71,29 +70,10 @@ export function listPiPackageCatalog(options: PiPackageCatalogOptions): Promise<
 	return value;
 }
 
-// A repository's local package is keyed by its path inside the worktree, so every worktree of the
-// project shares its switch like they share its npm and git declarations.
-export function packageSourceIdentity(
-	source: string,
-	scope: PiPackageScope,
-	cwd: string | undefined,
-	agentDir: string,
-): string {
-	const baseDir = settingsBaseDir(cwd, agentDir, scope);
-	return piPackageIdentity(source, (path) => {
-		const absolute = resolveLocalSource(path, baseDir);
-		if (scope !== "project" || cwd === undefined) return absolute;
-		const inside = relative(resolve(cwd), absolute);
-		return inside && !inside.startsWith("..") && !isAbsolute(inside)
-			? `project:${inside.split(sep).join("/")}`
-			: absolute;
-	});
-}
-
 async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackagesCatalog> {
 	const { agentDir, projectTrusted } = options;
 	const cwd = options.cwd ?? agentDir;
-	const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+	const settingsManager = createPiSettings(cwd, agentDir, { projectTrusted, packages: "all" });
 	const packageManager = new DefaultPackageManager({
 		cwd,
 		agentDir,
@@ -284,8 +264,9 @@ export async function listPiPackageRevealTargets(options: {
 	builtinExtensions: readonly string[];
 }): Promise<{ packageRoots: string[]; looseFiles: string[] }> {
 	const cwd = options.cwd ?? options.agentDir;
-	const settingsManager = SettingsManager.create(cwd, options.agentDir, {
+	const settingsManager = createPiSettings(cwd, options.agentDir, {
 		projectTrusted: options.projectTrusted,
+		packages: "all",
 	});
 	const packageManager = new DefaultPackageManager({
 		cwd,

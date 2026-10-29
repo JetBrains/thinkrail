@@ -3,12 +3,12 @@ export {
 	listPiPackageCatalog,
 	listPiPackageRevealTargets,
 	type PiPackageCatalogOptions,
-	packageSourceIdentity,
 } from "./catalog";
 export { advancePiExtensionCache } from "./extensionCache";
 export {
 	isOfflineMode,
 	npmPackageName,
+	packageSourceIdentity,
 	piPackageIdentity,
 	piPackageSourceKind,
 	settingsBaseDir,
@@ -26,8 +26,10 @@ export {
 	updatePiPackages,
 } from "./mutations";
 export {
-	type PackageDeclarationFilter,
+	createPiSettings,
+	disabledPackages,
 	type PackageDeclarationScope,
-	withoutPackages,
-	withPackageDeclarations,
+	type PiSettingsOptions,
+	type PiSettingsPackages,
+	setDisabledPackagesResolver,
 } from "./settingsView";

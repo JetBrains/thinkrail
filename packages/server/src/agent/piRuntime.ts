@@ -2,11 +2,10 @@ import {
 	createAgentSessionServices,
 	getAgentDir,
 	ModelRuntime,
-	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { logger } from "../log";
 import { accountAvailableModels, type ModelAvailabilityRuntime } from "./modelAvailability";
-import { advancePiExtensionCache, withoutPackages } from "./packages";
+import { advancePiExtensionCache, createPiSettings } from "./packages";
 
 const log = logger("agent");
 
@@ -27,7 +26,8 @@ export type PreparePiRuntimeGenerationResult =
 export type PiRuntimeGenerationInitializer = (runtime: ModelRuntime) => void | Promise<void>;
 
 export const piLoginOptions: NonNullable<Parameters<ModelRuntime["login"]>[3]> = {
-	getDeviceId: () => SettingsManager.create(process.cwd()).getOrCreateDeviceId(),
+	getDeviceId: () =>
+		createPiSettings(process.cwd(), undefined, { packages: "none" }).getOrCreateDeviceId(),
 };
 
 let nextGenerationId = 1;
@@ -139,7 +139,7 @@ async function createRuntimeWithExtensions(
 	try {
 		services = await createAgentSessionServices({
 			cwd: getAgentDir(),
-			settingsManager: withoutPackages(SettingsManager.create(getAgentDir(), getAgentDir())),
+			settingsManager: createPiSettings(getAgentDir(), getAgentDir(), { packages: "none" }),
 			modelRuntime: runtime,
 			resourceLoaderOptions: {
 				noExtensions: true,

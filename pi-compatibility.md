@@ -187,7 +187,7 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   Also relied on: `SettingsManager.getGlobalSettings` / `getProjectSettings` are the only reads pi's
   package manager makes of declarations, so patching them per instance hides a switched-off package —
   or every package, for a loader that resolves none — from every install-capable resolve
-  (`withPackageDeclarations`; **gate:** a loader option to exclude declarations); `PackageUpdate`
+  (`createPiSettings`; **gate:** a loader option to exclude declarations); `PackageUpdate`
   carries no target version; pi skips pinned npm versions in update checks; pi classifies `git@host:…`
   and `github:…` sources as local paths.
 - **Anthropic SSE framing patch** — [[submodule-server-agent]] (Provider stream framing),

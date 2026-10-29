@@ -22,6 +22,7 @@ import {
 } from "./extensions";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
+import { createPiSettings } from "./packages";
 import { writeFixturePiPackage } from "./packages/testFixtures";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { skillCarryover } from "./skillCarryover";
@@ -709,7 +710,10 @@ describe("pi packages", () => {
 		let disabled = new Set<string>();
 		setDisabledPackagesResolver(() => disabled);
 		try {
-			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const settingsManager = createPiSettings(project, agentDir, {
+				projectTrusted: true,
+				packages: "enabled",
+			});
 			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
 			const tools = () =>
 				loader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()]);
@@ -774,7 +778,10 @@ describe("pi packages", () => {
 		};
 		const installNpm = spyOn(prototype, "installNpm").mockResolvedValue();
 		try {
-			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const settingsManager = createPiSettings(project, agentDir, {
+				projectTrusted: true,
+				packages: "enabled",
+			});
 			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
 			expect(installNpm).not.toHaveBeenCalled();
 			expect(settingsManager.getGlobalSettings().packages).toEqual([]);
@@ -815,7 +822,10 @@ describe("pi packages", () => {
 			},
 		);
 		try {
-			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const settingsManager = createPiSettings(project, agentDir, {
+				projectTrusted: true,
+				packages: "enabled",
+			});
 			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
 			expect(installed).toBe(1);
 			await loader.reload();
