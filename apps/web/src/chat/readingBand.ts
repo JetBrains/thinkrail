@@ -2,7 +2,7 @@ const TURN_INSET_RATIO = 0.1;
 const TURN_INSET_MIN = 48;
 const TURN_INSET_MAX = 80;
 const ADVANCE_DURATION_MS = 220;
-const TALL_ARRIVAL_SETTLE_MS = 300;
+const TALL_ARRIVAL_WINDOW_MS = 300;
 const EDGE_STABILITY_FRAMES = 30;
 const GEOMETRY_EPSILON = 0.5;
 
@@ -170,7 +170,7 @@ export function createReadingBandController(
 	let deferredLatestRow: number | null = null;
 	let runwaySuppressed = false;
 	let lastEdgeRef: { id: string; offset: number } | null = null;
-	let seenRef: { id: string; offset: number } | null = null;
+	let edgeHistory: Array<{ id: string; offset: number; at: number }> = [];
 	let capRef: { id: string; offset: number; released: number; since: number } | null = null;
 	let nativeInputPending = false;
 	let settlementAfterInput = false;
@@ -429,13 +429,19 @@ export function createReadingBandController(
 
 	const resetFollowCap = () => {
 		lastEdgeRef = null;
-		seenRef = null;
+		edgeHistory = [];
 		capRef = null;
 	};
 
 	const rebaseFollowCap = () => {
 		lastEdgeRef = null;
-		seenRef = null;
+		edgeHistory = [];
+	};
+
+	const seenEdge = (now: number) => {
+		const settled = edgeHistory.findLastIndex((entry) => now - entry.at >= TALL_ARRIVAL_WINDOW_MS);
+		if (settled > 0) edgeHistory = edgeHistory.slice(settled);
+		return edgeHistory[0] ?? null;
 	};
 
 	const releaseRunway = () => {
@@ -475,31 +481,26 @@ export function createReadingBandController(
 		}
 		const referenceRow = environment.readReferenceRow();
 		lastEdgeRef = referenceRow ? { id: referenceRow.id, offset: edgeDoc - referenceRow.top } : null;
-		if (seenRef === null || geometry.edgeBottom <= geometry.viewportHeight + GEOMETRY_EPSILON) {
-			seenRef = lastEdgeRef;
-		}
+		const now = environment.now();
+		const seenRef = seenEdge(now);
+		if (lastEdgeRef !== null) edgeHistory.push({ ...lastEdgeRef, at: now });
 		if (capRef !== null) {
-			const arriving = environment.now() - capRef.since < TALL_ARRIVAL_SETTLE_MS;
+			const arriving = now - capRef.since < TALL_ARRIVAL_WINDOW_MS;
 			if (!arriving && growth > 0 && growth <= readingSpace + GEOMETRY_EPSILON) {
 				capRef.released += 2 * growth;
 			}
 		} else if (seenRef !== null) {
 			const seenTop = environment.readRowTop(seenRef.id);
 			if (seenTop !== null && pinned > seenTop + seenRef.offset - inset + GEOMETRY_EPSILON) {
-				capRef = {
-					id: seenRef.id,
-					offset: seenRef.offset - inset,
-					released: 0,
-					since: environment.now(),
-				};
+				capRef = { id: seenRef.id, offset: seenRef.offset - inset, released: 0, since: now };
 			}
 		}
-		const capTop = capRef === null ? null : environment.readRowTop(capRef.id);
-		const capped =
-			capRef === null || capTop === null ? null : capTop + capRef.offset + capRef.released;
-		if (capRef === null || capped === null || capped >= pinned - GEOMETRY_EPSILON) {
+		if (capRef === null) return pinned;
+		const capTop = environment.readRowTop(capRef.id);
+		const capped = capTop === null ? null : capTop + capRef.offset + capRef.released;
+		if (capped === null || capped >= pinned - GEOMETRY_EPSILON) {
 			capRef = null;
-			seenRef = lastEdgeRef;
+			edgeHistory = lastEdgeRef === null ? [] : [{ ...lastEdgeRef, at: now }];
 			return pinned;
 		}
 		if (referenceRow !== null) {

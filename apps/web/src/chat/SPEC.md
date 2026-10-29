@@ -694,16 +694,19 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   rest of the response froze following after every question card and then flew 2–2.6k px at settlement. A
   settlement that lands while native input is still pending defers its return until that input resolves, and
   drops the return if the input detached.
-- **A tall arrival shows its start** — in oldest-first the controller remembers the last response edge the
-  reader actually had on screen. When the follow destination would carry that edge above the turn inset —
-  content taller than the reading space (the pin line minus the turn inset) arrived below it, typically a
-  diagram or card that renders at once, possibly in several quick layout steps — the destination is capped so
-  that point lands at the turn inset, the same place an own prompt lands. Growth within 300 ms of the cap
-  engaging belongs to the arrival; each later growth releases the cap by twice its own height until it reaches
-  the pin line, and the pin moves to the capped destination on that same content change without easing, so
-  the block advances at twice reading pace instead of flying by (one mermaid card measured a 1.5k px glide in
-  under a second, and judging each layout step alone missed cards that land in two steps). A second tall
-  arrival never pushes an active cap further. The cap is evaluated wherever the follow destination is, so it
+- **A tall arrival shows its start** — in oldest-first the controller treats the response edge as it stood
+  300 ms ago (the newest edge position at least that old) as the edge the reader has seen. When the follow
+  destination would carry that edge above the turn inset — content taller than the reading space (the pin line
+  minus the turn inset) arrived within that window, typically a diagram or card that renders at once, possibly
+  in several quick layout steps — the destination is capped so that point lands at the turn inset, the same
+  place an own prompt lands. Streamed text adds far less than the reading space in 300 ms, so it never caps.
+  Counting every pinned edge as seen let a card that lands in several quick steps pin past at full speed,
+  because no single step exceeded the reading space. Growth within 300 ms of the cap engaging belongs to the
+  arrival; each later growth releases the cap by twice its own height until it reaches the pin line, and the
+  pin moves to the capped destination on that same content change without easing, so the block advances at
+  twice reading pace instead of flying by (one mermaid card measured a 1.5k px glide in under a second). A
+  cap release resets the seen edge to the edge on the pin line. A second tall arrival never pushes an active
+  cap further. The cap is evaluated wherever the follow destination is, so it
   also bounds an explicit return already in flight. Positions are kept relative to the
   topmost visible row rather than document coordinates, and each evaluation re-expresses them relative to the
   current one, so height changes above the viewport (Virtuoso replacing an estimate, a code block highlighting)
@@ -771,12 +774,12 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   cancellation or compete with settlement. Size-aware `nearest` keeps a
   tall target's useful leading edge visible.
 - **One cancellable, retargetable motion owner** — renderers and projections never scroll themselves.
-  New-turn placement, window steps, contextual-button returns, settlement, and explicit reveals
-  share one non-overlapping channel whose destination can retarget as Virtuoso measurements, status geometry,
-  or runway changes land. Corrections continue the current motion instead of launching overlapping eases or
-  alternating hard writes. The first real reader movement cancels it synchronously and native physics win.
-  Newest-first header deltas preserve a detached historical anchor; viewport resize reevaluates the live
-  percentages without moving a below-Trigger response. Initial/order placement is direct, and reduced motion
+  New-turn placement, contextual-button returns, settlement, and explicit reveals share one
+  non-overlapping channel whose destination can retarget as Virtuoso measurements, status geometry, or
+  runway changes land; the streaming pin writes only while that channel is idle. Corrections continue the
+  current motion instead of launching overlapping eases or alternating hard writes. The first real reader movement cancels it synchronously and native physics win.
+  Newest-first header deltas preserve a detached historical anchor; viewport resize re-evaluates the live
+  pin line without moving a response still below it. Initial/order placement is direct, and reduced motion
   makes every programmatic destination immediate while preserving identical state and final geometry.
 - **No hidden motion owners** — nothing but the controller and the reader may move the viewport. The
   transcript scroller opts out of browser scroll anchoring (`overflow-anchor: none`): Virtuoso excludes its
