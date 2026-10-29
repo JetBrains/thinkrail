@@ -751,7 +751,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   one call when the user presses Send, whatever the analytics setting; fails with `SURVEY_INVALID`,
   `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` (the survey moved to another id or iteration — the client reloads
   and restarts) or `SURVEY_NOT_SENT`; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the
-  invitation channel to v97) /
+  invitation channel to v97; `SURVEY_TRANSLATIONS_PROTOCOL_VERSION` pins `language` and `others` to v98 —
+  a client sends a pre-v98 host the older shape, Other text inline in `answers` and no `language`, and a
+  submission without `others` is read in that shape) /
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a

@@ -35,7 +35,7 @@ export interface ParsedSurveySubmission {
 	iteration: number;
 	language?: string;
 	answers: Record<string, SurveyAnswerValue>;
-	others: Record<string, string>;
+	others: Record<string, string> | null;
 }
 
 interface QuestionTranslation {
@@ -344,17 +344,16 @@ function resolveResponses(
 	const responses: Record<string, SurveyAnswerValue> = {};
 	const questions = new Map(survey.questions.map((question) => [question.id, question]));
 	const baseQuestions = new Map(base.questions.map((question) => [question.id, question]));
-	const ids = new Set([...Object.keys(submission.answers), ...Object.keys(submission.others)]);
+	const others = submission.others;
+	const ids = new Set([...Object.keys(submission.answers), ...Object.keys(others ?? {})]);
 	for (const id of ids) {
 		const question = questions.get(id);
 		const baseQuestion = baseQuestions.get(id);
 		if (!question || !baseQuestion) throw new Error("Invalid survey answer");
-		responses[`$survey_response_${id}`] = answerFor(
-			question,
-			baseQuestion,
-			submission.answers[id],
-			submission.others[id],
-		);
+		const [value, other] = others
+			? [submission.answers[id], others[id]]
+			: splitLegacyOther(question, submission.answers[id]);
+		responses[`$survey_response_${id}`] = answerFor(question, baseQuestion, value, other);
 	}
 	for (const question of survey.questions) {
 		if (question.optional) continue;
@@ -410,6 +409,21 @@ function choiceText(value: unknown): string {
 	const text = value.trim();
 	if (!text || text.length > SURVEY_OPEN_TEXT_LIMIT) throw new Error("Invalid survey answer");
 	return text;
+}
+
+function splitLegacyOther(
+	question: SurveyQuestion,
+	value: SurveyAnswerValue | undefined,
+): [SurveyAnswerValue | undefined, string | undefined] {
+	if (value === undefined || !("choices" in question) || !question.hasOpenChoice) {
+		return [value, undefined];
+	}
+	const isChoice = (item: string) => question.choices.includes(item.trim());
+	if (typeof value === "string") return isChoice(value) ? [value, undefined] : [undefined, value];
+	const typed = value.filter((item) => !isChoice(item));
+	if (typed.length > 1) throw new Error("Invalid survey answer");
+	const picked = value.filter(isChoice);
+	return [picked.length > 0 ? picked : undefined, typed[0]];
 }
 
 function matchLanguage(keys: readonly string[], language: string): string | null {
@@ -478,8 +492,8 @@ function translateQuestion(
 	return { ...question, ...shared, choices: translation.choices ?? question.choices };
 }
 
-function parseOthers(value: unknown): Record<string, string> {
-	if (value === undefined) return {};
+function parseOthers(value: unknown): Record<string, string> | null {
+	if (value === undefined) return null;
 	if (!isRecord(value)) throw new Error("Invalid survey submission");
 	const others: Record<string, string> = {};
 	for (const [id, text] of Object.entries(value)) {

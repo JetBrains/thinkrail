@@ -122,6 +122,21 @@ export function committedAnswers(
 	return { answers, others };
 }
 
+export function inlineOthers(
+	questions: readonly SurveyQuestion[],
+	committed: ReturnType<typeof committedAnswers>,
+): Record<string, SurveyAnswerValue> {
+	const answers = { ...committed.answers };
+	for (const question of questions) {
+		const other = committed.others[question.id];
+		if (other === undefined) continue;
+		const picked = answers[question.id];
+		answers[question.id] =
+			question.type === "multiple_choice" ? [...stringList(picked), other] : other;
+	}
+	return answers;
+}
+
 function committedValue(
 	question: SurveyQuestion,
 	draft: SurveyDraft,

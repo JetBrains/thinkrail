@@ -466,6 +466,7 @@ test("a translated answer is sent as the original choice with the language it wa
 			iteration: 2,
 			language,
 			answers,
+			others: {},
 		});
 	const properties = surveyResponse(survey, french({ pick: "Super", rate: "4" }));
 	expect(properties.$survey_language).toBe("fr");
@@ -526,7 +527,7 @@ test("Other text is never mistaken for a choice, and a choice never for Other te
 	const send = (fields: Record<string, unknown>) =>
 		surveyResponse(
 			survey,
-			parseSurveySubmission({ ...submissionShape(survey), language: "fr", ...fields }),
+			parseSurveySubmission({ ...submissionShape(survey), language: "fr", others: {}, ...fields }),
 		);
 	expect(
 		send({ answers: { multi: ["Correct", "Super"], one: "A" }, others: { multi: "Super" } })
@@ -545,4 +546,40 @@ test("Other text is never mistaken for a choice, and a choice never for Other te
 	expect(() => send({ answers: { multi: ["Super"], one: "A" }, others: 3 })).toThrow(
 		"Invalid survey submission",
 	);
+});
+
+test("a pre-v98 client's inline Other text is still told apart from its picked choices", () => {
+	const survey = selectInAppSurvey([
+		launched({
+			questions: [
+				{
+					type: "multiple_choice",
+					id: "m",
+					question: "Which?",
+					choices: ["Great", "Okay"],
+					hasOpenChoice: true,
+				},
+				{
+					type: "single_choice",
+					id: "s",
+					question: "One?",
+					choices: ["A", "B"],
+					hasOpenChoice: true,
+					optional: true,
+				},
+			],
+		}),
+	]);
+	if (!survey) throw new Error("expected a survey");
+	const legacy = (answers: Record<string, unknown>) =>
+		surveyResponse(survey, parseSurveySubmission({ ...submissionShape(survey), answers }));
+	expect(legacy({ m: ["Great", " keep this typed answer "], s: "B" })).toMatchObject({
+		$survey_response_m: ["Great", "keep this typed answer"],
+		$survey_response_s: "B",
+	});
+	expect(legacy({ m: ["Only typed"], s: "Something else" })).toMatchObject({
+		$survey_response_m: ["Only typed"],
+		$survey_response_s: "Something else",
+	});
+	expect(() => legacy({ m: ["one", "two"] })).toThrow("Invalid survey answer");
 });

@@ -1,14 +1,21 @@
-import { type AppSurvey, SURVEY_OPEN_TEXT_LIMIT, type SurveyQuestion } from "@thinkrail/contracts";
+import {
+	type AppSurvey,
+	SURVEY_OPEN_TEXT_LIMIT,
+	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
+	type SurveyQuestion,
+} from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
 import { useRef, useState } from "react";
 import { randomUuid } from "@/lib";
+import { useAppStore } from "@/store";
 import { getTransport, wsErrorCode } from "@/transport";
 import {
 	committedAnswers,
 	emptySurveyDraft,
+	inlineOthers,
 	presentSurvey,
 	ratingMark,
 	ratingPoints,
@@ -48,13 +55,17 @@ export function SurveyForm({
 		sending.current = true;
 		setPending(true);
 		setFailure(null);
+		const committed = committedAnswers(questions, draft);
+		const legacyHost =
+			(useAppStore.getState().protocolVersion ?? 0) < SURVEY_TRANSLATIONS_PROTOCOL_VERSION;
 		void getTransport()
 			.request("feedback.survey.submit", {
 				submissionId,
 				surveyId: survey.id,
 				iteration: survey.iteration,
-				...(survey.language ? { language: survey.language } : {}),
-				...committedAnswers(questions, draft),
+				...(legacyHost
+					? { answers: inlineOthers(questions, committed) }
+					: { ...(survey.language ? { language: survey.language } : {}), ...committed }),
 			})
 			.then(() => onSent())
 			.catch((error: unknown) => {

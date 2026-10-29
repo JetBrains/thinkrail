@@ -1010,7 +1010,8 @@ a project picker, the prompt hero, and the reused
   host, and the analytics setting plays no part. `SURVEY_CHANGED` reloads the survey and restarts it with a
   short notice; other refusals stay inline; success shows PostHog's thank-you header or the app's. The form
   is keyed by survey id, iteration and `language`, so a reload in another language restarts it rather than
-  mixing languages, and Send echoes `survey.language`.
+  mixing languages, and Send echoes `survey.language`. A pre-v98 host gets the older submission shape (Other text
+  inline, no `language`) through `surveyDraft`'s `inlineOthers`.
   **`ModelsSettings`** is the **Models** section, visible only at protocol v72 or newer. It re-reads
   `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
