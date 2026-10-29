@@ -139,6 +139,7 @@ import {
 	setupObservation,
 } from "./productAnalytics";
 import {
+	AbandonmentReportBudget,
 	heaviestReplayMethod,
 	type ReplayLoad,
 	RequestAbandonedError,
@@ -217,18 +218,22 @@ const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
-function reportAbandoned(methods: readonly string[]): void {
-	for (const method of methods) {
-		log.warn(`request abandoned before its handler settled: ${method}`);
-		reportError(new RequestAbandonedError(), requestErrorReport(method));
-	}
+function formatReplayLoad(load: ReplayLoad): string {
+	const occupancy = ({ pending, settled, abandoned }: ReplayLoad[string]) =>
+		pending + settled + abandoned;
+	return Object.entries(load)
+		.sort(([, a], [, b]) => occupancy(b) - occupancy(a))
+		.map(
+			([method, { pending, settled, abandoned }]) =>
+				`${method} ${pending} pending/${settled} settled/${abandoned} abandoned`,
+		)
+		.join(", ");
 }
 
-function formatReplayLoad(load: ReplayLoad): string {
-	return Object.entries(load)
-		.sort(([, a], [, b]) => b.pending + b.settled - (a.pending + a.settled))
-		.map(([method, { pending, settled }]) => `${method} ${pending} pending/${settled} settled`)
-		.join(", ");
+function countMethods(methods: readonly string[]): string {
+	const counts = new Map<string, number>();
+	for (const method of methods) counts.set(method, (counts.get(method) ?? 0) + 1);
+	return [...counts].map(([method, count]) => `${method} ×${count}`).join(", ");
 }
 
 function clientProtocolVersion(value: string | null): number {
@@ -280,6 +285,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
+	const abandonmentReports = new AbandonmentReportBudget();
+	const reportAbandoned = (methods: readonly string[]): void => {
+		if (methods.length === 0) return;
+		log.warn(`requests abandoned before their handlers settled: ${countMethods(methods)}`);
+		for (const method of new Set(methods)) {
+			if (abandonmentReports.admit(method))
+				reportError(new RequestAbandonedError(), requestErrorReport(method));
+		}
+	};
 	const terminalBackpressured = new Set<string>();
 	let hostUpdateNotice: HostUpdateNotice | undefined;
 	let hostUpdateTimer: ReturnType<typeof setInterval> | undefined;
