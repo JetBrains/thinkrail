@@ -453,10 +453,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   independent resources — never queue behind each other. The agent is deliberately **not** paused: the
   `changes` module's compare-and-swap makes the race safe, and the fs watcher's `fsChanged` tick re-reads
   the open tabs after a write exactly as it does after an agent edit (so both handlers `ensureWatch`
-  first). The named failures travel as `WsResponse.errorCode`
-  (`STALE_VIEW`/`SCOPE_IMMUTABLE`/`RANGE_INVALID`/`RECEIPT_UNKNOWN`/`UNSUPPORTED_CHANGE`) through the same `CodedError`
-  mapping `UNKNOWN_COMMIT` uses — the dispatch names no codes of its own, so a code added in `contracts`
-  and thrown by a feature reaches the client with no host-side allowlist to update.
+  first). Named failures and literal display parameters travel as `WsResponse.errorCode` / `errorParams`
+  through the shared `CodedError` mapping — dispatch names no codes of its own, so a code added in
+  `contracts` and thrown by a feature reaches the client with no host-side allowlist to update.
+  Replay caches preserve this language-neutral metadata and the English fallback, never client-localized text.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
   check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.

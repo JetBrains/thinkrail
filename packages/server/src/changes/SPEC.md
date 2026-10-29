@@ -46,9 +46,11 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   `[start, start+count)` with original lines `[start, start+count)`; `count: 0` names an insertion point
   before `start`, which is what makes "delete the lines the change added" and "restore the lines it
   removed" the same operation in both directions. Spans are validated against *these* reads
-  (`RANGE_INVALID`), never trusted.
+  (`RANGE_ORIGINAL_OUT_OF_BOUNDS` / `RANGE_MODIFIED_OUT_OF_BOUNDS`), never trusted; errors carry
+  `path`, `start`, `span` and `lineCount` for localization.
 - **Range reverts are text-only and never change a file's existence.** A byte-only side, or a worktree
-  file that is absent, is `RANGE_INVALID` — the whole-file revert is the operation for those.
+  file that is absent, is `RANGE_NOT_TEXT` or `RANGE_FILE_ABSENT`, respectively — the whole-file revert is
+  the operation for those.
 - **The line model is jsdiff's:** only `\n` terminates a line, a preceding `\r` remains part of that
   terminated segment, and a lone `\r` is ordinary content. This is the model that produced the client's
   `structuredPatch` spans, so the same span cannot address a different server line.
@@ -68,11 +70,16 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   while the destination is absent; a concurrent recreation wins, and the original claim is preserved as
   `.thinkrail-recovery-<ulid>` beside it with that absolute recovery path in the thrown error.
   `receipt.trashed` is the helper's absolute input path, so the file appears in the OS trash under its
-  `.thinkrail-revert-<ulid>` temporary name. Absent on both sides is not a change and is refused. A
-  *renamed* file reverts as its two halves — the new path trashes, the old path restores — because that
+  `.thinkrail-revert-<ulid>` temporary name. Absent on both sides is not a change and is refused as
+  `REVERT_NO_CHANGE`; an unknown target kind is `REVERT_TARGET_INVALID`. A *renamed* file reverts as its
+  two halves — the new path trashes, the old path restores — because that
   is what the two sides of each path actually say.
-- **Symlinks and mode-only changes are refused as `UNSUPPORTED_CHANGE`.** Worktree identity is read with
-  `lstat`, and the original tree mode comes from `git ls-tree`; a symlink on either side is never followed.
+- **Unsupported content mutations have specific codes:** `CHANGE_SYMLINK` for a worktree symlink,
+  `CHANGE_GIT_SYMLINK` for a historical symlink, `CHANGE_NOT_REGULAR` for other non-file Git modes,
+  and `CHANGE_MODE_ONLY` for mode-only changes. Path-specific refusals carry `path`; existing English
+  messages remain the wire fallback. `STALE_VIEW` and `RECEIPT_UNKNOWN` retain generic localized guidance.
+  Worktree identity is read with `lstat`, and the original tree mode comes from `git ls-tree`; a symlink
+  on either side is never followed.
   Equal bytes with a different mode are not a content revert and are refused. A whole-file restore
   applies the original Git mode (`100755` maps to executable permissions); a range keeps the worktree mode.
 - **Writes are atomic**: a temp file in the same directory, the selected mode applied, then `rename`.

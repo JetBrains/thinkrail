@@ -228,11 +228,17 @@ export function assertMcpServerDisablableInChat(sessionId: string, name: string)
 		configuredServers(view).some((server) => server.name === name)
 	)
 		return;
+	if (view.registered.some((server) => server.name === name)) {
+		throw new CodedError(
+			"MCP_EXTENSION_SERVER_READONLY",
+			`"${name}" is registered by an extension; it can't be disabled per chat.`,
+			{ name },
+		);
+	}
 	throw new CodedError(
-		"MCP_CONFIG_INVALID",
-		view.registered.some((server) => server.name === name)
-			? `"${name}" is registered by an extension; it can't be disabled per chat.`
-			: `No MCP server named "${name}" is configured for this chat.`,
+		"MCP_CHAT_SERVER_NOT_FOUND",
+		`No MCP server named "${name}" is configured for this chat.`,
+		{ name },
 	);
 }
 

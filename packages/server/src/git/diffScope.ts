@@ -57,7 +57,9 @@ export async function resolveDiffRange(
 		]);
 		throwExecutionFailure(resolved);
 		if (!resolved.ok || !resolved.out)
-			throw new CodedError("UNKNOWN_COMMIT", `Unknown commit: ${scope.baseRef}`);
+			throw new CodedError("UNKNOWN_COMMIT", `Unknown commit: ${scope.baseRef}`, {
+				ref: scope.baseRef,
+			});
 		return {
 			listPrefix: ["diff"],
 			listRevs: [resolved.out],
@@ -82,6 +84,7 @@ export async function resolveDiffRange(
 				throw new CodedError(
 					"UNKNOWN_COMMIT",
 					"That turn's snapshot is no longer in this repository",
+					{ ref: tree },
 				);
 		}
 		return {
@@ -103,7 +106,7 @@ export async function resolveDiffRange(
 		]);
 		throwExecutionFailure(resolved);
 		if (!resolved.ok || !resolved.out)
-			throw new CodedError("UNKNOWN_COMMIT", `Unknown commit: ${scope.sha}`);
+			throw new CodedError("UNKNOWN_COMMIT", `Unknown commit: ${scope.sha}`, { ref: scope.sha });
 		const sha = resolved.out;
 		const parent = await gitAsync(ws.worktreePath, [
 			"rev-parse",

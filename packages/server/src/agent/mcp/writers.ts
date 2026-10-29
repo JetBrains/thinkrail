@@ -13,11 +13,10 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { McpExposure } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { isOverrideEntry, isRecord } from "./config";
 
-export class McpConfigPathUnsafeError extends Error {
-	readonly code = "MCP_PATH_UNSAFE" as const;
-}
+export class McpConfigPathUnsafeError extends CodedError {}
 
 function lstatOrNull(path: string): Stats | null {
 	try {
@@ -32,20 +31,26 @@ export function assertProjectMcpConfigWritable(worktreePath: string, configPath:
 	const rel = relative(resolve(worktreePath), resolve(configPath));
 	if (rel.startsWith("..") || isAbsolute(rel)) {
 		throw new McpConfigPathUnsafeError(
+			"MCP_PATH_OUTSIDE_WORKTREE",
 			`refusing to write MCP config outside the worktree: ${configPath}`,
+			{ path: configPath },
 		);
 	}
 	const configDir = join(worktreePath, CONFIG_DIR_NAME);
 	const dir = lstatOrNull(configDir);
 	if (dir && (!dir.isDirectory() || dir.isSymbolicLink())) {
 		throw new McpConfigPathUnsafeError(
+			"MCP_PATH_DIRECTORY_UNSAFE",
 			`refusing to write MCP config through a non-directory or symlinked ${CONFIG_DIR_NAME}: ${configDir}`,
+			{ directory: CONFIG_DIR_NAME, path: configDir },
 		);
 	}
 	const file = lstatOrNull(configPath);
 	if (file && (!file.isFile() || file.isSymbolicLink())) {
 		throw new McpConfigPathUnsafeError(
+			"MCP_PATH_FILE_UNSAFE",
 			`refusing to write MCP config through a non-regular file: ${configPath}`,
+			{ path: configPath },
 		);
 	}
 }
@@ -74,7 +79,11 @@ function editMcpServers(
 	const text = file ? readFileSync(target, "utf8").replace(/^\uFEFF/, "") : undefined;
 	const parsed: unknown = text === undefined ? {} : JSON.parse(text);
 	if (!isRecord(parsed) || (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers))) {
-		throw new Error(`${path}: expected an object with an "mcpServers" object`);
+		throw new CodedError(
+			"MCP_FILE_OBJECT_REQUIRED",
+			`${path}: expected an object with an "mcpServers" object`,
+			{ path },
+		);
 	}
 	const servers = isRecord(parsed.mcpServers) ? parsed.mcpServers : undefined;
 	if (!edit(servers, parsed)) return;
@@ -112,7 +121,12 @@ export function updateMcpServerConfig(
 			setOwnEntry(target, name, server);
 			parsed.mcpServers = target;
 		}
-		if (!isRecord(server)) throw new Error(`${path} does not define MCP server "${name}"`);
+		if (!isRecord(server))
+			throw new CodedError(
+				"MCP_FILE_SERVER_MISSING",
+				`${path} does not define MCP server "${name}"`,
+				{ path, name },
+			);
 		const keepDefaults = isOverrideEntry(server);
 		if (patch.enabled !== undefined) {
 			if (patch.enabled && !keepDefaults) delete server.enabled;

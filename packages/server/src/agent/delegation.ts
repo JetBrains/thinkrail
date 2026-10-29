@@ -211,6 +211,7 @@ export function readChildTranscript(
 		throw new CodedError(
 			"SUBAGENT_TRANSCRIPT_NOT_FOUND",
 			`No transcript found for subagent session ${childSessionId}`,
+			{ sessionId: childSessionId },
 		);
 	}
 	const sessionManager = SessionManager.open(path);

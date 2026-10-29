@@ -95,7 +95,9 @@ SDK reserve-independence canary owns that assertion.
 
 `clone-project.spec.ts` clones disposable local `file:` repositories through the Welcome and rail menus,
 checking shallow/full history, project-home adoption without an agent, destination collision protection,
-URL correction, the parent picker, preview gating and old-host hiding. Cancellation UI coverage holds a
+URL correction, the parent picker, preview gating and old-host hiding. Chinese, Spanish and Japanese
+validation probes assert translated inline errors while observing English messages and literal path
+parameters on the real host wire. Cancellation UI coverage holds a
 wire reply to prove that an ack does not unlock the form before cleanup completes; real process teardown
 and cleanup are exercised separately by the projects and subprocess unit tests. No production Git
 credentials or remote repositories are used.

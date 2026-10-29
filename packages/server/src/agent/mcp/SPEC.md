@@ -111,6 +111,10 @@ without bypassing approvals or treating an occupied name as absent.
   Sharing checks raw repository occupancy independently of validity; rejecting a malformed occupied
   entry preserves the file, approvals and record override. Its user-level definition read and
   written-override verification intentionally remain object-only checks, not absence checks.
+- Validation failures carry specific codes and literal name/field/path parameters, including OAuth and
+  project-path containment reasons. Management consumes structured validation results, never parses
+  English; `validateMcpServerConfig` retains pi's string diagnostics for disk loading and parity checks.
+  Existing English messages remain the fallback, and external filesystem/JSON/pi errors remain verbatim.
 - `config.ts` — the port plus the host additions: `loadHostMcpConfig()` is what a session hands pi —
   project-file entries (servers and override-only entries alike) are admitted only when the project
   record's `mcpApprovals[name]` equals their current fingerprint (an unapproved override leaves the global
@@ -204,7 +208,7 @@ without bypassing approvals or treating an occupied name as absent.
   project files: the target stays inside the worktree, an existing `.pi/` is a real directory and an
   existing `mcp.json` a regular file — never a symlink, because pi's reader follows links and a
   read-modify-write would copy a foreign file into the repository (`McpConfigPathUnsafeError`,
-  wire code `MCP_PATH_UNSAFE`). Writes are synchronous, so one process never interleaves two edits; the
+  wire codes `MCP_PATH_OUTSIDE_WORKTREE`, `MCP_PATH_DIRECTORY_UNSAFE`, or `MCP_PATH_FILE_UNSAFE`). Writes are synchronous, so one process never interleaves two edits; the
   atomic rename keeps a concurrent `pi mcp add` from ever reading a torn file (a lost update between two
   processes is accepted). `add` creates a missing file and reports whether it replaced a same-name entry,
   `remove` whether the file defined the server, and `update` with `override` adds a missing override entry.

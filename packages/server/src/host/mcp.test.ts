@@ -106,7 +106,7 @@ test("config writes land in the defining file, validate like pi, and a project s
 				entry: { url: "https://x" },
 			}),
 		),
-	).toBe("MCP_CONFIG_INVALID");
+	).toBe("MCP_SERVER_EXISTS");
 	expect(
 		await codeOf(
 			request("mcp.add", {
@@ -116,7 +116,7 @@ test("config writes land in the defining file, validate like pi, and a project s
 				entry: { url: "https://x", type: "sse" },
 			}),
 		),
-	).toBe("MCP_CONFIG_INVALID");
+	).toBe("MCP_SSE_UNSUPPORTED");
 	expect(
 		await codeOf(
 			request("mcp.add", {
@@ -126,7 +126,7 @@ test("config writes land in the defining file, validate like pi, and a project s
 				entry: { url: "https://x", auth: { provider: "anthropic" } },
 			}),
 		),
-	).toBe("MCP_CONFIG_INVALID");
+	).toBe("MCP_PROJECT_AUTH_FORBIDDEN");
 
 	const project = await request("mcp.add", {
 		workspaceId: "w1",
@@ -171,10 +171,14 @@ test("a user entry is rewritten or removed only as rendered: a stale or missing 
 		stale,
 		{ ...stale, expectedFingerprint: 42 },
 	]) {
+		const code =
+			"expectedFingerprint" in params && typeof params.expectedFingerprint === "string"
+				? "MCP_ENTRY_CHANGED"
+				: "MCP_FINGERPRINT_REQUIRED";
 		expect(
 			await codeOf(request("mcp.update", { ...params, entry: { url: "https://docs.example/v2" } })),
-		).toBe("MCP_CONFIG_INVALID");
-		expect(await codeOf(request("mcp.remove", params))).toBe("MCP_CONFIG_INVALID");
+		).toBe(code);
+		expect(await codeOf(request("mcp.remove", params))).toBe(code);
 		expect(readFileSync(file, "utf8")).toBe(replaced);
 	}
 	await expect(
@@ -220,10 +224,10 @@ for (const scope of ["user", "project"] as const) {
 		}
 		const target = { workspaceId: "w1", scope, name: "docs" };
 		const entry = { url: "https://docs.example/v2" };
-		expect(await codeOf(request("mcp.add", { ...target, entry }))).toBe("MCP_CONFIG_INVALID");
+		expect(await codeOf(request("mcp.add", { ...target, entry }))).toBe("MCP_SERVER_EXISTS");
 		expect(
 			await codeOf(request("mcp.update", { ...target, entry, expectedFingerprint: "stale" })),
-		).toBe("MCP_CONFIG_INVALID");
+		).toBe("MCP_ENTRY_CHANGED");
 		expect(readFileSync(file, "utf8")).toBe(original);
 		const updated = find(
 			await request("mcp.update", {
@@ -271,7 +275,7 @@ for (const scope of ["user", "project"] as const) {
 					entry: { url: "https://docs.example/mcp" },
 				}),
 			),
-		).toBe("MCP_CONFIG_INVALID");
+		).toBe("MCP_SERVER_EXISTS");
 		expect(readFileSync(file, "utf8")).toBe(before);
 		expect(readFileSync(projectsFile, "utf8")).toBe(projectsBefore);
 
@@ -287,7 +291,7 @@ for (const scope of ["user", "project"] as const) {
 					expectedFingerprint: current?.fingerprint,
 				}),
 			),
-		).toBe("MCP_CONFIG_INVALID");
+		).toBe("MCP_SERVER_NOT_FOUND_IN_FILE");
 		expect(readFileSync(file, "utf8")).toBe(before);
 		expect(readFileSync(projectsFile, "utf8")).toBe(projectsBefore);
 	});
@@ -339,7 +343,7 @@ test("a repo-side change lapses approval, and approving needs the fingerprint th
 				fingerprint: pending?.approval?.fingerprint,
 			}),
 		),
-	).toBe("MCP_CONFIG_INVALID");
+	).toBe("MCP_REVIEWED_ENTRY_CHANGED");
 });
 
 test("an update never approves a pending or changed repository entry, and carries approval only from an entry approved as it is on disk", async () => {
@@ -378,7 +382,7 @@ test("an update never approves a pending or changed repository entry, and carrie
 
 	writeRepo(["-y", "evil"]);
 	expect(await codeOf(update({ command: "npx", args: ["-y", "evil"], enabled: false }))).toBe(
-		"MCP_CONFIG_INVALID",
+		"MCP_FINGERPRINT_REQUIRED",
 	);
 	const changed = find(await request("mcp.list", { workspaceId: "w1" }), "project", "repo");
 	const rewritten = await update(
@@ -391,7 +395,7 @@ test("an update never approves a pending or changed repository entry, and carrie
 			await codeOf(
 				request(method, { workspaceId: "w1", scope: "repo", name: "x", entry: { command: "x" } }),
 			),
-		).toBe("uncoded");
+		).toBe("MCP_SCOPE_INVALID");
 	}
 	expect(JSON.parse(readFileSync(file, "utf8")).mcpServers.x).toBeUndefined();
 });
@@ -423,7 +427,7 @@ test("an update or removal rendered from an entry that changed on disk since is 
 				expectedFingerprint: rendered?.approval?.fingerprint,
 			}),
 		),
-	).toBe("MCP_CONFIG_INVALID");
+	).toBe("MCP_ENTRY_CHANGED");
 	expect(readFileSync(file, "utf8")).toBe(checkedOut);
 	expect(
 		find(await request("mcp.list", { workspaceId: "w1" }), "project", "repo")?.approval?.state,
@@ -437,7 +441,7 @@ test("an update or removal rendered from an entry that changed on disk since is 
 				expectedFingerprint: rendered?.approval?.fingerprint,
 			}),
 		),
-	).toBe("MCP_CONFIG_INVALID");
+	).toBe("MCP_ENTRY_CHANGED");
 	expect(readFileSync(file, "utf8")).toBe(checkedOut);
 	const current = find(await request("mcp.list", { workspaceId: "w1" }), "project", "repo");
 	const removed = await request("mcp.remove", {
@@ -471,7 +475,7 @@ test("always-allowed tools are listed on their server row and revoked one by one
 	expect(getProjects()[0]?.mcpToolGrants?.linear?.tools).toEqual(["mcp__linear__comment"]);
 	expect(
 		await codeOf(request("mcp.revokeToolGrant", { workspaceId: "w1", name: "linear", tool: 7 })),
-	).toBe("MCP_CONFIG_INVALID");
+	).toBe("MCP_TOOL_NAME_REQUIRED");
 });
 
 test.each([
@@ -486,15 +490,15 @@ test.each([
 	mkdirSync(join(repo, ".pi"));
 	const file = join(repo, ".pi", "mcp.json");
 	const share = () => request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear" });
-	const refusedLeavesFile = async (entry: object) => {
+	const refusedLeavesFile = async (entry: object, code: string) => {
 		writeFileSync(file, `${prefix}${JSON.stringify({ mcpServers: { linear: entry } })}`);
 		const before = readFileSync(file, "utf8");
-		expect(await codeOf(share())).toBe("MCP_CONFIG_INVALID");
+		expect(await codeOf(share())).toBe(code);
 		expect(readFileSync(file, "utf8")).toBe(before);
 	};
 
-	await refusedLeavesFile({ url: "https://repo.example/mcp" });
-	await refusedLeavesFile({ exposure: "direct" });
+	await refusedLeavesFile({ url: "https://repo.example/mcp" }, "MCP_SHARE_ENTRY_EXISTS");
+	await refusedLeavesFile({ exposure: "direct" }, "MCP_SHARE_OVERRIDE_UNAPPROVED");
 
 	const pending = find(await request("mcp.list", { workspaceId: "w1" }), "user", "linear");
 	expect(pending?.approval?.state).toBe("pending");
@@ -547,7 +551,7 @@ test.each(
 		}
 		const projectsBefore = readFileSync(projectsFile, "utf8");
 		expect(await codeOf(request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear" }))).toBe(
-			"MCP_CONFIG_INVALID",
+			"MCP_SHARE_ENTRY_EXISTS",
 		);
 		expect(readFileSync(file, "utf8")).toBe(before);
 		expect(readFileSync(projectsFile, "utf8")).toBe(projectsBefore);
@@ -586,7 +590,7 @@ test("project settings for a user server merge into the record field by field un
 	});
 	expect(find(shared, "user", "linear")?.projectOverride).toBeUndefined();
 	expect(await codeOf(request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear" }))).toBe(
-		"MCP_CONFIG_INVALID",
+		"MCP_SHARE_OVERRIDE_MISSING",
 	);
 });
 
@@ -603,7 +607,7 @@ test("share requires the user-level server to remain an object definition", asyn
 		writeFileSync(userFile, JSON.stringify({ mcpServers: { linear: entry } }));
 		const before = readFileSync(userFile, "utf8");
 		expect(await codeOf(request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear" }))).toBe(
-			"MCP_CONFIG_INVALID",
+			"MCP_SHARE_SOURCE_MISSING",
 		);
 		expect(existsSync(join(repo, ".pi", "mcp.json"))).toBe(false);
 		expect(readFileSync(userFile, "utf8")).toBe(before);
@@ -631,7 +635,7 @@ test("project writes refuse a symlinked .pi, and per-chat calls need a session o
 				entry: { command: "npx" },
 			}),
 		),
-	).toBe("MCP_PATH_UNSAFE");
+	).toBe("MCP_PATH_DIRECTORY_UNSAFE");
 	expect(
 		await codeOf(
 			request("mcp.setSessionOverride", {
@@ -646,7 +650,7 @@ test("project writes refuse a symlinked .pi, and per-chat calls need a session o
 		await codeOf(
 			request("mcp.add", { workspaceId: "w1", scope: "user", name: "bad name", entry: {} }),
 		),
-	).toBe("MCP_CONFIG_INVALID");
+	).toBe("MCP_NAME_INVALID");
 });
 
 test("with builtin:mcp turned off in pi settings, sign-in, sign-out, Test connection and every mutation are refused", async () => {
@@ -722,7 +726,7 @@ test("a server's log is its own masked lines from pi's mcp.log and its rotated c
 			"    retry with api_key=***",
 		].join("\n"),
 	);
-	expect(await codeOf(readLog("../docs"))).toBe("MCP_CONFIG_INVALID");
+	expect(await codeOf(readLog("../docs"))).toBe("MCP_NAME_INVALID");
 });
 
 test("an unreadable mcp.json is listed as a file problem with its path, and an entry that is not an object keeps its row", async () => {
@@ -757,15 +761,20 @@ test("an untrusted project refuses writes to the MCP servers its repository defi
 		["mcp.approve", { name: "repo", fingerprint: pending?.approval?.fingerprint }],
 		[
 			"mcp.update",
-			{ scope: "project", name: "repo", entry: { command: "npx", args: ["-y", "y"] } },
+			{
+				scope: "project",
+				name: "repo",
+				entry: { command: "npx", args: ["-y", "y"] },
+				expectedFingerprint: pending?.fingerprint,
+			},
 		],
 		["mcp.add", { scope: "project", name: "fresh", entry: { command: "npx" } }],
-		["mcp.remove", { scope: "project", name: "repo" }],
+		["mcp.remove", { scope: "project", name: "repo", expectedFingerprint: pending?.fingerprint }],
 		["mcp.shareWithRepo", { name: "linear" }],
 	];
 	for (const [method, params] of refused) {
 		expect(await codeOf(request(method, { workspaceId: "w1", ...params }))).toBe(
-			"MCP_CONFIG_INVALID",
+			"MCP_PROJECT_UNTRUSTED",
 		);
 	}
 	expect(readFileSync(file, "utf8")).toBe(before);
@@ -795,7 +804,7 @@ test("Test connection judges the effective server of a name, not the shadowed on
 		handleRequest("mcp.testConnection", { workspaceId: "w1", name: "docs" }, CTX) as Promise<{
 			loginId: string;
 		}>;
-	expect(await codeOf(test())).toBe("MCP_CONFIG_INVALID");
+	expect(await codeOf(test())).toBe("MCP_TEST_REQUIRES_HTTP");
 	const pending = find(await request("mcp.list", { workspaceId: "w1" }), "project", "docs");
 	await request("mcp.approve", {
 		workspaceId: "w1",
@@ -904,7 +913,7 @@ test("trust revoked during ownership resolution refuses every repository mutatio
 		setProjectTrust("p1", true, undefined, { resources: true });
 		const pending = request(method, { workspaceId: "w1", ...params });
 		setProjectTrust("p1", false);
-		expect(await codeOf(pending)).toBe("MCP_CONFIG_INVALID");
+		expect(await codeOf(pending)).toBe("MCP_CONTEXT_CHANGED");
 		expect(readFileSync(file, "utf8")).toBe(before);
 		expect(getProjects()[0]).toMatchObject({
 			piResourceTrust: "untrusted",
@@ -936,7 +945,7 @@ test("ownership resolved for a previous cwd or project cannot admit a mutation",
 			entry: { command: "unused-test-server" },
 		});
 		writeFileSync(path, JSON.stringify([replacement]));
-		expect(await codeOf(pending)).toBe("MCP_CONFIG_INVALID");
+		expect(await codeOf(pending)).toBe("MCP_CONTEXT_CHANGED");
 		expect(existsSync(join(agentDir, "mcp.json"))).toBe(false);
 	}
 });
@@ -969,7 +978,7 @@ test("wire overrides reject invalid enablement and exposure before changing proj
 	for (const enabled of ["false", 0, 1, null, {}, []]) {
 		expect(
 			await codeOf(request("mcp.setProjectOverride", { workspaceId: "w1", name: "docs", enabled })),
-		).toBe("MCP_CONFIG_INVALID");
+		).toBe("MCP_ENABLED_INVALID");
 		expect(
 			await codeOf(
 				request("mcp.setSessionOverride", {
@@ -979,7 +988,7 @@ test("wire overrides reject invalid enablement and exposure before changing proj
 					enabled,
 				}),
 			),
-		).toBe("MCP_CONFIG_INVALID");
+		).toBe("MCP_ENABLED_INVALID");
 		expect(readFileSync(projectsPath, "utf8")).toBe(before);
 	}
 	for (const exposure of ["codemode", "codemode-deferred", "DIRECT", "", true, 0, null, {}, []]) {
@@ -992,14 +1001,14 @@ test("wire overrides reject invalid enablement and exposure before changing proj
 					exposure,
 				}),
 			),
-		).toBe("MCP_CONFIG_INVALID");
+		).toBe("MCP_OVERRIDE_EXPOSURE_INVALID");
 		expect(readFileSync(projectsPath, "utf8")).toBe(before);
 	}
 	expect(
 		await codeOf(
 			request("mcp.setSessionOverride", { workspaceId: "w1", sessionId: "missing", name: "docs" }),
 		),
-	).toBe("MCP_CONFIG_INVALID");
+	).toBe("MCP_ENABLED_INVALID");
 });
 
 test("probes refuse trust revoked while ownership is resolving", async () => {
@@ -1013,7 +1022,7 @@ test("probes refuse trust revoked while ownership is resolving", async () => {
 		setProjectTrust("p1", true, undefined, { resources: true });
 		const pending = request(method, { workspaceId: "w1", name: "docs" });
 		setProjectTrust("p1", false);
-		expect(await codeOf(pending)).toBe("MCP_CONFIG_INVALID");
+		expect(await codeOf(pending)).toBe("MCP_CONTEXT_CHANGED");
 	}
 });
 
@@ -1057,7 +1066,7 @@ test("Test connection reads the current approval rather than a pre-ownership sna
 	});
 	const pending = request("mcp.testConnection", { workspaceId: "w1", name: "docs" });
 	approveProjectMcpServer("p1", "docs", "revoked-fingerprint");
-	expect(await codeOf(pending)).toBe("MCP_CONFIG_INVALID");
+	expect(await codeOf(pending)).toBe("MCP_TEST_REQUIRES_HTTP");
 });
 
 test("Test connection ignores an approved invalid HTTP project entry over a valid user stdio server", async () => {
@@ -1077,7 +1086,7 @@ test("Test connection ignores an approved invalid HTTP project entry over a vali
 		fingerprint: invalid?.approval?.fingerprint,
 	});
 	expect(await codeOf(request("mcp.testConnection", { workspaceId: "w1", name: "docs" }))).toBe(
-		"MCP_CONFIG_INVALID",
+		"MCP_TEST_REQUIRES_HTTP",
 	);
 });
 
@@ -1106,6 +1115,44 @@ test("Test connection admits the user HTTP server beneath an approved invalid pr
 	await request("provider.loginCancel", { loginId: started.loginId });
 });
 
+test("MCP request errors expose literal parameters separately from their English fallback", async () => {
+	const target = { workspaceId: "w1", scope: "user", name: "literal-server" };
+	await expect(
+		request("mcp.add", { ...target, entry: { command: "unused", env: { TOKEN: 1 } } }),
+	).rejects.toMatchObject({
+		code: "MCP_FIELD_STRING_MAP_REQUIRED",
+		errorParams: { name: target.name, field: "env" },
+		message: 'server "literal-server": env must map names to strings',
+	});
+	await expect(
+		request("mcp.remove", { ...target, expectedFingerprint: "stale" }),
+	).rejects.toMatchObject({
+		code: "MCP_ENTRY_CHANGED",
+		errorParams: { name: target.name },
+		message: 'The entry for "literal-server" changed since it was opened — review it again.',
+	});
+	await expect(request("mcp.approve", { ...target, fingerprint: "stale" })).rejects.toMatchObject({
+		code: "MCP_REVIEWED_ENTRY_CHANGED",
+		errorParams: { name: target.name },
+	});
+	await expect(
+		request("mcp.setProjectOverride", { ...target, enabled: "no" }),
+	).rejects.toMatchObject({
+		code: "MCP_ENABLED_INVALID",
+		errorParams: { field: "enabled" },
+	});
+	await expect(
+		request("mcp.setProjectOverride", { ...target, exposure: "invalid" }),
+	).rejects.toMatchObject({
+		code: "MCP_OVERRIDE_EXPOSURE_INVALID",
+		errorParams: { field: "exposure" },
+	});
+	await expect(request("mcp.testConnection", target)).rejects.toMatchObject({
+		code: "MCP_SERVER_NOT_ADMITTED",
+		errorParams: { name: target.name },
+	});
+});
+
 test("probes refuse names with no admitted valid config", async () => {
 	writeFileSync(
 		join(agentDir, "mcp.json"),
@@ -1113,7 +1160,9 @@ test("probes refuse names with no admitted valid config", async () => {
 	);
 	for (const name of ["missing", "invalid"]) {
 		for (const method of ["mcp.login", "mcp.logout", "mcp.testConnection"]) {
-			expect(await codeOf(request(method, { workspaceId: "w1", name }))).toBe("MCP_CONFIG_INVALID");
+			expect(await codeOf(request(method, { workspaceId: "w1", name }))).toBe(
+				"MCP_SERVER_NOT_ADMITTED",
+			);
 		}
 	}
 });

@@ -548,9 +548,13 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 	await expect(resolveDiffRange(ws, { kind: "pinned", baseRef: "--output=x" })).rejects.toThrow(
 		/Not a commit id/,
 	);
-	await expect(resolveDiffRange(ws, { kind: "pinned", baseRef: "deadbeefcafe" })).rejects.toThrow(
-		/Unknown commit/,
-	);
+	await expect(
+		resolveDiffRange(ws, { kind: "pinned", baseRef: "deadbeefcafe" }),
+	).rejects.toMatchObject({
+		code: "UNKNOWN_COMMIT",
+		errorParams: { ref: "deadbeefcafe" },
+		message: "Unknown commit: deadbeefcafe",
+	});
 });
 
 test("resolveDiffRange degrades a root commit to an add-style diff (no parent to subtract)", async () => {
@@ -595,9 +599,30 @@ test("resolveDiffRange rejects a non-oid sha before it reaches git, and an unkno
 	await expect(resolveDiffRange(ws, { kind: "commit", sha: "HEAD" })).rejects.toThrow(
 		/Not a commit id/,
 	);
-	await expect(resolveDiffRange(ws, { kind: "commit", sha: "deadbeef" })).rejects.toThrow(
-		/Unknown commit/,
-	);
+	await expect(resolveDiffRange(ws, { kind: "commit", sha: "deadbeef" })).rejects.toMatchObject({
+		code: "UNKNOWN_COMMIT",
+		errorParams: { ref: "deadbeef" },
+		message: "Unknown commit: deadbeef",
+	});
+});
+
+test("a vanished turn snapshot retains UNKNOWN_COMMIT and identifies the missing tree", async () => {
+	const ws = { baseBranch: "main", worktreePath: repo };
+	const tree = new TextDecoder()
+		.decode(
+			Bun.spawnSync(["git", "-C", repo, "rev-parse", "HEAD^{tree}"], { stdout: "pipe" }).stdout,
+		)
+		.trim();
+	for (const scope of [
+		{ kind: "turn", id: "turn-1", startedAt: 1, baseTree: "deadbeef", headTree: tree },
+		{ kind: "turn", id: "turn-1", startedAt: 1, baseTree: tree, headTree: "deadbeef" },
+	] as const) {
+		await expect(resolveDiffRange(ws, scope)).rejects.toMatchObject({
+			code: "UNKNOWN_COMMIT",
+			errorParams: { ref: "deadbeef" },
+			message: "That turn's snapshot is no longer in this repository",
+		});
+	}
 });
 
 test("gitStatus scopes: branch spans the base range, uncommitted only the dirty worktree", async () => {

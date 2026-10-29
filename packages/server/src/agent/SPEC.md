@@ -999,7 +999,7 @@ re-opened transcripts provider-valid.
   `setSessionMcpServerEnabled` (the chat-local disable, applied through the reload gate), the config
   effective-config read `effectiveMcpServerConfig` and the config
   writers `writeMcpServerEntry` / `removeMcpServerEntry` / `mcpEntryFingerprint` /
-  `shareMcpOverrideWithRepo` (pi-rule validation, `MCP_CONFIG_INVALID` / `MCP_PATH_UNSAFE`) and the
+  `shareMcpOverrideWithRepo` (pi-rule validation with specific coded failures and literal parameters) and the
   sign-in probe (`startMcpProbe`, `replyMcpProbe`, `cancelMcpProbe`, `cancelMcpProbesOwnedBy`,
   `cancelAllMcpProbes`, `setMcpLoginPublisher`, `isMcpLoginId`);
   the pi-level trust surface — `applyPiResourceTrust(workspaceIds)`
@@ -1303,7 +1303,7 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   transport for a server an extension registered; a change publishes `session.resourcesChanged`) with
   per-chat "Disable in this chat" applied at the next idle reload (a deferred one shows the server
   `pending-reload` at once). The overlay reaches `mcp.json` servers only, so `setSessionMcpServerEnabled`
-  refuses (`MCP_CONFIG_INVALID`) to disable a server the chat did not load from its files — for a
+  refuses (`MCP_CHAT_SERVER_NOT_FOUND` / `MCP_EXTENSION_SERVER_READONLY`) to disable a server the chat did not load from its files — for a
   registered one the message says it is registered by an extension and can't be disabled per chat — and
   refuses with `MCP_HANDLED_ELSEWHERE` where `builtin:mcp` does not own `/mcp`. Ownership and file
   provenance are validated before both enable and disable, even for no-op requests; a disabled entry

@@ -194,7 +194,11 @@ export class WsTransport {
 			return;
 		}
 		const message = msg.error ?? t("app.transport.requestFailed");
-		entry.reject(msg.errorCode ? new RequestError(msg.errorCode, message) : new Error(message));
+		entry.reject(
+			msg.errorCode
+				? new RequestError(msg.errorCode, message, msg.errorParams)
+				: new Error(message),
+		);
 	}
 }
 

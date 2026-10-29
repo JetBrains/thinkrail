@@ -351,7 +351,11 @@ test("a mode-only change is unsupported", async () => {
 				modifiedHash: hash("one\ntwo\nthree\n"),
 			},
 		),
-	).rejects.toMatchObject({ code: "UNSUPPORTED_CHANGE" });
+	).rejects.toMatchObject({
+		code: "CHANGE_MODE_ONLY",
+		errorParams: { path: "a.ts" },
+		message: "a.ts has only a mode change, which change mutations do not support.",
+	});
 	expect(statSync(join(repo, "a.ts")).mode & 0o777).toBe(0o755);
 });
 
@@ -376,7 +380,11 @@ test("symbolic links on either side are unsupported", async () => {
 	commitAll("add symlink");
 	await expect(
 		revert("link.txt", { kind: "file" }, { originalHash: hash("target.txt"), modifiedHash: null }),
-	).rejects.toMatchObject({ code: "UNSUPPORTED_CHANGE" });
+	).rejects.toMatchObject({
+		code: "CHANGE_GIT_SYMLINK",
+		errorParams: { path: "link.txt" },
+		message: "link.txt is a symbolic link in Git, which change mutations do not support.",
+	});
 
 	rmSync(join(repo, "link.txt"));
 	write("regular.txt", "regular\n");
@@ -389,7 +397,11 @@ test("symbolic links on either side are unsupported", async () => {
 			{ kind: "file" },
 			{ originalHash: hash("regular\n"), modifiedHash: hash("target\n") },
 		),
-	).rejects.toMatchObject({ code: "UNSUPPORTED_CHANGE" });
+	).rejects.toMatchObject({
+		code: "CHANGE_SYMLINK",
+		errorParams: { path: "regular.txt" },
+		message: "regular.txt is a symbolic link, which change mutations do not support.",
+	});
 });
 
 test("a whole-file revert of an added or untracked file moves it to the trash", async () => {
@@ -553,7 +565,11 @@ test("a byte-only side refuses a range revert and keeps the file untouched", asy
 			originalHash: hash(png),
 			modifiedHash: hash(edited),
 		}),
-	).rejects.toMatchObject({ code: "RANGE_INVALID" });
+	).rejects.toMatchObject({
+		code: "RANGE_NOT_TEXT",
+		errorParams: { path: "shot.png" },
+		message: "shot.png is not text — only a whole-file revert applies.",
+	});
 	expect(read("shot.png")).toEqual(edited);
 
 	await revert(
@@ -567,7 +583,7 @@ test("a byte-only side refuses a range revert and keeps the file untouched", asy
 	expect(read("shot.png")).toEqual(png);
 });
 
-test("a span outside either side is RANGE_INVALID", async () => {
+test("a span outside either side identifies the side and bounds", async () => {
 	write("a.ts", "one\nTWO\nthree\n");
 	const expectation = {
 		originalHash: hash("one\ntwo\nthree\n"),
@@ -575,11 +591,59 @@ test("a span outside either side is RANGE_INVALID", async () => {
 	};
 	await expect(
 		revert("a.ts", range({ start: 4, count: 1 }, { start: 2, count: 1 }), expectation),
-	).rejects.toMatchObject({ code: "RANGE_INVALID" });
+	).rejects.toMatchObject({
+		code: "RANGE_ORIGINAL_OUT_OF_BOUNDS",
+		errorParams: { path: "a.ts", start: 4, span: 1, lineCount: 3 },
+		message: "Lines 4+1 lie outside the original side of a.ts (3 line(s)).",
+	});
 	await expect(
 		revert("a.ts", range({ start: 2, count: 1 }, { start: 3, count: 2 }), expectation),
-	).rejects.toMatchObject({ code: "RANGE_INVALID" });
+	).rejects.toMatchObject({
+		code: "RANGE_MODIFIED_OUT_OF_BOUNDS",
+		errorParams: { path: "a.ts", start: 3, span: 2, lineCount: 3 },
+		message: "Lines 3+2 lie outside the worktree side of a.ts (3 line(s)).",
+	});
 	expect(text("a.ts")).toBe("one\nTWO\nthree\n");
+});
+
+test("a missing worktree file refuses a range revert with its path", async () => {
+	rmSync(join(repo, "a.ts"));
+	await expect(
+		revert("a.ts", range({ start: 1, count: 1 }, { start: 1, count: 0 }), {
+			originalHash: hash("one\ntwo\nthree\n"),
+			modifiedHash: null,
+		}),
+	).rejects.toMatchObject({
+		code: "RANGE_FILE_ABSENT",
+		errorParams: { path: "a.ts" },
+		message: "a.ts is absent from the worktree — revert the whole file instead of a range.",
+	});
+	expect(existsSync(join(repo, "a.ts"))).toBe(false);
+});
+
+test("a path absent on both sides has no change to revert", async () => {
+	await expect(
+		revert("missing.txt", { kind: "file" }, { originalHash: null, modifiedHash: null }),
+	).rejects.toMatchObject({
+		code: "REVERT_NO_CHANGE",
+		errorParams: { path: "missing.txt" },
+		message: "There is no change to revert for missing.txt in this scope.",
+	});
+	expect(existsSync(join(repo, "missing.txt"))).toBe(false);
+});
+
+test("an invalid revert target identifies the path without writing", async () => {
+	await expect(
+		revert("a.ts", { kind: "invalid" } as unknown as RevertTarget, {
+			originalHash: hash("one\ntwo\nthree\n"),
+			modifiedHash: hash("one\ntwo\nthree\n"),
+		}),
+	).rejects.toMatchObject({
+		code: "REVERT_TARGET_INVALID",
+		errorParams: { path: "a.ts" },
+		message: "Unknown revert target for a.ts.",
+	});
+	expect(text("a.ts")).toBe("one\ntwo\nthree\n");
 });
 
 test("a stale hash on either side refuses the revert and writes nothing", async () => {
@@ -763,7 +827,7 @@ test("change paths cannot traverse .git or a symlink escaping the worktree", asy
 
 	await expect(
 		revert("linked.txt", { kind: "file" }, { originalHash: null, modifiedHash: null }),
-	).rejects.toMatchObject({ code: "UNSUPPORTED_CHANGE" });
+	).rejects.toMatchObject({ code: "CHANGE_SYMLINK", errorParams: { path: "linked.txt" } });
 	await expect(
 		revert(".git/config", { kind: "file" }, { originalHash: null, modifiedHash: null }),
 	).rejects.toThrow(".git");

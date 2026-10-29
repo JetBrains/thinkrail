@@ -18,7 +18,7 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
-import { errorCodeOf } from "@thinkrail/shared/codedError";
+import { errorCodeOf, errorParamsOf } from "@thinkrail/shared/codedError";
 import {
 	admissionContextFor,
 	cancelAllMcpProbes,
@@ -442,7 +442,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 									id: requestId,
 									ok: false,
 									error,
-									...(code ? { errorCode: code } : {}),
+									...(code ? { errorCode: code, errorParams: errorParamsOf(err) } : {}),
 								});
 							}
 						},

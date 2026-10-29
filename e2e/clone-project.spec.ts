@@ -11,6 +11,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import { PROJECT_CLONE_PROTOCOL_VERSION, type WsParams } from "@thinkrail/contracts";
+import ES from "../packages/locales/es.json" with { type: "json" };
+import JA from "../packages/locales/ja.json" with { type: "json" };
+import ZH from "../packages/locales/zh-CN.json" with { type: "json" };
 import { openAppFresh } from "./fixtures/app";
 import { commitFile, git, gitText } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
@@ -124,6 +127,69 @@ test("an existing destination is rejected without deleting its files", async ({ 
 	expect(existsSync(join(destination, ".git"))).toBe(false);
 	await expect(page.getByTestId("project-item")).toHaveCount(0);
 });
+
+for (const [locale, catalog] of [
+	["zh-CN", ZH],
+	["es", ES],
+	["ja", JA],
+] as const) {
+	test(`host clone errors render in ${locale} while wire errors stay English`, async ({ page }) => {
+		const fixture = seedRepository(root);
+		const destination = join(fixture.parent, "source");
+		mkdirSync(destination);
+		const failures: Record<string, unknown>[] = [];
+		await page.routeWebSocket(/\/ws(?:\?|$)/, (browser) => {
+			const server = browser.connectToServer();
+			server.onMessage((message) => {
+				const frame = parseFrame(message);
+				if (frame.ok === false) failures.push(frame);
+				browser.send(message);
+			});
+		});
+		await openAppFresh(page);
+		try {
+			await page.getByTestId("open-settings").click();
+			await page.getByTestId("settings-nav-language").click();
+			await page.getByTestId(`language-${locale}`).click();
+			await expect(page.locator("html")).toHaveAttribute("lang", locale);
+			await page.keyboard.press("Escape");
+			await page.getByTestId("add-project-menu").click();
+			await page.getByTestId("menu-clone-project").click();
+			const dialog = page.getByTestId("clone-project-dialog");
+			await dialog.getByTestId("clone-project-url").fill(fixture.url);
+			await dialog.getByTestId("clone-project-parent").fill(fixture.parent);
+			await expect(dialog.getByTestId("clone-project-destination-error")).toHaveText(
+				catalog["errors.PROJECT_CLONE_DESTINATION_EXISTS"].replace("{{path}}", destination),
+			);
+			expect(failures).toContainEqual(
+				expect.objectContaining({
+					errorCode: "PROJECT_CLONE_DESTINATION_EXISTS",
+					errorParams: { path: destination },
+					error: `Destination already exists: ${destination}`,
+				}),
+			);
+			await dialog.getByTestId("clone-project-name").fill("invalid-url");
+			await dialog.getByTestId("clone-project-url").fill("not a repository URL");
+			await dialog.getByTestId("clone-project-submit").click();
+			await expect(dialog.getByTestId("clone-project-error")).toHaveText(
+				catalog["errors.PROJECT_CLONE_URL_INVALID"],
+			);
+			expect(failures).toContainEqual(
+				expect.objectContaining({
+					errorCode: "PROJECT_CLONE_URL_INVALID",
+					error: "Enter a valid Git repository URL.",
+				}),
+			);
+			await dialog.getByTestId("clone-project-cancel").click();
+		} finally {
+			await page.keyboard.press("Escape");
+			await page.getByTestId("open-settings").click();
+			await page.getByTestId("settings-nav-language").click();
+			await page.getByTestId("language-system").click();
+			await expect(page.locator("html")).toHaveAttribute("lang", "en");
+		}
+	});
+}
 
 test("an invalid repository URL fails and can be corrected and retried in the same dialog", async ({
 	page,

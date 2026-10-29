@@ -89,7 +89,7 @@ export function getProjects(): Project[] {
 export function openProject(inputPath: string, displayName?: string): Project {
 	const path = resolveProjectPath(inputPath);
 	const root = gitToplevel(path);
-	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
+	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`, { path });
 
 	const projects = getProjects();
 	const existing = projects.find((p) => p.path === root);
@@ -106,6 +106,7 @@ export function openProject(inputPath: string, displayName?: string): Project {
 		throw new CodedError(
 			"ALREADY_OPEN",
 			`This folder is already open in ThinkRail as a workspace: ${root}`,
+			{ path: root },
 		);
 
 	const taken = new Set(projects.map((p) => p.slug));
@@ -233,7 +234,9 @@ export function setProjectMcpOverride(
 ): Project {
 	if (patch !== null) {
 		if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") {
-			throw new CodedError("MCP_CONFIG_INVALID", "MCP server enabled must be a boolean");
+			throw new CodedError("MCP_ENABLED_INVALID", "MCP server enabled must be a boolean", {
+				field: "enabled",
+			});
 		}
 		if (
 			patch.exposure !== undefined &&
@@ -242,8 +245,9 @@ export function setProjectMcpOverride(
 			patch.exposure !== "hidden"
 		) {
 			throw new CodedError(
-				"MCP_CONFIG_INVALID",
+				"MCP_OVERRIDE_EXPOSURE_INVALID",
 				"MCP server exposure must be deferred, direct or hidden",
+				{ field: "exposure" },
 			);
 		}
 	}

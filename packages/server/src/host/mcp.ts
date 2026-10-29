@@ -61,8 +61,9 @@ function assertRenderedEntry(
 ): void {
 	if (expectedFingerprint !== onDisk) {
 		throw new CodedError(
-			"MCP_CONFIG_INVALID",
+			"MCP_ENTRY_CHANGED",
 			`The entry for "${name}" changed since it was opened — review it again.`,
+			{ name },
 		);
 	}
 }
@@ -70,7 +71,7 @@ function assertRenderedEntry(
 function assertRepositoryWritable(project: Project): void {
 	if (project.piResourceTrust !== "granted") {
 		throw new CodedError(
-			"MCP_CONFIG_INVALID",
+			"MCP_PROJECT_UNTRUSTED",
 			"This project isn't trusted — trust it before changing the MCP servers its repository defines.",
 		);
 	}
@@ -96,7 +97,7 @@ async function admitManaged<T>(
 			(before.project.piResourceTrust === "granted")
 	) {
 		throw new CodedError(
-			"MCP_CONFIG_INVALID",
+			"MCP_CONTEXT_CHANGED",
 			"The workspace or project trust changed — retry with its current settings.",
 		);
 	}
@@ -116,20 +117,23 @@ function mutateManaged(
 
 function serverName(name: unknown): string {
 	if (typeof name !== "string" || !SERVER_NAME.test(name)) {
-		throw new CodedError("MCP_CONFIG_INVALID", "MCP server names use letters, digits, - and _");
+		throw new CodedError("MCP_NAME_INVALID", "MCP server names use letters, digits, - and _");
 	}
 	return name;
 }
 
 function serverEnabled(enabled: unknown): boolean {
 	if (typeof enabled !== "boolean") {
-		throw new CodedError("MCP_CONFIG_INVALID", "MCP server enabled must be a boolean");
+		throw new CodedError("MCP_ENABLED_INVALID", "MCP server enabled must be a boolean", {
+			field: "enabled",
+		});
 	}
 	return enabled;
 }
 
 function serverScope(scope: unknown): McpServerScope {
-	if (scope !== "user" && scope !== "project") throw new Error("Invalid MCP server scope");
+	if (scope !== "user" && scope !== "project")
+		throw new CodedError("MCP_SCOPE_INVALID", "Invalid MCP server scope");
 	return scope;
 }
 
@@ -138,7 +142,7 @@ function renderedTarget(params: unknown): McpRenderedTarget {
 	const expectedFingerprint = isRecord(params) ? params.expectedFingerprint : undefined;
 	if (typeof expectedFingerprint !== "string") {
 		throw new CodedError(
-			"MCP_CONFIG_INVALID",
+			"MCP_FINGERPRINT_REQUIRED",
 			"An entry is rewritten or removed only with the fingerprint it was rendered with.",
 		);
 	}
@@ -260,7 +264,7 @@ export function mcpRevokeToolGrant(params: {
 }): Promise<McpListResult> {
 	const name = serverName(params.name);
 	if (typeof params.tool !== "string" || params.tool.length === 0) {
-		throw new CodedError("MCP_CONFIG_INVALID", "Name the MCP tool to stop always allowing.");
+		throw new CodedError("MCP_TOOL_NAME_REQUIRED", "Name the MCP tool to stop always allowing.");
 	}
 	const { tool } = params;
 	return mutateManaged(params.workspaceId, ({ project }) => {
@@ -279,8 +283,9 @@ export function mcpApprove(params: {
 		assertRepositoryWritable(project);
 		if (mcpEntryFingerprint("project", workspace.worktreePath, name) !== params.fingerprint) {
 			throw new CodedError(
-				"MCP_CONFIG_INVALID",
+				"MCP_REVIEWED_ENTRY_CHANGED",
 				`The entry for "${name}" changed since it was reviewed — review it again.`,
+				{ name },
 			);
 		}
 		approveProjectMcpServer(project.id, name, params.fingerprint);
@@ -298,7 +303,11 @@ export function mcpShareWithRepo(params: {
 		const { approvals, overrides } = mcpPolicyOf(project);
 		const override = overrides[name];
 		if (!override) {
-			throw new CodedError("MCP_CONFIG_INVALID", `"${name}" has no project setting to share.`);
+			throw new CodedError(
+				"MCP_SHARE_OVERRIDE_MISSING",
+				`"${name}" has no project setting to share.`,
+				{ name },
+			);
 		}
 		const fingerprint = shareMcpOverrideWithRepo({
 			worktree: workspace.worktreePath,
@@ -355,11 +364,13 @@ async function probe(
 			name,
 		});
 		if (!effective) {
-			throw new CodedError("MCP_CONFIG_INVALID", `No admitted MCP server named "${name}".`);
+			throw new CodedError("MCP_SERVER_NOT_ADMITTED", `No admitted MCP server named "${name}".`, {
+				name,
+			});
 		}
 		if (action === "test" && !("url" in effective)) {
 			throw new CodedError(
-				"MCP_CONFIG_INVALID",
+				"MCP_TEST_REQUIRES_HTTP",
 				"Test connection applies to HTTP servers; a stdio server is verified when a chat starts it.",
 			);
 		}

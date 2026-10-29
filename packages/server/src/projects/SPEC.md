@@ -110,6 +110,10 @@ recovery. No agent starts and no trust is granted implicitly.
 `startProjectClone` / `cancelProjectClone` pair a client-owned operation id with an AbortController only
 while the request is active. Cancellation is owner-scoped and idempotent, and the original clone response
 reports cancellation only after cleanup. Socket reconnect uses host request replay, not a new operation.
+Input failures have distinct `PROJECT_CLONE_*` codes for URL corrections, credentials, parent/name,
+destination collisions, depth and operation ownership. Paths ride as literal error parameters; cleanup
+failures name the remaining path, while `PROJECT_CLONE_FAILED` keeps Git diagnostics verbatim. These
+errors use the shared localization contract in [[module-contracts]].
 Git diagnostics are redacted before truncation: user-configured URL rewrites can introduce credentials,
 and truncating first can separate a secret suffix from the URL prefix needed to recognize it.
 

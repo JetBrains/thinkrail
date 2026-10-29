@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	detectAppRoot,
 	EXTERNAL_FRAME,
@@ -244,6 +245,26 @@ test("messageFreeStack cuts the message out of the stack and drops a stack it ca
 	expect(messageFreeStack("    at real (x.ts:2:3)", "")).toBe("    at real (x.ts:2:3)");
 	expect(messageFreeStack("    at real (x.ts:2:3)", "rewritten message")).toBeUndefined();
 	expect(messageFreeStack(undefined, "x")).toBeUndefined();
+});
+
+test("coded display parameters never enter reportable errors or exception properties", () => {
+	const secret = "/Users/private/project";
+	const error = new CodedError("NOT_GIT", `Not a git repository: ${secret}`, { path: secret });
+	const reportable = reportableError(error);
+	expect(reportable.name).toBe("CodedError");
+	expect(reportable.message).toBe("");
+	expect(reportable).not.toHaveProperty("errorParams");
+	expect(reportable.stack).not.toContain(secret);
+	const properties = sanitizeExceptionProperties(
+		{
+			code: error.code,
+			errorParams: error.errorParams,
+			$exception_list: [{ type: error.name, value: error.message, errorParams: error.errorParams }],
+		},
+		ROOTS,
+	);
+	expect(JSON.stringify(properties)).not.toContain(secret);
+	expect(JSON.stringify(properties)).not.toContain("errorParams");
 });
 
 test("reportableError keeps the class and the message-free stacks of the cause chain, nothing else", () => {

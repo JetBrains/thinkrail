@@ -12,7 +12,7 @@ import {
 } from "@thinkrail/ui/dialog";
 import { useEffect, useRef, useState } from "react";
 import { randomId } from "../lib";
-import { errorText, getTransport, wsErrorCode } from "../transport";
+import { errorText, getTransport } from "../transport";
 import { cloneDepth, repositoryFolderName } from "./cloneRepository";
 
 const FIELD_CLASS =
@@ -137,12 +137,7 @@ export function CloneProjectDialog({
 				},
 				(err: unknown) => {
 					if (!mounted.current) return;
-					const message = errorText(err, t("panels.cloneProject.failed"));
-					setError(
-						wsErrorCode(err) === "PROJECT_CLONE_CLEANUP_FAILED"
-							? `${t("panels.cloneProject.cleanupFailed")}\n${message}`
-							: message,
-					);
+					setError(errorText(err, t("panels.cloneProject.failed")));
 				},
 			)
 			.finally(() => {

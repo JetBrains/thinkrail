@@ -123,7 +123,9 @@ ref off the workspace-create critical path.
   reach a git argument as an option or a path) then existence (`rev-parse --verify`, whose full oid is what is
   then used) — and a vanished commit throws a **`CodedError("UNKNOWN_COMMIT")`** (`@thinkrail/shared/codedError`),
   which the host puts on the wire as `WsResponse.errorCode` and the client turns into "reset the scope, with a
-  toast" — *only* for that named failure, never for a timeout or an unnamed host failure;
+  toast" — *only* for that named failure, never for a timeout or an unnamed host failure. Every
+  `UNKNOWN_COMMIT` carries the missing commit or tree as `errorParams.ref` for generic localized
+  revision-missing guidance; commit and vanished-turn English fallbacks remain unchanged;
   **`isSafeRef(ref)` / `assertSafeRef(ref)`** — the shape check every **user/repo-supplied ref** passes at its
   mutation door (`workspaces`' `createWorkspace` base — the **resolved** one, including the value read off the
   repo's own `HEAD` — + `setWorkspaceDiffBase` target). The rule set is `git check-ref-format`'s, reproduced

@@ -456,8 +456,8 @@ provides the absolute path preview and rejects existing destinations; only a pre
 fields enables submission, and clone validates again before writing. The dialog uses host Git credentials,
 not GitHub login. During cloning fields are locked, status is announced, and Cancel requests
 `project.cancelClone`; the original request settles only after process exit and cleanup. Cancel returns to
-the editable form, with values retained. Errors stay inline; cleanup failures explicitly require manual
-removal. Closing an idle dialog dismisses it, while Escape/backdrop cannot dismiss an active clone. Unmount
+the editable form, with values retained. Errors stay inline and use transport's shared code-based
+localization; cleanup failures explicitly require manual removal without a second per-dialog lead line. Closing an idle dialog dismisses it, while Escape/backdrop cannot dismiss an active clone. Unmount
 requests cancellation. A reconnect replays the pending operation. Success adopts Project Home through the
 same last-intent fence as opening a local project, without starting a chat. A late result cannot steal a
 newer open-project selection.
@@ -2130,7 +2130,8 @@ own section. The kebab menu (`plan-menu`, a
   changed since you opened it — review the new diff”; `RECEIPT_UNKNOWN` (the receipt was evicted, its
   workspace forgotten, or the host restarted behind a toast that is still on screen) reloads the same way
   and says “This change can no longer be undone — the host no longer holds it” as information, not an
-  error; every other named or unnamed failure uses `errorText`. Commit scopes never receive `hunkActions`, so neither the toolbar nor Revert file can render.
+  error. All failure wording comes from transport's `errorText`; this surface owns only the reload and
+  toast severity, not per-code translation mappings. Commit scopes never receive `hunkActions`, so neither the toolbar nor Revert file can render.
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
   per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
   (`ChangesTree`), both built from the same `git.status` list. The Tree is styled exactly like the
