@@ -345,12 +345,7 @@ closed preference and its oldest-first default, then hydrates the store before R
 read/write a host-qualified localStorage key and synchronize that key across same-origin tabs; a native shell
 may inject the same narrow string-storage adapter under its stable backend-profile/window identity so a
 dynamic loopback port cannot erase the preference on restart. It never enters `AppConfig`, so choosing
-newest-first cannot change another browser, device, host, or native window. The same persistence seam owns
-**Streaming response movement**, one `{ trigger }` client-local preference rather than a second
-adapter/subscription path. `trigger` is the pin line a following reader's response edge is held at,
-labelled **Pin line** in Settings: 35–100% from the top in 5-point steps, default 100%. Parsing reads only
-`trigger` and ignores extra fields, so a saved value carrying other keys keeps its pin line; an invalid
-`trigger` falls back to the default. It likewise never enters `AppConfig` or crosses the wire.
+newest-first cannot change another browser, device, host, or native window.
 
 **Sticky activity breadcrumb.** While the transcript's top visible content remains inside expanded
 Activity → Thinking → tool disclosures whose original headers have scrolled above the viewport, one
@@ -608,7 +603,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   once, after the first row mounts, from the work state at that moment: an idle oldest-first transcript jumps
   to the final row without animation and holds it through measurement frames (motion kind `mount`); an idle
   newest-first transcript stays at the native zero scroll origin; a working transcript reconstructs directly
-  at the pin line with only the room its active response needs and holds it through the same measurement frames,
+  at the pin line (the viewport bottom) with only the room its active response needs and holds it through the same measurement frames,
   re-applied without animation and never backward, so row measurement cannot push the live edge off screen.
   The mount target skips the tall-arrival cap, so a short viewport still lands the edge at the pin line.
   Virtuoso gets no `initialTopMostItemIndex`: it hides the list until a scroll to that row sees no size
@@ -666,7 +661,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   queued/background continuation preserves a detached reader when it starts.
 - **Streaming response movement exists only during work, and it pins the response edge** — while following,
   the view stands still while the active response fills the room below its prompt. Once the response edge
-  reaches the pin line (`trigger`, default 100%), the view is pinned: each content change moves it by exactly
+  reaches the pin line, the bottom of the viewport, the view is pinned: each content change moves it by exactly
   the growth, so the edge stays on the line. The pin runs in the before-paint content-change path (the
   Virtuoso height callback and the scroller resize observer, both inside `ResizeObserver` delivery) as one
   instant `scrollTop` write with no easing and no threshold, so growth and its compensation paint in the
@@ -678,7 +673,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   the pin line, then one eased ~220 ms move to a higher line) were tried and rejected: with a fast model they
   measured as a 120–240 px jump every ~0.5 s, growth landing in a step's last frame became a 20–100 px snap,
   and WebKit showed three times more snaps. Peers (shadcn Message Scroller, T3 Code, Zed, OpenCode) pin per
-  frame. The trade-off is that the line being read moves with the stream; a reader who
+  frame at the viewport bottom, and so does the pin line here: it is fixed, not a setting. The trade-off is
+  that the line being read moves with the stream; a reader who
   wants it still scrolls away and detaches. The pin publishes no state: following, moving, and runway change
   only on real transitions, so the pin itself adds no React commits. It never moves backward. Synthetic room
   is **derived, never accumulated**: while pinned it is exactly the part of the pin destination beyond the
@@ -686,9 +682,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   before paint on every content change, so growth consumes it one-for-one while neither the visible content
   nor the scroll range moves. Content that shrinks while pinned leaves the edge above the line; the
   on-screen guard below restores the anchor before paint and the room absorbs the loss, and later growth
-  consumes it before the pin resumes. Oldest-first therefore needs at most the band below the pin line;
-  newest-first uses older projected content where available and keeps any synthetic remainder after the
-  oldest group. Synthetic room never splits a reversed request/answer group. **Follow response** and an
+  consumes it before the pin resumes. Newest-first uses older projected content as room where available
+  and keeps any synthetic remainder after the oldest group. Synthetic room never splits a reversed request/answer group. **Follow response** and an
   exact-edge return make one eased ~220 ms motion to the pin line when it is ahead, then the pin takes over.
   Reader takeover never moves the reader: room shrinks only as far as the reader's current position allows
   (the document may end exactly at their viewport bottom), and later growth or upward reading consumes the
@@ -702,26 +697,19 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   100 ms ago (the newest edge position at least that old) as the edge the reader has seen. When content
   taller than the visible space (the viewport minus the turn inset) arrived within that window — typically
   a diagram or card that renders at once, possibly in several quick layout steps — the follow destination
-  is capped so the seen edge lands at the turn inset, the same place an own prompt lands. One content
-  change that grows the edge by more than the reading space (the pin line minus the turn inset) caps the
-  same way at the previous edge, because the pin would push that block's start above the inset; below
-  a 100% pin line the reading space is smaller than the visible space, so a card between the two would
-  otherwise lose its start. Counting every pinned edge as seen let a card that lands in several quick
-  steps pin past at full speed, because no single step was tall. A 300 ms seen-edge look-back capped plain
-  text: a fast replay (≈900 px/s) in the ≈300 px chat viewport of a 1280×720 window crossed the threshold
-  and stalled the pin every few lines; streamed text needs over 2k px/s to do that within 100 ms. Judging
-  the 100 ms window against the reading space did the same on a low pin line: at a 35% pin line that viewport
-  leaves 57 px, so text over ≈570 px/s capped. A burst of text deltas or a Markdown re-render can still
-  exceed that reading space in one delivery, so the per-change check stays off within 300 ms of a cap
-  release or another such growth: a run of bursts caps at most once, while a card after a quiet moment or
-  after ordinary text still caps. Growth within 300 ms of the cap engaging belongs to the arrival; each
-  later growth releases the cap by twice its own height, at most twice the reading space, until it reaches
-  the pin line, and the pin moves to the capped destination on that same content change without easing, so
-  the block advances at twice reading pace instead of flying by (one mermaid card measured a 1.5k px glide
-  in under a second). A cap release resets the seen edge to the edge on the pin line. A second tall
-  arrival inside the 300 ms arrival window never pushes an active cap further. The cap is evaluated wherever the follow destination is, so
-  it also bounds an explicit return already in flight. Positions are kept relative to the topmost visible
-  row rather than document coordinates, and each evaluation re-expresses them relative to the current one,
+  is capped so the seen edge lands at the turn inset, the same place an own prompt lands. Counting every
+  pinned edge as seen let a card that lands in several quick steps pin past at full speed, because no
+  single step was tall. A 300 ms seen-edge look-back capped plain text: a fast replay (≈900 px/s) in the
+  ≈300 px chat viewport of a 1280×720 window crossed the threshold and stalled the pin every few lines;
+  streamed text needs over 2k px/s to do that within 100 ms. Growth within 300 ms of the cap engaging
+  belongs to the arrival; each later growth releases the cap by twice its own height, at most twice the
+  visible space, until it reaches the pin line, and the pin moves to the capped destination on that same
+  content change without easing, so the block advances at twice reading pace instead of flying by (one
+  mermaid card measured a 1.5k px glide in under a second). A cap release resets the seen edge to the edge
+  on the pin line. A second tall arrival inside the 300 ms arrival window never pushes an active cap
+  further. The cap is evaluated wherever the follow destination is, so it also bounds an explicit return
+  already in flight. Positions are kept relative to the topmost visible row rather than document
+  coordinates, and each evaluation re-expresses them relative to the current one,
   so height changes above the viewport (Virtuoso replacing an estimate, a code block highlighting) neither
   trigger nor misplace the cap, rows may unmount, and a block that grows above rows that already follow it
   (WebKit renders a diagram after the next turn's row exists) still counts. Anchoring to the last row
@@ -759,8 +747,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `agent_settled`, never `agent_end`, ends response movement. In oldest-first a following reader whose
   content already ends inside the viewport stays exactly where it is: the remaining synthetic room becomes
   reader-preserving room that disappears as the reader scrolls up or the next turn starts, never by sliding
-  what is on screen. Removing it at settlement slid every finished answer down by up to the band below the
-  pin line (≈100 px measured) and, after an absorbed card collapse, by several hundred px. Only when unseen
+  what is on screen. Removing it at settlement slid every finished answer down by up to its synthetic
+  room (≈100 px measured) and, after an absorbed card collapse, by several hundred px. Only when unseen
   content remains below does a following reader make one smooth forward move to the physical latest edge;
   newest-first keeps its one smooth return to its top latest edge. A detached reader's visible content
   stays exactly where it is and only the affordance changes from **Follow response** to **Latest**. Returning
@@ -793,7 +781,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   current motion instead of launching overlapping eases or alternating hard writes. The first real reader
   movement cancels it synchronously and native physics win.
   Newest-first header deltas preserve a detached historical anchor; viewport resize re-evaluates the live
-  pin line without moving a response still below it. Initial/order placement is direct, and reduced motion
+  pin without moving a response that has not reached the pin line. Initial/order placement is direct, and reduced motion
   makes every programmatic destination immediate while preserving identical state and final geometry.
 - **No hidden motion owners** — nothing but the controller and the reader may move the viewport. The
   transcript scroller opts out of browser scroll anchoring (`overflow-anchor: none`): Virtuoso excludes its

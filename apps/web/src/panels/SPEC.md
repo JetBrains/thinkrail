@@ -867,14 +867,10 @@ a project picker, the prompt hero, and the reused
   toast without changing geometry); **`ChatSettings`** (one **Appearance and behavior** group of rows —
   **Message order** segmented over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), **Composer size** segmented over the composer-growth limit (Compact / Roomy /
-  Half chat), the chat `LineWidthControl`, and the **Streaming response movement** row, one range
-  over `store.streamingResponseMovement.trigger`. The row's copy is “Where the newest line of a streaming
-  answer stays as the chat follows it”; its axis runs Top → Message box, the handle is the **Pin line**
-  (35–100%, step 5, default 100%), and the track fills from Top to it (see
-  `apps/web/src/chat/SPEC.md`). It exposes no runway/tail/lifecycle controls. Message order and
-  movement both apply immediately and persist only in this client through the chat preference seam:
-  browsers use current-host-qualified keys, while a native shell may inject its stable
-  backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
+  Half chat), and the chat `LineWidthControl`. It exposes no scroll-follow controls: streaming follow is
+  fixed (see `apps/web/src/chat/SPEC.md`). Message order applies immediately and persists only in this
+  client through the chat preference seam: browsers use current-host-qualified keys, while a native shell
+  may inject its stable backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
   remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
   Explanatory copy says “message box” rather than the internal “composer” name for where the user types.
   The final **Subagents** group (`SubagentSettings.tsx`) is rows, not a table: global **Allow subagents**

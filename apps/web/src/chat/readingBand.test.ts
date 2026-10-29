@@ -32,7 +32,6 @@ function createHarness({
 	latestEdge = "bottom",
 	geometryAvailable = true,
 	runwayWritable = true,
-	movement = { trigger: 100 },
 	mountPending = false,
 }: {
 	streaming?: boolean;
@@ -41,7 +40,6 @@ function createHarness({
 	latestEdge?: "top" | "bottom";
 	geometryAvailable?: boolean;
 	runwayWritable?: boolean;
-	movement?: { trigger: number };
 	mountPending?: boolean;
 } = {}): Harness {
 	let geometry: ReadingBandGeometry = {
@@ -116,7 +114,6 @@ function createHarness({
 	const controller = createReadingBandController(environment, {
 		streaming,
 		latestEdge,
-		movement,
 		mountPending,
 	});
 
@@ -293,15 +290,6 @@ describe("reading-band movement", () => {
 		harness.setGeometry({ edgeBottom: 601 });
 		harness.controller.contentChanged();
 		expect(harness.writes).toEqual([101]);
-	});
-
-	it("re-pins immediately when the pin line changes", () => {
-		const harness = createHarness({ reducedMotion: true });
-		harness.setGeometry({ edgeBottom: 500 });
-		harness.controller.contentChanged();
-		expect(harness.writes).toEqual([]);
-		harness.controller.setMovement({ trigger: 80 });
-		expect(harness.writes).toEqual([120]);
 	});
 
 	it("re-pins when the live viewport shrinks", () => {
@@ -1072,17 +1060,6 @@ describe("reading-band derived room", () => {
 		).toBe(true);
 	});
 
-	it("uses a custom pin line in either message order", () => {
-		for (const latestEdge of ["bottom", "top"] as const) {
-			const harness = createHarness({ latestEdge, movement: { trigger: 90 } });
-			harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 691 });
-			harness.controller.contentChanged();
-			expect(harness.runwayHeights).toEqual([151]);
-			expect(harness.writes.at(-1)).toBe(251);
-			expect(harness.readGeometry().edgeBottom).toBe(540);
-		}
-	});
-
 	it("restarts the fill phase after a new user turn", () => {
 		const harness = createHarness();
 		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
@@ -1829,66 +1806,6 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 			harness.advance(16);
 		}
 	});
-
-	it("pins fast text on a low pin line in a short viewport without a tall-arrival cap", () => {
-		const harness = createHarness({ viewportHeight: 300, movement: { trigger: 35 } });
-		harness.setReferenceRow({ id: "r1", top: 100 });
-		harness.controller.contentChanged();
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 106 });
-		harness.controller.contentChanged();
-		harness.advance(TALL_ARRIVAL_SETTLE_MS);
-		const startingScrollTop = harness.readGeometry().scrollTop;
-		for (let frame = 1; frame <= 60; frame += 1) {
-			grow(harness, 14);
-			expect(harness.readGeometry().edgeBottom).toBe(105);
-			expect(harness.readGeometry().scrollTop).toBe(startingScrollTop + frame * 14);
-			harness.advance(16);
-		}
-	});
-
-	it("caps one jump taller than the viewport on a low pin line", () => {
-		const harness = createHarness({ viewportHeight: 300, movement: { trigger: 35 } });
-		harness.setReferenceRow({ id: "r1", top: 100 });
-		harness.controller.contentChanged();
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 106 });
-		harness.controller.contentChanged();
-		harness.advance(TALL_ARRIVAL_SETTLE_MS);
-		const before = harness.readGeometry();
-		grow(harness, 400);
-		expect(harness.readGeometry().scrollTop).toBeLessThan(before.scrollTop + 400);
-		expect(harness.readGeometry().edgeBottom).toBeGreaterThan(105);
-	});
-
-	it("keeps bursty text on a low pin line moving back to the pin line", () => {
-		const harness = createHarness({ viewportHeight: 300, movement: { trigger: 35 } });
-		harness.setReferenceRow({ id: "r1", top: 100 });
-		harness.controller.contentChanged();
-		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 106 });
-		harness.controller.contentChanged();
-		harness.advance(TALL_ARRIVAL_SETTLE_MS);
-		for (let burst = 0; burst < 20; burst += 1) {
-			grow(harness, 60 + (burst % 5) * 10);
-			expect(harness.readGeometry().edgeBottom).toBeLessThanOrEqual(300);
-			harness.advance(150);
-		}
-		expect(harness.readGeometry().edgeBottom).toBeCloseTo(105, 8);
-	});
-
-	for (const trigger of [35, 75]) {
-		it(`caps one card shorter than the viewport but taller than the reading space at Trigger ${trigger}`, () => {
-			const harness = createHarness({ movement: { trigger } });
-			harness.setReferenceRow({ id: "r1", top: 100 });
-			harness.controller.contentChanged();
-			harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 6 * trigger + 1 });
-			harness.controller.contentChanged();
-			harness.advance(TALL_ARRIVAL_SETTLE_MS);
-			const before = harness.readGeometry();
-			const cardTopDoc = before.scrollTop + (before.edgeBottom ?? 0);
-			grow(harness, 500);
-			advanceUntilIdle(harness);
-			expect(cardTopDoc - harness.readGeometry().scrollTop).toBeCloseTo(60, 8);
-		});
-	}
 
 	it("pins a streaming text response without a tall-arrival cap", () => {
 		const harness = createHarness();
