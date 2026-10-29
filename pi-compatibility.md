@@ -146,7 +146,7 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   Settings → Extensions package catalog and mutations build on pi's public `DefaultPackageManager`
   (`resolve(onMissing)`, `install`, `remove`, `update`, `checkForAvailableUpdates`,
   `listConfiguredPackages`, `addSourceToSettings` / `removeSourceFromSettings`) and `SettingsManager`
-  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Five pi facts the host compensates
+  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Eight pi facts the host compensates
   for, each with its gate:
   - `resolve()` without `onMissing` installs a declared-but-missing package, and
     `DefaultResourceLoader.reload()` always calls it that way; the catalog therefore reads with
