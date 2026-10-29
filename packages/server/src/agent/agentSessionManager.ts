@@ -88,6 +88,7 @@ import {
 	buildResourceLoader,
 	disabledExtensions,
 	loadsDisabledExtensionSkills,
+	providerExtensionPaths,
 	toSkillCommands,
 } from "./extensions";
 import {
@@ -2731,13 +2732,16 @@ export function liveParentContext(sessionId: string): ParentContext | undefined 
 	const entry = sessions.get(sessionId);
 	if (!entry || !canUseSessionResources(sessionId, entry.workspaceId)) return undefined;
 	const { session, workspaceId } = entry;
+	const isProjectTrusted = () =>
+		session.settingsManager.isProjectTrusted() && piResourceTrustFor(workspaceId);
 	return {
 		cwd: session.sessionManager.getCwd(),
 		model: session.model,
 		thinkingLevel: session.thinkingLevel,
 		modelRuntime: session.modelRuntime,
-		isProjectTrusted: () =>
-			session.settingsManager.isProjectTrusted() && piResourceTrustFor(workspaceId),
+		isProjectTrusted,
+		providerExtensionPaths: (provider) =>
+			providerExtensionPaths(session.resourceLoader, provider, isProjectTrusted()),
 	};
 }
 

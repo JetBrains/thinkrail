@@ -138,7 +138,9 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   transcript repair; repair policy and synthesized tool results remain host-owned.
 - `DelegationBindings` — everything host-specific: `resolveParent` (optional for resource-only services; parent creation requires it and a live result; returns
   `ParentContext` — `Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel">` plus optional
-  `isProjectTrusted`, `modelRuntime` and `modelRegistry` fields. `isProjectTrusted` is the pi-level
+  `isProjectTrusted`, `modelRuntime`, `modelRegistry` and `providerExtensionPaths` fields
+  (`providerExtensionPaths(provider)`: the parent's loaded extension paths that registered `provider`,
+  decision #32). `isProjectTrusted` is the pi-level
   project trust a child's settings manager receives (asked at creation and again at the revalidation
   below): trust is part of the context a child derives from its parent, so a child never loads more of
   the project than its parent — pure pi's `ctx` carries the session's own trust, ThinkRail answers its
@@ -286,10 +288,10 @@ to treat lifecycle snapshots as terminal authority.
 The child's resource loader is **narrow by default**: no discovered extensions, no prompt
 templates, no themes; context files, skills, and the embedder's curated extension set
 (`extensions: true` — decision #25) are explicit `SessionOptions` opt-ins, and only the embedder's
-hook-only base set loads unconditionally (same decision); `systemPrompt` maps to
-`systemPromptOverride`. Model/thinking default to the live parent's current values; `cwd` is the
-parent's. Runtime precedence is parent `modelRuntime` → service `modelRuntime` → cached self-created
-runtime. The self-created path caches a separate runtime and mirrored-registration set per parent
+hook-only base set (same decision) and the parent-projected owners of the child model's provider
+(decision #32) load unconditionally; `systemPrompt` maps to `systemPromptOverride`. Model/thinking
+default to the live parent's current values; `cwd` is the parent's. Runtime precedence is parent
+`modelRuntime` → service `modelRuntime` → cached self-created runtime. The self-created path caches a separate runtime and mirrored-registration set per parent
 lineage; `disposeChildrenOf(parent)` drops that cache entry with the lineage. It mirrors the parent's
 public `modelRegistry` registrations before each spawn: every previously mirrored id is unregistered
 before the current native providers and opaque configured-provider configs are replayed. Rebuilding
@@ -520,3 +522,22 @@ run-scoped signal. Non-user paths retain their behavior.
     unbound, every child `read` of an image there returned pi's `[Image omitted…]` note. The hook
     sits on `DelegationBindings` beside the factory sets, keeping decision #3's firewall: the
     settings manager stays infrastructure no consumer shapes per child.
+32. **Provider owners follow the model** (2026-10, user-settled). Runtime sharing and registration
+    replay (#26) carry a provider's config, not behaviour its extension implements in session hooks. A
+    provider extension may serve only sessions it observed: one that keys each request by the session's
+    exact assembled system prompt (recorded by its own `before_agent_start` / `agent_start` /
+    `turn_start` hooks) and runs its backend in the cwd its `session_start` hook recorded refuses every
+    narrow child on its model. A child therefore also loads, by path, what its parent projects through
+    `ParentContext.providerExtensionPaths(model.provider)`, whether or not it opted into `extensions`:
+    that extension makes the model work rather than adding a capability. It loads for its hooks, not
+    its provider: the child drops the registrations its owners queue at load, so the borrowed runtime
+    keeps the parent's instead of switching the parent to the child's closures. The child loads nothing
+    its parent does not, and explicit paths are not trust-gated, so the projection honours the child's
+    trust; provenance is the embedder's, because pi exposes none once a runner binds
+    ([[submodule-server-agent]]). Rejected: inheriting the parent's extensions (#25's reasons stand), a
+    user-curated package list (the failure stays until configured), changing such an extension (it
+    cannot learn an unobserved session's cwd), reaching into its private state, and a child-scoped
+    runtime for the owner's own registration (it would lose the parent's runtime-only provider state).
+    Not covered: owners keeping per-instance session state (children reach the parent's instance), an
+    owner re-registering after binding, `session_shutdown` for parent-owned children (unchanged, so
+    owners keep per-child state), pure pi (its `ctx` carries no provenance) and resource contexts.

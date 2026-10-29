@@ -13,6 +13,7 @@ import {
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
+	providerExtensionPaths,
 	setDisabledExtensionsResolver,
 } from "./extensions";
 import { headlessSearchPolicy } from "./headlessSearch";
@@ -305,6 +306,42 @@ describe("buildResourceLoader", () => {
 			}
 		});
 	}
+
+	it("projects provider owners the loader loaded: never an excluded generation artifact, never a project owner when untrusted", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-provider-owners-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		const generationArtifact = join(agentDir, "extensions", "generation.ts");
+		const registering = (provider: string) =>
+			`export default function owner(pi) { pi.registerProvider("${provider}", { baseUrl: "http://owner.local", apiKey: "x", api: "owner", models: [], streamSimple: () => { throw new Error("unused"); } }); }\n`;
+		mkdirSync(join(project, ".pi", "extensions"), { recursive: true });
+		mkdirSync(join(agentDir, "extensions"), { recursive: true });
+		mkdirSync(home, { recursive: true });
+		writeFileSync(generationArtifact, registering("generation-owned"));
+		writeFileSync(join(project, ".pi", "extensions", "repo.ts"), registering("project-owned"));
+		const restore = stubSkillEnv(home, agentDir);
+		try {
+			const load = (excluded: string[]) =>
+				buildResourceLoader(
+					project,
+					SettingsManager.create(project, agentDir, { projectTrusted: true }),
+					() => ctx(true),
+					excluded,
+				);
+			const plain = await load([]);
+			const excluding = await load([generationArtifact]);
+			expect(providerExtensionPaths(plain, "generation-owned", true)).toHaveLength(1);
+			expect(providerExtensionPaths(excluding, "generation-owned", true)).toEqual([]);
+			for (const loader of [plain, excluding]) {
+				expect(providerExtensionPaths(loader, "project-owned", true)).toHaveLength(1);
+				expect(providerExtensionPaths(loader, "project-owned", false)).toEqual([]);
+			}
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 
 	it("reload re-reads admission so a mid-session group toggle applies", async () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-reload-"));
