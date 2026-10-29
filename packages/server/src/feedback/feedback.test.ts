@@ -5,14 +5,14 @@ import { join } from "node:path";
 import {
 	completeSurvey,
 	recordAcceptedMessage,
-	redeliverInterview,
-	releaseInterview,
+	redeliverInvitation,
+	releaseInvitation,
 	resetFeedbackForTests,
-	respondToInterview,
+	respondToInvitation,
 	setFeedbackPublisher,
-	setSurveyOffer,
 	surveyIsCompleted,
 } from "./feedback";
+import { configureSurveySource, refreshInAppSurvey, resetSurveyForTests } from "./survey";
 
 interface StoredFeedback {
 	acceptedMessages: number;
@@ -33,6 +33,21 @@ function feedback(overrides: Partial<StoredFeedback> = {}): StoredFeedback {
 	};
 }
 
+async function launch(...surveys: Array<{ id: string; iteration: number }>): Promise<void> {
+	const list = surveys.map((survey) => ({
+		id: survey.id,
+		name: "in-app-feedback",
+		start_date: "2026-10-28T00:00:00.000Z",
+		current_iteration: survey.iteration,
+		questions: [{ id: "q1", type: "open", question: "How is it going?" }],
+	}));
+	configureSurveySource({
+		apiKey: "phc_test",
+		fetchImpl: (async () => new Response(JSON.stringify(list))) as unknown as typeof fetch,
+	});
+	await refreshInAppSurvey();
+}
+
 let directory: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
@@ -40,22 +55,23 @@ function stored(): StoredFeedback {
 	return JSON.parse(readFileSync(join(directory, "feedback.json"), "utf8")) as StoredFeedback;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
 	directory = mkdtempSync(join(tmpdir(), "thinkrail-feedback-test-"));
 	process.env.THINKRAIL_DATA_DIR = directory;
 	resetFeedbackForTests();
-	setSurveyOffer(() => true);
+	await launch({ id: "survey-1", iteration: 1 });
 });
 
 afterEach(() => {
 	resetFeedbackForTests();
+	resetSurveyForTests();
 	rmSync(directory, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
 test("missing and malformed state use the complete defaults", () => {
-	respondToInterview("postpone");
+	respondToInvitation("postpone");
 	expect(stored()).toEqual(feedback());
 
 	for (const malformed of [
@@ -77,12 +93,12 @@ test("missing and malformed state use the complete defaults", () => {
 });
 
 test("a failed atomic replacement preserves durable state and cleans its temporary path", () => {
-	respondToInterview("never");
+	respondToInvitation("never");
 	const durable = stored();
 	const temporary = join(directory, `feedback.json.${process.pid}.tmp`);
 	mkdirSync(temporary);
 
-	expect(() => respondToInterview("postpone")).toThrow();
+	expect(() => respondToInvitation("postpone")).toThrow();
 	expect(stored()).toEqual(durable);
 	expect(existsSync(temporary)).toBe(false);
 });
@@ -101,12 +117,12 @@ test("accepted messages persist synchronously and one client holds the eligible 
 	recordAcceptedMessage("client-a");
 	expect(delivered).toEqual(["client-a"]);
 	recordAcceptedMessage("client-b");
-	releaseInterview("client-b");
+	releaseInvitation("client-b");
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
 	expect(stored().acceptedMessages).toBe(12);
 
-	releaseInterview("client-a");
+	releaseInvitation("client-a");
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a", "client-b"]);
 	expect(stored().acceptedMessages).toBe(13);
@@ -120,7 +136,7 @@ test("postpone schedules ten additional accepted messages and clears the claim",
 	});
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
 
-	respondToInterview("postpone");
+	respondToInvitation("postpone");
 	expect(stored()).toEqual(feedback({ acceptedMessages: 10, nextInvitationAt: 20 }));
 	for (let count = 0; count < 9; count += 1) recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
@@ -128,20 +144,29 @@ test("postpone schedules ten additional accepted messages and clears the claim",
 	expect(delivered).toEqual(["client-a", "client-b"]);
 });
 
-test("book and never record dismissal without stopping later survey counting", () => {
-	for (const action of ["book", "never"] as const) {
-		rmSync(join(directory, "feedback.json"), { force: true });
-		resetFeedbackForTests();
-		setSurveyOffer(() => true);
-		recordAcceptedMessage("client-a");
-		respondToInterview(action);
-		expect(stored()).toEqual(feedback({ acceptedMessages: 1, dismissed: true }));
+test("never records dismissal without stopping later counting", () => {
+	recordAcceptedMessage("client-a");
+	respondToInvitation("never");
+	expect(stored()).toEqual(feedback({ acceptedMessages: 1, dismissed: true }));
 
-		resetFeedbackForTests();
-		setSurveyOffer(() => true);
-		recordAcceptedMessage("client-b");
-		expect(stored()).toEqual(feedback({ acceptedMessages: 2, dismissed: true }));
-	}
+	resetFeedbackForTests();
+	recordAcceptedMessage("client-b");
+	expect(stored()).toEqual(feedback({ acceptedMessages: 2, dismissed: true }));
+});
+
+test("a legacy dismissal from the interview invitation keeps the survey invitation silent", () => {
+	const delivered: string[] = [];
+	writeFileSync(
+		join(directory, "feedback.json"),
+		JSON.stringify({ acceptedMessages: 30, nextInvitationAt: 10, dismissed: true }),
+	);
+	resetFeedbackForTests();
+	setFeedbackPublisher((clientKey) => {
+		delivered.push(clientKey);
+		return true;
+	});
+	recordAcceptedMessage("client-a");
+	expect(delivered).toEqual([]);
 });
 
 test("don't ask again keeps counting but does not offer the usage prompt again", () => {
@@ -152,7 +177,7 @@ test("don't ask again keeps counting but does not offer the usage prompt again",
 	});
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
 	expect(delivered).toEqual(["client-a"]);
-	respondToInterview("never");
+	respondToInvitation("never");
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
 	expect(stored()).toEqual(feedback({ acceptedMessages: 20, dismissed: true }));
@@ -174,7 +199,6 @@ test("failed delivery and process-local reset release eligible claims", () => {
 	expect(attempts).toEqual(["client-a", "client-b"]);
 
 	resetFeedbackForTests();
-	setSurveyOffer(() => true);
 	setFeedbackPublisher((clientKey) => {
 		attempts.push(clientKey);
 		return true;
@@ -247,15 +271,15 @@ test("reconnect redelivers only to the claimed client and releases a failed rede
 	});
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
 
-	redeliverInterview("client-b");
-	redeliverInterview("client-a");
+	redeliverInvitation("client-b");
+	redeliverInvitation("client-a");
 	expect(attempts).toEqual(["client-a", "client-a"]);
 
 	setFeedbackPublisher((clientKey) => {
 		attempts.push(clientKey);
 		return false;
 	});
-	redeliverInterview("client-a");
+	redeliverInvitation("client-a");
 	setFeedbackPublisher((clientKey) => {
 		attempts.push(clientKey);
 		return true;
@@ -272,7 +296,7 @@ test("invalid responses do not mutate state or release the claim", () => {
 	});
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
 
-	expect(() => respondToInterview("later" as "postpone")).toThrow("Invalid interview response");
+	expect(() => respondToInvitation("later" as "postpone")).toThrow("Invalid invitation response");
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
 	expect(stored()).toEqual(feedback({ acceptedMessages: 11 }));
@@ -284,35 +308,34 @@ test("an old feedback file without survey completion still counts", () => {
 		JSON.stringify({ acceptedMessages: 4, nextInvitationAt: 10, dismissed: true }),
 	);
 	resetFeedbackForTests();
-	setSurveyOffer(() => true);
 	recordAcceptedMessage("client-a");
 	expect(stored()).toEqual(
 		feedback({ acceptedMessages: 5, nextInvitationAt: 10, dismissed: true }),
 	);
 });
 
-test("a survey offer is required before the usage prompt, and completion is per id and iteration", () => {
+test("a launched, unfinished survey is required before the invitation, per id and iteration", async () => {
 	const delivered: string[] = [];
 	setFeedbackPublisher((clientKey) => {
 		delivered.push(clientKey);
 		return true;
 	});
-	setSurveyOffer(() => false);
+	await launch();
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
 	expect(delivered).toEqual([]);
 
-	setSurveyOffer(() => !surveyIsCompleted("survey-1", 1));
+	await launch({ id: "survey-1", iteration: 1 });
 	recordAcceptedMessage("client-a");
 	expect(delivered).toEqual(["client-a"]);
 
 	completeSurvey("survey-1", 1);
 	expect(surveyIsCompleted("survey-1", 1)).toBe(true);
 	expect(surveyIsCompleted("survey-1", 2)).toBe(false);
-	releaseInterview("client-a");
+	releaseInvitation("client-a");
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
 
-	setSurveyOffer(() => !surveyIsCompleted("survey-2", 0));
+	await launch({ id: "survey-1", iteration: 2 });
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a", "client-b"]);
 	expect(stored()).toEqual(
@@ -336,7 +359,6 @@ test("a malformed survey completion resets the file to the defaults", () => {
 		}),
 	);
 	resetFeedbackForTests();
-	setSurveyOffer(() => true);
 	recordAcceptedMessage("client-a");
 	expect(stored()).toEqual(feedback({ acceptedMessages: 1 }));
 });

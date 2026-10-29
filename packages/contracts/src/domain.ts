@@ -1194,7 +1194,7 @@ export type AppConfigUpdate = Partial<
 	reviewEffort?: ThinkingLevel | null;
 };
 
-export type InterviewResponse = "book" | "postpone" | "never";
+export type SurveyInvitationResponse = "postpone" | "never";
 
 export const SURVEY_OPEN_TEXT_LIMIT = 2000;
 
@@ -1210,7 +1210,6 @@ interface SurveyQuestionBase {
 	question: string;
 	description?: string;
 	optional?: true;
-	buttonText?: string;
 }
 
 export interface SurveyOpenQuestion extends SurveyQuestionBase {
@@ -1247,11 +1246,12 @@ export interface AppSurvey {
 
 export type SurveyAnswerValue = string | string[];
 
+/** One finished survey, sent on Send; `surveyId` + `iteration` name the version the user answered. */
 export interface SurveySubmitParams {
 	submissionId: string;
-	event: "shown" | "dismissed" | "sent";
-	completed?: boolean;
-	answers?: Record<string, SurveyAnswerValue>;
+	surveyId: string;
+	iteration: number;
+	answers: Record<string, SurveyAnswerValue>;
 }
 
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;

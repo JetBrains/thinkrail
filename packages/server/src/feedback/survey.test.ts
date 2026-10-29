@@ -7,7 +7,7 @@ import {
 	resetSurveyForTests,
 	selectInAppSurvey,
 	setSurveyClockForTests,
-	surveyCapture,
+	surveyResponse,
 } from "./survey";
 
 afterEach(() => {
@@ -111,7 +111,6 @@ test("selects the newest launched in-app survey and drops unsupported questions"
 				hasOpenChoice: true,
 				shuffleOptions: true,
 				optional: true,
-				buttonText: "Next",
 			},
 			{
 				id: "choice-2",
@@ -174,46 +173,48 @@ test("a missing iteration is a single run and emoji ratings stay emoji on short 
 	expect(selected?.questions[0]).toMatchObject({ display: "emoji", scale: 3 });
 });
 
-test("survey capture uses question ids and rejects an unfinished required set", () => {
+const SUBMISSION_ID = "00000000-0000-4000-8000-000000000001";
+
+function submission(answers: Record<string, unknown>, overrides: Record<string, unknown> = {}) {
+	return parseSurveySubmission({
+		submissionId: SUBMISSION_ID,
+		surveyId: "01a17d9c-e8d7-0000-dbbb-79aad51d2281",
+		iteration: 2,
+		answers,
+		...overrides,
+	});
+}
+
+test("a finished submission becomes one survey sent payload keyed by question id", () => {
 	const survey = selectInAppSurvey({ surveys: [launched()] });
 	if (!survey) throw new Error("expected a survey");
-	const submissionId = "00000000-0000-4000-8000-000000000001";
-	expect(surveyCapture(survey, parseSurveySubmission({ submissionId, event: "shown" }))).toEqual({
-		name: "survey shown",
-		completed: false,
-		properties: {
-			$survey_id: survey.id,
-			$survey_iteration: 2,
-			$survey_submission_id: submissionId,
-		},
+	expect(surveyResponse(survey, submission({ [openQuestion.id]: "  Faster search  " }))).toEqual({
+		$survey_id: survey.id,
+		$survey_iteration: 2,
+		$survey_submission_id: SUBMISSION_ID,
+		$survey_completed: true,
+		$survey_questions: [{ id: openQuestion.id, question: openQuestion.question }],
+		[`$survey_response_${openQuestion.id}`]: "Faster search",
 	});
-	expect(
-		surveyCapture(
-			survey,
-			parseSurveySubmission({
-				submissionId,
-				event: "sent",
-				completed: true,
-				answers: { [openQuestion.id]: "  Faster search  " },
-			}),
-		),
-	).toMatchObject({
-		name: "survey sent",
-		completed: true,
-		properties: {
-			$survey_completed: true,
-			[`$survey_response_${openQuestion.id}`]: "Faster search",
-		},
-	});
-	expect(() =>
-		surveyCapture(
-			survey,
-			parseSurveySubmission({ submissionId, event: "sent", completed: true, answers: {} }),
-		),
-	).toThrow("Invalid survey answer");
-	expect(() => parseSurveySubmission({ submissionId: "nope", event: "shown" })).toThrow(
-		"Invalid survey submission",
+	expect(() => surveyResponse(survey, submission({}))).toThrow("Invalid survey answer");
+	expect(() => surveyResponse(survey, submission({ unknown: "x" }))).toThrow(
+		"Invalid survey answer",
 	);
+});
+
+test("a submission must name its survey version and a v4 submission id", () => {
+	expect(submission({}).surveyId).toBe("01a17d9c-e8d7-0000-dbbb-79aad51d2281");
+	for (const overrides of [
+		{ submissionId: "nope" },
+		{ surveyId: "" },
+		{ surveyId: 7 },
+		{ iteration: -1 },
+		{ iteration: 1.5 },
+		{ iteration: "2" },
+	]) {
+		expect(() => submission({}, overrides)).toThrow("Invalid survey submission");
+	}
+	expect(() => submission({ q: 3 })).toThrow("Invalid survey submission");
 });
 
 test("choice and rating answers keep PostHog's value shapes", () => {
@@ -243,28 +244,18 @@ test("choice and rating answers keep PostHog's value shapes", () => {
 		],
 	});
 	if (!survey) throw new Error("expected a survey");
-	const properties = surveyCapture(
+	const properties = surveyResponse(
 		survey,
-		parseSurveySubmission({
-			submissionId: "00000000-0000-4000-8000-000000000002",
-			event: "sent",
-			completed: false,
-			answers: { multi: ["Two", "  Something else  "], rate: "4" },
-		}),
-	).properties;
+		submission({ multi: ["Two", "  Something else  "], rate: "4" }),
+	);
 	expect(properties.$survey_response_multi).toEqual(["Two", "Something else"]);
 	expect(properties.$survey_response_rate).toBe("4");
-	expect(() =>
-		surveyCapture(
-			survey,
-			parseSurveySubmission({
-				submissionId: "00000000-0000-4000-8000-000000000002",
-				event: "sent",
-				completed: false,
-				answers: { rate: "9" },
-			}),
-		),
-	).toThrow("Invalid survey answer");
+	expect(() => surveyResponse(survey, submission({ multi: ["One"], rate: "9" }))).toThrow(
+		"Invalid survey answer",
+	);
+	expect(
+		surveyResponse(survey, submission({ multi: ["One"] })).$survey_response_rate,
+	).toBeUndefined();
 });
 
 test("a failed refresh keeps the last survey and a fresh one waits out the interval", async () => {

@@ -64,6 +64,7 @@ import {
 	reportError,
 	shutdownAnalytics,
 	startAttributionClaim,
+	surveyEndpoint,
 	track,
 } from "../analytics";
 import {
@@ -78,13 +79,10 @@ import {
 import { forgetOpenBranchReview } from "../branch-review";
 import {
 	configureSurveySource,
-	currentInAppSurvey,
-	redeliverInterview,
+	redeliverInvitation,
 	refreshInAppSurvey,
-	releaseInterview,
+	releaseInvitation,
 	setFeedbackPublisher,
-	setSurveyOffer,
-	surveyIsCompleted,
 } from "../feedback";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
@@ -292,7 +290,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					return;
 				}
 				clearTerminalClient(clientKey);
-				releaseInterview(clientKey);
+				releaseInvitation(clientKey);
 				cancelMcpProbesOwnedBy(clientKey);
 			}, CLIENT_REPLAY_RETENTION_MS),
 		);
@@ -389,7 +387,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					terminalBackpressured.add(ws.data.clientKey);
 				}
 				resumeClientTerminals(ws.data.clientKey);
-				redeliverInterview(ws.data.clientKey);
+				redeliverInvitation(ws.data.clientKey);
 			},
 			async message(ws, message) {
 				const raw = typeof message === "string" ? message : message.toString();
@@ -875,26 +873,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setModelListingPublisher(publishProviderChanged);
 
 	const initialConfig = getConfig();
-	setSurveyOffer(() => {
-		const survey = currentInAppSurvey();
-		if (!survey) return false;
-		return !surveyIsCompleted(survey.id, survey.iteration);
-	});
-	configureSurveySource(
-		analytics?.posthogApiKey
-			? {
-					apiKey: analytics.posthogApiKey,
-					...(analytics.posthogHost ? { host: analytics.posthogHost } : {}),
-					...(analytics.fetchImpl ? { fetchImpl: analytics.fetchImpl } : {}),
-				}
-			: null,
-	);
-	void refreshInAppSurvey();
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),
 		additionalEnabled: initialAdditionalAnalyticsEnabled(initialConfig),
 	});
+	configureSurveySource(surveyEndpoint());
+	void refreshInAppSurvey();
 	observeLoggedErrors((scope, error) =>
 		reportError(error, { source: "host_logged", handled: true, scope }),
 	);
@@ -938,7 +923,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		persistTerminalSessions();
 		closeAllTerminals();
 		setFeedbackPublisher(null);
-		setSurveyOffer(null);
 		configureSurveySource(null);
 		setSettingsPublisher(null);
 		setModelContextPublisher(null);

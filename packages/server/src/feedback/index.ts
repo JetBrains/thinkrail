@@ -1,5 +1,5 @@
 export * from "./feedback";
-export type { ParsedSurveySubmission, SurveyCapture, SurveySource } from "./survey";
+export type { ParsedSurveySubmission, SurveySource } from "./survey";
 export {
 	configureSurveySource,
 	currentInAppSurvey,
@@ -8,5 +8,5 @@ export {
 	resetSurveyForTests,
 	selectInAppSurvey,
 	setSurveyClockForTests,
-	surveyCapture,
+	surveyResponse,
 } from "./survey";

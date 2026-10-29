@@ -562,22 +562,9 @@ test("feedback.respond persists a popup action through the handler", async () =>
 	});
 });
 
-test("feedback.survey stays hidden until a launched survey exists and completion hides it", async () => {
-	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({
-		survey: null,
-		analyticsSuppressed: false,
-	});
-	await expect(
-		handleRequest(
-			"feedback.survey.submit",
-			{
-				submissionId: "00000000-0000-4000-8000-000000000001",
-				event: "shown",
-			},
-			CTX,
-		),
-	).rejects.toThrow("Survey is unavailable");
+const SURVEY_SUBMISSION_ID = "00000000-0000-4000-8000-000000000001";
 
+function launchSurvey(iteration = 0): void {
 	configureSurveySource({
 		apiKey: "phc_test",
 		fetchImpl: (() =>
@@ -589,6 +576,7 @@ test("feedback.survey stays hidden until a launched survey exists and completion
 								id: "survey-1",
 								name: "in-app-feedback",
 								start_date: "2026-10-28T00:00:00.000Z",
+								current_iteration: iteration,
 								questions: [{ id: "q1", type: "open", question: "How is it?" }],
 							},
 						],
@@ -597,112 +585,97 @@ test("feedback.survey stays hidden until a launched survey exists and completion
 				),
 			)) as unknown as typeof fetch,
 	});
-	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
-		survey: { id: "survey-1", iteration: 0 },
-	});
-	await expect(
-		handleRequest(
-			"feedback.survey.submit",
-			{
-				submissionId: "00000000-0000-4000-8000-000000000001",
-				event: "sent",
-				completed: true,
-				answers: { q1: "Good" },
-			},
-			CTX,
-		),
-	).rejects.toThrow("Analytics is off");
+}
 
-	await handleRequest(
-		"settings.update",
-		{ config: { analyticsEnabled: true, analyticsConsentConfirmed: true } },
-		CTX,
-	);
-	expect(
-		await handleRequest(
-			"feedback.survey.submit",
-			{
-				submissionId: "00000000-0000-4000-8000-000000000001",
-				event: "sent",
-				completed: true,
-				answers: { q1: "Good" },
-			},
-			CTX,
-		),
-	).toEqual({ ok: true });
-	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({
-		survey: null,
-		analyticsSuppressed: false,
-	});
-	expect(JSON.parse(readFileSync(join(dataDir, "feedback.json"), "utf8"))).toMatchObject({
-		submittedSurveyId: "survey-1",
-		submittedIteration: 0,
-	});
-});
-
-test("feedback.survey.submit refuses a --no-analytics run without completing the survey", async () => {
-	configureSurveySource({
-		apiKey: "phc_test",
-		fetchImpl: (() =>
-			Promise.resolve(
-				new Response(
-					JSON.stringify({
-						surveys: [
-							{
-								id: "survey-1",
-								name: "in-app-feedback",
-								start_date: "2026-10-28T00:00:00.000Z",
-								questions: [{ id: "q1", type: "open", question: "How is it?" }],
-							},
-						],
-					}),
-					{ status: 200 },
-				),
-			)) as unknown as typeof fetch,
-	});
-	await handleRequest(
-		"settings.update",
-		{ config: { analyticsEnabled: true, analyticsConsentConfirmed: true } },
-		CTX,
-	);
+function bootSurveyAnalytics(sent: string[], overrides: { mute?: boolean } = {}): void {
 	initializeAnalytics({
 		posthogApiKey: "phc_test",
 		appVersion: "0.0.0-dev",
 		channel: "dev",
 		build: "source",
-		additionalEnabled: true,
-		mute: true,
+		additionalEnabled: false,
 		env: {},
-		fetchImpl: (() =>
-			Promise.resolve(new Response("{}", { status: 200 }))) as unknown as typeof fetch,
+		...overrides,
+		fetchImpl: ((_url: string, init?: RequestInit) => {
+			if (typeof init?.body === "string") sent.push(init.body);
+			return Promise.resolve(new Response("{}", { status: 200 }));
+		}) as unknown as typeof fetch,
+	});
+}
+
+function submitSurvey(overrides: Record<string, unknown> = {}) {
+	return handleRequest(
+		"feedback.survey.submit",
+		{
+			submissionId: SURVEY_SUBMISSION_ID,
+			surveyId: "survey-1",
+			iteration: 0,
+			answers: { q1: "Good" },
+			...overrides,
+		},
+		CTX,
+	);
+}
+
+function storedFeedback(): Record<string, unknown> {
+	return JSON.parse(readFileSync(join(dataDir, "feedback.json"), "utf8")) as Record<
+		string,
+		unknown
+	>;
+}
+
+test("feedback.survey stays hidden until a launched survey exists and a sent answer hides it", async () => {
+	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_UNAVAILABLE" });
+
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent, { mute: true });
+	launchSurvey();
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1", iteration: 0 },
+	});
+	expect(await submitSurvey()).toEqual({ ok: true });
+	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	expect(storedFeedback()).toMatchObject({ submittedSurveyId: "survey-1", submittedIteration: 0 });
+	await shutdownAnalytics();
+	expect(sent.some((body) => body.includes('"survey sent"') && body.includes('"Good"'))).toBe(true);
+});
+
+test("feedback.survey.submit refuses a different survey version without completing either", async () => {
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent);
+	launchSurvey(1);
+	await expect(submitSurvey({ iteration: 0 })).rejects.toMatchObject({ code: "SURVEY_CHANGED" });
+	await expect(submitSurvey({ iteration: 1, surveyId: "survey-0" })).rejects.toMatchObject({
+		code: "SURVEY_CHANGED",
+	});
+	await expect(submitSurvey({ iteration: 1, answers: {} })).rejects.toMatchObject({
+		code: "SURVEY_INVALID",
+	});
+	await expect(submitSurvey({ submissionId: "nope" })).rejects.toMatchObject({
+		code: "SURVEY_INVALID",
 	});
 	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
-		survey: { id: "survey-1" },
-		analyticsSuppressed: true,
-	});
-	await expect(
-		handleRequest(
-			"feedback.survey.submit",
-			{
-				submissionId: "00000000-0000-4000-8000-000000000001",
-				event: "sent",
-				completed: true,
-				answers: { q1: "Good" },
-			},
-			CTX,
-		),
-	).rejects.toThrow("Analytics is off");
-	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
-		survey: { id: "survey-1" },
-		analyticsSuppressed: true,
+		survey: { id: "survey-1", iteration: 1 },
 	});
 	await shutdownAnalytics();
+	expect(sent.some((body) => body.includes('"survey sent"'))).toBe(false);
+});
+
+test("feedback.survey.submit does not complete a survey whose answers were not sent", async () => {
+	launchSurvey();
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_NOT_SENT" });
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1" },
+	});
 });
 
 test("feedback.respond rejects an action outside the wire union", async () => {
-	await expect(handleRequest("feedback.respond", { action: "later" }, CTX)).rejects.toThrow(
-		"Invalid interview response",
-	);
+	for (const action of ["later", "book"]) {
+		await expect(handleRequest("feedback.respond", { action }, CTX)).rejects.toThrow(
+			"Invalid invitation response",
+		);
+	}
 });
 
 test("project.setTrust grants pi-level resource trust only when the request asks for resources", async () => {

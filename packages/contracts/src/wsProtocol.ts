@@ -24,7 +24,6 @@ import type {
 	HostEnvironment,
 	HostEnvironmentStatus,
 	HostEnvironmentUpdateResult,
-	InterviewResponse,
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
@@ -64,6 +63,7 @@ import type {
 	SpecGraphSnapshot,
 	SubagentCompletionDetails,
 	SubagentOverride,
+	SurveyInvitationResponse,
 	SurveySubmitParams,
 	Template,
 	TemplateInfo,
@@ -178,7 +178,6 @@ export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 export const FEEDBACK_SURVEY_PROTOCOL_VERSION = 97;
-export const FEEDBACK_INTERVIEW_PROTOCOL_VERSION = 56;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -986,10 +985,10 @@ export interface WsMethodMap {
 		params: { environment: HostEnvironment };
 		result: HostEnvironmentUpdateResult;
 	};
-	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
+	"feedback.respond": { params: { action: SurveyInvitationResponse }; result: Ack };
 	"feedback.survey": {
 		params: Record<string, never>;
-		result: { survey: AppSurvey | null; analyticsSuppressed: boolean };
+		result: { survey: AppSurvey | null };
 	};
 	"feedback.survey.submit": { params: SurveySubmitParams; result: Ack };
 	"client.reportError": { params: ClientErrorReport; result: Ack };
@@ -1158,7 +1157,11 @@ export type WsErrorCode =
 	| "LOGIN_NOT_OWNER"
 	| "MCP_CONFIG_INVALID"
 	| "MCP_PATH_UNSAFE"
-	| "MCP_HANDLED_ELSEWHERE";
+	| "MCP_HANDLED_ELSEWHERE"
+	| "SURVEY_UNAVAILABLE"
+	| "SURVEY_CHANGED"
+	| "SURVEY_INVALID"
+	| "SURVEY_NOT_SENT";
 
 export interface WsResponse {
 	id: string;

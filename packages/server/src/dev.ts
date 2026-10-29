@@ -93,7 +93,6 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 const host = process.env.THINKRAIL_HOST ?? "localhost";
 const staticDir = process.env.THINKRAIL_STATIC_DIR;
 const envPort = process.env.THINKRAIL_PORT;
-const posthogApiKey = process.env.THINKRAIL_POSTHOG_PROJECT_KEY;
 
 const { port } = await bootHost({
 	port: envPort ? Number(envPort) : 24242,
@@ -101,10 +100,6 @@ const { port } = await bootHost({
 	portMode: envPort ? "exact" : "free",
 	resolveShellEnv: true,
 	...(staticDir ? { staticDir } : {}),
-	analytics: {
-		channel: "dev",
-		build: "source",
-		...(posthogApiKey ? { posthogApiKey } : {}),
-	},
+	analytics: { channel: "dev", build: "source" },
 });
 console.log(`thinkrail host: http://${host}:${port}`);

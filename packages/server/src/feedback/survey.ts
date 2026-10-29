@@ -17,7 +17,6 @@ const QUESTION_LIMIT = 1_000;
 const DESCRIPTION_LIMIT = 2_000;
 const CHOICE_LIMIT = 500;
 const CHOICE_COUNT_LIMIT = 30;
-const BUTTON_LIMIT = 80;
 const DEFAULT_HOST = "https://eu.i.posthog.com";
 
 const RATING_SCALES: readonly SurveyRatingScale[] = [3, 5, 7, 10];
@@ -31,15 +30,9 @@ export interface SurveySource {
 
 export interface ParsedSurveySubmission {
 	submissionId: string;
-	event: "shown" | "dismissed" | "sent";
-	completed: boolean;
+	surveyId: string;
+	iteration: number;
 	answers: Record<string, SurveyAnswerValue>;
-}
-
-export interface SurveyCapture {
-	name: "survey shown" | "survey sent" | "survey dismissed";
-	properties: Record<string, unknown>;
-	completed: boolean;
 }
 
 interface ActiveSource {
@@ -130,52 +123,34 @@ export function selectInAppSurvey(payload: unknown): AppSurvey | null {
 
 export function parseSurveySubmission(value: unknown): ParsedSurveySubmission {
 	if (!isRecord(value)) throw new Error("Invalid survey submission");
-	const submissionId = value.submissionId;
-	const event = value.event;
-	const completed = value.completed;
+	const { submissionId, surveyId, iteration } = value;
 	if (typeof submissionId !== "string" || !UUID.test(submissionId)) {
 		throw new Error("Invalid survey submission");
 	}
-	if (event !== "shown" && event !== "dismissed" && event !== "sent") {
+	if (typeof surveyId !== "string" || !surveyId || surveyId.length > 128) {
 		throw new Error("Invalid survey submission");
 	}
-	if (completed !== undefined && typeof completed !== "boolean") {
+	if (typeof iteration !== "number" || !Number.isSafeInteger(iteration) || iteration < 0) {
 		throw new Error("Invalid survey submission");
 	}
-	return {
-		submissionId,
-		event,
-		completed: completed === true,
-		answers: event === "sent" ? parseAnswers(value.answers) : {},
-	};
+	return { submissionId, surveyId, iteration, answers: parseAnswers(value.answers) };
 }
 
-export function surveyCapture(
+/** The `survey sent` properties for one finished submission; throws when an answer does not fit. */
+export function surveyResponse(
 	survey: AppSurvey,
 	submission: ParsedSurveySubmission,
-): SurveyCapture {
-	const properties: Record<string, unknown> = {
+): Record<string, unknown> {
+	return {
 		$survey_id: survey.id,
 		$survey_iteration: survey.iteration,
 		$survey_submission_id: submission.submissionId,
-	};
-	if (submission.event === "shown") return { name: "survey shown", properties, completed: false };
-	if (submission.event === "dismissed") {
-		return { name: "survey dismissed", properties, completed: false };
-	}
-	const responses = resolveResponses(survey, submission.answers, submission.completed);
-	return {
-		name: "survey sent",
-		completed: submission.completed,
-		properties: {
-			...properties,
-			$survey_completed: submission.completed,
-			$survey_questions: survey.questions.map((question) => ({
-				id: question.id,
-				question: question.question,
-			})),
-			...responses,
-		},
+		$survey_completed: true,
+		$survey_questions: survey.questions.map((question) => ({
+			id: question.id,
+			question: question.question,
+		})),
+		...resolveResponses(survey, submission.answers),
 	};
 }
 
@@ -240,12 +215,12 @@ function mapQuestion(entry: unknown): SurveyQuestion | null {
 	const id = boundedText(entry.id, 80);
 	const question = plainText(entry.question, QUESTION_LIMIT);
 	if (!id || !question) return null;
+	const description = plainText(entry.description, DESCRIPTION_LIMIT);
 	const base = {
 		id,
 		question,
-		...textField(plainText(entry.description, DESCRIPTION_LIMIT), "description"),
+		...(description ? { description } : {}),
 		...(entry.optional === true ? { optional: true as const } : {}),
-		...textField(plainText(entry.buttonText, BUTTON_LIMIT), "buttonText"),
 	};
 	if (entry.type === "open") return { ...base, type: "open" };
 	if (entry.type === "single_choice" || entry.type === "multiple_choice") {
@@ -278,7 +253,6 @@ function mapQuestion(entry: unknown): SurveyQuestion | null {
 function resolveResponses(
 	survey: AppSurvey,
 	answers: Record<string, SurveyAnswerValue>,
-	completed: boolean,
 ): Record<string, SurveyAnswerValue> {
 	const responses: Record<string, SurveyAnswerValue> = {};
 	const questions = new Map(survey.questions.map((question) => [question.id, question]));
@@ -287,7 +261,6 @@ function resolveResponses(
 		if (!question) throw new Error("Invalid survey answer");
 		responses[`$survey_response_${id}`] = answerFor(question, value);
 	}
-	if (!completed) return responses;
 	for (const question of survey.questions) {
 		if (question.optional) continue;
 		if (!Object.hasOwn(responses, `$survey_response_${question.id}`)) {
@@ -381,14 +354,6 @@ function ratingScale(value: unknown): SurveyRatingScale | null {
 
 function iterationOf(value: unknown): number {
 	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
-}
-
-function textField(
-	value: string | null,
-	key: "description" | "buttonText",
-): { description?: string; buttonText?: string } {
-	if (!value) return {};
-	return { [key]: value };
 }
 
 function plainText(value: unknown, max: number): string | null {

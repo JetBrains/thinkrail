@@ -79,8 +79,7 @@ import {
 } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
-	additionalAnalyticsSuppressed,
-	captureSurveyEvent,
+	captureSurveyResponse,
 	reportClientError,
 	type SendMode,
 	track,
@@ -112,9 +111,9 @@ import {
 	parseSurveySubmission,
 	recordAcceptedMessage,
 	refreshInAppSurvey,
-	respondToInterview,
-	surveyCapture,
+	respondToInvitation,
 	surveyIsCompleted,
+	surveyResponse,
 } from "../feedback";
 import { readDir, readFile } from "../fs";
 import {
@@ -263,7 +262,6 @@ import {
 import { resolveNewChatModel } from "./newChatModel";
 import { planReviewRunning } from "./planReviewQueue";
 import {
-	additionalAnalyticsEnabled,
 	additionalCapture,
 	captureAdditional,
 	captureReviewCommentAdded,
@@ -537,6 +535,14 @@ async function deliverToolResponse(
 	if (response === undefined) throw new Error("A tool response must carry a value");
 	await ackSend(respondToTool(sessionId, toolCallId, response));
 	return { ok: true };
+}
+
+function invalidSurveyOnThrow<T>(build: () => T): T {
+	try {
+		return build();
+	} catch {
+		throw new CodedError("SURVEY_INVALID", "Invalid survey submission");
+	}
 }
 
 const handlers: WsHandlers = {
@@ -1303,31 +1309,30 @@ const handlers: WsHandlers = {
 	"environment.get": () => hostEnvironmentStatus(),
 	"environment.update": (params) => updateHostEnvironment(params.environment),
 	"feedback.respond": (params) => {
-		respondToInterview(params.action);
+		respondToInvitation(params.action);
 		return { ok: true } as const;
 	},
 	"feedback.survey": async () => {
 		await refreshInAppSurvey();
-		const analyticsSuppressed = additionalAnalyticsSuppressed();
 		const survey = currentInAppSurvey();
-		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) {
-			return { survey: null, analyticsSuppressed };
-		}
-		return { survey, analyticsSuppressed };
+		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) return { survey: null };
+		return { survey };
 	},
 	"feedback.survey.submit": async (params) => {
-		const submission = parseSurveySubmission(params);
+		const submission = invalidSurveyOnThrow(() => parseSurveySubmission(params));
 		await refreshInAppSurvey();
 		const survey = currentInAppSurvey();
 		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) {
-			throw new Error("Survey is unavailable");
+			throw new CodedError("SURVEY_UNAVAILABLE", "Survey is unavailable");
 		}
-		if (additionalAnalyticsSuppressed() || !additionalAnalyticsEnabled(getConfig())) {
-			throw new Error("Analytics is off");
+		if (survey.id !== submission.surveyId || survey.iteration !== submission.iteration) {
+			throw new CodedError("SURVEY_CHANGED", "Survey changed");
 		}
-		const event = surveyCapture(survey, submission);
-		captureSurveyEvent(event.name, event.properties);
-		if (event.completed) completeSurvey(survey.id, survey.iteration);
+		const properties = invalidSurveyOnThrow(() => surveyResponse(survey, submission));
+		if (!captureSurveyResponse(properties)) {
+			throw new CodedError("SURVEY_NOT_SENT", "Survey answers were not sent");
+		}
+		completeSurvey(survey.id, survey.iteration);
 		return { ok: true } as const;
 	},
 	"client.reportError": (params) => {

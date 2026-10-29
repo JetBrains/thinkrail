@@ -57,8 +57,15 @@ interface AnalyticsGrant {
 	capture: AdditionalAnalyticsCapture;
 }
 
+export interface SurveyEndpoint {
+	apiKey: string;
+	host?: string;
+	fetchImpl?: typeof fetch;
+}
+
 interface AnalyticsState {
 	basic: AnalyticsSink;
+	surveyEndpoint: SurveyEndpoint;
 	additional: AnalyticsGrant | null;
 	createAdditionalSink: (() => AnalyticsSink) | null;
 	clientId: string;
@@ -87,11 +94,6 @@ interface AnalyticsState {
 }
 
 let state: AnalyticsState | null = null;
-let additionalSuppressed = false;
-
-export function additionalAnalyticsSuppressed(): boolean {
-	return additionalSuppressed;
-}
 
 function detectOs(): string {
 	if (process.platform === "darwin") return "macos";
@@ -110,7 +112,6 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 	resetAnalyticsForTests();
 	try {
 		const env = options.env ?? process.env;
-		additionalSuppressed = Boolean(options.mute) || Boolean(env.THINKRAIL_NO_ANALYTICS);
 		const apiKey = options.posthogApiKey;
 		if (!apiKey || environmentMute(env)) return;
 		readAcquisition();
@@ -131,6 +132,11 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 		const appInstalled = build !== "source" && claimAppInstalled();
 		state = {
 			basic,
+			surveyEndpoint: {
+				apiKey,
+				...(host ? { host } : {}),
+				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+			},
 			additional: null,
 			createAdditionalSink: options.mute || env.THINKRAIL_NO_ANALYTICS ? null : createSink,
 			clientId: record.id,
@@ -178,19 +184,18 @@ export function track(event: BasicAnalyticsEvent): void {
 	if (s && !s.shutdownPromise) send(s, s.basic, event);
 }
 
-export type SurveyAnalyticsEvent = "survey shown" | "survey sent" | "survey dismissed";
+export function surveyEndpoint(): SurveyEndpoint | null {
+	return state?.surveyEndpoint ?? null;
+}
 
-export function captureSurveyEvent(
-	event: SurveyAnalyticsEvent,
-	properties: Record<string, unknown>,
-): void {
+export function captureSurveyResponse(properties: Record<string, unknown>): boolean {
 	const s = state;
-	const sink = s?.additional?.sink;
-	if (!s || s.shutdownPromise || !sink?.sendProperties) return;
+	if (!s || s.shutdownPromise) return false;
 	try {
-		sink.sendProperties(s.clientId, event, properties);
+		return s.basic.sendSurveyResponse(s.clientId, { ...s.env, ...properties });
 	} catch {
 		log.debug("survey capture failed");
+		return false;
 	}
 }
 
@@ -469,7 +474,6 @@ export function shutdownAnalytics(): Promise<void> {
 }
 
 export function resetAnalyticsForTests(): void {
-	additionalSuppressed = false;
 	const s = state;
 	state = null;
 	if (!s) return;
