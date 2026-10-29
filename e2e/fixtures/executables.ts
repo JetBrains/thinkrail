@@ -1,21 +1,29 @@
 import { chmodSync, existsSync, writeFileSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LOGIN_ENV_MARKER } from "@thinkrail/shared/shellEnv";
 
-export function resolveBunExecutable(env: NodeJS.ProcessEnv = process.env): string {
-	const name = process.platform === "win32" ? "bun.exe" : "bun";
-	const executable = (env.PATH ?? "")
+function findOnPath(name: string, env: NodeJS.ProcessEnv): string | undefined {
+	return (env.PATH ?? "")
 		.split(delimiter)
 		.filter(Boolean)
 		.map((directory) => join(directory, name))
 		.find(existsSync);
+}
+
+export function resolveBunExecutable(env: NodeJS.ProcessEnv = process.env): string {
+	const executable = findOnPath(process.platform === "win32" ? "bun.exe" : "bun", env);
 	if (!executable) throw new Error("bun executable not found for the e2e host");
 	return executable;
 }
 
-export function hermeticE2ePath(fakeBinDir: string): string {
-	return [fakeBinDir, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
+export function hermeticE2ePath(fakeBinDir: string, env: NodeJS.ProcessEnv = process.env): string {
+	if (process.platform !== "win32")
+		return [fakeBinDir, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
+	const git = findOnPath("git.exe", env);
+	if (!git) throw new Error("git executable not found for the e2e host");
+	const systemRoot = env.SystemRoot ?? env.SYSTEMROOT ?? "C:\\Windows";
+	return [fakeBinDir, dirname(git), join(systemRoot, "System32"), systemRoot].join(delimiter);
 }
 
 export function hermeticE2eShell(fakeBinDir: string): string {
