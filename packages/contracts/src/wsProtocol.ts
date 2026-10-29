@@ -1,6 +1,7 @@
 import type {
 	AppConfig,
 	AppConfigUpdate,
+	AppSurvey,
 	BackgroundCommandCompletionDetails,
 	BackgroundCommandOutputResult,
 	BranchList,
@@ -23,7 +24,6 @@ import type {
 	HostEnvironment,
 	HostEnvironmentStatus,
 	HostEnvironmentUpdateResult,
-	InterviewResponse,
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
@@ -63,6 +63,8 @@ import type {
 	SpecGraphSnapshot,
 	SubagentCompletionDetails,
 	SubagentOverride,
+	SurveyInvitationResponse,
+	SurveySubmitParams,
 	Template,
 	TemplateInfo,
 	TemplateScope,
@@ -126,7 +128,7 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 96;
+export const PROTOCOL_VERSION = 97;
 export const RESOURCE_HISTORY_PROTOCOL_VERSION = 96;
 export const PROJECT_CLONE_PROTOCOL_VERSION = 95;
 export const ONBOARDING_PROTOCOL_VERSION = 94;
@@ -175,7 +177,7 @@ export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
 export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
-export const FEEDBACK_INTERVIEW_PROTOCOL_VERSION = 56;
+export const FEEDBACK_SURVEY_PROTOCOL_VERSION = 97;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -349,6 +351,8 @@ export const WS_METHODS = {
 	environmentGet: "environment.get",
 	environmentUpdate: "environment.update",
 	feedbackRespond: "feedback.respond",
+	feedbackSurvey: "feedback.survey",
+	feedbackSurveySubmit: "feedback.survey.submit",
 	clientReportError: "client.reportError",
 	historySearch: "history.search",
 	reviewGet: "review.get",
@@ -981,7 +985,12 @@ export interface WsMethodMap {
 		params: { environment: HostEnvironment };
 		result: HostEnvironmentUpdateResult;
 	};
-	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
+	"feedback.respond": { params: { action: SurveyInvitationResponse }; result: Ack };
+	"feedback.survey": {
+		params: Record<string, never>;
+		result: { survey: AppSurvey | null };
+	};
+	"feedback.survey.submit": { params: SurveySubmitParams; result: Ack };
 	"client.reportError": { params: ClientErrorReport; result: Ack };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
@@ -1148,7 +1157,11 @@ export type WsErrorCode =
 	| "LOGIN_NOT_OWNER"
 	| "MCP_CONFIG_INVALID"
 	| "MCP_PATH_UNSAFE"
-	| "MCP_HANDLED_ELSEWHERE";
+	| "MCP_HANDLED_ELSEWHERE"
+	| "SURVEY_UNAVAILABLE"
+	| "SURVEY_CHANGED"
+	| "SURVEY_INVALID"
+	| "SURVEY_NOT_SENT";
 
 export interface WsResponse {
 	id: string;

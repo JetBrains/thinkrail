@@ -2,7 +2,7 @@
 id: submodule-server-feedback
 type: submodule-design
 status: active
-title: feedback — host-scoped interview invitations
+title: feedback — host-scoped survey prompts
 parent: module-server
 tags: [feedback, research]
 depends-on: [module-contracts]
@@ -10,19 +10,19 @@ depends-on: [module-contracts]
 
 ## Responsibility
 
-Own the host-scoped lifecycle for automatic product-interview invitations. Count accepted user-authored messages from feature rollout onward, persist postponement/permanent dismissal, and offer one addressed invitation when due. The Settings booking link is independent and never mutates this lifecycle.
+Own the host-scoped lifecycle of the in-app survey invitation and the survey it offers. Count accepted user-authored messages, persist postponement, dismissal and the completed survey id plus iteration, load the launched PostHog survey, and offer one addressed invitation when that survey is due. The Settings entry reads the same survey and never postpones.
 
 ## Boundary
 
-- **Owns:** validated `feedback.json` state (`acceptedMessages`, `nextInvitationAt`, `dismissed`); the fixed 10-message initial/retry interval; one memory-only claimant client; `recordAcceptedMessage(clientKey)`; `respondToInterview("book" | "postpone" | "never")`; `releaseInterview(clientKey)`; an injected addressed-invitation publisher; and reset seams for tests.
-- **Public surface (barrel):** the lifecycle operations, reconnect redelivery seam, publisher installer, and test reset.
-- **Allowed deps:** `persistence` (`dataDir` only); `contracts` (`InterviewResponse`, type-only); Node filesystem/path APIs.
-- **Forbidden:** `host` or another feature sibling; analytics; transcripts/session files; browser/UI code; Google Calendar or any network access; exposing counters or client identity on the wire.
+- **Owns:** validated `feedback.json` (`acceptedMessages`, `nextInvitationAt`, `dismissed`, `submittedSurveyId`, `submittedIteration`); the fixed 10-message initial/retry interval; one memory-only claimant client; `recordAcceptedMessage`; `respondToInvitation`; `completeSurvey`; the addressed publisher; the public-survey loader, submission parser and `survey sent` payload builder in `survey.ts`.
+- **Public surface (barrel):** the lifecycle operations, survey source configuration, selection and refresh, submission parsing, the response builder, the publisher installer, and test resets.
+- **Allowed deps:** `persistence` (`dataDir` only); `contracts` survey and invitation types; Node filesystem/path APIs; `fetch` for `GET /api/surveys/` in `survey.ts` only.
+- **Forbidden:** importing `host` or analytics. The host passes in the survey endpoint analytics exposes and captures the payload this module builds. This module does not target people in PostHog or open a calendar.
 
 ## Get right
 
-- A missing or malformed file starts at `{ acceptedMessages: 0, nextInvitationAt: 10, dismissed: false }`; historical transcripts are never scanned. Non-negative safe integers and a boolean are the complete accepted schema. Every update writes a same-directory temporary file and atomically renames it over `feedback.json`, cleaning the temporary path on failure, so a partial write cannot erase a previously durable permanent dismissal.
-- `host` calls `recordAcceptedMessage` only after `ackSend` accepts a non-control `prompt`, `steer`, or `follow_up`. The synchronous persist happens inside the replay-cached request execution, so request replay cannot double-count. A count persistence failure is swallowed without disturbing an existing claim; the increment remains cached in memory and is retried with the next accepted send, but no newly-due invitation is offered until that state is durable. A publication failure releases only the claim created for that delivery. Interview bookkeeping must never turn an already-accepted product message into a rejected send.
-- Reaching `nextInvitationAt` claims at most one opaque client key and invokes the injected addressed publisher. While claimed, other clients do not receive the popup. Failed delivery or final client reap after the reconnect grace releases the memory-only claim; a transient reconnect re-delivers it to that same client after welcome, while restart releases it and welcome clears any stale browser projection while durable eligibility remains. Clients advertise their wire version in the socket handshake, and a client older than the invitation channel cannot retain a claim.
-- `postpone` sets `nextInvitationAt = acceptedMessages + 10`; `book` and `never` set `dismissed = true`. Each response clears the claim after persistence. Once dismissed, later sends neither count nor offer.
-- This state never depends on, emits to, or is disabled by anonymous analytics. Only a user's explicit browser navigation contacts the supplied Calendar URL.
+- A missing or malformed file starts at `{ acceptedMessages: 0, nextInvitationAt: 10, dismissed: false, submittedSurveyId: null, submittedIteration: null }`. An older file without the completion keys loads those as null. Every update writes a same-directory temporary file and atomically renames it over `feedback.json`.
+- Counting continues after `dismissed`. `postpone` sets `nextInvitationAt = acceptedMessages + 10`; Take the survey also postpones, so closing the survey window unsent re-invites after ten more messages. `never` sets `dismissed` for good: a new survey or iteration never clears it, and a dismissal recorded by the retired interview invitation (its Never or Book) carries over. The Settings entry stays available. Completion stores the survey id and `current_iteration` in memory first and clears the claim, then writes the file; a failed write leaves the in-memory completion in force and the next accepted message persists it; the same id and iteration stay hidden, and the next iteration or a new id can show again.
+- An invitation is delivered only when a launched survey is cached, unexpired and not completed (when a refresh is due, the offer waits for it), the count has reached `nextInvitationAt`, the invitation was not dismissed, and no client is claimed. The analytics setting and `--no-analytics` do not affect it. With no survey source configured, no refresh is scheduled.
+- `survey.ts` selects the newest launched survey named `in-app-feedback`, re-reads the list at most every 15 minutes, treats its cached copy as gone an hour after the last successful read (failed reads and the retry throttle never extend it), and sends the client a narrow question DTO (open text, single and multiple choice with an optional Other, rating). When a question accepts a custom answer (`hasOpenChoice`), PostHog stores that open choice as the last entry of `choices`, whatever its label; it is always removed from the list and kept only as the optional Other, which the client draws as one row (the app's localized "Other") with its text field. Other question types, PostHog branching, display conditions and translations are not drawn. No endpoint and no successful fetch leave the survey hidden.
+- A submission names the survey id and iteration the user answered and is checked against a fresh read (`confirmInAppSurvey`, which bypasses the 15-minute cache and rejects when the list cannot be read), never against the displayed copy. `surveyResponse` requires every non-optional answer and validates each against its question, so a changed or partial survey is never relabelled.

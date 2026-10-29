@@ -1,8 +1,9 @@
 import { useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { SettingsSection, useAppStore } from "@/store";
+import { loadInAppSurvey } from "@/transport";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
 import { EnvironmentSettings } from "./EnvironmentSettings";
@@ -34,6 +35,10 @@ export function SettingsDialog({
 	const filteredGroups = settingsNavGroups(protocolVersion, updateSettings !== undefined);
 	const selectedSection = resolveSettingsSection(section, filteredGroups);
 	const feedbackActive = selectedSection === SettingsSection.Feedback;
+
+	useEffect(() => {
+		if (open) void loadInAppSurvey();
+	}, [open]);
 
 	return (
 		<Dialog
@@ -104,7 +109,7 @@ export function SettingsDialog({
 								feedbackActive ? "bg-primary-subtle" : "bg-control-bg hover:bg-control-bg-hovered",
 							)}
 						>
-							<span className="tr-text-ui text-primary">{t("settings.dialog.interviewCta")}</span>
+							<span className="tr-text-ui text-primary">{t("settings.dialog.feedbackCta")}</span>
 						</button>
 					</nav>
 

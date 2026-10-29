@@ -15,12 +15,14 @@ import {
 	CUSTOM_BUCKET,
 } from "./events";
 import {
+	captureSurveyResponse,
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
 	initializeAnalyticsWithSinkFactoryForTests,
 	resetAnalyticsForTests,
 	setAdditionalAnalyticsEnabled,
 	shutdownAnalytics,
+	surveyEndpoint,
 	track,
 } from "./service";
 import { createPostHogSink, type OutgoingEvent } from "./sink";
@@ -232,6 +234,52 @@ test("every event has exactly its closed properties plus personless transport fr
 		expect(entry.properties.$process_person_profile).toBe(false);
 		expect(entry.properties.$geoip_disable).toBe(true);
 	}
+});
+
+test("survey answers go through the basic client whatever the additional grant or --no-analytics", async () => {
+	const response = {
+		$survey_id: "survey-1",
+		$survey_iteration: 1,
+		$survey_completed: true,
+		$survey_response_q1: "Faster search",
+		$survey_questions: [{ id: "q1", question: "How is it?" }],
+	};
+	for (const overrides of [
+		{ additionalEnabled: false },
+		{ additionalEnabled: true, mute: true },
+		{ additionalEnabled: true, env: { THINKRAIL_NO_ANALYTICS: "1" } },
+	]) {
+		const sent: SentPayload[] = [];
+		boot(sent, overrides);
+		expect(captureSurveyResponse(response)).toBe(true);
+		await shutdownAnalytics();
+		const surveys = allEntries(sent).filter((entry) => entry.event === "survey sent");
+		expect(surveys).toHaveLength(1);
+		expect(surveys[0]?.properties).toMatchObject({
+			...response,
+			app_version: "1.2.3",
+			$process_person_profile: false,
+		});
+	}
+});
+
+test("the survey endpoint exists only while a keyed, unmuted client does", async () => {
+	const sent: SentPayload[] = [];
+	boot(sent, { posthogHost: "https://stamped.example", env: {} });
+	expect(surveyEndpoint()).toMatchObject({ apiKey: TEST_KEY, host: "https://stamped.example" });
+	await shutdownAnalytics();
+	expect(captureSurveyResponse({ $survey_id: "survey-1" })).toBe(false);
+
+	boot(sent, { env: { THINKRAIL_POSTHOG_HOST: "http://127.0.0.1:9" } });
+	expect(surveyEndpoint()?.host).toBe("http://127.0.0.1:9");
+	resetAnalyticsForTests();
+
+	boot(sent, { env: { CI: "1" } });
+	expect(surveyEndpoint()).toBeNull();
+	expect(captureSurveyResponse({ $survey_id: "survey-1" })).toBe(false);
+
+	boot(sent, { posthogApiKey: "" });
+	expect(surveyEndpoint()).toBeNull();
 });
 
 test.each([
@@ -493,6 +541,7 @@ test("campaign-enriched basics stay on the current grant sink while plain basics
 				send(_clientId, events) {
 					sink.deliveries.push(...events);
 				},
+				sendSurveyResponse: () => true,
 				async sendException() {},
 				setSending(enabled) {
 					sink.sending = enabled;

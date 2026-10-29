@@ -20,6 +20,7 @@ import {
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
@@ -283,6 +284,13 @@ test("project create and the onboarding dismissal are pinned to v94", () => {
 	expect(WS_METHODS.projectCreate).toBe("project.create");
 	expect(WS_METHODS.providerDetect).toBe("provider.detect");
 	expect(DEFAULT_CONFIG.onboardingDismissed).toBe(false);
+});
+
+test("in-app surveys are pinned to v97", () => {
+	expect(FEEDBACK_SURVEY_PROTOCOL_VERSION).toBe(97);
+	expect(PROTOCOL_VERSION).toBe(97);
+	expect(WS_METHODS.feedbackSurvey).toBe("feedback.survey");
+	expect(WS_METHODS.feedbackSurveySubmit).toBe("feedback.survey.submit");
 });
 
 test("repository cloning and cancellation are registered", () => {

@@ -1,5 +1,6 @@
 import type {
 	AppConfig,
+	AppSurvey,
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
@@ -1051,7 +1052,9 @@ interface AppState {
 	unheldLoginFrame: LoginPush | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
-	interviewPromptOpen: boolean;
+	surveyInvitationOpen: boolean;
+	surveyWindowOpen: boolean;
+	inAppSurvey: AppSurvey | null;
 	notificationPromptOpen: boolean;
 	sessionSwitcherOpen: boolean;
 	theme: ThemeId;
@@ -1371,8 +1374,11 @@ interface AppState {
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
-	showInterviewPrompt: () => void;
-	hideInterviewPrompt: () => void;
+	showSurveyInvitation: () => void;
+	hideSurveyInvitation: () => void;
+	openSurveyWindow: () => void;
+	closeSurveyWindow: () => void;
+	setInAppSurvey: (survey: AppSurvey | null) => void;
 	openNotificationPrompt: () => void;
 	closeNotificationPrompt: () => void;
 	openSessionSwitcher: () => void;
@@ -2318,7 +2324,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	unheldLoginFrame: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
-	interviewPromptOpen: false,
+	surveyInvitationOpen: false,
+	surveyWindowOpen: false,
+	inAppSurvey: null,
 	notificationPromptOpen: false,
 	sessionSwitcherOpen: false,
 	theme: DEFAULT_CONFIG.theme,
@@ -4376,9 +4384,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSessionSwitcher: () => set({ sessionSwitcherOpen: false }),
 	toggleSessionSwitcher: () =>
 		set((state) => ({ sessionSwitcherOpen: !state.sessionSwitcherOpen })),
-	showInterviewPrompt: () =>
-		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
-	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),
+	showSurveyInvitation: () =>
+		set((state) => (state.surveyInvitationOpen ? state : { surveyInvitationOpen: true })),
+	hideSurveyInvitation: () => set({ surveyInvitationOpen: false }),
+	openSurveyWindow: () =>
+		set({ surveyWindowOpen: true, surveyInvitationOpen: false, settingsOpen: false }),
+	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
+	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
 	setStreamingResponseMovement: (streamingResponseMovement) => set({ streamingResponseMovement }),
 	setChatPreferences: (chatMessageOrder, streamingResponseMovement) =>

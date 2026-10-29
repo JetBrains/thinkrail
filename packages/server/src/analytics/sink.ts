@@ -12,6 +12,7 @@ export interface OutgoingEvent {
 
 export interface AnalyticsSink {
 	send(clientId: string, events: OutgoingEvent[]): void;
+	sendSurveyResponse(clientId: string, properties: Record<string, unknown>): boolean;
 	sendException(
 		clientId: string,
 		error: unknown,
@@ -92,6 +93,19 @@ export function createPostHogSink(options: PostHogSinkOptions): AnalyticsSink {
 				}
 			} catch (error) {
 				debugLog(error);
+			}
+		},
+		sendSurveyResponse(clientId, properties) {
+			try {
+				client.capture({
+					distinctId: clientId,
+					event: "survey sent",
+					properties: { ...properties, $process_person_profile: false },
+				});
+				return true;
+			} catch (error) {
+				debugLog(error);
+				return false;
 			}
 		},
 		async sendException(clientId, error, params, immediate) {

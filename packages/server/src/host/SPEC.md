@@ -245,7 +245,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `mcp.list` would report `handledElsewhere` (the probe's loader forces `builtin:mcp`);
   `provider.loginReply` / `provider.loginCancel` route `mcplogin_*` ids to the probe with the caller's
   `clientKey`, and `createServer` sends probe frames to the owner's socket only, cancels the probes of a
-  client when its retention timer finally reaps it (`cancelMcpProbesOwnedBy`, beside `releaseInterview`;
+  client when its retention timer finally reaps it (`cancelMcpProbesOwnedBy`, beside `releaseInvitation`;
   never on a mere socket close — a reconnect within the window keeps the key and its sign-in) and cancels
   every probe on stop — `mcp.login` / `mcp.testConnection` pushes go to the starting
   connection only (`ws.send`, not the broadcast topic) and foreign replies fail with `LOGIN_NOT_OWNER`; `session.list` decorates agent's `listSessions` summaries with
@@ -546,7 +546,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   host restart and does not shut down or relaunch the unsupervised process; failure permits retry and exposes no
   child output or arbitrary diagnostic. Discovery failures preserve known state, shutdown makes late results
   inert, and the host never learns feed, installer, command, path, channel, or version selection.
-- **Interview invitation delivery:** the three user-send handlers share one post-`ackSend` path that
+- **Survey invitation delivery:** the three user-send handlers share one post-`ackSend` path that
   filters control traffic once, tracks anonymous `message_sent`, and records the local feedback count. The
   feedback module's injected publisher maps an eligible claim to addressed `feedback.interview` delivery
   for that request's opaque client key only when its socket-advertised protocol version supports the channel;
@@ -554,6 +554,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
   replay-safe requests and never alter the Settings link.
+- **Survey submission:** after `initializeAnalytics` the host configures the feedback survey source from
+  analytics' `surveyEndpoint()`, so unkeyed, CI and test runs never fetch and `THINKRAIL_POSTHOG_HOST`
+  applies. A source dev host fetches only when `THINKRAIL_DEV_POSTHOG=1` and `THINKRAIL_POSTHOG_PROJECT_KEY`
+  are both set. `feedback.survey.submit` re-reads the survey list (no cache), refuses with `SURVEY_INVALID`,
+  `SURVEY_UNAVAILABLE` (none launched, or already completed) or `SURVEY_CHANGED` (another id or
+  iteration), hands the built payload to `captureSurveyResponse`, and records completion only when that
+  capture is accepted (`SURVEY_NOT_SENT` otherwise, and when the list cannot be read). Once accepted the
+  answer counts as sent: a failed completion write is logged, never reported as unsent, so a retry cannot
+  send the answers twice.
 - **Chat titles:** `session.rename` resolves `workspaceId` to its cwd and delegates title validation plus the
   unconditional durable write to `agent`; it never patches one client directly. Automatic titles come only
   from the agent's `set_title` (above); sends carry no naming work. Both manual and automatic

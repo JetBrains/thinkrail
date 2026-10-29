@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -26,7 +26,14 @@ import {
 	disposeAllSessions,
 	setSessionManagerFactory,
 } from "../agent";
-import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
+import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
+import {
+	configureSurveySource,
+	recordAcceptedMessage,
+	resetFeedbackForTests,
+	resetSurveyForTests,
+	setFeedbackPublisher,
+} from "../feedback";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
@@ -97,6 +104,7 @@ beforeEach(() => {
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	resetConfigCache();
 	resetFeedbackForTests();
+	resetSurveyForTests();
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);
 	git(repo, "init", "-b", "main");
@@ -116,6 +124,8 @@ afterEach(() => {
 	stopAllWatches();
 	resetConfigCache();
 	resetFeedbackForTests();
+	resetSurveyForTests();
+	resetAnalyticsForTests();
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -547,13 +557,173 @@ test("feedback.respond persists a popup action through the handler", async () =>
 		acceptedMessages: 10,
 		nextInvitationAt: 20,
 		dismissed: false,
+		submittedSurveyId: null,
+		submittedIteration: null,
+	});
+});
+
+const SURVEY_SUBMISSION_ID = "00000000-0000-4000-8000-000000000001";
+
+const remoteSurvey: { iteration: number | null; status: number } = { iteration: 0, status: 200 };
+
+function launchSurvey(iteration = 0): void {
+	remoteSurvey.iteration = iteration;
+	remoteSurvey.status = 200;
+	configureSurveySource({
+		apiKey: "phc_test",
+		fetchImpl: (() => {
+			if (remoteSurvey.status !== 200) {
+				return Promise.resolve(new Response("down", { status: remoteSurvey.status }));
+			}
+			const surveys =
+				remoteSurvey.iteration === null
+					? []
+					: [
+							{
+								id: "survey-1",
+								name: "in-app-feedback",
+								start_date: "2026-10-28T00:00:00.000Z",
+								current_iteration: remoteSurvey.iteration,
+								questions: [{ id: "q1", type: "open", question: "How is it?" }],
+							},
+						];
+			return Promise.resolve(new Response(JSON.stringify({ surveys }), { status: 200 }));
+		}) as unknown as typeof fetch,
+	});
+}
+
+function bootSurveyAnalytics(sent: string[], overrides: { mute?: boolean } = {}): void {
+	initializeAnalytics({
+		posthogApiKey: "phc_test",
+		appVersion: "0.0.0-dev",
+		channel: "dev",
+		build: "source",
+		additionalEnabled: false,
+		env: {},
+		...overrides,
+		fetchImpl: ((_url: string, init?: RequestInit) => {
+			if (typeof init?.body === "string") sent.push(init.body);
+			return Promise.resolve(new Response("{}", { status: 200 }));
+		}) as unknown as typeof fetch,
+	});
+}
+
+function submitSurvey(overrides: Record<string, unknown> = {}) {
+	return handleRequest(
+		"feedback.survey.submit",
+		{
+			submissionId: SURVEY_SUBMISSION_ID,
+			surveyId: "survey-1",
+			iteration: 0,
+			answers: { q1: "Good" },
+			...overrides,
+		},
+		CTX,
+	);
+}
+
+function storedFeedback(): Record<string, unknown> {
+	return JSON.parse(readFileSync(join(dataDir, "feedback.json"), "utf8")) as Record<
+		string,
+		unknown
+	>;
+}
+
+test("feedback.survey stays hidden until a launched survey exists and a sent answer hides it", async () => {
+	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_UNAVAILABLE" });
+
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent, { mute: true });
+	launchSurvey();
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1", iteration: 0 },
+	});
+	expect(await submitSurvey()).toEqual({ ok: true });
+	expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	expect(storedFeedback()).toMatchObject({ submittedSurveyId: "survey-1", submittedIteration: 0 });
+	await shutdownAnalytics();
+	expect(sent.some((body) => body.includes('"survey sent"') && body.includes('"Good"'))).toBe(true);
+});
+
+test("feedback.survey.submit refuses a different survey version without completing either", async () => {
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent);
+	launchSurvey(1);
+	await expect(submitSurvey({ iteration: 0 })).rejects.toMatchObject({ code: "SURVEY_CHANGED" });
+	await expect(submitSurvey({ iteration: 1, surveyId: "survey-0" })).rejects.toMatchObject({
+		code: "SURVEY_CHANGED",
+	});
+	await expect(submitSurvey({ iteration: 1, answers: {} })).rejects.toMatchObject({
+		code: "SURVEY_INVALID",
+	});
+	await expect(submitSurvey({ submissionId: "nope" })).rejects.toMatchObject({
+		code: "SURVEY_INVALID",
+	});
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1", iteration: 1 },
+	});
+	await shutdownAnalytics();
+	expect(sent.some((body) => body.includes('"survey sent"'))).toBe(false);
+});
+
+test("feedback.survey.submit re-reads PostHog instead of trusting the displayed copy", async () => {
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent);
+	launchSurvey(0);
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { iteration: 0 },
+	});
+
+	remoteSurvey.iteration = 1;
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_CHANGED" });
+	remoteSurvey.iteration = null;
+	await expect(submitSurvey({ iteration: 1 })).rejects.toMatchObject({
+		code: "SURVEY_UNAVAILABLE",
+	});
+	remoteSurvey.iteration = 0;
+	remoteSurvey.status = 503;
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_NOT_SENT" });
+	await shutdownAnalytics();
+	expect(sent.some((body) => body.includes('"survey sent"'))).toBe(false);
+	expect(existsSync(join(dataDir, "feedback.json"))).toBe(false);
+});
+
+test("a completion that cannot be saved still counts as sent and never sends the answers twice", async () => {
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent);
+	launchSurvey();
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1" },
+	});
+	const blocked = join(dataDir, "blocked");
+	writeFileSync(blocked, "not a directory");
+	process.env.THINKRAIL_DATA_DIR = blocked;
+	try {
+		expect(await submitSurvey()).toEqual({ ok: true });
+		await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_UNAVAILABLE" });
+		expect(await handleRequest("feedback.survey", {}, CTX)).toEqual({ survey: null });
+	} finally {
+		process.env.THINKRAIL_DATA_DIR = dataDir;
+	}
+	await shutdownAnalytics();
+	expect(sent.filter((body) => body.includes('"survey sent"'))).toHaveLength(1);
+});
+
+test("feedback.survey.submit does not complete a survey whose answers were not sent", async () => {
+	launchSurvey();
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_NOT_SENT" });
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { id: "survey-1" },
 	});
 });
 
 test("feedback.respond rejects an action outside the wire union", async () => {
-	await expect(handleRequest("feedback.respond", { action: "later" }, CTX)).rejects.toThrow(
-		"Invalid interview response",
-	);
+	for (const action of ["later", "book"]) {
+		await expect(handleRequest("feedback.respond", { action }, CTX)).rejects.toThrow(
+			"Invalid invitation response",
+		);
+	}
 });
 
 test("project.setTrust grants pi-level resource trust only when the request asks for resources", async () => {

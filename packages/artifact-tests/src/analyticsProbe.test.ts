@@ -148,9 +148,14 @@ test("loopback collector observes actual HTTP PostHog batches and records invali
 		expect(collector.requests).toBe(1);
 		expect(collector.events).toEqual([launch]);
 		expect(collector.errors).toEqual([]);
+		const surveys = await fetch(`${collector.origin}/api/surveys/?token=test-key`);
+		expect(await surveys.json()).toEqual({ surveys: [] });
+		expect(collector.surveyReads).toBe(1);
+		expect(collector.errors).toEqual([]);
 		await fetch(`${collector.origin}/batch/`, { method: "POST", body: "not JSON" });
-		expect(collector.requests).toBe(2);
-		expect(collector.errors).toHaveLength(1);
+		await fetch(`${collector.origin}/api/surveys/`);
+		expect(collector.requests).toBe(4);
+		expect(collector.errors).toHaveLength(2);
 	} finally {
 		await collector.stop();
 	}

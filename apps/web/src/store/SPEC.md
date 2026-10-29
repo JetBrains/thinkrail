@@ -512,11 +512,13 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   ephemeral **`notificationPromptOpen`** plus **`openNotificationPrompt()`** / **`closeNotificationPrompt()`**
   is the client-local render flag for the attention-notification permission preface (cadence/snooze and the
   trigger live in [[submodule-web-notifications]], never the store). The
-  ephemeral **`interviewPromptOpen`** plus
-  **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
-  invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so
-  a host restart cannot leave a stale projection, and the panel hides it after `feedback.respond` is
-  acknowledged. Counts, postponement, dismissal, and client claims never live in the store. The **theme**
+  ephemeral **`surveyInvitationOpen`** plus
+  **`showSurveyInvitation()`** / **`hideSurveyInvitation()`** is the render projection of the host's addressed
+  survey invitation, cleared before each valid welcome. **`surveyWindowOpen`** is the one survey window both
+  the invitation and Settings → Feedback open; **`openSurveyWindow()`** opens it and closes the invitation and
+  Settings in the same update, **`closeSurveyWindow()`** closes it. **`inAppSurvey`** (written by
+  **`setInAppSurvey`**) is the narrowed launched survey the Feedback pane and the window draw. Counts,
+  dismissal and completion stay in host `feedback.json`. The **theme**
   preference state — **`theme: ThemeId`** (the retained opaque fixed choice), **`themeMode: ThemeMode`**,
   and optional **`systemThemePair: SystemThemePair`** — arrives through **`applyConfig(config)`** from
   `server.welcome` / the `settings.changed` broadcast. A welcome from a pre-feature host (or any malformed
@@ -544,7 +546,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   controls, and shell quota read sides. Analytics preference and confirmation default independently to false;
   the store never upgrades a preference to confirmation. A selector combines host capability, hydrated
   configuration, and absent confirmation to drive the one first-launch prompt; `selectOnboardingActive`
-holds it (and the interview invitation) while the client-local **`onboardingWizard`** gate
+holds it (and the survey invitation) while the client-local **`onboardingWizard`** gate
 (`pending | shown | hidden`, set by Welcome through `setOnboardingWizard`) is shown — including its done
 screen, after `onboardingDismissed` is already persisted, until a project opens — or still pending on a
 cold-start-shaped store (capable host, not dismissed, no open or recent projects). Project Home reads the same
