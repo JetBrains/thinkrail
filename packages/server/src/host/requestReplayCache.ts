@@ -7,7 +7,7 @@ export class RequestReplayConflictError extends Error {
 	}
 }
 
-export type ReplayLoad = Record<string, { pending: number; settled: number }>;
+export type ReplayLoad = Record<string, { pending: number; settled: number; abandoned: number }>;
 
 export class RequestReplayOverflowError extends CodedError {
 	constructor(readonly load: ReplayLoad | null) {
@@ -25,6 +25,18 @@ export class RequestAbandonedError extends Error {
 	constructor() {
 		super("the page gave up on a request before its handler settled");
 		this.name = "RequestAbandonedError";
+	}
+}
+
+export class AbandonmentReportBudget {
+	private readonly reported = new Set<string>();
+
+	constructor(private readonly allowance = 10) {}
+
+	admit(method: string): boolean {
+		if (this.reported.has(method) || this.reported.size >= this.allowance) return false;
+		this.reported.add(method);
+		return true;
 	}
 }
 
@@ -56,9 +68,9 @@ function replayLoad(
 ): ReplayLoad {
 	const load: ReplayLoad = {};
 	for (const entry of entries) {
-		if (entry.abandoned) continue;
-		const counts = load[entry.label] ?? { pending: 0, settled: 0 };
-		if (entry.settled) counts.settled++;
+		const counts = load[entry.label] ?? { pending: 0, settled: 0, abandoned: 0 };
+		if (entry.abandoned) counts.abandoned++;
+		else if (entry.settled) counts.settled++;
 		else counts.pending++;
 		load[entry.label] = counts;
 	}
@@ -66,7 +78,8 @@ function replayLoad(
 }
 
 export function heaviestReplayMethod(load: ReplayLoad): string | undefined {
-	const occupancy = (counts: ReplayLoad[string]) => counts.pending + counts.settled;
+	const occupancy = (counts: ReplayLoad[string]) =>
+		counts.pending + counts.settled + counts.abandoned;
 	return Object.entries(load).sort(
 		([nameA, a], [nameB, b]) =>
 			occupancy(b) - occupancy(a) || b.pending - a.pending || nameA.localeCompare(nameB),
@@ -76,13 +89,16 @@ export function heaviestReplayMethod(load: ReplayLoad): string | undefined {
 export class RequestReplayCache<T> {
 	private readonly clients = new Map<string, ClientNamespace<T>>();
 
-	private readonly overflowLowWater: number;
+	private readonly liveLowWater: number;
+	private readonly trackedLowWater: number;
 
 	constructor(
 		private readonly maxRequestsPerClient = 512,
 		private readonly maxWeightPerClient = 16 * 1024 * 1024,
+		private readonly maxTrackedPerClient = 2048,
 	) {
-		this.overflowLowWater = Math.floor(maxRequestsPerClient * 0.9);
+		this.liveLowWater = Math.floor(maxRequestsPerClient * 0.9);
+		this.trackedLowWater = Math.floor(maxTrackedPerClient * 0.9);
 	}
 
 	run(
@@ -106,12 +122,14 @@ export class RequestReplayCache<T> {
 			return existing.result;
 		}
 
-		if (requests.size - namespace.abandoned >= this.maxRequestsPerClient) {
+		const live = requests.size - namespace.abandoned;
+		if (live >= this.maxRequestsPerClient || requests.size >= this.maxTrackedPerClient) {
 			const load = namespace.overflowing ? null : replayLoad(requests.values());
 			namespace.overflowing = true;
 			throw new RequestReplayOverflowError(load);
 		}
-		if (requests.size < this.overflowLowWater) namespace.overflowing = false;
+		if (live < this.liveLowWater && requests.size < this.trackedLowWater)
+			namespace.overflowing = false;
 
 		const result = Promise.resolve().then(execute);
 		const entry: ReplayEntry<T> = {
@@ -151,8 +169,7 @@ export class RequestReplayCache<T> {
 	clearClient(clientKey: string): boolean {
 		const namespace = this.clients.get(clientKey);
 		if (!namespace) return true;
-		for (const entry of namespace.requests.values())
-			if (!entry.settled && !entry.abandoned) return false;
+		for (const entry of namespace.requests.values()) if (!entry.settled) return false;
 		this.clients.delete(clientKey);
 		return true;
 	}
