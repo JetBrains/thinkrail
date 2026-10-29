@@ -181,7 +181,7 @@ function EditorResourceBody({ workspaceId, tab }: { workspaceId: string; tab: Ed
 		const workspace = selectWorkspaceById(state, workspaceId);
 		return workspace !== null && isChatWorkspace(workspace);
 	});
-	if (chat && tab.kind !== "file") return <ChatUnavailable />;
+	if (chat && tab.kind !== "file" && !isFileComparison(tab)) return <ChatUnavailable />;
 	if (!editor) {
 		return <MissingResource kind={tab.kind} />;
 	}
