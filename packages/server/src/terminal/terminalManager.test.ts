@@ -33,8 +33,8 @@ const TERMINAL_CONDITION_TIMEOUT_MS = 15_000;
 const TERMINAL_TEST_TIMEOUT_MS = TERMINAL_CONDITION_TIMEOUT_MS * 3 + 5_000;
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
-const savedHistFile = process.env.HISTFILE;
-const savedHistSize = process.env.HISTSIZE;
+const savedHome = process.env.HOME;
+const savedZdotdir = process.env.ZDOTDIR;
 
 let pushed: PublishedFrame[] = [];
 const terminalFrameSignals = new Set<() => void>();
@@ -131,9 +131,9 @@ async function exitTerminalWithMarker(
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-terminal-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
-	// Prevent test PTYs from polluting the user's shell history.
-	process.env.HISTFILE = join(dataDir, ".test_history");
-	process.env.HISTSIZE = "0";
+	// rc files override HISTFILE, so test PTYs get their own home: no user rc files, no user shell history.
+	process.env.HOME = dataDir;
+	process.env.ZDOTDIR = dataDir;
 	const worktreePath = join(dataDir, "worktree");
 	mkdirSync(worktreePath);
 	saveWorkspaces([{ id: WS, worktreePath } as Workspace]);
@@ -154,10 +154,10 @@ afterEach(() => {
 	removeTree(dataDir);
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
-	if (savedHistFile === undefined) delete process.env.HISTFILE;
-	else process.env.HISTFILE = savedHistFile;
-	if (savedHistSize === undefined) delete process.env.HISTSIZE;
-	else process.env.HISTSIZE = savedHistSize;
+	if (savedHome === undefined) delete process.env.HOME;
+	else process.env.HOME = savedHome;
+	if (savedZdotdir === undefined) delete process.env.ZDOTDIR;
+	else process.env.ZDOTDIR = savedZdotdir;
 });
 
 test("a shell spawn failure is actionable and preserves replay for retry", () => {
