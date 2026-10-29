@@ -136,11 +136,17 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
+      - name: Start Playwright Chromium download
+        run: .github/scripts/install-playwright.sh start
+      - run: bun run build:web
       - name: Install Playwright Chromium
-        run: .github/scripts/install-playwright.sh
-      # `bun run e2e` is self-contained: it builds the web app, boots the host on an isolated
-      # port + state dir, runs this job's slice of the @agent-free suite headless, then tears it all down.
+        timeout-minutes: 5
+        run: .github/scripts/install-playwright.sh wait
+      # `bun run e2e` boots the host on an isolated port + state dir, runs this job's slice of the
+      # @agent-free suite headless, then tears it all down. It reuses the web build above.
       - run: bun run e2e
+        env:
+          THINKRAIL_E2E_SKIP_BUILD: "1"
       - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v5
@@ -171,6 +177,8 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
+      - name: Start Playwright Chromium download
+        run: .github/scripts/install-playwright.sh start
       # Build the single-file binary for the runner's platform, then boot the artifact and assert it
       # serves the staged UI + skills, completes a real OAuth login up to its auth URL, and shuts down
       # cleanly — regressions in the extension/asset/provider-flow bundling only exist inside the
@@ -179,7 +187,8 @@ jobs:
       - run: bun run smoke:binary
         if: ${{ matrix.shard == 1 }}
       - name: Install Playwright Chromium
-        run: .github/scripts/install-playwright.sh
+        timeout-minutes: 5
+        run: .github/scripts/install-playwright.sh wait
       # This shard of the no-agent e2e suite against the artifact (grep-inverts @dev-seam too — the fake
       # login providers only exist in the dev boot): the broad net for works-from-source/broken-in-the-binary.
       - run: bun run e2e:binary --shard=${{ matrix.shard }}/4
@@ -250,11 +259,11 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
+      - name: Start Playwright Chromium download
+        run: .github/scripts/install-playwright.sh start
       - name: Install desktop runtime packages
         uses: ./.github/actions/desktop-apt
         timeout-minutes: 10
-      - name: Install Playwright Chromium
-        run: .github/scripts/install-playwright.sh
       - name: Start virtual display
         run: |
           for attempt in 1 2 3; do
@@ -278,6 +287,9 @@ jobs:
       - name: Smoke native desktop window and packaged runtime
         if: ${{ matrix.shard == 1 }}
         run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run smoke:desktop
+      - name: Install Playwright Chromium
+        timeout-minutes: 5
+        run: .github/scripts/install-playwright.sh wait
       - name: Run no-agent e2e against the embedded desktop host
         run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run e2e:desktop --shard=${{ matrix.shard }}/4
       - name: Upload Playwright report
