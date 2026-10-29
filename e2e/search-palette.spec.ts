@@ -290,7 +290,7 @@ test("a Settings section row opens that section, and Mod+K inside the palette cl
 	await expect(page.getByTestId("settings-nav-appearance")).toHaveAttribute("data-active", "true");
 });
 
-test("double Shift toggles the palette and can be turned off in Settings › Keyboard", async ({
+test("double Shift toggles the palette and can be turned off in the Keyboard settings", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -325,7 +325,7 @@ test("double Shift toggles the palette and can be turned off in Settings › Key
 	await openPalette(page);
 });
 
-test("the double-Shift row opens Settings › Keyboard, and Ctrl+R stays inert under the palette", async ({
+test("the double-Shift row opens the Keyboard settings, and Ctrl+R stays inert under the palette", async ({
 	page,
 }) => {
 	await openFixtureProject(page);

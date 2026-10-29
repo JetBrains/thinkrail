@@ -21,7 +21,8 @@ explicit, authenticated, on-demand runs.
 `bun run e2e` is the complete no-agent gate. It builds the web bundle once and runs machine-adaptive,
 process-level Playwright shards. A shard owns one host and one Playwright worker; serial execution inside
 that lane preserves the suite's destructive reset semantics, while lane-qualified state and ports make
-lanes independent. Playwright splits individual tests across lanes and the parent runner merges their blob
+lanes independent. The runner lists the selection once, in parallel with the web build, and deals the listed
+tests round-robin to the lanes through Playwright's `--test-list`; the parent runner merges their blob
 reports into one normal result. It also merges shard failure ids into Playwright's root last-run file,
 so `--last-failed` remains a valid serial repair loop. No-agent coverage is identical whether the count
 is one or many.
@@ -30,9 +31,18 @@ The automatic count is half the available CPU parallelism, clamped to 1–8. Dev
 select 1–16 lanes; `e2e:serial` is the stable debugging fallback. A focused invocation carrying Playwright
 arguments defaults to one lane unless its shard count is explicit, so an iteration on one spec stays cheap.
 CI splits the suite across machines with `THINKRAIL_E2E_JOB_SHARD=k/N`: the invocation runs slice `k` of
-`N`, and its local lanes subdivide that slice into global Playwright shards `(k-1)·L+i` of `N·L`, so the
-union of all jobs is exactly the suite. The runner owns `--shard`; combining the variable with an explicit
-`--shard` argument is rejected.
+`N`, and its local lanes subdivide that slice, so the union of all jobs is exactly the suite whatever
+lane count each job picks. Shards are dealt, not cut: a job takes every `N`th listed test from
+position `k`, and each of its `L` lanes takes every `L`th test of that slice. Playwright's own `--shard` splits the
+alphabetical list into contiguous equal-count blocks, which put the heaviest specs together in the first
+block and left that shard minutes behind the rest. Dealing spreads every spec across all shards, so lanes
+balance without recorded timings that would drift. A test list selects by file and title path, so listing
+rejects a title it could not select exactly once (a duplicate or prefix title path, a title with `›`, a line
+break or surrounding spaces) instead of risking a skipped or doubled test. Listing also forbids `test.only`:
+a dealt list would otherwise run every test a lane was given. Dealing splits a serial-mode group across
+lanes, so browser specs never use serial mode; a scenario whose steps depend on each other is one test,
+and `shard-runner.spec.ts` rejects `describe.serial` and `mode: "serial"`. The runner owns shard selection; an explicit
+`--shard` argument is rejected whenever a job slice or more than one lane is in play.
 Every public browser E2E runner owns one process-lifetime idle-sleep assertion on macOS before setup or
 build work begins; source, agent, full, binary, and desktop modes all receive it. The assertion uses the
 system `caffeinate` executable with idle-system-sleep scope and the owning runner pid, so display sleep stays
@@ -80,8 +90,9 @@ defensive cloud-source extras remain even when that distribution does not curren
 discover a real `central`, `pi`, or editor executable. The compiled-binary and
 packaged-desktop suites remain distinct artifact gates. Each has one lane-free, non-overlapping namespace
 per machine; any artifact run and `e2e:serial` still run sequentially in the same worktree. Artifact
-configs distribute individual tests, so a passed-through Playwright `--shard=k/N` splits them evenly
-across CI machines, each booting its own artifact host. A future launcher or
+runners take the same `THINKRAIL_E2E_JOB_SHARD=k/N` and deal their slice the same way across CI machines,
+each booting its own artifact host; the desktop runner lists while its host starts. A passed-through
+Playwright `--shard` still works for local use. A future launcher or
 deployment adds another host adapter for this same suite, never copied feature specs; shared behavior is
 therefore proven through every composition root.
 
