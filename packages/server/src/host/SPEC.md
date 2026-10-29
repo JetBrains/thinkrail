@@ -708,6 +708,11 @@ enabled/confirmed choice before entering analytics attribution.
   `terminalSend.ts`), so the host lifts the latch and resumes that client's terminals. A socket with
   buffered bytes stays latched, and a latch whose socket is already gone is left to `close`/`open`.
   Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
+- **The inbound frame cap follows the composer's image budget.** Bun closes a socket (1009) on a frame
+  over `maxPayloadLength`, before any handler sees it, and its 16 MiB default sat under the 24 MiB
+  `REQUEST_IMAGE_BASE64_BUDGET` a prompt may carry - so an accepted prompt killed the socket and every
+  open request with it (#671). `WS_MAX_FRAME_BYTES` is that budget plus 8 MiB for the prompt text and
+  JSON envelope; raising the budget raises the cap.
 - The host is the single place features are wired together — features never reach back into it.
 - **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
   The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
