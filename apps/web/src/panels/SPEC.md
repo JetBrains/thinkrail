@@ -1085,13 +1085,16 @@ a project picker, the prompt hero, and the reused
   (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
   toggle writes the whole list through `settings.update { disabledExtensions }` and converges on the
   broadcast. Unknown names already in the list are carried through. **Installed** and **pi built-in**
-  (`PiPackagesSettings.tsx`, props-driven) exist only while `supportsPiPackages(protocolVersion)` holds —
-  against an older host the page is the bundled group alone with its former description, no Install
-  button and no package request — and list `packages.list` for the active workspace (user scope alone
-  without one) through **one** request path (`listPackages`, generation-guarded so a slow older response
-  never overwrites a newer one), re-run on mount, on a workspace change and on the store's
-  `packagesVersion` (the `packages.changed` push, which the host also sends after a package switch so a
-  re-enabled row regains its chips). A **package row** (`PackageRow`) is name ·
+  (`PiPackagesSettings.tsx`, props-driven; every `packages.*` request and the row state live in the
+  **`usePiPackages`** hook, `usePiPackages.ts`, so the page component only composes) exist only while
+  `supportsPiPackages(protocolVersion)` holds — against an older host the page is the bundled group
+  alone with its former description, no Install button and no package request — and list
+  `packages.list` for the active workspace (user scope alone without one) through **one** request path
+  (`listPackages`, generation-guarded so a slow older response never overwrites a newer one), re-run on
+  mount, on a workspace change and on the store's `packagesVersion` (the `packages.changed` push, which
+  the host also sends after a package switch so a re-enabled row regains its chips). The update check
+  is guarded the same way: a check started later (a workspace switch, a manual check, the re-check
+  after an update) wins, and only the latest clears "Checking…" or re-flags rows. A **package row** (`PackageRow`) is name ·
   kind / scope tags (`npm` / `git` / `local`, Global / Repository) · an **Update available** tag when the
   update check flagged it · one provenance line (declared source · "<version> installed" · description) ·
   tool and `/command` chips of its extensions as a chat's loader last recorded them (a file no chat has

@@ -1,37 +1,21 @@
-import type {
-	ExtensionCatalogEntry,
-	PiBuiltinExtension,
-	PiPackageSummary,
-	PiPackagesCatalog,
-} from "@thinkrail/contracts";
+import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
-import { errorText, getTransport, supportsPiPackages } from "@/transport";
+import { getTransport, supportsPiPackages } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { InstallPackageDialog } from "./InstallPackageDialog";
-import {
-	PiBuiltinsGroup,
-	type PiPackageAction,
-	PiPackagesGroup,
-	piPackageKey,
-} from "./PiPackagesSettings";
+import { PiBuiltinsGroup, PiPackagesGroup } from "./PiPackagesSettings";
+import { UPDATE_CHECK_KEY, usePiPackages } from "./usePiPackages";
 
 const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
 	visualize: "settings.extensions.visualize.description",
 	"web-access": "settings.extensions.web-access.description",
 };
-
-/** npm installs outlast the transport's default; the host still finishes a run that outlasts this. */
-const PACKAGE_MUTATION_TIMEOUT_MS = 10 * 60_000;
-/** An update check is a read that spawns `npm view` / `git ls-remote` per package. */
-const UPDATE_CHECK_TIMEOUT_MS = 2 * 60_000;
-/** The row key the update check's own failure renders under. */
-const UPDATE_CHECK_KEY = "\0check-updates";
 
 function bundledDescription(t: Translator, entry: ExtensionCatalogEntry): string {
 	const key = BUNDLED_DESCRIPTIONS[entry.name];
@@ -114,16 +98,13 @@ export function ExtensionsSettings() {
 	const workspaceId = useAppStore((state) => selectActiveWorkspace(state)?.id);
 	const packagesSupported = supportsPiPackages(protocolVersion);
 	const [entries, setEntries] = useState<ExtensionCatalogEntry[] | "loading" | "failed">("loading");
-	const [catalog, setCatalog] = useState<PiPackagesCatalog | "loading" | "failed">("loading");
-	const [updates, setUpdates] = useState<ReadonlySet<string>>(new Set());
-	const [checkingUpdates, setCheckingUpdates] = useState(false);
-	const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
-	const [errors, setErrors] = useState<ReadonlyMap<string, string>>(new Map());
-	const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-	const [removeTarget, setRemoveTarget] = useState<PiPackageSummary | null>(null);
 	const [installOpen, setInstallOpen] = useState(false);
-	const scoped = workspaceId ? { workspaceId } : {};
-	const listGeneration = useRef(0);
+	const packages = usePiPackages({
+		enabled: packagesSupported,
+		workspaceId,
+		packagesVersion,
+		disabledPackages,
+	});
 
 	useEffect(() => {
 		let current = true;
@@ -140,68 +121,6 @@ export function ExtensionsSettings() {
 		};
 	}, []);
 
-	const listPackages = useCallback(() => {
-		const generation = ++listGeneration.current;
-		return getTransport()
-			.request("packages.list", workspaceId ? { workspaceId } : {})
-			.then((result) => {
-				if (generation === listGeneration.current) setCatalog(result);
-			})
-			.catch(() => {
-				if (generation === listGeneration.current) setCatalog("failed");
-			});
-	}, [workspaceId]);
-
-	useEffect(() => {
-		if (!packagesSupported) return;
-		void listPackages();
-	}, [listPackages, packagesVersion, packagesSupported]);
-
-	const setRowErrors = (keys: readonly string[], message: string | null) =>
-		setErrors((current) => {
-			const next = new Map(current);
-			for (const key of keys) {
-				if (message === null) next.delete(key);
-				else next.set(key, message);
-			}
-			return next;
-		});
-
-	const checkUpdates = useCallback(
-		(force = false) => {
-			setCheckingUpdates(true);
-			return getTransport()
-				.request(
-					"packages.checkUpdates",
-					{ ...(workspaceId ? { workspaceId } : {}), ...(force ? { force: true } : {}) },
-					{ timeoutMs: UPDATE_CHECK_TIMEOUT_MS },
-				)
-				.then((flagged) => {
-					setUpdates(new Set(flagged.map(piPackageKey)));
-					setErrors((current) => {
-						const next = new Map(current);
-						next.delete(UPDATE_CHECK_KEY);
-						return next;
-					});
-				})
-				.catch((error) => {
-					setErrors((current) =>
-						new Map(current).set(
-							UPDATE_CHECK_KEY,
-							errorText(error, t("settings.packages.checkUpdatesFailed")),
-						),
-					);
-				})
-				.finally(() => setCheckingUpdates(false));
-		},
-		[workspaceId, t],
-	);
-
-	useEffect(() => {
-		if (!packagesSupported) return;
-		void checkUpdates();
-	}, [checkUpdates, packagesSupported]);
-
 	const toggle = (name: string, enabled: boolean) => {
 		const next = enabled
 			? disabled.filter((candidate) => candidate !== name)
@@ -211,133 +130,10 @@ export function ExtensionsSettings() {
 			.catch(() => toast.error(t("settings.extensions.changeFailed")));
 	};
 
-	const markBusy = (keys: readonly string[], on: boolean) =>
-		setBusy((current) => {
-			const next = new Set(current);
-			for (const key of keys) {
-				if (on) next.add(key);
-				else next.delete(key);
-			}
-			return next;
-		});
-
-	const run = (
-		rowKeys: readonly string[],
-		task: () => Promise<unknown>,
-		failure: MessageKey,
-		name?: string,
-	) => {
-		markBusy(rowKeys, true);
-		setRowErrors(rowKeys, null);
-		return task()
-			.then(() => listPackages())
-			.catch((error) => setRowErrors(rowKeys, errorText(error, t(failure, { name }))))
-			.finally(() => markBusy(rowKeys, false));
-	};
-
-	const updatePackages = (targets: readonly PiPackageSummary[]) => {
-		if (targets.length === 0) return Promise.resolve();
-		return run(
-			targets.map(piPackageKey),
-			() =>
-				getTransport()
-					.request(
-						"packages.update",
-						{ packages: targets.map(({ source, scope }) => ({ source, scope })), ...scoped },
-						{ timeoutMs: PACKAGE_MUTATION_TIMEOUT_MS },
-					)
-					.then(() => checkUpdates(true)),
-			"settings.packages.updateFailed",
-			targets.length === 1 ? targets[0]?.name : undefined,
-		);
-	};
-
-	const onAction = (action: PiPackageAction) => {
-		switch (action.kind) {
-			case "togglePackage": {
-				const next = action.enabled
-					? disabledPackages.filter((candidate) => candidate !== action.identity)
-					: [
-							...disabledPackages.filter((candidate) => candidate !== action.identity),
-							action.identity,
-						];
-				void run(
-					[action.rowKey],
-					() => getTransport().request("settings.update", { config: { disabledPackages: next } }),
-					"settings.packages.actionFailed",
-				);
-				return;
-			}
-			case "toggleResource":
-				void run(
-					[action.rowKey],
-					() =>
-						getTransport().request("packages.setResourceEnabled", {
-							path: action.path,
-							type: action.type,
-							scope: action.scope,
-							enabled: action.enabled,
-							...scoped,
-						}),
-					"settings.packages.actionFailed",
-				);
-				return;
-			case "update":
-				void updatePackages([action.target]);
-				return;
-			case "reveal":
-				void run(
-					[action.rowKey],
-					() => getTransport().request("packages.reveal", { path: action.path, ...scoped }),
-					"settings.packages.openFolderFailed",
-				);
-				return;
-			case "remove":
-				setRemoveTarget(action.target);
-				return;
-		}
-	};
-
-	const removeNow = () => {
-		const target = removeTarget;
-		if (!target) return;
-		setRemoveTarget(null);
-		void run(
-			[piPackageKey(target)],
-			() =>
-				getTransport().request(
-					"packages.remove",
-					{ source: target.source, scope: target.scope, ...scoped },
-					{ timeoutMs: PACKAGE_MUTATION_TIMEOUT_MS },
-				),
-			"settings.packages.removeFailed",
-			target.name,
-		);
-	};
-
-	const updateAll = () => {
-		if (catalog === "loading" || catalog === "failed") return;
-		void updatePackages(catalog.packages.filter((summary) => updates.has(piPackageKey(summary))));
-	};
-
-	const toggleBuiltin = (builtin: PiBuiltinExtension, enabled: boolean) => {
-		void run(
-			[`builtin:${builtin.name}`],
-			() =>
-				getTransport().request("packages.setResourceEnabled", {
-					path: `builtin:${builtin.name}`,
-					type: "extensions",
-					scope: builtin.scope,
-					enabled,
-					...scoped,
-				}),
-			"settings.packages.actionFailed",
-		);
-	};
-
-	const settingsPath = catalog !== "loading" && catalog !== "failed" ? catalog.settingsPath : "";
-	const projectSettingsPath =
-		catalog !== "loading" && catalog !== "failed" ? catalog.projectSettingsPath : undefined;
+	const { catalog, removeTarget } = packages;
+	const loaded = catalog !== "loading" && catalog !== "failed" ? catalog : null;
+	const settingsPath = loaded?.settingsPath ?? "";
+	const projectSettingsPath = loaded?.projectSettingsPath;
 
 	return (
 		<section data-testid="settings-extensions" className="flex flex-col gap-24">
@@ -374,39 +170,32 @@ export function ExtensionsSettings() {
 					<PiPackagesGroup
 						catalog={catalog}
 						disabledPackages={disabledPackages}
-						updates={updates}
-						checkingUpdates={checkingUpdates}
-						checkError={errors.get(UPDATE_CHECK_KEY)}
-						busy={busy}
-						errors={errors}
-						expanded={expanded}
-						onToggleExpanded={(key) =>
-							setExpanded((current) => {
-								const next = new Set(current);
-								if (next.has(key)) next.delete(key);
-								else next.add(key);
-								return next;
-							})
-						}
-						onAction={onAction}
-						onUpdateAll={updateAll}
-						onCheckUpdates={() => void checkUpdates(true)}
+						updates={packages.updates}
+						checkingUpdates={packages.checkingUpdates}
+						checkError={packages.errors.get(UPDATE_CHECK_KEY)}
+						busy={packages.busy}
+						errors={packages.errors}
+						expanded={packages.expanded}
+						onToggleExpanded={packages.toggleExpanded}
+						onAction={packages.onAction}
+						onUpdateAll={packages.updateAll}
+						onCheckUpdates={packages.checkUpdates}
 						onInstall={() => setInstallOpen(true)}
 					/>
-					{catalog !== "loading" && catalog !== "failed" ? (
+					{loaded ? (
 						<PiBuiltinsGroup
-							builtins={catalog.builtins}
+							builtins={loaded.builtins}
 							settingsPath={settingsPath}
 							projectSettingsPath={projectSettingsPath}
-							busy={busy}
-							errors={errors}
-							onToggle={toggleBuiltin}
+							busy={packages.busy}
+							errors={packages.errors}
+							onToggle={packages.toggleBuiltin}
 						/>
 					) : null}
 					<ConfirmDialog
 						open={removeTarget !== null}
 						onOpenChange={(open) => {
-							if (!open) setRemoveTarget(null);
+							if (!open) packages.cancelRemove();
 						}}
 						title={t("settings.packages.removeTitle", { name: removeTarget?.name ?? "" })}
 						description={t("settings.packages.removeDescription", {
@@ -418,25 +207,14 @@ export function ExtensionsSettings() {
 						confirmLabel={t("settings.packages.removeConfirm")}
 						destructive
 						confirmTestId="package-remove-confirm"
-						onConfirm={removeNow}
+						onConfirm={packages.removeNow}
 					/>
 					<InstallPackageDialog
 						open={installOpen}
 						onOpenChange={setInstallOpen}
-						catalog={catalog === "loading" || catalog === "failed" ? null : catalog}
+						catalog={loaded}
 						workspaceId={workspaceId ?? null}
-						install={(request) =>
-							getTransport()
-								.request(
-									"packages.install",
-									{ ...request, ...scoped },
-									{ timeoutMs: PACKAGE_MUTATION_TIMEOUT_MS },
-								)
-								.then((summary) => {
-									void listPackages();
-									return summary;
-								})
-						}
+						install={packages.install}
 					/>
 				</>
 			) : null}
