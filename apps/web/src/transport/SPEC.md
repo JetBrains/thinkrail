@@ -67,7 +67,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
   restore a removed generation's models; provider settings observes the same version and re-reads
   `provider.status`), each valid `server.welcome` first clearing any popup projection left by a host restart,
-  then `feedback.interview` via the idempotent `showSurveyInvitation()` — the shell holds the invitation
+  then `feedback.interview` via the idempotent `showSurveyInvitation()`, only from a v97+ host (an older host
+  still sends the retired interview invitation on that channel) — the shell holds the invitation
   behind onboarding and the consent dialog, and additional analytics may be off (a surviving host claim
   re-delivers the addressed event immediately after welcome). `loadInAppSurvey()` installs `feedback.survey`
   into the store after welcome, when Settings opens, when the survey window opens, and after a

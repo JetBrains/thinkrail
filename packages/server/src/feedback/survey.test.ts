@@ -71,7 +71,7 @@ test("selects the newest launched in-app survey and drops unsupported questions"
 						type: "single_choice",
 						id: "choice-1",
 						question: "Pick one",
-						choices: ["Yes", "No"],
+						choices: ["Yes", "No", "Other"],
 						hasOpenChoice: true,
 						shuffleOptions: true,
 						optional: true,
@@ -129,7 +129,7 @@ test("selects the newest launched in-app survey and drops unsupported questions"
 	});
 });
 
-test("PostHog's trailing Other choice is the open answer, not a second option", () => {
+test("PostHog's last choice is the open answer whatever its label, never a second option", () => {
 	const selected = selectInAppSurvey({
 		surveys: [
 			launched({
@@ -146,6 +146,14 @@ test("PostHog's trailing Other choice is the open answer, not a second option", 
 						id: "choice-2",
 						question: "Pick any",
 						choices: ["A", "Other"],
+					},
+					{
+						type: "multiple_choice",
+						id: "choice-3",
+						question: "Pick some",
+						choices: ["A", "B", "Something else"],
+						hasOpenChoice: true,
+						shuffleOptions: true,
 					},
 				],
 			}),
@@ -164,6 +172,14 @@ test("PostHog's trailing Other choice is the open answer, not a second option", 
 			type: "multiple_choice",
 			question: "Pick any",
 			choices: ["A", "Other"],
+		},
+		{
+			id: "choice-3",
+			type: "multiple_choice",
+			question: "Pick some",
+			choices: ["A", "B"],
+			hasOpenChoice: true,
+			shuffleOptions: true,
 		},
 	]);
 });
@@ -266,7 +282,7 @@ test("choice and rating answers keep PostHog's value shapes", () => {
 						type: "multiple_choice",
 						id: "multi",
 						question: "Which?",
-						choices: ["One", "Two"],
+						choices: ["One", "Two", "Other"],
 						hasOpenChoice: true,
 					},
 					{

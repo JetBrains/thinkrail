@@ -343,7 +343,9 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
-		useAppStore.getState().showSurveyInvitation();
+		const state = useAppStore.getState();
+		if ((state.protocolVersion ?? 0) < FEEDBACK_SURVEY_PROTOCOL_VERSION) return;
+		state.showSurveyInvitation();
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
