@@ -1,5 +1,13 @@
+import { RiCloseLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import { SettingsSection, useAppStore } from "@/store";
@@ -44,6 +52,7 @@ export function SettingsDialog({
 		>
 			<DialogContent
 				data-testid="settings-dialog"
+				hideClose
 				onEscapeKeyDown={(event) => {
 					if (
 						document.activeElement instanceof HTMLElement &&
@@ -54,8 +63,11 @@ export function SettingsDialog({
 				}}
 				className="flex h-[80vh] max-h-[85vh] w-full max-w-[52rem] flex-col gap-0 overflow-hidden p-0"
 			>
-				<DialogHeader className="border-border-default border-b px-16 py-12">
+				<DialogHeader className="flex-row items-center justify-between border-border-default border-b px-16 py-8">
 					<DialogTitle>{t("settings.dialog.title")}</DialogTitle>
+					<DialogClose asChild>
+						<IconButton icon={RiCloseLine} label={t("common.close")} />
+					</DialogClose>
 				</DialogHeader>
 
 				<div className="flex min-h-0 flex-1 flex-col md:flex-row">
