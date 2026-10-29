@@ -5,6 +5,7 @@ import {
 	DefaultResourceLoader,
 	getAgentDir,
 	type InlineExtension,
+	type LoadExtensionsResult,
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
@@ -113,6 +114,27 @@ function repairResourceTranscript(manager: SessionManager): void {
 	const replay = scanReplayTools(manager.buildSessionContext().messages);
 	if (replay.issues.length)
 		throw new DelegationError("invalid-child-transcript", replay.issues.join("; "));
+}
+
+function withoutRegistrationsOf(
+	result: LoadExtensionsResult,
+	paths: readonly string[],
+): LoadExtensionsResult {
+	const owners = new Set(
+		result.extensions.flatMap((extension) =>
+			paths.includes(extension.resolvedPath) || paths.includes(extension.path)
+				? [extension.path]
+				: [],
+		),
+	);
+	const queued = ({ extensionPath }: { extensionPath: string }) => !owners.has(extensionPath);
+	const { runtime } = result;
+	runtime.pendingProviderRegistrations = runtime.pendingProviderRegistrations.filter(queued);
+	runtime.pendingNativeProviderRegistrations =
+		runtime.pendingNativeProviderRegistrations.filter(queued);
+	runtime.pendingVirtualModelRegistrations =
+		runtime.pendingVirtualModelRegistrations.filter(queued);
+	return result;
 }
 
 function abortActiveRun(entry: ChildEntry, reason?: string): Promise<void> {
@@ -797,6 +819,12 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			settingsManager,
 			noExtensions: true,
 			additionalExtensionPaths: [...providerExtensionPaths],
+			...(providerExtensionPaths.length > 0
+				? {
+						extensionsOverride: (result: LoadExtensionsResult) =>
+							withoutRegistrationsOf(result, providerExtensionPaths),
+					}
+				: {}),
 			extensionFactories: childFactories,
 			noPromptTemplates: true,
 			noThemes: true,

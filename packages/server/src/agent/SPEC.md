@@ -832,7 +832,9 @@ re-opened transcripts provider-valid.
     `buildResourceLoader`'s `extensionsOverride` fills from pi's load-time registration queues
     (provenance: [[pi-compatibility]]), intersected with the parent's own loaded extensions. Process-wide
     because an extension may register its provider only on its first load in a process; the intersection
-    keeps a child from loading an extension its parent lacks. Inline factories are never owners.
+    keeps a child from loading an extension its parent lacks. Inline factories are never owners. While the
+    child's trust (the same `isProjectTrusted`) is false, project-scoped owners are left out too: a revoke
+    deferred on a busy parent leaves them in its loader, and an explicit path would load them anyway.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves

@@ -165,9 +165,12 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   `pendingNativeProviderRegistrations` carry `extensionPath` only until `bindCore` flushes them, and the
   post-bind `registerProvider` it installs drops the path. The host reads the queues during every session
   load; a provider registered only after binding stays unowned, so its children keep the narrow set.
+  Children use the same queues the other way: a child drops its owners' queued registrations before
+  bind, so the shared runtime keeps the parent's; a post-bind re-registration would still replace it.
   **Removal gate:** a public surface naming the providers each extension registered. Re-verify that the
   queues still carry `extensionPath` and are filled before `extensionsOverride` runs; run the provider-owner
-  regressions in `agent/delegation.test.ts` and `pi-delegation`'s `service.test.ts` on every upgrade.
+  regressions in `agent/extensions.test.ts`, `agent/delegation.test.ts` and `pi-delegation`'s
+  `service.test.ts` on every upgrade.
 - **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
   pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))
   and retains image content lost by the destructive queue API. Remove the corresponding workaround

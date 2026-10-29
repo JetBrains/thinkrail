@@ -529,10 +529,15 @@ run-scoped signal. Non-user paths retain their behavior.
     `turn_start` hooks) and runs its backend in the cwd its `session_start` hook recorded refuses every
     narrow child on its model. A child therefore also loads, by path, what its parent projects through
     `ParentContext.providerExtensionPaths(model.provider)`, whether or not it opted into `extensions`:
-    that extension makes the model work rather than adding a capability. The child loads nothing its
-    parent does not; provenance is the embedder's, because pi exposes none once a runner binds
+    that extension makes the model work rather than adding a capability. It loads for its hooks, not
+    its provider: the child drops the registrations its owners queue at load, so the borrowed runtime
+    keeps the parent's instead of switching the parent to the child's closures. The child loads nothing
+    its parent does not, and explicit paths are not trust-gated, so the projection honours the child's
+    trust; provenance is the embedder's, because pi exposes none once a runner binds
     ([[submodule-server-agent]]). Rejected: inheriting the parent's extensions (#25's reasons stand), a
     user-curated package list (the failure stays until configured), changing such an extension (it
-    cannot learn an unobserved session's cwd), reaching into its private state.
-    Not covered: pure pi's `ctx` carries no provenance, so standalone `pi-subagents` children still
-    fail on such providers; resource contexts take no owner paths.
+    cannot learn an unobserved session's cwd), reaching into its private state, and a child-scoped
+    runtime for the owner's own registration (it would lose the parent's runtime-only provider state).
+    Not covered: owners keeping per-instance session state (children reach the parent's instance), an
+    owner re-registering after binding, `session_shutdown` for parent-owned children (unchanged, so
+    owners keep per-child state), pure pi (its `ctx` carries no provenance) and resource contexts.

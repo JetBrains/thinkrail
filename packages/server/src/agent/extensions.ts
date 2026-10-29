@@ -254,13 +254,20 @@ function recordProviderOwners(result: LoadExtensionsResult): void {
 	}
 }
 
-export function providerExtensionPaths(loader: ResourceLoader, provider: string): string[] {
+export function providerExtensionPaths(
+	loader: ResourceLoader,
+	provider: string,
+	projectTrusted: boolean,
+): string[] {
 	const owners = providerOwners.get(provider);
 	if (!owners) return [];
 	return loader
 		.getExtensions()
 		.extensions.flatMap((extension) =>
-			owners.has(extension.resolvedPath) ? [extension.resolvedPath] : [],
+			owners.has(extension.resolvedPath) &&
+			(projectTrusted || extension.sourceInfo.scope !== "project")
+				? [extension.resolvedPath]
+				: [],
 		);
 }
 

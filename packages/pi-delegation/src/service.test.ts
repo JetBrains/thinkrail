@@ -12,6 +12,8 @@ import {
 import {
 	type AgentSession,
 	createAgentSession,
+	DefaultResourceLoader,
+	getAgentDir,
 	ModelRegistry,
 	ModelRuntime,
 	SessionManager,
@@ -1424,6 +1426,104 @@ test("a child loads the parent extension that owns its model's provider, opted i
 		await owning.disposeChildrenOf(parent.sessionId);
 		runtime.unregisterProvider("bound");
 		delete (globalThis as Record<symbol, unknown>)[seenKey];
+	}
+});
+
+test("a child's owner extension never replaces the provider its parent registered", async () => {
+	const globals = globalThis as Record<symbol, unknown>;
+	const fauxKey = Symbol.for("pi-delegation-test:faux");
+	globals[fauxKey] = faux;
+	const owner = join(tmpDir("pi-delegation-replay-"), "owner.ts");
+	writeFileSync(
+		owner,
+		`export default function (pi) {
+	const seen = new Set();
+	pi.on("before_agent_start", (_event, ctx) => {
+		seen.add(ctx.sessionManager.getSessionId());
+	});
+	const faux = globalThis[Symbol.for("pi-delegation-test:faux")];
+	pi.registerProvider("replayed", {
+		api: faux.api,
+		baseUrl: "http://faux.local",
+		apiKey: "faux",
+		streamSimple: (model, context, options) =>
+			faux.streamSimple(model, context, { ...options, headers: { "x-observed": String(seen.has(options?.sessionId)) } }),
+		models: [{ id: "replayed", name: "replayed", api: faux.api, reasoning: false, input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 100000, maxTokens: 4096 }],
+	});
+}
+`,
+	);
+	const servesObserved: FauxResponseFactory = (_context, options) =>
+		options?.headers?.["x-observed"] === "true"
+			? fauxAssistantMessage("SERVED")
+			: fauxAssistantMessage("", { stopReason: "error", errorMessage: "unobserved session" });
+	const cwd = tmpDir("pi-delegation-replay-cwd-");
+	const settingsManager = SettingsManager.inMemory({});
+	const resourceLoader = new DefaultResourceLoader({
+		cwd,
+		agentDir: getAgentDir(),
+		settingsManager,
+		noExtensions: true,
+		additionalExtensionPaths: [owner],
+		noPromptTemplates: true,
+		noThemes: true,
+		noContextFiles: true,
+	});
+	await resourceLoader.reload();
+	const { session: owning } = await createAgentSession({
+		cwd,
+		modelRuntime: runtime,
+		sessionManager: SessionManager.inMemory(cwd),
+		settingsManager,
+		resourceLoader,
+	});
+	await owning.bindExtensions({ mode: "print" });
+	const replayed = runtime.getModel("replayed", "replayed");
+	if (!replayed) throw new Error("replayed provider not registered");
+	await owning.setModel(replayed);
+	const answer = () => {
+		const last = owning.messages.at(-1);
+		return last?.role === "assistant"
+			? last.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("")
+			: undefined;
+	};
+	const children = createDelegationService({
+		resolveParent: (id) =>
+			id === owning.sessionId
+				? {
+						cwd,
+						model: owning.model,
+						thinkingLevel: owning.thinkingLevel,
+						providerExtensionPaths: (provider: string) => (provider === "replayed" ? [owner] : []),
+					}
+				: undefined,
+		delegationRoot,
+		scope: "ws-owner-replay",
+		modelRuntime: runtime,
+	});
+	try {
+		faux.setResponses([servesObserved]);
+		await owning.prompt("Go.");
+		expect(answer()).toBe("SERVED");
+		await children.createChild({
+			parent: owning.sessionId,
+			visibility: "hidden",
+			info: { createdBy: "tool:Agent", roleName: "worker", roleSource: "builtin" },
+			session: {
+				systemPrompt: "replay child",
+				tools: [],
+				model: { provider: "replayed", id: "replayed" },
+			},
+		});
+		faux.setResponses([servesObserved]);
+		await owning.prompt("Again.");
+		expect(answer()).toBe("SERVED");
+	} finally {
+		await children.disposeChildrenOf(owning.sessionId);
+		owning.dispose();
+		runtime.unregisterProvider("replayed");
+		delete globals[fauxKey];
 	}
 });
 
