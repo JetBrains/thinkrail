@@ -1,7 +1,17 @@
+import { CodedError } from "@thinkrail/shared/codedError";
 import { spawnSyncCaptured, spawnSyncCapturedBytes } from "@thinkrail/shared/spawn";
 import { type BoundedStream, runBounded, streamBounded } from "../subprocess";
 
 const NETWORK_TIMEOUT_MS = 55_000;
+const SYNC_TIMEOUT_MS = 10_000;
+let syncTimeoutMs = SYNC_TIMEOUT_MS;
+export const SLOW_GIT_TIMEOUT_MS = 5 * 60_000;
+
+export function indexWriteTimeoutFor(platform: NodeJS.Platform) {
+	return platform === "win32" ? null : SLOW_GIT_TIMEOUT_MS;
+}
+
+export const INDEX_WRITE_TIMEOUT_MS = indexWriteTimeoutFor(process.platform);
 const MAX_STDERR_CHARS = 2_000;
 const TRUNCATION_MARK = "… (truncated) …";
 const HEAD_CHARS = 1_200;
@@ -24,9 +34,14 @@ export type GitBytesResult = {
 	ok: boolean;
 	out: Uint8Array;
 	err: string;
+	failure?: "timeout" | "launch";
 };
 
-export type GitAsyncBytesResult = GitBytesResult & Pick<GitResult, "failure">;
+export type GitAsyncBytesResult = Omit<GitBytesResult, "failure"> & Pick<GitResult, "failure">;
+
+type GitSyncOptions = {
+	timeoutMs?: number | null;
+};
 
 type GitAsyncOptions = {
 	timeoutMs?: number;
@@ -36,8 +51,24 @@ type GitAsyncOptions = {
 	redactStderr?: (text: string) => string;
 };
 
+class GitTimeoutError extends CodedError {
+	constructor(action: string, err: string, consequence?: string) {
+		const detail = `Could not ${action}: ${err}`;
+		super("GIT_TIMEOUT", consequence ? `${detail.replace(/\.$/, "")}. ${consequence}` : detail);
+		this.name = "GitTimeoutError";
+	}
+}
+
+export function setSyncGitTimeoutForTests(timeoutMs: number | undefined): void {
+	syncTimeoutMs = timeoutMs ?? SYNC_TIMEOUT_MS;
+}
+
 export function nonInteractiveGitEnv(): Record<string, string | undefined> {
 	return { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+}
+
+function syncDeadline(timeoutMs: number | null | undefined) {
+	return timeoutMs === null ? {} : { timeoutMs: timeoutMs ?? syncTimeoutMs };
 }
 
 function boundedStderr(raw: string): string {
@@ -48,11 +79,21 @@ function boundedStderr(raw: string): string {
 	return `${head}${TRUNCATION_MARK}${tail}`;
 }
 
-export function git(cwd: string, args: string[], opts: { raw?: boolean } = {}): GitResult {
+export function git(
+	cwd: string,
+	args: string[],
+	opts: GitSyncOptions & { raw?: boolean } = {},
+): GitResult {
+	const started = performance.now();
 	const result = spawnSyncCaptured(["git", "-C", cwd, ...args], {
 		env: nonInteractiveGitEnv(),
 		maxBuffer: Number.POSITIVE_INFINITY,
+		...syncDeadline(opts.timeoutMs),
 	});
+	if (result.timedOut) {
+		const waitedMs = performance.now() - started;
+		return { ok: false, out: "", ...timeoutFailure({ err: result.stderr, waitedMs }, false) };
+	}
 	return {
 		ok: result.launched && result.exitCode === 0,
 		out: opts.raw ? result.stdout : result.stdout.trim(),
@@ -63,12 +104,22 @@ export function git(cwd: string, args: string[], opts: { raw?: boolean } = {}): 
 export function gitBytes(
 	cwd: string,
 	args: string[],
-	opts: { env?: Record<string, string | undefined> } = {},
+	opts: GitSyncOptions & { env?: Record<string, string | undefined> } = {},
 ): GitBytesResult {
+	const started = performance.now();
 	const result = spawnSyncCapturedBytes(["git", "-C", cwd, ...args], {
 		env: opts.env ?? nonInteractiveGitEnv(),
 		maxBuffer: Number.POSITIVE_INFINITY,
+		...syncDeadline(opts.timeoutMs),
 	});
+	if (result.timedOut) {
+		const waitedMs = performance.now() - started;
+		return {
+			ok: false,
+			out: new Uint8Array(),
+			...timeoutFailure({ err: result.stderr, waitedMs }, false),
+		};
+	}
 	return {
 		ok: result.launched && result.exitCode === 0,
 		out: result.stdout,
@@ -86,6 +137,15 @@ function timeoutFailure(
 		err: `${STALLED(run.waitedMs)} — ${captured || noAnswer}`,
 		failure: "timeout",
 	};
+}
+
+export function throwOnTimeout<T extends { failure?: GitResult["failure"]; err: string }>(
+	result: T,
+	action: string,
+	consequence?: string,
+): T {
+	if (result.failure === "timeout") throw new GitTimeoutError(action, result.err, consequence);
+	return result;
 }
 
 function executionDiagnostics(run: {

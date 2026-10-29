@@ -11,8 +11,9 @@ import {
 } from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import type { Project } from "@thinkrail/contracts";
+import { setSyncGitTimeoutForTests } from "../git";
 import {
 	approveProjectMcpServer,
 	closeProject,
@@ -349,6 +350,77 @@ test("initProject: an existing repo is opened, not re-initialised (dedupe, histo
 	expect(second.id).toBe(first.id);
 	expect(listProjects()).toHaveLength(1);
 	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(originalHead);
+});
+
+const posix = test.skipIf(process.platform === "win32");
+
+function withGitWrapper<T>(caseBody: string, run: () => T): T {
+	const executable = Bun.which("git");
+	if (!executable) throw new Error("git not found");
+	const bin = join(dataDir, "bin");
+	mkdirSync(bin, { recursive: true });
+	writeFileSync(
+		join(bin, "git"),
+		`#!/bin/sh\ncase " $* " in ${caseBody} esac\nexec ${JSON.stringify(executable)} "$@"\n`,
+	);
+	chmodSync(join(bin, "git"), 0o755);
+	const path = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+	try {
+		return run();
+	} finally {
+		if (path === undefined) delete process.env.PATH;
+		else process.env.PATH = path;
+	}
+}
+
+posix("a timed-out top-level probe is an error, never an init offer for a real repo", () => {
+	const repo = join(dataDir, "slow-repo");
+	makeRepo(repo);
+	writeFileSync(join(repo, "untracked.txt"), "keep me untracked\n");
+	const head = gitOut(repo, "rev-parse", "HEAD");
+
+	setSyncGitTimeoutForTests(300);
+	try {
+		withGitWrapper('*" --show-toplevel "*) sleep 30;;', () => {
+			expect(() => inspectProjectPath(repo)).toThrow(
+				expect.objectContaining({ code: "GIT_TIMEOUT" }),
+			);
+			expect(() => initProject(repo)).toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
+			expect(() => openProject(repo)).toThrow(expect.objectContaining({ code: "GIT_TIMEOUT" }));
+		});
+	} finally {
+		setSyncGitTimeoutForTests(undefined);
+	}
+
+	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(head);
+	expect(gitOut(repo, "status", "--porcelain")).toBe("?? untracked.txt");
+	expect(listProjects()).toHaveLength(0);
+});
+
+posix("initProject keeps a .git it did not create when the initial commit fails", () => {
+	const dir = join(dataDir, "has-git-dir");
+	mkdirSync(join(dir, ".git"), { recursive: true });
+	writeFileSync(join(dir, ".git", "sentinel"), "user data\n");
+	writeFileSync(join(dir, "file.txt"), "x\n");
+
+	withGitWrapper('*" add "*) exit 1;;', () => {
+		expect(() => withoutUserGitConfig(() => initProject(dir))).toThrow(/git add failed/);
+	});
+
+	expect(readFileSync(join(dir, ".git", "sentinel"), "utf8")).toBe("user data\n");
+});
+
+posix("initProject removes the .git it created when the initial commit fails", () => {
+	const dir = join(dataDir, "fresh");
+	mkdirSync(dir);
+	writeFileSync(join(dir, "file.txt"), "x\n");
+
+	withGitWrapper('*" add "*) exit 1;;', () => {
+		expect(() => withoutUserGitConfig(() => initProject(dir))).toThrow(/git add failed/);
+	});
+
+	expect(existsSync(join(dir, ".git"))).toBe(false);
 });
 
 test("legacy project records default to open in both projections", () => {

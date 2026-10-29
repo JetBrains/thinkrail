@@ -5,7 +5,7 @@ import {
 	githubSlug,
 	runProviderCommand,
 } from "../branch-review";
-import { git, gitAsync, originUrls, remoteRefOid } from "../git";
+import { git, gitAsync, originUrls, remoteRefOidAsync, throwOnTimeout } from "../git";
 import {
 	MUTATION_TIMEOUT_MS,
 	onBaseBranch,
@@ -297,13 +297,18 @@ export async function deleteRemoteBranch(
 ): Promise<void> {
 	const ws = branchWorkspace(params.workspaceId, params.branch);
 	await assertNoOpenReview(ws.worktreePath, ws.branch, run);
-	const tip = remoteRefOid(ws.worktreePath, `origin/${ws.branch}`);
+	const tip = await remoteRefOidAsync(ws.worktreePath, `origin/${ws.branch}`);
 	if (!tip) {
 		throw new Error(
 			`Couldn't tell which commit origin/${ws.branch} points at — refresh and try again. Nothing was deleted.`,
 		);
 	}
-	if (!git(ws.worktreePath, ["merge-base", "--is-ancestor", tip, "HEAD"]).ok) {
+	const contained = throwOnTimeout(
+		git(ws.worktreePath, ["merge-base", "--is-ancestor", tip, "HEAD"]),
+		`check origin/${ws.branch} against this checkout`,
+		"Nothing was deleted.",
+	);
+	if (!contained.ok) {
 		throw new Error(
 			`origin/${ws.branch} has commits this checkout doesn't — integrate or review them first. Nothing was deleted.`,
 		);

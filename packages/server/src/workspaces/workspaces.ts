@@ -26,6 +26,8 @@ import {
 	remoteTrackingRef,
 	resolveDefaultBranch,
 	resolveDiffRange,
+	SLOW_GIT_TIMEOUT_MS,
+	throwOnTimeout,
 	tryCurrentBranch,
 } from "../git";
 import { logger } from "../log";
@@ -74,7 +76,10 @@ function toDisplayName(raw: string): string | null {
 }
 
 function branchExists(repoPath: string, branch: string): boolean {
-	return git(repoPath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).ok;
+	return throwOnTimeout(
+		git(repoPath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]),
+		"check the branch name",
+	).ok;
 }
 
 function nameTaken(project: Project, candidate: string): boolean {
@@ -247,7 +252,10 @@ export async function createWorkspace(
 	let baseBranch: string;
 	if (base) baseBranch = base;
 	else {
-		const head = git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]);
+		const head = throwOnTimeout(
+			git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]),
+			"read the current branch",
+		);
 		baseBranch = head.ok ? head.out : "HEAD";
 	}
 	assertSafeRef(baseBranch);
@@ -271,16 +279,20 @@ export async function createWorkspace(
 
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
 	mkdirSync(dirname(worktreePath), { recursive: true });
-	const added = git(project.path, [
-		"worktree",
-		"add",
-		worktreePath,
-		"-b",
-		branch,
-		"--no-track",
-		"--end-of-options",
-		remoteBase ?? baseBranch,
-	]);
+	const added = git(
+		project.path,
+		[
+			"worktree",
+			"add",
+			worktreePath,
+			"-b",
+			branch,
+			"--no-track",
+			"--end-of-options",
+			remoteBase ?? baseBranch,
+		],
+		{ timeoutMs: null },
+	);
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
 	const workspace: Workspace = {
@@ -323,12 +335,19 @@ export function ensureWorkspaceScratchDir(ws: Workspace): void {
 }
 
 function ensureDefaultWorkspace(project: Project): Workspace {
-	const truth = folderTruth(project.path);
-	const { branch, baseBranch } = truth;
 	const all = loadWorkspaces();
 	const defaults = all.filter((w) => w.projectId === project.id && w.kind === "default");
 
 	const existing = defaults[0];
+	let truth: ReturnType<typeof folderTruth>;
+	try {
+		truth = folderTruth(project.path);
+	} catch (err) {
+		if (!existing) throw err;
+		log.warn(`kept the stored branch of workspace ${existing.id}`, err);
+		return existing;
+	}
+	const { branch, baseBranch } = truth;
 	if (existing) {
 		const extras = defaults.slice(1);
 		if (extras.length > 0) {
@@ -371,16 +390,23 @@ export function completeInitialTerminalReservation(workspaceId: string): Workspa
 	return workspace;
 }
 
+function readUserOwnedTruth(peek: Workspace) {
+	if (peek.kind === "default")
+		return { kind: "default" as const, ...folderTruth(peek.worktreePath) };
+	const branch = tryCurrentBranch(peek.worktreePath);
+	return branch === null ? null : { kind: "external" as const, branch };
+}
+
 export function refreshUserOwnedWorkspace(workspaceId: string): void {
 	const peek = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
 	if (peek?.kind !== "default" && peek?.kind !== "external") return;
-	const truth =
-		peek.kind === "default"
-			? { kind: "default" as const, ...folderTruth(peek.worktreePath) }
-			: (() => {
-					const branch = tryCurrentBranch(peek.worktreePath);
-					return branch === null ? null : { kind: "external" as const, branch };
-				})();
+	let truth: ReturnType<typeof readUserOwnedTruth>;
+	try {
+		truth = readUserOwnedTruth(peek);
+	} catch (err) {
+		log.warn(`kept the stored branch of workspace ${workspaceId}`, err);
+		return;
+	}
 	if (!truth) return;
 
 	const all = loadWorkspaces();
@@ -680,7 +706,9 @@ export function reclaimWorktree(ws: Workspace): void {
 	const project = loadProjects().find((p) => p.id === ws.projectId);
 	if (!project) return;
 	if (resolve(ws.worktreePath) === resolve(project.path)) return;
-	const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath]);
+	const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath], {
+		timeoutMs: SLOW_GIT_TIMEOUT_MS,
+	});
 	if (!removed.ok) {
 		rmSync(ws.worktreePath, { recursive: true, force: true });
 		git(project.path, ["worktree", "prune"]);
