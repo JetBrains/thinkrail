@@ -454,7 +454,9 @@ function questionTranslationsOf(
 	for (const [key, translation] of translationEntries(raw.translations)) {
 		const text = plainText(translation.question, QUESTION_LIMIT);
 		const description = plainText(translation.description, DESCRIPTION_LIMIT);
-		const choices = "choices" in question ? choiceList(translation.choices) : null;
+		const listed = "choices" in question ? choiceList(translation.choices) : null;
+		const choices =
+			listed && "choices" in question && question.hasOpenChoice ? listed.slice(0, -1) : listed;
 		const lowerBoundLabel = plainText(translation.lowerBoundLabel, 80);
 		const upperBoundLabel = plainText(translation.upperBoundLabel, 80);
 		const parsed: QuestionTranslation = {

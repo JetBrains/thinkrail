@@ -407,12 +407,12 @@ const translatedSurvey = () =>
 					type: "single_choice",
 					id: "pick",
 					question: "Pick one",
-					choices: ["Great", "Okay"],
+					choices: ["Great", "Okay", "Other"],
 					hasOpenChoice: true,
 					translations: {
-						FR: { question: "Choisissez", choices: ["Super", "Correct"] },
-						de: { question: "Wählen", choices: ["Toll"] },
-						"zh-cn": { question: "选择一个", choices: ["很好", "还行"] },
+						FR: { question: "Choisissez", choices: ["Super", "Correct", "Autre"] },
+						de: { question: "Wählen", choices: ["Toll", "Andere"] },
+						"zh-cn": { question: "选择一个", choices: ["很好", "还行", "其他"] },
 					},
 				},
 				{
@@ -515,9 +515,9 @@ test("Other text is never mistaken for a choice, and a choice never for Other te
 					type: "multiple_choice",
 					id: "multi",
 					question: "Which?",
-					choices: ["Great", "Okay"],
+					choices: ["Great", "Okay", "Other"],
 					hasOpenChoice: true,
-					translations: { fr: { choices: ["Super", "Correct"] } },
+					translations: { fr: { choices: ["Super", "Correct", "Autre"] } },
 				},
 				{ type: "single_choice", id: "one", question: "One?", choices: ["A", "B"] },
 			],
@@ -556,14 +556,14 @@ test("a pre-v98 client's inline Other text is still told apart from its picked c
 					type: "multiple_choice",
 					id: "m",
 					question: "Which?",
-					choices: ["Great", "Okay"],
+					choices: ["Great", "Okay", "Other"],
 					hasOpenChoice: true,
 				},
 				{
 					type: "single_choice",
 					id: "s",
 					question: "One?",
-					choices: ["A", "B"],
+					choices: ["A", "B", "Other"],
 					hasOpenChoice: true,
 					optional: true,
 				},
@@ -582,4 +582,38 @@ test("a pre-v98 client's inline Other text is still told apart from its picked c
 		$survey_response_s: "Something else",
 	});
 	expect(() => legacy({ m: ["one", "two"] })).toThrow("Invalid survey answer");
+});
+
+test("a translated list loses its open choice the same way, so its fixed choices still line up", () => {
+	const survey = selectInAppSurvey([
+		launched({
+			questions: [
+				{
+					type: "single_choice",
+					id: "pick",
+					question: "Pick one",
+					choices: ["Yes", "No", "Something else"],
+					hasOpenChoice: true,
+					translations: {
+						fr: { choices: ["Oui", "Non", "Autre chose"] },
+						de: { choices: ["Ja", "Nein"] },
+					},
+				},
+			],
+		}),
+	]);
+	if (!survey) throw new Error("expected a survey");
+	expect(survey.questions[0]).toMatchObject({ choices: ["Yes", "No"], hasOpenChoice: true });
+	expect(localizeSurvey(survey, "fr").questions[0]).toMatchObject({ choices: ["Oui", "Non"] });
+	expect(localizeSurvey(survey, "de")).toBe(survey);
+	const sent = surveyResponse(
+		survey,
+		parseSurveySubmission({
+			...submissionShape(survey),
+			language: "fr",
+			answers: { pick: "Non" },
+			others: {},
+		}),
+	);
+	expect(sent.$survey_response_pick).toBe("No");
 });
