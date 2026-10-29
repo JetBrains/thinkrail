@@ -1506,7 +1506,7 @@
 	"settings.feedback.discordDescription": "与团队和其他 ThinkRail 用户交流：提问并分享你正在构建的内容。",
 	"settings.feedback.email": "或发送邮件至 <0>{{email}}</0>。",
 	"settings.feedback.joinDiscord": "加入我们的 Discord",
-	"settings.feedback.surveyDescription": "回答几个关于你使用 ThinkRail 体验的问题。",
+	"settings.feedback.surveyDescription": "帮助我们改进！回答几个关于你使用 ThinkRail 体验的问题。大约需要 5 分钟。",
 	"settings.feedback.takeSurvey": "参与问卷",
 	"settings.feedback.title": "反馈",
 	"settings.github.connected": "已连接",

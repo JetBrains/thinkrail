@@ -1451,7 +1451,7 @@
 	"settings.feedback.discordDescription": "チームや他の ThinkRail ユーザーと交流しましょう。質問したり、作っているものを共有したりできます。",
 	"settings.feedback.email": "または <0>{{email}}</0> までご連絡ください。",
 	"settings.feedback.joinDiscord": "Discord に参加",
-	"settings.feedback.surveyDescription": "ThinkRail の利用体験についていくつかの質問にお答えください。",
+	"settings.feedback.surveyDescription": "改善にご協力ください。ThinkRail の利用体験についていくつかの質問にお答えください。所要時間は 5 分ほどです。",
 	"settings.feedback.takeSurvey": "アンケートに回答",
 	"settings.feedback.title": "フィードバック",
 	"settings.github.connected": "接続済み",

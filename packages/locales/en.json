@@ -1603,7 +1603,7 @@
 	"settings.feedback.discordDescription": "Chat with the team and other ThinkRail users: ask questions and share what you're building.",
 	"settings.feedback.email": "Or write to us at <0>{{email}}</0>.",
 	"settings.feedback.joinDiscord": "Join our Discord",
-	"settings.feedback.surveyDescription": "Answer a few questions about your experience with ThinkRail.",
+	"settings.feedback.surveyDescription": "Help us improve! Answer a few questions about your experience with ThinkRail. It'll take ~5 minutes.",
 	"settings.feedback.takeSurvey": "Take the survey",
 	"settings.feedback.title": "Feedback",
 	"settings.github.connected": "Connected",
