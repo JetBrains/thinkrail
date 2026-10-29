@@ -1493,9 +1493,8 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		});
 		harness.controller.contentChanged();
 		advanceUntilIdle(harness);
-		const expectedSettle =
-			before.scrollTop + (before.edgeBottom ?? 0) + 1_500 - before.viewportHeight;
-		expect(harness.readGeometry().scrollTop).toBeCloseTo(expectedSettle, 8);
+		const expectedPin = before.scrollTop + (before.edgeBottom ?? 0) + 1_500 - before.viewportHeight;
+		expect(harness.readGeometry().scrollTop).toBeCloseTo(expectedPin, 8);
 	});
 
 	it("keeps an existing cap after rebasing before small growth", () => {
@@ -1831,6 +1830,35 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		}
 	});
 
+	it("pins fast text on a low pin line in a short viewport without a tall-arrival cap", () => {
+		const harness = createHarness({ viewportHeight: 300, movement: { trigger: 35 } });
+		harness.setReferenceRow({ id: "r1", top: 100 });
+		harness.controller.contentChanged();
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 106 });
+		harness.controller.contentChanged();
+		harness.advance(TALL_ARRIVAL_SETTLE_MS);
+		const startingScrollTop = harness.readGeometry().scrollTop;
+		for (let frame = 1; frame <= 60; frame += 1) {
+			grow(harness, 14);
+			expect(harness.readGeometry().edgeBottom).toBe(105);
+			expect(harness.readGeometry().scrollTop).toBe(startingScrollTop + frame * 14);
+			harness.advance(16);
+		}
+	});
+
+	it("caps one jump taller than the viewport on a low pin line", () => {
+		const harness = createHarness({ viewportHeight: 300, movement: { trigger: 35 } });
+		harness.setReferenceRow({ id: "r1", top: 100 });
+		harness.controller.contentChanged();
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 106 });
+		harness.controller.contentChanged();
+		harness.advance(TALL_ARRIVAL_SETTLE_MS);
+		const before = harness.readGeometry();
+		grow(harness, 400);
+		expect(harness.readGeometry().scrollTop).toBeLessThan(before.scrollTop + 400);
+		expect(harness.readGeometry().edgeBottom).toBeGreaterThan(105);
+	});
+
 	it("pins a streaming text response without a tall-arrival cap", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
@@ -1897,7 +1925,7 @@ describe("reading-band on-screen restoration", () => {
 		harness.controller.contentChanged();
 		const writes = harness.writes.length;
 		harness.controller.restoreScrollTop(before.scrollTop);
-		expect(harness.writes.slice(writes)).toEqual([before.scrollTop, before.scrollTop + 70]);
+		expect(harness.writes.slice(writes)).toEqual([before.scrollTop + 70]);
 		expect(harness.readGeometry()).toMatchObject({
 			scrollTop: before.scrollTop + 70,
 			edgeBottom: 600,
