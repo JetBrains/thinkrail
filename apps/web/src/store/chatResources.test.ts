@@ -173,10 +173,10 @@ test("atomic invalidation and installation preserve stale snapshots and reject o
 	expect(projection()?.snapshot).toBe(snapshot);
 	expect(selectChatResourceAuthority(state(), scope)).toBe(false);
 	state().installChatResources(first, { ...snapshot, commands: [] });
-	state().failChatResources(first, "old error");
+	state().failChatResources(first, "old error", true);
 	expect(projection()?.snapshot).toBe(snapshot);
 	expect(projection()?.error).toBeNull();
-	state().failChatResources(read(), "read failed");
+	state().failChatResources(read(), "read failed", true);
 	expect(projection()).toMatchObject({ snapshot, fresh: false, error: "read failed" });
 	state().installChatResources(read(), snapshot);
 	expect(projection()).toMatchObject({ fresh: true, error: null });
@@ -218,8 +218,10 @@ test("staleness names a dropped socket apart from a failed or in-flight refresh"
 	expect(staleness()).toBeNull();
 	state().invalidateChatResources(scope);
 	expect(staleness()).toBe("refreshing");
-	state().failChatResources(read(), "replay namespace is full");
+	state().failChatResources(read(), "replay namespace is full", true);
 	expect(staleness()).toBe("refreshFailed");
+	state().failChatResources(read(), "worktree gone", false);
+	expect(staleness()).toBe("unavailable");
 	state().setStatus("disconnected");
 	expect(staleness()).toBe("disconnected");
 });

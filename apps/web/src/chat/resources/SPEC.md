@@ -117,7 +117,8 @@ header, guarded by the parent's confirmation that names the current active count
 main chat or disables future delegation. A non-authoritative snapshot disables controls and says why,
 in the summary chip and the collapsed dock line alike: `disconnected` → "reconnecting" plus the stale
 banner; `refreshFailed` → "out of date" with "Couldn't refresh resources — retrying." above the error and
-Retry; a brief in-flight `refreshing` → "updating" with no banner, so a push no longer flashes the stale
+Retry; `unavailable` (a permanent failure the sync will not retry) → "out of date" with "Couldn't refresh
+resources." and Retry, never promising a retry that will not come; a brief in-flight `refreshing` → "updating" with no banner, so a push no longer flashes the stale
 banner. "Reconnecting" is reserved for a socket that is actually down.
 
 **MCP servers.** When the snapshot carries `mcpServers` (a host at `MCP_PROTOCOL_VERSION`; `null` hides

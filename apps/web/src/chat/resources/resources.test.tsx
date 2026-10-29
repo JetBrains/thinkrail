@@ -216,7 +216,7 @@ test("the dock lists live rows oldest-first with escaped text, one inspect contr
 	expect(many).toContain("5 active");
 	expect(many).toContain('aria-expanded="false"');
 
-	const dockFor = (staleness: "disconnected" | "refreshFailed" | "refreshing") =>
+	const dockFor = (staleness: "disconnected" | "refreshFailed" | "unavailable" | "refreshing") =>
 		renderToStaticMarkup(
 			<resources.ResourcesDock
 				{...dockProps}
@@ -232,6 +232,7 @@ test("the dock lists live rows oldest-first with escaped text, one inspect contr
 	).toMatch(/data-testid="resource-stop"[^>]*disabled/);
 	expect(dockFor("disconnected")).toContain("5 active · reconnecting");
 	expect(dockFor("refreshFailed")).toContain("5 active · out of date");
+	expect(dockFor("unavailable")).toContain("5 active · out of date");
 	expect(dockFor("refreshing")).toContain("5 active · updating");
 });
 
@@ -318,6 +319,18 @@ test("the inspector keeps the selected finished row, disables controls when stal
 	expect(failed).toContain("Read failed");
 	expect(failed).toContain('data-testid="resources-retry"');
 	expect(failed).toMatch(/data-testid="resource-stop"[^>]*disabled/);
+	const unavailable = renderInspector(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			authoritative={false}
+			staleness="unavailable"
+			error="worktree gone"
+		/>,
+	);
+	expect(unavailable).toContain("out of date");
+	expect(unavailable).toContain("Couldn&#x27;t refresh resources.");
+	expect(unavailable).not.toContain("retrying");
+	expect(unavailable).toContain('data-testid="resources-retry"');
 	expect(html).toMatch(/data-testid="resource-stop"[^>]*disabled/);
 	expect(html).not.toContain('data-testid="resource-detail-stop"');
 	expect(html).toContain("Stop failed");

@@ -1419,6 +1419,7 @@
 	"resources.inspector.outOfDate": "out of date",
 	"resources.inspector.reconnecting": "reconnecting",
 	"resources.inspector.refreshFailed": "Couldn't refresh resources — retrying.",
+	"resources.inspector.refreshUnavailable": "Couldn't refresh resources.",
 	"resources.inspector.retention": "Logs and transcripts are kept for this host session only.",
 	"resources.inspector.retentionWorkspace": "History and logs are kept until this workspace is archived.",
 	"resources.inspector.showMore": "Show {{count}} more · {{left}} left",
