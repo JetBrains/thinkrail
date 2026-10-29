@@ -587,6 +587,26 @@ test("resolveDiffRange degrades a root commit to an add-style diff (no parent to
 	);
 });
 
+test("an unborn HEAD lists staged and untracked files as added instead of failing", async () => {
+	const fresh = join(dataDir, "fresh");
+	mkdirSync(fresh);
+	git(fresh, "init", "-b", "feature");
+	writeFileSync(join(fresh, "staged.txt"), "a\nb\n");
+	writeFileSync(join(fresh, "loose.txt"), "c\n");
+	git(fresh, "add", "staged.txt");
+	seedWorkspace({ worktreePath: fresh, branch: "feature", baseBranch: "feature" });
+
+	for (const scope of [{ kind: "branch" }, { kind: "uncommitted" }] as const) {
+		const { changes } = await gitStatus("w1", scope);
+		expect(changes).toEqual([
+			{ path: "loose.txt", status: "untracked", added: 1, removed: 0 },
+			{ path: "staged.txt", status: "added", added: 2, removed: 0 },
+		]);
+		const diff = await gitDiffFile("w1", "staged.txt", scope);
+		expect(diff).toMatchObject({ original: "", modified: "a\nb\n", originalOid: null });
+	}
+});
+
 test("resolveDiffRange rejects a non-oid sha before it reaches git, and an unknown commit", async () => {
 	const ws = { baseBranch: "main", worktreePath: repo };
 	await expect(resolveDiffRange(ws, { kind: "commit", sha: "--output=/tmp/pwn" })).rejects.toThrow(

@@ -101,8 +101,10 @@ ref off the workspace-create critical path.
   point** ↔ worktree — what the workspace changed *since diverging*, so a base that advanced underneath it
   (a fetch moving `origin/main`, upstream work landing) never surfaces as phantom changes; while the base
   hasn't diverged the merge-base *is* its tip, and a normal nonzero `merge-base` (missing base, unrelated
-  histories, unborn `HEAD`) falls back to the raw ref, keeping the old error surfaces — and keeping the
-  file list ancestry-consistent with `listCommits`' `base..HEAD`; a timeout or launch failure throws
+  histories) falls back to the raw ref, keeping the old error surfaces — and keeping the
+  file list ancestry-consistent with `listCommits`' `base..HEAD`; an **unborn `HEAD`** whose base names no
+  commit (and `uncommitted` on one) diffs from the empty tree instead, add-style like a root commit; a
+  timeout or launch failure throws
   instead of impersonating that semantic outcome. The same distinction keeps a timed-out commit probe
   from becoming `UNKNOWN_COMMIT`, and a timed-out parent probe from becoming a root commit;
   `uncommitted`: `git diff HEAD` + untracked, sides = `HEAD` ↔ worktree; `commit`: `git diff <sha>^ <sha>`, no

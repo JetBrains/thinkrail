@@ -33,11 +33,34 @@ export function resolveCommitOid(worktreePath: string, ref: string): string | nu
 	return out.ok && out.out ? out.out : null;
 }
 
+const EMPTY_TREE: Record<string, string> = {
+	sha1: "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+	sha256: "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321",
+};
+
+async function unbornRange(worktreePath: string): Promise<DiffRange | null> {
+	if (resolveCommitOid(worktreePath, "HEAD")) return null;
+	const format = await gitAsync(worktreePath, ["rev-parse", "--show-object-format"]);
+	throwExecutionFailure(format);
+	const emptyTree = EMPTY_TREE[format.out];
+	if (!format.ok || !emptyTree) return null;
+	return {
+		listPrefix: ["diff"],
+		listRevs: [emptyTree],
+		untracked: true,
+		originalRef: null,
+		modifiedRef: null,
+		resolvedOriginalOid: null,
+	};
+}
+
 export async function resolveDiffRange(
 	ws: Pick<Workspace, "baseBranch" | "diffBase" | "worktreePath">,
 	scope: GitDiffScope = { kind: "branch" },
 ): Promise<DiffRange> {
 	if (scope.kind === "uncommitted") {
+		const unborn = await unbornRange(ws.worktreePath);
+		if (unborn) return unborn;
 		return {
 			listPrefix: ["diff"],
 			listRevs: ["HEAD"],
@@ -140,6 +163,10 @@ export async function resolveDiffRange(
 	]);
 	throwExecutionFailure(mergeBase);
 	const resolvedForkPoint = mergeBase.ok && mergeBase.out ? mergeBase.out : null;
+	if (!resolvedForkPoint && !resolveCommitOid(ws.worktreePath, base)) {
+		const unborn = await unbornRange(ws.worktreePath);
+		if (unborn) return unborn;
+	}
 	const forkPoint = resolvedForkPoint ?? base;
 	return {
 		listPrefix: ["diff"],
