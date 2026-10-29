@@ -343,10 +343,19 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   WebP assets, so a Markdown link to `./images/<file>` would otherwise 404.
   `src/pages/blog/[slug]/images/[file].ts` emits every image in a published post's `images/` folder
   byte-for-byte at `/blog/<slug>/images/<file>`. It walks `publishedPosts()`, so draft images never ship.
-- **Table images are thumbnails**: an image in a Markdown table renders at a fixed thumbnail width.
-  When it is wrapped in a link, `src/imageZoom.ts` turns a plain click (or Enter on the link) into a
-  modal `<dialog>` showing the link target. Modified clicks, middle-clicks and no-JS visits follow the
-  link instead.
+  The folder resolves from the Astro root (not the working directory); a post without `images/` has
+  none, but any other read failure fails the build, and `validateBuild` fails when a relative link on a
+  post has no built file — a silently empty route would otherwise ship 404 links.
+- **Table images are thumbnails**: a linked image's cell takes 60% of its row and the image fills it,
+  capped at 240px high (`object-fit: contain`, outline drawn around the painted image). The width stays
+  definite so lazy images reserve their box before loading — a `width: auto` box-fit was rejected because
+  unloaded images collapse to 0×0, shift the layout and all load at once. Below 520px of *content* width
+  (a container query: the blog pane's width does not follow the viewport) the cells stack. An all-empty
+  header row is hidden, so a post can lay rows out as header-less tables (e.g. alternating image sides).
+  Thumbnails are still Astro's full-resolution WebP, lazy-loaded; true downscaled thumbnails are deferred.
+  When the image is wrapped in a link, `src/imageZoom.ts` turns a plain primary click (or Enter on the
+  link) into a modal `<dialog>`, named by the image's alt, showing the link target; modified or
+  non-primary clicks and no-JS visits follow the link instead.
 - **Chrome: blog pages live inside the IDE shell**, not a separate page frame (decision, 2026-08 —
   the prior standalone blog header/footer is deleted). `BlogLayout.astro` renders through
   `IdeShell.astro`: the content sits in the same scrolling editor pane as the landing sections, in a
