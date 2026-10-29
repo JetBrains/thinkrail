@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { HostUpdateNotice, ServerWelcome } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, REQUEST_IMAGE_BASE64_BUDGET, WS_CHANNELS } from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
 import {
@@ -526,6 +526,28 @@ test("welcome omits closed projects whose folders are gone", async () => {
 	const welcome = frame.data as ServerWelcome;
 	expect(welcome.projects.map((project) => project.id)).toEqual(["open"]);
 	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
+});
+
+test("a request frame carrying the whole prompt image budget reaches its handler", async () => {
+	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const collector = await collectSocket(b.port, "frame-budget");
+	const closed = new Promise<string>((resolve) =>
+		collector.socket.addEventListener("close", (event) => resolve(`closed ${event.code}`)),
+	);
+	collector.socket.send(
+		JSON.stringify({
+			id: "budget",
+			method: "project.list",
+			params: { padding: "A".repeat(REQUEST_IMAGE_BASE64_BUDGET) },
+		}),
+	);
+
+	const outcome = await Promise.race([
+		collector.waitForFrame((candidate) => candidate.id === "budget").then((frame) => frame.ok),
+		closed,
+	]);
+	expect(outcome).toBe(true);
+	collector.socket.close();
 });
 
 test("shutdown is idempotent and releases the port", async () => {

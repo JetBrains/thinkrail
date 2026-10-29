@@ -646,6 +646,11 @@ enabled/confirmed choice before entering analytics attribution.
   `terminalSend.ts`), so the host lifts the latch and resumes that client's terminals. A socket with
   buffered bytes stays latched, and a latch whose socket is already gone is left to `close`/`open`.
   Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
+- **The inbound frame cap follows the composer's image budget.** Bun closes a socket (1009) on a frame
+  over `maxPayloadLength`, before any handler sees it, and its 16 MiB default sat under the 24 MiB
+  `REQUEST_IMAGE_BASE64_BUDGET` a prompt may carry - so an accepted prompt killed the socket and every
+  open request with it (#671). `WS_MAX_FRAME_BYTES` is that budget plus 8 MiB for the prompt text and
+  JSON envelope; raising the budget raises the cap.
 - The host is the single place features are wired together — features never reach back into it.
 - **Login-shell environment import is opt-in at boot** (`resolveShellEnv: true`, passed by the dev,
   CLI and desktop launchers). Post-mortem: with it on by default, `boot.test.ts` copied the developer's
