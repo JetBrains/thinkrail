@@ -128,13 +128,15 @@ const hostHitTargets: HostHitTargets = {
 	openPlan: (workspaceId) => useAppStore.getState().requestToolView(workspaceId, "plan"),
 };
 
-async function askTheAgent(
+export async function askTheAgent(
 	workspaceId: string | null,
 	projectId: string | null,
 	text: string,
+	stillWanted: () => boolean = paletteNavigator.beginPick(),
 ): Promise<void> {
 	const target =
-		workspaceId ?? (projectId ? ((await enterDefaultWorkspace(projectId))?.id ?? null) : null);
+		workspaceId ??
+		(projectId ? ((await enterDefaultWorkspace(projectId, stillWanted))?.id ?? null) : null);
 	if (target) await startChatInTab(target, { prompt: `${text}\n\n${globalT("search.ask.note")}` });
 }
 

@@ -36,11 +36,19 @@ export function sourceBlockAt(container: ParentNode, line: number): HTMLElement 
 	return best;
 }
 
-export function revealSourceLine(container: HTMLElement, line: number): () => void {
+export function revealSourceLine(
+	container: HTMLElement,
+	line: number,
+	onRevealed: () => void,
+): () => void {
 	const reveal = () => {
-		const block = sourceBlockAt(container, line);
-		block?.scrollIntoView({ block: "start" });
-		return block !== null;
+		const block =
+			sourceBlockAt(container, line) ??
+			container.querySelector<HTMLElement>("[data-md-line-start]");
+		if (!block) return false;
+		block.scrollIntoView({ block: "start" });
+		onRevealed();
+		return true;
 	};
 	if (reveal()) return () => {};
 	const observer = new MutationObserver(() => {

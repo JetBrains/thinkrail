@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef } from "react";
 import { type ResourceHost, type ResourceMarkdown, useResourceHost } from "../host";
 import type { ResourceViewProps } from "../registry";
 import { stripFrontmatter } from "./frontmatter";
@@ -127,6 +127,7 @@ export default function MarkdownPreview({
 	viewState,
 	onViewState,
 	reveal,
+	onRevealHandled,
 }: ResourceViewProps) {
 	const { workspaceId, path } = resource;
 	const text = content.kind === "text" ? content.text : "";
@@ -140,10 +141,11 @@ export default function MarkdownPreview({
 	const articleRef = useRef<HTMLElement>(null);
 	const revealLine = reveal?.line;
 	const revealTick = reveal?.tick;
+	const revealHandled = useEffectEvent((tick: number) => onRevealHandled?.(tick));
 	useEffect(() => {
 		const article = articleRef.current;
 		if (!article || revealLine === undefined || revealTick === undefined) return;
-		return revealSourceLine(article, revealLine);
+		return revealSourceLine(article, revealLine, () => revealHandled(revealTick));
 	}, [revealLine, revealTick]);
 	if (!review) {
 		return (

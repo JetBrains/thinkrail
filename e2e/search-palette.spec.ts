@@ -422,9 +422,20 @@ test("spec sections: words in any order find a section that opens and previews a
 	await pressPlatformShortcut(page, "i");
 	await page.keyboard.press("Enter");
 	await expect(palette(page)).toBeHidden();
-	await expect(
-		page.getByTestId("editor-pane").getByRole("heading", { name: "Session titles", exact: true }),
-	).toBeInViewport();
+	const pane = page.getByTestId("editor-pane");
+	const sessionTitles = pane.getByRole("heading", { name: "Session titles", exact: true });
+	const firstTopic = pane.getByRole("heading", { name: "Topic 0", exact: true });
+	await expect(sessionTitles).toBeInViewport();
+
+	await pane.getByTestId("markdown-preview").evaluate((scroller) => scroller.scrollTo(0, 0));
+	await expect(firstTopic).toBeInViewport();
+	await chatTabs.first().click();
+	await expect(firstTopic).toHaveCount(0);
+	await page
+		.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "SPEC.md" })
+		.click();
+	await expect(firstTopic).toBeInViewport();
+	await expect(sessionTitles).not.toBeInViewport();
 
 	await openPalette(page);
 	await page.getByTestId("search-input").fill("#who keeps my chats");
