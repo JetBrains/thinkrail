@@ -1,5 +1,6 @@
 export * from "./agentSessionManager";
 export {
+	getResourceHistoryPage,
 	getSessionResources,
 	readBackgroundCommandOutput,
 	setSessionResourcesPublisher,

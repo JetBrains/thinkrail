@@ -486,6 +486,8 @@ export interface BackgroundCommandSummary {
 	finishedAt?: number;
 	exitCode?: number | null;
 	errorMessage?: string;
+	/** The host or the chat's teardown ended this run; `status` is then terminal (see `interruptedResource`). */
+	interrupted?: true;
 }
 
 export interface BackgroundCommandCompletionDetails
@@ -508,6 +510,125 @@ export interface SubagentResourceSummary {
 	thinkingLevel?: ThinkingLevel;
 	abortReason?: string;
 	durationMs?: number;
+	finishedAt?: number;
+	/** The host or the chat's teardown ended this run; `status` is then terminal (see `interruptedResource`). */
+	interrupted?: true;
+}
+
+export type ResourceRecord =
+	| { kind: "command"; summary: BackgroundCommandSummary }
+	| { kind: "subagent"; summary: SubagentResourceSummary };
+
+export type ResourceKind = ResourceRecord["kind"];
+
+export type ResourceOutcome = "done" | "failed" | "stopped" | "interrupted";
+
+export type ResourceTally = Record<ResourceOutcome, number>;
+
+export interface SessionResourceHistory {
+	commands: ResourceTally;
+	subagents: ResourceTally;
+}
+
+export interface ResourceHistoryCursor {
+	at: number;
+	id: string;
+}
+
+export type ResourceHistoryPage =
+	| { kind: "command"; items: BackgroundCommandSummary[]; hasMore: boolean }
+	| { kind: "subagent"; items: SubagentResourceSummary[]; hasMore: boolean };
+
+export const RESOURCE_HISTORY_PAGE_LIMIT = 20;
+export const RESOURCE_HISTORY_MAX_PAGE_LIMIT = 100;
+
+export function resourceRecordId(record: ResourceRecord): string {
+	return record.kind === "command" ? record.summary.id : record.summary.childSessionId;
+}
+
+function hasLiveStatus(record: ResourceRecord): boolean {
+	const { status } = record.summary;
+	return record.kind === "command"
+		? status === "running" || status === "stopping"
+		: status === "queued" || status === "running";
+}
+
+export function isLiveResource(record: ResourceRecord): boolean {
+	return !record.summary.interrupted && hasLiveStatus(record);
+}
+
+export function interruptedResource(record: ResourceRecord): ResourceRecord {
+	return record.kind === "command"
+		? {
+				kind: "command",
+				summary: {
+					...record.summary,
+					status: hasLiveStatus(record) ? "stopped" : record.summary.status,
+					interrupted: true,
+				},
+			}
+		: {
+				kind: "subagent",
+				summary: {
+					...record.summary,
+					status: hasLiveStatus(record) ? "aborted" : record.summary.status,
+					interrupted: true,
+				},
+			};
+}
+
+export function resourceOutcome(record: ResourceRecord): ResourceOutcome | null {
+	if (record.summary.interrupted) return "interrupted";
+	if (record.kind === "command") {
+		switch (record.summary.status) {
+			case "completed":
+				return record.summary.exitCode === 0 ? "done" : "failed";
+			case "error":
+				return "failed";
+			case "stopped":
+				return "stopped";
+			default:
+				return null;
+		}
+	}
+	switch (record.summary.status) {
+		case "completed":
+			return "done";
+		case "error":
+			return "failed";
+		case "aborted":
+			return "stopped";
+		default:
+			return null;
+	}
+}
+
+function emptyResourceTally(): ResourceTally {
+	return { done: 0, failed: 0, stopped: 0, interrupted: 0 };
+}
+
+export function tallyResources(records: readonly ResourceRecord[]): ResourceTally {
+	const tally = emptyResourceTally();
+	for (const record of records) {
+		const outcome = resourceOutcome(record);
+		if (outcome) tally[outcome]++;
+	}
+	return tally;
+}
+
+export function resourceTallyTotal(tally: ResourceTally): number {
+	return tally.done + tally.failed + tally.stopped + tally.interrupted;
+}
+
+export function resourceHistoryCursor(record: ResourceRecord): ResourceHistoryCursor {
+	const at =
+		record.summary.finishedAt ??
+		(record.kind === "command" ? record.summary.startedAt : Date.parse(record.summary.createdAt));
+	return { at: Number.isFinite(at) ? at : 0, id: resourceRecordId(record) };
+}
+
+export function compareResourceHistory(a: ResourceHistoryCursor, b: ResourceHistoryCursor): number {
+	return b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
 }
 
 export interface SessionResources {
@@ -517,6 +638,8 @@ export interface SessionResources {
 	subagents: SubagentResourceSummary[];
 	/** Absent on hosts without MCP support (`MCP_PROTOCOL_VERSION`). */
 	mcpServers?: McpServerResourceSummary[];
+	/** Every finished record of this chat by outcome; absent before `RESOURCE_HISTORY_PROTOCOL_VERSION`. */
+	history?: SessionResourceHistory;
 }
 
 export type McpServerScope = "user" | "project";

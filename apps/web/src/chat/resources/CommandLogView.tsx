@@ -7,11 +7,15 @@ export function CommandLogView({
 	error,
 	stale,
 	onRetry,
+	interrupted = false,
+	retained = false,
 }: {
 	result: BackgroundCommandOutputResult | null;
 	error: string | null;
 	stale: boolean;
 	onRetry: () => void;
+	interrupted?: boolean;
+	retained?: boolean;
 }) {
 	const t = useT();
 	return (
@@ -39,7 +43,11 @@ export function CommandLogView({
 				) : null
 			) : !result.available ? (
 				<p data-testid="command-log-unavailable" className="text-text-muted tr-text-ui">
-					{t("resources.log.unavailable")}
+					{interrupted
+						? t("resources.log.notSaved")
+						: retained
+							? t("resources.log.missing")
+							: t("resources.log.unavailable")}
 				</p>
 			) : (
 				<>

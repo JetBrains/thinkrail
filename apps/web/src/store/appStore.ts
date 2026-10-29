@@ -15,7 +15,9 @@ import type {
 	Project,
 	ProviderStatusReport,
 	RefreshedModels,
+	ResourceKind,
 	ResourceMeta,
+	ResourceRecord,
 	ReviewChangedPayload,
 	ReviewSnapshot,
 	SessionEventPayload,
@@ -95,9 +97,11 @@ import type {
 } from "../shell/layout";
 import type { ConnectionStatus } from "../transport";
 import {
+	appendOlderResources,
 	type ChatResourceRead,
 	type ChatResourceScope,
 	type ChatResourceSnapshots,
+	carryOlderResources,
 	staleChatResources,
 } from "./chatResources";
 import {
@@ -110,6 +114,7 @@ import {
 } from "./mcp";
 import {
 	type HistoryTarget,
+	isChatResourceConnectionCurrent,
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
 	isConnectedGeneration,
@@ -950,6 +955,12 @@ interface AppState {
 	invalidateChatResources: (scope: ChatResourceScope) => void;
 	installChatResources: (read: ChatResourceRead, snapshot: SessionResources) => void;
 	failChatResources: (read: ChatResourceRead, error: string) => void;
+	appendChatResourceHistory: (
+		read: ChatResourceScope & { connectionGeneration: number },
+		kind: ResourceKind,
+		after: string,
+		page: readonly ResourceRecord[],
+	) => void;
 	clearChatResources: (scope: ChatResourceScope) => void;
 	mcpByWorkspace: Record<string, McpWorkspaceProjection>;
 	mcpRevision: number;
@@ -2421,6 +2432,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						...state.resourceSnapshots[scope.workspaceId],
 						[scope.sessionId]: {
 							snapshot: previous?.snapshot ?? null,
+							...(previous?.older ? { older: previous.older } : {}),
 							connectionGeneration: previous?.connectionGeneration ?? null,
 							revision,
 							fresh: false,
@@ -2438,6 +2450,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				snapshot.sessionId !== read.sessionId
 			)
 				return {};
+			const previous = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
+			const older =
+				previous?.connectionGeneration === read.connectionGeneration
+					? carryOlderResources(previous, snapshot)
+					: undefined;
 			return {
 				resourceSnapshots: {
 					...state.resourceSnapshots,
@@ -2445,11 +2462,33 @@ export const useAppStore = create<AppState>((set, get) => ({
 						...state.resourceSnapshots[read.workspaceId],
 						[read.sessionId]: {
 							snapshot,
+							...(older ? { older } : {}),
 							connectionGeneration: read.connectionGeneration,
 							revision: read.revision,
 							fresh: true,
 							error: null,
 						},
+					},
+				},
+			};
+		}),
+	appendChatResourceHistory: (read, kind, after, page) =>
+		set((state) => {
+			const projection = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
+			if (
+				!projection ||
+				projection.connectionGeneration !== read.connectionGeneration ||
+				!isChatResourceConnectionCurrent(state, read)
+			)
+				return {};
+			const older = appendOlderResources(projection, kind, after, page);
+			if (!older) return {};
+			return {
+				resourceSnapshots: {
+					...state.resourceSnapshots,
+					[read.workspaceId]: {
+						...state.resourceSnapshots[read.workspaceId],
+						[read.sessionId]: { ...projection, older },
 					},
 				},
 			};
