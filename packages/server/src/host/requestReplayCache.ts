@@ -10,13 +10,10 @@ export class RequestReplayConflictError extends Error {
 export type ReplayLoad = Record<string, { pending: number; settled: number }>;
 
 export class RequestReplayOverflowError extends CodedError {
-	constructor(
-		clientKey: string,
-		readonly load: ReplayLoad | null,
-	) {
+	constructor(readonly load: ReplayLoad | null) {
 		super(
 			"REQUEST_REPLAY_OVERFLOW",
-			`replay namespace for client "${clientKey}" is full: unacknowledged results must be read first`,
+			"replay namespace is full: unacknowledged results must be read first",
 		);
 		this.name = "RequestReplayOverflowError";
 	}
@@ -54,13 +51,25 @@ function replayLoad(entries: Iterable<{ label: string; settled: boolean }>): Rep
 	return load;
 }
 
+export function heaviestReplayMethod(load: ReplayLoad): string | undefined {
+	const occupancy = (counts: ReplayLoad[string]) => counts.pending + counts.settled;
+	return Object.entries(load).sort(
+		([nameA, a], [nameB, b]) =>
+			occupancy(b) - occupancy(a) || b.pending - a.pending || nameA.localeCompare(nameB),
+	)[0]?.[0];
+}
+
 export class RequestReplayCache<T> {
 	private readonly clients = new Map<string, ClientNamespace<T>>();
+
+	private readonly overflowLowWater: number;
 
 	constructor(
 		private readonly maxRequestsPerClient = 512,
 		private readonly maxWeightPerClient = 16 * 1024 * 1024,
-	) {}
+	) {
+		this.overflowLowWater = Math.floor(maxRequestsPerClient * 0.9);
+	}
 
 	run(
 		clientKey: string,
@@ -86,9 +95,9 @@ export class RequestReplayCache<T> {
 		if (requests.size >= this.maxRequestsPerClient) {
 			const load = namespace.overflowing ? null : replayLoad(requests.values());
 			namespace.overflowing = true;
-			throw new RequestReplayOverflowError(clientKey, load);
+			throw new RequestReplayOverflowError(load);
 		}
-		namespace.overflowing = false;
+		if (requests.size < this.overflowLowWater) namespace.overflowing = false;
 
 		const result = Promise.resolve().then(execute);
 		const entry: ReplayEntry<T> = { fingerprint, label, result, settled: false, weight: 0 };
