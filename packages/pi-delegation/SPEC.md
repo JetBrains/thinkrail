@@ -179,8 +179,13 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   importing another workspace package's internals.
 - `DelegationRunDetails` is **authored here and mirrored into `@thinkrail/contracts`** (never
   imported from it, never re-exported by it) — the `pi-todos` DTO posture. Its `model`
-  (`provider/id`) and `thinkingLevel` are read off the child session on every snapshot, so they report
-  what the run actually uses (pi-clamped), never the requested value.
+  (`provider/id`) and `thinkingLevel` come together from the current run's latest finalized assistant
+  response, including failed or aborted responses. Before that run has a response, both come from the
+  child session's selection. The session keeps its virtual selection; dispatched responses identify
+  the physical model and pi-clamped effort, while failed routing can report the virtual selection.
+  A response without `thinkingLevel` leaves it absent,
+  never paired with the selection's effort. Progress and terminal snapshots use the same projection;
+  observations survive compaction and never carry over to a successor run.
 - Consumers import **through the barrel only**; `src/` is internal.
 - The raw child `AgentSession` never crosses the barrel — `ChildHandle` is the sole control path.
 

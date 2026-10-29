@@ -771,6 +771,7 @@ test("finalized invocation evidence survives a shrinking compaction context and 
 	expect(compacted).toBe(1);
 	expect(outcome.finalText).toBe("AFTER_COMPACTION");
 	expect(outcome.stopReason).toBe("stop");
+	expect(outcome.details).toMatchObject({ model: "resource-faux/worker", thinkingLevel: "off" });
 	const manager = SessionManager.open(child.record.sessionFile);
 	expect(manager.buildSessionContext().messages.length).toBeLessThan(20);
 	expect(manager.getLeafId()).toBe(outcome.historyEntryId);

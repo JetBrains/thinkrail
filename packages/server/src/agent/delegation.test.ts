@@ -1127,28 +1127,23 @@ test("children follow their parent's retained runtime generation across a flip",
 	const cwdOld = tmpDir("trdel-flip-old-");
 	const { sessionId: oldParent } = await createSession({ cwd: cwdOld, workspaceId: "ws-flip" });
 	const service = delegationServiceFor("ws-flip");
+	const gen2Faux = createFauxCore({
+		provider: "fauxg2",
+		api: "fauxg2",
+		models: [{ ...faux.getModel(), id: "fauxg2", name: "fauxg2" }],
+		tokensPerSecond: 4000,
+	});
 	const gen2 = await ModelRuntime.create({
 		credentials: new InMemoryCredentialStore(),
 		modelsPath: null,
 		allowModelNetwork: false,
 	});
 	gen2.registerProvider("fauxg2", {
-		api: faux.api,
+		api: gen2Faux.api,
 		baseUrl: "http://faux.local",
 		apiKey: "faux",
-		streamSimple: faux.streamSimple,
-		models: [
-			{
-				id: "fauxg2",
-				name: "fauxg2",
-				api: faux.api,
-				reasoning: false,
-				input: ["text"],
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 100_000,
-				maxTokens: 4096,
-			},
-		],
+		streamSimple: gen2Faux.streamSimple,
+		models: gen2Faux.models,
 	});
 	let newParent: string | undefined;
 	try {
@@ -1169,7 +1164,7 @@ test("children follow their parent's retained runtime generation across a flip",
 		const cwdNew = tmpDir("trdel-flip-new-");
 		({ sessionId: newParent } = await createSession({ cwd: cwdNew, workspaceId: "ws-flip" }));
 		expect(liveParentContext(newParent)?.modelRuntime).toBe(gen2);
-		faux.setResponses([fauxAssistantMessage("NEW_GEN_DONE")]);
+		gen2Faux.setResponses([fauxAssistantMessage("NEW_GEN_DONE")]);
 		const newChild = await service.createChild({
 			parent: newParent,
 			visibility: "hidden",
