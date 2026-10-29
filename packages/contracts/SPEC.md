@@ -723,7 +723,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   per-skill `decision` + `group` — for a `workspaceId`) / **`extension.list`** (`ExtensionCatalogEntry[]`,
   no params — the host registry joined with `disabledExtensions`; v82, **`EXTENSION_CATALOG_PROTOCOL_VERSION`**;
   there is no write method — the Settings switch writes `settings.update { disabledExtensions }`) / **`packages.*`**
-  (installed pi packages; v97, § pi packages below) / **`project.skills`** (the same, project-scoped, for
+  (installed pi packages; v98, § pi packages below) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
   `session.*` — `create`/`prompt`/`steer`/`followUp`/**`clearQueue`** (drain Pi's steering+followUp
@@ -1048,7 +1048,7 @@ contracts only.
 
 ## pi packages
 
-`PI_PACKAGES_PROTOCOL_VERSION` (97) gates the `packages.*` methods, the `packages.changed` channel and
+`PI_PACKAGES_PROTOCOL_VERSION` (98) gates the `packages.*` methods, the `packages.changed` channel and
 the `disabledPackages` setting. The DTOs describe what the host reads through pi's `DefaultPackageManager`
 and what it loaded, never pi's own types.
 

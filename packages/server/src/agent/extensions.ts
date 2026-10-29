@@ -270,6 +270,8 @@ export function providerExtensionPaths(
 				? [extension.resolvedPath]
 				: [],
 		);
+}
+
 let disabledPackagesResolver: () => ReadonlySet<string> = () => new Set();
 export function setDisabledPackagesResolver(resolver: () => ReadonlySet<string>): void {
 	disabledPackagesResolver = resolver;
