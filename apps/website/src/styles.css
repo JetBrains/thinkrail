@@ -2632,15 +2632,7 @@ html:not(.anim) .term-caret {
 .blog-post-content table img {
 	display: block;
 	width: 100%;
-	max-width: none;
-	max-height: 240px;
 	margin: 0;
-	border: none;
-	border-radius: 0;
-	object-fit: contain;
-	object-position: left center;
-	filter: drop-shadow(1px 0 0 var(--blog-border)) drop-shadow(-1px 0 0 var(--blog-border))
-		drop-shadow(0 1px 0 var(--blog-border)) drop-shadow(0 -1px 0 var(--blog-border));
 }
 
 .blog-post-content table a > img {

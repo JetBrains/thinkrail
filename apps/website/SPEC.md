@@ -346,10 +346,11 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   The folder resolves from the Astro root (not the working directory); a post without `images/` has
   none, but any other read failure fails the build, and `validateBuild` fails when a relative link on a
   post has no built file — a silently empty route would otherwise ship 404 links.
-- **Table images are thumbnails**: a linked image's cell takes 60% of its row and the image fills it,
-  capped at 240px high (`object-fit: contain`, outline drawn around the painted image). The width stays
-  definite so lazy images reserve their box before loading — a `width: auto` box-fit was rejected because
-  unloaded images collapse to 0×0, shift the layout and all load at once. Below 520px of *content* width
+- **Table images are thumbnails**: a linked image's cell takes 60% of its row and the image fills its
+  width at its own aspect ratio — no height cap, since a capped, letterboxed thumbnail left the cell's
+  width unused. The width stays definite so lazy images reserve their box before loading — a
+  `width: auto` box-fit was rejected because unloaded images collapse to 0×0, shift the layout and all
+  load at once. Below 520px of *content* width
   (a container query: the blog pane's width does not follow the viewport) the cells stack. An all-empty
   header row is hidden, so a post can lay rows out as header-less tables (e.g. alternating image sides).
   Thumbnails are still Astro's full-resolution WebP, lazy-loaded; true downscaled thumbnails are deferred.
