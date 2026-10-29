@@ -39,8 +39,11 @@ export type GitBytesResult = {
 
 export type GitAsyncBytesResult = Omit<GitBytesResult, "failure"> & Pick<GitResult, "failure">;
 
-type GitSyncOptions = {
+export type GitSyncOptions = {
 	timeoutMs?: number | null;
+	action?: string;
+	consequence?: string;
+	onTimeout?: "return";
 };
 
 type GitAsyncOptions = {
@@ -71,6 +74,28 @@ function syncDeadline(timeoutMs: number | null | undefined) {
 	return timeoutMs === null ? {} : { timeoutMs: timeoutMs ?? syncTimeoutMs };
 }
 
+function gitSubcommand(args: readonly string[]): string {
+	for (let index = 0; index < args.length; index++) {
+		const arg = args[index] ?? "";
+		if (arg === "-c" || arg === "-C") index++;
+		else if (!arg.startsWith("-")) return `git ${arg}`;
+	}
+	return "git";
+}
+
+function syncTimeout<T extends { err: string; failure: "timeout" }>(
+	result: T,
+	args: readonly string[],
+	opts: GitSyncOptions,
+): T {
+	if (opts.onTimeout === "return") return result;
+	throw new GitTimeoutError(
+		opts.action ?? `run ${gitSubcommand(args)}`,
+		result.err,
+		opts.consequence,
+	);
+}
+
 function boundedStderr(raw: string): string {
 	const err = raw.trim();
 	if (err.length <= MAX_STDERR_CHARS) return err;
@@ -92,7 +117,12 @@ export function git(
 	});
 	if (result.timedOut) {
 		const waitedMs = performance.now() - started;
-		return { ok: false, out: "", ...timeoutFailure({ err: result.stderr, waitedMs }, false) };
+		const failed = {
+			ok: false,
+			out: "",
+			...timeoutFailure({ err: result.stderr, waitedMs }, false),
+		};
+		return syncTimeout(failed, args, opts);
 	}
 	return {
 		ok: result.launched && result.exitCode === 0,
@@ -114,11 +144,12 @@ export function gitBytes(
 	});
 	if (result.timedOut) {
 		const waitedMs = performance.now() - started;
-		return {
+		const failed = {
 			ok: false,
 			out: new Uint8Array(),
 			...timeoutFailure({ err: result.stderr, waitedMs }, false),
 		};
+		return syncTimeout(failed, args, opts);
 	}
 	return {
 		ok: result.launched && result.exitCode === 0,

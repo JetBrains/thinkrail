@@ -30,6 +30,7 @@ import {
 } from "./diffScope";
 import {
 	type GitResult,
+	type GitSyncOptions,
 	git,
 	gitAsync,
 	gitAsyncBytes,
@@ -50,6 +51,8 @@ function workspace(workspaceId: string): Workspace {
 	return ws;
 }
 
+const COMMIT_PATHS = "commit the TODO's changes";
+
 export function gitCommitPaths(
 	workspaceId: string,
 	message: string,
@@ -61,6 +64,7 @@ export function gitCommitPaths(
 	if (!unmerged.ok || unmerged.out) return null;
 	const indexOut = git(cwd, ["rev-parse", "--git-path", "index"]);
 	if (!indexOut.ok || !indexOut.out) return null;
+	const before = headShaAt(cwd);
 	const indexPath = isAbsolute(indexOut.out) ? indexOut.out : resolve(cwd, indexOut.out);
 	let saved: Buffer | null = null;
 	try {
@@ -68,34 +72,39 @@ export function gitCommitPaths(
 	} catch {
 		saved = null;
 	}
-	const restore = (): null => {
+	const restoreIndex = (result: GitResult): null => {
 		try {
 			if (saved === null) rmSync(indexPath, { force: true });
 			else writeFileSync(indexPath, saved);
 		} catch {}
+		throwOnTimeout(result, COMMIT_PATHS);
 		return null;
 	};
-	const writer = { timeoutMs: INDEX_WRITE_TIMEOUT_MS };
-	if (!git(cwd, ["--literal-pathspecs", "add", "-A", "--", ...paths], writer).ok) return restore();
-	if (git(cwd, ["--literal-pathspecs", "diff", "--cached", "--quiet", "--", ...paths]).ok)
-		return restore();
-	const before = headShaAt(cwd);
+	const writer = { timeoutMs: INDEX_WRITE_TIMEOUT_MS, action: COMMIT_PATHS };
+	const staging = { ...writer, onTimeout: "return" as const };
+	const added = git(cwd, ["--literal-pathspecs", "add", "-A", "--", ...paths], staging);
+	if (!added.ok) return restoreIndex(added);
+	const staged = git(
+		cwd,
+		["--literal-pathspecs", "diff", "--cached", "--quiet", "--", ...paths],
+		staging,
+	);
+	if (staged.ok || staged.failure === "timeout") return restoreIndex(staged);
 	const committed = git(
 		cwd,
 		["--literal-pathspecs", "commit", "--no-verify", "-m", message, "--", ...paths],
-		writer,
+		staging,
 	);
 	const sha = headShaAt(cwd, writer);
 	if (committed.ok) return sha ? { sha } : null;
-	return sha && sha !== before && isOurCommit(cwd, { sha, before, message, paths }, writer)
-		? { sha }
-		: restore();
+	if (sha === before) return restoreIndex(committed);
+	return sha && isOurCommit(cwd, { sha, before, message, paths }, writer) ? { sha } : null;
 }
 
 function isOurCommit(
 	cwd: string,
 	commit: { sha: string; before: string | null; message: string; paths: string[] },
-	opts: { timeoutMs: number | null },
+	opts: GitSyncOptions,
 ) {
 	if (parentOf(cwd, commit.sha, opts) !== commit.before) return false;
 	const body = git(cwd, ["log", "-1", "--format=%B", "--end-of-options", commit.sha, "--"], opts);
@@ -115,10 +124,10 @@ function isOurCommit(
 		],
 		opts,
 	);
-	return !touched.ok && touched.failure === undefined && !touched.err;
+	return !touched.ok && !touched.err;
 }
 
-function parentOf(cwd: string, sha: string, opts: { timeoutMs: number | null }) {
+function parentOf(cwd: string, sha: string, opts: GitSyncOptions) {
 	const parent = git(
 		cwd,
 		["rev-parse", "--verify", "--quiet", "--end-of-options", `${sha}^`],
@@ -128,25 +137,23 @@ function parentOf(cwd: string, sha: string, opts: { timeoutMs: number | null }) 
 }
 
 export function gitHeadSha(workspaceId: string): string | null {
-	const head = throwOnTimeout(
-		git(workspace(workspaceId).worktreePath, ["rev-parse", "--verify", "--quiet", "HEAD"]),
-		"read HEAD",
-	);
-	return head.ok && head.out ? head.out : null;
+	return headShaAt(workspace(workspaceId).worktreePath);
 }
 
-export function headShaAt(
-	repoPath: string,
-	opts: { timeoutMs?: number | null } = {},
-): string | null {
-	const head = git(repoPath, ["rev-parse", "--verify", "--quiet", "HEAD"], opts);
+export function headShaAt(repoPath: string, opts: GitSyncOptions = {}): string | null {
+	const head = git(repoPath, ["rev-parse", "--verify", "--quiet", "HEAD"], {
+		action: "read HEAD",
+		...opts,
+	});
 	return head.ok && head.out ? head.out : null;
 }
 
 export function readCommitSubject(workspaceId: string, sha: string): string | null {
 	if (!/^[0-9a-f]{4,64}$/.test(sha)) return null;
 	const cwd = workspace(workspaceId).worktreePath;
-	const out = git(cwd, ["log", "-1", "--format=%s", "--end-of-options", `${sha}^{commit}`, "--"]);
+	const out = git(cwd, ["log", "-1", "--format=%s", "--end-of-options", `${sha}^{commit}`, "--"], {
+		action: "read the commit subject",
+	});
 	return out.ok ? plainText(out.out) : null;
 }
 
@@ -157,13 +164,17 @@ export function resolveListedCommit(workspaceId: string, sha: string): string | 
 	const cwd = ws.worktreePath;
 	const canonical = resolveCommitOid(cwd, sha);
 	if (!canonical) return null;
-	const listed = git(cwd, [
-		"rev-list",
-		`--max-count=${COMMIT_LIST_MAX}`,
-		"--end-of-options",
-		`${diffBaseRef(ws)}..HEAD`,
-		"--",
-	]);
+	const listed = git(
+		cwd,
+		[
+			"rev-list",
+			`--max-count=${COMMIT_LIST_MAX}`,
+			"--end-of-options",
+			`${diffBaseRef(ws)}..HEAD`,
+			"--",
+		],
+		{ action: "list the branch commits" },
+	);
 	if (!listed.ok) return null;
 	return listed.out.split("\n").includes(canonical) ? canonical : null;
 }
@@ -230,20 +241,18 @@ export async function listBranches(projectId: string): Promise<BranchList> {
 }
 
 export function listRemotes(repoPath: string): string[] {
-	return lines(git(repoPath, ["remote"]).out);
+	return lines(git(repoPath, ["remote"], { action: "list the remotes" }).out);
 }
 
 export function resolveDefaultBranch(repoPath: string): string {
 	const originHeadRef = `${REMOTE_REF_PREFIX}origin/HEAD`;
 	const action = "resolve the default branch";
-	const originHead = throwOnTimeout(git(repoPath, ["symbolic-ref", originHeadRef]), action);
+	const originHead = git(repoPath, ["symbolic-ref", originHeadRef], { action });
 	const originDefault = originHead.ok ? refWithin(originHead.out, REMOTE_REF_PREFIX) : null;
 	if (originDefault) return originDefault;
 	const rows = lines(
-		throwOnTimeout(
-			git(repoPath, ["for-each-ref", "--format=%(refname)\t%(symref)", "refs/remotes"]),
-			action,
-		).out,
+		git(repoPath, ["for-each-ref", "--format=%(refname)\t%(symref)", "refs/remotes"], { action })
+			.out,
 	).map((line) => line.split("\t"));
 	const otherHead = rows.find(
 		([ref, symref]) =>
@@ -276,9 +285,9 @@ function detachedAtTopLevel(repoPath: string, topLevel: GitResult): "HEAD" | nul
 }
 
 export function tryCurrentBranch(repoPath: string): string | null {
-	const head = throwOnTimeout(git(repoPath, HEAD_BRANCH_ARGS), READ_BRANCH);
+	const head = git(repoPath, HEAD_BRANCH_ARGS, { action: READ_BRANCH });
 	if (head.ok && head.out) return head.out;
-	return detachedAtTopLevel(repoPath, throwOnTimeout(git(repoPath, TOP_LEVEL_ARGS), READ_BRANCH));
+	return detachedAtTopLevel(repoPath, git(repoPath, TOP_LEVEL_ARGS, { action: READ_BRANCH }));
 }
 
 export function currentBranch(repoPath: string): string {
@@ -296,14 +305,16 @@ function remoteRefArgs(ref: string): string[] {
 	return ["rev-parse", "--verify", "--quiet", "--end-of-options", `${REMOTE_REF_PREFIX}${ref}`];
 }
 
+const RESOLVE_REMOTE_BRANCH = "resolve a remote branch";
+
 function remoteOidFrom(result: GitResult): string | null {
-	throwOnTimeout(result, "resolve a remote branch");
+	throwOnTimeout(result, RESOLVE_REMOTE_BRANCH);
 	return result.ok && result.out !== "" ? result.out : null;
 }
 
 export function remoteRefOid(repoPath: string, ref: string): string | null {
 	if (!isSafeRef(ref)) return null;
-	return remoteOidFrom(git(repoPath, remoteRefArgs(ref)));
+	return remoteOidFrom(git(repoPath, remoteRefArgs(ref), { action: RESOLVE_REMOTE_BRANCH }));
 }
 
 export async function remoteRefOidAsync(repoPath: string, ref: string): Promise<string | null> {
@@ -417,19 +428,16 @@ function parseNameStatus(output: string): Array<{ code: string; path: string }> 
 export function gitUncommittedPaths(workspaceId: string): string[] {
 	const cwd = workspace(workspaceId).worktreePath;
 	const slow = { raw: true, timeoutMs: SLOW_GIT_TIMEOUT_MS };
-	const tracked = throwOnTimeout(
-		git(
-			cwd,
-			["diff", "--name-only", "-z", "--no-ext-diff", "--end-of-options", "HEAD", "--"],
-			slow,
-		),
-		"read the changed files",
+	const tracked = git(
+		cwd,
+		["diff", "--name-only", "-z", "--no-ext-diff", "--end-of-options", "HEAD", "--"],
+		{ ...slow, action: "read the changed files" },
 	);
 	if (!tracked.ok) throw diffFailure(tracked.err);
-	const untracked = throwOnTimeout(
-		git(cwd, ["ls-files", "-z", "--others", "--exclude-standard"], slow),
-		"read the untracked files",
-	);
+	const untracked = git(cwd, ["ls-files", "-z", "--others", "--exclude-standard"], {
+		...slow,
+		action: "read the untracked files",
+	});
 	if (!untracked.ok) throw diffFailure(untracked.err);
 	return [...new Set([...nulFields(tracked.out), ...nulFields(untracked.out)])].sort();
 }
@@ -483,7 +491,7 @@ function blobArgs(ref: string, path: string): string[] {
 }
 
 export function readBlobAt(worktreePath: string, ref: string, path: string): string | null {
-	return blobFrom(git(worktreePath, blobArgs(ref, path), { raw: true }));
+	return blobFrom(git(worktreePath, blobArgs(ref, path), { raw: true, onTimeout: "return" }));
 }
 
 export function readBlobBytesAt(
@@ -494,6 +502,7 @@ export function readBlobBytesAt(
 	return strictBlobFrom(
 		gitBytes(worktreePath, blobArgs(ref, path), {
 			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+			action: "read the file diff",
 		}),
 	);
 }

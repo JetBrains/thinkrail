@@ -51,8 +51,9 @@ bootstrap it into one so it can be opened.
   (bootstrap a plain directory: `git init` + `git add -A` + an **allow-empty** initial commit — committing
   the folder's contents, or an empty commit when it is empty, so the repo gets a HEAD and `git worktree
   add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path throws; a
-  timed-out top-level probe throws `GIT_TIMEOUT` rather than classifying a slow repo as `initable`, and a
-  failed add/commit removes `.git` only when this call created it).
+  timed-out top-level probe throws `GIT_TIMEOUT` rather than classifying a slow repo as `initable`; a
+  timed-out `user.name`/`user.email` probe throws rather than committing as ThinkRail; a failed
+  init/add/commit removes `.git` only when this call created it).
   **`createProject(parentPath, name)`** is the start-from-nothing path: `name` must be one plain folder
   name (no separators, not `.`/`..`), the resolved parent is created when missing, the target folder is
   made — an existing **empty** folder is reused, a non-empty one or a file rejects — and then gets the same

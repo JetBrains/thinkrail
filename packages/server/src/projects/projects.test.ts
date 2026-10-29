@@ -423,6 +423,32 @@ posix("initProject removes the .git it created when the initial commit fails", (
 	expect(existsSync(join(dir, ".git"))).toBe(false);
 });
 
+posix(
+	"a git identity probe that times out fails the init instead of committing as ThinkRail",
+	() => {
+		const dir = join(dataDir, "slow-identity");
+		mkdirSync(dir);
+		writeFileSync(join(dir, "file.txt"), "x\n");
+
+		setSyncGitTimeoutForTests(2_000);
+		try {
+			withGitWrapper('*" config user.email "*) sleep 30;;', () => {
+				expect(() => initProject(dir)).toThrow(
+					expect.objectContaining({
+						code: "GIT_TIMEOUT",
+						message: expect.stringMatching(/^Could not read the git identity/),
+					}),
+				);
+			});
+		} finally {
+			setSyncGitTimeoutForTests(undefined);
+		}
+
+		expect(existsSync(join(dir, ".git"))).toBe(false);
+		expect(listProjects()).toHaveLength(0);
+	},
+);
+
 test("legacy project records default to open in both projections", () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);

@@ -185,8 +185,8 @@ posix("the sync runners kill a hanging git at the deadline instead of holding th
 	const [text, bytes] = (() => {
 		try {
 			return [
-				git(repo, ["rev-parse", "HEAD"], { timeoutMs: 300 }),
-				gitBytes(repo, ["cat-file", "blob", "HEAD:x"], { timeoutMs: 300 }),
+				git(repo, ["rev-parse", "HEAD"], { timeoutMs: 300, onTimeout: "return" }),
+				gitBytes(repo, ["cat-file", "blob", "HEAD:x"], { timeoutMs: 300, onTimeout: "return" }),
 			];
 		} finally {
 			if (path === undefined) delete process.env.PATH;
@@ -208,6 +208,34 @@ posix("the sync runners kill a hanging git at the deadline instead of holding th
 	}
 	const exited = git(repo, ["rev-parse", "--verify", "--quiet", "refs/heads/missing"]);
 	expect(throwOnTimeout(exited, "read HEAD")).toBe(exited);
+});
+
+posix("a sync git timeout throws GIT_TIMEOUT unless the caller opts out", () => {
+	const bin = join(dir, "bin");
+	mkdirSync(bin);
+	writeFileSync(join(bin, "git"), "#!/bin/sh\nsleep 30\n");
+	chmodSync(join(bin, "git"), 0o755);
+	const path = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+	setSyncGitTimeoutForTests(300);
+	try {
+		const timeout = expect.objectContaining({ name: "GitTimeoutError", code: "GIT_TIMEOUT" });
+		expect(() => git(repo, ["-c", "a.b=c", "--literal-pathspecs", "add", "-A"])).toThrow(
+			/^Could not run git add: timed out after 1s — git did not exit$/,
+		);
+		expect(() => gitBytes(repo, ["cat-file", "blob", "HEAD:x"])).toThrow(timeout);
+		expect(() =>
+			git(repo, ["remote"], { action: "list the remotes", consequence: "Nothing was changed." }),
+		).toThrow(
+			"Could not list the remotes: timed out after 1s — git did not exit. Nothing was changed.",
+		);
+		expect(git(repo, ["remote"], { onTimeout: "return" }).failure).toBe("timeout");
+		expect(gitBytes(repo, ["remote"], { onTimeout: "return" }).failure).toBe("timeout");
+	} finally {
+		setSyncGitTimeoutForTests(undefined);
+		if (path === undefined) delete process.env.PATH;
+		else process.env.PATH = path;
+	}
 });
 
 test("a timeout's consequence follows the git detail as its own sentence", () => {
@@ -253,7 +281,7 @@ posix(
 		writeFileSync(join(repo, "a.txt"), "hi\n");
 
 		const started = performance.now();
-		const result = git(repo, ["add", "-A"], { timeoutMs: 500 });
+		const result = git(repo, ["add", "-A"], { timeoutMs: 500, onTimeout: "return" });
 
 		expect(performance.now() - started).toBeLessThan(5_000);
 		expect(result.failure).toBe("timeout");
@@ -282,7 +310,7 @@ posix("a null timeoutMs runs sync git with no deadline at all", () => {
 	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
 	setSyncGitTimeoutForTests(300);
 	try {
-		expect(git(repo, ["rev-parse", "--git-dir"]).failure).toBe("timeout");
+		expect(git(repo, ["rev-parse", "--git-dir"], { onTimeout: "return" }).failure).toBe("timeout");
 		expect(git(repo, ["rev-parse", "--git-dir"], { timeoutMs: null }).ok).toBe(true);
 	} finally {
 		setSyncGitTimeoutForTests(undefined);

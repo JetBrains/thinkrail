@@ -31,7 +31,7 @@ function commitOidFrom(result: GitResult): string | null {
 }
 
 export function resolveCommitOid(worktreePath: string, ref: string): string | null {
-	return commitOidFrom(throwOnTimeout(git(worktreePath, commitOidArgs(ref)), `resolve ${ref}`));
+	return commitOidFrom(git(worktreePath, commitOidArgs(ref), { action: `resolve ${ref}` }));
 }
 
 async function resolveCommitOidAsync(worktreePath: string, ref: string): Promise<string | null> {

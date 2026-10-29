@@ -1073,34 +1073,66 @@ posix("a commit that landed before git reported failure is kept, not rolled back
 	expect(stagedPaths()).toEqual([]);
 });
 
-posix("a failed commit never claims another writer's commit that landed meanwhile", async () => {
-	seedWorkspace();
-	writeFileSync(join(repo, "impl.ts"), "export {};\n");
-	const executable = JSON.stringify(Bun.which("git"));
-	const bin = join(dataDir, "bin");
-	mkdirSync(bin);
-	writeFileSync(
-		join(bin, "git"),
-		[
-			"#!/bin/sh",
-			'case " $* " in *" --no-verify "*)',
-			`  tree=$(${executable} -C "${repo}" rev-parse "HEAD^{tree}")`,
-			`  c=$(${executable} -C "${repo}" commit-tree "$tree" -p HEAD -m "agent commit")`,
-			`  ${executable} -C "${repo}" update-ref HEAD "$c"`,
-			'  echo "fatal: Unable to create index.lock: File exists" >&2; exit 128;;',
-			"esac",
-			`exec ${executable} "$@"`,
-			"",
-		].join("\n"),
-	);
-	chmodSync(join(bin, "git"), 0o755);
-	process.env.PATH = bin;
+posix(
+	"a failed commit never claims or rolls back another writer's commit that landed meanwhile",
+	async () => {
+		seedWorkspace();
+		writeFileSync(join(repo, "impl.ts"), "export {};\n");
+		const executable = JSON.stringify(Bun.which("git"));
+		const bin = join(dataDir, "bin");
+		mkdirSync(bin);
+		writeFileSync(
+			join(bin, "git"),
+			[
+				"#!/bin/sh",
+				'case " $* " in *" --no-verify "*)',
+				`  tree=$(${executable} -C "${repo}" rev-parse "HEAD^{tree}")`,
+				`  c=$(${executable} -C "${repo}" commit-tree "$tree" -p HEAD -m "agent commit")`,
+				`  ${executable} -C "${repo}" update-ref HEAD "$c"`,
+				'  echo "fatal: Unable to create index.lock: File exists" >&2; exit 128;;',
+				"esac",
+				`exec ${executable} "$@"`,
+				"",
+			].join("\n"),
+		);
+		chmodSync(join(bin, "git"), 0o755);
+		process.env.PATH = bin;
 
-	const committed = gitCommitPaths("w1", "feat: step", ["impl.ts"]);
-	process.env.PATH = savedPath;
-	expect(committed).toBeNull();
-	expect(stagedPaths()).toEqual([]);
-});
+		const committed = gitCommitPaths("w1", "feat: step", ["impl.ts"]);
+		process.env.PATH = savedPath;
+		expect(committed).toBeNull();
+		expect(stagedPaths()).toEqual(["impl.ts"]);
+	},
+);
+
+function gitText(...args: string[]): string {
+	return new TextDecoder()
+		.decode(Bun.spawnSync(["git", "-C", repo, ...args], { stdout: "pipe" }).stdout)
+		.trim();
+}
+
+posix(
+	"a commit that landed under a rewritten subject keeps the index instead of staging its inverse",
+	() => {
+		seedWorkspace();
+		writeFileSync(join(repo, "impl.ts"), "export {};\n");
+		const hooks = join(dataDir, "hooks");
+		mkdirSync(hooks);
+		writeFileSync(join(hooks, "prepare-commit-msg"), '#!/bin/sh\necho "hook: rewritten" > "$1"\n');
+		chmodSync(join(hooks, "prepare-commit-msg"), 0o755);
+		git(repo, "config", "core.hooksPath", hooks);
+		const before = gitHeadSha("w1");
+		installGitWrapper("commit", true);
+
+		expect(gitCommitPaths("w1", "feat: step", ["impl.ts"])).toBeNull();
+
+		process.env.PATH = savedPath;
+		expect(gitText("rev-parse", "HEAD^")).toBe(before ?? "");
+		expect(gitText("log", "-1", "--format=%s")).toBe("hook: rewritten");
+		expect(gitText("diff", "--cached", "--name-status")).toBe("");
+		expect(gitText("ls-files", "--", "impl.ts")).toBe("impl.ts");
+	},
+);
 
 test("a failed commit preserves index-only state — an intent-to-add entry survives byte-for-byte", async () => {
 	seedWorkspace();

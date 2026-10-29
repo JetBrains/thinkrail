@@ -66,6 +66,8 @@ const canSymlink = (() => {
 	}
 })();
 
+const posix = test.skipIf(process.platform === "win32");
+
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
@@ -200,6 +202,30 @@ test("createWorkspace checks out the remote-tracking ref, not a local branch of 
 	expect(ws.baseBranch).toBe("origin/main");
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(originSha);
 });
+
+posix(
+	"a remote list that times out fails createWorkspace instead of checking out a local decoy",
+	async () => {
+		const remoteRepo = join(dataDir, "remote.git");
+		git(repo, "init", "--bare", remoteRepo);
+		git(repo, "remote", "add", "origin", remoteRepo);
+		git(repo, "push", "origin", "main");
+		git(repo, "fetch", "origin");
+		writeFileSync(join(repo, "decoy.md"), "decoy\n");
+		git(repo, "add", "-A");
+		git(repo, "commit", "-m", "decoy");
+		git(repo, "update-ref", "refs/heads/origin/main", "HEAD");
+
+		setSyncGitTimeoutForTests(2_000);
+		const create = withGitWrapper('case " $* " in *" remote ") sleep 30;; esac', () =>
+			createWorkspace("p1", undefined, "origin/main"),
+		).finally(() => setSyncGitTimeoutForTests(undefined));
+
+		await expect(create).rejects.toThrow(/^Could not list the remotes: timed out/);
+		expect(existsSync(join(dataDir, "worktrees", "repo"))).toBe(false);
+		expect(await worktrees()).toHaveLength(0);
+	},
+);
 
 test("createWorkspace fails with git's own words when the base fetch fails", async () => {
 	git(repo, "remote", "add", "origin", join(dataDir, "missing.git"));
@@ -381,8 +407,6 @@ test("external workspace branch metadata converges on refresh and list", async (
 	).toBe("feature/list-refresh");
 });
 
-const posix = test.skipIf(process.platform === "win32");
-
 async function withGitWrapper<T>(script: string, run: () => T | Promise<T>): Promise<T> {
 	const bin = join(dataDir, "wrapped-bin");
 	mkdirSync(bin, { recursive: true });
@@ -407,7 +431,7 @@ posix(
 		setWorkspacePublisher((event) => events.push(event));
 
 		const hang = 'case "$*" in *symbolic-ref*) sleep 30;; esac';
-		setSyncGitTimeoutForTests(300);
+		setSyncGitTimeoutForTests(2_000);
 		const listed = await withGitWrapper(hang, async () => {
 			const result = await listWorkspaces("p1", { includeDiffStats: false });
 			refreshUserOwnedWorkspace(stored?.id ?? "");

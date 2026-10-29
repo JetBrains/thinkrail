@@ -78,7 +78,8 @@ as a permanently open foreign window and force every sibling chat into the fallb
 - **Commit the item's delta.** `git.gitCommitPaths` commits **exactly the delta paths** — the item's own
   work, never "everything currently dirty" — `--no-verify` (the commit must not run/fail the
   user's hooks; author/committer stay the user's own config — it's their branch). It
-  preserves the user's index across any failure (see [[submodule-server-git]]). The item gets **one
+  preserves the user's index across any failure, unless HEAD moved to a commit that is not ours (see
+  [[submodule-server-git]]). The item gets **one
   `commit` artifact** (the sha, `label` = the item title) and **nothing else**: the commit is
   self-sufficient — its file list is *derived*, never denormalized into the JSON (see the `listTodos`
   decoration below).
