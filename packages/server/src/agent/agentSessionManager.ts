@@ -951,6 +951,7 @@ function runGatedReload(entry: Entry): Promise<void> {
 				entry.reloadRunning = null;
 				applySubagentTools(entry);
 				applyReviewTool(entry);
+				if (reloaded) activateRegistryTools(entry);
 				applyExtensionTools(entry, {
 					allowReload: entry.reloadPolicyGeneration !== extensionPolicy.generation,
 				});
