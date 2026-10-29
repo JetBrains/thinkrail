@@ -324,12 +324,35 @@ twice.
 ## Navigation and window security
 
 The native window permits navigation only within its exact loopback origin. User-requested external URLs
-open through the OS instead of replacing the app surface. Navigation listeners use the SDK emitter's
-webview-scoped `will-navigate-<id>` and `new-window-open-<id>` channels; the unscoped payload has no
-webview id, and the instance listener's typed event list omits popups. Payload types are derived from
-SDK event factories, not copied into local declarations. Detail can be a raw URL, a popup object, or
-serialized navigation JSON; bounded decoding retains only a string URL and the HTTP/HTTPS/mailto
-allowlist. Native `navigationRules` enforce confinement: navigation-event responses cannot cancel it.
+open through the OS exactly once instead of replacing the app surface. Native navigation rules enforce
+confinement: navigation-event responses cannot cancel it. The launcher applies them with
+`webview.setNavigationRules` right after creating the window: block everything, then allow the origin,
+`about:srcdoc`, and same-origin `blob:`. HTML, SVG and notebook previews update `srcDoc` in place and
+every srcdoc load is policy-checked, so blocking `about:srcdoc` blanks them; `blob:` keeps downloads
+working. Electrobun 2.0.5 documents a `navigationRules` constructor option but never forwards it to
+native code, so the launcher does not use it.
+
+Every external link activation reaches the OS through one path. The desktop preload turns unmodified
+primary and middle clicks on external links, whatever their `target`, and `window.open` of external URLs
+into a same-window navigation. The rules cancel it, and the native layer reports it once through
+`will-navigate` on every platform. The per-platform new-window paths are unusable. On macOS, a `_blank`
+click that passes the policy check produces both `will-navigate` and `new-window-open`. WebKitGTK and
+WebView2 report nothing for `_blank` or `window.open`, because Electrobun handles neither
+`NEW_WINDOW_ACTION` nor `NewWindowRequested` (the WebView2 half is
+[electrobun#569](https://github.com/blackboardsh/electrobun/issues/569)). Cmd/Ctrl-click keeps
+Electrobun's own preload path, which emits `new-window-open`. Clicks the page already handled, `download`
+links, same-origin URLs, and schemes outside the allowlist below stay with the page. An Electrobun
+upgrade must re-check both gaps. Once the constructor option reaches native code, the explicit call
+becomes redundant. Once every renderer reports and cancels new-window requests, the preload routing can
+go. Post-mortem: before the rules were applied explicitly, every navigation was allowed. A non-`_blank`
+external navigation replaced the app with the external page, which then also received the desktop
+preload bridge, and macOS opened `_blank` links twice.
+
+Navigation listeners use the SDK emitter's webview-scoped `will-navigate-<id>` and `new-window-open-<id>`
+channels; the unscoped payload has no webview id, and the instance listener's typed event list omits
+popups. Payload types are derived from SDK event factories, not copied into local declarations. Detail
+can be a raw URL, a popup object, or serialized navigation JSON; bounded decoding retains only a string
+URL and the HTTP/HTTPS/mailto allowlist, which the preload routing reuses.
 
 A desktop preload sends typed, one-way route, local-preference, page-zoom, and title-bar double-click
 messages, and is the only writer of the window-chrome CSS properties described above. It wraps
@@ -370,8 +393,9 @@ Abrupt death relies only on operating-system process cleanup.
 
 Artifact tests drive this same entrypoint through opt-in environment/ready/control seams: isolated user
 data, a hidden neutral window for browser-backed tests, host/launcher ids and origin on DOM-ready, and
-normal quit. Native UI smoke can capture an external-open result and request one fixed navigation probe
-instead of launching the user's browser. With a title-bar probe file, two control commands dispatch
+normal quit. Native UI smoke records every external open instead of launching the user's browser. It
+also requests navigation probes aimed at a test-supplied cross-origin loopback origin: a scripted
+navigation, a plain link, a `_blank` link, `window.open`, and an in-place `srcdoc` update. With a title-bar probe file, two control commands dispatch
 synthetic `dblclick`s in the live webview: `title-bar-double-click` on the header, and
 `title-bar-double-click-no-drag` on the no-drag action cluster followed by the header in one task. The
 launcher records how many double-click messages it received and handled, plus the last handled
