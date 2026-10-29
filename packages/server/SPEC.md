@@ -101,7 +101,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
-| `search` | the search palette's host providers (files and specs from one root, plans, chats + transcripts, workspaces) and the transcript preview, ranked with the shared matcher | [search/SPEC.md](src/search/SPEC.md) |
+| `search` | the search palette's host providers (files and specs from one root, plans, chats + transcripts, workspaces) and the transcript preview, ranked with the shared matcher; Find in Files' bounded text search over the same root | [search/SPEC.md](src/search/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `registerBundledRuntime` seam; explicit package
@@ -113,7 +113,7 @@ the host from env via `bootHost` for dev/e2e.
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
 - `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `history`, `search`, `templates`, `analytics`, `feedback`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report)
-- `search` → `history` (`HistoryIndex.sessions()`), `spec` (`specSnapshot`), `todos` (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`); projects, workspace records and the file check (`fs.readableFileSize`) are injected by `host/search.ts`, never imported; it reads no file content (files and specs preview client-side over `fs.readFile`)
+- `search` → `history` (`HistoryIndex.sessions()`), `spec` (`specSnapshot`), `todos` (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files` and `grep`); projects, workspace records and the file check (`fs.readableFileSize`) are injected by `host/search.ts`, never imported; file content is read only by the bounded text search (`git grep` in a repository, a direct read of a chat folder's walked files) — files and specs preview client-side over `fs.readFile`
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)

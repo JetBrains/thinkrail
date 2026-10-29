@@ -72,6 +72,7 @@ export interface SearchService {
 		params: WsParams<"search.text">,
 		emit: (batch: TextSearchBatch) => void,
 	): WsResult<"search.text">;
+	cancelText(clientKey: string): void;
 	invalidateRoot(root: string): void;
 	forgetClient(clientKey: string): void;
 }
@@ -124,6 +125,11 @@ export function createSearchService(readers: SearchReaders): SearchService {
 	const latestSeq = new Map<string, number>();
 	const latestTextSeq = new Map<string, number>();
 	const textRuns = new Map<string, AbortController>();
+	const walkedFiles = async (root: string) => {
+		const list = await files.load(root, false);
+		if (list.failed) throw new Error("the walked file list is unavailable");
+		return list;
+	};
 
 	const visibleProjects = (audience: SearchAudience): Project[] =>
 		readers.projects().filter((project) => audience.chats || project.kind !== "chats");
@@ -275,10 +281,19 @@ export function createSearchService(readers: SearchReaders): SearchService {
 				{ query, caseSensitive: params.caseSensitive, wholeWord: params.wholeWord },
 				(batch) => send({ root: scope, ...batch }),
 				controller.signal,
+				{ files: walkedFiles },
 			)
-				.catch(() => send({ files: [], done: { reason: "failed", files: 0, lines: 0 } }))
+				.catch((error: unknown) => {
+					log.warn("text search failed", error);
+					send({ files: [], done: { reason: "failed", files: 0, lines: 0 } });
+				})
 				.finally(settle);
 			return { seq };
+		},
+
+		cancelText(clientKey) {
+			textRuns.get(clientKey)?.abort();
+			textRuns.delete(clientKey);
 		},
 
 		invalidateRoot(root) {

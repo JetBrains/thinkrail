@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
 	TEXT_SEARCH_LIMITS,
@@ -6,8 +6,13 @@ import {
 	type TextSearchEnd,
 	type TextSearchFile,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { gitAsyncStream, nonInteractiveGitEnv } from "../git";
+import { logger } from "../log";
+import { type FileList, isHiddenFromSearch, listRootFiles, SEARCH_HIDDEN_DIRS } from "./files";
 import type { SearchRoot } from "./providers";
+
+const log = logger("search");
 
 export interface TextQuery {
 	query: string;
@@ -18,24 +23,65 @@ export interface TextQuery {
 export const TEXT_SEARCH_BUDGET = {
 	gitTimeoutMs: 30_000,
 	flushMs: 60,
-	recordBytes: 64 * 1024,
+	recordBytes: TEXT_SEARCH_LIMITS.fileBytes + 8 * 1024,
 	rangesPerLine: 50,
+	binaryProbeBytes: 8_000,
 } as const;
 
-export function textSearchArgs(root: SearchRoot, query: TextQuery): string[] {
+const HIDDEN_PATHSPECS = SEARCH_HIDDEN_DIRS.map((name) => `:(exclude,glob)**/${name}/**`);
+const ERE_SPECIAL = /[.[\]()*+?{}|^$\\]/g;
+const REGEXP_SPECIAL = /[.*+?^${}()|[\]\\]/g;
+const isCased = (char: string): boolean => char.toLowerCase() !== char.toUpperCase();
+
+function isAscii(text: string): boolean {
+	for (let index = 0; index < text.length; index += 1) {
+		if (text.charCodeAt(index) > 0x7f) return false;
+	}
+	return true;
+}
+
+export function caseVariantsPattern(query: TextQuery): string | null {
+	if (query.caseSensitive || isAscii(query.query)) return null;
+	const chars = Array.from(query.query);
+	if (!chars.some((char) => !isAscii(char) && isCased(char))) return null;
+	return chars
+		.map((char) => {
+			const escaped = char.replace(ERE_SPECIAL, "\\$&");
+			if (!isCased(char)) return escaped;
+			const same = new RegExp(`^${char.replace(REGEXP_SPECIAL, "\\$&")}$`, "iu");
+			const lower = char.toLowerCase();
+			const upper = char.toUpperCase();
+			const variants = [
+				...new Set([char, lower, upper, upper.toLowerCase(), lower.toUpperCase()]),
+			].filter((variant) => same.test(variant));
+			return variants.length === 1 ? escaped : `(${variants.join("|")})`;
+		})
+		.join("");
+}
+
+export function textSearchArgs(query: TextQuery): string[] {
+	const pattern = caseVariantsPattern(query);
 	return [
+		"-c",
+		"grep.column=false",
+		"-c",
+		"grep.fullName=false",
 		"grep",
 		"--no-color",
 		"-n",
 		"-z",
 		"-I",
-		"--fixed-strings",
-		...(query.caseSensitive ? [] : ["-i"]),
+		...(pattern !== null
+			? ["--extended-regexp"]
+			: ["--fixed-strings", ...(query.caseSensitive ? [] : ["-i"])]),
 		...(query.wholeWord ? ["-w"] : []),
-		...(root.git ? ["--untracked"] : ["--no-index"]),
+		"--untracked",
 		"--exclude-standard",
 		"-e",
-		query.query,
+		pattern ?? query.query,
+		"--",
+		".",
+		...HIDDEN_PATHSPECS,
 	];
 }
 
@@ -46,19 +92,22 @@ function isBoundary(text: string, index: number): boolean {
 }
 
 export function matchRanges(text: string, query: TextQuery): [number, number][] {
-	const hay = query.caseSensitive ? text : text.toLowerCase();
-	const needle = query.caseSensitive ? query.query : query.query.toLowerCase();
-	if (!needle || hay.length !== text.length) return [];
+	if (!query.query) return [];
+	const pattern = new RegExp(
+		query.query.replace(REGEXP_SPECIAL, "\\$&"),
+		query.caseSensitive ? "gu" : "giu",
+	);
 	const ranges: [number, number][] = [];
-	let from = 0;
 	while (ranges.length < TEXT_SEARCH_BUDGET.rangesPerLine) {
-		const at = hay.indexOf(needle, from);
-		if (at === -1) break;
-		const end = at + needle.length;
+		const match = pattern.exec(text);
+		if (!match) break;
+		const at = match.index;
+		const end = at + match[0].length;
 		if (!query.wholeWord || (isBoundary(text, at - 1) && isBoundary(text, end))) {
 			ranges.push([at, end]);
+		} else {
+			pattern.lastIndex = at + 1;
 		}
-		from = end;
 	}
 	return ranges;
 }
@@ -101,44 +150,56 @@ function concat(parts: readonly Uint8Array[], bytes: number): Uint8Array {
 	return out;
 }
 
-function parseRecord(bytes: Uint8Array, decoder: TextDecoder): GrepRecord | null {
-	const pathEnd = bytes.indexOf(NUL);
-	if (pathEnd === -1) return null;
-	const lineEnd = bytes.indexOf(NUL, pathEnd + 1);
-	if (lineEnd === -1) return null;
-	const line = Number(decoder.decode(bytes.subarray(pathEnd + 1, lineEnd)));
-	if (!Number.isInteger(line) || line < 1) return null;
-	let text = decoder.decode(bytes.subarray(lineEnd + 1));
-	if (text.endsWith("\r")) text = text.slice(0, -1);
-	return { path: decoder.decode(bytes.subarray(0, pathEnd)), line, text };
-}
-
+/** A path may hold a newline: only the text field of `path NUL line NUL text` ends at LF. */
 export async function* grepRecords(chunks: AsyncIterable<Uint8Array>): AsyncGenerator<GrepRecord> {
 	const decoder = new TextDecoder();
-	let pending: Uint8Array[] = [];
-	let pendingBytes = 0;
+	let field = 0;
+	let parts: Uint8Array[] = [];
+	let partBytes = 0;
+	let recordBytes = 0;
 	let overflowed = false;
+	let path = "";
+	let line = 0;
+	const take = (): string => {
+		const value = decoder.decode(concat(parts, partBytes));
+		parts = [];
+		partBytes = 0;
+		return value;
+	};
 	for await (const chunk of chunks) {
 		let start = 0;
 		while (start < chunk.byteLength) {
-			const newline = chunk.indexOf(NEWLINE, start);
-			const end = newline === -1 ? chunk.byteLength : newline;
+			const found = chunk.indexOf(field === 2 ? NEWLINE : NUL, start);
+			const end = found === -1 ? chunk.byteLength : found;
 			if (!overflowed) {
-				const room = TEXT_SEARCH_BUDGET.recordBytes - pendingBytes;
+				const room = TEXT_SEARCH_BUDGET.recordBytes - recordBytes;
 				const piece = chunk.subarray(start, Math.min(end, start + room));
 				if (piece.byteLength > 0) {
-					pending.push(piece);
-					pendingBytes += piece.byteLength;
+					parts.push(piece);
+					partBytes += piece.byteLength;
+					recordBytes += piece.byteLength;
 				}
 				if (end - start > room) overflowed = true;
 			}
-			if (newline === -1) break;
-			const record = parseRecord(concat(pending, pendingBytes), decoder);
-			pending = [];
-			pendingBytes = 0;
+			if (found === -1) break;
+			start = found + 1;
+			if (field === 0) {
+				path = take();
+				field = 1;
+				continue;
+			}
+			if (field === 1) {
+				line = Number(take());
+				field = 2;
+				continue;
+			}
+			let text = take();
+			if (text.endsWith("\r")) text = text.slice(0, -1);
+			const complete = !overflowed && Number.isInteger(line) && line >= 1;
+			field = 0;
+			recordBytes = 0;
 			overflowed = false;
-			if (record) yield record;
-			start = newline + 1;
+			if (complete) yield { path, line, text };
 		}
 	}
 }
@@ -161,14 +222,115 @@ async function withinSizeLimit(path: string): Promise<boolean> {
 	}
 }
 
+async function searchableText(path: string): Promise<string | null> {
+	try {
+		const info = await stat(path);
+		if (!info.isFile() || info.size > TEXT_SEARCH_LIMITS.fileBytes) return null;
+		const bytes = await readFile(path);
+		if (bytes.subarray(0, TEXT_SEARCH_BUDGET.binaryProbeBytes).includes(NUL)) return null;
+		return new TextDecoder().decode(bytes);
+	} catch {
+		return null;
+	}
+}
+
+async function* walkedRecords(
+	root: string,
+	paths: readonly string[],
+	query: TextQuery,
+	signal: AbortSignal,
+): AsyncGenerator<GrepRecord> {
+	for (const path of paths) {
+		if (signal.aborted) return;
+		const content = await searchableText(join(root, path));
+		if (content === null) continue;
+		let line = 0;
+		for (const raw of content.split("\n")) {
+			line += 1;
+			const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+			if (matchRanges(text, query).length > 0) yield { path, line, text };
+		}
+	}
+}
+
+export interface TextSearchOptions {
+	files?: (root: string) => Promise<FileList>;
+}
+
 export async function searchText(
 	root: SearchRoot,
 	query: TextQuery,
 	emit: (batch: Omit<TextSearchBatch, "seq">) => void,
 	signal: AbortSignal,
-	now: () => number = () => performance.now(),
+	options: TextSearchOptions = {},
 ): Promise<void> {
-	const run = gitAsyncStream(root.root, textSearchArgs(root, query), {
+	const files = new Set<string>();
+	let lines = 0;
+	let batch: TextSearchFile[] = [];
+	let timer: ReturnType<typeof setTimeout> | null = null;
+	let reason: TextSearchEnd = "complete";
+	const flush = () => {
+		if (timer) clearTimeout(timer);
+		timer = null;
+		if (batch.length > 0 && !signal.aborted) emit({ files: batch });
+		batch = [];
+	};
+	const take = (record: GrepRecord): boolean => {
+		if (isHiddenFromSearch(record.path)) return false;
+		const ranges = matchRanges(record.text, query);
+		if (ranges.length === 0) return false;
+		const [first] = ranges;
+		const cut = cutLine(record.text, ranges);
+		let target = batch[batch.length - 1];
+		if (target?.path !== record.path) {
+			target = { path: record.path, matches: [] };
+			batch.push(target);
+		}
+		target.matches.push({
+			line: record.line,
+			column: (first?.[0] ?? 0) + 1,
+			length: first ? first[1] - first[0] : 0,
+			text: cut.text,
+			ranges: cut.ranges,
+		});
+		files.add(record.path);
+		lines += 1;
+		if (lines === 1) flush();
+		else timer ??= setTimeout(flush, TEXT_SEARCH_BUDGET.flushMs);
+		return lines >= TEXT_SEARCH_LIMITS.lines;
+	};
+	const finish = (failure: CodedError | null) => {
+		if (signal.aborted) {
+			if (timer) clearTimeout(timer);
+			return;
+		}
+		if (failure && reason !== "limit") {
+			reason = "failed";
+			log.warn("text search failed", failure);
+		}
+		flush();
+		emit({ files: [], done: { reason, files: files.size, lines } });
+	};
+
+	if (!root.git) {
+		let failure: CodedError | null = null;
+		try {
+			const list = await (options.files ?? ((dir) => listRootFiles(dir, false)))(root.root);
+			for await (const record of walkedRecords(root.root, list.paths, query, signal)) {
+				if (signal.aborted) break;
+				if (take(record)) {
+					reason = "limit";
+					break;
+				}
+			}
+		} catch {
+			failure = new CodedError("TEXT_SEARCH_FAILED", "the folder could not be listed");
+		}
+		finish(failure);
+		return;
+	}
+
+	const run = gitAsyncStream(root.root, textSearchArgs(query), {
 		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
 		timeoutMs: TEXT_SEARCH_BUDGET.gitTimeoutMs,
 	});
@@ -176,20 +338,8 @@ export async function searchText(
 	const cancel = () => void reader.cancel().catch(() => {});
 	if (signal.aborted) cancel();
 	else signal.addEventListener("abort", cancel, { once: true });
-
 	const allowed = new Map<string, boolean>();
-	const files = new Set<string>();
-	let lines = 0;
-	let batch: TextSearchFile[] = [];
-	let flushedAt = now();
-	let reason: TextSearchEnd = "complete";
 	let streamFailed = false;
-	const flush = () => {
-		if (batch.length > 0 && !signal.aborted) emit({ files: batch });
-		batch = [];
-		flushedAt = now();
-	};
-
 	try {
 		for await (const record of grepRecords(readerChunks(reader))) {
 			if (signal.aborted) break;
@@ -198,41 +348,27 @@ export async function searchText(
 				fits = await withinSizeLimit(join(root.root, record.path));
 				allowed.set(record.path, fits);
 			}
-			if (!fits) continue;
-			const ranges = matchRanges(record.text, query);
-			if (ranges.length === 0) continue;
-			const [first] = ranges;
-			const cut = cutLine(record.text, ranges);
-			let target = batch[batch.length - 1];
-			if (target?.path !== record.path) {
-				target = { path: record.path, matches: [] };
-				batch.push(target);
-			}
-			target.matches.push({
-				line: record.line,
-				column: (first?.[0] ?? 0) + 1,
-				length: first ? first[1] - first[0] : 0,
-				text: cut.text,
-				ranges: cut.ranges,
-			});
-			files.add(record.path);
-			lines += 1;
-			if (lines >= TEXT_SEARCH_LIMITS.lines) {
+			if (fits && take(record)) {
 				reason = "limit";
 				cancel();
 				break;
 			}
-			if (now() - flushedAt >= TEXT_SEARCH_BUDGET.flushMs) flush();
 		}
 	} catch {
 		streamFailed = true;
 	}
 	signal.removeEventListener("abort", cancel);
 	const exit = await run.exited;
-	if (signal.aborted) return;
 	const nothingMatched =
 		streamFailed && exit.err.trim() === "" && !exit.timedOut && !exit.launchFailed;
-	if (reason !== "limit" && !exit.ok && !nothingMatched) reason = "failed";
-	flush();
-	emit({ files: [], done: { reason, files: files.size, lines } });
+	finish(
+		exit.ok || nothingMatched
+			? null
+			: exit.timedOut
+				? new CodedError("TEXT_SEARCH_TIMEOUT", "git grep ran past the text search budget")
+				: new CodedError(
+						"TEXT_SEARCH_FAILED",
+						exit.launchFailed ? "git grep could not start" : "git grep exited abnormally",
+					),
+	);
 }

@@ -15,7 +15,8 @@ Answer the search palette's `search.query` and `search.preview` for the corpora 
 file names, spec titles and bodies, TODO plans, chat titles and transcripts, and the workspaces of
 projects the client has not expanded — ranking them with the one matcher from [[module-contracts]] so
 the browser can merge host hits with its own by tier and score; and run Find in Files' `search.text`,
-streaming `git grep` matches over the same one root. Registry-free: `host/search.ts`
+streaming matching lines over the same one root (`git grep` in a repository, an in-process read in a
+chat's folder). Registry-free: `host/search.ts`
 composes `createSearchService` with injected readers (open projects, persisted workspace records, the
 history index, spec snapshots, stored plans, and the file check — `fs`'s `readableFileSize`, the
 reader's own containment rule), the same shape as `host/historyScope.ts`.
@@ -28,7 +29,8 @@ reader's own containment rule), the same shape as `host/historyScope.ts`.
 - **Allowed deps:** `contracts` (DTOs + the matcher), `history` (`HistoryIndex.sessions()` — the
   narrow read of titles and entries), `spec` (`specSnapshot` / `invalidateSpecSnapshot`), `todos`
   (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files` and `grep`), `log` (a failed load or
-  provider, error type only), Node `fs` (`readdir` for a walk). A file hit's size and readability come
+  provider, error type only), `shared` (`CodedError` for a text search failure's code), Node `fs`
+  (`readdir` for a walk; `stat` / `readFile` for a chat folder's text search). A file hit's size and readability come
   from the injected `stat`, never a second containment rule here.
 - **Forbidden:** `host`, `workspaces`, `projects`, `persistence`, `agent` (projects and records are
   injected; a preview never attaches a pi session); writing anything; a second matcher.
@@ -130,24 +132,48 @@ one root as the `file` kind (so both searches see one file set) and answers at o
 `{ seq, superseded }` for a `seq` older than the client's latest; the matches follow on the addressed
 `search.textResults` push through the `emit` the host hands in (one socket, never a broadcast).
 
-- **Engine:** one `git grep --no-color -n -z -I --fixed-strings [-i] [-w] --untracked --exclude-standard`
-  process per search in the root (`--no-index` for a folder that is not a repository), streamed through
-  `gitAsyncStream`; the records are split on NUL/newline with a capped record buffer, CRLF trimmed. The
-  query is a plain substring clamped to `TEXT_SEARCH_LIMITS.maxQuery`; under `minQuery` characters or
-  without a root the search completes empty without spawning. Smart-case is the client's: the host
-  only sees an explicit `caseSensitive`.
-- **Matches:** per matching line, 1-based `line`, the first match's `column` / `length` (so the client
-  can open at it) and every match's `[start, end)` range inside `text`, which is cut to
-  `TEXT_SEARCH_LIMITS.lineChars` around the first match; the host recomputes ranges itself (git only
-  reports lines). A file over `fileBytes` is dropped after one `stat` per path. Matches are grouped by
-  file in the order git emits them and flushed every `TEXT_SEARCH_BUDGET.flushMs`.
+- **Engine (a repository):** one `git -c grep.column=false -c grep.fullName=false grep --no-color -n -z -I
+  --fixed-strings [-i] [-w] --untracked --exclude-standard -- . <exclusions>` process per search in the root,
+  streamed through `gitAsyncStream` under `LC_ALL=C`. The `-c` overrides keep a user's git config from
+  reshaping the output (an extra column field, top-level-relative paths); the exclusions are the palette's
+  hidden folders (`SEARCH_HIDDEN_DIRS` — `node_modules`, `.hg`, `.svn` — as `:(exclude,glob)**/<name>/**`
+  pathspecs, and a record under one is dropped too), so both searches see one file set. Git folds only
+  ASCII case under C, so a case-insensitive query with a non-ASCII cased letter is sent as an extended
+  regex spelling out each letter's case variants (`(ä|Ä)(p|P)…` — its lower and upper forms, closed once
+  more, so the Kelvin sign also asks for `k` and `K`; rarer fold partners such as a final `ς` for `σ` are not
+  asked of git); every other query is a fixed string.
+  Records are `path NUL line NUL text LF`: the path and line number end at a NUL (a path may hold a
+  newline), the text at the newline, CRLF trimmed; a record is capped at `TEXT_SEARCH_BUDGET.recordBytes`
+  (`fileBytes` plus framing — any longer line belongs to a file the size limit drops).
+- **Engine (a chat's folder):** a chat is never a repository, so no git runs there: each search walks the
+  folder afresh through the file-list cache (`load(root, false)`, which also refreshes the palette's `file`
+  list — no `.gitignore`, the hidden folders skipped, regular files only, a walk past `walkMaxFiles`
+  searching the files it listed) and reads them in-process, skipping a file over `fileBytes` or with a NUL
+  in its first `binaryProbeBytes` (git's binary heuristic), and checks each line with the same matcher.
+- **Query:** a plain substring clamped to `TEXT_SEARCH_LIMITS.maxQuery`; under `minQuery` characters or
+  without a root the search completes empty without spawning or reading. Smart-case is the client's: the
+  host only sees an explicit `caseSensitive`.
+- **Matches:** per matching line, 1-based `line` (git's newline-based numbering — an editor that also
+  breaks lines at a lone CR numbers such a file differently, a documented v1 limit), the first match's
+  `column` / `length` (so the client can open at it) and every match's `[start, end)` range inside `text`,
+  which is cut to `TEXT_SEARCH_LIMITS.lineChars` around the first match. The host recomputes ranges itself
+  (git only reports lines) with a Unicode case-insensitive regex over the original text, so a letter whose
+  lowercase changes length (`İ`) never shifts or drops a match, and a whole-word candidate rejected at a
+  word edge is retried one character later, as git's `-w` does. A file over `fileBytes` is dropped after
+  one `stat` per path. Matches are grouped by file in the order they arrive; the first one is sent at
+  once and later ones at most `TEXT_SEARCH_BUDGET.flushMs` after they arrive, even while git is still
+  scanning.
 - **End:** the final batch carries `done: { reason, files, lines }` — `complete`, `limit` when
   `TEXT_SEARCH_LIMITS.lines` matching lines were reached (the process is killed), or `failed` (git exited
-  abnormally, timed out or could not launch; git's "no match" exit is `complete`).
+  abnormally, timed out or could not launch, or a chat's folder could not be listed; git's "no match" exit
+  is `complete`). A failure is logged through `logger("search")` with `TEXT_SEARCH_TIMEOUT` or
+  `TEXT_SEARCH_FAILED`, never with git's stderr; a cancelled search is not a failure.
 - **Per-client superseding:** the service keeps the latest text `seq` and the running search's
   `AbortController` per `clientKey`; a newer `search.text` aborts the older one (cancelling the stream
   kills the process tree) and an aborted search emits nothing more — the client never sees a stale
-  batch or `done`. `forgetClient` aborts the reaped client's search.
+  batch or `done`. The host cancels a client's search when its socket closes (`cancelText`; the batches
+  could only reach the dead socket, and the client asks again on its next connection) and
+  `forgetClient` drops the reaped client's state.
 
 ## Preview
 
