@@ -3,6 +3,7 @@ import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
 	clampToCodePoints,
+	compareResourceHistory,
 	DEFAULT_CONFIG,
 	FIRST_PROMPT_MAX_LENGTH,
 	firstPromptHead,
@@ -11,11 +12,15 @@ import {
 	isDelegationRunDetails,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
+	isLiveResource,
 	isLocalePreference,
 	isPlanReviewResult,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	REQUEST_IMAGE_BASE64_BUDGET,
+	type ResourceRecord,
+	resourceHistoryCursor,
+	resourceOutcome,
 	TODO_NUDGE_PREFIX,
 } from "./domain";
 
@@ -303,5 +308,92 @@ describe("firstPromptHead", () => {
 		).toBe("The real prompt");
 		expect(firstPromptOfTexts([])).toBeUndefined();
 		expect(firstPromptOfTexts(['<review scope="branch">'])).toBeUndefined();
+	});
+});
+
+describe("resource history vocabulary", () => {
+	const command = (patch: Partial<Extract<ResourceRecord, { kind: "command" }>["summary"]>) =>
+		({
+			kind: "command",
+			summary: {
+				id: "c",
+				sessionId: "s",
+				name: "tests",
+				command: "bun test",
+				status: "completed",
+				startedAt: 1_000,
+				finishedAt: 2_000,
+				exitCode: 0,
+				...patch,
+			},
+		}) satisfies ResourceRecord;
+	const subagent = (patch: Partial<Extract<ResourceRecord, { kind: "subagent" }>["summary"]>) =>
+		({
+			kind: "subagent",
+			summary: {
+				childSessionId: "child",
+				parentSessionId: "s",
+				task: "Explore",
+				status: "completed",
+				createdAt: new Date(5_000).toISOString(),
+				...patch,
+			},
+		}) satisfies ResourceRecord;
+
+	test("outcomes collapse owner statuses, and an interrupted run reads interrupted whatever it last reported", () => {
+		expect(resourceOutcome(command({}))).toBe("done");
+		expect(resourceOutcome(command({ exitCode: 1 }))).toBe("failed");
+		expect(resourceOutcome(command({ status: "error", exitCode: 2 }))).toBe("failed");
+		expect(resourceOutcome(command({ status: "stopped" }))).toBe("stopped");
+		expect(resourceOutcome(command({ status: "stopping", interrupted: true }))).toBe("interrupted");
+		expect(resourceOutcome(command({ status: "running" }))).toBeNull();
+		expect(resourceOutcome(subagent({}))).toBe("done");
+		expect(resourceOutcome(subagent({ status: "error" }))).toBe("failed");
+		expect(resourceOutcome(subagent({ status: "aborted" }))).toBe("stopped");
+		expect(resourceOutcome(subagent({ status: "running", interrupted: true }))).toBe("interrupted");
+		expect(resourceOutcome(subagent({ status: "queued" }))).toBeNull();
+	});
+
+	test("live means a run the owner still reports in flight", () => {
+		expect(isLiveResource(command({ status: "running" }))).toBe(true);
+		expect(isLiveResource(command({ status: "stopping" }))).toBe(true);
+		expect(isLiveResource(command({}))).toBe(false);
+		expect(isLiveResource(subagent({ status: "queued" }))).toBe(true);
+		expect(isLiveResource(subagent({ status: "aborted" }))).toBe(false);
+	});
+
+	test("history orders newest finish first, falls back to the start, and breaks ties by id", () => {
+		expect(resourceHistoryCursor(command({}))).toEqual({ at: 2_000, id: "c" });
+		expect(
+			resourceHistoryCursor({
+				kind: "command",
+				summary: {
+					id: "c",
+					sessionId: "s",
+					name: "dev",
+					command: "bun run dev",
+					status: "stopping",
+					startedAt: 1_000,
+					interrupted: true,
+				},
+			}),
+		).toEqual({ at: 1_000, id: "c" });
+		expect(resourceHistoryCursor(subagent({}))).toEqual({ at: 5_000, id: "child" });
+		expect(resourceHistoryCursor(subagent({ finishedAt: 9_000 }))).toEqual({
+			at: 9_000,
+			id: "child",
+		});
+		const sorted = [
+			{ at: 1, id: "a" },
+			{ at: 3, id: "a" },
+			{ at: 3, id: "b" },
+			{ at: 2, id: "z" },
+		].sort(compareResourceHistory);
+		expect(sorted).toEqual([
+			{ at: 3, id: "b" },
+			{ at: 3, id: "a" },
+			{ at: 2, id: "z" },
+			{ at: 1, id: "a" },
+		]);
 	});
 });

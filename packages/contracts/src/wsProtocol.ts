@@ -47,6 +47,9 @@ import type {
 	ProjectTrustSummary,
 	ProviderStatusReport,
 	PrPreview,
+	ResourceHistoryCursor,
+	ResourceHistoryPage,
+	ResourceKind,
 	ResourceMeta,
 	RevertTarget,
 	ReviewAnchor,
@@ -123,7 +126,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 95;
+export const PROTOCOL_VERSION = 96;
+export const RESOURCE_HISTORY_PROTOCOL_VERSION = 96;
 export const PROJECT_CLONE_PROTOCOL_VERSION = 95;
 export const ONBOARDING_PROTOCOL_VERSION = 94;
 export const LAYOUT_PLAN_PRESET_PROTOCOL_VERSION = 94;
@@ -317,6 +321,7 @@ export const WS_METHODS = {
 	sessionGetMessages: "session.getMessages",
 	subagentGetTranscript: "subagent.getTranscript",
 	sessionResources: "session.resources",
+	sessionResourceHistory: "session.resourceHistory",
 	backgroundCommandOutput: "backgroundCommand.output",
 	backgroundCommandStop: "backgroundCommand.stop",
 	subagentStop: "subagent.stop",
@@ -911,6 +916,16 @@ export interface WsMethodMap {
 	"session.resources": {
 		params: { workspaceId: string; sessionId: string };
 		result: SessionResources;
+	};
+	"session.resourceHistory": {
+		params: {
+			workspaceId: string;
+			sessionId: string;
+			kind: ResourceKind;
+			before?: ResourceHistoryCursor;
+			limit?: number;
+		};
+		result: ResourceHistoryPage;
 	};
 	"backgroundCommand.output": {
 		params: { workspaceId: string; sessionId: string; commandId: string };

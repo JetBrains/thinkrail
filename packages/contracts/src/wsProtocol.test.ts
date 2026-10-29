@@ -38,6 +38,7 @@ import {
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
@@ -277,7 +278,7 @@ test("review details and the GitHub review actions are pinned to v88", () => {
 });
 
 test("project create and the onboarding dismissal are pinned to v94", () => {
-	expect(PROTOCOL_VERSION).toBe(95);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ONBOARDING_PROTOCOL_VERSION);
 	expect(ONBOARDING_PROTOCOL_VERSION).toBe(94);
 	expect(WS_METHODS.projectCreate).toBe("project.create");
 	expect(WS_METHODS.providerDetect).toBe("provider.detect");
@@ -442,6 +443,12 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 	expect(WS_METHODS.subagentStop).toBe("subagent.stop");
 	expect(WS_METHODS.subagentStopAll).toBe("subagent.stopAll");
 	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
+});
+
+test("resource history pages a chat's finished records from v96", () => {
+	expect(RESOURCE_HISTORY_PROTOCOL_VERSION).toBe(96);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(RESOURCE_HISTORY_PROTOCOL_VERSION);
+	expect(WS_METHODS.sessionResourceHistory).toBe("session.resourceHistory");
 });
 
 describe("completionDelivery", () => {
