@@ -137,7 +137,7 @@ import {
 } from "../workspaces";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
-import { handleRequest, requestMethodDiagnostic } from "./handlers";
+import { handleRequest, requestErrorReport, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
@@ -149,6 +149,7 @@ import {
 	setupObservation,
 } from "./productAnalytics";
 import {
+	heaviestReplayMethod,
 	type ReplayLoad,
 	RequestReplayCache,
 	RequestReplayOverflowError,
@@ -462,11 +463,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 							} catch (err) {
 								const error = err instanceof Error ? err.message : String(err);
 								log.debug(`ws ${methodDiagnostic} failed`);
-								reportError(err, {
-									source: "request",
-									handled: true,
-									...(methodDiagnostic === method ? { requestMethod: method } : {}),
-								});
+								reportError(err, requestErrorReport(method));
 								const code = errorCodeOf(err);
 								return JSON.stringify({
 									id: requestId,
@@ -483,11 +480,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					const error = err instanceof Error ? err.message : String(err);
 					if (err instanceof RequestReplayOverflowError && err.load) {
 						log.warn(`replay namespace full; held requests: ${formatReplayLoad(err.load)}`);
-						reportError(err, {
-							source: "request",
-							handled: true,
-							...(methodDiagnostic === method ? { requestMethod: method } : {}),
-						});
+						reportError(err, requestErrorReport(heaviestReplayMethod(err.load) ?? method));
 					}
 					const code = errorCodeOf(err);
 					const reply = JSON.stringify({

@@ -69,10 +69,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (`RequestReplayUnretainedError`) rather than re-executing, and the response the caller was already sent is
   unaffected. Neither limit can cost exactly-once — one refuses work that has not started, the other keeps the
   record of work that finished and drops only its answer. A refusal is `CodedError("REQUEST_REPLAY_OVERFLOW")`
-  in the reply's `errorCode`; the first refusal of an episode (until the namespace next admits a request) logs
-  a `warn` with what the namespace holds per method, pending vs settled, and reports the error with the
-  refused method, so a full namespace names the handler that filled it instead of vanishing into a debug
-  line (#974),
+  in the reply's `errorCode`, its message free of the client key because it reaches the page's toast. The
+  first refusal of an episode logs a `warn` with what the namespace holds per method, pending vs settled, and
+  reports the error tagged with the method occupying the most entries, pending or settled-but-unread (the
+  refused request is usually a bystander), so a full namespace points at what filled it — a lead, not proof of
+  the root cause — instead of vanishing into a debug line (#974). An episode ends only once the namespace drops below 90% of the cap, so a namespace hovering at the cap
+  does not log and report on every freed slot (the `request` report source has a fixed per-launch budget),
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`), the **`provider.changed`** invalidation broadcast after auth changes the Central status or
   current runtime generation, after every successful in-app provider login (not an MCP sign-in), and after
