@@ -347,8 +347,8 @@ may inject the same narrow string-storage adapter under its stable backend-profi
 dynamic loopback port cannot erase the preference on restart. It never enters `AppConfig`, so choosing
 newest-first cannot change another browser, device, host, or native window. The same persistence seam owns
 **Streaming response movement**, one `{ settle, trigger }` client-local preference rather than a second
-adapter/subscription path (Trigger is where the response edge triggers a step; Settle is where each step
-places it): both values use 5-point steps, Settle is 25–90, Trigger is 35–100, the gap is at
+adapter/subscription path (Trigger is the pin line a following reader's response edge is held at; the
+reading band does not read Settle): both values use 5-point steps, Settle is 25–90, Trigger is 35–100, the gap is at
 least 10 points, and the default is `{ settle: 75, trigger: 100 }`. Invalid storage falls back atomically to
 the default pair. It likewise never enters `AppConfig` or crosses the wire.
 
@@ -608,13 +608,13 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   once, after the first row mounts, from the work state at that moment: an idle oldest-first transcript jumps
   to the final row without animation and holds it through measurement frames (motion kind `mount`); an idle
   newest-first transcript stays at the native zero scroll origin; a working transcript reconstructs directly
-  at Settle with only the room its active response needs and holds Settle through the same measurement frames,
+  at the pin line with only the room its active response needs and holds it through the same measurement frames,
   re-applied without animation and never backward, so row measurement cannot push the live edge off screen.
-  The mount target skips the follow step cap, so a short viewport still lands the edge at Settle.
+  The mount target skips the tall-arrival cap, so a short viewport still lands the edge at the pin line.
   Virtuoso gets no `initialTopMostItemIndex`: it hides the list until a scroll to that row sees no size
   change, which a streaming final row never allows, so a returning or just-opened working chat stayed blank.
   Placement stays pending while native input is pending and while a working transcript has no stream edge
-  yet. A stream that starts during the idle hold cancels the hold and re-places at Settle. Reader takeover,
+  yet. A stream that starts during the idle hold cancels the hold and re-places at the pin line. Reader takeover,
   a new turn, or any controller reveal or anchor stabilization (jump-to-message, automatic card reveal,
   fold) cancels a pending placement; that motion then owns the position. Switching order re-arms placement
   because preserving a pixel position across total reversal has no stable meaning. There is no
@@ -664,40 +664,47 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   latest/response destination while following, and leaves a detached reader's visible anchor fixed. An own
   Send deliberately reattaches and places its user row at 10% of transcript height clamped to 48–80px; a
   queued/background continuation preserves a detached reader when it starts.
-- **Streaming response movement exists only during work, and it moves in window steps** — while following, the
-  view stands still while the active response fills the window below its prompt. Each time the response edge
-  passes Trigger (default 100%), the sole motion owner makes one eased ~220 ms step that places the edge at
-  Settle (default 75%), then stands still again until the edge passes Trigger once more. Reading text that
-  stands still is the point: a continuous follow (the edge held at Settle with per-frame smoothing) was tried
-  and rejected because the line being read never stopped creeping. The step destination is recomputed from live
-  geometry on each frame of the step, so growth during the step is included and the step never overshoots.
-  Steps never move backward. Synthetic room is **derived, never accumulated**: during a step it is exactly the
-  part of the Settle destination beyond the natural scroll range; between steps it is the reader-preserving
-  remainder, recomputed before paint on every content change, so response growth consumes it one-for-one while
-  neither the visible content nor the scroll range moves. The old step implementation consumed room one frame
-  late, which flapped the scroll range and wobbled each step; that defect, not the step model, made it feel
-  jumpy. Oldest-first therefore needs at most the lower `100% - Settle` band; newest-first uses older projected
-  content where available and keeps any synthetic remainder after the oldest group. Synthetic room never splits
-  a reversed request/answer group. **Follow response** and an exact-edge return make one step to Settle and
-  rearm the cycle. Reader takeover never moves the reader: room shrinks only as far as the reader's current
-  position allows (the document may end exactly at their viewport bottom), and later growth or upward reading
-  consumes the rest. A reveal that releases room (tool attention, jump-to-message, breadcrumb) suspends
-  stepping while its target is still the newest row, because it is about to place the viewport itself; the
-  first new latest row after it (for example the answer that follows a resolved question) ends the suspension.
-  Suspending for the rest of the response froze following after every question card and then flew 2–2.6k px at
-  settlement. A settlement that lands while native input is still pending defers its return until that input
-  resolves, and drops the return if the input detached.
+- **Streaming response movement exists only during work, and it pins the response edge** — while following,
+  the view stands still while the active response fills the room below its prompt. Once the response edge
+  reaches the pin line (Trigger, default 100%), the view is pinned: each content change moves it by exactly
+  the growth, so the edge stays on the line. The pin runs in the before-paint content-change path (the
+  Virtuoso height callback and the scroller resize observer, both inside `ResizeObserver` delivery) as one
+  instant `scrollTop` write with no easing and no threshold, so growth and its compensation paint in the
+  same frame; a write in the next animation frame paints one frame late and reads as jitter. Window steps
+  (hold until Trigger, then one eased ~220 ms move to a Settle line) were tried and rejected: with a fast
+  model they measured as a 120–240 px jump every ~0.5 s, growth landing in a step's last frame became a
+  20–100 px snap, and WebKit showed three times more snaps. Peers (shadcn Message Scroller, T3 Code, Zed,
+  OpenCode) pin per frame. The trade-off is that the line being read moves with the stream; a reader who
+  wants it still scrolls away and detaches. The pin publishes no state: following, moving, and runway change
+  only on real transitions, so the pin itself adds no React commits. It never moves backward. Synthetic room
+  is **derived, never accumulated**: while pinned it is exactly the part of the pin destination beyond the
+  natural scroll range; before the edge reaches the line it is the reader-preserving remainder, recomputed
+  before paint on every content change, so growth consumes it one-for-one while neither the visible content
+  nor the scroll range moves. Content that shrinks while pinned leaves the edge above the line; the
+  on-screen guard below restores the anchor before paint and the room absorbs the loss, and later growth
+  consumes it before the pin resumes. Oldest-first therefore needs at most the band below the pin line;
+  newest-first uses older projected content where available and keeps any synthetic remainder after the
+  oldest group. Synthetic room never splits a reversed request/answer group. **Follow response** and an
+  exact-edge return make one eased ~220 ms motion to the pin line when it is ahead, then the pin takes over.
+  Reader takeover never moves the reader: room shrinks only as far as the reader's current position allows
+  (the document may end exactly at their viewport bottom), and later growth or upward reading consumes the
+  rest. A reveal that releases room (tool attention, jump-to-message, breadcrumb) suspends the pin while its
+  target is still the newest row, because it is about to place the viewport itself; the first new latest row
+  after it (for example the answer that follows a resolved question) ends the suspension. Suspending for the
+  rest of the response froze following after every question card and then flew 2–2.6k px at settlement. A
+  settlement that lands while native input is still pending defers its return until that input resolves, and
+  drops the return if the input detached.
 - **A tall arrival shows its start** — in oldest-first the controller remembers the last response edge the
   reader actually had on screen. When the follow destination would carry that edge above the turn inset —
-  content taller than the reading space (the Settle line minus the turn inset) arrived below it, typically a
+  content taller than the reading space (the pin line minus the turn inset) arrived below it, typically a
   diagram or card that renders at once, possibly in several quick layout steps — the destination is capped so
   that point lands at the turn inset, the same place an own prompt lands. Growth within 300 ms of the cap
   engaging belongs to the arrival; each later growth releases the cap by twice its own height until it reaches
-  Settle, and the view still moves only in window steps: a step happens once the capped destination is at least
-  one window (`Trigger − Settle`) ahead, so the block advances at twice reading pace instead of flying by (one
-  mermaid card measured a 1.5k px glide in under a second, and judging each layout step alone missed cards that
-  land in two steps). A second tall arrival never pushes an active cap further. The cap is evaluated wherever
-  the follow destination is, so it also bounds a step already in flight. Positions are kept relative to the
+  the pin line, and the pin moves to the capped destination on that same content change without easing, so
+  the block advances at twice reading pace instead of flying by (one mermaid card measured a 1.5k px glide in
+  under a second, and judging each layout step alone missed cards that land in two steps). A second tall
+  arrival never pushes an active cap further. The cap is evaluated wherever the follow destination is, so it
+  also bounds an explicit return already in flight. Positions are kept relative to the
   topmost visible row rather than document coordinates, and each evaluation re-expresses them relative to the
   current one, so height changes above the viewport (Virtuoso replacing an estimate, a code block highlighting)
   neither trigger nor misplace the cap, rows may unmount, and a block that grows above rows that already follow
@@ -736,8 +743,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `agent_settled`, never `agent_end`, ends response movement. In oldest-first a following reader whose
   content already ends inside the viewport stays exactly where it is: the remaining synthetic room becomes
   reader-preserving room that disappears as the reader scrolls up or the next turn starts, never by sliding
-  what is on screen. Removing it at settlement slid every finished answer down by up to the `100% − Settle`
-  band (≈100 px measured) and, after an absorbed card collapse, by several hundred px. Only when unseen
+  what is on screen. Removing it at settlement slid every finished answer down by up to the band below the
+  pin line (≈100 px measured) and, after an absorbed card collapse, by several hundred px. Only when unseen
   content remains below does a following reader make one smooth forward move to the physical latest edge;
   newest-first keeps its one smooth return to its top latest edge. A detached reader's visible content
   stays exactly where it is and only the affordance changes from **Follow response** to **Latest**. Returning
