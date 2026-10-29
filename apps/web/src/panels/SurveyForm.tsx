@@ -144,10 +144,7 @@ function SurveyAnswer({
 	if (question.type === "rating") {
 		const selected = draft.answers[question.id];
 		return (
-			<div className="flex flex-wrap items-center gap-8">
-				{question.lowerBoundLabel ? (
-					<span className="text-text-muted tr-text-metadata">{question.lowerBoundLabel}</span>
-				) : null}
+			<div className="flex w-fit max-w-full flex-col gap-4">
 				<div
 					role="radiogroup"
 					aria-labelledby="survey-question"
@@ -180,8 +177,11 @@ function SurveyAnswer({
 						);
 					})}
 				</div>
-				{question.upperBoundLabel ? (
-					<span className="text-text-muted tr-text-metadata">{question.upperBoundLabel}</span>
+				{question.lowerBoundLabel || question.upperBoundLabel ? (
+					<div className="flex w-full justify-between gap-8 text-text-muted tr-text-metadata">
+						<span>{question.lowerBoundLabel}</span>
+						<span>{question.upperBoundLabel}</span>
+					</div>
 				) : null}
 			</div>
 		);
