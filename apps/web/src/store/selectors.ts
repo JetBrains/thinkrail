@@ -243,7 +243,11 @@ export function selectChatResourcesLoading(
 	);
 }
 
-export type ChatResourcesStaleness = "disconnected" | "refreshFailed" | "refreshing";
+export type ChatResourcesStaleness =
+	| "disconnected"
+	| "refreshFailed"
+	| "unavailable"
+	| "refreshing";
 
 export function selectChatResourcesStaleness(
 	state: ChatResourceState,
@@ -253,7 +257,7 @@ export function selectChatResourcesStaleness(
 	if (state.status !== "connected" || !supportsChatResources(state.protocolVersion))
 		return "disconnected";
 	const projection = selectChatResourceProjection(state, scope);
-	if (projection?.error) return "refreshFailed";
+	if (projection?.error) return projection.retrying ? "refreshFailed" : "unavailable";
 	return projection?.snapshot ? "refreshing" : null;
 }
 

@@ -76,7 +76,7 @@ export function ResourcesDock({
 					? t("resources.dock.active", { count: rows.length })
 					: staleness === "disconnected"
 						? t("resources.dock.activeReconnecting", { count: rows.length })
-						: staleness === "refreshFailed"
+						: staleness === "refreshFailed" || staleness === "unavailable"
 							? t("resources.dock.activeOutOfDate", { count: rows.length })
 							: t("resources.dock.activeUpdating", { count: rows.length })}
 			</span>

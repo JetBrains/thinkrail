@@ -960,7 +960,7 @@ interface AppState {
 	resourceRevision: number;
 	invalidateChatResources: (scope: ChatResourceScope) => void;
 	installChatResources: (read: ChatResourceRead, snapshot: SessionResources) => void;
-	failChatResources: (read: ChatResourceRead, error: string) => void;
+	failChatResources: (read: ChatResourceRead, error: string, retrying: boolean) => void;
 	appendChatResourceHistory: (
 		read: ChatResourceScope & { connectionGeneration: number },
 		kind: ResourceKind,
@@ -2514,7 +2514,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	failChatResources: (read, error) =>
+	failChatResources: (read, error, retrying) =>
 		set((state) => {
 			const previous = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
 			if (!previous || !isChatResourceReadCurrent(state, read)) return {};
@@ -2523,7 +2523,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...state.resourceSnapshots,
 					[read.workspaceId]: {
 						...state.resourceSnapshots[read.workspaceId],
-						[read.sessionId]: { ...previous, fresh: false, error },
+						[read.sessionId]: { ...previous, fresh: false, error, retrying },
 					},
 				},
 			};

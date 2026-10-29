@@ -186,6 +186,7 @@ test("a failed read keeps its error visible and retries on capped backoff until 
 			snapshot,
 			fresh: false,
 			error: "replay namespace is full",
+			retrying: true,
 		});
 		expect(f.timers.delays()).toEqual([delay]);
 		f.timers.fire();
@@ -207,6 +208,26 @@ test("a failed read keeps its error visible and retries on capped backoff until 
 	f.sync.dispose();
 	expect(f.timers.delays()).toEqual([]);
 	expect(f.reads).toHaveLength(8);
+});
+
+test("a permanent read failure stays visible without scheduling a retry", async () => {
+	const f = syncFixture();
+	f.reads[0]?.reject(new RequestError("RESOURCE_UNAVAILABLE", "worktree gone"));
+	await flush();
+	expect(projection()).toMatchObject({ fresh: false, error: "worktree gone", retrying: false });
+	expect(f.timers.delays()).toEqual([]);
+
+	f.invalidate();
+	f.reads[1]?.resolve({ ...snapshot, sessionId: "foreign" });
+	await flush();
+	expect(projection()).toMatchObject({
+		fresh: false,
+		error: "Resource snapshot belongs to another chat.",
+		retrying: false,
+	});
+	expect(f.timers.delays()).toEqual([]);
+	expect(f.reads).toHaveLength(2);
+	f.sync.dispose();
 });
 
 test("disposed views, generations, unsupported welcomes, cleared entries and tombstones reject late reads", async () => {

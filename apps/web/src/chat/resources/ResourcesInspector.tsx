@@ -476,14 +476,14 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 			data-staleness={props.staleness ?? "loading"}
 			className="inline-flex items-center gap-4 whitespace-nowrap rounded-full border border-border-muted px-8 text-text-muted tr-text-metadata"
 		>
-			{props.staleness === "refreshFailed" ? (
+			{props.staleness === "refreshFailed" || props.staleness === "unavailable" ? (
 				<RiAlertLine className="size-12 text-feedback-warning" aria-hidden />
 			) : (
 				<RiLoader4Line className="size-12 animate-spin motion-reduce:animate-none" />
 			)}
 			{props.staleness === "disconnected"
 				? t("resources.inspector.reconnecting")
-				: props.staleness === "refreshFailed"
+				: props.staleness === "refreshFailed" || props.staleness === "unavailable"
 					? t("resources.inspector.outOfDate")
 					: t("resources.inspector.updating")}
 		</span>
@@ -589,6 +589,8 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 								<span className="flex min-w-0 flex-1 flex-col gap-2 break-words">
 									{props.staleness === "refreshFailed" ? (
 										<span>{t("resources.inspector.refreshFailed")}</span>
+									) : props.staleness === "unavailable" ? (
+										<span>{t("resources.inspector.refreshUnavailable")}</span>
 									) : null}
 									<span>{props.error}</span>
 								</span>

@@ -38,6 +38,8 @@ import {
 
 type ResourceStore = ReturnType<typeof useAppStore.getState>;
 
+const FOREIGN_SNAPSHOT = "Resource snapshot belongs to another chat.";
+
 export function startChatResourceSync(
 	scope: ChatResourceScope,
 	deps: {
@@ -70,13 +72,16 @@ export function startChatResourceSync(
 		try {
 			const snapshot = await deps.read();
 			if (snapshot.workspaceId !== scope.workspaceId || snapshot.sessionId !== scope.sessionId) {
-				throw new Error("Resource snapshot belongs to another chat.");
+				if (current()) deps.state().failChatResources(read, FOREIGN_SNAPSHOT, false);
+				return;
 			}
 			if (current()) deps.state().installChatResources(read, snapshot);
 			failures = 0;
 		} catch (error) {
 			if (current()) {
-				deps.state().failChatResources(read, errorText(error));
+				const permanent = wsErrorCode(error) === "RESOURCE_UNAVAILABLE";
+				deps.state().failChatResources(read, errorText(error), !permanent);
+				if (permanent) return;
 				failures++;
 				retryTimer = scheduler.set(() => {
 					retryTimer = undefined;
