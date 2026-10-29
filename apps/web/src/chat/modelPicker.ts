@@ -117,7 +117,7 @@ export interface ProviderGroup {
 	auth: string | null;
 }
 
-const VERSION = /(?<![\d.])\d{1,3}(?:\.\d{1,3})*(?![\d.])/;
+const VERSION = /(?<![\d.])\d{1,3}(?:\.\d{1,3})*(?![\d.])(?![bB]\b|x\d)/;
 
 function nameVersion(name: string): number[] | null {
 	const match = name.replace(/\([^)]*\)/g, "").match(VERSION);

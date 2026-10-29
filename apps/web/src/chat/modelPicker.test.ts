@@ -152,6 +152,26 @@ describe("newestFirst", () => {
 		]);
 	});
 
+	test("skips parameter sizes such as 120b when reading the version", () => {
+		const names = [
+			"gpt-oss-120b",
+			"Pixtral 12B",
+			"Ministral 14B 3.0",
+			"GPT-6.1 Sol",
+			"Ministral 8B (latest)",
+			"Mixtral 8x22B Instruct",
+		];
+		const sorted = newestFirst(names.map((name) => model({ id: name, name })));
+		expect(sorted.map((m) => m.name)).toEqual([
+			"GPT-6.1 Sol",
+			"Ministral 14B 3.0",
+			"gpt-oss-120b",
+			"Pixtral 12B",
+			"Ministral 8B (latest)",
+			"Mixtral 8x22B Instruct",
+		]);
+	});
+
 	test("groupByProvider lists each group newest first", () => {
 		const [group] = groupByProvider(t, [
 			model({ id: "old", name: "Claude Opus 4.5" }),
