@@ -13,6 +13,7 @@ import {
 	levelPosition,
 	levelTone,
 	litBars,
+	newestFirst,
 	trailingLevel,
 } from "./modelPicker";
 
@@ -119,6 +120,44 @@ describe("groupByProvider", () => {
 			["openai", ["a", "c"], "API key · OPENAI_API_KEY"],
 			["anthropic", ["b"], "subscription"],
 		]);
+	});
+});
+
+describe("newestFirst", () => {
+	test("orders by the name's version, newest first, ignoring dated suffixes", () => {
+		const names = [
+			"Claude Fable 5",
+			"Claude Haiku 4.5 (latest)",
+			"Claude Haiku 4.5",
+			"Claude Haiku 5.5",
+			"Claude Opus 4.10",
+			"Claude Opus 4.8",
+			"Claude Opus 5.5",
+			"GPT-4o (2024-08-06)",
+			"Deep Research Preview (Apr-21-2026)",
+			"Claude Sonnet 5.5",
+		];
+		const sorted = newestFirst(names.map((name) => model({ id: name, name })));
+		expect(sorted.map((m) => m.name)).toEqual([
+			"Claude Haiku 5.5",
+			"Claude Opus 5.5",
+			"Claude Sonnet 5.5",
+			"Claude Fable 5",
+			"Claude Opus 4.10",
+			"Claude Opus 4.8",
+			"Claude Haiku 4.5 (latest)",
+			"Claude Haiku 4.5",
+			"GPT-4o (2024-08-06)",
+			"Deep Research Preview (Apr-21-2026)",
+		]);
+	});
+
+	test("groupByProvider lists each group newest first", () => {
+		const [group] = groupByProvider(t, [
+			model({ id: "old", name: "Claude Opus 4.5" }),
+			model({ id: "new", name: "Claude Opus 5.5" }),
+		]);
+		expect(group?.models.map((m) => m.id)).toEqual(["new", "old"]);
 	});
 });
 
