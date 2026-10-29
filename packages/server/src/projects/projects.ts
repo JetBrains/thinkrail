@@ -10,7 +10,7 @@ import type {
 	ProjectPathStatus,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { canonicalPath, git } from "../git";
+import { canonicalPath, git, gitAsync } from "../git";
 import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
@@ -368,21 +368,21 @@ export function inspectProjectPath(inputPath: string): ProjectPathStatus {
 	return inspectResolvedProjectPath(resolveProjectPath(inputPath));
 }
 
-export function initProject(inputPath: string): Project {
+export async function initProject(inputPath: string): Promise<Project> {
 	const path = resolveProjectPath(inputPath);
 	const status = inspectResolvedProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
 	if (status.kind === "repo") return openProject(path);
-	bootstrapRepository(path);
+	await bootstrapRepository(path);
 	return openProject(path);
 }
 
-export function createProject(
+export async function createProject(
 	parentPath: string,
 	requestedName: string,
 	displayName?: string,
-): Project {
+): Promise<Project> {
 	const name = requestedName.trim();
 	if (!name || name === "." || name === ".." || /[/\\\0]/.test(name)) {
 		throw new Error(`Invalid project folder name: ${requestedName}`);
@@ -401,7 +401,7 @@ export function createProject(
 		created = true;
 	}
 	try {
-		bootstrapRepository(path);
+		await bootstrapRepository(path);
 		return openProject(path, displayName);
 	} catch (err) {
 		rmSync(join(path, ".git"), { recursive: true, force: true });
@@ -410,18 +410,37 @@ export function createProject(
 	}
 }
 
-function bootstrapRepository(path: string): void {
-	const init = git(path, ["init", "-b", "main"]);
+const BOOTSTRAP_GIT_TIMEOUT_MS = 30 * 60_000;
+
+async function bootstrapRepository(path: string): Promise<void> {
+	const init = await gitAsync(path, ["init", "-b", "main"]);
 	if (!init.ok) throw new Error(`git init failed: ${path}`);
 	try {
-		const added = git(path, ["add", "-A"]);
+		const added = await gitAsync(path, ["add", "-A"], {
+			timeoutMs: BOOTSTRAP_GIT_TIMEOUT_MS,
+		});
 		if (!added.ok) throw new Error(`git add failed: ${path}`);
 
 		const identity: string[] = [];
-		if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
-		if (!git(path, ["config", "user.email"]).out)
+		if (!(await gitAsync(path, ["config", "user.name"])).out)
+			identity.push("-c", "user.name=ThinkRail");
+		if (!(await gitAsync(path, ["config", "user.email"])).out)
 			identity.push("-c", "user.email=thinkrail@localhost");
-		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"]);
+		const commit = await gitAsync(
+			path,
+			[
+				...identity,
+				"-c",
+				"maintenance.auto=false",
+				"-c",
+				"gc.auto=0",
+				"commit",
+				"--allow-empty",
+				"-m",
+				"Initial commit",
+			],
+			{ timeoutMs: BOOTSTRAP_GIT_TIMEOUT_MS },
+		);
 		if (!commit.ok) throw new Error(`git commit failed: ${path}`);
 	} catch (err) {
 		rmSync(join(path, ".git"), { recursive: true, force: true });

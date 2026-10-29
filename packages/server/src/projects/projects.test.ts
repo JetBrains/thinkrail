@@ -67,13 +67,13 @@ function makeRepo(path: string): void {
 	git(path, "commit", "-m", "init");
 }
 
-function withoutUserGitConfig<T>(run: () => T): T {
+async function withoutUserGitConfig<T>(run: () => T | Promise<T>): Promise<Awaited<T>> {
 	const savedGlobal = process.env.GIT_CONFIG_GLOBAL;
 	const savedSystem = process.env.GIT_CONFIG_SYSTEM;
 	process.env.GIT_CONFIG_GLOBAL = "/dev/null";
 	process.env.GIT_CONFIG_SYSTEM = "/dev/null";
 	try {
-		return run();
+		return await run();
 	} finally {
 		if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
 		else process.env.GIT_CONFIG_GLOBAL = savedGlobal;
@@ -172,7 +172,7 @@ test("inspectProjectPath: a git repo (and any subdirectory) is `repo`", () => {
 	expect(inspectProjectPath(sub)).toEqual({ kind: "repo" });
 });
 
-test("host-home paths resolve consistently across inspect, open, and init", () => {
+test("host-home paths resolve consistently across inspect, open, and init", async () => {
 	const home = join(dataDir, "host-home");
 	const repo = join(home, "repo");
 	const plain = join(home, "plain");
@@ -187,7 +187,9 @@ test("host-home paths resolve consistently across inspect, open, and init", () =
 		expect(inspectProjectPath("~/repo")).toEqual({ kind: "repo" });
 		expect(openProject("~/repo").path).toBe(realpathSync(repo));
 		expect(inspectProjectPath("~/plain")).toEqual({ kind: "initable" });
-		expect(withoutUserGitConfig(() => initProject("~/plain")).path).toBe(realpathSync(plain));
+		expect((await withoutUserGitConfig(() => initProject("~/plain"))).path).toBe(
+			realpathSync(plain),
+		);
 	} finally {
 		if (savedHome === undefined) delete process.env.HOME;
 		else process.env.HOME = savedHome;
@@ -217,18 +219,21 @@ test.skipIf(process.platform !== "win32")(
 	},
 );
 
-test("relative project paths are rejected instead of using the host process cwd", () => {
-	for (const operation of [openProject, inspectProjectPath, initProject]) {
+test("relative project paths are rejected instead of using the host process cwd", async () => {
+	for (const operation of [openProject, inspectProjectPath]) {
 		expect(() => operation("relative/project")).toThrow("must be absolute or start with ~/");
 	}
+	await expect(initProject("relative/project")).rejects.toThrow(
+		"must be absolute or start with ~/",
+	);
 });
 
-test("initProject: initialises a plain folder, commits its contents, and opens it", () => {
+test("initProject: initialises a plain folder, commits its contents, and opens it", async () => {
 	const dir = join(dataDir, "plain");
 	mkdirSync(dir);
 	writeFileSync(join(dir, "hello.txt"), "hi\n");
 
-	const project = withoutUserGitConfig(() => initProject(dir));
+	const project = await withoutUserGitConfig(() => initProject(dir));
 	expect(project.path).toBe(realpathSync(dir));
 	expect(existsSync(join(dir, ".git"))).toBe(true);
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
@@ -236,11 +241,11 @@ test("initProject: initialises a plain folder, commits its contents, and opens i
 	expect(listProjects()).toHaveLength(1);
 });
 
-test("initProject: an empty folder gets an empty initial commit (a HEAD), so worktrees work", () => {
+test("initProject: an empty folder gets an empty initial commit (a HEAD), so worktrees work", async () => {
 	const dir = join(dataDir, "empty");
 	mkdirSync(dir);
 
-	withoutUserGitConfig(() => initProject(dir));
+	await withoutUserGitConfig(() => initProject(dir));
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
 	expect(gitOut(dir, "ls-tree", "-r", "HEAD", "--name-only")).toBe("");
 	const wt = join(dataDir, "wt");
@@ -248,10 +253,10 @@ test("initProject: an empty folder gets an empty initial commit (a HEAD), so wor
 	expect(existsSync(wt)).toBe(true);
 });
 
-test("createProject: makes the folder and missing parents, bootstraps a repo, and opens it", () => {
+test("createProject: makes the folder and missing parents, bootstraps a repo, and opens it", async () => {
 	const parent = join(dataDir, "nested", "parent");
 
-	const project = withoutUserGitConfig(() => createProject(parent, " my-app ", " My  App "));
+	const project = await withoutUserGitConfig(() => createProject(parent, " my-app ", " My  App "));
 	const path = join(parent, "my-app");
 	expect(project.path).toBe(realpathSync(path));
 	expect(project.name).toBe("My App");
@@ -259,33 +264,36 @@ test("createProject: makes the folder and missing parents, bootstraps a repo, an
 	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
 });
 
-test("createProject: reuses an empty folder but rejects a non-empty one or a file", () => {
+test("createProject: reuses an empty folder but rejects a non-empty one or a file", async () => {
 	mkdirSync(join(dataDir, "empty"));
-	expect(withoutUserGitConfig(() => createProject(dataDir, "empty")).path).toBe(
+	expect((await withoutUserGitConfig(() => createProject(dataDir, "empty"))).path).toBe(
 		realpathSync(join(dataDir, "empty")),
 	);
 
 	mkdirSync(join(dataDir, "full"));
 	writeFileSync(join(dataDir, "full", "a.txt"), "a\n");
-	expect(() => createProject(dataDir, "full")).toThrow("already exists and isn't empty");
+	await expect(createProject(dataDir, "full")).rejects.toThrow("already exists and isn't empty");
 	expect(existsSync(join(dataDir, "full", ".git"))).toBe(false);
 
 	writeFileSync(join(dataDir, "file"), "x\n");
-	expect(() => createProject(dataDir, "file")).toThrow("Not a folder");
+	await expect(createProject(dataDir, "file")).rejects.toThrow("Not a folder");
 });
 
-test("createProject: a folder inside an enclosing repo becomes its own project", () => {
+test("createProject: a folder inside an enclosing repo becomes its own project", async () => {
 	const outer = join(dataDir, "outer");
 	makeRepo(outer);
 
-	const project = withoutUserGitConfig(() => createProject(outer, "inner"));
+	const project = await withoutUserGitConfig(() => createProject(outer, "inner"));
 	expect(project.path).toBe(realpathSync(join(outer, "inner")));
 	expect(resolve(gitOut(join(outer, "inner"), "rev-parse", "--show-toplevel"))).toBe(
 		realpathSync(join(outer, "inner")),
 	);
 });
 
-function withFailingCommitHook<T>(hookBody: string, run: () => T): T {
+async function withFailingCommitHook<T>(
+	hookBody: string,
+	run: () => T | Promise<T>,
+): Promise<Awaited<T>> {
 	const hooks = join(dataDir, "hooks");
 	mkdirSync(hooks, { recursive: true });
 	writeFileSync(join(hooks, "pre-commit"), `#!/bin/sh\n${hookBody}\nexit 1\n`, { mode: 0o755 });
@@ -297,7 +305,7 @@ function withFailingCommitHook<T>(hookBody: string, run: () => T): T {
 	delete process.env.GIT_CONFIG_COUNT;
 	delete process.env.GIT_CONFIG_PARAMETERS;
 	try {
-		return run();
+		return await run();
 	} finally {
 		keys.forEach((key, index) => {
 			const value = saved[index];
@@ -307,45 +315,131 @@ function withFailingCommitHook<T>(hookBody: string, run: () => T): T {
 	}
 }
 
-test("createProject: a failed bootstrap removes the folder it made, but nothing written into it meanwhile", () => {
+test("createProject: a failed bootstrap removes the folder it made, but nothing written into it meanwhile", async () => {
 	const parent = join(dataDir, "parent");
-	expect(() => withFailingCommitHook(":", () => createProject(parent, "clean"))).toThrow(
+	await expect(withFailingCommitHook(":", () => createProject(parent, "clean"))).rejects.toThrow(
 		"git commit failed",
 	);
 	expect(existsSync(join(parent, "clean"))).toBe(false);
 
-	expect(() =>
+	await expect(
 		withFailingCommitHook("echo kept > hook-output.txt", () => createProject(parent, "busy")),
-	).toThrow("git commit failed");
+	).rejects.toThrow("git commit failed");
 	expect(existsSync(join(parent, "busy", ".git"))).toBe(false);
 	expect(readFileSync(join(parent, "busy", "hook-output.txt"), "utf8")).toBe("kept\n");
 	expect(listProjects()).toEqual([]);
 });
 
-test("createProject: rejects names that are not one plain folder name", () => {
+test("createProject: rejects names that are not one plain folder name", async () => {
 	for (const name of ["", "  ", ".", "..", "a/b", "a\\b"]) {
-		expect(() => createProject(dataDir, name)).toThrow("Invalid project folder name");
+		await expect(createProject(dataDir, name)).rejects.toThrow("Invalid project folder name");
 	}
-	expect(() => createProject("relative", "app")).toThrow("must be absolute or start with ~/");
+	await expect(createProject("relative", "app")).rejects.toThrow(
+		"must be absolute or start with ~/",
+	);
 });
 
-test("initProject: commits even with no configured git identity (the -c fallback)", () => {
+test("initProject: commits even with no configured git identity (the -c fallback)", async () => {
 	const dir = join(dataDir, "noid");
 	mkdirSync(dir);
 	writeFileSync(join(dir, "file.txt"), "x\n");
 
-	withoutUserGitConfig(() => initProject(dir));
+	await withoutUserGitConfig(() => initProject(dir));
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
 	expect(gitOut(dir, "log", "-1", "--format=%an")).toBe("ThinkRail");
 });
 
-test("initProject: an existing repo is opened, not re-initialised (dedupe, history preserved)", () => {
+const SLOW_GIT_MS = 600;
+
+async function withGitShim(
+	dir: string,
+	run: () => Promise<void> | void,
+	opts: { slowBulkCommands?: boolean; recordFile?: string } = {},
+): Promise<void> {
+	const realGit = Bun.which("git");
+	const sleep = opts.slowBulkCommands
+		? `if [ "$1" = "-C" ] && { [ "$3" = "add" ] || [ "$3" = "commit" ]; }; then sleep ${
+				SLOW_GIT_MS / 1000
+			}; fi\n`
+		: "";
+	const record = opts.recordFile
+		? `printf '%s\n' "$*" >> ${JSON.stringify(opts.recordFile)}\n`
+		: "";
+	writeFileSync(join(dir, "git"), `#!/bin/sh\n${sleep}${record}exec "${realGit}" "$@"\n`);
+	chmodSync(join(dir, "git"), 0o755);
+	const savedPath = process.env.PATH;
+	process.env.PATH = `${dir}:${savedPath}`;
+	try {
+		await run();
+	} finally {
+		if (savedPath === undefined) delete process.env.PATH;
+		else process.env.PATH = savedPath;
+	}
+}
+
+test.skipIf(process.platform === "win32")(
+	"initProject: keeps the host event loop responsive while add/commit run",
+	async () => {
+		const shimDir = realpathSync.native(mkdtempSync(join(tmpdir(), "trpi-proj-shim-")));
+		const dir = join(dataDir, "slow-init");
+		mkdirSync(dir);
+		writeFileSync(join(dir, "hello.txt"), "hi\n");
+		try {
+			let wokeBeforeBulkGitFinished = false;
+			await withGitShim(
+				shimDir,
+				async () => {
+					const started = performance.now();
+					const init = withoutUserGitConfig(() => initProject(dir));
+					await Bun.sleep(150);
+					wokeBeforeBulkGitFinished = performance.now() - started < SLOW_GIT_MS;
+					await init;
+				},
+				{ slowBulkCommands: true },
+			);
+			expect(wokeBeforeBulkGitFinished).toBe(true);
+		} finally {
+			rmSync(shimDir, { recursive: true, force: true });
+		}
+	},
+);
+
+test.skipIf(process.platform === "win32")(
+	"initProject: opts out of git auto-gc for the initial commit",
+	async () => {
+		const shimDir = realpathSync.native(mkdtempSync(join(tmpdir(), "trpi-proj-shim-")));
+		const recordFile = join(shimDir, "calls.log");
+		const dir = join(dataDir, "no-gc");
+		mkdirSync(dir);
+		writeFileSync(join(dir, "hello.txt"), "hi\n");
+		try {
+			await withGitShim(
+				shimDir,
+				async () => {
+					await withoutUserGitConfig(() => initProject(dir));
+				},
+				{ recordFile },
+			);
+			const commitCall = readFileSync(recordFile, "utf8")
+				.trim()
+				.split("\n")
+				.find((call) => call.includes(" commit "));
+			expect(commitCall).toBeDefined();
+			expect(commitCall).toContain("-c maintenance.auto=false");
+			expect(commitCall).toContain("-c gc.auto=0");
+		} finally {
+			rmSync(shimDir, { recursive: true, force: true });
+		}
+	},
+);
+
+test("initProject: an existing repo is opened, not re-initialised (dedupe, history preserved)", async () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
 	const originalHead = gitOut(repo, "rev-parse", "HEAD");
 
-	const first = initProject(repo);
-	const second = initProject(repo);
+	const first = await initProject(repo);
+	const second = await initProject(repo);
 	expect(second.id).toBe(first.id);
 	expect(listProjects()).toHaveLength(1);
 	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(originalHead);
@@ -427,10 +521,10 @@ test("renameProject changes only the display name, publishes it, and survives cl
 	expect(() => renameProject("missing", "Name")).toThrow("Unknown project: missing");
 });
 
-test("setProjectTrust: persists a revocable, fail-closed trust decision", () => {
+test("setProjectTrust: persists a revocable, fail-closed trust decision", async () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
-	const project = initProject(repo);
+	const project = await initProject(repo);
 
 	expect(project.trusted).toBeUndefined();
 	expect(isProjectTrusted(project.id)).toBe(false);
@@ -446,10 +540,10 @@ test("setProjectTrust: persists a revocable, fail-closed trust decision", () => 
 	expect(() => setProjectTrust("nope", true)).toThrow();
 });
 
-test("setProjectTrust: pi-level resource trust needs its own explicit grant, and a revoke clears both", () => {
+test("setProjectTrust: pi-level resource trust needs its own explicit grant, and a revoke clears both", async () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
-	const project = initProject(repo);
+	const project = await initProject(repo);
 	const published: Array<{ trusted: boolean | undefined; piResourceTrust: string | undefined }> =
 		[];
 	setProjectPublisher(({ trusted, piResourceTrust }) =>
@@ -509,7 +603,7 @@ test("a record that predates pi-level trust is not grandfathered: it stays as st
 	expect(asked).toEqual([]);
 });
 
-test("a newly added project starts untrusted unless pi already trusts its path", () => {
+test("a newly added project starts untrusted unless pi already trusts its path", async () => {
 	const plain = join(dataDir, "plain");
 	const piTrusted = join(dataDir, "pi-trusted");
 	makeRepo(plain);
@@ -519,7 +613,7 @@ test("a newly added project starts untrusted unless pi already trusts its path",
 
 	expect(openProject(plain).piResourceTrust).toBe("untrusted");
 	expect(openProject(piTrusted).piResourceTrust).toBe("granted");
-	expect(initProject(plain).piResourceTrust).toBe("untrusted");
+	expect((await initProject(plain)).piResourceTrust).toBe("untrusted");
 });
 
 test("MCP approvals and per-project overrides persist in the project record and clear cleanly", () => {

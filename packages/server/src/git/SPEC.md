@@ -22,7 +22,9 @@ ref off the workspace-create critical path.
   byte-preserving, retained for `reviews`' synchronous snapshot pass). `gitAsync(cwd, args, opts?)` and
   **`gitAsyncBytes(cwd, args, opts?)`** are the bounded async twins over `subprocess.runBounded`; the latter
   preserves stdout as `Uint8Array`, while stderr remains decoded diagnostics. They keep network-bound ops
-  like `fetch` **and request-path historical reads** off the event loop: this module owns only the
+  like `fetch`, **request-path historical reads**, and the projects module's bootstrap write path (`git
+  init`/`add`/`commit`, which pass a 30-minute `timeoutMs` on the bulk steps) off the event loop:
+  this module owns only the
   git-shaped 55s budget and stalled/stderr wording, never child-lifetime mechanics. `opts.env` lets a
   caller run prompt-free with its own environment and pins blob diagnostics to English; the captured runners'
   optional `opts.redactStderr` transforms diagnostics before any truncation or timeout wording (clone uses

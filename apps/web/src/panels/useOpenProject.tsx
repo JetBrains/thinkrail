@@ -11,6 +11,8 @@ import { NoticeDialog } from "./NoticeDialog";
 import { OpenProjectPathDialog } from "./OpenProjectPathDialog";
 
 const PICK_TIMEOUT_MS = 30 * 60_000;
+// the host bounds each bulk git step at 30 minutes; the client waits out the whole chain
+const INIT_TIMEOUT_MS = 65 * 60_000;
 const projectOpenIntents = createLatestOperation();
 
 export type OpenedProjectIntent = { setup: boolean };
@@ -73,7 +75,13 @@ export function useOpenProject(
 	const initProject = async (path: string) => {
 		const isCurrent = projectOpenIntents.begin();
 		try {
-			const project = await getTransport().request("project.init", { path });
+			const project = await getTransport().request(
+				"project.init",
+				{ path },
+				{
+					timeoutMs: INIT_TIMEOUT_MS,
+				},
+			);
 			if (!isCurrent()) return;
 			await adopt(project, isCurrent);
 			if (!isCurrent()) return;
