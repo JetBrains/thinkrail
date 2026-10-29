@@ -1,9 +1,9 @@
 ---
-title: "ThinkRail 0.3.0: stop alt-tabbing to GitHub to ship what your agent wrote"
-slug: thinkrail-0-3-0-stop-alt-tabbing-to-github
+title: "ThinkRail 0.3.0: the whole loop in one window, now in your language"
+slug: thinkrail-0-3-0-whole-loop-one-window
 date: 2026-10-29
 author: rinat-s
-excerpt: "Publish, open the PR, watch CI and merge from the topbar. Plus a first run that gets you to a working model, an interface in Spanish, Chinese or Japanese (or your own language), and an agent that can show you a mockup instead of describing it."
+excerpt: "From first launch to merged PR: a first run that gets you to a working model, the PR flow in the topbar from Publish to Merge, an agent that shows you a mockup instead of describing it, and an interface in Spanish, Chinese, Japanese or your own language."
 draft: false
 tags:
   - release
