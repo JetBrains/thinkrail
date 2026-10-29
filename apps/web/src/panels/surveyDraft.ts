@@ -48,8 +48,7 @@ export function ratingPoints(question: SurveyRatingQuestion): number[] {
 	return surveyRatingValues(question.scale);
 }
 
-export function thankYouText(survey: AppSurvey, fallback: string): string | null {
-	if (survey.thankYou === undefined) return null;
+export function thankYouText(survey: AppSurvey, fallback: string): string {
 	return survey.thankYou || fallback;
 }
 
@@ -110,10 +109,9 @@ export function stepCanContinue(question: SurveyQuestion, draft: SurveyDraft): b
 export function committedAnswers(
 	questions: readonly SurveyQuestion[],
 	draft: SurveyDraft,
-	through: number,
 ): Record<string, SurveyAnswerValue> {
 	const answers: Record<string, SurveyAnswerValue> = {};
-	for (const question of questions.slice(0, through + 1)) {
+	for (const question of questions) {
 		const value = committedValue(question, draft);
 		if (value !== undefined) answers[question.id] = value;
 	}

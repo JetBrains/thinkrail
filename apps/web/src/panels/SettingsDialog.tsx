@@ -35,10 +35,9 @@ export function SettingsDialog({
 	const filteredGroups = settingsNavGroups(protocolVersion, updateSettings !== undefined);
 	const selectedSection = resolveSettingsSection(section, filteredGroups);
 	const feedbackActive = selectedSection === SettingsSection.Feedback;
-	const inAppSurvey = useAppStore((state) => state.inAppSurvey);
 
 	useEffect(() => {
-		if (open) loadInAppSurvey();
+		if (open) void loadInAppSurvey();
 	}, [open]);
 
 	return (
@@ -100,22 +99,18 @@ export function SettingsDialog({
 							</div>
 						))}
 
-						{inAppSurvey ? (
-							<button
-								type="button"
-								data-testid="settings-nav-feedback"
-								data-active={feedbackActive}
-								onClick={() => useAppStore.getState().setSettingsSection(SettingsSection.Feedback)}
-								className={cn(
-									"shrink-0 rounded-sm border border-primary-soft px-8 py-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:mt-auto md:px-12 md:py-8",
-									feedbackActive
-										? "bg-primary-subtle"
-										: "bg-control-bg hover:bg-control-bg-hovered",
-								)}
-							>
-								<span className="tr-text-ui text-primary">{t("settings.dialog.surveyCta")}</span>
-							</button>
-						) : null}
+						<button
+							type="button"
+							data-testid="settings-nav-feedback"
+							data-active={feedbackActive}
+							onClick={() => useAppStore.getState().setSettingsSection(SettingsSection.Feedback)}
+							className={cn(
+								"shrink-0 rounded-sm border border-primary-soft px-8 py-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:mt-auto md:px-12 md:py-8",
+								feedbackActive ? "bg-primary-subtle" : "bg-control-bg hover:bg-control-bg-hovered",
+							)}
+						>
+							<span className="tr-text-ui text-primary">{t("settings.dialog.feedbackCta")}</span>
+						</button>
 					</nav>
 
 					<div className="min-h-0 flex-1 overflow-y-auto p-16">

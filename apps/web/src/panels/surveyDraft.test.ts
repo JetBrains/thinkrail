@@ -71,9 +71,10 @@ test("required steps block Continue until they have a value", () => {
 	expect(stepCanContinue({ ...openQuestion, optional: true }, draft)).toBe(true);
 	const answered = setAnswerText(draft, "open", "  Faster search  ");
 	expect(stepCanContinue(openQuestion, answered)).toBe(true);
-	expect(committedAnswers([openQuestion], answered, 0)).toEqual({ open: "Faster search" });
+	expect(committedAnswers([openQuestion], answered)).toEqual({ open: "Faster search" });
 	expect(thankYouText(survey([openQuestion], { thankYou: "" }), "Thanks")).toBe("Thanks");
-	expect(thankYouText(survey([openQuestion]), "Thanks")).toBeNull();
+	expect(thankYouText(survey([openQuestion]), "Thanks")).toBe("Thanks");
+	expect(thankYouText(survey([openQuestion], { thankYou: "Merci" }), "Thanks")).toBe("Merci");
 });
 
 test("rating and checkbox answers keep the values PostHog records", () => {
@@ -85,7 +86,7 @@ test("rating and checkbox answers keep the values PostHog records", () => {
 	expect(stepCanContinue(checks, draft)).toBe(false);
 	draft = setOtherText(draft, "multi", " Something else ");
 	expect(
-		committedAnswers([rating, checks], { ...draft, answers: { ...draft.answers, rate: "4" } }, 1),
+		committedAnswers([rating, checks], { ...draft, answers: { ...draft.answers, rate: "4" } }),
 	).toEqual({
 		rate: "4",
 		multi: ["Two", "Something else"],
@@ -98,5 +99,5 @@ test("rating and checkbox answers keep the values PostHog records", () => {
 		question: "Pick",
 		choices: ["Yes", "No"],
 	};
-	expect(committedAnswers([choice], single, 0)).toEqual({ one: "Yes" });
+	expect(committedAnswers([choice], single)).toEqual({ one: "Yes" });
 });

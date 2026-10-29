@@ -2,7 +2,6 @@ import { useT } from "@thinkrail/locales/react";
 import { selectAnalyticsConsentSupported, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { AnalyticsDescription, AnalyticsPreferences } from "./AnalyticsPreferences";
-import { PrivacyPolicySentence } from "./PrivacyPolicyLink";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { useAnalyticsConsent } from "./useAnalyticsConsent";
@@ -20,9 +19,6 @@ export function PrivacySettings() {
 						{t("settings.privacy.connectToManage")}
 					</span>
 				</div>
-				<p className="pt-12 tr-text-metadata text-text-muted">
-					<PrivacyPolicySentence />
-				</p>
 			</div>
 		);
 	}
@@ -48,9 +44,6 @@ function AdditionalAnalyticsSettings() {
 					{error}
 				</p>
 			)}
-			<p className="pt-12 tr-text-metadata text-text-muted">
-				<PrivacyPolicySentence />
-			</p>
 		</div>
 	);
 }
@@ -84,9 +77,6 @@ function LegacyPrivacySettings() {
 					/>
 				}
 			/>
-			<p className="pt-12 tr-text-metadata text-text-muted">
-				<PrivacyPolicySentence />
-			</p>
 		</div>
 	);
 }

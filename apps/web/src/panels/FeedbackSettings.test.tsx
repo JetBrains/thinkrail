@@ -3,6 +3,7 @@ import type { AppSurvey } from "@thinkrail/contracts";
 import { EN } from "@thinkrail/locales";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FeedbackSettingsView } from "./FeedbackSettings";
+import { SurveyForm } from "./SurveyForm";
 
 const SURVEY: AppSurvey = {
 	id: "survey-1",
@@ -10,72 +11,70 @@ const SURVEY: AppSurvey = {
 	placeholder: "Start typing...",
 	questions: [
 		{
-			id: "q1",
-			type: "open",
-			question: "What can we do to improve our product?",
-			description: "Test",
+			id: "rate",
+			type: "rating",
+			question: "How likely are you to recommend ThinkRail?",
+			display: "number",
+			scale: 5,
+			lowerBoundLabel: "Unlikely",
+			upperBoundLabel: "Very likely",
 		},
+		{ id: "open", type: "open", question: "What can we do better?" },
 	],
 };
 
-test("without a launched survey the pane drops Discord and the interview link", () => {
-	const markup = renderToStaticMarkup(
-		<FeedbackSettingsView survey={null} analyticsEnabled={false} />,
-	);
-	expect(markup).not.toContain("feedback-join-discord");
-	expect(markup).not.toContain("thinkrail.ai/discord");
-	expect(markup).not.toContain("calendar.app.google");
-	expect(markup).not.toContain(String(EN["panels.survey.analyticsRequired"]));
+function escaped(key: keyof typeof EN): string {
+	return String(EN[key]).replaceAll("'", "&#x27;");
+}
+
+test("the Feedback pane always offers Discord and email, and the survey only when one is launched", () => {
+	const without = renderToStaticMarkup(<FeedbackSettingsView surveyAvailable={false} />);
+	expect(without).toContain('data-testid="feedback-join-discord"');
+	expect(without).toContain("https://thinkrail.ai/discord");
+	expect(without).toContain('href="mailto:info@thinkrail.ai"');
+	expect(without).not.toContain('data-testid="feedback-take-survey"');
+
+	const withSurvey = renderToStaticMarkup(<FeedbackSettingsView surveyAvailable={true} />);
+	expect(withSurvey).toContain('data-testid="feedback-take-survey"');
+	expect(withSurvey).toContain(String(EN["settings.feedback.takeSurvey"]));
+	expect(withSurvey).toContain('data-testid="feedback-join-discord"');
+	expect(withSurvey).not.toContain("How likely are you to recommend ThinkRail?");
 });
 
-test("analytics off explains how to take the survey", () => {
+test("the survey's first page carries the notice above the first question", () => {
 	const markup = renderToStaticMarkup(
-		<FeedbackSettingsView survey={SURVEY} analyticsEnabled={false} />,
+		<SurveyForm survey={SURVEY} onSent={() => {}} onChanged={() => {}} />,
 	);
-	expect(markup).toContain("Please enable analytics to take the survey.");
-	expect(markup).toContain("switch it off again later.");
-	expect(markup).toContain('data-testid="survey-enable-analytics"');
-	expect(markup).toContain(String(EN["panels.survey.enableAnalytics"]));
-	expect(markup).toContain("https://github.com/JetBrains/thinkrail#analytics--privacy");
-	expect(markup).toContain("privacy policy");
-	expect(markup).not.toContain("What can we do to improve our product?");
-});
-
-test("a run with --no-analytics explains that answers cannot be saved", () => {
-	const markup = renderToStaticMarkup(
-		<FeedbackSettingsView survey={SURVEY} analyticsEnabled={true} analyticsSuppressed={true} />,
-	);
+	expect(markup).toContain('data-testid="survey-notice"');
+	expect(markup).toContain(escaped("panels.survey.notice"));
+	expect(markup).not.toContain("<a ");
+	expect(markup).toContain("How likely are you to recommend ThinkRail?");
 	expect(markup).toContain(
-		String(EN["panels.survey.analyticsSuppressed"]).replaceAll("'", "&#x27;"),
+		String(EN["panels.survey.progress"]).replace("{{current}}", "1").replace("{{total}}", "2"),
 	);
-	expect(markup).toContain('data-testid="survey-analytics-suppressed"');
-	expect(markup).not.toContain('data-testid="survey-enable-analytics"');
-	expect(markup).not.toContain("What can we do to improve our product?");
-	expect(markup).not.toContain("https://github.com/JetBrains/thinkrail#analytics--privacy");
+	expect(markup).toContain('data-testid="survey-continue"');
+	expect(markup).not.toContain('data-testid="survey-send"');
 });
 
-test("the --no-analytics message stays when the saved preference is also off", () => {
+test("rating points are radio inputs, not buttons", () => {
 	const markup = renderToStaticMarkup(
-		<FeedbackSettingsView survey={SURVEY} analyticsEnabled={false} analyticsSuppressed={true} />,
+		<SurveyForm survey={SURVEY} onSent={() => {}} onChanged={() => {}} />,
 	);
-	expect(markup).toContain(
-		String(EN["panels.survey.analyticsSuppressed"]).replaceAll("'", "&#x27;"),
-	);
-	expect(markup).not.toContain('data-testid="survey-enable-analytics"');
+	expect(markup.match(/type="radio"/g)).toHaveLength(5);
+	expect(markup).toContain('role="radiogroup"');
+	expect(markup).not.toContain("aria-pressed");
+	expect(markup).toContain("Unlikely");
 });
 
-test("analytics on draws the current question", () => {
+test("a one-question survey ends on Send", () => {
 	const markup = renderToStaticMarkup(
-		<FeedbackSettingsView survey={SURVEY} analyticsEnabled={true} />,
+		<SurveyForm
+			survey={{ ...SURVEY, questions: [{ id: "open", type: "open", question: "Anything else?" }] }}
+			onSent={() => {}}
+			onChanged={() => {}}
+		/>,
 	);
-	expect(markup).toContain("What can we do to improve our product?");
-	expect(markup).toContain("Test");
-	expect(markup).toContain(
-		String(EN["panels.survey.progress"]).replace("{{current}}", "1").replace("{{total}}", "1"),
-	);
-	expect(markup).toContain(String(EN["panels.survey.continue"]));
-	expect(markup).toContain('data-testid="survey-privacy-policy"');
-	expect(markup).toContain("https://github.com/JetBrains/thinkrail#analytics--privacy");
-	expect(markup).toContain(String(EN["panels.survey.privacyPolicy"]));
-	expect(markup).not.toContain("feedback-join-discord");
+	expect(markup).toContain('data-testid="survey-send"');
+	expect(markup).toContain(String(EN["panels.survey.send"]));
+	expect(markup).toContain('placeholder="Start typing..."');
 });

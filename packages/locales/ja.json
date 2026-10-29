@@ -1430,6 +1430,8 @@
 	"settings.extensions.title": "拡張機能",
 	"settings.extensions.visualize.description": "エージェントがチャット内で Mermaid 図、選択肢の並べて比較、レンダリングされたファイルのプレビューや変更前後のモックアップを描画できるようにします。",
 	"settings.extensions.web-access.description": "エージェントが Web を検索し、ページ、GitHub リポジトリ、PDF、動画を取得し、librarian スキルでオープンソースライブラリを調査できるようにします。",
+	"settings.feedback.discordDescription": "チームや他の ThinkRail ユーザーと交流しましょう。質問したり、作っているものを共有したりできます。",
+	"settings.feedback.joinDiscord": "Discord に参加",
 	"settings.feedback.title": "フィードバック",
 	"settings.github.connected": "接続済み",
 	"settings.github.description": "リモートブランチからワークスペースを作成するため、GitHub CLI を認証します。",

@@ -11,7 +11,8 @@ import { NotificationPermissionPrompt, useAttentionNotifications } from "../noti
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { SettingsDialog } from "../panels/SettingsDialog";
-import { SurveyPromptDialog } from "../panels/SurveyPromptDialog";
+import { SurveyInvitationDialog } from "../panels/SurveyInvitationDialog";
+import { SurveyWindow } from "../panels/SurveyWindow";
 import { Toaster } from "../panels/Toaster";
 import { useBranchStatus } from "../panels/useBranchStatus";
 import {
@@ -258,8 +259,9 @@ export function Shell() {
 			{onboardingActive ? null : analyticsConsentOpen ? (
 				<AnalyticsConsentDialog />
 			) : (
-				<SurveyPromptDialog />
+				<SurveyInvitationDialog />
 			)}
+			<SurveyWindow />
 			<SessionSwitcher
 				open={sessionSwitcherOpen}
 				onOpenChange={(open) => {

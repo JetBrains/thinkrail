@@ -14,7 +14,7 @@ Own the host-scoped lifecycle for the in-app survey prompt. Count accepted user-
 
 ## Boundary
 
-- **Owns:** validated `feedback.json` (`acceptedMessages`, `nextInvitationAt`, `dismissed`, `submittedSurveyId`, `submittedIteration`); the fixed 10-message initial/retry interval; one memory-only claimant client; `recordAcceptedMessage`; `respondToInterview`; `completeSurvey`; an injected offer predicate and addressed publisher; the public-survey loader in `survey.ts`.
+- **Owns:** validated `feedback.json` (`acceptedMessages`, `nextInvitationAt`, `dismissed`, `submittedSurveyId`, `submittedIteration`); the fixed 10-message initial/retry interval; one memory-only claimant client; `recordAcceptedMessage`; `respondToInvitation`; `completeSurvey`; an injected offer predicate and addressed publisher; the public-survey loader in `survey.ts`.
 - **Public surface (barrel):** the lifecycle operations, survey selection and refresh, submission parsing, publisher and offer installers, and test resets.
 - **Allowed deps:** `persistence` (`dataDir` only); `contracts` survey and interview types; Node filesystem/path APIs; `fetch` for `GET /api/surveys/` in `survey.ts` only.
 - **Forbidden:** importing `host` or analytics. The host captures survey events and decides eligibility. This module does not target people in PostHog or open a calendar.

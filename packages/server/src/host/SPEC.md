@@ -245,7 +245,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `mcp.list` would report `handledElsewhere` (the probe's loader forces `builtin:mcp`);
   `provider.loginReply` / `provider.loginCancel` route `mcplogin_*` ids to the probe with the caller's
   `clientKey`, and `createServer` sends probe frames to the owner's socket only, cancels the probes of a
-  client when its retention timer finally reaps it (`cancelMcpProbesOwnedBy`, beside `releaseInterview`;
+  client when its retention timer finally reaps it (`cancelMcpProbesOwnedBy`, beside `releaseInvitation`;
   never on a mere socket close — a reconnect within the window keeps the key and its sign-in) and cancels
   every probe on stop — `mcp.login` / `mcp.testConnection` pushes go to the starting
   connection only (`ws.send`, not the broadcast topic) and foreign replies fail with `LOGIN_NOT_OWNER`; `session.list` decorates agent's `listSessions` summaries with

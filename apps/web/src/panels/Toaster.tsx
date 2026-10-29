@@ -34,7 +34,6 @@ export function Toaster() {
 		<ToastProvider swipeDirection="right">
 			{toasts.map((t) => {
 				const { Icon, className: iconClass } = variantIcon[t.variant];
-				const actions = t.actions ?? (t.action ? [t.action] : []);
 				return (
 					<Toast
 						key={t.id}
@@ -42,14 +41,11 @@ export function Toaster() {
 						duration={
 							t.durationMs ?? (t.variant === "error" ? Number.POSITIVE_INFINITY : AUTO_DISMISS_MS)
 						}
-						onOpenChange={(next) => {
-							if (next) return;
-							t.onDismiss?.();
-							dismissToast(t.id);
+						onOpenChange={(open) => {
+							if (!open) dismissToast(t.id);
 						}}
 						data-testid="toast"
 						data-variant={t.variant}
-						{...(t.marker ? { "data-toast": t.marker } : {})}
 					>
 						<div className="flex items-start gap-8">
 							<Icon className={cn("mt-2 size-14 shrink-0", iconClass)} aria-hidden />
@@ -61,32 +57,18 @@ export function Toaster() {
 							</div>
 							<ToastClose />
 						</div>
-						{actions.length > 0 ? (
-							<div className="mt-12 flex flex-wrap justify-end gap-8">
-								{actions.map((action) =>
-									t.actions ? (
-										<Button
-											key={action.label}
-											variant={action.variant ?? "outline"}
-											size="m"
-											data-testid="toast-action"
-											onClick={action.onClick}
-										>
-											{action.label}
-										</Button>
-									) : (
-										<ToastAction key={action.label} altText={action.label} asChild>
-											<Button
-												variant={action.variant ?? "outline"}
-												size="m"
-												data-testid="toast-action"
-												onClick={action.onClick}
-											>
-												{action.label}
-											</Button>
-										</ToastAction>
-									),
-								)}
+						{t.action ? (
+							<div className="mt-12 flex justify-end">
+								<ToastAction altText={t.action.label} asChild>
+									<Button
+										variant="outline"
+										size="m"
+										data-testid="toast-action"
+										onClick={t.action.onClick}
+									>
+										{t.action.label}
+									</Button>
+								</ToastAction>
 							</div>
 						) : null}
 					</Toast>

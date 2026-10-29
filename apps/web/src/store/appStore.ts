@@ -418,27 +418,13 @@ export const SettingsSection = {
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
-export interface ToastButton {
-	label: string;
-	onClick: () => void;
-	variant?: "primary" | "outline";
-}
-
 export interface Toast {
 	id: string;
 	variant: "error" | "success" | "info" | "warning";
 	message: string;
 	title?: string;
 	durationMs?: number;
-	/** Keeps one logical notification identifiable when its message changes. */
-	marker?: string;
-	action?: ToastButton;
-	actions?: ToastButton[];
-	onDismiss?: () => void;
-}
-
-function plainToast(toast: Pick<Toast, "action" | "actions" | "onDismiss" | "marker">): boolean {
-	return !toast.action && !toast.actions?.length && !toast.onDismiss && !toast.marker;
+	action?: { label: string; onClick: () => void };
 }
 
 const MAX_TOASTS = 5;
@@ -1066,9 +1052,9 @@ interface AppState {
 	unheldLoginFrame: LoginPush | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
-	interviewPromptOpen: boolean;
+	surveyInvitationOpen: boolean;
+	surveyWindowOpen: boolean;
 	inAppSurvey: AppSurvey | null;
-	surveyAnalyticsSuppressed: boolean;
 	notificationPromptOpen: boolean;
 	sessionSwitcherOpen: boolean;
 	theme: ThemeId;
@@ -1388,10 +1374,12 @@ interface AppState {
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
-	showInterviewPrompt: () => void;
-	hideInterviewPrompt: () => void;
+	showSurveyInvitation: () => void;
+	hideSurveyInvitation: () => void;
+	/** Opens the survey window, closing the invitation and Settings that led to it. */
+	openSurveyWindow: () => void;
+	closeSurveyWindow: () => void;
 	setInAppSurvey: (survey: AppSurvey | null) => void;
-	setSurveyAnalyticsSuppressed: (suppressed: boolean) => void;
 	openNotificationPrompt: () => void;
 	closeNotificationPrompt: () => void;
 	openSessionSwitcher: () => void;
@@ -1417,7 +1405,6 @@ interface AppState {
 	clearReviewFocus: (commentId?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
-	updateToast: (id: string, patch: Partial<Omit<Toast, "id">>) => void;
 	dismissToast: (id: string) => void;
 }
 
@@ -2338,9 +2325,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	unheldLoginFrame: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
-	interviewPromptOpen: false,
+	surveyInvitationOpen: false,
+	surveyWindowOpen: false,
 	inAppSurvey: null,
-	surveyAnalyticsSuppressed: false,
 	notificationPromptOpen: false,
 	sessionSwitcherOpen: false,
 	theme: DEFAULT_CONFIG.theme,
@@ -4398,11 +4385,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSessionSwitcher: () => set({ sessionSwitcherOpen: false }),
 	toggleSessionSwitcher: () =>
 		set((state) => ({ sessionSwitcherOpen: !state.sessionSwitcherOpen })),
-	showInterviewPrompt: () =>
-		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
-	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),
+	showSurveyInvitation: () =>
+		set((state) => (state.surveyInvitationOpen ? state : { surveyInvitationOpen: true })),
+	hideSurveyInvitation: () => set({ surveyInvitationOpen: false }),
+	openSurveyWindow: () =>
+		set({ surveyWindowOpen: true, surveyInvitationOpen: false, settingsOpen: false }),
+	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
 	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
-	setSurveyAnalyticsSuppressed: (suppressed) => set({ surveyAnalyticsSuppressed: suppressed }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
 	setStreamingResponseMovement: (streamingResponseMovement) => set({ streamingResponseMovement }),
 	setChatPreferences: (chatMessageOrder, streamingResponseMovement) =>
@@ -4558,8 +4547,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) =>
-				plainToast(t) &&
-				plainToast(toast) &&
+				!t.action &&
+				!toast.action &&
 				t.variant === toast.variant &&
 				t.title === toast.title &&
 				t.message === toast.message &&
@@ -4572,7 +4561,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			let actionlessToDrop = Math.max(0, next.length - MAX_TOASTS);
 			return {
 				toasts: next.filter((candidate) => {
-					if (!plainToast(candidate) || actionlessToDrop === 0) return true;
+					if (candidate.action || actionlessToDrop === 0) return true;
 					actionlessToDrop -= 1;
 					return false;
 				}),
@@ -4580,12 +4569,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 		});
 		return id;
 	},
-	updateToast: (id, patch) =>
-		set((s) =>
-			s.toasts.some((t) => t.id === id)
-				? { toasts: s.toasts.map((t) => (t.id === id ? { ...t, ...patch } : t)) }
-				: {},
-		),
 	dismissToast: (id) =>
 		set((s) =>
 			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},

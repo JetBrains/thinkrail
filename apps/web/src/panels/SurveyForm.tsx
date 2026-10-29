@@ -1,16 +1,10 @@
-import {
-	type AppSurvey,
-	SURVEY_OPEN_TEXT_LIMIT,
-	type SurveySubmitParams,
-} from "@thinkrail/contracts";
+import { type AppSurvey, SURVEY_OPEN_TEXT_LIMIT, type SurveyQuestion } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "@/store";
-import { errorText, getTransport } from "@/transport";
-import { PrivacyPolicyRowLink } from "./PrivacyPolicyLink";
+import { useRef, useState } from "react";
+import { getTransport, wsErrorCode } from "@/transport";
 import {
 	committedAnswers,
 	emptySurveyDraft,
@@ -23,81 +17,62 @@ import {
 	setAnswerText,
 	setOtherText,
 	stepCanContinue,
-	thankYouText,
 	toggleChoice,
 	toggleOther,
 } from "./surveyDraft";
 
 export function SurveyForm({
 	survey,
-	submissionId,
-	onCompleted,
 	onSent,
-	onShown,
+	onChanged,
 }: {
 	survey: AppSurvey;
-	submissionId?: string;
-	onCompleted: (thanks: string | null) => void;
-	onSent?: () => void;
-	onShown?: () => void;
+	onSent: () => void;
+	onChanged: () => void;
 }) {
 	const t = useT();
-	const questions = useMemo(() => presentSurvey(survey), [survey]);
+	const [questions] = useState(() => presentSurvey(survey));
+	const [submissionId] = useState(() => crypto.randomUUID());
 	const [step, setStep] = useState(0);
 	const [draft, setDraft] = useState<SurveyDraft>(emptySurveyDraft);
 	const [pending, setPending] = useState(false);
-	const submission = useRef(submissionId ?? crypto.randomUUID());
-	const pendingRef = useRef(false);
-	const onShownRef = useRef(onShown);
-	onShownRef.current = onShown;
+	const [failure, setFailure] = useState<"unavailable" | "sendFailed" | null>(null);
+	const sending = useRef(false);
 	const question = questions[step];
-
-	useEffect(() => {
-		void getTransport()
-			.request("feedback.survey.submit", {
-				submissionId: submission.current,
-				event: "shown",
-			})
-			.then(() => onShownRef.current?.())
-			.catch(() => {});
-	}, []);
-
 	if (!question) return null;
 	const last = step === questions.length - 1;
-	const send = (payload: SurveySubmitParams, advance: () => void) => {
-		if (pendingRef.current) return;
-		pendingRef.current = true;
+
+	const send = () => {
+		if (sending.current) return;
+		sending.current = true;
 		setPending(true);
+		setFailure(null);
 		void getTransport()
-			.request("feedback.survey.submit", payload)
-			.then(() => {
-				onSent?.();
-				advance();
+			.request("feedback.survey.submit", {
+				submissionId,
+				surveyId: survey.id,
+				iteration: survey.iteration,
+				answers: committedAnswers(questions, draft),
 			})
-			.catch((error) => toast.error(errorText(error), t("panels.survey.saveFailed")))
+			.then(() => onSent())
+			.catch((error: unknown) => {
+				const code = wsErrorCode(error);
+				if (code === "SURVEY_CHANGED") onChanged();
+				else setFailure(code === "SURVEY_UNAVAILABLE" ? "unavailable" : "sendFailed");
+			})
 			.finally(() => {
-				pendingRef.current = false;
+				sending.current = false;
 				setPending(false);
 			});
-	};
-	const continueStep = () => {
-		const answers = committedAnswers(questions, draft, step);
-		send(
-			{
-				submissionId: submission.current,
-				event: "sent",
-				completed: last,
-				answers,
-			},
-			() => {
-				if (last) onCompleted(thankYouText(survey, t("panels.survey.thankYou")));
-				else setStep((current) => current + 1);
-			},
-		);
 	};
 
 	return (
 		<div className="flex flex-col gap-12">
+			{step === 0 ? (
+				<p data-testid="survey-notice" className="text-text-muted tr-text-metadata">
+					{t("panels.survey.notice")}
+				</p>
+			) : null}
 			<p className="text-text-muted tr-text-metadata" data-testid="survey-progress">
 				{t("panels.survey.progress", { current: step + 1, total: questions.length })}
 			</p>
@@ -113,30 +88,41 @@ export function SurveyForm({
 					<p className="text-text-muted tr-text-metadata">{question.description}</p>
 				) : null}
 			</div>
-			<SurveyAnswer question={question} survey={survey} draft={draft} onDraft={setDraft} />
-			<div className="flex items-center gap-12">
-				<Button
-					variant="primary"
-					data-testid="survey-continue"
-					disabled={pending || !stepCanContinue(question, draft)}
-					onClick={continueStep}
-				>
-					{t("panels.survey.continue")}
-				</Button>
-				<PrivacyPolicyRowLink />
-			</div>
+			<SurveyAnswer
+				key={question.id}
+				question={question}
+				placeholder={survey.placeholder}
+				draft={draft}
+				onDraft={setDraft}
+			/>
+			{failure ? (
+				<p role="alert" className="tr-text-metadata text-feedback-error">
+					{failure === "unavailable"
+						? t("panels.survey.unavailable")
+						: t("panels.survey.sendFailed")}
+				</p>
+			) : null}
+			<Button
+				variant="primary"
+				className="self-start"
+				data-testid={last ? "survey-send" : "survey-continue"}
+				disabled={pending || !stepCanContinue(question, draft)}
+				onClick={last ? send : () => setStep(step + 1)}
+			>
+				{last ? t("panels.survey.send") : t("panels.survey.continue")}
+			</Button>
 		</div>
 	);
 }
 
 function SurveyAnswer({
 	question,
-	survey,
+	placeholder,
 	draft,
 	onDraft,
 }: {
-	question: NonNullable<ReturnType<typeof presentSurvey>[number]>;
-	survey: AppSurvey;
+	question: SurveyQuestion;
+	placeholder: string | undefined;
 	draft: SurveyDraft;
 	onDraft: (draft: SurveyDraft) => void;
 }) {
@@ -147,8 +133,9 @@ function SurveyAnswer({
 			<Textarea
 				rows={4}
 				maxLength={SURVEY_OPEN_TEXT_LIMIT}
+				aria-labelledby="survey-question"
 				value={typeof value === "string" ? value : ""}
-				placeholder={survey.placeholder}
+				placeholder={placeholder}
 				onChange={(event) => onDraft(setAnswerText(draft, question.id, event.target.value))}
 			/>
 		);
@@ -160,25 +147,35 @@ function SurveyAnswer({
 				{question.lowerBoundLabel ? (
 					<span className="text-text-muted tr-text-metadata">{question.lowerBoundLabel}</span>
 				) : null}
-				<div role="radiogroup" aria-label={question.question} className="flex flex-wrap gap-4">
+				<div
+					role="radiogroup"
+					aria-labelledby="survey-question"
+					className="flex flex-wrap gap-4"
+					data-testid="survey-rating"
+				>
 					{ratingPoints(question).map((point) => {
 						const value = String(point);
-						const active = selected === value;
+						const checked = selected === value;
 						return (
-							<button
+							<label
 								key={value}
-								type="button"
-								aria-pressed={active}
 								className={cn(
-									"flex size-32 items-center justify-center rounded-sm border tr-text-ui outline-none focus-visible:ring-2 focus-visible:ring-primary",
-									active
+									"flex size-32 cursor-pointer items-center justify-center rounded-sm border tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+									checked
 										? "border-primary-muted bg-primary-subtle text-primary"
-										: "border-border-default hover:bg-control-bg-hovered",
+										: "border-border-default text-text-default hover:bg-control-bg-hovered",
 								)}
-								onClick={() => onDraft(setAnswerText(draft, question.id, value))}
 							>
+								<input
+									type="radio"
+									name={question.id}
+									value={value}
+									checked={checked}
+									onChange={() => onDraft(setAnswerText(draft, question.id, value))}
+									className="sr-only"
+								/>
 								{ratingMark(question, point)}
-							</button>
+							</label>
 						);
 					})}
 				</div>
@@ -188,6 +185,7 @@ function SurveyAnswer({
 			</div>
 		);
 	}
+	const single = question.type === "single_choice";
 	const selected = draft.answers[question.id];
 	const otherSelected = draft.otherSelected[question.id] === true;
 	const body = (
@@ -195,17 +193,17 @@ function SurveyAnswer({
 			{question.choices.map((choice) => (
 				<ChoiceRow
 					key={choice}
-					kind={question.type === "single_choice" ? "radio" : "checkbox"}
+					kind={single ? "radio" : "checkbox"}
 					name={question.id}
 					label={choice}
 					checked={
-						question.type === "single_choice"
+						single
 							? selected === choice && !otherSelected
 							: Array.isArray(selected) && selected.includes(choice)
 					}
 					onSelect={() =>
 						onDraft(
-							question.type === "single_choice"
+							single
 								? selectSingleChoice(draft, question.id, choice)
 								: toggleChoice(draft, question.id, choice),
 						)
@@ -215,15 +213,13 @@ function SurveyAnswer({
 			{question.hasOpenChoice ? (
 				<>
 					<ChoiceRow
-						kind={question.type === "single_choice" ? "radio" : "checkbox"}
+						kind={single ? "radio" : "checkbox"}
 						name={question.id}
 						label={t("panels.survey.other")}
 						checked={otherSelected}
 						onSelect={() =>
 							onDraft(
-								question.type === "single_choice"
-									? selectSingleOther(draft, question.id)
-									: toggleOther(draft, question.id),
+								single ? selectSingleOther(draft, question.id) : toggleOther(draft, question.id),
 							)
 						}
 					/>
@@ -231,6 +227,7 @@ function SurveyAnswer({
 						<Textarea
 							rows={2}
 							maxLength={SURVEY_OPEN_TEXT_LIMIT}
+							aria-label={t("panels.survey.other")}
 							value={draft.otherText[question.id] ?? ""}
 							onChange={(event) => onDraft(setOtherText(draft, question.id, event.target.value))}
 						/>
@@ -239,8 +236,8 @@ function SurveyAnswer({
 			) : null}
 		</>
 	);
-	return question.type === "single_choice" ? (
-		<div role="radiogroup" aria-label={question.question} className="flex flex-col gap-4">
+	return single ? (
+		<div role="radiogroup" aria-labelledby="survey-question" className="flex flex-col gap-4">
 			{body}
 		</div>
 	) : (

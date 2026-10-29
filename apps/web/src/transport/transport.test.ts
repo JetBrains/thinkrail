@@ -97,7 +97,7 @@ describe("WsTransport channel replay", () => {
 			{},
 		],
 		[
-			"does not replay an addressed interview invitation to a late subscriber",
+			"does not replay an addressed survey invitation to a late subscriber",
 			WS_CHANNELS.feedbackInterview,
 			{},
 		],

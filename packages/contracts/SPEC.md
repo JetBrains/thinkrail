@@ -443,7 +443,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `server.welcome`, mutated via `settings.update`). Every new user chat receives the resolved model and
   effort explicitly, so the session agrees with `model.default`; explicit request fields win individually,
   while an effort-only request uses the configured or fallback model. Plan-review subagents keep their own model policy.
-  **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
+  **`SurveyInvitationResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
   feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
   Contracts deliberately exports no theme catalog enum/list/labels: a future manifest can mint an id
   unknown when the host was built, and a client missing it resolves a same-appearance bundled fallback;
@@ -737,7 +737,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   because values may be secrets; `get` → `HostEnvironmentStatus` with `restartRequired`, `launchOverridden`
   names and the `effectiveAgentDir`; `update` replaces the whole record and returns
   `{ ok: false, issues }` per field/row index instead of saving anything when it is invalid) /
-  **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists postpone, book, or the legacy
+  **`feedback.respond`** (`{ action: SurveyInvitationResponse }` → ack; persists postpone, book, or the legacy
   permanent-dismiss flag; book and never no longer stop message counting;
   `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction) /
   **`feedback.survey`** (no params → `{ survey: AppSurvey | null, analyticsSuppressed: boolean }`; the launched survey named
