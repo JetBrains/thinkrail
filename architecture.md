@@ -317,7 +317,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
     into the current-chat Resources view. Parent session entries own injected command services and
     retained subagent completion delivery across extension reload; scoped reads, controls, and
     invalidations are composed through the agent barrel. Detailed integration belongs to
-    [[submodule-server-agent]], and command lifetime/retention to [[module-pi-background-commands]].
+    [[submodule-server-agent]], and live command lifetime and runtime retention to
+    [[module-pi-background-commands]]. What Resources keeps past a host restart — every finished record and
+    command log tail of a chat, for the workspace's lifetime — is a host archive,
+    [[submodule-server-resource-history]], fed and read only by `agent`; the portable packages stay
+    in-memory, so an archived record never becomes control authority (user-settled, 2026-10).
 
 19. **The review surface is engine-neutral; renderers are registered, not hard-wired.** A resource (a
     file or one side-pair of a diff) is shown by the renderer the `@thinkrail/resource-renderers` registry selects by

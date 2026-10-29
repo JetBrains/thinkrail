@@ -87,8 +87,11 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   is committed on its own when its changes are provably its own, and can be reviewed by an independent
   reviewer ([[module-pi-todos]], [[submodule-server-todos]],
   [[submodule-server-host-plan-review]]).
-- **Subagents** — delegation to isolated child sessions, in the foreground, in parallel, or in the
-  background ([[module-pi-subagents]]).
+- **Subagents and background commands** — delegation to isolated child sessions, in the foreground, in
+  parallel, or in the background ([[module-pi-subagents]]), and commands the agent runs without holding its
+  turn ([[module-pi-background-commands]]); each chat's Resources view watches, inspects and stops them, and
+  keeps their finished history — outcomes and command log tails — for the workspace's lifetime, across host
+  restarts ([[submodule-web-chat-resources]], [[submodule-server-resource-history]]).
 - **Review** — anchored comments on files and diffs, collected without starting the agent and sent as
   structured context to chats that can resolve them; local review, not a forge integration
   ([[submodule-server-reviews]]).
