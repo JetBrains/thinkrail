@@ -215,7 +215,7 @@ check(
 	"the page outline jumps to a section and marks it current",
 );
 
-await page.setViewportSize({ width: 390, height: 844 });
+await page.setViewportSize({ width: 320, height: 844 });
 await open(page, "button");
 check(!(await page.locator("aside").first().isVisible()), "narrow layout hides the sidebar");
 await page.getByRole("button", { name: "Open navigation" }).click();
@@ -234,7 +234,7 @@ const overflow = await page.evaluate(() => {
 	);
 });
 check(overflow <= 0, `narrow layout does not scroll the page sideways (${overflow}px)`);
-for (const route of ["color", "typography", "themes", "vocabulary"]) {
+for (const route of ["button", "color", "typography", "themes", "vocabulary"]) {
 	await open(page, route);
 	const sideways = await page.evaluate(() => {
 		const main = document.getElementById("library-main") as HTMLElement;

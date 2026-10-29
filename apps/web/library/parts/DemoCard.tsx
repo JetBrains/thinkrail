@@ -33,7 +33,10 @@ export function DemoCard({
 			data-testid={testId}
 			className="mb-16 flex scroll-mt-16 break-inside-avoid flex-col rounded-md border border-border-default bg-container-elevated-bg"
 		>
-			<div data-testid="example-preview" className="flex min-h-[5rem] items-center px-24 py-32">
+			<div
+				data-testid="example-preview"
+				className="flex min-h-[5rem] min-w-0 items-center overflow-x-auto px-24 py-32"
+			>
 				{Demo ? <Demo /> : null}
 			</div>
 			<div className="flex flex-col gap-8 border-border-default border-t px-24 pt-16 pb-12">

@@ -225,7 +225,7 @@ export function Markdown({
 				return (
 					<div
 						key={key}
-						className="tr-prose-doc flex flex-col gap-16 break-words text-text-default"
+						className="tr-prose-doc flex flex-col gap-16 text-text-default [overflow-wrap:anywhere]"
 					>
 						{marked
 							.lexer(segment.source)

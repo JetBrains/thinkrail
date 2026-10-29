@@ -15,7 +15,9 @@ export function Section({
 		<section id={id} className="flex scroll-mt-16 flex-col gap-12">
 			<div className="flex flex-col gap-4">
 				<h2 className="tr-heading-sm text-text-default">{title}</h2>
-				{description ? <div className="tr-text-ui text-text-muted">{description}</div> : null}
+				{description ? (
+					<div className="tr-text-ui text-text-muted [overflow-wrap:anywhere]">{description}</div>
+				) : null}
 			</div>
 			{children}
 		</section>
