@@ -556,7 +556,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   replay-safe requests and never alter the Settings link.
 - **Survey submission:** after `initializeAnalytics` the host configures the feedback survey source from
   analytics' `surveyEndpoint()`, so unkeyed, CI and test runs never fetch and `THINKRAIL_POSTHOG_HOST`
-  applies. `feedback.survey.submit` re-reads the survey list (no cache), refuses with `SURVEY_INVALID`,
+  applies. A source dev host fetches only when `THINKRAIL_DEV_POSTHOG=1` and `THINKRAIL_POSTHOG_PROJECT_KEY`
+  are both set. `feedback.survey.submit` re-reads the survey list (no cache), refuses with `SURVEY_INVALID`,
   `SURVEY_UNAVAILABLE` (none launched, or already completed) or `SURVEY_CHANGED` (another id or
   iteration), hands the built payload to `captureSurveyResponse`, and records completion only when that
   capture is accepted (`SURVEY_NOT_SENT` otherwise, and when the list cannot be read). Once accepted the

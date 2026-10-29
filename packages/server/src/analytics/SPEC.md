@@ -198,7 +198,8 @@ update that explicitly includes `analyticsEnabled` changes the grant; unrelated 
 it. Settings changes write preference and confirmation together. Window behavior belongs to
 [[submodule-web-panels]]. Confirmed later launches do not prime or reopen.
 
-Only builds stamped with a project key report (see Data boundary); unkeyed source/dev builds, CI and
+Only builds stamped with a project key report (see Data boundary), plus a source dev host that opts in
+with `THINKRAIL_DEV_POSTHOG=1` and `THINKRAIL_POSTHOG_PROJECT_KEY`. Other unkeyed source/dev builds, CI and
 `NODE_ENV=test` create no vendor clients and claim no installation marker. `--no-analytics` / `THINKRAIL_NO_ANALYTICS` suppress only
 additional events without changing consent; they do not suppress an explicitly sent survey. Host-side
 analytics is the sole environment-policy reader
@@ -241,9 +242,12 @@ allow-listed shape above.
 The sink uses the launcher-supplied public key, EU endpoint, disabled GeoIP enrichment and
 `$process_person_profile: false`; key/endpoint/fetch injection supports tests and self-hosting. The
 repository carries no key: release CI stamps it into [[module-shared]]'s version seam, so source, dev
-and locally built artifacts (`channel=dev`, `0.0.0-*`) can never pollute production data. A 2026-10-06
+and locally built artifacts (`channel=dev`, `0.0.0-*`) do not report. A 2026-10-06
 spike of 275 `app_installed` from unstamped dev desktop/binary harness runs without `CI=1` motivated
-this; the `CI`/test mutes alone relied on every harness remembering them. The `phc_` key stays a public
+this; the `CI`/test mutes alone relied on every harness remembering them. The source dev host is the one
+exception: `THINKRAIL_DEV_POSTHOG=1` together with `THINKRAIL_POSTHOG_PROJECT_KEY` passes that key into
+`bootHost` and creates a real client, which sends basic events and survey answers. A normal dev run leaves
+the switch unset and stays unkeyed. CLI and desktop source runs still use the empty stamped key. The `phc_` key stays a public
 ingestion key extractable from shipped binaries, so this stops accidental pollution, not deliberate abuse. Personless
 processing does not remove UUID linkage; vendor IP-discard/retention policy is separate. Automated/schema,
 consent-revocation, migration, host-trigger and packaged loopback-delivery tests pin these boundaries.
