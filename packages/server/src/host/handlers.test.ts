@@ -559,6 +559,7 @@ test("feedback.respond persists a popup action through the handler", async () =>
 		dismissed: false,
 		submittedSurveyId: null,
 		submittedIteration: null,
+		lastInvitedAt: null,
 	});
 });
 

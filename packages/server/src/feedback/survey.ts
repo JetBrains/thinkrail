@@ -53,6 +53,9 @@ interface SurveyTranslations {
 }
 
 const translationsOf = new WeakMap<AppSurvey, SurveyTranslations>();
+const waitPeriodOf = new WeakMap<AppSurvey, number>();
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WAIT_PERIOD_DAY_LIMIT = 3650;
 
 interface ActiveSource {
 	apiKey: string;
@@ -88,6 +91,14 @@ export function configureSurveySource(next: SurveySource | null): void {
 export function currentInAppSurvey(): AppSurvey | null {
 	if (cached && clock() - succeededAt >= SURVEY_STALE_MS) cached = null;
 	return cached;
+}
+
+export function surveyNow(): number {
+	return clock();
+}
+
+export function surveyWaitPeriodMs(survey: AppSurvey): number {
+	return waitPeriodOf.get(survey) ?? 0;
 }
 
 export function surveyRefreshDue(at = clock()): boolean {
@@ -275,6 +286,11 @@ function selectOne(entry: unknown): { survey: AppSurvey; started: number } | nul
 		...(showThanks ? { thankYou } : {}),
 		...(appearance.shuffleQuestions === true ? { shuffleQuestions: true } : {}),
 	};
+	const conditions = isRecord(entry.conditions) ? entry.conditions : {};
+	const waitDays = conditions.seenSurveyWaitPeriodInDays;
+	if (typeof waitDays === "number" && Number.isFinite(waitDays) && waitDays > 0) {
+		waitPeriodOf.set(survey, Math.min(waitDays, WAIT_PERIOD_DAY_LIMIT) * DAY_MS);
+	}
 	const thankYouTranslations = new Map<string, string>();
 	for (const [key, translation] of translationEntries(entry.translations)) {
 		const header = plainText(translation.thankYouMessageHeader, 500);

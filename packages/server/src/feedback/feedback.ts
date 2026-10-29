@@ -2,7 +2,13 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node
 import { join } from "node:path";
 import type { SurveyInvitationResponse } from "@thinkrail/contracts";
 import { dataDir } from "../persistence";
-import { currentInAppSurvey, refreshInAppSurvey, surveyRefreshDue } from "./survey";
+import {
+	currentInAppSurvey,
+	refreshInAppSurvey,
+	surveyNow,
+	surveyRefreshDue,
+	surveyWaitPeriodMs,
+} from "./survey";
 
 interface FeedbackState {
 	acceptedMessages: number;
@@ -10,6 +16,7 @@ interface FeedbackState {
 	dismissed: boolean;
 	submittedSurveyId: string | null;
 	submittedIteration: number | null;
+	lastInvitedAt: number | null;
 }
 
 type FeedbackPublisher = (clientKey: string) => boolean;
@@ -21,6 +28,7 @@ const DEFAULT_STATE: FeedbackState = {
 	dismissed: false,
 	submittedSurveyId: null,
 	submittedIteration: null,
+	lastInvitedAt: null,
 };
 
 let cachedState: FeedbackState | null = null;
@@ -43,14 +51,25 @@ function parseState(value: unknown): FeedbackState | null {
 	}
 	const submittedSurveyId = completionId(value);
 	const submittedIteration = completionIteration(value);
+	const lastInvitedAt = invitedAt(value);
 	if (submittedSurveyId === undefined || submittedIteration === undefined) return null;
+	if (lastInvitedAt === undefined) return null;
 	return {
 		acceptedMessages: candidate.acceptedMessages,
 		nextInvitationAt: candidate.nextInvitationAt,
 		dismissed: candidate.dismissed,
 		submittedSurveyId,
 		submittedIteration,
+		lastInvitedAt,
 	};
+}
+
+function invitedAt(record: object): number | null | undefined {
+	if (!Object.hasOwn(record, "lastInvitedAt")) return null;
+	const at: unknown = Reflect.get(record, "lastInvitedAt");
+	if (at === null) return null;
+	if (isNonNegativeSafeInteger(at)) return at;
+	return undefined;
 }
 
 function completionId(record: object): string | null | undefined {
@@ -153,20 +172,31 @@ function maybeOffer(clientKey: string): void {
 		return;
 	}
 	claimedClient = clientKey;
-	deliverInvitation(clientKey);
+	if (deliverInvitation(clientKey)) recordInvitation();
 }
 
 function surveyOfferAvailable(): boolean {
 	const survey = currentInAppSurvey();
-	return survey !== null && !surveyIsCompleted(survey.id, survey.iteration);
+	if (!survey || surveyIsCompleted(survey.id, survey.iteration)) return false;
+	const lastInvitedAt = loadState().lastInvitedAt;
+	const wait = surveyWaitPeriodMs(survey);
+	return lastInvitedAt === null || wait === 0 || surveyNow() - lastInvitedAt >= wait;
 }
 
-function deliverInvitation(clientKey: string): void {
+function recordInvitation(): void {
+	const next = { ...loadState(), lastInvitedAt: surveyNow() };
+	cachedState = next;
 	try {
-		if (publishInvitation?.(clientKey) !== true) claimedClient = null;
-	} catch {
-		claimedClient = null;
-	}
+		writeState(next);
+	} catch {}
+}
+
+function deliverInvitation(clientKey: string): boolean {
+	try {
+		if (publishInvitation?.(clientKey) === true) return true;
+	} catch {}
+	claimedClient = null;
+	return false;
 }
 
 export function redeliverInvitation(clientKey: string): void {
