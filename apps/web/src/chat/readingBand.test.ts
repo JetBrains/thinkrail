@@ -6,7 +6,7 @@ import {
 	type ReadingBandGeometry,
 } from "./readingBand";
 
-const ARRIVAL_WINDOW_MS = 300;
+const TALL_ARRIVAL_SETTLE_MS = 300;
 
 interface Harness {
 	controller: ReturnType<typeof createReadingBandController>;
@@ -164,7 +164,7 @@ function startPinned(harness: Harness) {
 	harness.controller.contentChanged();
 	harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 601 });
 	harness.controller.contentChanged();
-	harness.advance(ARRIVAL_WINDOW_MS);
+	harness.advance(TALL_ARRIVAL_SETTLE_MS);
 }
 
 function grow(harness: Harness, pixels: number) {
@@ -1671,7 +1671,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 
 		grow(harness, 50);
 		expect(harness.readGeometry().scrollTop).toBe(cappedDestination);
-		harness.advance(ARRIVAL_WINDOW_MS);
+		harness.advance(TALL_ARRIVAL_SETTLE_MS);
 
 		grow(harness, 50);
 		expect(harness.readGeometry().scrollTop).toBeCloseTo(cappedDestination + 100, 8);
@@ -1813,6 +1813,22 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		advanceUntilIdle(harness);
 		const geometry = harness.readGeometry();
 		expect(geometry.edgeBottom).toBeCloseTo(600, 8);
+	});
+
+	it("pins a fast per-frame text stream in a short viewport without a tall-arrival cap", () => {
+		const harness = createHarness({ viewportHeight: 300 });
+		harness.setReferenceRow({ id: "r1", top: 100 });
+		harness.controller.contentChanged();
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 301 });
+		harness.controller.contentChanged();
+		harness.advance(TALL_ARRIVAL_SETTLE_MS);
+		const startingScrollTop = harness.readGeometry().scrollTop;
+		for (let frame = 1; frame <= 60; frame += 1) {
+			grow(harness, 20);
+			expect(harness.readGeometry().edgeBottom).toBe(300);
+			expect(harness.readGeometry().scrollTop).toBe(startingScrollTop + frame * 20);
+			harness.advance(16);
+		}
 	});
 
 	it("pins a streaming text response without a tall-arrival cap", () => {

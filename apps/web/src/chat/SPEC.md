@@ -695,13 +695,14 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   settlement that lands while native input is still pending defers its return until that input resolves, and
   drops the return if the input detached.
 - **A tall arrival shows its start** — in oldest-first the controller treats the response edge as it stood
-  300 ms ago (the newest edge position at least that old) as the edge the reader has seen. When the follow
+  100 ms ago (the newest edge position at least that old) as the edge the reader has seen. When the follow
   destination would carry that edge above the turn inset — content taller than the reading space (the pin line
   minus the turn inset) arrived within that window, typically a diagram or card that renders at once, possibly
   in several quick layout steps — the destination is capped so that point lands at the turn inset, the same
-  place an own prompt lands. Streamed text adds far less than the reading space in 300 ms, so it never caps.
-  Counting every pinned edge as seen let a card that lands in several quick steps pin past at full speed,
-  because no single step exceeded the reading space. Growth within 300 ms of the cap engaging belongs to the
+  place an own prompt lands. Counting every pinned edge as seen let a card that lands in several quick steps
+  pin past at full speed, because no single step exceeded the reading space. A 300 ms window capped plain
+  text: a fast replay (≈900 px/s) in the ≈300 px chat viewport of a 1280×720 window crossed the reading space
+  and stalled the pin every few lines; streamed text needs over 2k px/s to do that within 100 ms. Growth within 300 ms of the cap engaging belongs to the
   arrival; each later growth releases the cap by twice its own height until it reaches the pin line, and the
   pin moves to the capped destination on that same content change without easing, so the block advances at
   twice reading pace instead of flying by (one mermaid card measured a 1.5k px glide in under a second). A

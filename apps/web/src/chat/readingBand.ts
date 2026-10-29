@@ -2,7 +2,8 @@ const TURN_INSET_RATIO = 0.1;
 const TURN_INSET_MIN = 48;
 const TURN_INSET_MAX = 80;
 const ADVANCE_DURATION_MS = 220;
-const TALL_ARRIVAL_WINDOW_MS = 300;
+const TALL_ARRIVAL_SETTLE_MS = 300;
+const ARRIVAL_STEPS_WINDOW_MS = 100;
 const EDGE_STABILITY_FRAMES = 30;
 const GEOMETRY_EPSILON = 0.5;
 
@@ -439,7 +440,7 @@ export function createReadingBandController(
 	};
 
 	const seenEdge = (now: number) => {
-		const settled = edgeHistory.findLastIndex((entry) => now - entry.at >= TALL_ARRIVAL_WINDOW_MS);
+		const settled = edgeHistory.findLastIndex((entry) => now - entry.at >= ARRIVAL_STEPS_WINDOW_MS);
 		if (settled > 0) edgeHistory = edgeHistory.slice(settled);
 		return edgeHistory[0] ?? null;
 	};
@@ -485,7 +486,7 @@ export function createReadingBandController(
 		const seenRef = seenEdge(now);
 		if (lastEdgeRef !== null) edgeHistory.push({ ...lastEdgeRef, at: now });
 		if (capRef !== null) {
-			const arriving = now - capRef.since < TALL_ARRIVAL_WINDOW_MS;
+			const arriving = now - capRef.since < TALL_ARRIVAL_SETTLE_MS;
 			if (!arriving && growth > 0 && growth <= readingSpace + GEOMETRY_EPSILON) {
 				capRef.released += 2 * growth;
 			}
@@ -550,6 +551,14 @@ export function createReadingBandController(
 		if (keep < runwayHeight - GEOMETRY_EPSILON) writeRunwayHeight(keep);
 		publishRunway();
 	};
+
+	const pinning = () =>
+		state.following &&
+		state.streaming &&
+		!state.moving &&
+		!runwaySuppressed &&
+		!nativeInputPending &&
+		!immediateTurnPending;
 
 	const pinEdge = (geometry: ReadingBandGeometry) => {
 		const target = pinTarget(geometry);
@@ -671,14 +680,7 @@ export function createReadingBandController(
 			placeMount(geometry);
 			return;
 		}
-		const pinning =
-			state.following &&
-			state.streaming &&
-			!state.moving &&
-			!runwaySuppressed &&
-			!nativeInputPending &&
-			!immediateTurnPending;
-		if (pinning && pinEdge(geometry)) return;
+		if (pinning() && pinEdge(geometry)) return;
 		if (motion?.kind !== "follow") reconcileReaderRoom(geometry);
 		if (nativeInputPending || immediateTurnPending || !state.following) return;
 		if (state.moving) {
