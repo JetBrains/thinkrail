@@ -21,9 +21,11 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | File | Role |
 |---|---|
 | `typography.ts` | the library: load → validate → render CSS. The **only** place CSS custom-property names, semantic class names and prose root class names are derived. |
+| `typographyModel.ts` | the pure half of `typography.ts` (types, `$ref` resolution, class and variable naming, `allStyles`) with no `node:` import, re-exported by `typography.ts`, so the browser-built component library renders the same derivations. |
 | `generate-typography.ts` | CLI. Writes `src/styles/generated/typography.css` and `src/styles/generated/fonts.css` (the `@import`s for the self-hosted faces); `--check` fails instead of writing when a committed file is stale. |
 | `validate-typography.ts` | CLI. Validates `src/styles/typography.json` and prints a summary. The enforced gate. |
 | `colors.ts` | the library: load → validate → render. The **only** place a colour derivation (a palette alias or an alpha step) is written. |
+| `colorsModel.ts` | the pure half of `colors.ts` (types and `paletteVar`), re-exported by it, for the same reason. |
 | `generate-colors.ts` | CLI. Writes `src/styles/generated/colors.css` — the roles, the appearance-level effects, and the Tailwind map; `--check` fails when it is stale. |
 | `spacing.ts` | the library: load → validate → render. It enforces step identity and is the only place the generated spacing-CSS shape and `--spacing: 1px` (number = px) base are derived; the step lengths live only in `spacing.json`. |
 | `spacing.test.ts` | Pins the spacing source validator's closed root/metadata shapes and value types against the schema. |
@@ -47,9 +49,10 @@ command checks generated output and its corresponding adoption guard, so moving 
 out of the app cannot hide token misuse or make a live token look unused.
 
 Public surface: the `typography.ts`, `colors.ts`, `spacing.ts`, `providerGlyphs.ts`, `generatedFiles.ts` and `designSources.ts` exports. There is no `index.ts` barrel — the CLIs are entry points
-invoked by name from `package.json`, and the one importer outside this directory
-(`src/styles/*.test.ts`) imports the library directly, which keeps the tests and the generator provably
-in agreement about the same functions.
+invoked by name from `package.json`, and the importers outside this directory
+(`src/styles/*.test.ts`, and the component library [[submodule-web-library]], which may import only the
+two `*Model.ts` files) import the library directly, which keeps the tests, the library and the generator
+provably in agreement about the same functions.
 
 ## Boundary
 
