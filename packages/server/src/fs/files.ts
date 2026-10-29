@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { closeSync, constants, openSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
@@ -58,6 +58,29 @@ function resolveInWorktree(
 	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
 	if (isGitMetadataPath(resolve(root), abs)) throw new Error("The .git directory is not readable");
 	assertExistingAncestorContained(root, followLeaf ? abs : dirname(abs));
+
+	// Security: Re-resolve via realpathSync and re-check containment. This alone
+	// does NOT fully close the TOCTOU window (a race remains between realpathSync
+	// and the subsequent file read). The full fix pairs this with O_NOFOLLOW in
+	// readFile() so the kernel refuses symlink indirection at open time.
+	// See PR #920 (Finding-3) for details.
+	if (followLeaf) {
+		try {
+			const resolvedAbs = realpathSync(abs);
+			const resolvedRoot = realpathSync(root);
+			if (!isContained(resolvedRoot, resolvedAbs)) throw new Error("Path escapes the worktree");
+			if (isGitMetadataPath(resolvedRoot, resolvedAbs))
+				throw new Error("The .git directory is not readable");
+			return { root: resolvedRoot, abs: resolvedAbs };
+		} catch (error) {
+			const code =
+				typeof error === "object" && error !== null && "code" in error
+					? (error as { code: string }).code
+					: undefined;
+			if (code === "ENOENT" || code === "ENOTDIR") return { root, abs };
+			throw error;
+		}
+	}
 	return { root, abs };
 }
 
@@ -81,9 +104,32 @@ export function readFile(
 	path: string,
 ): { content: string; meta: ResourceMeta } {
 	const { abs } = resolveInWorktree(workspaceId, path, true);
-	const bytes = readFileSync(abs);
-	const meta = resourceMeta(bytes, path);
-	return { content: meta.text ? decodeText(bytes) : "", meta };
+
+	// Security: Open with O_NOFOLLOW so the kernel refuses to follow symlinks
+	// at the leaf. Combined with the realpathSync re-check in resolveInWorktree,
+	// this eliminates the TOCTOU race: if an attacker swaps the resolved path to
+	// a symlink between realpathSync and open, O_NOFOLLOW causes ELOOP and the
+	// read is aborted. Reading via fd ensures we read the same inode we opened.
+	const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+	let fd: number;
+	try {
+		fd = openSync(abs, constants.O_RDONLY | noFollow);
+	} catch (error) {
+		const code =
+			typeof error === "object" && error !== null && "code" in error
+				? (error as { code: string }).code
+				: undefined;
+		// ELOOP means O_NOFOLLOW caught a symlink — treat as path escape
+		if (code === "ELOOP") throw new Error("Path escapes the worktree");
+		throw error;
+	}
+	try {
+		const bytes = new Uint8Array(readFileSync(fd));
+		const meta = resourceMeta(bytes, path);
+		return { content: meta.text ? decodeText(bytes) : "", meta };
+	} finally {
+		closeSync(fd);
+	}
 }
 
 export function resolveWorktreeFile(

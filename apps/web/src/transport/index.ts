@@ -4,6 +4,7 @@ export {
 	reportClientError,
 } from "./errorReports";
 export { errorText } from "./errorText";
+export { instanceToken, setInstanceTokenForTests } from "./instanceToken";
 export { requestMcpList, watchMcpWorkspace } from "./mcp";
 export { RequestError, wsErrorCode } from "./requestError";
 export {

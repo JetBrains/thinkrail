@@ -101,7 +101,10 @@ async function overWire(
 	return page.evaluate(
 		async ({ calls: pending }) => {
 			const proto = location.protocol === "https:" ? "wss:" : "ws:";
-			const ws = new WebSocket(`${proto}//${location.host}/ws`);
+			const token =
+				document.querySelector('meta[name="thinkrail-instance-token"]')?.getAttribute("content") ??
+				"";
+			const ws = new WebSocket(`${proto}//${location.host}/ws?token=${token}`);
 			await new Promise((r) => {
 				ws.onopen = r;
 			});

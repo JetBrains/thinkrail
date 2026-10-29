@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
@@ -12,6 +12,8 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
+	INSTANCE_TOKEN_META,
+	INSTANCE_TOKEN_PARAM,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
@@ -183,10 +185,14 @@ export interface CreateServerOptions {
 		check(): Promise<HostUpdateNotice | null>;
 		run(): Promise<void>;
 	};
+	/** Override the per-instance credential; defaults to a fresh 256-bit token per boot. */
+	authToken?: string;
 }
 
 export interface RunningServer {
 	readonly port: number;
+	/** Per-instance credential a launcher hands to the client it opens; gates `/ws` and resource routes. */
+	readonly authToken: string;
 	startAttributionClaim: () => void;
 	stop: () => void;
 	shutdown: () => Promise<void>;
@@ -207,6 +213,33 @@ const isRequestId = (id: unknown): id is string => typeof id === "string";
 function clientProtocolVersion(value: string | null): number {
 	const parsed = Number(value);
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+const WILDCARD_HOSTS = new Set(["0.0.0.0", "::", "[::]"]);
+
+/**
+ * Defense-in-depth Origin check for the WebSocket upgrade. The per-instance token is the real
+ * credential; this only hardens the common browser case. A request with no `Origin` (native clients,
+ * `curl`) is allowed through to the token check. Browsers send `Origin` on every cross-site WS, so an
+ * attacker page is rejected here before the token is even considered. The allowlist is derived from
+ * the configured endpoint: loopback names when bound locally, plus the bind host itself. When bound to
+ * a wildcard address (`--host 0.0.0.0`), the reachable LAN/Tailscale origins cannot be enumerated
+ * (architecture Decision 4), so Origin is not restricted and the token carries the trust. The match is
+ * by hostname only; any port on a trusted host is accepted.
+ */
+function isTrustedOrigin(origin: string | null, host: string): boolean {
+	if (origin === null) return true;
+	if (WILDCARD_HOSTS.has(host)) return true;
+	let originHost: string;
+	try {
+		originHost = new URL(origin).hostname;
+	} catch {
+		return false;
+	}
+	const normalized = originHost.toLowerCase();
+	if (LOOPBACK_HOSTS.has(normalized) && LOOPBACK_HOSTS.has(host)) return true;
+	return normalized === host.toLowerCase().replace(/^\[|\]$/g, "");
 }
 
 function sameHostUpdateRelease(
@@ -233,6 +266,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		appVersion,
 		analytics,
 		hostUpdate,
+		authToken = randomBytes(32).toString("base64url"),
 	} = options;
 
 	setSessionProjectResolver((workspaceId) => {
@@ -289,12 +323,21 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	};
 
+	const hasInstanceToken = (url: URL): boolean =>
+		url.searchParams.get(INSTANCE_TOKEN_PARAM) === authToken;
+
 	const server = Bun.serve<SocketData, never>({
 		port,
 		hostname: host,
 		async fetch(req, srv) {
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
+				if (!isTrustedOrigin(req.headers.get("origin"), host)) {
+					return new Response("forbidden origin", { status: 403 });
+				}
+				if (!hasInstanceToken(url)) {
+					return new Response("unauthorized", { status: 401 });
+				}
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
 				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
 				await refreshRecentProjectFolders(RECENT_FOLDER_CHECK_BUDGET_MS);
@@ -306,13 +349,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				return new Response("ok");
 			}
 			if (url.pathname.startsWith(FILES_PREFIX)) {
+				if (!hasInstanceToken(url)) return new Response("unauthorized", { status: 401 });
 				return serveWorktreeFile(url.pathname);
 			}
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
+				if (!hasInstanceToken(url)) return new Response("unauthorized", { status: 401 });
 				return serveBlob(url.pathname, req.signal);
 			}
 			if (staticDir) {
-				return serveStatic(url.pathname, staticDir);
+				return serveStatic(url.pathname, staticDir, authToken);
 			}
 			return new Response("not found", { status: 404 });
 		},
@@ -946,18 +991,60 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		get port() {
 			return server.port ?? port;
 		},
+		authToken,
 		startAttributionClaim: startAttributionClaimWhenReady,
 		stop,
 		shutdown,
 	};
 }
 
-async function serveStatic(pathname: string, staticDir: string): Promise<Response> {
+/**
+ * The served `index.html` with the per-instance token injected, built once per process (the file and the
+ * token are both fixed for a host's lifetime) so the SPA-fallback hot path never re-reads or re-rewrites it.
+ */
+const injectedIndexCache = new Map<string, string>();
+
+async function injectedIndex(
+	file: Bun.BunFile,
+	staticDir: string,
+	authToken: string,
+): Promise<string> {
+	const cached = injectedIndexCache.get(staticDir);
+	if (cached !== undefined) return cached;
+	const html = await file.text();
+	const meta = `<meta name="${INSTANCE_TOKEN_META}" content="${authToken}">`;
+	const injected = html.includes("</head>")
+		? html.replace("</head>", `${meta}</head>`)
+		: `${meta}${html}`;
+	injectedIndexCache.set(staticDir, injected);
+	return injected;
+}
+
+async function serveIndex(
+	file: Bun.BunFile,
+	staticDir: string,
+	authToken: string,
+): Promise<Response> {
+	// No explicit cache header (matches the pre-token streaming behaviour): the token is stable for the
+	// host's lifetime, so a cached index carries the same valid token. Forcing `no-store` here would
+	// defeat the browser's fast reload path and slow every navigation.
+	return new Response(await injectedIndex(file, staticDir, authToken), {
+		headers: { "content-type": "text/html; charset=utf-8" },
+	});
+}
+
+async function serveStatic(
+	pathname: string,
+	staticDir: string,
+	authToken: string,
+): Promise<Response> {
 	const safe = normalize(pathname).replace(/^(\.\.(\/|\\|$))+/, "");
 	const requested = safe === "/" || safe === "" ? "index.html" : safe;
 	const file = Bun.file(join(staticDir, requested));
+	if (requested === "index.html" && (await file.exists()))
+		return serveIndex(file, staticDir, authToken);
 	if (await file.exists()) return new Response(file);
 	const index = Bun.file(join(staticDir, "index.html"));
-	if (await index.exists()) return new Response(index);
+	if (await index.exists()) return serveIndex(index, staticDir, authToken);
 	return new Response("not found", { status: 404 });
 }

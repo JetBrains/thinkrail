@@ -92,7 +92,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
    protocol version so an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
-   is keyed by backend profile so ids from one host are never interpreted against another.
+   is keyed by backend profile so ids from one host are never interpreted against another. The host gates
+   `/ws` and the `/files`/`/blob` resource routes on a per-instance token it embeds in the page it serves
+   (so a cross-origin page cannot obtain it — the defense against cross-site WebSocket hijacking); the
+   upgrade also runs a defense-in-depth Origin check derived from the configured endpoint, which a wildcard
+   `--host` bind cannot enumerate and so leaves to the token. See `packages/server/src/host/SPEC.md`.
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
    the code renderer, changes/diff, workspace-local review, terminal, chat, composer) never know their
    arrangement. Each desktop frontend window owns one locally persisted, resource-free workbench frame: a
@@ -119,8 +123,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
    GitHub PR through the user's own `gh` CLI (no stored tokens, no provider REST API), body rendered from
    the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see
    [[submodule-server-pr]]).
-7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
-   not a login UI.
+7. **Auth is external.** Tailscale ACLs / device identity are the network auth; the app carries an `owner`
+   field, not a login UI. The per-instance token in Decision 4 is orthogonal: it stops a co-located
+   browser page from hijacking the local host, which network ACLs do not cover.
 8. **Hydrate-then-stream (every client reconstructs domain state from the host).** A client never relies on
    having *witnessed* events to know domain state—on connect it **reads** current state, then **subscribes**
    to live deltas. The host exposes `project.list` / `workspace.list` / **`session.list`** /

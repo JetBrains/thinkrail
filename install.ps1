@@ -190,7 +190,11 @@ function Install-ThinkRail {
     # Windows PowerShell 5.1 defaults can lack TLS 1.2, which github.com requires. Additive + process-wide.
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-    $repo = if ($env:THINKRAIL_REPO) { $env:THINKRAIL_REPO } else { 'JetBrains/thinkrail' }
+    # Security: Repository is hardcoded to prevent supply chain attacks via environment
+    # variable poisoning. Both the binary and SHA256SUMS are downloaded from this repo,
+    # so allowing override would let an attacker serve a malicious binary with matching
+    # checksums. See PR #920 (Finding-2) for details.
+    $repo = 'JetBrains/thinkrail'
 
     # cmd's `set X=value && ...` embeds the space before && into the value -- trim every input.
     $channel = $Channel.Trim()

@@ -16,7 +16,11 @@
 
 set -euo pipefail
 
-REPO="${THINKRAIL_REPO:-JetBrains/thinkrail}"
+# Security: Repository is hardcoded to prevent supply chain attacks via environment
+# variable poisoning. Both the binary and SHA256SUMS are downloaded from this repo,
+# so allowing override would let an attacker serve a malicious binary with matching
+# checksums. See PR #920 (Finding-2) for details.
+REPO="JetBrains/thinkrail"
 CHANNEL="stable"
 VERSION="latest"
 if [ -z "${HOME:-}" ]; then

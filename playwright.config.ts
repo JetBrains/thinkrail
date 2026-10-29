@@ -15,6 +15,7 @@ import {
 	resolveBunExecutable,
 } from "./e2e/fixtures/executables";
 import {
+	E2E_AUTH_TOKEN,
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
 	E2E_CENTRAL_LOG,
@@ -81,6 +82,8 @@ export default defineConfig({
 			THINKRAIL_PORT: String(PORT),
 			THINKRAIL_STATIC_DIR: staticDir,
 			THINKRAIL_DATA_DIR: E2E_DATA_DIR,
+			// Fixed per-instance token so the served page and the E2eWire setup socket share one credential.
+			THINKRAIL_DEV_AUTH_TOKEN: E2E_AUTH_TOKEN,
 			DISPLAY: "",
 			WAYLAND_DISPLAY: "",
 			// Stub the host's native directory picker so "Open project" is drivable headlessly. It names a
