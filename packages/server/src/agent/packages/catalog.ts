@@ -51,6 +51,7 @@ const cache = new Map<string, { at: number; value: Promise<PiPackagesCatalog> }>
 export function invalidatePiPackageCatalog(): void {
 	cache.clear();
 	extensionInfoMemo.clear();
+	memoGeneration += 1;
 }
 
 export function listPiPackageCatalog(options: PiPackageCatalogOptions): Promise<PiPackagesCatalog> {
@@ -203,6 +204,7 @@ function isDirectory(path: string): boolean {
 }
 
 const extensionInfoMemo = new Map<string, { mtimeMs: number; info: LoadedExtensionInfo }>();
+let memoGeneration = 0;
 
 function fileMtime(path: string): number | undefined {
 	try {
@@ -229,6 +231,7 @@ async function loadExtensionInfo(
 		else pending.push(path);
 	}
 	if (pending.length === 0) return info;
+	const probedGeneration = memoGeneration;
 	await advancePiExtensionCache(agentDir);
 	const loader = new DefaultResourceLoader({
 		cwd,
@@ -257,7 +260,9 @@ async function loadExtensionInfo(
 	for (const [key, value] of fresh) {
 		info.set(key, value);
 		const mtimeMs = fileMtime(key);
-		if (mtimeMs !== undefined) extensionInfoMemo.set(key, { mtimeMs, info: value });
+		if (mtimeMs !== undefined && probedGeneration === memoGeneration) {
+			extensionInfoMemo.set(key, { mtimeMs, info: value });
+		}
 	}
 	return info;
 }

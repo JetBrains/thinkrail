@@ -330,6 +330,35 @@ describe("pi package mutations", () => {
 		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
 	});
 
+	it("re-enabling keeps the explicit +path an autoload:false repository declaration needs", async () => {
+		const project = join(root, "project");
+		mkdirSync(join(project, ".pi"), { recursive: true });
+		writeFileSync(settingsPath, JSON.stringify({ packages: [{ source: pkg, extensions: [] }] }));
+		writeFileSync(
+			join(project, ".pi", "settings.json"),
+			JSON.stringify({
+				packages: [{ source: pkg, autoload: false, extensions: ["+extensions/hello.ts"] }],
+			}),
+		);
+		const trustedCtx: PiPackageHostContext = { ...ctx, cwd: project, projectTrusted: () => true };
+		const hello = join(pkg, "extensions", "hello.ts");
+		expect(await resolvedEnabled(trustedCtx, "extensions", hello)).toBe(true);
+		const toggle = (enabled: boolean) =>
+			setPiResourceEnabled(trustedCtx, {
+				path: hello,
+				type: "extensions",
+				scope: "project",
+				enabled,
+			});
+		await toggle(false);
+		expect(await resolvedEnabled(trustedCtx, "extensions", hello)).toBe(false);
+		await toggle(true);
+		expect(await resolvedEnabled(trustedCtx, "extensions", hello)).toBe(true);
+		expect(readSettings(join(project, ".pi", "settings.json")).packages).toEqual([
+			{ source: pkg, autoload: false, extensions: ["+extensions/hello.ts"] },
+		]);
+	});
+
 	it("togglePackageFilter replaces only the resource's own exact override", () => {
 		expect(togglePackageFilter(undefined, "a", false)).toEqual(["-a"]);
 		expect(togglePackageFilter(undefined, "a", true)).toBeUndefined();
@@ -340,7 +369,7 @@ describe("pi package mutations", () => {
 		expect(togglePackageFilter(["a", "+b"], "b", false)).toEqual(["a", "-b"]);
 		expect(togglePackageFilter(["a", "-a"], "a", true)).toEqual(["a", "+a"]);
 		expect(togglePackageFilter(["a"], "b", true)).toEqual(["a", "+b"]);
-		expect(togglePackageFilter(["-a"], "a", true)).toBeUndefined();
+		expect(togglePackageFilter(["-a"], "a", true)).toEqual(["+a"]);
 		expect(togglePackageFilter(["-./a", "-b"], "a", true)).toEqual(["-b", "+a"]);
 		expect(togglePackageFilter(["!**/*.ts", "-a"], "a", true)).toEqual(["!**/*.ts", "+a"]);
 	});
@@ -396,7 +425,7 @@ describe("pi package mutations", () => {
 			enabled: true,
 		});
 		expect(readSettings(settingsPath).packages).toEqual([
-			{ source: pkg, skills: ["-skills/triage/SKILL.md"] },
+			{ source: pkg, extensions: ["+extensions/legacy.ts"], skills: ["-skills/triage/SKILL.md"] },
 		]);
 		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(true);
 	});

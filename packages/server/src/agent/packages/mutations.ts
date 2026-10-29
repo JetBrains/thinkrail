@@ -318,7 +318,8 @@ function normalizeExactPattern(pattern: string): string {
  * pi's filter semantics for one package: `undefined` = everything, `[]` = nothing, plain entries form
  * an allowlist, `!` excludes, and `±path` are exact overrides that beat everything before them. The
  * toggle therefore only replaces this resource's own exact override and never rewrites what the user
- * wrote for the others.
+ * wrote for the others; an explicit `+path` stays even when it is the only entry, because an
+ * `autoload: false` declaration admits nothing by default.
  */
 export function togglePackageFilter(
 	current: readonly string[] | undefined,
@@ -328,7 +329,6 @@ export function togglePackageFilter(
 	if (current === undefined) return enabled ? undefined : [`-${pattern}`];
 	if (current.length === 0) return enabled ? [pattern] : [];
 	const kept = current.filter((entry) => !isExactOverrideOf(entry, pattern));
-	if (enabled && kept.length === 0) return undefined;
 	return [...kept, `${enabled ? "+" : "-"}${pattern}`];
 }
 

@@ -50,8 +50,12 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   reads without executing any extension. Before a probe runs, `advancePiExtensionCache` (an empty
   loader reloaded twice — pi clears its process-wide factory cache only on a loaded loader's reload,
   and exports no clearer) makes it read the files as they are now, so an update's new names show
-  without waiting for a chat to reload; `invalidatePiPackageCatalog()` drops the memo too, so the memo
-  only spares unchanged files across workspaces and TTL expiry. Known limitation: a probe loader is
+  without waiting for a chat to reload; `invalidatePiPackageCatalog()` drops the memo too and bumps a
+  generation a probe that was already running cannot write into, so the memo only spares unchanged
+  files across workspaces and TTL expiry. What a probe cannot see is what a chat reload cannot see
+  either: under Bun's native import (the source and CLI runtimes; the desktop bundle forces jiti's
+  transform) a module an extension *imports* is cached process-wide, so a change to a helper outside
+  the manifest's globs shows after a restart — the chips match the next chat, which is their contract. Known limitation: a probe loader is
   never sent `session_shutdown`, so a factory that allocates at registration time (a watcher, a timer) leaks once
   per content change of its file — pi's contract for a factory is to register, not to allocate. `packageSourceIdentity(source, scope, cwd, agentDir)`
   resolves a local source against the settings file that declares it (user → `agentDir`, project →
@@ -100,8 +104,10 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   exact overrides that beat everything before them) to pi: it replaces only this resource's own exact
   `±` override and appends the new one, never touching plain, glob or `!` entries — a disabled allowlist
   member becomes `["a", "-a"]`, not an allowlist without `a` (which would admit every sibling). The
-  two baselines are the only special cases: enabling from `[]` writes `[path]`, and an override set
-  that empties on enable goes back to `undefined`. pi's TUI drops plain entries instead, which turns an
+  two baselines are the only special cases: enabling from `undefined` changes nothing and enabling
+  from `[]` writes `[path]`; otherwise the explicit `+path` stays even as the only entry, because under
+  an `autoload: false` declaration (or a user-scope `[]` the repository overrides) nothing is admitted
+  by default. pi's TUI drops plain entries instead, which turns an
   allowlist of one into "everything but one". A single-file local package has no filters pi honours;
   toggling one is refused. *Rejected:* rewriting the allowlist (first fix) — collapsing its last member
   flips the baseline from "only these" to "everything". **Input vs declared source:** pi stores a local source relative to its settings
