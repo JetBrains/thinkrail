@@ -4,7 +4,7 @@ import { T, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type ChatMessageOrder,
-	moveStreamingResponseHandle,
+	moveStreamingResponseTrigger,
 	STREAMING_RESPONSE_MOVEMENT_LIMITS,
 	type StreamingResponseMovement,
 } from "@/chat/chatPreferences";
@@ -13,7 +13,7 @@ import { errorText, getTransport } from "@/transport";
 import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
-import { SETTINGS_RANGE_INPUT, SETTINGS_RANGE_STACKED, SettingsRangeTrack } from "./SettingsRange";
+import { SETTINGS_RANGE_INPUT, SettingsRangeTrack } from "./SettingsRange";
 import { SettingsRow } from "./SettingsRow";
 import { SubagentSettings } from "./SubagentSettings";
 import { saveSettings } from "./saveSettings";
@@ -41,7 +41,7 @@ const GROWTH_OPTIONS: OptionSpec<ComposerGrowthLimit>[] = [
 
 const MOVEMENT_TRACK_SEGMENTS = Array.from({ length: 20 }, (_, index) => index * 5);
 
-const MOVEMENT_THUMB = cn(SETTINGS_RANGE_STACKED, SETTINGS_RANGE_INPUT);
+const MOVEMENT_THUMB = cn(SETTINGS_RANGE_INPUT, "cursor-pointer");
 
 function StreamingResponseMovementControl({
 	value,
@@ -51,10 +51,6 @@ function StreamingResponseMovementControl({
 	onChange: (value: StreamingResponseMovement) => void;
 }) {
 	const t = useT();
-	const update = (handle: "settle" | "trigger", rawValue: string) => {
-		onChange(moveStreamingResponseHandle(value, handle, Number(rawValue)));
-	};
-
 	return (
 		<div
 			data-testid="streaming-response-movement"
@@ -72,29 +68,12 @@ function StreamingResponseMovementControl({
 			</div>
 			<SettingsRangeTrack
 				steps={MOVEMENT_TRACK_SEGMENTS}
-				filled={(start) => start >= value.settle && start < value.trigger}
+				filled={(start) => start < value.trigger}
 			>
 				<input
 					type="range"
-					data-testid="streaming-movement-settle"
-					aria-label={t("settings.chat.movement.settlePosition")}
-					aria-valuemin={STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMin}
-					aria-valuemax={Math.min(
-						STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMax,
-						value.trigger - STREAMING_RESPONSE_MOVEMENT_LIMITS.minimumGap,
-					)}
-					aria-valuetext={t("settings.chat.movement.fromTop", { value: value.settle })}
-					min={0}
-					max={100}
-					step={STREAMING_RESPONSE_MOVEMENT_LIMITS.step}
-					value={value.settle}
-					onChange={(event) => update("settle", event.currentTarget.value)}
-					className={MOVEMENT_THUMB}
-				/>
-				<input
-					type="range"
 					data-testid="streaming-movement-trigger"
-					aria-label={t("settings.chat.movement.triggerPosition")}
+					aria-label={t("settings.chat.movement.pinLine")}
 					aria-valuemin={STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMin}
 					aria-valuemax={STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMax}
 					aria-valuetext={t("settings.chat.movement.fromTop", { value: value.trigger })}
@@ -102,21 +81,16 @@ function StreamingResponseMovementControl({
 					max={100}
 					step={STREAMING_RESPONSE_MOVEMENT_LIMITS.step}
 					value={value.trigger}
-					onChange={(event) => update("trigger", event.currentTarget.value)}
+					onChange={(event) =>
+						onChange(moveStreamingResponseTrigger(value, Number(event.currentTarget.value)))
+					}
 					className={MOVEMENT_THUMB}
 				/>
 			</SettingsRangeTrack>
-			<div className="flex items-center justify-between gap-8 text-text-muted tr-text-metadata">
+			<div className="flex justify-end text-text-muted tr-text-metadata">
 				<span>
 					<T
-						i18nKey="settings.chat.movement.settleValue"
-						values={{ value: value.settle }}
-						components={[<span key="value" className="text-text-default" />]}
-					/>
-				</span>
-				<span>
-					<T
-						i18nKey="settings.chat.movement.triggerValue"
+						i18nKey="settings.chat.movement.pinLineValue"
 						values={{ value: value.trigger }}
 						components={[<span key="value" className="text-text-default" />]}
 					/>

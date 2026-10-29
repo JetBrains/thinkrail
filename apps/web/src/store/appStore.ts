@@ -147,12 +147,10 @@ import {
 } from "./selectors";
 
 export interface StreamingResponseMovement {
-	settle: number;
 	trigger: number;
 }
 
 export const DEFAULT_STREAMING_RESPONSE_MOVEMENT: StreamingResponseMovement = {
-	settle: 75,
 	trigger: 100,
 };
 
