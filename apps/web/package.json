@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"build": "bun run typography:check && bun run colors:check && bun run spacing:check && bun run provider-glyphs:check && tsc --noEmit && vite build",
+		"build": "bun run typography:check && bun run colors:check && bun run spacing:check && bun run provider-glyphs:check && bun scripts/build-typecheck.ts && vite build",
 		"build:profile": "vite build --mode profile",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test",

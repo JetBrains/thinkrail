@@ -8,6 +8,9 @@ on:
   merge_group:
     types: [checks_requested]
 
+env:
+  THINKRAIL_WEB_BUILD_TYPECHECK: "0"
+
 # Supersede in-flight runs when a PR is updated.
 concurrency:
   group: ci-${{ github.ref }}
