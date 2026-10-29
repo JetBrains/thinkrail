@@ -1,10 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import {
-	DefaultPackageManager,
-	DefaultResourceLoader,
-	SettingsManager,
-} from "@earendil-works/pi-coding-agent";
+import { DefaultPackageManager } from "@earendil-works/pi-coding-agent";
 import type {
 	PiBuiltinExtension,
 	PiLooseExtension,
@@ -14,7 +10,7 @@ import type {
 	PiPackageSummary,
 	PiPackagesCatalog,
 } from "@thinkrail/contracts";
-import { advancePiExtensionCache } from "./extensionCache";
+import { knownExtensionInfo } from "./extensionInfo";
 import {
 	BUILTIN_PREFIX,
 	npmPackageName,
@@ -39,18 +35,10 @@ export interface PiPackageCatalogOptions {
 	disabledPackages: ReadonlySet<string>;
 }
 
-interface LoadedExtensionInfo {
-	tools?: string[];
-	commands?: string[];
-	error?: string;
-}
-
 const cache = new Map<string, { at: number; value: Promise<PiPackagesCatalog> }>();
 
 export function invalidatePiPackageCatalog(): void {
 	cache.clear();
-	extensionInfoMemo.clear();
-	memoGeneration += 1;
 }
 
 export function listPiPackageCatalog(options: PiPackageCatalogOptions): Promise<PiPackagesCatalog> {
@@ -151,17 +139,8 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 		}
 	}
 
-	const loadable = [
-		...[...packages.values()]
-			.filter((summary) => summary.enabled)
-			.flatMap((summary) =>
-				summary.resources.filter((r) => r.type === "extensions" && r.enabled).map((r) => r.path),
-			),
-		...loose.filter((entry) => entry.enabled).map((entry) => entry.path),
-	];
-	const loaded = await loadExtensionInfo(cwd, agentDir, loadable);
 	const annotate = (entry: PiPackageResource | PiLooseExtension): void => {
-		const info = loaded.get(resolve(entry.path));
+		const info = knownExtensionInfo(entry.path);
 		if (!info) return;
 		if (info.tools) entry.tools = info.tools;
 		if (info.commands) entry.commands = info.commands;
@@ -190,70 +169,6 @@ function isDirectory(path: string): boolean {
 	} catch {
 		return false;
 	}
-}
-
-const extensionInfoMemo = new Map<string, { mtimeMs: number; info: LoadedExtensionInfo }>();
-let memoGeneration = 0;
-
-function fileMtime(path: string): number | undefined {
-	try {
-		return statSync(path).mtimeMs;
-	} catch {
-		return undefined;
-	}
-}
-
-// In-memory settings + noExtensions: this loader can never install a declared-but-missing package.
-// A file's factory runs once per content change: the memo is keyed by its mtime.
-async function loadExtensionInfo(
-	cwd: string,
-	agentDir: string,
-	paths: readonly string[],
-): Promise<Map<string, LoadedExtensionInfo>> {
-	const info = new Map<string, LoadedExtensionInfo>();
-	const pending: string[] = [];
-	for (const path of paths) {
-		const key = resolve(path);
-		const memo = extensionInfoMemo.get(key);
-		const mtimeMs = fileMtime(key);
-		if (memo && mtimeMs !== undefined && memo.mtimeMs === mtimeMs) info.set(key, memo.info);
-		else pending.push(path);
-	}
-	if (pending.length === 0) return info;
-	const probedGeneration = memoGeneration;
-	await advancePiExtensionCache(agentDir);
-	const loader = new DefaultResourceLoader({
-		cwd,
-		agentDir,
-		settingsManager: SettingsManager.inMemory({}),
-		noExtensions: true,
-		additionalExtensionPaths: pending,
-		noSkills: true,
-		noPromptTemplates: true,
-		noThemes: true,
-		noContextFiles: true,
-	});
-	await loader.reload();
-	const result = loader.getExtensions();
-	const fresh = new Map<string, LoadedExtensionInfo>();
-	for (const extension of result.extensions) {
-		fresh.set(resolve(extension.resolvedPath), {
-			tools: [...extension.tools.keys()],
-			commands: [...extension.commands.keys()],
-		});
-	}
-	for (const failure of result.errors) {
-		const key = resolve(failure.path);
-		fresh.set(key, { ...fresh.get(key), error: failure.error });
-	}
-	for (const [key, value] of fresh) {
-		info.set(key, value);
-		const mtimeMs = fileMtime(key);
-		if (mtimeMs !== undefined && probedGeneration === memoGeneration) {
-			extensionInfoMemo.set(key, { mtimeMs, info: value });
-		}
-	}
-	return info;
 }
 
 /** The on-disk targets a reveal may open, read without executing any extension. */

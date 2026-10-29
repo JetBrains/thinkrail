@@ -186,7 +186,18 @@ test("a hand-dropped extension file is listed as a local file with its tools and
 		const section = await openExtensionsSettings(page);
 		const row = section.getByTestId("loose-extension-row").filter({ hasText: "loose-e2e.ts" });
 		await expect(row).toHaveCount(1);
-		await expect(row.getByTestId("package-chip-loose_tool")).toBeVisible();
+		await expect(row.getByTestId("package-chip-loose_tool")).toHaveCount(0);
+		await closeSettings(page);
+
+		seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+			name: "loose file",
+			messages: [{ role: "user", text: "hello", timestamp: Date.now() }],
+		});
+		await enterDefaultWorkspace(page);
+		await openPersistedChat(page, "loose file");
+		await expect(page.getByTestId("chat-toolbar")).toBeVisible();
+		await openExtensionsSettings(page);
+		await expect(row.getByTestId("package-chip-loose_tool")).toBeVisible({ timeout: 30_000 });
 		await row.getByTestId("loose-extension-toggle").click();
 		await expect
 			.poll(() => JSON.stringify(readSettings().extensions), { timeout: 15_000 })

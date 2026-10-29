@@ -1094,8 +1094,10 @@ a project picker, the prompt hero, and the reused
   re-enabled row regains its chips). A **package row** (`PackageRow`) is name ·
   kind / scope tags (`npm` / `git` / `local`, Global / Repository) · an **Update available** tag when the
   update check flagged it · one provenance line (declared source · "<version> installed" · description) ·
-  tool and `/command` chips of its enabled extensions · the **switch** · a ⋯ menu (Update, Open folder,
-  Remove…). The group's one-line description says the switch affects ThinkRail chats only (the pi CLI
+  tool and `/command` chips of its extensions as a chat's loader last recorded them (a file no chat has
+  loaded since it changed has none — the host never runs extension code to list; the install dialog
+  probes its new package once, so a fresh install shows chips at once) · the **switch** · a ⋯ menu
+  (Update, Open folder, Remove…). The group's one-line description says the switch affects ThinkRail chats only (the pi CLI
   still loads the package — `disabledPackages` is a ThinkRail setting). The switch is the only state
   control and reads **`store.disabledPackages`**; an off row dims
   its text and chips; a user declaration the repository shadows says so under its provenance line; a

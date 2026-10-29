@@ -19,6 +19,7 @@ import {
 	listPiPackageCatalog,
 	listPiPackageRevealTargets,
 	type PiPackageHostContext,
+	probeExtensionInfo,
 	removePiPackage,
 	setPiResourceEnabled,
 	updatePiPackages,
@@ -97,12 +98,23 @@ export async function piPackagesInstall(
 	refreshPiPackages();
 	const enabledFromNowOn = new Set(disabledPackages());
 	enabledFromNowOn.delete(identity);
+	const find = (catalog: PiPackagesCatalog) =>
+		catalog.packages.find((e) => e.identity === identity && e.scope === request.scope) ??
+		catalog.packages.find((e) => e.identity === identity);
 	let summary: PiPackageSummary | undefined;
 	try {
-		const catalog = await piPackagesCatalog(target, enabledFromNowOn);
-		summary =
-			catalog.packages.find((e) => e.identity === identity && e.scope === request.scope) ??
-			catalog.packages.find((e) => e.identity === identity);
+		summary = find(await piPackagesCatalog(target, enabledFromNowOn));
+		if (summary) {
+			await probeExtensionInfo(
+				target.cwd ?? getAgentDir(),
+				getAgentDir(),
+				summary.resources
+					.filter((resource) => resource.type === "extensions" && resource.enabled)
+					.map((resource) => resource.path),
+			);
+			invalidatePiPackageCatalog();
+			summary = find(await piPackagesCatalog(target, enabledFromNowOn));
+		}
 	} catch (error) {
 		throw new CodedError(
 			"PACKAGE_INSTALLED_UNLISTED",

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DefaultPackageManager } from "@earendil-works/pi-coding-agent";
 import { invalidatePiPackageCatalog, listPiPackageCatalog } from "./catalog";
+import { forgetExtensionInfo, probeExtensionInfo, recordLoadedExtensions } from "./extensionInfo";
 import { piPackageIdentity, piPackageSourceKind } from "./identity";
 import { fixtureExtensionSource, writeFixturePiPackage } from "./testFixtures";
 
@@ -61,6 +62,7 @@ describe("listPiPackageCatalog", () => {
 		mkdirSync(join(agentDir, "extensions"), { recursive: true });
 		pkg = writeFixturePackage(root);
 		invalidatePiPackageCatalog();
+		forgetExtensionInfo();
 	});
 	afterEach(() => {
 		if (originalOffline === undefined) delete process.env.PI_OFFLINE;
@@ -85,12 +87,26 @@ describe("listPiPackageCatalog", () => {
 			}),
 		);
 
-		const catalog = await listPiPackageCatalog({
+		const options = {
 			agentDir,
 			projectTrusted: false,
 			builtinExtensions: ["mcp", "tool-search"],
-			disabledPackages: new Set(),
-		});
+			disabledPackages: new Set<string>(),
+		};
+		const bare = await listPiPackageCatalog(options);
+		expect(bare.packages[0]?.resources.every((r) => r.tools === undefined)).toBe(true);
+		expect(
+			bare.loose.every((entry) => entry.tools === undefined && entry.error === undefined),
+		).toBe(true);
+
+		await probeExtensionInfo(agentDir, agentDir, [
+			join(pkg, "extensions", "hello.ts"),
+			join(agentDir, "extensions", "guard.ts"),
+			join(agentDir, "extensions", "broken.ts"),
+			join(explicitDir, "x.ts"),
+		]);
+		invalidatePiPackageCatalog();
+		const catalog = await listPiPackageCatalog(options);
 
 		expect(catalog.agentDir).toBe(agentDir);
 		expect(catalog.settingsPath).toBe(join(agentDir, "settings.json"));
@@ -139,7 +155,7 @@ describe("listPiPackageCatalog", () => {
 		]);
 	});
 
-	it("reports a disabled package as off and does not run its code", async () => {
+	it("reports a disabled package as off and never needs its code to list it", async () => {
 		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
 		const catalog = await listPiPackageCatalog({
 			agentDir,
@@ -153,20 +169,7 @@ describe("listPiPackageCatalog", () => {
 		expect(hello?.tools).toBeUndefined();
 	});
 
-	it("re-probes an unchanged entry file after an explicit invalidation", async () => {
-		const sibling = join(pkg, "extensions", "names.ts");
-		writeFileSync(sibling, 'export const toolName = "fixture_first";\n');
-		writeFileSync(
-			join(pkg, "extensions", "hello.ts"),
-			[
-				'import { toolName } from "./names.ts";',
-				"export default function (pi) {",
-				'  pi.registerTool({ name: toolName, label: toolName, description: "fixture",',
-				'    parameters: { type: "object", properties: {} },',
-				'    execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }) });',
-				"}",
-			].join("\n"),
-		);
+	it("takes chips from what a loader last recorded and forgets them once the file changes", async () => {
 		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
 		const options = {
 			agentDir,
@@ -174,14 +177,24 @@ describe("listPiPackageCatalog", () => {
 			builtinExtensions: [],
 			disabledPackages: new Set<string>(),
 		};
+		const hello = join(pkg, "extensions", "hello.ts");
 		const toolsOfHello = async () =>
 			(await listPiPackageCatalog(options)).packages[0]?.resources.find(
 				(r) => r.displayName === "hello.ts",
 			)?.tools;
-		expect(await toolsOfHello()).toEqual(["fixture_first"]);
-		writeFileSync(sibling, 'export const toolName = "fixture_second";\n');
+		expect(await toolsOfHello()).toBeUndefined();
+		recordLoadedExtensions({
+			extensions: [
+				{ resolvedPath: hello, tools: new Map([["from_session", 1]]), commands: new Map() },
+			],
+			errors: [],
+		});
 		invalidatePiPackageCatalog();
-		expect(await toolsOfHello()).toEqual(["fixture_second"]);
+		expect(await toolsOfHello()).toEqual(["from_session"]);
+		await new Promise((done) => setTimeout(done, 20));
+		writeFileSync(hello, extensionSource("fixture_hello_v2"));
+		invalidatePiPackageCatalog();
+		expect(await toolsOfHello()).toBeUndefined();
 	});
 
 	it("never installs a declared package that is missing on disk, even online", async () => {
@@ -225,10 +238,7 @@ describe("listPiPackageCatalog", () => {
 		const byName = Object.fromEntries(catalog.packages.map((p) => [p.name, p]));
 		expect(byName["@fixture/empty"]).toMatchObject({ resources: [], singleFile: false });
 		expect(byName["single.ts"]).toMatchObject({ singleFile: true, installedPath: single });
-		expect(byName["single.ts"]?.resources[0]).toMatchObject({
-			type: "extensions",
-			tools: ["single_tool"],
-		});
+		expect(byName["single.ts"]?.resources[0]).toMatchObject({ type: "extensions" });
 	});
 
 	it("keeps a user declaration pi shadows behind the repository's, marked as such", async () => {
@@ -309,6 +319,6 @@ describe("listPiPackageCatalog", () => {
 		});
 		expect(trusted.packages[0]).toMatchObject({ scope: "project", name: "@fixture/pi-tools" });
 		expect(trusted.loose.map((entry) => entry.displayName)).toEqual(["repo.ts"]);
-		expect(trusted.loose[0]).toMatchObject({ scope: "project", tools: ["repo_tool"] });
+		expect(trusted.loose[0]).toMatchObject({ scope: "project" });
 	});
 });

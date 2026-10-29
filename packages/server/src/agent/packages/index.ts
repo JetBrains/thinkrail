@@ -6,6 +6,13 @@ export {
 } from "./catalog";
 export { advancePiExtensionCache } from "./extensionCache";
 export {
+	forgetExtensionInfo,
+	knownExtensionInfo,
+	type LoadedExtensionInfo,
+	probeExtensionInfo,
+	recordLoadedExtensions,
+} from "./extensionInfo";
+export {
 	isOfflineMode,
 	npmPackageName,
 	packageSourceIdentity,

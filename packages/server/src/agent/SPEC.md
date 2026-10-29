@@ -865,8 +865,9 @@ re-opened transcripts provider-valid.
     deferred on a busy parent leaves them in its loader, and an explicit path would load them anyway.
   - `packages/` ([[submodule-server-agent-packages]]) — pi packages as a thing the host can list and
     change: the read-only catalog (packages, loose extension files, the two host built-ins; chips and
-    load errors from a loader that cannot install), pi's identity rule, and the install / remove /
-    update / toggle mutations in pi's own settings format.
+    load errors are what a chat's loader last recorded — `buildResourceLoader`'s `extensionsOverride`
+    reports every load through `recordLoadedExtensions` — so listing never executes extension code),
+    pi's identity rule, and the install / remove / update / toggle mutations in pi's own settings format.
   - `piPackages` — the orchestration above `packages/`: the host-facing façade (`piPackagesCatalog`,
     `piPackagesInstall`, …) that supplies the agent dir, the Central exclusion from the runtime
     generation and `HOST_BUILTIN_EXTENSION_NAMES`; `refreshPiPackages()` (bump the package revision,

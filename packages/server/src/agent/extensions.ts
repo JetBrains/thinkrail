@@ -29,7 +29,12 @@ import {
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
-import { createPiSettings, disabledPackages, setDisabledPackagesResolver } from "./packages";
+import {
+	createPiSettings,
+	disabledPackages,
+	recordLoadedExtensions,
+	setDisabledPackagesResolver,
+} from "./packages";
 
 export { disabledPackages, setDisabledPackagesResolver };
 
@@ -359,6 +364,7 @@ export async function buildResourceLoader(
 		extensionFactories,
 		extensionsOverride: (result: LoadExtensionsResult) => {
 			recordProviderOwners(result);
+			recordLoadedExtensions(result);
 			return preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload));
 		},
 	};

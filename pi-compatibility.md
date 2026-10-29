@@ -150,7 +150,8 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   for, each with its gate:
   - `resolve()` without `onMissing` installs a declared-but-missing package, and
     `DefaultResourceLoader.reload()` always calls it that way; the catalog therefore reads with
-    `onMissing → skip` and loads chips through a loader built on `SettingsManager.inMemory({})`.
+    `onMissing → skip`, and the one-off install probe loads through a loader built on
+    `SettingsManager.inMemory({})`.
     **Gate:** a public no-install resolve or exact-path extension loader.
   - `pi config`'s toggle writers are a TUI component, not SDK; `mutations.ts` replicates the format
     (`±relative` top-level patterns, object-form package filters, `±builtin:<name>`) and deliberately
@@ -182,7 +183,7 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
     before writing. **Gate:** a save that reports the skip.
   - pi's extension-factory cache is process-wide and is cleared only by a loaded loader's `reload()`;
     `clearExtensionCache` is not exported. `advancePiExtensionCache` reloads an empty loader twice
-    before the boot runtime and before the catalog probe. **Gate:** an exported clearer or a per-loader
+    before the boot runtime and before the install probe. **Gate:** an exported clearer or a per-loader
     cache.
   Also relied on: `SettingsManager.getGlobalSettings` / `getProjectSettings` are the only reads pi's
   package manager makes of declarations, so patching them per instance hides a switched-off package —

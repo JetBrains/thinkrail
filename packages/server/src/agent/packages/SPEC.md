@@ -40,47 +40,21 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   a row marked `shadowed` — then `resolve(async () => "skip")` attaches each resource to its declaration
   and yields the loose extensions and the host-supplied built-ins; the Central artifact path is excluded
   like the session loader excludes it. `singleFile` marks a local source that is one extension file: pi
-  loads it whole and ignores filters, so it gets no per-resource switches. Tool and command names and
-  load errors come from a `DefaultResourceLoader` over exactly the **enabled** extension file paths with
-  `SettingsManager.inMemory({})` (nothing to install), `noExtensions` (only those paths load), and
-  every other resource kind off — enabled factories run, as at every chat start; disabled code never
-  runs for chips, and a file's factory runs once per content change (a memo keyed by mtime). The
-  catalog cache is long-lived because every change path invalidates it explicitly
-  (`invalidatePiPackageCatalog()`); `listPiPackageRevealTargets` validates a reveal path from the same
-  reads without executing any extension. Before a probe runs, `advancePiExtensionCache` (an empty
-  loader reloaded twice — pi clears its process-wide factory cache only on a loaded loader's reload,
-  and exports no clearer) makes it read the files as they are now, so an update's new names show
-  without waiting for a chat to reload; `invalidatePiPackageCatalog()` drops the memo too and bumps a
-  generation a probe that was already running cannot write into, so the memo only spares unchanged
-  files across workspaces and TTL expiry. What a probe cannot see is what a chat reload cannot see
-  either: under Bun's native import (the source and CLI runtimes; the desktop bundle forces jiti's
-  transform) a module an extension *imports* is cached process-wide, so a change to a helper outside
-  the manifest's globs shows after a restart — the chips match the next chat, which is their contract. Known limitation: a probe loader is
-  never sent `session_shutdown`, so a factory that allocates at registration time (a watcher, a timer) leaks once
-  per content change of its file — pi's contract for a factory is to register, not to allocate. `packageSourceIdentity(source, scope, cwd, agentDir)`
-  resolves a local source against the settings file that declares it (user → `agentDir`, project →
-  `<cwd>/.pi`), as pi does.
-- `settingsView.ts` — `createPiSettings(cwd, agentDir, { projectTrusted?, packages })`, the only
-  place the host calls `SettingsManager.create` (a unit test scans the server sources). `packages:
-  "all"` is pi's manager untouched; `"enabled"` and `"none"` patch that instance's `getGlobalSettings`
-  / `getProjectSettings` to hide the switched-off declarations (keyed by `packageSourceIdentity`,
-  re-evaluated per read) or every declaration, and make `setPackages` / `setProjectPackages` throw —
-  a filtered list must never be written back. Also owns the `disabledPackages` resolver the host sets
-  from its config (`setDisabledPackagesResolver`).
-- `extensionCache.ts` — `advancePiExtensionCache(agentDir)`, shared by the boot runtime and the catalog probe.
-- `identity.ts` — `piPackageSourceKind` (npm by `npm:`; git only by `git:` or a `scheme://` URL — pi
-  treats `git@host:…` and `github:…` as local paths, so does this), `piPackageIdentity` (a simplified
-  port of pi's git parsing, no `hosted-git-info`, splitting the ref at the first `@`/`#` inside the
-  repository path so a `feature/x` branch keeps the identity — good enough for a ThinkRail-only key,
-  never written into pi settings), the shared `settingsBaseDir`, `resolveLocalSource` (pi's
-  `resolvePath` rule for a local source — trim, `~`, a `file://` URL decoded, then the base dir — used
-  alike by the identity, the install input and the declared-source mutations, so `file:///x` installs,
-  lists and removes as `/x`) and `isOfflineMode` (pi's `PI_OFFLINE` rule, which pi does not export). Changing a declared source's version or ref keeps the identity;
-  renaming a local folder makes a new one (the old switch entry becomes inert, like an unknown
-  `disabledExtensions` name). One ThinkRail-only refinement in `packageSourceIdentity`: a repository
-  declaration's local source that lives inside the worktree is keyed by its worktree-relative path
-  (`local:project:tools`), so every worktree of the project shares its switch, as they share the
-  repository's npm and git declarations; a repository path outside the worktree keeps the absolute key.
+  loads it whole and ignores filters, so it gets no per-resource switches. **The catalog never executes
+  extension code.** Tool and command names and load errors (`extensionInfo.ts`) are what a loader last
+  *recorded* for a file: every chat's `buildResourceLoader` reports its `LoadExtensionsResult` through
+  `recordLoadedExtensions`, and the install dialog's "Installed" step runs `probeExtensionInfo` once over
+  the new package's enabled extension files (in-memory settings, `noExtensions`, the explicit paths —
+  nothing to install) because no chat has loaded them yet. The memo is keyed by file and mtime, so a
+  changed file loses its chips until the next load records them; a row with no chips is a file no load
+  has seen since it changed, not an empty extension. *Rejected:* probing at list time (the first
+  implementation) — it ran every enabled extension's factory in the host process, outside any session
+  and without `session_shutdown`, on every Settings visit. The catalog's result cache is long-lived
+  because every change path invalidates it explicitly (`invalidatePiPackageCatalog()`);
+  `listPiPackageRevealTargets` validates a reveal path from the same reads. Before the install probe
+  runs, `advancePiExtensionCache` (an empty loader reloaded twice — pi clears its process-wide factory
+  cache only on a loaded loader's reload, and exports no clearer) makes it read the files as they are
+  now.
 - `mutations.ts` — every write validates `scope` / `type` at the boundary (the wire carries no runtime
   schema; an unknown type would otherwise fall through to pi's prompts setter), is serialized through
   one module queue (pi's `SettingsManager` merges only modified fields, but two instances racing on one
