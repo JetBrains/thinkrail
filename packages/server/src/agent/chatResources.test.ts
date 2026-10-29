@@ -601,6 +601,37 @@ test("a user stop that settles during teardown stays stopped; teardown's own cut
 	expect(archived.get(cut.sessionId)).toMatchObject({ status: "aborted", interrupted: true });
 });
 
+test("a foreground child the parent's own Stop cancelled stays stopped when teardown lands before it settles", async () => {
+	const p = await parent();
+	const service = delegationServiceFor(p.workspaceId);
+	const gate = deferred();
+	faux.setResponses([
+		async () => {
+			await gate.promise;
+			return fauxAssistantMessage("CHILD_DONE");
+		},
+	]);
+	const child = await service.createChild({
+		parent: p.sessionId,
+		visibility: "hidden",
+		info: { createdBy: "test" },
+		session: {},
+	});
+	const parentTurn = new AbortController();
+	const run = child.runQueued("Foreground work.", { signal: parentTurn.signal });
+	await waitFor(async () => child.snapshot?.status === "running");
+	parentTurn.abort();
+	const removing = removeSession(p.sessionId);
+	gate.resolve();
+	await Promise.allSettled([removing, run]);
+
+	const archived = finishedResources(p, "subagent", new Set()).find(
+		(record) => resourceRecordId(record) === child.sessionId,
+	);
+	expect(archived?.summary).toMatchObject({ status: "aborted" });
+	expect(archived?.summary.interrupted).toBeUndefined();
+});
+
 test("the live owner's finished record wins over an archived one it outlived", async () => {
 	const p = await parent();
 	const id = await launch(p, "printf done");

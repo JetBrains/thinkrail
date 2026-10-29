@@ -25,8 +25,8 @@ import {
 	pageResources,
 	recordResource,
 } from "../resourceHistory";
-import { canUseSessionResources, withSessionResources } from "./agentSessionManager";
-import { delegationServiceFor, stopSessionChildren } from "./delegation";
+import { withSessionResources } from "./agentSessionManager";
+import { delegationServiceFor, INTERRUPTED_ABORT_REASON, stopSessionChildren } from "./delegation";
 import { mcpResourceSummaries } from "./mcpSessions";
 
 let publish: (payload: { workspaceId: string; sessionId: string }) => void = () => {};
@@ -279,10 +279,7 @@ export function archiveSubagentRun(
 	if (!summary) return;
 	const terminal = event.type === "run-terminal";
 	const cutOff =
-		terminal &&
-		summary.status === "aborted" &&
-		summary.abortReason === undefined &&
-		!canUseSessionResources(event.parentSessionId, workspaceId);
+		terminal && summary.status === "aborted" && summary.abortReason === INTERRUPTED_ABORT_REASON;
 	recordResource(
 		{ workspaceId, sessionId: event.parentSessionId },
 		{

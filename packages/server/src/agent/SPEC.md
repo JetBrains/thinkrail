@@ -1138,10 +1138,14 @@ archive subscription outlives the manager's own and closes only once the command
 (or its budget expires), so the terminal edges that teardown itself causes are still recorded. A failed
 archive write is logged and never retried for the same status; the owner's record still wins while it lives. **Interrupted** is decided here, once:
 a command that ends `stopped` while its chat's resources are closing, without a stop requested before
-the closing began, and a subagent that ends `aborted` with no abort reason while its parent can no longer
-use resources, are archived `interrupted`; a command still unsettled when the cascade gives up is archived
-in flight and `interrupted`, with its log so far. A user or tool stop that merely settles during teardown
-stays Stopped. Interrupted work is shown to the user only: it never wakes the parent and nothing tells the
+the closing began, is archived `interrupted`, and so is a command still unsettled when the cascade gives
+up (in flight, with its log so far). For subagents the closing cascade marks its own cancellation: before
+`disposeChildrenOf` it aborts every child with the reason `interrupted`, and since [[module-pi-delegation]]
+keeps a run's first cancellation reason, only a run that teardown cancelled first is archived `interrupted`.
+A run already cancelled when teardown lands keeps its own provenance and reads Stopped — a user stop
+(`"user"`) as well as a foreground child the parent's own Stop cancelled through its tool signal, which
+carries no reason (an AIR review finding on PR #1004: inferring teardown from a missing reason mislabelled
+exactly that run). A user or tool stop that merely settles during teardown stays Stopped. Interrupted work is shown to the user only: it never wakes the parent and nothing tells the
 agent its acknowledged run is gone (user-settled, 2026-10). Work a dead host left in flight is the archive's own derivation. Workspace archive removes the
 workspace's history after its delegation store; late lifecycle events of a retired delegation service are not
 archived, so they cannot recreate it. Chat deletion leaves the history in place.

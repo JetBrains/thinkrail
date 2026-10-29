@@ -164,11 +164,17 @@ export function stopSessionChildren(
 	return { stopped: children.length, settled };
 }
 
+export const INTERRUPTED_ABORT_REASON = "interrupted";
+
 export async function disposeSessionChildren(
 	workspaceId: string,
 	parentSessionId: string,
 ): Promise<void> {
-	await services.get(workspaceId)?.disposeChildrenOf(parentSessionId);
+	const service = services.get(workspaceId);
+	if (!service) return;
+	for (const child of service.childrenOf(parentSessionId))
+		void child.abort(INTERRUPTED_ABORT_REASON).catch(() => {});
+	await service.disposeChildrenOf(parentSessionId);
 }
 
 export function removeWorkspaceDelegation(workspaceId: string): void {
