@@ -795,9 +795,14 @@ re-opened transcripts provider-valid.
     always registered and active (no setting, like `set_title`), and top-level only:
     - **`start_workspace { prompt, project?, base_branch?, model?, effort?, attachments? }`** starts an
       ordinary new workspace with a first chat. It returns the new ids once the child's first prompt is
-      accepted (the host's send-ack window), and never waits for the child's turn to finish.
+      accepted (the host's send-ack window), and never waits for the child's turn to finish. It hands pi's
+      abort signal to the host's `start`, because pi awaits a running tool and reports Stop only through
+      that signal: without it, Stop would wait out the base fetch and still spawn the workspace.
     - **`workspace_status { project?, workspaces? }`** reports chat states, PR state, diff stats and
-      (for named workspaces) each chat's final message.
+      (for named workspaces) each chat's final message. The report is bounded like pi's own tools
+      (`truncateHead` at pi's default line and byte limits) with a footer saying the later workspaces and
+      older chats were cut: a default workspace with dozens of chats would otherwise return their final
+      messages in one unbounded result. A named lookup lists its misses first, so a cut never hides them.
     `project` defaults to the chat's own project. In a chat without a project it is required, and the
     host enforces that.
     Both delegate to a host seam, `setWorkspaceToolsHost({ start, status })`, because they compose

@@ -1,4 +1,10 @@
-import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import {
+	DEFAULT_MAX_BYTES,
+	DEFAULT_MAX_LINES,
+	type ExtensionAPI,
+	type ToolDefinition,
+	truncateHead,
+} from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
 
 export const START_WORKSPACE_TOOL_NAME = "start_workspace";
@@ -79,7 +85,11 @@ export interface StartedWorkspace {
 }
 
 export interface WorkspaceToolsHost {
-	start: (callerSessionId: string, params: StartWorkspaceParams) => Promise<StartedWorkspace>;
+	start: (
+		callerSessionId: string,
+		params: StartWorkspaceParams,
+		signal?: AbortSignal,
+	) => Promise<StartedWorkspace>;
 	status: (callerSessionId: string, params: WorkspaceStatusParams) => Promise<string>;
 }
 
@@ -109,6 +119,17 @@ const STATUS_GUIDELINES = [
 	"Use workspace_status to check on workspaces — ones you started or any other in an open project: chat states, final messages, PR state, and diff size. Without arguments it gives a compact overview of this project; name workspaces to read their chats' final messages.",
 ];
 
+export function boundedStatus(text: string): string {
+	const whole = truncateHead(text);
+	if (!whole.truncated) return text;
+	const footer = `\n\n[workspace_status output truncated: ${whole.totalLines} lines, ${whole.totalBytes} bytes in all; the later workspaces and older chats were cut. Name specific (or fewer) workspaces to see more of each.]`;
+	const bounded = truncateHead(text, {
+		maxBytes: Math.max(0, DEFAULT_MAX_BYTES - Buffer.byteLength(footer)),
+		maxLines: DEFAULT_MAX_LINES - footer.split("\n").length,
+	});
+	return `${bounded.content}${footer}`;
+}
+
 function startedText(started: StartedWorkspace): string {
 	const model = started.model ? `${started.model}, effort ${started.effort}` : "default model";
 	return `Started workspace "${started.name}" (id ${started.workspaceId}, branch ${started.branch}, from ${started.baseBranch}) with chat ${started.sessionId} on ${model}. It runs independently; check it with workspace_status.`;
@@ -126,10 +147,11 @@ export function createStartWorkspaceTool(): ToolDefinition<
 		promptSnippet: "Start a new workspace with its own chat to work on a task in parallel",
 		promptGuidelines: START_GUIDELINES,
 		parameters: StartWorkspaceSchema,
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			const started = await host.start(
 				ctx.sessionManager.getSessionId(),
 				params as StartWorkspaceParams,
+				signal,
 			);
 			return { content: [{ type: "text", text: startedText(started) }], details: started };
 		},
@@ -153,7 +175,7 @@ export function createWorkspaceStatusTool(): ToolDefinition<
 				ctx.sessionManager.getSessionId(),
 				params as WorkspaceStatusParams,
 			);
-			return { content: [{ type: "text", text }], details: undefined };
+			return { content: [{ type: "text", text: boundedStatus(text) }], details: undefined };
 		},
 	};
 }

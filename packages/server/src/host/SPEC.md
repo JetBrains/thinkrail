@@ -450,10 +450,19 @@ channel fan-out, and the process-boot wrapper both launchers share.
       are listed by absolute path, because the child's worktree only has committed refs.
     - Project, model and attachments are validated **before** any worktree exists. If the chat fails to
       start after the worktree is created, the workspace is **kept** and the error names it.
+    - Stop cancels a start in progress: the tool's abort signal reaches the default-base prefetch,
+      `createWorkspace`'s fallback fetch and the send-ack wait. A start stopped before the worktree exists
+      creates nothing and says so; one stopped later stops before the chat starts or before its prompt is
+      sent, keeping the workspace and naming it (and its chat, once it exists) as a failed start does. A
+      child whose prompt is on its way runs on.
+    - An agent's spawn is not the user's explicit setup operation, so it records no `worktree_create`
+      setup action ([[submodule-server-analytics]]); its chat still reports `chat_started`.
     - The prompt goes through `ackSend` + `runObservation.send(…, "internal")`, not `sendUserMessage`: an
       agent-sent prompt is not a user `message_sent` and never claims the feedback invitation.
     - Status reuses existing state only: `listSessions` state (labelled working / needs_you / finished /
       failed / interrupted / idle), the cached `Workspace.review` (no new PR refresh), and diff stats.
+      Start and status take their reads and effects as injected deps, so both are unit-tested without
+      projects, worktrees or sessions.
   - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
     the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
     side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback
@@ -806,10 +815,11 @@ enabled/confirmed choice before entering analytics attribution.
 - **A send (prompt/steer/followUp/respondToTool) is acked when ACCEPTED, not when the turn ends**
   (`ackSend`): pi's send methods resolve only at turn end, and a turn can outlive the client's request
   timeout (long tool rounds and multi-minute reasoning turns are routine) — awaiting completion would
-  surface a phantom "request timed out" over a healthy turn. A rejection inside the ack window still
-  fails the request (bad model / missing key; for `respondToTool` also an unknown/responded/superseded
-  call — `assessRespondability`'s loud verdicts, or a response without a value); later faults reach the
-  client via the event stream.
+  surface a phantom "request timed out" over a healthy turn; a caller whose `signal` aborts (Stop on
+  `start_workspace`) is acked at once. A rejection inside the ack window still fails the request (bad
+  model / missing key; for `respondToTool` also an unknown/responded/superseded call —
+  `assessRespondability`'s loud verdicts, or a response without a value); later faults reach the client
+  via the event stream.
 
 ### Drift & overwrite
 

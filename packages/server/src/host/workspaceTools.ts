@@ -34,11 +34,10 @@ import {
 	listWorkspaces,
 	workspaceDiffStats,
 } from "../workspaces";
-import { ackSend } from "./ackSend";
+import { ackSend, SEND_ACK_MS } from "./ackSend";
 import { startChatSession } from "./chatSession";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { provisionInitialTerminal } from "./initialTerminal";
-import { observeSetupAction } from "./productAnalytics";
 import { runObservation } from "./runAnalytics";
 
 const log = logger("host");
@@ -54,8 +53,9 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
 };
 
 export const workspaceToolsHost: WorkspaceToolsHost = {
-	start: (callerSessionId, params) => startWorkspace(callerSessionId, params),
-	status: (callerSessionId, params) => workspaceStatus(callerSessionId, params),
+	start: (callerSessionId, params, signal) =>
+		startWorkspace(callerSessionId, params, liveStartDeps, signal),
+	status: (callerSessionId, params) => workspaceStatus(callerSessionId, params, liveStatusDeps),
 };
 
 function callerWorkspace(sessionId: string): Workspace {
@@ -155,10 +155,10 @@ export function composePrompt(prompt: string, files: readonly string[]): string 
 	return `${prompt}\n\nAttached files:\n${files.map((file) => `- ${file}`).join("\n")}`;
 }
 
-async function defaultBaseBranch(projectId: string): Promise<string> {
+async function defaultBaseBranch(projectId: string, signal?: AbortSignal): Promise<string> {
 	const { defaultBranch } = await listBranches(projectId);
 	try {
-		const { moved } = await prefetchBranch(projectId, defaultBranch);
+		const { moved } = await prefetchBranch(projectId, defaultBranch, signal);
 		if (moved) nudgeBaseRefWorkspaces(projectId, defaultBranch);
 	} catch {
 		log.warn(`start_workspace prefetch of ${defaultBranch} failed for project ${projectId}`);
@@ -174,13 +174,18 @@ export interface StartWorkspaceDeps {
 	callerWorkspace: (sessionId: string) => Workspace;
 	openProjects: () => Project[];
 	settledModels: () => Promise<WireModel[]>;
-	defaultBaseBranch: (projectId: string) => Promise<string>;
-	createWorkspace: (projectId: string, baseRef: string) => Promise<Workspace>;
+	defaultBaseBranch: (projectId: string, signal?: AbortSignal) => Promise<string>;
+	createWorkspace: (projectId: string, baseRef: string, signal?: AbortSignal) => Promise<Workspace>;
 	startChat: (
 		workspace: Workspace,
 		requested: { model?: WireModel; thinkingLevel?: ThinkingLevel },
 	) => Promise<CreateSessionResult>;
-	sendPrompt: (sessionId: string, text: string, images?: ImageContent[]) => Promise<void>;
+	sendPrompt: (
+		sessionId: string,
+		text: string,
+		images?: ImageContent[],
+		signal?: AbortSignal,
+	) => Promise<void>;
 }
 
 const liveStartDeps: StartWorkspaceDeps = {
@@ -188,26 +193,31 @@ const liveStartDeps: StartWorkspaceDeps = {
 	openProjects: listProjects,
 	settledModels: listSettledModels,
 	defaultBaseBranch,
-	createWorkspace: async (projectId, baseRef) =>
-		provisionInitialTerminal(
-			await observeSetupAction("worktree_create", () =>
-				createWorkspace(projectId, undefined, baseRef),
-			),
-		),
+	createWorkspace: async (projectId, baseRef, signal) =>
+		provisionInitialTerminal(await createWorkspace(projectId, undefined, baseRef, signal)),
 	startChat: async (workspace, requested) => {
 		await ensureWatch(workspace.id);
 		return startChatSession(workspace, requested);
 	},
-	sendPrompt: (sessionId, text, images) =>
+	sendPrompt: (sessionId, text, images, signal) =>
 		ackSend(
 			runObservation.send(sessionId, "internal", () => promptSession(sessionId, text, images)),
+			SEND_ACK_MS,
+			signal,
 		),
 };
+
+const NOTHING_CREATED = "Stopped; no workspace was created.";
+
+function throwIfStopped(signal: AbortSignal | undefined, message: string): void {
+	if (signal?.aborted) throw new Error(message);
+}
 
 export async function startWorkspace(
 	callerSessionId: string,
 	params: StartWorkspaceParams,
-	deps: StartWorkspaceDeps = liveStartDeps,
+	deps: StartWorkspaceDeps,
+	signal?: AbortSignal,
 ): Promise<StartedWorkspace> {
 	const caller = deps.callerWorkspace(callerSessionId);
 	const prompt = params.prompt.trim();
@@ -217,34 +227,50 @@ export async function startWorkspace(
 		? resolveModel(params.model, await deps.settledModels())
 		: undefined;
 	const { images, files } = prepareAttachments(params.attachments ?? [], caller.worktreePath);
-	const baseRef = params.base_branch?.trim() || (await deps.defaultBaseBranch(project.id));
+	const baseRef = params.base_branch?.trim() || (await deps.defaultBaseBranch(project.id, signal));
+	throwIfStopped(signal, NOTHING_CREATED);
 
-	const workspace = await deps.createWorkspace(project.id, baseRef);
+	let workspace: Workspace;
 	try {
-		const created = await deps.startChat(workspace, {
+		workspace = await deps.createWorkspace(project.id, baseRef, signal);
+	} catch (error) {
+		throwIfStopped(signal, NOTHING_CREATED);
+		throw error;
+	}
+	const named = `Workspace "${workspace.name}" (id ${workspace.id})`;
+	let created: CreateSessionResult;
+	try {
+		throwIfStopped(signal, "stopped");
+		created = await deps.startChat(workspace, {
 			...(model ? { model } : {}),
 			...(params.effort ? { thinkingLevel: params.effort } : {}),
 		});
+	} catch (error) {
+		throw new Error(`${named} was created, but its chat could not start: ${errorText(error)}`);
+	}
+	try {
+		throwIfStopped(signal, "stopped before it was sent");
 		await deps.sendPrompt(
 			created.sessionId,
 			composePrompt(prompt, files),
 			images.length > 0 ? images : undefined,
+			signal,
 		);
-		return {
-			workspaceId: workspace.id,
-			projectId: workspace.projectId,
-			sessionId: created.sessionId,
-			name: workspace.name,
-			branch: workspace.branch,
-			baseBranch: workspace.baseBranch,
-			model: created.model ? `${created.model.provider}/${created.model.id}` : null,
-			effort: created.thinkingLevel,
-		};
 	} catch (error) {
 		throw new Error(
-			`Workspace "${workspace.name}" (id ${workspace.id}) was created, but its chat could not start: ${errorText(error)}`,
+			`${named} and its chat ${created.sessionId} were created, but the chat did not take its prompt: ${errorText(error)}`,
 		);
 	}
+	return {
+		workspaceId: workspace.id,
+		projectId: workspace.projectId,
+		sessionId: created.sessionId,
+		name: workspace.name,
+		branch: workspace.branch,
+		baseBranch: workspace.baseBranch,
+		model: created.model ? `${created.model.provider}/${created.model.id}` : null,
+		effort: created.thinkingLevel,
+	};
 }
 
 export function chatStateLabel(state: SessionState | undefined): string {
@@ -287,7 +313,7 @@ function diffLine(workspace: Workspace): string {
 	return stats ? `diff +${stats.added} -${stats.removed}` : "diff unknown";
 }
 
-interface ChatReport {
+export interface ChatReport {
 	summary: SessionSummary;
 	finalMessage?: string | null;
 }
@@ -340,18 +366,6 @@ function renderWorkspace(
 	return lines.join("\n");
 }
 
-async function reportWorkspace(
-	workspace: Workspace,
-	projectName: string,
-	withFinal: boolean,
-	callerSessionId: string,
-): Promise<string> {
-	const chats = await chatReports(workspace, withFinal).catch((error: unknown) =>
-		error instanceof Error ? error : new Error(String(error)),
-	);
-	return renderWorkspace(workspace, projectName, chats, callerSessionId);
-}
-
 export function matchWorkspaces(
 	refs: readonly string[],
 	candidates: readonly Workspace[],
@@ -381,40 +395,55 @@ async function withDiffStats(workspace: Workspace): Promise<Workspace> {
 	}
 }
 
-async function workspaceStatus(
+export interface WorkspaceStatusDeps {
+	callerWorkspace: (sessionId: string) => Workspace;
+	openProjects: () => Project[];
+	allWorkspaces: () => Workspace[];
+	projectWorkspaces: (projectId: string) => Promise<Workspace[]>;
+	withDiffStats: (workspace: Workspace) => Promise<Workspace>;
+	chatReports: (workspace: Workspace, withFinal: boolean) => Promise<ChatReport[]>;
+}
+
+const liveStatusDeps: WorkspaceStatusDeps = {
+	callerWorkspace,
+	openProjects: listProjects,
+	allWorkspaces: listAllWorkspaceRecords,
+	projectWorkspaces: (projectId) => listWorkspaces(projectId, { includeDiffStats: true }),
+	withDiffStats,
+	chatReports,
+};
+
+export async function workspaceStatus(
 	callerSessionId: string,
 	params: WorkspaceStatusParams,
+	deps: WorkspaceStatusDeps,
 ): Promise<string> {
-	const caller = callerWorkspace(callerSessionId);
-	const open = openRepositories();
+	const caller = deps.callerWorkspace(callerSessionId);
+	const open = openRepositories(deps.openProjects());
 	const projectName = new Map(open.map((project) => [project.id, project.name]));
+	const report = async (workspace: Workspace, withFinal: boolean): Promise<string> => {
+		const chats = await deps
+			.chatReports(workspace, withFinal)
+			.catch((error: unknown) => (error instanceof Error ? error : new Error(String(error))));
+		const name = projectName.get(workspace.projectId) ?? workspace.projectId;
+		return renderWorkspace(workspace, name, chats, callerSessionId);
+	};
 	const refs = params.workspaces?.filter((ref) => ref.trim()) ?? [];
 
 	if (refs.length > 0) {
-		const candidates = listAllWorkspaceRecords().filter((workspace) =>
-			projectName.has(workspace.projectId),
-		);
+		const candidates = deps
+			.allWorkspaces()
+			.filter((workspace) => projectName.has(workspace.projectId));
 		const { matched, missing } = matchWorkspaces(refs, candidates);
 		const reports = await Promise.all(
-			matched.map(async (workspace) =>
-				reportWorkspace(
-					await withDiffStats(workspace),
-					projectName.get(workspace.projectId) ?? workspace.projectId,
-					true,
-					callerSessionId,
-				),
-			),
+			matched.map(async (workspace) => report(await deps.withDiffStats(workspace), true)),
 		);
-		if (missing.length > 0) {
-			reports.push(`No workspace matches: ${missing.join(", ")}.`);
-		}
+		if (missing.length > 0) reports.unshift(`No workspace matches: ${missing.join(", ")}.`);
 		return reports.join("\n\n");
 	}
 
 	const project = resolveProject(params.project, ownProjectId(caller), open);
-	const workspaces = await listWorkspaces(project.id, { includeDiffStats: true });
-	const reports = await Promise.all(
-		workspaces.map((workspace) => reportWorkspace(workspace, project.name, false, callerSessionId)),
-	);
+	const workspaces = await deps.projectWorkspaces(project.id);
+	const reports = await Promise.all(workspaces.map((workspace) => report(workspace, false)));
 	return [`# ${project.name}: ${workspaces.length} workspace(s)`, ...reports].join("\n\n");
 }

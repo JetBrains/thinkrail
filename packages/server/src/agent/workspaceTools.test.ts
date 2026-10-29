@@ -1,7 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
-import type { ExtensionAPI, ExtensionToolContext } from "@earendil-works/pi-coding-agent";
+import {
+	DEFAULT_MAX_BYTES,
+	DEFAULT_MAX_LINES,
+	type ExtensionAPI,
+	type ExtensionToolContext,
+} from "@earendil-works/pi-coding-agent";
 import { childExtensionFactories } from "./extensions";
 import {
+	boundedStatus,
 	createStartWorkspaceTool,
 	createWorkspaceStatusTool,
 	START_WORKSPACE_TOOL_NAME,
@@ -45,6 +51,20 @@ test("start_workspace delegates to the host with the caller's session and return
 	const text = result.content[0]?.type === "text" ? result.content[0].text : "";
 	expect(text).toContain('Started workspace "workspace-2" (id w-2');
 	expect(text).toContain("workspace_status");
+});
+
+test("start_workspace hands pi's abort signal to the host, so Stop reaches the start", async () => {
+	const signals: Array<AbortSignal | undefined> = [];
+	setWorkspaceToolsHost({
+		start: async (_sessionId, _params, signal) => {
+			signals.push(signal);
+			return started;
+		},
+		status: async () => "",
+	});
+	const stop = new AbortController();
+	await createStartWorkspaceTool().execute("c-1", { prompt: "x" }, stop.signal, undefined, ctx);
+	expect(signals).toEqual([stop.signal]);
 });
 
 test("workspace_status returns the host's report as text", async () => {
@@ -94,4 +114,23 @@ test("both tools are registered for top-level sessions, never in a subagent chil
 	workspaceToolsExtension(pi);
 	expect(registered).toEqual([START_WORKSPACE_TOOL_NAME, WORKSPACE_STATUS_TOOL_NAME]);
 	expect(childExtensionFactories("w1")).not.toContain(workspaceToolsExtension);
+});
+
+test("workspace_status bounds a long report by lines or bytes and says how to narrow it", async () => {
+	const footer = (text: string) =>
+		`[workspace_status output truncated: ${text.split("\n").length} lines, ${Buffer.byteLength(text)} bytes in all; the later workspaces and older chats were cut. Name specific (or fewer) workspaces to see more of each.]`;
+	const manyLines = Array.from({ length: 3000 }, (_, i) => `- chat ${i}: idle`).join("\n");
+	const manyBytes = Array.from({ length: 80 }, (_, i) => `${i} ${"x".repeat(1000)}`).join("\n");
+	setWorkspaceToolsHost({ start: async () => started, status: async () => manyLines });
+	const result = await createWorkspaceStatusTool().execute("c-1", {}, undefined, undefined, ctx);
+	expect(result.content).toEqual([{ type: "text", text: boundedStatus(manyLines) }]);
+
+	for (const report of [manyLines, manyBytes]) {
+		const bounded = boundedStatus(report);
+		expect(bounded.split("\n").length).toBeLessThanOrEqual(DEFAULT_MAX_LINES);
+		expect(Buffer.byteLength(bounded)).toBeLessThanOrEqual(DEFAULT_MAX_BYTES);
+		expect(report.startsWith(bounded.slice(0, bounded.lastIndexOf("\n\n[")))).toBe(true);
+		expect(bounded.endsWith(`\n\n${footer(report)}`)).toBe(true);
+	}
+	expect(boundedStatus("## main — main\nno chats")).toBe("## main — main\nno chats");
 });

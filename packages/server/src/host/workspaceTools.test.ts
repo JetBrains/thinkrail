@@ -6,10 +6,12 @@ import type {
 	ImageContent,
 	Project,
 	SessionState,
+	SessionSummary,
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
 import {
+	type ChatReport,
 	chatName,
 	chatStateLabel,
 	clampFinalMessage,
@@ -20,6 +22,8 @@ import {
 	resolveProject,
 	type StartWorkspaceDeps,
 	startWorkspace,
+	type WorkspaceStatusDeps,
+	workspaceStatus,
 } from "./workspaceTools";
 
 let dir: string;
@@ -176,12 +180,12 @@ function startDeps(overrides: Partial<StartWorkspaceDeps> = {}) {
 		callerWorkspace: () => caller,
 		openProjects: () => [project("p1", "ThinkRail"), project("p2", "Backend")],
 		settledModels: async () => [{ provider: "anthropic", id: "claude" } as WireModel],
-		defaultBaseBranch: async () => {
-			calls.push("defaultBase");
+		defaultBaseBranch: async (_projectId, signal) => {
+			calls.push(`defaultBase${signal ? " signal" : ""}`);
 			return "origin/main";
 		},
-		createWorkspace: async (projectId, baseRef) => {
-			calls.push(`create ${projectId} ${baseRef}`);
+		createWorkspace: async (projectId, baseRef, signal) => {
+			calls.push(`create ${projectId} ${baseRef}${signal ? " signal" : ""}`);
 			return child;
 		},
 		startChat: async (_workspace, requested) => {
@@ -194,8 +198,8 @@ function startDeps(overrides: Partial<StartWorkspaceDeps> = {}) {
 				thinkingLevel: "high",
 			};
 		},
-		sendPrompt: async (sessionId, text, images) => {
-			calls.push("prompt");
+		sendPrompt: async (sessionId, text, images, signal) => {
+			calls.push(`prompt${signal ? " signal" : ""}`);
 			prompts.push({ sessionId, text, ...(images ? { images } : {}) });
 		},
 		...overrides,
@@ -216,8 +220,14 @@ test("startWorkspace creates in the named project from its default base and prom
 			attachments: ["spec.md"],
 		},
 		deps,
+		new AbortController().signal,
 	);
-	expect(calls).toEqual(["defaultBase", "create p2 origin/main", "chat claude high", "prompt"]);
+	expect(calls).toEqual([
+		"defaultBase signal",
+		"create p2 origin/main signal",
+		"chat claude high",
+		"prompt signal",
+	]);
 	expect(prompts).toEqual([
 		{ sessionId: "s9", text: `Do X\n\nAttached files:\n- ${join(dir, "spec.md")}` },
 	]);
@@ -265,14 +275,157 @@ test("startWorkspace from a chat without a project needs a named repository and 
 	]);
 });
 
-test("startWorkspace keeps a created workspace and names it when its chat cannot start", async () => {
+test("startWorkspace keeps a created workspace and names it, and its chat, when the chat fails", async () => {
+	const unstarted = startDeps({
+		startChat: async () => {
+			throw new Error("no usable model");
+		},
+	});
+	await expect(
+		startWorkspace("s1", { prompt: "x", base_branch: "dev" }, unstarted.deps),
+	).rejects.toThrow(
+		'Workspace "workspace-9" (id w9) was created, but its chat could not start: no usable model',
+	);
 	const { deps, calls } = startDeps({
 		sendPrompt: async () => {
 			throw new Error("provider refused");
 		},
 	});
 	await expect(startWorkspace("s1", { prompt: "x", base_branch: "dev" }, deps)).rejects.toThrow(
-		'Workspace "workspace-9" (id w9) was created, but its chat could not start: provider refused',
+		'Workspace "workspace-9" (id w9) and its chat s9 were created, but the chat did not take its prompt: provider refused',
 	);
 	expect(calls).toEqual(["create p1 dev", "chat default default"]);
+});
+
+test("a Stop during a base fetch cuts no worktree and says so", async () => {
+	const stop = new AbortController();
+	const { deps, calls } = startDeps({
+		defaultBaseBranch: async (_projectId, signal) => {
+			calls.push(`defaultBase${signal ? " signal" : ""}`);
+			stop.abort();
+			return "origin/main";
+		},
+	});
+	await expect(startWorkspace("s1", { prompt: "x" }, deps, stop.signal)).rejects.toThrow(
+		"Stopped; no workspace was created.",
+	);
+	expect(calls).toEqual(["defaultBase signal"]);
+
+	const fetching = new AbortController();
+	const explicit = startDeps({
+		createWorkspace: async () => {
+			fetching.abort();
+			throw new Error("Could not fetch origin/dev: git operation cancelled");
+		},
+	});
+	await expect(
+		startWorkspace(
+			"s1",
+			{ prompt: "x", base_branch: "origin/dev" },
+			explicit.deps,
+			fetching.signal,
+		),
+	).rejects.toThrow("Stopped; no workspace was created.");
+	await expect(
+		startWorkspace("s1", { prompt: "x", base_branch: "origin/dev" }, explicit.deps),
+	).rejects.toThrow("Could not fetch origin/dev: git operation cancelled");
+});
+
+test("a Stop after the worktree exists names it and never prompts a chat", async () => {
+	const stop = new AbortController();
+	const created = startDeps({
+		createWorkspace: async (projectId, baseRef) => {
+			created.calls.push(`create ${projectId} ${baseRef}`);
+			stop.abort();
+			return { id: "w9", name: "workspace-9" } as Workspace;
+		},
+	});
+	await expect(
+		startWorkspace("s1", { prompt: "x", base_branch: "dev" }, created.deps, stop.signal),
+	).rejects.toThrow(
+		'Workspace "workspace-9" (id w9) was created, but its chat could not start: stopped',
+	);
+	expect(created.calls).toEqual(["create p1 dev"]);
+
+	const later = new AbortController();
+	const started = startDeps({
+		startChat: async () => {
+			started.calls.push("chat");
+			later.abort();
+			return { sessionId: "s9", model: null, thinkingLevel: "medium" };
+		},
+	});
+	await expect(
+		startWorkspace("s1", { prompt: "x", base_branch: "dev" }, started.deps, later.signal),
+	).rejects.toThrow(
+		'Workspace "workspace-9" (id w9) and its chat s9 were created, but the chat did not take its prompt: stopped before it was sent',
+	);
+	expect(started.calls).toEqual(["create p1 dev signal", "chat"]);
+});
+
+const summary = (sessionId: string, title: string, patch: Partial<SessionState> = {}) =>
+	({ sessionId, title, state: state(patch) }) as SessionSummary;
+
+function statusDeps(overrides: Partial<WorkspaceStatusDeps> = {}) {
+	const chats: Project = { ...project("c1", "Chats"), kind: "chats" };
+	const repo = project("p1", "ThinkRail");
+	const ws = (id: string, projectId: string, name: string, patch: Partial<Workspace> = {}) =>
+		({ id, projectId, name, branch: name, baseBranch: "origin/main", ...patch }) as Workspace;
+	const workspaces = [
+		ws("w1", "p1", "main", { kind: "default", diffStats: { added: 1, removed: 2 } }),
+		ws("w2", "p1", "fix-login", {
+			review: { kind: "pull-request", number: 7, state: "open", url: "https://pr/7" },
+		}),
+		ws("chat-1", "c1", "main", { kind: "chat" }),
+	];
+	const reports: Record<string, ChatReport[] | Error> = {
+		w1: [{ summary: summary("s1", "Plan") }],
+		w2: [
+			{ summary: summary("s2", "Fix it", { execution: "running" }), finalMessage: null },
+			{
+				summary: summary("s3", "", {
+					completion: { completionId: "c", outcome: "succeeded" },
+				}),
+				finalMessage: "Done.\nOpened PR #7.",
+			},
+		],
+		"chat-1": [{ summary: summary("s4", "Private chat"), finalMessage: "secret" }],
+	};
+	const deps: WorkspaceStatusDeps = {
+		callerWorkspace: () => workspaces[0] as Workspace,
+		openProjects: () => [chats, repo],
+		allWorkspaces: () => workspaces,
+		projectWorkspaces: async (projectId) => workspaces.filter((w) => w.projectId === projectId),
+		withDiffStats: async (workspace) => workspace,
+		chatReports: async (workspace, withFinal) => {
+			const report = reports[workspace.id] ?? [];
+			if (report instanceof Error) throw report;
+			return withFinal ? report : report.map(({ summary }) => ({ summary }));
+		},
+		...overrides,
+	};
+	return { deps, reports };
+}
+
+test("workspace_status gives an overview of the caller's project without final messages", async () => {
+	const { deps } = statusDeps();
+	expect(await workspaceStatus("s1", {}, deps)).toBe(
+		[
+			"# ThinkRail: 2 workspace(s)",
+			'## main — main (id w1, project ThinkRail, default)\nbase origin/main · no PR · diff +1 -2\n- chat "Plan" (s1, this chat): idle',
+			'## fix-login — fix-login (id w2, project ThinkRail)\nbase origin/main · PR #7 open https://pr/7 · diff unknown\n- chat "Fix it" (s2): working\n- chat unnamed (s3): finished',
+		].join("\n\n"),
+	);
+});
+
+test("workspace_status by name reads final messages, never matches a chat without a project, and lists misses", async () => {
+	const { deps, reports } = statusDeps();
+	reports.w1 = new Error("transcripts unreadable");
+	expect(await workspaceStatus("s1", { workspaces: ["MAIN", "fix-login", "nope"] }, deps)).toBe(
+		[
+			"No workspace matches: nope.",
+			"## main — main (id w1, project ThinkRail, default)\nbase origin/main · no PR · diff +1 -2\nchats unreadable: transcripts unreadable",
+			'## fix-login — fix-login (id w2, project ThinkRail)\nbase origin/main · PR #7 open https://pr/7 · diff unknown\n- chat "Fix it" (s2): working\n  final message: none yet\n- chat unnamed (s3): finished\n  final message:\n    Done.\n    Opened PR #7.',
+		].join("\n\n"),
+	);
 });
