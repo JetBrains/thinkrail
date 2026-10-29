@@ -97,6 +97,16 @@ test("an unknown workspace no list shows, or a list that failed, opens nothing a
 	expect(opened()).toEqual(nothing);
 });
 
+test("a held workspace whose project was closed is not opened, and the user is told", async () => {
+	useAppStore.setState({ projects: [project("p2")] });
+	expect(await openWorkspace({ workspaceId: "w1", projectId: "p1", sessionId: "s1" }, "gone")).toBe(
+		false,
+	);
+	expect(requests).toEqual([]);
+	expect(opened()).toEqual({ projectId: null, workspaceId: null, sessionId: null });
+	expect(useAppStore.getState().toasts.at(-1)?.message).toBe("gone");
+});
+
 test("a workspace being deleted is never opened, held or just listed", async () => {
 	useAppStore.setState({
 		workspaces: { p1: [{ ...workspace("w1", "p1"), deletionPending: true }] },

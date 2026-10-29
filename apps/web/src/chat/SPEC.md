@@ -522,8 +522,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   background result row reporting that the user opened it.
   Plus `openWorkspace({ workspaceId, projectId, sessionId? }, gone?)` (`openWorkspace.ts`), the one way
   a card opens another workspace's chat: the `start_workspace` card, Continue in workspace's Open and
-  follow, and the handoff's source. A workspace the store holds is activated under its own project. An
-  unknown one first reloads that project's `workspace.list` — `addWorkspace` drops a `workspace.created`
+  follow, and the handoff's source. A workspace the store holds is activated under its own project while
+  that project is open (closing a project keeps its workspace rows cached, so a held row alone proves
+  nothing). An unknown one first reloads that project's `workspace.list` — `addWorkspace` drops a `workspace.created`
   push for a project whose list was never loaded — and is activated only if that read, on the same
   connection, shows it in a project still open, and only if neither a newer open nor any navigation (the
   store's `selectNavigationMarker`, the palette's guard too) overtook the read: an overtaken open decides

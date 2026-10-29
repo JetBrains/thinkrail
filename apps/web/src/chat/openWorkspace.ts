@@ -8,10 +8,10 @@ let latestOpen = 0;
 
 /**
  * The one way a card opens another workspace's chat. A workspace the store holds opens under its own
- * project; an unknown one opens only once a fresh `workspace.list` on this connection shows it in an open
- * project, and only if no newer open or navigation overtook that read (then it decides silently). A
- * vanished or deletion-pending workspace is never activated: the user is told it is gone.
- * `null`: a reconnect overtook the read, so nothing was decided.
+ * project while that project is open; an unknown one opens only once a fresh `workspace.list` on this
+ * connection shows it in an open project, and only if no newer open or navigation overtook that read (then
+ * it decides silently). A vanished or deletion-pending workspace, or one whose project was closed, is never
+ * activated: the user is told it is gone. `null`: a reconnect overtook the read, so nothing was decided.
  */
 export async function openWorkspace(
 	{ workspaceId, projectId, sessionId }: WorkspaceChatTarget,
@@ -48,10 +48,14 @@ export async function openWorkspace(
 }
 
 function enter(workspace: Workspace, sessionId: string | undefined, gone: string): boolean {
-	if (workspace.deletionPending) {
+	const store = useAppStore.getState();
+	if (
+		workspace.deletionPending ||
+		!store.projects.some((project) => project.id === workspace.projectId)
+	) {
 		toast.error(gone);
 		return false;
 	}
-	useAppStore.getState().activateWorkspaceFromRoute(workspace, sessionId);
+	store.activateWorkspaceFromRoute(workspace, sessionId);
 	return true;
 }
