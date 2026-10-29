@@ -1,3 +1,4 @@
+import { RiInformationLine } from "@remixicon/react";
 import {
 	normalizePiPackageSource,
 	type PiPackageScope,
@@ -5,8 +6,9 @@ import {
 	type PiPackagesCatalog,
 	type WsErrorCode,
 } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -16,7 +18,7 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
-import { useState } from "react";
+import { Fragment, useId, useState } from "react";
 import { errorText, RequestTimeoutError, wsErrorCode } from "@/transport";
 import { CHIP_CLASS, GalleryLink, packageChips } from "./PiPackagesSettings";
 import { SegmentedControl } from "./SegmentedControl";
@@ -126,6 +128,38 @@ export interface InstallPackageBodyProps {
 }
 
 /** The dialog's content, props-driven so each step renders without a portal. */
+const SOURCE_EXAMPLES: readonly { key: MessageKey; example: string }[] = [
+	{ key: "settings.packages.installDialog.sourceHelp.link", example: "https://pi.dev/packages/…" },
+	{ key: "settings.packages.installDialog.sourceHelp.command", example: "pi install npm:…" },
+	{ key: "settings.packages.installDialog.sourceHelp.npm", example: "@scope/name[@version]" },
+	{
+		key: "settings.packages.installDialog.sourceHelp.git",
+		example: "https://github.com/owner/repo",
+	},
+	{ key: "settings.packages.installDialog.sourceHelp.local", example: "./tools or /abs/path" },
+];
+
+function SourceHelp() {
+	const t = useT();
+	return (
+		<div data-testid="install-package-source-help-content" className="flex flex-col gap-6 py-2">
+			<span className="text-text-default">
+				{t("settings.packages.installDialog.sourceHelp.title")}
+			</span>
+			<div className="grid grid-cols-[auto_1fr] items-baseline gap-x-12 gap-y-4 text-text-muted">
+				{SOURCE_EXAMPLES.map(({ key, example }) => (
+					<Fragment key={key}>
+						<span className="whitespace-nowrap">{t(key)}</span>
+						<code className="tr-code-text-small whitespace-nowrap text-text-default">
+							{example}
+						</code>
+					</Fragment>
+				))}
+			</div>
+		</div>
+	);
+}
+
 export function InstallPackageBody({
 	step,
 	source,
@@ -140,6 +174,7 @@ export function InstallPackageBody({
 	onDone,
 }: InstallPackageBodyProps) {
 	const t = useT();
+	const sourceInputId = useId();
 	const projectAvailable = workspaceId !== null && catalog?.projectTrusted === true;
 	const effectiveScope: PiPackageScope = projectAvailable ? scope : "user";
 	const trimmed = normalizePiPackageSource(source);
@@ -154,11 +189,24 @@ export function InstallPackageBody({
 			{step.kind === "form" ? (
 				<>
 					<div className="flex flex-col gap-12">
-						<label className="flex flex-col gap-4">
-							<span className="tr-text-ui text-text-default">
-								{t("settings.packages.installDialog.sourceLabel")}
+						<div className="flex flex-col gap-4">
+							<span className="flex items-center gap-4">
+								<label htmlFor={sourceInputId} className="tr-text-ui text-text-default">
+									{t("settings.packages.installDialog.sourceLabel")}
+								</label>
+								<IconButton
+									variant="ghost"
+									size="s"
+									icon={RiInformationLine}
+									label={t("settings.packages.installDialog.sourceHelpLabel")}
+									data-testid="install-package-source-help"
+									tooltip={<SourceHelp />}
+									tooltipSide="right"
+									tooltipAlign="start"
+								/>
 							</span>
 							<input
+								id={sourceInputId}
 								data-testid="install-package-source"
 								className={INPUT_CLASS}
 								value={source}
@@ -170,16 +218,15 @@ export function InstallPackageBody({
 									if (event.key === "Enter" && trimmed) onSubmit();
 								}}
 							/>
-							<span className="tr-text-metadata text-text-muted">
-								{echo ? (
-									<span data-testid="install-package-echo" className="text-text-default">
-										{echo}
-									</span>
-								) : (
-									t("settings.packages.installDialog.sourceHint")
-								)}
-							</span>
-						</label>
+							{echo ? (
+								<span
+									data-testid="install-package-echo"
+									className="tr-text-metadata text-text-default"
+								>
+									{echo}
+								</span>
+							) : null}
+						</div>
 						<GalleryLink />
 						<div className="flex flex-col gap-4">
 							<span className="tr-text-ui text-text-default">
@@ -219,9 +266,6 @@ export function InstallPackageBody({
 												})}
 							</span>
 						</div>
-						<SettingsNotice variant="warning" testId="install-package-notice">
-							{t("settings.packages.installDialog.notice")}
-						</SettingsNotice>
 					</div>
 					<DialogFooter>
 						<Button variant="outline" onClick={onCancel}>

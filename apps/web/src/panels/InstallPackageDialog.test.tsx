@@ -88,7 +88,9 @@ test("the form offers both scopes with a trusted workspace and shows the setting
 	expect(markup).toContain('data-testid="install-package-source"');
 	expect(markup).toContain('data-testid="install-package-scope-project"');
 	expect(markup).toContain(CATALOG.settingsPath);
-	expect(markup).toContain('data-testid="install-package-notice"');
+	expect(markup).not.toContain("install-package-notice");
+	expect(markup).toContain('data-testid="install-package-source-help"');
+	expect(markup).toContain('aria-label="What can I paste here?"');
 	expect(markup).toContain('data-testid="packages-gallery-link"');
 	expect(markup).toMatch(/data-testid="install-package-submit"[^>]*disabled/);
 	const typed = render("w1", CATALOG, { kind: "form" }, "npm:@acme/pi-jira@1.4.2");

@@ -1118,7 +1118,10 @@ a project picker, the prompt hero, and the reused
   Install and the pi.dev gallery link; an untrusted project shows one info notice; a failed list renders
   `packages-failed`. The **`InstallPackageDialog`** (`InstallPackageDialog.tsx`; its `InstallPackageBody` is
   props-driven so each step renders without a portal, `installStepHeader` supplies the Radix title per
-  step) is source → scope (**Global** / **This repository only**; there is no per-workspace choice, a
+  step) is source (an info icon beside the label opens a tooltip listing what can be pasted — gallery
+  or npm link, `pi install` line, npm name, git URL, local folder — in place of a permanent hint; there
+  is no trust warning in the dialog, the empty state's notice and pi's own trust prompt cover it) → scope
+  (**Global** / **This repository only**; there is no per-workspace choice, a
   package is on wherever its declaration loads) → one confirm → **Installing…** (indeterminate, no
   progress log, no Cancel — pi has none) → **Installed** (name · version · description, chips for every
   tool / command / skill / prompt it added, and one line: "Installed globally — new chats have it now;
