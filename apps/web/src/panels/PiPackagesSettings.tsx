@@ -179,23 +179,10 @@ function ResourceList({
 									</span>
 								) : null}
 							</span>
-							{summary.singleFile ? null : (
-								<Switch
-									checked={resource.enabled}
-									label={t("settings.packages.enableResource", { name: resource.displayName })}
-									testId={`package-resource-toggle-${resource.displayName}`}
-									disabled={busy}
-									onCheckedChange={(enabled) =>
-										onAction({
-											kind: "toggleResource",
-											rowKey: piPackageKey(summary),
-											path: resource.path,
-											type: resource.type,
-											scope: summary.scope,
-											enabled,
-										})
-									}
-								/>
+							{resource.enabled ? null : (
+								<span className="shrink-0 tr-text-metadata text-text-muted">
+									{t("settings.packages.resourceOff")}
+								</span>
 							)}
 						</div>
 					))}

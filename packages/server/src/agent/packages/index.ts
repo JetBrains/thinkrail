@@ -29,7 +29,6 @@ export {
 	type PiResourceToggle,
 	removePiPackage,
 	setPiResourceEnabled,
-	togglePackageFilter,
 	updatePiPackages,
 } from "./mutations";
 export {

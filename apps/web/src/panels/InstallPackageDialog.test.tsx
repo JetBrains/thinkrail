@@ -36,7 +36,6 @@ const SUMMARY: PiPackageSummary = {
 	name: "@acme/pi-jira",
 	version: "1.4.2",
 	installedPath: "/x",
-	singleFile: false,
 	enabled: true,
 	resources: [],
 };

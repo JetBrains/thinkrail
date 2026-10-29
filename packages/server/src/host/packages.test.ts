@@ -238,9 +238,17 @@ test("a repository install needs a trusted project", async () => {
 	expect(errorCodeOf(error)).toBe("PACKAGE_UNTRUSTED");
 });
 
-test("resource toggles write pi's format and reveal validates its target", async () => {
+test("built-in toggles write pi's format, in-package ones are refused, and reveal validates its target", async () => {
 	writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
 	await handleRequest(
+		"packages.setResourceEnabled",
+		{ path: "builtin:tool-search", type: "extensions", scope: "user", enabled: false },
+		CTX,
+	);
+	expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")).extensions).toEqual([
+		"-builtin:tool-search",
+	]);
+	const refused = await handleRequest(
 		"packages.setResourceEnabled",
 		{
 			path: join(pkg, "extensions", "hello.ts"),
@@ -249,14 +257,9 @@ test("resource toggles write pi's format and reveal validates its target", async
 			enabled: false,
 		},
 		CTX,
-	);
-	expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")).packages).toEqual([
-		{ source: pkg, extensions: ["-extensions/hello.ts"] },
-	]);
-	const catalog = await list();
-	expect(catalog.packages[0]?.resources.find((r) => r.displayName === "hello.ts")?.enabled).toBe(
-		false,
-	);
+	).catch((e) => e);
+	expect(errorCodeOf(refused)).toBe("PACKAGE_SOURCE_INVALID");
+	expect((await list()).builtins.find((b) => b.name === "tool-search")?.enabled).toBe(false);
 	const error = await handleRequest(
 		"packages.reveal",
 		{ path: join(root, "elsewhere") },

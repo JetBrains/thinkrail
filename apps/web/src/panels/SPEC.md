@@ -1100,12 +1100,12 @@ a project picker, the prompt hero, and the reused
   (Update, Open folder, Remove…). The group's one-line description says the switch affects ThinkRail chats only (the pi CLI
   still loads the package — `disabledPackages` is a ThinkRail setting). The switch is the only state
   control and reads **`store.disabledPackages`**; an off row dims
-  its text and chips; a user declaration the repository shadows says so under its provenance line; a
-  single-file package lists its resource without a switch (pi ignores filters for it). There is no status column and no "installing" / "not installed" row: a row exists
+  its text and chips; a user declaration the repository shadows says so under its provenance line. There is no status column and no "installing" / "not installed" row: a row exists
   only for something on disk, and the one row-level problem is an installed extension that failed to
   load — one attention line, `Failed to load: <pi's error>` → **Open folder**. Expanding a row lists its
-  extensions, skills and prompts with per-resource switches (`packages.setResourceEnabled`, pi's own
-  format) plus Open folder and Remove…; themes are never shown. A **loose file** row (`LooseRow`:
+  extensions, skills and prompts **read-only** (a resource pi's settings switch off says "off in pi
+  settings"; the package switch is the only control — in-package toggles are deferred until pi exposes
+  an API, see [[submodule-server-agent-packages]]) plus Open folder and Remove…; themes are never shown. A **loose file** row (`LooseRow`:
   `<agentDir>/extensions/*`, `.pi/extensions/*`, explicit `extensions[]` entries) is the file name with a
   `local file` tag, its path, chips, a switch and Open folder — no Update or Remove, since ThinkRail did
   not install it. **pi built-in** lists the two built-ins the host runs (MCP client, Tool search) with a

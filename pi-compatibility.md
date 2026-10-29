@@ -153,10 +153,12 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
     `onMissing → skip`, and the one-off install probe loads through a loader built on
     `SettingsManager.inMemory({})`.
     **Gate:** a public no-install resolve or exact-path extension loader.
-  - `pi config`'s toggle writers are a TUI component, not SDK; `mutations.ts` replicates the format
-    (`±relative` top-level patterns, object-form package filters, `±builtin:<name>`) and deliberately
-    keeps a plain explicit `extensions[]` entry beside its `-` override, which the TUI replaces, losing
-    discovery. Re-run the round-trip tests through pi's resolver on every bump. **Gate:** a public
+  - `pi config`'s toggle writers are a TUI component, not SDK; `mutations.ts` replicates the format for
+    top-level resources only (`±relative` patterns, `±builtin:<name>`) and deliberately keeps a plain
+    explicit `extensions[]` entry beside its `-` override, which the TUI replaces, losing discovery.
+    In-package filters are not written at all (deferred until a public per-resource API: every port of
+    `applyPatterns` / `collectPackageResources` semantics changed what pi loads in some shape). Re-run
+    the round-trip tests through pi's resolver on every bump. **Gate:** a public
     `setResourceEnabled`-style API.
   - `getPackageIdentity` is private; `identity.ts` ports it for the host-wide `disabledPackages` key.
     **Gate:** pi exporting its identity rule.
@@ -167,17 +169,9 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
     to its settings file (`getSourceMatchKeyForInput` vs `…ForSettings`); mutations pass absolute paths,
     normalised by a port of pi's private `resolvePath` (`~`, `file://`) in `resolveLocalSource`.
     **Gate:** pi matching declared strings by settings scope, or exporting `resolvePath`.
-  - `collectPackageResources` treats a string declaration and an object declaration differently: the
-    string form loads only a present manifest's entries, the object form falls back to convention
-    directories for undefined kinds; `materializeDeclaration` pins those kinds to `[]` on the first
-    toggle. **Gate:** pi deriving an object declaration's defaults from the manifest.
   - `isOfflineModeEnabled` (`PI_OFFLINE` ∈ `1|true|yes`) is private and pi's `install` / `update` turn
     into silent no-ops offline; `identity.ts` ports the rule so the host can refuse with `PACKAGE_OFFLINE`.
     **Gate:** pi exporting the predicate or throwing a typed error offline.
-  - `applyPatterns`' filter semantics (`[]` = nothing, plain entries = allowlist, `!` excludes, `±path`
-    exact overrides last) are not exported; `togglePackageFilter` writes only this resource's exact
-    override and the round-trip tests feed every written shape back through pi's resolver. **Gate:** a
-    public per-resource toggle API.
   - `SettingsManager.save()` / `saveProjectSettings()` silently skip a scope whose file failed to parse
     (private `*SettingsLoadError`); `drainErrors()` is the only signal, so mutations read it per scope
     before writing. **Gate:** a save that reports the skip.

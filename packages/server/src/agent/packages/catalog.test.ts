@@ -123,7 +123,6 @@ describe("listPiPackageCatalog", () => {
 			version: "0.1.0",
 			description: "Fixture tools for the catalog",
 			installedPath: pkg,
-			singleFile: false,
 			enabled: true,
 		});
 		expect(summary?.shadowed).toBeUndefined();
@@ -222,7 +221,7 @@ describe("listPiPackageCatalog", () => {
 		}
 	});
 
-	it("lists a declared package even when it contributes nothing, and marks a single-file package", async () => {
+	it("lists a declared package even when it contributes nothing, and a single-file package", async () => {
 		const empty = join(root, "pkgs", "empty");
 		mkdirSync(empty, { recursive: true });
 		writeFileSync(join(empty, "package.json"), JSON.stringify({ name: "@fixture/empty", pi: {} }));
@@ -236,8 +235,8 @@ describe("listPiPackageCatalog", () => {
 			disabledPackages: new Set(),
 		});
 		const byName = Object.fromEntries(catalog.packages.map((p) => [p.name, p]));
-		expect(byName["@fixture/empty"]).toMatchObject({ resources: [], singleFile: false });
-		expect(byName["single.ts"]).toMatchObject({ singleFile: true, installedPath: single });
+		expect(byName["@fixture/empty"]).toMatchObject({ resources: [] });
+		expect(byName["single.ts"]).toMatchObject({ installedPath: single });
 		expect(byName["single.ts"]?.resources[0]).toMatchObject({ type: "extensions" });
 	});
 
@@ -258,6 +257,32 @@ describe("listPiPackageCatalog", () => {
 		expect(user).toMatchObject({ shadowed: true, resources: [] });
 		expect(repo?.shadowed).toBeUndefined();
 		expect(repo?.resources.length).toBeGreaterThan(0);
+	});
+
+	it("puts a repository autoload:false override's resources on the user row, which is not shadowed", async () => {
+		const project = join(root, "project");
+		mkdirSync(join(project, ".pi"), { recursive: true });
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
+		writeFileSync(
+			join(project, ".pi", "settings.json"),
+			JSON.stringify({
+				packages: [{ source: pkg, autoload: false, extensions: ["-extensions/legacy.ts"] }],
+			}),
+		);
+		const catalog = await listPiPackageCatalog({
+			cwd: project,
+			agentDir,
+			projectTrusted: true,
+			builtinExtensions: [],
+			disabledPackages: new Set(),
+		});
+		expect(catalog.packages).toHaveLength(1);
+		const user = catalog.packages[0];
+		expect(user).toMatchObject({ scope: "user" });
+		expect(user?.shadowed).toBeUndefined();
+		const byName = Object.fromEntries((user?.resources ?? []).map((r) => [r.displayName, r]));
+		expect(byName["legacy.ts"]).toMatchObject({ enabled: false });
+		expect(byName["hello.ts"]).toMatchObject({ enabled: true });
 	});
 
 	it("keys a repository's local package by its path inside the worktree, shared across worktrees", async () => {

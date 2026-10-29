@@ -132,22 +132,9 @@ test("a pi package installed from Settings reaches a chat, switches off and on, 
 		await page.getByTestId("package-expand").click();
 		const resources = page.getByTestId("package-resources");
 		await expect(resources).toBeVisible();
-		await resources.getByTestId("package-resource-toggle-hello.ts").click();
-		await expect
-			.poll(() => JSON.stringify(readSettings().packages), { timeout: 15_000 })
-			.toContain("-extensions/hello.ts");
-		await expect(resources.getByTestId("package-resource-toggle-hello.ts")).toHaveAttribute(
-			"data-active",
-			"false",
-		);
-		await resources.getByTestId("package-resource-toggle-hello.ts").click();
-		await expect
-			.poll(() => JSON.stringify(readSettings().packages), { timeout: 15_000 })
-			.toContain("+extensions/hello.ts");
-		await expect(resources.getByTestId("package-resource-toggle-hello.ts")).toHaveAttribute(
-			"data-active",
-			"true",
-		);
+		await expect(resources.getByTestId("package-resource-hello.ts")).toBeVisible();
+		await expect(resources.getByTestId("package-resource-triage")).toBeVisible();
+		await expect(resources.getByTestId("package-resource-toggle-hello.ts")).toHaveCount(0);
 
 		await page.getByTestId("builtin-toggle-tool-search").click();
 		await expect

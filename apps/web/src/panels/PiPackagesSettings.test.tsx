@@ -21,7 +21,6 @@ const JIRA: PiPackageSummary = {
 	version: "1.4.2",
 	description: "Jira issues and search for the agent",
 	installedPath: "/home/me/.pi/agent/npm/node_modules/@acme/pi-jira",
-	singleFile: false,
 	enabled: true,
 	resources: [
 		{
@@ -136,9 +135,10 @@ test("an off package dims and an update shows as a tag; expanding lists resource
 	expect(markup).toContain('data-enabled="false"');
 	expect(markup).toContain('data-testid="package-update-available"');
 	expect(markup).toContain('data-testid="package-resources"');
-	expect(markup).toContain('data-testid="package-resource-toggle-legacy.ts" data-active="false"');
-	expect(markup).toContain('data-testid="package-resource-toggle-triage" data-active="true"');
-	expect(markup).toContain('data-testid="package-resource-toggle-standup.md"');
+	expect(markup).not.toContain("package-resource-toggle-");
+	expect(markup).toMatch(/package-resource-legacy\.ts[\s\S]*?off in pi settings/);
+	expect(markup).toContain('data-testid="package-resource-triage"');
+	expect(markup).toContain('data-testid="package-resource-standup.md"');
 	expect(markup).toContain('data-testid="package-remove"');
 	expect(markup).toContain("Extensions");
 	expect(markup).toContain("Skills");
@@ -229,7 +229,7 @@ test("a built-in switch reports the deciding scope so a repository override is w
 	expect(seen).toEqual([]);
 });
 
-test("a shadowed declaration says so and a single-file package shows its resources without switches", () => {
+test("a shadowed declaration says so", () => {
 	const shadowed = renderToStaticMarkup(
 		<PackageRow
 			summary={{ ...JIRA, shadowed: true }}
@@ -242,23 +242,6 @@ test("a shadowed declaration says so and a single-file package shows its resourc
 		/>,
 	);
 	expect(shadowed).toContain('data-testid="package-shadowed"');
-	const single = renderToStaticMarkup(
-		<PackageRow
-			summary={{
-				...JIRA,
-				singleFile: true,
-				resources: [JIRA.resources[0] as PiPackageSummary["resources"][number]],
-			}}
-			updateAvailable={false}
-			expanded
-			busy={false}
-			error={undefined}
-			onToggleExpanded={noop}
-			onAction={noop}
-		/>,
-	);
-	expect(single).toContain('data-testid="package-resource-jira.ts"');
-	expect(single).not.toContain("package-resource-toggle-jira.ts");
 });
 
 test("a failed update check renders under the group header", () => {

@@ -10,7 +10,6 @@ import {
 	type PiPackageHostContext,
 	removePiPackage,
 	setPiResourceEnabled,
-	togglePackageFilter,
 	updatePiPackages,
 } from "./mutations";
 import { fixtureExtensionSource, writeFixturePiPackage } from "./testFixtures";
@@ -296,140 +295,6 @@ describe("pi package mutations", () => {
 		expect(readSettings(settingsPath).packages).toEqual([relative(agentDir, pkg)]);
 	});
 
-	it("refuses a resource toggle on a single-file package, which pi loads whole", async () => {
-		const single = join(root, "pkgs", "single.ts");
-		writeFileSync(single, extensionSource("single_tool"));
-		writeFileSync(settingsPath, JSON.stringify({ packages: [single] }));
-		await expect(
-			setPiResourceEnabled(ctx, {
-				path: single,
-				type: "extensions",
-				scope: "user",
-				enabled: false,
-			}),
-		).rejects.toMatchObject({ code: "PACKAGE_SOURCE_INVALID" });
-	});
-
-	it("never changes a sibling's admission: allowlists and explicit empty filters keep their meaning", async () => {
-		const legacy = join(pkg, "extensions", "legacy.ts");
-		const hello = join(pkg, "extensions", "hello.ts");
-		const toggle = (path: string, enabled: boolean) =>
-			setPiResourceEnabled(ctx, { path, type: "extensions", scope: "user", enabled });
-
-		writeFileSync(
-			settingsPath,
-			JSON.stringify({ packages: [{ source: pkg, extensions: ["extensions/hello.ts"] }] }),
-		);
-		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
-		await toggle(hello, false);
-		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(false);
-		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
-		await toggle(hello, true);
-		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(true);
-		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
-
-		writeFileSync(settingsPath, JSON.stringify({ packages: [{ source: pkg, extensions: [] }] }));
-		await toggle(legacy, true);
-		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(true);
-		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(false);
-
-		writeFileSync(
-			settingsPath,
-			JSON.stringify({ packages: [{ source: pkg, extensions: ["-extensions/legacy.ts"] }] }),
-		);
-		await toggle(legacy, true);
-		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(true);
-		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(true);
-
-		writeFileSync(
-			settingsPath,
-			JSON.stringify({
-				packages: [{ source: pkg, extensions: ["extensions/hello.ts", "-extensions/legacy.ts"] }],
-			}),
-		);
-		await toggle(hello, false);
-		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(false);
-		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
-		await toggle(hello, true);
-		expect(await resolvedEnabled(ctx, "extensions", hello)).toBe(true);
-		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
-	});
-
-	it("materializing a string declaration keeps the kinds its manifest leaves out unloaded", async () => {
-		const skillsOnly = join(root, "pkgs", "skills-only");
-		mkdirSync(join(skillsOnly, "extensions"), { recursive: true });
-		mkdirSync(join(skillsOnly, "skills", "triage"), { recursive: true });
-		writeFileSync(
-			join(skillsOnly, "package.json"),
-			JSON.stringify({ name: "skills-only", pi: { skills: ["./skills"] } }),
-		);
-		writeFileSync(join(skillsOnly, "extensions", "stray.ts"), extensionSource("stray_tool"));
-		writeFileSync(
-			join(skillsOnly, "skills", "triage", "SKILL.md"),
-			"---\nname: triage\ndescription: Triage.\n---\n\n# triage\n",
-		);
-		writeFileSync(settingsPath, JSON.stringify({ packages: [skillsOnly] }));
-		const stray = join(skillsOnly, "extensions", "stray.ts");
-		const triage = join(skillsOnly, "skills", "triage", "SKILL.md");
-		expect(await resolvedEnabled(ctx, "extensions", stray)).toBeUndefined();
-
-		await setPiResourceEnabled(ctx, {
-			path: triage,
-			type: "skills",
-			scope: "user",
-			enabled: false,
-		});
-		expect(readSettings(settingsPath).packages).toEqual([
-			{ source: skillsOnly, extensions: [], skills: ["-skills/triage/SKILL.md"] },
-		]);
-		expect(await resolvedEnabled(ctx, "skills", triage)).toBe(false);
-		expect(await resolvedEnabled(ctx, "extensions", stray)).not.toBe(true);
-	});
-
-	it("re-enabling keeps the explicit +path an autoload:false repository declaration needs", async () => {
-		const project = join(root, "project");
-		mkdirSync(join(project, ".pi"), { recursive: true });
-		writeFileSync(settingsPath, JSON.stringify({ packages: [{ source: pkg, extensions: [] }] }));
-		writeFileSync(
-			join(project, ".pi", "settings.json"),
-			JSON.stringify({
-				packages: [{ source: pkg, autoload: false, extensions: ["+extensions/hello.ts"] }],
-			}),
-		);
-		const trustedCtx: PiPackageHostContext = { ...ctx, cwd: project, projectTrusted: () => true };
-		const hello = join(pkg, "extensions", "hello.ts");
-		expect(await resolvedEnabled(trustedCtx, "extensions", hello)).toBe(true);
-		const toggle = (enabled: boolean) =>
-			setPiResourceEnabled(trustedCtx, {
-				path: hello,
-				type: "extensions",
-				scope: "project",
-				enabled,
-			});
-		await toggle(false);
-		expect(await resolvedEnabled(trustedCtx, "extensions", hello)).toBe(false);
-		await toggle(true);
-		expect(await resolvedEnabled(trustedCtx, "extensions", hello)).toBe(true);
-		expect(readSettings(join(project, ".pi", "settings.json")).packages).toEqual([
-			{ source: pkg, autoload: false, extensions: ["+extensions/hello.ts"] },
-		]);
-	});
-
-	it("togglePackageFilter replaces only the resource's own exact override", () => {
-		expect(togglePackageFilter(undefined, "a", false)).toEqual(["-a"]);
-		expect(togglePackageFilter(undefined, "a", true)).toBeUndefined();
-		expect(togglePackageFilter([], "a", true)).toEqual(["a"]);
-		expect(togglePackageFilter([], "a", false)).toEqual([]);
-		expect(togglePackageFilter(["a"], "a", false)).toEqual(["a", "-a"]);
-		expect(togglePackageFilter(["a", "-b"], "a", false)).toEqual(["a", "-b", "-a"]);
-		expect(togglePackageFilter(["a", "+b"], "b", false)).toEqual(["a", "-b"]);
-		expect(togglePackageFilter(["a", "-a"], "a", true)).toEqual(["a", "+a"]);
-		expect(togglePackageFilter(["a"], "b", true)).toEqual(["a", "+b"]);
-		expect(togglePackageFilter(["-a"], "a", true)).toEqual(["+a"]);
-		expect(togglePackageFilter(["-./a", "-b"], "a", true)).toEqual(["-b", "+a"]);
-		expect(togglePackageFilter(["!**/*.ts", "-a"], "a", true)).toEqual(["!**/*.ts", "+a"]);
-	});
-
 	it("aborts a remove before disk when the settings write fails", async () => {
 		writeFileSync(settingsPath, JSON.stringify({ packages: [pkg] }));
 		const remove = spyOn(DefaultPackageManager.prototype, "remove");
@@ -447,43 +312,16 @@ describe("pi package mutations", () => {
 		}
 	});
 
-	it("writes a package resource toggle in pi config's filter form and pi honours it", async () => {
+	it("refuses to switch a resource inside a package; the package switch is the control", async () => {
 		writeFileSync(settingsPath, JSON.stringify({ packages: [pkg] }));
-		const legacy = join(pkg, "extensions", "legacy.ts");
-		const triage = join(pkg, "skills", "triage", "SKILL.md");
-
-		await setPiResourceEnabled(ctx, {
-			path: legacy,
+		const error = await setPiResourceEnabled(ctx, {
+			path: join(pkg, "extensions", "legacy.ts"),
 			type: "extensions",
 			scope: "user",
 			enabled: false,
-		});
-		expect(readSettings(settingsPath).packages).toEqual([
-			{ source: pkg, extensions: ["-extensions/legacy.ts"] },
-		]);
-		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
-		expect(await resolvedEnabled(ctx, "extensions", join(pkg, "extensions", "hello.ts"))).toBe(
-			true,
-		);
-
-		await setPiResourceEnabled(ctx, {
-			path: triage,
-			type: "skills",
-			scope: "user",
-			enabled: false,
-		});
-		expect(await resolvedEnabled(ctx, "skills", triage)).toBe(false);
-
-		await setPiResourceEnabled(ctx, {
-			path: legacy,
-			type: "extensions",
-			scope: "user",
-			enabled: true,
-		});
-		expect(readSettings(settingsPath).packages).toEqual([
-			{ source: pkg, extensions: ["+extensions/legacy.ts"], skills: ["-skills/triage/SKILL.md"] },
-		]);
-		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(true);
+		}).catch((e) => e);
+		expect(errorCodeOf(error)).toBe("PACKAGE_SOURCE_INVALID");
+		expect(readSettings(settingsPath).packages).toEqual([pkg]);
 	});
 
 	it("keeps an explicit settings entry discoverable while it is switched off", async () => {

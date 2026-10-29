@@ -1,8 +1,7 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import {
 	DefaultPackageManager,
-	type PackageSource,
 	type ResolvedResource,
 	type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
@@ -284,10 +283,12 @@ export function setPiResourceEnabled(
 			throw new CodedError("PACKAGE_UNKNOWN", `No ${toggle.type} resource at ${toggle.path}.`);
 		}
 		if (resource.metadata.origin === "package") {
-			togglePackageResource(settings, resource, toggle);
-		} else {
-			toggleTopLevelResource(ctx, settings, resource, toggle);
+			throw new CodedError(
+				"PACKAGE_SOURCE_INVALID",
+				"Resources inside a package are switched as a whole; use the package switch.",
+			);
 		}
+		toggleTopLevelResource(ctx, settings, resource, toggle);
 		await persist(ctx, settings, toggle.scope);
 		invalidatePiPackageCatalog();
 	});
@@ -316,94 +317,6 @@ function normalizeExactPattern(pattern: string): string {
 	const trimmed =
 		pattern.startsWith("./") || pattern.startsWith(".\\") ? pattern.slice(2) : pattern;
 	return trimmed.split(sep).join("/");
-}
-
-// Replaces only this resource's own exact override; pi's filter semantics are in the packages SPEC.
-export function togglePackageFilter(
-	current: readonly string[] | undefined,
-	pattern: string,
-	enabled: boolean,
-): string[] | undefined {
-	if (current === undefined) return enabled ? undefined : [`-${pattern}`];
-	if (current.length === 0) return enabled ? [pattern] : [];
-	const kept = current.filter((entry) => !isExactOverrideOf(entry, pattern));
-	return [...kept, `${enabled ? "+" : "-"}${pattern}`];
-}
-
-const RESOURCE_KINDS = ["extensions", "skills", "prompts", "themes"] as const;
-
-// A string declaration loads only what a present manifest names; pi's object form falls back to the
-// convention directory for every kind the filter leaves undefined, so those are pinned to `[]`.
-function materializeDeclaration(
-	source: string,
-	packageRoot: string,
-): Exclude<PackageSource, string> {
-	const pkg: Exclude<PackageSource, string> = { source };
-	const manifest = readPiManifest(packageRoot);
-	if (!manifest) return pkg;
-	for (const kind of RESOURCE_KINDS) {
-		if (manifest[kind] === undefined && existsSync(join(packageRoot, kind))) pkg[kind] = [];
-	}
-	return pkg;
-}
-
-function readPiManifest(
-	packageRoot: string,
-): Partial<Record<(typeof RESOURCE_KINDS)[number], string[]>> | null {
-	try {
-		const parsed: unknown = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
-		const pi = (parsed as { pi?: unknown } | null)?.pi;
-		if (!pi || typeof pi !== "object" || Array.isArray(pi)) return null;
-		const manifest: Partial<Record<(typeof RESOURCE_KINDS)[number], string[]>> = {};
-		for (const kind of RESOURCE_KINDS) {
-			const entries = (pi as Record<string, unknown>)[kind];
-			if (Array.isArray(entries) && entries.every((entry) => typeof entry === "string")) {
-				manifest[kind] = entries;
-			}
-		}
-		return manifest;
-	} catch {
-		return null;
-	}
-}
-
-function togglePackageResource(
-	settings: SettingsManager,
-	resource: ResolvedResource,
-	toggle: PiResourceToggle,
-): void {
-	const packageRoot = resource.metadata.packageRoot;
-	if (packageRoot === undefined || !statSync(packageRoot).isDirectory()) {
-		throw new CodedError(
-			"PACKAGE_SOURCE_INVALID",
-			"A single-file package has no resource filters; use its package switch.",
-		);
-	}
-	const scoped =
-		toggle.scope === "project" ? settings.getProjectSettings() : settings.getGlobalSettings();
-	const packages: PackageSource[] = [...(scoped.packages ?? [])];
-	const index = packages.findIndex(
-		(pkg) => (typeof pkg === "string" ? pkg : pkg.source) === resource.metadata.source,
-	);
-	if (index === -1) {
-		throw new CodedError(
-			"PACKAGE_UNKNOWN",
-			`No declaration of ${resource.metadata.source} at ${toggle.scope} scope.`,
-		);
-	}
-	const current = packages[index] ?? resource.metadata.source;
-	const pkg: Exclude<PackageSource, string> =
-		typeof current === "string"
-			? materializeDeclaration(current, packageRoot)
-			: { ...current, source: current.source };
-	const pattern = normalizeExactPattern(relative(packageRoot, resource.path));
-	const next = togglePackageFilter(pkg[toggle.type], pattern, toggle.enabled);
-	if (next === undefined) delete pkg[toggle.type];
-	else pkg[toggle.type] = next;
-	const hasFilters = RESOURCE_KINDS.some((key) => pkg[key] !== undefined);
-	packages[index] = hasFilters || pkg.autoload !== undefined ? pkg : pkg.source;
-	if (toggle.scope === "project") settings.setProjectPackages(packages);
-	else settings.setPackages(packages);
 }
 
 function toggleTopLevelResource(

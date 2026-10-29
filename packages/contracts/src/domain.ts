@@ -886,8 +886,6 @@ export interface PiPackageSummary {
 	version?: string;
 	description?: string;
 	installedPath: string;
-	/** A local source that is one extension file: pi loads it whole and ignores resource filters. */
-	singleFile: boolean;
 	/** The host-wide switch: `false` when `identity` is in `disabledPackages`. */
 	enabled: boolean;
 	/** `true` for a user declaration pi leaves aside because the repository declares the same identity. */

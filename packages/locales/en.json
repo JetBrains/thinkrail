@@ -1846,6 +1846,7 @@
 	"settings.packages.removeDescription": "Uninstalls the package and removes its declaration from {{path}}. Open chats lose its tools when their current turn ends.",
 	"settings.packages.removeFailed": "Couldn't remove {{name}}",
 	"settings.packages.removeTitle": "Remove {{name}}?",
+	"settings.packages.resourceOff": "off in pi settings",
 	"settings.packages.resources.extensions": "Extensions",
 	"settings.packages.resources.prompts": "Prompts",
 	"settings.packages.resources.skills": "Skills",

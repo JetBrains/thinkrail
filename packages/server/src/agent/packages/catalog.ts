@@ -79,27 +79,45 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 		.filter((entry) => !(entry.scope === "project" && !projectTrusted));
 	const identityOf = (source: string, scope: PiPackageScope) =>
 		packageSourceIdentity(source, scope, options.cwd, agentDir);
+	// pi keeps a project `autoload: false` declaration as a delta over the user's install, not a
+	// replacement: its resources belong on the user row, and that row is not shadowed.
+	const projectDeltas = new Set(
+		(projectTrusted ? (settingsManager.getProjectSettings().packages ?? []) : [])
+			.filter((pkg) => typeof pkg === "object" && pkg.autoload === false)
+			.map((pkg) => identityOf(typeof pkg === "string" ? pkg : pkg.source, "project")),
+	);
 	const projectIdentities = new Set(
 		configured
 			.filter((entry) => entry.scope === "project")
-			.map((entry) => identityOf(entry.source, "project")),
+			.map((entry) => identityOf(entry.source, "project"))
+			.filter((identity) => !projectDeltas.has(identity)),
 	);
+	const userIdentities = new Set(
+		configured
+			.filter((entry) => entry.scope === "user" && entry.installedPath !== undefined)
+			.map((entry) => identityOf(entry.source, "user")),
+	);
+	const rowByIdentity = new Map<string, PiPackageSummary>();
 	for (const entry of configured) {
 		if (!entry.installedPath) continue;
 		const identity = identityOf(entry.source, entry.scope);
+		if (entry.scope === "project" && projectDeltas.has(identity) && userIdentities.has(identity)) {
+			continue;
+		}
 		const shadowed = entry.scope === "user" && projectIdentities.has(identity);
-		packages.set(declarationKey(entry.scope, entry.source), {
+		const summary: PiPackageSummary = {
 			identity,
 			source: entry.source,
 			kind: piPackageSourceKind(entry.source),
 			scope: entry.scope,
 			...readPackageMetadata(entry.installedPath, entry.source),
 			installedPath: entry.installedPath,
-			singleFile: !isDirectory(entry.installedPath),
 			enabled: !options.disabledPackages.has(identity),
 			...(shadowed ? { shadowed: true } : {}),
 			resources: [],
-		});
+		};
+		packages.set(declarationKey(entry.scope, entry.source), summary);
+		if (!shadowed) rowByIdentity.set(identity, summary);
 	}
 
 	const loose: PiLooseExtension[] = [];
@@ -110,7 +128,10 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 			const { metadata } = resource;
 			if (metadata.origin === "package") {
 				const scope: PiPackageScope = metadata.scope === "project" ? "project" : "user";
-				packages.get(declarationKey(scope, metadata.source))?.resources.push({
+				const row =
+					packages.get(declarationKey(scope, metadata.source)) ??
+					rowByIdentity.get(identityOf(metadata.source, scope));
+				row?.resources.push({
 					type,
 					path: resource.path,
 					displayName: resourceDisplayName(resource.path, type),
@@ -161,14 +182,6 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 		loose,
 		builtins,
 	};
-}
-
-function isDirectory(path: string): boolean {
-	try {
-		return statSync(path).isDirectory();
-	} catch {
-		return false;
-	}
 }
 
 /** The on-disk targets a reveal may open, read without executing any extension. */

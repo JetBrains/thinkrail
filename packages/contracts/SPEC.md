@@ -1078,11 +1078,14 @@ and what it loaded, never pi's own types.
   but absent from disk is pi's to install at a chat's next load.
 - **`PiPackageSummary`** — `identity` (the host-wide switch key: npm by name, git by repo without ref, local
   by resolved path), `source` **as declared** (`npm:@scope/pkg@1.2.0`, `../pkgs/tools`), `kind`, `scope`,
-  `name` / `version` / `description` from its `package.json`, `installedPath`, `singleFile` (a local
-  source that is one extension file — pi loads it whole and ignores filters, so it has no per-resource
-  switches), `enabled` (`!disabledPackages.includes(identity)`), and `resources: PiPackageResource[]` — every extension, skill and
-  prompt file (themes are terminal-only and never listed) with pi's `enabled`, pi's `pi config` display
-  name, and for a loaded extension the `tools` and `commands` it registered or its load `error`. Every row
+  `name` / `version` / `description` from its `package.json`, `installedPath`, `enabled`
+  (`!disabledPackages.includes(identity)`), `shadowed` (a user declaration pi leaves aside because the
+  repository declares the same identity outright; a repository `autoload: false` override is a delta
+  over the user install, so its resources land on the user row and nothing is shadowed), and
+  `resources: PiPackageResource[]` — every extension, skill and prompt file (themes are terminal-only and
+  never listed) with pi's `enabled` (read-only here: a resource inside a package is switched with its
+  package), pi's `pi config` display name, and for an extension some loader has recorded the `tools`
+  and `commands` it registered or its load `error`. Every row
   action names its target as `{ source, scope, workspaceId? }`: the same npm package may be declared at
   user and project scope, and only the switch keys on `identity`.
 - Methods: **`packages.list { workspaceId? }`** (user scope alone without a workspace; repository
@@ -1093,9 +1096,10 @@ and what it loaded, never pi's own types.
   (pi updates every declaration of an identity at both scopes together) / **`packages.checkUpdates`**
   (the `{ source, scope }` declarations pi reports a newer version for — pi reports no target version
   and skips pinned npm versions; `force` bypasses the host's short cache for the manual check) / **`packages.setResourceEnabled { path, type, scope, enabled }`**
-  (written in pi's own format without changing any sibling's admission: a filter on the package's
-  declaration, a `±` pattern in the scope's resource array for a loose file, `±builtin:<name>` in the
-  scope that decides a built-in — the catalog's `PiBuiltinExtension.scope`, which a client must send back) / **`packages.reveal { path }`**
+  (top-level resources only, written in pi's own format: a `±` pattern in the scope's resource array for
+  a loose file, `±builtin:<name>` in the scope that decides a built-in — the catalog's
+  `PiBuiltinExtension.scope`, which a client must send back; a resource inside a package is refused with
+  `PACKAGE_SOURCE_INVALID`) / **`packages.reveal { path }`**
   (opens the install folder or a loose file's folder; the path must be in the current catalog). The
   package switch is `settings.update { disabledPackages }`, converging on `settings.changed` like the
   extension switches. **`packages.changed`** (no payload) tells an open page to re-list after an outside

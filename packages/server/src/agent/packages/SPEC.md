@@ -39,8 +39,7 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   Remove, and a user declaration pi deduplicates behind the repository's same-identity declaration stays
   a row marked `shadowed` — then `resolve(async () => "skip")` attaches each resource to its declaration
   and yields the loose extensions and the host-supplied built-ins; the Central artifact path is excluded
-  like the session loader excludes it. `singleFile` marks a local source that is one extension file: pi
-  loads it whole and ignores filters, so it gets no per-resource switches. **The catalog never executes
+  like the session loader excludes it. **The catalog never executes
   extension code.** Tool and command names and load errors (`extensionInfo.ts`) are what a loader last
   *recorded* for a file: every chat's `buildResourceLoader` reports its `LoadExtensionsResult` through
   `recordLoadedExtensions`, and the install dialog's "Installed" step runs `probeExtensionInfo` once over
@@ -79,27 +78,17 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   when the targets cover every installed declaration (Update all), so npm runs once per scope;
   `checkPiPackageUpdates` wraps `checkForAvailableUpdates()` (no target version, pinned npm never
   reported) behind a five-minute cache that `force` bypasses for the manual check. `setPiResourceEnabled`
-  re-resolves, finds the resource by path and scope, and writes pi's format: a top-level resource →
-  `±<path relative to its base dir>` in the scope's array of that kind (a plain explicit entry stays
-  beside its override — pi's TUI replaces it, after which the file is no longer discovered and cannot be
-  switched back on); a built-in → `±builtin:<name>` in the scope that decides it; a package resource →
-  `togglePackageFilter` on its declaration's object form, which leaves pi's filter semantics
-  (`undefined` = everything, `[]` = nothing, plain entries form an allowlist, `!` excludes, `±path` are
-  exact overrides that beat everything before them) to pi: it replaces only this resource's own exact
-  `±` override and appends the new one, never touching plain, glob or `!` entries — a disabled allowlist
-  member becomes `["a", "-a"]`, not an allowlist without `a` (which would admit every sibling). The
-  two baselines are the only special cases: enabling from `undefined` changes nothing and enabling
-  from `[]` writes `[path]`; otherwise the explicit `+path` stays even as the only entry, because under
-  an `autoload: false` declaration (or a user-scope `[]` the repository overrides) nothing is admitted
-  by default. pi's TUI drops plain entries instead, which turns an
-  allowlist of one into "everything but one". A single-file local package has no filters pi honours;
-  toggling one is refused. **Materializing a string declaration** (`"source"` → `{ source, … }`) is
-  itself a semantic change in pi: the string form loads only what a present manifest names, while the
-  object form falls back to the convention directory (`extensions/`, `skills/`, …) for every kind the
-  filter leaves `undefined`. The first toggle therefore pins every kind the manifest omits but whose
-  directory exists to `[]`, so a skill toggle never starts loading an `extensions/` folder the manifest
-  never declared (those files then appear as switched-off rows, as in `pi config`). *Rejected:* rewriting the allowlist (first fix) — collapsing its last member
-  flips the baseline from "only these" to "everything". **Input vs declared source:** pi stores a local source relative to its settings
+  re-resolves, finds the resource by path and scope, and writes pi's format for **top-level resources
+  only**: a loose file → `±<path relative to its base dir>` in the scope's array of that kind (a plain
+  explicit entry stays beside its override — pi's TUI replaces it, after which the file is no longer
+  discovered and cannot be switched back on); a built-in → `±builtin:<name>` in the scope that decides
+  it. A resource *inside a package* is refused (`PACKAGE_SOURCE_INVALID`): the package switch is the
+  control. **Deferred — in-package resource toggles.** The first implementation wrote pi's per-package
+  filter arrays; three rounds of review each found a way the written shape changed what pi loads
+  (collapsing an allowlist, dropping the only `+path` under `autoload: false`, materialising a string
+  declaration into object form, which flips pi's convention-directory fallback) — every one a port of
+  private pi behaviour with no public API behind it. They return when pi exposes a per-resource toggle;
+  until then the row lists each resource read-only with pi's `enabled` state. **Input vs declared source:** pi stores a local source relative to its settings
   file but matches an *input* source against the process cwd (`getSourceMatchKeyForInput`), so a
   declared `../pkgs/tools` handed back as written is not found; rows carry the declared string and
   `inputSource` hands pi the absolute path for Remove and Update (pinned by a test with a foreign cwd).
