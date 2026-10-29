@@ -527,9 +527,14 @@ export function PiPackagesGroup({
 	const t = useT();
 	const header = (
 		<div className="flex flex-wrap items-baseline justify-between gap-8 pb-8">
-			<h4 className="tr-text-label-pill text-text-subtle">
-				{t("settings.extensions.group.installed")}
-			</h4>
+			<span className="flex flex-col gap-2">
+				<h4 className="tr-text-label-pill text-text-subtle">
+					{t("settings.extensions.group.installed")}
+				</h4>
+				<p className="tr-text-metadata text-text-muted">
+					{t("settings.extensions.group.installedDescription")}
+				</p>
+			</span>
 			{catalog !== "loading" && catalog !== "failed" ? (
 				<span className="flex flex-wrap items-center gap-8 tr-text-metadata text-text-muted">
 					{updates.size > 0 ? (

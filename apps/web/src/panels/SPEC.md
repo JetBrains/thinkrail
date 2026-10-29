@@ -1095,7 +1095,9 @@ a project picker, the prompt hero, and the reused
   kind / scope tags (`npm` / `git` / `local`, Global / Repository) · an **Update available** tag when the
   update check flagged it · one provenance line (declared source · "<version> installed" · description) ·
   tool and `/command` chips of its enabled extensions · the **switch** · a ⋯ menu (Update, Open folder,
-  Remove…). The switch is the only state control and reads **`store.disabledPackages`**; an off row dims
+  Remove…). The group's one-line description says the switch affects ThinkRail chats only (the pi CLI
+  still loads the package — `disabledPackages` is a ThinkRail setting). The switch is the only state
+  control and reads **`store.disabledPackages`**; an off row dims
   its text and chips; a user declaration the repository shadows says so under its provenance line; a
   single-file package lists its resource without a switch (pi ignores filters for it). There is no status column and no "installing" / "not installed" row: a row exists
   only for something on disk, and the one row-level problem is an installed extension that failed to

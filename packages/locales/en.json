@@ -1607,6 +1607,7 @@
 	"settings.extensions.group.builtinDescription": "Part of the pi engine ThinkRail ships; switched through ±builtin entries in {{path}}.",
 	"settings.extensions.group.bundled": "Built into ThinkRail",
 	"settings.extensions.group.installed": "Installed",
+	"settings.extensions.group.installedDescription": "pi packages this machine loads. Switching one off here affects ThinkRail chats only; the pi CLI still loads it.",
 	"settings.extensions.install": "Install package…",
 	"settings.extensions.loadFailed": "Couldn't load the extensions from this host.",
 	"settings.extensions.title": "Extensions",

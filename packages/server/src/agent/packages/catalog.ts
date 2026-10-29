@@ -1,5 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
 	DefaultPackageManager,
 	DefaultResourceLoader,
@@ -71,6 +71,8 @@ export function listPiPackageCatalog(options: PiPackageCatalogOptions): Promise<
 	return value;
 }
 
+// A repository's local package is keyed by its path inside the worktree, so every worktree of the
+// project shares its switch like they share its npm and git declarations.
 export function packageSourceIdentity(
 	source: string,
 	scope: PiPackageScope,
@@ -78,7 +80,14 @@ export function packageSourceIdentity(
 	agentDir: string,
 ): string {
 	const baseDir = settingsBaseDir(cwd, agentDir, scope);
-	return piPackageIdentity(source, (path) => resolveLocalSource(path, baseDir));
+	return piPackageIdentity(source, (path) => {
+		const absolute = resolveLocalSource(path, baseDir);
+		if (scope !== "project" || cwd === undefined) return absolute;
+		const inside = relative(resolve(cwd), absolute);
+		return inside && !inside.startsWith("..") && !isAbsolute(inside)
+			? `project:${inside.split(sep).join("/")}`
+			: absolute;
+	});
 }
 
 async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackagesCatalog> {

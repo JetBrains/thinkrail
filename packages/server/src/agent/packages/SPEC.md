@@ -75,7 +75,10 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   alike by the identity, the install input and the declared-source mutations, so `file:///x` installs,
   lists and removes as `/x`) and `isOfflineMode` (pi's `PI_OFFLINE` rule, which pi does not export). Changing a declared source's version or ref keeps the identity;
   renaming a local folder makes a new one (the old switch entry becomes inert, like an unknown
-  `disabledExtensions` name).
+  `disabledExtensions` name). One ThinkRail-only refinement in `packageSourceIdentity`: a repository
+  declaration's local source that lives inside the worktree is keyed by its worktree-relative path
+  (`local:project:tools`), so every worktree of the project shares its switch, as they share the
+  repository's npm and git declarations; a repository path outside the worktree keeps the absolute key.
 - `mutations.ts` — every write validates `scope` / `type` at the boundary (the wire carries no runtime
   schema; an unknown type would otherwise fall through to pi's prompts setter), is serialized through
   one module queue (pi's `SettingsManager` merges only modified fields, but two instances racing on one

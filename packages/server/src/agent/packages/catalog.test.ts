@@ -250,6 +250,35 @@ describe("listPiPackageCatalog", () => {
 		expect(repo?.resources.length).toBeGreaterThan(0);
 	});
 
+	it("keys a repository's local package by its path inside the worktree, shared across worktrees", async () => {
+		const worktrees = ["wt-a", "wt-b"].map((name) => join(root, name));
+		for (const worktree of worktrees) {
+			mkdirSync(join(worktree, ".pi"), { recursive: true });
+			writeFixturePiPackage(join(worktree, "tools"));
+			writeFileSync(
+				join(worktree, ".pi", "settings.json"),
+				JSON.stringify({ packages: ["../tools", pkg] }),
+			);
+		}
+		const identities = await Promise.all(
+			worktrees.map(async (cwd) => {
+				const catalog = await listPiPackageCatalog({
+					cwd,
+					agentDir,
+					projectTrusted: true,
+					builtinExtensions: [],
+					disabledPackages: new Set(["local:project:tools"]),
+				});
+				return catalog.packages.map((p) => [p.identity, p.enabled]);
+			}),
+		);
+		expect(identities[0]).toEqual([
+			["local:project:tools", false],
+			[`local:${pkg}`, true],
+		]);
+		expect(identities[1]).toEqual(identities[0]);
+	});
+
 	it("excludes the host's excluded extension path and reads repository packages only when trusted", async () => {
 		const project = join(root, "project");
 		mkdirSync(join(project, ".pi", "extensions"), { recursive: true });
