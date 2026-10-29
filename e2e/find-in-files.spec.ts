@@ -30,6 +30,10 @@ function seedFindFixtures(): void {
 		Buffer.concat([Buffer.from([0, 1, 2]), Buffer.from("needle"), Buffer.from([0])]),
 	);
 	writeFileSync(
+		join(FIND_DIR, "long.ts"),
+		`${Array.from({ length: 200 }, (_, i) => (i === 149 ? "export const farmarker = 150;" : `export const line${i + 1} = ${i + 1};`)).join("\n")}\n`,
+	);
+	writeFileSync(
 		join(FIND_DIR, "many.txt"),
 		`${Array.from({ length: TEXT_SEARCH_LIMITS.lines + 100 }, (_, i) => `limit-probe ${i + 1}`).join("\n")}\n`,
 	);
@@ -158,6 +162,37 @@ test("smart case, the Aa and W toggles narrow the search, and the limit banner s
 	await expect(page.getByTestId("find-in-files-empty")).toHaveCount(0);
 });
 
+test("a kept tab opened at a hit keeps the reading position the user scrolled to across a tab switch", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openFindInFiles(page);
+	await input(page).fill("farmarker");
+	await expectStatus(page, "1 match in 1 file");
+	await pressPlatformShortcut(page, "Enter");
+	await expect(dialog(page)).toBeHidden();
+	const tab = page.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "long.ts" });
+	await expect(tab).toBeVisible();
+	await expect(editorLine(page, "farmarker")).toBeInViewport();
+
+	await editorLine(page, "farmarker").click();
+	const monacoMac = await page.evaluate(() => navigator.userAgent.includes("Macintosh"));
+	await page.keyboard.press(monacoMac ? "Meta+ArrowUp" : "Control+Home");
+	await expect(editorLine(page, "line1 = 1;")).toBeInViewport();
+	await expect(editorLine(page, "farmarker")).not.toBeInViewport();
+
+	await openFindInFiles(page);
+	await input(page).fill("needle here");
+	await expect(matches(page)).toHaveAttribute("data-path", "find/beta.md");
+	await page.keyboard.press("Enter");
+	await expect(editorLine(page, "A needle here.")).toBeInViewport();
+	await expect(editorLine(page, "line1 = 1;")).toHaveCount(0);
+	await tab.click();
+	await expect(editorLine(page, "line1 = 1;")).toBeInViewport();
+	await expect(editorLine(page, "farmarker")).not.toBeInViewport();
+});
+
 test("from Project Home the palette's command opens the window, the search covers the Default workspace, and Enter enters it", async ({
 	page,
 }) => {
@@ -215,6 +250,7 @@ test("an older host hides the command, and the window says the host needs an upd
 			} else socket.send(message);
 		});
 	});
+	await page.clock.install();
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
 
@@ -228,9 +264,10 @@ test("an older host hides the command, and the window says the host needs an upd
 	await expect(page.getByTestId("search-palette")).toBeHidden();
 
 	await openFindInFiles(page);
+	await page.clock.pauseAt(Date.now() + 1_000);
 	await input(page).fill("needle");
 	await expect(page.getByTestId("find-in-files-status")).toContainText("update it");
-	await page.waitForTimeout(500);
+	await page.clock.runFor(1_000);
 	expect(hostRequests).toEqual([]);
 	await expect(matches(page)).toHaveCount(0);
 });
