@@ -32,6 +32,7 @@ const API = "openai-completions";
 const NO_KEY = "thinkrail-local";
 const PROBE_TIMEOUT_MS = 5_000;
 const MAX_DETAIL_PROBES = 64;
+const NOT_JSON = "not a JSON reply";
 const ID_PREFIX = "local-";
 const ZERO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 const LOCAL_COMPAT = {
@@ -139,10 +140,13 @@ async function fetchJson(
 		method: init.method ?? "GET",
 		headers,
 		...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+		redirect: apiKey ? "error" : "follow",
 		signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
 	});
 	if (!response.ok) throw new Error(`HTTP ${response.status}`);
-	return response.json();
+	return response.json().catch(() => {
+		throw new Error(NOT_JSON);
+	});
 }
 
 function llamaContext(entry: Json): number | null {
@@ -205,7 +209,7 @@ async function enrichLlamaCpp(
 	const tools = typeof caps.supports_tools === "boolean" ? caps.supports_tools : null;
 	return models.map((model) => ({
 		...model,
-		contextWindow: model.contextWindow ?? context,
+		contextWindow: context ?? model.contextWindow,
 		reasoning: model.reasoning || reasoning,
 		tools: model.tools ?? tools,
 	}));
@@ -272,6 +276,7 @@ async function enrichLmStudio(
 function describeFailure(error: unknown): string {
 	if (error instanceof Error && error.name === "TimeoutError") return "timed out";
 	if (error instanceof Error && /^HTTP \d+$/.test(error.message)) return error.message;
+	if (error instanceof Error && error.message === NOT_JSON) return NOT_JSON;
 	return "connection failed";
 }
 
@@ -349,7 +354,7 @@ function toEntry(raw: unknown, overrides: Json): LocalModelEntry | undefined {
 	};
 }
 
-export function readLocalEndpoints(config: Node | undefined): LocalModelEndpoint[] {
+function readLocalEndpoints(config: Node | undefined): LocalModelEndpoint[] {
 	if (!config) return [];
 	const root = getNodeValue(config);
 	const providers = isObject(root) && isObject(root.providers) ? root.providers : {};
@@ -366,6 +371,12 @@ export function readLocalEndpoints(config: Node | undefined): LocalModelEndpoint
 				name: typeof provider.name === "string" && provider.name ? provider.name : id,
 				baseUrl: provider.baseUrl,
 				hasApiKey: apiKey !== undefined && apiKey !== NO_KEY,
+				chatTemplateThinking: provider.models.some(
+					(model) =>
+						isObject(model) &&
+						isObject(model.compat) &&
+						model.compat.thinkingFormat === CHAT_TEMPLATE_THINKING,
+				),
 				models,
 			},
 		];
@@ -382,8 +393,8 @@ function slug(name: string): string {
 			.toLowerCase()
 			.normalize("NFKD")
 			.replace(/[^a-z0-9.]+/g, "-")
-			.replace(/^-+|-+$/g, "")
-			.slice(0, 40) || "server"
+			.slice(0, 40)
+			.replace(/^-+|-+$/g, "") || "server"
 	);
 }
 
@@ -406,8 +417,16 @@ function validateDraft(draft: LocalModelEndpointDraft): void {
 	if (draft.apiKey !== undefined && typeof draft.apiKey !== "string")
 		throw new Error("The API key must be text.");
 	if (!Array.isArray(draft.models)) throw new Error("Pick at least one model.");
+	if (draft.id !== undefined && typeof draft.id !== "string")
+		throw new Error("That server is no longer in models.json. Reload and retry.");
 	if (draft.models.some((model) => !isObject(model) || typeof model.id !== "string"))
 		throw new Error("Model ids must be unique and non-empty.");
+	if (
+		draft.models.some(
+			(model) => typeof model.reasoning !== "boolean" || typeof model.vision !== "boolean",
+		)
+	)
+		throw new Error("Thinking and image input must be on or off.");
 	if (!draft.name.trim()) throw new Error("Name the server.");
 	if (draft.models.length === 0) throw new Error("Pick at least one model.");
 	const ids = new Set<string>();
@@ -494,16 +513,31 @@ function withoutManagedOverrides(overrides: unknown, ids: Set<string>): Json | u
 	return Object.keys(next).length > 0 ? next : undefined;
 }
 
-export function buildProviderConfig(
-	draft: LocalModelEndpointDraft,
-	previous: Json | undefined,
-): Json {
+function originOf(url: string): string | null {
+	try {
+		return new URL(url).origin;
+	} catch {
+		return null;
+	}
+}
+
+function buildProviderConfig(draft: LocalModelEndpointDraft, previous: Json | undefined): Json {
 	const previousUrl = typeof previous?.baseUrl === "string" ? previous.baseUrl : undefined;
 	const baseUrl =
 		previousUrl !== undefined && draft.baseUrl.trim() === previousUrl
 			? previousUrl
 			: normalizeLocalBaseUrl(draft.kind, draft.baseUrl);
 	const previousKey = typeof previous?.apiKey === "string" ? previous.apiKey : undefined;
+	if (
+		draft.apiKey === undefined &&
+		previousKey !== undefined &&
+		previousKey !== NO_KEY &&
+		previousUrl !== undefined &&
+		originOf(previousUrl) !== originOf(baseUrl)
+	)
+		throw new Error(
+			"The server address changed. Re-enter the API key for the new address, or remove the saved key.",
+		);
 	const apiKey =
 		draft.apiKey === undefined ? (previousKey ?? NO_KEY) : draft.apiKey.trim() || NO_KEY;
 	const previousModels = new Map<string, Json>();

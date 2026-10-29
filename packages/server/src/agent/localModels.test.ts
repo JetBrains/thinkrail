@@ -141,7 +141,9 @@ test("model listings read vLLM and llama.cpp context hints and skip non-text mod
 test("a llama.cpp probe takes the per-slot context from /props over the training length", async () => {
 	const base = serve(
 		{
-			"GET /v1/models": () => ({ data: [{ id: "qwen3-8b", meta: { n_ctx_train: 131_072 } }] }),
+			"GET /v1/models": () => ({
+				data: [{ id: "qwen3-8b", meta: { n_ctx: 32_768, n_ctx_train: 131_072 } }],
+			}),
 			"GET /props": () => ({
 				default_generation_settings: { n_ctx: 8_192 },
 				total_slots: 4,
@@ -208,7 +210,15 @@ test("saving clears a model override that would shadow the saved budgets", async
 	await saveLocalEndpoint(draft);
 	const config = JSON.parse(readFileSync(path, "utf8"));
 	config.providers["local-box"].modelOverrides = {
-		m: { contextWindow: 131_072, maxTokens: 32_768, name: "Mine" },
+		m: {
+			contextWindow: 131_072,
+			maxTokens: 32_768,
+			reasoning: true,
+			input: ["text", "image"],
+			thinkingLevelMap: { off: "off" },
+			compat: { thinkingFormat: "qwen-chat-template", supportsStore: false },
+			name: "Mine",
+		},
 		other: { contextWindow: 4_096 },
 	};
 	writeFileSync(path, JSON.stringify(config));
@@ -219,7 +229,10 @@ test("saving clears a model override that would shadow the saved budgets", async
 	});
 	await saveLocalEndpoint({ ...draft, id: "local-box" });
 	const saved = JSON.parse(readFileSync(path, "utf8")).providers["local-box"];
-	expect(saved.modelOverrides).toEqual({ m: { name: "Mine" }, other: { contextWindow: 4_096 } });
+	expect(saved.modelOverrides).toEqual({
+		m: { compat: { supportsStore: false }, name: "Mine" },
+		other: { contextWindow: 4_096 },
+	});
 	const model = settledAvailableModels(pi).find((m) => m.provider === "local-box" && m.id === "m");
 	expect([model?.contextWindow, model?.maxTokens]).toEqual([8_192, 2_048]);
 	expect((await listLocalEndpoints())[0]?.models[0]).toMatchObject({
@@ -269,6 +282,7 @@ test("saving writes a chat-completions provider pi serves, keeps unrelated confi
 			name: "GPU box vLLM",
 			baseUrl: "http://gpu.lan:8000/v1",
 			hasApiKey: false,
+			chatTemplateThinking: true,
 			models: [
 				{
 					id: "Qwen/Qwen3-Coder-30B",
@@ -342,7 +356,6 @@ test("saving writes a chat-completions provider pi serves, keeps unrelated confi
 	const after = parse(readFileSync(path, "utf8").slice(1), [], { allowTrailingComma: true });
 	expect(Object.keys(after.providers)).toEqual(["openai"]);
 	expect(settledAvailableModels(pi).some((m) => m.provider.startsWith("local-"))).toBe(false);
-	expect(() => statSync(join(directory, "data", "local-models.json"))).toThrow();
 });
 
 test("drafts are validated before anything is written", async () => {
@@ -536,4 +549,111 @@ test("only local-* providers are listed, so a hand-written gateway keeps its own
 	writeFileSync(path, JSON.stringify(handWritten));
 	await runtime();
 	expect((await listLocalEndpoints()).map((endpoint) => endpoint.id)).toEqual(["local-box"]);
+});
+
+test("Detect never sends the key of a provider this feature does not own", async () => {
+	const seen: (string | null)[] = [];
+	const other = Bun.serve({
+		port: 0,
+		hostname: "127.0.0.1",
+		fetch(request) {
+			seen.push(request.headers.get("authorization"));
+			return Response.json({ data: [{ id: "m" }] });
+		},
+	});
+	try {
+		const url = `http://127.0.0.1:${other.port}/v1`;
+		writeFileSync(
+			path,
+			JSON.stringify({
+				providers: {
+					gateway: {
+						baseUrl: url,
+						api: "openai-completions",
+						apiKey: "secret",
+						models: [{ id: "m" }],
+					},
+				},
+			}),
+		);
+		await runtime();
+		await probeLocalModels({ kind: "vllm", baseUrl: url, endpointId: "gateway" });
+		expect(seen).toEqual([null]);
+	} finally {
+		other.stop(true);
+	}
+});
+
+test("a keyed probe refuses redirects and a non-JSON reply is named", async () => {
+	const target = Bun.serve({
+		port: 0,
+		hostname: "127.0.0.1",
+		fetch: () => Response.json({ data: [{ id: "m" }] }),
+	});
+	try {
+		const base = serve({});
+		server?.stop(true);
+		server = Bun.serve({
+			port: 0,
+			hostname: "127.0.0.1",
+			fetch: (request) =>
+				new URL(request.url).pathname === "/html/v1/models"
+					? new Response("<html></html>", { headers: { "content-type": "text/html" } })
+					: Response.redirect(`http://127.0.0.1:${target.port}/v1/models`, 302),
+		});
+		const origin = `http://127.0.0.1:${server.port}`;
+		expect(base).not.toBe(origin);
+		await expect(
+			probeLocalModels({ kind: "vllm", baseUrl: origin, apiKey: "secret" }),
+		).rejects.toThrow("connection failed");
+		expect(
+			(await probeLocalModels({ kind: "vllm", baseUrl: origin })).models.map((m) => m.id),
+		).toEqual(["m"]);
+		await expect(
+			probeLocalModels({ kind: "openai-compatible", baseUrl: `${origin}/html/v1` }),
+		).rejects.toThrow("not a JSON reply");
+	} finally {
+		target.stop(true);
+	}
+});
+
+test("a save writes no server kind, can remove the key, and validates model flags", async () => {
+	await runtime();
+	const draft = {
+		kind: "llama.cpp" as const,
+		name: "box",
+		baseUrl: "http://127.0.0.1:8080/v1",
+		apiKey: "secret",
+		models: [{ id: "m", contextWindow: 8_192, maxTokens: 2_048, reasoning: false, vision: false }],
+	};
+	expect((await saveLocalEndpoint(draft))[0]?.hasApiKey).toBe(true);
+	const provider = JSON.parse(readFileSync(path, "utf8")).providers["local-box"];
+	expect(provider).not.toHaveProperty("kind");
+	const removed = await saveLocalEndpoint({ ...draft, id: "local-box", apiKey: "" });
+	expect(removed[0]?.hasApiKey).toBe(false);
+	expect(JSON.parse(readFileSync(path, "utf8")).providers["local-box"].apiKey).toBe(
+		"thinkrail-local",
+	);
+	const bad = JSON.parse(
+		JSON.stringify({ ...draft, models: [{ ...draft.models[0], reasoning: "yes" }] }),
+	);
+	await expect(saveLocalEndpoint(bad)).rejects.toThrow("Thinking and image input");
+});
+
+test("a saved key does not follow the endpoint to a new address", async () => {
+	await runtime();
+	const draft = {
+		kind: "llama.cpp" as const,
+		name: "box",
+		baseUrl: "http://127.0.0.1:8080/v1",
+		apiKey: "secret",
+		models: [{ id: "m", contextWindow: 8_192, maxTokens: 2_048, reasoning: false, vision: false }],
+	};
+	await saveLocalEndpoint(draft);
+	const { apiKey: _key, ...withoutKey } = draft;
+	await expect(
+		saveLocalEndpoint({ ...withoutKey, id: "local-box", baseUrl: "http://10.0.0.9:8080/v1" }),
+	).rejects.toThrow("Re-enter the API key");
+	await saveLocalEndpoint({ ...withoutKey, id: "local-box", baseUrl: "http://127.0.0.1:8080/v1/" });
+	expect(JSON.parse(readFileSync(path, "utf8")).providers["local-box"].apiKey).toBe("secret");
 });

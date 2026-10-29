@@ -663,6 +663,8 @@ export interface LocalModelEndpoint {
 	baseUrl: string;
 	/** True when the provider carries a real key (a literal, `$ENV` or `!command`), not the placeholder. */
 	hasApiKey: boolean;
+	/** A model uses the llama.cpp/vLLM chat-template thinking format, so the server is one of those. */
+	chatTemplateThinking: boolean;
 	models: LocalModelEntry[];
 }
 

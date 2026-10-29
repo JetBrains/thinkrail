@@ -253,7 +253,7 @@ test("the stored host environment is pinned to v91", () => {
 	expect(WS_METHODS.environmentUpdate).toBe("environment.update");
 });
 
-test("client error reports ride from v90", () => {
+test("client error reports are pinned to v90", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CLIENT_ERROR_REPORT_PROTOCOL_VERSION);
 	expect(CLIENT_ERROR_REPORT_PROTOCOL_VERSION).toBe(90);
 	expect(WS_METHODS.clientReportError).toBe("client.reportError");
@@ -286,7 +286,6 @@ test("review details and the GitHub review actions are pinned to v88", () => {
 test("project create and the onboarding dismissal are pinned to v94", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ONBOARDING_PROTOCOL_VERSION);
 	expect(ONBOARDING_PROTOCOL_VERSION).toBe(94);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ONBOARDING_PROTOCOL_VERSION);
 	expect(WS_METHODS.projectCreate).toBe("project.create");
 	expect(WS_METHODS.providerDetect).toBe("provider.detect");
 	expect(DEFAULT_CONFIG.onboardingDismissed).toBe(false);

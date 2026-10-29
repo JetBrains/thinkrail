@@ -781,16 +781,18 @@ a project picker, the prompt hero, and the reused
   (v99, hidden below `LOCAL_MODELS_PROTOCOL_VERSION`; re-read on `providerVersion`) — the **Local models**
   group listing every `localModels.list` endpoint (name, base URL, model count; **Edit** / **Remove**
   behind a `ConfirmDialog`; one row per saved model with its context / max output) and **Add local
-  server**, which opens a dialog: a server-kind segment row (the kind is not saved, so an edit opens on a
-  guess from the URL — `/v1` on a server's default port picks that server, anything else
-  OpenAI-compatible — and the user can change it; switching kind swaps an untouched name and a
-  still-default URL), name, URL, a password key field (blank keeps a saved key on edit; a "remove saved
-  key" checkbox on an endpoint with a key sends `apiKey: ""`), **Detect models** (`localModels.probe`;
-  detected rows merge with the draft — a row's edited context / max output (rows saved earlier count as
+  server**, which opens a dialog: a server-kind segment row (a labelled group; the kind is not saved, so
+  an edit opens on a guess — the endpoint's `chatTemplateThinking` picks llama.cpp/vLLM, a reasoning
+  model without it rules them out, otherwise `/v1` on a server's default port picks that server and
+  anything else is OpenAI-compatible — and the user can change it; switching kind swaps an untouched
+  name and a still-default URL), name, URL, a password key field (blank keeps a saved key on edit) and,
+  for an endpoint with a key, a separately labelled "remove saved key" checkbox that sends `apiKey: ""`
+  on Save and keeps Detect from reusing the saved key, **Detect models** (`localModels.probe`; an
+  unchanged saved URL stays as written in the form; detected rows merge with the draft — a row's edited context / max output (rows saved earlier count as
   edited) and selection survive every re-detect, and models the server no longer lists stay until
   unchecked; a model whose server reported no running context is filled with
   `LOCAL_MODEL_CONTEXT_LIMITS.fallback` and a `local-models-context-guessed` note asks the user to set the
-  real size until that field is edited), and per-model use checkbox, a `tools` badge when the server
+  real size until that model's context field is edited, across re-detects), and per-model use checkbox, a `tools` badge when the server
   reports one (with a kind-specific hint for enabling tool calls when a selected model has none),
   context field (`isLocalModelContextWindow`), max-output field (`isLocalMaxTokens`, defaulted by
   `defaultLocalMaxTokens`) and Thinking switch. **Save** sends `localModels.save`; host errors render

@@ -1,6 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
@@ -68,7 +67,10 @@ test.beforeAll(async () => {
 		response.end();
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-	baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+	const address = server.address();
+	if (address === null || typeof address === "string")
+		throw new Error("The fake server has no port.");
+	baseUrl = `http://127.0.0.1:${address.port}`;
 });
 
 test.afterAll(async () => {
@@ -96,6 +98,9 @@ test("a local vLLM server is detected, saved to models.json, edited, chatted wit
 	await expect(row.getByTestId("local-models-output")).toHaveValue("16384");
 	const unreported = dialog.locator(`[data-testid="local-models-row"][data-model="${UNREPORTED}"]`);
 	await expect(unreported.getByTestId("local-models-context")).toHaveValue("32768");
+	await expect(dialog.getByTestId("local-models-context-guessed")).toBeVisible();
+	await dialog.getByTestId("local-models-detect").click();
+	await expect(dialog.getByTestId("local-models-detect")).toBeEnabled();
 	await expect(dialog.getByTestId("local-models-context-guessed")).toBeVisible();
 	await unreported.getByRole("checkbox").uncheck();
 	await expect(dialog.getByTestId("local-models-context-guessed")).toHaveCount(0);

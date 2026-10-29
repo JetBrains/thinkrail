@@ -19,7 +19,7 @@ export const MODELS_JSON_PARSE = { allowTrailingComma: true };
 export const MODELS_JSON_FORMATTING = {
 	formattingOptions: { insertSpaces: true, tabSize: 2, eol: "\n" },
 };
-export const EMPTY_MODELS_JSON = '{\n  "providers": {}\n}\n';
+const EMPTY_MODELS_JSON = '{\n  "providers": {}\n}\n';
 const SAVE_FAILURE =
 	"Couldn't save pi's models.json. Check the file and its permissions, then retry.";
 

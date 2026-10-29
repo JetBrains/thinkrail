@@ -642,9 +642,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   add; absent `apiKey` = keep, `""` = clear) whose context windows must pass
   **`isLocalModelContextWindow`** (`LOCAL_MODEL_CONTEXT_LIMITS`, 1,024–10,000,000; `fallback` 32,768 for
   servers that report nothing) and whose `maxTokens` must pass **`isLocalMaxTokens`**
-  (`LOCAL_MODEL_OUTPUT_LIMITS`, ≥256 and ≤ the context; `defaultLocalMaxTokens` is the shared default).
+  (`LOCAL_MODEL_OUTPUT_LIMITS`, 256–1,000,000 and ≤ the context; `defaultLocalMaxTokens` is the shared default).
   Every list/save/remove returns `LocalModelEndpoint[]` (`id`, `name`, `baseUrl`, `hasApiKey` rather
-  than the key, and the effective model entries); saves and removals that change `models.json` emit
+  than the key, `chatTemplateThinking` for guessing the form-only kind on edit, and the effective model
+  entries); saves and removals that change `models.json` emit
   `provider.changed`) /
   **`model.clampThinking`** (pi's
   `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
