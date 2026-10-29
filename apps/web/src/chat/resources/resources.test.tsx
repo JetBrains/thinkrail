@@ -32,6 +32,7 @@ const child: SubagentResourceSummary = {
 	status: "queued",
 	createdAt: new Date(NOW - 30_000).toISOString(),
 };
+const noTally = { done: 0, failed: 0, stopped: 0, interrupted: 0 };
 const inspectorProps: ComponentProps<typeof resources.ResourcesInspector> = {
 	open: true,
 	onOpenChange: () => {},
@@ -39,6 +40,9 @@ const inspectorProps: ComponentProps<typeof resources.ResourcesInspector> = {
 	subagents: [],
 	finishedCommands: [],
 	finishedSubagents: [],
+	history: { commands: noTally, subagents: noTally },
+	expanded: {},
+	onExpandedChange: () => {},
 	now: NOW,
 	authoritative: true,
 	loading: false,
@@ -56,10 +60,12 @@ const inspectorProps: ComponentProps<typeof resources.ResourcesInspector> = {
 const dockProps: ComponentProps<typeof resources.ResourcesDock> = {
 	commands: [],
 	subagents: [],
+	finishedCount: 0,
 	now: NOW,
 	authoritative: true,
 	actions: {},
 	onInspect: () => {},
+	onOpenFinished: () => {},
 	onStopCommand: () => {},
 	onStopSubagent: () => {},
 };
@@ -164,7 +170,7 @@ test("ChatView mounts the trigger, dock and inspector and retires resource-only 
 	expect(source).toContain("resources.visible && !inspectorOpen ? (");
 });
 
-test("the dock lists live rows oldest-first with escaped text, one inspect control and stop, and collapses past four", () => {
+test("the dock lists live rows oldest-first with escaped text, one inspect control and stop, and collapses past four behind an active toggle", () => {
 	const empty = renderToStaticMarkup(<resources.ResourcesDock {...dockProps} />);
 	expect(empty).toBe("");
 
@@ -194,7 +200,7 @@ test("the dock lists live rows oldest-first with escaped text, one inspect contr
 	expect(html).toContain("4 min");
 	expect(html).toContain('data-testid="resource-inspect"');
 	expect(html).toMatch(/data-testid="resource-stop"[^>]*disabled/);
-	expect(html).toContain("3 active");
+	expect(html).not.toContain('data-testid="resources-dock-toggle"');
 	expect(html).not.toContain("<img");
 	expect(html).not.toContain("<b>");
 	expect(html).toContain("&lt;script&gt;");
@@ -226,13 +232,23 @@ test("the inspector renders a listbox of options whose accessible names carry th
 			finishedCommands={[
 				{ ...command, id: "finished", status: "completed", finishedAt: NOW - 60_000, exitCode: 1 },
 			]}
-			finishedSubagents={[{ ...child, status: "aborted", abortReason: "Stopped by user" }]}
+			finishedSubagents={[
+				{
+					...child,
+					childSessionId: "child-done",
+					status: "aborted",
+					abortReason: "Stopped by user",
+				},
+			]}
 		/>,
 	);
 	expect(html).toContain('data-testid="resources-inspector"');
 	expect(html).toContain('role="listbox"');
-	expect(html).toContain('data-testid="resources-active"');
+	expect(html.indexOf('data-testid="resources-commands"')).toBeLessThan(
+		html.indexOf('data-testid="resources-subagents"'),
+	);
 	expect(html).toContain('data-testid="resources-finished"');
+	expect(html).toContain("1 active · 1 finished");
 	expect(html).toMatch(/data-resource-id="build"[^>]*data-selected="true"/);
 	expect(html).not.toMatch(/data-resource-id="child"[^>]*data-selected="true"/);
 	expect(html).toContain('aria-selected="true"');
@@ -282,6 +298,149 @@ test("the inspector keeps the selected finished row, disables controls when stal
 	expect(html).toContain("Done");
 });
 
+test("the inspector groups work by kind and folds finished rows past the newest five, never hiding a new result", () => {
+	const finished = Array.from({ length: 8 }, (_, index) => ({
+		...command,
+		id: `done-${index}`,
+		name: `done ${index}`,
+		status: "completed" as const,
+		exitCode: index === 6 ? 1 : 0,
+		finishedAt: NOW - index * 60_000,
+	}));
+	const html = renderInspector(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			commands={[command]}
+			finishedCommands={finished}
+			history={{
+				commands: { done: 25, failed: 3, stopped: 1, interrupted: 1 },
+				subagents: noTally,
+			}}
+			remaining={{ command: 22 }}
+			newIds={new Set(["done-7"])}
+			onLoadMore={() => {}}
+			retained
+		/>,
+	);
+	expect(html).toContain('data-testid="resources-commands"');
+	expect(html).not.toContain('data-testid="resources-subagents"');
+	expect(html).toContain("1 active · 30 finished");
+	const shown = [...html.matchAll(/data-resource-id="([^"]+)"/g)].map((match) => match[1]);
+	expect(shown).toEqual(["build", "done-0", "done-1", "done-2", "done-3", "done-4", "done-7"]);
+	expect(html).toMatch(/data-resource-id="done-7"[^>]*data-fresh="true"/);
+	expect(html).toContain('aria-label="done 7: echo');
+	expect(html).toMatch(/aria-label="done 7: [^"]*, Done, new"/);
+	expect(html).toMatch(
+		/data-testid="resources-fold"[^>]*aria-expanded="false"[^>]*aria-label="24 more finished: 19 done, 3 failed, 2 stopped or interrupted"/,
+	);
+	expect(html).toContain("24 more finished");
+	expect(html).not.toContain('data-testid="resources-show-more"');
+	expect(html).toContain("History and logs are kept until this workspace is archived.");
+});
+
+test("expanded, the fold reveals the rest in order, offers the next page with what is left, and collapses back", () => {
+	const finished = Array.from({ length: 8 }, (_, index) => ({
+		...child,
+		childSessionId: `child-${index}`,
+		status: "completed" as const,
+		finishedAt: NOW - index * 60_000,
+	}));
+	const props = {
+		...inspectorProps,
+		finishedSubagents: finished,
+		history: { commands: noTally, subagents: { ...noTally, done: 30 } },
+		remaining: { subagent: 22 },
+		newIds: new Set(["child-7"]),
+		expanded: { subagent: true },
+		selectedId: "child-6",
+		onLoadMore: () => {},
+	};
+	const html = renderInspector(<resources.ResourcesInspector {...props} />);
+	const shown = [...html.matchAll(/data-resource-id="([^"]+)"/g)].map((match) => match[1]);
+	expect(shown).toEqual(finished.map((item) => item.childSessionId));
+	expect(html.indexOf('data-testid="resources-fold"')).toBeLessThan(
+		html.indexOf('data-resource-id="child-5"'),
+	);
+	expect(html).toMatch(/data-testid="resources-fold"[^>]*aria-expanded="true"/);
+	expect(html).toMatch(/data-testid="resources-show-more"[^>]*>Show 20 more · 22 left/);
+	expect(html).toContain('data-testid="resources-collapse"');
+
+	const loading = renderInspector(
+		<resources.ResourcesInspector
+			{...props}
+			actions={{ "history:subagent": { pending: true, error: null } }}
+		/>,
+	);
+	expect(loading).toMatch(/data-testid="resources-show-more"[^>]*disabled[^>]*>Loading…/);
+	const failed = renderInspector(
+		<resources.ResourcesInspector
+			{...props}
+			actions={{ "history:subagent": { pending: false, error: "History read failed" } }}
+		/>,
+	);
+	expect(failed).toMatch(/role="alert"[^>]*>History read failed/);
+
+	const older = renderInspector(
+		<resources.ResourcesInspector {...props} remaining={{}} onLoadMore={undefined} />,
+	);
+	expect(older).not.toContain('data-testid="resources-show-more"');
+	expect(older).toContain('data-testid="resources-collapse"');
+});
+
+test("a collapsed fold keeps the selected row visible, and a chat with no work says so once", () => {
+	const finished = Array.from({ length: 7 }, (_, index) => ({
+		...command,
+		id: `run-${index}`,
+		status: "completed" as const,
+		exitCode: 0,
+		finishedAt: NOW - index * 60_000,
+	}));
+	const html = renderInspector(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			finishedCommands={finished}
+			selectedId="run-6"
+		/>,
+	);
+	expect(html).toMatch(/data-resource-id="run-6"[^>]*data-selected="true"/);
+	expect(html).not.toContain('data-resource-id="run-5"');
+	expect(html).toContain("1 more finished");
+
+	const empty = renderInspector(<resources.ResourcesInspector {...inspectorProps} />);
+	expect(empty).toContain('data-testid="resources-empty"');
+	expect(empty).toContain("Nothing has run in the background in this chat yet.");
+	expect(empty).not.toContain('data-testid="resources-commands"');
+	expect(empty).toContain("kept for this host session only");
+});
+
+test("an interrupted run reads Interrupted, never live, and its detail says why", () => {
+	const cut: BackgroundCommandSummary = {
+		...command,
+		id: "cut",
+		status: "stopped",
+		interrupted: true,
+	};
+	expect(resourceState({ kind: "command", summary: cut })).toBe("interrupted");
+	expect(
+		resourceState({
+			kind: "subagent",
+			summary: { ...child, status: "aborted", interrupted: true },
+		}),
+	).toBe("interrupted");
+	const html = renderInspector(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			finishedCommands={[cut]}
+			history={{ commands: { ...noTally, interrupted: 1 }, subagents: noTally }}
+		/>,
+	);
+	expect(html).toMatch(/data-resource-id="cut"[^>]*data-state="interrupted"/);
+	expect(html).toContain("Interrupted");
+	expect(html).toContain('data-testid="resource-detail-interrupted"');
+	expect(html).not.toContain('data-testid="resource-detail-stop"');
+	expect(html).not.toContain('data-testid="resource-stop"');
+});
+
 test("the detail header shows a subagent's model through the parent's label and omits it when the host sent none", () => {
 	const withModel = { ...child, model: "openai/gpt-6", thinkingLevel: "max" as const };
 	const labelled = renderInspector(
@@ -321,6 +480,13 @@ test("command logs distinguish loading, empty, retry, permanent unavailability, 
 		);
 	expect(log({})).toContain("Loading logs…");
 	expect(log({ result: { available: false } })).toContain('data-testid="command-log-unavailable"');
+	expect(log({ result: { available: false } })).toContain("retained only for recent work");
+	expect(log({ result: { available: false }, retained: true })).toContain(
+		"This command’s log is not available.",
+	);
+	expect(log({ result: { available: false }, retained: true, interrupted: true })).toContain(
+		"The log wasn’t saved",
+	);
 	expect(log({ error: "Try again", stale: true })).toContain('role="alert"');
 	expect(log({ error: "Try again" })).toContain('data-testid="resources-retry"');
 	expect(log({ stale: true })).toContain("Logs are stale.");
@@ -507,55 +673,67 @@ test("the inspector lists the chat's MCP servers as a third section and hides it
 	);
 });
 
-test("the dock keeps finished results the user has not seen yet, with inspect and dismiss", () => {
-	const done: BackgroundCommandSummary = {
-		...command,
-		id: "done",
-		status: "completed",
-		exitCode: 0,
-		finishedAt: NOW - 60_000,
-	};
-	const reviewed: SubagentResourceSummary = {
-		...child,
-		childSessionId: "reviewed",
-		status: "completed",
-		durationMs: 120_000,
-	};
-	const freshOnly = renderToStaticMarkup(
+test("the dock lists only live work and sums finished work into one line that opens Resources", () => {
+	const idle = renderToStaticMarkup(
+		<resources.ResourcesDock {...dockProps} finishedCount={90} freshCount={2} />,
+	);
+	expect(idle).toContain('data-testid="resources-dock"');
+	expect(idle).not.toContain('data-testid="resource-command"');
+	expect(idle).not.toContain('data-testid="resource-dismiss"');
+	expect(idle).toMatch(
+		/data-testid="resources-dock-finished"[\s\S]*90 finished[\s\S]*2 new[\s\S]*Open Resources/,
+	);
+	expect(idle).not.toContain("active");
+	expect(idle).not.toContain("animate-working");
+
+	const seen = renderToStaticMarkup(<resources.ResourcesDock {...dockProps} finishedCount={3} />);
+	expect(seen).toContain("3 finished");
+	expect(seen).not.toContain('data-testid="resources-dock-fresh"');
+
+	const working = renderToStaticMarkup(
 		<resources.ResourcesDock
 			{...dockProps}
-			freshCommands={[done]}
-			freshSubagents={[reviewed]}
-			onDismiss={() => {}}
+			commands={[command]}
+			finishedCount={4}
+			freshCount={1}
 		/>,
 	);
-	expect(freshOnly).toContain('data-testid="resources-dock"');
-	expect(freshOnly).toMatch(/data-resource-id="done"[^>]*data-fresh="true"/);
-	expect(freshOnly).toMatch(/data-resource-id="reviewed"[^>]*data-fresh="true"/);
-	expect(freshOnly).toContain('data-testid="resource-dismiss"');
-	expect(freshOnly).not.toContain('data-testid="resource-stop"');
-	expect(freshOnly).toContain("2 new");
-	expect(freshOnly).not.toContain("active");
-	expect(freshOnly).not.toContain("animate-working");
-
-	const mixed = renderToStaticMarkup(
-		<resources.ResourcesDock {...dockProps} commands={[command]} freshCommands={[done]} />,
+	expect(working.indexOf('data-resource-id="build"')).toBeLessThan(
+		working.indexOf('data-testid="resources-dock-finished"'),
 	);
-	expect(mixed.indexOf('data-resource-id="build"')).toBeLessThan(
-		mixed.indexOf('data-resource-id="done"'),
-	);
-	expect(mixed).toContain("1 active");
-	expect(mixed).toContain("1 new");
-	expect(mixed).not.toContain('data-testid="resource-dismiss"');
+	expect(working).not.toContain('data-testid="resources-dock-toggle"');
 
 	const crowded = renderToStaticMarkup(
 		<resources.ResourcesDock
 			{...dockProps}
-			commands={[command]}
-			freshCommands={[1, 2, 3, 4].map((n) => ({ ...done, id: `done-${n}` }))}
+			commands={[1, 2, 3, 4, 5].map((n) => ({ ...command, id: `c${n}` }))}
+			finishedCount={7}
 		/>,
 	);
 	expect(crowded).toContain('data-collapsed="true"');
+	expect(crowded).toMatch(
+		/data-testid="resources-dock-toggle"[^>]*aria-expanded="false"[\s\S]*5 active/,
+	);
+	expect(crowded).toContain("7 finished");
+});
+
+test("a jump to what finished lands on the newest finish across kinds", () => {
+	const done = (id: string, finishedAt: number): BackgroundCommandSummary => ({
+		...command,
+		id,
+		status: "completed",
+		exitCode: 0,
+		finishedAt,
+	});
+	const reviewed: SubagentResourceSummary = {
+		...child,
+		childSessionId: "reviewed",
+		status: "completed",
+		finishedAt: NOW - 30_000,
+	};
+	expect(resources.newestResourceId([], [])).toBeNull();
+	expect(resources.newestResourceId([done("old", NOW - 90_000)], [reviewed])).toBe("reviewed");
+	expect(resources.newestResourceId([done("new", NOW - 10_000)], [reviewed])).toBe("new");
 });
 
 test("the trigger shows how many finished results are new", () => {
