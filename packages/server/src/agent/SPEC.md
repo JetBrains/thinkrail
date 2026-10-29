@@ -868,7 +868,10 @@ re-opened transcripts provider-valid.
     `piPackagesInstall`, …) that supplies the agent dir, the Central exclusion from the runtime
     generation and `HOST_BUILTIN_EXTENSION_NAMES`; `refreshPiPackages()` (bump the package revision,
     invalidate caches, `refreshExtensionTools()` so every registered session re-decides through the
-    gated reload — idle now, busy at `agent_settled` — and publish `packages.changed`); and the settings
+    gated reload — idle now, busy at `agent_settled` — and publish `packages.changed`; it runs after
+    Remove and Update **whether or not they succeeded**, since Remove persists before it uninstalls and
+    a batched update may have changed some packages before failing — the watcher cannot catch either,
+    having been primed by the host's own write); and the settings
     watch: the agent-dir watcher behind `watchUserMcpConfig` also hands it `settings.json` edits, which
     count only when the `packages` / `extensions` / `skills` / `prompts` arrays differ semantically from
     the last seen (an unrelated edit or the echo of the host's own write is ignored; a mutation primes

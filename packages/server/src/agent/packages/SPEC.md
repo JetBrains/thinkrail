@@ -70,8 +70,10 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   treats `git@host:…` and `github:…` as local paths, so does this), `piPackageIdentity` (a simplified
   port of pi's git parsing, no `hosted-git-info`, splitting the ref at the first `@`/`#` inside the
   repository path so a `feature/x` branch keeps the identity — good enough for a ThinkRail-only key,
-  never written into pi settings), the shared `settingsBaseDir`, `expandHome` and `isOfflineMode`
-  (pi's `PI_OFFLINE` rule, which pi does not export). Changing a declared source's version or ref keeps the identity;
+  never written into pi settings), the shared `settingsBaseDir`, `resolveLocalSource` (pi's
+  `resolvePath` rule for a local source — trim, `~`, a `file://` URL decoded, then the base dir — used
+  alike by the identity, the install input and the declared-source mutations, so `file:///x` installs,
+  lists and removes as `/x`) and `isOfflineMode` (pi's `PI_OFFLINE` rule, which pi does not export). Changing a declared source's version or ref keeps the identity;
   renaming a local folder makes a new one (the old switch entry becomes inert, like an unknown
   `disabledExtensions` name).
 - `mutations.ts` — every write validates `scope` / `type` at the boundary (the wire carries no runtime
@@ -109,7 +111,12 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   an `autoload: false` declaration (or a user-scope `[]` the repository overrides) nothing is admitted
   by default. pi's TUI drops plain entries instead, which turns an
   allowlist of one into "everything but one". A single-file local package has no filters pi honours;
-  toggling one is refused. *Rejected:* rewriting the allowlist (first fix) — collapsing its last member
+  toggling one is refused. **Materializing a string declaration** (`"source"` → `{ source, … }`) is
+  itself a semantic change in pi: the string form loads only what a present manifest names, while the
+  object form falls back to the convention directory (`extensions/`, `skills/`, …) for every kind the
+  filter leaves `undefined`. The first toggle therefore pins every kind the manifest omits but whose
+  directory exists to `[]`, so a skill toggle never starts loading an `extensions/` folder the manifest
+  never declared (those files then appear as switched-off rows, as in `pi config`). *Rejected:* rewriting the allowlist (first fix) — collapsing its last member
   flips the baseline from "only these" to "everything". **Input vs declared source:** pi stores a local source relative to its settings
   file but matches an *input* source against the process cwd (`getSourceMatchKeyForInput`), so a
   declared `../pkgs/tools` handed back as written is not found; rows carry the declared string and

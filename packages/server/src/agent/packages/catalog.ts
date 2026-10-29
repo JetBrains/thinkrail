@@ -17,10 +17,10 @@ import type {
 import { advancePiExtensionCache } from "./extensionCache";
 import {
 	BUILTIN_PREFIX,
-	expandHome,
 	npmPackageName,
 	piPackageIdentity,
 	piPackageSourceKind,
+	resolveLocalSource,
 	settingsBaseDir,
 } from "./identity";
 
@@ -78,7 +78,7 @@ export function packageSourceIdentity(
 	agentDir: string,
 ): string {
 	const baseDir = settingsBaseDir(cwd, agentDir, scope);
-	return piPackageIdentity(source, (path) => resolve(baseDir, expandHome(path)));
+	return piPackageIdentity(source, (path) => resolveLocalSource(path, baseDir));
 }
 
 async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackagesCatalog> {

@@ -120,20 +120,28 @@ export async function piPackagesInstall(
 	return { identity, summary };
 }
 
+// Remove persists before it uninstalls and a batched update may change some packages before it fails:
+// chats and pages reconcile with whatever landed, success or not.
 export async function piPackagesRemove(
 	target: PiPackagesTarget,
 	request: { source: string; scope: PiPackageScope },
 ): Promise<void> {
-	await removePiPackage(hostContext(target), request);
-	refreshPiPackages();
+	try {
+		await removePiPackage(hostContext(target), request);
+	} finally {
+		refreshPiPackages();
+	}
 }
 
 export async function piPackagesUpdate(
 	target: PiPackagesTarget,
 	packages: readonly { source: string; scope: PiPackageScope }[],
 ): Promise<void> {
-	await updatePiPackages(hostContext(target), packages);
-	refreshPiPackages();
+	try {
+		await updatePiPackages(hostContext(target), packages);
+	} finally {
+		refreshPiPackages();
+	}
 }
 
 export function piPackagesCheckUpdates(

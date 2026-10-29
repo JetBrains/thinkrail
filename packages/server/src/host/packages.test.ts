@@ -161,6 +161,45 @@ test("install returns the new row, turns the package on, and publishes a change"
 	expect((await list()).packages).toHaveLength(0);
 });
 
+test("a remove whose uninstall fails still reconciles chats and pages with the persisted declaration", async () => {
+	await handleRequest("packages.install", { source: pkg, scope: "user" }, CTX);
+	published = 0;
+	const remove = spyOn(DefaultPackageManager.prototype, "remove").mockRejectedValue(
+		new Error("EACCES"),
+	);
+	try {
+		const error = await handleRequest(
+			"packages.remove",
+			{ source: relative(agentDir, pkg), scope: "user" },
+			CTX,
+		).catch((e) => e);
+		expect(errorCodeOf(error)).toBe("PACKAGE_REMOVE_FAILED");
+	} finally {
+		remove.mockRestore();
+	}
+	expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")).packages).toEqual([]);
+	expect(published).toBeGreaterThan(0);
+	expect((await list()).packages).toHaveLength(0);
+});
+
+test("a file:// source lists, removes and installs like the path it names", async () => {
+	writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [`file://${pkg}`] }));
+	const listed = (await list()).packages;
+	expect(listed).toHaveLength(1);
+	expect(listed[0]).toMatchObject({ identity: `local:${pkg}`, source: `file://${pkg}` });
+	await handleRequest("packages.remove", { source: `file://${pkg}`, scope: "user" }, CTX);
+	expect((await list()).packages).toHaveLength(0);
+	const summary = (await handleRequest(
+		"packages.install",
+		{ source: `file://${pkg}`, scope: "user" },
+		CTX,
+	)) as PiPackageSummary;
+	expect(summary.identity).toBe(`local:${pkg}`);
+	expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")).packages).toEqual([
+		relative(agentDir, pkg),
+	]);
+});
+
 test("a failure after the declaration was written is not reported as an install failure", async () => {
 	const listConfigured = spyOn(
 		DefaultPackageManager.prototype,

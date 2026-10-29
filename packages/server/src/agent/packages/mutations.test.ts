@@ -330,6 +330,37 @@ describe("pi package mutations", () => {
 		expect(await resolvedEnabled(ctx, "extensions", legacy)).toBe(false);
 	});
 
+	it("materializing a string declaration keeps the kinds its manifest leaves out unloaded", async () => {
+		const skillsOnly = join(root, "pkgs", "skills-only");
+		mkdirSync(join(skillsOnly, "extensions"), { recursive: true });
+		mkdirSync(join(skillsOnly, "skills", "triage"), { recursive: true });
+		writeFileSync(
+			join(skillsOnly, "package.json"),
+			JSON.stringify({ name: "skills-only", pi: { skills: ["./skills"] } }),
+		);
+		writeFileSync(join(skillsOnly, "extensions", "stray.ts"), extensionSource("stray_tool"));
+		writeFileSync(
+			join(skillsOnly, "skills", "triage", "SKILL.md"),
+			"---\nname: triage\ndescription: Triage.\n---\n\n# triage\n",
+		);
+		writeFileSync(settingsPath, JSON.stringify({ packages: [skillsOnly] }));
+		const stray = join(skillsOnly, "extensions", "stray.ts");
+		const triage = join(skillsOnly, "skills", "triage", "SKILL.md");
+		expect(await resolvedEnabled(ctx, "extensions", stray)).toBeUndefined();
+
+		await setPiResourceEnabled(ctx, {
+			path: triage,
+			type: "skills",
+			scope: "user",
+			enabled: false,
+		});
+		expect(readSettings(settingsPath).packages).toEqual([
+			{ source: skillsOnly, extensions: [], skills: ["-skills/triage/SKILL.md"] },
+		]);
+		expect(await resolvedEnabled(ctx, "skills", triage)).toBe(false);
+		expect(await resolvedEnabled(ctx, "extensions", stray)).not.toBe(true);
+	});
+
 	it("re-enabling keeps the explicit +path an autoload:false repository declaration needs", async () => {
 		const project = join(root, "project");
 		mkdirSync(join(project, ".pi"), { recursive: true });

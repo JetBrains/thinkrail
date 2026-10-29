@@ -1,4 +1,6 @@
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { PiPackageScope, PiPackageSourceKind } from "@thinkrail/contracts";
 
 export const BUILTIN_PREFIX = "builtin:";
@@ -16,8 +18,13 @@ export function npmPackageName(spec: string): string {
 	return match?.[1] ?? spec;
 }
 
-export function expandHome(path: string): string {
-	return path.replace(/^~(?=\/|$)/, process.env.HOME ?? "~");
+/** pi's `resolvePath` rule for a local source: trim, expand `~`, decode a `file://` URL, resolve against the base. */
+export function resolveLocalSource(input: string, baseDir: string): string {
+	const trimmed = input.trim();
+	if (/^file:\/\//i.test(trimmed)) return resolve(fileURLToPath(trimmed));
+	if (trimmed === "~") return homedir();
+	if (trimmed.startsWith("~/")) return resolve(homedir(), trimmed.slice(2));
+	return resolve(baseDir, trimmed);
 }
 
 /** pi's offline switch (`PI_OFFLINE` ∈ 1 | true | yes), which pi does not export. */

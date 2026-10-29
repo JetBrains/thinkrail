@@ -1,4 +1,4 @@
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import {
 	DefaultPackageManager,
@@ -11,9 +11,9 @@ import { CodedError } from "@thinkrail/shared/codedError";
 import { invalidatePiPackageCatalog, packageSourceIdentity } from "./catalog";
 import {
 	BUILTIN_PREFIX,
-	expandHome,
 	isOfflineMode,
 	piPackageSourceKind,
+	resolveLocalSource,
 	settingsBaseDir,
 } from "./identity";
 
@@ -139,7 +139,7 @@ async function persist(
 function declaredAsInput(ctx: PiPackageHostContext, target: PiPackageTarget): string {
 	const source = target.source.trim();
 	if (piPackageSourceKind(source) !== "local") return source;
-	return resolve(settingsBaseDir(ctx.cwd, ctx.agentDir, target.scope), expandHome(source));
+	return resolveLocalSource(source, settingsBaseDir(ctx.cwd, ctx.agentDir, target.scope));
 }
 
 /** Installs, then persists the declaration; a relative local source reads like `pi install ./x` from the workspace. */
@@ -153,7 +153,7 @@ export function installPiPackage(
 		if (!raw) throw new CodedError("PACKAGE_SOURCE_INVALID", "A package source is required.");
 		assertScopeWritable(ctx, target.scope);
 		const kind = piPackageSourceKind(raw);
-		const source = kind === "local" ? resolve(ctx.cwd ?? ctx.agentDir, expandHome(raw)) : raw;
+		const source = kind === "local" ? resolveLocalSource(raw, ctx.cwd ?? ctx.agentDir) : raw;
 		if (kind === "local" && !existsSync(source)) {
 			throw new CodedError("PACKAGE_SOURCE_INVALID", `No such folder or file: ${source}`);
 		}
@@ -318,6 +318,43 @@ export function togglePackageFilter(
 	return [...kept, `${enabled ? "+" : "-"}${pattern}`];
 }
 
+const RESOURCE_KINDS = ["extensions", "skills", "prompts", "themes"] as const;
+
+// A string declaration loads only what a present manifest names; pi's object form falls back to the
+// convention directory for every kind the filter leaves undefined, so those are pinned to `[]`.
+function materializeDeclaration(
+	source: string,
+	packageRoot: string,
+): Exclude<PackageSource, string> {
+	const pkg: Exclude<PackageSource, string> = { source };
+	const manifest = readPiManifest(packageRoot);
+	if (!manifest) return pkg;
+	for (const kind of RESOURCE_KINDS) {
+		if (manifest[kind] === undefined && existsSync(join(packageRoot, kind))) pkg[kind] = [];
+	}
+	return pkg;
+}
+
+function readPiManifest(
+	packageRoot: string,
+): Partial<Record<(typeof RESOURCE_KINDS)[number], string[]>> | null {
+	try {
+		const parsed: unknown = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+		const pi = (parsed as { pi?: unknown } | null)?.pi;
+		if (!pi || typeof pi !== "object" || Array.isArray(pi)) return null;
+		const manifest: Partial<Record<(typeof RESOURCE_KINDS)[number], string[]>> = {};
+		for (const kind of RESOURCE_KINDS) {
+			const entries = (pi as Record<string, unknown>)[kind];
+			if (Array.isArray(entries) && entries.every((entry) => typeof entry === "string")) {
+				manifest[kind] = entries;
+			}
+		}
+		return manifest;
+	} catch {
+		return null;
+	}
+}
+
 function togglePackageResource(
 	settings: SettingsManager,
 	resource: ResolvedResource,
@@ -344,14 +381,14 @@ function togglePackageResource(
 	}
 	const current = packages[index] ?? resource.metadata.source;
 	const pkg: Exclude<PackageSource, string> =
-		typeof current === "string" ? { source: current } : { ...current, source: current.source };
+		typeof current === "string"
+			? materializeDeclaration(current, packageRoot)
+			: { ...current, source: current.source };
 	const pattern = normalizeExactPattern(relative(packageRoot, resource.path));
 	const next = togglePackageFilter(pkg[toggle.type], pattern, toggle.enabled);
 	if (next === undefined) delete pkg[toggle.type];
 	else pkg[toggle.type] = next;
-	const hasFilters = (["extensions", "skills", "prompts", "themes"] as const).some(
-		(key) => pkg[key] !== undefined,
-	);
+	const hasFilters = RESOURCE_KINDS.some((key) => pkg[key] !== undefined);
 	packages[index] = hasFilters || pkg.autoload !== undefined ? pkg : pkg.source;
 	if (toggle.scope === "project") settings.setProjectPackages(packages);
 	else settings.setPackages(packages);

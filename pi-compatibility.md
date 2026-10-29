@@ -163,8 +163,13 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
     queued with swallowed errors; the host sequences `install → trust → addSourceToSettings → flush →
     drainErrors`. **Gate:** a persist step that reports failure and accepts a trust predicate.
   - A local *input* source is matched against the process cwd while a *declared* one is stored relative
-    to its settings file (`getSourceMatchKeyForInput` vs `…ForSettings`); mutations pass absolute paths.
-    **Gate:** pi matching declared strings by settings scope.
+    to its settings file (`getSourceMatchKeyForInput` vs `…ForSettings`); mutations pass absolute paths,
+    normalised by a port of pi's private `resolvePath` (`~`, `file://`) in `resolveLocalSource`.
+    **Gate:** pi matching declared strings by settings scope, or exporting `resolvePath`.
+  - `collectPackageResources` treats a string declaration and an object declaration differently: the
+    string form loads only a present manifest's entries, the object form falls back to convention
+    directories for undefined kinds; `materializeDeclaration` pins those kinds to `[]` on the first
+    toggle. **Gate:** pi deriving an object declaration's defaults from the manifest.
   - `isOfflineModeEnabled` (`PI_OFFLINE` ∈ `1|true|yes`) is private and pi's `install` / `update` turn
     into silent no-ops offline; `identity.ts` ports the rule so the host can refuse with `PACKAGE_OFFLINE`.
     **Gate:** pi exporting the predicate or throwing a typed error offline.
