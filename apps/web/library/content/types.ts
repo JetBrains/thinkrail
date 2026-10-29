@@ -29,6 +29,9 @@ export interface StateDoc {
 export interface ComponentDoc {
 	slug: string;
 	name: string;
+	group: string;
+	source: string;
+	preview: string;
 	tag: string;
 	importLine: string;
 	summary: string;

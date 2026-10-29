@@ -24,17 +24,26 @@ page.on("console", (message) => {
 	if (message.type() === "error") errors.push(message.text());
 });
 
-await open(page, "using");
+await page.goto(BASE);
+await page.locator("#library-main h1").first().waitFor();
 check(
-	(await page.locator("h1").innerText()) === "Using the library",
-	"Using the library page renders",
+	(await page.locator("h1").innerText()) === "Components overview",
+	"the site opens on the components overview",
 );
-await page.getByRole("link", { name: "Button", exact: true }).first().click();
+const cards = page.locator('[data-testid^="overview-card-"]');
+check((await cards.count()) === 2, "overview shows a card per component");
+await page.getByTestId("overview-search").fill("icon");
+check((await cards.count()) === 1, "overview search filters the cards");
+await page.getByTestId("overview-search").fill("");
+await page.getByTestId("overview-card-button").click();
 await page.locator("h1", { hasText: "Button" }).waitFor();
-check(true, "navigation reaches the Button page");
+check(true, "an overview card opens its component page");
 await page.getByRole("link", { name: "IconButton", exact: true }).first().click();
 await page.locator("h1", { hasText: "IconButton" }).waitFor();
-check(true, "navigation reaches the IconButton page");
+check(true, "the sidebar reaches the IconButton page");
+await page.getByRole("link", { name: "Guides" }).click();
+await page.locator("h1", { hasText: "Using the library" }).waitFor();
+check(true, "the header reaches the Using the library guide");
 
 await open(page, "button");
 const themeIds: string[] = [];
@@ -141,11 +150,25 @@ check(
 );
 
 const example = page.getByTestId("example-button-dialog-actions");
+check((await example.locator("pre").count()) === 0, "example code is collapsed by default");
+await example.getByTestId("library-show-code").click();
+check(
+	(await example.locator("pre").innerText()).includes("export default function DialogActions"),
+	"show code reveals the example source",
+);
 await example.getByTestId("library-copy").click();
 const copied = await page.evaluate(() => navigator.clipboard.readText());
 check(
 	copied.includes('from "@thinkrail/ui/button"'),
 	"copy puts the example source on the clipboard",
+);
+
+const outline = page.getByRole("navigation", { name: "On this page" });
+await outline.getByRole("link", { name: "Tone", exact: true }).first().click();
+await page.waitForTimeout(300);
+check(
+	(await outline.locator('[aria-current="location"]').innerText()) === "Tone",
+	"the page outline jumps to a section and marks it current",
 );
 
 await page.setViewportSize({ width: 390, height: 844 });

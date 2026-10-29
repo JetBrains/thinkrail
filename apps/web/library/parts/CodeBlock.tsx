@@ -36,3 +36,22 @@ export function CodeBlock({
 		</div>
 	);
 }
+
+export function CopyText({ text, label }: { text: string; label: string }) {
+	const [copied, setCopied] = useState(false);
+	useEffect(() => {
+		if (!copied) return;
+		const timer = setTimeout(() => setCopied(false), 1500);
+		return () => clearTimeout(timer);
+	}, [copied]);
+	return (
+		<IconButton
+			size="s"
+			icon={copied ? RiCheckLine : RiFileCopyLine}
+			label={copied ? "Copied" : label}
+			onClick={() => {
+				void navigator.clipboard?.writeText(text).then(() => setCopied(true));
+			}}
+		/>
+	);
+}

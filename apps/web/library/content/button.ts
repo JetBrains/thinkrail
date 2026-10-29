@@ -92,6 +92,9 @@ export const sharedPropDocs = {
 export const button = {
 	slug: "button",
 	name: "Button",
+	group: "General",
+	source: "packages/ui/button.tsx",
+	preview: "variants",
 	tag: "<Button",
 	importLine: 'import { Button } from "@thinkrail/ui/button";',
 	summary:

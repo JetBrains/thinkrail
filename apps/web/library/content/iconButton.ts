@@ -8,6 +8,9 @@ type OwnProps<P> = Exclude<keyof P, keyof ButtonHTMLAttributes<HTMLButtonElement
 export const iconButton = {
 	slug: "icon-button",
 	name: "IconButton",
+	group: "General",
+	source: "packages/ui/button.tsx",
+	preview: "variants",
 	tag: "<IconButton",
 	importLine: 'import { IconButton } from "@thinkrail/ui/button";',
 	summary:

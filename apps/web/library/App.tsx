@@ -2,14 +2,17 @@ import { RiCloseLine, RiMenuLine } from "@remixicon/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useState } from "react";
+import { BrandLogo } from "@/shell/BrandLogo";
 import { components, guides } from "./content";
 import { ComponentPage } from "./pages/ComponentPage";
 import { GuidePage } from "./pages/GuidePage";
-import { componentSections } from "./pages/sections";
+import { OverviewPage } from "./pages/OverviewPage";
 import { ThemeMenu } from "./parts/ThemeMenu";
 
+export const OVERVIEW = "overview";
+
 function currentRoute(): string {
-	return window.location.hash.replace(/^#\//, "").split("/")[0] || "using";
+	return window.location.hash.replace(/^#\//, "").split("/")[0] || OVERVIEW;
 }
 
 function useRoute(): string {
@@ -25,68 +28,134 @@ function useRoute(): string {
 	return route;
 }
 
-function Navigation({ route, onNavigate }: { route: string; onNavigate: () => void }) {
-	const link = (slug: string, label: string) => (
+type Area = "guides" | "components";
+
+function areaOf(route: string): Area {
+	return guides.some((guide) => guide.slug === route) ? "guides" : "components";
+}
+
+const componentGroups = [...new Set(components.map((doc) => doc.group))].map((group) => ({
+	group,
+	items: components.filter((doc) => doc.group === group),
+}));
+
+function NavLink({
+	slug,
+	label,
+	route,
+	onNavigate,
+}: {
+	slug: string;
+	label: string;
+	route: string;
+	onNavigate: () => void;
+}) {
+	const active = route === slug;
+	return (
 		<a
-			key={slug}
 			href={`#/${slug}`}
 			onClick={onNavigate}
-			aria-current={route === slug ? "page" : undefined}
+			aria-current={active ? "page" : undefined}
 			className={cn(
-				"flex h-panel-row items-center rounded-sm px-8 tr-text-ui outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
-				route === slug ? "bg-control-bg-selected text-text-default" : "text-text-muted",
+				"flex h-32 items-center rounded-md px-16 tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+				active ? "bg-primary-subtle text-primary" : "text-text-default hover:bg-control-bg-hovered",
 			)}
 		>
 			{label}
 		</a>
 	);
-	const active = components.find((doc) => doc.slug === route);
+}
+
+function GroupLabel({ label }: { label: string }) {
 	return (
-		<nav aria-label="Library" className="flex flex-col gap-16">
-			<div className="flex flex-col gap-2">
-				<span className="px-8 tr-text-eyebrow text-text-muted">Guides</span>
-				{guides.map((guide) => link(guide.slug, guide.title))}
-			</div>
-			<div className="flex flex-col gap-2">
-				<span className="px-8 tr-text-eyebrow text-text-muted">Components</span>
-				{components.map((doc) => (
-					<div key={doc.slug} className="flex flex-col gap-2">
-						{link(doc.slug, doc.name)}
-						{active?.slug === doc.slug ? (
-							<div className="ml-12 flex flex-col border-border-default border-l pl-4">
-								{componentSections.map((section) => (
-									<a
-										key={section.id}
-										href={`#/${doc.slug}/${section.id}`}
-										onClick={(event) => {
-											event.preventDefault();
-											onNavigate();
-											document
-												.getElementById(`${doc.slug}-${section.id}`)
-												?.scrollIntoView({ block: "start" });
-										}}
-										className="rounded-sm px-8 py-2 tr-text-metadata text-text-muted outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-									>
-										{section.title}
-									</a>
-								))}
-							</div>
-						) : null}
-					</div>
-				))}
-			</div>
+		<div className="mt-16 mb-4 flex flex-col gap-8 px-16">
+			<span className="tr-text-metadata text-text-subtle">{label}</span>
+			<span className="h-px bg-border-muted" />
+		</div>
+	);
+}
+
+function Sidebar({
+	area,
+	route,
+	onNavigate,
+}: {
+	area: Area;
+	route: string;
+	onNavigate: () => void;
+}) {
+	return (
+		<nav aria-label={area === "guides" ? "Guides" : "Components"} className="flex flex-col gap-2">
+			{area === "guides" ? (
+				guides.map((guide) => (
+					<NavLink
+						key={guide.slug}
+						slug={guide.slug}
+						label={guide.title}
+						route={route}
+						onNavigate={onNavigate}
+					/>
+				))
+			) : (
+				<>
+					<NavLink
+						slug={OVERVIEW}
+						label="Components overview"
+						route={route}
+						onNavigate={onNavigate}
+					/>
+					{componentGroups.map(({ group, items }) => (
+						<div key={group} className="flex flex-col gap-2">
+							<GroupLabel label={group} />
+							{items.map((doc) => (
+								<NavLink
+									key={doc.slug}
+									slug={doc.slug}
+									label={doc.name}
+									route={route}
+									onNavigate={onNavigate}
+								/>
+							))}
+						</div>
+					))}
+				</>
+			)}
+		</nav>
+	);
+}
+
+function TopNav({ area }: { area: Area }) {
+	const item = (target: Area, href: string, label: string) => (
+		<a
+			href={href}
+			aria-current={area === target ? "page" : undefined}
+			className={cn(
+				"relative flex h-full items-center px-12 tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+				area === target
+					? "text-primary after:absolute after:inset-x-12 after:bottom-0 after:h-2 after:rounded-full after:bg-primary after:content-['']"
+					: "text-text-muted hover:text-text-default",
+			)}
+		>
+			{label}
+		</a>
+	);
+	return (
+		<nav aria-label="Sections" className="hidden h-full items-stretch sm:flex">
+			{item("guides", `#/${guides[0]?.slug ?? "using"}`, "Guides")}
+			{item("components", `#/${OVERVIEW}`, "Components")}
 		</nav>
 	);
 }
 
 export function App() {
 	const route = useRoute();
+	const area = areaOf(route);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const component = components.find((doc) => doc.slug === route);
-	const guide = guides.find((page) => page.slug === route) ?? guides[0];
+	const guide = guides.find((page) => page.slug === route);
 	return (
 		<div className="flex h-dvh flex-col bg-container-workspace-bg text-text-default">
-			<header className="flex h-40 shrink-0 items-center gap-8 border-border-default border-b bg-container-header-bg px-12">
+			<header className="flex h-[3.5rem] shrink-0 items-center gap-12 border-border-default border-b bg-container-header-bg px-16">
 				<IconButton
 					icon={menuOpen ? RiCloseLine : RiMenuLine}
 					label={menuOpen ? "Close navigation" : "Open navigation"}
@@ -95,26 +164,29 @@ export function App() {
 					onClick={() => setMenuOpen((open) => !open)}
 					className="md:hidden"
 				/>
-				<a href="#/using" className="tr-title-compact text-text-default">
-					ThinkRail components
+				<a
+					href={`#/${OVERVIEW}`}
+					className="flex items-center gap-8 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				>
+					<BrandLogo />
+					<span className="tr-title-card text-text-default">Components</span>
 				</a>
-				<span className="hidden tr-text-metadata text-text-muted sm:inline">
-					live from source · production styles
-				</span>
-				<div className="ml-auto">
+				<div className="ml-auto flex h-full items-center gap-12">
+					<TopNav area={area} />
 					<ThemeMenu />
 				</div>
 			</header>
 			<div className="relative flex min-h-0 flex-1">
-				<aside className="hidden w-[15rem] shrink-0 overflow-y-auto border-border-default border-r bg-container-sidebar-bg p-8 md:block">
-					<Navigation route={route} onNavigate={() => {}} />
+				<aside className="hidden w-[16rem] shrink-0 overflow-y-auto border-border-default border-r bg-container-sidebar-bg px-8 py-16 md:block">
+					<Sidebar area={area} route={route} onNavigate={() => {}} />
 				</aside>
 				{menuOpen ? (
 					<aside
 						id="library-nav-drawer"
-						className="absolute inset-y-0 left-0 z-20 w-[16rem] max-w-full overflow-y-auto border-border-default border-r bg-container-sidebar-bg p-8 shadow-[var(--shadow-lg)] md:hidden"
+						className="absolute inset-y-0 left-0 z-20 flex w-[16rem] max-w-full flex-col gap-16 overflow-y-auto border-border-default border-r bg-container-sidebar-bg px-8 py-16 shadow-[var(--shadow-lg)] md:hidden"
 					>
-						<Navigation route={route} onNavigate={() => setMenuOpen(false)} />
+						<Sidebar area="guides" route={route} onNavigate={() => setMenuOpen(false)} />
+						<Sidebar area="components" route={route} onNavigate={() => setMenuOpen(false)} />
 					</aside>
 				) : null}
 				<main id="library-main" className="min-w-0 flex-1 overflow-y-auto">
@@ -122,7 +194,9 @@ export function App() {
 						<ComponentPage key={component.slug} doc={component} />
 					) : guide ? (
 						<GuidePage page={guide} />
-					) : null}
+					) : (
+						<OverviewPage />
+					)}
 				</main>
 			</div>
 		</div>

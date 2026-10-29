@@ -3,7 +3,8 @@ import { Switch } from "@thinkrail/ui/switch";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { type ComponentType, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import type { ComponentDoc } from "../content/types";
-import { CodeBlock } from "../parts/CodeBlock";
+import { CodeBlock, CopyText } from "../parts/CodeBlock";
+import { DemoCard } from "../parts/DemoCard";
 import { InlineMarkdown, Markdown } from "../parts/Markdown";
 import { Section, Table } from "../parts/Section";
 import {
@@ -13,7 +14,8 @@ import {
 	type SpecimenConfig,
 	specimenCode,
 } from "../parts/Specimen";
-import type { componentSections } from "./sections";
+import { Toc, type TocEntry } from "../parts/Toc";
+import { type SectionId, sectionTitles } from "./sections";
 
 const exampleModules = import.meta.glob<{ default: ComponentType }>("../examples/*/*.tsx", {
 	eager: true,
@@ -48,7 +50,7 @@ function flagPatch(flag: (typeof FLAGS)[number], on: boolean): Partial<SpecimenC
 }
 const CONTENTS: readonly Content[] = ["text", "icon left", "icon right", "both icons"];
 
-function sectionId(doc: ComponentDoc, id: (typeof componentSections)[number]["id"]) {
+function sectionId(doc: ComponentDoc, id: SectionId) {
 	return `${doc.slug}-${id}`;
 }
 
@@ -67,70 +69,58 @@ function MeasuredHeight({ children }: { children: ReactNode }) {
 	);
 }
 
-function Overview({ doc, kind }: { doc: ComponentDoc; kind: Kind }) {
+function WhenToUse({ doc }: { doc: ComponentDoc }) {
+	return (
+		<Section id={sectionId(doc, "when")} title={sectionTitles.when}>
+			<ul className="flex list-disc flex-col gap-8 pl-24 tr-text-reading text-text-default">
+				{doc.whenToUse.map((line) => (
+					<li key={line}>
+						<InlineMarkdown source={line} />
+					</li>
+				))}
+			</ul>
+			<h3 className="tr-title-section text-text-default">Choose something else when</h3>
+			<ul className="flex list-disc flex-col gap-8 pl-24 tr-text-reading text-text-default">
+				{doc.alternatives.map((alt) => (
+					<li key={alt.name}>
+						<span className="tr-text-emphasis">{alt.name}</span>
+						<span className="text-text-muted"> — </span>
+						<InlineMarkdown source={alt.when} />
+					</li>
+				))}
+			</ul>
+		</Section>
+	);
+}
+
+function VariantsAndSizes({ doc, kind }: { doc: ComponentDoc; kind: Kind }) {
 	const variants = Object.keys(doc.variants) as ButtonVariant[];
 	const sizes = Object.keys(doc.sizes) as ButtonSize[];
 	return (
-		<Section id={sectionId(doc, "overview")} title="Variants and sizes">
-			<div className="grid grid-cols-[minmax(0,1fr)] gap-24 xl:grid-cols-[minmax(0,1fr)_22rem]">
-				<div className="flex flex-col gap-12">
-					<Table
-						head={["Variant", ...sizes.map((size) => size.toUpperCase())]}
-						rows={variants.map((variant) => [
-							<code key="name" className="tr-code-text">
-								{variant}
-							</code>,
-							...sizes.map((size) => (
-								<MeasuredHeight key={size}>
-									<Specimen kind={kind} config={{ variant, size, content: "icon left" }} />
-								</MeasuredHeight>
-							)),
-						])}
-					/>
-					<Table
-						head={["Variant", "Use it for"]}
-						rows={variants.map((variant) => [
-							<code key="name" className="tr-code-text">
-								{variant}
-							</code>,
-							<InlineMarkdown key="text" source={doc.variants[variant] ?? ""} />,
-						])}
-					/>
-					<Table
-						head={["Size", "Use it for"]}
-						rows={sizes.map((size) => [
-							<code key="name" className="tr-code-text">
-								{size}
-							</code>,
-							<InlineMarkdown key="text" source={doc.sizes[size] ?? ""} />,
-						])}
-					/>
-				</div>
-				<aside className="flex flex-col gap-16 rounded-sm border border-border-default bg-container-elevated-bg p-16">
-					<div className="flex flex-col gap-8">
-						<h3 className="tr-title-section text-text-default">When to use</h3>
-						<ul className="flex list-disc flex-col gap-4 pl-16 tr-text-ui">
-							{doc.whenToUse.map((line) => (
-								<li key={line}>
-									<InlineMarkdown source={line} />
-								</li>
-							))}
-						</ul>
-					</div>
-					<div className="flex flex-col gap-8">
-						<h3 className="tr-title-section text-text-default">Alternatives</h3>
-						<ul className="flex flex-col gap-8 tr-text-ui">
-							{doc.alternatives.map((alt) => (
-								<li key={alt.name}>
-									<span className="tr-text-emphasis">{alt.name}</span>
-									<span className="text-text-muted"> — </span>
-									<InlineMarkdown source={alt.when} />
-								</li>
-							))}
-						</ul>
-					</div>
-				</aside>
-			</div>
+		<Section id={sectionId(doc, "variants")} title={sectionTitles.variants}>
+			<Table
+				head={["Variant", ...sizes.map((size) => size.toUpperCase()), "Use it for"]}
+				rows={variants.map((variant) => [
+					<code key="name" className="tr-code-text">
+						{variant}
+					</code>,
+					...sizes.map((size) => (
+						<MeasuredHeight key={size}>
+							<Specimen kind={kind} config={{ variant, size, content: "icon left" }} />
+						</MeasuredHeight>
+					)),
+					<InlineMarkdown key="text" source={doc.variants[variant] ?? ""} />,
+				])}
+			/>
+			<Table
+				head={["Size", "Use it for"]}
+				rows={sizes.map((size) => [
+					<code key="name" className="tr-code-text">
+						{size}
+					</code>,
+					<InlineMarkdown key="text" source={doc.sizes[size] ?? ""} />,
+				])}
+			/>
 		</Section>
 	);
 }
@@ -140,7 +130,7 @@ function States({ doc, kind }: { doc: ComponentDoc; kind: Kind }) {
 	return (
 		<Section
 			id={sectionId(doc, "states")}
-			title="States"
+			title={sectionTitles.states}
 			description="Every cell is the real component. Hover and press the first column, or click into the page and press Tab to see keyboard focus. Disabled, loading and selected are real props."
 		>
 			<Table
@@ -180,7 +170,7 @@ function Tones({ doc, kind }: { doc: ComponentDoc; kind: Kind }) {
 	return (
 		<Section
 			id={sectionId(doc, "tone")}
-			title="Tone"
+			title={sectionTitles.tone}
 			description={
 				<InlineMarkdown source="`tone` applies to `outline` and `ghost`; other variants ignore it." />
 			}
@@ -260,7 +250,7 @@ function Playground({ doc, kind }: { doc: ComponentDoc; kind: Kind }) {
 	return (
 		<Section
 			id={sectionId(doc, "playground")}
-			title="Playground"
+			title={sectionTitles.playground}
 			description="Combine supported props; the preview is the real component and the code updates with it."
 		>
 			<div className="grid grid-cols-[minmax(0,1fr)] gap-16 rounded-sm border border-border-default p-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -316,42 +306,27 @@ function Playground({ doc, kind }: { doc: ComponentDoc; kind: Kind }) {
 	);
 }
 
+export function exampleAnchor(doc: ComponentDoc, id: string) {
+	return `${doc.slug}-example-${id}`;
+}
+
 function Examples({ doc }: { doc: ComponentDoc }) {
 	return (
-		<Section
-			id={sectionId(doc, "examples")}
-			title="Examples"
-			description="Each example is a file in the library; the preview runs it and the code is its exact source."
-		>
-			<div className="flex flex-col gap-16">
+		<Section id={sectionId(doc, "examples")} title={sectionTitles.examples}>
+			<div className="gap-16 xl:columns-2">
 				{doc.examples.map((example) => {
 					const path = `../examples/${doc.slug}/${example.id}.tsx`;
-					const Example = exampleModules[path]?.default;
 					return (
-						<article
+						<DemoCard
 							key={example.id}
-							data-testid={`example-${doc.slug}-${example.id}`}
-							className="grid grid-cols-[minmax(0,1fr)] gap-12 rounded-sm border border-border-default p-16 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
-						>
-							<div className="flex flex-col gap-12">
-								<div className="flex flex-col gap-4">
-									<h3 className="tr-title-section text-text-default">{example.title}</h3>
-									<p className="tr-text-ui text-text-muted">
-										<InlineMarkdown source={example.description} />
-									</p>
-								</div>
-								<div
-									data-testid="example-preview"
-									className="flex min-h-[4rem] items-center rounded-sm bg-container-elevated-bg p-16"
-								>
-									{Example ? <Example /> : null}
-								</div>
-							</div>
-							<CodeBlock
-								code={exampleSources[path] ?? ""}
-								title={`examples/${doc.slug}/${example.id}.tsx`}
-							/>
-						</article>
+							id={exampleAnchor(doc, example.id)}
+							testId={`example-${doc.slug}-${example.id}`}
+							title={example.title}
+							description={example.description}
+							file={`apps/web/library/examples/${doc.slug}/${example.id}.tsx`}
+							code={exampleSources[path] ?? ""}
+							Demo={exampleModules[path]?.default}
+						/>
 					);
 				})}
 			</div>
@@ -382,7 +357,8 @@ function PropsTable({ props }: { props: ComponentDoc["props"] }) {
 function Guidance({ doc }: { doc: ComponentDoc }) {
 	return (
 		<>
-			<Section id={sectionId(doc, "anatomy")} title="Anatomy">
+			<Section id={sectionId(doc, "api")} title={sectionTitles.api}>
+				<h3 className="tr-title-section text-text-default">Anatomy</h3>
 				<Table
 					head={["Part", "Description"]}
 					rows={doc.anatomy.map((part) => [
@@ -392,13 +368,12 @@ function Guidance({ doc }: { doc: ComponentDoc }) {
 						<InlineMarkdown key="text" source={part.description} />,
 					])}
 				/>
-			</Section>
-			<Section id={sectionId(doc, "api")} title="Props">
+				<h3 className="tr-title-section text-text-default">Props</h3>
 				<PropsTable props={doc.props} />
 				<h3 className="tr-title-section text-text-default">Native button props</h3>
 				<PropsTable props={doc.nativeProps} />
 			</Section>
-			<Section id={sectionId(doc, "accessibility")} title="Accessibility and keyboard">
+			<Section id={sectionId(doc, "accessibility")} title={sectionTitles.accessibility}>
 				<ul className="flex list-disc flex-col gap-4 pl-16 tr-text-ui">
 					{doc.accessibility.map((line) => (
 						<li key={line}>
@@ -416,7 +391,7 @@ function Guidance({ doc }: { doc: ComponentDoc }) {
 					])}
 				/>
 			</Section>
-			<Section id={sectionId(doc, "rules")} title="Usage rules">
+			<Section id={sectionId(doc, "rules")} title={sectionTitles.rules}>
 				<ul className="flex flex-col gap-8">
 					{doc.rules.map((rule) => (
 						<li
@@ -433,7 +408,7 @@ function Guidance({ doc }: { doc: ComponentDoc }) {
 			</Section>
 			<Section
 				id={sectionId(doc, "usages")}
-				title="In production"
+				title={sectionTitles.usages}
 				description={
 					<InlineMarkdown
 						source={`Representative call sites. The full contract is \`${doc.spec}\`.`}
@@ -456,22 +431,81 @@ function Guidance({ doc }: { doc: ComponentDoc }) {
 
 export function ComponentPage({ doc }: { doc: ComponentDoc }) {
 	const kind: Kind = doc.slug === "icon-button" ? "icon-button" : "button";
+	const toc: TocEntry[] = [
+		{ id: sectionId(doc, "when"), title: sectionTitles.when },
+		{
+			id: sectionId(doc, "examples"),
+			title: sectionTitles.examples,
+			children: doc.examples.map((example) => ({
+				id: exampleAnchor(doc, example.id),
+				title: example.title,
+			})),
+		},
+		...(
+			[
+				"variants",
+				"states",
+				"tone",
+				"playground",
+				"api",
+				"accessibility",
+				"rules",
+				"usages",
+			] as const
+		).map((id) => ({ id: sectionId(doc, id), title: sectionTitles[id] })),
+	];
+	const meta: [string, ReactNode][] = [
+		[
+			"Import",
+			<code key="import" className="tr-code-text text-text-default">
+				{doc.importLine}
+			</code>,
+		],
+		[
+			"Source",
+			<code key="source" className="tr-code-text text-text-default">
+				{doc.source}
+			</code>,
+		],
+		[
+			"Docs",
+			<span key="docs" className="flex flex-wrap gap-x-16 gap-y-4">
+				<code className="tr-code-text text-text-default">{doc.spec}</code>
+				<code className="tr-code-text text-text-default">packages/ui/COMPONENTS.md</code>
+			</span>,
+		],
+	];
 	return (
-		<article className="mx-auto flex max-w-[80rem] flex-col gap-32 px-24 py-24">
-			<header className="flex flex-col gap-12">
-				<span className="tr-text-eyebrow text-text-muted">Component</span>
-				<h1 className="tr-heading-lg text-text-default">{doc.name}</h1>
-				<Markdown source={doc.summary} className="max-w-[56rem]" />
-				<div className="max-w-[40rem]">
-					<CodeBlock code={doc.importLine} title="import" label="Copy import" />
-				</div>
-			</header>
-			<Overview doc={doc} kind={kind} />
-			<States doc={doc} kind={kind} />
-			<Tones doc={doc} kind={kind} />
-			<Playground doc={doc} kind={kind} />
-			<Examples doc={doc} />
-			<Guidance doc={doc} />
-		</article>
+		<div className="mx-auto flex max-w-[90rem] gap-40 px-16 py-24 md:px-40 md:py-40">
+			<article className="flex min-w-0 flex-1 flex-col gap-40">
+				<header className="flex flex-col gap-16 border-border-default border-b pb-32">
+					<h1 className="tr-heading-xl text-text-default">{doc.name}</h1>
+					<Markdown source={doc.summary} className="max-w-[56rem]" />
+					<dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-24 gap-y-8">
+						{meta.map(([label, value]) => (
+							<div key={label} className="contents">
+								<dt className="tr-text-ui text-text-subtle">{label}</dt>
+								<dd className="flex min-w-0 items-center gap-8">
+									{value}
+									{label === "Import" ? (
+										<CopyText text={doc.importLine} label="Copy import" />
+									) : null}
+								</dd>
+							</div>
+						))}
+					</dl>
+				</header>
+				<WhenToUse doc={doc} />
+				<Examples doc={doc} />
+				<VariantsAndSizes doc={doc} kind={kind} />
+				<States doc={doc} kind={kind} />
+				<Tones doc={doc} kind={kind} />
+				<Playground doc={doc} kind={kind} />
+				<Guidance doc={doc} />
+			</article>
+			<aside className="sticky top-40 hidden w-[13rem] shrink-0 self-start xl:block">
+				<Toc entries={toc} />
+			</aside>
+		</div>
 	);
 }

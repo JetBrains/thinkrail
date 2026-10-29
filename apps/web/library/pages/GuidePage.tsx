@@ -4,7 +4,7 @@ import { Section } from "../parts/Section";
 
 export function GuidePage({ page }: { page: GuidePageDoc }) {
 	return (
-		<article className="mx-auto flex max-w-[56rem] flex-col gap-24 px-24 py-24">
+		<article className="mx-auto flex max-w-[56rem] flex-col gap-24 px-16 py-24 md:px-40 md:py-40">
 			<header className="flex flex-col gap-8">
 				<h1 className="tr-heading-lg text-text-default">{page.title}</h1>
 				<Markdown source={page.summary} />

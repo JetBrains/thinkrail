@@ -1,12 +1,14 @@
-export const componentSections = [
-	{ id: "overview", title: "Overview" },
-	{ id: "states", title: "States" },
-	{ id: "tone", title: "Tone" },
-	{ id: "playground", title: "Playground" },
-	{ id: "examples", title: "Examples" },
-	{ id: "anatomy", title: "Anatomy" },
-	{ id: "api", title: "Props" },
-	{ id: "accessibility", title: "Accessibility" },
-	{ id: "rules", title: "Usage rules" },
-	{ id: "usages", title: "In production" },
-] as const;
+export const sectionTitles = {
+	when: "When to use",
+	examples: "Examples",
+	variants: "Variants and sizes",
+	states: "States",
+	tone: "Tone",
+	playground: "Playground",
+	api: "API",
+	accessibility: "Accessibility",
+	rules: "Usage rules",
+	usages: "In production",
+} as const;
+
+export type SectionId = keyof typeof sectionTitles;

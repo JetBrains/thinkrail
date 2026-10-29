@@ -26,6 +26,7 @@ describe("examples", () => {
 				.map((file) => file.replace(/\.tsx$/, ""))
 				.sort();
 			expect(doc.examples.map((example) => example.id).sort()).toEqual(files);
+			expect(files).toContain(doc.preview);
 		});
 });
 

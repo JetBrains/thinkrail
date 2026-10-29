@@ -28,7 +28,7 @@ Every example is a real component rendered from source with mocked data and real
 
 ### Adding a component page
 
-Write its guidance in `apps/web/library/content/<name>.ts` and its examples in `apps/web/library/examples/<name>/`, register it in `content/index.ts`, then run `bun run library:md` to regenerate the Markdown reference. `library.test.ts` fails when the reference is stale, an example file is missing, or a listed production usage no longer uses the component.
+Write its guidance in `apps/web/library/content/<name>.ts` — including its sidebar `group` and the example shown as its overview `preview` — and its examples in `apps/web/library/examples/<name>/`, register it in `content/index.ts`, then run `bun run library:md` to regenerate the Markdown reference. `library.test.ts` fails when the reference is stale, an example file is missing, or a listed production usage no longer uses the component.
 
 ### Commands
 
