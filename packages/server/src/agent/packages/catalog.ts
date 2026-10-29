@@ -109,6 +109,13 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 			.filter((entry) => entry.scope === "user" && entry.installedPath !== undefined)
 			.map((entry) => piIdentityOf(entry.source, "user")),
 	);
+	const switchKeysByPiIdentity = new Map<string, Set<string>>();
+	for (const entry of configured) {
+		const piIdentity = piIdentityOf(entry.source, entry.scope);
+		const keys = switchKeysByPiIdentity.get(piIdentity) ?? new Set<string>();
+		keys.add(switchKeyOf(entry.source, entry.scope));
+		switchKeysByPiIdentity.set(piIdentity, keys);
+	}
 	const rowByIdentity = new Map<string, PiPackageSummary>();
 	for (const entry of configured) {
 		const piIdentity = piIdentityOf(entry.source, entry.scope);
@@ -131,6 +138,7 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 						installedPath: entry.installedPath,
 					}
 				: { name: fallbackName(entry.source, entry.source) }),
+			switchKeys: [...(switchKeysByPiIdentity.get(piIdentity) ?? [])],
 			enabled: !off.has(piIdentity),
 			...(shadowed ? { shadowed: true } : {}),
 			resources: [],

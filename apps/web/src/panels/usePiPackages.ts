@@ -35,6 +35,17 @@ export interface PiPackagesController {
 	install: (request: { source: string; scope: PiPackageScope }) => Promise<PiPackageSummary>;
 }
 
+/** Off adds the row's key; on clears every key of the package, including those of pi-equivalent declarations. */
+export function nextDisabledPackages(
+	current: readonly string[],
+	target: Pick<PiPackageSummary, "identity" | "switchKeys">,
+	enabled: boolean,
+): string[] {
+	const keys = new Set([target.identity, ...target.switchKeys]);
+	const without = current.filter((candidate) => !keys.has(candidate));
+	return enabled ? without : [...without, target.identity];
+}
+
 /** Every `packages.*` request of the Extensions page; list and check results apply only when still current. */
 export function usePiPackages({
 	enabled,
@@ -171,12 +182,7 @@ export function usePiPackages({
 	const onAction = (action: PiPackageAction) => {
 		switch (action.kind) {
 			case "togglePackage": {
-				const next = action.enabled
-					? disabledPackages.filter((candidate) => candidate !== action.identity)
-					: [
-							...disabledPackages.filter((candidate) => candidate !== action.identity),
-							action.identity,
-						];
+				const next = nextDisabledPackages(disabledPackages, action.target, action.enabled);
 				void run(
 					[action.rowKey],
 					() => getTransport().request("settings.update", { config: { disabledPackages: next } }),

@@ -924,7 +924,9 @@ export interface PiPackageSummary {
 	description?: string;
 	/** Absent when the declaration has no install on disk: pi retries at a chat's next start; the row offers Remove only. */
 	installedPath?: string;
-	/** The host-wide switch: `false` when `identity` is in `disabledPackages`. */
+	/** Every `disabledPackages` key that switches this package off: its own `identity` and those of pi-equivalent declarations. */
+	switchKeys: string[];
+	/** The host-wide switch, closed over pi's equivalence: `false` when any of `switchKeys` is in `disabledPackages`. */
 	enabled: boolean;
 	/** `true` for a user declaration pi leaves aside because the repository declares the same identity. */
 	shadowed?: boolean;

@@ -21,6 +21,7 @@ const JIRA: PiPackageSummary = {
 	version: "1.4.2",
 	description: "Jira issues and search for the agent",
 	installedPath: "/home/me/.pi/agent/npm/node_modules/@acme/pi-jira",
+	switchKeys: ["npm:@acme/pi-jira"],
 	enabled: true,
 	resources: [
 		{
@@ -74,7 +75,6 @@ function renderGroup(catalog: PiPackagesGroupCatalog, overrides: Partial<GroupPr
 	return renderToStaticMarkup(
 		<PiPackagesGroup
 			catalog={catalog}
-			disabledPackages={[]}
 			updates={none}
 			checkingUpdates={false}
 			busy={none}
@@ -158,11 +158,11 @@ test("a loose file row carries its path, the local-file tag and its load error w
 	expect(markup).toContain('data-testid="loose-extension-toggle" data-active="true"');
 });
 
-test("the group follows the synced disabled list and the update-check result", () => {
-	const markup = renderGroup(CATALOG, {
-		disabledPackages: ["npm:@acme/pi-jira"],
-		updates: new Set([piPackageKey(JIRA)]),
-	});
+test("the group shows the host's enabled state and the update-check result", () => {
+	const markup = renderGroup(
+		{ ...CATALOG, packages: [{ ...JIRA, enabled: false }] },
+		{ updates: new Set([piPackageKey(JIRA)]) },
+	);
 	expect(markup).toContain('data-testid="package-toggle" data-active="false"');
 	expect(markup).toContain('data-testid="package-update-available"');
 	expect(markup).toContain('data-testid="packages-update-all"');

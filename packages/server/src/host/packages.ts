@@ -47,9 +47,10 @@ export async function packagesInstall(params: {
 		{ source: params.source, scope: params.scope },
 		disabledPackages,
 	);
+	const keys = new Set([identity, ...summary.switchKeys]);
 	const disabled = getConfig().disabledPackages;
-	if (disabled.includes(identity)) {
-		updateConfig({ disabledPackages: disabled.filter((entry) => entry !== identity) });
+	if (disabled.some((entry) => keys.has(entry))) {
+		updateConfig({ disabledPackages: disabled.filter((entry) => !keys.has(entry)) });
 	}
 	return { ...summary, enabled: true };
 }

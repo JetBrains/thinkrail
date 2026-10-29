@@ -29,7 +29,7 @@ import { SettingsNotice } from "./SettingsNotice";
 
 /** `rowKey` is the row the action came from — what the page marks busy or shows an error on. */
 export type PiPackageAction =
-	| { kind: "togglePackage"; rowKey: string; identity: string; enabled: boolean }
+	| { kind: "togglePackage"; rowKey: string; target: PiPackageSummary; enabled: boolean }
 	| {
 			kind: "toggleResource";
 			rowKey: string;
@@ -303,7 +303,7 @@ export function PackageRow({
 							testId="package-toggle"
 							disabled={busy}
 							onCheckedChange={(enabled) =>
-								onAction({ kind: "togglePackage", rowKey, identity: summary.identity, enabled })
+								onAction({ kind: "togglePackage", rowKey, target: summary, enabled })
 							}
 						/>
 					)}
@@ -509,7 +509,6 @@ export function LooseRow({
 
 export interface PiPackagesGroupProps {
 	catalog: PiPackagesCatalog | "loading" | "failed";
-	disabledPackages: readonly string[];
 	/** `scope\0source` keys the last update check flagged. */
 	updates: ReadonlySet<string>;
 	checkingUpdates: boolean;
@@ -527,7 +526,6 @@ export interface PiPackagesGroupProps {
 
 export function PiPackagesGroup({
 	catalog,
-	disabledPackages,
 	updates,
 	checkingUpdates,
 	checkError,
@@ -647,7 +645,7 @@ export function PiPackagesGroup({
 						return (
 							<PackageRow
 								key={key}
-								summary={{ ...summary, enabled: !disabledPackages.includes(summary.identity) }}
+								summary={summary}
 								updateAvailable={updates.has(key)}
 								expanded={expanded.has(key)}
 								busy={busy.has(key)}

@@ -200,6 +200,31 @@ test("a file:// source lists, removes and installs like the path it names", asyn
 	]);
 });
 
+test("installing for the repository a folder the user already declares returns the one row and clears every key", async () => {
+	const tools = join(repo, "tools");
+	writeFixturePiPackage(tools, { prompts: [] });
+	writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [tools] }));
+	updateConfig({ disabledPackages: ["local:project:tools"] });
+	expect((await list("w1")).packages[0]).toMatchObject({
+		scope: "user",
+		enabled: true,
+		switchKeys: [`local:${tools}`],
+	});
+	const summary = (await handleRequest(
+		"packages.install",
+		{ source: "./tools", scope: "project", workspaceId: "w1" },
+		CTX,
+	)) as PiPackageSummary;
+	expect(summary).toMatchObject({ scope: "project", enabled: true });
+	expect(summary.switchKeys.sort()).toEqual([`local:${tools}`, "local:project:tools"].sort());
+	expect(getConfig().disabledPackages).toEqual([]);
+	const rows = (await list("w1")).packages;
+	expect(rows.map((row) => [row.scope, row.enabled, row.shadowed ?? false])).toEqual([
+		["user", true, true],
+		["project", true, false],
+	]);
+});
+
 test("a failure after the declaration was written is not reported as an install failure", async () => {
 	const listConfigured = spyOn(
 		DefaultPackageManager.prototype,

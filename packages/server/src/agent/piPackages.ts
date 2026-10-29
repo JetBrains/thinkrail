@@ -104,9 +104,10 @@ export async function piPackagesInstall(
 	refreshPiPackages();
 	const enabledFromNowOn = new Set(disabledPackages());
 	enabledFromNowOn.delete(identity);
+	const covers = (e: PiPackageSummary) => e.switchKeys.includes(identity);
 	const find = (catalog: PiPackagesCatalog) =>
-		catalog.packages.find((e) => e.identity === identity && e.scope === request.scope) ??
-		catalog.packages.find((e) => e.identity === identity);
+		catalog.packages.find((e) => covers(e) && e.scope === request.scope) ??
+		catalog.packages.find(covers);
 	let summary: PiPackageSummary | undefined;
 	try {
 		summary = find(await piPackagesCatalog(target, enabledFromNowOn));

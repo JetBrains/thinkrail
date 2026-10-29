@@ -1102,7 +1102,9 @@ a project picker, the prompt hero, and the reused
   probes its new package once, so a fresh install shows chips at once) · the **switch** · a ⋯ menu
   (Update, Open folder, Remove…). The group's one-line description says the switch affects ThinkRail chats only (the pi CLI
   still loads the package — `disabledPackages` is a ThinkRail setting). The switch is the only state
-  control and reads **`store.disabledPackages`**; an off row dims
+  control; it renders the host's `enabled` (closed over pi's package equivalence) and writes
+  `settings.update { disabledPackages }` — on removes every key in the row's `switchKeys`, off adds its
+  `identity` (`nextDisabledPackages`); an off row dims
   its text and chips; a user declaration the repository shadows says so under its provenance line. There is no status column and no "installing" row. A declaration with no install
   on disk (`installedPath` absent) is a **Not installed** row: a warning tag, the source and one hint
   line ("pi retries when a chat starts; remove it if that keeps failing"), no switch, no expand, a menu

@@ -169,7 +169,6 @@ export function ExtensionsSettings() {
 				<>
 					<PiPackagesGroup
 						catalog={catalog}
-						disabledPackages={disabledPackages}
 						updates={packages.updates}
 						checkingUpdates={packages.checkingUpdates}
 						checkError={packages.errors.get(UPDATE_CHECK_KEY)}

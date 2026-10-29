@@ -1084,8 +1084,11 @@ and what it loaded, never pi's own types.
   by resolved path — except a repository declaration's local source inside the worktree, keyed by its
   worktree-relative path so every worktree of the project shares the switch; the host closes the switch
   over pi's own equivalence, so switching off any declaration of a package switches off its aliases too), `source` **as declared** (`npm:@scope/pkg@1.2.0`, `../pkgs/tools`), `kind`, `scope`,
-  `name` / `version` / `description` from its `package.json`, `installedPath`, `enabled`
-  (`!disabledPackages.includes(identity)`), `shadowed` (a user declaration pi leaves aside because the
+  `name` / `version` / `description` from its `package.json`, `installedPath`, `switchKeys` (every
+  `disabledPackages` key that covers the package: its own `identity` and those of pi-equivalent
+  declarations — a client switching a package on removes them all, off adds `identity`), `enabled`
+  (the host's effective state: `false` when any of `switchKeys` is in `disabledPackages`; a client
+  renders it as is, never recomputes it), `shadowed` (a user declaration pi leaves aside because the
   repository declares the same identity outright; a repository `autoload: false` override is a delta
   over the user install, so its resources land on the user row and nothing is shadowed), and
   `resources: PiPackageResource[]` — every extension, skill and prompt file (themes are terminal-only and
