@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { dirname, join, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	createSyntheticSourceInfo,
@@ -231,6 +231,39 @@ export function disabledExtensions(): ReadonlySet<string> {
 
 const isExtensionDisabled = (name: string): boolean => disabledExtensions().has(name);
 
+const providerOwners = new Map<string, Set<string>>();
+
+function recordProviderOwners(result: LoadExtensionsResult): void {
+	const resolvedPaths = new Map(
+		result.extensions.map((extension) => [extension.path, extension.resolvedPath]),
+	);
+	const { pendingProviderRegistrations, pendingNativeProviderRegistrations } = result.runtime;
+	const registrations = [
+		...pendingProviderRegistrations,
+		...pendingNativeProviderRegistrations.map(({ provider, extensionPath }) => ({
+			name: provider.id,
+			extensionPath,
+		})),
+	];
+	for (const { name, extensionPath } of registrations) {
+		const path = resolvedPaths.get(extensionPath);
+		if (path === undefined || !isAbsolute(path)) continue;
+		const owners = providerOwners.get(name) ?? new Set<string>();
+		owners.add(path);
+		providerOwners.set(name, owners);
+	}
+}
+
+export function providerExtensionPaths(loader: ResourceLoader, provider: string): string[] {
+	const owners = providerOwners.get(provider);
+	if (!owners) return [];
+	return loader
+		.getExtensions()
+		.extensions.flatMap((extension) =>
+			owners.has(extension.resolvedPath) ? [extension.resolvedPath] : [],
+		);
+}
+
 export function childBaseExtensionFactories(): InlineExtension[] {
 	return [oversizedImageGuard, skillCarryover];
 }
@@ -276,8 +309,10 @@ export async function buildResourceLoader(
 		settingsManager,
 		...skillInputs,
 		extensionFactories,
-		extensionsOverride: (result: LoadExtensionsResult) =>
-			preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload)),
+		extensionsOverride: (result: LoadExtensionsResult) => {
+			recordProviderOwners(result);
+			return preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload));
+		},
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
 	const applyCurrentPolicy = (): void => {

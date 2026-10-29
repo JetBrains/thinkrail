@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore, type Model, type ProviderHeaders } from "@earendil-works/pi-ai";
 import {
 	createFauxCore,
+	type FauxResponseFactory,
 	fauxAssistantMessage,
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
@@ -1356,6 +1357,73 @@ test("the base set loads for every child, opted into extensions or not, ahead of
 		expect(loads).toEqual(["base", "base", "curated"]);
 	} finally {
 		await scoped.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("a child loads the parent extension that owns its model's provider, opted into extensions or not", async () => {
+	const seen = new Set<string>();
+	const seenKey = Symbol.for("pi-delegation-test:observed-sessions");
+	(globalThis as Record<symbol, unknown>)[seenKey] = seen;
+	const owner = join(tmpDir("pi-delegation-owner-"), "owner.ts");
+	writeFileSync(
+		owner,
+		`export default function (pi) {
+	pi.on("before_agent_start", (_event, ctx) => {
+		globalThis[Symbol.for("pi-delegation-test:observed-sessions")].add(ctx.sessionManager.getSessionId());
+	});
+}
+`,
+	);
+	registerFauxProvider(runtime, "bound");
+	const servesObserved: FauxResponseFactory = (_context, options) =>
+		seen.has(options?.sessionId ?? "")
+			? fauxAssistantMessage("SERVED")
+			: fauxAssistantMessage("", { stopReason: "error", errorMessage: "unobserved session" });
+	const boundChild = {
+		session: {
+			systemPrompt: "bound child",
+			tools: [] as string[],
+			model: { provider: "bound", id: "bound" },
+		},
+	};
+	const owning = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? {
+						cwd: parentCwd,
+						model: parent.model,
+						thinkingLevel: parent.thinkingLevel,
+						providerExtensionPaths: (provider: string) => (provider === "bound" ? [owner] : []),
+					}
+				: undefined,
+		delegationRoot,
+		scope: "ws-provider-owner",
+		modelRuntime: runtime,
+	});
+	try {
+		faux.setResponses([servesObserved]);
+		const unowned = await service.createChild(subagentSpec(boundChild));
+		try {
+			expect((await unowned.runQueued("Go.")).errorMessage).toBe("unobserved session");
+		} finally {
+			await unowned.dispose();
+		}
+
+		faux.setResponses([servesObserved]);
+		const bound = await owning.createChild(subagentSpec(boundChild));
+		const outcome = await bound.runQueued("Go.");
+		expect(outcome.status).toBe("completed");
+		expect(outcome.finalText).toBe("SERVED");
+		expect(seen.has(bound.sessionId)).toBe(true);
+
+		faux.setResponses([fauxAssistantMessage("PLAIN")]);
+		const plain = await owning.createChild(subagentSpec());
+		expect((await plain.runQueued("Go.")).finalText).toBe("PLAIN");
+		expect(seen.has(plain.sessionId)).toBe(false);
+	} finally {
+		await owning.disposeChildrenOf(parent.sessionId);
+		runtime.unregisterProvider("bound");
+		delete (globalThis as Record<symbol, unknown>)[seenKey];
 	}
 });
 

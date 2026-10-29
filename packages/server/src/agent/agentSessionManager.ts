@@ -88,6 +88,7 @@ import {
 	buildResourceLoader,
 	disabledExtensions,
 	loadsDisabledExtensionSkills,
+	providerExtensionPaths,
 	toSkillCommands,
 } from "./extensions";
 import {
@@ -2738,6 +2739,7 @@ export function liveParentContext(sessionId: string): ParentContext | undefined 
 		modelRuntime: session.modelRuntime,
 		isProjectTrusted: () =>
 			session.settingsManager.isProjectTrusted() && piResourceTrustFor(workspaceId),
+		providerExtensionPaths: (provider) => providerExtensionPaths(session.resourceLoader, provider),
 	};
 }
 

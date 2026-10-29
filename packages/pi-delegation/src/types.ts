@@ -189,6 +189,8 @@ export type ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLe
 	Partial<Pick<ExtensionContext, "isProjectTrusted">> & {
 		modelRuntime?: ModelRuntime;
 		modelRegistry?: ExtensionContext["modelRegistry"];
+		/** Loaded extension paths that registered `provider`; a child on that provider's model loads them. */
+		providerExtensionPaths?: (provider: string) => readonly string[];
 	};
 
 export interface DelegationBindings {

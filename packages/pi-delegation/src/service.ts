@@ -779,6 +779,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		thinkingLevel: SessionOptions["thinkingLevel"],
 		factories: InlineExtension[],
 		manager: SessionManager,
+		providerExtensionPaths: readonly string[] = [],
 	): Promise<AgentSession> {
 		const settingsManager =
 			bindings.buildChildSettings?.(cwd, projectTrusted) ??
@@ -795,6 +796,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			agentDir: getAgentDir(),
 			settingsManager,
 			noExtensions: true,
+			additionalExtensionPaths: [...providerExtensionPaths],
 			extensionFactories: childFactories,
 			noPromptTemplates: true,
 			noThemes: true,
@@ -922,6 +924,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			options.thinkingLevel ?? parent.thinkingLevel,
 			bindings.childExtensionFactories ?? [],
 			manager,
+			model ? (parent.providerExtensionPaths?.(model.provider) ?? []) : [],
 		);
 		const current = bindings.resolveParent?.(parentSessionId);
 		const parentClosed = parentLifetimes.get(parentSessionId) !== parentLifetime || !current;
