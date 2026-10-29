@@ -34,8 +34,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   the Git registry at the mutation door, comparing canonicalized paths; same-project retries are
   idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
   directory-basename display name, `renamed: true`, and the repo default as its initial review target —
-  **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b` (the one sync git
-  call with no deadline: a large checkout legitimately runs long), never a detached
+  **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b` (no deadline: a large
+  checkout legitimately runs long; `renameWorkspace`'s `branch -m` is the other sync git call without one), never a detached
   remote checkout, and **`--no-track`**: a remote-tracking base would otherwise become the new branch's
   upstream (git's `autoSetupMerge` default), aiming the workspace terminal's `git push`/`git pull` at the
   *base* branch — the workspace branch's upstream is the user's to set on first push, never ours;
