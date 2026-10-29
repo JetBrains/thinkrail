@@ -142,10 +142,7 @@ function declaredAsInput(ctx: PiPackageHostContext, target: PiPackageTarget): st
 	return resolve(settingsBaseDir(ctx.cwd, ctx.agentDir, target.scope), expandHome(source));
 }
 
-/**
- * Installs, then persists the declaration in the scope's settings file; returns the package identity.
- * A relative local source is the user's input, read like `pi install ./tools` from the workspace.
- */
+/** Installs, then persists the declaration; a relative local source reads like `pi install ./x` from the workspace. */
 export function installPiPackage(
 	ctx: PiPackageHostContext,
 	target: PiPackageTarget,
@@ -209,12 +206,7 @@ export function removePiPackage(ctx: PiPackageHostContext, target: PiPackageTarg
 	});
 }
 
-/**
- * pi's `update(source)` reconciles every declaration of that identity, at both scopes. When the
- * targets cover every declaration, pi's own `update()` runs once and batches npm per scope; it would
- * also install a declaration that is missing on disk, so a missing one that was not asked for keeps
- * the per-target path.
- */
+// Parameterless update() also installs missing declarations, so it runs only when the targets cover them all.
 export function updatePiPackages(
 	ctx: PiPackageHostContext,
 	targets: readonly PiPackageTarget[],
@@ -314,13 +306,7 @@ function normalizeExactPattern(pattern: string): string {
 	return trimmed.split(sep).join("/");
 }
 
-/**
- * pi's filter semantics for one package: `undefined` = everything, `[]` = nothing, plain entries form
- * an allowlist, `!` excludes, and `±path` are exact overrides that beat everything before them. The
- * toggle therefore only replaces this resource's own exact override and never rewrites what the user
- * wrote for the others; an explicit `+path` stays even when it is the only entry, because an
- * `autoload: false` declaration admits nothing by default.
- */
+// Replaces only this resource's own exact override; pi's filter semantics are in the packages SPEC.
 export function togglePackageFilter(
 	current: readonly string[] | undefined,
 	pattern: string,

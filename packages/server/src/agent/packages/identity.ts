@@ -63,10 +63,7 @@ function gitHostAndPath(source: string): string {
 	return `${host.toLowerCase()}/${path.replace(/\/+$/, "").replace(/\.git$/, "")}`;
 }
 
-/**
- * pi's package identity rule (`DefaultPackageManager.getPackageIdentity`, not exported): npm by name,
- * git by host/path without ref, local by resolved absolute path.
- */
+/** pi's private `getPackageIdentity` rule: npm by name, git by host/path without ref, local by absolute path. */
 export function piPackageIdentity(source: string, resolveLocal: (path: string) => string): string {
 	const kind = piPackageSourceKind(source);
 	if (kind === "npm") return `npm:${npmPackageName(source.trim().slice(4).trim())}`;

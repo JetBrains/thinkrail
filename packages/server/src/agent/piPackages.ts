@@ -87,11 +87,7 @@ export async function piPackagesCatalog(
 	});
 }
 
-/**
- * Installs, applies to chats and pages, and returns the new row. `disabledPackages` is read after the
- * install finished — it can take minutes — so another client's switch flips are honoured; the caller
- * clears the installed identity from the setting.
- */
+// `disabledPackages` is read after the install (minutes, possibly) so another client's switch flips are honoured.
 export async function piPackagesInstall(
 	target: PiPackagesTarget,
 	request: { source: string; scope: PiPackageScope },
@@ -209,11 +205,7 @@ export function handleProjectPiSettingsChanged(worktreePath: string): boolean {
 	return handlePiSettingsFileChanged(join(worktreePath, ".pi", "settings.json"));
 }
 
-/**
- * A pi settings file changed on disk. Only a change to its `packages` / `extensions` / `skills` /
- * `prompts` declarations counts — an unrelated setting, the echo of the host's own write, or the first
- * sight of a file that does not exist does not.
- */
+/** A pi settings file changed on disk; only a semantic change to its resource declarations counts. */
 export function handlePiSettingsFileChanged(path: string): boolean {
 	const key = resolve(path);
 	const next = resourceFingerprint(path);
