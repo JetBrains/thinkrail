@@ -336,6 +336,19 @@ test("prefetch fetches from the remote the ref names, and refuses a remote-shape
 	expect(await prefetchBranch("p1", "upstairs/trunk")).toEqual({ ok: false, moved: false });
 });
 
+test("an aborted prefetch fetches nothing", async () => {
+	addSecondRemote();
+	git(repo, "update-ref", "-d", "refs/remotes/upstream/trunk");
+	const stopped = new AbortController();
+	stopped.abort();
+
+	expect(await prefetchBranch("p1", "upstream/trunk", stopped.signal)).toEqual({
+		ok: false,
+		moved: false,
+	});
+	expect(await prefetchBranch("p1", "upstream/trunk")).toEqual({ ok: true, moved: true });
+});
+
 test("prefetch honors a legal remote name containing a slash", async () => {
 	const nestedRepo = join(dataDir, "team-upstream.git");
 	git(repo, "init", "--bare", nestedRepo);

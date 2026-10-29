@@ -249,14 +249,10 @@ export async function createWorkspace(
 	projectId: string,
 	name?: string,
 	baseRef?: string,
+	signal?: AbortSignal,
 ): Promise<Workspace> {
 	const project = openProjectById(projectId);
-
 	const displayName = name ? toDisplayName(name) : null;
-	const branch = displayName
-		? uniqueBranch(project, toBranch(displayName))
-		: nextAutoBranch(project);
-	const wsName = displayName ?? branch;
 
 	const base = baseRef?.trim();
 	let baseBranch: string;
@@ -274,7 +270,7 @@ export async function createWorkspace(
 		const fetched = await gitAsync(
 			project.path,
 			["fetch", remoteName, "--", baseBranch.slice(`${remoteName}/`.length)],
-			{ network: true },
+			{ network: true, ...(signal ? { signal } : {}) },
 		);
 		if (baseMissing())
 			throw new Error(
@@ -284,6 +280,10 @@ export async function createWorkspace(
 			);
 	}
 
+	const branch = displayName
+		? uniqueBranch(project, toBranch(displayName))
+		: nextAutoBranch(project);
+	const wsName = displayName ?? branch;
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
 	mkdirSync(dirname(worktreePath), { recursive: true });
 	const added = git(project.path, [

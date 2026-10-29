@@ -91,7 +91,10 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   moves afterwards (what the diff is measured *against* is the separate, re-pointable `diffBase`; see
   `setWorkspaceDiffBase`); **branch name made unique
   against refs *and* worktree dirs** — archiving leaves the branch behind and renaming frees a branch
-  name whose worktree directory stays occupied, so candidate names skip both; path
+  name whose worktree directory stays occupied, so candidate names skip both — and **chosen after the
+  fallback fetch**, so no await separates choosing it from `worktree add -b` and parallel creates (an
+  agent's parallel `start_workspace` calls) never pick the same one; a caller's `signal` cancels the
+  fallback fetch, which then fails the create like any failed fetch; path
   `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
   (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
   new worktree, the home for temp docs (task-specs / working files) that stay out of git yet remain

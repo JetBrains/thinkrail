@@ -221,9 +221,10 @@ ref off the workspace-create critical path.
   (`null` when the path is not a readable worktree root, so a refresh never persists an I/O failure as a
   detach); **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
   take (git resolves symlinks, a caller's path does not), shared with `workspaces`' worktree-identity
-  checks; `prefetchBranch(projectId, ref)` — best-effort background
-  `git fetch` of a configured remote ref (via `gitAsync`), so a later `createWorkspace` branches off a
-  fresh tip without the network round-trip on its critical path (local/unknown ref or offline → no-op).
+  checks; `prefetchBranch(projectId, ref, signal?)` — best-effort background
+  `git fetch` of a configured remote ref (via `gitAsync`; an aborted `signal` cancels it), so a later
+  `createWorkspace` branches off a fresh tip without the network round-trip on its critical path
+  (local/unknown ref or offline → no-op).
   Its ref is
   **wire-supplied and passes the same `isSafeRef` gate `createWorkspace` uses** before it reaches git:
   `--` separates *options*, not refspecs, so `--`-after-`fetch` alone stopped a `-`-prefixed name and
