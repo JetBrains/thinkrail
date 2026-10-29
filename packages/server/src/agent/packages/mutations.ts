@@ -6,7 +6,11 @@ import {
 	type ResolvedResource,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { PiPackageResourceType, PiPackageScope } from "@thinkrail/contracts";
+import {
+	normalizePiPackageSource,
+	type PiPackageResourceType,
+	type PiPackageScope,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { invalidatePiPackageCatalog, packageSourceIdentity } from "./catalog";
 import {
@@ -149,7 +153,7 @@ export function installPiPackage(
 ): Promise<string> {
 	return enqueue(async () => {
 		assertScope(target.scope);
-		const raw = target.source.trim();
+		const raw = normalizePiPackageSource(target.source);
 		if (!raw) throw new CodedError("PACKAGE_SOURCE_INVALID", "A package source is required.");
 		assertScopeWritable(ctx, target.scope);
 		const kind = piPackageSourceKind(raw);

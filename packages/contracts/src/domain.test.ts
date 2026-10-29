@@ -18,6 +18,7 @@ import {
 	isPlanReviewResult,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	normalizePiPackageSource,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	type ResourceRecord,
 	resourceHistoryCursor,
@@ -430,5 +431,56 @@ describe("resource history vocabulary", () => {
 			{ at: 2, id: "z" },
 			{ at: 1, id: "a" },
 		]);
+	});
+});
+
+describe("normalizePiPackageSource", () => {
+	test("pasted pi install lines, gallery and npm URLs and bare names become npm sources", () => {
+		expect(normalizePiPackageSource("pi install npm:@jals1212/pi-spaces")).toBe(
+			"npm:@jals1212/pi-spaces",
+		);
+		expect(normalizePiPackageSource("`pi install -l npm:pi-plain@1.2.0`")).toBe(
+			"npm:pi-plain@1.2.0",
+		);
+		expect(normalizePiPackageSource("https://pi.dev/packages/@jals1212/pi-spaces")).toBe(
+			"npm:@jals1212/pi-spaces",
+		);
+		expect(normalizePiPackageSource("https://pi.dev/packages/bigpowers/?utm=x#install")).toBe(
+			"npm:bigpowers",
+		);
+		expect(normalizePiPackageSource("https://www.npmjs.com/package/@jals1212/pi-spaces")).toBe(
+			"npm:@jals1212/pi-spaces",
+		);
+		expect(normalizePiPackageSource("https://npmjs.com/package/@jals1212/pi-spaces/v/0.4.0")).toBe(
+			"npm:@jals1212/pi-spaces@0.4.0",
+		);
+		expect(normalizePiPackageSource("https://www.npmjs.com/package/%40jals1212%2Fpi-spaces")).toBe(
+			"npm:@jals1212/pi-spaces",
+		);
+		expect(normalizePiPackageSource("@jals1212/pi-spaces")).toBe("npm:@jals1212/pi-spaces");
+		expect(normalizePiPackageSource("@jals1212/pi-spaces@0.4.0")).toBe(
+			"npm:@jals1212/pi-spaces@0.4.0",
+		);
+		expect(normalizePiPackageSource("  pi-spaces ")).toBe("npm:pi-spaces");
+	});
+
+	test("pi's own sources, git URLs and paths pass through untouched", () => {
+		for (const source of [
+			"npm:@jals1212/pi-spaces",
+			"git:github.com/acme/pi-tools@v2",
+			"https://github.com/acme/pi-tools.git",
+			"ssh://git@github.com/acme/pi-tools",
+			"/abs/pi/tools",
+			"~/pi/tools",
+			"./tools",
+			"tools/sub",
+			"file:///tmp/tools",
+			"spaces.ts",
+			"builtin:mcp",
+		]) {
+			expect(normalizePiPackageSource(source)).toBe(source);
+		}
+		expect(normalizePiPackageSource("")).toBe("");
+		expect(normalizePiPackageSource("pi install")).toBe("");
 	});
 });

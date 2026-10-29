@@ -31,6 +31,7 @@ export {
 	LINE_WIDTH_COLUMNS,
 	MAX_HISTORY_LIMIT,
 	MAX_HISTORY_QUERY_LENGTH,
+	normalizePiPackageSource,
 	normalizeThemePreference,
 	PLAN_REVIEW_VERDICTS,
 	RECENT_MODELS_LIMIT,

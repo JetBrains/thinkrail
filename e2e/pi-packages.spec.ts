@@ -79,6 +79,13 @@ test("a pi package installed from Settings reaches a chat, switches off and on, 
 		await section.getByTestId("packages-install").click();
 		const dialog = page.getByTestId("install-package-dialog");
 		await expect(dialog).toBeVisible();
+		await dialog
+			.getByTestId("install-package-source")
+			.fill("https://pi.dev/packages/@jals1212/pi-spaces");
+		await expect(dialog.getByTestId("install-package-echo")).toHaveText(
+			"npm · @jals1212/pi-spaces",
+		);
+		await expect(dialog.getByTestId("install-package-submit")).toContainText("@jals1212/pi-spaces");
 		await dialog.getByTestId("install-package-source").fill(FIXTURE_PACKAGE);
 		await expect(dialog.getByTestId("install-package-echo")).toContainText("local folder or file");
 		await dialog.getByTestId("install-package-submit").click();

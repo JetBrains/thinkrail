@@ -194,3 +194,18 @@ test("each step has its dialog title", () => {
 		title: "Couldn't install x",
 	});
 });
+
+test("the echo and the display name read gallery links, pasted commands and bare names as npm", () => {
+	expect(describeSource(t, "https://pi.dev/packages/@jals1212/pi-spaces")).toBe(
+		"npm · @jals1212/pi-spaces",
+	);
+	expect(describeSource(t, "pi install npm:@jals1212/pi-spaces")).toBe("npm · @jals1212/pi-spaces");
+	expect(describeSource(t, "https://www.npmjs.com/package/@jals1212/pi-spaces/v/0.4.0")).toBe(
+		"npm · @jals1212/pi-spaces, pinned to 0.4.0",
+	);
+	expect(describeSource(t, "@jals1212/pi-spaces")).toBe("npm · @jals1212/pi-spaces");
+	expect(sourceDisplayName("https://pi.dev/packages/@jals1212/pi-spaces")).toBe(
+		"@jals1212/pi-spaces",
+	);
+	expect(describeSource(t, "./tools")).toBe("local folder or file · ./tools");
+});

@@ -1,8 +1,9 @@
-import type {
-	PiPackageScope,
-	PiPackageSummary,
-	PiPackagesCatalog,
-	WsErrorCode,
+import {
+	normalizePiPackageSource,
+	type PiPackageScope,
+	type PiPackageSummary,
+	type PiPackagesCatalog,
+	type WsErrorCode,
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -26,7 +27,7 @@ const INPUT_CLASS =
 
 /** A light reading of the source for the echo line only; the host is the validator. */
 export function describeSource(t: Translator, raw: string): string | null {
-	const source = raw.trim();
+	const source = normalizePiPackageSource(raw);
 	if (!source) return null;
 	if (source.startsWith("npm:")) {
 		const spec = source.slice(4).trim();
@@ -46,7 +47,7 @@ export function describeSource(t: Translator, raw: string): string | null {
 }
 
 export function sourceDisplayName(raw: string): string {
-	const source = raw.trim();
+	const source = normalizePiPackageSource(raw);
 	if (source.startsWith("npm:")) {
 		const spec = source.slice(4).trim();
 		return spec.match(/^(@?[^@]+(?:\/[^@]+)?)(?:@(.+))?$/)?.[1] ?? spec;
@@ -141,7 +142,7 @@ export function InstallPackageBody({
 	const t = useT();
 	const projectAvailable = workspaceId !== null && catalog?.projectTrusted === true;
 	const effectiveScope: PiPackageScope = projectAvailable ? scope : "user";
-	const trimmed = source.trim();
+	const trimmed = normalizePiPackageSource(source);
 	const name = sourceDisplayName(trimmed);
 	const echo = describeSource(t, source);
 	const scopeHintPath =
@@ -329,7 +330,7 @@ export function InstallPackageDialog({
 
 	const projectAvailable = workspaceId !== null && catalog?.projectTrusted === true;
 	const effectiveScope: PiPackageScope = projectAvailable ? scope : "user";
-	const trimmed = source.trim();
+	const trimmed = normalizePiPackageSource(source);
 	const name = sourceDisplayName(trimmed);
 	const header = installStepHeader(t, step);
 

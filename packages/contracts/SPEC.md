@@ -57,6 +57,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `USER_THEMES_PROTOCOL_VERSION`, v92, with each ok file's `manifest` deliberately `unknown` because the
   theme schema is owned by [[submodule-web-themes]]),
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
+  `normalizePiPackageSource` (§ pi packages),
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
   `FIRST_PROMPT_MAX_LENGTH` + **`firstPromptHead(text)`** + **`firstPromptOfTexts(texts)`** +
@@ -1051,6 +1052,17 @@ contracts only.
 `PI_PACKAGES_PROTOCOL_VERSION` (98) gates the `packages.*` methods, the `packages.changed` channel and
 the `disabledPackages` setting. The DTOs describe what the host reads through pi's `DefaultPackageManager`
 and what it loaded, never pi's own types.
+
+- **`normalizePiPackageSource(raw)`** (value export from `domain`) is the one reading of the Install
+  field, shared by the web dialog (echo, display name, request) and the host (`installPiPackage`), so
+  both agree before anything is sent: a pasted `pi install [flags] <source>` line yields its source; a
+  `https://pi.dev/packages/<name>` or `https://[www.]npmjs.com/package/<name>[/v/<version>]` URL
+  (percent-encoded or not) yields `npm:<name>[@version]`; a bare npm spec (`@scope/name`, `name`,
+  either with `@version`) yields `npm:…` unless it ends in an extension-file suffix (`.ts`, `.js`, …),
+  which stays a path. Everything else — `npm:` / `git:` / `builtin:` / `file:` sources, git URLs,
+  absolute, `~` and relative paths — is returned trimmed, so pi's own syntax keeps working unchanged.
+  Deliberately not inferred: `owner/repo` as a git shorthand (pi reads it as a path, and a scoped npm
+  name without `@` looks the same).
 
 - **`PiPackagesCatalog`** — `agentDir` and `settingsPath` (the effective pi folder; a client never hardcodes
   `~/.pi/agent`), `projectSettingsPath` + `projectTrusted` when read for a workspace, then three groups:

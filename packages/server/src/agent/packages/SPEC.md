@@ -86,9 +86,11 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
   the packages layer primes its watcher before any further disk work. `installPiPackage` is
   `install()` → fresh trust check for a project scope → `settings.reload()` (an npm install can take
   minutes; an outside edit of `packages` meanwhile must survive) → `addSourceToSettings()` → persist,
-  **not** `installAndPersist`, which persists before the caller can re-check anything. A relative local
-  source is the user's *input* and reads like `pi install ./tools` from the workspace (`cwd`, else the
-  agent dir); it must exist (pi would happily declare a missing path), and the same absolute path is
+  **not** `installAndPersist`, which persists before the caller can re-check anything. The input is first
+  reduced with [[module-contracts]]' `normalizePiPackageSource` (gallery / npm links, pasted `pi
+  install` lines and bare npm names → `npm:…`), the same function the dialog echoes with. A relative
+  local source is the user's *input* and reads like `pi install ./tools` from the workspace (`cwd`, else
+  the agent dir); it must exist (pi would happily declare a missing path), and the same absolute path is
   installed, declared (pi stores it relative to the settings file) and turned into the identity.
   npm/git are refused offline (`PACKAGE_OFFLINE`), local is not. `removePiPackage` removes the
   declaration and persists **before** `remove()` touches disk, aborting on a write error, so a resolve

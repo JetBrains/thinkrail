@@ -791,6 +791,54 @@ export type PiPackageScope = "user" | "project";
 
 export type PiPackageSourceKind = "npm" | "git" | "local";
 
+const NPM_NAME = String.raw`(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*`;
+const BARE_NPM_SPEC = new RegExp(`^(${NPM_NAME})(?:@([^/\\s@]+))?$`, "i");
+const EXTENSION_FILE = /\.(m|c)?(j|t)sx?$/i;
+const PI_INSTALL_COMMAND = /^pi\s+install\b/;
+
+/**
+ * The install field's forgiving forms, reduced to the source string pi itself accepts: a pasted
+ * `pi install …` line, a pi.dev or npmjs.com package URL and a bare npm name (`@scope/name[@version]`,
+ * `name`) become `npm:…`; everything else — `npm:` / `git:` sources, git URLs, paths — is returned trimmed.
+ */
+export function normalizePiPackageSource(raw: string): string {
+	let source = raw
+		.trim()
+		.replace(/^[`'"]+|[`'"]+$/g, "")
+		.trim();
+	if (PI_INSTALL_COMMAND.test(source)) {
+		const words = source.split(/\s+/).slice(2);
+		source = words.filter((word) => !word.startsWith("-")).at(-1) ?? "";
+	}
+	const url = packageUrl(source);
+	if (url) {
+		const host = url.hostname.replace(/^www\./, "");
+		const path = decodeURIComponent(url.pathname).replace(/\/+$/, "");
+		const piDev = host === "pi.dev" ? path.match(/^\/packages\/(.+)$/) : null;
+		if (piDev?.[1]) return `npm:${piDev[1]}`;
+		const npmjs = host === "npmjs.com" ? path.match(/^\/package\/(.+?)(?:\/v\/([^/]+))?$/) : null;
+		if (npmjs?.[1]) return `npm:${npmjs[1]}${npmjs[2] ? `@${npmjs[2]}` : ""}`;
+		return source;
+	}
+	if (
+		BARE_NPM_SPEC.test(source) &&
+		!EXTENSION_FILE.test(source) &&
+		!/^(npm|git|builtin|file):/i.test(source)
+	) {
+		return `npm:${source}`;
+	}
+	return source;
+}
+
+function packageUrl(source: string): URL | null {
+	if (!/^https?:\/\//i.test(source)) return null;
+	try {
+		return new URL(source);
+	} catch {
+		return null;
+	}
+}
+
 /** The pi resource kinds the Extensions page lists and toggles; themes are terminal-only and never shown. */
 export type PiPackageResourceType = "extensions" | "skills" | "prompts";
 

@@ -85,9 +85,16 @@ describe("pi package mutations", () => {
 			installPiPackage(ctx, { source: join(root, "nope"), scope: "user" }),
 		).rejects.toMatchObject({ code: "PACKAGE_SOURCE_INVALID" });
 		process.env.PI_OFFLINE = "1";
-		await expect(
-			installPiPackage(ctx, { source: "npm:@fixture/anything", scope: "user" }),
-		).rejects.toMatchObject({ code: "PACKAGE_OFFLINE" });
+		for (const source of [
+			"npm:@fixture/anything",
+			"@fixture/anything",
+			"https://pi.dev/packages/@fixture/anything",
+			"pi install npm:@fixture/anything",
+		]) {
+			await expect(installPiPackage(ctx, { source, scope: "user" })).rejects.toMatchObject({
+				code: "PACKAGE_OFFLINE",
+			});
+		}
 		await expect(installPiPackage(ctx, { source: pkg, scope: "project" })).rejects.toMatchObject({
 			code: "PACKAGE_UNTRUSTED",
 		});
