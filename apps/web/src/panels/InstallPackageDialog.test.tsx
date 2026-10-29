@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import type { PiPackageSummary, PiPackagesCatalog } from "@thinkrail/contracts";
+import {
+	type PiPackageScope,
+	type PiPackageSummary,
+	type PiPackagesCatalog,
+	parsePiPackageInput,
+} from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -210,4 +215,35 @@ test("the echo and the display name read gallery links, pasted commands and bare
 		"@jals1212/pi-spaces",
 	);
 	expect(describeSource(t, "./tools")).toBe("local folder or file · ./tools");
+});
+
+test("a pasted `pi install -l …` line selects the repository scope when it is available", () => {
+	let scope: PiPackageScope = "user";
+	let source = "";
+	const render = () =>
+		renderToStaticMarkup(
+			<TooltipProvider>
+				<InstallPackageBody
+					step={{ kind: "form" }}
+					source={source}
+					scope={scope}
+					catalog={{
+						...CATALOG,
+						projectTrusted: true,
+						projectSettingsPath: "/repo/.pi/settings.json",
+					}}
+					workspaceId="w1"
+					onSourceChange={() => {}}
+					onScopeChange={() => {}}
+					onSubmit={() => {}}
+					onCancel={() => {}}
+					onBack={() => {}}
+					onDone={() => {}}
+				/>
+			</TooltipProvider>,
+		);
+	source = "pi install -l npm:@acme/pi-jira";
+	if (parsePiPackageInput(source).local) scope = "project";
+	expect(render()).toContain('data-testid="install-package-scope-project" data-active="true"');
+	expect(render()).toContain("npm · @acme/pi-jira");
 });

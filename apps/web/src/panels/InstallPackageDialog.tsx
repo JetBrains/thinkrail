@@ -1,9 +1,9 @@
 import { RiInformationLine } from "@remixicon/react";
 import {
-	normalizePiPackageSource,
 	type PiPackageScope,
 	type PiPackageSummary,
 	type PiPackagesCatalog,
+	parsePiPackageInput,
 	type WsErrorCode,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
@@ -29,7 +29,7 @@ const INPUT_CLASS =
 
 /** A light reading of the source for the echo line only; the host is the validator. */
 export function describeSource(t: Translator, raw: string): string | null {
-	const source = normalizePiPackageSource(raw);
+	const { source } = parsePiPackageInput(raw);
 	if (!source) return null;
 	if (source.startsWith("npm:")) {
 		const spec = source.slice(4).trim();
@@ -49,7 +49,7 @@ export function describeSource(t: Translator, raw: string): string | null {
 }
 
 export function sourceDisplayName(raw: string): string {
-	const source = normalizePiPackageSource(raw);
+	const { source } = parsePiPackageInput(raw);
 	if (source.startsWith("npm:")) {
 		const spec = source.slice(4).trim();
 		return spec.match(/^(@?[^@]+(?:\/[^@]+)?)(?:@(.+))?$/)?.[1] ?? spec;
@@ -177,7 +177,7 @@ export function InstallPackageBody({
 	const sourceInputId = useId();
 	const projectAvailable = workspaceId !== null && catalog?.projectTrusted === true;
 	const effectiveScope: PiPackageScope = projectAvailable ? scope : "user";
-	const trimmed = normalizePiPackageSource(source);
+	const trimmed = parsePiPackageInput(source).source;
 	const name = sourceDisplayName(trimmed);
 	const echo = describeSource(t, source);
 	const scopeHintPath =
@@ -374,7 +374,7 @@ export function InstallPackageDialog({
 
 	const projectAvailable = workspaceId !== null && catalog?.projectTrusted === true;
 	const effectiveScope: PiPackageScope = projectAvailable ? scope : "user";
-	const trimmed = normalizePiPackageSource(source);
+	const trimmed = parsePiPackageInput(source).source;
 	const name = sourceDisplayName(trimmed);
 	const header = installStepHeader(t, step);
 
@@ -391,7 +391,7 @@ export function InstallPackageDialog({
 		if (!trimmed) return;
 		setStep({ kind: "installing", name });
 		try {
-			const summary = await install({ source: trimmed, scope: effectiveScope });
+			const summary = await install({ source: source.trim(), scope: effectiveScope });
 			setStep({ kind: "installed", summary });
 		} catch (error) {
 			const outcome = installFailureOutcome(error);
@@ -416,7 +416,10 @@ export function InstallPackageDialog({
 					scope={scope}
 					catalog={catalog}
 					workspaceId={workspaceId}
-					onSourceChange={setSource}
+					onSourceChange={(next) => {
+						setSource(next);
+						if (parsePiPackageInput(next).local) setScope("project");
+					}}
 					onScopeChange={setScope}
 					onSubmit={() => void submit()}
 					onCancel={() => close(false)}

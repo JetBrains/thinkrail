@@ -1130,10 +1130,12 @@ a project picker, the prompt hero, and the reused
   "Nothing was added to your settings" only for the codes the host raises before it writes
   (`installFailureOutcome`), "It may have been added anyway — check the list" for any other error, Back /
   Retry; a `RequestTimeoutError` instead says to check the list, since the install may still complete). A package that installs but contributes nothing loadable
-  is a success with an empty chip list — it has a row, so it can be removed. The field is forgiving: `normalizePiPackageSource`
+  is a success with an empty chip list — it has a row, so it can be removed. The field is forgiving: `parsePiPackageInput`
   ([[module-contracts]]) turns a pi.dev or npmjs.com package link, a pasted `pi install …` line and a
-  bare `@scope/name[@version]` into the `npm:` source pi accepts, before the echo, the display name and
-  the request alike — the host applies the same function, so what the echo says is what installs.
+  bare `@scope/name[@version]` into the `npm:` source pi accepts for the echo and the display name; a
+  pasted `-l` selects the repository scope when it is available. The request carries the raw text and
+  the host applies the same function (plus its folder-first rule for a bare name), so what the echo
+  says is what installs.
   `describeSource` is a light client-side echo only — the host validates; **This repository only** is
   offered only with an active workspace whose project is pi-trusted,
   with the reason shown otherwise, and the hints show the real settings paths from the catalog. Disabling

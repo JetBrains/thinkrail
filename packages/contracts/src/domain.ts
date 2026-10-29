@@ -795,48 +795,66 @@ const NPM_NAME = String.raw`(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*`;
 const BARE_NPM_SPEC = new RegExp(`^(${NPM_NAME})(?:@([^/\\s@]+))?$`, "i");
 const EXTENSION_FILE = /\.(m|c)?(j|t)sx?$/i;
 const PI_INSTALL_COMMAND = /^pi\s+install\b/;
+const PI_INSTALL_LOCAL_FLAGS = new Set(["-l", "--local"]);
+
+export interface PiPackageInput {
+	/** The source string pi accepts, or "" when the input names nothing. */
+	source: string;
+	/** `true` when a pasted `pi install` line carried `-l` / `--local`. */
+	local: boolean;
+	/** The bare name `source` was inferred from (`bigpowers` → `npm:bigpowers`); absent otherwise. */
+	bareName?: string;
+}
 
 /**
- * The install field's forgiving forms, reduced to the source string pi itself accepts: a pasted
- * `pi install …` line, a pi.dev or npmjs.com package URL and a bare npm name (`@scope/name[@version]`,
- * `name`) become `npm:…`; everything else — `npm:` / `git:` sources, git URLs, paths — is returned trimmed.
+ * The install field's forgiving forms, reduced to what pi accepts: a pasted `pi install …` line (its
+ * `-l` is reported, not dropped), a pi.dev or npmjs.com package URL and a bare npm name become `npm:…`;
+ * everything else — `npm:` / `git:` sources, git URLs, paths — is returned trimmed. Never throws.
  */
-export function normalizePiPackageSource(raw: string): string {
+export function parsePiPackageInput(raw: string): PiPackageInput {
 	let source = raw
 		.trim()
 		.replace(/^[`'"]+|[`'"]+$/g, "")
 		.trim();
+	let local = false;
 	if (PI_INSTALL_COMMAND.test(source)) {
 		const words = source.split(/\s+/).slice(2);
+		local = words.some((word) => PI_INSTALL_LOCAL_FLAGS.has(word));
 		source = words.filter((word) => !word.startsWith("-")).at(-1) ?? "";
 	}
-	const url = packageUrl(source);
-	if (url) {
-		const host = url.hostname.replace(/^www\./, "");
-		const path = decodeURIComponent(url.pathname).replace(/\/+$/, "");
-		const piDev = host === "pi.dev" ? path.match(/^\/packages\/(.+)$/) : null;
-		if (piDev?.[1]) return `npm:${piDev[1]}`;
-		const npmjs = host === "npmjs.com" ? path.match(/^\/package\/(.+?)(?:\/v\/([^/]+))?$/) : null;
-		if (npmjs?.[1]) return `npm:${npmjs[1]}${npmjs[2] ? `@${npmjs[2]}` : ""}`;
-		return source;
-	}
+	const fromUrl = packageUrlSource(source);
+	if (fromUrl !== null) return { source: fromUrl, local };
 	if (
 		BARE_NPM_SPEC.test(source) &&
 		!EXTENSION_FILE.test(source) &&
 		!/^(npm|git|builtin|file):/i.test(source)
 	) {
-		return `npm:${source}`;
+		return { source: `npm:${source}`, local, bareName: source };
 	}
-	return source;
+	return { source, local };
 }
 
-function packageUrl(source: string): URL | null {
+function packageUrlSource(source: string): string | null {
 	if (!/^https?:\/\//i.test(source)) return null;
+	let url: URL;
 	try {
-		return new URL(source);
+		url = new URL(source);
 	} catch {
-		return null;
+		return source;
 	}
+	const host = url.hostname.replace(/^www\./, "");
+	if (host !== "pi.dev" && host !== "npmjs.com") return source;
+	let path: string;
+	try {
+		path = decodeURIComponent(url.pathname).replace(/\/+$/, "");
+	} catch {
+		return source;
+	}
+	const piDev = host === "pi.dev" ? path.match(/^\/packages\/(.+)$/) : null;
+	if (piDev?.[1]) return `npm:${piDev[1]}`;
+	const npmjs = host === "npmjs.com" ? path.match(/^\/package\/(.+?)(?:\/v\/([^/]+))?$/) : null;
+	if (npmjs?.[1]) return `npm:${npmjs[1]}${npmjs[2] ? `@${npmjs[2]}` : ""}`;
+	return source;
 }
 
 /** The pi resource kinds the Extensions page lists and toggles; themes are terminal-only and never shown. */

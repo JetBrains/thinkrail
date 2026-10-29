@@ -236,6 +236,24 @@ describe("pi package mutations", () => {
 		]);
 	});
 
+	it("a bare name installs the folder of that name when one exists, else the npm package", async () => {
+		const project = join(root, "project");
+		mkdirSync(join(project, "tools", "extensions"), { recursive: true });
+		writeFileSync(
+			join(project, "tools", "package.json"),
+			JSON.stringify({ name: "tools", pi: { extensions: ["./extensions/*.ts"] } }),
+		);
+		writeFileSync(join(project, "tools", "extensions", "t.ts"), extensionSource("tools_tool"));
+		const inWorkspace: PiPackageHostContext = { ...ctx, cwd: project };
+		expect(await installPiPackage(inWorkspace, { source: "tools", scope: "user" })).toBe(
+			`local:${join(project, "tools")}`,
+		);
+		process.env.PI_OFFLINE = "1";
+		await expect(
+			installPiPackage(inWorkspace, { source: "no-such-folder", scope: "user" }),
+		).rejects.toMatchObject({ code: "PACKAGE_OFFLINE" });
+	});
+
 	it("re-reads settings after the install so a concurrent outside edit survives", async () => {
 		const install = spyOn(DefaultPackageManager.prototype, "install").mockImplementation(
 			async () => {

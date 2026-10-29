@@ -7,9 +7,9 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import {
-	normalizePiPackageSource,
 	type PiPackageResourceType,
 	type PiPackageScope,
+	parsePiPackageInput,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { invalidatePiPackageCatalog, packageSourceIdentity } from "./catalog";
@@ -153,11 +153,16 @@ export function installPiPackage(
 ): Promise<string> {
 	return enqueue(async () => {
 		assertScope(target.scope);
-		const raw = normalizePiPackageSource(target.source);
+		const base = ctx.cwd ?? ctx.agentDir;
+		const input = parsePiPackageInput(target.source);
+		const raw =
+			input.bareName !== undefined && existsSync(resolveLocalSource(input.bareName, base))
+				? input.bareName
+				: input.source;
 		if (!raw) throw new CodedError("PACKAGE_SOURCE_INVALID", "A package source is required.");
 		assertScopeWritable(ctx, target.scope);
 		const kind = piPackageSourceKind(raw);
-		const source = kind === "local" ? resolveLocalSource(raw, ctx.cwd ?? ctx.agentDir) : raw;
+		const source = kind === "local" ? resolveLocalSource(raw, base) : raw;
 		if (kind === "local" && !existsSync(source)) {
 			throw new CodedError("PACKAGE_SOURCE_INVALID", `No such folder or file: ${source}`);
 		}
