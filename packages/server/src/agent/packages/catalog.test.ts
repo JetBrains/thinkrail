@@ -196,7 +196,7 @@ describe("listPiPackageCatalog", () => {
 		expect(await toolsOfHello()).toBeUndefined();
 	});
 
-	it("never installs a declared package that is missing on disk, even online", async () => {
+	it("lists a declared package that is missing on disk as not installed, and never installs it", async () => {
 		delete process.env.PI_OFFLINE;
 		writeFileSync(
 			join(agentDir, "settings.json"),
@@ -212,7 +212,15 @@ describe("listPiPackageCatalog", () => {
 				builtinExtensions: [],
 				disabledPackages: new Set(),
 			});
-			expect(catalog.packages.map((p) => p.name)).toEqual(["@fixture/pi-tools"]);
+			expect(catalog.packages.map((p) => [p.name, p.installedPath !== undefined])).toEqual([
+				["@fixture/not-installed", false],
+				["@fixture/pi-tools", true],
+			]);
+			expect(catalog.packages[0]).toMatchObject({
+				kind: "npm",
+				identity: "npm:@fixture/not-installed",
+				resources: [],
+			});
 			expect(installNpm).not.toHaveBeenCalled();
 			expect(install).not.toHaveBeenCalled();
 		} finally {

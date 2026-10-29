@@ -1838,6 +1838,8 @@
 	"settings.packages.loadFailed": "Couldn't load the installed packages from this host.",
 	"settings.packages.looseHint": "Not a package — edit or delete the file itself.",
 	"settings.packages.more": "More actions for {{name}}",
+	"settings.packages.notInstalled": "Not installed",
+	"settings.packages.notInstalledHint": "declared but not on disk — pi retries when a chat starts; remove it if that keeps failing",
 	"settings.packages.openFolder": "Open folder",
 	"settings.packages.openFolderFailed": "Couldn't open the folder",
 	"settings.packages.projectUntrusted": "This repository's packages load after you trust the project.",

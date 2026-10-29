@@ -194,3 +194,23 @@ test("a hand-dropped extension file is listed as a local file with its tools and
 		rmSync(loose, { force: true });
 	}
 });
+
+test("a package declared in settings but missing on disk is listed as Not installed and can be removed", async ({
+	page,
+}) => {
+	const settings = readSettings();
+	settings.packages = ["npm:@e2e/never-published"];
+	writeFileSync(SETTINGS_PATH, `${JSON.stringify(settings, null, 2)}\n`);
+	await openFixtureProject(page);
+	const section = await openExtensionsSettings(page);
+	const row = section.getByTestId("package-row");
+	await expect(row).toHaveCount(1);
+	await expect(row).toHaveAttribute("data-installed", "false");
+	await expect(row.getByTestId("package-not-installed")).toBeVisible();
+	await expect(row.getByTestId("package-toggle")).toHaveCount(0);
+	await row.getByTestId("package-menu").click();
+	await page.getByTestId("package-menu-remove").click();
+	await page.getByTestId("package-remove-confirm").click();
+	await expect(section.getByTestId("packages-empty")).toBeVisible();
+	expect(readSettings().packages ?? []).toEqual([]);
+});

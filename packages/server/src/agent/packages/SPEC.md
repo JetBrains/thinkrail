@@ -35,9 +35,11 @@ stay pi's (`DefaultPackageManager`); this module never spawns npm or git itself.
 ## What's here
 
 - `catalog.ts` — `listPiPackageCatalog(options)`: rows are seeded from `listConfiguredPackages()` — every
-  declaration whose install is **on disk**, so a package that contributes nothing still has a row with
-  Remove, and a user declaration pi deduplicates behind the repository's same-identity declaration stays
-  a row marked `shadowed` — then `resolve(async () => "skip")` attaches each resource to its declaration
+  declaration, so a package that contributes nothing still has a row with Remove, a declaration with no
+  install on disk is a row without `installedPath` (the UI's **Not installed**: Remove only — pi retries
+  the install at a chat's next start, and this row is the only way out of a typo or an offline install
+  short of `pi remove`), and a user declaration pi deduplicates behind the repository's same-identity
+  declaration stays a row marked `shadowed` — then `resolve(async () => "skip")` attaches each resource to its declaration
   and yields the loose extensions and the host-supplied built-ins; the Central artifact path is excluded
   like the session loader excludes it. **The catalog never executes
   extension code.** Tool and command names and load errors (`extensionInfo.ts`) are what a loader last

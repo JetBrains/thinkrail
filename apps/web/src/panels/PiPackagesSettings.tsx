@@ -139,10 +139,12 @@ function LoadError({
 
 function ResourceList({
 	summary,
+	installedPath,
 	busy,
 	onAction,
 }: {
 	summary: PiPackageSummary;
+	installedPath: string;
 	busy: boolean;
 	onAction: (action: PiPackageAction) => void;
 }) {
@@ -195,7 +197,7 @@ function ResourceList({
 					data-testid="package-reveal"
 					disabled={busy}
 					onClick={() =>
-						onAction({ kind: "reveal", rowKey: piPackageKey(summary), path: summary.installedPath })
+						onAction({ kind: "reveal", rowKey: piPackageKey(summary), path: installedPath })
 					}
 				>
 					{t("settings.packages.openFolder")}
@@ -265,37 +267,46 @@ export function PackageRow({
 }) {
 	const t = useT();
 	const rowKey = piPackageKey(summary);
+	const installedPath = summary.installedPath;
 	const off = !summary.enabled;
 	const loadError = off ? undefined : firstLoadError(summary.resources);
 	const titleClass = off ? "text-text-muted" : "text-text-default";
 	return (
 		<RowShell
 			testId="package-row"
-			dataAttributes={{ "data-identity": summary.identity, "data-scope": summary.scope }}
+			dataAttributes={{
+				"data-identity": summary.identity,
+				"data-scope": summary.scope,
+				"data-installed": installedPath === undefined ? "false" : "true",
+			}}
 			off={off}
 			caret={
-				<IconButton
-					icon={expanded ? ChevronDown : ChevronRight}
-					size="s"
-					label={t(expanded ? "settings.packages.collapse" : "settings.packages.expand", {
-						name: summary.name,
-					})}
-					data-testid="package-expand"
-					aria-expanded={expanded}
-					onClick={onToggleExpanded}
-				/>
+				installedPath === undefined ? undefined : (
+					<IconButton
+						icon={expanded ? ChevronDown : ChevronRight}
+						size="s"
+						label={t(expanded ? "settings.packages.collapse" : "settings.packages.expand", {
+							name: summary.name,
+						})}
+						data-testid="package-expand"
+						aria-expanded={expanded}
+						onClick={onToggleExpanded}
+					/>
+				)
 			}
 			actions={
 				<>
-					<Switch
-						checked={summary.enabled}
-						label={t("settings.packages.enable", { name: summary.name })}
-						testId="package-toggle"
-						disabled={busy}
-						onCheckedChange={(enabled) =>
-							onAction({ kind: "togglePackage", rowKey, identity: summary.identity, enabled })
-						}
-					/>
+					{installedPath === undefined ? null : (
+						<Switch
+							checked={summary.enabled}
+							label={t("settings.packages.enable", { name: summary.name })}
+							testId="package-toggle"
+							disabled={busy}
+							onCheckedChange={(enabled) =>
+								onAction({ kind: "togglePackage", rowKey, identity: summary.identity, enabled })
+							}
+						/>
+					)}
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<IconButton
@@ -314,13 +325,15 @@ export function PackageRow({
 									{t("settings.packages.update")}
 								</DropdownMenuItem>
 							) : null}
-							<DropdownMenuItem
-								data-testid="package-menu-reveal"
-								disabled={busy}
-								onSelect={() => onAction({ kind: "reveal", rowKey, path: summary.installedPath })}
-							>
-								{t("settings.packages.openFolder")}
-							</DropdownMenuItem>
+							{installedPath === undefined ? null : (
+								<DropdownMenuItem
+									data-testid="package-menu-reveal"
+									disabled={busy}
+									onSelect={() => onAction({ kind: "reveal", rowKey, path: installedPath })}
+								>
+									{t("settings.packages.openFolder")}
+								</DropdownMenuItem>
+							)}
 							<DropdownMenuItem
 								data-testid="package-menu-remove"
 								disabled={busy}
@@ -351,12 +364,21 @@ export function PackageRow({
 						{t("settings.packages.updateAvailable")}
 					</span>
 				) : null}
+				{installedPath === undefined ? (
+					<span
+						data-testid="package-not-installed"
+						className={cn(TAG_CLASS, "border-feedback-warning text-feedback-warning")}
+					>
+						{t("settings.packages.notInstalled")}
+					</span>
+				) : null}
 			</div>
 			<span
 				className={cn("truncate tr-text-metadata", off ? "text-text-subtle" : "text-text-muted")}
 			>
 				{[
 					summary.source,
+					installedPath === undefined ? t("settings.packages.notInstalledHint") : null,
 					summary.version ? t("settings.packages.installed", { version: summary.version }) : null,
 					summary.description ?? null,
 				]
@@ -369,11 +391,11 @@ export function PackageRow({
 				</span>
 			) : null}
 			<Chips chips={packageChips(summary.resources)} dim={off} />
-			{loadError ? (
+			{loadError && installedPath !== undefined ? (
 				<LoadError
 					error={loadError}
-					path={summary.installedPath}
-					onReveal={() => onAction({ kind: "reveal", rowKey, path: summary.installedPath })}
+					path={installedPath}
+					onReveal={() => onAction({ kind: "reveal", rowKey, path: installedPath })}
 				/>
 			) : null}
 			{error ? (
@@ -381,7 +403,14 @@ export function PackageRow({
 					{error}
 				</SettingsNotice>
 			) : null}
-			{expanded ? <ResourceList summary={summary} busy={busy} onAction={onAction} /> : null}
+			{expanded && installedPath !== undefined ? (
+				<ResourceList
+					summary={summary}
+					installedPath={installedPath}
+					busy={busy}
+					onAction={onAction}
+				/>
+			) : null}
 		</RowShell>
 	);
 }

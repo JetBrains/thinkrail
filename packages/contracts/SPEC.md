@@ -1069,13 +1069,15 @@ and what it loaded, never pi's own types.
 
 - **`PiPackagesCatalog`** — `agentDir` and `settingsPath` (the effective pi folder; a client never hardcodes
   `~/.pi/agent`), `projectSettingsPath` + `projectTrusted` when read for a workspace, then three groups:
-  `packages: PiPackageSummary[]` (one per declared package that is **on disk**, with or without
-  loadable resources; a user declaration pi leaves aside because the repository declares the same
-  identity is a row marked `shadowed`), `loose: PiLooseExtension[]` (extensions pi discovers outside
+  `packages: PiPackageSummary[]` (one per declaration, with or without loadable resources; a
+  declaration with no install on disk has no `installedPath` and is the "Not installed" row; a user
+  declaration pi leaves aside because the repository declares the same identity is a row marked
+  `shadowed`), `loose: PiLooseExtension[]` (extensions pi discovers outside
   any package — `<agentDir>/extensions`, `.pi/extensions`, explicit `extensions[]` entries) and `builtins:
   PiBuiltinExtension[]` (the two pi built-ins the host runs, `mcp` and `tool-search`). There is no
-  "installing" or "not installed" row: installing is the Install dialog's request, and a source declared
-  but absent from disk is pi's to install at a chat's next load.
+  "installing" row: installing is the Install dialog's request, and a source declared but absent from
+  disk is pi's to install at a chat's next load — until then it is listed as not installed so it can be
+  removed.
 - **`PiPackageSummary`** — `identity` (the host-wide switch key: npm by name, git by repo without ref, local
   by resolved path), `source` **as declared** (`npm:@scope/pkg@1.2.0`, `../pkgs/tools`), `kind`, `scope`,
   `name` / `version` / `description` from its `package.json`, `installedPath`, `enabled`

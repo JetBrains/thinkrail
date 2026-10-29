@@ -99,7 +99,6 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 	);
 	const rowByIdentity = new Map<string, PiPackageSummary>();
 	for (const entry of configured) {
-		if (!entry.installedPath) continue;
 		const identity = identityOf(entry.source, entry.scope);
 		if (entry.scope === "project" && projectDeltas.has(identity) && userIdentities.has(identity)) {
 			continue;
@@ -110,8 +109,12 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 			source: entry.source,
 			kind: piPackageSourceKind(entry.source),
 			scope: entry.scope,
-			...readPackageMetadata(entry.installedPath, entry.source),
-			installedPath: entry.installedPath,
+			...(entry.installedPath
+				? {
+						...readPackageMetadata(entry.installedPath, entry.source),
+						installedPath: entry.installedPath,
+					}
+				: { name: fallbackName(entry.source, entry.source) }),
 			enabled: !options.disabledPackages.has(identity),
 			...(shadowed ? { shadowed: true } : {}),
 			resources: [],
@@ -245,6 +248,8 @@ function readPackageMetadata(
 }
 
 function fallbackName(installedPath: string, source: string): string {
-	if (piPackageSourceKind(source) === "npm") return npmPackageName(source.trim().slice(4).trim());
+	const kind = piPackageSourceKind(source);
+	if (kind === "npm") return npmPackageName(source.trim().slice(4).trim());
+	if (kind === "git") return basename(source.replace(/\.git$/, "").replace(/[#@][^/]*$/, ""));
 	return basename(installedPath);
 }

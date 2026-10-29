@@ -885,7 +885,8 @@ export interface PiPackageSummary {
 	name: string;
 	version?: string;
 	description?: string;
-	installedPath: string;
+	/** Absent when the declaration has no install on disk: pi retries at a chat's next start; the row offers Remove only. */
+	installedPath?: string;
 	/** The host-wide switch: `false` when `identity` is in `disabledPackages`. */
 	enabled: boolean;
 	/** `true` for a user declaration pi leaves aside because the repository declares the same identity. */

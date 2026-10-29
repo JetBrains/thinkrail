@@ -884,8 +884,9 @@ re-opened transcripts provider-valid.
     file (at boot for every workspace record, and right after each of its own writes through the
     mutations' `onPersisted` hook), so an untrusted repository's edits, the echo of the host's own
     project-scope write, or the first sight of a worktree without the file never fan out a reload. A
-    declared-but-missing *enabled* package gets no host handling: pi installs it the next time a chat
-    loads its resources, as it always did (a disabled one is hidden from pi, so it is never installed).
+    declared-but-missing *enabled* package gets no host install: pi installs it the next time a chat
+    loads its resources, as it always did (a disabled one is hidden from pi, so it is never installed);
+    the page lists it as not installed with Remove.
     **Known limitations, accepted:** several chats reloading at once can each resolve and install the same missing package
     (pre-existing, as in pi CLI with two terminals; settings-first Remove narrows but does not close the
     window for a resolve already in flight); Remove and Update change files on disk at once, so a busy

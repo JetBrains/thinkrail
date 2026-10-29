@@ -248,3 +248,24 @@ test("a failed update check renders under the group header", () => {
 	const markup = renderGroup(CATALOG, { checkError: "Couldn't check for updates" });
 	expect(markup).toContain('data-testid="packages-check-error"');
 });
+
+test("a declared package missing on disk is a Not installed row with Remove only", () => {
+	const { installedPath: _installed, ...missing } = JIRA;
+	const markup = renderToStaticMarkup(
+		<PackageRow
+			summary={{ ...missing, version: undefined, description: undefined, resources: [] }}
+			updateAvailable={false}
+			expanded={false}
+			busy={false}
+			error={undefined}
+			onToggleExpanded={noop}
+			onAction={noop}
+		/>,
+	);
+	expect(markup).toContain('data-installed="false"');
+	expect(markup).toContain('data-testid="package-not-installed"');
+	expect(markup).toContain("pi retries when a chat starts");
+	expect(markup).not.toContain('data-testid="package-toggle"');
+	expect(markup).not.toContain('data-testid="package-expand"');
+	expect(markup).toContain('data-testid="package-menu"');
+});

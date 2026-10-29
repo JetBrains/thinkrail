@@ -1100,8 +1100,10 @@ a project picker, the prompt hero, and the reused
   (Update, Open folder, Remove…). The group's one-line description says the switch affects ThinkRail chats only (the pi CLI
   still loads the package — `disabledPackages` is a ThinkRail setting). The switch is the only state
   control and reads **`store.disabledPackages`**; an off row dims
-  its text and chips; a user declaration the repository shadows says so under its provenance line. There is no status column and no "installing" / "not installed" row: a row exists
-  only for something on disk, and the one row-level problem is an installed extension that failed to
+  its text and chips; a user declaration the repository shadows says so under its provenance line. There is no status column and no "installing" row. A declaration with no install
+  on disk (`installedPath` absent) is a **Not installed** row: a warning tag, the source and one hint
+  line ("pi retries when a chat starts; remove it if that keeps failing"), no switch, no expand, a menu
+  with Remove only. The one row-level problem of an installed package is an extension that failed to
   load — one attention line, `Failed to load: <pi's error>` → **Open folder**. Expanding a row lists its
   extensions, skills and prompts **read-only** (a resource pi's settings switch off says "off in pi
   settings"; the package switch is the only control — in-package toggles are deferred until pi exposes
