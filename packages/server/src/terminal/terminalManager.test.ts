@@ -144,8 +144,9 @@ beforeEach(() => {
 		HISTFILE: join(dataDir, ".test_history"),
 		HISTSIZE: "0",
 	});
-	// With no zsh startup file, zsh-newuser-install's menu swallows the first typed key.
+	// Without these stubs zsh-newuser-install swallows the first key and fish 3 builds completions in the background.
 	writeFileSync(join(dataDir, ".zshenv"), "");
+	mkdirSync(join(dataDir, "fish", "generated_completions"), { recursive: true });
 	const worktreePath = join(dataDir, "worktree");
 	mkdirSync(worktreePath);
 	saveWorkspaces([{ id: WS, worktreePath } as Workspace]);
