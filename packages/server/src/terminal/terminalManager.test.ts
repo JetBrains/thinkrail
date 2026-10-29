@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
@@ -144,6 +144,8 @@ beforeEach(() => {
 		HISTFILE: join(dataDir, ".test_history"),
 		HISTSIZE: "0",
 	});
+	// With no zsh startup file, zsh-newuser-install's menu swallows the first typed key.
+	writeFileSync(join(dataDir, ".zshenv"), "");
 	const worktreePath = join(dataDir, "worktree");
 	mkdirSync(worktreePath);
 	saveWorkspaces([{ id: WS, worktreePath } as Workspace]);
