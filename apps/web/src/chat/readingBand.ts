@@ -482,10 +482,11 @@ export function createReadingBandController(
 		const inset = turnInset(geometry.viewportHeight);
 		const pinLine = geometry.viewportHeight * (movement.trigger / 100);
 		const readingSpace = pinLine - inset;
+		const previousRef = lastEdgeRef;
 		let growth = 0;
-		if (lastEdgeRef !== null) {
-			const referenceTop = environment.readRowTop(lastEdgeRef.id);
-			if (referenceTop !== null) growth = edgeDoc - referenceTop - lastEdgeRef.offset;
+		if (previousRef !== null) {
+			const referenceTop = environment.readRowTop(previousRef.id);
+			if (referenceTop !== null) growth = edgeDoc - referenceTop - previousRef.offset;
 		}
 		const referenceRow = environment.readReferenceRow();
 		const now = environment.now();
@@ -499,12 +500,13 @@ export function createReadingBandController(
 			if (!arriving && growth > 0 && growth <= readingSpace + GEOMETRY_EPSILON) {
 				capRef.released += 2 * growth;
 			}
+		} else if (previousRef !== null && growth > readingSpace + GEOMETRY_EPSILON) {
+			capRef = { id: previousRef.id, offset: previousRef.offset - inset, released: 0, since: now };
 		} else if (seenRef !== null) {
 			const seenTop = environment.readRowTop(seenRef.id);
-			const seenCap = seenTop === null ? null : seenTop + seenRef.offset - inset;
 			if (
-				seenCap !== null &&
-				pinned > seenCap + geometry.viewportHeight - pinLine + GEOMETRY_EPSILON
+				seenTop !== null &&
+				edgeDoc - (seenTop + seenRef.offset) > geometry.viewportHeight - inset + GEOMETRY_EPSILON
 			) {
 				capRef = { id: seenRef.id, offset: seenRef.offset - inset, released: 0, since: now };
 			}
@@ -838,8 +840,9 @@ export function createReadingBandController(
 			if (!geometry) return;
 			const pinned = pinning() ? followTarget(geometry) : null;
 			const final = Math.max(0, desired, pinned ?? 0);
-			const neededRoom = Math.max(runwayHeight, final - naturalMaxScrollTop(geometry));
-			if (neededRoom > runwayHeight + GEOMETRY_EPSILON) writeRunwayHeight(neededRoom);
+			const beyondNatural = final - naturalMaxScrollTop(geometry);
+			if (pinned !== null && pinned >= desired) writeRunwayHeight(Math.max(0, beyondNatural));
+			else if (beyondNatural > runwayHeight + GEOMETRY_EPSILON) writeRunwayHeight(beyondNatural);
 			publishRunway();
 			const bounds = environment.readScrollBounds();
 			if (bounds) environment.writeScrollTop(Math.min(bounds.maxScrollTop, final));

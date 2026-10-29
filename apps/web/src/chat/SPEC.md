@@ -351,8 +351,8 @@ adapter/subscription path. Trigger is the pin line a following reader's response
 reading band does not read Settle, which stays stored so old values still parse. Both values use 5-point
 steps, Settle is 25–90, Trigger is 35–100, and Settle stays at least 10 points below Trigger: moving Trigger
 lower pushes Settle down, so the unused Settle never limits the pin line. The default is
-`{ settle: 75, trigger: 100 }`. Invalid storage falls back atomically to
-the default pair. It likewise never enters `AppConfig` or crosses the wire.
+`{ settle: 75, trigger: 100 }`. Invalid storage falls back atomically to the default pair. It likewise never
+enters `AppConfig` or crosses the wire.
 
 **Sticky activity breadcrumb.** While the transcript's top visible content remains inside expanded
 Activity → Thinking → tool disclosures whose original headers have scrolled above the viewport, one
@@ -701,35 +701,39 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   settlement that lands while native input is still pending defers its return until that input resolves, and
   drops the return if the input detached.
 - **A tall arrival shows its start** — in oldest-first the controller treats the response edge as it stood
-  100 ms ago (the newest edge position at least that old) as the edge the reader has seen. When content taller
-  than the visible space (the viewport minus the turn inset) arrived within that window — typically a diagram
-  or card that renders at once, possibly in several quick layout steps — the follow destination is capped so
-  the seen edge lands at the turn inset, the same place an own prompt lands. Counting every pinned edge as
-  seen let a card that lands in several quick steps pin past at full speed, because no single step was tall.
-  A 300 ms seen-edge look-back capped plain text: a fast replay (≈900 px/s) in the ≈300 px chat viewport of a
-  1280×720 window crossed the threshold and stalled the pin every few lines; streamed text needs over 2k px/s
-  to do that within 100 ms. Judging against the reading space (the pin line minus the turn inset) did the same
-  on a low pin line: at Trigger 35% that viewport leaves 57 px, so text over ≈570 px/s capped. Growth within
-  300 ms of the cap engaging belongs to the arrival; each later growth no taller than the reading space
-  releases the cap by twice its own height until it reaches the pin line, and the pin moves to the capped
-  destination on that same content change without easing, so the block advances at twice reading pace instead
-  of flying by (one mermaid card measured a 1.5k px glide in under a second). A cap release resets the seen
-  edge to the edge on the pin line. A second tall arrival never pushes an active cap further. The cap is
-  evaluated wherever the follow destination is, so it also bounds an explicit return already in flight.
-  Positions are kept relative to the
-  topmost visible row rather than document coordinates, and each evaluation re-expresses them relative to the
-  current one, so height changes above the viewport (Virtuoso replacing an estimate, a code block highlighting)
-  neither trigger nor misplace the cap, rows may unmount, and a block that grows above rows that already follow
-  it (WebKit renders a diagram after the next turn's row exists) still counts. Anchoring to the last row
-  instead missed exactly that case. A width reflow, a reader's own disclosure toggle, and a fresh mount re-take
-  the seen edge instead of counting as an arrival; an automatic expansion (a card opening when it completes)
-  still can. A Markdown mermaid fence replaces its own source in place, so its rendered top sits above the old
-  edge by the source height and the cap shows the diagram from that point. Newest-first prepends its latest
-  rows, so edge growth there is not appended content and the cap does not apply. **Follow response**, an
-  exact-edge return, a new turn, reader takeover, and a room-releasing reveal clear it. Settlement ends the cap
-  like any other following settlement: content still unseen below gets the one forward move to the end.
-  Detaching the reader there instead surfaced **Latest** without anyone taking over and stranded plain text
-  answers whose deltas arrived in large bursts.
+  100 ms ago (the newest edge position at least that old) as the edge the reader has seen. When content
+  taller than the visible space (the viewport minus the turn inset) arrived within that window — typically
+  a diagram or card that renders at once, possibly in several quick layout steps — the follow destination
+  is capped so the seen edge lands at the turn inset, the same place an own prompt lands. One content
+  change that grows the edge by more than the reading space (the pin line minus the turn inset) caps the
+  same way at the previous edge, because the pin would push that block's start above the inset; below
+  Trigger 100 the reading space is smaller than the visible space, so a card between the two would
+  otherwise lose its start. Counting every pinned edge as seen let a card that lands in several quick
+  steps pin past at full speed, because no single step was tall. A 300 ms seen-edge look-back capped plain
+  text: a fast replay (≈900 px/s) in the ≈300 px chat viewport of a 1280×720 window crossed the threshold
+  and stalled the pin every few lines; streamed text needs over 2k px/s to do that within 100 ms. Judging
+  the 100 ms window against the reading space did the same on a low pin line: at Trigger 35% that viewport
+  leaves 57 px, so text over ≈570 px/s capped; one delivery of fast text adds only a few px, so the
+  per-change check leaves it alone. Growth within 300 ms of the cap engaging belongs to the arrival; each
+  later growth no taller than the reading space releases the cap by twice its own height until it reaches
+  the pin line, and the pin moves to the capped destination on that same content change without easing, so
+  the block advances at twice reading pace instead of flying by (one mermaid card measured a 1.5k px glide
+  in under a second). A cap release resets the seen edge to the edge on the pin line. A second tall
+  arrival never pushes an active cap further. The cap is evaluated wherever the follow destination is, so
+  it also bounds an explicit return already in flight. Positions are kept relative to the topmost visible
+  row rather than document coordinates, and each evaluation re-expresses them relative to the current one,
+  so height changes above the viewport (Virtuoso replacing an estimate, a code block highlighting) neither
+  trigger nor misplace the cap, rows may unmount, and a block that grows above rows that already follow it
+  (WebKit renders a diagram after the next turn's row exists) still counts. Anchoring to the last row
+  instead missed exactly that case. A width reflow, a reader's own disclosure toggle, and a fresh mount
+  re-take the seen edge instead of counting as an arrival; an automatic expansion (a card opening when it
+  completes) still can. A Markdown mermaid fence replaces its own source in place, so its rendered top
+  sits above the old edge by the source height and the cap shows the diagram from that point. Newest-first
+  prepends its latest rows, so edge growth there is not appended content and the cap does not apply.
+  **Follow response**, an exact-edge return, a new turn, reader takeover, and a room-releasing reveal
+  clear it. Settlement ends the cap like any other following settlement: content still unseen below gets
+  the one forward move to the end. Detaching the reader there instead surfaced **Latest** without anyone
+  taking over and stranded plain text answers whose deltas arrived in large bursts.
 - **Following keeps what is on screen still** — while a following reader watches an oldest-first stream,
   the topmost visible row is the view's anchor: only the controller's own writes and reader input may move
   it. After every layout that changes the item list (before paint) and on any scroll the hook did not cause,

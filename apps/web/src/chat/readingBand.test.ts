@@ -1859,6 +1859,22 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		expect(harness.readGeometry().edgeBottom).toBeGreaterThan(105);
 	});
 
+	for (const trigger of [35, 75]) {
+		it(`caps one card shorter than the viewport but taller than the reading space at Trigger ${trigger}`, () => {
+			const harness = createHarness({ movement: { trigger } });
+			harness.setReferenceRow({ id: "r1", top: 100 });
+			harness.controller.contentChanged();
+			harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 6 * trigger + 1 });
+			harness.controller.contentChanged();
+			harness.advance(TALL_ARRIVAL_SETTLE_MS);
+			const before = harness.readGeometry();
+			const cardTopDoc = before.scrollTop + (before.edgeBottom ?? 0);
+			grow(harness, 500);
+			advanceUntilIdle(harness);
+			expect(cardTopDoc - harness.readGeometry().scrollTop).toBeCloseTo(60, 8);
+		});
+	}
+
 	it("pins a streaming text response without a tall-arrival cap", () => {
 		const harness = createHarness();
 		harness.setReferenceRow({ id: "r1", top: 100 });
@@ -1930,6 +1946,25 @@ describe("reading-band on-screen restoration", () => {
 			scrollTop: before.scrollTop + 70,
 			edgeBottom: 600,
 		});
+	});
+
+	it("re-pins after a guard restore with exactly the room the pin needs", () => {
+		const harness = createHarness();
+		startPinned(harness);
+		harness.setGeometry({ edgeBottom: 540, maxScrollTop: 41 });
+		harness.controller.restoreScrollTop(101);
+		harness.controller.contentChanged();
+		expect(harness.readRunwayHeight()).toBe(61);
+		const before = harness.readGeometry();
+		harness.setGeometry({
+			scrollTop: before.scrollTop + 70,
+			maxScrollTop: before.maxScrollTop + 150,
+			edgeBottom: 620,
+		});
+		harness.controller.restoreScrollTop(before.scrollTop);
+		const after = harness.readGeometry();
+		expect(after).toMatchObject({ scrollTop: 191, maxScrollTop: 191, edgeBottom: 600 });
+		expect(harness.readRunwayHeight()).toBe(1);
 	});
 
 	it("restores without pinning once the reader is detached", () => {
