@@ -138,6 +138,105 @@ test("fences follow CommonMark: no backtick in a backtick fence's info string, a
 	]);
 });
 
+test("HTML blocks and comments hold no headings, and a block ends with the list item or quote holding it", () => {
+	const html = splitSections(
+		[
+			"## Boundary",
+			"<pre>",
+			"## Example",
+			"",
+			"## Still the example",
+			"</pre>",
+			"Mentions requestRouter.",
+			"<!--",
+			"",
+			"## Commented out",
+			"-->",
+			"<details>",
+			"## Inside details",
+			"",
+			"## After details",
+			"Prose that a tag line continues:",
+			"<custom-element>",
+			"## Interrupts",
+			"",
+			"<custom-element>",
+			"## Inside the element",
+			"",
+			"## End",
+		].join("\n"),
+	);
+	expect(html.map((section) => [section.headings.join(" › "), section.line])).toEqual([
+		["Boundary", 1],
+		["After details", 15],
+		["Interrupts", 18],
+		["End", 23],
+	]);
+	expect(html[0]?.body).toContain("Mentions requestRouter.");
+
+	const contained = splitSections(
+		[
+			"## Steps",
+			"- Item",
+			"  <div>",
+			"## After the item",
+			"> <pre>",
+			"## After the quote",
+			"1. First",
+			"   ### Inside the item",
+			"> ## Quoted",
+			"",
+			"Only a list that starts at 1 interrupts a paragraph:",
+			"2. <pre>",
+			"   ### After the prose",
+		].join("\n"),
+	);
+	expect(contained.map((section) => [section.headings.join(" › "), section.line])).toEqual([
+		["Steps", 1],
+		["After the item", 4],
+		["After the quote", 6],
+		["After the quote › Inside the item", 8],
+		["Quoted", 9],
+		["Quoted › After the prose", 13],
+	]);
+});
+
+test("each finer block rule, and each place micromark departs from CommonMark, decides the headings", () => {
+	const headings = (...lines: string[]) =>
+		splitSections(lines.join("\n")).flatMap((section) => section.headings.slice(-1));
+	expect(headings("## A", "> para", "2. ```", "   ## B")).toEqual(["A"]);
+	expect(headings("## A", "- item", "<custom>", "  ## B")).toEqual(["A"]);
+	expect(headings("## A", "", "    code", "2. <pre>", "   ## B")).toEqual(["A", "B"]);
+	expect(headings("## A", ">", "    code", "2) <pre>", "   ## B")).toEqual(["A"]);
+	expect(headings("## A", "- a", "-     code", "  2) <pre>", "     ## B")).toEqual(["A", "B"]);
+	expect(headings("## A", ">     code", "", "2) <pre>", "   ## B")).toEqual(["A"]);
+	expect(headings("## A", "", "    code", "-", "<custom>", "## B")).toEqual(["A", "B"]);
+	expect(headings("## A", "-", "", "  <custom>", "## B")).toEqual(["A"]);
+	expect(headings("## A", "-", "  <custom>", "## B")).toEqual(["A", "B"]);
+	expect(headings("## A", "- item", "lazy", "  ```", "## B")).toEqual(["A", "B"]);
+	expect(headings("## A", "-     code", "<custom>", "## B")).toEqual(["A"]);
+	expect(headings("## A", "para", "===", "<custom>", "## B")).toEqual(["A"]);
+	expect(headings("## A", "", "***", "<custom>", "## B")).toEqual(["A"]);
+	expect(
+		headings(
+			"<?php",
+			"## B",
+			"?>",
+			"<!DOCTYPE html",
+			"## C",
+			">",
+			"<![CDATA[",
+			"## D",
+			"]]>",
+			"## E",
+		),
+	).toEqual(["E"]);
+	expect(headings("-\tItem", "    ## B")).toEqual(["B"]);
+	expect(headings("para", "01. x", "    ## B")).toEqual([]);
+	expect(headings("<a href=/docs>", "## B")).toEqual(["B"]);
+	expect(headings("<a b=c/>", "## B")).toEqual([]);
+});
+
 test("a lone leading H1 names the document, not every section's trail", () => {
 	const titled = splitSections(
 		"---\nid: a\ntype: x\n---\n# Architecture\nWhy.\n## Decisions\nOne.\n",

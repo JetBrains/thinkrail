@@ -59,10 +59,17 @@ and a local embedding model — transformers.js runs in Bun/Node only through na
 (~300 MB) and breaks `bun build --compile`, and BM25 alone already scores about what a small model
 does on retrieval benchmarks.
 
-- **Sections.** An ATX heading up to the next heading of any level, fence-aware as CommonMark is (a
-  backtick fence's info string holds no backtick, so a line like ```` ```x``` ```` is prose; a fence
-  opened on a list item's line closes at that item's indentation — tabs expand to 4-column stops — and
-  ends with the item); text before
+- **Sections.** An ATX heading up to the next heading of any level, found in CommonMark's block structure
+  as micromark — the web's renderer — builds it, so a hit's section is the one the reader sees there: list
+  items and block quotes are containers (a heading inside one is a section too; an item that opens on a
+  blank line ends at a second one), and a fenced code block or an HTML block holds no heading and ends
+  with its container. HTML blocks are the raw `pre`/`script`/`style`/`textarea` tags, comments, processing
+  instructions, declarations, CDATA, block-level tags and a lone complete tag that does not continue a
+  paragraph. A backtick fence's info string holds no backtick, so a line like ```` ```x``` ```` is prose;
+  tabs expand to 4-column stops. Where micromark departs from CommonMark's text, sections follow
+  micromark: a lazy line ends a list item or quote at any list marker, a lazy complete tag opens an HTML
+  block, an indented code block ends at a lazy line and while open keeps an empty list item or an ordered
+  list not starting at `1` from interrupting it, and an unquoted attribute value ends at `/`. Text before
   the first heading is a section named by the spec. A lone leading `#` heading names the document and
   stays out of every trail. A section keeps its heading trail and its file line numbers (frontmatter
   included), so a hit is a `path:line` a reader opens directly; a hit also names its `occurrence` among
