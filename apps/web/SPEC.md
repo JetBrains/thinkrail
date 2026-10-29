@@ -56,9 +56,10 @@ Leaf utilities without their own spec: `constants/` (branding — the product na
 `BRAND_MARK_SEGMENTS` monogram regions, joined into the `BRAND_MARK_PATH` the shell logo fills and clipped to by the components' working badge), `clientPreferences.ts` (feature-neutral
 access to the optional native stable string adapter), and `styles/` — which holds the three
 design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
-structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
-[TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md);
-the in-app notice and toast look built on them is [NOTIFICATIONS.md](src/styles/NOTIFICATIONS.md).
+structural token contract; per-theme palettes belong to `themes`. The words that describe them live in
+the component library (`library/`, [[submodule-web-library]]), which renders these files live and
+generates the specs beside them: [TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md),
+[SPACING.md](src/styles/SPACING.md) and the notice/toast look [NOTIFICATIONS.md](src/styles/NOTIFICATIONS.md).
 Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator module — it runs under Bun,
 never ships, and turns those three JSON sources into `styles/generated/` (plus the vendored provider
 marks into `chat/generated/`).
@@ -235,46 +236,16 @@ themselves.
   `src/styles/COLOR.md` is the system; `src/styles/colorUsage.test.ts` is the adoption guard (Tailwind
   drops an unknown utility silently, so an unpublished token renders as nothing at all).
 - **Ordinary radius and rhythm-spacing values come from their scales, never raw pixel lengths** — `rounded-md`
-  and `p-8` / `gap-12`, not `rounded-[7px]` or `py-[3px]`. Radius is the project t-shirt family
-  (`--radius-xs/sm/md/lg` — a small primitive geometry capped at 8px: `sm` (4px) is the default corner,
-  `md` (6px) the outer corner for surfaces nesting 4px children, `lg` (8px) the exception for large
-  standalone elevated surfaces (dialogs, user-message bubbles)). Spacing is **one canonical numeric
-  scale** — `0 / 2 / 4 / 6 / 8 / 12 / 16 / 24 / 32 / 40 / 64` — where the step name *is* its pixel value, so
-  `p-8` / `gap-12` / `py-4` resolve to exactly that many pixels; it is generated from a single JSON source
-  (`src/styles/spacing.json` → `src/styles/generated/spacing.css`), so each canonical length is written
-  once in the JSON rather than re-declared at call sites. A value several surfaces must move together is a
-  named **layout role** aliasing a step (`p-panel-inset`, `h-panel-row`), never a repeated literal.
-  `src/styles/SPACING.md` (`web-spacing`) is the authoritative system; `src/styles/spacingUsage.test.ts`
-  is that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
-  utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes
-  every other gate. Lengths that are not scale steps at all — `max-w-[78ch]`, `w-[320px]`,
-  `max-h-[40vh]`, a measured `pl-[calc(…)]` indent — stay allowed; they are layout constraints, not rhythm.
-- **Icons are `@remixicon/react` (Remix Icon) glyphs sized by UI *context*, not location, on the
-  Tailwind `size-*` scale** — imported by name, no `<Icon>` wrapper and no `size=` prop, and never a
-  container added just to resize a glyph. Remix glyphs are `fill="currentColor"`, so the semantic
-  `text-*` utilities colour them. **Style is state-driven: the `Line` (outline) variant is the
-  default; the `Fill` (solid) variant marks the *active/selected* item** — the selected project &
-  active workspace rows (`ProjectTree`), the active/main-spec node (`SpecsPanel`), the active file/dir
-  row (`TreeRow`) and the active editor tab (`Workbench`) swap to `Ri…Fill`; everything else (buttons,
-  chevrons, status, composer, chat, menus) stays `Ri…Line`. Icons with no Line/Fill pair
-  (`RiParagraph`/`RiDraggable`/`RiLinkM`/`RiListCheck3`) render their single style in both states.
-  **Project-custom glyphs** that Remix lacks live as SVGs in `public/custom-icons/` and render through
-  the `CustomIcon` primitive (`components/CustomIcon`) — a `currentColor` CSS `mask-image` span, so they
-  theme and swap Line/Fill by state exactly like Remix glyphs. The **Changes** tool uses the custom
-  `file-diff` glyph; **Review** uses `RiDiscussLine`/`RiDiscussFill`.
-  Three tiers: `size-12` (12px) for **chat-content** indicators (tool activity, plan/todo status,
-  expand/collapse chat details — subordinate to chat text); `size-14` (14px) for **compact interface /
-  navigation chrome** (left/right panels, panel & toolbar headers, tabs, the mobile switcher rail, menu
-  items); `size-16` (16px) for **every disclosure/expand chevron** (`ChevronDown/Right/Left/Up`), which
-  are `size-16` in all contexts regardless of tier — except a chevron inside a button. **Icons inside
-  buttons are not tiered by context**: `Button` / `IconButton` (`@thinkrail/ui/button`) size their icon,
-  chevrons included, from the button size (S 14, M 16, L 20) and the call site passes the icon component,
-  never a `size-*` class. The **icon↔text gap is `gap-4` (4px)** across all icon+label rows (nav
-  rows, menu/command items, tabs). A **two-line** row (e.g. a
-  workspace whose branch differs from its name) **top-aligns** the icon to the first line (`items-start`
-  + `mt-2`) so the glyph hangs on its title, while a single-line row stays vertically centred
-  (`items-center`, no nudge). Menu-item icons are centralized once in `packages/ui/menu-styles.ts` (`menuItemClass`
-  `[&_svg]:size-14` + `gap-4`).
+  and `p-8` / `gap-12`, not `rounded-[7px]` or `py-[3px]`; a value several surfaces move together is a
+  named layout role (`p-panel-inset`, `h-panel-row`). `src/styles/spacingUsage.test.ts` is the adoption
+  guard, because an off-scale length always renders and passes every other gate. Lengths that are not
+  rhythm — `max-w-[78ch]`, `w-[320px]`, a measured `pl-[calc(…)]` indent — stay allowed. The scales, the
+  layout roles and when to use each step are the library's Spacing and Radius foundations
+  ([[submodule-web-library]]; generated as `src/styles/SPACING.md`, `web-spacing`).
+- **Icons are `@remixicon/react` glyphs, Line by default and Fill for the active/selected item, sized
+  by UI context on the `size-*` scale**, plus project-custom glyphs through the `CustomIcon` primitive.
+  The tiers, the chevron and in-button rules, alignment and the custom glyphs are the library's Icons
+  foundation ([[submodule-web-library]]).
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the
@@ -311,13 +282,9 @@ themselves.
   strict consumers still pass through `lib.cssColorToHex`. Data-driven tests enforce the existing
   contrast floor (body/muted ≥ 4.5:1 and hint ≥ 3:1 on the primary declared surfaces) for every discovered
   manifest.
-- Radius tokens **are** Tailwind's radius namespace: `tokens.css` declares `--radius-xs/sm/md/lg` in an
-  `@theme static` block that first resets Tailwind's default scale (`--radius-*: initial`). So
-  `rounded-<step>` and its side variants resolve to the live tokens, an undeclared step such as
-  `rounded-xl` is never generated, and `static` keeps every variable emitted for hand-written CSS. This
-  replaces the earlier rule of spelling the colliding tokens as arbitrary values
-  (`rounded-[var(--radius-md)]`): the collision is removed at its source instead of worked around at ~300
-  call sites, and the guard rejects any arbitrary radius value.
+- Radius tokens **are** Tailwind's radius namespace: `tokens.css` declares them in an `@theme static`
+  block that first resets Tailwind's default scale, so only declared steps generate `rounded-*`
+  utilities (see the library's Radius foundation).
 - **Typography comes from `styles/typography.json` via generated semantic classes — nothing else.**
   `styles/generated/typography.css` (committed, regenerated by `bun run typography:generate`, drift-gated
   by `typography:check`) emits the primitive `--tr-*` custom properties, the `<body>` base, and one class
@@ -358,8 +325,9 @@ themselves.
   load despite the analytics opt-out. `e2e/fonts.spec.ts` pins both halves (no CDN request; the real
   faces present).
 - **The typography system — `typography.json` as the single source of truth, the primitives and the
-  semantic styles generated from them, the `<body>` base, the 370/400/500/600/800 weight policy,
-  code-only mono, the two prose systems, and how to add or change a style — is specced in
+  semantic styles generated from them, the `<body>` base, the weight policy,
+  code-only mono, the two prose systems, and how to add or change a style — is the library's
+  Typography foundation ([[submodule-web-library]]), generated as
   [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)** (`web-typography`); check changes against it. The
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).
 - **Icons: `@remixicon/react` (Line default, Fill when active/selected). Components: shadcn/ui** (Radix primitives), owned by [[module-ui]]

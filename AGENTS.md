@@ -70,8 +70,10 @@ palette names, or unknown token utilities. Read `apps/web/src/styles/COLOR.md` f
 `apps/web/src/styles/SPACING.md` for spacing work. Use `@remixicon/react` icons (Line by default, Fill
 when active) and owned shadcn/Radix primitives from `@thinkrail/ui/<primitive>`; `cn()` lives in
 `@thinkrail/ui/utils`. These rules also apply to `packages/ui`, `packages/resource-renderers`, and extension
-web halves. Component usage rules and examples live in the component library (`bun run library:dev`;
-written reference `packages/ui/COMPONENTS.md`).
+web halves. The design system — foundations, components, patterns and vocabulary — is the component
+library (`apps/web/library`, `bun run library:dev`): its content is the only place design rules are
+written, and `COLOR.md`, `TYPOGRAPHY.md`, `SPACING.md`, `NOTIFICATIONS.md`, `UI-TERMINOLOGY.md`,
+`packages/ui/COMPONENTS.md` and the root `DESIGN.md` are generated from it (`bun run library:md`).
 
 For conversation rendering or tool presentation, read `apps/web/src/chat/SPEC.md`. Presentational
 renderers remain props-driven; only `ChatView` integrates store and transport. A server capability and
