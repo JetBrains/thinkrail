@@ -384,7 +384,9 @@ later scenario's topbar.
 
 The app reset leaves host settings alone (theme, system theme pair, message order, extension switches), and
 the lane shares one host. A test that changes one restores it before it ends; otherwise later scenarios, or
-the same test under `--repeat-each`, inherit it.
+the same test under `--repeat-each`, inherit it. Host-owned `recentModels` are the exception: every explicit
+model pick appends to them and no wire call restores them, so a model-picker scenario never assumes an empty
+shortlist — it reveals the provider groups (`revealModelGroups`) and asserts only the head of the recents.
 
 **GitHub review states** (`topbar-review.spec.ts`) need a real-looking PR without a network. Origin is
 `git@github.com:<repo>.git` — what both the host's configured-URL read and `git remote get-url` see — with
