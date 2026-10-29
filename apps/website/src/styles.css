@@ -2465,6 +2465,7 @@ html:not(.anim) .term-caret {
 /* ── Blog Post Content ──────────────────────────────────────────────────── */
 
 .blog-post-content {
+	container-type: inline-size;
 	font-size: var(--text-lg);
 	line-height: 1.75;
 }
@@ -2613,9 +2614,24 @@ html:not(.anim) .term-caret {
 	display: none;
 }
 
+.blog-post-content td:has(> a > img) {
+	width: 60%;
+}
+
+@container (max-width: 520px) {
+	.blog-post-content tr:has(> td > a > img) > td {
+		display: block;
+		width: auto;
+	}
+
+	.blog-post-content tr:has(> td > a > img) > td:first-child {
+		border-bottom: none;
+	}
+}
+
 .blog-post-content table img {
 	display: block;
-	width: min(400px, 45vw);
+	width: 100%;
 	max-width: none;
 	max-height: 240px;
 	margin: 0;
