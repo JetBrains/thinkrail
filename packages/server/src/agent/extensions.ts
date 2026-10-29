@@ -369,25 +369,49 @@ export async function buildResourceLoader(
 		},
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
-	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
-
-	// pi keeps a reference to this array and reads it on every reload, so it is rebuilt in place.
-	const additionalExtensionPaths: string[] = [...devExtensionPaths];
 	const packageManager = new DefaultPackageManager({
 		cwd,
 		agentDir,
 		settingsManager,
 		builtinExtensions: builtinExtensionNames(extensionFactories),
 	});
-	let discoveredMetadata = new Map<string, PathMetadata>();
-	const resolveExtensionPaths = async (): Promise<void> => {
-		await settingsManager.reload();
+	const applyCurrentPolicy = (loader: ResourceLoader): void => {
+		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
+		disabledAtReload = disabledExtensions();
+		refreshSkillPaths(disabledAtReload);
+		loaderPackagePolicies.set(loader, packagePolicyKey());
+	};
+	// pi's reload installs a declared package that is missing; the packages layer learns of it here.
+	const noticingInstalls = async (reload: () => Promise<void>): Promise<void> => {
 		const installedBefore = installedDeclarations(packageManager);
-		const resolvedResources = await packageManager.resolve();
+		await reload();
 		const installedAfter = installedDeclarations(packageManager);
 		if ([...installedAfter].some((key) => !installedBefore.has(key))) {
 			installedPackagesListener?.();
 		}
+	};
+
+	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
+	if (excluded.size === 0) {
+		const loader = new DefaultResourceLoader({
+			...common,
+			additionalExtensionPaths: devExtensionPaths,
+		});
+		const reloadTrusted = loader.reload.bind(loader);
+		loader.reload = async (options) => {
+			applyCurrentPolicy(loader);
+			await noticingInstalls(() => reloadTrusted(options));
+		};
+		await loader.reload();
+		return loader;
+	}
+
+	// pi keeps a reference to this array and reads it on every reload, so it is rebuilt in place.
+	const additionalExtensionPaths: string[] = [...devExtensionPaths];
+	let discoveredMetadata = new Map<string, PathMetadata>();
+	const resolveExtensionPaths = async (): Promise<void> => {
+		await settingsManager.reload();
+		const resolvedResources = await packageManager.resolve();
 		const next: string[] = [];
 		const metadata = new Map<string, PathMetadata>();
 		for (const resource of resolvedResources.extensions) {
@@ -416,12 +440,11 @@ export async function buildResourceLoader(
 	});
 	const reloadResolved = loader.reload.bind(loader);
 	loader.reload = async (options) => {
-		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
-		disabledAtReload = disabledExtensions();
-		refreshSkillPaths(disabledAtReload);
-		loaderPackagePolicies.set(loader, packagePolicyKey());
-		await resolveExtensionPaths();
-		await reloadResolved(options);
+		applyCurrentPolicy(loader);
+		await noticingInstalls(async () => {
+			await resolveExtensionPaths();
+			await reloadResolved(options);
+		});
 		relabelDiscoveredExtensions(loader, discoveredMetadata);
 	};
 	await loader.reload();

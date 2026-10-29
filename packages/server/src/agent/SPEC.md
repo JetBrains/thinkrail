@@ -1009,14 +1009,17 @@ re-opened transcripts provider-valid.
     instance. Together the define and the forced transform are the tested artifact seam (the shared artifact
     probe's synthetic extension value-imports pi and fails closed without them); the `server-runtime.ts`
     filename is only a name.
-    In every mode and whether or not a Central path is excluded, the loader composes extensions from
-    **one host-owned path list** (`noExtensions` + `additionalExtensionPaths`, rebuilt in place from
-    pi's `resolve()` at every reload — the earlier branch that let pi discover extensions itself when
-    nothing was excluded is gone, so every session builds its extension set the same way). Each resolve
-    also compares which declared packages were on disk before and after it ran; when pi's
-    install-while-loading fetched one, the packages layer is told (`setInstalledPackagesListener`) so
-    the catalog is invalidated and `packages.changed` published — without bumping the revision, so a
-    reload never triggers another reload. *Rejected:* a fingerprint of the resolved package set — it was
+    When no Central path is excluded — most installs — pi discovers extensions itself from the
+    (`enabled`-view) settings, the branch every session took before packages were managed. Only an
+    excluded Central path switches the loader to **one host-owned path list** (`noExtensions` +
+    `additionalExtensionPaths`, rebuilt in place from pi's `resolve()` at every reload) so that exact
+    identity can be removed before loading. Both branches wrap `reload()` the same way: apply the
+    current policy (trust, disabled extensions, skill paths, the package policy key) and compare which
+    declared packages were on disk before and after — when pi's install-while-loading fetched one, the
+    packages layer is told (`setInstalledPackagesListener`) so the catalog is invalidated and
+    `packages.changed` published, without bumping the revision, so a reload never triggers another
+    reload. The comparison needs only `listConfiguredPackages()`, not the host-owned list, which is
+    why the fast path could return. *Rejected:* a fingerprint of the resolved package set — it was
     process-global while `resolve()` output is per cwd, so two workspaces flapped it on alternating
     reloads, and its first observation had to be suppressed, hiding exactly the first-chat install.
     In every mode, the optional Central artifact remains an external filesystem path loaded by PI's public
