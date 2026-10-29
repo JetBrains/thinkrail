@@ -152,6 +152,70 @@ re-opened transcripts provider-valid.
     pi owns schema validation and the effective value; error messages are generic and never carry file
     contents. Accepted gap: a Central rebuild whose runtime loaded the file before a save and activated
     after its refresh serves the old budget until the next read refreshes it.
+  - `modelsFile` — the one owner of pi's `models.json` IO shared by `modelContext` and `localModels`:
+    path resolution, BOM-preserving JSONC parse, the symlink-following temp-file + rename writer
+    described above, the in-process write serializer (both adapters queue on the same chain, so a context
+    save and an endpoint save never interleave a read-modify-write), and the `provider.changed`
+    publisher seam (`setModelsFilePublisher`).
+  - `localModels` — the settings adapter for local and self-hosted OpenAI chat-completions servers
+    (llama.cpp, vLLM, Ollama, LM Studio, anything OpenAI-compatible), again a `models.json` editor, not a
+    registry: pi's own `models.json` provider support does the serving, and everything the feature
+    saves lives in that one file. `probeLocalModels` normalizes the base URL (drops `/models` /
+    `/chat/completions` / `/completions` suffixes; adds `/v1` for every kind but generic OpenAI-compatible; refuses a URL
+    carrying `user:pass@` or a query string, so a key always lives in the key field), `GET`s
+    `<base>/models` with a 5s timeout, and enriches per kind — llama.cpp `/props` (per-slot `n_ctx`,
+    `enable_thinking` template, `chat_template_caps.supports_tools`), Ollama `/api/show` (`num_ctx` from
+    the model's `parameters`, `tools`/`thinking`/`vision` capabilities), LM Studio `/api/v0/models`
+    (`loaded_context_length`, `vlm`, `tool_use`, drops embeddings); vLLM's `max_model_len` and llama.cpp's
+    `meta.n_ctx` / router `status.args` come from the listing itself, and the per-slot `/props` value wins
+    over them because `-c` is split across `-np` slots. Only the context a server runs
+    with counts: training lengths (`n_ctx_train`, Ollama's `*.context_length`, LM Studio's
+    `max_context_length`) are ignored, so a context the server does not report stays `null` and the
+    dialog asks the user to set it rather than saving a window the server would truncate. The per-model
+    `tools` hint is null when the server does not say. A typed probe key follows pi's
+    `resolveConfigValue` template rules (`$NAME` / `${NAME}` interpolation anywhere in the value, `$$`
+    and `$!` escapes; pi does not export the resolver, so the rules are mirrored and pinned by tests)
+    except that a `!command` key is never run by a probe. A probe that names `endpointId` without a key
+    reuses the saved key only when that id is a listed `local-*` endpoint and its saved `baseUrl`,
+    normalized for the probe's kind, equals the probed URL; the key is resolved by pi itself
+    (`runtime.getAuth`), and a key pi cannot resolve fails with a closed message that never echoes it.
+    Any other URL is probed without a key, so an edited or mistyped URL never receives the saved bearer.
+    A keyed probe refuses redirects, so the bearer never follows a redirect to another host. Failures
+    surface a short closed reason (`HTTP n`, `timed out`, `connection failed`, `not a JSON reply`), never
+    response bodies. The probe's trust surface is the URL the user typed: the host fetches it from the server
+    process, which is the point of the feature (a server on the user's own network), and returns only
+    parsed model ids and limits.
+    `listLocalEndpoints` lists only the providers this feature owns — `local-*` ids with `api:
+    "openai-completions"`, a `baseUrl` and a `models` array — so a hand-written provider (a cloud
+    gateway, say) is neither listed nor edited nor removed here, and pi keeps serving it unchanged.
+    The list reports effective values (each model merged with its `modelOverrides` entry) and
+    `chatTemplateThinking` (some model carries the llama.cpp/vLLM chat-template thinking format). The
+    server kind is a form-only choice: it drives the probe, URL normalization and defaults, and is not
+    saved; the dialog guesses it on edit from that flag and the URL, so an edit that only renames a server
+    keeps its thinking settings.
+    `saveLocalEndpoint` validates the draft (name, ≥1 unique model, `isLocalModelContextWindow`, max
+    output within `LOCAL_MODEL_OUTPUT_LIMITS` and ≤ context, boolean thinking and image flags), allocates `local-<slug>` ids for new
+    endpoints, keeps an unchanged `baseUrl` exactly as written whatever kind the form picks (only an
+    edited URL is normalized), and on create writes the provider with pi's llama.cpp-provider compat
+    (`supportsStore`/`supportsDeveloperRole`/`supportsReasoningEffort`/`supportsStrictMode` false,
+    `max_tokens`); an edit keeps the provider's existing `compat` as it is. It writes zero cost, the
+    draft's `maxTokens` (the UI defaults it to the contracts' `defaultLocalMaxTokens`, ¼ context clamped
+    to 256–16K, because vLLM rejects prompt + `max_tokens` over its limit), and — for a thinking model on
+    llama.cpp/vLLM — `thinkingFormat: "qwen-chat-template"` with pi's off/medium level map. Reasoning off
+    drops any `thinkingFormat` and the level map; any other kind drops that chat-template format and its
+    level map, so a kind change never carries llama.cpp/vLLM thinking parameters to another server. An edit merges over the previous
+    provider/model objects so hand-added fields survive, and removes the fields it manages
+    (`contextWindow`, `maxTokens`, `reasoning`, `input`, `thinkingLevelMap`, `compat.thinkingFormat`)
+    from that model's `modelOverrides` entry, which pi would otherwise apply over the saved values; other
+    override keys stay. An omitted `apiKey` keeps the saved one unless the edit moves the endpoint to
+    another origin, which fails until the key is re-entered or removed, so a saved bearer never follows
+    a changed address; an empty one writes the
+    `thinkrail-local` placeholder pi needs to treat the provider as available (the dialog's "remove saved
+    key" sends it). The key never crosses the wire (`hasApiKey` only). `removeLocalEndpoint` deletes only
+    a listed endpoint. A save or removal that changes `models.json` refreshes the runtime and publishes
+    `provider.changed`; a no-op save does neither. The refresh is best-effort: a refresh failure is
+    logged and does not fail the save, because the file is already written and the next read refreshes
+    again.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and `buildSessionSettings(cwd, projectTrusted)`** (the user's
@@ -979,8 +1043,9 @@ re-opened transcripts provider-valid.
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
   pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam; `listModelContextSettings` /
-  `setModelContextWindow` / `setModelContextPublisher` (the `modelContext` adapter and its
-  `provider.changed` seam); `piLoginOptions` (pi login options
+  `setModelContextWindow` (the `modelContext` adapter); `listLocalEndpoints` / `probeLocalModels` /
+  `saveLocalEndpoint` / `removeLocalEndpoint` (the `localModels` adapter); `setModelsFilePublisher` (their
+  shared `provider.changed` seam); `piLoginOptions` (pi login options
   carrying the lazily created installation device id, for `auth`);
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `toolResponses` mailbox
@@ -1043,7 +1108,8 @@ re-opened transcripts provider-valid.
   skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly; the barrel
   stays Node-loadable for the workflow harness ([[module-workflow-tests]]) because a registry extension
   over raw third-party `.ts` loads it lazily, see [[module-ext-web-access]]); `typebox` (the host tools' parameter schemas); `jsonc-parser` (targeted
-  `models.json` edits in `modelContext`); `trash` (reached only through the
+  `models.json` edits in `modelsFile`, `modelContext` and `localModels`); global `fetch` (only
+  `localModels`' user-initiated probes of the URL the user typed); `trash` (reached only through the
   sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to
   throw, never degraded to `unlink`; the launcher's staged-helper and procfs-parser seams live there too,
   because `changes`' whole-file revert needs the same primitive);
