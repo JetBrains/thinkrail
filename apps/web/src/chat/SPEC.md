@@ -525,9 +525,12 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   follow, and the handoff's source. A workspace the store holds is activated under its own project. An
   unknown one first reloads that project's `workspace.list` — `addWorkspace` drops a `workspace.created`
   push for a project whose list was never loaded — and is activated only if that read, on the same
-  connection, shows it in a project still open; a deletion-pending, vanished or unreadable workspace is
-  never activated, and the user is told why (`gone`, a card-specific message); a reconnect that overtakes
-  the read decides nothing (`null`), so the follow is armed again. Next to
+  connection, shows it in a project still open, and only if neither a newer open nor any navigation (the
+  store's `selectNavigationMarker`, the palette's guard too) overtook the read: an overtaken open decides
+  silently (`false`), so neither a slow list nor a Continue follow pulls the user back from where they
+  went. A deletion-pending, vanished or unreadable workspace is never activated, and the user is told why
+  (`gone`, a card-specific message); a reconnect that overtakes the read decides nothing (`null`), so the
+  follow is armed again. Next to
   it sits `WorkspaceName` — an injected component that renders a workspace's **live** store
   name, so a renderer can show an up-to-date name without importing the store. The `start_workspace`
   card uses both and hides the open action when there is no provider.

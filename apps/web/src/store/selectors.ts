@@ -1212,6 +1212,19 @@ export function selectWorkspaceNavTick(
 	return state.navTickByWorkspace[workspaceId] ?? 0;
 }
 
+export function selectNavigationMarker(state: {
+	activeWorkspaceId: string | null;
+	selectedProjectId: string | null;
+	navTickByWorkspace: Record<string, number>;
+}): string {
+	const active = state.activeWorkspaceId;
+	return [
+		active,
+		state.selectedProjectId,
+		active ? selectWorkspaceNavTick(state, active) : null,
+	].join("\u0000");
+}
+
 interface SkillsStaleState {
 	skillChangeTickByWorkspace: Record<string, number>;
 	skillsSyncedTickBySession: Record<string, number>;

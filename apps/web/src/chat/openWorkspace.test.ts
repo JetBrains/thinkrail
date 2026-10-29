@@ -107,3 +107,26 @@ test("a workspace being deleted is never opened, held or just listed", async () 
 	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
 	expect(useAppStore.getState().toasts.at(-1)?.message).toBe("gone");
 });
+
+test("an open the user navigated away from, or a newer open overtook, opens nothing and says nothing", async () => {
+	reply = () => Promise.resolve([workspace("w9", "p2")]);
+	const overtaken = openWorkspace({ workspaceId: "w9", projectId: "p2", sessionId: "s9" });
+	useAppStore.getState().activateWorkspaceFromRoute(workspace("w1", "p1"));
+	expect(await overtaken).toBe(false);
+	expect(opened()).toEqual({ projectId: "p1", workspaceId: "w1", sessionId: null });
+
+	const toasts = useAppStore.getState().toasts.length;
+	reply = () => Promise.reject(new Error("offline"));
+	const failed = openWorkspace({ workspaceId: "w9", projectId: "p2" });
+	useAppStore.getState().selectMain();
+	expect(await failed).toBe(false);
+	expect(useAppStore.getState().toasts).toHaveLength(toasts);
+
+	reply = () => Promise.resolve([workspace("w9", "p2"), workspace("w8", "p2")]);
+	const older = openWorkspace({ workspaceId: "w9", projectId: "p2" });
+	const newer = openWorkspace({ workspaceId: "w8", projectId: "p2" });
+	expect(await older).toBe(false);
+	expect(await newer).toBe(true);
+	expect(opened()).toEqual({ projectId: "p2", workspaceId: "w8", sessionId: null });
+	expect(useAppStore.getState().toasts).toHaveLength(toasts);
+});
