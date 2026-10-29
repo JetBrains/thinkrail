@@ -1,7 +1,7 @@
 import type { IconButtonProps } from "@thinkrail/ui/button";
 import type { ButtonHTMLAttributes } from "react";
+import type { ComponentDoc, PropDoc } from "../types";
 import { sharedPropDocs, sizeDocs, toneDocs, variantDocs } from "./button";
-import type { ComponentDoc, PropDoc } from "./types";
 
 type OwnProps<P> = Exclude<keyof P, keyof ButtonHTMLAttributes<HTMLButtonElement>>;
 
@@ -204,5 +204,5 @@ export const iconButton = {
 			note: "Message copy action at size S, revealed on hover.",
 		},
 	],
-	spec: "packages/ui/SPEC.md",
+	contract: "components/button-system.md",
 } satisfies ComponentDoc;

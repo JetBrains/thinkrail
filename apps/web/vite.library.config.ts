@@ -7,6 +7,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
 	root: fileURLToPath(new URL("./library", import.meta.url)),
 	base: "./",
+	publicDir: fileURLToPath(new URL("./public", import.meta.url)),
 	plugins: [react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss()],
 	resolve: {
 		alias: [{ find: "@", replacement: fileURLToPath(new URL("./src", import.meta.url)) }],

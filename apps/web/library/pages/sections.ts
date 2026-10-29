@@ -9,6 +9,7 @@ export const sectionTitles = {
 	accessibility: "Accessibility",
 	rules: "Usage rules",
 	usages: "In production",
+	contract: "System contract",
 } as const;
 
 export type SectionId = keyof typeof sectionTitles;

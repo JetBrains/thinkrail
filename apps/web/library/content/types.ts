@@ -49,12 +49,17 @@ export interface ComponentDoc {
 	rules: readonly Rule[];
 	examples: readonly ExampleDoc[];
 	usages: readonly UsageLocation[];
-	spec: string;
+	contract: string;
 }
 
-export interface GuidePage {
+export type DocArea = "guides" | "foundations" | "patterns" | "vocabulary";
+
+export interface DocPage {
 	slug: string;
+	area: DocArea;
 	title: string;
 	summary: string;
-	sections: readonly { title: string; body: string; rules?: readonly Rule[] }[];
+	file: string;
+	sources: readonly string[];
+	output?: { path: string; heading: string; frontmatter?: string };
 }

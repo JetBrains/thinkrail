@@ -2,16 +2,19 @@
 id: submodule-web-library
 type: submodule-design
 status: active
-title: library — the live component library and its generated reference
+title: library — the design system: live foundations, components and their generated reference
 parent: module-web
-references: [module-ui, web-color, web-typography, web-spacing]
+references: [module-ui, submodule-web-themes]
 ---
 
 ## Responsibility
 
-One maintained place where designers, developers and agents inspect real ThinkRail components, read
-their usage rules and copy working examples. It covers `Button` and `IconButton` today; every shared
-component gets a page here when it is added or reworked.
+The single home of ThinkRail's design system. Designers, developers and agents read every design rule
+here, see the foundations (colour, typography, spacing, radius, icons, themes) rendered live from the
+files the app is built from, inspect real components and copy working examples. It covers `Button` and
+`IconButton` today; every shared component gets a page here when it is added or reworked. The design
+specs `web-color`, `web-typography`, `web-spacing` and `web-notices`, `apps/web/UI-TERMINOLOGY.md`,
+`packages/ui/COMPONENTS.md` and the root `DESIGN.md` are generated from this module.
 
 ## Boundary
 
@@ -25,28 +28,55 @@ component gets a page here when it is added or reworked.
   `@/themes` (`getThemes` / `applyTheme`, every bundled theme). No specimen is redrawn with
   handwritten markup, no screenshot stands in for a component, and states are real interactions or
   real props — never forced pseudo-classes or overriding classes.
-- **One authored source.** `content/*.ts` holds every description, rule, API row and example
-  reference; `examples/<component>/<id>.tsx` are runnable files whose source is shown verbatim. The
-  site renders both; `scripts/generate-md.ts` turns the same modules into `packages/ui/COMPONENTS.md`
-  (generated, never edited). Variant, size and tone tables are typed as `Record<ButtonVariant | …>` and
-  own props as `Record<keyof Props minus HTML attributes>`, so a prop added to or removed from the
-  component fails the library's typecheck until its documentation follows.
+- **One authored source for words; values stay in their files.** Values live where the app reads them —
+  the theme manifests, `src/styles/{colors,typography,spacing}.json` and `src/styles/tokens.css` — and
+  are edited only there. Every word lives in `content/`: `guides/`, `foundations/`, `patterns/` and
+  `vocabulary/` are Markdown pages registered in `content/index.ts`; `components/<name>.ts` are typed
+  component docs with `examples/<component>/<id>.tsx` as runnable files shown verbatim, and
+  `components/button-system.md` is the Button system's implementation contract. Prose never restates a
+  value: a `:::live <block>` line renders one of the `live/` blocks, which import the JSON, `tokens.css`
+  (raw), the bundled manifests and `public/custom-icons/` at build time, reusing the generators' own
+  pure models (`scripts/typographyModel.ts`, `scripts/colorsModel.ts`). Variant, size and tone tables
+  are typed as `Record<ButtonVariant | …>` and own props as `Record<keyof Props minus HTML attributes>`,
+  so a prop added to or removed from the component fails the library's typecheck until its documentation
+  follows.
+- **Generated Markdown.** `scripts/generate-md.ts` writes every output from the same content: a page
+  with `output` becomes that file (its spec frontmatter, a GENERATED banner and H1 come from the
+  registry, and each live block becomes a pointer to its source); the components and the contract
+  become `packages/ui/COMPONENTS.md`; the design prompt plus a snapshot of the current foundations
+  becomes `DESIGN.md`, the one output that quotes values. Page links (`#/<slug>`) and repository links
+  (`/<path>`) are rewritten to relative paths. The outputs keep their spec ids and paths, so the spec
+  graph and existing links are unchanged; they are never edited by hand.
 - **Layout** follows the familiar component-site shape (Ant Design's): a header with the Guides /
-  Components sections and the theme menu; a sidebar of component groups; a Components overview with a
+  Foundations / Components / Patterns / Vocabulary areas and the theme menu; a sidebar of component groups; a Components overview with a
   name search and one card per component whose preview is that component's `preview` example, live but
   `inert`; and component pages with a title, summary and Import / Source / Docs rows, When to use,
   examples as a two-column grid of cards (preview, title, description, copy and show-code), then
   variants and sizes, states, tone, playground, API, accessibility, usage rules and production usages,
-  with a sticky "On this page" outline that tracks the scroll position. Under `md` the sidebar becomes
-  a drawer and the outline is hidden. All of it uses ThinkRail's tokens, type classes and components.
+  with a sticky "On this page" outline that tracks the scroll position. Markdown pages show Values /
+  Content / Generated rows, the prose in the product's `tr-prose-doc` type and live blocks outside that
+  prose root, with the same outline built from their headings. Below `lg` the header areas move into
+  the drawer, which lists every area; under `md` the sidebar becomes that drawer and the outline is
+  hidden. All of it uses ThinkRail's tokens, type classes and components.
+- **Rules are words, not block output.** A live block renders values and specimens only; any rule a
+  reader needs — which tier a context takes, which step a surface uses — is written in the page's
+  Markdown. A block whose content is *names* (the type style id → class table) also emits a names-only
+  table into the generated Markdown, so agents reading the files see every class without any value.
+- **Specimen colour is the one inline-style exception.** The app forbids inline `style` for colour; live
+  blocks may set a swatch's colour, a radius specimen's corner, a spacing bar's width or a theme preview's
+  colours from token or manifest data through `style`, because those values are the data being shown.
+  Nothing else in the library uses inline style.
 - **Values stay in their owners.** Pixel values, colours and type live in the component source,
-  [[module-ui]] and the token systems; pages measure the rendered component instead of restating them.
+  [[module-ui]] and the token files; component pages measure the rendered component and foundation
+  pages render the files instead of restating them.
 - **Library text is documentation, not app UI.** It is English and outside `check-i18n`; examples use
   real locale keys so copied code passes it.
 
 ## Checks
 
-- `library.test.ts` (in `apps/web`'s `bun test`): the Markdown reference is current, examples and
+- `library.test.ts` (in `apps/web`'s `bun test`): every generated Markdown file is current, every
+  authored Markdown file is registered and exists, every live block is known and used, page and
+  repository links resolve, each page's value sources exist, examples and
   their documentation match one-to-one, each overview `preview` names one of them, every listed
   production usage still uses the component, and the documented defaults equal the rendered ones.
 - `tsc -p library` (part of `apps/web` `typecheck`).
@@ -58,6 +88,7 @@ component gets a page here when it is added or reworked.
 
 ## Commands
 
-`bun run library:dev` (hot reload), `bun run library:build` (reference check, typecheck, static site in
-`apps/web/dist-library/`), `bun run --cwd apps/web library:preview`, `bun run library:md`, and
+`bun run library:dev` (hot reload), `bun run library:build` (generated-docs check, typecheck, static
+site in `apps/web/dist-library/`), `bun run --cwd apps/web library:preview`, `bun run library:md`
+(regenerates every output), and
 `bun run --cwd apps/web library:verify [url]` against a running dev or preview server.

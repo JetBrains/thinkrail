@@ -6,16 +6,63 @@ import { Button, IconButton } from "@thinkrail/ui/button";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { components } from "./content";
-import { button } from "./content/button";
-import { iconButton } from "./content/iconButton";
-import { renderMarkdown, TARGET } from "./scripts/generate-md";
+import { components, docs } from "./content";
+import { button } from "./content/components/button";
+import { iconButton } from "./content/components/icon-button";
+import { LIVE_BLOCKS, LIVE_LINE } from "./live/names";
+import { content, renderOutputs, unknownLinks } from "./scripts/generate-md";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const EXAMPLES = fileURLToPath(new URL("./examples", import.meta.url));
+const CONTENT = fileURLToPath(new URL("./content", import.meta.url));
 
-test("packages/ui/COMPONENTS.md is regenerated from the library content", () => {
-	expect(readFileSync(TARGET, "utf8")).toBe(renderMarkdown());
+describe("generated docs", () => {
+	for (const [path, markdown] of renderOutputs())
+		test(`${path} is regenerated from the library content`, () => {
+			expect(existsSync(join(ROOT, path)) ? readFileSync(join(ROOT, path), "utf8") : "").toBe(
+				markdown,
+			);
+		});
+});
+
+describe("content", () => {
+	const files = [...docs.map((page) => page.file), ...components.map((doc) => doc.contract)];
+
+	test("every authored Markdown file is registered and every registered file exists", () => {
+		const authored = readdirSync(CONTENT, { recursive: true, encoding: "utf8" })
+			.filter((file) => file.endsWith(".md"))
+			.sort();
+		expect([...new Set(files)].sort()).toEqual(authored);
+	});
+
+	test("page slugs are unique across docs and components", () => {
+		const slugs = [...docs.map((page) => page.slug), ...components.map((doc) => doc.slug)];
+		expect(new Set(slugs).size).toBe(slugs.length);
+	});
+
+	for (const file of new Set(files))
+		test(`${file}: every live block and page link resolves`, () => {
+			const markdown = content(file);
+			const blocks = markdown
+				.split("\n")
+				.map((line) => LIVE_LINE.exec(line)?.[1])
+				.filter((name): name is string => name !== undefined);
+			expect(blocks.filter((name) => !(name in LIVE_BLOCKS))).toEqual([]);
+			expect(unknownLinks(markdown)).toEqual([]);
+			for (const [, path] of markdown.matchAll(/\]\(\/([^)]+)\)/g))
+				expect(existsSync(join(ROOT, path ?? ""))).toBe(true);
+		});
+
+	test("every live block is used by some page", () => {
+		const used = files.map(content).join("\n");
+		for (const name of Object.keys(LIVE_BLOCKS)) expect(used).toContain(`:::live ${name}`);
+	});
+
+	for (const page of docs)
+		for (const source of page.sources.filter((entry) => entry.startsWith("apps/")))
+			test(`${page.slug}: value source ${source} exists`, () => {
+				expect(existsSync(join(ROOT, source.replace(/\*.*$/, "")))).toBe(true);
+			});
 });
 
 describe("examples", () => {

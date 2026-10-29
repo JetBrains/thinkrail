@@ -2,6 +2,7 @@ import type { ButtonSize, ButtonTone, ButtonVariant } from "@thinkrail/ui/button
 import { Switch } from "@thinkrail/ui/switch";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { type ComponentType, type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { contentFile } from "../content/files";
 import type { ComponentDoc } from "../content/types";
 import { CodeBlock, CopyText } from "../parts/CodeBlock";
 import { DemoCard } from "../parts/DemoCard";
@@ -409,11 +410,7 @@ function Guidance({ doc }: { doc: ComponentDoc }) {
 			<Section
 				id={sectionId(doc, "usages")}
 				title={sectionTitles.usages}
-				description={
-					<InlineMarkdown
-						source={`Representative call sites. The full contract is \`${doc.spec}\`.`}
-					/>
-				}
+				description={<InlineMarkdown source="Representative call sites in the app." />}
 			>
 				<Table
 					head={["File", "What it shows"]}
@@ -424,6 +421,17 @@ function Guidance({ doc }: { doc: ComponentDoc }) {
 						<InlineMarkdown key="note" source={usage.note} />,
 					])}
 				/>
+			</Section>
+			<Section
+				id={sectionId(doc, "contract")}
+				title={sectionTitles.contract}
+				description={
+					<InlineMarkdown
+						source={`The implementation contract every button follows, from \`apps/web/library/content/${doc.contract}\`.`}
+					/>
+				}
+			>
+				<Markdown source={contentFile(doc.contract)} />
 			</Section>
 		</>
 	);
@@ -451,27 +459,30 @@ export function ComponentPage({ doc }: { doc: ComponentDoc }) {
 				"accessibility",
 				"rules",
 				"usages",
+				"contract",
 			] as const
 		).map((id) => ({ id: sectionId(doc, id), title: sectionTitles[id] })),
 	];
 	const meta: [string, ReactNode][] = [
 		[
 			"Import",
-			<code key="import" className="tr-code-text text-text-default">
+			<code key="import" className="break-all tr-code-text text-text-default">
 				{doc.importLine}
 			</code>,
 		],
 		[
 			"Source",
-			<code key="source" className="tr-code-text text-text-default">
+			<code key="source" className="break-all tr-code-text text-text-default">
 				{doc.source}
 			</code>,
 		],
 		[
 			"Docs",
 			<span key="docs" className="flex flex-wrap gap-x-16 gap-y-4">
-				<code className="tr-code-text text-text-default">{doc.spec}</code>
-				<code className="tr-code-text text-text-default">packages/ui/COMPONENTS.md</code>
+				<code className="break-all tr-code-text text-text-default">
+					apps/web/library/content/components/{doc.slug}.ts
+				</code>
+				<code className="break-all tr-code-text text-text-default">packages/ui/COMPONENTS.md</code>
 			</span>,
 		],
 	];

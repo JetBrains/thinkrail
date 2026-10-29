@@ -6,33 +6,72 @@ The written reference of the component library. The live library renders the sam
 
 ## Using the library
 
-This library renders ThinkRail's production components from source with the app's own stylesheet, tokens and themes. When a component changes, its page changes with it. The written guidance here is also published as `packages/ui/COMPONENTS.md` for agents and reviews.
+This library is ThinkRail's single source of truth for design. It renders the production components from
+source with the app's own stylesheet, tokens and themes, and it reads every foundation — colour,
+typography, spacing, radius, icons, themes — live from the files the app itself is built from. When a
+component or a token changes, its page changes with it.
 
 ### Rules
 
 Follow these before writing any UI, and cite the IDs in reviews.
 
-- **LIB-1** — **Search and reuse first.** Look for an existing component and its supported variants in this library, `packages/ui/*.tsx`, `apps/web/src/components` and the owning feature module, and check how real call sites use it.
-- **LIB-2** — **Compose or extend before adding.** Combine existing components, or extend one when its behaviour and semantic contract stay the same. Add a component only when the system cannot express the need.
-- **LIB-3** — **Choose by contract, not by look.** Buttons, switches, tabs, menu items, tree rows and disclosures behave differently for keyboards and assistive technology. Never restyle one into another.
-- **LIB-4** — **Use supported props; never recreate appearance.** A component owns its geometry, colour, typography and states. A call site passes props and adds placement only — no copied skins, no state classes, no colour or type overrides.
-- **LIB-5** — **A new component ships with its documentation.** Compare it with the nearest existing components (behaviour, API, styling), record what you adopted and rejected, place it at the right level — shared primitive in `packages/ui`, app composite in `apps/web/src/components`, or local to its feature — and add its page, live examples and checks to this library in the same change.
+- **LIB-1 — Search and reuse first.** Look for an existing component and its supported variants in this
+  library, `packages/ui/*.tsx`, `apps/web/src/components` and the owning feature module, and check how
+  real call sites use it.
+- **LIB-2 — Compose or extend before adding.** Combine existing components, or extend one when its
+  behaviour and semantic contract stay the same. Add a component only when the system cannot express the
+  need.
+- **LIB-3 — Choose by contract, not by look.** Buttons, switches, tabs, menu items, tree rows and
+  disclosures behave differently for keyboards and assistive technology. Never restyle one into another.
+- **LIB-4 — Use supported props; never recreate appearance.** A component owns its geometry, colour,
+  typography and states. A call site passes props and adds placement only — no copied skins, no state
+  classes, no colour or type overrides.
+- **LIB-5 — A new component ships with its documentation.** Compare it with the nearest existing
+  components (behaviour, API, styling), record what you adopted and rejected, place it at the right
+  level — shared primitive in `packages/ui`, app composite in `apps/web/src/components`, or local to its
+  feature — and add its page, live examples and checks to this library in the same change.
 
-### Where values live
+### Where things live
 
-The library explains usage; it never restates values. Implementation values stay in production code and the token sources: the component source (`packages/ui/<name>.tsx`) and its spec (`packages/ui/SPEC.md`), colour roles (`apps/web/src/styles/COLOR.md`), typography (`TYPOGRAPHY.md`) and spacing (`SPACING.md`). A missing token is added at its source and validated there, never at a call site.
+Values and words have one home each.
+
+| What | Where | Edited by hand |
+| --- | --- | --- |
+| Token values — palette, colour roles, type, spacing | `apps/web/src/themes/bundled/*.theme.json`, `apps/web/src/styles/colors.json`, `typography.json`, `spacing.json` | yes |
+| Structural tokens — radius, motion, panel heights | `apps/web/src/styles/tokens.css` | yes |
+| Components | `packages/ui/<name>.tsx` | yes |
+| Every rule, description and example | `apps/web/library/content/` and `apps/web/library/examples/` | yes |
+| Markdown for specs and agents — `COLOR.md`, `TYPOGRAPHY.md`, `SPACING.md`, `NOTIFICATIONS.md`, `UI-TERMINOLOGY.md`, `packages/ui/COMPONENTS.md`, `DESIGN.md` | generated from the library | never |
+
+The library never restates a value in prose: foundation pages show the JSON's current content, and the
+generated Markdown points to the JSON. `DESIGN.md` is the one exception — it quotes the current values,
+generated from the same files, for agents and design tools that cannot open the library. A missing token
+is added at its source and validated there, never at a call site.
 
 ### Examples
 
-Every example is a real component rendered from source with mocked data and real interactions — hover, press, Tab, click. Copy the code as a starting point; labels use locale keys, as the app requires.
+Every example is a real component rendered from source with mocked data and real interactions — hover,
+press, Tab, click. Copy the code as a starting point; labels use locale keys, as the app requires.
 
-### Adding a component page
+### Adding or changing a page
 
-Write its guidance in `apps/web/library/content/<name>.ts` — including its sidebar `group` and the example shown as its overview `preview` — and its examples in `apps/web/library/examples/<name>/`, register it in `content/index.ts`, then run `bun run library:md` to regenerate the Markdown reference. `library.test.ts` fails when the reference is stale, an example file is missing, or a listed production usage no longer uses the component.
+- **A component:** write its guidance in `apps/web/library/content/components/<name>.ts` — including its
+  sidebar `group` and the example shown as its overview `preview` — and its examples in
+  `apps/web/library/examples/<name>/`, then register it in `content/index.ts`.
+- **A foundation, pattern or guide:** write Markdown in `content/<area>/<name>.md` and register it in
+  `content/index.ts`. A line `:::live <block>` places a live table or specimen read from the token files;
+  the blocks live in `apps/web/library/live/`. Link another page as `#/<slug>` and a repository file as
+  `/<path>`; the generator rewrites both into relative links.
+- Run `bun run library:md` to regenerate every Markdown output. `library.test.ts` fails when an output is
+  stale, a registered file or example is missing, a live block is unknown, or a listed production usage
+  no longer uses its component.
 
 ### Commands
 
-`bun run library:dev` starts the library with hot reload. `bun run library:build` checks the Markdown reference, typechecks and writes the static site to `apps/web/dist-library/`. `bun run library:md` regenerates `packages/ui/COMPONENTS.md`.
+- `bun run library:dev` starts the library with hot reload.
+- `bun run library:build` checks the generated Markdown, typechecks and writes the static site to
+  `apps/web/dist-library/`.
+- `bun run library:md` regenerates every generated Markdown file.
 
 ## Button
 
@@ -74,7 +113,7 @@ import { Button } from "@thinkrail/ui/button";
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
 | `variant` | `"primary" \| "soft-primary" \| "outline" \| "ghost" \| "destructive"` | `"primary"` | The action's role. Pick it by meaning, not by the colour you want. |
-| `size` | `"s" \| "m" \| "l"` | `"l"` | Height, padding, gap and icon size together. Values live in `packages/ui/SPEC.md` *Sizes*. |
+| `size` | `"s" \| "m" \| "l"` | `"l"` | Height, padding, gap and icon size together. Values live in the Button system contract (*Sizes*). |
 | `tone` | `"warning" \| "danger"` | — | Keeps the feedback colour on the label in every state. Applies to `ghost` and `outline`; other variants ignore it. |
 | `selected` | `boolean` | `false` | Persistent toggle or open state. Styled on `outline`, `ghost` and `soft-primary`. An open Radix trigger (`data-state="open"`) shows it automatically. Pair a toggle with `aria-pressed`. |
 | `loading` | `boolean` | `false` | Shows an icon-sized spinner without changing geometry, sets `aria-busy` and natively disables the button so the action cannot run twice. |
@@ -452,8 +491,6 @@ export default function Link() {
 | `packages/resource-renderers/src/support/ReviewComposer.tsx` | Save draft, Send now and Cancel at size S in a comment card. |
 | `apps/web/src/panels/PlanPane.tsx` | Open PR with `loading`, plan header actions. |
 
-The full technical contract is `packages/ui/SPEC.md`.
-
 ## IconButton
 
 A square, icon-only action. Its required `label` is both the accessible name and the shared tooltip, so an icon is never left unexplained. Same variants, sizes and states as Button; defaults to `ghost` at `m`.
@@ -492,7 +529,7 @@ import { IconButton } from "@thinkrail/ui/button";
 | `icon` | `ButtonIcon` | — | The icon component (pass `RiCloseLine`, not `<RiCloseLine />`). Line by default, Fill for an active state. |
 | `label` | `string` | — | Required. The accessible name (`aria-label`) and the default tooltip text. Use a locale key. |
 | `variant` | `"primary" \| "soft-primary" \| "outline" \| "ghost" \| "destructive"` | `"ghost"` | The action's role. Pick it by meaning, not by the colour you want. |
-| `size` | `"s" \| "m" \| "l"` | `"m"` | Height, padding, gap and icon size together. Values live in `packages/ui/SPEC.md` *Sizes*. |
+| `size` | `"s" \| "m" \| "l"` | `"m"` | Height, padding, gap and icon size together. Values live in the Button system contract (*Sizes*). |
 | `tone` | `"warning" \| "danger"` | — | Keeps the feedback colour on the label in every state. Applies to `ghost` and `outline`; other variants ignore it. |
 | `selected` | `boolean` | `false` | Persistent toggle or open state. Styled on `outline`, `ghost` and `soft-primary`. An open Radix trigger (`data-state="open"`) shows it automatically. Pair a toggle with `aria-pressed`. |
 | `loading` | `boolean` | `false` | Shows an icon-sized spinner without changing geometry, sets `aria-busy` and natively disables the button so the action cannot run twice. |
@@ -814,4 +851,77 @@ export default function Tone() {
 | `apps/web/src/shell/layout/workbenchTabs.tsx` | Tab close and the open-tabs search trigger. |
 | `apps/web/src/chat/CopyButton.tsx` | Message copy action at size S, revealed on hover. |
 
-The full technical contract is `packages/ui/SPEC.md`.
+## Button system contract
+
+`button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /
+`iconRight`), `IconButton` (icon only — `label` is required and becomes both the `aria-label` and the shared
+`IconTooltip`), and `buttonVariants` for a non-button element that must look like one (a link) — it
+returns the same merged class list the components render, compounds resolved — with
+`buttonDataAttributes` giving such an element the same `data-slot` / `data-variant` / `data-size` /
+`data-icon-only` / `data-selected` contract the components render (the panel tool rails, the Monaco
+comment widget), and `withIconClass(Icon, classes)` for a tinted or animated glyph (a success check, a
+working pulse) — created once at module scope, never during render, so the icon keeps its identity. Neither
+component accepts a native `title`: an explanation is `tooltip` (on `IconButton` it overrides the label's
+tooltip text), rendered through the same `IconTooltip`, so it also shows on a disabled button — the
+place a reason for being unavailable matters most. While `disabled`, a button moves its tooltip trigger to
+the `wrapTrigger` span automatically, so the tooltip survives the disabled button's `pointer-events:
+none`; the value, not the prop's presence, decides, because a Radix trigger such as
+`DropdownMenuTrigger asChild` injects `disabled={false}` into every child and a wrapper would take a
+text button's `min-w-0` truncation away. The button element remounts inside the span when `disabled`
+flips; an explicit `wrapTrigger` keeps the span permanently (and isolates a second Radix trigger), and
+`wrapTrigger={false}` opts out. Every
+ordinary action in the app, the renderer package and extension web halves renders through it; a raw
+`<button>` carrying a button skin is rejected by `apps/web/src/styles/buttonUsage.test.ts` unless that
+test's documented specialized list names it.
+
+- **Variants** (exactly five): `primary` (accent fill — the main action of a surface), `soft-primary`
+  (accent tint + accent text; also every former transparent "green ghost"), `outline` (neutral bordered),
+  `ghost` (no surface, muted text, neutral hover fill — the default for `IconButton`), `destructive` (danger
+  fill; confirms irreversible actions). A call site picks the variant that matches the action's existing
+  look; there is no `soft-default` and no colour override at a call site. `tone` (`warning` | `danger`)
+  is the one sanctioned label colour: on `ghost` and `outline` it keeps the feedback colour in every state
+  (rest, hover, focus-visible, pressed, selected — disabled still wins), because a colour set at the call
+  site loses to ghost's own state text in focus and pressed, exactly when the control is used.
+- **Sizes** (exactly three; border-box, same for every variant and state, radius `rounded-sm`, type
+  `tr-text-button` — the interface face at the `button` weight, one step above ordinary UI text): `s` 20px
+  high, 4px text padding, 14px icon, 4px icon↔text gap, 20px square icon-only; `m` 24 / 8 / 16 / 4 / 24;
+  `l` 32 / 12 / 20 / 6 / 32 (the default for `Button`; `IconButton` defaults to `m`). At `s` the gap equals the side padding: a 12px icon read as
+  lighter than the 14px label beside it, so the icon was raised to 14px and the gap to 4px to keep the pair
+  legible. Icon weight follows the icon size only — Remix Icon ships Line/Fill, not stroke weights, so
+  there is no per-size weight to match and none is simulated with CSS. Icons never shrink; text buttons
+  size to content unless the layout asks for `w-full`.
+- **States** live in the component, not at the call site: hover uses the variant's hover role
+  (soft-primary: `control-soft-primary-bg-hovered` plus a `primary-muted` border, so its accent label
+  stays AA); pressed (`:active`, pointer down or Space held) looks exactly like hover — the same `active:` classes mirror the `hover:` ones, so a keyboard press without a pointer shows it too — and never moves geometry; focus-visible is a 2px `primary` outline with a 2px offset in every variant, so
+  it stays visible over a primary or destructive fill and on every surface (`ghost`, which has no surface
+  of its own, also takes its hover fill and default text while focused, so the focused button reads as a
+  control and not only as a ring around empty space) — except a `ghost` icon-only button, which draws the
+  ring 2px inside its square, because those sit flush in 28px header strips and rails whose
+  `overflow: hidden` would clip an outer ring; disabled keeps the element in
+  place on the `control-disabled-*` / `control-primary-disabled-*` / `control-destructive-disabled-*` roles
+  (never opacity, never hidden) through the `button-disabled` variant the app stylesheet defines — a
+  `data-disabled` element, or a natively `:disabled` one that is not loading, so a button inside a disabled
+  `<fieldset>` takes the skin too; `loading` swaps the icon (with `spinIcon`, it instead rotates the button's own icon in place — the refresh idiom of [Loading](../../apps/web/library/content/patterns/loading.md) — and under reduced motion shows the static spinner glyph instead, so the state stays visible) (or, with no icon, overlays the label it keeps
+  transparent for width and the accessible name) for a spinner at the size's icon size, sets `aria-busy`, and natively disables the
+  element so the action cannot run twice; `selected` — or an open Radix trigger (`data-state="open"`) — is
+  the persistent toggle/open fill (`control-bg-selected`) for `outline` and `ghost`, distinct from pressed;
+  `soft-primary` shows selected as its hover look (`primary-muted` border on the hover tint), the one
+  accent step that keeps its label AA, so an expanded accent chip still reads as expanded. Toggles keep
+  `aria-pressed`; disclosures keep `aria-expanded`.
+- **Rows**: a list row that paints its own hover or selected fill uses the same roles as ghost's fills
+  (`control-bg-hovered` / `control-bg-selected`), so a ghost action on it would show no feedback. Such a
+  row carries `data-row`, and a `ghost` button inside it takes `container-elevated-bg` for hover, pressed,
+  focus-visible and selected instead — the raised look row actions had before the system — so a hovered
+  row action and an open row menu stay visible against the filled row. Marked rows: project and workspace
+  rows, change rows, todo rows, every cmdk `CommandItem`, and a history-overlay row only while it is
+  selected — those rows sit on the overlay's elevated surface and fill only when selected, so an unselected
+  row keeps ghost's own hover fill.
+- **Call sites own placement only**: margins, self/flex/grid placement, `w-full`, positioning, responsive
+  visibility and whole-button hover reveal. Height, padding, gap, radius, colours, borders, typography and
+  state skins are rejected by the adoption guard. Documented exceptions live in that guard with a reason
+  (red-on-hover raw actions that `tone` does not express; extension select options that must wrap long
+  labels).
+- **Not buttons**: tabs, menu items, switches, toggle segments, radio/segmented options, tree and list rows,
+  disclosure headers, chips, inline text links, the composer send pill, native window controls and large
+  choice cards keep their own primitives or components.
+- The dialog close button and `ToastClose` are `IconButton ghost m`.

@@ -3,9 +3,9 @@ import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useState } from "react";
 import { BrandLogo } from "@/shell/BrandLogo";
-import { components, guides } from "./content";
+import { type AreaId, areas, components, docs } from "./content";
 import { ComponentPage } from "./pages/ComponentPage";
-import { GuidePage } from "./pages/GuidePage";
+import { DocPage } from "./pages/DocPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { ThemeMenu } from "./parts/ThemeMenu";
 
@@ -28,10 +28,14 @@ function useRoute(): string {
 	return route;
 }
 
-type Area = "guides" | "components";
+function areaOf(route: string): AreaId {
+	return docs.find((page) => page.slug === route)?.area ?? "components";
+}
 
-function areaOf(route: string): Area {
-	return guides.some((guide) => guide.slug === route) ? "guides" : "components";
+function areaHome(area: AreaId): string {
+	return area === "components"
+		? OVERVIEW
+		: (docs.find((page) => page.area === area)?.slug ?? OVERVIEW);
 }
 
 const componentGroups = [...new Set(components.map((doc) => doc.group))].map((group) => ({
@@ -80,23 +84,14 @@ function Sidebar({
 	route,
 	onNavigate,
 }: {
-	area: Area;
+	area: AreaId;
 	route: string;
 	onNavigate: () => void;
 }) {
+	const title = areas.find((entry) => entry.area === area)?.title ?? area;
 	return (
-		<nav aria-label={area === "guides" ? "Guides" : "Components"} className="flex flex-col gap-2">
-			{area === "guides" ? (
-				guides.map((guide) => (
-					<NavLink
-						key={guide.slug}
-						slug={guide.slug}
-						label={guide.title}
-						route={route}
-						onNavigate={onNavigate}
-					/>
-				))
-			) : (
+		<nav aria-label={title} className="flex flex-col gap-2">
+			{area === "components" ? (
 				<>
 					<NavLink
 						slug={OVERVIEW}
@@ -119,30 +114,41 @@ function Sidebar({
 						</div>
 					))}
 				</>
+			) : (
+				docs
+					.filter((page) => page.area === area)
+					.map((page) => (
+						<NavLink
+							key={page.slug}
+							slug={page.slug}
+							label={page.title}
+							route={route}
+							onNavigate={onNavigate}
+						/>
+					))
 			)}
 		</nav>
 	);
 }
 
-function TopNav({ area }: { area: Area }) {
-	const item = (target: Area, href: string, label: string) => (
-		<a
-			href={href}
-			aria-current={area === target ? "page" : undefined}
-			className={cn(
-				"relative flex h-full items-center px-12 tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
-				area === target
-					? "text-primary after:absolute after:inset-x-12 after:bottom-0 after:h-2 after:rounded-full after:bg-primary after:content-['']"
-					: "text-text-muted hover:text-text-default",
-			)}
-		>
-			{label}
-		</a>
-	);
+function TopNav({ area }: { area: AreaId }) {
 	return (
-		<nav aria-label="Sections" className="hidden h-full items-stretch sm:flex">
-			{item("guides", `#/${guides[0]?.slug ?? "using"}`, "Guides")}
-			{item("components", `#/${OVERVIEW}`, "Components")}
+		<nav aria-label="Sections" className="hidden h-full items-stretch lg:flex">
+			{areas.map((entry) => (
+				<a
+					key={entry.area}
+					href={`#/${areaHome(entry.area)}`}
+					aria-current={area === entry.area ? "page" : undefined}
+					className={cn(
+						"relative flex h-full items-center px-12 tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+						area === entry.area
+							? "text-primary after:absolute after:inset-x-12 after:bottom-0 after:h-2 after:rounded-full after:bg-primary after:content-['']"
+							: "text-text-muted hover:text-text-default",
+					)}
+				>
+					{entry.title}
+				</a>
+			))}
 		</nav>
 	);
 }
@@ -152,7 +158,7 @@ export function App() {
 	const area = areaOf(route);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const component = components.find((doc) => doc.slug === route);
-	const guide = guides.find((page) => page.slug === route);
+	const page = docs.find((entry) => entry.slug === route);
 	return (
 		<div className="flex h-dvh flex-col bg-container-workspace-bg text-text-default">
 			<header className="flex h-[3.5rem] shrink-0 items-center gap-12 border-border-default border-b bg-container-header-bg px-16">
@@ -162,14 +168,14 @@ export function App() {
 					aria-expanded={menuOpen}
 					aria-controls="library-nav-drawer"
 					onClick={() => setMenuOpen((open) => !open)}
-					className="md:hidden"
+					className="lg:hidden"
 				/>
 				<a
 					href={`#/${OVERVIEW}`}
 					className="flex items-center gap-8 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					<BrandLogo />
-					<span className="tr-title-card text-text-default">Components</span>
+					<span className="tr-title-card text-text-default">Design system</span>
 				</a>
 				<div className="ml-auto flex h-full items-center gap-12">
 					<TopNav area={area} />
@@ -183,17 +189,21 @@ export function App() {
 				{menuOpen ? (
 					<aside
 						id="library-nav-drawer"
-						className="absolute inset-y-0 left-0 z-20 flex w-[16rem] max-w-full flex-col gap-16 overflow-y-auto border-border-default border-r bg-container-sidebar-bg px-8 py-16 shadow-[var(--shadow-lg)] md:hidden"
+						className="absolute inset-y-0 left-0 z-20 flex w-[16rem] max-w-full flex-col gap-16 overflow-y-auto border-border-default border-r bg-container-sidebar-bg px-8 py-16 shadow-[var(--shadow-lg)] lg:hidden"
 					>
-						<Sidebar area="guides" route={route} onNavigate={() => setMenuOpen(false)} />
-						<Sidebar area="components" route={route} onNavigate={() => setMenuOpen(false)} />
+						{areas.map((entry) => (
+							<div key={entry.area} className="flex flex-col gap-2">
+								<GroupLabel label={entry.title} />
+								<Sidebar area={entry.area} route={route} onNavigate={() => setMenuOpen(false)} />
+							</div>
+						))}
 					</aside>
 				) : null}
 				<main id="library-main" className="min-w-0 flex-1 overflow-y-auto">
 					{component ? (
 						<ComponentPage key={component.slug} doc={component} />
-					) : guide ? (
-						<GuidePage page={guide} />
+					) : page ? (
+						<DocPage key={page.slug} page={page} />
 					) : (
 						<OverviewPage />
 					)}

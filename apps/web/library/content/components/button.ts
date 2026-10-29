@@ -1,6 +1,6 @@
 import type { ButtonProps, ButtonSize, ButtonTone, ButtonVariant } from "@thinkrail/ui/button";
 import type { ButtonHTMLAttributes } from "react";
-import type { ComponentDoc, PropDoc } from "./types";
+import type { ComponentDoc, PropDoc } from "../types";
 
 type OwnProps<P> = Exclude<keyof P, keyof ButtonHTMLAttributes<HTMLButtonElement>>;
 
@@ -40,7 +40,7 @@ export const sharedPropDocs = {
 		type: '"s" | "m" | "l"',
 		default: '"l"',
 		description:
-			"Height, padding, gap and icon size together. Values live in `packages/ui/SPEC.md` *Sizes*.",
+			"Height, padding, gap and icon size together. Values live in the Button system contract (*Sizes*).",
 	},
 	tone: {
 		type: '"warning" | "danger"',
@@ -312,5 +312,5 @@ export const button = {
 			note: "Open PR with `loading`, plan header actions.",
 		},
 	],
-	spec: "packages/ui/SPEC.md",
+	contract: "components/button-system.md",
 } satisfies ComponentDoc;

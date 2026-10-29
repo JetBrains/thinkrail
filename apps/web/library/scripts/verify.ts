@@ -44,6 +44,50 @@ check(true, "the sidebar reaches the IconButton page");
 await page.getByRole("link", { name: "Guides" }).click();
 await page.locator("h1", { hasText: "Using the library" }).waitFor();
 check(true, "the header reaches the Using the library guide");
+for (const [area, title] of [
+	["Foundations", "Color"],
+	["Patterns", "Notices"],
+	["Vocabulary", "UI vocabulary"],
+] as const) {
+	await page
+		.getByRole("navigation", { name: "Sections" })
+		.getByRole("link", { name: area })
+		.click();
+	await page.locator("#library-main h1", { hasText: title }).waitFor();
+	check(true, `the header reaches the ${area} area (${title})`);
+}
+
+const liveExpected: Record<string, readonly string[]> = {
+	color: ["color-roles", "color-alpha"],
+	typography: ["type-primitives", "type-styles", "type-counts", "type-weights", "prose-systems"],
+	spacing: ["spacing-scale", "layout-roles"],
+	radius: ["radius-scale"],
+	icons: ["icon-styles", "icon-tiers", "custom-icons"],
+	themes: ["themes", "color-palettes"],
+};
+for (const [route, blocks] of Object.entries(liveExpected)) {
+	await open(page, route);
+	for (const block of blocks) {
+		const rows = await page
+			.locator(`[data-live-block="${block}"] tr, [data-live-block="${block}"] > div > div`)
+			.count();
+		check(rows > 1, `${route}: live block ${block} renders its source (${rows} rows)`);
+	}
+}
+await open(page, "typography");
+const sample = page.locator('[data-live-block="type-styles"] .tr-heading-xl').first();
+const sampleSize = await sample.evaluate((element) => getComputedStyle(element).fontSize);
+check(
+	sampleSize === "24px",
+	`type samples render in their own class, outside the prose root (${sampleSize})`,
+);
+await open(page, "radius");
+const radius = await page
+	.locator('[data-live-block="radius-scale"] tbody tr')
+	.first()
+	.locator("span[aria-hidden]")
+	.evaluate((element) => getComputedStyle(element).borderTopLeftRadius);
+check(radius === "2px", `radius specimens use the live token (${radius})`);
 
 await open(page, "button");
 const themeIds: string[] = [];
@@ -190,6 +234,14 @@ const overflow = await page.evaluate(() => {
 	);
 });
 check(overflow <= 0, `narrow layout does not scroll the page sideways (${overflow}px)`);
+for (const route of ["color", "typography", "themes", "vocabulary"]) {
+	await open(page, route);
+	const sideways = await page.evaluate(() => {
+		const main = document.getElementById("library-main") as HTMLElement;
+		return main.scrollWidth - main.clientWidth;
+	});
+	check(sideways <= 0, `narrow ${route} page does not scroll sideways (${sideways}px)`);
+}
 
 check(errors.length === 0, `no runtime errors (${errors.join(" | ")})`);
 await browser.close();
