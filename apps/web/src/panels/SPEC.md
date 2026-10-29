@@ -1008,7 +1008,9 @@ a project picker, the prompt hero, and the reused
   above the first question; `SurveyForm` then draws one question per step (rating points are real radio
   inputs; selecting Other focuses its text field) with **Continue**, and **Send** on the last. Nothing is sent before Send, closing never calls the
   host, and the analytics setting plays no part. `SURVEY_CHANGED` reloads the survey and restarts it with a
-  short notice; other refusals stay inline; success shows PostHog's thank-you header or the app's.
+  short notice; other refusals stay inline; success shows PostHog's thank-you header or the app's. The form
+  is keyed by survey id, iteration and `language`, so a reload in another language restarts it rather than
+  mixing languages, and Send echoes `survey.language`.
   **`ModelsSettings`** is the **Models** section, visible only at protocol v72 or newer. It re-reads
   `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed

@@ -41,6 +41,7 @@ interface SurveyHost {
 	submits: Partial<SurveySubmitParams>[];
 	actions: string[];
 	reads: number;
+	readLanguages: (string | undefined)[];
 	nextSubmitError: WsErrorCode | null;
 	socket: () => WebSocketRoute;
 	welcomeFrame: () => string;
@@ -58,6 +59,7 @@ async function stubSurveyHost(
 		submits: [],
 		actions: [],
 		reads: 0,
+		readLanguages: [],
 		nextSubmitError: null,
 		socket: () => {
 			if (!browserSocket) throw new Error("expected the app WebSocket");
@@ -82,6 +84,7 @@ async function stubSurveyHost(
 			}
 			if (request.method === "feedback.survey" && request.id) {
 				host.reads += 1;
+				host.readLanguages.push(request.params?.language);
 				socket.send(
 					JSON.stringify({ id: request.id, ok: true, result: { survey: host.available } }),
 				);
@@ -311,4 +314,25 @@ test("a pre-v97 host's retired interview invitation never opens the survey invit
 	await expect(page.getByTestId("feedback-take-survey")).toHaveCount(0);
 	await expect(page.getByTestId("survey-invitation-dialog")).toHaveCount(0);
 	expect(host.reads).toBe(0);
+});
+
+test("the survey is asked for in the UI language and Send echoes the translation shown", async ({
+	page,
+}) => {
+	const spanish: AppSurvey = {
+		...survey(1),
+		language: "es",
+		questions: [{ id: "open", type: "open", question: "¿Qué podemos mejorar?" }],
+	};
+	const host = await stubSurveyHost(page, spanish);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-feedback").click();
+	await page.getByTestId("feedback-take-survey").click();
+	const window = page.getByTestId("survey-window");
+	await expect(window.getByTestId("survey-question")).toHaveText("¿Qué podemos mejorar?");
+	expect(host.readLanguages.at(-1)).toBe("en");
+	await window.getByRole("textbox").fill("Más atajos");
+	await window.getByTestId("survey-send").click();
+	await expect(window.getByTestId("survey-thanks")).toBeVisible();
+	expect(host.submits[0]).toMatchObject({ language: "es", answers: { open: "Más atajos" } });
 });

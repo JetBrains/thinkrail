@@ -53,6 +53,7 @@ export function SurveyForm({
 				submissionId,
 				surveyId: survey.id,
 				iteration: survey.iteration,
+				...(survey.language ? { language: survey.language } : {}),
 				answers: committedAnswers(questions, draft),
 			})
 			.then(() => onSent())

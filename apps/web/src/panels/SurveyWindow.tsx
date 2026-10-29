@@ -66,7 +66,7 @@ function SurveyWindowBody() {
 				</p>
 			) : null}
 			<SurveyForm
-				key={`${survey.id}:${survey.iteration}`}
+				key={`${survey.id}:${survey.iteration}:${survey.language ?? ""}`}
 				survey={survey}
 				onSent={() => {
 					setThanks(thankYouText(survey, t("panels.survey.thankYou")));
