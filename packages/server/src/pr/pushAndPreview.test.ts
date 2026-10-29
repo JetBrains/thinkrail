@@ -129,6 +129,19 @@ describe("pushBranch", () => {
 		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
 	});
 
+	test("a managed workspace switched in its terminal pushes the live branch, never the stale one", async () => {
+		sh(repo, "switch", "-q", "-c", "feature-live");
+		await expect(pushBranch({ workspaceId: "w1", branch: "feature" })).rejects.toThrow(
+			/moved from "feature" to "feature-live"/,
+		);
+		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
+
+		await pushBranch({ workspaceId: "w1", branch: "feature-live" });
+		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads")).toBe(
+			"refs/heads/feature-live",
+		);
+	});
+
 	test("a repository without origin names the missing remote", async () => {
 		sh(repo, "remote", "remove", "origin");
 		await expect(pushBranch({ workspaceId: "w1", branch: "feature" })).rejects.toThrow(

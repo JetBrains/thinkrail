@@ -219,7 +219,16 @@ ref off the workspace-create critical path.
   (`symbolic-ref --short HEAD`, unborn-safe; detached → literal `HEAD`), consumed by the `workspaces`
   module for a user-owned workspace's folder-truth `branch`, with **`tryCurrentBranch`** its fallible form
   (`null` when the path is not a readable worktree root, so a refresh never persists an I/O failure as a
-  detach); **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
+  detach); **`headBranchAt(worktreePath)`** (`head.ts`) — the checked-out branch read from
+  files with no spawn: `<worktreePath>/.git` is the gitdir, or a gitfile `gitdir: <path>` (relative to the
+  worktree), and that gitdir's own `HEAD` (per-worktree, so `commondir` never matters) reading
+  `ref: refs/heads/<x>` gives `x` (unborn included); a sha or anything else is `null` (detached), and so is
+  a missing or unreadable `.git` in the worktree itself, so an enclosing repo's branch is never answered.
+  A reftable repo writes the stub `ref: refs/heads/.invalid` to every `HEAD`, so that text alone falls back
+  to `git symbolic-ref -q HEAD`, which needs no path compare because discovery
+  stops at the `.git` already found. The gitfile parse mirrors `watch`'s `resolveExternalGitDir` on
+  purpose: the two modules have no sibling edge. Consumed by `workspaces` for managed workspaces;
+  **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
   take (git resolves symlinks, a caller's path does not), shared with `workspaces`' worktree-identity
   checks; `prefetchBranch(projectId, ref)` — best-effort background
   `git fetch` of a configured remote ref (via `gitAsync`), so a later `createWorkspace` branches off a
@@ -313,7 +322,8 @@ ref off the workspace-create critical path.
   `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,
   `readPathModeAtAsync`, `readCommitSubject`, `commitsAheadOf`, `originUrls`, `countPushTargetDivergence`,
   `PushTargetStatus`,
-  `gitCommitPaths`, `gitHeadSha`, `headShaAt`, `listCommits`, `listCommitsSince`,
+  `gitCommitPaths`, `gitHeadSha`, `headShaAt`, `headBranchAt`, `listCommits`,
+  `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `resolveListedCommit`, `prefetchBranch`, `countPushDivergence`, `listRemotes`, `remoteNameOf`,
@@ -341,8 +351,10 @@ ref off the workspace-create critical path.
   the other end — it returns *no* stats (and logs why) rather than a fabricated `+0 −0`. A review surface that
   calls a dirty worktree clean is the worst failure this product can have.
 - `gitStatus` reports the **live** current branch for a user-owned (`kind: "default" | "external"`)
-  workspace (its branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot
-  self-heals only at list time; the Changes header must not lag).
+  workspace, whose branch moves out-of-band (a terminal `git checkout`) and the Changes header must not lag.
+  A managed workspace's branch moves out-of-band too; `gitStatus` deliberately reports its **stored**
+  branch, which converges through `workspaces`' `syncWorkspaceBranch` (repo-metadata nudge, list, rename,
+  push), so between a terminal switch and that nudge the header may show the old branch.
 - **A network git call is bounded by us, not talked out of waiting.** A `fetch` whose remote wants a
   passphrase blocks on `/dev/tty` forever, and the only thing that ever ended that wait was the *client's*
   60s request timeout (`transport.ts` `DEFAULT_TIMEOUT_MS`, not overridden for `workspace.create`) — which

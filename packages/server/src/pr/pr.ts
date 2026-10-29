@@ -1,6 +1,12 @@
 import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import { join, sep } from "node:path";
-import type { GhSetupProblem, OpenPrResult, PrBodySource, PrPreview } from "@thinkrail/contracts";
+import type {
+	GhSetupProblem,
+	OpenPrResult,
+	PrBodySource,
+	PrPreview,
+	Workspace,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	forgetOpenBranchReview,
@@ -22,7 +28,7 @@ import {
 } from "../git";
 import { ghSetupProblem } from "../github";
 import { generateTodoSummary, listTodos } from "../todos";
-import { getWorkspace, refreshUserOwnedWorkspace } from "../workspaces";
+import { getWorkspace, syncWorkspaceBranch } from "../workspaces";
 import { flatItems, renderPrBody } from "./prBody";
 
 const COMPARE_BODY_LIMIT = 4_000;
@@ -271,8 +277,13 @@ export function baseRef(baseBranch: string): string {
 	return baseBranch.replace(/^origin\//, "");
 }
 
-export function onBaseBranch(ws: { branch: string; baseBranch: string }): boolean {
-	return ws.branch === baseRef(ws.baseBranch);
+export function onBaseBranch(
+	ws: Pick<Workspace, "worktreePath" | "branch" | "baseBranch">,
+): boolean {
+	if (ws.branch === baseRef(ws.baseBranch)) return true;
+	if (!ws.baseBranch.endsWith(`/${ws.branch}`)) return false;
+	const remote = remoteNameOf(ws.baseBranch, listRemotes(ws.worktreePath));
+	return remote !== null && ws.baseBranch === `${remote}/${ws.branch}`;
 }
 
 export function compareQuickPullUrl(
@@ -415,7 +426,7 @@ async function pushToOrigin(cwd: string, branch: string): Promise<string> {
 }
 
 export function refreshedWorkspace(workspaceId: string, expectedBranch: string | undefined) {
-	refreshUserOwnedWorkspace(workspaceId);
+	syncWorkspaceBranch(workspaceId);
 	const ws = getWorkspace(workspaceId);
 	assertSafeRef(ws.branch);
 	if (expectedBranch !== undefined && ws.branch !== expectedBranch) {
@@ -475,10 +486,6 @@ export async function openPr(
 	run: PrCommandRunner = runProviderCommand,
 	ghProblem: () => Promise<GhSetupProblem | null> = ghSetupProblem,
 ): Promise<OpenPrHostResult> {
-	// Default/external workspaces are user-owned checkouts the fs watcher re-syncs asynchronously —
-	// resolve the live branch synchronously here so a switch made in a terminal just before Open PR
-	// can never push/open/compare against a stale one (see SPEC). A no-op for created workspaces,
-	// whose branch is ThinkRail-owned and never drifts externally.
 	prWorkspace(params.workspaceId, params.branch);
 	const dirtyFiles = (await gitStatus(params.workspaceId, { kind: "uncommitted" })).changes.length;
 	const ws = prWorkspace(params.workspaceId, params.branch);

@@ -37,6 +37,7 @@ export {
 	tryCurrentBranch,
 } from "./git";
 export { git, gitAsync, gitAsyncBytes, gitAsyncStream, nonInteractiveGitEnv } from "./gitExec";
+export { headBranchAt } from "./head";
 export { ignoredPaths } from "./ignored";
 export { assertSafeRef, isSafeRef, remoteNameOf, remoteTrackingRef } from "./refs";
 export { snapshotWorktree } from "./snapshot";

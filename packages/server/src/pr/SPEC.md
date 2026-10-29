@@ -43,7 +43,7 @@ the base clamped to a fixed line budget, the session plan's rendered body when p
 template's text.
 
 `pushBranch({ workspaceId, branch, confirmBase? })` → `{ dirtyFiles }` (`workspace.push`): the safe-ref guard
-and `refreshUserOwnedWorkspace` revalidation before and after the dirty read — each time the live branch must
+and `syncWorkspaceBranch` revalidation before and after the dirty read — each time the live branch must
 still be the `branch` the request names (the one the user saw and confirmed), so a terminal switch in between
 pushes nothing instead of another branch — then the same `--set-upstream origin <branch>` push, env, and
 `PUSH_AUTH_FAILED` classification as step 2 below — one implementation that `openPr` also calls. A branch
@@ -57,24 +57,26 @@ one idempotent attempt
 (`body` — the user-edited description from that dialog — replaces the rendered plan body verbatim
 when present; the title/body defaults come from ONE place — openPr consumes `previewPr`, so the
 previewed draft and the pushed PR can never diverge). The call opens with **`assertSafeRef(ws.branch)`**:
-adopted/external worktree branches are stored verbatim from git (only created workspaces pass
-`toBranch`), so an option-shaped branch from an untrusted repo (`--repo=x` is creatable via
+any branch adopted from a live checkout (Default, external, or a managed workspace whose terminal
+switched branch) is stored verbatim from git — only `createWorkspace`/`renameWorkspace` names pass
+`toBranch`/`branchSlug` — so an option-shaped branch from an untrusted repo (`--repo=x` is creatable via
 `git update-ref`) must be rejected before it reaches any git/gh argv. It then rejects a **non-origin
 remote base before the dirty-file read or push**: it pushes and opens against `origin` only; silently treating
 `upstream/main` as a branch in that repository would first publish the workspace branch and only later
 fail to identify its PR target. A remote-tracking ref that outlived its remote configuration is rejected
 on the same side. The error directs the user to open it manually or create from a local/`origin` base;
 cross-repository fork PR creation is future scope, not guessed from string prefixes.
-The next guard rejects when the branch **IS its base** (`ws.branch === baseRef(ws.baseBranch)`, still
+The next guard rejects when the branch **IS its base** (`onBaseBranch`: the base with `origin/` or any
+configured remote's prefix removed equals `ws.branch`, so `main` on an `upstream/main` base counts; still
 before the origin check or any push): the Default workspace's cwd is the project's own checkout, so
 `branch`/`baseBranch` commonly coincide whenever the user is on the repository's default branch
 (`workspaces`' `folderTruth` tracks both off the live `git symbolic-ref`), and an external (adopted)
 workspace can equally sit on its base — without this guard, Open PR would `git push origin
 <default-branch>` straight to the shared branch on an unprotected remote, publishing the commits before
 any PR could offer its review boundary. The client mirrors the ordinary local/`origin` same-branch case;
-the host remains authoritative for unsupported remote bases. **`refreshUserOwnedWorkspace(workspaceId)` resolves the LIVE branch for
-Default/external workspaces** (`workspaces`' same sync used by the fs-watcher tee) and persists it — a
-no-op for created workspaces, whose branch only ThinkRail ever moves. Open PR validates once before its
+the host remains authoritative for unsupported remote bases. **`syncWorkspaceBranch(workspaceId)` resolves the LIVE branch for
+every workspace kind** (`workspaces`' same sync used by the fs-watcher tee) and persists it, so a branch
+switched in a managed workspace's terminal is adopted too. Open PR validates once before its
 async dirty-file read (preserving the safe base-branch fast failure), then refreshes, reloads, and
 revalidates immediately after that await. Without both, a branch switched in a terminal while the Git
 read is in flight or moments before pressing Open PR would push/open/compare against the STALE persisted
@@ -145,7 +147,7 @@ pushes nothing rather than opening a PR for another branch with this one's title
    won't be in the PR. Dirty state never blocks. The server-side `openPr` result also carries the exact
    refreshed `branch` used for push/gh/compare; the host CASes the review snapshot against that branch and
    strips it before the wire response. Capturing branch before the dirty-read await is unsound for
-   user-owned checkouts because `openPr` deliberately refreshes after that await.
+   every workspace kind because `openPr` deliberately refreshes after that await.
 
 **Review actions** (`reviewActions.ts`, v88): `readyPr` (`pr.ready`), `reopenPr` (`pr.reopen`),
 `mergePr({ …, method, deleteBranch })` (`pr.merge`) and `deleteRemoteBranch` (`workspace.deleteRemoteBranch`).
@@ -193,8 +195,8 @@ an update, a create, or an ambiguous create result.
 - **Public surface (barrel):** `openPr`, `previewPr`, `pushBranch`, `prDraftInput`, `onBaseBranch`,
   `readyPr`, `mergePr`, `reopenPr`, `deleteRemoteBranch`.
 - `onBaseBranch` is the one "the branch is its own base" check, shared with `host`'s
-  `workspace.branchStatus`.
-- **Allowed deps:** `workspaces` (workspace record, `refreshUserOwnedWorkspace`), `git` (exec + status), `todos` (`listTodos` for
+  `workspace.branchStatus` and its review lookups, which never run on the base branch for any kind.
+- **Allowed deps:** `workspaces` (workspace record, `syncWorkspaceBranch`), `git` (exec + status), `todos` (`listTodos` for
   the body), `branch-review` (provider detection, `githubSlug`, existing-PR lookup, the fresh open-review
   check before a remote deletion, the shared command runner, `forgetOpenBranchReview`),
   `github` (`ghSetupProblem` — the named compare-fallback reason); `contracts` types;
