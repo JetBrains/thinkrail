@@ -129,6 +129,45 @@ test("selects the newest launched in-app survey and drops unsupported questions"
 	});
 });
 
+test("PostHog's trailing Other choice is the open answer, not a second option", () => {
+	const selected = selectInAppSurvey({
+		surveys: [
+			launched({
+				questions: [
+					{
+						type: "single_choice",
+						id: "choice-1",
+						question: "Pick one",
+						choices: ["Yes", "Other"],
+						hasOpenChoice: true,
+					},
+					{
+						type: "multiple_choice",
+						id: "choice-2",
+						question: "Pick any",
+						choices: ["A", "Other"],
+					},
+				],
+			}),
+		],
+	});
+	expect(selected?.questions).toEqual([
+		{
+			id: "choice-1",
+			type: "single_choice",
+			question: "Pick one",
+			choices: ["Yes"],
+			hasOpenChoice: true,
+		},
+		{
+			id: "choice-2",
+			type: "multiple_choice",
+			question: "Pick any",
+			choices: ["A", "Other"],
+		},
+	]);
+});
+
 test("a survey with no drawable questions and a declined thank-you are absent", () => {
 	expect(
 		selectInAppSurvey({

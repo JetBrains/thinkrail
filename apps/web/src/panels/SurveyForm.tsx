@@ -227,6 +227,7 @@ function SurveyAnswer({
 					{otherSelected ? (
 						<Textarea
 							rows={2}
+							autoFocus
 							maxLength={SURVEY_OPEN_TEXT_LIMIT}
 							aria-label={t("panels.survey.other")}
 							value={draft.otherText[question.id] ?? ""}

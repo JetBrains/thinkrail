@@ -1006,7 +1006,7 @@ a project picker, the prompt hero, and the reused
   **`SurveyWindow`** is the one survey UI. Its first page carries the data notice (what is sent, linked
   to a random installation ID, no secrets/code/personal data, deletion via `info@thinkrail.ai`; no links)
   above the first question; `SurveyForm` then draws one question per step (rating points are real radio
-  inputs) with **Continue**, and **Send** on the last. Nothing is sent before Send, closing never calls the
+  inputs; selecting Other focuses its text field) with **Continue**, and **Send** on the last. Nothing is sent before Send, closing never calls the
   host, and the analytics setting plays no part. `SURVEY_CHANGED` reloads the survey and restarts it with a
   short notice; other refusals stay inline; success shows PostHog's thank-you header or the app's.
   **`ModelsSettings`** is the **Models** section, visible only at protocol v72 or newer. It re-reads

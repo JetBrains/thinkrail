@@ -19,6 +19,8 @@ const DESCRIPTION_LIMIT = 2_000;
 const CHOICE_LIMIT = 500;
 const CHOICE_COUNT_LIMIT = 30;
 const DEFAULT_HOST = "https://eu.i.posthog.com";
+/** PostHog stores the open answer as a trailing choice with this label. */
+const POSTHOG_OPEN_CHOICE = "Other";
 
 const RATING_SCALES: readonly SurveyRatingScale[] = [3, 5, 7, 10];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -239,13 +241,16 @@ function mapQuestion(entry: unknown): SurveyQuestion | null {
 	};
 	if (entry.type === "open") return { ...base, type: "open" };
 	if (entry.type === "single_choice" || entry.type === "multiple_choice") {
-		const choices = choiceList(entry.choices);
-		if (!choices) return null;
+		const listed = choiceList(entry.choices);
+		if (!listed) return null;
+		const open = entry.hasOpenChoice === true;
+		const choices =
+			open && listed[listed.length - 1] === POSTHOG_OPEN_CHOICE ? listed.slice(0, -1) : listed;
 		return {
 			...base,
 			type: entry.type,
 			choices,
-			...(entry.hasOpenChoice === true ? { hasOpenChoice: true } : {}),
+			...(open ? { hasOpenChoice: true } : {}),
 			...(entry.shuffleOptions === true ? { shuffleOptions: true } : {}),
 		};
 	}
