@@ -52,6 +52,7 @@ export {
 	THEME_MODES,
 	TODO_NUDGE_PREFIX,
 	tallyResources,
+	UNWATCHED_PATH_SEGMENTS,
 } from "./domain";
 export type * from "./nativeClient";
 export type * from "./piProtocol";

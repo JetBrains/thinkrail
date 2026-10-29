@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { type FolderChainNode, resolveFolderChain } from "./folderChains";
+import { changeTouchesDirectory, type FolderChainNode, resolveFolderChain } from "./folderChains";
 
 function dir(name: string, path = name): FolderChainNode {
 	return { kind: "dir", name, path };
@@ -56,4 +56,26 @@ test("resolveFolderChain stops at empty, file-only, and branching directories", 
 		deepest: dir("src"),
 		children: branched,
 	});
+});
+
+test("a directory row is touched by changes at or under it and by a .gitignore above it", () => {
+	const touches = (changedPath: string) => changeTouchesDirectory("src/app", changedPath);
+	expect(touches("src/app")).toBe(true);
+	expect(touches("src/app/main.ts")).toBe(true);
+	expect(touches("src/app/deep/nested.ts")).toBe(true);
+	expect(touches(".gitignore")).toBe(true);
+	expect(touches("src/.gitignore")).toBe(true);
+	expect(touches("src/app/.gitignore")).toBe(true);
+	expect(touches("src/application/main.ts")).toBe(false);
+	expect(touches("src/other.ts")).toBe(false);
+	expect(touches("README.md")).toBe(false);
+	expect(touches("lib/.gitignore")).toBe(false);
+	expect(touches("src/app2/.gitignore")).toBe(false);
+});
+
+test("a directory under a path the watcher never reports is touched by every change", () => {
+	expect(changeTouchesDirectory("node_modules/pkg", "bun.lock")).toBe(true);
+	expect(changeTouchesDirectory("node_modules", "src/main.ts")).toBe(true);
+	expect(changeTouchesDirectory("lib/node_modules/x", "README.md")).toBe(true);
+	expect(changeTouchesDirectory("node_modules_cache", "README.md")).toBe(false);
 });

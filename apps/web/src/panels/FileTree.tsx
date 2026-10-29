@@ -9,7 +9,11 @@ import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
-import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
+import {
+	changeTouchesDirectory,
+	type ResolvedFolderChain,
+	resolveFolderChain,
+} from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
 import { useWorkspaceRead } from "./useWorkspaceRead";
@@ -114,6 +118,7 @@ function FileNodeRow({
 				pendingExpand.current = false;
 				setDirectory(null);
 			},
+			affectedBy: (changedPath) => changeTouchesDirectory(node.path, changedPath),
 		},
 	);
 

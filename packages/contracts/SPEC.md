@@ -826,7 +826,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   be treated as a wildcard; `skillChange: "none" | "detected" | "unknown"` is an **independent semantic
   fact**, accumulated before that cap, so a concrete non-skill overflow stays `none`, a skill path omitted
   after the cap stays `detected`, and only a pathless platform/startup uncertainty is `unknown`; a pathless
-  non-truncated/`none` frame is a whole-workspace invalidation such as repo-metadata drift); an
+  non-truncated/`none` frame is a whole-workspace invalidation such as repo-metadata drift;
+  **`UNWATCHED_PATH_SEGMENTS`** names the segments (`.git`, `node_modules`) whose paths no frame ever lists,
+  so a client narrowing re-reads by path re-reads those on every frame instead); an
   **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
   frame is harmless.
   The `WsMethodMap` typed request/result map +

@@ -1,3 +1,5 @@
+import { UNWATCHED_PATH_SEGMENTS } from "@thinkrail/contracts";
+
 export interface FolderChainNode {
 	kind: "dir" | "file";
 	name: string;
@@ -56,4 +58,12 @@ export async function resolveFolderChain<TNode extends FolderChainNode>(
 		deepest = extension.directory;
 		children = await readChildren(extension.directory.path);
 	}
+}
+
+export function changeTouchesDirectory(directory: string, changedPath: string): boolean {
+	if (directory.split("/").some((segment) => UNWATCHED_PATH_SEGMENTS.has(segment))) return true;
+	if (changedPath === directory || changedPath.startsWith(`${directory}/`)) return true;
+	const slash = changedPath.lastIndexOf("/");
+	if (changedPath.slice(slash + 1) !== ".gitignore") return false;
+	return slash === -1 || directory.startsWith(`${changedPath.slice(0, slash)}/`);
 }

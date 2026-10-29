@@ -1823,8 +1823,22 @@ own section. The kebab menu (`plan-menu`, a
   *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
   its compact single-directory run; descendants below the run's deepest directory mount and read only
   when that compact row is expanded. No tick has to be threaded down as a prop.
+  An optional **`affectedBy(changedPath)`** handler narrows which ticks re-read: a tick re-reads only when
+  one of its paths matches, or when it names no paths (truncated, the startup nudge, or the pathless
+  repo-metadata nudge that an index write such as `git add -f` raises), or when ticks were skipped since
+  the last one seen. Two more cases widen a tick to "unknown paths", as `selectFileChangeSince` does: a
+  `connectionGeneration` change since the last tick (the host publishes `fsChanged` without replay, so
+  changes made while the socket was down are lost), and a last read that failed (a timeout or a
+  replay-cap refusal), so the next tick anywhere retries it. Ignore inputs outside the watched
+  tree (a linked worktree's common-dir `info/exclude`, a global `core.excludesFile`) raise no tick; they
+  show on the next widened tick or a collapse and re-expand. Each visible `FileTree` directory row passes `changeTouchesDirectory`:
+  a change at or under the row's directory, or a `.gitignore` in it or an ancestor (which can flip
+  `gitignored` on its entries). A row whose path has a contracts `UNWATCHED_PATH_SEGMENTS` segment
+  (`node_modules`) matches every tick: the watcher never reports paths under it, so a narrowed row there
+  would never refresh. Every folder row, collapsed too, otherwise re-read its chain on any change
+  anywhere in the worktree. The root listing keeps reading on every tick.
   The wiring of this hook and `useLiveTabContent` (ticks during a slow read, a workspace or file switch
-  mid-read) is tested in `liveReads.test.tsx` by mounting real hooks through
+  mid-read, `affectedBy`) is tested in `liveReads.test.tsx` by mounting real hooks through
   `react-dom/client` on a headless container: a tree that renders no host elements needs only a stub
   `window`, so the web package needs no DOM library or testing dependency.
   Its users — `FileTree` (root + each visible directory chain), `FilesPanel` (`git.status`, via

@@ -55,11 +55,9 @@ function scriptedReads<T>() {
 	return { pending, read, keys: () => pending.map((entry) => entry.key) };
 }
 
-const tick = (workspaceId: string, paths: string[]) =>
+const tick = (workspaceId: string, paths: string[], truncated = false) =>
 	act(async () => {
-		useAppStore
-			.getState()
-			.noteFsChanged({ workspaceId, paths, truncated: false, skillChange: "none" });
+		useAppStore.getState().noteFsChanged({ workspaceId, paths, truncated, skillChange: "none" });
 	});
 
 function WorkspaceRead(props: {
@@ -67,10 +65,12 @@ function WorkspaceRead(props: {
 	read: (id: string) => Promise<string>;
 	results: string[];
 	switched?: string[];
+	affectedBy?: (changedPath: string) => boolean;
 }) {
 	useWorkspaceRead(props.workspaceId, props.read, {
 		onResult: (value) => props.results.push(value),
 		onSwitch: (id) => props.switched?.push(id),
+		...(props.affectedBy ? { affectedBy: props.affectedBy } : {}),
 	});
 	return null;
 }
@@ -108,6 +108,86 @@ test("a workspace switch drops the old workspace's answer", async () => {
 	expect(results).toEqual([]);
 	await host.pending[1]?.settle("new answer");
 	expect(results).toEqual(["new answer"]);
+	await view.unmount();
+});
+
+test("affectedBy skips ticks elsewhere but never a truncated or pathless one", async () => {
+	const host = scriptedReads<string>();
+	const results: string[] = [];
+	const view = await mount(
+		<WorkspaceRead
+			workspaceId="wr-filter"
+			read={host.read}
+			results={results}
+			affectedBy={(path) => path.startsWith("src/")}
+		/>,
+	);
+	await host.pending[0]?.settle("initial");
+	await tick("wr-filter", ["docs/readme.md"]);
+	expect(host.pending).toHaveLength(1);
+	await tick("wr-filter", ["src/main.ts"]);
+	expect(host.pending).toHaveLength(2);
+	await host.pending[1]?.settle("after src");
+	await tick("wr-filter", [], true);
+	expect(host.pending).toHaveLength(3);
+	await host.pending[2]?.settle("after truncated");
+	await tick("wr-filter", []);
+	expect(host.pending).toHaveLength(4);
+	await host.pending[3]?.settle("after repo meta");
+	expect(results).toEqual(["initial", "after src", "after truncated", "after repo meta"]);
+	await view.unmount();
+});
+
+test("affectedBy widens the first tick after a reconnect", async () => {
+	const host = scriptedReads<string>();
+	const results: string[] = [];
+	const view = await mount(
+		<WorkspaceRead
+			workspaceId="wr-reconnect"
+			read={host.read}
+			results={results}
+			affectedBy={(path) => path.startsWith("src/")}
+		/>,
+	);
+	await host.pending[0]?.settle("initial");
+	await act(async () => {
+		useAppStore.getState().setStatus("disconnected");
+		useAppStore.getState().setStatus("connected");
+	});
+	expect(host.pending).toHaveLength(1);
+	await tick("wr-reconnect", ["docs/readme.md"]);
+	expect(host.pending).toHaveLength(2);
+	await host.pending[1]?.settle("after reconnect");
+	await tick("wr-reconnect", ["docs/other.md"]);
+	expect(host.pending).toHaveLength(2);
+	expect(results).toEqual(["initial", "after reconnect"]);
+	await view.unmount();
+});
+
+test("affectedBy widens the next tick after a failed read until a read succeeds", async () => {
+	const settles: Array<(outcome: "ok" | "fail") => Promise<void>> = [];
+	const read = () =>
+		new Promise<string>((resolve, reject) => {
+			settles.push((outcome) =>
+				act(async () => (outcome === "ok" ? resolve("ok") : reject(new Error("refused")))),
+			);
+		});
+	const results: string[] = [];
+	const view = await mount(
+		<WorkspaceRead
+			workspaceId="wr-failed"
+			read={read}
+			results={results}
+			affectedBy={(path) => path.startsWith("src/")}
+		/>,
+	);
+	await settles[0]?.("fail");
+	await tick("wr-failed", ["docs/readme.md"]);
+	expect(settles).toHaveLength(2);
+	await settles[1]?.("ok");
+	await tick("wr-failed", ["docs/other.md"]);
+	expect(settles).toHaveLength(2);
+	expect(results).toEqual(["ok"]);
 	await view.unmount();
 });
 
