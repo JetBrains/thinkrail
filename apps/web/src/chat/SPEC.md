@@ -1268,8 +1268,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
     next save). `templateText.test.ts` pins the round-trip/stability properties this fix depends on.
   - **Fields**: name (validated client-side against the exact same rule as the server's
     `isValidTemplateName`, `packages/server/src/templates/templates.ts` — duplicated rather than shared,
-    since it's a 4-line pure predicate and the server module is server-only), a scope radio (Global / This
-    project; "This project" is disabled with no active workspace), description, argument-hint, and a body
+    since the validator is small and the server module is server-only; both reject Windows reserved
+    device names, even on non-Windows hosts), a scope radio (Global / This project; "This project" is
+    disabled with no active workspace), description, argument-hint, and a body
     `Textarea` with a static one-line syntax hint (`$1, $ARGUMENTS, ${1:-default} — pi prompt-template
     syntax`; the real grammar is parsed by the `prompt` module / expanded by pi — this line is documentation
     text only, not itself parsed).

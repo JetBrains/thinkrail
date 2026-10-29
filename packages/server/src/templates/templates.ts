@@ -20,10 +20,19 @@ export interface TemplateDirs {
 	projectDir?: string;
 }
 
+const WINDOWS_DEVICE_NAME =
+	/^(?:con|prn|aux|nul|com[1-9\u00b9\u00b2\u00b3]|lpt[1-9\u00b9\u00b2\u00b3])(?:\.|$)/i;
+
 export function isValidTemplateName(name: string): boolean {
 	if (name.length === 0) return false;
 	if (name.startsWith(".")) return false;
-	return !name.includes("/") && !name.includes("\\") && !name.includes("\0") && !name.includes(":");
+	return (
+		!name.includes("/") &&
+		!name.includes("\\") &&
+		!name.includes("\0") &&
+		!name.includes(":") &&
+		!WINDOWS_DEVICE_NAME.test(name)
+	);
 }
 
 export function templateDirs(cwd?: string, agentDir: string = getAgentDir()): TemplateDirs {

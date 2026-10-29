@@ -21,7 +21,28 @@ import {
 	templateDirs,
 } from "./templates";
 
-const INVALID_NAMES = ["../x", "a/b", "a\\b", ".hidden", "", "a:b", ":b", "a:"];
+const INVALID_NAMES = [
+	"../x",
+	"a/b",
+	"a\\b",
+	".hidden",
+	"",
+	"a:b",
+	":b",
+	"a:",
+	"CON",
+	"con",
+	"CON.notes",
+	"PRN",
+	"AUX",
+	"NUL",
+	"COM1",
+	"com9",
+	"LPT1",
+	"lpt9",
+	"COM¹",
+	"lpt²",
+];
 
 let root: string;
 let globalDir: string;
@@ -59,7 +80,19 @@ describe("isValidTemplateName", () => {
 		});
 	}
 
-	for (const name of ["greet", "My_Template-2", "a", "foo.bar", "my template"]) {
+	for (const name of [
+		"greet",
+		"My_Template-2",
+		"a",
+		"foo.bar",
+		"my template",
+		"COM0",
+		"COM10",
+		"LPT10",
+		"conductor",
+		"nulled",
+		"report.con",
+	]) {
 		test(`accepts ${JSON.stringify(name)}`, () => {
 			expect(isValidTemplateName(name)).toBe(true);
 		});

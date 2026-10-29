@@ -339,7 +339,7 @@
 	"chat.templateEditor.description": "描述",
 	"chat.templateEditor.descriptionPlaceholder": "此模板的用途",
 	"chat.templateEditor.editTitle": "编辑 {{name}}",
-	"chat.templateEditor.invalidName": "名称不能为空，不能以 \".\" 开头，也不能包含 \"/\"、\"\\\"、\":\" 或空字符。",
+	"chat.templateEditor.invalidName": "名称不能为空、以 \".\" 开头、包含 \"/\"、\"\\\"、\":\" 或空字符，也不能使用 Windows 保留设备名称（如 CON、NUL、COM1）。",
 	"chat.templateEditor.name": "名称",
 	"chat.templateEditor.namePlaceholder": "standup",
 	"chat.templateEditor.newTitle": "新建模板",
