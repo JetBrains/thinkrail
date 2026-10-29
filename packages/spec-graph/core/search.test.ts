@@ -109,6 +109,35 @@ test("sections follow headings of every level, skip fenced headings and keep fil
 	expect(sections[1]?.endLine).toBe(12);
 });
 
+test("fences follow CommonMark: no backtick in a backtick fence's info string, and a list item's fence ends with the item", () => {
+	const inline = splitSections("## Syntax\n```literal``` stays prose.\n## Shutdown\nStop.\n");
+	expect(inline.map((section) => section.headings.join(" › "))).toEqual(["Syntax", "Shutdown"]);
+	const listed = splitSections(
+		[
+			"## Example",
+			"- A sample:",
+			"- ```md",
+			"  ## Sample heading",
+			"  ```",
+			"## Boundary",
+			"Owns.",
+			"- ```md",
+			"## Real",
+			"Ends the item and its fence.",
+			"- ```sh",
+			"\techo a tab-indented line stays in the fence",
+			"  ```",
+			"## After",
+		].join("\n"),
+	);
+	expect(listed.map((section) => [section.headings.join(" › "), section.line])).toEqual([
+		["Example", 1],
+		["Boundary", 6],
+		["Real", 9],
+		["After", 14],
+	]);
+});
+
 test("a lone leading H1 names the document, not every section's trail", () => {
 	const titled = splitSections(
 		"---\nid: a\ntype: x\n---\n# Architecture\nWhy.\n## Decisions\nOne.\n",
@@ -200,6 +229,22 @@ test("an exact phrase ranks above the same words scattered", () => {
 		),
 	]);
 	expect(where(searchSpecs(index, "rename chat title").hits[0])).toBe("b.md › Phrase");
+});
+
+test("a hit names its section by heading trail and occurrence, which an edit above it does not change", () => {
+	const body = (lead: string) =>
+		`${lead}## Example\nThe first gizmo.\n## Example\nThe second gizmo.\n`;
+	const before = indexSections([spec("a.md", "id: a\ntype: module-design\ntitle: A", body(""))]);
+	const located = (index: ReturnType<typeof indexSections>) =>
+		searchSpecs(index, "second gizmo")
+			.hits.slice(0, 1)
+			.map((hit) => [hit.heading, hit.occurrence, hit.line]);
+	expect(located(before)).toEqual([["Example", 2, 8]]);
+	const after = indexSections(
+		[spec("a.md", "id: a\ntype: module-design\ntitle: A", body("Intro.\n\n"))],
+		before,
+	);
+	expect(located(after)).toEqual([["Example", 2, 10]]);
 });
 
 test("durable specs win ties over task-specs, then path order", () => {

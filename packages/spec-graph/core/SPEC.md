@@ -59,10 +59,14 @@ and a local embedding model — transformers.js runs in Bun/Node only through na
 (~300 MB) and breaks `bun build --compile`, and BM25 alone already scores about what a small model
 does on retrieval benchmarks.
 
-- **Sections.** An ATX heading up to the next heading of any level, fence-aware; text before the first
-  heading is a section named by the spec. A lone leading `#` heading names the document and stays out
-  of every trail. A section keeps its heading trail and its file line numbers (frontmatter included),
-  so a hit is a `path:line` a reader opens directly.
+- **Sections.** An ATX heading up to the next heading of any level, fence-aware as CommonMark is (a
+  backtick fence's info string holds no backtick, so a line like ```` ```x``` ```` is prose; a fence
+  opened on a list item's line closes at that item's indentation — tabs expand to 4-column stops — and
+  ends with the item); text before
+  the first heading is a section named by the spec. A lone leading `#` heading names the document and
+  stays out of every trail. A section keeps its heading trail and its file line numbers (frontmatter
+  included), so a hit is a `path:line` a reader opens directly; a hit also names its `occurrence` among
+  the file's sections with the same trail, which, unlike the line, survives an edit above it.
 - **Terms.** Lowercased Unicode words; a compound identifier also yields its parts (`renameSession` →
   `renamesession`, `rename`, `session`); English stopwords and one-character words drop. The stemmer is
   Porter's step 1 (plurals, `-eed`/`-ed`/`-ing`, terminal `y`), Snowball's `-ly` rule and the final
@@ -85,7 +89,8 @@ does on retrieval benchmarks.
   an append-only vocabulary the chain of indexes shares (a vanished term keeps its id); a section stores
   sorted id/count arrays. About 2 MB of specs index in ~160 ms into ~9 MB of heap on a developer machine
   (~3 s on a loaded CI runner, which is why the test's bound is a 20 s blowup guard rather than a speed
-  gate) — callers bound how many roots they keep.
+  gate) — callers bound how many roots they keep. Indexing is synchronous: a caller on a shared event loop
+  pays a root's first build in one turn (a corpus of tens of megabytes would hold it for seconds).
 - **Benchmark.** `core/bench/` holds a frozen copy of 15 real specs (`*.md.txt`, so no indexer sees a
   duplicate id) and 20 questions written without the engine in view; the test gates on ≥ 16 with the
   expected section in the top 3. Five paraphrase misses are recorded but not gated. `bun

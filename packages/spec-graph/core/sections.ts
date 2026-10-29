@@ -9,6 +9,7 @@ export interface SpecSection {
 }
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+const LIST_ITEM = /^ {0,3}(?:[-*+]|\d{1,9}[.)]) {1,4}(?=\S)/;
 const ATX_HEADING = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/;
 
 export function cleanInline(text: string): string {
@@ -38,18 +39,52 @@ interface Heading {
 	readonly text: string;
 }
 
+interface Fence {
+	readonly marker: string;
+	readonly indent: number;
+}
+
+function fenceOpenedBy(line: string): Fence | null {
+	const indent = LIST_ITEM.exec(line)?.[0].length ?? 0;
+	const rest = line.slice(indent);
+	const match = FENCE.exec(rest);
+	const marker = match?.[1];
+	if (!match || marker === undefined) return null;
+	if (marker[0] === "`" && rest.slice(match[0].length).includes("`")) return null;
+	return { marker, indent };
+}
+
+const TAB_STOP = 4;
+
+function afterColumns(line: string, columns: number): { column: number; rest: string } {
+	let column = 0;
+	let index = 0;
+	while (index < line.length && column < columns) {
+		const char = line[index];
+		if (char === " ") column += 1;
+		else if (char === "\t") column += TAB_STOP - (column % TAB_STOP);
+		else break;
+		index += 1;
+	}
+	return { column, rest: " ".repeat(Math.max(0, column - columns)) + line.slice(index) };
+}
+
 function headingsOf(lines: readonly string[], from: number): Heading[] {
 	const headings: Heading[] = [];
-	let fence: string | null = null;
+	let fence: Fence | null = null;
 	for (let index = from; index < lines.length; index += 1) {
 		const line = lines[index] ?? "";
 		if (fence !== null) {
-			if (closesFence(line, fence)) fence = null;
-			continue;
+			const { column, rest } = afterColumns(line, fence.indent);
+			if (line.trim() === "" || column >= fence.indent) {
+				if (closesFence(rest, fence.marker)) fence = null;
+				continue;
+			}
+			fence = null;
 		}
-		const open = FENCE.exec(line)?.[1];
-		if (open !== undefined) {
-			fence = open;
+		const opened = fenceOpenedBy(line);
+		if (opened) {
+			fence = opened;
 			continue;
 		}
 		const heading = ATX_HEADING.exec(line);

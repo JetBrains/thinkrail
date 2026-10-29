@@ -78,6 +78,7 @@ export interface SpecSectionHit {
 	readonly title: string;
 	readonly type: string;
 	readonly heading: string;
+	readonly occurrence: number;
 	readonly line: number;
 	readonly endLine: number;
 	readonly snippet: string;
@@ -484,6 +485,15 @@ function snippetOf(
 	return { text: "", line: section.line, ranges: [] };
 }
 
+function occurrenceOf(file: IndexedFile, section: IndexedSection, heading: string): number {
+	let occurrence = 0;
+	for (const candidate of file.sections) {
+		if (candidate.headings.join(" › ") === heading) occurrence += 1;
+		if (candidate === section) break;
+	}
+	return occurrence;
+}
+
 function hitOf(scored: Scored, query: ParsedQuery, score: number): SpecSectionHit {
 	const { file, section } = scored;
 	const heading = section.headings.join(" › ");
@@ -494,6 +504,7 @@ function hitOf(scored: Scored, query: ParsedQuery, score: number): SpecSectionHi
 		title: file.title,
 		type: file.type,
 		heading,
+		occurrence: occurrenceOf(file, section, heading),
 		line: section.line,
 		endLine: section.endLine,
 		snippet: snippet.text,
