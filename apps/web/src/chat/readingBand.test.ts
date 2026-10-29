@@ -1859,6 +1859,21 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		expect(harness.readGeometry().edgeBottom).toBeGreaterThan(105);
 	});
 
+	it("keeps bursty text on a low pin line moving back to the pin line", () => {
+		const harness = createHarness({ viewportHeight: 300, movement: { trigger: 35 } });
+		harness.setReferenceRow({ id: "r1", top: 100 });
+		harness.controller.contentChanged();
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 106 });
+		harness.controller.contentChanged();
+		harness.advance(TALL_ARRIVAL_SETTLE_MS);
+		for (let burst = 0; burst < 20; burst += 1) {
+			grow(harness, 60 + (burst % 5) * 10);
+			expect(harness.readGeometry().edgeBottom).toBeLessThanOrEqual(300);
+			harness.advance(150);
+		}
+		expect(harness.readGeometry().edgeBottom).toBeCloseTo(105, 8);
+	});
+
 	for (const trigger of [35, 75]) {
 		it(`caps one card shorter than the viewport but taller than the reading space at Trigger ${trigger}`, () => {
 			const harness = createHarness({ movement: { trigger } });

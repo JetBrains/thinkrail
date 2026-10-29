@@ -179,6 +179,7 @@ export function createReadingBandController(
 	let lastEdgeRef: EdgeRef | null = null;
 	const edgeHistory: EdgeRef[] = [];
 	let capRef: { id: string; offset: number; released: number; since: number } | null = null;
+	let burstUntil = Number.NEGATIVE_INFINITY;
 	let nativeInputPending = false;
 	let settlementAfterInput = false;
 	let nativeInputToken = 0;
@@ -403,7 +404,7 @@ export function createReadingBandController(
 			runwayTarget === null || Math.abs(runwayTarget - runwayHeight) <= GEOMETRY_EPSILON;
 		if (scrollAlreadySettled && runwayAlreadySettled && stabilityFrames === 0) {
 			if (runwayTarget !== null) publishRunway();
-			if (reevaluate && kind !== "follow") contentChanged();
+			if (reevaluate) contentChanged();
 			return;
 		}
 		if (active.instant) {
@@ -438,6 +439,7 @@ export function createReadingBandController(
 		lastEdgeRef = null;
 		edgeHistory.length = 0;
 		capRef = null;
+		burstUntil = Number.NEGATIVE_INFINITY;
 	};
 
 	const rebaseFollowCap = () => {
@@ -495,12 +497,11 @@ export function createReadingBandController(
 			: null;
 		const seenRef = seenEdge(now);
 		if (lastEdgeRef !== null) edgeHistory.push(lastEdgeRef);
+		const tallGrowth = growth > readingSpace + GEOMETRY_EPSILON;
 		if (capRef !== null) {
 			const arriving = now - capRef.since < TALL_ARRIVAL_SETTLE_MS;
-			if (!arriving && growth > 0 && growth <= readingSpace + GEOMETRY_EPSILON) {
-				capRef.released += 2 * growth;
-			}
-		} else if (previousRef !== null && growth > readingSpace + GEOMETRY_EPSILON) {
+			if (!arriving && growth > 0) capRef.released += 2 * Math.min(growth, readingSpace);
+		} else if (previousRef !== null && tallGrowth && now >= burstUntil) {
 			capRef = { id: previousRef.id, offset: previousRef.offset - inset, released: 0, since: now };
 		} else if (seenRef !== null) {
 			const seenTop = environment.readRowTop(seenRef.id);
@@ -511,11 +512,15 @@ export function createReadingBandController(
 				capRef = { id: seenRef.id, offset: seenRef.offset - inset, released: 0, since: now };
 			}
 		}
-		if (capRef === null) return pinned;
+		if (capRef === null) {
+			if (tallGrowth) burstUntil = now + TALL_ARRIVAL_SETTLE_MS;
+			return pinned;
+		}
 		const capTop = environment.readRowTop(capRef.id);
 		const capped = capTop === null ? null : capTop + capRef.offset + capRef.released;
 		if (capped === null || capped >= pinned - GEOMETRY_EPSILON) {
 			capRef = null;
+			burstUntil = now + TALL_ARRIVAL_SETTLE_MS;
 			edgeHistory.length = 0;
 			if (lastEdgeRef !== null) edgeHistory.push(lastEdgeRef);
 			return pinned;
@@ -580,18 +585,11 @@ export function createReadingBandController(
 		const target = pinTarget(geometry);
 		if (target === null || target - geometry.scrollTop <= GEOMETRY_EPSILON) return false;
 		writeRunwayHeight(Math.max(0, target - naturalMaxScrollTop(geometry)));
-		publishRunway();
 		environment.writeScrollTop(target);
 		return true;
 	};
 
-	const returnToPin = () => {
-		const geometry = environment.readGeometry();
-		const target = geometry ? pinTarget(geometry) : null;
-		if (!geometry || target === null || target - geometry.scrollTop <= GEOMETRY_EPSILON) {
-			contentChanged();
-			return;
-		}
+	const returnToPin = () =>
 		startMotion({
 			kind: "follow",
 			...followHold,
@@ -599,7 +597,6 @@ export function createReadingBandController(
 			requireFollowing: true,
 			reevaluate: true,
 		});
-	};
 
 	const refreshAnchor = () => {
 		if (motion?.kind !== "anchor") return;
@@ -843,7 +840,7 @@ export function createReadingBandController(
 			const beyondNatural = final - naturalMaxScrollTop(geometry);
 			if (pinned !== null && pinned >= desired) writeRunwayHeight(Math.max(0, beyondNatural));
 			else if (beyondNatural > runwayHeight + GEOMETRY_EPSILON) writeRunwayHeight(beyondNatural);
-			publishRunway();
+			if (pinned === null) publishRunway();
 			const bounds = environment.readScrollBounds();
 			if (bounds) environment.writeScrollTop(Math.min(bounds.maxScrollTop, final));
 		},

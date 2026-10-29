@@ -713,13 +713,15 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   text: a fast replay (≈900 px/s) in the ≈300 px chat viewport of a 1280×720 window crossed the threshold
   and stalled the pin every few lines; streamed text needs over 2k px/s to do that within 100 ms. Judging
   the 100 ms window against the reading space did the same on a low pin line: at Trigger 35% that viewport
-  leaves 57 px, so text over ≈570 px/s capped; one delivery of fast text adds only a few px, so the
-  per-change check leaves it alone. Growth within 300 ms of the cap engaging belongs to the arrival; each
-  later growth no taller than the reading space releases the cap by twice its own height until it reaches
+  leaves 57 px, so text over ≈570 px/s capped. A burst of text deltas or a Markdown re-render can still
+  exceed that reading space in one delivery, so the per-change check stays off within 300 ms of a cap
+  release or another such growth: a run of bursts caps at most once, while a card after a quiet moment or
+  after ordinary text still caps. Growth within 300 ms of the cap engaging belongs to the arrival; each
+  later growth releases the cap by twice its own height, at most twice the reading space, until it reaches
   the pin line, and the pin moves to the capped destination on that same content change without easing, so
   the block advances at twice reading pace instead of flying by (one mermaid card measured a 1.5k px glide
   in under a second). A cap release resets the seen edge to the edge on the pin line. A second tall
-  arrival never pushes an active cap further. The cap is evaluated wherever the follow destination is, so
+  arrival inside the 300 ms arrival window never pushes an active cap further. The cap is evaluated wherever the follow destination is, so
   it also bounds an explicit return already in flight. Positions are kept relative to the topmost visible
   row rather than document coordinates, and each evaluation re-expresses them relative to the current one,
   so height changes above the viewport (Virtuoso replacing an estimate, a code block highlighting) neither
