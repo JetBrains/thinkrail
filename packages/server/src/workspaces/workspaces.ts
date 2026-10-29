@@ -442,9 +442,7 @@ export function renameWorkspace(
 	const branch = !wanted || wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
 	const branchChanged = branch !== ws.branch;
 	if (branchChanged) {
-		const moved = git(project.path, ["branch", "-m", ws.branch, branch], {
-			action: "rename the branch",
-		});
+		const moved = git(project.path, ["branch", "-m", ws.branch, branch], { timeoutMs: null });
 		if (!moved.ok) throw new Error(`git branch -m failed: ${moved.err}`);
 	}
 

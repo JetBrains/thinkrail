@@ -31,7 +31,8 @@ ref off the workspace-create critical path.
   `initProject`, `gitCommitPaths`' add and commit) pass **`INDEX_WRITE_TIMEOUT_MS`**: the same 5 minutes, but
   `null` (no deadline) on Windows, where the timeout kill is `TerminateProcess` and git cannot remove
   `index.lock`. `createWorkspace`'s `worktree add` passes `timeoutMs: null`: a large checkout legitimately
-  runs for minutes. Known gap: a Windows read that refreshes the index (`status`, `diff`) and hits its deadline
+  runs for minutes. `renameWorkspace`'s `branch -m` also passes `null`: a kill between deleting the old ref and
+  creating the new one leaves the worktree without a branch, and nothing here can recover it. Known gap: a Windows read that refreshes the index (`status`, `diff`) and hits its deadline
   can still leave `index.lock` behind. **A timeout is not an answer, so sync git throws on it by default:**
   `git`/`gitBytes` throw a **`GitTimeoutError`** (`CodedError("GIT_TIMEOUT")`, so error tracking tells a
   hung git apart without message text) worded `Could not <opts.action>: timed out …` (default action
