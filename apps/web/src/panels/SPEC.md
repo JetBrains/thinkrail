@@ -1823,6 +1823,10 @@ own section. The kebab menu (`plan-menu`, a
   *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
   its compact single-directory run; descendants below the run's deepest directory mount and read only
   when that compact row is expanded. No tick has to be threaded down as a prop.
+  The wiring of this hook and `useLiveTabContent` (ticks during a slow read, a workspace or file switch
+  mid-read) is tested in `liveReads.test.tsx` by mounting real hooks through
+  `react-dom/client` on a headless container: a tree that renders no host elements needs only a stub
+  `window`, so the web package needs no DOM library or testing dependency.
   Its users — `FileTree` (root + each visible directory chain), `FilesPanel` (`git.status`, via
   `useGitStatus`, feeding both modes),
   `useWorkspaceSpecs` (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per
