@@ -32,6 +32,7 @@ export function SurveyWindow() {
 function SurveyWindowBody() {
 	const t = useT();
 	const survey = useAppStore((state) => state.inAppSurvey);
+	const hostProtocol = useAppStore((state) => state.protocolVersion);
 	const [thanks, setThanks] = useState<string | null>(null);
 	const [changed, setChanged] = useState(false);
 
@@ -68,6 +69,7 @@ function SurveyWindowBody() {
 			<SurveyForm
 				key={`${survey.id}:${survey.iteration}:${survey.language ?? ""}`}
 				survey={survey}
+				hostProtocol={hostProtocol}
 				onSent={() => {
 					setThanks(thankYouText(survey, t("panels.survey.thankYou")));
 					forgetInAppSurvey();
