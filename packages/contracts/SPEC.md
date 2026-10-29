@@ -40,7 +40,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   the four `feedback.survey.submit` refusals `SURVEY_INVALID`, `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` and
   `SURVEY_NOT_SENT`), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
-  for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
+  for it; everything else stays a plain `error` string. `GIT_TIMEOUT` (a sync git killed at its deadline,
+  [[submodule-server-git]]) is coded so error tracking can tell it apart without message text; an older client
+  wraps it like any unknown code, so it needs no protocol bump. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,

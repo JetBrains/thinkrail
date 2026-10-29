@@ -34,7 +34,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   the Git registry at the mutation door, comparing canonicalized paths; same-project retries are
   idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
   directory-basename display name, `renamed: true`, and the repo default as its initial review target —
-  **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b`, never a detached
+  **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b` (the one sync git
+  call with no deadline: a large checkout legitimately runs long), never a detached
   remote checkout, and **`--no-track`**: a remote-tracking base would otherwise become the new branch's
   upstream (git's `autoSetupMerge` default), aiming the workspace terminal's `git push`/`git pull` at the
   *base* branch — the workspace branch's upstream is the user's to set on first push, never ours;
@@ -167,7 +168,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
   Drift is **not** only a list-time discovery: `refreshUserOwnedWorkspace(workspaceId)` is the same
   re-sync **without** the diff-stat listing (an external workspace re-syncs only its `branch`, and an
-  unreadable checkout is never persisted as a fake detached `HEAD`; unknown id / a managed workspace /
+  unreadable checkout is never persisted as a fake detached `HEAD`; nor is a git that timed out — a
+  timeout is no answer, so the stored fields stay and only a warning is logged, and an existing Default
+  is returned as stored for the same reason; unknown id / a managed workspace /
   no drift → no save, no emit), which the host wires to `watch`'s **repo-metadata nudge** (host-mediated,
   `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in the Default
   workspace's terminal converges the rail, the top bar and the empty receipt live, instead of leaving

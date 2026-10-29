@@ -1,6 +1,6 @@
 import type { GitDiffScope, Workspace } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { type GitResult, git, gitAsync } from "./gitExec";
+import { type GitResult, git, gitAsync, throwOnTimeout } from "./gitExec";
 
 export function diffBaseRef(ws: Pick<Workspace, "baseBranch" | "diffBase">): string {
 	return ws.diffBase ?? ws.baseBranch;
@@ -22,15 +22,22 @@ function throwExecutionFailure(result: GitResult): void {
 		throw new Error(`Could not resolve the diff range: ${result.err || "git failed"}`);
 }
 
+function commitOidArgs(ref: string): string[] {
+	return ["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`];
+}
+
+function commitOidFrom(result: GitResult): string | null {
+	return result.ok && result.out ? result.out : null;
+}
+
 export function resolveCommitOid(worktreePath: string, ref: string): string | null {
-	const out = git(worktreePath, [
-		"rev-parse",
-		"--verify",
-		"--quiet",
-		"--end-of-options",
-		`${ref}^{commit}`,
-	]);
-	return out.ok && out.out ? out.out : null;
+	return commitOidFrom(throwOnTimeout(git(worktreePath, commitOidArgs(ref)), `resolve ${ref}`));
+}
+
+async function resolveCommitOidAsync(worktreePath: string, ref: string): Promise<string | null> {
+	return commitOidFrom(
+		throwOnTimeout(await gitAsync(worktreePath, commitOidArgs(ref)), `resolve ${ref}`),
+	);
 }
 
 export async function resolveDiffRange(
@@ -44,7 +51,7 @@ export async function resolveDiffRange(
 			untracked: true,
 			originalRef: "HEAD",
 			modifiedRef: null,
-			resolvedOriginalOid: resolveCommitOid(ws.worktreePath, "HEAD"),
+			resolvedOriginalOid: await resolveCommitOidAsync(ws.worktreePath, "HEAD"),
 		};
 	}
 	if (scope.kind === "pinned") {
@@ -147,7 +154,7 @@ export async function resolveDiffRange(
 		untracked: true,
 		originalRef: forkPoint,
 		modifiedRef: null,
-		resolvedOriginalOid: resolvedForkPoint ?? resolveCommitOid(ws.worktreePath, base),
+		resolvedOriginalOid: resolvedForkPoint ?? (await resolveCommitOidAsync(ws.worktreePath, base)),
 	};
 }
 

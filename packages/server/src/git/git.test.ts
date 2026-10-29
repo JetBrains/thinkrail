@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	truncateSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
@@ -19,6 +27,7 @@ import {
 	readBlobStreamAtAsync,
 	tryCurrentBranch,
 } from "./git";
+import { setSyncGitTimeoutForTests } from "./gitExec";
 import { isSafeRef } from "./refs";
 
 const posix = test.skipIf(process.platform === "win32");
@@ -156,6 +165,27 @@ test("git paths preserve legal leading and trailing filename whitespace", async 
 	expect(changes.find((row) => row.path === " tracked ")).toMatchObject({ added: 1, removed: 1 });
 });
 
+posix("gitUncommittedPaths gives its whole-tree reads the slow budget, not the 10s default", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "README.md"), "changed\n");
+	writeFileSync(join(repo, "new.txt"), "new\n");
+	const executable = JSON.stringify(Bun.which("git"));
+	const bin = join(dataDir, "bin");
+	mkdirSync(bin);
+	writeFileSync(
+		join(bin, "git"),
+		`#!/bin/sh\ncase " $* " in *" ls-files "*|*" diff "*) sleep 1;; esac\nexec ${executable} "$@"\n`,
+	);
+	chmodSync(join(bin, "git"), 0o755);
+	process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+	setSyncGitTimeoutForTests(300);
+	try {
+		expect(gitUncommittedPaths("w1")).toEqual(["README.md", "new.txt"]);
+	} finally {
+		setSyncGitTimeoutForTests(undefined);
+	}
+});
+
 test("git numstat preserves tabs and newlines in a literal path", async () => {
 	seedWorkspace();
 	const path = "line\n\tname";
@@ -180,6 +210,24 @@ test("gitStatus attaches per-file +/- counts, incl. untracked line counts", asyn
 	expect(readme).toMatchObject({ status: "modified", added: 2, removed: 0 });
 	const untracked = changes.find((c) => c.path === "new.txt");
 	expect(untracked).toMatchObject({ status: "untracked", added: 2, removed: 0 });
+});
+
+test("gitStatus stops counting untracked lines once the read budget is spent", async () => {
+	seedWorkspace();
+	const maxFileBytes = 2 * 1024 * 1024;
+	writeFileSync(join(repo, "a.txt"), "a\nb\n");
+	for (let i = 0; i < 15; i += 1) {
+		const sparse = join(repo, `m${String(i).padStart(2, "0")}.bin`);
+		writeFileSync(sparse, "");
+		truncateSync(sparse, maxFileBytes);
+	}
+	writeFileSync(join(repo, "z.txt"), `${"x".repeat(1_023)}\n`.repeat(maxFileBytes / 1_024));
+
+	const { changes } = await gitStatus("w1");
+	expect(changes.find((c) => c.path === "a.txt")?.added).toBe(2);
+	const last = changes.find((c) => c.path === "z.txt");
+	expect(last).toMatchObject({ status: "untracked" });
+	expect(last?.added).toBeUndefined();
 });
 
 test("gitStatus uses ResourceMeta text classification for untracked counts", async () => {
@@ -1009,6 +1057,49 @@ test("a failed commit restores the index — the user's staging area is never le
 	expect(gitCommitPaths("w1", "feat: unsignable", ["impl.ts"])).toBeNull();
 	expect(gitHeadSha("w1")).toBe(head ?? "");
 	expect(stagedPaths()).toEqual(["mine.ts"]);
+});
+
+posix("a commit that landed before git reported failure is kept, not rolled back", async () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "impl.ts"), "export {};\n");
+	const before = gitHeadSha("w1");
+	installGitWrapper("commit", true);
+
+	const committed = gitCommitPaths("w1", "feat: hook hung", ["impl.ts"]);
+	process.env.PATH = savedPath;
+	const head = gitHeadSha("w1");
+	expect(head).not.toBe(before);
+	expect(committed).toEqual({ sha: head ?? "" });
+	expect(stagedPaths()).toEqual([]);
+});
+
+posix("a failed commit never claims another writer's commit that landed meanwhile", async () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "impl.ts"), "export {};\n");
+	const executable = JSON.stringify(Bun.which("git"));
+	const bin = join(dataDir, "bin");
+	mkdirSync(bin);
+	writeFileSync(
+		join(bin, "git"),
+		[
+			"#!/bin/sh",
+			'case " $* " in *" --no-verify "*)',
+			`  tree=$(${executable} -C "${repo}" rev-parse "HEAD^{tree}")`,
+			`  c=$(${executable} -C "${repo}" commit-tree "$tree" -p HEAD -m "agent commit")`,
+			`  ${executable} -C "${repo}" update-ref HEAD "$c"`,
+			'  echo "fatal: Unable to create index.lock: File exists" >&2; exit 128;;',
+			"esac",
+			`exec ${executable} "$@"`,
+			"",
+		].join("\n"),
+	);
+	chmodSync(join(bin, "git"), 0o755);
+	process.env.PATH = bin;
+
+	const committed = gitCommitPaths("w1", "feat: step", ["impl.ts"]);
+	process.env.PATH = savedPath;
+	expect(committed).toBeNull();
+	expect(stagedPaths()).toEqual([]);
 });
 
 test("a failed commit preserves index-only state — an intent-to-add entry survives byte-for-byte", async () => {

@@ -2,7 +2,18 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { git, gitAsync, gitAsyncBytes, nonInteractiveGitEnv } from "./gitExec";
+import { resolveCommitOid } from "./diffScope";
+import {
+	git,
+	gitAsync,
+	gitAsyncBytes,
+	gitBytes,
+	indexWriteTimeoutFor,
+	nonInteractiveGitEnv,
+	SLOW_GIT_TIMEOUT_MS,
+	setSyncGitTimeoutForTests,
+	throwOnTimeout,
+} from "./gitExec";
 
 const posix = test.skipIf(process.platform === "win32");
 
@@ -161,6 +172,123 @@ posix("gitAsyncBytes bounds a stalled git wrapper and classifies the timeout", a
 	expect(result.err).toContain("timed out after");
 	expect(result.err).toContain("git did not exit");
 	expect(result.out).toEqual(new Uint8Array());
+});
+
+posix("the sync runners kill a hanging git at the deadline instead of holding the loop", () => {
+	const bin = join(dir, "bin");
+	mkdirSync(bin);
+	writeFileSync(join(bin, "git"), "#!/bin/sh\necho partial >&2\nsleep 30\n");
+	chmodSync(join(bin, "git"), 0o755);
+	const path = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+	const started = performance.now();
+	const [text, bytes] = (() => {
+		try {
+			return [
+				git(repo, ["rev-parse", "HEAD"], { timeoutMs: 300 }),
+				gitBytes(repo, ["cat-file", "blob", "HEAD:x"], { timeoutMs: 300 }),
+			];
+		} finally {
+			if (path === undefined) delete process.env.PATH;
+			else process.env.PATH = path;
+		}
+	})();
+
+	expect(performance.now() - started).toBeLessThan(5_000);
+	for (const result of [text, bytes]) {
+		expect(result.ok).toBe(false);
+		expect(result.failure).toBe("timeout");
+		expect(result.err).toContain("timed out after");
+		expect(result.err).toContain("partial");
+		expect(result.out.length).toBe(0);
+		expect(() => throwOnTimeout(result, "read HEAD")).toThrow(/^Could not read HEAD: timed out/);
+		expect(() => throwOnTimeout(result, "read HEAD")).toThrow(
+			expect.objectContaining({ name: "GitTimeoutError", code: "GIT_TIMEOUT" }),
+		);
+	}
+	const exited = git(repo, ["rev-parse", "--verify", "--quiet", "refs/heads/missing"]);
+	expect(throwOnTimeout(exited, "read HEAD")).toBe(exited);
+});
+
+test("a timeout's consequence follows the git detail as its own sentence", () => {
+	const stalled = (err: string) => ({ ok: false, out: "", err, failure: "timeout" as const });
+	expect(() =>
+		throwOnTimeout(
+			stalled("timed out after 10s — git did not exit"),
+			"check x",
+			"Nothing was deleted.",
+		),
+	).toThrow("Could not check x: timed out after 10s — git did not exit. Nothing was deleted.");
+	expect(() =>
+		throwOnTimeout(stalled("timed out after 10s — stuck."), "check x", "Nothing was deleted."),
+	).toThrow("Could not check x: timed out after 10s — stuck. Nothing was deleted.");
+});
+
+posix("resolveCommitOid throws on a timeout instead of reporting no commit", () => {
+	const bin = join(dir, "bin");
+	mkdirSync(bin);
+	writeFileSync(join(bin, "git"), "#!/bin/sh\nsleep 30\n");
+	chmodSync(join(bin, "git"), 0o755);
+	const path = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+	setSyncGitTimeoutForTests(300);
+	try {
+		expect(() => resolveCommitOid(repo, "HEAD")).toThrow(
+			expect.objectContaining({ code: "GIT_TIMEOUT" }),
+		);
+	} finally {
+		setSyncGitTimeoutForTests(undefined);
+		if (path === undefined) delete process.env.PATH;
+		else process.env.PATH = path;
+	}
+	expect(resolveCommitOid(repo, "refs/heads/missing")).toBe(null);
+});
+
+posix(
+	"a sync git stopped at its deadline removes its index.lock and leaves no filter behind",
+	() => {
+		const marker = `sleep ${30 + Math.floor(Math.random() * 1_000) / 1_000}`;
+		run(repo, "config", "filter.slow.clean", `${marker}; cat`);
+		writeFileSync(join(repo, ".gitattributes"), "*.txt filter=slow\n");
+		writeFileSync(join(repo, "a.txt"), "hi\n");
+
+		const started = performance.now();
+		const result = git(repo, ["add", "-A"], { timeoutMs: 500 });
+
+		expect(performance.now() - started).toBeLessThan(5_000);
+		expect(result.failure).toBe("timeout");
+		expect(existsSync(join(repo, ".git", "index.lock"))).toBe(false);
+		expect(Bun.spawnSync(["pgrep", "-f", marker]).exitCode).toBe(1);
+		run(repo, "config", "--unset", "filter.slow.clean");
+		expect(git(repo, ["add", "-A"]).ok).toBe(true);
+	},
+);
+
+test("index writers get no deadline on Windows, where a kill cannot let git drop index.lock", () => {
+	expect(indexWriteTimeoutFor("win32")).toBeNull();
+	expect(indexWriteTimeoutFor("darwin")).toBe(SLOW_GIT_TIMEOUT_MS);
+	expect(indexWriteTimeoutFor("linux")).toBe(SLOW_GIT_TIMEOUT_MS);
+});
+
+posix("a null timeoutMs runs sync git with no deadline at all", () => {
+	const bin = join(dir, "bin");
+	mkdirSync(bin);
+	writeFileSync(
+		join(bin, "git"),
+		`#!/bin/sh\nsleep 1\nexec ${JSON.stringify(Bun.which("git"))} "$@"\n`,
+	);
+	chmodSync(join(bin, "git"), 0o755);
+	const path = process.env.PATH;
+	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+	setSyncGitTimeoutForTests(300);
+	try {
+		expect(git(repo, ["rev-parse", "--git-dir"]).failure).toBe("timeout");
+		expect(git(repo, ["rev-parse", "--git-dir"], { timeoutMs: null }).ok).toBe(true);
+	} finally {
+		setSyncGitTimeoutForTests(undefined);
+		if (path === undefined) delete process.env.PATH;
+		else process.env.PATH = path;
+	}
 });
 
 test("the async git runners distinguish a launch failure from git's own nonzero exit", async () => {
