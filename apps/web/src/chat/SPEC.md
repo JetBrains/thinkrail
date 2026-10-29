@@ -670,7 +670,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   the growth, so the edge stays on the line. The pin runs in the before-paint content-change path (the
   Virtuoso height callback and the scroller resize observer, both inside `ResizeObserver` delivery) as one
   instant `scrollTop` write with no easing and no threshold, so growth and its compensation paint in the
-  same frame; a write in the next animation frame paints one frame late and reads as jitter. Window steps
+  same frame; a write in the next animation frame paints one frame late and reads as jitter. Virtuoso answers
+  some growth of the streaming row with its own `scrollBy`, because the row's top is above the viewport; the
+  on-screen guard below restores that unowned move and the controller then re-applies the pin in the same
+  call. Restoring without re-pinning painted the edge 20–70 px below the line for a frame, in about half of the
+  Chromium replay runs. Window steps
   (hold until Trigger, then one eased ~220 ms move to a Settle line) were tried and rejected: with a fast
   model they measured as a 120–240 px jump every ~0.5 s, growth landing in a step's last frame became a
   20–100 px snap, and WebKit showed three times more snaps. Peers (shadcn Message Scroller, T3 Code, Zed,

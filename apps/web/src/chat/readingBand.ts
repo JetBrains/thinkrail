@@ -843,6 +843,8 @@ export function createReadingBandController(
 			publishRunway();
 			const bounds = environment.readScrollBounds();
 			if (bounds) writeScrollTop(Math.min(bounds.maxScrollTop, Math.max(0, desired)));
+			const restored = pinning() ? environment.readGeometry() : null;
+			if (restored) pinEdge(restored);
 		},
 		armImmediateTurn: () => {
 			mountPending = false;
