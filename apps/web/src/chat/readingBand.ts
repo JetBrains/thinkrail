@@ -10,7 +10,6 @@ const SCROLL_REQUEST_EPSILON = 1e-6;
 export type ReadingBandLatestEdge = "top" | "bottom";
 
 export interface ReadingBandMovement {
-	settle: number;
 	trigger: number;
 }
 
@@ -168,7 +167,6 @@ export function createReadingBandController(
 	let mountPending = initialMountPending;
 	let runwayHeight = 0;
 	let immediateTurnPending = false;
-	let pendingSettleReturn = false;
 	let deferredUserTurn: { index: number; source: "immediate" | "queued" } | null = null;
 	let deferredLatestRow: number | null = null;
 	let runwaySuppressed = false;
@@ -455,7 +453,6 @@ export function createReadingBandController(
 	};
 
 	const releaseRunway = () => {
-		pendingSettleReturn = false;
 		runwaySuppressed = true;
 		resetFollowCap();
 		cancelMotion();
@@ -471,20 +468,20 @@ export function createReadingBandController(
 		return bounds ? latestScrollTop(bounds) : null;
 	};
 
-	const settleTarget = (geometry: ReadingBandGeometry): number | null => {
+	const pinLineTarget = (geometry: ReadingBandGeometry): number | null => {
 		if (geometry.edgeBottom === null) return null;
 		return Math.max(
 			0,
-			geometry.scrollTop + geometry.edgeBottom - geometry.viewportHeight * (movement.settle / 100),
+			geometry.scrollTop + geometry.edgeBottom - geometry.viewportHeight * (movement.trigger / 100),
 		);
 	};
 
 	const followTarget = (geometry: ReadingBandGeometry): number | null => {
-		const settle = settleTarget(geometry);
-		if (settle === null || geometry.edgeBottom === null || latestEdge !== "bottom") return settle;
+		const pinned = pinLineTarget(geometry);
+		if (pinned === null || geometry.edgeBottom === null || latestEdge !== "bottom") return pinned;
 		const edgeDoc = geometry.scrollTop + geometry.edgeBottom;
 		const inset = turnInset(geometry.viewportHeight);
-		const readingSpace = geometry.viewportHeight * (movement.settle / 100) - inset;
+		const readingSpace = geometry.viewportHeight * (movement.trigger / 100) - inset;
 		let growth = 0;
 		if (lastEdgeRef !== null) {
 			const referenceTop = environment.readRowTop(lastEdgeRef.id);
@@ -502,7 +499,7 @@ export function createReadingBandController(
 			}
 		} else if (seenRef !== null) {
 			const seenTop = environment.readRowTop(seenRef.id);
-			if (seenTop !== null && settle > seenTop + seenRef.offset - inset + GEOMETRY_EPSILON) {
+			if (seenTop !== null && pinned > seenTop + seenRef.offset - inset + GEOMETRY_EPSILON) {
 				capRef = {
 					id: seenRef.id,
 					offset: seenRef.offset - inset,
@@ -511,17 +508,13 @@ export function createReadingBandController(
 				};
 			}
 		}
-		if (capRef === null) return settle;
-		const capTop = environment.readRowTop(capRef.id);
-		if (capTop === null) {
-			capRef = null;
-			return settle;
-		}
-		const capped = capTop + capRef.offset + capRef.released;
-		if (capped >= settle - GEOMETRY_EPSILON) {
+		const capTop = capRef === null ? null : environment.readRowTop(capRef.id);
+		const capped =
+			capRef === null || capTop === null ? null : capTop + capRef.offset + capRef.released;
+		if (capRef === null || capped === null || capped >= pinned - GEOMETRY_EPSILON) {
 			capRef = null;
 			seenRef = lastEdgeRef;
-			return settle;
+			return pinned;
 		}
 		if (referenceRow !== null) {
 			capRef = {
@@ -531,7 +524,7 @@ export function createReadingBandController(
 				since: capRef.since,
 			};
 		}
-		return Math.min(settle, capped);
+		return Math.min(pinned, capped);
 	};
 
 	const forwardOnly =
@@ -541,8 +534,8 @@ export function createReadingBandController(
 			return value === null ? null : Math.max(value, geometry.scrollTop);
 		};
 
-	const stepTarget = forwardOnly(followTarget);
-	const mountSettleTarget = forwardOnly(settleTarget);
+	const pinTarget = forwardOnly(followTarget);
+	const mountTarget = forwardOnly(pinLineTarget);
 
 	const naturalMaxScrollTop = (geometry: ReadingBandGeometry) =>
 		geometry.maxScrollTop - runwayHeight;
@@ -560,8 +553,8 @@ export function createReadingBandController(
 		return { scrollTarget, deriveRoom };
 	};
 
-	const stepHold = liveHold(stepTarget);
-	const settleHold = liveHold(mountSettleTarget);
+	const followHold = liveHold(pinTarget);
+	const mountHold = liveHold(mountTarget);
 
 	const reconcileReaderRoom = (geometry?: ReadingBandGeometry | null) => {
 		const current = geometry ?? environment.readGeometry();
@@ -571,26 +564,30 @@ export function createReadingBandController(
 		publishRunway();
 	};
 
-	const startStep = (geometry: ReadingBandGeometry, animate: boolean) => {
-		const target = stepTarget(geometry);
-		if (target === null) return false;
-		if (animate) {
-			if (Math.abs(target - geometry.scrollTop) <= GEOMETRY_EPSILON) return false;
-			startMotion({
-				kind: "follow",
-				...stepHold,
-				requireStreaming: true,
-				requireFollowing: true,
-				reevaluate: true,
-			});
-		} else {
-			const room = stepHold.deriveRoom();
-			if (room !== null) writeRunwayHeight(room);
-			publishRunway();
-			const liveTarget = boundedScrollTarget(stepHold.scrollTarget);
-			if (liveTarget !== null) writeScrollTop(liveTarget);
-		}
+	const pinEdge = (geometry: ReadingBandGeometry) => {
+		const target = pinTarget(geometry);
+		if (target === null || target - geometry.scrollTop <= GEOMETRY_EPSILON) return false;
+		writeRunwayHeight(Math.max(0, target - naturalMaxScrollTop(geometry)));
+		publishRunway();
+		const bounds = environment.readScrollBounds();
+		if (bounds) writeScrollTop(Math.min(bounds.maxScrollTop, target));
 		return true;
+	};
+
+	const returnToPin = () => {
+		const geometry = environment.readGeometry();
+		const target = geometry ? pinTarget(geometry) : null;
+		if (!geometry || target === null || target - geometry.scrollTop <= GEOMETRY_EPSILON) {
+			contentChanged();
+			return;
+		}
+		startMotion({
+			kind: "follow",
+			...followHold,
+			requireStreaming: true,
+			requireFollowing: true,
+			reevaluate: true,
+		});
 	};
 
 	const refreshAnchor = () => {
@@ -623,7 +620,6 @@ export function createReadingBandController(
 	const settle = () => {
 		cancelAnchor();
 		immediateTurnPending = false;
-		pendingSettleReturn = false;
 		deferredUserTurn = null;
 		deferredLatestRow = null;
 		runwaySuppressed = true;
@@ -664,7 +660,7 @@ export function createReadingBandController(
 			resetFollowCap();
 			startMotion({
 				kind: "mount",
-				...settleHold,
+				...mountHold,
 				requireStreaming: true,
 				reevaluate: true,
 				stabilityFrames: EDGE_STABILITY_FRAMES,
@@ -688,6 +684,14 @@ export function createReadingBandController(
 			placeMount(geometry);
 			return;
 		}
+		const pinning =
+			state.following &&
+			state.streaming &&
+			!state.moving &&
+			!runwaySuppressed &&
+			!nativeInputPending &&
+			!immediateTurnPending;
+		if (pinning && pinEdge(geometry)) return;
 		if (motion?.kind !== "follow") reconcileReaderRoom(geometry);
 		if (nativeInputPending || immediateTurnPending || !state.following) return;
 		if (state.moving) {
@@ -695,20 +699,7 @@ export function createReadingBandController(
 			else if (motion) syncDerivedRoom(motion);
 			return;
 		}
-		if (!state.streaming) {
-			startMotion({ scrollTarget: latestTarget });
-			return;
-		}
-		if (runwaySuppressed) return;
-		if (pendingSettleReturn) {
-			pendingSettleReturn = !startStep(geometry, true);
-			return;
-		}
-		const target = followTarget(geometry);
-		if (target === null) return;
-		const windowSize = geometry.viewportHeight * ((movement.trigger - movement.settle) / 100);
-		if (target - geometry.scrollTop <= windowSize + GEOMETRY_EPSILON) return;
-		startStep(geometry, true);
+		if (!state.streaming) startMotion({ scrollTarget: latestTarget });
 	}
 
 	function userTurnApplies(source: "immediate" | "queued") {
@@ -857,7 +848,6 @@ export function createReadingBandController(
 			cancelMotion();
 			cancelAnchor();
 			immediateTurnPending = true;
-			pendingSettleReturn = false;
 			deferredUserTurn = null;
 			deferredLatestRow = null;
 			runwaySuppressed = false;
@@ -949,8 +939,7 @@ export function createReadingBandController(
 				});
 				return;
 			}
-			const geometry = environment.readGeometry();
-			pendingSettleReturn = !geometry || !startStep(geometry, true);
+			returnToPin();
 		},
 		returnToEdge: () => {
 			releaseNativeInput();
@@ -968,8 +957,7 @@ export function createReadingBandController(
 				});
 				return;
 			}
-			const geometry = environment.readGeometry();
-			pendingSettleReturn = !geometry || !startStep(geometry, true);
+			returnToPin();
 		},
 		releaseRunway,
 		resumeAfterReveal: () => {
@@ -1013,7 +1001,6 @@ export function createReadingBandController(
 			deferredUserTurn = null;
 			deferredLatestRow = null;
 			mountPending = true;
-			pendingSettleReturn = false;
 			runwaySuppressed = false;
 			writeRunwayHeight(0);
 			publish({ following: true, runway: runwayHeight > GEOMETRY_EPSILON || state.streaming });
@@ -1023,7 +1010,6 @@ export function createReadingBandController(
 			cancelMotion();
 			cancelAnchor();
 			immediateTurnPending = false;
-			pendingSettleReturn = false;
 			deferredUserTurn = null;
 			deferredLatestRow = null;
 		},
