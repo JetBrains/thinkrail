@@ -42,8 +42,6 @@ const bunExecutable = resolveBunExecutable();
 const hostPath = hermeticE2ePath(E2E_FAKE_BIN_DIR);
 if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi"))))
 	throw new Error("e2e host PATH must not contain pi");
-const isShardLane =
-	process.env.THINKRAIL_E2E_LANE !== undefined || !!process.env.THINKRAIL_E2E_JOB_SHARD;
 const hostCommand =
 	process.env.THINKRAIL_E2E_SKIP_BUILD === "1"
 		? `${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`
@@ -54,9 +52,7 @@ export default defineConfig({
 	// no webServer; `bun run test:workflows`. Never picked up by the browser suites.
 	testIgnore: "workflows/**",
 	...(centralMode ? { grep: /@agent/ } : { grepInvert: /@agent/ }),
-	// One worker owns one stateful host. Shard lanes stay serial internally; fullyParallel only lets
-	// Playwright distribute individual tests (rather than uneven whole files) across separate processes.
-	fullyParallel: isShardLane,
+	// One worker owns one stateful host; the shard runner deals tests to lanes through test lists.
 	workers: 1,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 1 : 0,
