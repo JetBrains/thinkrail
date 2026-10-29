@@ -1233,20 +1233,17 @@ export interface SurveyRatingQuestion extends SurveyQuestionBase {
 
 export type SurveyQuestion = SurveyOpenQuestion | SurveyChoiceQuestion | SurveyRatingQuestion;
 
-/** A launched in-app survey, narrowed to the questions the product can draw. */
 export interface AppSurvey {
 	id: string;
 	iteration: number;
 	questions: SurveyQuestion[];
 	placeholder?: string;
-	/** Present when PostHog asks for a thank-you. An empty string uses the app fallback. */
 	thankYou?: string;
 	shuffleQuestions?: true;
 }
 
 export type SurveyAnswerValue = string | string[];
 
-/** One finished survey, sent on Send; `surveyId` + `iteration` name the version the user answered. */
 export interface SurveySubmitParams {
 	submissionId: string;
 	surveyId: string;

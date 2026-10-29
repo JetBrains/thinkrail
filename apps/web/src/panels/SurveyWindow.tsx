@@ -3,7 +3,7 @@ import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { useEffect, useState } from "react";
 import { useAppStore } from "@/store";
-import { loadInAppSurvey } from "@/transport";
+import { forgetInAppSurvey, loadInAppSurvey } from "@/transport";
 import { SurveyForm } from "./SurveyForm";
 import { thankYouText } from "./surveyDraft";
 
@@ -17,11 +17,13 @@ export function SurveyWindow() {
 				if (!next) useAppStore.getState().closeSurveyWindow();
 			}}
 		>
-			<DialogContent data-testid="survey-window">
-				<DialogHeader>
+			<DialogContent data-testid="survey-window" className="max-h-[85vh]">
+				<DialogHeader className="pr-24">
 					<DialogTitle>{t("panels.survey.title")}</DialogTitle>
 				</DialogHeader>
-				<SurveyWindowBody />
+				<div data-testid="survey-window-body" className="-mx-16 min-h-0 overflow-y-auto px-16">
+					<SurveyWindowBody />
+				</div>
 			</DialogContent>
 		</Dialog>
 	);
@@ -68,7 +70,7 @@ function SurveyWindowBody() {
 				survey={survey}
 				onSent={() => {
 					setThanks(thankYouText(survey, t("panels.survey.thankYou")));
-					useAppStore.getState().setInAppSurvey(null);
+					forgetInAppSurvey();
 				}}
 				onChanged={() => {
 					setChanged(true);

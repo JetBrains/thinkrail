@@ -402,7 +402,6 @@ export function getTransport(): WsTransport {
 
 let surveyLoadGeneration = 0;
 
-/** Refreshes the store's launched survey; never rejects, so callers can await it as a settle point. */
 export function loadInAppSurvey(): Promise<void> {
 	const protocol = useAppStore.getState().protocolVersion;
 	if (protocol === null || protocol < FEEDBACK_SURVEY_PROTOCOL_VERSION) {
@@ -417,4 +416,9 @@ export function loadInAppSurvey(): Promise<void> {
 			useAppStore.getState().setInAppSurvey(result.survey);
 		})
 		.catch(() => {});
+}
+
+export function forgetInAppSurvey(): void {
+	surveyLoadGeneration += 1;
+	useAppStore.getState().setInAppSurvey(null);
 }

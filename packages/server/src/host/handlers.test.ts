@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -564,26 +564,31 @@ test("feedback.respond persists a popup action through the handler", async () =>
 
 const SURVEY_SUBMISSION_ID = "00000000-0000-4000-8000-000000000001";
 
+const remoteSurvey: { iteration: number | null; status: number } = { iteration: 0, status: 200 };
+
 function launchSurvey(iteration = 0): void {
+	remoteSurvey.iteration = iteration;
+	remoteSurvey.status = 200;
 	configureSurveySource({
 		apiKey: "phc_test",
-		fetchImpl: (() =>
-			Promise.resolve(
-				new Response(
-					JSON.stringify({
-						surveys: [
+		fetchImpl: (() => {
+			if (remoteSurvey.status !== 200) {
+				return Promise.resolve(new Response("down", { status: remoteSurvey.status }));
+			}
+			const surveys =
+				remoteSurvey.iteration === null
+					? []
+					: [
 							{
 								id: "survey-1",
 								name: "in-app-feedback",
 								start_date: "2026-10-28T00:00:00.000Z",
-								current_iteration: iteration,
+								current_iteration: remoteSurvey.iteration,
 								questions: [{ id: "q1", type: "open", question: "How is it?" }],
 							},
-						],
-					}),
-					{ status: 200 },
-				),
-			)) as unknown as typeof fetch,
+						];
+			return Promise.resolve(new Response(JSON.stringify({ surveys }), { status: 200 }));
+		}) as unknown as typeof fetch,
 	});
 }
 
@@ -660,6 +665,28 @@ test("feedback.survey.submit refuses a different survey version without completi
 	});
 	await shutdownAnalytics();
 	expect(sent.some((body) => body.includes('"survey sent"'))).toBe(false);
+});
+
+test("feedback.survey.submit re-reads PostHog instead of trusting the displayed copy", async () => {
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent);
+	launchSurvey(0);
+	expect(await handleRequest("feedback.survey", {}, CTX)).toMatchObject({
+		survey: { iteration: 0 },
+	});
+
+	remoteSurvey.iteration = 1;
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_CHANGED" });
+	remoteSurvey.iteration = null;
+	await expect(submitSurvey({ iteration: 1 })).rejects.toMatchObject({
+		code: "SURVEY_UNAVAILABLE",
+	});
+	remoteSurvey.iteration = 0;
+	remoteSurvey.status = 503;
+	await expect(submitSurvey()).rejects.toMatchObject({ code: "SURVEY_NOT_SENT" });
+	await shutdownAnalytics();
+	expect(sent.some((body) => body.includes('"survey sent"'))).toBe(false);
+	expect(existsSync(join(dataDir, "feedback.json"))).toBe(false);
 });
 
 test("feedback.survey.submit does not complete a survey whose answers were not sent", async () => {

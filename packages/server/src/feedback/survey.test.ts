@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import {
 	configureSurveySource,
+	confirmInAppSurvey,
 	currentInAppSurvey,
 	parseSurveySubmission,
 	refreshInAppSurvey,
@@ -284,5 +285,38 @@ test("a failed refresh keeps the last survey and a fresh one waits out the inter
 	expect(calls).toBe(2);
 
 	configureSurveySource(null);
+	expect(currentInAppSurvey()).toBeNull();
+});
+
+test("a failed refresh drops a copy older than the stale lifetime, and confirm always fetches", async () => {
+	let calls = 0;
+	let status = 200;
+	let iteration = 2;
+	const fetchImpl = (() => {
+		calls += 1;
+		if (status !== 200) return Promise.resolve(new Response("nope", { status }));
+		return Promise.resolve(
+			new Response(JSON.stringify({ surveys: [launched({ current_iteration: iteration })] }), {
+				status: 200,
+			}),
+		);
+	}) as unknown as typeof fetch;
+	let at = 1_000;
+	setSurveyClockForTests(() => at);
+	configureSurveySource({ apiKey: "phc_test", fetchImpl });
+	expect((await refreshInAppSurvey())?.iteration).toBe(2);
+
+	iteration = 3;
+	expect((await refreshInAppSurvey())?.iteration).toBe(2);
+	expect((await confirmInAppSurvey())?.iteration).toBe(3);
+	expect(calls).toBe(2);
+
+	status = 500;
+	await expect(confirmInAppSurvey()).rejects.toThrow("survey list failed");
+	expect(currentInAppSurvey()?.iteration).toBe(3);
+	at += 45 * 60 * 1000;
+	expect((await refreshInAppSurvey())?.iteration).toBe(3);
+	at += 15 * 60 * 1000;
+	expect(await refreshInAppSurvey()).toBeNull();
 	expect(currentInAppSurvey()).toBeNull();
 });

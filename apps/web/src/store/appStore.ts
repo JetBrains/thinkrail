@@ -1376,7 +1376,6 @@ interface AppState {
 	setSettingsSection: (section: SettingsSection) => void;
 	showSurveyInvitation: () => void;
 	hideSurveyInvitation: () => void;
-	/** Opens the survey window, closing the invitation and Settings that led to it. */
 	openSurveyWindow: () => void;
 	closeSurveyWindow: () => void;
 	setInAppSurvey: (survey: AppSurvey | null) => void;

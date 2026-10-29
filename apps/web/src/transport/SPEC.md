@@ -71,7 +71,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   behind onboarding and the consent dialog, and additional analytics may be off (a surviving host claim
   re-delivers the addressed event immediately after welcome). `loadInAppSurvey()` installs `feedback.survey`
   into the store after welcome, when Settings opens, when the survey window opens, and after a
-  `SURVEY_CHANGED` refusal; it never rejects, and a stale reply is dropped by generation,
+  `SURVEY_CHANGED` refusal; it never rejects, and a stale reply is dropped by generation, so
+  `forgetInAppSurvey()` after a successful Send cannot be undone by a load still in flight,
   `workspace.fsChanged` via `noteFsChanged(payload)`, **`mcp.status`** via the generation-guarded
   `applyMcpStatus(snapshot)`, and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
   welcome config lands in the atomic install above.

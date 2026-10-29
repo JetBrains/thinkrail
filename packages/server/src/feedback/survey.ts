@@ -10,6 +10,7 @@ import {
 
 export const IN_APP_SURVEY_NAME = "in-app-feedback";
 export const SURVEY_REFRESH_MS = 15 * 60 * 1000;
+export const SURVEY_STALE_MS = 60 * 60 * 1000;
 
 const SURVEY_LIST_LIMIT = 1_000_000;
 const FETCH_TIMEOUT_MS = 10_000;
@@ -43,7 +44,8 @@ interface ActiveSource {
 
 let source: ActiveSource | null = null;
 let cached: AppSurvey | null = null;
-let fetchedAt = 0;
+let attemptedAt = 0;
+let succeededAt = 0;
 let generation = 0;
 let inFlight: Promise<AppSurvey | null> | null = null;
 let clock: () => number = () => Date.now();
@@ -52,7 +54,8 @@ export function configureSurveySource(next: SurveySource | null): void {
 	generation += 1;
 	inFlight = null;
 	cached = null;
-	fetchedAt = 0;
+	attemptedAt = 0;
+	succeededAt = 0;
 	if (!next?.apiKey) {
 		source = null;
 		return;
@@ -70,7 +73,7 @@ export function currentInAppSurvey(): AppSurvey | null {
 
 export function surveyRefreshDue(at = clock()): boolean {
 	if (!source) return false;
-	return fetchedAt === 0 || at - fetchedAt >= SURVEY_REFRESH_MS;
+	return attemptedAt === 0 || at - attemptedAt >= SURVEY_REFRESH_MS;
 }
 
 export function setSurveyClockForTests(next: (() => number) | null): void {
@@ -81,29 +84,44 @@ export function resetSurveyForTests(): void {
 	generation += 1;
 	source = null;
 	cached = null;
-	fetchedAt = 0;
+	attemptedAt = 0;
+	succeededAt = 0;
 	inFlight = null;
 	clock = () => Date.now();
 }
 
 export function refreshInAppSurvey(): Promise<AppSurvey | null> {
 	const active = source;
-	if (!active) return Promise.resolve(cached);
-	const at = clock();
-	if (fetchedAt !== 0 && at - fetchedAt < SURVEY_REFRESH_MS) return Promise.resolve(cached);
+	if (!active || !surveyRefreshDue()) return Promise.resolve(cached);
+	return load(active).catch(() => cached);
+}
+
+export function confirmInAppSurvey(): Promise<AppSurvey | null> {
+	const active = source;
+	if (!active) return Promise.resolve(null);
+	return load(active);
+}
+
+function load(active: ActiveSource): Promise<AppSurvey | null> {
 	if (inFlight) return inFlight;
 	const stamp = generation;
 	const pending = fetchSurvey(active)
-		.then((next) => {
-			if (stamp !== generation) return cached;
-			cached = next;
-			fetchedAt = clock();
-			return cached;
-		})
-		.catch(() => {
-			if (stamp === generation) fetchedAt = clock();
-			return cached;
-		})
+		.then(
+			(next) => {
+				if (stamp !== generation) throw new Error("survey source changed");
+				cached = next;
+				attemptedAt = clock();
+				succeededAt = attemptedAt;
+				return next;
+			},
+			(error: unknown) => {
+				if (stamp === generation) {
+					attemptedAt = clock();
+					if (attemptedAt - succeededAt >= SURVEY_STALE_MS) cached = null;
+				}
+				throw error;
+			},
+		)
 		.finally(() => {
 			if (inFlight === pending) inFlight = null;
 		});
@@ -136,7 +154,6 @@ export function parseSurveySubmission(value: unknown): ParsedSurveySubmission {
 	return { submissionId, surveyId, iteration, answers: parseAnswers(value.answers) };
 }
 
-/** The `survey sent` properties for one finished submission; throws when an answer does not fit. */
 export function surveyResponse(
 	survey: AppSurvey,
 	submission: ParsedSurveySubmission,

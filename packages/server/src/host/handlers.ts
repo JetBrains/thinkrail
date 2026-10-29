@@ -107,6 +107,7 @@ import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
 import { listExtensionCatalog } from "../extensions";
 import {
 	completeSurvey,
+	confirmInAppSurvey,
 	currentInAppSurvey,
 	parseSurveySubmission,
 	recordAcceptedMessage,
@@ -1320,8 +1321,9 @@ const handlers: WsHandlers = {
 	},
 	"feedback.survey.submit": async (params) => {
 		const submission = invalidSurveyOnThrow(() => parseSurveySubmission(params));
-		await refreshInAppSurvey();
-		const survey = currentInAppSurvey();
+		const survey = await confirmInAppSurvey().catch(() => {
+			throw new CodedError("SURVEY_NOT_SENT", "Survey could not be confirmed");
+		});
 		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) {
 			throw new CodedError("SURVEY_UNAVAILABLE", "Survey is unavailable");
 		}
