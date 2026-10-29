@@ -109,13 +109,17 @@ export function stepCanContinue(question: SurveyQuestion, draft: SurveyDraft): b
 export function committedAnswers(
 	questions: readonly SurveyQuestion[],
 	draft: SurveyDraft,
-): Record<string, SurveyAnswerValue> {
+): { answers: Record<string, SurveyAnswerValue>; others: Record<string, string> } {
 	const answers: Record<string, SurveyAnswerValue> = {};
+	const others: Record<string, string> = {};
 	for (const question of questions) {
 		const value = committedValue(question, draft);
 		if (value !== undefined) answers[question.id] = value;
+		if (question.type !== "single_choice" && question.type !== "multiple_choice") continue;
+		const other = draft.otherSelected[question.id] ? otherText(draft, question.id) : "";
+		if (other) others[question.id] = other;
 	}
-	return answers;
+	return { answers, others };
 }
 
 function committedValue(
@@ -131,20 +135,13 @@ function committedValue(
 		return typeof value === "string" ? value : undefined;
 	}
 	if (question.type === "single_choice") {
-		if (draft.otherSelected[question.id]) {
-			const text = otherText(draft, question.id);
-			return text ? text : undefined;
-		}
+		if (draft.otherSelected[question.id]) return undefined;
 		const value = draft.answers[question.id];
 		return typeof value === "string" && question.choices.includes(value) ? value : undefined;
 	}
 	const chosen = stringList(draft.answers[question.id]).filter((choice) =>
 		question.choices.includes(choice),
 	);
-	if (draft.otherSelected[question.id]) {
-		const text = otherText(draft, question.id);
-		if (text) chosen.push(text);
-	}
 	return chosen.length > 0 ? chosen : undefined;
 }
 

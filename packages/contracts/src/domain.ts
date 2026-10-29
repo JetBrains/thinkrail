@@ -1251,6 +1251,7 @@ export interface SurveySubmitParams {
 	iteration: number;
 	language?: string;
 	answers: Record<string, SurveyAnswerValue>;
+	others?: Record<string, string>;
 }
 
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;

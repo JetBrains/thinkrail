@@ -303,7 +303,7 @@ test("choice and rating answers keep PostHog's value shapes", () => {
 	if (!survey) throw new Error("expected a survey");
 	const properties = surveyResponse(
 		survey,
-		submission({ multi: ["Two", "  Something else  "], rate: "4" }),
+		submission({ multi: ["Two"], rate: "4" }, { others: { multi: "  Something else  " } }),
 	);
 	expect(properties.$survey_response_multi).toEqual(["Two", "Something else"]);
 	expect(properties.$survey_response_rate).toBe("4");
@@ -474,12 +474,21 @@ test("a translated answer is sent as the original choice with the language it wa
 		{ id: "pick", question: "Pick one" },
 		{ id: "rate", question: "Score" },
 	]);
-	expect(
-		surveyResponse(survey, french({ pick: "Autre chose", rate: "4" })).$survey_response_pick,
-	).toBe("Autre chose");
-	expect(() => surveyResponse(survey, french({ pick: "Great", rate: "4" }))).not.toThrow();
-	expect(surveyResponse(survey, french({ pick: "Great", rate: "4" })).$survey_response_pick).toBe(
-		"Great",
+	const typed = (other: string) =>
+		surveyResponse(
+			survey,
+			parseSurveySubmission({
+				...submissionShape(survey),
+				language: "fr",
+				answers: { rate: "4" },
+				others: { pick: other },
+			}),
+		).$survey_response_pick;
+	expect(typed("Autre chose")).toBe("Autre chose");
+	expect(typed("Super")).toBe("Super");
+	expect(typed("Great")).toBe("Great");
+	expect(() => surveyResponse(survey, french({ pick: "Great", rate: "4" }))).toThrow(
+		"Invalid survey answer",
 	);
 	expect(() => surveyResponse(survey, french({ pick: "Super", rate: "4" }, "es"))).toThrow(
 		"Invalid survey answer",
@@ -496,3 +505,44 @@ test("a translated answer is sent as the original choice with the language it wa
 function submissionShape(survey: { id: string }) {
 	return { submissionId: SUBMISSION_ID, surveyId: survey.id, iteration: 2 };
 }
+
+test("Other text is never mistaken for a choice, and a choice never for Other text", () => {
+	const survey = selectInAppSurvey([
+		launched({
+			questions: [
+				{
+					type: "multiple_choice",
+					id: "multi",
+					question: "Which?",
+					choices: ["Great", "Okay"],
+					hasOpenChoice: true,
+					translations: { fr: { choices: ["Super", "Correct"] } },
+				},
+				{ type: "single_choice", id: "one", question: "One?", choices: ["A", "B"] },
+			],
+		}),
+	]);
+	if (!survey) throw new Error("expected a survey");
+	const send = (fields: Record<string, unknown>) =>
+		surveyResponse(
+			survey,
+			parseSurveySubmission({ ...submissionShape(survey), language: "fr", ...fields }),
+		);
+	expect(
+		send({ answers: { multi: ["Correct", "Super"], one: "A" }, others: { multi: "Super" } })
+			.$survey_response_multi,
+	).toEqual(["Okay", "Great", "Super"]);
+	expect(
+		send({ answers: { one: "A" }, others: { multi: "Great" } }).$survey_response_multi,
+	).toEqual(["Great"]);
+	expect(() => send({ answers: { multi: ["Other"], one: "A" } })).toThrow("Invalid survey answer");
+	expect(() => send({ answers: { multi: ["Super"] }, others: { one: "C" } })).toThrow(
+		"Invalid survey answer",
+	);
+	expect(() => send({ answers: { multi: ["Super"], one: "A" }, others: { one: "A" } })).toThrow(
+		"Invalid survey answer",
+	);
+	expect(() => send({ answers: { multi: ["Super"], one: "A" }, others: 3 })).toThrow(
+		"Invalid survey submission",
+	);
+});

@@ -745,8 +745,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   launched survey named `in-app-feedback` in the PostHog translation that language matches, with
   `AppSurvey.language` naming it, or the original text without `language`; null when it is off or this id
   and iteration were already submitted) /
-  **`feedback.survey.submit`** (`SurveySubmitParams { submissionId, surveyId, iteration, language?, answers }` → ack;
-  `language` echoes `AppSurvey.language`;
+  **`feedback.survey.submit`** (`SurveySubmitParams { submissionId, surveyId, iteration, language?, answers, others? }` → ack;
+  `language` echoes `AppSurvey.language`; `answers` hold only picked choices (as shown), ratings and open text,
+  while a choice question's typed **Other** text travels in `others`, so it is never read as a choice;
   one call when the user presses Send, whatever the analytics setting; fails with `SURVEY_INVALID`,
   `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` (the survey moved to another id or iteration — the client reloads
   and restarts) or `SURVEY_NOT_SENT`; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the

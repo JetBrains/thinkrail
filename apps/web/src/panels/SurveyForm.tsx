@@ -54,7 +54,7 @@ export function SurveyForm({
 				surveyId: survey.id,
 				iteration: survey.iteration,
 				...(survey.language ? { language: survey.language } : {}),
-				answers: committedAnswers(questions, draft),
+				...committedAnswers(questions, draft),
 			})
 			.then(() => onSent())
 			.catch((error: unknown) => {
