@@ -559,6 +559,7 @@ test("feedback.respond persists a popup action through the handler", async () =>
 		dismissed: false,
 		submittedSurveyId: null,
 		submittedIteration: null,
+		lastInvitedAt: null,
 	});
 });
 
@@ -708,6 +709,43 @@ test("a completion that cannot be saved still counts as sent and never sends the
 	}
 	await shutdownAnalytics();
 	expect(sent.filter((body) => body.includes('"survey sent"'))).toHaveLength(1);
+});
+
+test("feedback.survey speaks the app language and a vanished translation restarts the survey", async () => {
+	const sent: string[] = [];
+	bootSurveyAnalytics(sent);
+	let translations: Record<string, unknown> = { es: { question: "¿Qué tal?" } };
+	configureSurveySource({
+		apiKey: "phc_test",
+		fetchImpl: (() =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify({
+						surveys: [
+							{
+								id: "survey-1",
+								name: "in-app-feedback",
+								start_date: "2026-10-28T00:00:00.000Z",
+								questions: [{ id: "q1", type: "open", question: "How is it?", translations }],
+							},
+						],
+					}),
+				),
+			)) as unknown as typeof fetch,
+	});
+	expect(await handleRequest("feedback.survey", { language: "es-MX" }, CTX)).toMatchObject({
+		survey: { language: "es", questions: [{ question: "¿Qué tal?" }] },
+	});
+	expect(await handleRequest("feedback.survey", {}, CTX)).not.toMatchObject({
+		survey: { language: "es" },
+	});
+
+	translations = {};
+	await expect(submitSurvey({ language: "es" })).rejects.toMatchObject({ code: "SURVEY_CHANGED" });
+	translations = { es: { question: "¿Qué tal?" } };
+	expect(await submitSurvey({ language: "es" })).toEqual({ ok: true });
+	await shutdownAnalytics();
+	expect(sent.some((body) => body.includes('"$survey_language":"es"'))).toBe(true);
 });
 
 test("feedback.survey.submit does not complete a survey whose answers were not sent", async () => {

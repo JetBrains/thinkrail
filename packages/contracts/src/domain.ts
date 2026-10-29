@@ -1240,6 +1240,7 @@ export interface AppSurvey {
 	placeholder?: string;
 	thankYou?: string;
 	shuffleQuestions?: true;
+	language?: string;
 }
 
 export type SurveyAnswerValue = string | string[];
@@ -1248,7 +1249,9 @@ export interface SurveySubmitParams {
 	submissionId: string;
 	surveyId: string;
 	iteration: number;
+	language?: string;
 	answers: Record<string, SurveyAnswerValue>;
+	others?: Record<string, string>;
 }
 
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;

@@ -1,4 +1,9 @@
-import { type AppSurvey, SURVEY_OPEN_TEXT_LIMIT, type SurveyQuestion } from "@thinkrail/contracts";
+import {
+	type AppSurvey,
+	SURVEY_OPEN_TEXT_LIMIT,
+	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
+	type SurveyQuestion,
+} from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Textarea } from "@thinkrail/ui/textarea";
@@ -9,6 +14,7 @@ import { getTransport, wsErrorCode } from "@/transport";
 import {
 	committedAnswers,
 	emptySurveyDraft,
+	inlineOthers,
 	presentSurvey,
 	ratingMark,
 	ratingPoints,
@@ -24,10 +30,12 @@ import {
 
 export function SurveyForm({
 	survey,
+	hostProtocol,
 	onSent,
 	onChanged,
 }: {
 	survey: AppSurvey;
+	hostProtocol: number | null;
 	onSent: () => void;
 	onChanged: () => void;
 }) {
@@ -44,16 +52,20 @@ export function SurveyForm({
 	const last = step === questions.length - 1;
 
 	const send = () => {
-		if (sending.current) return;
+		if (sending.current || hostProtocol === null) return;
 		sending.current = true;
 		setPending(true);
 		setFailure(null);
+		const committed = committedAnswers(questions, draft);
+		const legacyHost = hostProtocol < SURVEY_TRANSLATIONS_PROTOCOL_VERSION;
 		void getTransport()
 			.request("feedback.survey.submit", {
 				submissionId,
 				surveyId: survey.id,
 				iteration: survey.iteration,
-				answers: committedAnswers(questions, draft),
+				...(legacyHost
+					? { answers: inlineOthers(questions, committed) }
+					: { ...(survey.language ? { language: survey.language } : {}), ...committed }),
 			})
 			.then(() => onSent())
 			.catch((error: unknown) => {
@@ -107,7 +119,7 @@ export function SurveyForm({
 				variant="primary"
 				className="self-start"
 				data-testid={last ? "survey-send" : "survey-continue"}
-				disabled={pending || !stepCanContinue(question, draft)}
+				disabled={pending || (last && hostProtocol === null) || !stepCanContinue(question, draft)}
 				onClick={last ? send : () => setStep(step + 1)}
 			>
 				{last ? t("panels.survey.send") : t("panels.survey.continue")}

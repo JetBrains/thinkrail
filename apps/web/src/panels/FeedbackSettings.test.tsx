@@ -43,7 +43,7 @@ test("the Feedback pane always offers Discord and email, and the survey only whe
 
 test("the survey's first page carries the notice above the first question", () => {
 	const markup = renderToStaticMarkup(
-		<SurveyForm survey={SURVEY} onSent={() => {}} onChanged={() => {}} />,
+		<SurveyForm survey={SURVEY} hostProtocol={98} onSent={() => {}} onChanged={() => {}} />,
 	);
 	expect(markup).toContain('data-testid="survey-notice"');
 	expect(markup).toContain(escaped("panels.survey.notice"));
@@ -58,7 +58,7 @@ test("the survey's first page carries the notice above the first question", () =
 
 test("rating points are radio inputs, not buttons", () => {
 	const markup = renderToStaticMarkup(
-		<SurveyForm survey={SURVEY} onSent={() => {}} onChanged={() => {}} />,
+		<SurveyForm survey={SURVEY} hostProtocol={98} onSent={() => {}} onChanged={() => {}} />,
 	);
 	expect(markup.match(/type="radio"/g)).toHaveLength(5);
 	expect(markup).toContain('role="radiogroup"');
@@ -70,6 +70,7 @@ test("a one-question survey ends on Send", () => {
 	const markup = renderToStaticMarkup(
 		<SurveyForm
 			survey={{ ...SURVEY, questions: [{ id: "open", type: "open", question: "Anything else?" }] }}
+			hostProtocol={98}
 			onSent={() => {}}
 			onChanged={() => {}}
 		/>,
@@ -77,4 +78,22 @@ test("a one-question survey ends on Send", () => {
 	expect(markup).toContain('data-testid="survey-send"');
 	expect(markup).toContain(String(EN["panels.survey.send"]));
 	expect(markup).toContain('placeholder="Start typing..."');
+});
+
+test("Send stays disabled while no host is welcomed, so nothing is queued in the wrong shape", () => {
+	const only: AppSurvey = {
+		...SURVEY,
+		questions: [{ id: "open", type: "open", question: "Anything else?", optional: true }],
+	};
+	const render = (hostProtocol: number | null) =>
+		renderToStaticMarkup(
+			<SurveyForm
+				survey={only}
+				hostProtocol={hostProtocol}
+				onSent={() => {}}
+				onChanged={() => {}}
+			/>,
+		);
+	expect(render(null)).toMatch(/<button[^>]*data-testid="survey-send"[^>]*disabled=""/);
+	expect(render(98)).not.toMatch(/<button[^>]*data-testid="survey-send"[^>]*disabled=""/);
 });

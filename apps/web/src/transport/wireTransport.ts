@@ -31,6 +31,7 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
+import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
@@ -412,7 +413,7 @@ export function loadInAppSurvey(): Promise<void> {
 	}
 	const generation = ++surveyLoadGeneration;
 	return getTransport()
-		.request("feedback.survey", {})
+		.request("feedback.survey", { language: currentLocale() })
 		.then((result) => {
 			if (generation !== surveyLoadGeneration) return;
 			useAppStore.getState().setInAppSurvey(result.survey);

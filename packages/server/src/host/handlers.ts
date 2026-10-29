@@ -109,6 +109,7 @@ import {
 	completeSurvey,
 	confirmInAppSurvey,
 	currentInAppSurvey,
+	localizeSurvey,
 	parseSurveySubmission,
 	recordAcceptedMessage,
 	refreshInAppSurvey,
@@ -1313,11 +1314,15 @@ const handlers: WsHandlers = {
 		respondToInvitation(params.action);
 		return { ok: true } as const;
 	},
-	"feedback.survey": async () => {
+	"feedback.survey": async (params) => {
 		await refreshInAppSurvey();
 		const survey = currentInAppSurvey();
 		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) return { survey: null };
-		return { survey };
+		const language =
+			typeof params?.language === "string" && params.language.length <= 35
+				? params.language
+				: undefined;
+		return { survey: localizeSurvey(survey, language) };
 	},
 	"feedback.survey.submit": async (params) => {
 		const submission = invalidSurveyOnThrow(() => parseSurveySubmission(params));
@@ -1327,7 +1332,11 @@ const handlers: WsHandlers = {
 		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) {
 			throw new CodedError("SURVEY_UNAVAILABLE", "Survey is unavailable");
 		}
-		if (survey.id !== submission.surveyId || survey.iteration !== submission.iteration) {
+		if (
+			survey.id !== submission.surveyId ||
+			survey.iteration !== submission.iteration ||
+			localizeSurvey(survey, submission.language).language !== submission.language
+		) {
 			throw new CodedError("SURVEY_CHANGED", "Survey changed");
 		}
 		const properties = invalidSurveyOnThrow(() => surveyResponse(survey, submission));

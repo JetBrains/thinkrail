@@ -3,8 +3,10 @@ import type { AppSurvey, SurveyQuestion } from "@thinkrail/contracts";
 import {
 	committedAnswers,
 	emptySurveyDraft,
+	inlineOthers,
 	presentSurvey,
 	selectSingleChoice,
+	selectSingleOther,
 	setAnswerText,
 	setOtherText,
 	stepCanContinue,
@@ -71,7 +73,10 @@ test("required steps block Continue until they have a value", () => {
 	expect(stepCanContinue({ ...openQuestion, optional: true }, draft)).toBe(true);
 	const answered = setAnswerText(draft, "open", "  Faster search  ");
 	expect(stepCanContinue(openQuestion, answered)).toBe(true);
-	expect(committedAnswers([openQuestion], answered)).toEqual({ open: "Faster search" });
+	expect(committedAnswers([openQuestion], answered)).toEqual({
+		answers: { open: "Faster search" },
+		others: {},
+	});
 	expect(thankYouText(survey([openQuestion], { thankYou: "" }), "Thanks")).toBe("Thanks");
 	expect(thankYouText(survey([openQuestion]), "Thanks")).toBe("Thanks");
 	expect(thankYouText(survey([openQuestion], { thankYou: "Merci" }), "Thanks")).toBe("Merci");
@@ -88,8 +93,8 @@ test("rating and checkbox answers keep the values PostHog records", () => {
 	expect(
 		committedAnswers([rating, checks], { ...draft, answers: { ...draft.answers, rate: "4" } }),
 	).toEqual({
-		rate: "4",
-		multi: ["Two", "Something else"],
+		answers: { rate: "4", multi: ["Two"] },
+		others: { multi: "Something else" },
 	});
 
 	const single = selectSingleChoice(emptySurveyDraft(), "one", "Yes");
@@ -99,5 +104,32 @@ test("rating and checkbox answers keep the values PostHog records", () => {
 		question: "Pick",
 		choices: ["Yes", "No"],
 	};
-	expect(committedAnswers([choice], single)).toEqual({ one: "Yes" });
+	expect(committedAnswers([choice], single)).toEqual({ answers: { one: "Yes" }, others: {} });
+	const typedOther = setOtherText(selectSingleOther(single, "one"), "one", "Yes");
+	expect(committedAnswers([{ ...choice, hasOpenChoice: true }], typedOther)).toEqual({
+		answers: {},
+		others: { one: "Yes" },
+	});
+});
+
+test("a pre-v98 host gets Other text inline, the shape it parses", () => {
+	const multi: SurveyQuestion = {
+		id: "m",
+		type: "multiple_choice",
+		question: "Which?",
+		choices: ["Great", "Okay"],
+		hasOpenChoice: true,
+	};
+	const single: SurveyQuestion = { ...multi, id: "s", type: "single_choice" };
+	const committed = {
+		answers: { m: ["Great"] },
+		others: { m: "keep this typed answer", s: "Something else" },
+	};
+	expect(inlineOthers([multi, single], committed)).toEqual({
+		m: ["Great", "keep this typed answer"],
+		s: "Something else",
+	});
+	expect(inlineOthers([multi], { answers: {}, others: { m: "Only typed" } })).toEqual({
+		m: ["Only typed"],
+	});
 });

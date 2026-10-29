@@ -128,7 +128,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 97;
+export const PROTOCOL_VERSION = 98;
+export const SURVEY_TRANSLATIONS_PROTOCOL_VERSION = 98;
 export const RESOURCE_HISTORY_PROTOCOL_VERSION = 96;
 export const PROJECT_CLONE_PROTOCOL_VERSION = 95;
 export const ONBOARDING_PROTOCOL_VERSION = 94;
@@ -987,7 +988,7 @@ export interface WsMethodMap {
 	};
 	"feedback.respond": { params: { action: SurveyInvitationResponse }; result: Ack };
 	"feedback.survey": {
-		params: Record<string, never>;
+		params: { language?: string };
 		result: { survey: AppSurvey | null };
 	};
 	"feedback.survey.submit": { params: SurveySubmitParams; result: Ack };

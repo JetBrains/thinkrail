@@ -741,13 +741,19 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `{ ok: false, issues }` per field/row index instead of saving anything when it is invalid) /
   **`feedback.respond`** (`{ action: SurveyInvitationResponse }` → ack; persists postpone or the permanent
   dismissal; neither stops message counting) /
-  **`feedback.survey`** (no params → `{ survey: AppSurvey | null }`; the launched survey named
-  `in-app-feedback`, or null when it is off or this id and iteration were already submitted) /
-  **`feedback.survey.submit`** (`SurveySubmitParams { submissionId, surveyId, iteration, answers }` → ack;
+  **`feedback.survey`** (`{ language? }`, the client's UI language → `{ survey: AppSurvey | null }`; the
+  launched survey named `in-app-feedback` in the PostHog translation that language matches, with
+  `AppSurvey.language` naming it, or the original text without `language`; null when it is off or this id
+  and iteration were already submitted) /
+  **`feedback.survey.submit`** (`SurveySubmitParams { submissionId, surveyId, iteration, language?, answers, others? }` → ack;
+  `language` echoes `AppSurvey.language`; `answers` hold only picked choices (as shown), ratings and open text,
+  while a choice question's typed **Other** text travels in `others`, so it is never read as a choice;
   one call when the user presses Send, whatever the analytics setting; fails with `SURVEY_INVALID`,
   `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` (the survey moved to another id or iteration — the client reloads
   and restarts) or `SURVEY_NOT_SENT`; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the
-  invitation channel to v97) /
+  invitation channel to v97; `SURVEY_TRANSLATIONS_PROTOCOL_VERSION` pins `language` and `others` to v98 —
+  a client sends a pre-v98 host the older shape, Other text inline in `answers` and no `language`, and a
+  submission without `others` is read in that shape) /
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a

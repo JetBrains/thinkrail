@@ -3,6 +3,7 @@ import {
 	configureSurveySource,
 	confirmInAppSurvey,
 	currentInAppSurvey,
+	localizeSurvey,
 	parseSurveySubmission,
 	refreshInAppSurvey,
 	resetSurveyForTests,
@@ -302,7 +303,7 @@ test("choice and rating answers keep PostHog's value shapes", () => {
 	if (!survey) throw new Error("expected a survey");
 	const properties = surveyResponse(
 		survey,
-		submission({ multi: ["Two", "  Something else  "], rate: "4" }),
+		submission({ multi: ["Two"], rate: "4" }, { others: { multi: "  Something else  " } }),
 	);
 	expect(properties.$survey_response_multi).toEqual(["Two", "Something else"]);
 	expect(properties.$survey_response_rate).toBe("4");
@@ -395,4 +396,224 @@ test("a cached copy expires an hour after its last successful read, even between
 	at += 2 * 60 * 1000;
 	expect(currentInAppSurvey()).toBeNull();
 	expect(await refreshInAppSurvey()).toBeNull();
+});
+
+const translatedSurvey = () =>
+	selectInAppSurvey([
+		launched({
+			translations: { fr: { thankYouMessageHeader: "Merci !" }, "pt-br": { name: "x" } },
+			questions: [
+				{
+					type: "single_choice",
+					id: "pick",
+					question: "Pick one",
+					choices: ["Great", "Okay", "Other"],
+					hasOpenChoice: true,
+					translations: {
+						FR: { question: "Choisissez", choices: ["Super", "Correct", "Autre"] },
+						de: { question: "Wählen", choices: ["Toll", "Andere"] },
+						"zh-cn": { question: "选择一个", choices: ["很好", "还行", "其他"] },
+					},
+				},
+				{
+					type: "rating",
+					id: "rate",
+					question: "Score",
+					display: "number",
+					scale: 5,
+					lowerBoundLabel: "Bad",
+					upperBoundLabel: "Good",
+					translations: { fr: { lowerBoundLabel: "<b>Mauvais</b>" }, xx_bad: { question: "?" } },
+				},
+			],
+		}),
+	]);
+
+test("a survey is localized by exact tag, then base language, else left as written", () => {
+	const survey = translatedSurvey();
+	if (!survey) throw new Error("expected a survey");
+	expect(localizeSurvey(survey, undefined)).toBe(survey);
+	expect(localizeSurvey(survey, "ja")).toBe(survey);
+
+	const french = localizeSurvey(survey, "fr-CA");
+	expect(french.language).toBe("fr");
+	expect(french.thankYou).toBe("Merci !");
+	expect(french.questions[0]).toMatchObject({
+		question: "Choisissez",
+		choices: ["Super", "Correct"],
+	});
+	expect(french.questions[1]).toMatchObject({
+		question: "Score",
+		lowerBoundLabel: "Mauvais",
+		upperBoundLabel: "Good",
+	});
+
+	const german = localizeSurvey(survey, "de");
+	expect(german.language).toBe("de");
+	expect(german.questions[0]).toMatchObject({ question: "Wählen", choices: ["Great", "Okay"] });
+
+	expect(localizeSurvey(survey, "zh-CN").questions[0]).toMatchObject({ question: "选择一个" });
+	expect(localizeSurvey(survey, "pt-BR")).toBe(survey);
+});
+
+test("a translated answer is sent as the original choice with the language it was shown in", () => {
+	const survey = translatedSurvey();
+	if (!survey) throw new Error("expected a survey");
+	const french = (answers: Record<string, unknown>, language = "fr") =>
+		parseSurveySubmission({
+			submissionId: SUBMISSION_ID,
+			surveyId: survey.id,
+			iteration: 2,
+			language,
+			answers,
+			others: {},
+		});
+	const properties = surveyResponse(survey, french({ pick: "Super", rate: "4" }));
+	expect(properties.$survey_language).toBe("fr");
+	expect(properties.$survey_response_pick).toBe("Great");
+	expect(properties.$survey_questions).toEqual([
+		{ id: "pick", question: "Pick one" },
+		{ id: "rate", question: "Score" },
+	]);
+	const typed = (other: string) =>
+		surveyResponse(
+			survey,
+			parseSurveySubmission({
+				...submissionShape(survey),
+				language: "fr",
+				answers: { rate: "4" },
+				others: { pick: other },
+			}),
+		).$survey_response_pick;
+	expect(typed("Autre chose")).toBe("Autre chose");
+	expect(typed("Super")).toBe("Super");
+	expect(typed("Great")).toBe("Great");
+	expect(() => surveyResponse(survey, french({ pick: "Great", rate: "4" }))).toThrow(
+		"Invalid survey answer",
+	);
+	expect(() => surveyResponse(survey, french({ pick: "Super", rate: "4" }, "es"))).toThrow(
+		"Invalid survey answer",
+	);
+	expect(
+		surveyResponse(
+			survey,
+			parseSurveySubmission({ ...submissionShape(survey), answers: { pick: "Okay", rate: "1" } }),
+		).$survey_language,
+	).toBeUndefined();
+	expect(() => french({}, "FR")).toThrow("Invalid survey submission");
+});
+
+function submissionShape(survey: { id: string }) {
+	return { submissionId: SUBMISSION_ID, surveyId: survey.id, iteration: 2 };
+}
+
+test("Other text is never mistaken for a choice, and a choice never for Other text", () => {
+	const survey = selectInAppSurvey([
+		launched({
+			questions: [
+				{
+					type: "multiple_choice",
+					id: "multi",
+					question: "Which?",
+					choices: ["Great", "Okay", "Other"],
+					hasOpenChoice: true,
+					translations: { fr: { choices: ["Super", "Correct", "Autre"] } },
+				},
+				{ type: "single_choice", id: "one", question: "One?", choices: ["A", "B"] },
+			],
+		}),
+	]);
+	if (!survey) throw new Error("expected a survey");
+	const send = (fields: Record<string, unknown>) =>
+		surveyResponse(
+			survey,
+			parseSurveySubmission({ ...submissionShape(survey), language: "fr", others: {}, ...fields }),
+		);
+	expect(
+		send({ answers: { multi: ["Correct", "Super"], one: "A" }, others: { multi: "Super" } })
+			.$survey_response_multi,
+	).toEqual(["Okay", "Great", "Super"]);
+	expect(
+		send({ answers: { one: "A" }, others: { multi: "Great" } }).$survey_response_multi,
+	).toEqual(["Great"]);
+	expect(() => send({ answers: { multi: ["Other"], one: "A" } })).toThrow("Invalid survey answer");
+	expect(() => send({ answers: { multi: ["Super"] }, others: { one: "C" } })).toThrow(
+		"Invalid survey answer",
+	);
+	expect(() => send({ answers: { multi: ["Super"], one: "A" }, others: { one: "A" } })).toThrow(
+		"Invalid survey answer",
+	);
+	expect(() => send({ answers: { multi: ["Super"], one: "A" }, others: 3 })).toThrow(
+		"Invalid survey submission",
+	);
+});
+
+test("a pre-v98 client's inline Other text is still told apart from its picked choices", () => {
+	const survey = selectInAppSurvey([
+		launched({
+			questions: [
+				{
+					type: "multiple_choice",
+					id: "m",
+					question: "Which?",
+					choices: ["Great", "Okay", "Other"],
+					hasOpenChoice: true,
+				},
+				{
+					type: "single_choice",
+					id: "s",
+					question: "One?",
+					choices: ["A", "B", "Other"],
+					hasOpenChoice: true,
+					optional: true,
+				},
+			],
+		}),
+	]);
+	if (!survey) throw new Error("expected a survey");
+	const legacy = (answers: Record<string, unknown>) =>
+		surveyResponse(survey, parseSurveySubmission({ ...submissionShape(survey), answers }));
+	expect(legacy({ m: ["Great", " keep this typed answer "], s: "B" })).toMatchObject({
+		$survey_response_m: ["Great", "keep this typed answer"],
+		$survey_response_s: "B",
+	});
+	expect(legacy({ m: ["Only typed"], s: "Something else" })).toMatchObject({
+		$survey_response_m: ["Only typed"],
+		$survey_response_s: "Something else",
+	});
+	expect(() => legacy({ m: ["one", "two"] })).toThrow("Invalid survey answer");
+});
+
+test("a translated list loses its open choice the same way, so its fixed choices still line up", () => {
+	const survey = selectInAppSurvey([
+		launched({
+			questions: [
+				{
+					type: "single_choice",
+					id: "pick",
+					question: "Pick one",
+					choices: ["Yes", "No", "Something else"],
+					hasOpenChoice: true,
+					translations: {
+						fr: { choices: ["Oui", "Non", "Autre chose"] },
+						de: { choices: ["Ja", "Nein"] },
+					},
+				},
+			],
+		}),
+	]);
+	if (!survey) throw new Error("expected a survey");
+	expect(survey.questions[0]).toMatchObject({ choices: ["Yes", "No"], hasOpenChoice: true });
+	expect(localizeSurvey(survey, "fr").questions[0]).toMatchObject({ choices: ["Oui", "Non"] });
+	expect(localizeSurvey(survey, "de")).toBe(survey);
+	const sent = surveyResponse(
+		survey,
+		parseSurveySubmission({
+			...submissionShape(survey),
+			language: "fr",
+			answers: { pick: "Non" },
+			others: {},
+		}),
+	);
+	expect(sent.$survey_response_pick).toBe("No");
 });

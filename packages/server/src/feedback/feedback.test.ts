@@ -25,6 +25,7 @@ interface StoredFeedback {
 	dismissed: boolean;
 	submittedSurveyId: string | null;
 	submittedIteration: number | null;
+	lastInvitedAt: number | null;
 }
 
 function feedback(overrides: Partial<StoredFeedback> = {}): StoredFeedback {
@@ -34,6 +35,7 @@ function feedback(overrides: Partial<StoredFeedback> = {}): StoredFeedback {
 		dismissed: false,
 		submittedSurveyId: null,
 		submittedIteration: null,
+		lastInvitedAt: null,
 		...overrides,
 	};
 }
@@ -142,7 +144,9 @@ test("postpone schedules ten additional accepted messages and clears the claim",
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
 
 	respondToInvitation("postpone");
-	expect(stored()).toEqual(feedback({ acceptedMessages: 10, nextInvitationAt: 20 }));
+	expect(stored()).toEqual(
+		feedback({ acceptedMessages: 10, nextInvitationAt: 20, lastInvitedAt: expect.any(Number) }),
+	);
 	for (let count = 0; count < 9; count += 1) recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
 	recordAcceptedMessage("client-b");
@@ -185,7 +189,9 @@ test("don't ask again keeps counting but does not offer the usage prompt again",
 	respondToInvitation("never");
 	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
-	expect(stored()).toEqual(feedback({ acceptedMessages: 20, dismissed: true }));
+	expect(stored()).toEqual(
+		feedback({ acceptedMessages: 20, dismissed: true, lastInvitedAt: expect.any(Number) }),
+	);
 });
 
 test("failed delivery and process-local reset release eligible claims", () => {
@@ -210,7 +216,7 @@ test("failed delivery and process-local reset release eligible claims", () => {
 	});
 	recordAcceptedMessage("client-c");
 	expect(attempts).toEqual(["client-a", "client-b", "client-c"]);
-	expect(stored()).toEqual(feedback({ acceptedMessages: 12 }));
+	expect(stored()).toEqual(feedback({ acceptedMessages: 12, lastInvitedAt: expect.any(Number) }));
 });
 
 test("a throwing publisher releases the claim without losing the accepted count", () => {
@@ -304,7 +310,7 @@ test("invalid responses do not mutate state or release the claim", () => {
 	expect(() => respondToInvitation("later" as "postpone")).toThrow("Invalid invitation response");
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
-	expect(stored()).toEqual(feedback({ acceptedMessages: 11 }));
+	expect(stored()).toEqual(feedback({ acceptedMessages: 11, lastInvitedAt: expect.any(Number) }));
 });
 
 test("an old feedback file without survey completion still counts", () => {
@@ -348,6 +354,7 @@ test("a launched, unfinished survey is required before the invitation, per id an
 			acceptedMessages: 13,
 			submittedSurveyId: "survey-1",
 			submittedIteration: 1,
+			lastInvitedAt: expect.any(Number),
 		}),
 	);
 });
@@ -410,4 +417,63 @@ test("an idle host does not invite from a copy it can no longer refresh", async 
 	await refreshInAppSurvey();
 	await Bun.sleep(0);
 	expect(delivered).toEqual(["client-a"]);
+});
+
+test("PostHog's wait period keeps a postponed invitation away for that many days", async () => {
+	let at = 1_000_000;
+	setSurveyClockForTests(() => at);
+	configureSurveySource({
+		apiKey: "phc_test",
+		fetchImpl: (async () =>
+			new Response(
+				JSON.stringify([
+					{
+						id: "survey-1",
+						name: "in-app-feedback",
+						start_date: "2026-10-28T00:00:00.000Z",
+						conditions: { seenSurveyWaitPeriodInDays: 7 },
+						questions: [{ id: "q1", type: "open", question: "How is it going?" }],
+					},
+				]),
+			)) as unknown as typeof fetch,
+	});
+	await refreshInAppSurvey();
+	const delivered: string[] = [];
+	setFeedbackPublisher((clientKey) => {
+		delivered.push(clientKey);
+		return true;
+	});
+	const send = async (count: number) => {
+		for (let index = 0; index < count; index += 1) recordAcceptedMessage("client-a");
+		await refreshInAppSurvey();
+		await Bun.sleep(0);
+	};
+
+	await send(10);
+	expect(delivered).toEqual(["client-a"]);
+	expect(stored().lastInvitedAt).toBe(at);
+	respondToInvitation("postpone");
+
+	at += 24 * 60 * 60 * 1000;
+	await send(10);
+	expect(delivered).toEqual(["client-a"]);
+
+	at += 6 * 24 * 60 * 60 * 1000;
+	await send(1);
+	expect(delivered).toEqual(["client-a", "client-a"]);
+});
+
+test("a malformed invitation time resets the file to the defaults", () => {
+	writeFileSync(
+		join(directory, "feedback.json"),
+		JSON.stringify({
+			acceptedMessages: 3,
+			nextInvitationAt: 10,
+			dismissed: false,
+			lastInvitedAt: "x",
+		}),
+	);
+	resetFeedbackForTests();
+	recordAcceptedMessage("client-a");
+	expect(stored()).toEqual(feedback({ acceptedMessages: 1 }));
 });
