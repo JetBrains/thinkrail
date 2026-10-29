@@ -33,8 +33,12 @@ const TERMINAL_CONDITION_TIMEOUT_MS = 15_000;
 const TERMINAL_TEST_TIMEOUT_MS = TERMINAL_CONDITION_TIMEOUT_MS * 3 + 5_000;
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
-const savedHome = process.env.HOME;
-const savedZdotdir = process.env.ZDOTDIR;
+const savedShellEnv = Object.fromEntries(
+	["HOME", "ZDOTDIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "HISTFILE", "HISTSIZE"].map((name) => [
+		name,
+		process.env[name],
+	]),
+);
 
 let pushed: PublishedFrame[] = [];
 const terminalFrameSignals = new Set<() => void>();
@@ -131,9 +135,15 @@ async function exitTerminalWithMarker(
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-terminal-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
-	// rc files override HISTFILE, so test PTYs get their own home: no user rc files, no user shell history.
-	process.env.HOME = dataDir;
-	process.env.ZDOTDIR = dataDir;
+	// Shells find rc files and history via HOME, ZDOTDIR, XDG dirs or an exported HISTFILE; keep all in dataDir.
+	Object.assign(process.env, {
+		HOME: dataDir,
+		ZDOTDIR: dataDir,
+		XDG_CONFIG_HOME: dataDir,
+		XDG_DATA_HOME: dataDir,
+		HISTFILE: join(dataDir, ".test_history"),
+		HISTSIZE: "0",
+	});
 	const worktreePath = join(dataDir, "worktree");
 	mkdirSync(worktreePath);
 	saveWorkspaces([{ id: WS, worktreePath } as Workspace]);
@@ -154,10 +164,10 @@ afterEach(() => {
 	removeTree(dataDir);
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
-	if (savedHome === undefined) delete process.env.HOME;
-	else process.env.HOME = savedHome;
-	if (savedZdotdir === undefined) delete process.env.ZDOTDIR;
-	else process.env.ZDOTDIR = savedZdotdir;
+	for (const [name, value] of Object.entries(savedShellEnv)) {
+		if (value === undefined) delete process.env[name];
+		else process.env[name] = value;
+	}
 });
 
 test("a shell spawn failure is actionable and preserves replay for retry", () => {
