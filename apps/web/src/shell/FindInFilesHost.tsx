@@ -79,6 +79,7 @@ export function FindInFilesHost() {
 					? "ready"
 					: "unsupported",
 	);
+	const connection = useAppStore((state) => state.welcomeGeneration);
 	const projectId = contextProject?.id;
 	const workspaceId = activeWorkspace?.id;
 	const context = useMemo(
@@ -97,6 +98,7 @@ export function FindInFilesHost() {
 			context={context}
 			scopeLabel={scopeLabel}
 			host={host}
+			connection={connection}
 			onOpen={onOpen}
 			renderPreview={renderPreview}
 		/>

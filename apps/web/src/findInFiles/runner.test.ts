@@ -37,8 +37,8 @@ beforeEach(() => {
 
 test("a search sends search.text with smart case resolved, a clamped query and a growing seq, and applies its batches", async () => {
 	const request = { query: "Needle", caseSensitive: false, wholeWord: true, context };
-	runTextSearch(request);
-	expect(wasRequested(requestKeyOf(request))).toBe(true);
+	runTextSearch(request, 1);
+	expect(wasRequested(requestKeyOf(request), 1)).toBe(true);
 	expect(requests).toHaveLength(1);
 	expect(requests[0]).toMatchObject({
 		query: "Needle",
@@ -66,7 +66,7 @@ test("a search sends search.text with smart case resolved, a clamped query and a
 	expect(useFindInFiles.getState().results?.files).toEqual(batch.files);
 	expect(useFindInFiles.getState().searching).toBe(false);
 
-	runTextSearch({ ...request, query: "x".repeat(TEXT_SEARCH_LIMITS.maxQuery + 20) });
+	runTextSearch({ ...request, query: "x".repeat(TEXT_SEARCH_LIMITS.maxQuery + 20) }, 1);
 	expect(requests[1]?.seq).toBeGreaterThan(first);
 	expect(requests[1]?.query).toHaveLength(TEXT_SEARCH_LIMITS.maxQuery);
 	expect(requests[1]?.caseSensitive).toBe(false);
@@ -74,14 +74,14 @@ test("a search sends search.text with smart case resolved, a clamped query and a
 });
 
 test("a query under the minimum clears the results without asking the host", () => {
-	runTextSearch({ query: "needle", caseSensitive: false, wholeWord: false, context });
+	runTextSearch({ query: "needle", caseSensitive: false, wholeWord: false, context }, 1);
 	subscriptions.get(WS_CHANNELS.searchTextResults)?.({
 		seq: requests[0]?.seq,
 		files: [{ path: "a.ts", matches: [] }],
 	});
 	expect(useFindInFiles.getState().results).not.toBeNull();
 
-	runTextSearch({ query: "n", caseSensitive: false, wholeWord: false, context });
+	runTextSearch({ query: "n", caseSensitive: false, wholeWord: false, context }, 1);
 	expect(requests).toHaveLength(1);
 	expect(useFindInFiles.getState()).toMatchObject({ results: null, searching: false });
 });
@@ -89,8 +89,40 @@ test("a query under the minimum clears the results without asking the host", () 
 test("a rejected request fails the search and lets the same request be asked again", async () => {
 	answer = () => Promise.reject(new Error("offline"));
 	const request = { query: "needle", caseSensitive: false, wholeWord: false, context };
-	runTextSearch(request);
+	runTextSearch(request, 1);
 	await settle();
 	expect(useFindInFiles.getState()).toMatchObject({ searching: false, failed: true });
-	expect(wasRequested(requestKeyOf(request))).toBe(false);
+	expect(wasRequested(requestKeyOf(request), 1)).toBe(false);
+});
+
+test("a search that ended failed lets the same request be asked again", () => {
+	const request = { query: "needle", caseSensitive: false, wholeWord: false, context };
+	runTextSearch(request, 1);
+	const seq = requests[0]?.seq ?? 0;
+	subscriptions.get(WS_CHANNELS.searchTextResults)?.({
+		seq: seq - 1,
+		files: [],
+		done: { reason: "failed", files: 0, lines: 0 },
+	});
+	expect(wasRequested(requestKeyOf(request), 1)).toBe(true);
+	subscriptions.get(WS_CHANNELS.searchTextResults)?.({
+		seq,
+		files: [],
+		done: { reason: "failed", files: 0, lines: 0 },
+	});
+	expect(useFindInFiles.getState()).toMatchObject({ searching: false, failed: true });
+	expect(wasRequested(requestKeyOf(request), 1)).toBe(false);
+});
+
+test("a search still running when the connection changes is asked again there; a finished one is not", () => {
+	const request = { query: "needle", caseSensitive: false, wholeWord: false, context };
+	runTextSearch(request, 1);
+	expect(wasRequested(requestKeyOf(request), 1)).toBe(true);
+	expect(wasRequested(requestKeyOf(request), 2)).toBe(false);
+	subscriptions.get(WS_CHANNELS.searchTextResults)?.({
+		seq: requests[0]?.seq,
+		files: [],
+		done: { reason: "complete", files: 0, lines: 0 },
+	});
+	expect(wasRequested(requestKeyOf(request), 2)).toBe(true);
 });

@@ -42,7 +42,10 @@ preview renders.
   are the only open-state writers (the chord, the palette command, `↵`, Escape and the overlay click).
 - **Controller (`runner.ts`)**: a request is `{ query, caseSensitive, wholeWord, context }`; the dialog
   debounces 150 ms and skips a request identical to the last one asked (so a reopen does not re-search,
-  while a changed workspace context does re-run the same query there). Smart-case is resolved here —
+  while a changed workspace context does re-run the same query there) — unless it was asked on an earlier
+  connection and is still searching: the host's batches only ever reach the socket that asked, so a search
+  a reconnect interrupted is asked again with a fresh `seq` (the dialog gets the host's welcome generation as
+  `connection` from the shell), while one that finished keeps its results. Smart-case is resolved here —
   `effectiveCaseSensitive`: a capital letter (any `\p{Lu}`) in the query makes the search exact, as the
   `Aa` toggle does — so the host only sees an explicit flag. Under `TEXT_SEARCH_LIMITS.minQuery` characters
   the results are cleared without a request; the query is clamped to `maxQuery`. `seq` is a clock-seeded
@@ -51,19 +54,22 @@ preview renders.
   never repaint the list. The first batch of a `seq` replaces the results and selects the first match;
   later batches merge by file (`mergeFiles`, keeping file order) and keep the selection while its file is
   still listed; `done` ends `searching`, `done.reason === "failed"` or a rejected request marks `failed`
-  (and forgets the request key, so the same query can be retried).
+  and forgets the request key, so the same query can be retried (an edit, or the next ⌘⇧F).
 - **Window (`FindInFilesDialog`)**: a Radix dialog at the top of the viewport — the query field with the
   `Aa` / `W` toggles (`⌥C` / `⌥W`, `aria-pressed`), a scope line ("in <workspace>") with the status (counts
   once `done`, searching, failed, offline, older host, or no workspace), the limit banner when the host
-  stopped at `TEXT_SEARCH_LIMITS.lines`, the results as a `listbox` of file headers (name, directory, count)
-  and `option` rows (line number, the cut line with `highlightRanges`), the selected match's preview below
+  stopped at `TEXT_SEARCH_LIMITS.lines`, the results as a `listbox` of one group per file (a `fieldset`
+  labelled by its header: name, directory, count) with `option` rows (line number, the cut line with
+  `highlightRanges`), the selected match's preview below
   (`renderPreview`, keyed by workspace + path so changing the match within a file only re-reveals), and a
   footer of keycaps. `↑` / `↓` move the selection across file groups and scroll it into view; `↵` opens the
   selected match as a preview tab and `⌘↵` (`Ctrl+↵`) as a kept tab — both through `onOpen` with the
   `FindInFilesTarget` (the host's `root` workspace, path, line, column, length) and close the window; a
   click on a row does the same, hover selects. Escape closes. Keys are handled on the input; the rows are
-  `tabIndex=-1` and `mousedown`-prevented so focus never leaves the field. Strings are `en.json` keys;
-  icons are Remix; typography is `tr-code-text` for the query and lines.
+  `tabIndex=-1` and `mousedown`-prevented so focus never leaves the field, so the field is the listbox's
+  `combobox` (`aria-controls`, `aria-activedescendant` naming the selected option's id) and the status is
+  a polite live region, as in the palette — a screen reader hears the selected match and the counts.
+  Strings are `en.json` keys; icons are Remix; typography is `tr-code-text` for the query and lines.
 - **Host state**: the dialog is told `ready`, `offline` or `unsupported` (a host before `search.text`,
   [[submodule-web-shell]] derives it from `supportsTextSearch`); only `ready` sends requests, the other two
   explain why nothing is searched. With no context (no project selected) the status says so.

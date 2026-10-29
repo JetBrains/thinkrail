@@ -11,6 +11,7 @@ import {
 	clearTextSearch,
 	effectiveCaseSensitive,
 	failTextSearch,
+	useFindInFiles,
 } from "./state";
 
 /** Seeded with the clock so a reloaded page never issues a `seq` the host has already seen from this client. */
@@ -19,9 +20,10 @@ let unsubscribe: (() => void) | null = null;
 
 function ensureSubscribed(): void {
 	if (unsubscribe) return;
-	unsubscribe = getTransport().subscribe(WS_CHANNELS.searchTextResults, (data) =>
-		applyTextSearchBatch(data as TextSearchBatch),
-	);
+	unsubscribe = getTransport().subscribe(WS_CHANNELS.searchTextResults, (data) => {
+		const batch = data as TextSearchBatch;
+		if (applyTextSearchBatch(batch) && batch.done?.reason === "failed") forgetRequest();
+	});
 }
 
 export function contextKeyOf(context: SearchContext): string {
@@ -35,7 +37,11 @@ export interface TextSearchRequest {
 	context: SearchContext;
 }
 
-let lastRequestKey = "";
+let lastRequest = { key: "", connection: -1 };
+
+function forgetRequest(): void {
+	lastRequest = { key: "", connection: -1 };
+}
 
 export function requestKeyOf(request: TextSearchRequest): string {
 	return JSON.stringify([
@@ -46,12 +52,13 @@ export function requestKeyOf(request: TextSearchRequest): string {
 	]);
 }
 
-export function wasRequested(key: string): boolean {
-	return key === lastRequestKey;
+export function wasRequested(key: string, connection: number): boolean {
+	if (key !== lastRequest.key) return false;
+	return connection === lastRequest.connection || !useFindInFiles.getState().searching;
 }
 
-export function runTextSearch(request: TextSearchRequest): void {
-	lastRequestKey = requestKeyOf(request);
+export function runTextSearch(request: TextSearchRequest, connection: number): void {
+	lastRequest = { key: requestKeyOf(request), connection };
 	if (request.query.trim().length < TEXT_SEARCH_LIMITS.minQuery) {
 		clearTextSearch();
 		return;
@@ -71,7 +78,7 @@ export function runTextSearch(request: TextSearchRequest): void {
 			if (result.superseded) failTextSearch(seq);
 		})
 		.catch(() => {
-			lastRequestKey = "";
+			forgetRequest();
 			failTextSearch(seq);
 		});
 }

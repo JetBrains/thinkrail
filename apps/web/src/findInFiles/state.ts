@@ -113,8 +113,8 @@ export function failTextSearch(seq: number): void {
 	useFindInFiles.setState({ searching: false, failed: true });
 }
 
-export function applyTextSearchBatch(batch: TextSearchBatch): void {
-	if (batch.seq !== latest.seq) return;
+export function applyTextSearchBatch(batch: TextSearchBatch): boolean {
+	if (batch.seq !== latest.seq) return false;
 	useFindInFiles.setState((state) => {
 		const fresh = state.results?.seq !== batch.seq;
 		const files = fresh ? [...batch.files] : mergeFiles(state.results?.files ?? [], batch.files);
@@ -134,4 +134,5 @@ export function applyTextSearchBatch(batch: TextSearchBatch): void {
 			failed: batch.done?.reason === "failed",
 		};
 	});
+	return true;
 }
