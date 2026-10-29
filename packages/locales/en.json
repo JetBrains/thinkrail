@@ -2,6 +2,7 @@
 	"app.errorBoundary.label": "app",
 	"app.transport.mcpUnavailable": "MCP servers are unavailable until the host reconnects.",
 	"app.transport.requestFailed": "request failed",
+	"app.transport.replayOverflow": "This window has too many requests waiting on the host, so the host refused this one. If this keeps happening, reload the window.",
 	"app.transport.requestFailedFallback": "The request failed.",
 	"app.transport.timedOut": "request \"{{method}}\" timed out",
 	"auth.login.connectTitle": "Connect {{provider}}",

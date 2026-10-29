@@ -95,7 +95,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   This dispatch barrier preserves cross-message order and the store's transcript-revision fence while still
   collapsing consecutive stream frames. All subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
-  string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice);
+  string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice;
+  `REQUEST_REPLAY_OVERFLOW` maps to localized text, since the host's message names wire internals);
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named
   `WsResponse.errorCode`. A coded response rejects with a `RequestError`, everything else (timeout or an unnamed
   host error) with a plain `Error`, so *having* a code is exactly how a caller tells "this
