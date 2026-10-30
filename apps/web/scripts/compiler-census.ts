@@ -1,18 +1,24 @@
 #!/usr/bin/env bun
 import { existsSync, readFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
-import { type NodePath, parseSync, transformFromAstSync, traverse, type types } from "@babel/core";
 import {
-	type LoggerEvent,
-	type PluginOptions,
-	parsePluginOptions,
-} from "babel-plugin-react-compiler";
+	type ArrowFunctionExpression,
+	type Function as FunctionLike,
+	type Node,
+	parseSync,
+	visitorKeys,
+} from "oxc-parser";
+import { type OxcError, type ReactCompilerOptions, transformSync } from "oxc-transform-react";
 import { designSourceFiles } from "./designSources";
 import { type GeneratedFile, normalizeEol, writeOrCheck } from "./generatedFiles";
 
-// Must match `reactCompilerPreset()` in vite.config.ts.
-const COMPILER_OPTIONS: PluginOptions = {};
-const PRESET_FILTER = /\b[A-Z]|\buse/;
+// Must match the `react({ compiler })` options in vite.config.ts.
+const COMPILER_OPTIONS: ReactCompilerOptions = {};
+const CODE_FILTER = /forwardRef|memo|\b(?:[A-Z]|use[A-Z0-9])/;
+const UNIT_NAME = /^(?:[A-Z]|use[A-Z0-9])/;
+const HOOK_NAME = /^use[A-Z0-9]/;
+const UNIT_WRAPPERS = new Set(["memo", "forwardRef"]);
+const MEMO_CACHE = /\b_c\d*\(\d+\)/g;
 
 const WEB_ROOT = resolve(import.meta.dir, "..");
 const BASELINE = resolve(import.meta.dir, "compiler-census.baseline.txt");
@@ -23,155 +29,197 @@ interface Bailout {
 	line: number;
 	fnLine: number | null;
 	fnName: string | null;
-	kind: "CompileError" | "CompileSkip" | "PipelineError";
 	reason: string;
 	description: string | null;
 	category: string;
 }
 
 interface FileResult {
-	compiled: number;
+	memoized: number;
 	bailouts: Bailout[];
 }
 
-function locKey(loc: types.SourceLocation | null | undefined) {
-	return loc ? `${loc.start.line}:${loc.start.column}` : "";
+interface Unit {
+	start: number;
+	end: number;
+	name: string;
 }
 
-function bindingName(path: NodePath): string | null {
-	const { node, parent, parentPath } = path;
+type FunctionNode = FunctionLike | ArrowFunctionExpression;
+
+function isNode(value: unknown): value is Node {
+	return typeof value === "object" && value !== null && "type" in value;
+}
+
+function children(node: Node) {
+	return (visitorKeys[node.type] ?? []).flatMap((key) => {
+		const value: unknown = Reflect.get(node, key);
+		return (Array.isArray(value) ? value : [value]).filter(isNode);
+	});
+}
+
+function isFunction(node: Node): node is FunctionNode {
+	return (
+		(node.type === "FunctionDeclaration" ||
+			node.type === "FunctionExpression" ||
+			node.type === "ArrowFunctionExpression") &&
+		node.body !== null
+	);
+}
+
+function bindingName(node: Node, ancestors: Node[]): string | null {
+	const parent = ancestors.at(-1);
+	if (!parent) return null;
 	if (parent.type === "VariableDeclarator" && parent.id.type === "Identifier")
 		return parent.id.name;
-	if (parent.type === "ObjectProperty" && !parent.computed && parent.key.type === "Identifier")
+	if (
+		parent.type === "Property" &&
+		parent.kind === "init" &&
+		!parent.method &&
+		!parent.computed &&
+		parent.key.type === "Identifier"
+	) {
 		return parent.key.name;
+	}
 	if (parent.type === "ExportDefaultDeclaration") return "default";
-	if (parent.type === "CallExpression" && parent.callee !== node && parentPath) {
-		return bindingName(parentPath);
+	if (parent.type === "CallExpression" && parent.callee !== node) {
+		return bindingName(parent, ancestors.slice(0, -1));
 	}
 	return null;
 }
 
-function ownName(path: NodePath<types.Function>) {
-	const { node, parent } = path;
+function calleeName(node: Node) {
+	if (node.type === "Identifier") return node.name;
+	if (
+		node.type === "MemberExpression" &&
+		!node.computed &&
+		node.object.type === "Identifier" &&
+		node.object.name === "React" &&
+		node.property.type === "Identifier"
+	) {
+		return node.property.name;
+	}
+	return null;
+}
+
+function ownName(node: FunctionNode, ancestors: Node[]) {
 	if (node.type === "FunctionDeclaration" && node.id) return node.id.name;
-	const binding = bindingName(path);
+	const binding = bindingName(node, ancestors);
 	if (binding) return binding;
-	if ("id" in node && node.id) return node.id.name;
-	if (parent.type === "CallExpression" && parent.callee.type === "Identifier") {
+	if (node.id) return node.id.name;
+	const parent = ancestors.at(-1);
+	if (parent?.type === "CallExpression" && parent.callee.type === "Identifier") {
 		return `${parent.callee.name}(…)`;
 	}
 	return null;
 }
 
-function functionName(path: NodePath<types.Function>) {
-	const names = [ownName(path) ?? "<anonymous>"];
-	for (let owner = path.getFunctionParent(); owner; owner = owner.getFunctionParent()) {
-		const name = ownName(owner);
-		if (name) names.unshift(name);
+function isHookCallee(node: Node) {
+	if (node.type === "Identifier") return HOOK_NAME.test(node.name);
+	return (
+		node.type === "MemberExpression" &&
+		!node.computed &&
+		node.object.type === "Identifier" &&
+		/^[A-Z]/.test(node.object.name) &&
+		node.property.type === "Identifier" &&
+		HOOK_NAME.test(node.property.name)
+	);
+}
+
+function callsHooksOrCreatesJsx(node: Node): boolean {
+	if (node.type === "JSXElement" || node.type === "JSXFragment") return true;
+	if (node.type === "CallExpression" && isHookCallee(node.callee)) return true;
+	return children(node).some(callsHooksOrCreatesJsx);
+}
+
+function unitName(node: FunctionNode, parent: Node | undefined) {
+	if (node.type === "FunctionDeclaration") return node.id?.name ?? "";
+	return parent?.type === "VariableDeclarator" && parent.id.type === "Identifier"
+		? parent.id.name
+		: "";
+}
+
+function isCompilerUnit(node: FunctionNode, ancestors: Node[]) {
+	const parent = ancestors.at(-1);
+	const unitShaped =
+		parent?.type === "CallExpression" && parent.callee !== node
+			? UNIT_WRAPPERS.has(calleeName(parent.callee) ?? "")
+			: UNIT_NAME.test(unitName(node, parent));
+	return unitShaped && callsHooksOrCreatesJsx(node);
+}
+
+function collectUnits(program: Node) {
+	const units: Unit[] = [];
+	function visit(node: Node, ancestors: Node[], owners: string[], inUnit: boolean) {
+		let nextOwners = owners;
+		let nextInUnit = inUnit;
+		if (isFunction(node)) {
+			const own = ownName(node, ancestors);
+			if (!inUnit && isCompilerUnit(node, ancestors)) {
+				units.push({
+					start: node.start,
+					end: node.end,
+					name: [...owners, own ?? "<anonymous>"].join("."),
+				});
+				nextInUnit = true;
+			}
+			if (own) nextOwners = [...owners, own];
+		}
+		const path = [...ancestors, node];
+		for (const child of children(node)) visit(child, path, nextOwners, nextInUnit);
 	}
-	return names.join(".");
+	visit(program, [], [], false);
+	return units;
 }
 
-function collectFunctionNames(ast: types.File) {
-	const names = new Map<string, string>();
-	traverse(ast, {
-		Function(path) {
-			names.set(locKey(path.node.loc), functionName(path));
-		},
-	});
-	return names;
-}
-
-function assertDistinctUnits(file: string, names: Map<string, string>, events: LoggerEvent[]) {
-	const units = new Map<string, string>();
-	for (const event of events) {
-		const loc = "fnLoc" in event ? locKey(event.fnLoc) : "";
-		const name = names.get(loc);
-		if (!name) continue;
-		if ((units.get(name) ?? loc) !== loc) {
+function assertDistinctUnits(file: string, units: Unit[]) {
+	const starts = new Map<string, number>();
+	for (const unit of units) {
+		if ((starts.get(unit.name) ?? unit.start) !== unit.start) {
 			throw new Error(
-				`compiler-census: ${file} has two compiler units named ${name}; rename one so the baseline can tell them apart`,
+				`compiler-census: ${file} has two compiler units named ${unit.name}; rename one so the baseline can tell them apart`,
 			);
 		}
-		units.set(name, loc);
+		starts.set(unit.name, unit.start);
 	}
 }
 
-function toBailout(file: string, names: Map<string, string>, event: LoggerEvent): Bailout | null {
-	if (
-		event.kind !== "CompileError" &&
-		event.kind !== "CompileSkip" &&
-		event.kind !== "PipelineError"
-	) {
-		return null;
-	}
-	const fnLine = event.fnLoc?.start.line ?? null;
-	const fnName = names.get(locKey(event.fnLoc)) ?? null;
-	if (event.kind === "CompileError") {
-		const loc = event.detail.primaryLocation();
-		return {
-			file,
-			line: (typeof loc === "object" && loc?.start.line) || fnLine || 0,
-			fnLine,
-			fnName,
-			kind: event.kind,
-			reason: event.detail.reason,
-			description: event.detail.description ?? null,
-			category: event.detail.category,
-		};
-	}
-	if (event.kind === "CompileSkip") {
-		return {
-			file,
-			line: event.loc?.start.line ?? fnLine ?? 0,
-			fnLine,
-			fnName,
-			kind: event.kind,
-			reason: event.reason,
-			description: null,
-			category: "Skip",
-		};
-	}
+function toBailout(file: string, code: string, units: Unit[], error: OxcError): Bailout {
+	const lineAt = (offset: number) => code.slice(0, offset).split("\n").length;
+	const label = error.labels[0];
+	const offset = label ? Buffer.from(code).subarray(0, label.start).toString("utf8").length : null;
+	const unit = offset === null ? undefined : units.find((u) => u.start <= offset && offset < u.end);
+	const fnLine = unit ? lineAt(unit.start) : null;
 	return {
 		file,
-		line: fnLine ?? 0,
+		line: offset === null ? (fnLine ?? 0) : lineAt(offset),
 		fnLine,
-		fnName,
-		kind: event.kind,
-		reason: event.data,
-		description: null,
-		category: "Pipeline",
+		fnName: unit?.name ?? null,
+		reason: error.message,
+		description: error.helpMessage,
+		category: error.codeframe?.match(/react-compiler\((\w+)\)/)?.[1] ?? error.severity,
 	};
 }
 
 export function censusFile(absPath: string, code: string): FileResult {
 	const file = relative(WEB_ROOT, absPath);
-	if (!PRESET_FILTER.test(code)) return { compiled: 0, bailouts: [] };
-	const ast = parseSync(code, {
-		babelrc: false,
-		configFile: false,
-		filename: absPath,
-		parserOpts: { plugins: absPath.endsWith("x") ? ["jsx", "typescript"] : ["typescript"] },
+	if (!CODE_FILTER.test(code)) return { memoized: 0, bailouts: [] };
+	const parsed = parseSync(absPath, code, { preserveParens: false });
+	if (parsed.errors.length > 0) throw new Error(`compiler-census: could not parse ${file}`);
+	const units = collectUnits(parsed.program);
+	assertDistinctUnits(file, units);
+	const result = transformSync(absPath, code, {
+		jsx: "preserve",
+		reactCompiler: { ...COMPILER_OPTIONS, reportDiagnostics: true },
 	});
-	if (!ast) throw new Error(`compiler-census: could not parse ${file}`);
-	const names = collectFunctionNames(ast);
-	const events: LoggerEvent[] = [];
-	const options: PluginOptions = {
-		...COMPILER_OPTIONS,
-		logger: { logEvent: (_filename, event) => events.push(event) },
-	};
-	transformFromAstSync(ast, code, {
-		babelrc: false,
-		configFile: false,
-		filename: absPath,
-		code: false,
-		cloneInputAst: false,
-		plugins: [["babel-plugin-react-compiler", options]],
-	});
-	assertDistinctUnits(file, names, events);
+	if (result.fatal) {
+		throw new Error(
+			`compiler-census: could not compile ${file}: ${result.errors.map((e) => e.message).join("; ")}`,
+		);
+	}
 	return {
-		compiled: events.filter((e) => e.kind === "CompileSuccess").length,
-		bailouts: events.flatMap((e) => toBailout(file, names, e) ?? []),
+		memoized: result.code.match(MEMO_CACHE)?.length ?? 0,
+		bailouts: result.errors.map((error) => toBailout(file, code, units, error)),
 	};
 }
 
@@ -186,15 +234,14 @@ function bailedFunctionKey(b: Bailout) {
 }
 
 function runCensus() {
-	const { target, compilationMode, panicThreshold } = parsePluginOptions(COMPILER_OPTIONS);
 	const files = designSourceFiles().filter((file) => /\.tsx?$/.test(file) && !EXCLUDED.test(file));
 	const results = files.map((file) => censusFile(file, readFileSync(file, "utf8")));
 	const bailouts = results.flatMap((r) => r.bailouts);
 	const bailedFunctions = new Set(bailouts.map(bailedFunctionKey)).size;
 	return {
-		options: { target, compilationMode, panicThreshold },
+		options: COMPILER_OPTIONS,
 		filesScanned: files.length,
-		compiled: results.reduce((sum, r) => sum + r.compiled, 0),
+		memoized: results.reduce((sum, r) => sum + r.memoized, 0),
 		bailedFunctions,
 		bailoutCount: bailouts.length,
 		byCategory: Object.fromEntries(countBy(bailouts, (b) => b.category)),
@@ -210,7 +257,7 @@ function printHuman(census: ReturnType<typeof runCensus>) {
 	}
 	console.log("");
 	console.log(
-		`compiler-census: ${census.bailoutCount} bail-out reasons in ${census.bailedFunctions} functions across ${Object.keys(census.byFile).length} files; ${census.compiled} functions compiled; ${census.filesScanned} files scanned`,
+		`compiler-census: ${census.bailoutCount} bail-out reasons in ${census.bailedFunctions} functions across ${Object.keys(census.byFile).length} files; ${census.memoized} functions memoized; ${census.filesScanned} files scanned`,
 	);
 	for (const [category, count] of Object.entries(census.byCategory)) {
 		console.log(`  ${category}: ${count}`);

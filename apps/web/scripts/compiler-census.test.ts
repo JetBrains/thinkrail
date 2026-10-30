@@ -39,6 +39,38 @@ describe("compiler census identities", () => {
 		expect(entries(["", unnamed])).toEqual(["scripts/fixture.tsx <anonymous>"]);
 	});
 
+	it("names a function expression after its variable, never its own id", () => {
+		expect(entries([`export const Upper = function lower() ${body(true)};`])).toEqual([
+			"scripts/fixture.tsx Upper",
+		]);
+		expect(
+			entries([`export const x = function Fake() { function Row() ${body(true)} return Row; };`]),
+		).toEqual(["scripts/fixture.tsx x.Row"]);
+	});
+
+	it("maps a diagnostic after multi-byte text to its function, line, and category", () => {
+		const [bailout, ...rest] = census([
+			'const label = "😀 émoji ü";',
+			`export function Calm() ${body(false)}`,
+			"export function useCounter() {",
+			"\tconst ref = useRef(0);",
+			"\tref.current = 1;",
+			"\treturn ref;",
+			"}",
+		]).bailouts;
+		expect(rest).toEqual([]);
+		expect(bailout).toMatchObject({ fnName: "useCounter", line: 6, category: "Refs" });
+	});
+
+	it("ignores same-named helpers that neither call hooks nor render JSX", () => {
+		expect(
+			entries([
+				"if (Math.random()) { const Label = () => 1; } else { const Label = () => 2; }",
+				`export const Row = ${memoRow(true)};`,
+			]),
+		).toEqual(["scripts/fixture.tsx Row"]);
+	});
+
 	it("refuses compiler units it cannot tell apart", () => {
 		expect(() => census([`export const rows = [${memoRow(true)}, ${memoRow(false)}];`])).toThrow(
 			"two compiler units named memo(…)",

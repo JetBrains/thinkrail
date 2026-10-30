@@ -92,10 +92,9 @@ posthog-cli (the root `posthog-cli` script exposes it to desktop's `preBuild`): 
 pinned SHA-256s before running it ([[module-ci-release]]). The injected chunk-id registry is what
 `transport` reads for UI error reports.
 
-**The React Compiler is on for every `apps/web` bundle** (`vite.config.ts`: `@rolldown/plugin-babel` running
-`@vitejs/plugin-react`'s `reactCompilerPreset()` over dev and build). Three devDependencies live in this
-manifest only, and the `@babel/core` 7.x pin is load-bearing: `babel-plugin-react-compiler` 1.0.0 mis-lowers
-destructuring defaults under Babel 8 and silently drops those functions from compilation. Bailouts never
+**The React Compiler is on for every `apps/web` bundle** (`vite.config.ts`: `@vitejs/plugin-react`'s
+`react({ compiler: true })`, which runs the Rust compiler in `oxc-transform-react` over dev and build).
+`oxc-transform-react` lives in this manifest only and stays inside plugin-react's peer range. Bailouts never
 fail the build — a function the compiler cannot prove safe is skipped whole, not miscompiled — so check it
 ran: a production build's `dist/assets/*.js` carries `react.memo_cache_sentinel` in the hundreds (React's own
 runtime accounts for three), and CI's `bun run check:compiler` fails when a function's compiled state drifts
