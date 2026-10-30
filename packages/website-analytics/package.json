@@ -7,11 +7,12 @@
 		".": "./src/index.ts"
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsrs --noEmit",
 		"test": "bun test"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
+		"tsrs": "catalog:",
 		"typescript": "catalog:"
 	}
 }
