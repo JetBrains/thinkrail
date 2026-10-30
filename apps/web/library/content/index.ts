@@ -1,5 +1,7 @@
 import { button } from "./components/button";
+import { headerIconButton } from "./components/header-icon-button";
 import { iconButton } from "./components/icon-button";
+import { tabStrip } from "./components/tab-strip";
 import type { ComponentDoc, DocArea, DocPage } from "./types";
 
 export type AreaId = DocArea | "components";
@@ -145,4 +147,4 @@ references: [web-color, web-spacing, web-typography]`,
 	},
 ];
 
-export const components: readonly ComponentDoc[] = [button, iconButton];
+export const components: readonly ComponentDoc[] = [button, iconButton, headerIconButton, tabStrip];

@@ -851,6 +851,1306 @@ export default function Tone() {
 | `apps/web/src/shell/layout/workbenchTabs.tsx` | Tab close and the open-tabs search trigger. |
 | `apps/web/src/chat/CopyButton.tsx` | Message copy action at size S, revealed on hover. |
 
+## HeaderIconButton
+
+The icon action of a panel header strip — the diff pane, the Changes review toolbar and walk bar, a review section header and the Files switch row. It is a thin wrapper that renders the shared IconButton fixed at `ghost` and `m`, and turns an optional `active` into the toggle contract (`selected`, `aria-pressed` and `data-active` together) and a required `testid` into `data-testid`. The call site provides the icon, the label, the handler and the strip around it; everything else (`tooltip`, `loading`, `tone`, `className`, other sizes and variants) is not exposed.
+
+```tsx
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+```
+
+### When to use
+
+- A one-click icon action in a pane or section header strip: Revert file, Copy file contents, Open as its own tab, Collapse all folders.
+- An on/off header toggle with a familiar icon, such as Hide whitespace changes, with `active` driving `aria-pressed`.
+- Previous / next stepping in a header bar, `disabled` at either end of the list.
+- A pair of bulk actions such as Collapse all files / Expand all files beside the view toggles.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| IconButton | The action needs anything HeaderIconButton does not pass: a `tooltip` that differs from the label, `loading` or `spinIcon`, `tone`, another size or variant, a `className`, or a Radix `asChild` trigger (the section menu beside these buttons is an IconButton). |
+| ToggleSegment | The header chooses one of a few named views (Split \| Inline, Stacked \| One file) rather than turning one option on or off. |
+| Button | The header action needs visible words to be understood, such as Mark as viewed in the review walk bar. |
+| AuxiliaryPaneHeader | The whole header row of an auxiliary pane, with its title and close action, rather than one action inside a strip. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Button | The shared IconButton at `variant="ghost"` and `size="m"`: a native `<button type="button">` square with `aria-label` set to `label`, `data-testid` from `testid`, and — only when `active` is passed — `aria-pressed` and `data-active`. |
+| Icon | `icon`, sized by the button and `aria-hidden`. A tinted glyph (a success check) comes from `withIconClass`. |
+| Selected fill | While `active` is true, the ghost selected role (`control-bg-selected`) through IconButton's `selected`. |
+| Focus ring | IconButton's ghost icon-only ring, drawn inside the square so a clipped header strip keeps it. |
+| Tooltip | Always the `label`, through the shared IconTooltip; it still opens while the button is disabled. |
+| Strip (call site) | The component renders no strip. Call sites place it in a header row with a small flex gap, usually a `role="toolbar"` with an `aria-label`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `testid` | `string` | — | Required. Rendered as `data-testid`; e2e tests select header actions by it (`diff-toggle-whitespace`, `changes-review-next`, `files-collapse-all`). |
+| `label` | `string` | — | Required. The accessible name (`aria-label`) and the tooltip text. Use a locale key. There is no separate tooltip, so a shortcut hint is written into the label (`Previous file (Alt+↑)`). |
+| `active` | `boolean` | — | Makes the button a toggle. `true` paints the selected fill (`selected`) and sets `aria-pressed="true"` and `data-active="true"`; `false` sets both to `"false"`. Omitted, neither attribute is rendered and the button is a plain action. |
+| `disabled` | `boolean` | `false` | Native `disabled`: the disabled roles, out of the Tab order, activation blocked. The tooltip still opens on hover. |
+| `onClick` | `() => void` | — | Required. Activation handler (pointer, Enter, Space). It receives no event. |
+| `icon` | `ButtonIcon` | — | Required. The icon component (pass `RiParagraph`, not `<RiParagraph />`). Swap it for transient feedback, for example to a `withIconClass` success check after a copy. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Default | Rest, no `active`. | Ghost: only the muted icon, no surface. |
+| Hover | Pointer over the button. | Ghost hover fill; the tooltip with the label opens after the shared delay. |
+| Pressed | Pointer down or Space held. | Identical to hover. |
+| Keyboard focus | Tab to the button. | Inset focus ring, the ghost hover fill and the tooltip. |
+| Off | `active={false}`. | Same as default; `aria-pressed="false"` and `data-active="false"`. |
+| On | `active={true}`. | Ghost selected fill (`control-bg-selected`), distinct from hover; `aria-pressed="true"` and `data-active="true"`. |
+| Disabled | `disabled`. | The disabled icon colour in place, not hidden, and no hover feedback; the tooltip still opens on hover. With `active`, the selected fill stays under the disabled icon. |
+| Loading | Not exposed. | No distinct treatment; use IconButton with `loading` for an in-flight action. |
+
+### Accessibility
+
+- Renders IconButton, so it is a native `<button type="button">`; role, focus and activation come from the platform.
+- `label` is the accessible name and the tooltip; the icon is `aria-hidden`.
+- `active` maps to `aria-pressed`, so a toggle is announced as pressed or not pressed. Pass it as a boolean on every render of a toggle — omitting it when off removes `aria-pressed` and the button stops being a toggle.
+- The tooltip cannot differ from the name, so any shortcut hint is part of the accessible name (`Next file (Alt+↓)`). The shortcut itself is handled by the pane, not by the button.
+- Call sites group the buttons in a `role="toolbar"` with an `aria-label` (`Diff view mode`, `Changes review`, `Files view`) but add no roving focus: every button stays its own Tab stop.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from each button; the focus ring and tooltip appear. Disabled buttons are skipped. |
+| `Enter / Space` | Activates; on a toggle the call site flips active. |
+| `Escape` | Closes the tooltip. |
+
+### Usage rules
+
+- **HIB-1** — Use HeaderIconButton for icon actions and on/off toggles in panel header strips; anywhere else, or when you need `tooltip`, `loading`, `tone`, another size or a menu trigger, use IconButton directly.
+- **HIB-2** — For a toggle, always pass `active` as a boolean (`active={ignoreWhitespace}`). Leave it out only for one-shot actions; a missing `active` drops `aria-pressed` and `data-active`.
+- **HIB-3** — A toggle keeps one label that names the option (`Hide whitespace changes`); `active` carries the on/off state.
+- **HIB-4** — Give every instance a unique `testid` named `<surface>-<action>` (`diff-copy`, `changes-review-prev`) — tests select header actions by it.
+- **HIB-5** — Hide a header action only when its capability is missing (no hunk actions, no whitespace support); when it exists but cannot run right now, keep it in place with `disabled`.
+- **HIB-6** — The component takes no `className`: place it with the strip's flex gap or a placement wrapper (`ml-auto flex shrink-0`), never by restyling it.
+- **HIB-7** — Show transient success by swapping `icon` for a module-scope `withIconClass(RiCheckLine, "text-feedback-success")` for a moment; the label stays the same.
+
+### Examples
+
+#### Diff pane header
+
+Revert, the whitespace toggle and copy in one toolbar, as in the diff pane.
+
+```tsx
+import { RiArrowGoBackLine, RiFileCopyLine, RiParagraph } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+export default function DiffHeader() {
+	const t = useT();
+	const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
+	return (
+		<div
+			role="toolbar"
+			aria-label={t("panels.diffPane.viewMode")}
+			className="flex items-center gap-4"
+		>
+			<HeaderIconButton
+				testid="diff-revert-file"
+				label={t("panels.diffPane.revertFile")}
+				onClick={() => {}}
+				icon={RiArrowGoBackLine}
+			/>
+			<HeaderIconButton
+				testid="diff-toggle-whitespace"
+				label={t("panels.diffPane.hideWhitespace")}
+				active={ignoreWhitespace}
+				onClick={() => setIgnoreWhitespace(!ignoreWhitespace)}
+				icon={RiParagraph}
+			/>
+			<HeaderIconButton
+				testid="diff-copy"
+				label={t("panels.diffPane.copyContents")}
+				onClick={() => {}}
+				icon={RiFileCopyLine}
+			/>
+		</div>
+	);
+}
+```
+
+#### Toggle
+
+`active` drives the selected fill, `aria-pressed` and `data-active`.
+
+```tsx
+import { RiParagraph } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+export default function Toggle() {
+	const t = useT();
+	const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
+	return (
+		<HeaderIconButton
+			testid="changes-review-toggle-whitespace"
+			label={t("changes.review.hideWhitespace")}
+			active={ignoreWhitespace}
+			onClick={() => setIgnoreWhitespace(!ignoreWhitespace)}
+			icon={RiParagraph}
+		/>
+	);
+}
+```
+
+#### Copy feedback
+
+The icon swaps to a success check for a moment after copying.
+
+```tsx
+import { RiCheckLine, RiFileCopyLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { withIconClass } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+const CopiedCheck = withIconClass(RiCheckLine, "text-feedback-success");
+
+export default function CopyFeedback() {
+	const t = useT();
+	const [copied, setCopied] = useState(false);
+	const copy = () => {
+		setCopied(true);
+		setTimeout(() => setCopied(false), 1500);
+	};
+	return (
+		<HeaderIconButton
+			testid="diff-copy"
+			label={t("panels.diffPane.copyContents")}
+			onClick={copy}
+			icon={copied ? CopiedCheck : RiFileCopyLine}
+		/>
+	);
+}
+```
+
+#### Previous and next
+
+The review walk bar: each end disables its button, and the tooltip still opens.
+
+```tsx
+import { RiArrowLeftSLine, RiArrowRightSLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+const files = ["src/app.ts", "src/store.ts", "README.md"];
+
+export default function FileWalk() {
+	const t = useT();
+	const [index, setIndex] = useState(0);
+	return (
+		<div className="flex items-center gap-4">
+			<HeaderIconButton
+				testid="changes-review-prev"
+				label={t("changes.review.previousFile")}
+				disabled={index === 0}
+				onClick={() => setIndex(index - 1)}
+				icon={RiArrowLeftSLine}
+			/>
+			<span className="tr-text-metadata tabular-nums text-text-muted">
+				{index + 1} / {files.length}
+			</span>
+			<HeaderIconButton
+				testid="changes-review-next"
+				label={t("changes.review.nextFile")}
+				disabled={index >= files.length - 1}
+				onClick={() => setIndex(index + 1)}
+				icon={RiArrowRightSLine}
+			/>
+		</div>
+	);
+}
+```
+
+#### Collapse and expand all
+
+A pair of bulk actions in the stacked review toolbar.
+
+```tsx
+import { RiArrowDownSLine, RiArrowUpSLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+export default function CollapseExpand() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-4">
+			<HeaderIconButton
+				testid="changes-review-collapse-all"
+				label={t("changes.review.collapseAll")}
+				onClick={() => {}}
+				icon={RiArrowUpSLine}
+			/>
+			<HeaderIconButton
+				testid="changes-review-expand-all"
+				label={t("changes.review.expandAll")}
+				onClick={() => {}}
+				icon={RiArrowDownSLine}
+			/>
+		</div>
+	);
+}
+```
+
+#### Placement
+
+No `className`: a placement wrapper pushes Collapse all folders to the end of the Files switch row.
+
+```tsx
+import { RiCollapseVerticalLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+export default function Placement() {
+	const t = useT();
+	const [mode, setMode] = useState<"all" | "changed">("all");
+	return (
+		<div
+			role="toolbar"
+			aria-label={t("panels.files.toolbar")}
+			className="flex w-full max-w-[20rem] items-center gap-4"
+		>
+			<ToggleSegment
+				testid="files-mode-all"
+				label={t("panels.files.all")}
+				active={mode === "all"}
+				onClick={() => setMode("all")}
+			/>
+			<ToggleSegment
+				testid="files-mode-changed"
+				label={t("panels.files.changed")}
+				active={mode === "changed"}
+				onClick={() => setMode("changed")}
+			/>
+			<div className="ml-auto flex shrink-0">
+				<HeaderIconButton
+					testid="files-collapse-all"
+					label={t("panels.files.collapseAll")}
+					onClick={() => {}}
+					icon={RiCollapseVerticalLine}
+				/>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Beside a menu trigger
+
+A review section header: two HeaderIconButtons and an IconButton as the menu trigger, because HeaderIconButton cannot be an `asChild` trigger.
+
+```tsx
+import { RiArrowGoBackLine, RiExternalLinkLine, RiMoreLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+const path = "src/app.ts";
+
+export default function WithMenu() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-4">
+			<HeaderIconButton
+				testid="changes-section-revert"
+				label={t("changes.section.revertFile")}
+				onClick={() => {}}
+				icon={RiArrowGoBackLine}
+			/>
+			<HeaderIconButton
+				testid="changes-section-open-tab"
+				label={t("changes.section.openOwnTab")}
+				onClick={() => {}}
+				icon={RiExternalLinkLine}
+			/>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<IconButton
+						icon={RiMoreLine}
+						label={t("changes.section.actions", { path })}
+						data-testid="changes-section-menu"
+						wrapTrigger
+					/>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					<DropdownMenuItem onSelect={() => {}}>
+						<RiExternalLinkLine />
+						{t("changes.section.openAsTab")}
+					</DropdownMenuItem>
+					<DropdownMenuItem onSelect={() => {}}>
+						<RiArrowGoBackLine />
+						{t("changes.section.revertFile")}
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/DiffPane.tsx` | Revert file, the Hide whitespace toggle and Copy file contents with a success-check swap. |
+| `apps/web/src/panels/ChangesReviewPane.tsx` | Collapse / Expand all, the guide and whitespace toggles, and Previous / Next file with `disabled` at the ends. |
+| `apps/web/src/panels/ChangesFileSection.tsx` | Revert file and Open as its own tab beside the IconButton menu trigger. |
+| `apps/web/src/panels/FilesPanel.tsx` | Collapse all folders at the end of the All \| Changed row. |
+
+## TabStrip
+
+The workbench's resource tab strip: one fixed-height row of `WorkbenchTab`s for a center group or an auxiliary terminal-session group, implementing WAI-ARIA tabs with roving focus. It owns the tab look, horizontal overflow (hidden scrollbar, edge fades, a searchable list), keyboard reorder, the per-tab context menu with every arrangement command, inline chat rename, drag sources and drop targets. The call site provides the layout `document` and group `location`, the selection and preview ids, and callbacks that commit pure layout results; trailing actions go in `trailing`.
+
+```tsx
+import { TabStrip, WorkbenchTab } from "@/shell/layout/workbenchTabs";
+```
+
+### When to use
+
+- The tab row of a center group: files, diffs, Changes, chats, plan documents and center terminals.
+- The session tabs of an auxiliary pane whose selected tab is a terminal (left, right or bottom).
+- Anywhere a group of layout resources must be selectable, closable, reorderable and movable between panes — it is the one renderer of the layout grammar's tabs.
+- `WorkbenchTab` alone, in `rail` mode, for a placed singleton tool on an edge rail; the rail reuses the same menu and drag controller.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ToggleSegment | Switching between a few named views of one surface; it holds no layout resources. |
+| SegmentedControl | Choosing one value from a short fixed list in a form or settings row. |
+| AuxiliaryPaneHeader | An auxiliary pane whose selected tab is a singleton tool or nothing: a plain title, not a strip. |
+| DropdownMenu | Picking one of many items that do not need to stay visible side by side. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Strip | A `h-panel-header-row` row with a bottom border on `container-workspace-bg`; carries `data-area`, `data-group-id` and the group drop cues. |
+| Tab list | `role="tablist"` named after the group (*center group tabs*, *bottom group tabs*…). Scrolls horizontally with the native scrollbar hidden; a vertical wheel scrolls it sideways. |
+| Tab | `WorkbenchTab`: a bordered cell between `min-w-96` and `max-w-192` holding the tab button (kind icon, truncated name, adornment) and its close button. |
+| Kind icon | From `tabIcon`: the kind's Line icon at rest and its Fill icon when active. |
+| Active underline | A 2px `primary` bar along the active tab's bottom edge. |
+| Close button | IconButton `ghost` `s`, *Close {name}*, revealed on hover. Not rendered on tool tabs. |
+| Insertion markers | Two invisible half-width zones per tab; the one under a legal drag shows a 2px `primary` edge. |
+| Edge fades | Pointer-transparent fades from `container-workspace-bg`, shown only on a clipped side. |
+| Trailing | The call site's `trailing` actions, after the tab list. |
+| Overflow search | IconButton *Search open tabs*, only while the list is clipped; opens a Popover with a Command list of the group's tabs. |
+| Tab menu | ContextMenu on every tab: focus, rename, focus groups, keep preview, move, split, move to pane, new group, show tool, hide side, remove group and close. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `document` | `WorkspaceLayoutDocument` | — | The projected layout. The strip reads it to decide which menu commands and drop targets are legal and to build the pure results it hands to `onApply`. |
+| `location` | `LayoutGroupLocation` | — | `{ area, groupId }` of this group. `area` names the tab list, sets the test id and decides which menu items exist (center-only splits and keep preview; auxiliary-only new group, show tool and hide). |
+| `tabs` | `LayoutTab[]` | — | The group's tabs in order — a center group's `tabs`, or only the terminals of an auxiliary group. |
+| `selectedId` | `string \| undefined` | — | The selected tab: `aria-selected`, the roving `tabIndex={0}`, the active fill and underline, scrolled into view when it changes. |
+| `previewId` | `string \| undefined` | — | The group's preview slot (center only): italic name, *Preview — double-click to keep* tooltip, and *Keep preview* enabled in its menu. |
+| `onSelect` | `(tabId: string, keep?: boolean) => void` | — | Click, keyboard navigation and the overflow list. `keep` is `true` when a preview tab is promoted: double-click, a single click on the active preview after the settle window, or *Keep preview*. |
+| `onClose` | `(tab: LayoutTab) => void` | — | Close button, Delete and the menu's *Close*. The workbench routes it through its close request. |
+| `readAttention` | `() => LayoutAttention` | — | Reads the current attention overlay. Used to drop a deferred preview keep when any navigation happened during the settle window. |
+| `selectionEpochRef` | `MutableRefObject<number>` | — | Shared gesture counter. The strip bumps it on every select, close and apply so delayed focus and preview-keep work from an older gesture is skipped. |
+| `maxSideGroups` | `number` | — | Local left/right group limit, for *New … group* availability. |
+| `maxBottomGroups` | `number` | — | Local bottom group limit, for *New … group* availability. |
+| `draggingTab` | `LayoutTab \| null` | — | The tab being dragged (from the workbench's `DndContext`). While it can join this group, the strip shows its drop hint, enables the insertion markers and adds an *Insert at end* zone. |
+| `onApply` | `(result: LayoutMutationResult) => void` | — | Receives one complete pure result (reorder, move, split, new group, remove group) from the tab menu and Alt+Shift+Arrow. Commit `result.document`; never splice tabs yourself. |
+| `onFocusAdjacentGroup` | `(delta: -1 \| 1, fromGroupId?: string) => void` | — | *Focus previous group* / *Focus next group* in the tab menu. |
+| `onHideSide` | `(region: LayoutAuxiliaryRegion) => void` | — | *Hide left side* / *Hide right side* / *Hide bottom* in an auxiliary tab's menu. |
+| `onRevealTool` | `(tool: LayoutToolId) => void` | — | *Show {tool}* in an auxiliary tab's menu, listed for every tool placed nowhere in `document`. |
+| `onRenameChat` | `((sessionId: string, titleInput: string, currentTitle: string) => void) \| undefined` | — | Required key. When set, chat tabs get *Rename chat*, which swaps the label for an inline editor and calls this on commit. Pass `undefined` to omit the item. |
+| `chatFirstPrompts` | `Readonly<Record<string, string>>` | — | First prompt by session id. An unnamed chat (or its plan document) is labelled by it, and the tab's native tooltip shows the full prompt. Presentation only; `tab.name` stays `""`. |
+| `canFocusAdjacentGroup` | `boolean` | — | Enables the two *Focus … group* menu items; when `false` they stay listed, disabled, with their unavailable wording. |
+| `renderTabAdornment` | `(tab: LayoutTab) => ReactNode` | — | A small mark after the tab name (the shell's Review flag, the review draft count on the Review tool). Return `null` for none. Keep the identity stable. |
+| `splitGeometry` | `{ horizontal: boolean; vertical: boolean }` | — | Whether the group has room for a left/right or up/down split. A missing direction keeps its *Split …* item disabled with the size it needs. |
+| `trailing` | `ReactNode` | — | Actions after the tab list — IconButton `ghost` `m` with `shrink-0 self-center`: New chat, Remove group, the pane's add menu and Hide. |
+
+WorkbenchTab props (besides the strip props it shares):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `tab` | `LayoutTab` | — | The tab to render. |
+| `index` | `number` | — | Its index in the group, the base for insertion and reorder targets. |
+| `reorderIndexes` | `{ previous: number \| undefined; next: number \| undefined }` | — | Targets for *Move left/right* (*up/down* on a vertical rail); `undefined` disables that item. Defaults to `index ± 1` within the group. |
+| `rail` | `AuxiliaryRailControlProps & { entryKey; vertical; beforeIndex; afterIndex; onActivate }` | — | Rail mode: an icon-only pressed button in the rail-entry frame with an IconTooltip, roving `tabIndex` from the rail, no close button and *Remove tool from group* instead of *Close*. |
+| `active` | `boolean` | — | Selected (strip) or pressed (rail). |
+| `preview` | `boolean` | — | This tab holds the group's preview slot. |
+| `register` | `(node: HTMLElement \| null) => void` | — | Ref callback for the focusable control, so the strip can focus and reveal it. |
+| `onClose` | `() => void` | — | Closes this tab. |
+| `panelId` | `string` | — | `aria-controls` target: the group's tab panel (`groupPanelId(location)`). |
+| `onKeyDown` | `(event: KeyboardEvent<HTMLButtonElement>) => void` | — | The tab button's key handler; the strip passes roving focus, reorder and Delete here. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Rest | A tab that is not `selectedId`. | Muted label and the kind's Line icon; a right border separates tabs. |
+| Hover | Pointer over a tab. | The close button appears; the tab itself has no hover fill. |
+| Active | `selectedId`. | `control-bg-selected` fill, default text, Fill icon and the `primary` underline. |
+| Keyboard focus | Tab into the list, or arrow between tabs. | A 2px inset `primary` ring around the whole tab. |
+| Preview | `previewId`. | Italic name and the *Preview — double-click to keep* tooltip. |
+| Renaming | *Rename chat* in a chat tab's menu (needs `onRenameChat`). | The name becomes an inline text field with the chat icon; the close button stays. |
+| Dragging | Drag a tab more than 5px in a `DndContext`. | The source tab drops to 40% opacity. |
+| Drop hint | `draggingTab` can join this group. | A 1px inset `primary-soft` ring around the strip. |
+| Drop active | That drag is over the strip. | `primary-subtle` fill and a 2px inset `primary` ring; the insertion marker under the pointer shows a 2px `primary` edge. |
+| Overflowing | More tabs than fit. | Edge fades on the clipped sides and the *Search open tabs* button. |
+| Empty | `tabs={[]}`. | An empty strip with its trailing actions; no distinct treatment. |
+| Disabled | — | No distinct treatment: tabs are never disabled. Unavailable menu commands stay listed, disabled, with a reason. |
+
+### Accessibility
+
+- The list is `role="tablist"` named by its area; each tab button is `role="tab"` with `aria-selected` and `aria-controls` pointing at the group's tab panel.
+- Roving focus: only the selected tab has `tabIndex={0}`; arrows move selection and focus together.
+- Each tab advertises its keys with `aria-keyshortcuts`.
+- The close button is named *Close {name}* and is `tabIndex={-1}`; keyboard users close with Delete.
+- The tab button's native `title` carries the preview hint or the full first prompt of an unnamed chat.
+- The rename field is named *Chat name*; Enter and Escape return focus to the tab.
+- In rail mode the control is a pressed button (`aria-pressed`) named by the tool, with its tooltip opening away from the edge.
+- Every drag arrangement has a menu or keyboard equivalent; unavailable commands stay in the menu, disabled, with *{label} — {reason}*.
+
+| Keys | Action |
+| --- | --- |
+| `Tab` | Enters the list on the selected tab, then moves on to the trailing actions. |
+| `ArrowLeft / ArrowRight` | Selects and focuses the previous or next tab, wrapping. |
+| `Home / End` | Selects and focuses the first or last tab. |
+| `Enter / Space` | Activates the focused tab; on the active preview tab, keeps it. |
+| `Delete` | Closes the focused tab. |
+| `Alt+Shift+ArrowLeft / ArrowRight` | Moves the tab one place left or right. |
+| `Shift+F10 / Menu` | Opens the tab menu (the browser's context-menu event on the focused tab). |
+| `Control+F6 / Control+Shift+F6` | Next or previous group — handled by the Workbench root, not the strip. |
+| `Enter / Escape (renaming)` | Commits or cancels the new chat name. |
+
+### Usage rules
+
+- **TAB-1** — Use TabStrip only for groups of layout resources inside the workbench. To switch views of one surface use ToggleSegment or SegmentedControl; never restyle those into tabs or this into a segmented control.
+- **TAB-2** — Commit what `onApply` hands you (`result.document`) as one pure result; never splice `tabs` or reorder them at the call site.
+- **TAB-3** — Pass `tabs` and the layout `document`, not labels: names come from `layoutTabName` at render, and an unnamed chat is labelled through `chatFirstPrompts`, never by writing a name into the tab.
+- **TAB-4** — Trailing actions are IconButton `ghost` `m` with `shrink-0 self-center`, and a control renders only when it can act (Remove group only on an empty group, Hide on every expanded auxiliary pane).
+- **TAB-5** — Tool tabs have no close glyph; terminals and center resources do. Remove a tool through its menu or Delete, and hide the pane with AuxiliaryPaneHideButton.
+- **TAB-6** — Keep the injected callbacks and `renderTabAdornment` referentially stable and `chatFirstPrompts` shallow-stable; the strip and its tabs are memoized and must not re-render on unrelated attention changes.
+- **TAB-7** — An adornment is a small non-interactive mark after the name; return `null` when there is nothing to show. Never put a button or a second close control in it.
+
+### Examples
+
+#### Preview
+
+A center group with a file and a chat: click or arrow to select, hover to close.
+
+```tsx
+import { useRef, useState } from "react";
+import { closeLayoutTab, collectCenterGroups, type LayoutAttention } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "group",
+		id: "center",
+		tabs: [
+			{ kind: "file", id: "auth", name: "auth.ts", path: "src/auth.ts" },
+			{ kind: "chat", id: "chat", name: "Login", sessionId: "s1" },
+		],
+	},
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function Preview() {
+	const [document, setDocument] = useState(INITIAL);
+	const [selectedId, setSelectedId] = useState("auth");
+	const selectionEpochRef = useRef(0);
+	const tabs = collectCenterGroups(document.center)[0]?.tabs ?? [];
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={document}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={tabs}
+				selectedId={selectedId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={setSelectedId}
+				onClose={(tab) => setDocument((current) => closeLayoutTab(current, tab.id).document)}
+				onApply={(result) => setDocument(result.document)}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+			/>
+		</div>
+	);
+}
+```
+
+#### Center group
+
+Every center kind — chat, file, Changes, plan — with the New chat action in `trailing`. Right-click a tab for its menu.
+
+```tsx
+import { RiChatNewLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { closeLayoutTab, collectCenterGroups, type LayoutAttention } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "group",
+		id: "center",
+		tabs: [
+			{ kind: "chat", id: "chat", name: "Fix login redirect", sessionId: "s1" },
+			{ kind: "file", id: "auth", name: "auth.ts", path: "src/auth.ts" },
+			{ kind: "changes", id: "changes", name: "", scope: { kind: "uncommitted" } },
+			{
+				kind: "document",
+				id: "plan",
+				name: "Fix login redirect",
+				documentKind: "todo-plan",
+				sourceId: "s1",
+				docPath: "plan.md",
+			},
+		],
+	},
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function CenterGroup() {
+	const t = useT();
+	const [document, setDocument] = useState(INITIAL);
+	const [selectedId, setSelectedId] = useState("chat");
+	const selectionEpochRef = useRef(0);
+	const tabs = collectCenterGroups(document.center)[0]?.tabs ?? [];
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={document}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={tabs}
+				selectedId={selectedId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={setSelectedId}
+				onClose={(tab) => {
+					const next = closeLayoutTab(document, tab.id).document;
+					setDocument(next);
+					const rest = collectCenterGroups(next.center)[0]?.tabs ?? [];
+					if (tab.id === selectedId && rest[0]) setSelectedId(rest[0].id);
+				}}
+				onApply={(result) => setDocument(result.document)}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+				trailing={
+					<IconButton
+						variant="ghost"
+						size="m"
+						icon={RiChatNewLine}
+						label={t("workbench.center.newChat")}
+						onClick={() => {}}
+						className="shrink-0 self-center"
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Preview slot
+
+`previewId` shows the name in italics. Double-click it, or click it again once active, to keep it.
+
+```tsx
+import { useRef, useState } from "react";
+import { collectCenterGroups, type LayoutAttention } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const DOCUMENT: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "group",
+		id: "center",
+		tabs: [
+			{ kind: "file", id: "auth", name: "auth.ts", path: "src/auth.ts" },
+			{ kind: "file", id: "session", name: "session.ts", path: "src/session.ts" },
+		],
+		previewTabId: "session",
+	},
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function PreviewTab() {
+	const [selectedId, setSelectedId] = useState("session");
+	const [previewId, setPreviewId] = useState<string | undefined>("session");
+	const selectionEpochRef = useRef(0);
+	const tabs = collectCenterGroups(DOCUMENT.center)[0]?.tabs ?? [];
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={DOCUMENT}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={tabs}
+				selectedId={selectedId}
+				previewId={previewId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={(tabId, keep) => {
+					setSelectedId(tabId);
+					if (keep && tabId === previewId) setPreviewId(undefined);
+				}}
+				onClose={() => {}}
+				onApply={() => {}}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+			/>
+		</div>
+	);
+}
+```
+
+#### Overflow
+
+In a narrow group the list scrolls sideways with edge fades, and *Search open tabs* finds any tab.
+
+```tsx
+import { useRef, useState } from "react";
+import { closeLayoutTab, collectCenterGroups, type LayoutAttention } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const FILES = [
+	"auth.ts",
+	"session.ts",
+	"routes.tsx",
+	"login.tsx",
+	"api.ts",
+	"store.ts",
+	"theme.css",
+];
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "group",
+		id: "center",
+		tabs: FILES.map((name) => ({ kind: "file", id: name, name, path: `src/${name}` })),
+	},
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function Overflow() {
+	const [document, setDocument] = useState(INITIAL);
+	const [selectedId, setSelectedId] = useState("login.tsx");
+	const selectionEpochRef = useRef(0);
+	const tabs = collectCenterGroups(document.center)[0]?.tabs ?? [];
+	return (
+		<div className="w-full max-w-[24rem]">
+			<TabStrip
+				document={document}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={tabs}
+				selectedId={selectedId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={setSelectedId}
+				onClose={(tab) => setDocument((current) => closeLayoutTab(current, tab.id).document)}
+				onApply={(result) => setDocument(result.document)}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+			/>
+		</div>
+	);
+}
+```
+
+#### Drag to reorder
+
+Inside a `DndContext`, drag a tab: the strip shows its drop hint and the insertion marker; dropping commits `moveTabToGroup`.
+
+```tsx
+import {
+	DndContext,
+	type DragEndEvent,
+	PointerSensor,
+	pointerWithin,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import { useRef, useState } from "react";
+import {
+	collectCenterGroups,
+	isLayoutUnavailable,
+	type LayoutAttention,
+	moveTabToGroup,
+} from "@/shell/layout/model";
+import type { LayoutTab, WorkspaceLayoutDocument } from "@/shell/layout/types";
+import type { DragData, DropTarget } from "@/shell/layout/workbenchShared";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "group",
+		id: "center",
+		tabs: [
+			{ kind: "file", id: "auth", name: "auth.ts", path: "src/auth.ts" },
+			{ kind: "file", id: "session", name: "session.ts", path: "src/session.ts" },
+			{ kind: "file", id: "routes", name: "routes.tsx", path: "src/routes.tsx" },
+		],
+	},
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function DragReorder() {
+	const [document, setDocument] = useState(INITIAL);
+	const [selectedId, setSelectedId] = useState("auth");
+	const [draggingTab, setDraggingTab] = useState<LayoutTab | null>(null);
+	const selectionEpochRef = useRef(0);
+	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+	const tabs = collectCenterGroups(document.center)[0]?.tabs ?? [];
+	const drop = (event: DragEndEvent) => {
+		const tab = draggingTab;
+		setDraggingTab(null);
+		const target = event.over?.data.current?.target as DropTarget | undefined;
+		if (!tab || target?.kind !== "insert") return;
+		const from = tabs.findIndex((candidate) => candidate.id === tab.id);
+		const index = from >= 0 && from < target.index ? target.index - 1 : target.index;
+		const result = moveTabToGroup(document, tab, target.location, index);
+		if (!isLayoutUnavailable(result)) setDocument(result.document);
+	};
+	return (
+		<DndContext
+			sensors={sensors}
+			collisionDetection={pointerWithin}
+			onDragStart={(event) => setDraggingTab((event.active.data.current as DragData).tab)}
+			onDragCancel={() => setDraggingTab(null)}
+			onDragEnd={drop}
+		>
+			<div className="w-full">
+				<TabStrip
+					document={document}
+					readAttention={() => ATTENTION}
+					selectionEpochRef={selectionEpochRef}
+					location={{ area: "center", groupId: "center" }}
+					tabs={tabs}
+					selectedId={selectedId}
+					maxSideGroups={6}
+					maxBottomGroups={3}
+					draggingTab={draggingTab}
+					onSelect={setSelectedId}
+					onClose={() => {}}
+					onApply={(result) => setDocument(result.document)}
+					onFocusAdjacentGroup={() => {}}
+					onHideSide={() => {}}
+					onRevealTool={() => {}}
+					onRenameChat={undefined}
+					canFocusAdjacentGroup={false}
+					renderTabAdornment={() => null}
+				/>
+			</div>
+		</DndContext>
+	);
+}
+```
+
+#### Chat names
+
+An unnamed chat is labelled by its first prompt. *Rename chat* in the tab menu edits the name inline through `onRenameChat`.
+
+```tsx
+import { useRef, useState } from "react";
+import { collectCenterGroups, type LayoutAttention } from "@/shell/layout/model";
+import type { LayoutCenterTab, WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const FIRST_PROMPTS = { s2: "Why does the login page redirect twice after signing in?" };
+
+const withTabs = (tabs: LayoutCenterTab[]): WorkspaceLayoutDocument => ({
+	version: 2,
+	center: { kind: "group", id: "center", tabs },
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+});
+
+export default function RenameChat() {
+	const [tabs, setTabs] = useState<LayoutCenterTab[]>([
+		{ kind: "chat", id: "c1", name: "Refactor session store", sessionId: "s1" },
+		{ kind: "chat", id: "c2", name: "", sessionId: "s2" },
+	]);
+	const [selectedId, setSelectedId] = useState("c1");
+	const selectionEpochRef = useRef(0);
+	const document = withTabs(tabs);
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={document}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={collectCenterGroups(document.center)[0]?.tabs ?? []}
+				selectedId={selectedId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={setSelectedId}
+				onClose={() => {}}
+				onApply={() => {}}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={(sessionId, titleInput) =>
+					setTabs((current) =>
+						current.map((tab) =>
+							tab.kind === "chat" && tab.sessionId === sessionId
+								? { ...tab, name: titleInput.trim() }
+								: tab,
+						),
+					)
+				}
+				chatFirstPrompts={FIRST_PROMPTS}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+			/>
+		</div>
+	);
+}
+```
+
+#### Terminal sessions
+
+A bottom pane's session strip with the pane's add menu and AuxiliaryPaneHideButton in `trailing`.
+
+```tsx
+import { useRef, useState } from "react";
+import { AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import {
+	closeLayoutTab,
+	type LayoutAttention,
+	type LayoutGroupLocation,
+	toolTab,
+} from "@/shell/layout/model";
+import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { groupPanelId } from "@/shell/layout/workbenchShared";
+import { SideGroupMenu } from "@/shell/layout/workbenchSide";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const LOCATION: LayoutGroupLocation = { area: "bottom", groupId: "terminals" };
+
+const terminal = (index: number): LayoutTerminalTab => ({
+	kind: "terminal",
+	id: `terminal-${index}`,
+	name: `Terminal ${index}`,
+	tabKey: `t${index}`,
+});
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [{ id: "left", weight: 1, folded: false, tabs: [toolTab("projects")] }],
+	},
+	right: {
+		visible: true,
+		width: 0.25,
+		groups: [
+			{
+				id: "right",
+				weight: 1,
+				folded: false,
+				tabs: [toolTab("specs"), toolTab("files"), toolTab("review"), toolTab("plan")],
+			},
+		],
+	},
+	bottom: {
+		visible: true,
+		height: 0.3,
+		alignment: "center",
+		groups: [{ id: "terminals", weight: 1, folded: false, tabs: [terminal(1), terminal(2)] }],
+	},
+	toolRestoreTargets: {},
+};
+
+export default function TerminalStrip() {
+	const [document, setDocument] = useState(INITIAL);
+	const [selectedId, setSelectedId] = useState("terminal-1");
+	const selectionEpochRef = useRef(0);
+	const group = document.bottom.groups[0];
+	const tabs = group?.tabs ?? [];
+	const addTerminal = () => {
+		const next = terminal(tabs.length + 1);
+		setDocument((current) => ({
+			...current,
+			bottom: {
+				...current.bottom,
+				groups: current.bottom.groups.map((group) => ({ ...group, tabs: [...group.tabs, next] })),
+			},
+		}));
+		setSelectedId(next.id);
+	};
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={document}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={LOCATION}
+				tabs={tabs}
+				selectedId={selectedId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={setSelectedId}
+				onClose={(tab) => setDocument((current) => closeLayoutTab(current, tab.id).document)}
+				onApply={(result) => setDocument(result.document)}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+				trailing={
+					<>
+						{group ? (
+							<SideGroupMenu
+								document={document}
+								side="bottom"
+								group={group}
+								limit={3}
+								onNewTerminal={addTerminal}
+								onRevealTool={() => {}}
+							/>
+						) : null}
+						<AuxiliaryPaneHideButton
+							testId="bottom-group-fold"
+							controls={groupPanelId(LOCATION)}
+							onClick={() => {}}
+						/>
+					</>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Empty group
+
+No tabs: the strip keeps its actions. Remove group is disabled with its reason because the last center group always stays.
+
+```tsx
+import { RiChatNewLine, RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useRef } from "react";
+import { isLayoutUnavailable, type LayoutAttention, removeLayoutGroup } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const DOCUMENT: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function EmptyGroup() {
+	const t = useT();
+	const selectionEpochRef = useRef(0);
+	const removal = removeLayoutGroup(t, DOCUMENT, { area: "center", groupId: "center" });
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={DOCUMENT}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={[]}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={() => {}}
+				onClose={() => {}}
+				onApply={() => {}}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+				trailing={
+					<>
+						<IconButton
+							variant="ghost"
+							size="m"
+							icon={RiCloseLine}
+							label={t("workbench.group.remove")}
+							tooltip={isLayoutUnavailable(removal) ? removal.reason : t("workbench.group.remove")}
+							wrapTrigger
+							disabled={isLayoutUnavailable(removal)}
+							onClick={() => {}}
+							className="shrink-0 self-center"
+						/>
+						<IconButton
+							variant="ghost"
+							size="m"
+							icon={RiChatNewLine}
+							label={t("workbench.center.newChat")}
+							onClick={() => {}}
+							className="shrink-0 self-center"
+						/>
+					</>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### WorkbenchTab on a rail
+
+`WorkbenchTab` in `rail` mode inside AuxiliaryRail: pressed icon buttons that select a tool, or fold the pane when pressed again.
+
+```tsx
+import { useRef, useState } from "react";
+import { AuxiliaryRail } from "@/shell/layout/AuxiliaryRail";
+import {
+	type AuxiliaryRailEntry,
+	activateAuxiliaryRailEntry,
+	projectAuxiliaryRail,
+} from "@/shell/layout/auxiliaryPresentation";
+import {
+	isLayoutUnavailable,
+	type LayoutAttention,
+	type LayoutGroupLocation,
+	toolTab,
+} from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { groupPanelId } from "@/shell/layout/workbenchShared";
+import { WorkbenchTab } from "@/shell/layout/workbenchTabs";
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [
+			{
+				id: "tools",
+				weight: 1,
+				folded: false,
+				tabs: [toolTab("projects"), toolTab("specs"), toolTab("files")],
+			},
+		],
+	},
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+const LOCATION: LayoutGroupLocation = { area: "left", groupId: "tools" };
+
+export default function RailEntry() {
+	const [document, setDocument] = useState(INITIAL);
+	const [attention, setAttention] = useState<LayoutAttention>({
+		selectedByGroup: { tools: "tool:projects" },
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: { left: "tools" },
+		navigationClockByGroup: {},
+	});
+	const selectionEpochRef = useRef(0);
+	const tabs = document.left.groups[0]?.tabs ?? [];
+	const activate = (entry: AuxiliaryRailEntry) => {
+		const result = activateAuxiliaryRailEntry(document, attention, entry, 6, 3);
+		if (isLayoutUnavailable(result)) return;
+		setDocument(result.document);
+		const focusTabId = result.focusTabId;
+		if (focusTabId)
+			setAttention((current) => ({
+				...current,
+				selectedByGroup: { ...current.selectedByGroup, tools: focusTabId },
+			}));
+	};
+	return (
+		<div className="flex h-[9rem]">
+			<AuxiliaryRail
+				region="left"
+				entries={projectAuxiliaryRail(document, attention, "left")}
+				renderEntry={(entry, control) =>
+					entry.kind === "tool" && entry.tab ? (
+						<WorkbenchTab
+							tab={entry.tab}
+							index={tabs.findIndex((tab) => tab.id === entry.tab?.id)}
+							rail={{
+								...control,
+								entryKey: entry.key,
+								vertical: true,
+								beforeIndex: tabs.findIndex((tab) => tab.id === entry.tab?.id),
+								afterIndex: tabs.findIndex((tab) => tab.id === entry.tab?.id) + 1,
+								onActivate: () => activate(entry),
+							}}
+							location={LOCATION}
+							readAttention={() => attention}
+							selectionEpochRef={selectionEpochRef}
+							active={entry.selected && entry.expanded}
+							preview={false}
+							document={document}
+							maxSideGroups={6}
+							maxBottomGroups={3}
+							register={() => {}}
+							onSelect={() => {}}
+							onClose={() => {}}
+							onApply={(result) => setDocument(result.document)}
+							onFocusAdjacentGroup={() => {}}
+							onHideSide={() => {}}
+							onRevealTool={() => {}}
+							onRenameChat={undefined}
+							canFocusAdjacentGroup={false}
+							renderTabAdornment={() => null}
+							draggingTab={null}
+							panelId={groupPanelId(LOCATION)}
+							onKeyDown={() => {}}
+						/>
+					) : null
+				}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/shell/layout/workbenchCenter.tsx` | Every center group's strip, with preview, split geometry and New chat / Remove group in `trailing`. |
+| `apps/web/src/shell/layout/workbenchSide.tsx` | `AuxiliaryGroupHeader`: the terminal-session strip of a left, right or bottom pane, with the add menu and Hide in `trailing`. |
+
 ## Button and IconButton contract
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /

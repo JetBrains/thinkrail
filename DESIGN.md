@@ -128,3 +128,5 @@ Radius steps: `rounded-xs` 2px · `rounded-sm` 4px · `rounded-md` 6px · `round
 | --- | --- | --- | --- |
 | Button | `import { Button } from "@thinkrail/ui/button";` | `primary`, `soft-primary`, `outline`, `ghost`, `destructive` | `s`, `m`, `l` |
 | IconButton | `import { IconButton } from "@thinkrail/ui/button";` | `primary`, `soft-primary`, `outline`, `ghost`, `destructive` | `s`, `m`, `l` |
+| HeaderIconButton | `import { HeaderIconButton } from "@/panels/HeaderIconButton";` | — | — |
+| TabStrip | `import { TabStrip, WorkbenchTab } from "@/shell/layout/workbenchTabs";` | — | — |
