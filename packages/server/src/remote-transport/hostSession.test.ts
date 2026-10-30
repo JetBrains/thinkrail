@@ -37,6 +37,7 @@ function handshake() {
 		consumeToken: (token) => (token === "good" ? { projectRef: "proj", expiresAt: 1 } : null),
 		verifyProof: (proof) => proof.signature === "valid",
 		registerDevice: (d) => registered.push(d),
+		findDevice: () => null,
 		now: () => 1,
 		newDeviceId: () => "dev-1",
 	});

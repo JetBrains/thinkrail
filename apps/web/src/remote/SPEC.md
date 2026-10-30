@@ -21,12 +21,15 @@ crypto library, it has `RTCPeerConnection`, `WebSocket`, and `crypto.subtle` bui
     `RTCDataChannel` (decoding string / ArrayBuffer / Blob frames the host may send).
   - `deviceWireClient.ts` — `createDeviceWireClient`: sends `{ id, method, params }` requests, matches
     `{ id, ok, result | error }` replies by id (as promises, with `RemoteRequestError`), and fans
-    `{ channel, data }` pushes to subscribers. Transport-agnostic over `DeviceChannel`, unit-tested with an
+    `{ channel, data }` pushes to subscribers. **Reconnect-safe**: `attach` points it at a fresh channel and
+    replays in-flight requests; a dropped channel does not fail them, only `close` does. Unit-tested with an
     in-memory channel.
   - `deviceConnector.ts` — `connectRemoteProject(link)`: parses the `thinkrail://pair` link, connects to the
     relay as the device, signs the challenge with `crypto.subtle` Ed25519 through the handshake, negotiates a
-    browser `RTCPeerConnection` **answerer**, and resolves a wire client once the DataChannel opens. Uses the
-    shared broker + signaling protocol from `contracts`; browser-only glue (no library bundled).
+    browser `RTCPeerConnection` **answerer**, and attaches the opened DataChannel to the wire client. Holds a
+    **persistent per-browser device key** (localStorage) and an **auto-reconnect loop** (backoff): the first
+    attempt pairs with the token, reconnects re-authorize with `resume`. Uses the shared broker + signaling
+    protocol from `contracts`; browser-only glue (no library bundled).
   - `remoteConnection.ts` — `createRemoteConnectionController`: the "add a project by link" lifecycle
     (validate link → connecting → connected | error), with the connector injected so it is unit-tested
     without a browser. The UI surface subscribes to it.

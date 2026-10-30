@@ -2,6 +2,7 @@ import {
 	addDevice,
 	buildPairingUri,
 	createPairingTokens,
+	findDeviceByKey,
 	type HostIdentity,
 	loadOrCreateIdentity,
 	newChallenge,
@@ -49,6 +50,7 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 				consumeToken: (token) => tokens.consume(token),
 				verifyProof: verifyPairingProof,
 				registerDevice: (device) => void addDevice(device),
+				findDevice: (key) => findDeviceByKey(key),
 			});
 			const peer = createWeriftHostPeer();
 			const session = createHostSession({ handshake, peer, send: toDevice });

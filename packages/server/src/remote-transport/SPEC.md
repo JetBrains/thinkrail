@@ -30,7 +30,8 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
   - `signalingSession.ts` — `createHostHandshake`, the pure host-side authorization state machine
     (`hello` → `challenge` → `proof` → `accepted`/`rejected`), dependency-injected over the `remote`
     module's token consume / proof verify / device registry, so an unauthorized peer never reaches
-    SDP/ICE exchange.
+    SDP/ICE exchange. A **`resume`** frame re-authorizes an already-paired device by its registered key
+    (`findDevice`) with no token — the path a reconnect takes, since the QR token is one-time.
   - `channel.ts` — `RemoteChannel`, the byte-channel interface the wire protocol runs over.
   - `weriftRemoteChannel.ts` — `toRemoteChannel`, adapting a werift `RTCDataChannel` to `RemoteChannel`.
     werift (pure TS) is **validated under Bun** (offer/answer, ICE, DataChannel, byte transfer via a
