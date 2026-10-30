@@ -1049,7 +1049,7 @@ contracts only.
 
 ## pi packages
 
-`PI_PACKAGES_PROTOCOL_VERSION` (99) gates the `packages.*` methods, the `packages.changed` channel and
+`PI_PACKAGES_PROTOCOL_VERSION` (100) gates the `packages.*` methods, the `packages.changed` channel and
 the `disabledPackages` setting. The DTOs describe what the host reads through pi's `DefaultPackageManager`
 and what it loaded, never pi's own types.
 
