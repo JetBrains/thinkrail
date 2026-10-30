@@ -9,6 +9,7 @@ import {
 	revealWorkbenchTool,
 } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { seedWorkspaceSession } from "./fixtures/sessions";
 import { E2eWire } from "./fixtures/wire";
 
 interface ClientFrame {
@@ -199,4 +200,79 @@ test("from the palette, typed text starts a chat without a project through the d
 	await expect.poll(() => existsSync(chat.worktreePath)).toBe(false);
 	expect(storedChats().chats).toEqual([]);
 	await expect(page.getByTestId("scope-context")).not.toHaveAttribute("data-context", "chat");
+});
+
+test("Continue in workspace asks the chat's agent for a summary and shows the operation's phases in the chat", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		const { workspace, sessionId } = await wire.request("chat.create", {});
+		await wire.request("session.dispose", { sessionId });
+		seedWorkspaceSession(workspace.worktreePath, {
+			id: sessionId,
+			messages: [
+				{ role: "user", text: "Remember: the answer is 42.", timestamp: Date.now() - 2_000 },
+				{ role: "assistant", text: "Noted: 42.", timestamp: Date.now() - 1_000 },
+			],
+		});
+	} finally {
+		wire.close();
+	}
+	await page.getByTestId("chat-item").click();
+	await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(1);
+
+	const row = page.getByTestId("chat-item");
+	await row.getByTestId("chat-menu").click();
+	await page.getByTestId("chat-continue").click();
+	const dialog = page.getByTestId("continue-chat-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("continue-chat-project")).toContainText("sample-project");
+	await dialog.getByTestId("continue-chat-confirm").click();
+	await expect(dialog).toBeHidden();
+
+	const card = page.getByTestId("continuation-card");
+	await expect(card).toBeVisible({ timeout: 15_000 });
+	await expect(card).toContainText("Continue in workspace — sample-project");
+	await expect(card).toHaveAttribute("data-phase", "failed", { timeout: 30_000 });
+	await expect(card.getByTestId("continuation-status")).toContainText("without a summary");
+	await expect(card.getByTestId("continuation-retry")).toBeVisible();
+	await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
+	expect(storedChats().chats[0]?.continuedTo).toBeUndefined();
+});
+
+test("a topbar Continue dialog closes when another window deletes its chat and this one moves to a sibling", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await page.getByTestId("add-chat").click();
+	await expect(page.getByTestId("chat-item")).toHaveCount(1);
+	const [first] = storedChats().chats;
+	if (!first) throw new Error("the first chat is not stored");
+	await page.getByTestId("add-chat").click();
+	await expect(page.getByTestId("chat-item")).toHaveCount(2);
+	await expect
+		.poll(() =>
+			storedChats().chats.some((chat) => chat.id !== first.id && page.url().includes(chat.id)),
+		)
+		.toBe(true);
+	const second = storedChats().chats.find((chat) => chat.id !== first.id);
+	if (!second) throw new Error("the second chat is not stored");
+
+	await page.getByTestId("scope-workspace").click();
+	await page.getByTestId("scope-chat-continue").click();
+	const dialog = page.getByTestId("continue-chat-dialog");
+	await expect(dialog).toBeVisible();
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		await wire.request("chat.delete", { workspaceId: second.id });
+	} finally {
+		wire.close();
+	}
+	await expect(page.getByTestId("chat-item")).toHaveCount(1);
+	await expect.poll(() => page.url().includes(first.id)).toBe(true);
+	await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
+	await expect(dialog).toHaveCount(0);
 });

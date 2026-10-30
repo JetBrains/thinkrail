@@ -33,7 +33,10 @@ both rings rank with. The one package
   conversation asked of a chat — the client starts a new chat instead), **`CHAT_DELETING`** (a delete of
   this chat is running — wait for its `workspace.removed`, never start a sibling) and
   **`CHAT_DELETION_PENDING`** (a delete did not finish — offer Retry, nothing else),
-  `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
+  `CONTINUATION_UNKNOWN` (`chat.continuationStatus` for an operation the host neither holds nor linked —
+  a restart lost it mid-flight; the card offers Retry), `CONTINUATION_IN_FLIGHT` (`chat.continue` for
+  another project while the chat is already being continued — the first gesture is never silently
+  joined by a different choice), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
   written yet instead returns empty messages with its current status, so a live run remains pollable;
@@ -798,7 +801,17 @@ both rings rank with. The one package
   one session it owns, created by the host in one call), **`delete`** (`{ workspaceId }` → ack; the only
   teardown door — transcripts and folder to the Trash, `session.delete` refuses a chat) and **`inspect`**
   (`{ workspaceId }` → `ChatInspection { files, truncated }`, the confirmation's file count — `truncated`
-  when the host's walk stopped at its entry or time budget, so the folder may hold more) /
+  when the host's walk stopped at its entry or time budget, so the folder may hold more),
+  and from `CONTINUATION_PROTOCOL_VERSION` (v101) **`continue`** (`{ workspaceId, projectId }` →
+  `{ operationId }`: bind one in-memory continuation and ask the chat's agent for a summary) and
+  **`continuationStatus`** (`{ operationId }` → `ChatContinuation` — the host-owned phases `requested →
+  summarizing → creating → started | failed | lost` with the created `workspaceId` / `sessionId` and
+  `firstMessage: sent | failed` reported apart; after a restart a linked operation answers `started`
+  from its `continuedTo` link, any other `CONTINUATION_UNKNOWN`; the same shape rides the scoped
+  `chat.continuation` push); the custom messages **`continue-in-workspace-request`** (`ContinueInWorkspaceRequestDetails`,
+  the host's card in the source chat) and **`chat-handoff`** (`ChatHandoffDetails`: the clamped summary
+  — `CHAT_HANDOFF_SUMMARY_MAX_LENGTH` — plus the source chat, the new chat's first message); and
+  `Workspace.continuedTo: ChatContinuationLink[]` on a chat record (each link names its `operationId`) /
   **`search.query`** + **`search.preview`** (the palette's host
   providers from `SEARCH_PROTOCOL_VERSION`, v99: `{ seq, query, kinds?, context, limit? }` → per-kind
   groups with the shared matcher's tiers, or `superseded` for an overtaken `seq`; a preview is a bounded

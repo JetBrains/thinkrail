@@ -44,6 +44,8 @@ export function deriveMessageActions(
 				if (completionDelivery(row.details) !== "run") roundHasLaterContent = false;
 				break;
 			case "reviewFix":
+			case "continuationRequest":
+			case "handoff":
 				roundHasLaterContent = false;
 				break;
 		}

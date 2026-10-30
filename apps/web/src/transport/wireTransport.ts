@@ -1,6 +1,7 @@
 import type {
 	Ack,
 	AppConfig,
+	ChatContinuation,
 	ExtUiRequest,
 	HostUpdateNotice,
 	LoginPush,
@@ -372,6 +373,9 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().updateWorkspace(data as Workspace);
 	});
 
+	transport.subscribe(WS_CHANNELS.chatContinuation, (data) => {
+		useAppStore.getState().applyChatContinuation(data as ChatContinuation);
+	});
 	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
 		const { projectId, id } = data as WorkspaceRemoved;
 		const state = useAppStore.getState();

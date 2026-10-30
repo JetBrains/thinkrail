@@ -307,6 +307,33 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   know), and the pruning surfaces only when *Review turn* is clicked — as the review tab's scope-aware
   `UNKNOWN_COMMIT` notice.
 
+- `continuationRequest` / `handoff` — the two host-authored cards of **Continue in workspace**
+  (`isContinueInWorkspaceRequestMessage` / `isChatHandoffMessage`, both open a round like `reviewFix`):
+  `ContinuationRequestCard` names the target project and shows the operation's host-owned phase from
+  `ChatActions.continuationOf` — asking, summarizing, creating, "Continued in a new workspace" with
+  **Open** (`openContinuation`), or the failure reason / "host restarted" with **Retry**
+  (`retryContinuation` asks the host again for the same project); `HandoffCard` renders the clamped
+  summary as Markdown under "Continued from “<title>”" with **Open the original chat**
+  (`openHandoffSource`). The renderers stay props-driven: `ChatTranscript` supplies the three actions and
+  the phase lookup from the store's `chatContinuations` slice, and the app-integration module
+  **`continuations.ts`** owns every continuation read and route (it never imports `panels`, which reuses
+  it). The card's lookup is a pure store read; an effect in `ChatTranscript` over its cards' operation ids
+  and the welcome generation asks `chat.continuationStatus` for each one the slice does not know (a
+  reload) — once per connection (`refreshContinuation`, keyed by the welcome generation), so a read that
+  failed is asked again on the next connection, never on every render; after each welcome
+  `useContinuations` — mounted once by `Shell` — asks again for every operation still
+  `requested`/`summarizing`/`creating` and every one this client started, card or not, so a disconnect
+  cannot strand a card mid-phase. A reply is installed only on the connection it was asked on and only if
+  no push replaced the record meanwhile (the push is newer); the host's `CONTINUATION_UNKNOWN` (neither
+  held nor linked — a restart lost it mid-flight) becomes `lost`, or drops a started-here operation no
+  card shows. Only the initiating client follows `started` (`followContinuation`, once — a follow a
+  reconnect overtook is armed again and followed on the connection that overtook it), and a failure is
+  told once. **Open**, **Open the original chat** and the follow all go through `openContinuationTarget`,
+  which activates the workspace only after a fresh `workspace.list` on the same connection shows its
+  project open and the workspace there (not deletion-pending), and otherwise says it is gone instead of
+  activating an id no row backs. A Retry from the card (`requestContinuation`) registers the new operation
+  as initiated, so this client follows it like the original gesture.
+
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives
 re-derivation and virtualization: **every fold surface (outer activity groups, nested thinking groups, tool
@@ -1573,7 +1600,9 @@ Unknown custom messages retain their existing behavior.
   is `ChatView.tsx`, **`ChatTranscript.tsx`** (the churn-isolated transcript child — the Virtuoso list, scroll
   control, transcript sync, completion-ack, the extension-dialog reply, and the
   `ChatActions`/`InteractionStatesContext`/`PendingExtUiContext` providers),
-  `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
+  `chatPreferences.ts` (the client-local persistence adapter), **`continuations.ts`** (Continue in
+  workspace's status reads, follow and routes — the shell mounts its `useContinuations`, `panels` calls
+  its `requestContinuation`), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
   `useModelCatalog.ts`, **`useChatResources.ts`** (the Resources hydration/control/log-read seam),
   **`useFreshResults.ts`** (the per-chat "new result" seen set),

@@ -8,6 +8,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
+import { useContinuations } from "../chat/continuations";
 import { shortcutLabel } from "../commands";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
@@ -75,6 +76,7 @@ export function Shell() {
 	const t = useT();
 	useLocalLayoutState();
 	useAttentionNotifications();
+	useContinuations();
 	const status = useAppStore((s) => s.status);
 	const analyticsConsentOpen = useAppStore(selectAnalyticsConsentPromptOpen);
 	const onboardingActive = useAppStore(selectOnboardingActive);

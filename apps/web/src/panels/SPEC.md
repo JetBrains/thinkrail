@@ -63,6 +63,18 @@ treatment.
   Repository
   listings and fallbacks (`ProjectTree`, `WelcomePanel`, the dialog's project picker) read
   `selectRepoProjects`, never `s.projects`, so the container is never offered as a project.
+  **Continue in workspace:** `ContinueChatDialog` (reached from the Chats row menu and the topbar chat
+  segment) picks a repository — the context repository first — and calls
+  `continueChatInWorkspace(chatId, projectId)` → `chat/continuations`' `requestContinuation`
+  (`chat.continue`), closing at once (the agent's turn runs on its own); the store's
+  `initiatedContinuations` remembers the operations this client started, and `chat/continuations`
+  follows them to the new chat when the host reports `started` — the initiating client alone — or
+  toasts the failure. The dialog is bound to the chat that opened it: the topbar segment keys it by that
+  chat's id (navigating elsewhere, or a delete elsewhere that moves this window to another chat, closes
+  it), it never shows over a chat whose deletion did not finish, and the project picker is named by its
+  label and its current value. A first chat loads the container's list through
+  `loadProjectWorkspaces` instead of seeding it, so the Chats section never shows a partial list. A chat row reads "Continued in <project>" from the record's
+  `continuedTo`.
 - **Owns:** `ProjectTree`. Each top-level project row is a compact IDE-tree row at the shared `--panel-row-height` (`web-spacing`):
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add

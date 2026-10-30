@@ -119,8 +119,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
    inside the one built-in **Chats container** (`Project.kind: "chats"`, not a repository, never
    closed), held apart in `chats.json`; files, terminal and Plan work there, nothing git-, review- or
    spec-backed does, the host refuses every repository door for it, `GIT_CEILING_DIRECTORIES` keeps
-   git from walking up out of its folder, and deleting it trashes the conversation and the folder as a
-   whole (see [[submodule-server-workspaces]]). The shell is built first,
+   git from walking up out of its folder, deleting it trashes the conversation and the folder as a
+   whole, and **Continue in workspace** hands it over — the chat's own agent writes a summary, the host
+   creates a workspace chat whose first message is that summary, and the chat keeps the link (see
+   [[submodule-server-workspaces]], [[submodule-server-host]]). The shell is built first,
    `pi` connected last. **Open PR** is a deterministic, host-side push + open/update of the branch's
    GitHub PR through the user's own `gh` CLI (no stored tokens, no provider REST API), body rendered from
    the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see

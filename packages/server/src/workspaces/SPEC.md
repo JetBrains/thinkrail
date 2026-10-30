@@ -30,7 +30,9 @@ kind with an opaque id, never closed). The record keeps the required wire fields
 conversation); `kind` is the only marker and every git consumer gates on it. `chats.ts` owns the container
 and chat records: `ensureChatsContainer`, `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`,
 `markChatDeletionPending` (persisted before any destructive step so a crash leaves a visible
-"deletion incomplete" chat, never a half-gone one), `dropChatRecord`, an in-memory chat-id cache for the
+"deletion incomplete" chat, never a half-gone one), `recordChatContinuation` (the durable
+`continuedTo: { projectId, workspaceId, sessionId }[]` link to the workspace a chat's summary went to —
+it survives compaction of the transcript card), `dropChatRecord`, an in-memory chat-id cache for the
 host's per-event push scoping (`isChatWorkspaceId` / `isChatsContainerId` — only this process writes the
 store), and the refusal helpers (`assertNotChatsContainer`, `assertNotChatWorkspace`) the doors below use.
 The session, the terminal and the teardown are composed in `host` (`host/chats.ts`): a chat owns exactly
@@ -279,8 +281,9 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
   `CHATS_CONTAINER_NAME`, `CHAT_WORKSPACE_NAME`, `chatsRoot`, `isUnderChatsRoot`, `isChatsContainer`, `isChatWorkspace`,
   `isChatsContainerId`, `isChatWorkspaceId`, `resetChatIdCache`, `ensureChatsContainer`, `findChatsContainer`,
-  `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`, `markChatDeletionPending`, `dropChatRecord`,
-  `setChatPublishers`, `assertNotChatsContainer`, `assertNotChatWorkspace`.
+  `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`, `markChatDeletionPending`,
+  `recordChatContinuation`, `dropChatRecord`, `setChatPublishers`, `assertNotChatsContainer`,
+  `assertNotChatWorkspace`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

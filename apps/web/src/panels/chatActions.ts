@@ -1,5 +1,11 @@
-import type { ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
+import {
+	CONTINUATION_PROTOCOL_VERSION,
+	type ThinkingLevel,
+	type WireModel,
+	type Workspace,
+} from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
+import { requestContinuation } from "../chat/continuations";
 import type { ChatAttachment } from "../chat/types";
 import { selectWorkspaceTick, supportsProjectlessChats, toast, useAppStore } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
@@ -99,6 +105,23 @@ export async function inspectProjectlessChat(
 	try {
 		return await getTransport().request("chat.inspect", { workspaceId });
 	} catch {
+		return null;
+	}
+}
+
+export function supportsChatContinuation(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= CONTINUATION_PROTOCOL_VERSION;
+}
+
+/** Asks the host to continue a chat in a new workspace of `projectId`; this client then follows the new chat. */
+export async function continueChatInWorkspace(
+	workspaceId: string,
+	projectId: string,
+): Promise<string | null> {
+	try {
+		return await requestContinuation(workspaceId, projectId);
+	} catch (err) {
+		toast.error(errorText(err), t("panels.chats.continueFailed"));
 		return null;
 	}
 }

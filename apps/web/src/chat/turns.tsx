@@ -13,6 +13,8 @@ import {
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import type {
+	ChatHandoffDetails,
+	ContinueInWorkspaceRequestDetails,
 	GitDiffScope,
 	ImageContent,
 	ReviewFixDetails,
@@ -36,6 +38,7 @@ import { ActivityGroup } from "./ActivityGroup";
 import { type AssistantFailure, errorTurnText } from "./assistantFailure";
 import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
+import { useChatActions } from "./ChatActions";
 import { CopyButton } from "./CopyButton";
 import { ToolPromptSlot } from "./ExtUiPrompt";
 import { FileChip } from "./FileChip";
@@ -146,6 +149,10 @@ function ChatTurnViewImpl({
 			return <SubagentResult id={row.id} details={row.details} text={row.text} />;
 		case "reviewFix":
 			return <ReviewFixCard id={row.id} details={row.details} />;
+		case "continuationRequest":
+			return <ContinuationRequestCard details={row.details} />;
+		case "handoff":
+			return <HandoffCard details={row.details} />;
 		case "tool":
 			return <ToolRow row={row} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
 		case "activity":
@@ -484,6 +491,99 @@ function ReviewFixCard({ id, details }: { id: string; details: ReviewFixDetails 
 				</p>
 			) : null}
 			{items.length > 0 ? <ReviewPackageComments foldPrefix={id} items={items} /> : null}
+		</div>
+	);
+}
+
+const HOST_CARD_CLASS =
+	"max-w-[85%] overflow-hidden rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8";
+
+function ContinuationRequestCard({ details }: { details: ContinueInWorkspaceRequestDetails }) {
+	const t = useT();
+	const actions = useChatActions();
+	const continuation = actions?.continuationOf?.(details.operationId);
+	const phase = continuation?.phase ?? "summarizing";
+	const status =
+		phase === "requested"
+			? t("chat.turn.continuation.requested")
+			: phase === "summarizing"
+				? t("chat.turn.continuation.summarizing")
+				: phase === "creating"
+					? t("chat.turn.continuation.creating")
+					: phase === "started"
+						? continuation?.firstMessage === "failed"
+							? t("chat.turn.continuation.startedNoMessage")
+							: t("chat.turn.continuation.started")
+						: phase === "lost"
+							? t("chat.turn.continuation.lost")
+							: t("chat.turn.continuation.failed", { reason: continuation?.reason ?? "" });
+	return (
+		<div data-testid="continuation-card" data-phase={phase} className={HOST_CARD_CLASS}>
+			<span className="block tr-text-reading text-text-default">
+				{t("chat.turn.continuation.title", { project: details.projectName })}
+			</span>
+			<p
+				data-testid="continuation-status"
+				className={cn(
+					"mt-4 tr-text-metadata",
+					phase === "failed" || phase === "lost" ? "text-feedback-error" : "text-text-muted",
+				)}
+			>
+				{status}
+			</p>
+			{phase === "started" && continuation ? (
+				<Button
+					type="button"
+					variant="outline"
+					size="m"
+					data-testid="continuation-open"
+					className="mt-8"
+					onClick={() => actions?.openContinuation?.(continuation)}
+				>
+					{t("chat.turn.continuation.open")}
+				</Button>
+			) : phase === "failed" || phase === "lost" ? (
+				<Button
+					type="button"
+					variant="outline"
+					size="m"
+					data-testid="continuation-retry"
+					className="mt-8"
+					onClick={() => actions?.retryContinuation?.(details)}
+				>
+					{t("chat.turn.continuation.retry")}
+				</Button>
+			) : null}
+		</div>
+	);
+}
+
+function HandoffCard({ details }: { details: ChatHandoffDetails }) {
+	const t = useT();
+	const actions = useChatActions();
+	return (
+		<div data-testid="handoff-card" className={HOST_CARD_CLASS}>
+			<span className="block tr-text-reading text-text-default">
+				{details.sourceTitle
+					? t("chat.turn.handoff.titled", { title: details.sourceTitle })
+					: t("chat.turn.handoff.title")}
+			</span>
+			<div
+				data-testid="handoff-summary"
+				className="mt-4 tr-text-reading text-text-muted [&>div>*:last-child]:mb-0"
+			>
+				<Markdown text={details.summary} />
+			</div>
+			<Button
+				type="button"
+				variant="outline"
+				size="m"
+				data-testid="handoff-open-source"
+				className="mt-8"
+				onClick={() => actions?.openHandoffSource?.(details)}
+			>
+				{t("chat.turn.handoff.open")}
+			</Button>
 		</div>
 	);
 }

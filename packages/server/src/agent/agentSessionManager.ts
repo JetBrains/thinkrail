@@ -2392,11 +2392,21 @@ export async function sendReviewFixToSession(
 	content: string,
 	details: ReviewFixDetails,
 ): Promise<void> {
+	await sendHostMessageToSession(sessionId, TODO_REVIEW_FIX_CUSTOM_TYPE, content, details);
+}
+
+/** A host-authored custom message the agent answers: a card in the transcript, queued behind a running turn, never a steer. */
+export async function sendHostMessageToSession(
+	sessionId: string,
+	customType: string,
+	content: string,
+	details: unknown,
+): Promise<void> {
 	const entry = mustGetEntry(sessionId);
 	const release = admitPreflight(entry);
 	try {
 		await entry.session.sendCustomMessage(
-			{ customType: TODO_REVIEW_FIX_CUSTOM_TYPE, content, display: true, details },
+			{ customType, content, display: true, details },
 			{ deliverAs: "followUp", triggerTurn: true },
 		);
 	} finally {
