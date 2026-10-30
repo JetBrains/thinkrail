@@ -293,8 +293,8 @@ function designMarkdown(): string {
 			components.map((doc) => [
 				doc.name,
 				code(doc.importLine),
-				Object.keys(doc.variants).map(code).join(", "),
-				Object.keys(doc.sizes).map(code).join(", "),
+				doc.variants ? Object.keys(doc.variants).map(code).join(", ") : "—",
+				doc.sizes ? Object.keys(doc.sizes).map(code).join(", ") : "—",
 			]),
 		),
 	].join("\n\n");

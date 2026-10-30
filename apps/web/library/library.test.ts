@@ -16,13 +16,14 @@ const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const EXAMPLES = fileURLToPath(new URL("./examples", import.meta.url));
 const CONTENT = fileURLToPath(new URL("./content", import.meta.url));
 
-describe("generated docs", () => {
-	for (const [path, markdown] of renderOutputs())
-		test(`${path} is regenerated from the library content`, () => {
-			expect(existsSync(join(ROOT, path)) ? readFileSync(join(ROOT, path), "utf8") : "").toBe(
-				markdown,
-			);
-		});
+test("every generated doc is regenerated from the library content", () => {
+	const stale = [...renderOutputs()]
+		.filter(([path, markdown]) => {
+			const target = join(ROOT, path);
+			return (existsSync(target) ? readFileSync(target, "utf8") : "") !== markdown;
+		})
+		.map(([path]) => path);
+	expect(stale).toEqual([]);
 });
 
 describe("content", () => {
