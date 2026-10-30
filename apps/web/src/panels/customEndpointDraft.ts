@@ -72,8 +72,8 @@ export function addManualModel(draft: EndpointDraft, rawId: string): EndpointDra
 		id,
 		contextWindow: null,
 		maxTokens: null,
-		reasoning: false,
-		vision: false,
+		reasoning: null,
+		vision: null,
 		tools: null,
 		selected: true,
 	};
@@ -94,8 +94,8 @@ export function mergeProbe(
 			contextWindow: model.contextWindow ?? previous.contextWindow,
 			maxTokens:
 				model.contextWindow === null ? (model.maxTokens ?? previous.maxTokens) : model.maxTokens,
-			reasoning: model.reasoning || previous.reasoning,
-			vision: model.vision || previous.vision,
+			reasoning: model.reasoning ?? previous.reasoning,
+			vision: model.vision ?? previous.vision,
 			selected: previous.selected,
 		};
 	});

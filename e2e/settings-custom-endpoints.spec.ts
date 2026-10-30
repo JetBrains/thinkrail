@@ -182,9 +182,9 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 	await dialog.getByTestId("custom-endpoints-save").click();
 	await expect(dialog).toHaveCount(0);
 	await expect(endpoint).toContainText("Gateway");
-	expect(JSON.parse(readFileSync(modelsPath, "utf8")).providers["custom-company-gateway"]).toMatchObject(
-		{ name: "Gateway", apiKey: KEY },
-	);
+	expect(
+		JSON.parse(readFileSync(modelsPath, "utf8")).providers["custom-company-gateway"],
+	).toMatchObject({ name: "Gateway", apiKey: KEY });
 
 	await endpoint.getByTestId("custom-endpoints-remove").click();
 	await page.getByTestId("custom-endpoints-remove-confirm").click();

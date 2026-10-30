@@ -779,7 +779,24 @@ a project picker, the prompt hero, and the reused
   `canApiKey` — **both routes start `provider.loginStart`**
   (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
   URL / paste a code / answer the provider's own key prompts, `provider.loginReply` — no inline key
-  field); a "configured outside the app" note for rows with neither flag; and
+  field); a "configured outside the app" note for rows with neither flag; **`CustomEndpointsSettings`**
+  (v100, hidden below `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; re-read on `providerVersion`) — the **Custom
+  servers** group listing every `customEndpoints.list` endpoint (name, address, model count; **Edit** and a
+  **Remove** icon behind a `ConfirmDialog`) plus **Add server**. `custom-*` providers are filtered out of the
+  generic provider rows so each appears once; hand-written `models.json` providers stay in Connected as
+  "Managed", not repeated here. The dialog is one form for a company gateway and a local server: name,
+  address with local preset chips (Ollama, LM Studio, vLLM, llama.cpp — they only fill the address and an
+  empty or preset name; there is no server-kind choice), a password key field (blank keeps a saved key on
+  edit; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
+  (`customEndpoints.probe`, run automatically when an edit opens), a per-model use switch, and a manual
+  model-id field for gateways that list nothing. **A model row has no editable parameters** (decision: they
+  describe the server rather than configure it — its real limits are set by whoever runs it). It shows only
+  the facts the server reported (context, thinking, images, tools; "No tools" in warning tone), and an
+  unreported fact is simply absent and left to pi's default. Re-detecting keeps selections and saved
+  facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
+  reported, and keeps models the server no longer lists; an unchanged saved address stays as written. The
+  pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and
+  host save errors render inline; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
   `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's

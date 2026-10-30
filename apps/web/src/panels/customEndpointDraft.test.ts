@@ -17,8 +17,8 @@ function model(id: string, patch: Partial<CustomEndpointModel> = {}): CustomEndp
 		id,
 		contextWindow: null,
 		maxTokens: null,
-		reasoning: false,
-		vision: false,
+		reasoning: null,
+		vision: null,
 		tools: null,
 		...patch,
 	};
@@ -84,9 +84,9 @@ test("re-detecting keeps saved facts the server doesn't report and refreshes the
 
 test("an unchanged saved address stays as written while a typed one takes the probed form", () => {
 	const draft = editEndpointDraft(saved);
-	expect(mergeProbe(draft, { ok: true, baseUrl: "https://gw.example/v1", models: [] }).baseUrl).toBe(
-		"https://gw.example/v1",
-	);
+	expect(
+		mergeProbe(draft, { ok: true, baseUrl: "https://gw.example/v1", models: [] }).baseUrl,
+	).toBe("https://gw.example/v1");
 	const typed = { ...newEndpointDraft(), baseUrl: "http://127.0.0.1:11434" };
 	expect(
 		mergeProbe(typed, { ok: true, baseUrl: "http://127.0.0.1:11434/v1", models: [] }).baseUrl,
@@ -131,4 +131,23 @@ test("manual ids are trimmed, deduplicated and selected; saving needs a name, ad
 			models: draft.models.map((row) => ({ ...row, selected: false })),
 		}),
 	).toBe(false);
+});
+
+test("re-detecting keeps an unreported capability and clears one the server now denies", () => {
+	const draft = editEndpointDraft({
+		...saved,
+		models: [model("a", { reasoning: true, vision: true })],
+	});
+	const unreported = mergeProbe(draft, {
+		ok: true,
+		baseUrl: "https://gw.example/v1",
+		models: [model("a")],
+	});
+	expect(unreported.models[0]).toMatchObject({ reasoning: true, vision: true });
+	const denied = mergeProbe(draft, {
+		ok: true,
+		baseUrl: "https://gw.example/v1",
+		models: [model("a", { reasoning: false, vision: false })],
+	});
+	expect(denied.models[0]).toMatchObject({ reasoning: false, vision: false });
 });

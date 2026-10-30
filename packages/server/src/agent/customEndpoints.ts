@@ -141,6 +141,7 @@ export function parseModelList(payload: unknown): CustomEndpointModel[] | null {
 		const output = strings(architecture.output_modalities);
 		if (output.length > 0 && !output.includes("text")) continue;
 		const meta = isObject(entry.meta) ? entry.meta : {};
+		const input = strings(architecture.input_modalities);
 		seen.add(entry.id);
 		models.push({
 			id: entry.id,
@@ -150,8 +151,8 @@ export function parseModelList(payload: unknown): CustomEndpointModel[] | null {
 				positiveInt(entry.context_length) ??
 				positiveInt(meta.n_ctx),
 			maxTokens: positiveInt(entry.max_output_tokens),
-			reasoning: false,
-			vision: strings(architecture.input_modalities).includes("image"),
+			reasoning: null,
+			vision: input.length > 0 ? input.includes("image") : null,
 			tools: null,
 		});
 	}
@@ -165,7 +166,9 @@ async function enrichLlamaCpp(root: string, key: string | undefined) {
 	return {
 		contextWindow: positiveInt(props.default_generation_settings.n_ctx),
 		reasoning:
-			typeof props.chat_template === "string" && props.chat_template.includes("enable_thinking"),
+			typeof props.chat_template === "string" && props.chat_template.includes("enable_thinking")
+				? true
+				: null,
 		tools: typeof caps.supports_tools === "boolean" ? caps.supports_tools : null,
 	};
 }
@@ -194,7 +197,7 @@ async function enrichOllama(
 				...model,
 				contextWindow: model.contextWindow ?? ollamaContext(show.parameters),
 				reasoning: capabilities.includes("thinking"),
-				vision: model.vision || capabilities.includes("vision"),
+				vision: capabilities.includes("vision"),
 				tools: capabilities.includes("tools"),
 			};
 		}),
@@ -227,7 +230,7 @@ async function enrich(
 		next = next.map((model) => ({
 			...model,
 			contextWindow: llama.contextWindow ?? model.contextWindow,
-			reasoning: model.reasoning || llama.reasoning,
+			reasoning: model.reasoning ?? llama.reasoning,
 			tools: model.tools ?? llama.tools,
 		}));
 	if (lmStudio)
@@ -239,7 +242,8 @@ async function enrich(
 				{
 					...model,
 					contextWindow: model.contextWindow ?? positiveInt(entry.loaded_context_length),
-					vision: model.vision || entry.type === "vlm",
+					vision:
+						entry.type === "vlm" || entry.type === "llm" ? entry.type === "vlm" : model.vision,
 					tools: Array.isArray(entry.capabilities)
 						? entry.capabilities.includes("tool_use")
 						: model.tools,
@@ -249,18 +253,12 @@ async function enrich(
 	return next;
 }
 
-async function savedKey(id: string, baseUrl: string): Promise<string | undefined> {
-	const endpoint = readEndpoints(parseModelsConfig(readModelsSource(modelsPath()))).find(
-		(candidate) => candidate.id === id,
-	);
-	if (!endpoint?.hasApiKey || parseBaseUrl(endpoint.baseUrl) !== baseUrl) return undefined;
-	let key: string | undefined;
-	try {
-		key = (await usePiRuntime((runtime) => runtime.getAuth(id)))?.auth.apiKey;
-	} catch {
-		throw new Error("Couldn't resolve the saved API key. Check it in pi's models.json and retry.");
-	}
-	return key && key !== NO_KEY ? key : undefined;
+function savedKey(id: string, baseUrl: string): string | undefined {
+	const provider = providersOf(parseModelsConfig(readModelsSource(modelsPath())))[id];
+	if (!isCustomEndpointId(id) || !isObject(provider)) return undefined;
+	if (typeof provider.baseUrl !== "string" || parseBaseUrl(provider.baseUrl) !== baseUrl)
+		return undefined;
+	return typeof provider.apiKey === "string" ? resolveProbeKey(provider.apiKey) : undefined;
 }
 
 export async function probeCustomEndpoint(
@@ -274,7 +272,7 @@ export async function probeCustomEndpoint(
 	if (!baseUrl) return { ok: false, reason: "invalid-url" };
 	const key =
 		request.apiKey === undefined && typeof request.endpointId === "string"
-			? await savedKey(request.endpointId, baseUrl)
+			? savedKey(request.endpointId, baseUrl)
 			: resolveProbeKey(request.apiKey);
 	let listing = await fetchJson(`${baseUrl}/models`, key, LIST_TIMEOUT_MS);
 	if (!listing.ok && listing.status === 404 && !baseUrl.endsWith("/v1")) {
@@ -304,8 +302,8 @@ function readModel(raw: unknown, overrides: Json): CustomEndpointModel | undefin
 		id: raw.id,
 		contextWindow: positiveInt(model.contextWindow),
 		maxTokens: positiveInt(model.maxTokens),
-		reasoning: model.reasoning === true,
-		vision: strings(model.input).includes("image"),
+		reasoning: typeof model.reasoning === "boolean" ? model.reasoning : null,
+		vision: Array.isArray(model.input) ? strings(model.input).includes("image") : null,
 		tools: null,
 	};
 }
@@ -361,6 +359,10 @@ function isCount(value: unknown): boolean {
 	return value === null || positiveInt(value) !== null;
 }
 
+function isFlag(value: unknown): boolean {
+	return value === null || typeof value === "boolean";
+}
+
 function validateDraft(draft: CustomEndpointDraft): void {
 	if (!isObject(draft) || typeof draft.name !== "string" || typeof draft.baseUrl !== "string")
 		throw new Error("Name and server address must be text.");
@@ -381,7 +383,7 @@ function validateDraft(draft: CustomEndpointDraft): void {
 		ids.add(model.id);
 		if (!isCount(model.contextWindow) || !isCount(model.maxTokens))
 			throw new Error("Model limits must be whole numbers.");
-		if (typeof model.reasoning !== "boolean" || typeof model.vision !== "boolean")
+		if (!isFlag(model.reasoning) || !isFlag(model.vision))
 			throw new Error("Model capabilities must be on or off.");
 	}
 }
@@ -398,10 +400,12 @@ function modelConfig(model: CustomEndpointModel, previous: Json | undefined): Js
 		...(previous ?? {}),
 		id: model.id,
 		name: typeof previous?.name === "string" ? previous.name : model.id,
-		reasoning: model.reasoning,
-		input: model.vision ? ["text", "image"] : ["text"],
 		cost: isObject(previous?.cost) ? previous.cost : ZERO_COST,
 	};
+	if (model.reasoning === null) delete next.reasoning;
+	else next.reasoning = model.reasoning;
+	if (model.vision === null) delete next.input;
+	else next.input = model.vision ? ["text", "image"] : ["text"];
 	const maxTokens = maxTokensFor(model);
 	if (model.contextWindow === null) delete next.contextWindow;
 	else next.contextWindow = model.contextWindow;
@@ -433,6 +437,17 @@ function originOf(url: string): string | null {
 	}
 }
 
+function hasHeaders(provider: Json | undefined): boolean {
+	const nonEmpty = (value: unknown) => isObject(value) && Object.keys(value).length > 0;
+	if (!provider) return false;
+	const models = Array.isArray(provider.models) ? provider.models : [];
+	const overrides = isObject(provider.modelOverrides) ? Object.values(provider.modelOverrides) : [];
+	return (
+		nonEmpty(provider.headers) ||
+		[...models, ...overrides].some((entry) => isObject(entry) && nonEmpty(entry.headers))
+	);
+}
+
 function providerConfig(draft: CustomEndpointDraft, previous: Json | undefined): Json {
 	const previousUrl = typeof previous?.baseUrl === "string" ? previous.baseUrl : undefined;
 	const baseUrl =
@@ -440,13 +455,12 @@ function providerConfig(draft: CustomEndpointDraft, previous: Json | undefined):
 			? previousUrl
 			: (parseBaseUrl(draft.baseUrl) ?? draft.baseUrl.trim());
 	const previousKey = typeof previous?.apiKey === "string" ? previous.apiKey : undefined;
-	if (
-		draft.apiKey === undefined &&
-		previousKey !== undefined &&
-		previousKey !== NO_KEY &&
-		previousUrl !== undefined &&
-		originOf(previousUrl) !== originOf(baseUrl)
-	)
+	const moved = previousUrl !== undefined && originOf(previousUrl) !== originOf(baseUrl);
+	if (moved && hasHeaders(previous))
+		throw new Error(
+			"This server sends custom headers from models.json. Change its address there, or remove the headers first.",
+		);
+	if (draft.apiKey === undefined && previousKey !== undefined && previousKey !== NO_KEY && moved)
 		throw new Error(
 			"The server address changed. Enter the API key for the new address, or remove the saved key.",
 		);

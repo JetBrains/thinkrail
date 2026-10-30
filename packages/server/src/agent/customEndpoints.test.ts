@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -82,15 +82,15 @@ function model(id: string, patch: Partial<CustomEndpointModel> = {}): CustomEndp
 		id,
 		contextWindow: null,
 		maxTokens: null,
-		reasoning: false,
-		vision: false,
+		reasoning: null,
+		vision: null,
 		tools: null,
 		...patch,
 	};
 }
 
-function config(): Record<string, Record<string, Record<string, unknown>>> {
-	return parse(readFileSync(path, "utf8"));
+function providers(): Record<string, Record<string, unknown>> {
+	return parse(readFileSync(path, "utf8")).providers ?? {};
 }
 
 test("base URLs drop endpoint suffixes and refuse credentials, queries and other schemes", () => {
@@ -204,7 +204,9 @@ test("probes fill facts from Ollama, llama.cpp and LM Studio without a server ki
 	expect(await probeCustomEndpoint({ baseUrl: `${ollama.url}/v1` })).toEqual({
 		ok: true,
 		baseUrl: `${ollama.url}/v1`,
-		models: [model("qwen3:14b", { contextWindow: 40_960, reasoning: true, tools: true })],
+		models: [
+			model("qwen3:14b", { contextWindow: 40_960, reasoning: true, vision: false, tools: true }),
+		],
 	});
 	server?.stop(true);
 
@@ -233,6 +235,16 @@ test("probes fill facts from Ollama, llama.cpp and LM Studio without a server ki
 	expect(await probeCustomEndpoint({ baseUrl: `${lmStudio.url}/v1` })).toMatchObject({
 		models: [model("qwen-vl", { contextWindow: 16_384, vision: true, tools: true })],
 	});
+	server?.stop(true);
+
+	const gateway = serve({
+		"GET /v1/models": () => ({
+			data: [{ id: "text-only", architecture: { input_modalities: ["text"] } }],
+		}),
+	});
+	expect(await probeCustomEndpoint({ baseUrl: `${gateway.url}/v1` })).toMatchObject({
+		models: [model("text-only", { vision: false })],
+	});
 });
 
 test("save writes only reported facts with derived output and conservative compat", async () => {
@@ -249,13 +261,13 @@ test("save writes only reported facts with derived output and conservative compa
 		apiKey: "$CORP_KEY",
 		models: [
 			model("known", { contextWindow: 131_072, tools: true }),
-			model("reported-output", { contextWindow: 200_000, maxTokens: 32_000 }),
-			model("unknown"),
+			model("reported-output", { contextWindow: 200_000, maxTokens: 32_000, reasoning: true }),
+			model("unknown", { vision: false }),
 		],
 	});
 	expect(published).toBe(1);
 	expect(readFileSync(path, "utf8")).toContain("// mine");
-	const provider = config().providers["custom-company-gateway"];
+	const provider = providers()["custom-company-gateway"];
 	expect(provider).toEqual({
 		name: "Company gateway",
 		baseUrl: "https://llm.corp.example/v1",
@@ -266,17 +278,25 @@ test("save writes only reported facts with derived output and conservative compa
 			{
 				id: "known",
 				name: "known",
-				reasoning: false,
-				input: ["text"],
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: 131_072,
 				maxTokens: defaultMaxTokens(131_072),
 			},
-			expect.objectContaining({ id: "reported-output", contextWindow: 200_000, maxTokens: 32_000 }),
-			expect.not.objectContaining({ contextWindow: expect.anything() }),
+			expect.objectContaining({
+				id: "reported-output",
+				contextWindow: 200_000,
+				maxTokens: 32_000,
+				reasoning: true,
+			}),
+			{
+				id: "unknown",
+				name: "unknown",
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				input: ["text"],
+			},
 		],
 	});
-	expect(config().providers.ollama).toEqual({ baseUrl: "http://x/v1" });
+	expect(providers().ollama).toEqual({ baseUrl: "http://x/v1" });
 	expect(endpoints).toEqual([
 		{
 			id: "custom-company-gateway",
@@ -285,8 +305,8 @@ test("save writes only reported facts with derived output and conservative compa
 			hasApiKey: true,
 			models: [
 				model("known", { contextWindow: 131_072, maxTokens: defaultMaxTokens(131_072) }),
-				model("reported-output", { contextWindow: 200_000, maxTokens: 32_000 }),
-				model("unknown"),
+				model("reported-output", { contextWindow: 200_000, maxTokens: 32_000, reasoning: true }),
+				model("unknown", { vision: false }),
 			],
 		},
 	]);
@@ -300,7 +320,7 @@ test("saved endpoints become available pi models, and a keyless one gets pi's pl
 		baseUrl: "http://127.0.0.1:11434/v1",
 		models: [model("qwen3:14b", { contextWindow: 40_960 })],
 	});
-	expect(config().providers["custom-ollama"]?.apiKey).toBe("thinkrail-no-key");
+	expect(providers()["custom-ollama"]?.apiKey).toBe("thinkrail-no-key");
 	const available = settledAvailableModels(pi).find((m) => m.provider === "custom-ollama");
 	expect(available).toMatchObject({ id: "qwen3:14b", contextWindow: 40_960 });
 	expect((await listCustomEndpoints())[0]?.hasApiKey).toBe(false);
@@ -317,7 +337,7 @@ test("edits keep hand-added fields, clear managed overrides and guard the saved 
 					baseUrl: "https://gw.example/v1",
 					api: "openai-completions",
 					apiKey: "sk-saved",
-					headers: { "x-team": "core" },
+					authHeader: true,
 					compat: { supportsStore: false },
 					models: [{ id: "a", contextWindow: 8_000, maxTokens: 2_000, temperature: 0.2 }],
 					modelOverrides: { a: { contextWindow: 4_000, name: "Alias" } },
@@ -334,11 +354,11 @@ test("edits keep hand-added fields, clear managed overrides and guard the saved 
 		baseUrl: "https://gw.example/v1",
 		models: [model("a", { contextWindow: 8_000, maxTokens: 2_000 })],
 	});
-	const saved = config().providers["custom-gw"];
+	const saved = providers()["custom-gw"];
 	expect(saved).toMatchObject({
 		name: "Gateway",
 		apiKey: "sk-saved",
-		headers: { "x-team": "core" },
+		authHeader: true,
 		compat: { supportsStore: false },
 		modelOverrides: { a: { name: "Alias" } },
 	});
@@ -359,7 +379,55 @@ test("edits keep hand-added fields, clear managed overrides and guard the saved 
 		apiKey: "",
 		models: [model("a")],
 	});
-	expect(config().providers["custom-gw"]?.apiKey).toBe("thinkrail-no-key");
+	expect(providers()["custom-gw"]?.apiKey).toBe("thinkrail-no-key");
+});
+
+test("an endpoint carrying custom headers can't move to another origin from the form", async () => {
+	await runtime();
+	const withHeaders = (headers: Record<string, unknown>) =>
+		writeFileSync(
+			path,
+			JSON.stringify({
+				providers: {
+					"custom-gw": {
+						baseUrl: "https://gw.example/v1",
+						api: "openai-completions",
+						apiKey: "sk-saved",
+						models: [{ id: "a" }],
+						...headers,
+					},
+				},
+			}),
+		);
+	const move = (apiKey: string) =>
+		saveCustomEndpoint({
+			id: "custom-gw",
+			name: "GW",
+			baseUrl: "https://elsewhere.example/v1",
+			apiKey,
+			models: [model("a")],
+		});
+	for (const headers of [
+		{ headers: { Authorization: "Bearer old-secret" } },
+		{ models: [{ id: "a", headers: { "x-api-key": "old" } }] },
+		{ modelOverrides: { a: { headers: { "x-api-key": "old" } } } },
+	]) {
+		withHeaders(headers);
+		for (const apiKey of ["sk-new", ""])
+			await expect(move(apiKey)).rejects.toThrow("custom headers");
+		expect(providers()["custom-gw"]?.baseUrl).toBe("https://gw.example/v1");
+	}
+	withHeaders({ headers: { Authorization: "Bearer old-secret" } });
+	await saveCustomEndpoint({
+		id: "custom-gw",
+		name: "GW",
+		baseUrl: "https://gw.example/openai/v1",
+		models: [model("a")],
+	});
+	expect(providers()["custom-gw"]).toMatchObject({
+		baseUrl: "https://gw.example/openai/v1",
+		headers: { Authorization: "Bearer old-secret" },
+	});
 });
 
 test("a re-detected smaller context never keeps an output budget that no longer fits", async () => {
@@ -369,7 +437,7 @@ test("a re-detected smaller context never keeps an output budget that no longer 
 		baseUrl: "http://gpu:8000/v1",
 		models: [model("m", { contextWindow: 4_096, maxTokens: 16_384 })],
 	});
-	expect(config().providers["custom-vllm"]?.models).toEqual([
+	expect(providers()["custom-vllm"]?.models).toEqual([
 		expect.objectContaining({ contextWindow: 4_096, maxTokens: 1_024 }),
 	]);
 });
@@ -393,7 +461,7 @@ test("only custom-* providers are listed, edited or removed", async () => {
 		}),
 	).rejects.toThrow("no longer in models.json");
 	expect(await removeCustomEndpoint("my-litellm")).toEqual([]);
-	expect(config().providers["my-litellm"]).toEqual(handWritten);
+	expect(providers()["my-litellm"]).toEqual(handWritten);
 });
 
 test("Detect reuses a saved key only for that endpoint's unchanged address", async () => {
@@ -437,6 +505,59 @@ test("Detect reuses a saved key only for that endpoint's unchanged address", asy
 	const otherRequests = seen.filter((line) => line.startsWith("other"));
 	expect(otherRequests.length).toBeGreaterThan(0);
 	expect(otherRequests.every((line) => line === "other -")).toBe(true);
+});
+
+test("Detect reads the saved key from the file it checks the address against", async () => {
+	await runtime();
+	const first = serve({ "GET /v1/models": () => ({ data: [{ id: "m" }] }) });
+	const firstUrl = first.url;
+	const firstSeen = first.seen;
+	const firstServer = server;
+	const second = serve({ "GET /v1/models": () => ({ data: [{ id: "m" }] }) });
+	const endpoint = (baseUrl: string, apiKey: string) =>
+		writeFileSync(
+			path,
+			JSON.stringify({
+				providers: {
+					"custom-gw": { baseUrl, api: "openai-completions", apiKey, models: [{ id: "m" }] },
+				},
+			}),
+		);
+	try {
+		endpoint(`${firstUrl}/v1`, "sk-first");
+		await runtime();
+		endpoint(`${second.url}/v1`, "sk-second");
+		await probeCustomEndpoint({ baseUrl: `${second.url}/v1`, endpointId: "custom-gw" });
+		expect(second.seen.length).toBeGreaterThan(0);
+		expect(second.seen.every((line) => line.endsWith("Bearer sk-second"))).toBe(true);
+		expect(firstSeen).toEqual([]);
+	} finally {
+		firstServer?.stop(true);
+	}
+});
+
+test("Detect never runs a saved command-backed key", async () => {
+	await runtime();
+	const marker = join(directory, "command-ran");
+	const { url, seen } = serve({ "GET /v1/models": () => ({ data: [{ id: "m" }] }) });
+	writeFileSync(
+		path,
+		JSON.stringify({
+			providers: {
+				"custom-gw": {
+					baseUrl: `${url}/v1`,
+					api: "openai-completions",
+					apiKey: `!touch ${marker} && echo leaked`,
+					models: [{ id: "m" }],
+				},
+			},
+		}),
+	);
+	expect(
+		await probeCustomEndpoint({ baseUrl: `${url}/v1`, endpointId: "custom-gw" }),
+	).toMatchObject({ ok: true });
+	expect(existsSync(marker)).toBe(false);
+	expect(seen.every((line) => line.endsWith(" -"))).toBe(true);
 });
 
 test("invalid drafts are refused before models.json is touched", async () => {

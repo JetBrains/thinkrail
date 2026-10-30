@@ -626,8 +626,8 @@ export interface CustomEndpointModel {
 	id: string;
 	contextWindow: number | null;
 	maxTokens: number | null;
-	reasoning: boolean;
-	vision: boolean;
+	reasoning: boolean | null;
+	vision: boolean | null;
 	/** Whether the server says the model takes tool calls; never saved, so a listed endpoint reports null. */
 	tools: boolean | null;
 }
