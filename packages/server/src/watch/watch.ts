@@ -1,9 +1,10 @@
 import { type FSWatcher, readFileSync, statSync, watch } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import type {
-	WorkspaceFsChangedPayload,
-	WorkspaceSkillChange,
-	WorkspaceWatchReadyResult,
+import {
+	UNWATCHED_PATH_SEGMENTS,
+	type WorkspaceFsChangedPayload,
+	type WorkspaceSkillChange,
+	type WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
 import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -17,7 +18,6 @@ const MAX_PATHS = 100;
 const STARTUP_NUDGE_MS = 750;
 const MAX_PREWARM_ONLY_WATCHES = 8;
 
-const IGNORED_SEGMENTS = new Set([".git", "node_modules"]);
 const IGNORED_NAMES = new Set([".DS_Store"]);
 const REPO_META_DEBOUNCE_MS = 300;
 
@@ -116,7 +116,7 @@ function scheduleRepoMeta(workspaceId: string, watcher: FSWatcher): void {
 
 export function isIgnoredPath(relPath: string): boolean {
 	const segments = relPath.split(/[\\/]/);
-	if (segments.some((s) => IGNORED_SEGMENTS.has(s))) return true;
+	if (segments.some((s) => UNWATCHED_PATH_SEGMENTS.has(s))) return true;
 	const name = segments[segments.length - 1];
 	return name !== undefined && IGNORED_NAMES.has(name);
 }

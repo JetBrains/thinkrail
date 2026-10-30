@@ -281,6 +281,8 @@ export interface EditorInfo {
 
 export type WorkspaceSkillChange = "none" | "detected" | "unknown";
 
+export const UNWATCHED_PATH_SEGMENTS: ReadonlySet<string> = new Set([".git", "node_modules"]);
+
 export interface WorkspaceFsChangedPayload {
 	workspaceId: string;
 	paths: string[];

@@ -13,7 +13,9 @@ import {
 	type BranchStatusSnapshot,
 	type BranchStatusStateStore,
 	branchStatusState,
+	withDivergence,
 } from "./branchStatusState";
+import { createSingleFlight } from "./singleFlight";
 
 type BranchStatusRequestParams = { workspaceId: string; allowCached?: true; skipFetch?: true };
 
@@ -35,9 +37,9 @@ function requestBranchStatus(options: {
 	skipFetch?: boolean;
 	request: BranchStatusRequest;
 	state: BranchStatusStateStore;
-}): void {
-	const generation = options.state.beginRequest(options.key);
-	void options
+}): Promise<void> {
+	const request = options.state.beginRequest(options.key, { supersede: !options.allowCached });
+	return options
 		.request({
 			workspaceId: options.workspaceId,
 			...(options.allowCached ? { allowCached: true as const } : {}),
@@ -45,10 +47,10 @@ function requestBranchStatus(options: {
 		})
 		.then(
 			(answer) => {
-				options.state.resolveRequest(options.key, generation, answer);
+				options.state.resolveRequest(options.key, request, answer);
 			},
 			() => {
-				options.state.resolveRequest(options.key, generation, { review: null, status: null });
+				options.state.failRequest(options.key, request);
 			},
 		);
 }
@@ -69,6 +71,7 @@ export function startBranchStatusSync(options: {
 } {
 	let connected = options.connected;
 	let freshOnReconnect = false;
+	const cachedReads = createSingleFlight();
 	const load = (allowCached: boolean, skipFetch = false) =>
 		requestBranchStatus({
 			workspaceId: options.workspaceId,
@@ -78,26 +81,31 @@ export function startBranchStatusSync(options: {
 			request: options.request,
 			state: options.state,
 		});
+	const loadFresh = (skipFetch = false) => void load(false, skipFetch);
+	const reload = () => {
+		if (connected) cachedReads.run(() => (connected ? load(true) : undefined));
+	};
 	const poll = () => {
-		if (connected) load(false, true);
+		if (connected) loadFresh(true);
 	};
 	const refresh = () => {
-		if (connected) load(false);
+		if (connected) loadFresh();
 		else freshOnReconnect = true;
-	};
-	const reload = () => {
-		if (connected) load(true);
 	};
 	const setConnected = (next: boolean) => {
 		if (connected === next) return;
 		connected = next;
 		if (!connected) return;
-		load(!freshOnReconnect);
+		if (freshOnReconnect) loadFresh();
+		else reload();
 		freshOnReconnect = false;
 	};
-	const stop = () => options.focusTarget.removeEventListener("focus", refresh);
+	const stop = () => {
+		cachedReads.stop();
+		options.focusTarget.removeEventListener("focus", refresh);
+	};
 
-	if (connected) load(true);
+	reload();
 	options.focusTarget.addEventListener("focus", refresh);
 	return { setConnected, refresh, reload, poll, stop };
 }
@@ -130,18 +138,7 @@ export function supportsBranchStatus(protocolVersion: number | null): boolean {
 }
 
 export function branchAnswer({ review, ...facts }: BranchStatus): BranchAnswer {
-	const ahead = facts.ahead ?? 0;
-	const behind = facts.behind ?? 0;
-	return {
-		review: review
-			? {
-					...review,
-					...(ahead > 0 ? { unpushedCommits: ahead } : {}),
-					...(behind > 0 ? { behindCommits: behind } : {}),
-				}
-			: null,
-		status: facts,
-	};
+	return { review: review ? withDivergence(review, facts) : null, status: facts };
 }
 
 const transportRequest: BranchStatusRequest = async (params) => {
