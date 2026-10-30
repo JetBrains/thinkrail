@@ -1,4 +1,6 @@
 export type { RemoteChannel } from "./channel";
+export { createWeriftHostPeer, type HostPeer, type HostPeerSignal } from "./hostPeer";
+export { createHostSession, type HostSession, type HostSessionDeps } from "./hostSession";
 export {
 	type DeviceMessage,
 	encodeHostMessage,
