@@ -250,10 +250,15 @@ test("a failed update check renders under the group header", () => {
 });
 
 test("a declared package missing on disk is a Not installed row with Remove only", () => {
-	const { installedPath: _installed, ...missing } = JIRA;
+	const {
+		installedPath: _installed,
+		version: _version,
+		description: _description,
+		...missing
+	} = JIRA;
 	const markup = renderToStaticMarkup(
 		<PackageRow
-			summary={{ ...missing, version: undefined, description: undefined, resources: [] }}
+			summary={{ ...missing, resources: [] }}
 			updateAvailable={false}
 			expanded={false}
 			busy={false}

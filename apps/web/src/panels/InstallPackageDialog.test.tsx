@@ -104,7 +104,8 @@ test("the form offers both scopes with a trusted workspace and shows the setting
 });
 
 test("without a workspace the repository scope is disabled with a reason; untrusted says so too", () => {
-	const noWorkspace = render(null, { ...CATALOG, projectSettingsPath: undefined });
+	const { projectSettingsPath: _projectSettingsPath, ...withoutRepository } = CATALOG;
+	const noWorkspace = render(null, withoutRepository);
 	expect(noWorkspace).toContain("Open a workspace to install for its repository.");
 	const untrusted = render("w1", { ...CATALOG, projectTrusted: false });
 	expect(untrusted).toContain("Trust this project before installing packages into its repository.");
