@@ -46,6 +46,7 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import { ExtraUsageNotice } from "./ExtraUsageNotice";
 import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
@@ -109,6 +110,8 @@ export default function ChatView({
 	const extUiWidget = useAppStore(
 		(s) => s.sessions[sessionId]?.extUiWidget ?? EMPTY_RUNTIME.extUiWidget,
 	);
+	const notice = useAppStore((s) => s.sessions[sessionId]?.notice ?? null);
+	const [disablingNotice, setDisablingNotice] = useState(false);
 	const commands = useAppStore((s) => s.sessions[sessionId]?.commands ?? EMPTY_RUNTIME.commands);
 	const stats = useAppStore((s) => s.sessions[sessionId]?.stats ?? null);
 	const statsRefreshTick = useAppStore((s) => s.sessions[sessionId]?.statsRefreshTick ?? 0);
@@ -733,6 +736,14 @@ export default function ChatView({
 	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
 
 	const widgetEntries = Object.entries(extUiWidget);
+	const disableNotice = () => {
+		setDisablingNotice(true);
+		getTransport()
+			.request("provider.disableWarning", { warning: "anthropicExtraUsage" })
+			.then(() => useAppStore.getState().silenceNotice("anthropicExtraUsage"))
+			.catch((err) => toast.error(errorText(err), translate("chat.extraUsage.disableFailed")))
+			.finally(() => setDisablingNotice(false));
+	};
 	const focusComposer = useCallback(() => composerRef.current?.refocus(), []);
 	// Keep a stable `onTryAgain` identity (it is passed to every transcript row) while always calling the
 	// latest `performSend` closure.
@@ -874,6 +885,15 @@ export default function ChatView({
 					onOpenFinished={openFinished}
 					onStopCommand={resources.stopCommand}
 					onStopSubagent={resources.stopSubagent}
+				/>
+			) : null}
+			{notice === "anthropicExtraUsage" ? (
+				<ExtraUsageNotice
+					context="chat"
+					className="mx-12 mb-8 shrink-0"
+					onDismiss={() => useAppStore.getState().dismissSessionNotice(sessionId)}
+					onDisable={disableNotice}
+					disabling={disablingNotice}
 				/>
 			) : null}
 			<div className="relative shrink-0">

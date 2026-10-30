@@ -1,6 +1,11 @@
 import type { AuthInteraction, AuthPrompt, AuthType } from "@earendil-works/pi-ai";
 import type { LoginFrame, LoginPush, LoginReply } from "@thinkrail/contracts";
-import { type PiRuntimeGeneration, piLoginOptions, usePiRuntime } from "../agent";
+import {
+	type PiRuntimeGeneration,
+	piLoginOptions,
+	recheckAnthropicExtraUsage,
+	usePiRuntime,
+} from "../agent";
 
 let publish: (push: LoginPush, generation?: PiRuntimeGeneration) => void = () => {};
 export function setLoginPublisher(
@@ -131,6 +136,7 @@ export function startLogin(
 			if (terminate(loginId)) {
 				publish({ loginId, providerId, frame: { kind: "success" } }, generation);
 			}
+			if (providerId === "anthropic") recheckAnthropicExtraUsage();
 		})
 		.catch((err: unknown) => {
 			if (terminate(loginId)) {

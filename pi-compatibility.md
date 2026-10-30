@@ -134,6 +134,14 @@ registry-extension tools by mirroring Pi's private `_isActivatedOnRegistration` 
 re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way to keep host-withheld tools
 apart from the recorded selection. Run the manager's restart regressions on upgrades.
 
+- **Anthropic extra-usage warning parity** — [[submodule-server-agent]], `agent/anthropicExtraUsage.ts`.
+  Pi's warning exists only in interactive mode (`maybeWarnAboutAnthropicSubscriptionAuth`), and its
+  `sk-ant-oat` predicate and warning text are module-private. So the host mirrors the trigger: it uses
+  the public `ModelRuntime.checkAuth` / `getAuth`, gates on `SettingsManager.getWarnings()`, and copies
+  the prefix check. The re-check points (session start, model switch, Anthropic login) are mirrored too.
+  **Removal gate:** pi exports the predicate, or a host-consumable warning event; then drop the copy.
+  On upgrades, re-diff the interactive check and its call sites, and run
+  `agent/anthropicExtraUsage.test.ts`.
 - **Anthropic SSE framing patch** — [[submodule-server-agent]] (Provider stream framing),
   `patches/@earendil-works%2Fpi-ai@1.4.0.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
   streams fail with the non-retryable "Could not parse Anthropic SSE event": a valid CRLF stream whose

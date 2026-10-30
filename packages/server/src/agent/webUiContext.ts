@@ -4,7 +4,7 @@ import type {
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
 } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest, ExtUiResponse } from "@thinkrail/contracts";
+import type { ExtUiRequest, ExtUiResponse, ProviderWarning } from "@thinkrail/contracts";
 import { plainTextTheme } from "./plainTextTheme";
 
 /** Clients whose protocol version is below `belowProtocol`; absent means every client. */
@@ -82,6 +82,10 @@ export function notifyExtUi(
 	audience?: ExtUiAudience,
 ): void {
 	publish({ id: nextId(), sessionId, kind: "notify", message, level }, audience);
+}
+
+export function publishSessionNotice(sessionId: string, notice: ProviderWarning): void {
+	publish({ id: nextId(), sessionId, kind: "notice", notice });
 }
 
 const MAX_EXTENSION_ERROR_CHARS = 500;

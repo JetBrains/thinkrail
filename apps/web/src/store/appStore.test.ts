@@ -1591,6 +1591,35 @@ test("an ext-UI frame that beats its session.create response is replayed, not dr
 	expect(useAppStore.getState().extUiOrphans).toEqual([]);
 });
 
+test("an extra-usage notice survives the create race, dismisses per chat, and silences every chat", () => {
+	const store = useAppStore.getState();
+	store.applyExtUi({ id: "x1", sessionId: "a", kind: "notice", notice: "anthropicExtraUsage" });
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+	store.openChatSession("ws1", "c", null, "medium");
+	store.applyExtUi({ id: "x2", sessionId: "b", kind: "notice", notice: "anthropicExtraUsage" });
+	store.applyExtUi({ id: "x3", sessionId: "c", kind: "notice", notice: "anthropicExtraUsage" });
+	expect(rt("a").notice).toBe("anthropicExtraUsage");
+
+	store.dismissSessionNotice("a");
+	expect(rt("a").notice).toBeNull();
+	expect(rt("b").notice).toBe("anthropicExtraUsage");
+
+	store.silenceNotice("anthropicExtraUsage");
+	expect(rt("b").notice).toBeNull();
+	expect(rt("c").notice).toBeNull();
+});
+
+test("Don't warn again also drops a buffered notice for a chat not opened yet", () => {
+	const store = useAppStore.getState();
+	store.applyExtUi({ id: "x4", sessionId: "later", kind: "notice", notice: "anthropicExtraUsage" });
+	store.applyExtUi({ id: "s4", sessionId: "later", kind: "setStatus", key: "k", text: "kept" });
+	store.silenceNotice("anthropicExtraUsage");
+	store.openChatSession("ws1", "later", null, "medium");
+	expect(rt("later").notice).toBeNull();
+	expect(rt("later").extUiStatus).toEqual({ k: "kept" });
+});
+
 test("a dialog for an unknown session is dropped, never replayed as a phantom", () => {
 	const store = useAppStore.getState();
 

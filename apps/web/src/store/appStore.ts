@@ -15,6 +15,7 @@ import type {
 	PiEvent,
 	Project,
 	ProviderStatusReport,
+	ProviderWarning,
 	RefreshedModels,
 	ResourceKind,
 	ResourceMeta,
@@ -486,6 +487,7 @@ export interface SessionRuntime {
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
 	extUiWidget: Record<string, string[]>;
+	notice: ProviderWarning | null;
 	hostState: SessionState | null;
 }
 
@@ -517,6 +519,7 @@ function newRuntime(
 		extUiQueue: [],
 		extUiStatus: {},
 		extUiWidget: {},
+		notice: null,
 		hostState: null,
 	};
 }
@@ -919,6 +922,8 @@ function reduceExtUi(
 				return { ...rt, extUiWidget: omitKey(rt.extUiWidget, request.key) };
 			return { ...rt, extUiWidget: { ...rt.extUiWidget, [request.key]: request.content } };
 		}
+		case "notice":
+			return rt.notice === request.notice ? rt : { ...rt, notice: request.notice };
 		default:
 			return rt;
 	}
@@ -1362,11 +1367,18 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	dismissSessionNotice: (sessionId: string) => void;
+	silenceNotice: (notice: ProviderWarning) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	applyExtUi: (request: ExtUiRequest) => void;
 	reserveLogin: () => boolean;
 	finishLoginStart: () => void;
-	beginLogin: (loginId: string, providerId: string, target?: LoginPush["target"]) => void;
+	beginLogin: (
+		loginId: string,
+		providerId: string,
+		target?: LoginPush["target"],
+		method?: LoginState["method"],
+	) => void;
 	applyLoginFrame: (push: LoginPush) => void;
 	clearLoginInput: () => void;
 	clearLogin: (loginId?: string) => void;
@@ -2038,6 +2050,7 @@ const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
 	"setStatus",
 	"setWidget",
 	"setTitle",
+	"notice",
 ]);
 
 function isDialogRequest(
@@ -4305,6 +4318,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	dismissSessionNotice: (sessionId) =>
+		set((s) => withRuntime(s, sessionId, (rt) => (rt.notice ? { ...rt, notice: null } : rt))),
+	silenceNotice: (notice) =>
+		set((s) => {
+			const silenced = Object.entries(s.sessions).filter(([, rt]) => rt.notice === notice);
+			const orphans = s.extUiOrphans.filter(
+				(frame) => frame.kind !== "notice" || frame.notice !== notice,
+			);
+			const sessions = silenced.length > 0 ? { ...s.sessions } : s.sessions;
+			for (const [id, rt] of silenced) sessions[id] = { ...rt, notice: null };
+			return {
+				...(sessions !== s.sessions ? { sessions } : {}),
+				...(orphans.length !== s.extUiOrphans.length ? { extUiOrphans: orphans } : {}),
+			};
+		}),
 	clearPendingExtUi: (sessionId, id) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => {
@@ -4327,12 +4355,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 		return true;
 	},
 	finishLoginStart: () => set({ loginStarting: false }),
-	beginLogin: (loginId, providerId, target) =>
+	beginLogin: (loginId, providerId, target, method) =>
 		set((s) => {
 			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
-			if (s.activeLogin?.loginId === loginId || s.activeLogin?.status === "active") return {};
+			if (s.activeLogin?.loginId === loginId)
+				return method && !s.activeLogin.method ? { activeLogin: { ...s.activeLogin, method } } : {};
+			if (s.activeLogin?.status === "active") return {};
 			const early = s.unheldLoginFrame?.loginId === loginId ? s.unheldLoginFrame.frame : null;
-			const fresh = newLoginState(loginId, providerId, target);
+			const fresh = {
+				...newLoginState(loginId, providerId, target),
+				...(method ? { method } : {}),
+			};
 			return {
 				activeLogin: early ? foldLoginFrame(fresh, early) : fresh,
 				unheldLoginFrame: null,

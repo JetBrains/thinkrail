@@ -39,6 +39,7 @@ import {
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	PROVIDER_WARNINGS_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
@@ -517,5 +518,11 @@ describe("tool response guards", () => {
 
 test("survey translations and separate Other text are pinned to v98", () => {
 	expect(SURVEY_TRANSLATIONS_PROTOCOL_VERSION).toBe(98);
-	expect(PROTOCOL_VERSION).toBe(98);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SURVEY_TRANSLATIONS_PROTOCOL_VERSION);
+});
+
+test("provider warnings are pinned to v99", () => {
+	expect(PROVIDER_WARNINGS_PROTOCOL_VERSION).toBe(99);
+	expect(PROTOCOL_VERSION).toBe(99);
+	expect(WS_METHODS.providerDisableWarning).toBe("provider.disableWarning");
 });

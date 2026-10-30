@@ -954,6 +954,16 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `styles/COLOR.md`). **Compact mode**: below the chat column's `@md` container width (phones, narrow
   splits) labels and keycap hide and the send pill collapses to an icon, so the model pill keeps its room.
   Labels use `ui.action`.
+- **Anthropic extra-usage notice** (`ExtraUsageNotice.tsx`, props-driven). It warns that Claude Pro/Max
+  auth bills ThinkRail's usage per token as extra usage. Both variants link only claude.ai's usage page.
+  There is no "Details" link: no pi doc explains the billing (pi's providers.md has no Claude Pro/Max
+  section), and Anthropic's help pages cover usage limits, not the third-party rule. The notice's own
+  sentence is the explanation. The `chat` variant sits above
+  the composer while the runtime's `notice` is `anthropicExtraUsage`. It is non-blocking, ✕ dismisses it
+  for that chat, and **Don't warn again** (`ChatView`: `provider.disableWarning`, then
+  `silenceNotice`, toast on failure) turns off pi's own setting. The `signIn` variant is
+  informational, for the Connect dialog ([[submodule-web-panels]]). When the host warns, and how often,
+  is [[submodule-server-agent]]'s Billing warnings.
 - **Queued messages: the pending strip** (`QueueStrip.tsx`, props-driven: `queue` + `onEdit`/`onRemove`)
   — the web mirror of pi's interactive-mode pending-messages area. A **streaming send never renders an
   optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips

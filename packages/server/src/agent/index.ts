@@ -1,4 +1,5 @@
 export * from "./agentSessionManager";
+export { disableAnthropicExtraUsageWarning, globalProviderWarnings } from "./anthropicExtraUsage";
 export {
 	getResourceHistoryPage,
 	getSessionResources,

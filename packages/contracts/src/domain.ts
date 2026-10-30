@@ -941,10 +941,15 @@ export function isJbcentralConnected(status: JbcentralStatus): boolean {
 	return status.state === "configured" && !status.signedOut && !status.proxyStopped;
 }
 
+/** A pi `warnings.*` setting the host surfaces; `anthropicExtraUsage` warns that Claude subscription auth bills per token. */
+export type ProviderWarning = "anthropicExtraUsage";
+
 export interface ProviderStatusReport {
 	providers: ProviderStatus[];
 	jbcentral: JbcentralStatus;
 	jbcentralInstall: JbcentralInstall;
+	/** pi's global `warnings.*` switches (default on); absent from hosts older than v99. */
+	warnings?: Record<ProviderWarning, boolean>;
 }
 
 export type JbcentralActionResult =
