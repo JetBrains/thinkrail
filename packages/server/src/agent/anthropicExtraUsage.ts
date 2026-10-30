@@ -1,5 +1,6 @@
-import { type ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
+import type { ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
 import type { ProviderWarning } from "@thinkrail/contracts";
+import { createPiSettings } from "./packages";
 
 const ANTHROPIC = "anthropic";
 const SUBSCRIPTION_KEY_PREFIX = "sk-ant-oat";
@@ -21,7 +22,7 @@ export function anthropicExtraUsageWarningEnabledOnDisk(
 	projectTrusted: boolean,
 ): boolean {
 	return anthropicExtraUsageWarningEnabled(
-		SettingsManager.create(cwd, undefined, { projectTrusted }),
+		createPiSettings(cwd, undefined, { projectTrusted, packages: "all" }),
 	);
 }
 
@@ -44,7 +45,7 @@ export async function shouldWarnAnthropicExtraUsage(subject: ExtraUsageSubject):
 }
 
 function globalSettingsManager(): SettingsManager {
-	return SettingsManager.create(process.cwd(), undefined, { projectTrusted: false });
+	return createPiSettings(process.cwd(), undefined, { projectTrusted: false, packages: "all" });
 }
 
 export function globalProviderWarnings(): Record<ProviderWarning, boolean> {
