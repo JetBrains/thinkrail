@@ -5,21 +5,7 @@ import { useRef, useState } from "react";
 import { Table } from "../parts/Section";
 import type { PlaygroundValues, Showcase } from "./types";
 
-const ROW_COUNTS = [
-	{
-		rows: 2,
-		use: "A short sub-list: workspaces under an expanded project, the Extensions catalog.",
-	},
-	{ rows: 3, use: "A settings section, a menu's commit section." },
-	{
-		rows: 4,
-		use: "A dialog list (existing worktrees, skills), one file section of the review tab.",
-	},
-	{ rows: 5, use: "A side-panel list: Changes, Review." },
-	{ rows: 6, use: "The default; the Specs panel." },
-	{ rows: 8, use: "The file tree, the review tab, a plan or a resource preview pane." },
-	{ rows: 12, use: "A restoring tab body, a file or diff pane. The maximum." },
-] as const;
+const ROW_COUNTS = [2, 3, 4, 5, 6, 8, 12] as const;
 
 const code = (text: string) => (
 	<code key="code" className="tr-code-text">
@@ -30,13 +16,12 @@ const code = (text: string) => (
 function RowCounts() {
 	return (
 		<Table
-			head={["rows", "Placeholder", "Used for"]}
-			rows={ROW_COUNTS.map(({ rows, use }) => [
+			head={["rows", "Placeholder"]}
+			rows={ROW_COUNTS.map((rows) => [
 				code(`rows={${rows}}`),
 				<div key="live" className="w-[12rem]">
 					<LoadingRegion rows={rows} />
 				</div>,
-				use,
 			])}
 		/>
 	);
@@ -71,23 +56,11 @@ function Replay({ resolveAfter }: { resolveAfter: number | null }) {
 function States() {
 	return (
 		<Table
-			head={["Read time", "Live", "What you see"]}
+			head={["Read time", "Live"]}
 			rows={[
-				[
-					"Resolves within the grace",
-					<Replay key="live" resolveAfter={200} />,
-					"The region keeps its space but never shows bars; the content fades in.",
-				],
-				[
-					"Resolves after the grace",
-					<Replay key="live" resolveAfter={1500} />,
-					"The bars fade in, pulse, then give way to the content.",
-				],
-				[
-					"Still pending",
-					<Replay key="live" resolveAfter={null} />,
-					"The bars fade in and keep pulsing until the read lands.",
-				],
+				["Resolves within the grace", <Replay key="live" resolveAfter={200} />],
+				["Resolves after the grace", <Replay key="live" resolveAfter={1500} />],
+				["Still pending", <Replay key="live" resolveAfter={null} />],
 			]}
 		/>
 	);
@@ -119,20 +92,8 @@ function playgroundCode(values: PlaygroundValues) {
 
 export const skeletonShowcase: Showcase = {
 	sections: [
-		{
-			id: "rows",
-			title: "Row counts",
-			description:
-				"Every cell is the real `LoadingRegion`. Bars follow one fixed width sequence, so a count only adds or removes rows from the end; counts above 12 are clamped.",
-			Render: RowCounts,
-		},
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Press Mount to mount a fresh placeholder and watch the grace, the fade-in and the pulse. The resolved text carries `motion-safe:animate-reveal`, as resolved content does in the app.",
-			Render: States,
-		},
+		{ id: "rows", Render: RowCounts },
+		{ id: "states", Render: States },
 	],
 	playground: {
 		controls: [

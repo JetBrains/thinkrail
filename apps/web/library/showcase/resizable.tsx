@@ -2,7 +2,6 @@ import { useT } from "@thinkrail/locales/react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment } from "react";
-import { InlineMarkdown } from "../parts/Markdown";
 import { Table } from "../parts/Section";
 import type { PlaygroundValues, Showcase } from "./types";
 
@@ -57,25 +56,21 @@ function Specimen({ direction, panels, collapsible, disabled }: SpecimenConfig) 
 	);
 }
 
-const ROWS: readonly { state: string; how: string; config: SpecimenConfig }[] = [
+const ROWS: readonly { state: string; config: SpecimenConfig }[] = [
 	{
 		state: "Horizontal",
-		how: "Hover the line, drag it, or Tab to it and press ←/→, Home, End.",
 		config: { direction: "horizontal", panels: 2, collapsible: false, disabled: false },
 	},
 	{
 		state: "Vertical",
-		how: '`direction="vertical"` on the group and on the handle. ↑/↓ resize.',
 		config: { direction: "vertical", panels: 2, collapsible: false, disabled: false },
 	},
 	{
 		state: "Collapsible side",
-		how: "`collapsible` + `collapsedSize={0}`. Drag past `minSize`, or focus the handle and press Enter.",
 		config: { direction: "horizontal", panels: 2, collapsible: true, disabled: false },
 	},
 	{
 		state: "Disabled",
-		how: "`disabled` on the handle: no hover colour, no drag, no keyboard resize.",
 		config: { direction: "horizontal", panels: 2, collapsible: false, disabled: true },
 	},
 ];
@@ -83,12 +78,11 @@ const ROWS: readonly { state: string; how: string; config: SpecimenConfig }[] = 
 function States() {
 	return (
 		<Table
-			head={["Case", "Try it", "Live"]}
+			head={["Case", "Live"]}
 			rows={ROWS.map((row) => [
 				<span key="state" className="tr-text-emphasis">
 					{row.state}
 				</span>,
-				<InlineMarkdown key="how" source={row.how} />,
 				<div key="live" className="w-full min-w-[16rem]">
 					<Specimen {...row.config} />
 				</div>,
@@ -129,15 +123,7 @@ function code(values: PlaygroundValues) {
 }
 
 export const resizableShowcase: Showcase = {
-	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Every cell is a real panel group. The handle is a hairline in `border-default` that turns `primary` while the pointer is over it or dragging; click into the page and press Tab to reach a handle from the keyboard.",
-			Render: States,
-		},
-	],
+	sections: [{ id: "states", Render: States }],
 	playground: {
 		controls: [
 			{ kind: "choice", name: "direction", options: ["horizontal", "vertical"] },

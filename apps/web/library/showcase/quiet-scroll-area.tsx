@@ -1,6 +1,5 @@
 import { cn } from "@thinkrail/ui/utils";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
-import { InlineMarkdown } from "../parts/Markdown";
 import { Table } from "../parts/Section";
 import type { PlaygroundValues, Showcase } from "./types";
 
@@ -61,48 +60,23 @@ function Specimen({
 	);
 }
 
-const ROWS: readonly {
-	state: string;
-	how: string;
-	props: Parameters<typeof Specimen>[0];
-}[] = [
-	{ state: "No overflow", how: "Content fits.", props: { content: "short" } },
-	{
-		state: "At the start",
-		how: "Overflow below.",
-		props: { content: "long" },
-	},
-	{
-		state: "In the middle",
-		how: "Overflow on both sides.",
-		props: { content: "long", start: "middle" },
-	},
-	{
-		state: "At the end",
-		how: "Scrolled to the bottom.",
-		props: { content: "long", start: "end" },
-	},
-	{
-		state: "Both axes",
-		how: '`axis="both"`, scrolled to the middle of wide content.',
-		props: { content: "wide", axis: "both", start: "middle" },
-	},
-	{
-		state: "Terminal surface",
-		how: '`surface="terminal"` on `container-terminal-bg`.',
-		props: { content: "long", surface: "terminal", start: "middle" },
-	},
+const ROWS: readonly { state: string; props: Parameters<typeof Specimen>[0] }[] = [
+	{ state: "No overflow", props: { content: "short" } },
+	{ state: "At the start", props: { content: "long" } },
+	{ state: "In the middle", props: { content: "long", start: "middle" } },
+	{ state: "At the end", props: { content: "long", start: "end" } },
+	{ state: "Both axes", props: { content: "wide", axis: "both", start: "middle" } },
+	{ state: "Terminal surface", props: { content: "long", surface: "terminal", start: "middle" } },
 ];
 
 function States() {
 	return (
 		<Table
-			head={["Case", "How", "Live"]}
+			head={["Case", "Live"]}
 			rows={ROWS.map((row) => [
 				<span key="state" className="tr-text-emphasis">
 					{row.state}
 				</span>,
-				<InlineMarkdown key="how" source={row.how} />,
 				<div key="live" className="w-full min-w-[16rem]">
 					<Specimen {...row.props} />
 				</div>,
@@ -135,15 +109,7 @@ function code(values: PlaygroundValues) {
 }
 
 export const quietScrollAreaShowcase: Showcase = {
-	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Every cell is the real component. A curtain fades in on each clipped edge; hover a cell or scroll it to reveal the thumb.",
-			Render: States,
-		},
-	],
+	sections: [{ id: "states", Render: States }],
 	playground: {
 		controls: [
 			{ kind: "choice", name: "surface", options: ["sidebar", "terminal"] },

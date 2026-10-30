@@ -3,7 +3,6 @@ import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
 
 export default function GroupDisabled() {
 	const t = useT();
-	// The connected host cannot apply this setting yet.
 	const supported = false;
 	return (
 		<div className="w-full">

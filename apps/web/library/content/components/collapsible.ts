@@ -83,6 +83,24 @@ export const collapsible = {
 				"Background classes for the fade strip. The default ends on `container-header-bg`, the code-block surface; pass the gradient to `--container-elevated-bg` when the content's bottom edge is the card itself (EditCard's coloured diff rows).",
 		},
 	} satisfies Record<keyof CollapsibleProps, PropDoc>,
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is the real component. The fold starts collapsed; the toggle is the only way to expand it, and the choice is remembered per `id`.",
+			table: {
+				head: ["State", "How"],
+				rows: [
+					["Short", "`lines={6}` — 24 lines or fewer render as they are."],
+					[
+						"Collapsed → expanded",
+						"`lines={60}` — capped behind the fade. Click the toggle to expand, click again to collapse.",
+					],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Short",

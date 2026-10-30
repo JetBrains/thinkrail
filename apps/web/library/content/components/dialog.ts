@@ -3,7 +3,6 @@ import type { ComponentProps } from "react";
 import type { ComponentDoc, PropDoc } from "../types";
 
 type RootProps = ComponentProps<typeof Dialog>;
-/** `DialogPanel` takes exactly Radix `Dialog.Content` props, so the difference is what ThinkRail adds. */
 type RadixContentProps = ComponentProps<typeof DialogPanel>;
 type ContentOwnProps = Exclude<keyof ComponentProps<typeof DialogContent>, keyof RadixContentProps>;
 

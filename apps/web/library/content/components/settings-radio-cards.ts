@@ -132,6 +132,14 @@ export const settingsRadioCards = {
 			},
 		} satisfies Record<keyof SettingsRadioChoice<string>, PropDoc>,
 	},
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is the real component with real props and its own radio group. Hover a card, click to select, or click into the page and press Tab, then the arrow keys.",
+		},
+	],
 	states: [
 		{
 			state: "Rest",

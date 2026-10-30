@@ -4,7 +4,6 @@ import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
 
 export default function NonPreset() {
 	const t = useT();
-	// The host is configured with 5 days, which is not one of the presets.
 	const [choice, setChoice] = useState<string>("5");
 	return (
 		<div className="w-full">

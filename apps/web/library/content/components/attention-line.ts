@@ -79,6 +79,22 @@ export const attentionLine = {
 				"Renders the component's own polite live region. Pass `false` when a surrounding owner announces the request; the visible line is then always `aria-hidden`.",
 		},
 	} satisfies Record<keyof AttentionLineProps, PropDoc>,
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"The three configurations look identical; they differ only in which copy of the message is in the accessibility tree. Every cell is the real component.",
+			table: {
+				head: ["Props", "Visible line", "Live region"],
+				rows: [
+					["`default`", "Exposed", "Mounted, empty"],
+					["`announced`", "`aria-hidden`", "“Your input is needed — the agent is waiting.”"],
+					["`live={false}`", "`aria-hidden`", "Not rendered — the owner announces"],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Waiting, not yet announced",

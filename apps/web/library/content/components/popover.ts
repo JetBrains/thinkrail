@@ -1,22 +1,13 @@
 import type { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import type { ComponentProps } from "react";
+import { type PartDocs, partProps } from "../parts";
 import type { ComponentDoc, PropDoc } from "../types";
 
-/** Docs for some of a part's props, checked against its real props. */
-type PartDocs<P> = Partial<Record<keyof P, PropDoc>>;
 type ContentProps = ComponentProps<typeof PopoverContent>;
-/** What the ThinkRail wrapper adds to or changes on Radix `Popover.Content`; must exist on the real props. */
 type ContentOwnProps = Pick<
 	Record<keyof ContentProps, PropDoc>,
 	"container" | "align" | "sideOffset"
 >;
-
-/** Prefixes each prop of a part with the part's name, so one table lists every part. */
-function partProps(part: string, docs: Readonly<Record<string, PropDoc>>) {
-	return Object.fromEntries(
-		Object.entries(docs).map(([name, doc]) => [`${part}.${name}`, doc]),
-	) as Record<string, PropDoc>;
-}
 
 const contentOwnProps = {
 	container: {

@@ -151,6 +151,14 @@ export const treeRow = {
 				"Forwarded to the `<button>` — FileTree scrolls a revealed file into view with it.",
 		},
 	} satisfies Record<keyof TreeRowProps, PropDoc>,
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				'Every cell is the real component. Hover a cell or click into the page and press Tab to see the hover fill and the inset focus ring. With `highlight="wrapper"` the row paints no fill of its own — only the fill icon marks it active.',
+		},
+	],
 	states: [
 		{
 			state: "Default",

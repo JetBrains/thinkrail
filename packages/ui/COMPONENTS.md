@@ -136,7 +136,7 @@ Native button props:
 | `onClick` | `MouseEventHandler` | — | Activation handler (pointer, Enter, Space). |
 | `className` | `string` | — | Placement only: margins, flex/grid placement, `w-full`, positioning, responsive visibility. |
 
-### Variants
+### Variants and sizes
 
 | Variant | Use it for |
 | --- | --- |
@@ -146,24 +146,15 @@ Native button props:
 | `ghost` | A quiet action with no surface of its own — toolbar, header and row actions, Dismiss. Muted label with a neutral hover fill. |
 | `destructive` | Confirms an irreversible action — Delete, Discard. Danger fill. Ask first; use it on the confirming step. |
 
-### Sizes
-
 | Size | Use it for |
 | --- | --- |
 | `s` | Dense rows, inline chips and comment cards, where the button sits inside a line of content. |
 | `m` | Panel headers, toolbars, popovers and secondary actions in settings rows. |
 | `l` | The default for Button — dialog footers, empty states and standalone actions. |
 
-### Tone
-
-`tone` applies to `outline` and `ghost`; other variants ignore it.
-
-| Tone | Use it for |
-| --- | --- |
-| `warning` | A ghost or outline action whose label must read as a warning in every state (a pending MCP approval). |
-| `danger` | A ghost or outline action whose label must read as dangerous in every state without a danger fill (Stop all). |
-
 ### States
+
+Every cell is the real component. Hover and press the first column, or click into the page and press Tab to see keyboard focus. Disabled, loading and selected are real props.
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -174,6 +165,15 @@ Native button props:
 | Disabled | `disabled`. | Disabled roles, cursor and activation blocked, tooltip still shown. |
 | Loading | `loading` (optionally `spinIcon`). | Spinner at icon size, same width, `aria-busy`, not activatable. |
 | Selected | `selected` or an open Radix trigger. | Selected fill on `outline` / `ghost`; hover look on `soft-primary`; none on `primary` / `destructive`. |
+
+### Tone
+
+`tone` applies to `outline` and `ghost`; other variants ignore it.
+
+| Tone | Use it for |
+| --- | --- |
+| `warning` | A ghost or outline action whose label must read as a warning in every state (a pending MCP approval). |
+| `danger` | A ghost or outline action whose label must read as dangerous in every state without a danger fill (Stop all). |
 
 ### Accessibility
 
@@ -549,7 +549,7 @@ Native button props:
 | `onClick` | `MouseEventHandler` | — | Activation handler (pointer, Enter, Space). |
 | `className` | `string` | — | Placement only, including whole-button hover reveal (`opacity-0 group-hover:opacity-100`). |
 
-### Variants
+### Variants and sizes
 
 | Variant | Use it for |
 | --- | --- |
@@ -559,24 +559,15 @@ Native button props:
 | `ghost` | A quiet action with no surface of its own — toolbar, header and row actions, Dismiss. Muted label with a neutral hover fill. |
 | `destructive` | Confirms an irreversible action — Delete, Discard. Danger fill. Ask first; use it on the confirming step. |
 
-### Sizes
-
 | Size | Use it for |
 | --- | --- |
 | `s` | Dense rows, inline chips and comment cards, where the button sits inside a line of content. |
 | `m` | The default for IconButton — panel headers, tab strips, toolbars and toasts. |
 | `l` | Standalone icon actions next to L buttons. |
 
-### Tone
-
-`tone` applies to `outline` and `ghost`; other variants ignore it.
-
-| Tone | Use it for |
-| --- | --- |
-| `warning` | A ghost or outline action whose label must read as a warning in every state (a pending MCP approval). |
-| `danger` | A ghost or outline action whose label must read as dangerous in every state without a danger fill (Stop all). |
-
 ### States
+
+Every cell is the real component. Hover and press the first column, or click into the page and press Tab to see keyboard focus. Disabled, loading and selected are real props.
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -587,6 +578,15 @@ Native button props:
 | Disabled | `disabled`. | Disabled roles; tooltip still opens on hover. |
 | Loading | `loading` (optionally `spinIcon`). | Spinner or rotating icon, same square, `aria-busy`. |
 | Selected | `selected` or an open Radix trigger. | Selected fill on `outline` / `ghost`. |
+
+### Tone
+
+`tone` applies to `outline` and `ghost`; other variants ignore it.
+
+| Tone | Use it for |
+| --- | --- |
+| `warning` | A ghost or outline action whose label must read as a warning in every state (a pending MCP approval). |
+| `danger` | A ghost or outline action whose label must read as dangerous in every state without a danger fill (Stop all). |
 
 ### Accessibility
 
@@ -897,7 +897,31 @@ import { HeaderIconButton } from "@/panels/HeaderIconButton";
 | `onClick` | `() => void` | — | Required. Activation handler (pointer, Enter, Space). It receives no event. |
 | `icon` | `ButtonIcon` | — | Required. The icon component (pass `RiParagraph`, not `<RiParagraph />`). Swap it for transient feedback, for example to a `withIconClass` success check after a copy. |
 
+### Compared with IconButton
+
+HeaderIconButton renders the shared IconButton and adds no styling of its own. Both rows below are live and render the same button.
+
+| HeaderIconButton | Passed to IconButton as | Note |
+| --- | --- | --- |
+| `<HeaderIconButton testid="…" label={…} active={on} onClick={…} icon={…} />` | `<IconButton variant="ghost" size="m" selected={on} aria-pressed={on} data-active={on} data-testid="…" … />` | The source of the two live rows above. |
+| `icon` | `icon` | Same. |
+| `label` | `label` | aria-label and tooltip; same. |
+| `testid` | `data-testid` | Required here; optional on IconButton. |
+| `active` | `selected={active === true} aria-pressed={active} data-active={active}` | One prop for the whole toggle contract. |
+| `disabled` | `disabled` | Same. |
+| `onClick` | `onClick` | Typed () => void; no event. |
+| (fixed) | `variant="ghost" size="m"` | IconButton's own defaults, pinned. |
+| (not exposed) | `tooltip, tooltipSide, tooltipAlign, wrapTrigger, loading, spinIcon, tone, className, ref, type, other native attributes` | Rest props are not forwarded, so it cannot be a Radix asChild trigger. |
+
 ### States
+
+Every cell is the real component. Hover and press the first column, or click into the page and press Tab to see keyboard focus; hover a disabled cell to see its tooltip.
+
+| active | aria-pressed · data-active |
+| --- | --- |
+| `(omitted)` | `absent` |
+| `false` | `"false"` |
+| `true` | `"true"` |
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -1299,7 +1323,13 @@ WorkbenchTab props (besides the strip props it shares):
 | `panelId` | `string` | — | `aria-controls` target: the group's tab panel (`groupPanelId(location)`). |
 | `onKeyDown` | `(event: KeyboardEvent<HTMLButtonElement>) => void` | — | The tab button's key handler; the strip passes roving focus, reorder and Delete here. |
 
+### Tab kinds
+
+Every resource kind's icon from `tabIcon`: Line at rest, Fill when active (the plan document's icon has one form). Names come from `layoutTabName`.
+
 ### States
+
+Every strip is the real component with real props. Hover a tab to reveal its close button, click into the page and press Tab to see keyboard focus, right-click a tab for its menu. The drop hint is `draggingTab` set to a tab from another group.
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -2193,6 +2223,8 @@ import { SettingsSwitch } from "@/panels/SettingsSwitch";
 
 ### States
 
+Every cell is the real component. Click the first row, or click into the page and press Tab to see keyboard focus; there is no hover treatment. Disabled is the real prop.
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Off | `checked={false}`. | `border-default` track, `container-workspace-bg` knob at the start. |
@@ -2202,6 +2234,19 @@ import { SettingsSwitch } from "@/panels/SettingsSwitch";
 | Keyboard focus | Tab to the switch. | A 2px `primary` ring flush around the track; on the `primary` track it reads as a thicker edge. |
 | Disabled | `disabled`. | The enabled colours at `opacity-50`; no pointer events. |
 | Changing | `checked` flips. | The track colour fades and the knob slides; there is no reduced-motion variant. |
+
+### SettingsSwitch and Switch
+
+Both render a `role="switch"` button with the same track and knob geometry, but they are two implementations (audit F-04). Every cell is the real component: hover and Tab into each column to compare.
+
+| Aspect | Switch | SettingsSwitch |
+| --- | --- | --- |
+| Hit area and hover | The track sits in a larger round hit area that takes `control-bg-hovered` on hover. | The button is the track itself; no hover treatment. |
+| Knob when on | `control-primary-text`, the label colour on the primary fill. | Stays `container-workspace-bg` in both states. |
+| Disabled | Disabled colour roles: track `control-primary-disabled-bg` (on) or `control-disabled-border` (off), knob `control-disabled-text`. | The enabled colours at `opacity-50`. |
+| Focus ring | Drawn around the hit area, clear of the track. | Drawn flush against the track; on the `primary` track it merges with the fill. |
+| Reduced motion | Track and knob transitions stop under `prefers-reduced-motion`. | Transitions always run. |
+| API | `onCheckedChange`; optional `testId`; native button props, `className` and `ref` pass through; `onClick` can cancel with `preventDefault()`. | `onChange`; required `testId`; nothing else is accepted. |
 
 ### Accessibility
 
@@ -2434,7 +2479,7 @@ import { SettingsSwitch } from "@/panels/SettingsSwitch";
 
 export default function HostSaved() {
 	const t = useT();
-	// `saved` stands for the host's value; the switch shows it, never a local guess.
+	// `saved` stands in for the host's saved value.
 	const [saved, setSaved] = useState(false);
 	const update = (next: boolean) => {
 		setTimeout(() => setSaved(next), 600);
@@ -2555,6 +2600,8 @@ Native button props:
 
 ### States
 
+Every cell is the real component. Hover and click the first row, or click into the page and press Tab to see keyboard focus. Disabled is the real prop.
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Off | `checked={false}`. | `border-default` track, `container-workspace-bg` knob at the start. |
@@ -2564,6 +2611,19 @@ Native button props:
 | Keyboard focus | Tab to the switch. | A 2px `primary` ring around the hit area, clear of the track. |
 | Disabled | `disabled`. | Track `control-disabled-border` (off) or `control-primary-disabled-bg` (on), knob `control-disabled-text`; no hover fill, no pointer events. |
 | Changing | `checked` flips. | The track colour fades and the knob slides; both are instant under `prefers-reduced-motion`. |
+
+### Switch and SettingsSwitch
+
+Both render a `role="switch"` button with the same track and knob geometry, but they are two implementations (audit F-04). Every cell is the real component: hover and Tab into each column to compare.
+
+| Aspect | Switch | SettingsSwitch |
+| --- | --- | --- |
+| Hit area and hover | The track sits in a larger round hit area that takes `control-bg-hovered` on hover. | The button is the track itself; no hover treatment. |
+| Knob when on | `control-primary-text`, the label colour on the primary fill. | Stays `container-workspace-bg` in both states. |
+| Disabled | Disabled colour roles: track `control-primary-disabled-bg` (on) or `control-disabled-border` (off), knob `control-disabled-text`. | The enabled colours at `opacity-50`. |
+| Focus ring | Drawn around the hit area, clear of the track. | Drawn flush against the track; on the `primary` track it merges with the fill. |
+| Reduced motion | Track and knob transitions stop under `prefers-reduced-motion`. | Transitions always run. |
+| API | `onCheckedChange`; optional `testId`; native button props, `className` and `ref` pass through; `onClick` can cancel with `preventDefault()`. | `onChange`; required `testId`; nothing else is accepted. |
 
 ### Accessibility
 
@@ -2913,6 +2973,8 @@ import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 
 ### States
 
+Every cell is the real component with real props. Hover the enabled inactive segment, or click into the page and press Tab to see keyboard focus.
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Inactive | `active={false}`. | No fill; `text-muted` label. |
@@ -2921,6 +2983,15 @@ import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 | Active | `active`. | `control-bg-selected` fill with a `text-default` label; `aria-pressed="true"`. |
 | Keyboard focus | Tab to the segment. | No component focus treatment; the browser's default focus outline is what shows. |
 | Disabled | `disabled`. | Inactive: `control-disabled-text` label and no hover fill. Active: no distinct treatment — it looks like an enabled active segment. |
+
+### ToggleSegment and SegmentedControl
+
+The same choice in both components, sharing one state. ToggleSegment is for view toggles in chrome; SegmentedControl is for settings.
+
+| Component | Semantics and keyboard |
+| --- | --- |
+| ToggleSegment | Toggle buttons with aria-pressed; each is a Tab stop; Enter / Space. |
+| SegmentedControl | A named radiogroup of native radios; one Tab stop; arrow keys select. |
 
 ### Accessibility
 
@@ -3307,6 +3378,8 @@ Option fields (SegmentedControlOption<T>):
 
 ### States
 
+Every row is the real component with real props. Hover an unselected option, click into the page and press Tab, then use the arrow keys.
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Unselected | An option whose `id` is not `value`. | The track shows through; `text-muted` label. |
@@ -3316,6 +3389,15 @@ Option fields (SegmentedControlOption<T>):
 | No selection | `value={null}`. | Every option looks unselected; no radio is checked. |
 | Keyboard focus | Tab into the group, or move with the arrow keys. | An inset `ring-2` in `primary` on the focused segment. |
 | Disabled | Option `disabled`, or the group `disabled`. | `control-disabled-text` label with no hover change and a default cursor. A selected option keeps its `control-bg-selected` fill. |
+
+### SegmentedControl and ToggleSegment
+
+The same choice in both components, sharing one state. SegmentedControl is for settings; ToggleSegment is for view toggles in chrome.
+
+| Component | Semantics and keyboard |
+| --- | --- |
+| ToggleSegment | Toggle buttons with aria-pressed; each is a Tab stop; Enter / Space. |
+| SegmentedControl | A named radiogroup of native radios; one Tab stop; arrow keys select. |
 
 ### Accessibility
 
@@ -3563,7 +3645,6 @@ const PRESETS = [
 
 export default function NoSelection() {
 	const t = useT();
-	// The host stores 128 KB, which no preset names.
 	const [replayKb, setReplayKb] = useState(128);
 	const value = PRESETS.find((option) => Number(option.id) === replayKb)?.id ?? null;
 	return (
@@ -3645,6 +3726,17 @@ Native textarea props:
 | `className` | `string` | — | Placement and height (`min-h-*`, `flex-1`), `resize-y` for a field the user may stretch, and `tr-code-text` (with `px-8 py-4`) for code-like content. Merged after the base classes. |
 
 ### States
+
+Every cell is the real component with real props. Click or Tab into a field to see its focus border; disabled fields cannot be focused.
+
+| State | Props |
+| --- | --- |
+| Empty | `placeholder` |
+| Filled | `value` |
+| Disabled, empty | `disabled` |
+| Disabled, filled | `disabled` |
+| Read-only | `readOnly` |
+| Code-like content | `className="px-8 py-4 tr-code-text"` |
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -3985,6 +4077,8 @@ Choice fields (SettingsRadioChoice):
 
 ### States
 
+Every cell is the real component with real props and its own radio group. Hover a card, click to select, or click into the page and press Tab, then the arrow keys.
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Rest | A choice that is not `value`. | A `border-default` border with no fill; pointer cursor. |
@@ -4224,7 +4318,6 @@ import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
 
 export default function NonPreset() {
 	const t = useT();
-	// The host is configured with 5 days, which is not one of the presets.
 	const [choice, setChoice] = useState<string>("5");
 	return (
 		<div className="w-full">
@@ -4272,7 +4365,6 @@ import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
 
 export default function Unavailable() {
 	const t = useT();
-	// fr.json was selected, then removed from the folder.
 	const [value, setValue] = useState("missing:fr");
 	return (
 		<div className="w-full">
@@ -4330,7 +4422,6 @@ import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
 
 export default function GroupDisabled() {
 	const t = useT();
-	// The connected host cannot apply this setting yet.
 	const supported = false;
 	return (
 		<div className="w-full">
@@ -4437,7 +4528,6 @@ function requestUpdate(shell: Shell, onChanged: (shell: Shell) => void) {
 
 export default function HostConfirmed() {
 	const t = useT();
-	// In the app this value comes from the store, which only the broadcast updates.
 	const [shell, setShell] = useState<Shell>("auto");
 	const select = (next: Shell) => {
 		if (next === shell) return;
@@ -4537,6 +4627,14 @@ import { SettingsGroup, SettingsPageContainer } from "@/panels/SettingsGroup";
 | `SettingsGroup.testId` | `string` | — | `data-testid` on the `<section>`. |
 | `SettingsPageContainer.children` | `ReactNode` | — | The page's groups, in order. Give conditional children a `key` so the others never remount when one appears; `null`/`false` children and components that render `null` leave no rule behind. |
 | `SettingsPageContainer.testId` | `string` | — | `data-testid` on the page column, e.g. `settings-chat`. |
+
+### Narrow columns
+
+The same real row in three column widths. The label column keeps a minimum width (`min-w-160`); when the control no longer fits beside it, the control wraps below the label instead of squeezing it.
+
+### Dividers
+
+Every row draws its own bottom divider. A bare wrapper keeps the last one; `SETTINGS_ROWS_CONTAINER` (also inside every `SettingsGroup`) drops it; `SettingsPageContainer` adds a rule and spacing only between children that render — the middle child here renders `null` and leaves no extra rule.
 
 ### States
 
@@ -5137,6 +5235,8 @@ import { DiffStatBadge } from "@/panels/DiffStatBadge";
 
 ### States
 
+Every cell in the last column is the real component with the props shown. The empty case is the component returning `null`.
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Added and removed | Both counts positive. | `+N` in the success colour, a space, `−M` in the error colour. |
@@ -5477,6 +5577,8 @@ Passed-through attributes:
 
 ### States
 
+Every cell is the real component. Hover the clickable chip, or click into the page and press Tab to see its focus ring.
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Static | No `onClick`. | A `<span>`; no hover or focus treatment. Its trailing action has its own states. |
@@ -5815,6 +5917,13 @@ import { Collapsible, countLines } from "@/chat/tools/Collapsible";
 
 ### States
 
+Every cell is the real component. The fold starts collapsed; the toggle is the only way to expand it, and the choice is remembered per `id`.
+
+| State | How |
+| --- | --- |
+| Short | `lines={6}` — 24 lines or fewer render as they are. |
+| Collapsed → expanded | `lines={60}` — capped behind the fade. Click the toggle to expand, click again to collapse. |
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Short | `lines` ≤ 24. | The children only. No cap, fade or toggle. |
@@ -6116,6 +6225,8 @@ import { TreeRow } from "@/panels/TreeRow";
 | `ref` | `Ref<HTMLButtonElement>` | — | Forwarded to the `<button>` — FileTree scrolls a revealed file into view with it. |
 
 ### States
+
+Every cell is the real component. Hover a cell or click into the page and press Tab to see the hover fill and the inset focus ring. With `highlight="wrapper"` the row paints no fill of its own — only the fill icon marks it active.
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -6678,7 +6789,29 @@ SkeletonRows props:
 | `rows` | `number` | `6` | How many bars to draw, clamped to 12 (the length of the fixed width sequence). Approximate the content that will arrive: 2 for a short sub-list, 3–5 for a menu section, settings list or panel list, 8–12 for a tab body or a full pane. |
 | `label` | `string` | `t("components.skeleton.loading")` | The status region's `aria-label`. Pass a specific locale key when it tells the reader more than "Loading" — `shell.workbench.restoring.chat`, `panels.existingWorktree.loading`, `mcp.settings.loading`. |
 
+### Row counts
+
+Every cell is the real `LoadingRegion`. Bars follow one fixed width sequence, so a count only adds or removes rows from the end; counts above 12 are clamped.
+
+| rows | Used for |
+| --- | --- |
+| `rows={2}` | A short sub-list: workspaces under an expanded project, the Extensions catalog. |
+| `rows={3}` | A settings section, a menu's commit section. |
+| `rows={4}` | A dialog list (existing worktrees, skills), one file section of the review tab. |
+| `rows={5}` | A side-panel list: Changes, Review. |
+| `rows={6}` | The default; the Specs panel. |
+| `rows={8}` | The file tree, the review tab, a plan or a resource preview pane. |
+| `rows={12}` | A restoring tab body, a file or diff pane. The maximum. |
+
 ### States
+
+Press Mount to mount a fresh placeholder and watch the grace, the fade-in and the pulse. The resolved text carries `motion-safe:animate-reveal`, as resolved content does in the app.
+
+| Read time | What you see |
+| --- | --- |
+| Resolves within the grace | The region keeps its space but never shows bars; the content fades in. |
+| Resolves after the grace | The bars fade in, pulse, then give way to the content. |
+| Still pending | The bars fade in and keep pulsing until the read lands. |
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -7251,6 +7384,8 @@ import { SettingsNotice } from "@/panels/SettingsNotice";
 
 ### Variants
 
+Every cell is the real SettingsNotice. The surface is the same for all five; the variant picks the glyph and its colour.
+
 | Variant | Use it for |
 | --- | --- |
 | `neutral` | An empty state with no severity — no project templates yet. Muted icon; usually with `hideIcon`. |
@@ -7597,7 +7732,9 @@ Radix props in common use (passed through unchanged):
 | `asChild` | `boolean` | — | `ToastAction`. Merge onto the child Button. |
 | `className` | `string` | — | Placement only. On ToastDescription the one sanctioned override is `text-text-default` when there is no title. |
 
-### Variants
+### Severities
+
+Each button raises a real toast through `pushToast`, rendered by the app's own `Toaster` in the corner of this page. The variant sets the border; `Toaster` picks the icon. The full look is the [Notices](../../apps/web/src/styles/NOTIFICATIONS.md) pattern.
 
 | Variant | Use it for |
 | --- | --- |
@@ -7607,6 +7744,8 @@ Radix props in common use (passed through unchanged):
 | `error` | A failed action with no better place to land — no form or chat turn to show it inline. Persists until dismissed. |
 
 ### States
+
+Raise a real five-second toast, then hover it or Tab into it and the timer pauses; leave and it resumes; drag it to the right to swipe it away; Escape or Dismiss closes it. Errors stay until dismissed.
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -7888,7 +8027,16 @@ Module exports:
 | `isChunkLoadError` | `(error: unknown) => boolean` | — | True when the message reads as a failed dynamic import: a stale or unreachable Vite chunk, Safari's “Importing a module script failed”, or Vite's outdated optimised dependency. The boundary uses it to choose Reload page over Try again. |
 | `setErrorBoundaryReporter` | `(reporter: ((error: Error, reportId: string \| undefined) => void) \| null) => void` | — | Installs the one module-wide reporter every boundary calls from `componentDidCatch`; `null` removes it. `main.tsx` wires it to the transport's client error reports. A reporter that throws is ignored. |
 
-### States
+### Fallbacks
+
+Every cell is a real boundary around a child that throws while rendering. Press Open file to crash it; Try again remounts the child.
+
+| Case | Fallback |
+| --- | --- |
+| Render error, labelled | “The editor panel hit an error”, the error message and Try again. |
+| Render error, no label | “Something went wrong”, the error message and Try again. |
+| Empty message | The generic “An unexpected error occurred…” line instead of a blank message. |
+| Chunk load error | The stale-chunk explanation and Reload page, which reloads the page. |
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -8227,6 +8375,18 @@ import { RunningIcon } from "@/components/RunningIcon";
 | --- | --- | --- | --- |
 | `className` | `string` | — | Size and colour only: a `size-*` class (`size-14` in rows and menus, `size-16` in the chat footer) and the `text-*` the replaced glyph would wear (`text-primary` active, `text-text-muted` inactive), plus placement such as `mt-2` in a two-line row. |
 
+### Sizes and colours
+
+Every cell is the real badge. It takes its size from `size-*` and its colour from `text-*` through `currentColor`; with reduced motion enabled in the OS every cell shows the static, complete mark.
+
+| Class | Use it for |
+| --- | --- |
+| `size-14` | Rows and menus: ProjectTree, the session switcher, the *Switch to* menu. |
+| `size-16` | The chat stream footer, beside the phase label. |
+| `size-64` | Not a production size — a large specimen to read the draw-and-erase cycle. |
+| `text-primary` | The active or highlighted row, and the chat footer. |
+| `text-text-muted` | An inactive row; a Command row switches to primary while highlighted. |
+
 ### States
 
 | State | How | Appearance |
@@ -8557,6 +8717,16 @@ import { AttentionDot } from "@/components/AttentionDot";
 
 ### States
 
+The rail's two treatments from normalized host state, rendered with the real components. Attention is binary; working replaces the glyph; the two are orthogonal.
+
+| Session | Host state | Markers |
+| --- | --- | --- |
+| Quiet | Quiet, queued, stopped or in the background | identity glyph |
+| Working | Working | RunningIcon |
+| Waiting | Waiting for input (`needsInput`) | identity glyph + AttentionDot |
+| Unread | Finished, failed or interrupted, unread (`completionUnread`) | identity glyph + AttentionDot |
+| Waiting while running | Waiting for input while still running | RunningIcon + AttentionDot |
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Present | The call site renders it because attention is positive (`needsInput !== null \|\| completionUnread`). | The static accent dot. Identical for every reason. |
@@ -8883,6 +9053,14 @@ import { AttentionLine } from "@thinkrail/ui/attention-line";
 | `live` | `boolean` | `true` | Renders the component's own polite live region. Pass `false` when a surrounding owner announces the request; the visible line is then always `aria-hidden`. |
 
 ### States
+
+The three configurations look identical; they differ only in which copy of the message is in the accessibility tree. Every cell is the real component.
+
+| Props | Visible line | Live region |
+| --- | --- | --- |
+| `default` | Exposed | Mounted, empty |
+| `announced` | `aria-hidden` | “Your input is needed — the agent is waiting.” |
+| `live={false}` | `aria-hidden` | Not rendered — the owner announces |
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -11045,6 +11223,14 @@ Radix parts (props ThinkRail sets or call sites use; other Radix props pass thro
 
 ### States
 
+Every trigger is the real component. The left column is IconTooltip; the right composes the Radix parts directly, without its focus-visible gate.
+
+| Row | Try it | Outcome |
+| --- | --- | --- |
+| Hover · Tab | Hover, or click into the page and press Tab. | Both open: IconTooltip opens on hover and Tab, the Radix parts on hover and any focus. |
+| Focus from code | Click Focus: the target is focused from code after a pointer action, as when a dialog autofocuses. | IconTooltip stays closed. The Radix parts open on any focus, so they would cover a dialog and take its Escape. |
+| Disabled | Hover the disabled button. | With `wrapTrigger` it opens; without it never opens, because the disabled button ignores the pointer. |
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Closed | Rest. | Nothing rendered; the trigger carries `data-state="closed"`. |
@@ -11433,6 +11619,8 @@ Radix props that pass through:
 | `DropdownMenuItem.textValue` | `string` | — | Typeahead text when the item's content is not plain text (a two-line row). |
 
 ### States
+
+One real menu with every part: a heading, a submenu, an enabled and a disabled item, and a radio group. Open it, then hover or arrow through the rows to see the highlight; the disabled row is skipped; ArrowRight opens the submenu, whose trigger keeps its fill while open; choose a radio option to move the check. The trigger shows its selected look while the menu is open.
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -12035,6 +12223,13 @@ Radix props that pass through:
 
 ### States
 
+Each row is the real component with a real menu. Hover or arrow through the items to see the highlight; the disabled item is skipped.
+
+| Trigger | Try |
+| --- | --- |
+| `enabled` | Right-click, long-press, or Tab to the row and press Shift+F10. The row stays highlighted while open; the second item is disabled. |
+| `disabled` | Right-click opens the browser's own menu. |
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Closed | Rest. | Only the trigger element; it carries `data-state="closed"` and no styling from the menu. |
@@ -12185,7 +12380,6 @@ import {
 import type { KeyboardEvent } from "react";
 import { TreeRow } from "@/panels/TreeRow";
 
-/** The Context Menu key and Shift+F10 open the menu under the focused row. */
 function openFromKeyboard(event: KeyboardEvent<HTMLElement>) {
 	if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
 	event.preventDefault();
@@ -12471,6 +12665,16 @@ Native props that matter:
 | `*.ref` | `Ref<HTMLDivElement \| HTMLInputElement>` | — | Forwarded to the part's element (React 19 ref prop). |
 
 ### States
+
+Every cell is the real component with real props. Type into the inputs, move the pointer and press the arrow keys inside a list.
+
+| State | What to look for |
+| --- | --- |
+| Rest · highlighted | cmdk highlights the first row. Move the pointer or use the arrows to move the `control-bg-selected` fill; there is no separate hover look. |
+| Filtered | The query `main` keeps only matching rows, ranked; the separator between the groups is gone while searching. |
+| Empty | No match: CommandEmpty replaces the list. |
+| Disabled item | `origin/release-2.4` is `disabled`: skipped by the arrows and the pointer, but drawn like an enabled row. |
+| Separator | CommandSeparator between the groups while the search is empty. |
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -13207,6 +13411,15 @@ Passed-through attributes in common use:
 
 ### States
 
+Every cell is a real panel group. The handle is a hairline in `border-default` that turns `primary` while the pointer is over it or dragging; click into the page and press Tab to reach a handle from the keyboard.
+
+| Case | Try it |
+| --- | --- |
+| Horizontal | Hover the line, drag it, or Tab to it and press ←/→, Home, End. |
+| Vertical | `direction="vertical"` on the group and on the handle. ↑/↓ resize. |
+| Collapsible side | `collapsible` + `collapsedSize={0}`. Drag past `minSize`, or focus the handle and press Enter. |
+| Disabled | `disabled` on the handle: no hover colour, no drag, no keyboard resize. |
+
 | State | How | Appearance |
 | --- | --- | --- |
 | Rest | Default. | A hairline in `border-default` at the leading edge of the handle; the pointer cursor is `col-resize` / `row-resize` over the hit area. |
@@ -13757,6 +13970,17 @@ Host attributes:
 
 ### States
 
+Every cell is the real component. A curtain fades in on each clipped edge; hover a cell or scroll it to reveal the thumb.
+
+| Case | How |
+| --- | --- |
+| No overflow | Content fits. |
+| At the start | Overflow below. |
+| In the middle | Overflow on both sides. |
+| At the end | Scrolled to the bottom. |
+| Both axes | `axis="both"`, scrolled to the middle of wide content. |
+| Terminal surface | `surface="terminal"` on `container-terminal-bg`. |
+
 | State | How | Appearance |
 | --- | --- | --- |
 | No overflow | Content fits the viewport. | No curtains and no thumb; the area looks like plain content. |
@@ -14044,7 +14268,6 @@ const OUTPUT = Array.from(
 	(_, index) => `[${index + 1}] compiling chunk ${index + 1}`,
 );
 
-/** Stands in for a third-party view (xterm) that owns its scroll element and reports its own position. */
 function ThirdPartyLog({ onEdges }: { onEdges: (edges: QuietScrollEdges) => void }) {
 	const report = (event: UIEvent<HTMLDivElement>) => {
 		const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
@@ -14145,6 +14368,15 @@ AuxiliaryPaneHideButton props:
 | `onClick` | `() => void` | — | Hides or folds the pane. |
 
 ### States
+
+Every row is the real component. Hover the drag-handle title to see the grab cursor and drag it a few pixels to see the grabbing cursor; hover and Tab to the Hide button for its tooltip and focus ring.
+
+| Title | Props |
+| --- | --- |
+| Plain | `title` |
+| Drag handle | `title dragTab` |
+| No actions | `title` |
+| Clipped (no ellipsis) | `title` (narrow column) |
 
 | State | How | Appearance |
 | --- | --- | --- |

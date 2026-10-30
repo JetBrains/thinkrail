@@ -114,6 +114,14 @@ export const settingsNotice = {
 		},
 	} satisfies Record<keyof SettingsNoticeProps, PropDoc>,
 	variants: settingsNoticeVariantDocs,
+	sections: [
+		{
+			id: "variants",
+			title: "Variants",
+			description:
+				"Every cell is the real SettingsNotice. The surface is the same for all five; the variant picks the glyph and its colour.",
+		},
+	],
 	states: [
 		{
 			state: "Default",

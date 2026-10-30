@@ -151,19 +151,8 @@ function playgroundCode(values: PlaygroundValues) {
 
 export const fileChipShowcase: Showcase = {
 	sections: [
-		{
-			id: "tone",
-			title: "Tone",
-			description: fileChip.tones.note,
-			Render: ToneMatrix,
-		},
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Every cell is the real component. Hover the clickable chip, or click into the page and press Tab to see its focus ring.",
-			Render: StateMatrix,
-		},
+		{ id: "tone", Render: ToneMatrix },
+		{ id: "states", Render: StateMatrix },
 	],
 	playground: {
 		controls: [

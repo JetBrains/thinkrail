@@ -5,7 +5,6 @@ import type { ComponentDoc, PropDoc } from "../types";
 type AreaProps = ComponentProps<typeof QuietScrollArea>;
 type FrameProps = ComponentProps<typeof QuietScrollFrame>;
 type OwnProps = Exclude<keyof AreaProps, keyof HTMLAttributes<HTMLDivElement> | "key">;
-/** QuietScrollFrame shares `surface` and `axis`; only what it adds is listed under its name. */
 type FrameOwnProps = `QuietScrollFrame.${Exclude<keyof FrameProps, keyof AreaProps>}`;
 
 export const quietScrollArea = {
@@ -126,6 +125,25 @@ export const quietScrollArea = {
 			},
 		} satisfies Partial<Record<keyof AreaProps | keyof FrameProps, PropDoc>>,
 	},
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is the real component. A curtain fades in on each clipped edge; hover a cell or scroll it to reveal the thumb.",
+			table: {
+				head: ["Case", "How"],
+				rows: [
+					["No overflow", "Content fits."],
+					["At the start", "Overflow below."],
+					["In the middle", "Overflow on both sides."],
+					["At the end", "Scrolled to the bottom."],
+					["Both axes", '`axis="both"`, scrolled to the middle of wide content.'],
+					["Terminal surface", '`surface="terminal"` on `container-terminal-bg`.'],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "No overflow",

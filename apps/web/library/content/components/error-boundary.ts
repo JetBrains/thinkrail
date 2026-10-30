@@ -103,6 +103,32 @@ export const errorBoundary = {
 			},
 		} satisfies Record<ModuleExports, PropDoc>,
 	},
+	sections: [
+		{
+			id: "states",
+			title: "Fallbacks",
+			description:
+				"Every cell is a real boundary around a child that throws while rendering. Press Open file to crash it; Try again remounts the child.",
+			table: {
+				head: ["Case", "Fallback"],
+				rows: [
+					[
+						"Render error, labelled",
+						"“The editor panel hit an error”, the error message and Try again.",
+					],
+					["Render error, no label", "“Something went wrong”, the error message and Try again."],
+					[
+						"Empty message",
+						"The generic “An unexpected error occurred…” line instead of a blank message.",
+					],
+					[
+						"Chunk load error",
+						"The stale-chunk explanation and Reload page, which reloads the page.",
+					],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Healthy",

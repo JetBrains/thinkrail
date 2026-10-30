@@ -6,7 +6,6 @@ const OUTPUT = Array.from(
 	(_, index) => `[${index + 1}] compiling chunk ${index + 1}`,
 );
 
-/** Stands in for a third-party view (xterm) that owns its scroll element and reports its own position. */
 function ThirdPartyLog({ onEdges }: { onEdges: (edges: QuietScrollEdges) => void }) {
 	const report = (event: UIEvent<HTMLDivElement>) => {
 		const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;

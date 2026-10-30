@@ -156,20 +156,8 @@ const playground: PlaygroundConfig = {
 
 export const segmentedControlShowcase: Showcase = {
 	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Every row is the real component with real props. Hover an unselected option, click into the page and press Tab, then use the arrow keys.",
-			Render: StateMatrix,
-		},
-		{
-			id: "compare",
-			title: "SegmentedControl and ToggleSegment",
-			description:
-				"The same choice in both components, sharing one state. SegmentedControl is for settings; ToggleSegment is for view toggles in chrome.",
-			Render: SegmentComparison,
-		},
+		{ id: "states", Render: StateMatrix },
+		{ id: "compare", Render: SegmentComparison },
 	],
 	playground,
 };

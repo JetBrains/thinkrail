@@ -11,7 +11,6 @@ type Align = "start" | "center" | "end";
 
 const SIDES: readonly Side[] = ["top", "right", "bottom", "left"];
 const ALIGNS: readonly Align[] = ["start", "center", "end"];
-const muted = "tr-text-metadata text-text-muted";
 
 function WithIconTooltip({ ref }: { ref?: Ref<HTMLButtonElement> }) {
 	const t = useT();
@@ -71,24 +70,11 @@ function Behaviour() {
 			<Table
 				head={["Interaction", "IconTooltip", "Radix parts only"]}
 				rows={[
+					["Hover · Tab", <WithIconTooltip key="icon" />, <WithParts key="parts" />],
 					[
-						"Hover, or click into the page and press Tab",
-						<WithIconTooltip key="icon" />,
-						<WithParts key="parts" />,
-					],
-					[
-						"Click Focus: the target is focused from code after a pointer action, as when a dialog autofocuses",
+						"Focus from code",
 						<FocusFromClick key="icon" Target={WithIconTooltip} />,
 						<FocusFromClick key="parts" Target={WithParts} />,
-					],
-					[
-						"Outcome",
-						<span key="icon" className={muted}>
-							Opens on hover and Tab; stays closed on focus from code
-						</span>,
-						<span key="parts" className={muted}>
-							Opens on any focus, so it would cover a dialog and take its Escape
-						</span>,
 					],
 				]}
 			/>
@@ -96,7 +82,7 @@ function Behaviour() {
 				head={["Disabled trigger", "wrapTrigger", "no wrapTrigger"]}
 				rows={[
 					[
-						"Hover the disabled button",
+						"Disabled",
 						<DisabledTrigger key="wrap" wrap />,
 						<DisabledTrigger key="bare" wrap={false} />,
 					],
@@ -164,15 +150,7 @@ function playgroundCode(values: PlaygroundValues) {
 }
 
 export const tooltipShowcase: Showcase = {
-	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Every trigger is the real component. The left column is IconTooltip; the right composes the Radix parts directly, without its focus-visible gate. Disabled buttons need `wrapTrigger` to receive the pointer.",
-			Render: Behaviour,
-		},
-	],
+	sections: [{ id: "states", Render: Behaviour }],
 	playground: {
 		controls: [
 			{ kind: "choice", name: "side", options: SIDES },

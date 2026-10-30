@@ -1,7 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { useState } from "react";
-import { InlineMarkdown } from "../parts/Markdown";
 import { Table } from "../parts/Section";
 import type { PlaygroundValues, Showcase } from "./types";
 
@@ -10,7 +9,6 @@ const CODE_SAMPLE = "-y\n@modelcontextprotocol/server-filesystem\n.";
 
 interface Cell {
 	state: string;
-	props: string;
 	value: string;
 	disabled?: boolean;
 	readOnly?: boolean;
@@ -18,17 +16,12 @@ interface Cell {
 }
 
 const CELLS: readonly Cell[] = [
-	{ state: "Empty — click or Tab in for focus", props: "`placeholder`", value: "" },
-	{ state: "Filled", props: "`value`", value: SAMPLE },
-	{ state: "Disabled, empty", props: "`disabled`", value: "", disabled: true },
-	{ state: "Disabled, filled", props: "`disabled`", value: SAMPLE, disabled: true },
-	{ state: "Read-only", props: "`readOnly`", value: SAMPLE, readOnly: true },
-	{
-		state: "Code-like content",
-		props: '`className="px-8 py-4 tr-code-text"`',
-		value: CODE_SAMPLE,
-		code: true,
-	},
+	{ state: "Empty", value: "" },
+	{ state: "Filled", value: SAMPLE },
+	{ state: "Disabled, empty", value: "", disabled: true },
+	{ state: "Disabled, filled", value: SAMPLE, disabled: true },
+	{ state: "Read-only", value: SAMPLE, readOnly: true },
+	{ state: "Code-like content", value: CODE_SAMPLE, code: true },
 ];
 
 function Specimen({ cell }: { cell: Cell }) {
@@ -51,12 +44,11 @@ function Specimen({ cell }: { cell: Cell }) {
 function StateMatrix() {
 	return (
 		<Table
-			head={["State", "Props", "Live"]}
+			head={["State", "Live"]}
 			rows={CELLS.map((cell) => [
 				<span key="state" className="tr-text-emphasis">
 					{cell.state}
 				</span>,
-				<InlineMarkdown key="props" source={cell.props} />,
 				<div key="live" className="w-[18rem]">
 					<Specimen cell={cell} />
 				</div>,
@@ -101,15 +93,7 @@ function playgroundCode(values: PlaygroundValues) {
 }
 
 export const textareaShowcase: Showcase = {
-	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Every cell is the real component with real props. Click or Tab into a field to see its focus border; disabled fields cannot be focused.",
-			Render: StateMatrix,
-		},
-	],
+	sections: [{ id: "states", Render: StateMatrix }],
 	playground: {
 		controls: [
 			{ kind: "choice", name: "rows", options: ["3", "6", "8", "14"] },

@@ -64,7 +64,6 @@ function toConfig(values: PlaygroundValues): Config {
 	};
 }
 
-/** Every part of the menu in one real, interactive instance. */
 function Specimen({ config }: { config: Config }) {
 	const t = useT();
 	const [alignment, setAlignment] = useState<Alignment>("full");
@@ -239,25 +238,14 @@ const ALL_PARTS: Config = {
 
 function States() {
 	return (
-		<div className="flex flex-wrap items-center gap-16">
+		<div className="flex">
 			<Specimen config={ALL_PARTS} />
-			<span className="tr-text-ui text-text-muted">
-				Open the menu: a heading, a submenu, an enabled and a disabled item, and a radio group.
-			</span>
 		</div>
 	);
 }
 
 export const dropdownMenuShowcase: Showcase = {
-	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				"One real menu with every part. Hover or arrow through the rows to see the highlight; the disabled row is skipped; ArrowRight opens the submenu, whose trigger keeps its fill while open; choose a radio option to move the check. The trigger shows its selected look while the menu is open.",
-			Render: States,
-		},
-	],
+	sections: [{ id: "states", Render: States }],
 	playground: {
 		controls: [
 			{ kind: "choice", name: "trigger", options: TRIGGERS },

@@ -117,15 +117,7 @@ function code(values: PlaygroundValues) {
 }
 
 export const treeRowShowcase: Showcase = {
-	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				'Every cell is the real component. Hover a cell or click into the page and press Tab to see the hover fill and the inset focus ring. With `highlight="wrapper"` the row paints no fill of its own — only the fill icon marks it active.',
-			Render: StateMatrix,
-		},
-	],
+	sections: [{ id: "states", Render: StateMatrix }],
 	playground: {
 		controls: [
 			{ kind: "choice", name: "kind", options: ["file", "dir"] },

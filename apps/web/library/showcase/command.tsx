@@ -10,7 +10,6 @@ import {
 	CommandSeparator,
 } from "@thinkrail/ui/command";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { InlineMarkdown } from "../parts/Markdown";
 import { Table } from "../parts/Section";
 import type { PlaygroundValues, Showcase } from "./types";
 
@@ -91,10 +90,6 @@ function Specimen({ config }: { config: SpecimenConfig }) {
 	);
 }
 
-/**
- * cmdk scrolls its highlighted row into view when it mounts. In a popover that is a no-op; inline on
- * this page it would jump the page to the specimen, so a specimen mounts only once its slot is in view.
- */
 function WhenInView({ children }: { children: ReactNode }) {
 	const ref = useRef<HTMLDivElement>(null);
 	const [visible, setVisible] = useState(false);
@@ -113,46 +108,25 @@ function WhenInView({ children }: { children: ReactNode }) {
 	return visible ? children : <div ref={ref} className="h-160 w-240" />;
 }
 
-const STATES: readonly { state: string; config: SpecimenConfig; note: string }[] = [
-	{
-		state: "Rest · highlighted",
-		config: BASE,
-		note: "cmdk highlights the first row. Move the pointer or use the arrows to move the `control-bg-selected` fill; there is no separate hover look.",
-	},
-	{
-		state: "Filtered",
-		config: { ...BASE, separator: true, query: "main" },
-		note: "The query `main` keeps only matching rows, ranked; the separator between the groups is gone while searching.",
-	},
-	{
-		state: "Empty",
-		config: { ...BASE, query: "zzz" },
-		note: "No match: CommandEmpty replaces the list.",
-	},
-	{
-		state: "Disabled item",
-		config: { ...BASE, disabledItem: true },
-		note: "`origin/release-2.4` is `disabled`: skipped by the arrows and the pointer, but drawn like an enabled row.",
-	},
-	{
-		state: "Separator",
-		config: { ...BASE, separator: true },
-		note: "CommandSeparator between the groups while the search is empty.",
-	},
+const STATES: readonly { state: string; config: SpecimenConfig }[] = [
+	{ state: "Rest · highlighted", config: BASE },
+	{ state: "Filtered", config: { ...BASE, separator: true, query: "main" } },
+	{ state: "Empty", config: { ...BASE, query: "zzz" } },
+	{ state: "Disabled item", config: { ...BASE, disabledItem: true } },
+	{ state: "Separator", config: { ...BASE, separator: true } },
 ];
 
 function StateMatrix() {
 	return (
 		<Table
-			head={["State", "Live", "What to look for"]}
-			rows={STATES.map(({ state, config, note }) => [
+			head={["State", "Live"]}
+			rows={STATES.map(({ state, config }) => [
 				<span key="state" className="tr-text-emphasis">
 					{state}
 				</span>,
 				<WhenInView key="live">
 					<Specimen config={config} />
 				</WhenInView>,
-				<InlineMarkdown key="note" source={note} />,
 			])}
 		/>
 	);
@@ -206,15 +180,7 @@ function code(values: PlaygroundValues) {
 }
 
 export const commandShowcase: Showcase = {
-	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Every cell is the real component with real props. Type into the inputs, move the pointer and press the arrow keys inside a list.",
-			Render: StateMatrix,
-		},
-	],
+	sections: [{ id: "states", Render: StateMatrix }],
 	playground: {
 		controls: FLAGS.map((name) => ({ kind: "flag" as const, name })),
 		initial: { input: true, headings: true, shouldFilter: true, vimBindings: true },

@@ -47,7 +47,7 @@ interface Cell {
 const CELLS: readonly Cell[] = [
 	{
 		id: "selected",
-		state: "Selected, rest — hover the others, Tab and arrows for focus",
+		state: "Selected",
 		props: '`value="auto"`',
 		value: "auto",
 	},
@@ -175,15 +175,7 @@ function playgroundCode(values: PlaygroundValues) {
 }
 
 export const settingsRadioCardsShowcase: Showcase = {
-	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Every cell is the real component with real props and its own radio group. Hover a card, click to select, or click into the page and press Tab, then the arrow keys.",
-			Render: StateMatrix,
-		},
-	],
+	sections: [{ id: "states", Render: StateMatrix }],
 	playground: {
 		controls: [
 			{ kind: "choice", name: "value", options: ["auto", "pwsh", "cmd", "none"] },

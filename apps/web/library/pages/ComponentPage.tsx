@@ -64,21 +64,32 @@ function StatesTable({ doc }: { doc: ComponentDoc }) {
 
 function Showcases({ doc }: { doc: ComponentDoc }) {
 	const showcase = showcases[doc.slug];
-	const sections = showcase?.sections ?? [];
+	const sections = doc.sections ?? [];
 	const hasStates = sections.some((section) => section.id === "states");
 	return (
 		<>
-			{sections.map(({ id, title, description, Render }) => (
-				<Section
-					key={id}
-					id={sectionId(doc, id)}
-					title={title}
-					description={description ? <InlineMarkdown source={description} /> : undefined}
-				>
-					<Render />
-					{id === "states" ? <StatesTable doc={doc} /> : null}
-				</Section>
-			))}
+			{sections.map(({ id, title, description, table }) => {
+				const Render = showcase?.sections.find((section) => section.id === id)?.Render;
+				return (
+					<Section
+						key={id}
+						id={sectionId(doc, id)}
+						title={title}
+						description={description ? <InlineMarkdown source={description} /> : undefined}
+					>
+						{Render ? <Render /> : null}
+						{table ? (
+							<Table
+								head={table.head}
+								rows={table.rows.map((row) =>
+									row.map((cell, index) => <InlineMarkdown key={String(index)} source={cell} />),
+								)}
+							/>
+						) : null}
+						{id === "states" ? <StatesTable doc={doc} /> : null}
+					</Section>
+				);
+			})}
 			{hasStates ? null : (
 				<Section id={sectionId(doc, "states")} title={sectionTitles.states}>
 					<StatesTable doc={doc} />
@@ -98,14 +109,13 @@ function Showcases({ doc }: { doc: ComponentDoc }) {
 }
 
 function showcaseToc(doc: ComponentDoc): TocEntry[] {
-	const showcase = showcases[doc.slug];
-	const sections = showcase?.sections ?? [];
+	const sections = doc.sections ?? [];
 	return [
 		...sections.map((section) => ({ id: sectionId(doc, section.id), title: section.title })),
 		...(sections.some((section) => section.id === "states")
 			? []
 			: [{ id: sectionId(doc, "states"), title: sectionTitles.states }]),
-		...(showcase?.playground
+		...(showcases[doc.slug]?.playground
 			? [{ id: sectionId(doc, "playground"), title: sectionTitles.playground }]
 			: []),
 	];

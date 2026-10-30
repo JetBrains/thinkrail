@@ -72,6 +72,14 @@ export const diffStatBadge = {
 				"Placement only (margins, order, responsive visibility). Production passes none; the badge owns its type and colours.",
 		},
 	} satisfies Record<keyof DiffStatBadgeProps, PropDoc>,
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell in the last column is the real component with the props shown. The empty case is the component returning `null`.",
+		},
+	],
 	states: [
 		{
 			state: "Added and removed",

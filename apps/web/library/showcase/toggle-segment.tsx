@@ -41,7 +41,6 @@ function StateMatrix() {
 
 type View = "list" | "tree";
 
-/** The same two-option choice rendered by both components, for the comparison sections. */
 export function SegmentComparison() {
 	const t = useT();
 	const [view, setView] = useState<View>("list");
@@ -51,7 +50,7 @@ export function SegmentComparison() {
 	] as const;
 	return (
 		<Table
-			head={["Component", "Live", "Semantics and keyboard"]}
+			head={["Component", "Live"]}
 			rows={[
 				[
 					<span key="name" className="tr-text-emphasis">
@@ -68,7 +67,6 @@ export function SegmentComparison() {
 							/>
 						))}
 					</span>,
-					"Toggle buttons with aria-pressed; each is a Tab stop; Enter / Space.",
 				],
 				[
 					<span key="name" className="tr-text-emphasis">
@@ -82,7 +80,6 @@ export function SegmentComparison() {
 						value={view}
 						onSelect={setView}
 					/>,
-					"A named radiogroup of native radios; one Tab stop; arrow keys select.",
 				],
 			]}
 		/>
@@ -91,19 +88,7 @@ export function SegmentComparison() {
 
 export const toggleSegmentShowcase: Showcase = {
 	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Every cell is the real component with real props. Hover the enabled inactive segment, or click into the page and press Tab to see keyboard focus.",
-			Render: StateMatrix,
-		},
-		{
-			id: "compare",
-			title: "ToggleSegment and SegmentedControl",
-			description:
-				"The same choice in both components, sharing one state. ToggleSegment is for view toggles in chrome; SegmentedControl is for settings.",
-			Render: SegmentComparison,
-		},
+		{ id: "states", Render: StateMatrix },
+		{ id: "compare", Render: SegmentComparison },
 	],
 };

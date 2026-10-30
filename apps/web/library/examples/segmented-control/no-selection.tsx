@@ -10,7 +10,6 @@ const PRESETS = [
 
 export default function NoSelection() {
 	const t = useT();
-	// The host stores 128 KB, which no preset names.
 	const [replayKb, setReplayKb] = useState(128);
 	const value = PRESETS.find((option) => Number(option.id) === replayKb)?.id ?? null;
 	return (

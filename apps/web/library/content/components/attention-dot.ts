@@ -55,6 +55,32 @@ export const attentionDot = {
 				"Placement only (margins, order). Production passes none; the dot owns its size and colour.",
 		},
 	} satisfies Record<keyof AttentionDotProps, PropDoc>,
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"The rail's two treatments from normalized host state, rendered with the real components. Attention is binary; working replaces the glyph; the two are orthogonal.",
+			table: {
+				head: ["Session", "Host state", "Markers"],
+				rows: [
+					["Quiet", "Quiet, queued, stopped or in the background", "identity glyph"],
+					["Working", "Working", "RunningIcon"],
+					["Waiting", "Waiting for input (`needsInput`)", "identity glyph + AttentionDot"],
+					[
+						"Unread",
+						"Finished, failed or interrupted, unread (`completionUnread`)",
+						"identity glyph + AttentionDot",
+					],
+					[
+						"Waiting while running",
+						"Waiting for input while still running",
+						"RunningIcon + AttentionDot",
+					],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Present",

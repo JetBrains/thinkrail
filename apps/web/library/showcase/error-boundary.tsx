@@ -46,43 +46,22 @@ function Live({ kind, label }: { kind: ErrorKind; label: Label }) {
 	);
 }
 
-const CASES: readonly { name: string; kind: ErrorKind; label: Label; shows: string }[] = [
-	{
-		name: "Render error, labelled",
-		kind: "message",
-		label: "editor",
-		shows: "“The editor panel hit an error”, the error message and Try again.",
-	},
-	{
-		name: "Render error, no label",
-		kind: "message",
-		label: "none",
-		shows: "“Something went wrong”, the error message and Try again.",
-	},
-	{
-		name: "Empty message",
-		kind: "empty",
-		label: "editor",
-		shows: "The generic “An unexpected error occurred…” line instead of a blank message.",
-	},
-	{
-		name: "Chunk load error",
-		kind: "chunk",
-		label: "editor",
-		shows: "The stale-chunk explanation and Reload page, which reloads the page.",
-	},
+const CASES: readonly { name: string; kind: ErrorKind; label: Label }[] = [
+	{ name: "Render error, labelled", kind: "message", label: "editor" },
+	{ name: "Render error, no label", kind: "message", label: "none" },
+	{ name: "Empty message", kind: "empty", label: "editor" },
+	{ name: "Chunk load error", kind: "chunk", label: "editor" },
 ];
 
 function Fallbacks() {
 	return (
 		<Table
-			head={["Case", "Live", "Fallback"]}
+			head={["Case", "Live"]}
 			rows={CASES.map((item) => [
 				<span key="name" className="tr-text-emphasis">
 					{item.name}
 				</span>,
 				<Live key="live" kind={item.kind} label={item.label} />,
-				item.shows,
 			])}
 		/>
 	);
@@ -93,15 +72,7 @@ function config(values: PlaygroundValues) {
 }
 
 export const errorBoundaryShowcase: Showcase = {
-	sections: [
-		{
-			id: "states",
-			title: "Fallbacks",
-			description:
-				"Every cell is a real boundary around a child that throws while rendering. Press Open file to crash it; Try again remounts the child.",
-			Render: Fallbacks,
-		},
-	],
+	sections: [{ id: "states", Render: Fallbacks }],
 	playground: {
 		controls: [
 			{ kind: "choice", name: "label", options: LABELS },

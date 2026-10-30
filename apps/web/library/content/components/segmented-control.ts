@@ -1,5 +1,6 @@
 import type { SegmentedControlOption, SegmentedControlProps } from "@/panels/SegmentedControl";
 import type { ComponentDoc, PropDoc } from "../types";
+import { segmentComparisonTable } from "./toggle-segment";
 
 type OwnProps = keyof SegmentedControlProps<string>;
 type OptionFields = keyof SegmentedControlOption<string>;
@@ -125,6 +126,21 @@ export const segmentedControl = {
 			},
 		} satisfies Record<OptionFields, PropDoc>,
 	},
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every row is the real component with real props. Hover an unselected option, click into the page and press Tab, then use the arrow keys.",
+		},
+		{
+			id: "compare",
+			title: "SegmentedControl and ToggleSegment",
+			description:
+				"The same choice in both components, sharing one state. SegmentedControl is for settings; ToggleSegment is for view toggles in chrome.",
+			table: segmentComparisonTable,
+		},
+	],
 	states: [
 		{
 			state: "Unselected",

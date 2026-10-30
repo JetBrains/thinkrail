@@ -92,6 +92,49 @@ export const skeleton = {
 			label: labelDoc,
 		} satisfies Record<keyof SkeletonRowsProps, PropDoc>,
 	},
+	sections: [
+		{
+			id: "rows",
+			title: "Row counts",
+			description:
+				"Every cell is the real `LoadingRegion`. Bars follow one fixed width sequence, so a count only adds or removes rows from the end; counts above 12 are clamped.",
+			table: {
+				head: ["rows", "Used for"],
+				rows: [
+					[
+						"`rows={2}`",
+						"A short sub-list: workspaces under an expanded project, the Extensions catalog.",
+					],
+					["`rows={3}`", "A settings section, a menu's commit section."],
+					[
+						"`rows={4}`",
+						"A dialog list (existing worktrees, skills), one file section of the review tab.",
+					],
+					["`rows={5}`", "A side-panel list: Changes, Review."],
+					["`rows={6}`", "The default; the Specs panel."],
+					["`rows={8}`", "The file tree, the review tab, a plan or a resource preview pane."],
+					["`rows={12}`", "A restoring tab body, a file or diff pane. The maximum."],
+				],
+			},
+		},
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Press Mount to mount a fresh placeholder and watch the grace, the fade-in and the pulse. The resolved text carries `motion-safe:animate-reveal`, as resolved content does in the app.",
+			table: {
+				head: ["Read time", "What you see"],
+				rows: [
+					[
+						"Resolves within the grace",
+						"The region keeps its space but never shows bars; the content fades in.",
+					],
+					["Resolves after the grace", "The bars fade in, pulse, then give way to the content."],
+					["Still pending", "The bars fade in and keep pulsing until the read lands."],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Grace",

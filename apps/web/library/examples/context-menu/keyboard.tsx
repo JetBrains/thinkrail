@@ -9,7 +9,6 @@ import {
 import type { KeyboardEvent } from "react";
 import { TreeRow } from "@/panels/TreeRow";
 
-/** The Context Menu key and Shift+F10 open the menu under the focused row. */
 function openFromKeyboard(event: KeyboardEvent<HTMLElement>) {
 	if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
 	event.preventDefault();

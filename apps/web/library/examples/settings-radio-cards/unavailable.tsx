@@ -5,7 +5,6 @@ import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
 
 export default function Unavailable() {
 	const t = useT();
-	// fr.json was selected, then removed from the folder.
 	const [value, setValue] = useState("missing:fr");
 	return (
 		<div className="w-full">

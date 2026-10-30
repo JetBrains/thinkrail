@@ -5,7 +5,7 @@ import { SettingsSwitch } from "@/panels/SettingsSwitch";
 
 export default function HostSaved() {
 	const t = useT();
-	// `saved` stands for the host's value; the switch shows it, never a local guess.
+	// `saved` stands in for the host's saved value.
 	const [saved, setSaved] = useState(false);
 	const update = (next: boolean) => {
 		setTimeout(() => setSaved(next), 600);

@@ -176,20 +176,9 @@ function playground(kind: Kind, docs: ButtonDocs): PlaygroundConfig {
 export function buttonShowcase(kind: Kind, docs: ButtonDocs): Showcase {
 	return {
 		sections: [
-			{ id: "variants", title: "Variants and sizes", Render: variantsAndSizes(kind, docs) },
-			{
-				id: "states",
-				title: "States",
-				description:
-					"Every cell is the real component. Hover and press the first column, or click into the page and press Tab to see keyboard focus. Disabled, loading and selected are real props.",
-				Render: stateMatrix(kind, docs),
-			},
-			{
-				id: "tone",
-				title: "Tone",
-				description: docs.tones.note,
-				Render: toneMatrix(kind, docs),
-			},
+			{ id: "variants", Render: variantsAndSizes(kind, docs) },
+			{ id: "states", Render: stateMatrix(kind, docs) },
+			{ id: "tone", Render: toneMatrix(kind, docs) },
 		],
 		playground: playground(kind, docs),
 	};

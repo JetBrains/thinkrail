@@ -15,6 +15,7 @@ import { content, renderOutputs, unknownLinks } from "./scripts/generate-md";
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const EXAMPLES = fileURLToPath(new URL("./examples", import.meta.url));
 const CONTENT = fileURLToPath(new URL("./content", import.meta.url));
+const SHOWCASE = fileURLToPath(new URL("./showcase", import.meta.url));
 
 test("every generated doc is regenerated from the library content", () => {
 	const stale = [...renderOutputs()]
@@ -78,6 +79,19 @@ describe("examples", () => {
 				.sort();
 			expect(doc.examples.map((example) => example.id).sort()).toEqual(files);
 			expect(files).toContain(doc.preview);
+		});
+});
+
+describe("showcases", () => {
+	for (const doc of components)
+		test(`${doc.name}: every showcase section has its words in the doc`, () => {
+			const documented = (doc.sections ?? []).map((section) => section.id);
+			const file = join(SHOWCASE, `${doc.slug}.tsx`);
+			const source = existsSync(file) ? readFileSync(file, "utf8") : "";
+			const rendered = [...source.matchAll(/\{\s*id:\s*"([a-z-]+)",\s*Render:/g)].map(
+				(match) => match[1],
+			);
+			expect(rendered.filter((id) => !documented.includes(id))).toEqual([]);
 		});
 });
 

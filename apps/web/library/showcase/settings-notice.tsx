@@ -121,15 +121,7 @@ function code(values: PlaygroundValues): string {
 }
 
 export const settingsNoticeShowcase: Showcase = {
-	sections: [
-		{
-			id: "variants",
-			title: "Variants",
-			description:
-				"Every cell is the real SettingsNotice. The surface is the same for all five; the variant picks the glyph and its colour.",
-			Render: Variants,
-		},
-	],
+	sections: [{ id: "variants", Render: Variants }],
 	playground: {
 		controls: [
 			{ kind: "choice", name: "variant", options: VARIANTS },

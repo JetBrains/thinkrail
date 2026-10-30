@@ -34,7 +34,6 @@ function openFromKeyboard(event: KeyboardEvent<HTMLElement>) {
 	);
 }
 
-/** A real project row with a real context menu, assembled from the chosen parts. */
 function Specimen({ config }: { config: Config }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
@@ -138,26 +137,19 @@ const LIVE: Config = {
 function States() {
 	return (
 		<Table
-			head={["Trigger", "Row", "Try"]}
+			head={["Trigger", "Row"]}
 			rows={[
 				[
 					<code key="name" className="tr-code-text">
 						enabled
 					</code>,
 					<Specimen key="row" config={LIVE} />,
-					<span key="try" className="tr-text-ui text-text-muted">
-						Right-click, long-press, or Tab to the row and press Shift+F10. The row stays
-						highlighted while open; the second item is disabled.
-					</span>,
 				],
 				[
 					<code key="name" className="tr-code-text">
 						disabled
 					</code>,
 					<Specimen key="row" config={{ ...LIVE, triggerDisabled: true }} />,
-					<span key="try" className="tr-text-ui text-text-muted">
-						Right-click opens the browser's own menu.
-					</span>,
 				],
 			]}
 		/>
@@ -165,15 +157,7 @@ function States() {
 }
 
 export const contextMenuShowcase: Showcase = {
-	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Each row is the real component with a real menu. Hover or arrow through the items to see the highlight; the disabled item is skipped.",
-			Render: States,
-		},
-	],
+	sections: [{ id: "states", Render: States }],
 	playground: {
 		controls: FLAGS.map((name) => ({ kind: "flag" as const, name })),
 		initial: {

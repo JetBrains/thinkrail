@@ -66,6 +66,30 @@ export const runningIcon = {
 				"Size and colour only: a `size-*` class (`size-14` in rows and menus, `size-16` in the chat footer) and the `text-*` the replaced glyph would wear (`text-primary` active, `text-text-muted` inactive), plus placement such as `mt-2` in a two-line row.",
 		},
 	} satisfies Record<keyof RunningIconProps, PropDoc>,
+	sections: [
+		{
+			id: "sizes",
+			title: "Sizes and colours",
+			description:
+				"Every cell is the real badge. It takes its size from `size-*` and its colour from `text-*` through `currentColor`; with reduced motion enabled in the OS every cell shows the static, complete mark.",
+			table: {
+				head: ["Class", "Use it for"],
+				rows: [
+					["`size-14`", "Rows and menus: ProjectTree, the session switcher, the *Switch to* menu."],
+					["`size-16`", "The chat stream footer, beside the phase label."],
+					[
+						"`size-64`",
+						"Not a production size — a large specimen to read the draw-and-erase cycle.",
+					],
+					["`text-primary`", "The active or highlighted row, and the chat footer."],
+					[
+						"`text-text-muted`",
+						"An inactive row; a Command row switches to primary while highlighted.",
+					],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Running",

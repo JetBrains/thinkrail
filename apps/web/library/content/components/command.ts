@@ -10,7 +10,6 @@ import type {
 import type { ComponentProps, HTMLAttributes, InputHTMLAttributes } from "react";
 import type { ComponentDoc, PropDoc } from "../types";
 
-/** Props cmdk adds to a part on top of the native element's attributes. */
 type Own<P, Native = HTMLAttributes<HTMLDivElement>> = Exclude<
 	keyof P,
 	keyof Native | "key" | "ref" | "asChild"
@@ -18,16 +17,13 @@ type Own<P, Native = HTMLAttributes<HTMLDivElement>> = Exclude<
 type Part<Name extends string, Keys> = `${Name}.${Extract<Keys, string>}`;
 
 type OwnProps =
-	// cmdk reuses the native `defaultValue` name for the initially highlighted item.
 	| Part<"Command", Own<ComponentProps<typeof Command>> | "defaultValue">
-	// cmdk replaces the native `value` with the controlled search string.
 	| Part<
 			"CommandInput",
 			Own<ComponentProps<typeof CommandInput>, InputHTMLAttributes<HTMLInputElement>> | "value"
 	  >
 	| Part<"CommandList", Own<ComponentProps<typeof CommandList>>>
 	| Part<"CommandGroup", Own<ComponentProps<typeof CommandGroup>>>
-	// cmdk replaces the native `onSelect` with its own selection callback.
 	| Part<"CommandItem", Own<ComponentProps<typeof CommandItem>> | "onSelect">
 	| Part<"CommandSeparator", Own<ComponentProps<typeof CommandSeparator>>>
 	| Part<"CommandEmpty", Own<ComponentProps<typeof CommandEmpty>>>;
@@ -255,6 +251,33 @@ export const command = {
 			},
 		} satisfies Partial<Record<NativeKeys, PropDoc>>,
 	},
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is the real component with real props. Type into the inputs, move the pointer and press the arrow keys inside a list.",
+			table: {
+				head: ["State", "What to look for"],
+				rows: [
+					[
+						"Rest · highlighted",
+						"cmdk highlights the first row. Move the pointer or use the arrows to move the `control-bg-selected` fill; there is no separate hover look.",
+					],
+					[
+						"Filtered",
+						"The query `main` keeps only matching rows, ranked; the separator between the groups is gone while searching.",
+					],
+					["Empty", "No match: CommandEmpty replaces the list."],
+					[
+						"Disabled item",
+						"`origin/release-2.4` is `disabled`: skipped by the arrows and the pointer, but drawn like an enabled row.",
+					],
+					["Separator", "CommandSeparator between the groups while the search is empty."],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Rest",

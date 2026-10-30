@@ -1,8 +1,16 @@
 import type { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import type { ComponentProps } from "react";
-import type { ComponentDoc, PropDoc } from "../types";
+import type { ComponentDoc, PropDoc, SectionDoc } from "../types";
 
 type OwnProps = keyof ComponentProps<typeof ToggleSegment>;
+
+export const segmentComparisonTable = {
+	head: ["Component", "Semantics and keyboard"],
+	rows: [
+		["ToggleSegment", "Toggle buttons with aria-pressed; each is a Tab stop; Enter / Space."],
+		["SegmentedControl", "A named radiogroup of native radios; one Tab stop; arrow keys select."],
+	],
+} as const satisfies SectionDoc["table"];
 
 export const toggleSegment = {
 	slug: "toggle-segment",
@@ -86,6 +94,21 @@ export const toggleSegment = {
 				"Required. Called on every activation, including on the segment that is already active; set the view to this segment's value.",
 		},
 	} satisfies Record<OwnProps, PropDoc>,
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is the real component with real props. Hover the enabled inactive segment, or click into the page and press Tab to see keyboard focus.",
+		},
+		{
+			id: "compare",
+			title: "ToggleSegment and SegmentedControl",
+			description:
+				"The same choice in both components, sharing one state. ToggleSegment is for view toggles in chrome; SegmentedControl is for settings.",
+			table: segmentComparisonTable,
+		},
+	],
 	states: [
 		{
 			state: "Inactive",

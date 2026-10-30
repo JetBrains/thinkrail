@@ -4,6 +4,45 @@ import type { ComponentDoc, PropDoc } from "../types";
 
 type OwnProps = Exclude<keyof SwitchProps, keyof ButtonHTMLAttributes<HTMLButtonElement>>;
 
+export const switchComparisonDescription =
+	'Both render a `role="switch"` button with the same track and knob geometry, but they are two implementations (audit F-04). Every cell is the real component: hover and Tab into each column to compare.';
+
+export const switchComparisonTable = {
+	head: ["Aspect", "Switch", "SettingsSwitch"],
+	rows: [
+		[
+			"Hit area and hover",
+			"The track sits in a larger round hit area that takes `control-bg-hovered` on hover.",
+			"The button is the track itself; no hover treatment.",
+		],
+		[
+			"Knob when on",
+			"`control-primary-text`, the label colour on the primary fill.",
+			"Stays `container-workspace-bg` in both states.",
+		],
+		[
+			"Disabled",
+			"Disabled colour roles: track `control-primary-disabled-bg` (on) or `control-disabled-border` (off), knob `control-disabled-text`.",
+			"The enabled colours at `opacity-50`.",
+		],
+		[
+			"Focus ring",
+			"Drawn around the hit area, clear of the track.",
+			"Drawn flush against the track; on the `primary` track it merges with the fill.",
+		],
+		[
+			"Reduced motion",
+			"Track and knob transitions stop under `prefers-reduced-motion`.",
+			"Transitions always run.",
+		],
+		[
+			"API",
+			"`onCheckedChange`; optional `testId`; native button props, `className` and `ref` pass through; `onClick` can cancel with `preventDefault()`.",
+			"`onChange`; required `testId`; nothing else is accepted.",
+		],
+	],
+} as const;
+
 export const switchDoc = {
 	slug: "switch",
 	name: "Switch",
@@ -111,6 +150,20 @@ export const switchDoc = {
 			},
 		} satisfies Partial<Record<keyof SwitchProps, PropDoc>>,
 	},
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is the real component. Hover and click the first row, or click into the page and press Tab to see keyboard focus. Disabled is the real prop.",
+		},
+		{
+			id: "compare",
+			title: "Switch and SettingsSwitch",
+			description: switchComparisonDescription,
+			table: switchComparisonTable,
+		},
+	],
 	states: [
 		{
 			state: "Off",

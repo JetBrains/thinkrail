@@ -6,13 +6,10 @@ import type {
 	TooltipTrigger,
 } from "@thinkrail/ui/tooltip";
 import type { ComponentProps } from "react";
+import { type PartDocs, partProps } from "../parts";
 import type { ComponentDoc, PropDoc } from "../types";
 
 type IconTooltipProps = ComponentProps<typeof IconTooltip>;
-type PartDocs<P> = Partial<Record<keyof P, PropDoc>>;
-
-const part = (name: string, docs: Readonly<Record<string, PropDoc>>) =>
-	Object.fromEntries(Object.entries(docs).map(([prop, doc]) => [`${name}.${prop}`, doc]));
 
 const providerProps = {
 	delayDuration: {
@@ -184,12 +181,40 @@ export const tooltip = {
 	nativeProps: {
 		title: "Radix parts (props ThinkRail sets or call sites use; other Radix props pass through)",
 		props: {
-			...part("TooltipProvider", providerProps),
-			...part("Tooltip", rootProps),
-			...part("TooltipTrigger", triggerProps),
-			...part("TooltipContent", contentProps),
+			...partProps("TooltipProvider", providerProps),
+			...partProps("Tooltip", rootProps),
+			...partProps("TooltipTrigger", triggerProps),
+			...partProps("TooltipContent", contentProps),
 		},
 	},
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every trigger is the real component. The left column is IconTooltip; the right composes the Radix parts directly, without its focus-visible gate.",
+			table: {
+				head: ["Row", "Try it", "Outcome"],
+				rows: [
+					[
+						"Hover · Tab",
+						"Hover, or click into the page and press Tab.",
+						"Both open: IconTooltip opens on hover and Tab, the Radix parts on hover and any focus.",
+					],
+					[
+						"Focus from code",
+						"Click Focus: the target is focused from code after a pointer action, as when a dialog autofocuses.",
+						"IconTooltip stays closed. The Radix parts open on any focus, so they would cover a dialog and take its Escape.",
+					],
+					[
+						"Disabled",
+						"Hover the disabled button.",
+						"With `wrapTrigger` it opens; without it never opens, because the disabled button ignores the pointer.",
+					],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Closed",

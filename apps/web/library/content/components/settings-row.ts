@@ -126,6 +126,20 @@ export const settingsRow = {
 			description: "`data-testid` on the page column, e.g. `settings-chat`.",
 		},
 	} satisfies Record<OwnProps, PropDoc>,
+	sections: [
+		{
+			id: "widths",
+			title: "Narrow columns",
+			description:
+				"The same real row in three column widths. The label column keeps a minimum width (`min-w-160`); when the control no longer fits beside it, the control wraps below the label instead of squeezing it.",
+		},
+		{
+			id: "dividers",
+			title: "Dividers",
+			description:
+				"Every row draws its own bottom divider. A bare wrapper keeps the last one; `SETTINGS_ROWS_CONTAINER` (also inside every `SettingsGroup`) drops it; `SettingsPageContainer` adds a rule and spacing only between children that render — the middle child here renders `null` and leaves no extra rule.",
+		},
+	],
 	states: [
 		{
 			state: "Default",

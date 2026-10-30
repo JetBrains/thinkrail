@@ -37,15 +37,7 @@ function StateMatrix() {
 const count = (values: PlaygroundValues, name: string) => Number(values[name] ?? 0);
 
 export const diffStatBadgeShowcase: Showcase = {
-	sections: [
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Every cell in the last column is the real component with the props shown. The empty case is the component returning `null`.",
-			Render: StateMatrix,
-		},
-	],
+	sections: [{ id: "states", Render: StateMatrix }],
 	playground: {
 		controls: [
 			{ kind: "choice", name: "added", options: COUNTS },

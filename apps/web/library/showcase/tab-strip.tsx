@@ -275,20 +275,8 @@ const playground: PlaygroundConfig = {
 
 export const tabStripShowcase: Showcase = {
 	sections: [
-		{
-			id: "kinds",
-			title: "Tab kinds",
-			description:
-				"Every resource kind's icon from `tabIcon`: Line at rest, Fill when active (the plan document's icon has one form). Names come from `layoutTabName`.",
-			Render: Kinds,
-		},
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Every strip is the real component with real props. Hover a tab to reveal its close button, click into the page and press Tab to see keyboard focus, right-click a tab for its menu. The drop hint is `draggingTab` set to a tab from another group.",
-			Render: StateMatrix,
-		},
+		{ id: "kinds", Render: Kinds },
+		{ id: "states", Render: StateMatrix },
 	],
 	playground,
 };

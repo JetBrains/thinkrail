@@ -8,6 +8,9 @@ type OwnProps = Exclude<
 	Exclude<keyof HTMLAttributes<HTMLElement>, "onClick"> | `data-${string}`
 >;
 
+const toneNote =
+	"`tone` sets the chip's border, fill and text together; the trailing action keeps its own colours.";
+
 export const fileChip = {
 	slug: "file-chip",
 	name: "FileChip",
@@ -129,7 +132,7 @@ export const fileChip = {
 		} satisfies Record<Exclude<keyof FileChipProps, OwnProps>, PropDoc>,
 	},
 	tones: {
-		note: "`tone` sets the chip's border, fill and text together; the trailing action keeps its own colours.",
+		note: toneNote,
 		docs: {
 			default:
 				"Every file or attachment — composer images, sent attachments and the pending placeholder.",
@@ -137,6 +140,15 @@ export const fileChip = {
 				"A refused attachment or a failed command in the composer's chip row, with the icon off.",
 		} satisfies Record<NonNullable<FileChipProps["tone"]>, string>,
 	},
+	sections: [
+		{ id: "tone", title: "Tone", description: toneNote },
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is the real component. Hover the clickable chip, or click into the page and press Tab to see its focus ring.",
+		},
+	],
 	states: [
 		{
 			state: "Static",

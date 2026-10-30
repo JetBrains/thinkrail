@@ -101,6 +101,54 @@ export const headerIconButton = {
 				"Required. The icon component (pass `RiParagraph`, not `<RiParagraph />`). Swap it for transient feedback, for example to a `withIconClass` success check after a copy.",
 		},
 	} satisfies Record<OwnProps, PropDoc>,
+	sections: [
+		{
+			id: "compared",
+			title: "Compared with IconButton",
+			description:
+				"HeaderIconButton renders the shared IconButton and adds no styling of its own. Both rows below are live and render the same button.",
+			table: {
+				head: ["HeaderIconButton", "Passed to IconButton as", "Note"],
+				rows: [
+					[
+						'`<HeaderIconButton testid="…" label={…} active={on} onClick={…} icon={…} />`',
+						'`<IconButton variant="ghost" size="m" selected={on} aria-pressed={on} data-active={on} data-testid="…" … />`',
+						"The source of the two live rows above.",
+					],
+					["`icon`", "`icon`", "Same."],
+					["`label`", "`label`", "aria-label and tooltip; same."],
+					["`testid`", "`data-testid`", "Required here; optional on IconButton."],
+					[
+						"`active`",
+						"`selected={active === true} aria-pressed={active} data-active={active}`",
+						"One prop for the whole toggle contract.",
+					],
+					["`disabled`", "`disabled`", "Same."],
+					["`onClick`", "`onClick`", "Typed () => void; no event."],
+					["(fixed)", '`variant="ghost" size="m"`', "IconButton's own defaults, pinned."],
+					[
+						"(not exposed)",
+						"`tooltip, tooltipSide, tooltipAlign, wrapTrigger, loading, spinIcon, tone, className, ref, type, other native attributes`",
+						"Rest props are not forwarded, so it cannot be a Radix asChild trigger.",
+					],
+				],
+			},
+		},
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is the real component. Hover and press the first column, or click into the page and press Tab to see keyboard focus; hover a disabled cell to see its tooltip.",
+			table: {
+				head: ["active", "aria-pressed · data-active"],
+				rows: [
+					["`(omitted)`", "`absent`"],
+					["`false`", '`"false"`'],
+					["`true`", '`"true"`'],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Default",

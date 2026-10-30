@@ -98,6 +98,44 @@ function propsTable(props: Readonly<Record<string, PropDoc>>): string {
 	);
 }
 
+const hasSection = (doc: ComponentDoc, id: string) =>
+	doc.sections?.some((section) => section.id === id) ?? false;
+
+function variantBlocks(doc: ComponentDoc, headings: boolean): string[] {
+	const block = (heading: string, label: string, entries?: Readonly<Record<string, string>>) =>
+		entries
+			? [
+					...(headings ? [heading] : []),
+					table(
+						[label, "Use it for"],
+						Object.entries(entries).map(([name, text]) => [code(name), text]),
+					),
+				]
+			: [];
+	return [
+		...block("### Variants", "Variant", doc.variants),
+		...block("### Sizes", "Size", doc.sizes),
+	];
+}
+
+function toneBlock(doc: ComponentDoc, heading: string | null): string[] {
+	if (!doc.tones) return [];
+	return [
+		...(heading ? [heading, doc.tones.note] : []),
+		table(
+			["Tone", "Use it for"],
+			Object.entries(doc.tones.docs).map(([name, text]) => [code(name), text]),
+		),
+	];
+}
+
+function statesTable(doc: ComponentDoc): string {
+	return table(
+		["State", "How", "Appearance"],
+		doc.states.map((state) => [state.state, state.how, state.appearance]),
+	);
+}
+
 function component(doc: ComponentDoc): string {
 	return [
 		`## ${doc.name}`,
@@ -118,39 +156,21 @@ function component(doc: ComponentDoc): string {
 		"### Props",
 		propsTable(doc.props),
 		...(doc.nativeProps ? [`${doc.nativeProps.title}:`, propsTable(doc.nativeProps.props)] : []),
-		...(doc.variants
-			? [
-					"### Variants",
-					table(
-						["Variant", "Use it for"],
-						Object.entries(doc.variants).map(([name, text]) => [code(name), text]),
-					),
-				]
+		...(hasSection(doc, "variants") ? [] : variantBlocks(doc, true)),
+		...(doc.tones && !doc.sections?.some((section) => section.id === "tone")
+			? toneBlock(doc, "### Tone")
 			: []),
-		...(doc.sizes
-			? [
-					"### Sizes",
-					table(
-						["Size", "Use it for"],
-						Object.entries(doc.sizes).map(([name, text]) => [code(name), text]),
-					),
-				]
-			: []),
-		...(doc.tones
-			? [
-					"### Tone",
-					doc.tones.note,
-					table(
-						["Tone", "Use it for"],
-						Object.entries(doc.tones.docs).map(([name, text]) => [code(name), text]),
-					),
-				]
-			: []),
-		"### States",
-		table(
-			["State", "How", "Appearance"],
-			doc.states.map((state) => [state.state, state.how, state.appearance]),
-		),
+		...(doc.sections ?? []).flatMap((section) => [
+			`### ${section.title}`,
+			...(section.description ? [section.description] : []),
+			...(section.table ? [table(section.table.head, section.table.rows)] : []),
+			...(section.id === "variants" ? variantBlocks(doc, false) : []),
+			...(section.id === "tone" ? toneBlock(doc, null) : []),
+			...(section.id === "states" ? [statesTable(doc)] : []),
+		]),
+		...(doc.sections?.some((section) => section.id === "states")
+			? []
+			: ["### States", statesTable(doc)]),
 		"### Accessibility",
 		list(doc.accessibility),
 		table(

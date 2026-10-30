@@ -5,7 +5,6 @@ import type { ComponentDoc, PropDoc } from "../types";
 type GroupProps = ComponentProps<typeof ResizablePanelGroup>;
 type PanelProps = ComponentProps<typeof ResizablePanel>;
 type HandleProps = ComponentProps<typeof ResizableHandle>;
-/** Library props: everything that is not a plain HTML attribute, plus the attributes the library redefines. */
 type Own<P, Redefined extends keyof P = never> =
 	| Exclude<keyof P, keyof HTMLAttributes<HTMLElement> | "key">
 	| Redefined;
@@ -242,6 +241,26 @@ export const resizable = {
 			},
 		} satisfies Partial<Record<AllProps, PropDoc>>,
 	},
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is a real panel group. The handle is a hairline in `border-default` that turns `primary` while the pointer is over it or dragging; click into the page and press Tab to reach a handle from the keyboard.",
+			table: {
+				head: ["Case", "Try it"],
+				rows: [
+					["Horizontal", "Hover the line, drag it, or Tab to it and press ←/→, Home, End."],
+					["Vertical", '`direction="vertical"` on the group and on the handle. ↑/↓ resize.'],
+					[
+						"Collapsible side",
+						"`collapsible` + `collapsedSize={0}`. Drag past `minSize`, or focus the handle and press Enter.",
+					],
+					["Disabled", "`disabled` on the handle: no hover colour, no drag, no keyboard resize."],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Rest",

@@ -5,11 +5,8 @@ import type {
 	ContextMenuTrigger,
 } from "@thinkrail/ui/context-menu";
 import type { ComponentProps } from "react";
-import type { ComponentDoc, PropDoc } from "../types";
-import { partProps } from "./dropdown-menu";
-
-/** Docs for some of a part's props, checked against its real props. */
-type PartDocs<P> = Partial<Record<keyof P, PropDoc>>;
+import { type PartDocs, partProps } from "../parts";
+import type { ComponentDoc } from "../types";
 
 const rootProps = {
 	open: {
@@ -161,6 +158,24 @@ export const contextMenu = {
 			} satisfies PartDocs<ComponentProps<typeof ContextMenuItem>>),
 		},
 	},
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Each row is the real component with a real menu. Hover or arrow through the items to see the highlight; the disabled item is skipped.",
+			table: {
+				head: ["Trigger", "Try"],
+				rows: [
+					[
+						"`enabled`",
+						"Right-click, long-press, or Tab to the row and press Shift+F10. The row stays highlighted while open; the second item is disabled.",
+					],
+					["`disabled`", "Right-click opens the browser's own menu."],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Closed",

@@ -11,7 +11,6 @@ function requestUpdate(shell: Shell, onChanged: (shell: Shell) => void) {
 
 export default function HostConfirmed() {
 	const t = useT();
-	// In the app this value comes from the store, which only the broadcast updates.
 	const [shell, setShell] = useState<Shell>("auto");
 	const select = (next: Shell) => {
 		if (next === shell) return;

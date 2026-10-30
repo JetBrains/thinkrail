@@ -15,8 +15,6 @@ export interface PlaygroundConfig {
 
 export interface ShowcaseSection {
 	id: string;
-	title: string;
-	description?: string;
 	Render: ComponentType;
 }
 

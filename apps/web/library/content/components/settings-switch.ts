@@ -1,5 +1,6 @@
 import type { SettingsSwitch } from "@/panels/SettingsSwitch";
 import type { ComponentDoc, PropDoc } from "../types";
+import { switchComparisonDescription, switchComparisonTable } from "./switch";
 
 type Props = Parameters<typeof SettingsSwitch>[0];
 
@@ -75,6 +76,20 @@ export const settingsSwitch = {
 			description: "Required. Called on every click with the next state (`!checked`).",
 		},
 	} satisfies Record<keyof Props, PropDoc>,
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is the real component. Click the first row, or click into the page and press Tab to see keyboard focus; there is no hover treatment. Disabled is the real prop.",
+		},
+		{
+			id: "compare",
+			title: "SettingsSwitch and Switch",
+			description: switchComparisonDescription,
+			table: switchComparisonTable,
+		},
+	],
 	states: [
 		{
 			state: "Off",

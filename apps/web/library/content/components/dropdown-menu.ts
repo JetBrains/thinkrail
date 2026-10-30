@@ -10,17 +10,8 @@ import type {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import type { ComponentProps } from "react";
-import type { ComponentDoc, PropDoc } from "../types";
-
-/** Docs for some of a part's props, checked against its real props. */
-type PartDocs<P> = Partial<Record<keyof P, PropDoc>>;
-
-/** Prefixes each prop of a part with the part's name, so one table lists every part. */
-export function partProps(part: string, docs: Readonly<Record<string, PropDoc>>) {
-	return Object.fromEntries(
-		Object.entries(docs).map(([name, doc]) => [`${part}.${name}`, doc]),
-	) as Record<string, PropDoc>;
-}
+import { type PartDocs, partProps } from "../parts";
+import type { ComponentDoc } from "../types";
 
 const rootProps = {
 	open: {
@@ -269,6 +260,14 @@ export const dropdownMenu = {
 			} satisfies PartDocs<ComponentProps<typeof DropdownMenuItem>>),
 		},
 	},
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"One real menu with every part: a heading, a submenu, an enabled and a disabled item, and a radio group. Open it, then hover or arrow through the rows to see the highlight; the disabled row is skipped; ArrowRight opens the submenu, whose trigger keeps its fill while open; choose a radio option to move the check. The trigger shows its selected look while the menu is open.",
+		},
+	],
 	states: [
 		{
 			state: "Closed",

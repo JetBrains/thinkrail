@@ -178,6 +178,20 @@ export const button = {
 		note: "`tone` applies to `outline` and `ghost`; other variants ignore it.",
 		docs: toneDocs,
 	},
+	sections: [
+		{ id: "variants", title: "Variants and sizes" },
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is the real component. Hover and press the first column, or click into the page and press Tab to see keyboard focus. Disabled, loading and selected are real props.",
+		},
+		{
+			id: "tone",
+			title: "Tone",
+			description: "`tone` applies to `outline` and `ghost`; other variants ignore it.",
+		},
+	],
 	states: [
 		{ state: "Default", how: "Rest.", appearance: "The variant's fill, border and label colour." },
 		{

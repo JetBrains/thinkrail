@@ -107,6 +107,23 @@ export const auxiliaryPaneHeader = {
 			onClick: { type: "() => void", description: "Hides or folds the pane." },
 		} satisfies Record<keyof HideProps, PropDoc>,
 	},
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every row is the real component. Hover the drag-handle title to see the grab cursor and drag it a few pixels to see the grabbing cursor; hover and Tab to the Hide button for its tooltip and focus ring.",
+			table: {
+				head: ["Title", "Props"],
+				rows: [
+					["Plain", "`title`"],
+					["Drag handle", "`title dragTab`"],
+					["No actions", "`title`"],
+					["Clipped (no ellipsis)", "`title` (narrow column)"],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Default",

@@ -26,6 +26,13 @@ export interface StateDoc {
 	appearance: string;
 }
 
+export interface SectionDoc {
+	id: string;
+	title: string;
+	description?: string;
+	table?: { head: readonly string[]; rows: readonly (readonly string[])[] };
+}
+
 export interface ComponentDoc {
 	slug: string;
 	name: string;
@@ -43,6 +50,7 @@ export interface ComponentDoc {
 	variants?: Readonly<Record<string, string>>;
 	sizes?: Readonly<Record<string, string>>;
 	tones?: { note: string; docs: Readonly<Record<string, string>> };
+	sections?: readonly SectionDoc[];
 	states: readonly StateDoc[];
 	accessibility: readonly string[];
 	keyboard: readonly { keys: string; action: string }[];

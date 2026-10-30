@@ -44,10 +44,13 @@ specs `web-color`, `web-typography`, `web-spacing` and `web-notices`, `apps/web/
   component docs with `examples/<component>/<id>.tsx` as runnable files shown verbatim, and
   `components/button-system.md` is the Button system's implementation contract. A component doc is generic
   (variants, sizes, tones, native props and a contract are optional); anything specific to one
-  component — a variant × size matrix, a live state matrix, a playground — is its `showcase/<slug>.tsx`,
-  registered in `showcase/index.ts`: data-driven sections the page renders in order (a section with id
-  `states` gets the doc's state table appended, otherwise a plain States section is added) and an
-  optional declarative playground (choice and flag controls, a live preview, generated code). Prose never restates a
+  component — a variant × size matrix, a live state matrix, a playground — renders from its
+  `showcase/<slug>.tsx`, registered in `showcase/index.ts`, while its words stay in the doc: `sections`
+  (id, title, description, an optional static guidance table) are rendered in order, each followed by
+  the showcase `Render` with the same id; a section with id `states` gets the doc's state table
+  appended, otherwise a plain States section is added. The showcase also holds an optional declarative
+  playground (choice and flag controls, a live preview, generated code). The generated Markdown carries
+  every section's words, so nothing a reader needs lives only in rendering code. Prose never restates a
   value: a `:::live <block>` line renders one of the `live/` blocks, which import the JSON, `tokens.css`
   (raw), the bundled manifests and `public/custom-icons/` at build time, reusing the generators' own
   pure models (`scripts/typographyModel.ts`, `scripts/colorsModel.ts`). Variant, size and tone tables
@@ -92,10 +95,12 @@ specs `web-color`, `web-typography`, `web-spacing` and `web-notices`, `apps/web/
   authored Markdown file is registered and exists, every live block is known and used, page and
   repository links resolve, each page's value sources exist, examples and
   their documentation match one-to-one, each overview `preview` names one of them, every listed
-  production usage still uses the component, and the documented defaults equal the rendered ones.
+  production usage still uses the component, every showcase section has its words in the doc, and the
+  Button and IconButton defaults equal the rendered ones.
 - `tsc -p library` (part of `apps/web` `typecheck`).
-- `library:verify` drives a running library in Chromium: the overview, its search and cards, sidebar
-  and header navigation, every theme, keyboard focus,
+- `library:verify` drives a running library in Chromium: every component page (all of its examples
+  render, no sideways scroll, no runtime errors), the overview, its search and cards, sidebar and header
+  navigation, the foundation live blocks, every theme, keyboard focus,
   tooltips (including on a disabled button), loading blocking a second click, menu-open selected state,
   collapsed and revealed example code, copy-to-clipboard, the page outline, the narrow-screen drawer and
   the absence of runtime errors.

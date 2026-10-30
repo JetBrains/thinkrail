@@ -126,6 +126,25 @@ export const textarea = {
 			},
 		} satisfies Partial<Record<keyof TextareaProps, PropDoc>>,
 	},
+	sections: [
+		{
+			id: "states",
+			title: "States",
+			description:
+				"Every cell is the real component with real props. Click or Tab into a field to see its focus border; disabled fields cannot be focused.",
+			table: {
+				head: ["State", "Props"],
+				rows: [
+					["Empty", "`placeholder`"],
+					["Filled", "`value`"],
+					["Disabled, empty", "`disabled`"],
+					["Disabled, filled", "`disabled`"],
+					["Read-only", "`readOnly`"],
+					["Code-like content", '`className="px-8 py-4 tr-code-text"`'],
+				],
+			},
+		},
+	],
 	states: [
 		{
 			state: "Empty",

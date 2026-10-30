@@ -85,20 +85,8 @@ function code(values: PlaygroundValues): string {
 
 export const toastShowcase: Showcase = {
 	sections: [
-		{
-			id: "variants",
-			title: "Severities",
-			description:
-				"Each button raises a real toast through `pushToast`, rendered by the app's own `Toaster` in the corner of this page. The variant sets the border; `Toaster` picks the icon. The full look is the [Notices](#/notices) pattern.",
-			Render: Severities,
-		},
-		{
-			id: "states",
-			title: "States",
-			description:
-				"Raise a real five-second toast, then hover it or Tab into it and the timer pauses; leave and it resumes; drag it to the right to swipe it away; Escape or Dismiss closes it. Errors stay until dismissed.",
-			Render: Lifetime,
-		},
+		{ id: "variants", Render: Severities },
+		{ id: "states", Render: Lifetime },
 	],
 	playground: {
 		controls: [
