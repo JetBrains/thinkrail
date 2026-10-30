@@ -638,6 +638,7 @@ export default function syntheticExternalExtension(pi) {
 			"brainstorming",
 			"choosing-a-workflow",
 			"importing-a-codebase",
+			"running-the-project",
 			"setting-up-a-project",
 			"starting-a-new-project",
 			"writing-specs",
