@@ -1,7 +1,7 @@
 {
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
-		"rootDir": ".",
+		"rootDir": "../..",
 		"types": ["bun"]
 	},
 	"include": [
@@ -12,23 +12,5 @@
 		"vite.config.ts"
 	],
 	"exclude": [
-		"src/chat/Markdown.test.tsx",
-		"src/chat/markdownBlocks.test.ts",
-		"src/components/preloadedLazy.test.tsx",
-		"src/lib/idle.test.ts",
-		"src/navigation/restore.test.ts",
-		"src/notifications/attentionObserver.test.ts",
-		"src/notifications/attentionPipeline.test.ts",
-		"src/notifications/channel.test.ts",
-		"src/notifications/detectAttention.test.ts",
-		"src/notifications/webNotifications.test.ts",
-		"src/styles/buttonUsage.test.ts",
-		"src/styles/typography.test.ts",
-		"src/themes/schema.test.ts",
-		"src/transport/mcp.test.ts",
-		"src/transport/piEventBatcher.test.ts",
-		"src/transport/transport.test.ts",
-		"src/transport/wireTransport.test.ts",
-		"src/updates/useUpdates.test.ts"
 	]
 }

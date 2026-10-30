@@ -490,7 +490,7 @@ test("a workspace-level route retains existing local attention and canonicalizes
 	calls[0]?.resolve([workspace("w1")]);
 	await settle();
 	const state = useAppStore.getState();
-	expect(selectAttentionCenterTab(state, "w1")?.sessionId).toBe("s1");
+	expect(selectAttentionCenterTab(state, "w1")).toMatchObject({ kind: "chat", sessionId: "s1" });
 	expect(state.routeChatTarget).toBeNull();
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
 	expect(d.pushes.length).toBe(pushesBefore);

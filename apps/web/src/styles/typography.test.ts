@@ -152,7 +152,7 @@ describe("typography source", () => {
 	it("keeps state out of typography and pins the UI role weights", () => {
 		expect(
 			Object.fromEntries(
-				Object.keys(typography.textStyles.ui).map((name) => {
+				Object.keys(typography.textStyles.ui ?? {}).map((name) => {
 					const style = resolveStyle(typography, `ui.${name}`);
 					return [name, typography.fontWeights[style.fontWeight]];
 				}),
@@ -170,7 +170,7 @@ describe("typography source", () => {
 	});
 
 	it("holds one monotonic heading scale", () => {
-		expect(Object.keys(typography.textStyles.heading)).toEqual(["xl", "lg", "md", "sm"]);
+		expect(Object.keys(typography.textStyles.heading ?? {})).toEqual(["xl", "lg", "md", "sm"]);
 		const sizes = ["xl", "lg", "md", "sm"].map((n) => px(`heading.${n}`) as number);
 		expect(sizes).toEqual([24, 20, 18, 16]);
 		for (const n of ["xl", "lg", "md", "sm"])
@@ -230,6 +230,7 @@ describe("references", () => {
 	function doc(
 		styles: Record<string, Style | StyleRef>,
 		prose: Record<string, Style | StyleRef> = {},
+		rootStyle: Style | StyleRef = { $ref: "probe.base" },
 	) {
 		const canonical: Style = {
 			fontFamily: "interface",
@@ -242,7 +243,7 @@ describe("references", () => {
 		};
 		return {
 			...typography,
-			rootStyle: { $ref: "probe.base" },
+			rootStyle,
 			textStyles: { probe: { base: canonical, ...styles }, code: typography.textStyles.code },
 			proseSystems: {
 				chat: {
@@ -319,7 +320,7 @@ describe("references", () => {
 	});
 
 	it("rejects a rootStyle that carries its own values", () => {
-		const t = { ...doc({}), rootStyle: resolveStyle(typography, "ui.default") } as Typography;
+		const t = doc({}, {}, resolveStyle(typography, "ui.default"));
 		expect(errorsFor(t)).toContain(
 			"rootStyle must be a $ref to a semantic style, not a set of values",
 		);

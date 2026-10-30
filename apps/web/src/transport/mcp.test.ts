@@ -75,7 +75,7 @@ test("the watch reads once and polls with backoff only while a server is startin
 	expect(h.reads).toHaveLength(1);
 	await h.settleRead();
 	expect(h.results).toEqual([null]);
-	expect(h.timers.map((timer) => timer.ms)).toEqual([MCP_STARTING_POLL_MS[0]]);
+	expect(h.timers.map((timer) => timer.ms)).toEqual(MCP_STARTING_POLL_MS.slice(0, 1));
 	h.fire();
 	expect(h.reads).toHaveLength(2);
 	await h.settleRead(true);
@@ -134,6 +134,7 @@ const listResult = (name: string, workspace = workspaceId): McpListResult => ({
 			name,
 			scope: "user",
 			source: "/agent/mcp.json",
+			fingerprint: "fingerprint",
 			transport: "stdio",
 			endpoint: `bun ${name}.ts`,
 			exposure: "deferred",
@@ -197,11 +198,21 @@ const mutations = [
 			requestMcpList("mcp.update", {
 				workspaceId,
 				scope: "user",
+				expectedFingerprint: "fingerprint",
 				name: "docs",
 				entry: { command: "docs" },
 			}),
 	],
-	["mcp.remove", () => requestMcpList("mcp.remove", { workspaceId, scope: "user", name: "docs" })],
+	[
+		"mcp.remove",
+		() =>
+			requestMcpList("mcp.remove", {
+				workspaceId,
+				scope: "user",
+				expectedFingerprint: "fingerprint",
+				name: "docs",
+			}),
+	],
 	[
 		"mcp.setProjectOverride",
 		() => requestMcpList("mcp.setProjectOverride", { workspaceId, name: "docs", enabled: false }),
@@ -213,7 +224,13 @@ const mutations = [
 	["mcp.shareWithRepo", () => requestMcpList("mcp.shareWithRepo", { workspaceId, name: "docs" })],
 ] as const;
 
-const remove = () => requestMcpList("mcp.remove", { workspaceId, scope: "user", name: "docs" });
+const remove = () =>
+	requestMcpList("mcp.remove", {
+		workspaceId,
+		scope: "user",
+		expectedFingerprint: "fingerprint",
+		name: "docs",
+	});
 const read = (workspace = workspaceId) => requestMcpList("mcp.list", { workspaceId: workspace });
 
 describe("MCP list request ordering", () => {
@@ -455,6 +472,7 @@ describe("MCP list request ordering", () => {
 		const other = requestMcpList("mcp.remove", {
 			workspaceId: otherWorkspace,
 			scope: "user",
+			expectedFingerprint: "fingerprint",
 			name: "docs",
 		});
 		const otherRead = read(otherWorkspace);
@@ -462,6 +480,7 @@ describe("MCP list request ordering", () => {
 		expect(transport.at(1).params).toEqual({
 			workspaceId: otherWorkspace,
 			scope: "user",
+			expectedFingerprint: "fingerprint",
 			name: "docs",
 		});
 		transport.at(1).resolve(listResult("other", otherWorkspace));
@@ -474,7 +493,12 @@ describe("MCP list request ordering", () => {
 		expect(state().mcpByWorkspace[workspaceId]).toBeUndefined();
 		transport.at(0).resolve(listResult("first"));
 		await first;
-		expect(transport.at(3).params).toEqual({ workspaceId, scope: "user", name: "docs" });
+		expect(transport.at(3).params).toEqual({
+			workspaceId,
+			scope: "user",
+			expectedFingerprint: "fingerprint",
+			name: "docs",
+		});
 		const updated = listResult("updated");
 		transport.at(3).resolve(updated);
 		await queued;
