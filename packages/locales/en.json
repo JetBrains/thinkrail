@@ -184,7 +184,6 @@
 	"chat.extUi.submit": "Submit",
 	"chat.extraUsage.chatBody": "Third-party harness usage draws from your account's extra usage and is billed per token, not your Claude plan limits.",
 	"chat.extraUsage.chatTitle": "Anthropic is billing this chat as extra usage.",
-	"chat.extraUsage.details": "Details",
 	"chat.extraUsage.disable": "Don't warn again",
 	"chat.extraUsage.disableFailed": "Couldn't turn off the warning",
 	"chat.extraUsage.manage": "Manage extra usage",

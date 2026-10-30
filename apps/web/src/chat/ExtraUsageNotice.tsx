@@ -9,8 +9,6 @@ import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 
 export const CLAUDE_USAGE_URL = "https://claude.ai/settings/usage";
-export const EXTRA_USAGE_DOCS_URL =
-	"https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/providers.md#claude-promax";
 
 const LINK =
 	"inline-flex items-center gap-2 rounded-sm text-primary underline underline-offset-2 outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary";
@@ -59,7 +57,6 @@ export function ExtraUsageNotice({
 				</p>
 				<div className="flex flex-wrap items-center gap-x-16 gap-y-4">
 					<NoticeLink href={CLAUDE_USAGE_URL}>{t("chat.extraUsage.manage")}</NoticeLink>
-					<NoticeLink href={EXTRA_USAGE_DOCS_URL}>{t("chat.extraUsage.details")}</NoticeLink>
 					{onDisable ? (
 						<button
 							type="button"

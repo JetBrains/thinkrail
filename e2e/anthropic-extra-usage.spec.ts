@@ -80,10 +80,7 @@ test("an Anthropic subscription sign-in warns about extra usage before the user 
 		"href",
 		"https://claude.ai/settings/usage",
 	);
-	await expect(notice.getByRole("link", { name: "Details" })).toHaveAttribute(
-		"href",
-		/providers\.md#claude-promax$/,
-	);
+	await expect(notice.getByRole("link")).toHaveCount(1);
 	await shot(dialog, "anthropic-extra-usage", "signin-notice");
 	await page.getByTestId("login-cancel").click();
 	await expect(dialog).toHaveCount(0);

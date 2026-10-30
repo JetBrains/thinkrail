@@ -167,7 +167,6 @@
 	"chat.extUi.submit": "送信",
 	"chat.extraUsage.chatBody": "サードパーティ製ツールからの利用は Claude プランの上限ではなく、アカウントの追加使用量から差し引かれ、トークン単位で課金されます。",
 	"chat.extraUsage.chatTitle": "Anthropic はこのチャットを追加使用量として課金しています。",
-	"chat.extraUsage.details": "詳細",
 	"chat.extraUsage.disable": "今後は警告しない",
 	"chat.extraUsage.disableFailed": "警告をオフにできませんでした",
 	"chat.extraUsage.manage": "追加使用量を管理",

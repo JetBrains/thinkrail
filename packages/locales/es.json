@@ -193,7 +193,6 @@
 	"chat.extUi.submit": "Enviar",
 	"chat.extraUsage.chatBody": "El uso desde herramientas de terceros consume el uso adicional de tu cuenta y se factura por token, no con los límites de tu plan de Claude.",
 	"chat.extraUsage.chatTitle": "Anthropic factura este chat como uso adicional.",
-	"chat.extraUsage.details": "Detalles",
 	"chat.extraUsage.disable": "No volver a avisar",
 	"chat.extraUsage.disableFailed": "No se pudo desactivar el aviso",
 	"chat.extraUsage.manage": "Gestionar el uso adicional",
