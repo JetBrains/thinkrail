@@ -8,7 +8,12 @@ import {
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { SettingsSection } from "@/store";
-import { filterSettingsNavGroups, resolveSettingsSection, settingsNavGroups } from "./settingsNav";
+import {
+	filterSettingsNavGroups,
+	resolveSettingsSection,
+	type SettingsNavGroup,
+	settingsNavGroups,
+} from "./settingsNav";
 
 const LATEST = Math.max(
 	DEFAULT_MODEL_PROTOCOL_VERSION,
@@ -98,28 +103,36 @@ describe("settingsNavGroups", () => {
 	});
 
 	test("groups left without an available section disappear", () => {
-		const groups = [
+		const groups: SettingsNavGroup[] = [
 			{
-				label: "Gated",
+				label: "settings.nav.group.agent",
 				sections: [
 					{
 						id: SettingsSection.Models,
-						label: "Models",
+						label: "settings.nav.models",
 						icon: RiBrainLine,
 						requiresProtocolVersion: DEFAULT_MODEL_PROTOCOL_VERSION,
 					},
 					{
 						id: SettingsSection.Updates,
-						label: "Updates",
+						label: "settings.nav.updates",
 						icon: RiBrainLine,
-						requiresInjectedContent: true as const,
+						requiresInjectedContent: true,
 					},
 				],
 			},
-			{ label: "Open", sections: [{ id: SettingsSection.Chat, label: "Chat", icon: RiBrainLine }] },
+			{
+				label: "settings.nav.group.interface",
+				sections: [{ id: SettingsSection.Chat, label: "settings.nav.chat", icon: RiBrainLine }],
+			},
 		];
-		expect(filterSettingsNavGroups(groups, 1, false).map((g) => g.label)).toEqual(["Open"]);
-		expect(filterSettingsNavGroups(groups, 1, true).map((g) => g.label)).toEqual(["Gated", "Open"]);
+		expect(filterSettingsNavGroups(groups, 1, false).map((g) => g.label)).toEqual([
+			"settings.nav.group.interface",
+		]);
+		expect(filterSettingsNavGroups(groups, 1, true).map((g) => g.label)).toEqual([
+			"settings.nav.group.agent",
+			"settings.nav.group.interface",
+		]);
 		expect(settingsNavGroups(1, false).every((g) => g.sections.length > 0)).toBe(true);
 	});
 });
@@ -159,9 +172,9 @@ describe("resolveSettingsSection", () => {
 	});
 
 	test("without Appearance it falls back to the first available section", () => {
-		const groups = [
+		const groups: SettingsNavGroup[] = [
 			{
-				label: "Only",
+				label: "settings.nav.group.system",
 				sections: settingsNavGroups(LATEST, true)
 					.flatMap((g) => g.sections)
 					.filter((s) => s.id === SettingsSection.Privacy),
