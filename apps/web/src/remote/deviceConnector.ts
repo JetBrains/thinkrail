@@ -12,6 +12,8 @@ import { createDeviceWireClient, type DeviceWireClient } from "./deviceWireClien
 
 export interface RemoteConnection {
 	client: DeviceWireClient;
+	hostKey: string;
+	relayUrl: string;
 	projectRef: string;
 	close(): void;
 }
@@ -70,21 +72,34 @@ async function loadOrCreateDeviceKey(): Promise<DeviceKey> {
 	return { privateKey: keyPair.privateKey, publicKeyRaw };
 }
 
+interface OpenParams {
+	relayUrl: string;
+	hostKey: string;
+	projectRef: string;
+	/** The one-time pairing token for a first pairing; omitted when resuming an already-paired host. */
+	token?: string;
+	label: string;
+}
+
 /**
- * Opens (or re-opens) a remote session: connect to the relay, authorize (first time with the one-time pairing
- * token, reconnects with `resume` against the already-registered device key), negotiate a browser WebRTC
- * answer, and attach the opened channel to the wire client. A dropped connection auto-reconnects with backoff;
- * in-flight requests survive and replay (see `deviceWireClient`). Browser-only — uses the platform WebSocket,
- * RTCPeerConnection, and SubtleCrypto.
+ * Opens (or re-opens) a remote session. A first pairing sends `hello` + the one-time token; a saved host (or a
+ * reconnect) sends `resume` and re-authorizes by the registered device key. Negotiates a browser WebRTC answer
+ * and attaches the opened channel to the wire client; a dropped connection auto-reconnects with backoff, and
+ * in-flight requests survive and replay. Browser-only (WebSocket, RTCPeerConnection, SubtleCrypto).
  */
-export async function connectRemoteProject(
-	link: string,
-	options: { label: string },
-): Promise<RemoteConnection> {
-	const pairing = parsePairingUri(link);
-	if (!pairing) throw new Error("Invalid pairing link");
+async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 	const key = await loadOrCreateDeviceKey();
 	const client = createDeviceWireClient();
+	const resumeFrame: DeviceMessage = { kind: "resume", devicePublicKey: key.publicKeyRaw };
+	const firstFrame: DeviceMessage =
+		params.token !== undefined
+			? {
+					kind: "hello",
+					token: params.token,
+					devicePublicKey: key.publicKeyRaw,
+					label: params.label,
+				}
+			: resumeFrame;
 
 	let closed = false;
 	let backoff = 500;
@@ -110,10 +125,9 @@ export async function connectRemoteProject(
 		return bytesToBase64url(new Uint8Array(signature));
 	};
 
-	/** Runs one connection attempt; resolves when its DataChannel opens, rejects on failure. */
 	const attempt = (initiate: DeviceMessage): Promise<void> =>
 		new Promise<void>((resolve, reject) => {
-			const ws = new WebSocket(pairing.signalingUrl);
+			const ws = new WebSocket(params.relayUrl);
 			const pc = new RTCPeerConnection();
 			active = { ws, pc };
 			let settled = false;
@@ -126,7 +140,6 @@ export async function connectRemoteProject(
 					reject(new Error(reason));
 				}
 			};
-
 			const send = (message: DeviceMessage): void =>
 				ws.send(encodeBrokerFrame({ t: "frame", data: encodeDeviceMessage(message) }));
 
@@ -173,7 +186,7 @@ export async function connectRemoteProject(
 			};
 
 			ws.addEventListener("open", () =>
-				ws.send(encodeBrokerFrame({ t: "connect", hostKey: pairing.hostPublicKey })),
+				ws.send(encodeBrokerFrame({ t: "connect", hostKey: params.hostKey })),
 			);
 			ws.addEventListener("error", () => dropped("relay connection failed"));
 			ws.addEventListener("close", () => dropped("relay connection closed"));
@@ -196,26 +209,51 @@ export async function connectRemoteProject(
 		backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
 		setTimeout(() => {
 			if (closed) return;
-			attempt({ kind: "resume", devicePublicKey: key.publicKeyRaw }).catch(() =>
-				scheduleReconnect(),
-			);
+			attempt(resumeFrame).catch(() => scheduleReconnect());
 		}, delay);
 	};
 
-	await attempt({
-		kind: "hello",
-		token: pairing.token,
-		devicePublicKey: key.publicKeyRaw,
-		label: options.label,
-	});
+	await attempt(firstFrame);
 
 	return {
 		client,
-		projectRef: pairing.projectRef,
+		hostKey: params.hostKey,
+		relayUrl: params.relayUrl,
+		projectRef: params.projectRef,
 		close: () => {
 			closed = true;
 			teardownActive();
 			client.close();
 		},
 	};
+}
+
+/** First pairing: parse a `thinkrail://pair` link and connect with its one-time token. */
+export function connectRemoteProject(
+	link: string,
+	options: { label: string },
+): Promise<RemoteConnection> {
+	const pairing = parsePairingUri(link);
+	if (!pairing) throw new Error("Invalid pairing link");
+	return openRemote({
+		relayUrl: pairing.signalingUrl,
+		hostKey: pairing.hostPublicKey,
+		projectRef: pairing.projectRef,
+		token: pairing.token,
+		label: options.label,
+	});
+}
+
+/** Reconnect to an already-paired host (no token) — re-authorizes by the registered device key via `resume`. */
+export function connectSavedHost(host: {
+	relayUrl: string;
+	hostKey: string;
+	label: string;
+}): Promise<RemoteConnection> {
+	return openRemote({
+		relayUrl: host.relayUrl,
+		hostKey: host.hostKey,
+		projectRef: "",
+		label: host.label,
+	});
 }

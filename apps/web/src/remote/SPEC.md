@@ -41,6 +41,20 @@ The UI entry is `panels/ConnectByLinkDialog.tsx` (reached from the `AddProjectMe
 item): it drives the controller and, on connect, calls `mountRemoteSession` so the remote host's projects and
 sessions render in the normal UI via the shared channel→store wiring.
 
+### Lightweight multi-host core (for a mobile "sessions pulled onto your phone" client)
+
+A phone wants a *thin* view — the live sessions across several hosts (laptop, server), not the full IDE. These
+framework-agnostic, unit-tested pieces are that core (a future `apps/mobile` Capacitor shell renders over them):
+
+- `connectSavedHost` (in `deviceConnector.ts`) — reconnect to an already-paired host with no token, via
+  `resume`. The first pairing still uses `connectRemoteProject` (link + token); `openRemote` is their shared
+  machinery.
+- `hostRegistry.ts` — the locally-stored set of paired hosts (`{ hostKey, relayUrl, label }`), over an
+  injected `KeyValueStore` (web localStorage / Capacitor Preferences). No cloud account — the device pairs each
+  host by link and remembers it.
+- `remoteSessions.ts` — one wire client per host, aggregating their live `sessionState` into one list for the
+  mobile session view. Connector injected for tests.
+
 ## Not yet here
 
 - `/files` and `/blob` byte URLs over the data channel (markdown images, diff blobs) — `RemoteTransport.httpBase`
