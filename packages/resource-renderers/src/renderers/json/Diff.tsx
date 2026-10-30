@@ -188,6 +188,7 @@ export default function JsonDiff({
 				<JsonTree
 					node={modifiedDocument.root}
 					markFor={(node) => classification.current.get(node.pointer)}
+					nestedChangesFor={(node) => layout.nestedChanges.get(node.pointer)}
 					threadsFor={(node) => threadMaps.current.get(node.pointer) ?? []}
 					onSelect={(node) => composer.select({ node, side: "worktree" })}
 					onMarker={scrollToCard}
