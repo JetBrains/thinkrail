@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
-	HostPlatform,
 	HostUpdateNotice,
 	ServerWelcome,
 	SessionCreatedPayload,
@@ -382,20 +381,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.localesChanged);
 				if (ws.data.protocolVersion >= USER_THEMES_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.themesChanged);
-				const hostPlatform: HostPlatform =
-					process.platform === "darwin" || process.platform === "win32"
-						? process.platform
-						: "linux";
 				const setupCapture = additionalCapture();
-				const welcome: ServerWelcome = {
-					protocolVersion: PROTOCOL_VERSION,
-					hostPlatform,
-					projects: listProjects(),
-					recentProjects: listRecentProjects(),
-					config: getConfig(),
-					...(appVersion ? { appVersion } : {}),
-					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
-				};
+				const welcome: ServerWelcome = buildWelcome();
 				setupObservation.observe(setupCapture, {
 					project_present: welcome.projects.length > 0 ? "yes" : "no",
 				});
@@ -502,6 +489,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		},
 	});
 
+	const buildWelcome = (): ServerWelcome => ({
+		protocolVersion: PROTOCOL_VERSION,
+		hostPlatform:
+			process.platform === "darwin" || process.platform === "win32" ? process.platform : "linux",
+		projects: listProjects(),
+		recentProjects: listRecentProjects(),
+		config: getConfig(),
+		...(appVersion ? { appVersion } : {}),
+		...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
+	});
+
 	// Remote (WebRTC) clients are not Bun sockets, so they can't join Bun's native pub/sub. Wrapping
 	// `server.publish` once mirrors every broadcast — already framed as `{ channel, data }` — to each live
 	// remote bridge, with no cost when no device is paired. Targeted `ws.send`s stay host-local by design.
@@ -535,6 +533,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				});
 				remoteBridges.add(bridge);
 				channel.onClose(() => remoteBridges.delete(bridge));
+				// The device has no WS "open" event, so hand it the same welcome snapshot over the bridge.
+				bridge.push(WS_CHANNELS.serverWelcome, buildWelcome());
 			},
 		});
 	}

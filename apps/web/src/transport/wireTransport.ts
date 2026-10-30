@@ -32,11 +32,17 @@ import {
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { currentLocale } from "@thinkrail/locales/react";
+import type { DeviceWireClient } from "../remote/deviceWireClient";
 import { isConnectedGeneration, useAppStore } from "../store";
-import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
-import { WsTransport } from "./transport";
+import {
+	createPiEventBatcher,
+	type PiEventBatcher,
+	shouldFlushPiEventsBefore,
+} from "./piEventBatcher";
+import { RemoteTransport } from "./remoteTransport";
+import { type Transport, WsTransport } from "./transport";
 
-let transport: WsTransport | null = null;
+let transport: Transport | null = null;
 
 export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= HOST_UPDATE_RUN_PROTOCOL_VERSION;
@@ -209,12 +215,13 @@ function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 }
 
 export function initTransport(): WsTransport {
-	if (transport) return transport;
+	const existing = transport;
+	if (existing instanceof WsTransport) return existing;
 	const piEvents = createPiEventBatcher((payloads) =>
 		useAppStore.getState().handlePiEvents(payloads),
 	);
 
-	transport = new WsTransport(
+	const ws = new WsTransport(
 		{
 			onStatus: (status) => {
 				piEvents.flush();
@@ -227,7 +234,13 @@ export function initTransport(): WsTransport {
 			},
 		},
 	);
+	transport = ws;
+	wireChannelsToStore(ws, piEvents);
+	ws.connect();
+	return ws;
+}
 
+function wireChannelsToStore(transport: Transport, piEvents: PiEventBatcher): void {
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
 		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
@@ -393,14 +406,28 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data as AppConfig);
 	});
+}
 
-	transport.connect();
+export function getTransport(): Transport {
+	if (!transport) throw new Error("transport not initialized — call initTransport() first");
 	return transport;
 }
 
-export function getTransport(): WsTransport {
-	if (!transport) throw new Error("transport not initialized — call initTransport() first");
-	return transport;
+/**
+ * Switches the app onto a remote host reached over a WebRTC DataChannel (a project opened by link). It
+ * installs a `RemoteTransport` as the active transport and runs the same channel→store wiring as the local
+ * WS; the host sends its `serverWelcome` over the bridge on connect, so the store bootstraps normally. Byte
+ * URLs (`/files`, `/blob`) are unavailable until that tunnel lands. Replaces the current transport.
+ */
+export function mountRemoteSession(client: DeviceWireClient): Transport {
+	const piEvents = createPiEventBatcher((payloads) =>
+		useAppStore.getState().handlePiEvents(payloads),
+	);
+	const remote = new RemoteTransport(client);
+	transport = remote;
+	wireChannelsToStore(remote, piEvents);
+	useAppStore.getState().setStatus("connected");
+	return remote;
 }
 
 let surveyLoadGeneration = 0;

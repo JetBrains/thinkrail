@@ -48,7 +48,21 @@ export interface RequestOptions {
 	timeoutMs?: number;
 }
 
-export class WsTransport {
+/**
+ * The surface the store and panels use, so the same wiring drives either a same-origin `WsTransport` or the
+ * remote `RemoteTransport` (a WebRTC DataChannel to another host).
+ */
+export interface Transport {
+	request<M extends WsMethodName>(
+		method: M,
+		params: WsParams<M>,
+		options?: RequestOptions,
+	): Promise<WsResult<M>>;
+	subscribe(channel: string, handler: (data: unknown) => void): () => void;
+	httpBase(): string;
+}
+
+export class WsTransport implements Transport {
 	private ws: WebSocket | null = null;
 	private readonly url: string;
 	private readonly onStatus: ((status: ConnectionStatus) => void) | undefined;
