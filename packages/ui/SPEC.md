@@ -21,9 +21,11 @@ only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-t
 explicit cleanup. It knows nothing about the theme catalog or preferences. `./fonts` is the same seam for
 the font settings: `onFontsChange` / `fontsRevision` over the `data-fonts` signal, `resolveFont(className)`
 (the computed family, size, weight and ligatures of a generated typography class, for surfaces that take
-fonts as JS options), `fontsLoaded`, and `watchFont(className, fields, onChange)` — how such a surface
-follows the class: the latest change wins once its faces load, a change to none of the listed fields is
-skipped, and a new face set (the `data-font-faces` signal) re-applies an unchanged font. It knows nothing about the settings or the runtime that publishes them.
+fonts as JS options), `fontsLoaded` (resolves once the faces for that family, size and weight have
+loaded), and `watchFont(className, fields, onChange)` — how such a surface follows the class: the latest
+change wins once its faces load, a change to none of the listed fields is skipped, and a new face set (the
+`data-font-faces` signal) re-applies an unchanged font. It knows nothing about the settings or the runtime
+that publishes them.
 
 Workspace imports may reach `contracts` and `@thinkrail/locales/react` (the shared i18next instance, for
 primitive-owned strings such as the dialog's screen-reader Close and the toast's Dismiss label) only. External dependencies are React, Radix, cmdk,

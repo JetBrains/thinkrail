@@ -40,8 +40,8 @@ export function resolveFont(className: string): ResolvedFont {
 	return resolved;
 }
 
-export function fontsLoaded({ family, size }: ResolvedFont): Promise<void> {
-	return document.fonts.load(`${size}px ${family}`).then(
+export function fontsLoaded({ family, size, weight }: ResolvedFont): Promise<void> {
+	return document.fonts.load(`${weight} ${size}px ${family}`).then(
 		() => undefined,
 		() => undefined,
 	);

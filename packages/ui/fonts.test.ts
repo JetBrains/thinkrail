@@ -1,5 +1,5 @@
 import { expect, mock, test } from "bun:test";
-import { fontsRevision, onFontsChange, watchFont } from "./fonts";
+import { fontsLoaded, fontsRevision, onFontsChange, watchFont } from "./fonts";
 
 test("onFontsChange observes only the published fonts revision and returns cleanup", () => {
 	const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
@@ -138,3 +138,24 @@ test("watchFont re-applies an unchanged family when the face set changes, and sk
 		expect(applied).toEqual(['"Fira Code"']);
 		stop();
 	}));
+
+test("fontsLoaded waits for the face of the resolved weight, not just the regular one", async () => {
+	const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+	const load = mock((_font: string) => Promise.resolve([]));
+	try {
+		Object.defineProperty(globalThis, "document", {
+			configurable: true,
+			value: { fonts: { load } },
+		});
+		await fontsLoaded({
+			family: '"Ubuntu Mono", monospace',
+			size: 18,
+			weight: 530,
+			ligatures: false,
+		});
+		expect(load).toHaveBeenCalledWith('530 18px "Ubuntu Mono", monospace');
+	} finally {
+		if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
+		else Reflect.deleteProperty(globalThis, "document");
+	}
+});

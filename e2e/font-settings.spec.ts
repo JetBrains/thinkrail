@@ -1,7 +1,7 @@
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { DEFAULT_CONFIG, normalizeFontSettings } from "@thinkrail/contracts";
+import { type AppConfigUpdate, DEFAULT_CONFIG, normalizeFontSettings } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	expandDisclosure,
@@ -48,14 +48,19 @@ async function connect(page: Page): Promise<void> {
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 }
 
-test.afterEach(async () => {
+async function updateHostSettings(baseURL: string | undefined, config: AppConfigUpdate) {
+	if (!baseURL) throw new Error("Font settings fixtures require the isolated host URL");
+	const wire = await E2eWire.connect(Number(new URL(baseURL).port));
 	try {
-		const wire = await E2eWire.connect();
-		try {
-			await wire.request("settings.update", { config: normalizeFontSettings(DEFAULT_CONFIG) });
-		} finally {
-			wire.close();
-		}
+		await wire.request("settings.update", { config });
+	} finally {
+		wire.close();
+	}
+}
+
+test.afterEach(async ({ baseURL }) => {
+	try {
+		await updateHostSettings(baseURL, normalizeFontSettings(DEFAULT_CONFIG));
 	} finally {
 		writeFileSync(E2E_INSTALLED_FONTS, "[]");
 		rmSync(FONTS_DIR, { recursive: true, force: true });
@@ -240,6 +245,7 @@ test("the weight slider says so when the chosen font has no weights to move betw
 
 test("a code size change re-measures an open Pierre file and keeps the comment being written", async ({
 	page,
+	baseURL,
 }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
@@ -256,12 +262,7 @@ test("a code size change re-measures an open Pierre file and keeps the comment b
 	await selectPierreLine(fileView, "plain-text-fixture");
 	const input = page.getByTestId("review-composer-input");
 	await input.fill("Kept across a font change.");
-	const wire = await E2eWire.connect();
-	try {
-		await wire.request("settings.update", { config: { codeFontSize: 18 } });
-	} finally {
-		wire.close();
-	}
+	await updateHostSettings(baseURL, { codeFontSize: 18 });
 	await expect.poll(rowHeight).toBeGreaterThan(before);
 	await expect(input).toHaveValue("Kept across a font change.");
 });
