@@ -130,3 +130,10 @@ Radius steps: `rounded-xs` 2px · `rounded-sm` 4px · `rounded-md` 6px · `round
 | IconButton | `import { IconButton } from "@thinkrail/ui/button";` | `primary`, `soft-primary`, `outline`, `ghost`, `destructive` | `s`, `m`, `l` |
 | HeaderIconButton | `import { HeaderIconButton } from "@/panels/HeaderIconButton";` | — | — |
 | TabStrip | `import { TabStrip, WorkbenchTab } from "@/shell/layout/workbenchTabs";` | — | — |
+| SettingsSwitch | `import { SettingsSwitch } from "@/panels/SettingsSwitch";` | — | — |
+| Switch | `import { Switch } from "@thinkrail/ui/switch";` | — | — |
+| ToggleSegment | `import { ToggleSegment } from "@thinkrail/ui/toggle-segment";` | — | — |
+| SegmentedControl | `import { SegmentedControl, type SegmentedControlOption } from "@/panels/SegmentedControl";` | — | — |
+| Textarea | `import { Textarea } from "@thinkrail/ui/textarea";` | — | — |
+| SettingsRadioCards | `import { SettingsRadioCards, type SettingsRadioChoice } from "@/panels/SettingsRadioCards";` | — | — |
+| SettingsRow and SettingsGroup | `import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "@/panels/SettingsRow"; import { SettingsGroup, SettingsPageContainer } from "@/panels/SettingsGroup";` | — | — |

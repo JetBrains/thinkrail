@@ -1,7 +1,14 @@
 import { button } from "./components/button";
 import { headerIconButton } from "./components/header-icon-button";
 import { iconButton } from "./components/icon-button";
+import { segmentedControl } from "./components/segmented-control";
+import { settingsRadioCards } from "./components/settings-radio-cards";
+import { settingsRow } from "./components/settings-row";
+import { settingsSwitch } from "./components/settings-switch";
+import { switchDoc } from "./components/switch";
 import { tabStrip } from "./components/tab-strip";
+import { textarea } from "./components/textarea";
+import { toggleSegment } from "./components/toggle-segment";
 import type { ComponentDoc, DocArea, DocPage } from "./types";
 
 export type AreaId = DocArea | "components";
@@ -147,4 +154,16 @@ references: [web-color, web-spacing, web-typography]`,
 	},
 ];
 
-export const components: readonly ComponentDoc[] = [button, iconButton, headerIconButton, tabStrip];
+export const components: readonly ComponentDoc[] = [
+	button,
+	iconButton,
+	headerIconButton,
+	tabStrip,
+	settingsSwitch,
+	switchDoc,
+	toggleSegment,
+	segmentedControl,
+	textarea,
+	settingsRadioCards,
+	settingsRow,
+];

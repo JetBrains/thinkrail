@@ -2151,6 +2151,2949 @@ export default function RailEntry() {
 | `apps/web/src/shell/layout/workbenchCenter.tsx` | Every center group's strip, with preview, split geometry and New chat / Remove group in `trailing`. |
 | `apps/web/src/shell/layout/workbenchSide.tsx` | `AuxiliaryGroupHeader`: the terminal-session strip of a left, right or bottom pane, with the add menu and Hide in `trailing`. |
 
+## SettingsSwitch
+
+The Settings dialog's own on/off control: a `<button role="switch">` whose body is the track, with a sliding knob. It is a second implementation beside Switch from `packages/ui` with the same geometry but a different look and a closed API — five props, no `className`, `ref` or extra attributes. The call site provides `checked`, the accessible `label`, a required `testId`, and the visible text, almost always as the `control` of a SettingsRow.
+
+```tsx
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+```
+
+### When to use
+
+- Maintaining an existing Settings page that already uses it (Privacy, Notifications, Models, Subagents, Visible models, Line width, JetBrains AI quota).
+- A host-persisted on/off setting shown as the `control` of a SettingsRow, whose `checked` follows the saved value.
+- A per-item visibility switch in a Settings list, such as Visible models.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Switch | Any new switch, including in Settings (Extensions and MCP servers already use it), and anywhere you need a hover state, `className`, `ref`, a tooltip trigger or extra ARIA. See *SettingsSwitch and Switch* below for the differences. |
+| SegmentedControl | A setting with more than two named values. |
+| SettingsRadioCards | Choosing one of a few options that each need a title and description. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Track | The `<button type="button" role="switch">` itself: a rounded track, `border-default` off and `primary` on. It also carries the focus ring. |
+| Knob | A round span that slides to the end when on; `container-workspace-bg` in both states. |
+| Visible text | Not part of the component; usually the `label` and `description` of the surrounding SettingsRow. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `checked` | `boolean` | — | Required. The current state; the switch keeps no state of its own. |
+| `disabled` | `boolean` | `false` | Native disabled: no focus, no activation, no pointer events; the whole control is dimmed with `opacity-50`. |
+| `label` | `string` | — | Required. The accessible name (`aria-label`). Use the row's locale key, or a more specific one (`settings.subagents.allowGlobally`, `settings.visibleModels.show`). |
+| `testId` | `string` | — | Required. Rendered as `data-testid`; the e2e handle of the setting (`notifications-toggle`, `review-autofix-toggle`). |
+| `onChange` | `(checked: boolean) => void` | — | Required. Called on every click with the next state (`!checked`). |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Off | `checked={false}`. | `border-default` track, `container-workspace-bg` knob at the start. |
+| On | `checked`. | `primary` track; the knob stays `container-workspace-bg` and moves to the end. |
+| Hover | Pointer over the switch. | No distinct treatment. |
+| Pressed | Pointer down or Space held. | No distinct treatment. |
+| Keyboard focus | Tab to the switch. | A 2px `primary` ring flush around the track; on the `primary` track it reads as a thicker edge. |
+| Disabled | `disabled`. | The enabled colours at `opacity-50`; no pointer events. |
+| Changing | `checked` flips. | The track colour fades and the knob slides; there is no reduced-motion variant. |
+
+### Accessibility
+
+- A native `<button type="button">` with `role="switch"` and `aria-checked`; `data-active` mirrors `checked`.
+- `label` is the accessible name. The SettingsRow text is not linked to the switch, so the label must name the same setting.
+- No visible On/Off text; the state is `aria-checked` and the knob position.
+- `disabled` is native: the switch leaves the tab order and cannot be activated.
+- It accepts no other attributes and no `ref`, so it cannot carry `aria-description` or be a Radix `asChild` trigger; use Switch when that is needed.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from the switch; the focus ring appears. |
+| `Space / Enter` | Toggles the state (native button activation). |
+
+### Usage rules
+
+- **SSW-1** — Do not add new SettingsSwitch call sites; new switches, in Settings too, use Switch. SettingsSwitch is a duplicate implementation tracked for consolidation (audit F-04, `buttonUsage.test.ts`).
+- **SSW-2** — Place it as the `control` of a SettingsRow (or beside its own visible name in a list row); it has no visible text of its own.
+- **SSW-3** — `label` comes from the row's locale key or a more specific one; in a list it names the item (`settings.visibleModels.show`).
+- **SSW-4** — Give every switch a stable `testId` named after the setting (`<setting>-toggle`); it is required because e2e tests address settings by it.
+- **SSW-5** — `checked` is the saved value: `onChange` writes the setting and the switch follows the broadcast, never an optimistic local copy. Report a failed write with a toast or an inline error and leave `checked` on the saved value.
+- **SSW-6** — Do not wrap, restyle or patch it to get hover, tooltips, `aria-description` or a different disabled look — those are what Switch already provides.
+
+### Examples
+
+#### Basic
+
+The control of a SettingsRow, as in Privacy.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function Basic() {
+	const t = useT();
+	const [enabled, setEnabled] = useState(true);
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsRow
+				noBorder
+				label={t("settings.privacy.share")}
+				control={
+					<SettingsSwitch
+						checked={enabled}
+						label={t("settings.privacy.share")}
+						testId="analytics-toggle"
+						onChange={setEnabled}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### With a description
+
+A SettingsRow with a detail line, as in Notifications.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function Description() {
+	const t = useT();
+	const [enabled, setEnabled] = useState(false);
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsRow
+				noBorder
+				label={t("settings.notifications.enable")}
+				description={t("settings.notifications.osDescription")}
+				control={
+					<SettingsSwitch
+						checked={enabled}
+						label={t("settings.notifications.enable")}
+						testId="notifications-toggle"
+						onChange={setEnabled}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### In a settings group
+
+Two switch rows in the Models page's Review group.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function Group() {
+	const t = useT();
+	const [agentReview, setAgentReview] = useState(true);
+	const [autoFix, setAutoFix] = useState(false);
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsGroup title={t("settings.models.reviewGroup")}>
+				<SettingsRow
+					testId="agent-review-row"
+					label={t("settings.models.agentReview")}
+					description={t("settings.models.agentReviewDescription")}
+					control={
+						<SettingsSwitch
+							checked={agentReview}
+							label={t("settings.models.agentReview")}
+							testId="agent-review-toggle"
+							onChange={setAgentReview}
+						/>
+					}
+				/>
+				<SettingsRow
+					testId="review-autofix-row"
+					label={t("settings.models.autoFix")}
+					description={t("settings.models.autoFixDescription")}
+					control={
+						<SettingsSwitch
+							checked={autoFix}
+							label={t("settings.models.autoFix")}
+							testId="review-autofix-toggle"
+							onChange={setAutoFix}
+						/>
+					}
+				/>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Description follows the state
+
+Subagents: the row's description explains the current state, and `label` is more specific than the row text.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function StateDescription() {
+	const t = useT();
+	const [enabled, setEnabled] = useState(true);
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsRow
+				noBorder
+				label={t("settings.subagents.allow")}
+				description={
+					enabled
+						? t("settings.subagents.allowOnDescription")
+						: t("settings.subagents.allowOffDescription")
+				}
+				control={
+					<SettingsSwitch
+						checked={enabled}
+						label={t("settings.subagents.allowGlobally")}
+						testId="subagents-global-toggle"
+						onChange={setEnabled}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Per-item list
+
+Visible models: one switch per model, each label names its model.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+const MODELS = [
+	{ id: "claude-sonnet-4", name: "Claude Sonnet 4", provider: "anthropic", window: "200K" },
+	{ id: "gpt-5", name: "GPT-5", provider: "openai", window: "400K" },
+	{ id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "google", window: "1M" },
+];
+
+export default function ItemList() {
+	const t = useT();
+	const [hidden, setHidden] = useState<readonly string[]>(["gemini-2.5-pro"]);
+	const toggle = (id: string) =>
+		setHidden((list) => (list.includes(id) ? list.filter((item) => item !== id) : [...list, id]));
+	return (
+		<div className="flex w-full max-w-[28rem] flex-col gap-12">
+			{MODELS.map((model) => (
+				<div key={model.id} className="flex items-center gap-12">
+					<span className="flex min-w-0 flex-1 flex-col">
+						<span className="truncate tr-text-ui text-text-default">{model.name}</span>
+						<span className="truncate tr-text-metadata text-text-muted">
+							{t("settings.visibleModels.meta", { provider: model.provider, window: model.window })}
+						</span>
+					</span>
+					<SettingsSwitch
+						checked={!hidden.includes(model.id)}
+						label={t("settings.visibleModels.show", { name: model.name })}
+						testId={`model-visibility-${model.provider}-${model.id}`}
+						onChange={() => toggle(model.id)}
+					/>
+				</div>
+			))}
+		</div>
+	);
+}
+```
+
+#### Saved through the host
+
+`checked` is the saved value, so the knob moves when the mocked host confirms the write, not on click.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function HostSaved() {
+	const t = useT();
+	// `saved` stands for the host's value; the switch shows it, never a local guess.
+	const [saved, setSaved] = useState(false);
+	const update = (next: boolean) => {
+		setTimeout(() => setSaved(next), 600);
+	};
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsRow
+				noBorder
+				label={t("settings.lineWidth.fitToPane")}
+				description={t("settings.lineWidth.fitToPaneDescription")}
+				control={
+					<SettingsSwitch
+						checked={saved}
+						label={t("settings.lineWidth.chat.boundedLabel")}
+						testId="chat-line-width-bounded"
+						onChange={update}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Disabled
+
+Off and on; the whole control is dimmed with `opacity-50`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function Disabled() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-16">
+			<SettingsSwitch
+				checked={false}
+				disabled
+				label={t("panels.analytics.shareLabel")}
+				testId="analytics-toggle-off"
+				onChange={() => {}}
+			/>
+			<SettingsSwitch
+				checked
+				disabled
+				label={t("panels.analytics.shareLabel")}
+				testId="analytics-toggle-on"
+				onChange={() => {}}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/PrivacySettings.tsx` | Analytics sharing as a SettingsRow control; a failed write toasts. |
+| `apps/web/src/panels/ModelsSettings.tsx` | Agent-triggered review and automatic fix cycle rows in the Review group. |
+| `apps/web/src/panels/SubagentSettings.tsx` | Global and per-workspace allow switches; the workspace one sits beside a source tag. |
+| `apps/web/src/panels/VisibleModelsSettings.tsx` | One switch per model in the visibility list. |
+| `apps/web/src/panels/AnalyticsPreferences.tsx` | Shared by Settings and the analytics consent dialog, with `disabled`. |
+| `apps/web/src/panels/JetBrainsAiCard.tsx` | Show-quota switch whose failed save shows an inline error. |
+
+## Switch
+
+The shared on/off control: a native `<button role="switch">` that reports the next state through `onCheckedChange`. It owns the track, the knob, the hover hit area, focus, disabled colours and motion. The call site provides the controlled `checked` value, an accessible `label` and the visible text beside it.
+
+```tsx
+import { Switch } from "@thinkrail/ui/switch";
+```
+
+### When to use
+
+- A setting or option that takes effect as soon as it is flipped: enable an extension or MCP server, load a skill.
+- A yes/no option inside a dialog form that the submit reads: delete the branch after merging, draft specs with the agent.
+- A per-item enable control at the end of a list row, next to the row's other actions.
+- A switch whose state needs a spoken or hovered explanation, wrapped in IconTooltip with `aria-description`.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SettingsSwitch | The existing Settings-dialog switch in `apps/web/src/panels`. It looks and behaves differently (no hover area, opacity-dimmed disabled state, no `className`); see *Switch and SettingsSwitch* below. New code uses Switch. |
+| Button | An action, or a text toggle that changes a view rather than a setting (`selected` with `aria-pressed`). |
+| ToggleSegment | Choosing one of a few views in a header strip. |
+| SegmentedControl | A setting with more than two named values, or two values that are not on/off. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Hit area | The `<button type="button" role="switch">`: a round area slightly larger than the track that takes the hover fill and the focus ring. |
+| Track | An `aria-hidden` rounded span: `border-default` when off, `primary` when on, disabled roles while disabled. |
+| Knob | A round span inside the track that slides to the end when on; `container-workspace-bg` off, `control-primary-text` on. |
+| Visible text | Not part of the component. The call site places the setting's name (and detail) beside it; the switch shows no On/Off text. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `checked` | `boolean` | — | Required. The current state; the switch is fully controlled and keeps no state of its own. |
+| `label` | `string` | — | Required. The accessible name (`aria-label`). Use a locale key that names the setting, and the item in a list (`Enable {{title}}`). |
+| `onCheckedChange` | `(checked: boolean) => void` | — | Required. Called once per activation with the next state (`!checked`). Not called while disabled or when `onClick` called `preventDefault()`. |
+| `testId` | `string` | — | Rendered as `data-testid`. |
+| `ref` | `Ref<HTMLButtonElement>` | — | Forwarded to the `<button>` (React 19 ref prop), so the switch can be a Radix `asChild` trigger. |
+
+Native button props:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `disabled` | `boolean` | `false` | Native disabled: no focus, no activation, no pointer events (so no hover and no tooltip without a wrapper), disabled colour roles. |
+| `onClick` | `MouseEventHandler` | — | Runs before the change; call `event.preventDefault()` to cancel it. `onCheckedChange` is the normal handler. |
+| `className` | `string` | — | Placement only: margins, flex/grid placement, alignment. |
+| `aria-description` | `string` | — | Extra spoken detail, for example the tooltip text that explains the current state or why it is blocked. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Off | `checked={false}`. | `border-default` track, `container-workspace-bg` knob at the start. |
+| On | `checked`. | `primary` track, `control-primary-text` knob at the end. |
+| Hover | Pointer over the switch. | The hit area behind the track takes `control-bg-hovered`; the track and knob do not change. |
+| Pressed | Pointer down or Space held. | No distinct treatment. |
+| Keyboard focus | Tab to the switch. | A 2px `primary` ring around the hit area, clear of the track. |
+| Disabled | `disabled`. | Track `control-disabled-border` (off) or `control-primary-disabled-bg` (on), knob `control-disabled-text`; no hover fill, no pointer events. |
+| Changing | `checked` flips. | The track colour fades and the knob slides; both are instant under `prefers-reduced-motion`. |
+
+### Accessibility
+
+- A native `<button type="button">` with `role="switch"` and `aria-checked`, so screen readers announce a switch and its state.
+- `label` is the accessible name. The visible text beside the switch is not linked to it, so the label must say the same thing (or more, such as the item's name).
+- There is no visible On/Off text; the state is carried by `aria-checked` and the knob position (`packages/ui/SPEC.md`).
+- The track and knob are `aria-hidden`; `data-active` mirrors `checked` for tests.
+- `disabled` is native: the switch leaves the tab order and cannot be activated. Because it also stops pointer events, a tooltip on a disabled switch needs IconTooltip's `wrapTrigger`.
+- Explain a state or a block with IconTooltip and the same text in `aria-description`, as the Skills dialog does.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from the switch; the focus ring appears. |
+| `Space / Enter` | Toggles the state (native button activation). |
+
+### Usage rules
+
+- **SWT-1** — Use a switch only for an on/off state that applies when flipped or that a form submits. Actions are Buttons; choosing between views is ToggleSegment or a `selected` Button (LIB-3).
+- **SWT-2** — Always pass `label` from a locale key that names the setting; in a list, name the item (`settings.extensions.enable`, `mcp.server.enable`). Place the visible name beside the switch yourself.
+- **SWT-3** — Never add On/Off text next to the switch. When the state or a block needs words, use IconTooltip and pass the same text as `aria-description`; wrap a disabled switch with `wrapTrigger`.
+- **SWT-4** — Keep it controlled: `checked` comes from the authoritative value. A persisted setting follows the store's broadcast value instead of flipping optimistically (`apps/web/src/panels/SPEC.md`).
+- **SWT-5** — Disable the switch while its change or the surrounding submit is in flight (`disabled={busy}`) instead of hiding it.
+- **SWT-6** — `className` is for placement only; never restyle the track or knob. New switches use Switch, not SettingsSwitch or a hand-rolled `role="switch"` button (LIB-2, audit F-04).
+
+### Examples
+
+#### Basic
+
+A switch with its visible name beside it; `label` repeats the name.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+import { useState } from "react";
+
+export default function Basic() {
+	const t = useT();
+	const [setup, setSetup] = useState(true);
+	return (
+		<div className="flex items-center gap-12">
+			<span className="tr-text-ui text-text-default">{t("panels.createProject.setupTitle")}</span>
+			<Switch
+				checked={setup}
+				label={t("panels.createProject.setupTitle")}
+				onCheckedChange={setSetup}
+			/>
+		</div>
+	);
+}
+```
+
+#### Dialog option
+
+A title, a detail line and the switch, as in the Create project dialog.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+import { useState } from "react";
+
+export default function DialogOption() {
+	const t = useT();
+	const [setup, setSetup] = useState(true);
+	return (
+		<div className="flex w-full max-w-[28rem] items-center gap-12">
+			<span className="min-w-0 flex-1">
+				<span className="block tr-title-compact text-text-default">
+					{t("panels.createProject.setupTitle")}
+				</span>
+				<span className="block tr-text-metadata text-text-muted">
+					{t("panels.createProject.setupDetail")}
+				</span>
+			</span>
+			<Switch
+				checked={setup}
+				onCheckedChange={setSetup}
+				label={t("panels.createProject.setupTitle")}
+				testId="create-project-setup"
+			/>
+		</div>
+	);
+}
+```
+
+#### Disabled while busy
+
+The Merge PR option is disabled while the merge runs.
+
+```tsx
+import { RiGitMergeLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Switch } from "@thinkrail/ui/switch";
+import { useState } from "react";
+
+export default function Busy() {
+	const t = useT();
+	const branch = "feature/login";
+	const [deleteBranch, setDeleteBranch] = useState(true);
+	const [busy, setBusy] = useState(false);
+	const merge = () => {
+		setBusy(true);
+		setTimeout(() => setBusy(false), 1500);
+	};
+	return (
+		<div className="flex w-full max-w-[28rem] flex-col gap-12">
+			<div className="flex items-center justify-between gap-12">
+				<span className="tr-text-ui text-text-default">
+					{t("panels.mergePr.deleteBranch", { branch })}
+				</span>
+				<Switch
+					checked={deleteBranch}
+					label={t("panels.mergePr.deleteBranch", { branch })}
+					testId="merge-pr-delete-branch"
+					disabled={busy}
+					onCheckedChange={setDeleteBranch}
+				/>
+			</div>
+			<div className="flex justify-end">
+				<Button iconLeft={RiGitMergeLine} loading={busy} onClick={merge}>
+					{t("panels.mergePr.method.squash")}
+				</Button>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Per-item list
+
+One switch per extension; each label names its item.
+
+```tsx
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+import { useState } from "react";
+
+const EXTENSIONS: readonly { name: string; title: string; description: MessageKey }[] = [
+	{
+		name: "visualize",
+		title: "Visualize",
+		description: "settings.extensions.visualize.description",
+	},
+	{
+		name: "web-access",
+		title: "Web access",
+		description: "settings.extensions.web-access.description",
+	},
+];
+
+export default function ItemList() {
+	const t = useT();
+	const [disabled, setDisabled] = useState<readonly string[]>(["web-access"]);
+	const toggle = (name: string, enabled: boolean) =>
+		setDisabled((list) => (enabled ? list.filter((item) => item !== name) : [...list, name]));
+	return (
+		<ul className="flex w-full max-w-[28rem] flex-col gap-12">
+			{EXTENSIONS.map((entry) => (
+				<li key={entry.name} className="flex items-start justify-between gap-12">
+					<span className="flex min-w-0 flex-col gap-4">
+						<span className="tr-title-compact text-text-default">{entry.title}</span>
+						<span className="tr-text-metadata text-text-muted">{t(entry.description)}</span>
+					</span>
+					<Switch
+						checked={!disabled.includes(entry.name)}
+						label={t("settings.extensions.enable", { title: entry.title })}
+						testId={`extension-toggle-${entry.name}`}
+						onCheckedChange={(next) => toggle(entry.name, next)}
+					/>
+				</li>
+			))}
+		</ul>
+	);
+}
+```
+
+#### Beside row actions
+
+An MCP server row: the switch sits between the row's action and its menu, and its label says what the next flip does.
+
+```tsx
+import { RiMore2Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { Switch } from "@thinkrail/ui/switch";
+import { useState } from "react";
+
+export default function RowActions() {
+	const t = useT();
+	const name = "github";
+	const [enabled, setEnabled] = useState(true);
+	return (
+		<div className="flex w-full max-w-[28rem] flex-wrap items-center gap-8">
+			<span className="min-w-0 flex-1 truncate tr-title-compact text-text-default">{name}</span>
+			<div className="ml-auto flex shrink-0 items-center gap-8">
+				<Button variant="outline" size="m" onClick={() => {}}>
+					{t("mcp.action.testConnection")}
+				</Button>
+				<Switch
+					checked={enabled}
+					label={t(enabled ? "mcp.server.disable" : "mcp.server.enable", { name })}
+					testId="mcp-server-toggle"
+					onCheckedChange={setEnabled}
+				/>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<IconButton icon={RiMore2Line} label={t("mcp.server.more", { name })} />
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem onSelect={() => {}}>{t("common.edit")}</DropdownMenuItem>
+						<DropdownMenuItem onSelect={() => {}}>{t("common.remove")}</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Tooltip and blocked reason
+
+IconTooltip explains the state; a blocked switch is disabled and keeps its tooltip through `wrapTrigger`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { useState } from "react";
+
+export default function TooltipReason() {
+	const t = useT();
+	const [loaded, setLoaded] = useState(true);
+	const hint = loaded ? t("chat.skills.switchOn") : t("chat.skills.switchOff");
+	const blocked = t("chat.skills.blockedByTrust");
+	return (
+		<div className="flex items-center gap-16">
+			<IconTooltip label={hint}>
+				<Switch
+					checked={loaded}
+					label={t("chat.skills.enableSkill", { skill: "write-spec" })}
+					aria-description={hint}
+					onCheckedChange={setLoaded}
+				/>
+			</IconTooltip>
+			<IconTooltip label={blocked} wrapTrigger>
+				<Switch
+					checked={false}
+					disabled
+					label={t("chat.skills.enableSkill", { skill: "deploy" })}
+					aria-description={blocked}
+					onCheckedChange={() => {}}
+				/>
+			</IconTooltip>
+		</div>
+	);
+}
+```
+
+#### Disabled
+
+Off and on with the disabled colour roles.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+
+export default function Disabled() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-16">
+			<Switch
+				checked={false}
+				disabled
+				label={t("settings.notifications.enable")}
+				onCheckedChange={() => {}}
+			/>
+			<Switch
+				checked
+				disabled
+				label={t("settings.notifications.enable")}
+				onCheckedChange={() => {}}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ExtensionsSettings.tsx` | One switch per extension row, label `settings.extensions.enable`. |
+| `apps/web/src/panels/McpSettings.tsx` | Server enable switch beside the row actions; label depends on scope and state; disabled while busy or locked. |
+| `apps/web/src/chat/SkillsDialog.tsx` | `SkillSwitch`: IconTooltip with `wrapTrigger` while disabled and `aria-description` from the tooltip. |
+| `apps/web/src/panels/MergePrDialog.tsx` | Delete-branch option in the merge form, disabled while merging. |
+| `apps/web/src/panels/CreateProjectDialog.tsx` | Draft-the-specs option with a title and detail line. |
+
+## ToggleSegment
+
+One slim text segment of a view toggle in a header or toolbar strip — List | Tree, Split | Inline, Preview | Source. It renders a single `<button>` with `aria-pressed` and owns its type, padding and the active fill (`control-bg-selected`, the same selected role as tabs). The call site renders one segment per option, decides which one is `active`, and provides the row, the gap and any group label.
+
+```tsx
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+```
+
+### When to use
+
+- Switching how a panel or pane shows the same content: List | Tree, All | Changed, Split | Inline, Stacked | One file.
+- Choosing among resolved renderer candidates (Preview | Source, Image | File) in a pane header.
+- Choosing a preview mode beside the content it controls, such as the HTML preview width or the visual-diff mode.
+- Any place a few short, mutually exclusive view options sit inline in chrome next to other header controls.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SegmentedControl | The choice is a setting or a form value (a radio group with one Tab stop and arrow keys), not a view toggle in chrome. |
+| HeaderIconButton | A single on/off header toggle with a familiar icon (hide whitespace, show the review guide). |
+| TabStrip | The options switch between different documents or panels with their own tabpanels. |
+| DropdownMenu | There are too many options to show inline, or the labels are long. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Segment | A native `<button type="button">` with `aria-pressed`, `data-active` and `data-testid`; `tr-text-metadata` type, compact horizontal padding and a small radius. |
+| Label | The `label` string as the button's only content; there is no icon slot. |
+| Active fill | `control-bg-selected` with `text-default` on the active segment. |
+| Group (call site) | The component renders no group. The call site places segments in a flex row with a small gap, inside a `role="toolbar"` row or a `<fieldset aria-label>` when the set needs a name. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `testid` | `string` | — | Required. Rendered as `data-testid` on the button; e2e tests select segments by it. |
+| `label` | `string` | — | The visible text and the accessible name. Use a locale key; keep it to one or two short words. |
+| `active` | `boolean` | — | Required. Whether this segment is the current view. Sets `aria-pressed` and `data-active` and paints the active fill. The call site keeps exactly one segment of a set active. |
+| `disabled` | `boolean` | `false` | Natively disables the button. Only an inactive segment shows the disabled text colour; an active one keeps its active look. |
+| `onClick` | `() => void` | — | Required. Called on every activation, including on the segment that is already active; set the view to this segment's value. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Inactive | `active={false}`. | No fill; `text-muted` label. |
+| Hover | Pointer over an inactive segment. | `control-bg-hovered` fill and `text-default` label. An active segment has no hover change. |
+| Pressed | Pointer down or Space held. | No distinct treatment. |
+| Active | `active`. | `control-bg-selected` fill with a `text-default` label; `aria-pressed="true"`. |
+| Keyboard focus | Tab to the segment. | No component focus treatment; the browser's default focus outline is what shows. |
+| Disabled | `disabled`. | Inactive: `control-disabled-text` label and no hover fill. Active: no distinct treatment — it looks like an enabled active segment. |
+
+### Accessibility
+
+- Each segment is a native `<button type="button">` with `aria-pressed`, so assistive technology announces it as a toggle button that is pressed or not pressed.
+- The `label` is the accessible name; there is no `aria-label` prop and no tooltip.
+- The component sets no group role. Name the set where the context does not: the Files and Changes rows are `role="toolbar"` with an `aria-label`, the HTML preview width is a `<fieldset aria-label>`.
+- Exclusivity is not exposed: each segment is an independent toggle, so a reader hears several toggle buttons, one of them pressed.
+- Disabled segments use the native `disabled` attribute and leave the Tab order.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves to the next or previous segment; every enabled segment is its own Tab stop. A surrounding `role="toolbar"` adds no arrow-key movement. |
+| `Enter / Space` | Activates the segment (calls `onClick`). |
+
+### Usage rules
+
+- **TGS-1** — Use ToggleSegment for view toggles in chrome — header rows, pane toolbars, renderer strips. A setting or a form value is a SegmentedControl, because it needs radio semantics and one Tab stop; the MCP server dialogs' transport, exposure and scope pairs are the remaining form use.
+- **TGS-2** — Render a set, never a lone segment: a few short options from one piece of state, with exactly one `active`. A single on/off toggle is a HeaderIconButton or a Button with `selected` and `aria-pressed`.
+- **TGS-3** — Place segments in a flex row with a small gap (`gap-2` or `gap-4`) and add only placement. Never restyle the active segment or add a track behind the set; the selected look is `control-bg-selected`, shared with tabs.
+- **TGS-4** — Separate two independent sets in one row with space (`ml-auto`) or a thin vertical divider, as the review header does, so they never read as one choice.
+- **TGS-5** — Name the set when its labels do not explain it: wrap the segments in a `<fieldset>` with an `aria-label` from a locale key, as the HTML preview width does. A `role="toolbar"` row names the set too, but it adds no arrow-key movement.
+- **TGS-6** — Labels come from locale keys and stay short; a count belongs in the label through its key (`panels.files.changedCount`), not in a badge beside it.
+- **TGS-7** — Give every segment a stable `testid` built from the set and the option (`changes-toggle-list`, `html-viewport-phone`).
+
+### Examples
+
+#### List | Tree
+
+The Changes panel's view toggle in a named toolbar row.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+export default function ListTree() {
+	const t = useT();
+	const [view, setView] = useState<"list" | "tree">("list");
+	return (
+		<div role="toolbar" aria-label={t("changes.panel.toolbar")} className="flex items-center gap-4">
+			<ToggleSegment
+				testid="changes-toggle-list"
+				label={t("changes.panel.list")}
+				active={view === "list"}
+				onClick={() => setView("list")}
+			/>
+			<ToggleSegment
+				testid="changes-toggle-tree"
+				label={t("changes.panel.tree")}
+				active={view === "tree"}
+				onClick={() => setView("tree")}
+			/>
+		</div>
+	);
+}
+```
+
+#### Count in the label
+
+The Files panel's All | Changed pair; the count comes from the label's locale key, and a header action sits at the end of the row.
+
+```tsx
+import { RiCollapseVerticalLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+export default function FilesMode() {
+	const t = useT();
+	const [mode, setMode] = useState<"all" | "changed">("all");
+	const count = 3;
+	return (
+		<div
+			role="toolbar"
+			aria-label={t("panels.files.toolbar")}
+			className="flex w-full max-w-[20rem] items-center gap-4"
+		>
+			<ToggleSegment
+				testid="files-mode-all"
+				label={t("panels.files.all")}
+				active={mode === "all"}
+				onClick={() => setMode("all")}
+			/>
+			<ToggleSegment
+				testid="files-mode-changed"
+				label={count > 0 ? t("panels.files.changedCount", { count }) : t("panels.files.changed")}
+				active={mode === "changed"}
+				onClick={() => setMode("changed")}
+			/>
+			<div className="ml-auto flex shrink-0">
+				<HeaderIconButton
+					testid="files-collapse-all"
+					label={t("panels.files.collapseAll")}
+					onClick={() => {}}
+					icon={RiCollapseVerticalLine}
+				/>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Two sets in one header
+
+Split | Inline and Stacked | One file, separated by a thin divider.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+export default function TwoSets() {
+	const t = useT();
+	const [view, setView] = useState<"split" | "inline">("split");
+	const [layout, setLayout] = useState<"stacked" | "single">("stacked");
+	return (
+		<span className="flex items-center gap-4">
+			<ToggleSegment
+				testid="changes-review-toggle-split"
+				label={t("changes.review.split")}
+				active={view === "split"}
+				onClick={() => setView("split")}
+			/>
+			<ToggleSegment
+				testid="changes-review-toggle-inline"
+				label={t("changes.review.inline")}
+				active={view === "inline"}
+				onClick={() => setView("inline")}
+			/>
+			<span className="mx-4 h-16 w-px bg-border-default" />
+			<ToggleSegment
+				testid="changes-review-layout-stacked"
+				label={t("changes.review.stacked")}
+				active={layout === "stacked"}
+				onClick={() => setLayout("stacked")}
+			/>
+			<ToggleSegment
+				testid="changes-review-layout-single"
+				label={t("changes.review.oneFile")}
+				active={layout === "single"}
+				onClick={() => setLayout("single")}
+			/>
+		</span>
+	);
+}
+```
+
+#### Renderer candidates
+
+One segment per resolved renderer, mapped from a list, then the diff layout pair.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+const CANDIDATES = [
+	{ id: "markdown", labelKey: "viewer.renderer.preview" },
+	{ id: "code", labelKey: "viewer.renderer.source" },
+] as const;
+
+export default function RendererCandidates() {
+	const t = useT();
+	const [rendererId, setRendererId] = useState<string>("markdown");
+	const [layout, setLayout] = useState<"split" | "unified">("split");
+	return (
+		<span className="flex shrink-0 items-center gap-4">
+			{CANDIDATES.map((candidate) => (
+				<ToggleSegment
+					key={candidate.id}
+					testid={`renderer-${candidate.id}`}
+					label={t(candidate.labelKey)}
+					active={candidate.id === rendererId}
+					onClick={() => setRendererId(candidate.id)}
+				/>
+			))}
+			<ToggleSegment
+				testid="diff-toggle-split"
+				label={t("panels.diffPane.split")}
+				active={layout === "split"}
+				onClick={() => setLayout("split")}
+			/>
+			<ToggleSegment
+				testid="diff-toggle-inline"
+				label={t("panels.diffPane.inline")}
+				active={layout === "unified"}
+				onClick={() => setLayout("unified")}
+			/>
+		</span>
+	);
+}
+```
+
+#### Named set
+
+The HTML preview width as a `<fieldset>` with an `aria-label`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+const VIEWPORTS = [
+	{ id: "fill", labelKey: "viewer.html.viewport.fill" },
+	{ id: "phone", labelKey: "viewer.html.viewport.phone" },
+	{ id: "tablet", labelKey: "viewer.html.viewport.tablet" },
+	{ id: "desktop", labelKey: "viewer.html.viewport.desktop" },
+] as const;
+
+export default function NamedSet() {
+	const t = useT();
+	const [viewport, setViewport] = useState<string>("fill");
+	return (
+		<fieldset aria-label={t("viewer.html.viewport.label")} className="m-0 flex gap-2 border-0 p-0">
+			{VIEWPORTS.map((candidate) => (
+				<ToggleSegment
+					key={candidate.id}
+					testid={`html-viewport-${candidate.id}`}
+					label={t(candidate.labelKey)}
+					active={candidate.id === viewport}
+					onClick={() => setViewport(candidate.id)}
+				/>
+			))}
+		</fieldset>
+	);
+}
+```
+
+#### Mode and side
+
+The visual-diff header: the comparison mode on the left, the comment side pushed to the right.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+const MODES = [
+	{ mode: "2-up", labelKey: "viewer.visualDiff.twoUp" },
+	{ mode: "swipe", labelKey: "viewer.visualDiff.swipe" },
+	{ mode: "onion", labelKey: "viewer.visualDiff.onionSkin" },
+] as const;
+
+export default function ModeAndSide() {
+	const t = useT();
+	const [mode, setMode] = useState<string>("swipe");
+	const [side, setSide] = useState<"base" | "worktree">("worktree");
+	return (
+		<div className="flex w-full flex-wrap items-center gap-4">
+			<div className="flex items-center gap-2">
+				{MODES.map((candidate) => (
+					<ToggleSegment
+						key={candidate.mode}
+						testid={`image-diff-${candidate.mode}`}
+						label={t(candidate.labelKey)}
+						active={mode === candidate.mode}
+						onClick={() => setMode(candidate.mode)}
+					/>
+				))}
+			</div>
+			{mode !== "2-up" ? (
+				<div className="ml-auto flex items-center gap-2">
+					<ToggleSegment
+						testid="image-diff-side-base"
+						label={t("viewer.visualDiff.commentOnOld")}
+						active={side === "base"}
+						onClick={() => setSide("base")}
+					/>
+					<ToggleSegment
+						testid="image-diff-side-worktree"
+						label={t("viewer.visualDiff.commentOnNew")}
+						active={side === "worktree"}
+						onClick={() => setSide("worktree")}
+					/>
+				</div>
+			) : null}
+		</div>
+	);
+}
+```
+
+#### Disabled option
+
+The MCP add dialog's scope pair: Project stays visible but disabled until the project is trusted, with the reason below.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+export default function Disabled() {
+	const t = useT();
+	const [scope, setScope] = useState<"user" | "project">("user");
+	const projectScopeAvailable = false;
+	return (
+		<div className="flex flex-col gap-8">
+			<div className="flex flex-wrap items-center gap-2">
+				<ToggleSegment
+					testid="mcp-add-scope-user"
+					label={t("mcp.addDialog.scopeUser")}
+					active={scope === "user"}
+					onClick={() => setScope("user")}
+				/>
+				<ToggleSegment
+					testid="mcp-add-scope-project"
+					label={t("mcp.addDialog.scopeProject")}
+					active={scope === "project"}
+					disabled={!projectScopeAvailable}
+					onClick={() => setScope("project")}
+				/>
+			</div>
+			<p className="tr-text-metadata text-text-muted">{t("mcp.addDialog.untrusted")}</p>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ChangesPanel.tsx` | List \| Tree at the end of the Changes toolbar row. |
+| `apps/web/src/panels/FilesPanel.tsx` | All \| Changed (with the changed-file count) in the Files toolbar row. |
+| `apps/web/src/panels/ChangesReviewPane.tsx` | Split \| Inline and Stacked \| One file in the review header, split by a divider. |
+| `packages/resource-renderers/src/support/RendererToggles.tsx` | Renderer candidates and the diff Split \| Inline pair in file and diff pane headers. |
+| `packages/resource-renderers/src/renderers/html/ViewportSwitch.tsx` | Preview width inside a labelled `<fieldset>`. |
+| `packages/resource-renderers/src/renderers/VisualDiff.tsx` | Comparison mode and comment side in the visual-diff header. |
+
+## SegmentedControl
+
+A single-choice settings control: a row of options on one `control-bg` track, built from native radio inputs inside a named `radiogroup`. It owns the track, the selected segment, focus and disabled looks, and the radio keyboard model. The call site provides a unique `name`, an accessible `label`, the typed options, the current `value` (or `null` when the stored value matches no option) and an `onSelect` that writes the setting.
+
+```tsx
+import { SegmentedControl, type SegmentedControlOption } from "@/panels/SegmentedControl";
+```
+
+### When to use
+
+- A setting with two to five short, mutually exclusive values that applies on selection: Theme mode, Contrast level, Message order, Composer size.
+- A preset choice where the stored value may match no preset — pass `value={null}` and nothing is selected (Terminal scrollback).
+- A choice where some values are unavailable on this host or theme, with per-option `disabled`.
+- A choice that must lock while a write is in flight, with the group-level `disabled`.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ToggleSegment | Switching how a panel shows its content in a header or toolbar strip (List \| Tree, Split \| Inline). |
+| SettingsRadioCards | Each option needs a description or hint, or the labels are too long for one row. |
+| SettingsSwitch | The setting is a plain on/off. |
+| DropdownMenu | There are more options than fit in one row, or the list comes from data. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Track | A `role="radiogroup"` `<div>` named by `label`: an inline-flex row on `control-bg` with a small radius and clipped corners; it carries `testId`. |
+| Option | A `<label>` per option with `data-active` and the option's `testId`; it wraps the input and the segment. |
+| Radio input | A visually hidden native `<input type="radio">` with the group's `name`, the option `id` as its value, `checked` and `disabled`. It receives focus and keyboard input. |
+| Segment | The visible text in `tr-text-ui`, full track height with horizontal padding. The selected one takes `control-bg-selected` with `text-default`. |
+| Focus ring | An inset `ring-2` in `primary` on the segment while its radio has keyboard focus. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `name` | `string` | — | Required. The native radio group name. It must be unique on the page: two controls sharing a name become one radio group. |
+| `label` | `string` | — | Required. The `aria-label` of the radiogroup. Use the row's label key (`settings.appearance.themeMode`); it is not shown. |
+| `options` | `readonly SegmentedControlOption<T>[]` | — | The choices in display order. Fields are listed below. |
+| `value` | `T \| null` | — | Required. The selected option `id`. `null` selects nothing — for a host value that no option names. |
+| `onSelect` | `(value: T) => void` | — | Called with the option `id` when a radio becomes checked — by click or by arrow keys. Not called for the option that is already selected. |
+| `disabled` | `boolean` | `false` | Disables every option, for example while a theme write is pending. Combined with each option's own `disabled`. |
+| `testId` | `string` | — | Rendered as `data-testid` on the radiogroup. |
+
+Option fields (SegmentedControlOption<T>):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `id` | `T extends string` | — | The value passed to `onSelect` and compared with `value`; also the radio's `value`. |
+| `label` | `string` | — | The visible text. Translate it at the call site (`t(option.label)`). |
+| `testId` | `string` | — | Rendered as `data-testid` on the option's `<label>`. |
+| `disabled` | `boolean` | — | Disables this option only, such as a theme mode the current family cannot reach. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Unselected | An option whose `id` is not `value`. | The track shows through; `text-muted` label. |
+| Hover | Pointer over an unselected option. | The label turns `text-default`; no fill. The selected option does not change. |
+| Pressed | Pointer down. | No distinct treatment. |
+| Selected | `value` equals the option `id`. | `control-bg-selected` segment with a small radius and a `text-default` label; the radio is checked. |
+| No selection | `value={null}`. | Every option looks unselected; no radio is checked. |
+| Keyboard focus | Tab into the group, or move with the arrow keys. | An inset `ring-2` in `primary` on the focused segment. |
+| Disabled | Option `disabled`, or the group `disabled`. | `control-disabled-text` label with no hover change and a default cursor. A selected option keeps its `control-bg-selected` fill. |
+
+### Accessibility
+
+- The track is `role="radiogroup"` with `aria-label={label}`; each option is a native radio whose accessible name is its wrapping `<label>` text.
+- Selection is native `checked`, so assistive technology announces the option, its position in the group and whether it is selected.
+- The inputs are visually hidden, not removed: focus lands on the radio and the segment shows the focus ring.
+- Disabled options use the native `disabled` attribute; arrow keys skip them and they leave the Tab order.
+- The group carries no description. Put the explanation in the surrounding SettingsRow `description`.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus into the group — to the checked option, or the first enabled one when `value` is `null` — and out of it; the whole group is one Tab stop. |
+| `Arrow Left / Arrow Up` | Moves to the previous enabled option, checks it and calls `onSelect`; wraps at the start. |
+| `Arrow Right / Arrow Down` | Moves to the next enabled option, checks it and calls `onSelect`; wraps at the end. |
+| `Space` | Checks the focused option if it is not checked yet. |
+
+### Usage rules
+
+- **SEG-1** — Use SegmentedControl for settings and form values with a few short options that apply on selection. A view toggle in a header strip is a ToggleSegment.
+- **SEG-2** — Give every control a unique `name` (`theme-mode`, `chat-message-order`) and an accessible `label` from the row's locale key.
+- **SEG-3** — Make `onSelect` cheap and idempotent: arrow keys select as they move, so each press writes the setting. Return early when the value is already current, as the settings pages do.
+- **SEG-4** — When the stored value matches no option, pass `value={null}` — never fall back to a nearby preset that would misreport the setting.
+- **SEG-5** — Keep unavailable options visible with per-option `disabled`; lock the whole control with `disabled` while a write is pending instead of hiding it.
+- **SEG-6** — Place it as the `control` of a SettingsRow, or under a stacked title and description; add no classes — the component takes none.
+- **SEG-7** — Keep labels short and options few: the track never wraps. Use SettingsRadioCards or a DropdownMenu when the choices do not fit one row.
+
+### Examples
+
+#### Basic
+
+Two options with one selected; arrow keys move the selection.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+
+type Order = "oldest-first" | "newest-first";
+
+export default function Basic() {
+	const t = useT();
+	const [order, setOrder] = useState<Order>("oldest-first");
+	return (
+		<SegmentedControl
+			name="chat-message-order"
+			label={t("settings.chat.messageOrder")}
+			options={[
+				{ id: "oldest-first", label: t("settings.chat.order.oldestFirst") },
+				{ id: "newest-first", label: t("settings.chat.order.newestFirst") },
+			]}
+			value={order}
+			onSelect={setOrder}
+			testId="chat-message-order-control"
+		/>
+	);
+}
+```
+
+#### In a settings row
+
+Composer size as the control of a SettingsRow with a description.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+type Growth = "compact" | "roomy" | "half-chat";
+
+export default function InSettingsRow() {
+	const t = useT();
+	const [growth, setGrowth] = useState<Growth>("roomy");
+	return (
+		<div className="w-full">
+			<SettingsRow
+				noBorder
+				label={t("settings.chat.composerSize")}
+				description={t("settings.chat.composerSizeDescription")}
+				control={
+					<SegmentedControl
+						name="composer-growth-limit"
+						label={t("settings.chat.composerSize")}
+						options={[
+							{ id: "compact", label: t("settings.chat.growth.compact") },
+							{ id: "roomy", label: t("settings.chat.growth.roomy") },
+							{ id: "half-chat", label: t("settings.chat.growth.halfChat") },
+						]}
+						value={growth}
+						onSelect={(next) => {
+							if (next === growth) return;
+							setGrowth(next);
+						}}
+						testId="composer-growth-control"
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Unavailable option
+
+Theme mode with System offered and Dark unavailable for the current theme family.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl, type SegmentedControlOption } from "@/panels/SegmentedControl";
+
+type ThemeMode = "system" | "light" | "dark";
+
+export default function OptionDisabled() {
+	const t = useT();
+	const [mode, setMode] = useState<ThemeMode>("light");
+	const options: SegmentedControlOption<ThemeMode>[] = [
+		{ id: "system", label: t("settings.appearance.mode.system"), testId: "theme-mode-system" },
+		{ id: "light", label: t("settings.appearance.mode.light"), testId: "theme-mode-light" },
+		{
+			id: "dark",
+			label: t("settings.appearance.mode.dark"),
+			testId: "theme-mode-dark",
+			disabled: true,
+		},
+	];
+	return (
+		<SegmentedControl
+			name="theme-mode"
+			label={t("settings.appearance.themeMode")}
+			options={options}
+			value={mode}
+			onSelect={setMode}
+			testId="theme-mode-control"
+		/>
+	);
+}
+```
+
+#### Locked while saving
+
+The whole control is `disabled` while the simulated write is in flight.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+
+type Contrast = "normal" | "high";
+
+export default function Pending() {
+	const t = useT();
+	const [contrast, setContrast] = useState<Contrast>("normal");
+	const [pending, setPending] = useState(false);
+	const select = (next: Contrast) => {
+		if (next === contrast) return;
+		setPending(true);
+		setTimeout(() => {
+			setContrast(next);
+			setPending(false);
+		}, 1200);
+	};
+	return (
+		<SegmentedControl
+			name="contrast-level"
+			label={t("settings.appearance.contrastLevel")}
+			options={[
+				{ id: "normal", label: t("common.default"), testId: "contrast-default" },
+				{ id: "high", label: t("settings.appearance.contrast.high"), testId: "contrast-high" },
+			]}
+			value={contrast}
+			disabled={pending}
+			onSelect={select}
+			testId="contrast-level-control"
+		/>
+	);
+}
+```
+
+#### Presets
+
+Terminal scrollback: five presets under a stacked title and description.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+
+type Scrollback = "0" | "16" | "64" | "256" | "1024";
+
+export default function Presets() {
+	const t = useT();
+	const [replayKb, setReplayKb] = useState<Scrollback>("256");
+	return (
+		<div className="flex flex-col gap-12">
+			<div className="flex flex-col gap-2">
+				<span className="tr-text-ui text-text-default">
+					{t("settings.terminal.scrollback.title")}
+				</span>
+				<span className="tr-text-metadata text-text-muted">
+					{t("settings.terminal.scrollback.description")}
+				</span>
+			</div>
+			<SegmentedControl
+				name="terminal-scrollback"
+				label={t("settings.terminal.scrollback.label")}
+				options={[
+					{ id: "0", label: t("common.off"), testId: "terminal-replay-0" },
+					{ id: "16", label: t("settings.terminal.scrollback.kb16"), testId: "terminal-replay-16" },
+					{ id: "64", label: t("settings.terminal.scrollback.kb64"), testId: "terminal-replay-64" },
+					{
+						id: "256",
+						label: t("settings.terminal.scrollback.kb256"),
+						testId: "terminal-replay-256",
+					},
+					{
+						id: "1024",
+						label: t("settings.terminal.scrollback.mb1"),
+						testId: "terminal-replay-1024",
+					},
+				]}
+				value={replayKb}
+				onSelect={setReplayKb}
+				testId="terminal-scrollback-control"
+			/>
+		</div>
+	);
+}
+```
+
+#### No matching option
+
+A stored value that names no preset selects nothing until the user picks one.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+
+const PRESETS = [
+	{ id: "0", label: "common.off" },
+	{ id: "16", label: "settings.terminal.scrollback.kb16" },
+	{ id: "64", label: "settings.terminal.scrollback.kb64" },
+] as const;
+
+export default function NoSelection() {
+	const t = useT();
+	// The host stores 128 KB, which no preset names.
+	const [replayKb, setReplayKb] = useState(128);
+	const value = PRESETS.find((option) => Number(option.id) === replayKb)?.id ?? null;
+	return (
+		<div className="flex flex-col items-start gap-8">
+			<SegmentedControl
+				name="terminal-scrollback-example"
+				label={t("settings.terminal.scrollback.label")}
+				options={PRESETS.map((option) => ({ ...option, label: t(option.label) }))}
+				value={value}
+				onSelect={(id) => setReplayKb(Number(id))}
+			/>
+			<output className="tr-text-metadata text-text-muted">{replayKb} KB</output>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/AppearanceSettings.tsx` | Theme mode and Contrast level; per-option `disabled` and `disabled` while a theme write is pending. |
+| `apps/web/src/panels/ChatSettings.tsx` | Message order and Composer size as SettingsRow controls. |
+| `apps/web/src/panels/TerminalSettings.tsx` | Scrollback presets with `value={null}` for a non-preset host value. |
+
+## Textarea
+
+The shared multi-line text field for dialogs and forms: a native `<textarea>` with the control border and fill, `tr-text-ui` type, a muted placeholder, a stronger border while focused and the disabled roles. It adds no props of its own — the call site provides the label, `value`/`onChange`, `rows`, any key handling and placement.
+
+```tsx
+import { Textarea } from "@thinkrail/ui/textarea";
+```
+
+### When to use
+
+- A multi-line plain-text value in a dialog or form: a prompt template body, a new workspace prompt, a pull request description.
+- Code-like text the user edits line by line — MCP server arguments, pasted `mcpServers` JSON, an entry's raw JSON — with `tr-code-text`.
+- A field whose Enter key submits the dialog while Shift+Enter inserts a newline, as the new workspace prompt does.
+- A field that fills the remaining height of a dialog column (`flex-1` with a `min-h-*`).
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Native `<input>` | The value is a single line — a name, a URL, a command. Dialogs style those with their own input class. |
+| SettingsRadioCards | The user picks one of a few fixed, described options instead of typing. |
+| SegmentedControl | The value is one of a few short presets. |
+| Command | Typing filters a list the user then picks from (a branch, a session, a model). |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Field | A native `<textarea>`: `w-full`, `rounded-sm`, a `control-border-default` border on `control-bg`, `px-12 py-8` padding and `tr-text-ui` in `text-default`. `resize-none` unless the call site opts in. |
+| Placeholder | The native placeholder in `text-muted`. An example of the content, not the label. |
+| Label (call site) | The component renders none. Production pairs it with a `<label htmlFor>` above it, or relies on the dialog's own heading. |
+| Hint or error (call site) | A `tr-text-metadata` line under the field: a muted hint, or an error in `text-feedback-error` with `role="alert"`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `ref` | `Ref<HTMLTextAreaElement>` | — | Forwarded to the `<textarea>` (React 19 ref prop) — the new workspace prompt uses it to focus the field and place the selection after a template is applied. |
+
+Native textarea props:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `value` | `string` | — | Controlled value. Every production call site is controlled. |
+| `onChange` | `ChangeEventHandler<HTMLTextAreaElement>` | — | Receives every edit; read `event.target.value` or `event.currentTarget.value`. |
+| `rows` | `number` | — | Visible height in lines. The field does not grow with its content; production uses 3 for arguments, 6 to 8 for prompts and JSON, 12 to 14 for raw entries and PR descriptions. |
+| `placeholder` | `string` | — | Example content in `text-muted`. Use a locale key, or a literal code sample. |
+| `disabled` | `boolean` | — | Native disabled: the disabled border, fill and text roles, not focusable. Set it while the owning action runs. |
+| `readOnly` | `boolean` | — | Native read-only; focusable and selectable. No distinct look. |
+| `spellCheck` | `boolean` | — | Production turns it off (`false`) for prompts and template bodies, which are full of code and file names. |
+| `onKeyDown` | `KeyboardEventHandler<HTMLTextAreaElement>` | — | Call-site shortcuts, such as Enter to submit. Check IME composition first (`isPromptKeyEventComposing`). |
+| `id` | `string` | — | Ties the field to a `<label htmlFor>`. |
+| `aria-label` | `string` | — | The accessible name when no visible label is tied to the field. |
+| `className` | `string` | — | Placement and height (`min-h-*`, `flex-1`), `resize-y` for a field the user may stretch, and `tr-code-text` (with `px-8 py-4`) for code-like content. Merged after the base classes. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Empty | `value` is empty. | The placeholder in `text-muted` on `control-bg`. |
+| Filled | `value` has text. | `tr-text-ui` in `text-default`; overflow scrolls inside the field. |
+| Hover | Pointer over the field. | No distinct treatment. |
+| Focus | Click or Tab into the field. | The border changes to `control-border-active`. The native outline is removed (`outline-none`) and there is no accent ring. |
+| Disabled | `disabled`. | `control-disabled-border`, `control-disabled-bg` and `control-disabled-text`; the placeholder stays `text-muted`. Not focusable. |
+| Read-only | `readOnly`. | No distinct treatment; it still takes the focus border. |
+| Error | The call site's validation fails. | No distinct treatment on the field; the call site shows a `role="alert"` message below it. |
+
+### Accessibility
+
+- A native `<textarea>`: an implicit multi-line textbox, with focus, selection, undo and IME input from the platform.
+- It has no accessible name of its own. Tie it to a visible `<label htmlFor>` (template body, PR description) or give it `aria-label`; a placeholder is not a label.
+- The focus indicator is the `control-border-active` border, not a ring.
+- `disabled` removes it from the tab order; use `readOnly` when the text must stay selectable.
+- Errors are announced by the call site's `role="alert"` line; the field sets neither `aria-invalid` nor `aria-describedby`.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from the field. |
+| `Enter / Shift+Enter` | Insert a newline, unless the call site's `onKeyDown` handles Enter. |
+| `Arrows, Home, End` | Move the caret; native text editing. |
+
+### Usage rules
+
+- **TXA-1** — Use Textarea for multi-line fields in dialogs and forms. The chat composer, `PlanComposer` and `ReviewComposer` own their own editors; do not rebuild them from Textarea or copy their classes onto it.
+- **TXA-2** — Name every Textarea: a visible `<label htmlFor>` tied to its `id`, or `aria-label` when a heading already names it. The placeholder only shows example content.
+- **TXA-3** — Size it with `rows`, or with `flex-1` and a `min-h-*` inside a flex column. It never grows with its content. It does not resize by default; add `resize-y` only where stretching helps, as on the PR description.
+- **TXA-4** — `className` is for placement, height and resize. Border, fill, focus and disabled come from the component. The one font change in production is `tr-code-text` (with `px-8 py-4` in the MCP dialogs) for code-like content.
+- **TXA-5** — Disable the field with native `disabled` while its action runs (saving a template, creating a workspace, generating a PR body). Never dim it with opacity.
+- **TXA-6** — Show validation as a `role="alert"` line in `text-feedback-error tr-text-metadata` under the field; do not recolour the field's border.
+- **TXA-7** — An Enter shortcut returns early while an IME composition is active (`isPromptKeyEventComposing`) and leaves Shift+Enter as a newline.
+
+### Examples
+
+#### Basic
+
+A controlled field with an accessible name and a placeholder.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useState } from "react";
+
+export default function Preview() {
+	const t = useT();
+	const [body, setBody] = useState("Summarize the changes on $1 since yesterday.");
+	return (
+		<Textarea
+			aria-label={t("chat.templateEditor.body")}
+			value={body}
+			onChange={(event) => setBody(event.target.value)}
+			placeholder={t("chat.templateEditor.bodyPlaceholder")}
+			rows={3}
+			className="max-w-[24rem]"
+		/>
+	);
+}
+```
+
+#### Labelled field with a hint
+
+The template editor's body: a `<label htmlFor>`, eight rows and a syntax hint.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useId, useState } from "react";
+
+export default function Labelled() {
+	const t = useT();
+	const id = useId();
+	const [body, setBody] = useState("");
+	return (
+		<div className="flex w-full flex-col gap-4 tr-text-ui">
+			<label htmlFor={id} className="tr-text-emphasis text-text-default">
+				{t("chat.templateEditor.body")}
+			</label>
+			<Textarea
+				id={id}
+				value={body}
+				onChange={(event) => setBody(event.target.value)}
+				placeholder={t("chat.templateEditor.bodyPlaceholder")}
+				spellCheck={false}
+				rows={8}
+			/>
+			<p className="text-text-muted tr-text-metadata">{t("chat.templateEditor.syntaxHint")}</p>
+		</div>
+	);
+}
+```
+
+#### Code-like content
+
+MCP server arguments, one per line, in `tr-code-text`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useId, useState } from "react";
+
+export default function Code() {
+	const t = useT();
+	const id = useId();
+	const [args, setArgs] = useState("");
+	return (
+		<div className="flex w-full flex-col gap-4">
+			<label htmlFor={id} className="tr-title-compact text-text-default">
+				{t("mcp.form.args")}
+			</label>
+			<Textarea
+				id={id}
+				rows={3}
+				value={args}
+				placeholder={"-y\n@modelcontextprotocol/server-filesystem\n."}
+				onChange={(event) => setArgs(event.currentTarget.value)}
+				className="px-8 py-4 tr-code-text"
+			/>
+			<span className="text-text-muted tr-text-metadata">{t("mcp.form.argsHint")}</span>
+		</div>
+	);
+}
+```
+
+#### Validation message
+
+Pasted `mcpServers` JSON parsed with the real parser; the error is a `role="alert"` line, not a field style.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useId, useState } from "react";
+import { parseMcpServersJson } from "@/panels/mcpEntries";
+
+export default function JsonValidation() {
+	const t = useT();
+	const id = useId();
+	const [text, setText] = useState('{ "mcpServers": { "docs": { "command": "npx" ');
+	const parsed = text.trim() ? parseMcpServersJson(t, text) : null;
+	return (
+		<div className="flex w-full flex-col gap-4">
+			<label htmlFor={id} className="tr-title-compact text-text-default">
+				{t("mcp.import.label")}
+			</label>
+			<Textarea
+				id={id}
+				rows={8}
+				value={text}
+				placeholder={'{ "mcpServers": { … } }'}
+				onChange={(event) => setText(event.currentTarget.value)}
+				className="px-8 py-4 tr-code-text"
+			/>
+			{parsed && !parsed.ok ? (
+				<p role="alert" className="text-feedback-error tr-text-metadata">
+					{parsed.error}
+				</p>
+			) : (
+				<span className="text-text-muted tr-text-metadata">{t("mcp.import.hint")}</span>
+			)}
+		</div>
+	);
+}
+```
+
+#### Disabled while saving
+
+The field takes the disabled roles while its Save action is loading.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useState } from "react";
+
+export default function Disabled() {
+	const t = useT();
+	const [body, setBody] = useState("Review the open pull request and list blocking issues.");
+	const [saving, setSaving] = useState(false);
+	const save = () => {
+		setSaving(true);
+		setTimeout(() => setSaving(false), 1500);
+	};
+	return (
+		<div className="flex w-full flex-col items-end gap-8">
+			<Textarea
+				aria-label={t("chat.templateEditor.body")}
+				disabled={saving}
+				value={body}
+				onChange={(event) => setBody(event.target.value)}
+				rows={4}
+			/>
+			<Button loading={saving} onClick={save}>
+				{t("common.save")}
+			</Button>
+		</div>
+	);
+}
+```
+
+#### Enter submits
+
+The new workspace prompt: Enter submits outside an IME composition, Shift+Enter adds a line. The counter shows submissions.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useState } from "react";
+import { isPromptKeyEventComposing } from "@/prompt/SlashCommandCompletion";
+
+export default function EnterSubmits() {
+	const t = useT();
+	const [prompt, setPrompt] = useState("");
+	const [created, setCreated] = useState<string[]>([]);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Textarea
+				value={prompt}
+				onChange={(event) => setPrompt(event.target.value)}
+				placeholder={t("panels.newWorkspace.promptPlaceholder")}
+				spellCheck={false}
+				rows={6}
+				onKeyDown={(event) => {
+					if (isPromptKeyEventComposing(event.nativeEvent)) return;
+					if (event.key === "Enter" && !event.shiftKey) {
+						event.preventDefault();
+						if (!prompt.trim()) return;
+						setCreated((list) => [...list, prompt.trim()]);
+						setPrompt("");
+					}
+				}}
+			/>
+			<output className="tr-text-metadata text-text-muted">{created.length}</output>
+		</div>
+	);
+}
+```
+
+#### Fills its column
+
+The PR description takes the column's remaining height with `flex-1` and can be stretched with `resize-y`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useId, useState } from "react";
+
+export default function FillColumn() {
+	const t = useT();
+	const id = useId();
+	const [body, setBody] = useState(
+		"## Summary\n\n- Moves the prompt field to the shared Textarea.\n\n## Testing\n\n- bun test",
+	);
+	return (
+		<div className="flex h-[20rem] w-full flex-col">
+			<div className="flex min-h-0 flex-1 flex-col gap-4">
+				<label htmlFor={id} className="tr-text-eyebrow text-text-subtle">
+					{t("panels.prCompose.bodyLabel")}
+				</label>
+				<Textarea
+					id={id}
+					value={body}
+					onChange={(event) => setBody(event.target.value)}
+					rows={14}
+					className="min-h-160 flex-1 resize-y tr-code-text"
+				/>
+			</div>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/chat/TemplateEditorDialog.tsx` | The template body: labelled, eight rows, disabled while loading, with a syntax hint. |
+| `apps/web/src/panels/McpServerDialogs.tsx` | Arguments, `mcpServers` JSON import and raw entry editing in `tr-code-text`, with alert errors. |
+| `apps/web/src/panels/NewWorkspaceDialog.tsx` | The workspace prompt: `ref`, Enter to create, template slots, image paste and drop. |
+| `apps/web/src/panels/PrComposeDialog.tsx` | The PR description filling the dialog with `flex-1 resize-y`, disabled while generating. |
+
+## SettingsRadioCards
+
+A settings radio group drawn as a stack of cards. Each card has a label, an optional short hint and a one-line description, and the selected card shows a check. It renders native radio inputs sharing one `name`, so the browser handles keyboard, focus and checked state. The call site supplies the translated choices, the current `value` from the store and `onSelect`, which writes the setting.
+
+```tsx
+import { SettingsRadioCards, type SettingsRadioChoice } from "@/panels/SettingsRadioCards";
+```
+
+### When to use
+
+- A setting with one value out of a few exclusive options, where each option needs a sentence explaining what it does — the Windows shell, how long before idle workspaces settle.
+- A list whose options can be unavailable and must still show why — language files that are missing or cannot be read.
+- An option that needs a short qualifier next to its name: *Recommended*, *default*, a source such as *Built-in* or *Local file*.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SegmentedControl | The options are a few short presets that need no description, such as Terminal scrollback or Theme mode. |
+| SettingsSwitch | The setting is on or off. |
+| DropdownMenu | The choice sits in a compact row or toolbar, or there are too many options to stack as cards. |
+| SettingsRow and SettingsGroup | Surrounding layout: put the cards inside a SettingsGroup, or use a row when the control is a single button or switch. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Group | A `<div role="radiogroup">` named by `label`; the cards stack in a column with `gap-4`. |
+| Card | A `<label>` for each choice, carrying `data-testid` (the choice's `testId`) and `data-active`. It has a `rounded-sm` border and `px-12 py-8` padding, and the whole card is the click target. |
+| Radio | A visually hidden (`sr-only`) native `<input type="radio">` with the group's `name` and the choice `id` as its value. It holds the checked and disabled state. |
+| Title line | The choice `label` in `tr-title-compact text-text-default`, then the optional `hint` in `tr-text-metadata text-text-muted`. |
+| Description | The choice `description` in `tr-text-metadata text-text-muted`, on its own line. |
+| Check | A `size-16` `RiCheckLine` in `text-primary` at the end of the selected card only. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `name` | `string` | — | The native radio group name. It must be unique on the page: two groups with the same name become one group. |
+| `label` | `string` | — | The group's accessible name (`aria-label`). Production passes the same string as the visible heading above it. |
+| `choices` | `readonly SettingsRadioChoice<T>[]` | — | The cards, in order. Texts are already translated; see *Choice fields*. |
+| `value` | `T` | — | The selected choice `id`, read from the store. A value that matches no choice selects none. |
+| `disabled` | `boolean` | `false` | Disables every radio in the group, for example while the host cannot apply the setting. |
+| `onSelect` | `(value: T) => void` | — | Called with the newly selected `id` from the native `change` event. It does not fire for the card that is already selected. |
+
+Choice fields (SettingsRadioChoice):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `id` | `T` | — | The value written to `onSelect` and compared with `value`; also the radio's `value`. |
+| `label` | `string` | — | The card's name, translated: `t("…")` or an own-language name. |
+| `hint` | `string` | — | Optional short qualifier after the label: *Recommended*, *default*, *File not found*. |
+| `description` | `string` | — | Required. One line on what the choice does or why it is unavailable. |
+| `testId` | `string` | — | Set as the card's `data-testid`. |
+| `disabled` | `boolean` | — | Makes this one choice unselectable while it stays in the list. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Rest | A choice that is not `value`. | A `border-default` border with no fill; pointer cursor. |
+| Hover | Pointer over a card that is not selected. | `control-bg-hovered` fill. Disabled cards that are not selected still take it. Selected cards do not change. |
+| Keyboard focus | Tab into the group or move with the arrow keys. | A `ring-2` `primary` ring around the focused card (`has-[:focus-visible]`), drawn from the hidden radio's focus. |
+| Selected | `value` equals the choice `id`. | `primary-muted` border on a `primary-subtle` fill, a `primary` check at the end, and `data-active="true"`. |
+| No selection | `value` matches no choice (a host value outside the presets). | Every card at rest and no check. |
+| Disabled choice | `disabled` on a choice. | The radio is natively disabled and the cursor is the default one. No other distinct treatment: colours, hint and description stay as they are. |
+| Selected and disabled | `value` is a disabled choice (a language file that was selected and then removed). | The selected look with the check. The choice cannot be selected again. |
+| Disabled group | `disabled` on the component. | Every radio disabled, with the same look as a disabled choice; the selected card keeps its look. |
+
+### Accessibility
+
+- The wrapper is a `role="radiogroup"` named by `label`. Each card is a native radio inside its `<label>`, so role, checked and disabled state come from the platform.
+- A radio's accessible name is the whole card text — label, hint and description — because the `<label>` wraps all three.
+- Radios that share `name` form one tab stop with arrow-key movement. Give every group its own `name`.
+- The focus ring is on the card. The input itself is `sr-only`, so nothing else shows focus.
+- Disabled choices are skipped by the arrow keys and cannot be clicked. The reason must be in their hint or description, because nothing else explains it.
+- The check icon repeats the checked state visually; the state itself is the radio's `checked`.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus into the group, onto the selected card (or an end card when none is selected), and out again. The group is one tab stop. |
+| `Arrow Down / Arrow Right` | Selects the next enabled card, wrapping at the end; calls `onSelect`. |
+| `Arrow Up / Arrow Left` | Selects the previous enabled card, wrapping at the start; calls `onSelect`. |
+| `Space` | Selects the focused card when nothing is selected yet. |
+
+### Usage rules
+
+- **SRC-1** — Use SettingsRadioCards in Settings when each exclusive option needs a description. Short presets without one are a SegmentedControl, and an on/off setting is a SettingsSwitch.
+- **SRC-2** — Every choice has a `description` saying what it does. `hint` is only for a short qualifier (*Recommended*, *default*, a source, *File not found*). Keep the choice specs typed as `MessageKey`s and translate them when rendering; own-language names and language tags stay untranslated.
+- **SRC-3** — Keep it controlled by host state. `onSelect` returns early for the current value, sends `settings.update` and shows a toast on failure. `value` changes only when `settings.changed` arrives — never update it optimistically.
+- **SRC-4** — A host value outside the presets selects no card. Never map it to the nearest card or the default.
+- **SRC-5** — Keep unavailable options in the list as disabled choices, with the reason in `hint` and `description`. Disable the whole group while the host cannot apply the setting; hide it when the setting does not apply at all, as the Windows shell picker does on other platforms.
+- **SRC-6** — Give each group a unique `name` and a `label` that repeats the setting's heading. Put the heading and the section description outside the group.
+- **SRC-7** — The component accepts no `className`. Place it with a wrapper (`py-12` inside a SettingsGroup) and do not restyle cards; the selected, hover and focus looks belong to the component.
+
+### Examples
+
+#### Basic
+
+Three shells, one selected, with a *Recommended* hint.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+type Shell = "auto" | "pwsh" | "cmd";
+
+export default function Preview() {
+	const t = useT();
+	const [shell, setShell] = useState<Shell>("auto");
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="terminal-windows-shell-preview"
+				label={t("settings.terminal.shell.title")}
+				choices={[
+					{
+						id: "auto",
+						label: t("settings.terminal.shell.auto.label"),
+						hint: t("settings.terminal.shell.auto.hint"),
+						description: t("settings.terminal.shell.auto.description"),
+						testId: "terminal-shell-auto",
+					},
+					{
+						id: "pwsh",
+						label: t("settings.terminal.shell.pwsh.label"),
+						description: t("settings.terminal.shell.pwsh.description"),
+						testId: "terminal-shell-pwsh",
+					},
+					{
+						id: "cmd",
+						label: t("settings.terminal.shell.cmd.label"),
+						description: t("settings.terminal.shell.cmd.description"),
+						testId: "terminal-shell-cmd",
+					},
+				]}
+				value={shell}
+				onSelect={setShell}
+			/>
+		</div>
+	);
+}
+```
+
+#### Heading and description
+
+The Windows shell picker: `MessageKey` specs translated when rendering, with a heading and a description above the group.
+
+```tsx
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards, type SettingsRadioChoice } from "@/panels/SettingsRadioCards";
+
+type Shell = "auto" | "pwsh" | "powershell" | "cmd";
+
+type ShellChoiceSpec = SettingsRadioChoice<Shell> & {
+	label: MessageKey;
+	hint?: MessageKey;
+	description: MessageKey;
+};
+
+const SHELL_CHOICES: ShellChoiceSpec[] = [
+	{
+		id: "auto",
+		label: "settings.terminal.shell.auto.label",
+		hint: "settings.terminal.shell.auto.hint",
+		description: "settings.terminal.shell.auto.description",
+		testId: "terminal-shell-auto",
+	},
+	{
+		id: "pwsh",
+		label: "settings.terminal.shell.pwsh.label",
+		description: "settings.terminal.shell.pwsh.description",
+		testId: "terminal-shell-pwsh",
+	},
+	{
+		id: "powershell",
+		label: "settings.terminal.shell.powershell.label",
+		description: "settings.terminal.shell.powershell.description",
+		testId: "terminal-shell-powershell",
+	},
+	{
+		id: "cmd",
+		label: "settings.terminal.shell.cmd.label",
+		description: "settings.terminal.shell.cmd.description",
+		testId: "terminal-shell-cmd",
+	},
+];
+
+export default function WindowsShell() {
+	const t = useT();
+	const [shell, setShell] = useState<Shell>("auto");
+	return (
+		<div className="flex w-full flex-col">
+			<div className="flex flex-col gap-2 pb-8">
+				<h3 className="tr-title-section text-text-default">{t("settings.terminal.shell.title")}</h3>
+				<p className="tr-text-metadata text-text-muted">
+					{t("settings.terminal.shell.description")}
+				</p>
+			</div>
+			<SettingsRadioCards
+				name="terminal-windows-shell"
+				label={t("settings.terminal.shell.title")}
+				choices={SHELL_CHOICES.map((choice) => ({
+					...choice,
+					label: t(choice.label),
+					...(choice.hint ? { hint: t(choice.hint) } : {}),
+					description: t(choice.description),
+				}))}
+				value={shell}
+				onSelect={setShell}
+			/>
+		</div>
+	);
+}
+```
+
+#### Plural labels and a default
+
+Settle idle workspaces after: plural day labels, a *default* hint and a *Never* choice.
+
+```tsx
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+type IdleChoice = `${number}` | "never";
+
+const IDLE_CHOICES: readonly {
+	id: IdleChoice;
+	days: number | null;
+	hint?: MessageKey;
+	description: MessageKey;
+	testId: string;
+}[] = [
+	{ id: "1", days: 1, description: "settings.workspaces.idle.oneDay", testId: "settle-idle-1" },
+	{ id: "3", days: 3, description: "settings.workspaces.idle.threeDays", testId: "settle-idle-3" },
+	{
+		id: "7",
+		days: 7,
+		hint: "settings.workspaces.idle.defaultHint",
+		description: "settings.workspaces.idle.sevenDays",
+		testId: "settle-idle-7",
+	},
+	{
+		id: "14",
+		days: 14,
+		description: "settings.workspaces.idle.fourteenDays",
+		testId: "settle-idle-14",
+	},
+	{
+		id: "never",
+		days: null,
+		description: "settings.workspaces.idle.never",
+		testId: "settle-idle-never",
+	},
+];
+
+export default function SettleIdle() {
+	const t = useT();
+	const [choice, setChoice] = useState<IdleChoice>("7");
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="settle-idle-days"
+				label={t("settings.workspaces.title")}
+				choices={IDLE_CHOICES.map(({ days, hint, description, ...rest }) => ({
+					...rest,
+					label:
+						days === null
+							? t("settings.workspaces.idle.neverLabel")
+							: t("settings.workspaces.idle.days", { count: days }),
+					...(hint ? { hint: t(hint) } : {}),
+					description: t(description),
+				}))}
+				value={choice}
+				onSelect={setChoice}
+			/>
+		</div>
+	);
+}
+```
+
+#### Value outside the presets
+
+A host-configured five days selects no card until the user picks one.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+export default function NonPreset() {
+	const t = useT();
+	// The host is configured with 5 days, which is not one of the presets.
+	const [choice, setChoice] = useState<string>("5");
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="settle-idle-days-custom"
+				label={t("settings.workspaces.title")}
+				choices={[
+					{
+						id: "3",
+						label: t("settings.workspaces.idle.days", { count: 3 }),
+						description: t("settings.workspaces.idle.threeDays"),
+						testId: "settle-idle-3",
+					},
+					{
+						id: "7",
+						label: t("settings.workspaces.idle.days", { count: 7 }),
+						hint: t("settings.workspaces.idle.defaultHint"),
+						description: t("settings.workspaces.idle.sevenDays"),
+						testId: "settle-idle-7",
+					},
+					{
+						id: "14",
+						label: t("settings.workspaces.idle.days", { count: 14 }),
+						description: t("settings.workspaces.idle.fourteenDays"),
+						testId: "settle-idle-14",
+					},
+				]}
+				value={choice}
+				onSelect={setChoice}
+			/>
+		</div>
+	);
+}
+```
+
+#### Unavailable choices
+
+A selected language file that went missing and a file that cannot be used stay listed as disabled, with the reason as their hint and description.
+
+```tsx
+import { languageName, SYSTEM_LOCALE } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+export default function Unavailable() {
+	const t = useT();
+	// fr.json was selected, then removed from the folder.
+	const [value, setValue] = useState("missing:fr");
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="ui-language-unavailable"
+				label={t("settings.language.title")}
+				choices={[
+					{
+						id: SYSTEM_LOCALE,
+						label: t("settings.language.system.label"),
+						description: t("settings.language.system.description", {
+							language: languageName("en"),
+						}),
+						testId: "language-system",
+					},
+					{
+						id: "en",
+						label: languageName("en"),
+						hint: t("settings.language.source.builtin"),
+						description: "en",
+						testId: "language-en",
+					},
+					{
+						id: "missing:fr",
+						label: languageName("fr"),
+						hint: t("settings.language.source.missing"),
+						description: t("settings.language.missingDescription", { tag: "fr" }),
+						testId: "language-missing-fr",
+						disabled: true,
+					},
+					{
+						id: "broken:german.json",
+						label: "german.json",
+						hint: t("settings.language.source.broken"),
+						description: t("settings.language.error.invalidName"),
+						testId: "language-broken-german.json",
+						disabled: true,
+					},
+				]}
+				value={value}
+				onSelect={setValue}
+			/>
+		</div>
+	);
+}
+```
+
+#### Disabled group
+
+`disabled` while the connected host cannot apply the setting.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+export default function GroupDisabled() {
+	const t = useT();
+	// The connected host cannot apply this setting yet.
+	const supported = false;
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="settle-idle-days-unsupported"
+				label={t("settings.workspaces.title")}
+				choices={[
+					{
+						id: "7",
+						label: t("settings.workspaces.idle.days", { count: 7 }),
+						hint: t("settings.workspaces.idle.defaultHint"),
+						description: t("settings.workspaces.idle.sevenDays"),
+						testId: "settle-idle-7",
+					},
+					{
+						id: "never",
+						label: t("settings.workspaces.idle.neverLabel"),
+						description: t("settings.workspaces.idle.never"),
+						testId: "settle-idle-never",
+					},
+				]}
+				value="7"
+				disabled={!supported}
+				onSelect={() => {}}
+			/>
+		</div>
+	);
+}
+```
+
+#### Inside a SettingsGroup
+
+The Language page layout: the group's title and description, then the cards.
+
+```tsx
+import { languageName, SYSTEM_LOCALE } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+export default function InSettingsGroup() {
+	const t = useT();
+	const [locale, setLocale] = useState(SYSTEM_LOCALE);
+	return (
+		<div className="w-full">
+			<SettingsGroup
+				title={t("settings.language.title")}
+				description={t("settings.language.description")}
+			>
+				<div className="py-12">
+					<SettingsRadioCards
+						name="ui-language"
+						label={t("settings.language.title")}
+						choices={[
+							{
+								id: SYSTEM_LOCALE,
+								label: t("settings.language.system.label"),
+								description: t("settings.language.system.description", {
+									language: languageName("en"),
+								}),
+								testId: "language-system",
+							},
+							{
+								id: "en",
+								label: languageName("en"),
+								hint: t("settings.language.source.builtin"),
+								description: "en",
+								testId: "language-en",
+							},
+							{
+								id: "ja",
+								label: languageName("ja"),
+								hint: t("settings.language.source.builtin"),
+								description: "ja",
+								testId: "language-ja",
+							},
+						]}
+						value={locale}
+						onSelect={setLocale}
+					/>
+				</div>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Waits for the host
+
+`onSelect` sends the update; the selection moves only when the mocked `settings.changed` arrives.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+type Shell = "auto" | "pwsh" | "cmd";
+
+// Stands in for getTransport().request("settings.update", …) and the settings.changed broadcast.
+function requestUpdate(shell: Shell, onChanged: (shell: Shell) => void) {
+	setTimeout(() => onChanged(shell), 800);
+}
+
+export default function HostConfirmed() {
+	const t = useT();
+	// In the app this value comes from the store, which only the broadcast updates.
+	const [shell, setShell] = useState<Shell>("auto");
+	const select = (next: Shell) => {
+		if (next === shell) return;
+		requestUpdate(next, setShell);
+	};
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="terminal-windows-shell-confirmed"
+				label={t("settings.terminal.shell.title")}
+				choices={[
+					{
+						id: "auto",
+						label: t("settings.terminal.shell.auto.label"),
+						hint: t("settings.terminal.shell.auto.hint"),
+						description: t("settings.terminal.shell.auto.description"),
+						testId: "terminal-shell-auto",
+					},
+					{
+						id: "pwsh",
+						label: t("settings.terminal.shell.pwsh.label"),
+						description: t("settings.terminal.shell.pwsh.description"),
+						testId: "terminal-shell-pwsh",
+					},
+					{
+						id: "cmd",
+						label: t("settings.terminal.shell.cmd.label"),
+						description: t("settings.terminal.shell.cmd.description"),
+						testId: "terminal-shell-cmd",
+					},
+				]}
+				value={shell}
+				onSelect={select}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/TerminalSettings.tsx` | The Windows shell picker (Windows hosts only), with a *Recommended* hint on Auto. |
+| `apps/web/src/panels/WorkspacesSettings.tsx` | Settle idle workspaces after: plural labels, a *default* hint, no selection for a non-preset value, disabled on older hosts. |
+| `apps/web/src/panels/LanguageSettings.tsx` | The interface language: System first, source hints, missing and broken files as disabled choices. |
+
+## SettingsRow and SettingsGroup
+
+The layout kit every Settings section is built from: `SettingsPageContainer` stacks a section's groups, `SettingsGroup` is one titled block of rows, and `SettingsRow` is one setting — a label, an optional description and one control on the right. The kit owns spacing, dividers, label typography and the narrow-width wrap; the call site provides the words and the control (SettingsSwitch, SegmentedControl, Button…), and the control owns its own name, state and saving.
+
+```tsx
+import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "@/panels/SettingsRow";
+import { SettingsGroup, SettingsPageContainer } from "@/panels/SettingsGroup";
+```
+
+### When to use
+
+- Every page of the Settings dialog: wrap the page in `SettingsPageContainer` and give each topic its own `SettingsGroup`.
+- One setting with one control — a switch, a segmented choice, a picker, a Button that starts an action — as a `SettingsRow`.
+- A section with a single, untitled list of rows (Notifications, Terminal, Privacy): put the rows in a `<div className={SETTINGS_ROWS_CONTAINER}>` instead of a group.
+- A row whose control is a small cluster (two Buttons, a source tag beside a switch): wrap the cluster in one flex element and pass it as `control`.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SettingsRadioCards | Each option needs its own description, or the choice is too wide for a row's right column (language, Windows shell, idle settling). Put it in the group below its heading, not in `control`. |
+| SettingsNotice | A message about the setting (a permission prompt, a fallback, a restart hint). Place it as a sibling block under the row, never as the row's `control`. |
+| TreeRow | A navigable, selectable list item in a tree or sidebar rather than a setting. |
+| Collapsible | Advanced settings hidden by default; the rows inside still use this kit. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| SettingsPageContainer | A column that wraps each child in its own block. A block that renders nothing is hidden (`empty:hidden`); a block after a rendered one gets top spacing and a `border-border-muted` rule, so rules appear only between groups that render. |
+| SettingsGroup | A `<section>` with a header — the `<h3>` title in `tr-text-label-pill` / `text-text-subtle` and an optional description in `tr-text-metadata` / `text-text-muted` — over a `SETTINGS_ROWS_CONTAINER` that holds the children. |
+| SETTINGS_ROWS_CONTAINER | An exported class string: a flex column whose last child loses its bottom border, so a list of rows ends without a trailing divider. Used by `SettingsGroup` and directly by untitled sections. |
+| SettingsRow | A wrapping flex row with vertical padding and a `border-border-muted` bottom divider (unless `noBorder`). |
+| Label column | Grows to fill the row with a minimum width (`min-w-160`): the `label` in `tr-text-ui` / `text-text-default` and, under it, the `description` in `tr-text-metadata` / `text-text-muted`. |
+| Control slot | Holds `control` at its natural width on the right, never wider than the row. When it no longer fits beside the label column it wraps below the label. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `label` | `string` | — | The setting's visible name, from a locale key. Plain text only; it is not linked to the control, so the control needs its own accessible label (usually the same string). |
+| `description` | `ReactNode` | — | One short line under the label: what the setting does, or the current consequence of its value. May be a node — a `<code>` path, for example. |
+| `control` | `ReactNode` | — | The one control for this setting: SettingsSwitch, SegmentedControl, a Button, a picker, or one flex element wrapping a small cluster. |
+| `testId` | `string` | — | `data-testid` on the row. |
+| `noBorder` | `boolean` | `false` | Drops the row's bottom divider. Rarely needed: inside `SETTINGS_ROWS_CONTAINER` or `SettingsGroup` the last row already loses it. |
+| `className` | `string` | — | Placement only, such as top margin after a non-row block (`mt-24`). |
+| `SettingsGroup.title` | `string` | — | The group heading (`<h3>`), from a locale key. |
+| `SettingsGroup.description` | `string \| undefined` | — | One explanatory line under the title. Plain text. |
+| `SettingsGroup.children` | `ReactNode` | — | The group's rows, plus any blocks that belong between them (a notice, a radio-card list, a sub-heading). |
+| `SettingsGroup.testId` | `string` | — | `data-testid` on the `<section>`. |
+| `SettingsPageContainer.children` | `ReactNode` | — | The page's groups, in order. Give conditional children a `key` so the others never remount when one appears; `null`/`false` children and components that render `null` leave no rule behind. |
+| `SettingsPageContainer.testId` | `string` | — | `data-testid` on the page column, e.g. `settings-chat`. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Default | A row with `label` and `control`. | Label left, control right, vertically centred; a muted bottom divider under the row. |
+| With description | `description`. | A muted metadata line under the label; the control stays centred on both lines. |
+| Last row | The row is the last child of `SETTINGS_ROWS_CONTAINER` or a `SettingsGroup`. | No bottom divider. |
+| No border | `noBorder`. | No bottom divider wherever the row sits. |
+| Narrow | The column is too narrow for the label column's minimum width plus the control. | The control wraps onto its own line below the label, aligned left. |
+| Hover, focus, disabled | — | No distinct treatment: the row is not interactive. Hover, focus ring and disabled belong to the control (e.g. a SegmentedControl `disabled` while a save is pending). |
+| Empty page child | A `SettingsPageContainer` child is `null` or a component that renders nothing. | Its block is hidden and draws no rule or spacing. |
+
+### Accessibility
+
+- `SettingsRow` renders plain `<div>`/`<span>` elements: the visible `label` is **not** associated with the control. Give every control its own name — `label` on SettingsSwitch and SegmentedControl, the Button's text or `aria-label` — normally the same locale string as the row label.
+- When a row's control is scoped (a workspace override), name it fully in the control's label (`Allow subagents in {{name}}`) even if the row label is short.
+- `SettingsGroup` renders a `<section>` whose title is an `<h3>`, so screen-reader users can jump between groups by heading. The section is not labelled by that heading.
+- The description is plain text next to the label and is not wired to the control with `aria-describedby`; keep anything the user must know to operate the control in the control's own label or tooltip.
+- Reading and Tab order follow the DOM: label, description, then the control. Wrapping at narrow widths does not reorder anything.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves between the rows' controls in document order; the rows themselves take no focus. |
+| `Space / Enter / arrows` | Handled by the control: Space or Enter toggles a SettingsSwitch, arrow keys move within a SegmentedControl. |
+
+### Usage rules
+
+- **SRW-1** — Build every Settings page from the kit: `SettingsPageContainer` → `SettingsGroup` → `SettingsRow`. Do not hand-roll the row shape (`flex justify-between border-b py-12`) or group headers.
+- **SRW-2** — One row, one setting, one control. A small related cluster (Copy path + Open folder, a source tag + its switch) goes in one flex wrapper; a choice with per-option descriptions is SettingsRadioCards below the heading, not a row.
+- **SRW-3** — Always name the control itself — SettingsSwitch and SegmentedControl `label`, Button text — because the row label is not linked to it.
+- **SRW-4** — The row owns layout and typography: pass words through `label` and `description`, never style them, and use `className` for placement only.
+- **SRW-5** — Rows apply immediately; a Settings page has no Save or Apply button. While a save is in flight, disable the control rather than the row, and let the value follow the host's broadcast.
+- **SRW-6** — Let the containers draw dividers: put rows inside `SettingsGroup` or `SETTINGS_ROWS_CONTAINER` so the last one ends clean, and render optional groups as keyed conditional children of `SettingsPageContainer` instead of adding your own rules or margins.
+- **SRW-7** — A notice, sub-heading or other block between rows is a sibling of the rows, not their `control`; give it its own vertical padding so it sits on the row rhythm.
+
+### Examples
+
+#### Group of rows
+
+A titled group with a SegmentedControl row and a SettingsSwitch row.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+type ThemeMode = "system" | "light" | "dark";
+
+export default function Preview() {
+	const t = useT();
+	const [mode, setMode] = useState<ThemeMode>("system");
+	const [autoFix, setAutoFix] = useState(true);
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsGroup title={t("settings.appearance.themeGroup")}>
+				<SettingsRow
+					label={t("settings.appearance.themeMode")}
+					control={
+						<SegmentedControl
+							name="preview-theme-mode"
+							label={t("settings.appearance.themeMode")}
+							options={[
+								{ id: "system", label: t("settings.appearance.mode.system") },
+								{ id: "light", label: t("settings.appearance.mode.light") },
+								{ id: "dark", label: t("settings.appearance.mode.dark") },
+							]}
+							value={mode}
+							onSelect={setMode}
+						/>
+					}
+				/>
+				<SettingsRow
+					label={t("settings.models.autoFix")}
+					description={t("settings.models.autoFixDescription")}
+					control={
+						<SettingsSwitch
+							checked={autoFix}
+							label={t("settings.models.autoFix")}
+							testId="preview-autofix-toggle"
+							onChange={setAutoFix}
+						/>
+					}
+				/>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Settings page
+
+`SettingsPageContainer` with two groups, as Chat settings composes them; the switch row's description follows its value.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+import { SettingsGroup, SettingsPageContainer } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+type Order = "oldest-first" | "newest-first";
+type Growth = "compact" | "roomy" | "half-chat";
+
+export default function Page() {
+	const t = useT();
+	const [order, setOrder] = useState<Order>("oldest-first");
+	const [growth, setGrowth] = useState<Growth>("roomy");
+	const [subagents, setSubagents] = useState(true);
+	return (
+		<div className="w-full max-w-[40rem]">
+			<SettingsPageContainer testId="settings-chat">
+				<SettingsGroup title={t("settings.chat.group")}>
+					<SettingsRow
+						label={t("settings.chat.messageOrder")}
+						description={t("settings.chat.messageOrderDescription")}
+						control={
+							<SegmentedControl
+								name="chat-message-order"
+								label={t("settings.chat.messageOrder")}
+								options={[
+									{ id: "oldest-first", label: t("settings.chat.order.oldestFirst") },
+									{ id: "newest-first", label: t("settings.chat.order.newestFirst") },
+								]}
+								value={order}
+								onSelect={setOrder}
+							/>
+						}
+					/>
+					<SettingsRow
+						label={t("settings.chat.composerSize")}
+						description={t("settings.chat.composerSizeDescription")}
+						control={
+							<SegmentedControl
+								name="composer-growth-limit"
+								label={t("settings.chat.composerSize")}
+								options={[
+									{ id: "compact", label: t("settings.chat.growth.compact") },
+									{ id: "roomy", label: t("settings.chat.growth.roomy") },
+									{ id: "half-chat", label: t("settings.chat.growth.halfChat") },
+								]}
+								value={growth}
+								onSelect={setGrowth}
+							/>
+						}
+					/>
+				</SettingsGroup>
+				<SettingsGroup
+					title={t("settings.subagents.title")}
+					description={t("settings.subagents.description")}
+				>
+					<SettingsRow
+						label={t("settings.subagents.allow")}
+						description={
+							subagents
+								? t("settings.subagents.allowOnDescription")
+								: t("settings.subagents.allowOffDescription")
+						}
+						control={
+							<SettingsSwitch
+								checked={subagents}
+								label={t("settings.subagents.allowGlobally")}
+								testId="subagents-global-toggle"
+								onChange={setSubagents}
+							/>
+						}
+					/>
+				</SettingsGroup>
+			</SettingsPageContainer>
+		</div>
+	);
+}
+```
+
+#### Conditional groups
+
+Sign in or out to move providers between groups; a group appears only while it has rows, and the rule between groups follows.
+
+```tsx
+import { RiLoginBoxLine, RiLogoutBoxLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { SettingsGroup, SettingsPageContainer } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+const PROVIDERS = ["Anthropic", "OpenAI", "GitHub Copilot"];
+
+export default function ConditionalGroups() {
+	const t = useT();
+	const [connected, setConnected] = useState<string[]>([]);
+	const available = PROVIDERS.filter((name) => !connected.includes(name));
+	return (
+		<div className="w-full max-w-[40rem]">
+			<SettingsPageContainer>
+				{connected.length > 0 ? (
+					<SettingsGroup key="connected" title={t("settings.providers.connectedGroup")}>
+						{connected.map((name) => (
+							<SettingsRow
+								key={name}
+								label={name}
+								control={
+									<Button
+										variant="soft-primary"
+										size="m"
+										iconLeft={RiLogoutBoxLine}
+										onClick={() => setConnected((list) => list.filter((item) => item !== name))}
+									>
+										{t("settings.providers.signOut")}
+									</Button>
+								}
+							/>
+						))}
+					</SettingsGroup>
+				) : null}
+				{available.length > 0 ? (
+					<SettingsGroup
+						key="subscriptions"
+						title={t("settings.providers.subscriptionsGroup")}
+						description={t("settings.providers.subscriptionsDescription")}
+					>
+						{available.map((name) => (
+							<SettingsRow
+								key={name}
+								label={name}
+								control={
+									<Button
+										variant="soft-primary"
+										size="m"
+										iconLeft={RiLoginBoxLine}
+										onClick={() => setConnected((list) => [...list, name])}
+									>
+										{t("settings.providers.signIn")}
+									</Button>
+								}
+							/>
+						))}
+					</SettingsGroup>
+				) : null}
+			</SettingsPageContainer>
+		</div>
+	);
+}
+```
+
+#### Pending save
+
+Choosing a value disables the controls until the save lands, as Appearance does; the rows do not change.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+type ThemeMode = "system" | "light" | "dark";
+type Contrast = "normal" | "high";
+
+export default function Pending() {
+	const t = useT();
+	const [mode, setMode] = useState<ThemeMode>("dark");
+	const [contrast, setContrast] = useState<Contrast>("normal");
+	const [pending, setPending] = useState(false);
+	const save = (apply: () => void) => {
+		setPending(true);
+		setTimeout(() => {
+			apply();
+			setPending(false);
+		}, 1200);
+	};
+	return (
+		<div className="w-full max-w-[32rem]">
+			<SettingsGroup title={t("settings.appearance.themeGroup")}>
+				<SettingsRow
+					label={t("settings.appearance.themeMode")}
+					control={
+						<SegmentedControl
+							name="pending-theme-mode"
+							label={t("settings.appearance.themeMode")}
+							options={[
+								{ id: "system", label: t("settings.appearance.mode.system") },
+								{ id: "light", label: t("settings.appearance.mode.light") },
+								{ id: "dark", label: t("settings.appearance.mode.dark") },
+							]}
+							value={mode}
+							disabled={pending}
+							onSelect={(next) => save(() => setMode(next))}
+						/>
+					}
+				/>
+				<SettingsRow
+					label={t("settings.appearance.contrastLevel")}
+					control={
+						<SegmentedControl
+							name="pending-contrast-level"
+							label={t("settings.appearance.contrastLevel")}
+							options={[
+								{ id: "normal", label: t("common.default") },
+								{ id: "high", label: t("settings.appearance.contrast.high") },
+							]}
+							value={contrast}
+							disabled={pending}
+							onSelect={(next) => save(() => setContrast(next))}
+						/>
+					}
+				/>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Action row
+
+A Button as the control, opening a confirmation, with the consequence in the description.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+export default function ButtonControl() {
+	const t = useT();
+	const [confirming, setConfirming] = useState(false);
+	return (
+		<div className="w-full max-w-[32rem]">
+			<SettingsRow
+				label={t("workbench.layoutSettings.resetToDefault")}
+				description={t("workbench.layoutSettings.resetDescription", {
+					name: t("workbench.preset.balanced"),
+				})}
+				control={
+					<Button variant="outline" size="m" onClick={() => setConfirming(true)}>
+						{t("workbench.layoutSettings.reset")}
+					</Button>
+				}
+			/>
+			<ConfirmDialog
+				open={confirming}
+				onOpenChange={setConfirming}
+				title={t("workbench.layoutSettings.applyTitle")}
+				description={t("workbench.layoutSettings.applyDescription")}
+				confirmLabel={t("workbench.layoutSettings.applyConfirm")}
+				onConfirm={() => setConfirming(false)}
+			/>
+		</div>
+	);
+}
+```
+
+#### Rich description and a control cluster
+
+A `<code>` path as the description and two Buttons in one wrapper.
+
+```tsx
+import { RiFileCopyLine, RiFolderOpenLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+export default function FolderRow() {
+	const t = useT();
+	const folder = "~/.thinkrail/locales";
+	return (
+		<div className="w-full max-w-[40rem]">
+			<SettingsGroup title={t("settings.language.add.title")}>
+				<SettingsRow
+					label={t("settings.language.folder.label")}
+					description={<code className="tr-code-text break-all">{folder}</code>}
+					testId="language-folder"
+					control={
+						<div className="flex gap-8">
+							<Button variant="outline" size="m" iconLeft={RiFileCopyLine} onClick={() => {}}>
+								{t("settings.language.folder.copy")}
+							</Button>
+							<Button variant="outline" size="m" iconLeft={RiFolderOpenLine} onClick={() => {}}>
+								{t("settings.language.folder.open")}
+							</Button>
+						</div>
+					}
+				/>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Workspace override
+
+A source tag beside the switch: toggle to make it Custom, click Custom to return to the global value.
+
+```tsx
+import { RiArrowGoBackLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+type Override = "on" | "off" | null;
+
+export default function OverrideTag() {
+	const t = useT();
+	const name = "feature/login";
+	const globalEnabled = false;
+	const [override, setOverride] = useState<Override>("on");
+	const enabled = override === null ? globalEnabled : override === "on";
+	return (
+		<div className="w-full max-w-[32rem]">
+			<SettingsGroup
+				title={t("settings.subagents.workspaceHeading")}
+				description={t("settings.subagents.workspaceDescription", { name })}
+			>
+				<SettingsRow
+					label={t("settings.subagents.allow")}
+					control={
+						<span className="flex items-center gap-8">
+							{override === null ? (
+								<span className="tr-text-metadata text-text-subtle">
+									{t("settings.subagents.source.global")}
+								</span>
+							) : (
+								<Button
+									variant="soft-primary"
+									size="s"
+									iconRight={RiArrowGoBackLine}
+									aria-label={t("settings.subagents.resetEnabled", { name })}
+									tooltip={t("settings.subagents.source.useGlobal")}
+									onClick={() => setOverride(null)}
+								>
+									{t("settings.subagents.source.custom")}
+								</Button>
+							)}
+							<SettingsSwitch
+								checked={enabled}
+								label={t("settings.subagents.allowInWorkspace", { name })}
+								testId="subagents-workspace-toggle"
+								onChange={(next) => setOverride(next ? "on" : "off")}
+							/>
+						</span>
+					}
+				/>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Untitled rows
+
+`SETTINGS_ROWS_CONTAINER` without a group, with a notice block under the row while the setting is on.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function RowsContainer() {
+	const t = useT();
+	const [enabled, setEnabled] = useState(true);
+	return (
+		<div className="w-full max-w-[32rem]">
+			<div data-testid="settings-notifications" className={SETTINGS_ROWS_CONTAINER}>
+				<SettingsRow
+					label={t("settings.notifications.enable")}
+					description={t("settings.notifications.browserDescription")}
+					control={
+						<SettingsSwitch
+							checked={enabled}
+							label={t("settings.notifications.enable")}
+							testId="notifications-toggle"
+							onChange={setEnabled}
+						/>
+					}
+				/>
+				{enabled ? (
+					<div className="py-12">
+						<SettingsNotice
+							variant="info"
+							action={
+								<Button variant="outline" size="m" onClick={() => {}}>
+									{t("settings.notifications.allowInBrowser")}
+								</Button>
+							}
+						>
+							{t("settings.notifications.notGranted")}
+						</SettingsNotice>
+					</div>
+				) : null}
+			</div>
+		</div>
+	);
+}
+```
+
+#### Narrow column
+
+When the control does not fit beside the label, it wraps below it.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+type Growth = "compact" | "roomy" | "half-chat";
+
+export default function Narrow() {
+	const t = useT();
+	const [growth, setGrowth] = useState<Growth>("roomy");
+	return (
+		<div className="w-full max-w-[20rem]">
+			<SettingsRow
+				label={t("settings.chat.composerSize")}
+				description={t("settings.chat.composerSizeDescription")}
+				control={
+					<SegmentedControl
+						name="narrow-composer-growth"
+						label={t("settings.chat.composerSize")}
+						options={[
+							{ id: "compact", label: t("settings.chat.growth.compact") },
+							{ id: "roomy", label: t("settings.chat.growth.roomy") },
+							{ id: "half-chat", label: t("settings.chat.growth.halfChat") },
+						]}
+						value={growth}
+						onSelect={setGrowth}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ChatSettings.tsx` | `SettingsPageContainer` with the Appearance and behavior group of SegmentedControl rows, followed by the Subagents group. |
+| `apps/web/src/panels/SubagentSettings.tsx` | A `SettingsGroup` with a description; switch rows, number fields and a source tag beside the switch. |
+| `apps/web/src/panels/AppearanceSettings.tsx` | Theme mode and contrast SegmentedControl rows disabled while pending, a conditional read-only row and `SETTINGS_ROWS_CONTAINER` inside a disclosure. |
+| `apps/web/src/panels/LanguageSettings.tsx` | Folder row with a `<code>` description and Copy path / Open folder Buttons, plus a link row. |
+| `apps/web/src/panels/NotificationsSettings.tsx` | Untitled `SETTINGS_ROWS_CONTAINER` section: a switch row with notice blocks under it. |
+| `apps/web/src/shell/LayoutSettings.tsx` | Reset to default row with an outline Button, and a nested `SettingsGroup` of limit inputs. |
+
 ## Button and IconButton contract
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /
