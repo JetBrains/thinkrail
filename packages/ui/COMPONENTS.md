@@ -6631,6 +6631,2660 @@ export default function OpenGestures() {
 | `apps/web/src/panels/FileTree.tsx` | Workspace Files tree: compact folders, gitignored `subtle` rows, status letters, editor warm-up and reveal via `ref`. |
 | `apps/web/src/panels/ChangesTree.tsx` | Changes tree: status-coloured names, DiffStatBadge, viewed marks and `highlight="wrapper"` inside ChangeRowActions. |
 
+## LoadingRegion and SkeletonRows
+
+The one loading placeholder for a content region. `SkeletonRows` draws pulsing bars of varied widths inside a single labelled `role="status"` region that stays invisible through a short grace and then fades in; `LoadingRegion` wraps it in a plain `div` that takes the region's padding, size and test id. They own the bars, their rhythm and motion and the live-region semantics; the call site picks the row count, the frame and, when it helps, a specific label. Which loading tier a surface takes is the [Loading](../../apps/web/library/content/patterns/loading.md) pattern.
+
+```tsx
+import { LoadingRegion, SkeletonRows } from "@thinkrail/ui/skeleton";
+```
+
+### When to use
+
+- A region that will fill with substantial content is waiting for its first read: a tool panel's list (Files, Specs, Changes, Review), a dialog's list, a menu's list section, a settings section.
+- A tab body or lazy chunk is restoring: the workbench's `MissingResource` and the pane-level `Suspense` fallbacks.
+- Reach for `LoadingRegion` whenever the placeholder needs padding, a height or a test id; use `SkeletonRows` alone only inside a container that already frames it.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Button | An in-flight action pinned to its control: `loading` swaps in the spinner, `loading spinIcon` rotates a refresh icon while the content stays valid. |
+| RunningIcon | An agent session is running; that is activity, not data on the way. |
+| SettingsNotice | The read failed: replace the skeleton with the error and its Retry action, never show both at once. |
+| Nothing | The content may legitimately never appear and absence is a valid steady state (see [Loading](../../apps/web/library/content/patterns/loading.md)). |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Region | `LoadingRegion` only: a plain `div` with the call site's `className` and `data-testid={testId}`. It has no look of its own and never opens a second live region. |
+| Status region | The `SkeletonRows` root: a `div` with `role="status"`, `aria-label`, `aria-busy="true"` and `data-testid="skeleton-rows"`; a vertical `flex` column with `gap-8` that carries `animate-loading-in`. |
+| Bars | One empty `span` per row from a fixed width sequence (`w-3/4`, `w-1/2`, `w-5/6`, …), so every skeleton has the same ragged shape: `h-3`, `rounded-sm`, `bg-control-bg-hovered`, `animate-pulse`. Widths are fractions of the parent, so the parent sets the width. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `rows` | `number` | `6` | How many bars to draw, clamped to 12 (the length of the fixed width sequence). Approximate the content that will arrive: 2 for a short sub-list, 3–5 for a menu section, settings list or panel list, 8–12 for a tab body or a full pane. |
+| `label` | `string` | `t("components.skeleton.loading")` | The status region's `aria-label`. Pass a specific locale key when it tells the reader more than "Loading" — `shell.workbench.restoring.chat`, `panels.existingWorktree.loading`, `mcp.settings.loading`. Threaded through to `SkeletonRows`; an empty string falls back to the default. |
+| `className` | `string` | — | The region's own padding and size, matching the content that replaces it (`px-8 py-4` in side panels, `p-12` in panes, `h-full p-12` for a pane fallback, `min-h-112 p-4` in a dialog list). |
+| `testId` | `string` | — | `data-testid` on the region (`file-pane-loading`, `existing-worktree-loading`). The inner `skeleton-rows` id is shared by every instance. |
+
+SkeletonRows props:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `rows` | `number` | `6` | How many bars to draw, clamped to 12 (the length of the fixed width sequence). Approximate the content that will arrive: 2 for a short sub-list, 3–5 for a menu section, settings list or panel list, 8–12 for a tab body or a full pane. |
+| `label` | `string` | `t("components.skeleton.loading")` | The status region's `aria-label`. Pass a specific locale key when it tells the reader more than "Loading" — `shell.workbench.restoring.chat`, `panels.existingWorktree.loading`, `mcp.settings.loading`. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Grace | Mount (the parent's data is still `null`). | In the layout at full size but transparent through the `animate-loading-in` delay, so a read that lands quickly never flashes bars. The status region and test ids exist from the first paint. |
+| Loading | Still mounted after the grace. | Fades to full opacity; the bars pulse on `bg-control-bg-hovered`. |
+| Resolved | The call site renders its content instead. | The skeleton unmounts; the content's own root fades in with `motion-safe:animate-reveal` where the [Loading](../../apps/web/library/content/patterns/loading.md) pattern allows it. |
+| Failed | The read rejects. | No treatment of its own: the call site replaces the skeleton with its error and Retry. |
+| Reduced motion | `prefers-reduced-motion: reduce`. | No distinct treatment; the grace fade and the pulse still run. |
+| Hover, focus, disabled | — | No distinct treatment; the placeholder is not interactive. |
+
+### Accessibility
+
+- Exactly one `role="status"` region per placeholder, with `aria-busy="true"` and an `aria-label` (default `components.skeleton.loading`). `LoadingRegion` threads `label` to it instead of nesting a second region.
+- The bars are empty spans with no text, so assistive technology hears only the label.
+- Name what is loading when the context does not: restoring a chat tab, reading Git worktrees, loading commits or MCP servers.
+- Not focusable. Inside a menu it is not a menu item, so arrow keys and typeahead skip it.
+
+| Keys | Action |
+| --- | --- |
+| `—` | No keyboard interaction; focus stays on the surrounding dialog, menu or panel while the region loads. |
+
+### Usage rules
+
+- **SKL-1** — Every content region waiting for data renders this placeholder — never bare “Loading…” text, never an empty frame, never a spinner centred in the region. The tier rules are the [Loading](../../apps/web/library/content/patterns/loading.md) pattern.
+- **SKL-2** — Prefer `LoadingRegion` and give its `className` the padding and size of the content that replaces it, so the data lands without a layout jump. Use bare `SkeletonRows` only inside a container that already frames it.
+- **SKL-3** — Choose `rows` from the content's footprint: 2 for a short sub-list, 3–5 for a menu section, settings section or side-panel list, 8–12 for a tab body or full pane.
+- **SKL-4** — Put a specific message on `label` from a locale key; never wrap the placeholder in your own `role="status"` or add visible loading text beside it.
+- **SKL-5** — Never restyle the bars or copy their classes into a hand-made skeleton. A hand-shaped placeholder is only for a footprint rows cannot represent, such as the Welcome panel's card grid.
+- **SKL-6** — Never show Retry beside an active skeleton: the error and its Retry replace it only after a real failure.
+- **SKL-7** — Put `motion-safe:animate-reveal` on the resolved content's own root — never on the skeleton or on a wrapper around both branches.
+
+### Examples
+
+#### Preview
+
+A short list region with the default label.
+
+```tsx
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+
+export default function Preview() {
+	return <LoadingRegion rows={3} className="w-full" />;
+}
+```
+
+#### Side-panel list
+
+The Changes and Review panels: five rows with the panel's own `px-8 py-4` padding.
+
+```tsx
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+
+export default function PanelList() {
+	return (
+		<div className="w-full max-w-[20rem]">
+			<LoadingRegion rows={5} className="px-8 py-4" />
+		</div>
+	);
+}
+```
+
+#### Expand, load, reveal
+
+Expanding a project in the Projects rail: two rows under it while its workspaces load, then the list fades in with `motion-safe:animate-reveal` on its own root. Collapse and expand to replay.
+
+```tsx
+import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
+import { Button } from "@thinkrail/ui/button";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { useEffect, useRef, useState } from "react";
+
+const WORKSPACES = ["main", "design-system-audit", "component-pages"];
+
+export default function LoadThenReveal() {
+	const [expanded, setExpanded] = useState(true);
+	const [list, setList] = useState<string[] | undefined>(undefined);
+	const timer = useRef(0);
+	const load = () => {
+		window.clearTimeout(timer.current);
+		setList(undefined);
+		timer.current = window.setTimeout(() => setList(WORKSPACES), 1500);
+	};
+	useEffect(() => {
+		load();
+		return () => window.clearTimeout(timer.current);
+	}, []);
+	return (
+		<div className="flex min-h-112 w-full max-w-[20rem] flex-col">
+			<Button
+				variant="ghost"
+				size="m"
+				iconLeft={expanded ? RiArrowDownSLine : RiArrowRightSLine}
+				aria-expanded={expanded}
+				className="self-start"
+				onClick={() => {
+					if (!expanded) load();
+					setExpanded(!expanded);
+				}}
+			>
+				thinkrail
+			</Button>
+			{expanded && list === undefined && <LoadingRegion rows={2} className="py-4 pr-8 pl-16" />}
+			{expanded && list !== undefined && (
+				<ul className="mt-2 flex flex-col gap-2 py-4 pl-24 tr-text-ui text-text-default motion-safe:animate-reveal">
+					{list.map((name) => (
+						<li key={name}>{name}</li>
+					))}
+				</ul>
+			)}
+		</div>
+	);
+}
+```
+
+#### Restoring tab body
+
+The workbench's `MissingResource`: twelve rows, a specific label and a full-height region that clips its bars.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+
+export default function RestoringTab() {
+	const t = useT();
+	return (
+		<div className="h-160 w-full">
+			<LoadingRegion
+				rows={12}
+				label={t("shell.workbench.restoring.chat")}
+				className="h-full overflow-hidden p-16"
+			/>
+		</div>
+	);
+}
+```
+
+#### Dialog list with retry after failure
+
+Open existing worktree: a labelled region with a minimum height and a test id; the error and Retry replace it only once the read fails.
+
+```tsx
+import { RiRefreshLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { useRef, useState } from "react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function DialogList() {
+	const t = useT();
+	const [loadError, setLoadError] = useState<string | null>(null);
+	const timer = useRef(0);
+	const load = () => {
+		setLoadError(null);
+		window.clearTimeout(timer.current);
+		timer.current = window.setTimeout(
+			() => setLoadError(t("panels.existingWorktree.listFailed")),
+			2000,
+		);
+	};
+	return (
+		<Dialog
+			onOpenChange={(open) => {
+				if (open) load();
+				else window.clearTimeout(timer.current);
+			}}
+		>
+			<DialogTrigger asChild>
+				<Button variant="outline">{t("panels.projectTree.openExistingWorktree")}</Button>
+			</DialogTrigger>
+			<DialogContent className="max-w-[36rem]">
+				<DialogHeader>
+					<DialogTitle>{t("panels.existingWorktree.title")}</DialogTitle>
+					<DialogDescription>{t("panels.existingWorktree.description")}</DialogDescription>
+				</DialogHeader>
+				{loadError === null ? (
+					<LoadingRegion
+						rows={4}
+						label={t("panels.existingWorktree.loading")}
+						className="min-h-112 p-4"
+						testId="existing-worktree-loading"
+					/>
+				) : (
+					<SettingsNotice
+						variant="error"
+						action={
+							<Button variant="outline" size="m" iconLeft={RiRefreshLine} onClick={load}>
+								{t("common.retry")}
+							</Button>
+						}
+					>
+						{loadError}
+					</SettingsNotice>
+				)}
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Menu section
+
+The Changes scope menu's commit section loads below its label; the commits arrive as plain menu items without a reveal.
+
+```tsx
+import { RiArrowDownSLine, RiGitCommitLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { useRef, useState } from "react";
+
+const COMMITS = [
+	{ sha: "4f2a9c1", subject: "Add the loading page" },
+	{ sha: "b81e07d", subject: "Thread the skeleton label" },
+	{ sha: "09cd3aa", subject: "Fade the skeleton in after a grace" },
+];
+
+export default function MenuSection() {
+	const t = useT();
+	const [commits, setCommits] = useState<typeof COMMITS | null>(null);
+	const timer = useRef(0);
+	return (
+		<DropdownMenu
+			onOpenChange={(open) => {
+				window.clearTimeout(timer.current);
+				if (!open) return;
+				setCommits(null);
+				timer.current = window.setTimeout(() => setCommits(COMMITS), 2000);
+			}}
+		>
+			<DropdownMenuTrigger asChild>
+				<Button variant="ghost" size="m" iconRight={RiArrowDownSLine}>
+					{t("changes.scopeMenu.uncommitted")}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="w-[18rem]">
+				<DropdownMenuItem onSelect={() => {}}>
+					{t("changes.scopeMenu.uncommitted")}
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuLabel>{t("changes.scopeMenu.commits")}</DropdownMenuLabel>
+				{commits === null ? (
+					<LoadingRegion
+						rows={3}
+						label={t("changes.scopeMenu.loadingCommits")}
+						className="px-8 py-4"
+					/>
+				) : (
+					commits.map((commit) => (
+						<DropdownMenuItem key={commit.sha} onSelect={() => {}}>
+							<RiGitCommitLine />
+							<span className="truncate">{commit.subject}</span>
+						</DropdownMenuItem>
+					))
+				)}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Settings section
+
+Settings sections use bare `SkeletonRows` inside their own container, optionally with a specific label.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { SkeletonRows } from "@thinkrail/ui/skeleton";
+
+export default function SettingsSection() {
+	const t = useT();
+	return (
+		<div className="grid w-full grid-cols-2 gap-24">
+			<div data-testid="settings-templates">
+				<SkeletonRows rows={3} />
+			</div>
+			<SkeletonRows rows={3} label={t("mcp.settings.loading")} />
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/shell/WorkspaceWorkbench.tsx` | `MissingResource`: every restoring tab body and lazy-chunk fallback, 12 rows with a per-kind label. |
+| `apps/web/src/panels/ChangesPanel.tsx` | The Changes list while the first status read is pending (`px-8 py-4`). |
+| `apps/web/src/panels/ExistingWorktreeDialog.tsx` | The worktree-candidate list with a label and `testId`, replaced by the error and Retry on failure. |
+| `apps/web/src/panels/ChangesScopeMenu.tsx` | The commit section of a dropdown menu, labelled `changes.scopeMenu.loadingCommits`. |
+| `apps/web/src/panels/FileTree.tsx` | The file tree before its first listing (8 rows, `px-4 py-4`). |
+| `packages/resource-renderers/src/support/ResourcePreview.tsx` | The shared pane fallback (`h-full p-12`) of the resource renderers. |
+
+## StaleComposerNotice
+
+A one-line warning that a review comment composer was closed because the file changed under its selection. It renders a `role="status"` paragraph with a warning icon and the fixed `viewer.composer.fileChanged` message, or nothing while `visible` is false. It owns its look and its words; the renderer keeps it mounted in the composer's slot and passes the composer state's `stale` flag. It is internal to `packages/resource-renderers/src/renderers` and not exported from `@thinkrail/resource-renderers`, so renderers import it by relative path.
+
+```tsx
+import { StaleComposerNotice } from "../StaleComposerNotice";
+```
+
+### When to use
+
+- A renderer with a review composer (select content, then comment) whose content can change on disk while the composer is open.
+- Explaining why an open composer disappeared after a re-read, and what to do next: select again.
+- Every bundled surface that hash-stamps its composer with `useStampedComposer`: Pierre diffs, JSON and CSV views and diffs, notebook views and diffs, and the region review surface.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SettingsNotice | An inline message in settings or a dialog, with its own severity, text and an optional action. |
+| Toast | A transient app-level message that is not tied to one renderer's composer slot. |
+| Refresh-failed notice | A re-read failed and the preview shows the last loaded version: `ResourcePreview`'s `resource-preview-stale` bar, not this notice. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | A `<p role="status" data-testid="review-selection-stale">`: one `flex items-center gap-8` row on the notice surface — `bg-container-elevated-bg`, a `border-feedback-warning-muted` border, `rounded-sm` — at the dense `px-8 py-4` notice padding. |
+| Icon | `RiAlertLine` (the warning glyph) at `size-14` in `text-feedback-warning`, `shrink-0` and `aria-hidden`. |
+| Message | `viewer.composer.fileChanged` in `tr-text-metadata text-text-default`. Fixed: there is no prop for other text and no action. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `visible` | `boolean` | — | Required. Renders the notice when `true` and nothing when `false`. Pass the composer state's `stale` (`composer.stale`, `pending.stale` in the Pierre diff). |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Hidden | `visible={false}` — no composer was open when the content changed, or the reader has selected again. | Renders nothing; the slot takes no space. |
+| Visible | `visible` — the content's stamp changed while a composer was open, so the selection and composer were dropped. | The warning notice in the composer's slot, until the reader makes a new selection, which clears `stale`. |
+| Narrow | A column narrower than the message. | The message wraps; the icon stays vertically centred on the text block. |
+| Hover, focus, disabled | — | No distinct treatment; the notice is not interactive. |
+
+### Accessibility
+
+- `role="status"` makes the message a polite live region. The element is inserted when it becomes visible, rather than updating a region that already exists.
+- The icon is `aria-hidden`; the message text is the whole content.
+- Not focusable and never takes focus; focus is not moved when the composer it replaces unmounts.
+
+| Keys | Action |
+| --- | --- |
+| `—` | No keyboard interaction. The reader selects again with the renderer's own controls. |
+
+### Usage rules
+
+- **STN-1** — Use it only for a review composer whose selection went stale because the content changed. A failed re-read is the preview's refresh-failed notice; any other warning is a SettingsNotice or a Toast.
+- **STN-2** — Keep it mounted and drive `visible` from the composer state's `stale` (`useStampedComposer`); never compute staleness at the call site or wrap it in your own condition.
+- **STN-3** — Place it in the composer's slot — after the reviewed content and before the composer and the thread list, at the end of a notebook's cells, or first inside a scrolling Pierre diff — so it appears where the composer was.
+- **STN-4** — It carries one fixed message and no action. Do not add Retry, Dismiss or custom text; selecting again clears it.
+- **STN-5** — Do not restyle it or copy its classes. It follows the dense notice surface of [Notices](../../apps/web/src/styles/NOTIFICATIONS.md): neutral fill, warning border and the warning icon.
+- **STN-6** — It belongs to the renderers package: import it by relative path inside `packages/resource-renderers/src/renderers`. App code does not render it.
+
+### Examples
+
+#### Preview
+
+The visible notice.
+
+```tsx
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+export default function Preview() {
+	return <StaleComposerNotice visible />;
+}
+```
+
+#### File changed under the composer
+
+Comment on a line, then wait: the file changes on disk, the composer closes and the notice takes its place until you comment again.
+
+```tsx
+import { RiChatNewLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useEffect, useState } from "react";
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+export default function FileChanged() {
+	const t = useT();
+	const [version, setVersion] = useState(1);
+	const [composing, setComposing] = useState(false);
+	const [stale, setStale] = useState(false);
+	useEffect(() => {
+		if (!composing) return;
+		const timer = window.setTimeout(() => {
+			setVersion((value) => value + 1);
+			setComposing(false);
+			setStale(true);
+		}, 2500);
+		return () => window.clearTimeout(timer);
+	}, [composing]);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<pre className="tr-code-text text-text-default">{`const retries = ${version};`}</pre>
+			<Button
+				variant="outline"
+				size="s"
+				iconLeft={RiChatNewLine}
+				className="self-start"
+				onClick={() => {
+					setStale(false);
+					setComposing(true);
+				}}
+			>
+				{t("viewer.code.commentOnLine")}
+			</Button>
+			<StaleComposerNotice visible={stale} />
+			{composing ? <Textarea rows={2} placeholder={t("review.composer.placeholder")} /> : null}
+		</div>
+	);
+}
+```
+
+#### In the composer slot
+
+JSON, CSV and region surfaces render it right after the reviewed content, where the composer opens, and before any thread cards.
+
+```tsx
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+export default function ComposerSlot() {
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<pre className="tr-code-text text-text-default">
+				{'{\n  "name": "thinkrail",\n  "private": true\n}'}
+			</pre>
+			<StaleComposerNotice visible />
+		</div>
+	);
+}
+```
+
+#### Top of a scrolling diff
+
+The Pierre diff renders it as the first child of its scroller, so it sits above the hunks and scrolls with them.
+
+```tsx
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+const LINES = Array.from(
+	{ length: 12 },
+	(_, index) => `${index + 1}  const step${index + 1} = load(${index + 1});`,
+);
+
+export default function DiffTop() {
+	return (
+		<div className="h-128 w-full overflow-auto">
+			<StaleComposerNotice visible />
+			<pre className="tr-code-text text-text-default">{LINES.join("\n")}</pre>
+		</div>
+	);
+}
+```
+
+#### End of a notebook
+
+Notebook views and diffs render it after the last cell.
+
+```tsx
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+const CELLS = ["import pandas as pd", 'df = pd.read_csv("runs.csv")', "df.describe()"];
+
+export default function NotebookEnd() {
+	return (
+		<div className="flex w-full flex-col gap-8">
+			{CELLS.map((cell) => (
+				<section key={cell}>
+					<pre className="tr-code-text text-text-default">{cell}</pre>
+				</section>
+			))}
+			<StaleComposerNotice visible />
+		</div>
+	);
+}
+```
+
+#### Narrow column
+
+In a narrow side-by-side pane the message wraps beside the icon.
+
+```tsx
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+export default function Narrow() {
+	return (
+		<div className="w-[10rem]">
+			<StaleComposerNotice visible />
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `packages/resource-renderers/src/renderers/code/PierreDiff.tsx` | First child of the diff scroller, driven by `pending.stale`. |
+| `packages/resource-renderers/src/renderers/RegionReviewSurface.tsx` | Between the image or page region surface and its composer. |
+| `packages/resource-renderers/src/renderers/csv/View.tsx` | After the table, before the composer and the thread cards. |
+| `packages/resource-renderers/src/renderers/json/Diff.tsx` | The JSON diff's composer slot. |
+| `packages/resource-renderers/src/renderers/notebook/View.tsx` | After the last cell of a notebook. |
+
+## SettingsNotice
+
+The one inline notice inside a Settings page: a `rounded-sm` block on the control background with a severity icon, a line of text and an optional action row beneath it. It owns the surface, the icon per variant and its colour, the text type and the action row; the call site provides the variant, the message and at most one action, and places the notice in its group. How it relates to toasts and other notices is the [Notices](../../apps/web/src/styles/NOTIFICATIONS.md) pattern.
+
+```tsx
+import { SettingsNotice } from "@/panels/SettingsNotice";
+```
+
+### When to use
+
+- A lasting condition on a Settings page that explains why a section does not work as expected: the GitHub CLI is not connected, browser notifications are blocked or not yet allowed.
+- A section that cannot show its content yet, with the next step: open a project to manage its templates, add starter templates.
+- A short empty state inside a Settings group (`neutral`, often `hideIcon`).
+- One notice per problem in a list of issues — one per theme file that failed to load, one per theme fallback.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Toast | Reporting the result of an action, such as a rejected save. Settings toasts a rejected auto-save and keeps the authoritative value. |
+| SettingsRow and SettingsGroup | The text is a setting's description rather than a condition — put it in the row's or group's description. |
+| StaleComposerNotice | A condition in the chat composer, not in Settings. |
+| ConfirmDialog | The user must decide before something happens. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | A `div` with `data-variant` (and `data-testid` from `testId`): `flex items-start gap-8`, `rounded-sm`, `px-12 py-8` on `control-bg` for every variant. No border and no landmark role. |
+| Icon | A `shrink-0` span nudged `mt-2` to the first line, coloured by the variant (`text-muted` for `neutral`, `text-feedback-*` otherwise). It holds the variant's default glyph at `size-14`, or `icon`. Omitted with `hideIcon`. |
+| Text | The children in a `div` with `tr-text-ui` and `text-default`, inside a `flex min-w-0 flex-1 flex-col gap-4` column. A secondary line is the call site's own `tr-text-metadata text-text-muted` element. |
+| Action row | `action`, when given, in a `flex items-center gap-8` row under the text, aligned with its start. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `variant` | `"neutral" \| "info" \| "success" \| "warning" \| "error"` | — | Required. Picks the default glyph and its colour. The surface is the same for every variant. |
+| `children` | `ReactNode` | — | The message, set in `tr-text-ui` / `text-default`. A string, or a `<p>` per line when there is a muted second line; inline code through `<T components>` with `tr-code-text`. |
+| `action` | `ReactNode` | — | One control under the text: a `Button variant="outline" size="m"`, or a disclosure for instructions. `null` renders no row. |
+| `icon` | `ReactNode` | — | Replaces the default glyph for a meaning more specific than the severity (`RiMagicLine` on the starter-templates notice). Size it `size-14`; the colour still comes from `variant`. |
+| `hideIcon` | `boolean` | `false` | Drops the icon so the text starts at the padding — for a `neutral` empty state. |
+| `testId` | `string` | — | Sets `data-testid` on the container. Every production notice sets one. |
+| `className` | `string` | — | Placement only — margins or width. The page's separator and padding belong on a wrapper, as the call sites do. |
+
+### Variants
+
+| Variant | Use it for |
+| --- | --- |
+| `neutral` | An empty state with no severity — no project templates yet. Muted icon; usually with `hideIcon`. |
+| `info` | A condition the user can resolve or should know about: permission not granted yet, open a project first, no global templates yet. |
+| `success` | A confirmed good state. No production call site yet. |
+| `warning` | A setting that is degraded or not working as configured: GitHub CLI not connected, notifications blocked, a theme fallback, a theme file that failed to load. |
+| `error` | A setting that failed outright. No production call site yet; theme-file problems use `warning`. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Default | Rendered. | Icon, text and the optional action row on `control-bg`. |
+| With action | `action`. | A second row under the text, at the text's start; the action's own states (loading, disabled) apply. |
+| Custom icon | `icon`. | The given glyph in the variant's colour. |
+| No icon | `hideIcon`. | Text and action start at the left padding. |
+| Hover, focus, disabled | — | No distinct treatment: the notice is not interactive; only its action is. |
+
+### Accessibility
+
+- A plain `div` with no role and no live region: it is read in page order, and appearing or changing is not announced. Say what matters in the text.
+- The glyph is decorative and carries no label; the words must state the condition ("Notifications are blocked by your browser"), never just the icon.
+- The action is an ordinary Button (or disclosure button) in the tab order after the text; give it a label that names the fix ("Allow in browser", "Refresh").
+- Use the native semantics of the children — a `<p>` per line, `<code>` for commands and paths.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Skips the notice itself and reaches its action. |
+| `Enter / Space` | Activates the action. |
+
+### Usage rules
+
+- **SNT-1** — Use SettingsNotice for every inline status inside Settings — never a hand-made tinted box. Outside Settings use the surface's own notice; for an action's result use a Toast.
+- **SNT-2** — Pick the variant by meaning: `warning` for something configured that does not work, `info` for a condition the user can resolve, `neutral` for an empty state. Never colour the text or the surface to signal severity.
+- **SNT-3** — At most one action, passed through `action`: a `Button variant="outline" size="m"` (with `loading`/`spinIcon` for a refresh). Never a filled or toned button, and never place the action beside the text yourself.
+- **SNT-4** — Keep the text short and from locale keys. A second line is `tr-text-metadata text-text-muted`; commands and paths go through `<T components>` as `tr-code-text`.
+- **SNT-5** — Replace the icon only with a domain glyph at `size-14`; drop it (`hideIcon`) only on a `neutral` empty state.
+- **SNT-6** — The page places the notice: a wrapper adds the separator and padding (`border-b py-12`), and several notices stack in `flex flex-col gap-4`, one per item, each with a `testId`.
+
+### Examples
+
+#### Basic
+
+A warning with a command in the text and a Refresh action that spins in place — Local GitHub when the CLI is not signed in.
+
+```tsx
+import { RiRefreshLine } from "@remixicon/react";
+import { T, useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function Preview() {
+	const t = useT();
+	const [refreshing, setRefreshing] = useState(false);
+	const refresh = () => {
+		setRefreshing(true);
+		setTimeout(() => setRefreshing(false), 1500);
+	};
+	return (
+		<SettingsNotice
+			variant="warning"
+			action={
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={RiRefreshLine}
+					loading={refreshing}
+					spinIcon
+					onClick={refresh}
+				>
+					{t("settings.github.refresh")}
+				</Button>
+			}
+		>
+			<p>
+				<T
+					i18nKey="settings.github.notConnected"
+					components={[<code key="command" className="tr-code-text" />]}
+				/>
+			</p>
+		</SettingsNotice>
+	);
+}
+```
+
+#### Variants
+
+Every variant with its default glyph. Only the icon changes colour.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function Variants() {
+	const t = useT();
+	return (
+		<div className="flex w-full flex-col gap-4">
+			<SettingsNotice variant="neutral">{t("settings.templates.projectEmpty")}</SettingsNotice>
+			<SettingsNotice variant="info">{t("settings.notifications.notGranted")}</SettingsNotice>
+			<SettingsNotice variant="success">{t("settings.github.connected")}</SettingsNotice>
+			<SettingsNotice variant="warning">{t("settings.notifications.blocked")}</SettingsNotice>
+			<SettingsNotice variant="error">
+				{t("settings.appearance.custom.error.unreadable")}
+			</SettingsNotice>
+		</div>
+	);
+}
+```
+
+#### With an action
+
+An info notice whose one outline action fixes the condition — notification permission not granted yet.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function Permission() {
+	const t = useT();
+	return (
+		<SettingsNotice
+			variant="info"
+			testId="notifications-permission-prompt"
+			action={
+				<Button variant="outline" size="m" onClick={() => {}}>
+					{t("settings.notifications.allowInBrowser")}
+				</Button>
+			}
+		>
+			{t("settings.notifications.notGranted")}
+		</SettingsNotice>
+	);
+}
+```
+
+#### Two lines
+
+A message and a muted second line with an inline path — no project open in Templates.
+
+```tsx
+import { T, useT } from "@thinkrail/locales/react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function TwoLines() {
+	const t = useT();
+	return (
+		<SettingsNotice variant="info" testId="project-templates-unavailable">
+			<p>{t("settings.templates.openProject")}</p>
+			<p className="tr-text-metadata text-text-muted">
+				<T
+					i18nKey="settings.templates.projectLocation"
+					components={[<code key="path" className="tr-code-text" />]}
+				/>
+			</p>
+		</SettingsNotice>
+	);
+}
+```
+
+#### Custom icon
+
+A domain glyph instead of the info icon and an action that fills the empty state — no global templates yet.
+
+```tsx
+import { RiMagicLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function CustomIcon() {
+	const t = useT();
+	const [adding, setAdding] = useState(false);
+	return (
+		<SettingsNotice
+			variant="info"
+			icon={<RiMagicLine className="size-14" />}
+			testId="global-templates-empty"
+			action={
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={RiMagicLine}
+					disabled={adding}
+					onClick={() => {
+						setAdding(true);
+						setTimeout(() => setAdding(false), 1500);
+					}}
+				>
+					{t("settings.templates.addStarters")}
+				</Button>
+			}
+		>
+			<p>{t("settings.templates.globalEmpty")}</p>
+			<p className="tr-text-metadata text-text-muted">
+				{t("settings.templates.globalEmptyDescription")}
+			</p>
+		</SettingsNotice>
+	);
+}
+```
+
+#### Empty state without an icon
+
+`neutral` with `hideIcon` for an empty list.
+
+```tsx
+import { T, useT } from "@thinkrail/locales/react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function HideIcon() {
+	const t = useT();
+	return (
+		<SettingsNotice variant="neutral" hideIcon testId="project-templates-empty">
+			<p>{t("settings.templates.projectEmpty")}</p>
+			<p className="tr-text-metadata text-text-muted">
+				<T
+					i18nKey="settings.templates.projectEmptyLocation"
+					components={[<code key="path" className="tr-code-text" />]}
+				/>
+			</p>
+		</SettingsNotice>
+	);
+}
+```
+
+#### One notice per issue
+
+Theme files that failed to load: a stack of warnings, each naming the file, the problem and the detail.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function IssueList() {
+	const t = useT();
+	const issues = [
+		{
+			fileName: "midnight.json",
+			label: t("settings.appearance.custom.error.invalidJson"),
+			detail: "Unexpected token } in JSON at position 412",
+		},
+		{
+			fileName: "solarized-dusk.json",
+			label: t("settings.appearance.custom.error.invalidTheme"),
+			detail: null,
+		},
+	];
+	return (
+		<div className="flex w-full flex-col gap-4">
+			{issues.map((issue) => (
+				<SettingsNotice
+					key={issue.fileName}
+					variant="warning"
+					testId={`custom-theme-issue-${issue.fileName}`}
+				>
+					<span className="flex flex-col gap-4">
+						<span className="tr-code-text">{issue.fileName}</span>
+						<span>{issue.label}</span>
+						{issue.detail ? (
+							<span className="break-words text-text-muted">{issue.detail}</span>
+						) : null}
+					</span>
+				</SettingsNotice>
+			))}
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/GithubSettings.tsx` | Not connected: `warning` with a `gh auth login` command and the Refresh button as `action`. |
+| `apps/web/src/panels/NotificationsSettings.tsx` | Permission not granted (`info` + Allow in browser) and blocked or unsupported (`warning` + How to enable disclosure). |
+| `apps/web/src/panels/TemplatesSettings.tsx` | No project (`info`, two lines), no project templates (`neutral` + `hideIcon`), no global templates (custom icon + Add starter templates). |
+| `apps/web/src/panels/CustomThemesSettings.tsx` | One `warning` per theme file that failed to load. |
+| `apps/web/src/panels/AppearanceSettings.tsx` | One `warning` per configured theme that fell back to another. |
+
+## Toast
+
+A transient message in the corner of the window: Radix Toast with ThinkRail's viewport, a neutral elevated card whose border carries the severity, title and description type, and a Dismiss icon button. The primitives own the live-region announcement, the timers (paused on hover and focus), swipe and Escape dismissal, and the F8 landmark. The app composes them once in `panels/Toaster` — which adds the severity icon, the layout, the action footer and each toast's lifetime — and features raise toasts through the store's `toast.*` / `pushToast`. The shared look of toasts and inline notices is the [Notices](../../apps/web/src/styles/NOTIFICATIONS.md) pattern.
+
+```tsx
+import { Toast, ToastAction, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@thinkrail/ui/toast";
+```
+
+### When to use
+
+- Reporting the result of something the user just did when the result is not otherwise visible: Plan copied, Review started, Check All started.
+- A failed background or fire-and-forget call with no better place to land — no open dialog, form or chat turn to show it inline.
+- A receipt with one short follow-up: Undo after a revert, Show after workspaces moved to Settled.
+- From a feature: call `toast.success|info|warning|error(message, title?)` or `pushToast({ …, action, durationMs })` from `@/store`. Compose the parts yourself only inside `panels/Toaster`.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SettingsNotice | A lasting condition on a Settings page — a missing permission, a disconnected CLI, a theme file that failed to load. |
+| StaleComposerNotice | A condition that belongs to the chat composer and stays until the user acts on it. |
+| ConfirmDialog | The user must decide before anything happens. A toast never asks a question. |
+| Inline error | The error can be fixed in place in a form or dialog that stays open — show it there (the template editor's `template-error`). A rejection with nowhere to land, such as a failed workspace create, still toasts. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| ToastProvider | Radix `Provider`, unchanged. Holds the one viewport, the default `duration`, `swipeDirection` and the announcement `label`. Toaster sets `swipeDirection="right"`. |
+| ToastViewport | Radix `Viewport`: an `ol` inside a `role="region"` landmark labelled `common.notificationsRegion` ("Notifications (F8)"). Fixed at `z-[100]`: a full-width column at the bottom of the window, from `sm` a fixed-width column (`sm:w-[380px]`) in the bottom-right corner, toasts stacked with `gap-8` inside `p-12`. It takes no pointer events while empty. |
+| Toast | Radix `Root`, an `li` portalled into the viewport: a `rounded-sm` card on `container-elevated-bg` with a border in `feedback-*-muted`, the medium shadow, `p-12`, `text-default`, children stacked in a column. Slides in on open, out on close and follows a horizontal swipe through `data-state` and `data-swipe`. |
+| Content row | Call-site markup (Toaster): `flex items-start gap-8` holding the severity icon, the text column (`flex min-w-0 flex-1 flex-col gap-4`) and ToastClose. |
+| Severity icon | Call-site markup: one Line glyph per variant, `mt-2 size-14 shrink-0`, `text-feedback-*`, `aria-hidden`. The primitive renders no icon. |
+| ToastTitle | Radix `Title`, a `div` in `tr-title-compact`. Optional. |
+| ToastDescription | Radix `Description`, a `div` in `tr-text-ui` and `text-muted` that breaks long tokens (`[overflow-wrap:anywhere]`). Without a title Toaster sets `text-text-default` so the message reads as the main line. |
+| ToastClose | Radix `Close` with `asChild` around an IconButton (ghost, M, `RiCloseLine`, label `common.dismiss`) pushed right with `ml-auto shrink-0`. `className` reaches the IconButton; children are ignored. |
+| ToastAction | Radix `Action`, unstyled: use `asChild` on a Button (outline, M) in a `mt-12 flex justify-end` footer. Activating it also closes the toast. |
+| toastVariants | The `cva` recipe behind Toast (surface, animation, swipe and the variant border), exported for completeness. Call sites use `<Toast variant>`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `variant` | `"info" \| "success" \| "warning" \| "error"` | `"info"` | `Toast`. The severity: sets the border colour only. Pick the matching icon and colour it with the same `feedback-*` role. |
+| `label` | `string` | `t("common.notificationsRegion")` | `ToastViewport`. The landmark name; ThinkRail localizes Radix's English default. `{hotkey}` is replaced with the hotkey (F8). |
+
+Radix props in common use (passed through unchanged):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `duration` | `number` | `5000` | `ToastProvider` default and per-`Toast` override, in ms. Toaster passes `durationMs ?? (error ? Infinity : 5000)`; `Number.POSITIVE_INFINITY` keeps a toast until it is dismissed. |
+| `open` | `boolean` | — | `Toast`. Controlled open state. Toaster leaves it uncontrolled (open on mount) and removes the item from the queue when it closes. |
+| `defaultOpen` | `boolean` | `true` | `Toast`. An uncontrolled toast opens as soon as it mounts. |
+| `onOpenChange` | `(open: boolean) => void` | — | `Toast`. Called with `false` on timeout, Close, the action, Escape and a completed swipe. Remove the toast from its queue here (`dismissToast(id)`). |
+| `type` | `"foreground" \| "background"` | `"foreground"` | `Toast`. `foreground` announces assertively, `background` politely. Toaster uses the default. |
+| `onPause` | `() => void` | — | `Toast`. The timer paused: pointer over the viewport, focus inside it, or the window lost focus. |
+| `onResume` | `() => void` | — | `Toast`. The timer resumed with the remaining time. |
+| `swipeDirection` | `"up" \| "down" \| "left" \| "right"` | `"right"` | `ToastProvider`. Keep `right`: the toast's swipe classes translate horizontally only. |
+| `swipeThreshold` | `number` | `50` | `ToastProvider`. Pixels a swipe must travel before it dismisses. |
+| `hotkey` | `string[]` | `["F8"]` | `ToastViewport`. The keys that move focus to the viewport. |
+| `altText` | `string` | — | `ToastAction`. Required and non-empty (Radix renders nothing otherwise). Announced instead of the action's own text; Toaster passes the action label. |
+| `asChild` | `boolean` | — | `ToastAction`. Merge onto the child Button. |
+| `className` | `string` | — | Placement only. On ToastDescription the one sanctioned override is `text-text-default` when there is no title. |
+
+### Variants
+
+| Variant | Use it for |
+| --- | --- |
+| `info` | Neutral news and no-ops: Check All is already running, nothing to review, a project was closed, workspaces moved to Settled. The default. |
+| `success` | A finished action the user started: plan copied, review started, a revert with Undo. |
+| `warning` | Something worked only partly or needs attention soon, but nothing failed. Raised through `toast.warning`. |
+| `error` | A failed action with no better place to land — no form or chat turn to show it inline. Persists until dismissed. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Entering | A Toast mounts (`data-state="open"`). | The `toast-in` keyframes: it fades in while rising into place. |
+| Closing | Timeout, Close, the action or Escape (`data-state="closed"`). | The `toast-out` keyframes: it fades out while sinking, then unmounts. |
+| Paused | Pointer over the viewport, focus inside it, or the window is not focused. | No distinct treatment; every timer in the viewport stops and resumes on leave. |
+| Persistent | `duration={Number.POSITIVE_INFINITY}` (every error toast). | No distinct treatment; it stays until Close, Escape or a swipe. |
+| Swiping | Drag the toast to the right (`data-swipe`). | `move`: it follows the pointer with transitions off. `cancel` (under the threshold): it snaps back. `end`: it plays `toast-out` and closes. |
+| Focused toast | Tab into the viewport, or F8 then Tab. | No ThinkRail focus style on the card; the browser's default focus outline. |
+| Close hover / focus | Pointer over Dismiss, or Tab to it. | The IconButton's ghost hover and focus ring, and its `common.dismiss` tooltip above the viewport. |
+| Empty viewport | No open toast. | Nothing visible; the landmark stays in the page and takes no pointer events. |
+
+### Accessibility
+
+- ToastViewport is a `role="region"` landmark named by `common.notificationsRegion` ("Notifications (F8)"), so it can be found in the landmark list and reached with F8.
+- Each new toast is announced through a visually hidden `role="status"` live region — assertive for `type="foreground"` (the default), polite for `background` — with the title and description text, prefixed by the ToastProvider `label`.
+- ToastClose and ToastAction are excluded from that announcement; the action is announced as its `altText` instead, so make it say what the action does.
+- Every toast is focusable (`tabIndex=0`). Closing a toast that holds focus moves focus to the viewport rather than losing it.
+- Timers pause while the pointer is over the viewport, while focus is inside it and while the window is in the background, so a toast is not removed while someone is reading or reaching for it.
+- Dismiss is an IconButton labelled `common.dismiss`; its tooltip stacks above the viewport. The severity icon is decorative (`aria-hidden`) — the words must carry the meaning.
+
+| Keys | Action |
+| --- | --- |
+| `F8` | Moves focus to the toast viewport. |
+| `Tab / Shift+Tab` | From the viewport: walks the toasts newest first — each card, then its controls in DOM order (Dismiss, then the action); after the last one focus continues into the page. |
+| `Enter / Space` | On the action or Dismiss: runs it and closes the toast. |
+| `Escape` | With focus on a toast or inside it: closes that toast and moves focus to the viewport. Escape elsewhere does not close toasts. |
+
+### Usage rules
+
+- **TST-1** — Raise toasts with `toast.success|info|warning|error` or `pushToast` from `@/store`. Never mount another ToastProvider or compose Toast parts in a feature: `panels/Toaster`, mounted once by Shell, is the only composer.
+- **TST-2** — Toast an outcome, not a question. A decision is a ConfirmDialog; an error the user can fix in a still-open form stays inline (the template editor's `template-error`); a lasting condition on a page is an inline notice.
+- **TST-3** — Severity is `variant` plus its one Line glyph in the matching `text-feedback-*`. Never tint the fill, add a stripe or colour the text — see [Notices](../../apps/web/src/styles/NOTIFICATIONS.md).
+- **TST-4** — Errors persist until dismissed; every other toast auto-dismisses. A toast with an action gets a bounded `durationMs` long enough to reach it (Undo 8 s, Settled 15 s).
+- **TST-5** — At most one action: `ToastAction altText asChild` around `Button variant="outline" size="m"` in a `mt-12 flex justify-end` footer. Never a filled button, never a second button.
+- **TST-6** — Write a short title and one sentence, or the sentence alone. Without a title the description takes `text-text-default`. Both come from locale keys; dynamic detail (an error text, a file name) goes in the message.
+- **TST-7** — Keep ToastClose on every toast, including ones with an action. `className` on the parts is placement only.
+
+### Examples
+
+#### Basic
+
+A success toast with a title, a message and Dismiss, raised again by Copy. The library places the viewport in the card (`className="static p-0 sm:w-full"`) and keeps the toast open; in the app it sits in the corner and leaves after five seconds.
+
+```tsx
+import { RiCheckboxCircleLine, RiFileCopyLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Toast,
+	ToastClose,
+	ToastDescription,
+	ToastProvider,
+	ToastTitle,
+	ToastViewport,
+} from "@thinkrail/ui/toast";
+import { useState } from "react";
+
+export default function Preview() {
+	const t = useT();
+	const [open, setOpen] = useState(true);
+	return (
+		<ToastProvider>
+			<div className="flex w-full flex-col items-start gap-8">
+				<Button variant="outline" size="m" iconLeft={RiFileCopyLine} onClick={() => setOpen(true)}>
+					{t("common.copy")}
+				</Button>
+				<Toast
+					variant="success"
+					open={open}
+					onOpenChange={setOpen}
+					duration={Number.POSITIVE_INFINITY}
+				>
+					<div className="flex items-start gap-8">
+						<RiCheckboxCircleLine
+							className="mt-2 size-14 shrink-0 text-feedback-success"
+							aria-hidden
+						/>
+						<div className="flex min-w-0 flex-1 flex-col gap-4">
+							<ToastTitle>{t("plan.copied.title")}</ToastTitle>
+							<ToastDescription>{t("plan.copied.message")}</ToastDescription>
+						</div>
+						<ToastClose />
+					</div>
+				</Toast>
+				<ToastViewport className="static p-0 sm:w-full" />
+			</div>
+		</ToastProvider>
+	);
+}
+```
+
+#### Severities
+
+Each `variant` with its icon. Only the border and the icon change colour; the card and the text stay neutral.
+
+```tsx
+import {
+	RiAlertLine,
+	RiCheckboxCircleLine,
+	RiErrorWarningLine,
+	RiInformationLine,
+} from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	Toast,
+	ToastClose,
+	ToastDescription,
+	ToastProvider,
+	ToastTitle,
+	ToastViewport,
+} from "@thinkrail/ui/toast";
+import { cn } from "@thinkrail/ui/utils";
+
+export default function Severities() {
+	const t = useT();
+	const toasts = [
+		{
+			variant: "info",
+			Icon: RiInformationLine,
+			iconClass: "text-feedback-info",
+			title: t("plan.checkAll.runningTitle"),
+			message: t("plan.checkAll.runningMessage"),
+		},
+		{
+			variant: "success",
+			Icon: RiCheckboxCircleLine,
+			iconClass: "text-feedback-success",
+			title: t("plan.review.startedTitle"),
+			message: t("plan.review.startedMessage"),
+		},
+		{
+			variant: "warning",
+			Icon: RiAlertLine,
+			iconClass: "text-feedback-warning",
+			title: t("updates.native.disabled.title"),
+			message: t("updates.native.disabled.detail"),
+		},
+		{
+			variant: "error",
+			Icon: RiErrorWarningLine,
+			iconClass: "text-feedback-error",
+			title: t("plan.copyFailed.title"),
+			message: t("plan.copyFailed.message"),
+		},
+	] as const;
+	return (
+		<ToastProvider>
+			{toasts.map(({ variant, Icon, iconClass, title, message }) => (
+				<Toast key={variant} variant={variant} duration={Number.POSITIVE_INFINITY}>
+					<div className="flex items-start gap-8">
+						<Icon className={cn("mt-2 size-14 shrink-0", iconClass)} aria-hidden />
+						<div className="flex min-w-0 flex-1 flex-col gap-4">
+							<ToastTitle>{title}</ToastTitle>
+							<ToastDescription>{message}</ToastDescription>
+						</div>
+						<ToastClose />
+					</div>
+				</Toast>
+			))}
+			<ToastViewport className="static" />
+		</ToastProvider>
+	);
+}
+```
+
+#### Message only
+
+No title: the description takes `text-text-default` and carries the toast alone, as `toast.info(message)` renders.
+
+```tsx
+import { RiInformationLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	Toast,
+	ToastClose,
+	ToastDescription,
+	ToastProvider,
+	ToastViewport,
+} from "@thinkrail/ui/toast";
+
+export default function MessageOnly() {
+	const t = useT();
+	return (
+		<ToastProvider>
+			<Toast variant="info" duration={Number.POSITIVE_INFINITY}>
+				<div className="flex items-start gap-8">
+					<RiInformationLine className="mt-2 size-14 shrink-0 text-feedback-info" aria-hidden />
+					<div className="flex min-w-0 flex-1 flex-col gap-4">
+						<ToastDescription className="text-text-default">
+							{t("panels.diffSurface.staleView")}
+						</ToastDescription>
+					</div>
+					<ToastClose />
+				</div>
+			</Toast>
+			<ToastViewport className="static" />
+		</ToastProvider>
+	);
+}
+```
+
+#### Undo receipt
+
+A success receipt with one Undo action in the footer and the 8-second lifetime `pushToast({ action, durationMs: 8000 })` gives it after a revert. Revert file raises it again.
+
+```tsx
+import { RiArrowGoBackLine, RiCheckboxCircleLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Toast,
+	ToastAction,
+	ToastClose,
+	ToastDescription,
+	ToastProvider,
+	ToastViewport,
+} from "@thinkrail/ui/toast";
+import { useState } from "react";
+
+export default function Undo() {
+	const t = useT();
+	const [open, setOpen] = useState(true);
+	return (
+		<ToastProvider>
+			<div className="flex w-full flex-col items-start gap-8">
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={RiArrowGoBackLine}
+					onClick={() => setOpen(true)}
+				>
+					{t("panels.diffPane.revertFile")}
+				</Button>
+				<Toast variant="success" open={open} onOpenChange={setOpen} duration={8000}>
+					<div className="flex items-start gap-8">
+						<RiCheckboxCircleLine
+							className="mt-2 size-14 shrink-0 text-feedback-success"
+							aria-hidden
+						/>
+						<div className="flex min-w-0 flex-1 flex-col gap-4">
+							<ToastDescription className="text-text-default">
+								{t("panels.diffSurface.revertedFile", { file: "src/app.ts" })}
+							</ToastDescription>
+						</div>
+						<ToastClose />
+					</div>
+					<div className="mt-12 flex justify-end">
+						<ToastAction altText={t("panels.diffSurface.undo")} asChild>
+							<Button variant="outline" size="m" onClick={() => {}}>
+								{t("panels.diffSurface.undo")}
+							</Button>
+						</ToastAction>
+					</div>
+				</Toast>
+				<ToastViewport className="static" />
+			</div>
+		</ToastProvider>
+	);
+}
+```
+
+#### Long error
+
+An error title with a long, unbroken error text: the description wraps anywhere instead of widening the card. Errors never time out.
+
+```tsx
+import { RiErrorWarningLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	Toast,
+	ToastClose,
+	ToastDescription,
+	ToastProvider,
+	ToastTitle,
+	ToastViewport,
+} from "@thinkrail/ui/toast";
+
+const detail =
+	"ENOENT: no such file or directory, open '/Users/me/projects/thinkrail/.pi/worktrees/feature-rework-the-review-pipeline/.cache/review-session-0f3c9a.json'";
+
+export default function LongError() {
+	const t = useT();
+	return (
+		<ToastProvider>
+			<Toast variant="error" duration={Number.POSITIVE_INFINITY}>
+				<div className="flex items-start gap-8">
+					<RiErrorWarningLine className="mt-2 size-14 shrink-0 text-feedback-error" aria-hidden />
+					<div className="flex min-w-0 flex-1 flex-col gap-4">
+						<ToastTitle>{t("plan.review.startFailed")}</ToastTitle>
+						<ToastDescription>{detail}</ToastDescription>
+					</div>
+					<ToastClose />
+				</div>
+			</Toast>
+			<ToastViewport className="static" />
+		</ToastProvider>
+	);
+}
+```
+
+#### Raised from an action
+
+The real fixed viewport in the bottom-right corner, fed by a local queue like Toaster's: toasts stack newest last, leave after five seconds (the receipt after eight, errors never), pause while hovered or focused, and swipe right to dismiss.
+
+```tsx
+import {
+	RiAlertLine,
+	RiArrowGoBackLine,
+	RiCheckboxCircleLine,
+	RiErrorWarningLine,
+	RiFileCopyLine,
+	RiInformationLine,
+	RiPlayLine,
+} from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Toast,
+	ToastAction,
+	ToastClose,
+	ToastDescription,
+	ToastProvider,
+	ToastTitle,
+	ToastViewport,
+} from "@thinkrail/ui/toast";
+import { cn } from "@thinkrail/ui/utils";
+import { useRef, useState } from "react";
+
+type Variant = "info" | "success" | "warning" | "error";
+
+interface Item {
+	id: number;
+	variant: Variant;
+	message: string;
+	title?: string;
+	durationMs?: number;
+	action?: { label: string; onClick: () => void };
+}
+
+const ICONS: Record<Variant, { Icon: typeof RiAlertLine; className: string }> = {
+	info: { Icon: RiInformationLine, className: "text-feedback-info" },
+	success: { Icon: RiCheckboxCircleLine, className: "text-feedback-success" },
+	warning: { Icon: RiAlertLine, className: "text-feedback-warning" },
+	error: { Icon: RiErrorWarningLine, className: "text-feedback-error" },
+};
+
+export default function Queue() {
+	const t = useT();
+	const [toasts, setToasts] = useState<Item[]>([]);
+	const nextId = useRef(0);
+	const push = (item: Omit<Item, "id">) => {
+		nextId.current += 1;
+		setToasts((list) => [...list, { ...item, id: nextId.current }]);
+	};
+	const dismiss = (id: number) => setToasts((list) => list.filter((item) => item.id !== id));
+	return (
+		<ToastProvider swipeDirection="right">
+			<div className="flex flex-wrap gap-8">
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={RiFileCopyLine}
+					onClick={() =>
+						push({
+							variant: "success",
+							title: t("plan.copied.title"),
+							message: t("plan.copied.message"),
+						})
+					}
+				>
+					{t("common.copy")}
+				</Button>
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={RiArrowGoBackLine}
+					onClick={() =>
+						push({
+							variant: "success",
+							message: t("panels.diffSurface.revertedFile", { file: "src/app.ts" }),
+							durationMs: 8000,
+							action: { label: t("panels.diffSurface.undo"), onClick: () => {} },
+						})
+					}
+				>
+					{t("panels.diffPane.revertFile")}
+				</Button>
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={RiPlayLine}
+					onClick={() =>
+						push({
+							variant: "error",
+							title: t("plan.review.startFailed"),
+							message: "The host is not connected.",
+						})
+					}
+				>
+					{t("plan.item.checkIt")}
+				</Button>
+			</div>
+			{toasts.map((item) => {
+				const { Icon, className } = ICONS[item.variant];
+				return (
+					<Toast
+						key={item.id}
+						variant={item.variant}
+						duration={
+							item.durationMs ?? (item.variant === "error" ? Number.POSITIVE_INFINITY : 5000)
+						}
+						onOpenChange={(open) => {
+							if (!open) dismiss(item.id);
+						}}
+					>
+						<div className="flex items-start gap-8">
+							<Icon className={cn("mt-2 size-14 shrink-0", className)} aria-hidden />
+							<div className="flex min-w-0 flex-1 flex-col gap-4">
+								{item.title ? <ToastTitle>{item.title}</ToastTitle> : null}
+								<ToastDescription className={item.title ? undefined : "text-text-default"}>
+									{item.message}
+								</ToastDescription>
+							</div>
+							<ToastClose />
+						</div>
+						{item.action ? (
+							<div className="mt-12 flex justify-end">
+								<ToastAction altText={item.action.label} asChild>
+									<Button variant="outline" size="m" onClick={item.action.onClick}>
+										{item.action.label}
+									</Button>
+								</ToastAction>
+							</div>
+						) : null}
+					</Toast>
+				);
+			})}
+			<ToastViewport />
+		</ToastProvider>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/Toaster.tsx` | The one composer: severity icon, title and description, Dismiss, the action footer, `swipeDirection="right"` and every lifetime. |
+| `apps/web/src/shell/Shell.tsx` | Mounts `<Toaster />` once above both the workbench and Project Home. |
+| `apps/web/src/store/appStore.ts` | The toast queue: `pushToast` (coalescing, five-toast cap) and the `toast.*` helpers features call. |
+| `packages/ui/labels.test.tsx` | The viewport's landmark label follows the interface language. |
+
+## ErrorBoundary
+
+The app's React error boundary: when a region throws while rendering or loading a lazy chunk, it replaces that region with a themed, self-contained fallback instead of letting the crash blank the whole app. It owns the fallback, the retry, the reload for a stale chunk, the console log and the hand-off to the installed reporter. The call site provides the region's translated `label`, a stable `reportId` and the `resetKeys` that identify the subtree.
+
+```tsx
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+```
+
+### When to use
+
+- Around every independently mounted region — a workbench tab body, a tool body, a rail pane — so one failing panel degrades on its own.
+- Once at the root (`main.tsx`) as the last resort, so a crash that escapes every region shows a recoverable screen rather than an empty page.
+- Around a `Suspense` that loads a lazy chunk (Monaco, xterm, the chat view), so a failed `import()` is caught and steered to a reload.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| LoadingRegion and SkeletonRows | The region is waiting for data, not broken; that is the boundary's `Suspense` fallback, not its error fallback. |
+| SettingsNotice | An expected, recoverable failure inside a settings surface (a list that failed to load, a provider that cannot connect); render it as a state, do not throw. |
+| Toast | An action failed after a click or a request; event handlers and promises never reach a boundary. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Boundary | A class component (`getDerivedStateFromError`). Without an error it renders `children` as is, with no wrapper element. |
+| Fallback container | `role="alert"`, `data-testid="error-boundary-fallback"`: a centred column that fills the region (`h-full`, `min-h-0`, `p-16`, `gap-8`) and scrolls (`overflow-auto`) when the region is too small. |
+| Icon | `RiAlertLine` at `size-24` in `text-feedback-error`. |
+| Title | `tr-title-compact`, `text-default`: “The {label} panel hit an error” (`components.errorBoundary.panelTitle`) with a `label`, otherwise “Something went wrong” (`components.errorBoundary.title`). |
+| Message | `tr-text-metadata`, `text-muted`, capped at `max-w-[28rem]`: the error's own message, `components.errorBoundary.unexpected` when it is empty, or `components.errorBoundary.chunkError` for a chunk load error. |
+| Action | One Button, `outline` at `m`: **Try again** (`RiArrowGoBackLine`, `data-testid="error-retry"`) clears the error and remounts the children; for a chunk load error **Reload page** (`RiRefreshLine`, `data-testid="error-reload"`) calls `window.location.reload()`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `children` | `ReactNode` | — | The protected region. It is unmounted while the fallback shows, so its local state is lost on recovery. |
+| `label` | `string` | — | The region's translated, lowercase name (`t("shell.workbench.panel.editor")`). It is interpolated into the fallback title and the console log; it never reaches the reporter. |
+| `reportId` | `string` | — | A stable, untranslated id (`"editor"`, `"chat"`, `"plan_rail"`) passed to the installed reporter with the error. |
+| `resetKeys` | `readonly unknown[]` | — | The subtree's identity (`[workspaceId, tab.id]`). When the boundary holds an error and any value changes (shallow compare), it resets and renders the children again. |
+
+Module exports:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `isChunkLoadError` | `(error: unknown) => boolean` | — | True when the message reads as a failed dynamic import: a stale or unreachable Vite chunk, Safari's “Importing a module script failed”, or Vite's outdated optimised dependency. The boundary uses it to choose Reload page over Try again. |
+| `setErrorBoundaryReporter` | `(reporter: ((error: Error, reportId: string \| undefined) => void) \| null) => void` | — | Installs the one module-wide reporter every boundary calls from `componentDidCatch`; `null` removes it. `main.tsx` wires it to the transport's client error reports. A reporter that throws is ignored. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Healthy | No render error below the boundary. | The children, untouched; the boundary adds no element. |
+| Render error | A child throws while rendering, or a lazy component rejects. | The fallback fills the region: error icon, title, the error message and an outline Try again. The crash is logged to the console and handed to the reporter. |
+| Render error without a label | No `label`. | Same fallback with the generic title “Something went wrong”. |
+| Empty message | The thrown error has an empty `message`. | The message line reads “An unexpected error occurred while rendering this view.” |
+| Chunk load error | `isChunkLoadError(error)` is true (a failed `import()`). | The message explains the stale or unreachable resource and the action is Reload page instead of Try again. |
+| Recovered | Try again, or a change in `resetKeys` while the error shows. | The children mount again from scratch; if they throw again, the fallback returns. |
+| Hover, focus, disabled | — | No distinct treatment of its own; the action is a Button with Button's states. |
+
+### Accessibility
+
+- The fallback has `role="alert"`, so assistive technology announces the title and message when a region fails.
+- The action is a native `<button>` named by its label (Try again or Reload page); the alert icon has no accessible name of its own.
+- The boundary does not move focus. Focus inside the crashed subtree is lost with it; the user reaches the action with Tab.
+- The fallback text comes from locale keys; `label` must be translated too, because it is read inside the title.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from the fallback's action. |
+| `Enter / Space` | Activates Try again (remounts the region) or Reload page (reloads the app). |
+
+### Usage rules
+
+- **ERB-1** — Give every independently mounted region its own boundary, plus the one root wrap in `main.tsx`. Where boundaries go is owned by the shell; panels do not wrap themselves, and a boundary is not for a small leaf control — the fallback fills its region.
+- **ERB-2** — Pass `label` as a translated region noun from a locale key (`shell.workbench.panel.*`) and `reportId` as a stable, untranslated id. Reports group by `reportId`, never by the displayed `label`.
+- **ERB-3** — Set `resetKeys` to the subtree's identity — `[workspaceId, tab.id]` — so switching workspace or tab recovers without a click. Do not put values that change on every render in it.
+- **ERB-4** — Put the `Suspense` for a lazy chunk inside the boundary, with the region's loading placeholder as its fallback, so a failed `import()` is caught and offered a reload.
+- **ERB-5** — A boundary catches render and lazy-load errors only. Failures in event handlers, timers and promises (`transport.request`) never reach it; show them as an error turn, a notice or a Toast, and never throw from a handler to trigger the fallback.
+- **ERB-6** — Report crashes only through the one reporter installed with `setErrorBoundaryReporter`; do not call the transport or a store from a boundary or add a second reporting path.
+- **ERB-7** — Do not hand-roll a fallback or a second boundary class. Expected failures (a list that failed to load) are an ordinary state of the panel, not a thrown error.
+
+### Examples
+
+#### Panel boundary
+
+A labelled workbench region. Open file makes the child throw while rendering; Try again remounts it.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+function FileView() {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	if (opened) throw new Error("Cannot read properties of undefined (reading 'title')");
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-8">
+			<span className="tr-text-ui text-text-muted">src/App.tsx</span>
+			<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+				{t("panels.diffSurface.openFile")}
+			</Button>
+		</div>
+	);
+}
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<div className="h-[12rem] w-full">
+			<ErrorBoundary
+				label={t("shell.workbench.panel.editor")}
+				reportId="editor"
+				resetKeys={["workspace-1", "tab-1"]}
+			>
+				<FileView />
+			</ErrorBoundary>
+		</div>
+	);
+}
+```
+
+#### Without a label
+
+The generic title; an error with an empty message falls back to the unexpected-error line.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+function Broken({ message }: { message: string }) {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	if (opened) throw new Error(message);
+	return (
+		<div className="flex h-full items-center justify-center">
+			<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+				{t("panels.diffSurface.openFile")}
+			</Button>
+		</div>
+	);
+}
+
+export default function WithoutLabel() {
+	return (
+		<div className="grid h-[12rem] w-full grid-cols-2 gap-16">
+			<ErrorBoundary>
+				<Broken message="x.localeCompare is not a function" />
+			</ErrorBoundary>
+			<ErrorBoundary>
+				<Broken message="" />
+			</ErrorBoundary>
+		</div>
+	);
+}
+```
+
+#### Failed lazy chunk
+
+`Suspense` inside the boundary; a rejected dynamic import shows Reload page, which reloads the page.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { lazy, Suspense, useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+const FilePane = lazy(() =>
+	Promise.reject(new Error("Failed to fetch dynamically imported module: /assets/FilePane.js")),
+);
+
+export default function ChunkError() {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	return (
+		<div className="h-[12rem] w-full">
+			<ErrorBoundary label={t("shell.workbench.panel.editor")} reportId="editor">
+				{opened ? (
+					<Suspense fallback={<LoadingRegion className="p-16" />}>
+						<FilePane />
+					</Suspense>
+				) : (
+					<div className="flex h-full items-center justify-center">
+						<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+							{t("panels.diffSurface.openFile")}
+						</Button>
+					</div>
+				)}
+			</ErrorBoundary>
+		</div>
+	);
+}
+```
+
+#### Reset on navigation
+
+`resetKeys` holds the open tab; crash one file, then switch tabs to recover without a click.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+const TABS = ["App.tsx", "main.ts"];
+
+function FileView({ path }: { path: string }) {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	if (opened) throw new Error(`Cannot render ${path}`);
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-8">
+			<span className="tr-text-ui text-text-muted">{path}</span>
+			<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+				{t("panels.diffSurface.openFile")}
+			</Button>
+		</div>
+	);
+}
+
+export default function ResetKeys() {
+	const t = useT();
+	const [tab, setTab] = useState("App.tsx");
+	return (
+		<div className="flex h-[14rem] w-full flex-col gap-8">
+			<div className="flex gap-2">
+				{TABS.map((path) => (
+					<ToggleSegment
+						key={path}
+						testid={`tab-${path}`}
+						label={path}
+						active={tab === path}
+						onClick={() => setTab(path)}
+					/>
+				))}
+			</div>
+			<div className="min-h-0 flex-1">
+				<ErrorBoundary
+					label={t("shell.workbench.panel.editor")}
+					reportId="editor"
+					resetKeys={["workspace-1", tab]}
+				>
+					<FileView path={tab} />
+				</ErrorBoundary>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Regions and the root
+
+A root boundary around two region boundaries, as the app mounts them: one panel fails, the other keeps working.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { type ReactNode, useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+function Region({ children }: { children: ReactNode }) {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	if (opened) throw new Error("Cannot read properties of undefined (reading 'rows')");
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-8">
+			<span className="tr-text-ui text-text-muted">{children}</span>
+			<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+				{t("panels.diffSurface.openFile")}
+			</Button>
+		</div>
+	);
+}
+
+export default function Regions() {
+	const t = useT();
+	return (
+		<div className="h-[14rem] w-full">
+			<ErrorBoundary label={t("app.errorBoundary.label")} reportId="app">
+				<div className="grid h-full grid-cols-2 gap-16">
+					<ErrorBoundary label={t("shell.workbench.panel.editor")} reportId="editor">
+						<Region>src/App.tsx</Region>
+					</ErrorBoundary>
+					<ErrorBoundary label={t("shell.workbench.panel.terminal")} reportId="terminal">
+						<Region>zsh</Region>
+					</ErrorBoundary>
+				</div>
+			</ErrorBoundary>
+		</div>
+	);
+}
+```
+
+#### Reporting a crash
+
+`setErrorBoundaryReporter` receives the error with the untranslated `reportId`, never the translated label.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useEffect, useState } from "react";
+import { ErrorBoundary, setErrorBoundaryReporter } from "@/components/ErrorBoundary";
+
+function ChatView() {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	if (opened) throw new Error("Cannot read properties of undefined (reading 'turns')");
+	return (
+		<div className="flex h-full items-center justify-center">
+			<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+				{t("mcp.action.openChat")}
+			</Button>
+		</div>
+	);
+}
+
+export default function Reporter() {
+	const t = useT();
+	const [report, setReport] = useState("—");
+	useEffect(() => {
+		setErrorBoundaryReporter((error, reportId) => setReport(`${reportId}: ${error.message}`));
+		return () => setErrorBoundaryReporter(null);
+	}, []);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<div className="h-[12rem]">
+				<ErrorBoundary label={t("shell.workbench.panel.chat")} reportId="chat">
+					<ChatView />
+				</ErrorBoundary>
+			</div>
+			<output className="tr-code-text text-text-muted">{report}</output>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/main.tsx` | The last-resort root boundary (`label` from `app.errorBoundary.label`, `reportId="app"`) and the reporter wired to client error reports. |
+| `apps/web/src/shell/WorkspaceWorkbench.tsx` | One boundary per editor, chat, plan, plan-rail, terminal and tool body, each with `resetKeys={[workspaceId, tab.id]}` and a `Suspense` inside. |
+
+## RunningIcon
+
+The “ThinkRail is working” badge: the brand monogram inside a split rounded-square frame that draws and erases while an agent works. It is drawn in `currentColor`, so it sizes with `size-*` and colours with `text-*` exactly like a Remix icon, and it carries the accessible label “Agent working”. The call site decides from normalized host state whether a session is running and passes only size and colour classes.
+
+```tsx
+import { RunningIcon } from "@/components/RunningIcon";
+```
+
+### When to use
+
+- A top-level session is genuinely working: render it **in place of** the row's identity glyph (folder, branch, chat) — ProjectTree workspace and collapsed-project rows, the location bar's *Switch to* menu, the session switcher.
+- The decorative badge beside a live phase label in the chat stream footer (`StreamIndicator`), where the label is the announcement.
+- Anywhere “an agent is working here” must read at icon size and in the surrounding glyph colour.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Button | An in-flight action pinned to its control — `loading` (or `loading spinIcon` for a refresh) on Button or IconButton, never RunningIcon. |
+| LoadingRegion and SkeletonRows | A content region waiting for data (the loading pattern's first tier). |
+| AttentionDot | The session needs the user (a question or an unread result), not that it is working. The two can coexist on one row. |
+| AttentionLine | A chat-level “needs your answer” line with its own live announcement. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | An `inline-flex` `<span role="img">` that never shrinks, labelled “Agent working”, with `data-testid="running-icon"` and `data-running="true"`. Your `size-*` and `text-*` classes land here. |
+| Frame | Two `aria-hidden` SVG halves of a rounded square (`running-icon-frame`), leaving a gap on the left and meeting on the right; they draw and erase with `animate-loader-frame`. |
+| Monogram | Six wide letter strokes of the “TR” mark, each clipped to its region of `BRAND_MARK_SEGMENTS` (the shell logo's own segments), animated by the `loader-t-*` / `loader-r-*` keyframes. |
+| Clip paths | One `<clipPath>` per monogram segment with an id from `useId`, so any number of badges on a page never share ids. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `className` | `string` | — | Size and colour only: a `size-*` class (`size-14` in rows and menus, `size-16` in the chat footer) and the `text-*` the replaced glyph would wear (`text-primary` active, `text-text-muted` inactive), plus placement such as `mt-2` in a two-line row. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Running | Rendered, with motion allowed. | The frame and the six monogram strokes draw and erase on one shared cycle; a beat with only the frame showing is part of the design. |
+| Reduced motion | `prefers-reduced-motion: reduce`. | Every stroke stays at its fully drawn dash (`motion-safe:` animations off): the static, complete brand mark in the frame. |
+| Not running | The call site does not render it. | No idle, paused or stopped look — the row shows its identity glyph again. Queued, background, stopped and quiet sessions are not running. |
+| Active / selected row | The call site's colour class (`text-primary`, or `group-data-[selected=true]:text-primary` in a Command row). | Takes the colour through `currentColor`; the component has no colour of its own. |
+| Hover, focus, disabled | — | No distinct treatment; the badge is not interactive and inherits the row's state. |
+
+### Accessibility
+
+- Renders `role="img"` with the localized label “Agent working” (`components.runningIcon.label`); the SVG inside is `aria-hidden`.
+- Inside a row button, menu item or command option the label becomes part of that control's name, so the running state is read with the row and never needs a tooltip.
+- Where an adjacent live label already announces the work, wrap it in `<span aria-hidden="true">` as `StreamIndicator` does, so screen readers hear the phase once.
+- Motion respects `prefers-reduced-motion`; the static badge keeps the same shape and name, so no information depends on the animation.
+- Drawn in `currentColor`, so it follows the row's text colour in every theme.
+
+| Keys | Action |
+| --- | --- |
+| `—` | Not focusable. Keyboard behaviour belongs to the row, menu item or option it sits in. |
+
+### Usage rules
+
+- **RUN-1** — Show it only while a top-level session is genuinely working, from normalized host state (`selectWorkspaceIsRunning` and friends) — never for queued, background, stopped or quiet sessions.
+- **RUN-2** — Render it **in place of** the identity glyph, never beside it as a second marker; when work stops the glyph returns.
+- **RUN-3** — Pass only `size-*`, the replaced glyph's `text-*` colour and placement. Do not recolour parts, add a spinner, dot, count or tooltip, or wrap it in a pulse.
+- **RUN-4** — For an in-flight action on a control use Button or IconButton `loading`; for a waiting region use LoadingRegion. RunningIcon means “an agent is working”, nothing else.
+- **RUN-5** — When a visible live label already says what is happening, hide the badge from assistive technology with an `aria-hidden="true"` wrapper (the chat stream footer).
+- **RUN-6** — It is orthogonal to attention: a session that needs input but is still running shows both the badge and the AttentionDot.
+
+### Examples
+
+#### Working badge
+
+The badge at row size in the active and inactive colours, and at the chat-footer size.
+
+```tsx
+import { RunningIcon } from "@/components/RunningIcon";
+
+export default function Preview() {
+	return (
+		<div className="flex items-center gap-16">
+			<RunningIcon className="size-14 text-primary" />
+			<RunningIcon className="size-14 text-text-muted" />
+			<RunningIcon className="size-16 text-primary" />
+		</div>
+	);
+}
+```
+
+#### Replaces the identity glyph
+
+A workspace row swaps its branch glyph for the badge while an agent works; toggle the run to see the glyph return.
+
+```tsx
+import { RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { RunningIcon } from "@/components/RunningIcon";
+
+export default function IdentitySwap() {
+	const t = useT();
+	const [running, setRunning] = useState(true);
+	return (
+		<div className="flex w-full max-w-xs flex-col gap-12">
+			<button type="button" className="flex min-w-0 items-center gap-4 text-left">
+				{running ? (
+					<RunningIcon className="size-14 text-primary" />
+				) : (
+					<RiGitBranchLine className="size-14 shrink-0 text-primary" />
+				)}
+				<span className="truncate tr-text-ui text-primary">fix-login</span>
+			</button>
+			<div>
+				<Button variant="outline" size="m" onClick={() => setRunning((value) => !value)}>
+					{running ? t("chat.composer.stop") : t("chat.composer.send")}
+				</Button>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Row colour
+
+The badge wears the colour the replaced glyph would: `text-primary` on the active row, `text-text-muted` elsewhere.
+
+```tsx
+import { RiGitBranchLine } from "@remixicon/react";
+import { useState } from "react";
+import { RunningIcon } from "@/components/RunningIcon";
+
+const WORKSPACES = [
+	{ id: "fix-login", running: true },
+	{ id: "command-docs", running: true },
+	{ id: "pricing", running: false },
+];
+
+export default function RowColour() {
+	const [activeId, setActiveId] = useState("fix-login");
+	return (
+		<ul className="flex w-full max-w-xs flex-col gap-4">
+			{WORKSPACES.map((workspace) => {
+				const colour = workspace.id === activeId ? "text-primary" : "text-text-muted";
+				return (
+					<li key={workspace.id}>
+						<button
+							type="button"
+							aria-current={workspace.id === activeId || undefined}
+							onClick={() => setActiveId(workspace.id)}
+							className="flex w-full min-w-0 items-center gap-4 text-left"
+						>
+							{workspace.running ? (
+								<RunningIcon className={`size-14 ${colour}`} />
+							) : (
+								<RiGitBranchLine className={`size-14 shrink-0 ${colour}`} />
+							)}
+							<span className={`truncate tr-text-ui ${colour}`}>{workspace.id}</span>
+						</button>
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+```
+
+#### Two-line row
+
+In a row with a branch line the badge aligns to the first line with `mt-2`, like the glyph it replaces.
+
+```tsx
+import { RunningIcon } from "@/components/RunningIcon";
+
+export default function TwoLineRow() {
+	return (
+		<button type="button" className="flex w-full max-w-xs min-w-0 items-start gap-4 text-left">
+			<RunningIcon className="mt-2 size-14 text-primary" />
+			<span className="flex min-w-0 flex-1 flex-col">
+				<span className="truncate tr-text-ui leading-tight text-primary">Login fix</span>
+				<span className="truncate text-text-subtle tr-text-metadata leading-tight">
+					julia/fix-login-redirect
+				</span>
+			</span>
+		</button>
+	);
+}
+```
+
+#### Chat stream footer
+
+`StreamIndicator` shows the badge decoratively beside the live phase label, which is the announcement.
+
+```tsx
+import { StreamIndicator } from "@/chat/StreamIndicator";
+
+export default function StreamFooter() {
+	return (
+		<div className="flex w-full max-w-sm flex-col gap-4">
+			<StreamIndicator status={{ phase: "working" }} />
+			<StreamIndicator status={{ phase: "thinking" }} />
+			<StreamIndicator status={{ phase: "running-tool", toolName: "bash" }} />
+		</div>
+	);
+}
+```
+
+#### Switch to menu
+
+In a dropdown the running workspace's item leads with the badge instead of its branch icon. The menu row's own icon rule (`[&_svg]:text-text-muted`) currently colours the badge's SVG muted, so the `text-primary` passed here does not show.
+
+```tsx
+import { RiArrowDownSLine, RiGitBranchLine, RiHome2Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { RunningIcon } from "@/components/RunningIcon";
+
+const WORKSPACES = [
+	{ id: "command-docs", isDefault: false, running: true },
+	{ id: "thinkrail", isDefault: true, running: false },
+	{ id: "pricing", isDefault: false, running: false },
+];
+
+export default function MenuItem() {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="ghost" size="m" iconRight={RiArrowDownSLine}>
+					fix-login
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start">
+				<DropdownMenuLabel>{t("shell.location.workspace.switchTo")}</DropdownMenuLabel>
+				{WORKSPACES.map((workspace) => {
+					const Icon = workspace.isDefault ? RiHome2Line : RiGitBranchLine;
+					return (
+						<DropdownMenuItem key={workspace.id} onSelect={() => {}}>
+							{workspace.running ? <RunningIcon className="size-14 text-primary" /> : <Icon />}
+							<span className="truncate">{workspace.id}</span>
+						</DropdownMenuItem>
+					);
+				})}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Session switcher rows
+
+Muted at rest and primary on the highlighted option, through the row's `group-data-[selected=true]` colour.
+
+```tsx
+import { RiChat2Line } from "@remixicon/react";
+import { Command, CommandItem, CommandList } from "@thinkrail/ui/command";
+import { AttentionDot } from "@/components/AttentionDot";
+import { RunningIcon } from "@/components/RunningIcon";
+
+const SESSIONS = [
+	{ id: "s1", title: "Fix the flaky login test", running: true },
+	{ id: "s2", title: "Document the command list", running: true },
+	{ id: "s3", title: "Update the pricing page", running: false },
+];
+
+export default function CommandRow() {
+	return (
+		<Command className="w-full max-w-sm" loop shouldFilter={false} vimBindings={false}>
+			<CommandList>
+				{SESSIONS.map((session) => (
+					<CommandItem
+						key={session.id}
+						value={session.id}
+						className="group gap-8"
+						onSelect={() => {}}
+					>
+						{session.running ? (
+							<RunningIcon className="size-14 text-text-muted group-data-[selected=true]:text-primary" />
+						) : (
+							<RiChat2Line className="size-14 shrink-0 text-text-muted group-data-[selected=true]:text-primary" />
+						)}
+						<span className="min-w-0 flex-1 truncate group-data-[selected=true]:text-primary">
+							{session.title}
+						</span>
+						{session.running ? null : <AttentionDot />}
+					</CommandItem>
+				))}
+			</CommandList>
+		</Command>
+	);
+}
+```
+
+#### Working and needs attention
+
+A session waiting on input while still running shows the badge and the dot.
+
+```tsx
+import { AttentionDot } from "@/components/AttentionDot";
+import { RunningIcon } from "@/components/RunningIcon";
+
+export default function WithAttention() {
+	return (
+		<div className="flex w-full max-w-xs min-w-0 items-center gap-8">
+			<button type="button" className="flex min-w-0 flex-1 items-center gap-4 text-left">
+				<RunningIcon className="size-14 text-primary" />
+				<span className="truncate tr-text-ui text-primary">fix-login</span>
+			</button>
+			<AttentionDot />
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ProjectTree.tsx` | Replaces the project folder and workspace branch glyph while a session works (`size-14`, primary or muted). |
+| `apps/web/src/chat/StreamIndicator.tsx` | Decorative `size-16 text-primary` badge beside the stream phase label. |
+| `apps/web/src/shell/SessionSwitcher.tsx` | Replaces the chat glyph on running session rows; primary while the option is highlighted. |
+| `apps/web/src/shell/locationBar/WorkspaceSegment.tsx` | Leads a running workspace's item in the *Switch to* menu. |
+
+## AttentionDot
+
+The one “needs attention” marker: a static accent dot in its own square column, labelled “Needs attention”. It is binary — a session waiting for input and a session with an unread result show the same dot — and it carries no reason, count, tooltip or motion. The call site decides only whether it is present, from normalized host state.
+
+```tsx
+import { AttentionDot } from "@/components/AttentionDot";
+```
+
+### When to use
+
+- A workspace, collapsed project or session needs the user: a question or dialog is waiting, or a finished, failed or interrupted run has an unread result.
+- Rows in ProjectTree, project headings and session rows in the session switcher — trailing the identity button, in its own flex column.
+- Any list that must mirror the rail's attention signal; out-of-app notifications fire on the same dot lighting up.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| RunningIcon | The session is working, not waiting for the user. Both can show on one row. |
+| AttentionLine | Inside the chat itself, where the reason (“Your input is needed”) should be spelled out and announced. |
+| DiffStatBadge | A count or a magnitude must be shown; the dot never carries a number. |
+| Toast | A one-off event the user should notice now, rather than a persistent state on a row. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Box | A `<span role="img">` labelled “Needs attention” (`data-testid="attention-dot"`): a fixed `size-20` flex square that never shrinks and centres the dot, so it lines up with the row's other trailing controls. |
+| Dot | An `aria-hidden` `size-6` `rounded-full` circle filled with `bg-primary`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `className` | `string` | — | Placement only (margins, order). Production passes none; the dot owns its size and colour. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Present | The call site renders it because attention is positive (`needsInput !== null \|\| completionUnread`). | The static accent dot. Identical for every reason. |
+| Absent | The call site does not render it. | Nothing — there is no hidden, zero or read state, and the column collapses (rows keep `data-attention` only while positive). |
+| Hover, focus, selected, disabled | — | No distinct treatment; the dot is not interactive and does not react to the row's state. |
+| Motion | — | None. It never pulses or animates. |
+
+### Accessibility
+
+- Renders `role="img"` with the localized label “Needs attention” (`components.attentionDot.label`); the inner circle is `aria-hidden`.
+- Inside a command option or row the label is read with that row, so the state is never colour-only.
+- There is no tooltip and no per-reason label by design; the reason is found by opening the session.
+- Clearing is the call site's job (opening the session, *Mark as read*); the dot itself has no dismiss affordance.
+
+| Keys | Action |
+| --- | --- |
+| `—` | Not focusable. Keyboard behaviour belongs to the row or option it sits in. |
+
+### Usage rules
+
+- **ATD-1** — One marker for every attention reason: needs-input and unread-result use the same AttentionDot — no question, check or result glyph, and no status-specific tooltip.
+- **ATD-2** — Decide presence only from normalized host state (`selectWorkspaceNeedsAttention`, the switcher groups), never from client-side guesses; render it or not, with no other prop.
+- **ATD-3** — Give it its own flex column after the identity button and before hover-revealed row actions; do not overlay it on an icon or put it inside the name.
+- **ATD-4** — Never add a count, reason text, colour, size or motion at the call site; `className` is for placement only.
+- **ATD-5** — Attention is orthogonal to running: a running session that needs input shows RunningIcon in place of its glyph and the dot as well.
+- **ATD-6** — Let the user clear an unread result where the dot appears (*Mark as read* in the row menu), and offer *Mark as unread* to bring it back.
+
+### Examples
+
+#### Needs attention
+
+The dot trailing a workspace row, in its own column.
+
+```tsx
+import { RiGitBranchLine } from "@remixicon/react";
+import { AttentionDot } from "@/components/AttentionDot";
+
+export default function Preview() {
+	return (
+		<div className="flex w-full max-w-xs min-w-0 items-center gap-8">
+			<button type="button" className="flex min-w-0 flex-1 items-center gap-4 text-left">
+				<RiGitBranchLine className="size-14 shrink-0 text-text-muted" />
+				<span className="truncate tr-text-ui text-text-muted">fix-login</span>
+			</button>
+			<AttentionDot />
+		</div>
+	);
+}
+```
+
+#### Workspace rows
+
+Rows that need attention carry the dot between the identity button and the hover-revealed actions; quiet rows have nothing there.
+
+```tsx
+import { RiGitBranchLine, RiMore2Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { AttentionDot } from "@/components/AttentionDot";
+
+const WORKSPACES = [
+	{ id: "fix-login", needsAttention: true },
+	{ id: "command-docs", needsAttention: false },
+	{ id: "pricing", needsAttention: true },
+];
+
+export default function WorkspaceRows() {
+	const t = useT();
+	return (
+		<ul className="flex w-full max-w-xs flex-col gap-4">
+			{WORKSPACES.map((workspace) => (
+				<li
+					key={workspace.id}
+					data-attention={workspace.needsAttention || undefined}
+					className="flex min-w-0 items-center gap-8"
+				>
+					<button type="button" className="flex min-w-0 flex-1 items-center gap-4 text-left">
+						<RiGitBranchLine className="size-14 shrink-0 text-text-muted" />
+						<span className="truncate tr-text-ui text-text-muted">{workspace.id}</span>
+					</button>
+					{workspace.needsAttention ? <AttentionDot /> : null}
+					<IconButton
+						icon={RiMore2Line}
+						label={t("panels.projectTree.workspaceActions", { name: workspace.id })}
+						size="s"
+						className="shrink-0"
+					/>
+				</li>
+			))}
+		</ul>
+	);
+}
+```
+
+#### One marker for every reason
+
+The second line names each reason for this demo only; the rail shows the same dot for a waiting question and for a finished or failed run, and never says which.
+
+```tsx
+import { RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { AttentionDot } from "@/components/AttentionDot";
+
+const WORKSPACES = [
+	{ id: "fix-login", reason: "notifications.reason.needsInput" },
+	{ id: "pricing", reason: "notifications.reason.succeeded" },
+	{ id: "migrate-db", reason: "notifications.reason.failed" },
+] as const;
+
+export default function OneMarker() {
+	const t = useT();
+	return (
+		<ul className="flex w-full max-w-xs flex-col gap-8">
+			{WORKSPACES.map((workspace) => (
+				<li key={workspace.id} className="flex min-w-0 items-start gap-8">
+					<span className="flex min-w-0 flex-1 items-start gap-4">
+						<RiGitBranchLine className="mt-2 size-14 shrink-0 text-text-muted" />
+						<span className="flex min-w-0 flex-col">
+							<span className="truncate tr-text-ui leading-tight text-text-muted">
+								{workspace.id}
+							</span>
+							<span className="truncate text-text-subtle tr-text-metadata leading-tight">
+								{t(workspace.reason)}
+							</span>
+						</span>
+					</span>
+					<AttentionDot />
+				</li>
+			))}
+		</ul>
+	);
+}
+```
+
+#### Mark as read
+
+The row menu clears the unread result and brings it back; the call site decides presence.
+
+```tsx
+import { RiGitBranchLine, RiMailOpenLine, RiMailUnreadLine, RiMore2Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { useState } from "react";
+import { AttentionDot } from "@/components/AttentionDot";
+
+export default function MarkRead() {
+	const t = useT();
+	const [unread, setUnread] = useState(true);
+	return (
+		<div className="flex w-full max-w-xs min-w-0 items-center gap-8">
+			<button type="button" className="flex min-w-0 flex-1 items-center gap-4 text-left">
+				<RiGitBranchLine className="size-14 shrink-0 text-text-muted" />
+				<span className="truncate tr-text-ui text-text-muted">pricing</span>
+			</button>
+			{unread ? <AttentionDot /> : null}
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<IconButton
+						icon={RiMore2Line}
+						label={t("panels.projectTree.workspaceActions", { name: "pricing" })}
+						size="s"
+						className="shrink-0"
+					/>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					{unread ? (
+						<DropdownMenuItem onSelect={() => setUnread(false)}>
+							<RiMailOpenLine />
+							{t("panels.projectTree.markRead")}
+						</DropdownMenuItem>
+					) : (
+						<DropdownMenuItem onSelect={() => setUnread(true)}>
+							<RiMailUnreadLine />
+							{t("panels.projectTree.markUnread")}
+						</DropdownMenuItem>
+					)}
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</div>
+	);
+}
+```
+
+#### Working and needs attention
+
+A running session that waits on input shows RunningIcon and the dot together.
+
+```tsx
+import { AttentionDot } from "@/components/AttentionDot";
+import { RunningIcon } from "@/components/RunningIcon";
+
+export default function WithRunning() {
+	return (
+		<div className="flex w-full max-w-xs min-w-0 items-center gap-8">
+			<button type="button" className="flex min-w-0 flex-1 items-center gap-4 text-left">
+				<RunningIcon className="size-14 text-text-muted" />
+				<span className="truncate tr-text-ui text-text-muted">fix-login</span>
+			</button>
+			<AttentionDot />
+		</div>
+	);
+}
+```
+
+#### Session switcher
+
+A project heading shows the dot when any session needs attention, and each waiting session row trails one.
+
+```tsx
+import { RiChat2Line, RiFolderLine } from "@remixicon/react";
+import { Command, CommandGroup, CommandItem, CommandList } from "@thinkrail/ui/command";
+import { AttentionDot } from "@/components/AttentionDot";
+import { RunningIcon } from "@/components/RunningIcon";
+
+const PROJECTS = [
+	{
+		id: "thinkrail",
+		name: "thinkrail",
+		sessions: [
+			{ id: "s1", title: "Fix the flaky login test", running: false },
+			{ id: "s2", title: "Document the command list", running: true },
+		],
+	},
+	{
+		id: "website",
+		name: "website",
+		sessions: [{ id: "s3", title: "Update the pricing page", running: true }],
+	},
+];
+
+export default function SessionSwitcher() {
+	return (
+		<Command className="w-full max-w-sm" loop shouldFilter={false} vimBindings={false}>
+			<CommandList>
+				{PROJECTS.map((project) => (
+					<CommandGroup
+						key={project.id}
+						heading={
+							<span className="flex items-center gap-4">
+								<RiFolderLine className="size-14 shrink-0 text-text-muted" />
+								<span className="min-w-0 flex-1 truncate">{project.name}</span>
+								{project.sessions.some((session) => !session.running) ? <AttentionDot /> : null}
+							</span>
+						}
+					>
+						{project.sessions.map((session) => (
+							<CommandItem
+								key={session.id}
+								value={session.id}
+								className="group gap-8 pl-24"
+								onSelect={() => {}}
+							>
+								{session.running ? (
+									<RunningIcon className="size-14 text-text-muted group-data-[selected=true]:text-primary" />
+								) : (
+									<RiChat2Line className="size-14 shrink-0 text-text-muted group-data-[selected=true]:text-primary" />
+								)}
+								<span className="min-w-0 flex-1 truncate group-data-[selected=true]:text-primary">
+									{session.title}
+								</span>
+								{session.running ? null : <AttentionDot />}
+							</CommandItem>
+						))}
+					</CommandGroup>
+				))}
+			</CommandList>
+		</Command>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ProjectTree.tsx` | Workspace rows and collapsed project rows, between the identity button and the row actions. |
+| `apps/web/src/shell/SessionSwitcher.tsx` | Project group headings and every non-running session row. |
+
+## AttentionLine
+
+The one-line “Your input is needed · Agent is waiting” heading above a chat surface the agent is blocked on. It owns the icon, the fixed words, their colour and type, and an optional polite live region that announces the wait once. The call site decides whether the line is shown at all and, through `announced` and `live`, which copy of the message assistive technology hears.
+
+```tsx
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+```
+
+### When to use
+
+- Directly above an inline prompt the host is waiting on — an `ask_user_question` card or an extension `select` / `confirm` / `input` / `editor` prompt.
+- Only while the host is actually waiting on that request; remove it the moment it no longer is.
+- When the waiting surface should announce itself politely once, without moving focus.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| AttentionDot | A row in a list or rail (a project, a session) needs attention; the dot marks it without words. |
+| StaleComposerNotice | A notice about the composer's own state, not a request the agent is waiting on. |
+| SettingsNotice | A persistent status or warning inside a settings surface. |
+| Toast | A transient confirmation or failure after an action, not a blocking request. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | A `div`, `flex items-center gap-4`, in `text-primary` and `tr-text-action`. |
+| Visible line | A span holding the icon and both texts; `aria-hidden` once `announced` is set or when `live` is `false`. |
+| Icon | `RiQuestionnaireLine` at `size-14`, in the line's `primary` colour. |
+| Message | “Your input is needed” (`chat.attention.needed`). |
+| Waiting note | “· Agent is waiting” (`chat.attention.waiting`) in `tr-text-metadata`, `text-muted`. |
+| Live region | Rendered only when `live`: an `sr-only` `role="status"` `aria-live="polite"` span, empty until `announced`, then “Your input is needed — the agent is waiting.” (`chat.attention.announcement`). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `announced` | `boolean` | `false` | Fills the live region with the announcement and hides the visible line from assistive technology, so exactly one copy is read. Set it a frame after mount, once per request. |
+| `live` | `boolean` | `true` | Renders the component's own polite live region. Pass `false` when a surrounding owner announces the request; the visible line is then always `aria-hidden`. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Waiting, not yet announced | Default props. | The primary line with the muted waiting note; the empty live region is mounted and the visible line is exposed to assistive technology. |
+| Announced | `announced`. | Looks the same; the live region carries the announcement and the visible line is `aria-hidden`. |
+| Announced elsewhere | `live={false}`. | Looks the same; no live region, and the visible line is `aria-hidden`. |
+| Narrow | A container narrower than the line. | The message and the waiting note each wrap in their own column beside the icon, which keeps its size (`shrink-0`). |
+| Hover, focus, disabled | — | No distinct treatment; the line is not interactive. |
+
+### Accessibility
+
+- The live region is a polite `role="status"` that is mounted with the line and filled later: a region inserted together with its text is announced unreliably.
+- Exactly one copy is in the accessibility tree. Before `announced` the visible line is read; after it, only the region's announcement; with `live={false}` neither, because the owner's region speaks.
+- A remount (a virtualised row coming back) starts with `announced={false}`, so the region stays empty and the visible line is exposed again without a second announcement.
+- The line never takes focus; any focus claim belongs to the waiting card or prompt.
+- Colour is not the only signal: the line is words; the icon has no accessible name of its own.
+
+| Keys | Action |
+| --- | --- |
+| `—` | Not focusable; the line has no keyboard interaction. |
+
+### Usage rules
+
+- **ATL-1** — Show the line only while the host is waiting on this request (`canRespond ? <AttentionLine … /> : null`). A call the host is not waiting on never asks for attention.
+- **ATL-2** — Place it directly above the waiting surface in a `flex flex-col gap-4` stack, so it reads as that surface's heading. One line per waiting surface.
+- **ATL-3** — When the line owns the announcement, keep it mounted from the first render and set `announced` a frame later through a one-shot claim per request; never re-announce on a remount.
+- **ATL-4** — When a surrounding owner already announces the request (the chat transcript's polite region for extension prompts), pass `live={false}` so the message is not read twice.
+- **ATL-5** — Do not recreate or restyle it: the words are fixed locale keys and the component takes no `className`. Put the question itself in the card, not in the line.
+- **ATL-6** — Not for list markers or unread results — use AttentionDot there.
+
+### Examples
+
+#### Basic
+
+The default line: its own live region, mounted empty.
+
+```tsx
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+
+export default function Preview() {
+	return <AttentionLine />;
+}
+```
+
+#### One-shot announcement
+
+`announced` is set a frame after mount, so the polite region speaks once and the visible line leaves the accessibility tree.
+
+```tsx
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+import { useEffect, useState } from "react";
+
+export default function Announced() {
+	const [announced, setAnnounced] = useState(false);
+	useEffect(() => {
+		const frame = requestAnimationFrame(() => setAnnounced(true));
+		return () => cancelAnimationFrame(frame);
+	}, []);
+	return <AttentionLine announced={announced} />;
+}
+```
+
+#### Announced by the owner
+
+`live={false}` beside the owner's always-mounted polite region, as the chat transcript does for extension prompts.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+import { useEffect, useState } from "react";
+
+export default function NotLive() {
+	const t = useT();
+	const [announcement, setAnnouncement] = useState("");
+	useEffect(() => {
+		const frame = requestAnimationFrame(() =>
+			setAnnouncement(t("chat.transcript.inputNeeded", { title: "Deploy to staging?" })),
+		);
+		return () => cancelAnimationFrame(frame);
+	}, [t]);
+	return (
+		<div className="flex flex-col gap-4">
+			<span role="status" aria-live="polite" className="sr-only">
+				{announcement}
+			</span>
+			<AttentionLine live={false} />
+		</div>
+	);
+}
+```
+
+#### Extension prompt
+
+The real extension `confirm` prompt, which heads itself with `<AttentionLine live={false} />`.
+
+```tsx
+import { useState } from "react";
+import { ExtUiPrompt } from "@/chat/ExtUiPrompt";
+
+export default function ExtUiPromptExample() {
+	const [reply, setReply] = useState<string | boolean | null | undefined>(undefined);
+	if (reply !== undefined)
+		return <output className="tr-code-text text-text-muted">{String(reply)}</output>;
+	return (
+		<ExtUiPrompt
+			className="w-full"
+			request={{
+				id: "ext-1",
+				sessionId: "session-1",
+				kind: "confirm",
+				title: "Deploy to staging?",
+				message: "The extension will push the current branch and run the deploy script.",
+			}}
+			onReply={setReply}
+		/>
+	);
+}
+```
+
+#### Only while waiting
+
+The line is present only while a response is accepted; answering removes it. Retry asks again.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+
+export default function Awaiting() {
+	const t = useT();
+	const [canRespond, setCanRespond] = useState(true);
+	return (
+		<div className="flex flex-col gap-4">
+			{canRespond ? <AttentionLine /> : null}
+			<div className="flex gap-8">
+				<Button
+					variant="outline"
+					size="m"
+					disabled={!canRespond}
+					onClick={() => setCanRespond(false)}
+				>
+					{t("tools.ask.skip")}
+				</Button>
+				<Button size="m" disabled={!canRespond} onClick={() => setCanRespond(false)}>
+					{t("tools.ask.submit")}
+				</Button>
+				{canRespond ? null : (
+					<Button variant="ghost" size="m" onClick={() => setCanRespond(true)}>
+						{t("common.retry")}
+					</Button>
+				)}
+			</div>
+		</div>
+	);
+}
+```
+
+#### Narrow container
+
+In a narrow column the message and the waiting note wrap side by side; give the line the width of its card instead.
+
+```tsx
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+
+export default function Narrow() {
+	return (
+		<div className="w-[10rem]">
+			<AttentionLine />
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx` | `canRespond ? <AttentionLine announced={announced} /> : null` above the question card; `announced` set by the one-shot attention claim. |
+| `apps/web/src/chat/ExtUiPrompt.tsx` | `<AttentionLine live={false} />` above every extension prompt; `ChatTranscript` owns the polite announcement. |
+
 ## Button and IconButton contract
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /

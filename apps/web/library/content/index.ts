@@ -1,16 +1,24 @@
+import { attentionDot } from "./components/attention-dot";
+import { attentionLine } from "./components/attention-line";
 import { button } from "./components/button";
 import { collapsible } from "./components/collapsible";
 import { diffStatBadge } from "./components/diff-stat-badge";
+import { errorBoundary } from "./components/error-boundary";
 import { fileChip } from "./components/file-chip";
 import { headerIconButton } from "./components/header-icon-button";
 import { iconButton } from "./components/icon-button";
+import { runningIcon } from "./components/running-icon";
 import { segmentedControl } from "./components/segmented-control";
+import { settingsNotice } from "./components/settings-notice";
 import { settingsRadioCards } from "./components/settings-radio-cards";
 import { settingsRow } from "./components/settings-row";
 import { settingsSwitch } from "./components/settings-switch";
+import { skeleton } from "./components/skeleton";
+import { staleComposerNotice } from "./components/stale-composer-notice";
 import { switchDoc } from "./components/switch";
 import { tabStrip } from "./components/tab-strip";
 import { textarea } from "./components/textarea";
+import { toast } from "./components/toast";
 import { toggleSegment } from "./components/toggle-segment";
 import { treeRow } from "./components/tree-row";
 import type { ComponentDoc, DocArea, DocPage } from "./types";
@@ -174,4 +182,12 @@ export const components: readonly ComponentDoc[] = [
 	fileChip,
 	collapsible,
 	treeRow,
+	skeleton,
+	staleComposerNotice,
+	settingsNotice,
+	toast,
+	errorBoundary,
+	runningIcon,
+	attentionDot,
+	attentionLine,
 ];

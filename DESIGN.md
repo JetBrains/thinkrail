@@ -141,3 +141,11 @@ Radius steps: `rounded-xs` 2px · `rounded-sm` 4px · `rounded-md` 6px · `round
 | FileChip | `import { FileChip } from "@/chat/FileChip";` | — | — |
 | Collapsible | `import { Collapsible, countLines } from "@/chat/tools/Collapsible";` | — | — |
 | TreeRow | `import { TreeRow } from "@/panels/TreeRow";` | — | — |
+| LoadingRegion and SkeletonRows | `import { LoadingRegion, SkeletonRows } from "@thinkrail/ui/skeleton";` | — | — |
+| StaleComposerNotice | `import { StaleComposerNotice } from "../StaleComposerNotice";` | — | — |
+| SettingsNotice | `import { SettingsNotice } from "@/panels/SettingsNotice";` | `neutral`, `info`, `success`, `warning`, `error` | — |
+| Toast | `import { Toast, ToastAction, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@thinkrail/ui/toast";` | `info`, `success`, `warning`, `error` | — |
+| ErrorBoundary | `import { ErrorBoundary } from "@/components/ErrorBoundary";` | — | — |
+| RunningIcon | `import { RunningIcon } from "@/components/RunningIcon";` | — | — |
+| AttentionDot | `import { AttentionDot } from "@/components/AttentionDot";` | — | — |
+| AttentionLine | `import { AttentionLine } from "@thinkrail/ui/attention-line";` | — | — |
