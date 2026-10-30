@@ -20,10 +20,28 @@ const UNIT_NAME = /^(?:[A-Z]|use[A-Z0-9])/;
 const HOOK_NAME = /^use[A-Z0-9]/;
 const UNIT_WRAPPERS = new Set(["memo", "forwardRef"]);
 const MEMO_CACHE = /\b_c\d*\(\d+\)/g;
+const OPT_IN_DIRECTIVES = ["use memo", "use forget"];
 // The compiler skips a unit under one of these directives without a diagnostic.
 const OPT_OUT_DIRECTIVES = COMPILER_OPTIONS.ignoreUseNoForget
 	? []
 	: (COMPILER_OPTIONS.customOptOutDirectives ?? ["use no memo", "use no forget"]);
+
+// TypeScript-only syntax the compiler looks through, as in `memo((props: P) => …) as FC`.
+const TYPE_WRAPPERS = new Set([
+	"TSAsExpression",
+	"TSSatisfiesExpression",
+	"TSNonNullExpression",
+	"TSTypeAssertion",
+	"ParenthesizedExpression",
+]);
+// A component that returns one of these cannot be rendering, so the compiler leaves it alone.
+const NON_NODE_RETURNS = new Set([
+	"ObjectExpression",
+	"ArrowFunctionExpression",
+	"FunctionExpression",
+	"ClassExpression",
+	"NewExpression",
+]);
 
 const WEB_ROOT = resolve(import.meta.dir, "..");
 const BASELINE = resolve(import.meta.dir, "compiler-census.baseline.txt");
@@ -32,8 +50,8 @@ const EXCLUDED = /\.(test|spec|stories)\.[tj]sx?$/;
 interface Bailout {
 	file: string;
 	line: number;
-	fnLine: number | null;
-	fnName: string | null;
+	fnLine: number;
+	fnName: string;
 	reason: string;
 	description: string | null;
 	category: string;
@@ -56,7 +74,9 @@ interface OptOut {
 	start: number;
 }
 
-type FunctionNode = FunctionLike | ArrowFunctionExpression;
+type FunctionNode = (FunctionLike | ArrowFunctionExpression) & {
+	body: NonNullable<(FunctionLike | ArrowFunctionExpression)["body"]>;
+};
 
 function isNode(value: unknown): value is Node {
 	return typeof value === "object" && value !== null && "type" in value;
@@ -78,8 +98,27 @@ function isFunction(node: Node): node is FunctionNode {
 	);
 }
 
+function isClass(node: Node) {
+	return node.type === "ClassDeclaration" || node.type === "ClassExpression";
+}
+
+/** The node `node` hangs from, skipping TypeScript-only wrappers; `child` is the wrapper (or `node`). */
+function parentOf(node: Node, ancestors: Node[]) {
+	let child = node;
+	let index = ancestors.length - 1;
+	while (index >= 0 && TYPE_WRAPPERS.has(ancestors[index]?.type ?? "")) {
+		child = ancestors[index] as Node;
+		index--;
+	}
+	return { parent: ancestors[index], child, above: ancestors.slice(0, Math.max(index, 0)) };
+}
+
+function isWrappedArgument(parent: Node | undefined, child: Node) {
+	return parent?.type === "CallExpression" && parent.callee !== child;
+}
+
 function bindingName(node: Node, ancestors: Node[]): string | null {
-	const parent = ancestors.at(-1);
+	const { parent, child, above } = parentOf(node, ancestors);
 	if (!parent) return null;
 	if (parent.type === "VariableDeclarator" && parent.id.type === "Identifier")
 		return parent.id.name;
@@ -93,9 +132,7 @@ function bindingName(node: Node, ancestors: Node[]): string | null {
 		return parent.key.name;
 	}
 	if (parent.type === "ExportDefaultDeclaration") return "default";
-	if (parent.type === "CallExpression" && parent.callee !== node) {
-		return bindingName(parent, ancestors.slice(0, -1));
-	}
+	if (isWrappedArgument(parent, child)) return bindingName(parent, above);
 	return null;
 }
 
@@ -118,7 +155,7 @@ function ownName(node: FunctionNode, ancestors: Node[]) {
 	const binding = bindingName(node, ancestors);
 	if (binding) return binding;
 	if (node.id) return node.id.name;
-	const parent = ancestors.at(-1);
+	const { parent } = parentOf(node, ancestors);
 	if (parent?.type === "CallExpression" && parent.callee.type === "Identifier") {
 		return `${parent.callee.name}(…)`;
 	}
@@ -137,20 +174,48 @@ function isHookCallee(node: Node) {
 	);
 }
 
-function callsHooksOrCreatesJsx(node: Node): boolean {
-	if (node.type === "JSXElement" || node.type === "JSXFragment") return true;
-	if (node.type === "CallExpression" && isHookCallee(node.callee)) return true;
-	return children(node).some((child) => !isFunction(child) && callsHooksOrCreatesJsx(child));
+/** Whether `test` holds for a node in `fn`'s own body; nested functions and classes are not searched. */
+function inOwnBody(fn: FunctionNode, test: (node: Node) => boolean) {
+	const search = (node: Node): boolean =>
+		test(node) || children(node).some((c) => !isFunction(c) && !isClass(c) && search(c));
+	return search(fn.body);
 }
 
-function optOutDirective(statements: Node[]): OptOut | null {
+function callsHooksOrCreatesJsx(fn: FunctionNode) {
+	return inOwnBody(
+		fn,
+		(node) =>
+			node.type === "JSXElement" ||
+			node.type === "JSXFragment" ||
+			(node.type === "CallExpression" && isHookCallee(node.callee)),
+	);
+}
+
+function isNonNode(node: Node | null) {
+	if (!node) return false;
+	return NON_NODE_RETURNS.has(node.type) || (node.type === "Literal" && "bigint" in node);
+}
+
+function hasComponentShape(fn: FunctionNode) {
+	const [first, second, ...more] = fn.params;
+	if (more.length > 0 || first?.type === "RestElement") return false;
+	if (second && !(second.type === "Identifier" && /ref|Ref/.test(second.name))) return false;
+	if (fn.body.type !== "BlockStatement") return !isNonNode(fn.body);
+	return !inOwnBody(fn, (node) => node.type === "ReturnStatement" && isNonNode(node.argument));
+}
+
+function findDirective(statements: Node[], directives: string[]): OptOut | null {
 	for (const statement of statements) {
 		if (statement.type !== "ExpressionStatement" || !statement.directive) break;
-		if (OPT_OUT_DIRECTIVES.includes(statement.directive)) {
+		if (directives.includes(statement.directive)) {
 			return { directive: statement.directive, start: statement.start };
 		}
 	}
 	return null;
+}
+
+function ownDirective(fn: FunctionNode, directives: string[]) {
+	return fn.body.type === "BlockStatement" ? findDirective(fn.body.body, directives) : null;
 }
 
 function unitName(node: FunctionNode, parent: Node | undefined) {
@@ -161,18 +226,25 @@ function unitName(node: FunctionNode, parent: Node | undefined) {
 }
 
 function isCompilerUnit(node: FunctionNode, ancestors: Node[]) {
-	const parent = ancestors.at(-1);
-	const unitShaped =
-		parent?.type === "CallExpression" && parent.callee !== node
-			? UNIT_WRAPPERS.has(calleeName(parent.callee) ?? "")
-			: UNIT_NAME.test(unitName(node, parent));
-	return unitShaped && callsHooksOrCreatesJsx(node);
+	if (ownDirective(node, OPT_IN_DIRECTIVES)) return true;
+	const { parent, child } = parentOf(node, ancestors);
+	if (isWrappedArgument(parent, child)) {
+		return (
+			parent?.type === "CallExpression" &&
+			UNIT_WRAPPERS.has(calleeName(parent.callee) ?? "") &&
+			callsHooksOrCreatesJsx(node)
+		);
+	}
+	const name = unitName(node, parent);
+	if (HOOK_NAME.test(name)) return callsHooksOrCreatesJsx(node);
+	return UNIT_NAME.test(name) && hasComponentShape(node) && callsHooksOrCreatesJsx(node);
 }
 
 function collectUnits(program: Program) {
 	const units: Unit[] = [];
-	const moduleOptOut = optOutDirective(program.body);
+	const moduleOptOut = findDirective(program.body, OPT_OUT_DIRECTIVES);
 	function visit(node: Node, ancestors: Node[], owners: string[], inUnit: boolean) {
+		if (isClass(node)) return;
 		let nextOwners = owners;
 		let nextInUnit = inUnit;
 		if (isFunction(node)) {
@@ -182,9 +254,7 @@ function collectUnits(program: Program) {
 					start: node.start,
 					end: node.end,
 					name: [...owners, own ?? "<anonymous>"].join("."),
-					optOut:
-						moduleOptOut ??
-						(node.body?.type === "BlockStatement" ? optOutDirective(node.body.body) : null),
+					optOut: moduleOptOut ?? ownDirective(node, OPT_OUT_DIRECTIVES),
 				});
 				nextInUnit = true;
 			}
@@ -217,12 +287,17 @@ function toBailout(file: string, code: string, units: Unit[], error: OxcError): 
 	const label = error.labels[0];
 	const offset = label ? Buffer.from(code).subarray(0, label.start).toString("utf8").length : null;
 	const unit = offset === null ? undefined : units.find((u) => u.start <= offset && offset < u.end);
-	const fnLine = unit ? lineAt(code, unit.start) : null;
+	if (offset === null || !unit) {
+		// A line-number key would churn on every edit above it, so refuse to write one.
+		throw new Error(
+			`compiler-census: ${file}:${offset === null ? "?" : lineAt(code, offset)}: cannot tell which function "${error.message}" belongs to. Put a suppression comment inside the function it disables, or teach the census unit rule this function's shape (scripts/SPEC.md).`,
+		);
+	}
 	return {
 		file,
-		line: offset === null ? (fnLine ?? 0) : lineAt(code, offset),
-		fnLine,
-		fnName: unit?.name ?? null,
+		line: lineAt(code, offset),
+		fnLine: lineAt(code, unit.start),
+		fnName: unit.name,
 		reason: error.message,
 		description: error.helpMessage,
 		category: error.codeframe?.match(/react-compiler\((\w+)\)/)?.[1] ?? error.severity,
@@ -273,7 +348,7 @@ function countBy(items: Bailout[], key: (b: Bailout) => string) {
 }
 
 function bailedFunctionKey(b: Bailout) {
-	return `${b.file}:${b.fnLine ?? b.line}`;
+	return `${b.file}:${b.fnLine}`;
 }
 
 function runCensus() {
@@ -295,8 +370,7 @@ function runCensus() {
 
 function printHuman(census: ReturnType<typeof runCensus>) {
 	for (const b of census.bailouts) {
-		const fn = b.fnName ? ` [${b.fnName}]` : "";
-		console.log(`${b.file}:${b.line}:${fn} ${b.category}: ${b.reason}`);
+		console.log(`${b.file}:${b.line}: [${b.fnName}] ${b.category}: ${b.reason}`);
 	}
 	console.log("");
 	console.log(
@@ -308,9 +382,7 @@ function printHuman(census: ReturnType<typeof runCensus>) {
 }
 
 export function baselineEntries(bailouts: Bailout[]) {
-	const functions = new Set(
-		bailouts.map((b) => `${b.file.split(sep).join("/")} ${b.fnName ?? `:${b.fnLine ?? b.line}`}`),
-	);
+	const functions = new Set(bailouts.map((b) => `${b.file.split(sep).join("/")} ${b.fnName}`));
 	return [...functions].sort();
 }
 

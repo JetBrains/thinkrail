@@ -78,6 +78,47 @@ describe("compiler census identities", () => {
 		expect(entries([factory(false)])).toEqual(["scripts/fixture.tsx Factory.Second"]);
 	});
 
+	it("keys each child on its own when the outer function is not component-shaped", () => {
+		const children = `function Head() ${body(true)} function Cell() ${body(true)}`;
+		const expected = ["scripts/fixture.tsx Table.Cell", "scripts/fixture.tsx Table.Head"];
+		// More than one prop argument, or returning an object, means the compiler skips `Table` itself.
+		expect(
+			entries([`export function Table(rows, columns) { ${children} return <table />; }`]),
+		).toEqual(expected);
+		expect(
+			entries([`export function Table() { ${children} return { Head, Cell, el: <hr /> }; }`]),
+		).toEqual(expected);
+		expect(entries([`export function Row(props, forwardedRef) ${body(true)}`])).toEqual([
+			"scripts/fixture.tsx Row",
+		]);
+	});
+
+	it("follows the compiler past TypeScript wrappers and opt-in directives, and out of classes", () => {
+		expect(
+			entries([`export const Row = forwardRef(((props, forwardedRef) => ${body(true)}) as any);`]),
+		).toEqual(["scripts/fixture.tsx Row"]);
+		expect(
+			entries([
+				`export function helper() { "use memo"; const ref = useRef(0); ref.current = 1; return 1; }`,
+			]),
+		).toEqual(["scripts/fixture.tsx helper"]);
+		expect(
+			entries([
+				`export class Panel { render() { function Row() { "use no memo"; return <p />; } return Row; } }`,
+			]),
+		).toEqual([]);
+	});
+
+	it("refuses a diagnostic it cannot place in a function", () => {
+		const fileWide = [
+			"/* eslint-disable react-hooks/exhaustive-deps */",
+			"export function A({ a }) { return <p>{a}</p>; }",
+		].join("\n");
+		expect(() => censusFile(FIXTURE, fileWide)).toThrow(
+			"fixture.tsx:1: cannot tell which function",
+		);
+	});
+
 	it("records units skipped by an opt-out directive, which the compiler does not report", () => {
 		expect(entries([`export function Row() { "use no memo"; return <p />; }`])).toEqual([
 			"scripts/fixture.tsx Row",
