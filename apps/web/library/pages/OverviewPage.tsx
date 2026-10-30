@@ -50,22 +50,24 @@ export function OverviewPage() {
 							{items.map((doc) => {
 								const Preview = examples[`../examples/${doc.slug}/${doc.preview}.tsx`]?.default;
 								return (
-									<a
+									<div
 										key={doc.slug}
-										href={`#/${doc.slug}`}
 										data-testid={`overview-card-${doc.slug}`}
-										className="flex flex-col overflow-hidden rounded-md border border-border-default bg-container-elevated-bg outline-none transition-shadow hover:shadow-[var(--shadow-md)] focus-visible:ring-2 focus-visible:ring-primary"
+										className="relative flex flex-col overflow-hidden rounded-md border border-border-default bg-container-elevated-bg transition-shadow focus-within:ring-2 focus-within:ring-primary hover:shadow-[var(--shadow-md)]"
 									>
-										<span className="border-border-default border-b px-12 py-8 tr-title-section text-text-default">
+										<a
+											href={`#/${doc.slug}`}
+											className="border-border-default border-b px-12 py-8 tr-title-section text-text-default outline-none after:absolute after:inset-0 after:content-['']"
+										>
 											{doc.name}
-										</span>
-										<span
+										</a>
+										<div
 											inert
 											className="pointer-events-none flex h-[9rem] items-center justify-center overflow-hidden p-16 [&>*]:flex-wrap [&>*]:justify-center"
 										>
 											{Preview ? <Preview /> : null}
-										</span>
-									</a>
+										</div>
+									</div>
 								);
 							})}
 						</div>
