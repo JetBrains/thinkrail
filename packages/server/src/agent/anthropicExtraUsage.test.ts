@@ -8,7 +8,6 @@ import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest, WireModel } from "@thinkrail/contracts";
 import {
 	createSession,
-	disableAnthropicExtraUsageWarning,
 	disposeAllSessions,
 	recheckAnthropicExtraUsage,
 	setSessionManagerFactory,
@@ -17,6 +16,7 @@ import {
 } from "./agentSessionManager";
 import {
 	anthropicSubscriptionAuthActive,
+	disableAnthropicExtraUsageWarning,
 	globalProviderWarnings,
 	shouldWarnAnthropicExtraUsage,
 } from "./anthropicExtraUsage";
@@ -272,6 +272,22 @@ describe("session extra-usage notice", () => {
 		} finally {
 			process.chdir(hostCwd);
 		}
+	});
+
+	test("a session whose settings loaded before the opt-out still stays quiet", async () => {
+		await signIn(OAUTH);
+		const { sessionId } = await createSession({
+			cwd,
+			workspaceId: "ws",
+			model: toWireModel(faux.getModel()),
+		});
+		writeFileSync(
+			join(agentDir, "settings.json"),
+			JSON.stringify({ warnings: { anthropicExtraUsage: false } }),
+		);
+		await setSessionModel(sessionId, anthropicModel());
+		await settle();
+		expect(notices).toEqual([]);
 	});
 
 	test("Don't warn again writes pi's global setting and silences live sessions", async () => {

@@ -16,6 +16,15 @@ export function anthropicExtraUsageWarningEnabled(
 	return settings.getWarnings().anthropicExtraUsage !== false;
 }
 
+export function anthropicExtraUsageWarningEnabledOnDisk(
+	cwd: string,
+	projectTrusted: boolean,
+): boolean {
+	return anthropicExtraUsageWarningEnabled(
+		SettingsManager.create(cwd, undefined, { projectTrusted }),
+	);
+}
+
 export async function anthropicSubscriptionAuthActive(
 	modelRuntime: ExtraUsageSubject["modelRuntime"],
 ): Promise<boolean> {
@@ -43,7 +52,7 @@ export function globalProviderWarnings(): Record<ProviderWarning, boolean> {
 	return { anthropicExtraUsage: warnings?.anthropicExtraUsage !== false };
 }
 
-export async function saveAnthropicExtraUsageWarningOff(): Promise<void> {
+export async function disableAnthropicExtraUsageWarning(): Promise<void> {
 	const settings = globalSettingsManager();
 	settings.setWarnings({ ...settings.getGlobalSettings().warnings, anthropicExtraUsage: false });
 	await settings.flush();

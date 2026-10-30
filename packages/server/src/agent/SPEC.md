@@ -1103,8 +1103,10 @@ shared with the pi CLI. There is no ThinkRail copy of the setting.
 
 - **Once per session per host run.** The entry's `extraUsageWarned` flag is set only after the async
   check passes, the entry is still registered with the same provider, and the setting is *still* on.
-  A concurrent re-check therefore cannot double-warn, and a Don't warn again that lands mid-lookup
-  wins. Triggers mirror pi's: `registerSession` (create and attach),
+  That final setting check reads pi's settings **from disk** (the session's cwd and trust), not the
+  session's in-memory `SettingsManager`. A manager loaded before an opt-out would still say "on":
+  a chat mid-create or mid-attach when another client clicks Don't warn again, or a lookup still in
+  flight. A concurrent re-check cannot double-warn, and the opt-out always wins. Triggers mirror pi's: `registerSession` (create and attach),
   `setSessionModel`, and `recheckAnthropicExtraUsage` after a successful Anthropic login in `auth`.
 - **Central-replaced `anthropic`** is skipped (`opaqueProviderIds`): its credential is Central's and is
   never read.
@@ -1112,8 +1114,8 @@ shared with the pi CLI. There is no ThinkRail copy of the setting.
   code, never text, so the web localizes it. The web replays it like `notify`, so a push that beats
   `session.create`'s response survives. A reload before dismissal loses it, like pi's transient line.
 - **Don't warn again** (`provider.disableWarning`): `disableAnthropicExtraUsageWarning` writes pi's
-  *global* `warnings.anthropicExtraUsage = false` (other global warnings are kept), flushes, then
-  reloads every live session's settings manager so later checks see it. Re-enabling is pi's
+  *global* `warnings.anthropicExtraUsage = false` (other global warnings are kept) and flushes. Live
+  sessions need no reload, because the publish-time disk read sees it. Re-enabling is pi's
   `/settings` or `settings.json`; ThinkRail has no switch by design. `globalProviderWarnings()` feeds
   `ProviderStatusReport.warnings`, which gates the sign-in dialog notice. Both global helpers open pi's
   `SettingsManager` with `projectTrusted: false`. Otherwise a malformed `.pi/settings.json` in the

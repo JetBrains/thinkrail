@@ -76,9 +76,8 @@ import {
 import { removeWorkspaceResourceHistory } from "../resourceHistory";
 import { trashFile } from "../trash";
 import {
-	anthropicExtraUsageWarningEnabled,
+	anthropicExtraUsageWarningEnabledOnDisk,
 	type ExtraUsageSubject,
-	saveAnthropicExtraUsageWarningOff,
 	shouldWarnAnthropicExtraUsage,
 } from "./anthropicExtraUsage";
 import { archiveCommandHistory, publishSessionResourcesChanged } from "./chatResources";
@@ -2514,24 +2513,20 @@ async function warnAnthropicExtraUsage(entry: Entry): Promise<void> {
 	if (entry.extraUsageWarned || entry.disposed || sessions.get(entry.session.sessionId) !== entry)
 		return;
 	if (entry.session.model?.provider !== subject.model?.provider) return;
-	if (!anthropicExtraUsageWarningEnabled(entry.session.settingsManager)) return;
+	const { sessionManager, settingsManager } = entry.session;
+	if (
+		!anthropicExtraUsageWarningEnabledOnDisk(
+			sessionManager.getCwd(),
+			settingsManager.isProjectTrusted(),
+		)
+	)
+		return;
 	entry.extraUsageWarned = true;
 	publishSessionNotice(entry.session.sessionId, "anthropicExtraUsage");
 }
 
 export function recheckAnthropicExtraUsage(): void {
 	for (const entry of sessions.values()) void warnAnthropicExtraUsage(entry);
-}
-
-export async function disableAnthropicExtraUsageWarning(): Promise<void> {
-	await saveAnthropicExtraUsageWarningOff();
-	await Promise.all(
-		[...sessions.values()].map((entry) =>
-			entry.session.settingsManager
-				.reload()
-				.catch((error: unknown) => log.warn("session settings were not reloaded", error as Error)),
-		),
-	);
 }
 
 export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel): void {
