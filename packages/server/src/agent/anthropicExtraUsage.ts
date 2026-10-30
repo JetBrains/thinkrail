@@ -34,13 +34,17 @@ export async function shouldWarnAnthropicExtraUsage(subject: ExtraUsageSubject):
 	return anthropicSubscriptionAuthActive(subject.modelRuntime);
 }
 
+function globalSettingsManager(): SettingsManager {
+	return SettingsManager.create(process.cwd(), undefined, { projectTrusted: false });
+}
+
 export function globalProviderWarnings(): Record<ProviderWarning, boolean> {
-	const warnings = SettingsManager.create(process.cwd()).getGlobalSettings().warnings;
+	const warnings = globalSettingsManager().getGlobalSettings().warnings;
 	return { anthropicExtraUsage: warnings?.anthropicExtraUsage !== false };
 }
 
 export async function saveAnthropicExtraUsageWarningOff(): Promise<void> {
-	const settings = SettingsManager.create(process.cwd());
+	const settings = globalSettingsManager();
 	settings.setWarnings({ ...settings.getGlobalSettings().warnings, anthropicExtraUsage: false });
 	await settings.flush();
 	if (settings.drainErrors().length > 0) throw new Error("pi settings could not be saved");

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Credential, InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -259,6 +259,19 @@ describe("session extra-usage notice", () => {
 		release();
 		await settle();
 		expect(notices).toEqual([]);
+	});
+
+	test("Don't warn again ignores a malformed project settings file in the host's cwd", async () => {
+		const hostCwd = process.cwd();
+		mkdirSync(join(cwd, ".pi"), { recursive: true });
+		writeFileSync(join(cwd, ".pi", "settings.json"), "{ not json");
+		process.chdir(cwd);
+		try {
+			await disableAnthropicExtraUsageWarning();
+			expect(globalProviderWarnings()).toEqual({ anthropicExtraUsage: false });
+		} finally {
+			process.chdir(hostCwd);
+		}
 	});
 
 	test("Don't warn again writes pi's global setting and silences live sessions", async () => {

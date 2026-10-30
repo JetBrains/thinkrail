@@ -1115,7 +1115,9 @@ shared with the pi CLI. There is no ThinkRail copy of the setting.
   *global* `warnings.anthropicExtraUsage = false` (other global warnings are kept), flushes, then
   reloads every live session's settings manager so later checks see it. Re-enabling is pi's
   `/settings` or `settings.json`; ThinkRail has no switch by design. `globalProviderWarnings()` feeds
-  `ProviderStatusReport.warnings`, which gates the sign-in dialog notice.
+  `ProviderStatusReport.warnings`, which gates the sign-in dialog notice. Both global helpers open pi's
+  `SettingsManager` with `projectTrusted: false`. Otherwise a malformed `.pi/settings.json` in the
+  host's cwd would surface through `drainErrors()` and fail a global write that actually succeeded.
 
 The parity entry and its removal gate live in [[pi-compatibility]].
 
