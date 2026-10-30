@@ -430,6 +430,17 @@ test("an endpoint carrying custom headers can't move to another origin from the 
 	});
 });
 
+test("a name with no Latin letters takes its id from the server's host", async () => {
+	await runtime();
+	const [endpoint] = await saveCustomEndpoint({
+		name: "Корпоративный шлюз",
+		baseUrl: "https://llm.corp.example/v1",
+		models: [model("m")],
+	});
+	expect(endpoint?.id).toBe("custom-llm-corp-example");
+	expect(endpoint?.name).toBe("Корпоративный шлюз");
+});
+
 test("a re-detected smaller context never keeps an output budget that no longer fits", async () => {
 	await runtime();
 	await saveCustomEndpoint({

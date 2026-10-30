@@ -336,20 +336,20 @@ export function listCustomEndpoints(): Promise<CustomEndpoint[]> {
 	return Promise.resolve(readEndpoints(parseModelsConfig(readModelsSource(modelsPath()))));
 }
 
-function slug(name: string): string {
-	return (
-		name
-			.toLowerCase()
-			.normalize("NFKD")
-			.replace(/[^a-z0-9]+/g, "-")
-			.slice(0, 40)
-			.replace(/^-+|-+$/g, "") || "server"
-	);
+function slug(text: string): string {
+	return text
+		.toLowerCase()
+		.normalize("NFKD")
+		.replace(/[^a-z0-9]+/g, "-")
+		.slice(0, 40)
+		.replace(/^-+|-+$/g, "");
 }
 
-function newEndpointId(name: string, config: Node | undefined): string {
+function newEndpointId(name: string, baseUrl: string, config: Node | undefined): string {
 	const taken = new Set(Object.keys(providersOf(config)));
-	const base = `${CUSTOM_ENDPOINT_ID_PREFIX}${slug(name)}`;
+	const host = parseBaseUrl(baseUrl);
+	const fallback = host ? slug(new URL(host).hostname) : "";
+	const base = `${CUSTOM_ENDPOINT_ID_PREFIX}${slug(name) || fallback || "server"}`;
 	let id = base;
 	for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
 	return id;
@@ -519,7 +519,7 @@ export function saveCustomEndpoint(draft: CustomEndpointDraft): Promise<CustomEn
 	return commit((body, config) => {
 		if (draft.id !== undefined && !readEndpoints(config).some((e) => e.id === draft.id))
 			throw new Error("That server is no longer in models.json. Reload and retry.");
-		const id = draft.id ?? newEndpointId(draft.name, config);
+		const id = draft.id ?? newEndpointId(draft.name, draft.baseUrl, config);
 		const previous = draft.id === undefined ? undefined : providersOf(config)[draft.id];
 		const value = providerConfig(draft, isObject(previous) ? previous : undefined);
 		return applyEdits(body, modify(body, ["providers", id], value, MODELS_JSON_FORMATTING));
