@@ -31,7 +31,9 @@ function createHarness({
 	runwayWritable = true,
 	movement = { settle: 75, trigger: 100 },
 	mountPending = false,
+	snap = (top: number) => top,
 }: {
+	snap?: (top: number) => number;
 	streaming?: boolean;
 	reducedMotion?: boolean;
 	viewportHeight?: number;
@@ -68,10 +70,11 @@ function createHarness({
 		writeScrollTop: (top) => {
 			const bounded = Math.min(geometry.maxScrollTop, Math.max(0, top));
 			writes.push(bounded);
-			const delta = bounded - geometry.scrollTop;
+			const achieved = snap(bounded);
+			const delta = achieved - geometry.scrollTop;
 			geometry = {
 				...geometry,
-				scrollTop: bounded,
+				scrollTop: achieved,
 				edgeBottom: geometry.edgeBottom === null ? null : geometry.edgeBottom - delta,
 			};
 		},
@@ -1939,5 +1942,111 @@ describe("reading-band on-screen restoration", () => {
 		resume();
 		expect(harness.controller.getMotionKind()).toBe("follow");
 		expect(harness.controller.isNativeInputPending()).toBe(false);
+	});
+});
+
+describe("reading-band quantized scroll writes", () => {
+	const webkitTruncation = Math.floor;
+	const coarseTruncation = (top: number) => Math.floor(top / 2) * 2;
+
+	function returnedMidStream(
+		options: Parameters<typeof createHarness>[0],
+		returnPath: "returnToEdge" | "readerReachedEdge",
+	) {
+		const harness = createHarness(options);
+		harness.setGeometry({ scrollTop: 100, maxScrollTop: 100, edgeBottom: 450 });
+		harness.controller.readerLeft();
+		harness.controller[returnPath]();
+		return harness;
+	}
+
+	it("follows a fractional growth once under reduced motion after the reader returns", () => {
+		for (const returnPath of ["returnToEdge", "readerReachedEdge"] as const) {
+			const harness = returnedMidStream({ reducedMotion: true, snap: webkitTruncation }, returnPath);
+			harness.setGeometry({ edgeBottom: 450.8 });
+			expect(() => harness.controller.contentChanged()).not.toThrow();
+			expect(harness.readGeometry().scrollTop).toBe(100);
+			expect(harness.controller.getSnapshot()).toMatchObject({ following: true, moving: false });
+			expect(harness.pendingFrames()).toBe(0);
+
+			const writes = harness.writes.length;
+			harness.setGeometry({ edgeBottom: 460 });
+			harness.controller.contentChanged();
+			expect(harness.writes).toHaveLength(writes);
+		}
+	});
+
+	it("completes an animated follow whose destination the engine truncates", () => {
+		for (const snap of [webkitTruncation, coarseTruncation]) {
+			const harness = returnedMidStream({ snap }, "returnToEdge");
+			harness.setGeometry({ edgeBottom: 451.9 });
+			harness.controller.contentChanged();
+			advanceUntilIdle(harness);
+			expect(harness.controller.getMotionKind()).toBeNull();
+			expect(harness.controller.getSnapshot().moving).toBe(false);
+			const writes = harness.writes.length;
+			harness.advance(16);
+			expect(harness.writes).toHaveLength(writes);
+		}
+	});
+
+	it("completes a large fractional step at either quantum", () => {
+		for (const reducedMotion of [false, true]) {
+			for (const snap of [webkitTruncation, coarseTruncation]) {
+				const harness = createHarness({ reducedMotion, snap });
+				harness.setGeometry({ edgeBottom: 900.7, maxScrollTop: 900 });
+				harness.controller.contentChanged();
+				advanceUntilIdle(harness);
+				expect(harness.readGeometry().scrollTop).toBe(snap(550.7));
+				expect(harness.controller.getSnapshot().moving).toBe(false);
+			}
+		}
+	});
+
+	it("completes a fractional reveal without rewriting it every frame", () => {
+		for (const reducedMotion of [false, true]) {
+			const harness = createHarness({ reducedMotion, snap: webkitTruncation });
+			harness.controller.revealTo(() => 700.6, true);
+			advanceUntilIdle(harness);
+			expect(harness.readGeometry().scrollTop).toBe(700);
+			expect(harness.writes.filter((write) => write === 700.6).length).toBeLessThanOrEqual(
+				reducedMotion ? 1 : 2,
+			);
+		}
+	});
+
+	it("holds a fractional streaming mount with one write while geometry is unchanged", () => {
+		const harness = createHarness({ mountPending: true, snap: webkitTruncation });
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600.6 });
+		harness.controller.contentChanged();
+		advanceUntilIdle(harness);
+		expect(harness.writes).toEqual([350.6]);
+		expect(harness.readGeometry().scrollTop).toBe(350);
+	});
+
+	it("does not reuse a truncated write once its evidence no longer applies", () => {
+		const harness = createHarness({ reducedMotion: true, snap: webkitTruncation });
+		harness.controller.readerLeft();
+		let target = 100.8;
+		harness.controller.revealTo(() => target, true);
+		expect(harness.writes).toEqual([100.8]);
+
+		target = 101.2;
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBe(101.2);
+		expect(harness.readGeometry().scrollTop).toBe(101);
+
+		harness.setGeometry({ scrollTop: 90 });
+		harness.advance(16);
+		expect(harness.readGeometry().scrollTop).toBe(101);
+
+		const writes = harness.writes.length;
+		harness.setGeometry({ maxScrollTop: 1_200 });
+		harness.advance(16);
+		expect(harness.writes).toHaveLength(writes + 1);
+		harness.advance(16);
+		expect(harness.writes).toHaveLength(writes + 1);
+		advanceUntilIdle(harness);
 	});
 });
