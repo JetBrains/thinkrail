@@ -46,7 +46,9 @@ ourselves and never surface a credential value over the wire.
     Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice, unit-tested with
     fixture data; the kind/detail mapping itself is `agent`'s `describeProviderAuth`, shared with the
     catalog's per-model `WireModel.auth` projection so a provider row and a picker row never disagree. Its runtime reads are restricted to the generation's provider-id allowlist captured before
-    the opaque Central extension loads (after invariant host registrations): providers Central *introduces*
+    the opaque Central extension loads (after invariant host registrations), plus any `custom-*` provider the
+    runtime knows now that is not opaque (`statusProviderIds`), so a custom server saved after the
+    generation started counts as connected without a host restart: providers Central *introduces*
     never become rows or cross the wire. A built-in Central *replaces* (`anthropic`, `openai`, `google-vertex`
     in the real artifact) stays a row — the user must be able to see which providers reach them through
     JetBrains AI — and is reported as `kind: "central"` with no `detail`, decided purely by the id's membership

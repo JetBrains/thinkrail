@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { JbcentralInstall } from "@thinkrail/contracts";
-import { buildProviderReport, type ProviderStatusSources } from "./providerStatus";
+import {
+	buildProviderReport,
+	type ProviderStatusSources,
+	statusProviderIds,
+} from "./providerStatus";
 
 const INSTALL: JbcentralInstall = {
 	platform: "linux",
@@ -26,6 +30,18 @@ function sources(overrides: Partial<ProviderStatusSources> = {}): ProviderStatus
 		...overrides,
 	};
 }
+
+test("custom servers saved after the runtime started join the status allowlist, opaque ids never do", () => {
+	expect(
+		statusProviderIds(new Set(["anthropic", "openai"]), new Set(["anthropic", "custom-central"]), [
+			"anthropic",
+			"openai",
+			"custom-gw-1a2b3c",
+			"custom-central",
+			"central-test",
+		]),
+	).toEqual(["anthropic", "openai", "custom-gw-1a2b3c"]);
+});
 
 describe("buildProviderReport", () => {
 	test("empty runtime carries the closed Central state and install plan", () => {

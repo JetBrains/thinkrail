@@ -147,6 +147,8 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 				),
 			)
 			.toBe(true);
+		const status = await wire.request("provider.status", {});
+		expect(status.providers.find((provider) => provider.id === providerId)?.configured).toBe(true);
 		const listed = await wire.request("customEndpoints.list", {});
 		expect(JSON.stringify(listed)).not.toContain(KEY);
 	} finally {
