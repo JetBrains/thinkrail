@@ -43,7 +43,17 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   probing; the minimum supported version and the global opaque PI-extension path; a one-directional auth
   verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; and
   the per-OS official install plan. It never edits PI model or credential configuration.
-- **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, stdout, stderr }`),
+- **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, timedOut, stdout, stderr }`;
+  `timeoutMs` runs the child in its own process group (POSIX), sends the child `SIGTERM` at the deadline
+  and, once it exits, `SIGKILL`s the whole group, so grandchildren holding a hang (a hook, an ssh helper)
+  die with it; `SIGTERM` first lets git remove its `.lock` files, which a `SIGKILL` would leave behind and
+  so lock the repo for every later write; a direct child that ignores `SIGTERM` is not bounded; it sets
+  `timedOut`, so a caller can name a hang rather than read it as an ordinary nonzero exit. A child in its
+  own group misses the terminal's Ctrl-C, and the blocked host cannot run its `SIGINT` handler until the
+  child exits, so when the host has a controlling terminal a small `/bin/sh` supervisor stays in the
+  host's group, starts the command in a new group (`setsid`, else `set -m`) and turns Ctrl-C into a
+  group `SIGTERM`. Without a terminal the child is spawned detached directly, so the desktop host pays
+  no extra fork),
   `spawnSyncCapturedBytes()` (the same launch and exit semantics with **`stdout` left as bytes**, for a
   caller reading binary child output the UTF-8 decoder would replace — stderr stays decoded text, since a
   diagnostic is only ever read as text) and

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
@@ -10,7 +10,7 @@ import type {
 	ProjectPathStatus,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { canonicalPath, git } from "../git";
+import { canonicalPath, git, INDEX_WRITE_TIMEOUT_MS } from "../git";
 import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
@@ -39,7 +39,9 @@ export function resolveProjectPath(path: string): string {
 }
 
 function gitToplevel(path: string): string | null {
-	const result = git(path, ["rev-parse", "--show-toplevel"]);
+	const result = git(path, ["rev-parse", "--show-toplevel"], {
+		action: "read the repository root",
+	});
 	return result.ok && result.out ? resolve(result.out) : null;
 }
 
@@ -411,20 +413,26 @@ export function createProject(
 }
 
 function bootstrapRepository(path: string): void {
-	const init = git(path, ["init", "-b", "main"]);
-	if (!init.ok) throw new Error(`git init failed: ${path}`);
+	const gitDir = join(path, ".git");
+	const createdGitDir = !existsSync(gitDir);
 	try {
-		const added = git(path, ["add", "-A"]);
+		const init = git(path, ["init", "-b", "main"]);
+		if (!init.ok) throw new Error(`git init failed: ${path}`);
+		const added = git(path, ["add", "-A"], { timeoutMs: INDEX_WRITE_TIMEOUT_MS });
 		if (!added.ok) throw new Error(`git add failed: ${path}`);
 
 		const identity: string[] = [];
-		if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
-		if (!git(path, ["config", "user.email"]).out)
+		const identityProbe = { action: "read the git identity" };
+		if (!git(path, ["config", "user.name"], identityProbe).out)
+			identity.push("-c", "user.name=ThinkRail");
+		if (!git(path, ["config", "user.email"], identityProbe).out)
 			identity.push("-c", "user.email=thinkrail@localhost");
-		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"]);
+		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"], {
+			timeoutMs: INDEX_WRITE_TIMEOUT_MS,
+		});
 		if (!commit.ok) throw new Error(`git commit failed: ${path}`);
 	} catch (err) {
-		rmSync(join(path, ".git"), { recursive: true, force: true });
+		if (createdGitDir) rmSync(gitDir, { recursive: true, force: true });
 		throw err;
 	}
 }

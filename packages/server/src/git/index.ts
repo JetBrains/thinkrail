@@ -32,11 +32,22 @@ export {
 	readCommitSubject,
 	readPathModeAtAsync,
 	remoteRefOid,
+	remoteRefOidAsync,
 	resolveDefaultBranch,
 	resolveListedCommit,
 	tryCurrentBranch,
 } from "./git";
-export { git, gitAsync, gitAsyncBytes, gitAsyncStream, nonInteractiveGitEnv } from "./gitExec";
+export {
+	git,
+	gitAsync,
+	gitAsyncBytes,
+	gitAsyncStream,
+	INDEX_WRITE_TIMEOUT_MS,
+	nonInteractiveGitEnv,
+	SLOW_GIT_TIMEOUT_MS,
+	setSyncGitTimeoutForTests,
+	throwOnTimeout,
+} from "./gitExec";
 export { ignoredPaths } from "./ignored";
 export { assertSafeRef, isSafeRef, remoteNameOf, remoteTrackingRef } from "./refs";
 export { snapshotWorktree } from "./snapshot";

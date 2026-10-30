@@ -1,15 +1,17 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { TodoStore } from "pi-todos/core";
-import { gitCommitPaths } from "../git";
+import { gitCommitPaths, setSyncGitTimeoutForTests } from "../git";
 import { maybeAttachChangeArtifacts, settleChangeArtifacts } from "./artifacts";
+import { readBaselines } from "./baselines";
 import { approveTodoReview, listTodos, startTodoReview } from "./todos";
 
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+const savedPath = process.env.PATH;
 const SESSION = "sess-adopt";
 
 function sh(cwd: string, ...args: string[]): void {
@@ -63,6 +65,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	process.env.PATH = savedPath;
+	setSyncGitTimeoutForTests(undefined);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -194,3 +198,31 @@ test("review resolution rejects a commit past the newest-200 listCommits cap", (
 		startTodoReview({ workspaceId: "w1", sessionId: SESSION, id: `commit:${newest}` }),
 	).not.toThrow();
 });
+
+test.skipIf(process.platform === "win32")(
+	"a HEAD read that times out leaves the work window open, so the next attach records the real head",
+	async () => {
+		const store = new TodoStore(repo, SESSION);
+		const active = store.add({ title: "active" });
+		store.update(active.id, { status: "in_progress" });
+		const bin = join(dataDir, "bin");
+		mkdirSync(bin);
+		writeFileSync(
+			join(bin, "git"),
+			`#!/bin/sh\ncase " $* " in *" --quiet HEAD "*) sleep 3;; esac\nexec ${JSON.stringify(Bun.which("git"))} "$@"\n`,
+		);
+		chmodSync(join(bin, "git"), 0o755);
+		process.env.PATH = `${bin}${delimiter}${savedPath}`;
+		setSyncGitTimeoutForTests(300);
+		await maybeAttachChangeArtifacts("w1", SESSION);
+		await settleChangeArtifacts("w1");
+		process.env.PATH = savedPath;
+		setSyncGitTimeoutForTests(undefined);
+		expect(readBaselines(repo, SESSION)[active.id]).toBeUndefined();
+
+		await maybeAttachChangeArtifacts("w1", SESSION);
+		await settleChangeArtifacts("w1");
+		expect(readBaselines(repo, SESSION)[active.id]?.head).toBe(headSha(repo));
+	},
+	20_000,
+);

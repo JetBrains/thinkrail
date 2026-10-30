@@ -183,7 +183,8 @@ treatment.
   **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the Projects view and the Welcome screen): `project.open` reactivates
   a closed known path under its same id (or opens a new one), then the initiating client selects Project
-  Home while every client receives `project.updated`; on failure `project.inspect` → either offers to
+  Home while every client receives `project.updated`; on failure (except `GIT_TIMEOUT`, which shows its error at once
+  rather than run the same hung probe again) `project.inspect` → either offers to
   bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
   non-git folder is never a silent no-op. The native picker remains the local fast path and keeps its raised

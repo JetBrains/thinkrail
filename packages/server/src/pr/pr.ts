@@ -394,7 +394,9 @@ export async function pushOrigin(
 	cwd: string,
 	args: string[],
 ): Promise<{ ok: true } | { err: string }> {
-	const hasSshCommandConfig = git(cwd, ["config", "core.sshCommand"]).ok;
+	const hasSshCommandConfig = git(cwd, ["config", "core.sshCommand"], {
+		action: "read core.sshCommand",
+	}).ok;
 	const pushed = await gitAsync(cwd, ["push", ...args], {
 		env: pushGitEnv(process.env, hasSshCommandConfig),
 		network: true,
@@ -415,7 +417,7 @@ async function pushToOrigin(cwd: string, branch: string): Promise<string> {
 }
 
 export function refreshedWorkspace(workspaceId: string, expectedBranch: string | undefined) {
-	refreshUserOwnedWorkspace(workspaceId);
+	refreshUserOwnedWorkspace(workspaceId, { strict: true });
 	const ws = getWorkspace(workspaceId);
 	assertSafeRef(ws.branch);
 	if (expectedBranch !== undefined && ws.branch !== expectedBranch) {
