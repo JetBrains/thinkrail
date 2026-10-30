@@ -40,7 +40,7 @@ test("token adoption scans app, shared UI, and every extension web half only", (
 
 test("Tailwind scans the same external roots as the adoption guards", () => {
 	const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
-	expect(css).toContain('@source "../../../packages/ui";');
+	expect(css).toContain('@source "../../../packages/ui/**/*.{ts,tsx}";');
 	expect(css).toContain('@source "../../../thinkrail-extensions/*/web/**/*.{ts,tsx}";');
 	const labels = designSourceFiles().map(designSourceLabel);
 	expect(labels).toContain("index.css");

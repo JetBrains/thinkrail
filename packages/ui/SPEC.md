@@ -5,7 +5,7 @@ status: draft
 title: Shared host UI primitives
 parent: architecture
 depends-on: [module-contracts, module-locales]
-references: [web-color, web-spacing, web-typography]
+references: [web-color, web-spacing, web-typography, submodule-web-library]
 ---
 
 ## Responsibility
@@ -29,78 +29,12 @@ The app's Tailwind sources and adoption guards include this package and extensio
 
 ## Button system
 
-`button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /
-`iconRight`), `IconButton` (icon only — `label` is required and becomes both the `aria-label` and the shared
-`IconTooltip`), and `buttonVariants` for a non-button element that must look like one (a link) — it
-returns the same merged class list the components render, compounds resolved — with
-`buttonDataAttributes` giving such an element the same `data-slot` / `data-variant` / `data-size` /
-`data-icon-only` / `data-selected` contract the components render (the panel tool rails, the Monaco
-comment widget), and `withIconClass(Icon, classes)` for a tinted or animated glyph (a success check, a
-working pulse) — created once at module scope, never during render, so the icon keeps its identity. Neither
-component accepts a native `title`: an explanation is `tooltip` (on `IconButton` it overrides the label's
-tooltip text), rendered through the same `IconTooltip`, so it also shows on a disabled button — the
-place a reason for being unavailable matters most. While `disabled`, a button moves its tooltip trigger to
-the `wrapTrigger` span automatically, so the tooltip survives the disabled button's `pointer-events:
-none`; the value, not the prop's presence, decides, because a Radix trigger such as
-`DropdownMenuTrigger asChild` injects `disabled={false}` into every child and a wrapper would take a
-text button's `min-w-0` truncation away. The button element remounts inside the span when `disabled`
-flips; an explicit `wrapTrigger` keeps the span permanently (and isolates a second Radix trigger), and
-`wrapTrigger={false}` opts out. Every
-ordinary action in the app, the renderer package and extension web halves renders through it; a raw
-`<button>` carrying a button skin is rejected by `apps/web/src/styles/buttonUsage.test.ts` unless that
-test's documented specialized list names it.
-
-- **Variants** (exactly five): `primary` (accent fill — the main action of a surface), `soft-primary`
-  (accent tint + accent text; also every former transparent "green ghost"), `outline` (neutral bordered),
-  `ghost` (no surface, muted text, neutral hover fill — the default for `IconButton`), `destructive` (danger
-  fill; confirms irreversible actions). A call site picks the variant that matches the action's existing
-  look; there is no `soft-default` and no colour override at a call site. `tone` (`warning` | `danger`)
-  is the one sanctioned label colour: on `ghost` and `outline` it keeps the feedback colour in every state
-  (rest, hover, focus-visible, pressed, selected — disabled still wins), because a colour set at the call
-  site loses to ghost's own state text in focus and pressed, exactly when the control is used.
-- **Sizes** (exactly three; border-box, same for every variant and state, radius `rounded-sm`, type
-  `tr-text-button` — the 14px interface face at weight 470, one step above ordinary UI text): `s` 20px
-  high, 4px text padding, 14px icon, 4px icon↔text gap, 20px square icon-only; `m` 24 / 8 / 16 / 4 / 24;
-  `l` 32 / 12 / 20 / 6 / 32 (the default for `Button`; `IconButton` defaults to `m`). At `s` the gap equals the side padding: a 12px icon read as
-  lighter than the 14px label beside it, so the icon was raised to 14px and the gap to 4px to keep the pair
-  legible. Icon weight follows the icon size only — Remix Icon ships Line/Fill, not stroke weights, so
-  there is no per-size weight to match and none is simulated with CSS. Icons never shrink; text buttons
-  size to content unless the layout asks for `w-full`.
-- **States** live in the component, not at the call site: hover uses the variant's hover role
-  (soft-primary: `control-soft-primary-bg-hovered` plus a `primary-muted` border, so its accent label
-  stays AA); pressed (`:active`, pointer down or Space held) looks exactly like hover — the same `active:` classes mirror the `hover:` ones, so a keyboard press without a pointer shows it too — and never moves geometry; focus-visible is a 2px `primary` outline with a 2px offset in every variant, so
-  it stays visible over a primary or destructive fill and on every surface (`ghost`, which has no surface
-  of its own, also takes its hover fill and default text while focused, so the focused button reads as a
-  control and not only as a ring around empty space) — except a `ghost` icon-only button, which draws the
-  ring 2px inside its square, because those sit flush in 28px header strips and rails whose
-  `overflow: hidden` would clip an outer ring; disabled keeps the element in
-  place on the `control-disabled-*` / `control-primary-disabled-*` / `control-destructive-disabled-*` roles
-  (never opacity, never hidden) through the `button-disabled` variant the app stylesheet defines — a
-  `data-disabled` element, or a natively `:disabled` one that is not loading, so a button inside a disabled
-  `<fieldset>` takes the skin too; `loading` swaps the icon (with `spinIcon`, it instead rotates the button's own icon in place — the refresh idiom of `apps/web/src/components` *Loading vocabulary* — and under reduced motion shows the static spinner glyph instead, so the state stays visible) (or, with no icon, overlays the label it keeps
-  transparent for width and the accessible name) for a spinner at the size's icon size, sets `aria-busy`, and natively disables the
-  element so the action cannot run twice; `selected` — or an open Radix trigger (`data-state="open"`) — is
-  the persistent toggle/open fill (`control-bg-selected`) for `outline` and `ghost`, distinct from pressed;
-  `soft-primary` shows selected as its hover look (`primary-muted` border on the hover tint), the one
-  accent step that keeps its label AA, so an expanded accent chip still reads as expanded. Toggles keep
-  `aria-pressed`; disclosures keep `aria-expanded`.
-- **Rows**: a list row that paints its own hover or selected fill uses the same roles as ghost's fills
-  (`control-bg-hovered` / `control-bg-selected`), so a ghost action on it would show no feedback. Such a
-  row carries `data-row`, and a `ghost` button inside it takes `container-elevated-bg` for hover, pressed,
-  focus-visible and selected instead — the raised look row actions had before the system — so a hovered
-  row action and an open row menu stay visible against the filled row. Marked rows: project and workspace
-  rows, change rows, todo rows, every cmdk `CommandItem`, and a history-overlay row only while it is
-  selected — those rows sit on the overlay's elevated surface and fill only when selected, so an unselected
-  row keeps ghost's own hover fill.
-- **Call sites own placement only**: margins, self/flex/grid placement, `w-full`, positioning, responsive
-  visibility and whole-button hover reveal. Height, padding, gap, radius, colours, borders, typography and
-  state skins are rejected by the adoption guard. Documented exceptions live in that guard with a reason
-  (red-on-hover raw actions that `tone` does not express; extension select options that must wrap long
-  labels).
-- **Not buttons**: tabs, menu items, switches, toggle segments, radio/segmented options, tree and list rows,
-  disclosure headers, chips, inline text links, the composer send pill, native window controls and large
-  choice cards keep their own primitives or components.
-- The dialog close button and `ToastClose` are `IconButton ghost m`.
+`button` is the one implementation of an action button: `Button`, `IconButton`, `buttonVariants`,
+`buttonDataAttributes` and `withIconClass`. Its contract — variants, sizes, states, tone, tooltips,
+loading, selected, rails and what is *not* a button — and its usage guidance, live states and examples
+are owned by the component library ([[submodule-web-library]]): authored in
+`apps/web/library/content/components/` and generated into [COMPONENTS.md](./COMPONENTS.md).
+`apps/web/src/styles/buttonUsage.test.ts` is its adoption guard.
 
 ## Primitive invariants
 

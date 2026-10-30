@@ -1,5 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { type Colors, paletteVar, type Role } from "./colorsModel";
+
+export * from "./colorsModel";
 
 export const STYLES_DIR = join(import.meta.dir, "..", "src", "styles");
 export const SOURCE_PATH = join(STYLES_DIR, "colors.json");
@@ -7,35 +10,10 @@ export const GENERATED_CSS_PATH = join(STYLES_DIR, "generated", "colors.css");
 export const THEMES_DIR = join(import.meta.dir, "..", "src", "themes");
 export const THEME_SCHEMA_PATH = join(THEMES_DIR, "schema.ts");
 
-export const paletteVar = (key: string) =>
-	`--${key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()}`;
-
 export function themeColorKeys(): string[] {
 	const schema = readFileSync(THEME_SCHEMA_PATH, "utf8");
 	const block = /export const THEME_COLOR_KEYS = \[([\s\S]*?)\] as const;/.exec(schema)?.[1] ?? "";
 	return [...block.matchAll(/"([A-Za-z]+)"/g)].map((m) => m[1] as string);
-}
-
-export interface Role {
-	readonly from: string;
-	readonly alpha?: string;
-	readonly fallback?: string;
-	readonly publish: boolean;
-	readonly note?: string;
-}
-
-export interface Effect {
-	readonly dark: string;
-	readonly light: string;
-	readonly publish: boolean;
-	readonly note?: string;
-}
-
-export interface Colors {
-	readonly metadata: { readonly version: string; readonly note?: string };
-	readonly scale: Readonly<Record<string, number>>;
-	readonly roles: Readonly<Record<string, Role>>;
-	readonly effects: Readonly<Record<string, Effect>>;
 }
 
 export function loadColors(path = SOURCE_PATH): Colors {

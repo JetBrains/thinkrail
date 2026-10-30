@@ -1,0 +1,252 @@
+import { chromium, type Page } from "@playwright/test";
+
+const BASE = process.argv[2] ?? "http://localhost:24391/";
+const failures: string[] = [];
+const check = (ok: boolean, message: string) => {
+	console.log(`${ok ? "ok  " : "FAIL"} ${message}`);
+	if (!ok) failures.push(message);
+};
+
+async function open(page: Page, route: string) {
+	await page.goto(`${BASE}#/${route}`);
+	await page.locator("#library-main h1").first().waitFor();
+}
+
+const browser = await chromium.launch();
+const context = await browser.newContext({
+	viewport: { width: 1440, height: 900 },
+	permissions: ["clipboard-read", "clipboard-write"],
+});
+const page = await context.newPage();
+const errors: string[] = [];
+page.on("pageerror", (error) => errors.push(String(error)));
+page.on("console", (message) => {
+	if (message.type() === "error") errors.push(message.text());
+});
+
+await page.goto(BASE);
+await page.locator("#library-main h1").first().waitFor();
+check(
+	(await page.locator("h1").innerText()) === "Components overview",
+	"the site opens on the components overview",
+);
+const cards = page.locator('[data-testid^="overview-card-"]');
+check((await cards.count()) === 2, "overview shows a card per component");
+await page.getByTestId("overview-search").fill("icon");
+check((await cards.count()) === 1, "overview search filters the cards");
+await page.getByTestId("overview-search").fill("");
+await page.getByTestId("overview-card-button").click();
+await page.locator("h1", { hasText: "Button" }).waitFor();
+check(true, "an overview card opens its component page");
+await page.getByRole("link", { name: "IconButton", exact: true }).first().click();
+await page.locator("h1", { hasText: "IconButton" }).waitFor();
+check(true, "the sidebar reaches the IconButton page");
+await page.getByRole("link", { name: "Guides" }).click();
+await page.locator("h1", { hasText: "Using the library" }).waitFor();
+check(true, "the header reaches the Using the library guide");
+for (const [area, title] of [
+	["Foundations", "Color"],
+	["Patterns", "Notices"],
+	["Vocabulary", "UI vocabulary"],
+] as const) {
+	await page
+		.getByRole("navigation", { name: "Sections" })
+		.getByRole("link", { name: area })
+		.click();
+	await page.locator("#library-main h1", { hasText: title }).waitFor();
+	check(true, `the header reaches the ${area} area (${title})`);
+}
+
+const liveExpected: Record<string, readonly string[]> = {
+	color: ["color-roles", "color-alpha"],
+	typography: ["type-primitives", "type-styles", "type-counts", "type-weights", "prose-systems"],
+	spacing: ["spacing-scale", "layout-roles"],
+	radius: ["radius-scale"],
+	icons: ["icon-styles", "icon-tiers", "custom-icons"],
+	themes: ["themes", "color-palettes"],
+};
+for (const [route, blocks] of Object.entries(liveExpected)) {
+	await open(page, route);
+	for (const block of blocks) {
+		const rows = await page
+			.locator(`[data-live-block="${block}"] tr, [data-live-block="${block}"] > div > div`)
+			.count();
+		check(rows > 1, `${route}: live block ${block} renders its source (${rows} rows)`);
+	}
+}
+await open(page, "typography");
+const sample = page.locator('[data-live-block="type-styles"] .tr-heading-xl').first();
+const sampleSize = await sample.evaluate((element) => getComputedStyle(element).fontSize);
+check(
+	sampleSize === "24px",
+	`type samples render in their own class, outside the prose root (${sampleSize})`,
+);
+await open(page, "radius");
+const radius = await page
+	.locator('[data-live-block="radius-scale"] tbody tr')
+	.first()
+	.locator("span[aria-hidden]")
+	.evaluate((element) => getComputedStyle(element).borderTopLeftRadius);
+check(radius === "2px", `radius specimens use the live token (${radius})`);
+
+await open(page, "button");
+const themeIds: string[] = [];
+await page.getByTestId("library-theme").click();
+for (const item of await page.locator("[data-theme-id]").all())
+	themeIds.push((await item.getAttribute("data-theme-id")) ?? "");
+await page.keyboard.press("Escape");
+check(themeIds.length >= 6, `theme menu lists every bundled theme (${themeIds.join(", ")})`);
+const backgrounds = new Set<string>();
+for (const id of themeIds) {
+	await page.getByTestId("library-theme").click();
+	await page.locator(`[data-theme-id="${id}"]`).click();
+	const applied = await page.evaluate(() => document.documentElement.dataset.theme);
+	const bg = await page.evaluate(
+		() => getComputedStyle(document.querySelector("#root > div") as Element).backgroundColor,
+	);
+	backgrounds.add(bg);
+	check(applied === id, `theme ${id} applies through the theme engine`);
+}
+check(backgrounds.size >= 4, `themes change the surface colour (${backgrounds.size} distinct)`);
+
+await page.getByTestId("library-theme").click();
+await page.locator('[data-theme-id="dark"]').click();
+const primary = page.locator('[data-slot="button"][data-variant="primary"][data-size="m"]').first();
+await page.locator("#library-main").click({ position: { x: 5, y: 5 } });
+await primary.focus();
+await page.keyboard.press("Shift+Tab");
+await page.keyboard.press("Tab");
+const focus = await page.evaluate(() => {
+	const el = document.activeElement as HTMLElement;
+	const style = getComputedStyle(el);
+	return {
+		visible: el.matches(":focus-visible"),
+		outline: `${style.outlineStyle} ${style.outlineWidth}`,
+	};
+});
+check(
+	focus.visible && focus.outline === "solid 2px",
+	`keyboard focus shows the ring (${focus.outline})`,
+);
+
+await open(page, "icon-button");
+const basic = page.getByTestId("example-icon-button-basic");
+await basic.getByRole("button", { name: "Copy", exact: true }).hover();
+const tooltip = page.getByRole("tooltip");
+await tooltip.first().waitFor({ timeout: 3000 });
+check(
+	(await tooltip.first().innerText()).includes("Copy"),
+	"IconButton label shows as its tooltip on hover",
+);
+await page.mouse.move(0, 0);
+
+const disabled = page
+	.getByTestId("example-icon-button-disabled-reason")
+	.getByTestId("example-preview");
+const disabledButton = disabled.locator('[data-slot="button"]');
+check(await disabledButton.isDisabled(), "disabled IconButton is natively disabled");
+await disabledButton.scrollIntoViewIfNeeded();
+const disabledBox = await disabledButton.boundingBox();
+if (disabledBox)
+	await page.mouse.move(
+		disabledBox.x + disabledBox.width / 2,
+		disabledBox.y + disabledBox.height / 2,
+		{ steps: 5 },
+	);
+await page.getByRole("tooltip").first().waitFor({ timeout: 3000 });
+check(
+	(await page.getByRole("tooltip").first().innerText()).includes("one review at a time"),
+	"disabled IconButton still shows its reason tooltip",
+);
+await page.mouse.move(0, 0);
+
+const menu = page.getByTestId("example-icon-button-menu-trigger").getByTestId("example-preview");
+await menu.locator('[data-slot="button"]').click();
+await page.getByRole("menu").waitFor();
+check(
+	(await menu.locator('[data-slot="button"]').getAttribute("data-selected")) === "true",
+	"open menu trigger shows the selected state",
+);
+await page.keyboard.press("Escape");
+
+const toggle = page
+	.getByTestId("example-icon-button-toggle")
+	.getByTestId("example-preview")
+	.locator('[data-slot="button"]');
+await toggle.click();
+check((await toggle.getAttribute("aria-pressed")) === "true", "toggle sets aria-pressed");
+
+await open(page, "button");
+const loading = page.getByTestId("example-button-loading").getByTestId("example-preview");
+const save = loading.locator('[data-slot="button"]').first();
+const widthBefore = (await save.boundingBox())?.width ?? 0;
+await save.click();
+check((await save.getAttribute("aria-busy")) === "true", "loading sets aria-busy");
+check(await save.isDisabled(), "loading natively disables the button");
+await save.click({ force: true });
+check(
+	(await loading.locator("output").innerText()) === "1",
+	"a second click while loading is ignored",
+);
+check(
+	Math.abs(((await save.boundingBox())?.width ?? 0) - widthBefore) < 0.5,
+	"loading keeps the width",
+);
+
+const example = page.getByTestId("example-button-dialog-actions");
+check((await example.locator("pre").count()) === 0, "example code is collapsed by default");
+await example.getByTestId("library-show-code").click();
+check(
+	(await example.locator("pre").innerText()).includes("export default function DialogActions"),
+	"show code reveals the example source",
+);
+await example.getByTestId("library-copy").click();
+const copied = await page.evaluate(() => navigator.clipboard.readText());
+check(
+	copied.includes('from "@thinkrail/ui/button"'),
+	"copy puts the example source on the clipboard",
+);
+
+const outline = page.getByRole("navigation", { name: "On this page" });
+await outline.getByRole("link", { name: "Tone", exact: true }).first().click();
+await page.waitForTimeout(300);
+check(
+	(await outline.locator('[aria-current="location"]').innerText()) === "Tone",
+	"the page outline jumps to a section and marks it current",
+);
+
+await page.setViewportSize({ width: 320, height: 844 });
+await open(page, "button");
+check(!(await page.locator("aside").first().isVisible()), "narrow layout hides the sidebar");
+await page.getByRole("button", { name: "Open navigation" }).click();
+await page.locator("#library-nav-drawer").waitFor();
+await page.locator("#library-nav-drawer").getByRole("link", { name: "IconButton" }).click();
+await page.locator("h1", { hasText: "IconButton" }).waitFor();
+check(
+	!(await page.locator("#library-nav-drawer").isVisible()),
+	"narrow drawer navigates and closes",
+);
+const overflow = await page.evaluate(() => {
+	const main = document.getElementById("library-main") as HTMLElement;
+	return Math.max(
+		document.documentElement.scrollWidth - window.innerWidth,
+		main.scrollWidth - main.clientWidth,
+	);
+});
+check(overflow <= 0, `narrow layout does not scroll the page sideways (${overflow}px)`);
+for (const route of ["button", "color", "typography", "themes", "vocabulary"]) {
+	await open(page, route);
+	const sideways = await page.evaluate(() => {
+		const main = document.getElementById("library-main") as HTMLElement;
+		return main.scrollWidth - main.clientWidth;
+	});
+	check(sideways <= 0, `narrow ${route} page does not scroll sideways (${sideways}px)`);
+}
+
+check(errors.length === 0, `no runtime errors (${errors.join(" | ")})`);
+await browser.close();
+if (failures.length) {
+	console.log(`\n${failures.length} failed`);
+	process.exit(1);
+}
+console.log("\nall checks passed");

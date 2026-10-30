@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss" source(".");
 @import "./styles/generated/fonts.css";
 @import "./styles/generated/typography.css";
 @import "./styles/generated/colors.css";
@@ -6,8 +6,8 @@
 @import "./styles/tokens.css";
 @import "./styles/global.css";
 
-@source "../../../packages/ui";
-@source "../../../packages/resource-renderers/src";
+@source "../../../packages/ui/**/*.{ts,tsx}";
+@source "../../../packages/resource-renderers/src/**/*.{ts,tsx}";
 @source "../../../thinkrail-extensions/*/web/**/*.{ts,tsx}";
 
 @custom-variant button-disabled (&:is([data-disabled="true"], :disabled:not([data-loading])));
