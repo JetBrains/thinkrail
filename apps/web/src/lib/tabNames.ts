@@ -74,7 +74,6 @@ export function terminalName(t: Translator, title: string, tabKey?: string): str
 	return index === null ? title : t("store.terminal.defaultTitle", { index });
 }
 
-/** The target id a command tab key names (`""` for the prepare-only tab), or `null` for a shell tab. */
 export function commandTabTarget(tabKey: string): string | null {
 	if (tabKey === `${COMMAND_TAB_KEY_PREFIX}-prepare`) return "";
 	const prefix = `${COMMAND_TAB_KEY_PREFIX}:`;

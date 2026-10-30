@@ -197,7 +197,7 @@ Ubuntu 24.04 WebKitGTK, WebView2) all meet it, so web code may use baseline-17 A
 `URL.canParse`.
 
 The module set: `transport` / `store` / branded `shell` + its headless `shell/layout` child;
-layout-agnostic Project/File/Specs/Changes/Review renderers; registry-dispatched resource bodies and lazy xterm terminal
+layout-agnostic Project/File/Specs/Changes/Review/Run renderers; registry-dispatched resource bodies and lazy xterm terminal
 bodies; the shared `prompt` behavior module; and the `chat` module (`ChatView`, content-block renderers, tool registry, and full Composer). The
 workbench owns center and left/right/bottom auxiliary strips/groups around those bodies, never the panels
 themselves.

@@ -50,12 +50,20 @@ create the tools it needs based on how you actually work.
   its own model and live token and cost readout. Steer a running turn or queue a follow-up, delegate to
   subagents, and work a shared plan the agent updates and you edit — each completed step can be committed
   and reviewed on its own.
+- **Run the project from any workspace.** Press **Set up run** once and the agent learns how the project
+  is prepared and started — dependencies, env files, the dev server, tests — and saves a recipe on your
+  machine. From then on the topbar's Run segment starts it in whichever workspace you are in, each
+  worktree on its own stable ports, in a terminal tab the app keeps; a web app offers *Open in browser*
+  once it listens, a failed run offers *Fix with agent*, and the agent can run the same targets to check
+  its own work. The Run tab lists the targets, the prepare commands and the recipe, which you can edit by
+  hand. (macOS and Linux; Windows follows.)
 - **Specs as ground truth.** A connected graph of `SPEC.md` files lives beside the code; the agent reads,
   searches, and maintains it through dedicated `spec_*` tools, so intent survives the session. The
   read-only Specs tool renders the graph as a tree in the workbench.
 - **Skills and workflows.** Portable Agent Skills you already keep for other coding agents are read in
-  place, and bundled workflows guide project setup, design brainstorming, and shipping a pull request —
-  pushing the workspace branch and opening or updating its GitHub PR through your own `gh`.
+  place, and bundled workflows guide project setup, design brainstorming, learning how the project runs,
+  and shipping a pull request — pushing the workspace branch and opening or updating its GitHub PR
+  through your own `gh`.
 - **Agent tools beyond the shell.** Web research, structured multiple-choice questions the agent asks you
   in the chat instead of guessing, and inline diagrams, option comparisons and file previews rendered right
   in the chat — when the agent proposes a UI change it shows a before/after mockup you can comment on like

@@ -25,10 +25,6 @@ function openExternal(url: string): boolean {
 	return opened !== null;
 }
 
-/**
- * Executes Run actions for one workspace. Auto-open fires once per execution, only in the client that
- * started it (a popup blocker leaves a toast with the link instead).
- */
 export function useRunRunner(workspaceId: string | null, projectId: string | null): RunRunner {
 	const t = useT();
 	const pushToast = useAppStore((state) => state.pushToast);

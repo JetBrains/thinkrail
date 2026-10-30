@@ -167,7 +167,6 @@ function endedSlot(workspaceId: string, last: PersistedLastRun): Slot {
 	};
 }
 
-/** A host restart finds no live run; whatever was interrupted is "ended, outcome unknown". */
 function reviveLastRuns(loaded: PersistedRun): void {
 	let changed = false;
 	for (const [workspaceId, byTarget] of Object.entries(loaded.lastRuns)) {
@@ -555,7 +554,6 @@ export async function startRun(
 			assertStillOwned(slot);
 			slot.execution.ports = leased;
 			slot.boundPorts = boundVariables.map((name) => leased[name] ?? 0).filter((port) => port > 0);
-			// Persisted inside the chain, so the next allocation already sees this workspace's assignments.
 			const previous = state().ports[workspaceId];
 			if (
 				Object.keys(leased).length > 0 &&
@@ -678,7 +676,6 @@ export function readRunOutput(
 	return { runId: record.execution.runId, text: (record.tail ?? "").slice(-maxChars) };
 }
 
-/** Stop everything live in a workspace; with `force`, admission closes too (removal), and the promise resolves once the terminal reported every end. */
 export async function stopWorkspaceRuns(
 	workspaceId: string,
 	options: { force?: boolean } = {},
@@ -722,7 +719,6 @@ export function forgetWorkspaceRuns(workspaceId: string): void {
 	if (changed) persist();
 }
 
-/** Test seam: forget everything, including the terminal subscription. */
 export function resetRunState(): void {
 	for (const map of slots.values()) {
 		for (const slot of map.values()) clearPoll(slot);

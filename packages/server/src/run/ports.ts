@@ -2,15 +2,10 @@ import { RUN_RECIPE_LIMITS } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 
 export interface PortLeaseInput {
-	/** Declared variable → natural port. */
 	natural: Record<string, number>;
-	/** This workspace's persisted assignments. */
 	current: Record<string, number>;
-	/** The Default workspace prefers the natural port; a worktree scans upward from natural + 1. */
 	isDefaultWorkspace: boolean;
-	/** Something is live in this workspace: its assignments are kept as they are, never re-probed. */
 	workspaceLive: boolean;
-	/** Ports no candidate may take: leases of live runs elsewhere on this host and sibling workspaces' assignments. */
 	taken: ReadonlySet<number>;
 	isFree: (port: number) => Promise<boolean>;
 }
@@ -39,16 +34,11 @@ async function pick(
 	throw new CodedError("RUN_NO_FREE_PORT", `No free port found near ${preferred ?? start}`);
 }
 
-/**
- * Resolve every declared variable to a port for one workspace start. Pure apart from the probe; the caller
- * serializes calls and marks the result as live before it yields, so concurrent starts cannot collide.
- */
 export async function allocatePorts(input: PortLeaseInput): Promise<Record<string, number>> {
 	const result: Record<string, number> = {};
 	const chosen = new Set<number>();
 	const excluded = (): ReadonlySet<number> => new Set([...input.taken, ...chosen]);
 
-	// Kept assignments first, so a fresh variable cannot take a port a sibling variable already holds.
 	for (const name of Object.keys(input.natural)) {
 		const held = input.current[name];
 		if (held === undefined || input.taken.has(held) || chosen.has(held)) continue;
@@ -68,7 +58,6 @@ export async function allocatePorts(input: PortLeaseInput): Promise<Record<strin
 	return result;
 }
 
-/** One promise chain: allocations run strictly one after another, whatever the caller's concurrency. */
 export function createSerialQueue(): <T>(task: () => Promise<T>) => Promise<T> {
 	let tail: Promise<unknown> = Promise.resolve();
 	return <T>(task: () => Promise<T>): Promise<T> => {

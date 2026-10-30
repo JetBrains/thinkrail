@@ -11,19 +11,20 @@ tags: [ui, topbar, public-surface-checked]
 ## Responsibility
 
 The persistent "where am I / what state is it in" strip after the ThinkRail mark: one row of captioned
-segments — **Project · Workspace · Branch · from base · Remote · Pull request** — whose values are the
-controls for switching project or workspace, acting on the workspace, reading or retargeting the
-branch, and taking the branch's **next delivery step** (publish, push, open a PR, sync, fix checks, mark
-ready, merge, settle). It renders
-what the store and `workspace.branchStatus` (older hosts: `workspace.openReview`) already report and runs
-actions through the panels-owned ship runner; it owns no host state.
+segments — **Project · Workspace · Branch · from base · Remote · Pull request · Run** — whose values are
+the controls for switching project or workspace, acting on the workspace, reading or retargeting the
+branch, taking the branch's **next delivery step** (publish, push, open a PR, sync, fix checks, mark
+ready, merge, settle), and **running the project** in this workspace (set up, run, stop, open, fix). It
+renders what the store, `workspace.branchStatus` (older hosts: `workspace.openReview`) and the run
+snapshots already report and runs actions through the panels-owned ship and run runners; it owns no host
+state.
 
 ## Boundary
 
 - **Owns:** the segment grammar (caption over a 20px value row, segments separated by space alone),
   the pill/chip/split-button classes every value uses, the project switcher menu, the workspace menu
   (actions + sibling switcher + New workspace), the branch card (copy, based-on, compare-to picker, remote
-  and review rows), the Remote and Pull request segments, and the responsive drop order.
+  and review rows), the Remote, Pull request and Run segments, and the responsive drop order.
 - **Public surface (`index.ts`):**
   - `LocationBar`
 - **Allowed deps:** `store` (projects, workspaces, session state, diff base selector, toasts), `transport`
@@ -32,14 +33,17 @@ actions through the panels-owned ship runner; it owns no host state.
   `workspaceActions` (the one implementation of open-in / rename / reveal / remove / `editor.list` /
   `workspace.list`, shared with `ProjectTree`), `RemoveWorkspaceDialog`, `BranchPicker` + `branches`,
   `useOpenProject`, `useBranchStatus` (`openReviewLabel`, `resolveBranchReview`), `shipActions` (the
-  derivation), and `useShipRunner` (the action runner with its dialogs, shared with the Plan pane). A
+  derivation), `useShipRunner` (the action runner with its dialogs, shared with the Plan pane),
+  `runActions` (the Run derivation, shared with the Run tab), `useRunRunner` (the run action runner,
+  shared with the Run tab and the run terminal footer) and `useRunHydration` (the run slice's read). A
   `ShipStrip` keyed by the workspace id owns the runner: a compose draft survives the segments unmounting on a
   disconnect, while moving to another workspace discards the draft, its retry, and any pending preview with
   it, so a submit can never send one workspace's draft for another (the same binding rule as rename and
   Remove).
 - **Forbidden:** server/shared/pi; layout engine, intents, or frame state; being imported by anything
   other than `Shell`; a second implementation of a workspace action that `panels/workspaceActions` has,
-  or of a ship action (push, open PR, sync) that `panels/useShipRunner` has.
+  of a ship action (push, open PR, sync) that `panels/useShipRunner` has, or of a run action that
+  `panels/useRunRunner` has.
 
 ## Grammar
 
@@ -67,8 +71,8 @@ actions through the panels-owned ship runner; it owns no host state.
   input opts out with `window-no-drag` (unit-tested), which is the deliberate relaxation of the shell's
   "buttons only in `topbar-actions`" rule for this strip alone.
 - Drop order as the window narrows: project segment below `sm`, branch segment below `md`, a Remote
-  segment **without an action** below `md`, and a Pull request segment with neither a review nor a next
-  action below `sm`. The workspace segment, a Pull request segment with a review or a next action, and a
+  segment **without an action** below `md`, a Pull request segment with neither a review nor a next
+  action below `sm`, and a Run segment whose run is neither live nor failed below `md`. The workspace segment, a Pull request segment with a review or a next action, and a
   Remote segment carrying an action never hide; below `md` their split buttons collapse to the icon. The
   workspace keeps a 64px minimum, so a strip squeezed by native insets clips its trailing segments, never
   the workspace name (e2e `topbar-chrome` keeps `scope-name` visible at phone width with insets). Inside the
@@ -145,6 +149,22 @@ actions through the panels-owned ship runner; it owns no host state.
   so a repository without required review can merge once CI allows. The branch card adds a **Checks** row
   and a **Review** row (approved / changes requested by whom, or waiting for review) — the review decision
   is information, never an action gate.
+- **Run** (v101 `RUN_PROTOCOL_VERSION`; absent on an older host and on a win32 host, where project runs
+  are not available yet) is `panels/runActions` rendered in the strip's grammar. Without a recipe its
+  split button reads **Set up run** (▾ *Run tab…*), which hands `/skill:running-the-project …` to the
+  workspace chat. With one, the segment **follows the most recently started run** of the workspace —
+  caption `Run · <target>`, a status chip (`Starting…` · `Running` · `Running · :port` · `Stopping…` ·
+  `Stopped` · `Finished` · `Exited N` · `Ended` for an outcome lost to a host restart) with a live dot —
+  or, with nothing run yet, the primary target. Live: **Stop** (disabled while stopping) plus an **Open**
+  button once a serve target listens on a declared url; ▾ Restart, Open in browser, Show terminal, the
+  other targets, Fix with agent, Run tab. Idle: **Run <target>** (the followed target, else the primary);
+  a non-zero exit puts **Fix with agent** first and *Run again* second; ▾ the other targets, *Run …
+  without prepare*, *Prepare only*, Show terminal, Fix, Run tab. Starting a run reveals its host-born
+  command tab in this surface (the `reveal-terminal` intent — host-born tabs never place themselves);
+  Open rewrites a loopback url to the transport's hostname for a remote client; auto-open fires only in
+  the client that pressed Run, once per execution, falling back to a toast when the browser blocks the
+  popup. Everything shown comes from `run.state` / `run.recipe` snapshots hydrated by `useRunHydration`
+  and kept current by their pushes ([[submodule-web-panels]] owns the derivation and the runner).
 - **CI polling** belongs to the topbar's `useBranchStatus` (the Shell's hook opts in; the Plan pane's
   instance of the same key does not, so nothing polls twice): every 20 s while the open review's checks are
   pending and the window is visible, a fresh review read that skips the origin fetch. A ship action's

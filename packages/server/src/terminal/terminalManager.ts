@@ -38,7 +38,6 @@ interface TerminalEntry {
 	output: OutputBatcher;
 	recorder: OutputRecorder;
 	grid: PtyGrid;
-	/** Command tabs only: a stop was requested, so whatever end follows was asked for. */
 	stopRequested: boolean;
 	escalation: ReturnType<typeof setTimeout> | null;
 }
@@ -53,9 +52,7 @@ export interface CommandTabEnd {
 }
 
 export interface CommandTabSpec {
-	/** POSIX sh source, run as `/bin/sh -c <script>` in the worktree root. */
 	script: string;
-	/** Overlaid on the filtered PTY environment, so the terminal filter cannot strip it. */
 	env: Record<string, string>;
 }
 
@@ -147,9 +144,7 @@ function signalProcessGroup(pid: number, signal: "SIGTERM" | "SIGKILL"): void {
 	} catch {
 		try {
 			process.kill(pid, signal);
-		} catch {
-			// Already gone: the exit path reports it.
-		}
+		} catch {}
 	}
 }
 

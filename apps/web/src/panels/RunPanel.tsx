@@ -347,7 +347,6 @@ export function RunPanel({ workspace }: { workspace: Workspace }) {
 	);
 }
 
-/** Props-driven body of the Run tab; `RunPanel` is the only store-connected wrapper. */
 export function RunPanelView({
 	workspaceId,
 	supported,

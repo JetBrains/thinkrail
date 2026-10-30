@@ -272,6 +272,14 @@ local workspace-view placement, which this module never receives.
   test persists only after its printed marker arrives and asserts the replay contains it. A non-forced close
   that expects "not busy" also waits for a printed marker first: until startup finishes, rc files run short
   child processes (`$(groups)`, `lesspipe`, `dircolors`) that correctly make the shell read as busy.
+- `commandTabs.test.ts` — real-PTY command tabs: the script's exit code, a compound command running to
+  the end with injected variables surviving the environment filter, a group stop that kills a grandchild
+  and a TERM-ignoring process, always-busy close with a forced close ending as `closed`, the
+  `workspace-closed` and `host-stop` reasons, a refused double start and a restart's fresh recording, and
+  a failed start leaving no tab; `terminalManager.test.ts` adds the namespace rejection and a revived
+  command tab's non-spawning attach.
+- `e2e/run.spec.ts` — a project run from the Run segment: prepare and server output in the command tab,
+  listening on the leased port, stop, a failed one-shot and its footer, two clients, workspace removal.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
   cross-client tab convergence, addressed-output isolation. Its output markers likewise never appear
   contiguously in the typed command: keystroke echo reaches the screen first, split across output batches.

@@ -106,7 +106,6 @@ interface Props {
 	tabKey: string;
 	workspaceId: string;
 	initialCommand?: string;
-	/** A command tab's current execution: a change means the host spawned a new process under the same tab. */
 	runGeneration?: string | null;
 }
 

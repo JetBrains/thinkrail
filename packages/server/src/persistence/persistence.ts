@@ -279,7 +279,6 @@ export function saveTurns(turns: PersistedTurns): void {
 
 export const RUN_VERSION = 1;
 
-/** The stored envelope; `recipe` is re-validated by the run module on load, so it stays `unknown` here. */
 export interface PersistedRunDocument {
 	recipe: unknown;
 	revision: number;
@@ -292,8 +291,6 @@ export interface PersistedRunProject {
 	settings: RunSettings;
 }
 
-/** Written at start as `interrupted` with no `endedAt` and overwritten at the end: a boot that still finds it
- * learns the run never ended on the host's watch — "ended, outcome unknown" — never a running status. */
 export interface PersistedLastRun {
 	runId: string;
 	targetId: string | null;
@@ -306,9 +303,7 @@ export interface PersistedLastRun {
 export interface PersistedRun {
 	version: typeof RUN_VERSION;
 	projects: Record<string, PersistedRunProject>;
-	/** workspaceId → declared port variable → leased port. */
 	ports: Record<string, Record<string, number>>;
-	/** workspaceId → target id (`""` for prepare) → the last ended execution's metadata. */
 	lastRuns: Record<string, Record<string, PersistedLastRun>>;
 }
 
@@ -334,7 +329,6 @@ function parseRunDocument(value: unknown): PersistedRunDocument | null | undefin
 	return { recipe: value.recipe, revision: value.revision, learnedAt: value.learnedAt, learnedBy };
 }
 
-/** Structural read only: the recipe's own rules are the run module's validator; a recipe it rejects is dropped there, not repaired here. */
 function parseRun(raw: unknown): PersistedRun | null {
 	if (!isRecord(raw) || raw.version !== RUN_VERSION) return null;
 	if (!isRecord(raw.projects) || !isRecord(raw.ports) || !isRecord(raw.lastRuns)) return null;

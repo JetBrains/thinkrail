@@ -102,10 +102,17 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   GitHub PR, its checks and review decision with mark ready, merge, fix failing checks or integrate a
   diverged branch with the agent, reopen, and delete the remote branch
   ([[submodule-server-pr]], [[submodule-web-shell-location-bar]]).
+- **Run the project** — the agent learns once how a project is prepared and run (a machine-local recipe
+  of idempotent prepare commands, named targets and the port variables the project reads) and the topbar's
+  Run segment runs it in any workspace: each worktree gets its own stable ports, the run lives in a
+  terminal tab the host owns, a serve target offers *Open in browser* once it listens, a failed run offers
+  *Fix with agent*, and the agent can run the same targets to verify its own work; the Run tab holds the
+  targets, prepare, recipe and the project's switches ([[submodule-server-run]],
+  [[submodule-web-shell-location-bar]], [[submodule-web-panels]]).
 - **Specs** — the agent searches, navigates, and maintains the spec graph through `spec_*` tools; the
   read-only Specs tool renders it as a tree ([[module-spec-graph]], [[submodule-server-spec]]).
-- **Workflows** — bundled workflow skills for project setup, design brainstorming, and shipping a PR
-  ([[module-thinkrail-workflow]]).
+- **Workflows** — bundled workflow skills for project setup, design brainstorming, shipping a PR, and
+  learning or fixing how the project runs ([[module-thinkrail-workflow]]).
 - **Providers** — in-app sign-in and API keys through pi's auth, JetBrains AI through the user's
   `central` CLI, and the user's own OpenAI-compatible servers (a company gateway or a local model server)
   added from Settings into pi's `models.json` ([[submodule-server-auth]], [[central-integration]],

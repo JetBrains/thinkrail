@@ -1301,7 +1301,6 @@ interface AppState {
 	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
 	closeTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
 	setActiveTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
-	/** Select a host terminal that is already placed in this surface, else place it (host-born tabs never place themselves). */
 	revealTerminalTab: (workspaceId: string, tabKey: string, title: string) => void;
 	beginChatStart: (workspaceId: string) => void;
 	endChatStart: (workspaceId: string) => void;
@@ -1430,7 +1429,6 @@ interface AppState {
 	requestReviewFocus: (workspaceId: string, commentId: string, surface: ReviewFocusSurface) => void;
 	clearReviewFocus: (commentId?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
-	/** A `run.state` read that landed (fenced by generation) or a `run.stateChanged` push. */
 	applyRunState: (state: RunWorkspaceState, connectionGeneration?: number) => void;
 	applyProjectRun: (push: RunRecipeChangedPush, connectionGeneration?: number) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;

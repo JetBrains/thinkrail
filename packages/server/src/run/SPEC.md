@@ -24,9 +24,11 @@ The agent uses the same recipe and the same runs to verify its work.
   per-(workspace, target) execution state and its retained diagnostics tail; the script a command tab
   runs and the environment it gets; the `run.recipe` / `run.state` publisher seam.
 - **Public surface (barrel):** `getProjectRun`, `setRecipe`, `setPrimaryTarget`, `setRunSettings`,
-  `startRun`, `restartRun`, `stopRun`, `runPrepare`, `listRunState`, `readRunOutput`,
-  `stopWorkspaceRuns`, `forgetWorkspaceRuns`, `setRunPublisher`, `resetRunState` (test seam), the
-  validator `validateRecipe` and the `RunRecipeError` field-error type.
+  `startRun` (a `null` target is the prepare-only run), `restartRun`, `stopRun`, `listRunState`,
+  `readRunOutput`, `stopWorkspaceRuns`, `stopAllRuns`, `forgetWorkspaceRuns`, `setRunPublisher` (+
+  `RunPublisher`), `resetRunState` (test seam); the recipe validator `validateRecipe` / `assertRecipe` /
+  `RecipeInvalidError`; `allocatePorts`; `stripAnsi`; the tab-key vocabulary `runTabKey`,
+  `targetIdOfTabKey`, `PREPARE_TAB_KEY`; `RUN_OUTPUT_TAIL_CHARS`.
 - **Consumers:** `host` serves `run.*`, wires the publisher, installs the agent tool's seam, and calls
   `stopWorkspaceRuns(id, { force: true })` from workspace removal and host stop — before terminals close
   and the worktree is reclaimed. The `run_project` tool (`agent`) reaches every operation through that
@@ -108,7 +110,10 @@ strip from an *inherited* environment and that can never collide with the host's
 4. **The script** is composed with single-quote escaping, one dim `$ <command>` echo line per command,
    `set -e`, no `exec`: a prepare failure exits with that command's code; the target runs last, so the
    shell's exit status is the target's (a signal is 128 + n). Non-interactive `sh` has no job control, so
-   the shell and every descendant share the process group the terminal module signals.
+   the shell and every descendant share the process group the terminal module signals. Between prepare
+   and the target the script creates a **sentinel file** (`<data dir>/run-sentinels/<runId>`); the module
+   polls it (with the port probe) and its appearance is both the `starting → running` transition and the
+   release of the workspace's prepare queue — observed from the filesystem, never parsed from output.
 5. The command tab is `thinkrail-run:<targetId>`, titled by the target; `runPrepare` uses
    `thinkrail-run-prepare`, outside the target namespace, with the same lifecycle.
 
@@ -127,8 +132,10 @@ server's watcher cannot recreate files under `git worktree remove`.
 
 **Diagnostics.** At every end the execution's ANSI-stripped tail (≤ 64 KB) is retained in memory on the
 record (current and last-ended execution per slot) for the agent's `output`; `run.json` keeps only
-`{ runId, startedAt, endedAt, status, exitCode }`, so after a host restart every command tab is
-reconstructed as `exited { code: null }` — ended, outcome unknown — never a fabricated code.
+`{ runId, targetId, startedAt, endedAt, status, exitCode }` per slot — written as `interrupted` with no
+`endedAt` at admission and overwritten at the end, so a boot that still finds the admission record knows
+the run never ended on the host's watch and reconstructs it as `exited { code: null }` — ended, outcome
+unknown — never a fabricated code and never a running status.
 
 ## Decisions
 
@@ -173,7 +180,12 @@ reconstructed as `exited { code: null }` — ended, outcome unknown — never a 
   sibling and cross-variable exclusion, `RUN_NO_FREE_PORT`, concurrent starts in two workspaces during a
   slow prepare receive distinct ports.
 - `script.test.ts` — quoting (quotes, newlines), `a && b`, `FOO=1 cmd`, `cd`, prepare failure code.
-- `runs.test.ts` — the state machine with a fake terminal seam: intent-based `stopped`, restart, a
-  cancelled start, removal mid-allocation, recipe save during a run leaving the live snapshot intact,
-  URL discovery from output, reconstruction after restart.
-- Real-PTY coverage of command tabs lives in `terminal`; the wire and skew cases in `host`.
+- `runs.test.ts` — against the real terminal module and `/bin/sh`: a one-shot's exit code and prepare
+  order, a serve target leasing its port and reaching `listening`, intent-based `stopped`, a refused second
+  start and a restart under one tab with the previous tail still readable, Default-natural / worktree + 1
+  leases persisted, concurrent starts in two workspaces during a slow prepare getting distinct ports while
+  one workspace prepares one run at a time, removed-workspace refusals and lease cleanup, a recipe edit
+  leaving the live snapshot intact, and reconstruction after a restart.
+- `host/runHandlers.test.ts` — the wire: validation message and code, revision conflict, settings,
+  unknown project/workspace, a Default-workspace run to exit; `e2e/run.spec.ts` — the whole surface in a
+  browser without an agent; `e2e/run-setup.live.spec.ts` — the set-up skill end to end with a real model.

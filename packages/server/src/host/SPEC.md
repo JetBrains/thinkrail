@@ -450,7 +450,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   fresh process yet, so every mark found necessarily predates it. Without this, a review in flight at the
   last shutdown would spin `Reviewing…` forever and Review All would skip the item forever (its own
   `reviewing !== true` filter);
-  `ackSend.ts` (the send-ack policy — see "Get right"); `titleTool.ts` (the **`set_title` host**, installed through agent's `setTitleToolHost` — the
+  `ackSend.ts` (the send-ack policy — see "Get right"); `runTool.ts` (the **`run_project` host**, installed
+  through agent's `setRunToolHost` — the composition of `agent` + `run` + `workspaces` + `projects` only
+  the host may make: it resolves a session to its workspace and project, stamps a tool write with the
+  session, and starts agent-origin runs); the `run.*` handlers (project- and workspace-scoped, user origin)
+  and `setRunPublisher` → `run.recipeChanged` / `run.stateChanged` broadcasts, subscribed from
+  `RUN_PROTOCOL_VERSION`; `stop()` calls `stopAllRuns` before `closeAllTerminals`; `titleTool.ts` (the **`set_title` host**, installed through agent's `setTitleToolHost` — the
   composition of `agent` + `workspaces` only the host may make). The main agent names things; the host
   only enforces the write policy (the old host-driven passes — first-words, then a cheap-model refine on
   the first settled turn, then a send-time cheap-model chat title — kept producing names users wanted to
@@ -477,7 +482,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
     reaps *everything* rooted in the worktree (for a user-owned `kind: "external"` one, everything except
     the checkout itself) but is **non-blocking**:
     it does the fast part synchronously — `forgetWorkspace` (drop the record → gone from `workspace.list`
-    immediately) → `evictSpecIndex` (drop the spec cache) → `closeWorkspaceTerminals` (kill its PTYs) —
+    immediately) → `evictSpecIndex` (drop the spec cache) → `stopWorkspaceRuns(id, { force: true })`
+    (close the run module's admission so no pending start can spawn, and SIGKILL every live project run's
+    process group) → `closeWorkspaceTerminals` (kill its PTYs — command tabs report their end to the run
+    module here) → `forgetWorkspaceRuns` (drop the workspace's port leases and last runs) —
     **acks**, then runs the slow reclamation in the **background** (`archiveTeardown`, fire-and-forget):
     `removeWorkspaceSessions` (abort a streaming turn, dispose the live sessions, **and** purge pi's
     on-disk transcripts for the cwd) → `reclaimWorktree` (`git worktree remove`; a hard no-op for an

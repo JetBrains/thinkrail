@@ -2,10 +2,6 @@ import { useEffect } from "react";
 import { selectSupportsRun, useAppStore } from "../store";
 import { getTransport } from "../transport";
 
-/**
- * Hydrate-then-stream for the run slice: the pushes are subscribed at transport bootstrap, so a read on
- * every connection and every (workspace, project) activation seeds what the pushes keep current.
- */
 export function useRunHydration(workspaceId: string | null, projectId: string | null): void {
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const status = useAppStore((state) => state.status);

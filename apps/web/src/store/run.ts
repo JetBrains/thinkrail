@@ -12,7 +12,6 @@ export function isLiveRun(execution: Pick<RunExecution, "status">): boolean {
 	return LIVE_RUN_STATUSES.has(execution.status);
 }
 
-/** The execution the topbar follows: the most recently started one, live first. */
 export function latestExecution(state: RunWorkspaceState | undefined): RunExecution | null {
 	if (!state || state.executions.length === 0) return null;
 	const live = state.executions.filter(isLiveRun);

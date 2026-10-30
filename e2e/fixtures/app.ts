@@ -152,7 +152,6 @@ async function disposeLiveSessions(page: Page): Promise<void> {
 					await wire.request("session.dispose", { sessionId: session.sessionId }, 30_000);
 				}
 			}
-			// A workspace-owned run outlives its chats; its worktree is removed next, so kill it first.
 			const runs: RunWorkspaceState = await wire.request(
 				"run.state",
 				{ workspaceId: workspace.id },

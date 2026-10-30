@@ -53,7 +53,6 @@ export const E2E_BINARY_PORT = PORT_BASE + 2;
 
 export const E2E_RESTART_PORT = PORT_BASE + 4;
 
-/** The natural port a seeded run recipe declares; the Default workspace leases it, a worktree the next one. */
 export const E2E_RUN_PORT = PORT_BASE + 6;
 
 export const E2E_DATA_DIR = join(tmpdir(), `thinkrail-e2e-${E2E_STATE_KEY}`);

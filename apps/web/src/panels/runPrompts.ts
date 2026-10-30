@@ -2,7 +2,6 @@ import type { RunExecution } from "@thinkrail/contracts";
 
 export const RUN_SKILL = "running-the-project";
 
-/** Both prompts open with the skill reference pi expands in `prompt`, `steer` and `followUp` alike. */
 export const SETUP_RUN_PROMPT = `/skill:${RUN_SKILL} Set up how this project is prepared and run in this workspace: learn the recipe, try it, and save it with run_project.`;
 
 export function fixRunPrompt(execution: RunExecution | null, targetLabel: string | null): string {

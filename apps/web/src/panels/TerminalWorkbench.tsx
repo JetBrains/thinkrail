@@ -75,7 +75,6 @@ const FOOTER_CHIP: Record<ReturnType<typeof statusChip>["tone"], string> = {
 	info: "bg-feedback-info-subtle text-feedback-info",
 };
 
-/** The ended command tab's status and its two next steps; while the run is live the topbar and the Run tab carry Stop. */
 function RunTerminalFooter({
 	workspaceId,
 	execution,

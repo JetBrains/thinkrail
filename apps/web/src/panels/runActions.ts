@@ -142,7 +142,6 @@ function startItem(
 	};
 }
 
-/** The topbar's Run segment and the Run tab's action menu derive from this one table. */
 export function runActions(t: Translator, context: RunContext): RunSegmentModel | null {
 	if (!runAvailable(context)) return null;
 	const recipe = context.run?.document?.recipe ?? null;
@@ -269,7 +268,6 @@ export function runActions(t: Translator, context: RunContext): RunSegmentModel 
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]", "[::]"]);
 
-/** A loopback URL the host resolved points at the host machine, which a remote client reaches by the transport's hostname. */
 export function browserUrl(url: string, transportHostname: string): string {
 	try {
 		const parsed = new URL(url);

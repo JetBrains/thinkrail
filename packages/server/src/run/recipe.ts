@@ -39,7 +39,6 @@ function command(value: unknown, path: string, errors: RunRecipeError[]): string
 	return value;
 }
 
-/** `id` is reported even when the rest of the target fails, so `primary` is judged against every named target. */
 function target(
 	value: unknown,
 	index: number,
@@ -113,7 +112,6 @@ function target(
 	return { id, target: result };
 }
 
-/** Every rule of the recipe contract, reported as field errors the Edit dialog and the agent both read. */
 export function validateRecipe(value: unknown): RecipeValidation {
 	const errors: RunRecipeError[] = [];
 	if (!isRecord(value)) return { ok: false, errors: [{ path: "", message: "must be an object" }] };

@@ -296,7 +296,9 @@ test("a hidden local frame keeps the host terminal reserved without attaching un
 		"terminal.list",
 		{ workspaceId: workspace.id },
 	);
-	expect(catalog.tabs).toEqual([{ tabKey: "thinkrail-initial", title: "Terminal 1" }]);
+	expect(catalog.tabs).toEqual([
+		{ tabKey: "thinkrail-initial", title: "Terminal 1", kind: "shell" },
+	]);
 
 	const peer = await context.newPage();
 	await peer.goto("/");

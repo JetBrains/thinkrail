@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
 	DEFAULT_CONFIG,
+	DEFAULT_RUN_SETTINGS,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
+	type LayoutToolId,
 	RECENT_MODELS_LIMIT,
 	type ReviewFixDetails,
 	SETTLE_IDLE_DAYS,
@@ -15,6 +17,7 @@ import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
+	COMMAND_TAB_KEY_PREFIX,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
@@ -48,6 +51,7 @@ import {
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
+	RUN_PROTOCOL_VERSION,
 	readToolResponseMessage,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
@@ -547,8 +551,28 @@ test("provider warnings are pinned to v99", () => {
 
 test("custom endpoints are pinned to v101 and own only custom-* providers", () => {
 	expect(CUSTOM_ENDPOINTS_PROTOCOL_VERSION).toBe(101);
-	expect(PROTOCOL_VERSION).toBe(101);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CUSTOM_ENDPOINTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.customEndpointsProbe).toBe("customEndpoints.probe");
 	expect(isCustomEndpointId(`${CUSTOM_ENDPOINT_ID_PREFIX}gateway`)).toBe(true);
 	expect(isCustomEndpointId("ollama")).toBe(false);
+});
+
+test("project runs are pinned to v102 with their methods, channels, codes and the run tool", () => {
+	expect(PROTOCOL_VERSION).toBe(102);
+	expect(RUN_PROTOCOL_VERSION).toBe(102);
+	expect(WS_METHODS.runRecipe).toBe("run.recipe");
+	expect(WS_METHODS.runSetRecipe).toBe("run.setRecipe");
+	expect(WS_METHODS.runSetPrimary).toBe("run.setPrimary");
+	expect(WS_METHODS.runSetSettings).toBe("run.setSettings");
+	expect(WS_METHODS.runStart).toBe("run.start");
+	expect(WS_METHODS.runRestart).toBe("run.restart");
+	expect(WS_METHODS.runStop).toBe("run.stop");
+	expect(WS_METHODS.runPrepare).toBe("run.prepare");
+	expect(WS_METHODS.runState).toBe("run.state");
+	expect(WS_CHANNELS.runRecipeChanged).toBe("run.recipeChanged");
+	expect(WS_CHANNELS.runStateChanged).toBe("run.stateChanged");
+	expect(COMMAND_TAB_KEY_PREFIX).toBe("thinkrail-run");
+	expect(DEFAULT_RUN_SETTINGS).toEqual({ autoOpen: false, agentMayRun: true });
+	const tools: LayoutToolId[] = ["projects", "specs", "files", "review", "plan", "run"];
+	expect(tools).toContain("run");
 });

@@ -610,7 +610,17 @@ ReviewSnapshot>`** with **`setWorkspaceReview`** (a `review.get` read landing) a
 **`applyReviewChanged`** (folds a `review.changed` push — full snapshot, idempotent; every client,
 including a mutation's initiator, converges here — no optimism); `applyWorkspaceRemoved` drops the
 entry; the pending-draft count is a selector (`selectReviewDraftCount`), never duplicated in
-components. The **Skills-reload badge** rides the same tick without a separate signal:
+components. The **run slice** (`store/run.ts`) follows the same shape — **`runByWorkspace:
+Record<workspaceId, RunWorkspaceState>`** and **`runByProject: Record<projectId, ProjectRun>`** with
+**`applyRunState(state, connectionGeneration?)`** / **`applyProjectRun(push, connectionGeneration?)`**
+folding either a read (generation-fenced) or a push as an idempotent full snapshot, gated by
+`selectSupportsRun` (v101) and dropped for a removed workspace; the pure helpers `latestExecution` (the
+topbar's followed run: the most recently started live execution, else the most recent), `executionForTarget`
+and `isLiveRun` are the only readings of an execution list, so the segment, the Run tab and the terminal
+footer never disagree. Reads live in `panels/useRunHydration` — the store holds no fetch. **`TerminalTab.kind`**
+mirrors the catalog's `shell` | `command` so a command tab is recognised without a key test, and
+**`revealTerminalTab`** appends the `reveal-terminal` intent (select the placed tab, else place it) for the
+host-born tabs that never place themselves. The **Skills-reload badge** rides the same tick without a separate signal:
   `noteFsChanged` also folds **`skillChangeTickByWorkspace: Record<workspaceId, tick>`** — the tick of the
   most recent *skill-relevant* batch, from the host-authored `payload.skillChange` semantic (`detected` for
   a concrete project-skill path, `unknown` for a genuinely pathless uncertainty, `none` for concrete
