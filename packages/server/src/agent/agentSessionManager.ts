@@ -76,6 +76,7 @@ import {
 import { removeWorkspaceResourceHistory } from "../resourceHistory";
 import { trashFile } from "../trash";
 import {
+	anthropicExtraUsageWarningEnabled,
 	type ExtraUsageSubject,
 	saveAnthropicExtraUsageWarningOff,
 	shouldWarnAnthropicExtraUsage,
@@ -2513,6 +2514,7 @@ async function warnAnthropicExtraUsage(entry: Entry): Promise<void> {
 	if (entry.extraUsageWarned || entry.disposed || sessions.get(entry.session.sessionId) !== entry)
 		return;
 	if (entry.session.model?.provider !== subject.model?.provider) return;
+	if (!anthropicExtraUsageWarningEnabled(entry.session.settingsManager)) return;
 	entry.extraUsageWarned = true;
 	publishSessionNotice(entry.session.sessionId, "anthropicExtraUsage");
 }

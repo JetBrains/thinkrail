@@ -239,6 +239,28 @@ describe("session extra-usage notice", () => {
 		expect(globalProviderWarnings()).toEqual({ anthropicExtraUsage: false });
 	});
 
+	test("a check still awaiting auth stays quiet when Don't warn again lands first", async () => {
+		await signIn({ type: "api_key", key: "sk-ant-api03-normal" });
+		await createSession({ cwd, workspaceId: "ws", model: anthropicModel() });
+		await settle();
+		await signIn(OAUTH);
+		const checkAuth = runtime.checkAuth.bind(runtime);
+		let release: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		runtime.checkAuth = async (...args) => {
+			await gate;
+			return checkAuth(...args);
+		};
+
+		recheckAnthropicExtraUsage();
+		await disableAnthropicExtraUsageWarning();
+		release();
+		await settle();
+		expect(notices).toEqual([]);
+	});
+
 	test("Don't warn again writes pi's global setting and silences live sessions", async () => {
 		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ theme: "dark" }));
 		await signIn(OAUTH);
