@@ -10,6 +10,7 @@ import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Command, CommandContext } from "../commands";
+import { openFindInFiles } from "../findInFiles";
 import { chatDisplayName, copyText } from "../lib";
 import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
@@ -60,7 +61,13 @@ import {
 	useAppStore,
 	workspaceName,
 } from "../store";
-import { errorText, getTransport, supportsHostSearch, wsErrorCode } from "../transport";
+import {
+	errorText,
+	getTransport,
+	supportsHostSearch,
+	supportsTextSearch,
+	wsErrorCode,
+} from "../transport";
 import { type HostHitTargets, openHostHit } from "./openHostHit";
 import { createPaletteBackfill, mergeProjectWorkspaces } from "./paletteBackfill";
 import {
@@ -243,6 +250,9 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			historyAvailable: historySessionId !== null,
 			canCreateProject: selectSupportsOnboarding({ protocolVersion }),
 			settingsShortcut,
+			findInFilesAvailable:
+				supportsTextSearch(protocolVersion) &&
+				(activeWorkspace !== null || contextProject !== null),
 			readAction,
 			canSettle: activeWorkspace !== null && canSettleWorkspace(protocolVersion, activeWorkspace),
 			settled,
@@ -270,6 +280,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 					const target = selectHistoryTarget(store());
 					if (target) store().requestHistoryOpen(target);
 				},
+				findInFiles: openFindInFiles,
 				markRead: markWorkspaceRead,
 				markUnread: markWorkspaceUnread,
 				settle: settleWorkspace,

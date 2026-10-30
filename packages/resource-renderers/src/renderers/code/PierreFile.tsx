@@ -3,7 +3,7 @@ import { File, VirtualizerContext } from "@pierre/diffs/react";
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { AnchorDraft, ResourceViewProps } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
@@ -71,6 +71,8 @@ function PierreFileSurface({
 	onPlacedThreadIds,
 	viewState,
 	onViewState,
+	reveal,
+	onRevealHandled,
 }: ResourceViewProps) {
 	const t = useT();
 	const text = content.kind === "text" ? content.text : "";
@@ -149,6 +151,25 @@ function PierreFileSurface({
 	);
 	const { virtualizer, metrics, attach } = usePierreVirtualizer(attachScroller);
 	usePierreFocus(rootRef, virtualizer, [{ review }], placedThreadIds);
+	const revealLine = reveal?.line;
+	const revealTick = reveal?.tick;
+	const revealHandled = useEffectEvent((tick: number) => onRevealHandled?.(tick));
+	useEffect(() => {
+		if (revealLine === undefined || revealTick === undefined) return;
+		let frame = 0;
+		let attempts = 0;
+		const attempt = () => {
+			if (virtualizer.revealLine(revealLine)) {
+				setSelectedLines({ start: revealLine, end: revealLine });
+				revealHandled(revealTick);
+				return;
+			}
+			attempts += 1;
+			if (attempts < 30) frame = requestAnimationFrame(attempt);
+		};
+		attempt();
+		return () => cancelAnimationFrame(frame);
+	}, [virtualizer, revealLine, revealTick]);
 
 	return (
 		<PierreScroller

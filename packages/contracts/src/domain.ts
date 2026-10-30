@@ -1556,6 +1556,41 @@ export interface SearchQueryResult {
 	superseded?: true;
 }
 
+export const TEXT_SEARCH_LIMITS = {
+	lines: 2000,
+	fileBytes: 1_000_000,
+	lineChars: 400,
+	minQuery: 2,
+	maxQuery: 200,
+} as const;
+
+export interface TextSearchMatch {
+	/** 1-based line number in the file. */
+	line: number;
+	/** 1-based UTF-16 column and length of the first match in the full line, for opening at it. */
+	column: number;
+	length: number;
+	/** The matched line, cut to `TEXT_SEARCH_LIMITS.lineChars` around its first match. */
+	text: string;
+	/** `[start, end)` UTF-16 offsets of every match inside `text`. */
+	ranges: [number, number][];
+}
+
+export interface TextSearchFile {
+	path: string;
+	matches: TextSearchMatch[];
+}
+
+export type TextSearchEnd = "complete" | "limit" | "failed";
+
+export interface TextSearchBatch {
+	seq: number;
+	/** The workspace whose files these are; absent when the context resolves to no root. */
+	root?: { projectId: string; workspaceId: string };
+	files: TextSearchFile[];
+	done?: { reason: TextSearchEnd; files: number; lines: number };
+}
+
 /** The transcript window around a chat hit; files and specs render client-side through `fs.readFile`. */
 export interface SearchPreviewTarget {
 	kind: "chat";

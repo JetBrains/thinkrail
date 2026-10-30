@@ -1,6 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import type { editor } from "monaco-editor/editor/editor.api.js";
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffectEvent, useId, useLayoutEffect, useRef, useState } from "react";
 import { type ResourceHost, useResourceHost, useResourcePreferences } from "../host";
 import type { ResourceDescriptor, ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
@@ -44,6 +44,8 @@ export default function MonacoEditor({
 	review,
 	viewState,
 	onViewState,
+	reveal,
+	onRevealHandled,
 }: ResourceViewProps) {
 	const t = useT();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
@@ -167,6 +169,25 @@ export default function MonacoEditor({
 		else codeEditor.revealLineInCenter(line);
 		review.onFocusHandled();
 	}, [review]);
+
+	const revealLine = reveal?.line;
+	const revealColumn = reveal?.column;
+	const revealLength = reveal?.length;
+	const revealTick = reveal?.tick;
+	const revealHandled = useEffectEvent((tick: number) => onRevealHandled?.(tick));
+	useLayoutEffect(() => {
+		const codeEditor = editorRef.current;
+		if (!codeEditor || revealLine === undefined || revealTick === undefined) return;
+		revealLineNow(codeEditor, revealLine);
+		const column = revealColumn ?? 1;
+		codeEditor.setSelection({
+			startLineNumber: revealLine,
+			startColumn: column,
+			endLineNumber: revealLine,
+			endColumn: column + (revealLength ?? 0),
+		});
+		revealHandled(revealTick);
+	}, [revealLine, revealColumn, revealLength, revealTick]);
 
 	return (
 		<>

@@ -54,6 +54,7 @@ export {
 	surveyRatingValues,
 	TERMINAL_REPLAY_KB,
 	TERMINAL_WINDOWS_SHELLS,
+	TEXT_SEARCH_LIMITS,
 	THEME_MODES,
 	TODO_NUDGE_PREFIX,
 	tallyResources,

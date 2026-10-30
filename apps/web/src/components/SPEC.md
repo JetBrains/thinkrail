@@ -11,8 +11,8 @@ tags: [ui, resilience]
 
 The app's dependency-light shared React primitives: the error boundary that keeps one failed region from
 unmounting the root, project-custom icons, the binary attention dot and working-icon treatment used by
-feature panels (currently the Projects rail), the quiet-scroll frame, and the shared loading-skeleton
-primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`), not this module.
+feature panels (currently the Projects rail), the quiet-scroll frame, the keycap and match-highlight
+vocabulary of the two search surfaces, and the shared loading-skeleton primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`), not this module.
 
 ## Boundary
 
@@ -53,6 +53,11 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
 - **`AttentionDot.tsx`** — the store-free, static green/accent dot whose sole accessible label is “Needs
   attention.” It carries no reason, count, tooltip, motion, or clearing behavior; callers decide only whether
   it is present. It is the one marker for both needs-input and unread-result attention.
+- **`Keycaps.tsx`** — `Keycaps` (a row of `<kbd>` caps for already-resolved key labels — callers derive
+  them with `commands`' `shortcutKeys`, so a platform rule lives in one place) and `KeyHint` (caps plus a
+  short label), the footer vocabulary the search palette and Find in Files share.
+- **`MatchHighlight.tsx`** — `highlightRanges(text, ranges)`: the text with its ascending, disjoint
+  `[start, end)` match ranges wrapped in `<mark>`, the one rendering of a matcher's or `git grep`'s ranges.
 - **`RunningIcon.tsx`** — the store-free **“ThinkRail is working” badge**: the brand monogram inside a
   rounded-square frame, drawn in `currentColor` so it sizes with `size-*` and colours with `text-*` like a
   Remix icon, with the accessible label “Agent working”. While motion is allowed, the frame (two halves

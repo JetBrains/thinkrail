@@ -54,7 +54,9 @@ create the tools it needs based on how you actually work.
   the messages inside them, workspaces and projects, files in the current workspace, specs and plans — with
   a preview pane on `⌘I` — runs the app's commands with their shortcuts shown, and jumps to a Settings
   section. Whatever you typed can also become work: `⌘↵` opens Create workspace with it as the prompt. With
-  nothing typed it lists the chats waiting for you.
+  nothing typed it lists the chats waiting for you. `⌘⇧F` finds text inside the workspace's files as you
+  type — matches grouped by file, smart-case with match-case and whole-word toggles, a code preview of the
+  selected one — and `↵` opens the file at that line.
 - **Chats without a project.** Ask, plan or draft without a repository: a chat gets its own scratch
   folder under **Chats** (files, terminal and plan work there; no branch, review or pull request), starts
   from the Welcome screen, the Create dialog, the palette or the Chats section, deletes to the Trash

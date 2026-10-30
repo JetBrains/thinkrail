@@ -487,7 +487,13 @@ long-history scrolling, and reload durability without involving a provider. Firs
 Recently closed and the search palette's chat rows (`data-title-source="prompt"`, full line as tooltip,
 word-boundary cut, found by words past the cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
 from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
-durability is the server unit test's. Visualize coverage
+durability is the server unit test's. Find in Files coverage (`find-in-files.spec.ts`) writes its probe
+files into the fixture repository as an untracked folder removed after every test — a binary with NUL
+bytes so `git grep -I` skips it, and a file past the host's line limit — and pins the chord, grouping
+and counts, the Monaco preview and the open-at-line selection overlay, the restored window, smart-case
+and the `Aa` / `W` toggles, the limit banner, the Project Home scope entering the Default workspace, the
+palette command, double Shift staying inert over the window, and the older-host notice with no
+`search.text` frame on the wire. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
 sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
 fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons

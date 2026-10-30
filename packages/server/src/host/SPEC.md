@@ -669,11 +669,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   scoped `chat.continuation` push (sockets ≥ `CONTINUATION_PROTOCOL_VERSION`, and only those that see
   chats); `chat.continuationStatus` answers a client that missed the pushes (a reload, a reconnect). Only
   the initiating client navigates — a web-side rule.
-- **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
-  `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
-  history index's `sessions()`, `specSnapshot` and `listStoredPlans`; the handler passes the socket's
-  `clientKey` so the service can supersede an older `seq` per client, and its audience
-  (`{ chats: seesChats(protocolVersion) }`). The `workspace.fsChanged`
+- **Search composition (`search.ts`):** `search.query` / `search.preview` / `search.text` go to one
+  lazily created `SearchService` ([[submodule-server-search]]) fed with `listProjects`,
+  `listAllWorkspaceRecords`, the history index's `sessions()`, `specSnapshot` and `listStoredPlans`;
+  the handler passes the socket's `clientKey` so the service can supersede an older `seq` per client, and its audience
+  (`{ chats: seesChats(protocolVersion) }`) for query and preview.
+  Find in Files' batches ride the **addressed** `search.textResults` push: `createServer` installs
+  `setSearchTextPublisher`, which `ws.send`s each batch to the requesting `clientKey`'s socket only
+  (sockets ≥ `TEXT_SEARCH_PROTOCOL_VERSION`; a gone socket drops the batch, the terminal / MCP-login
+  pattern), and clears it on close. The `workspace.fsChanged`
   publisher also calls `invalidateRoot(worktreePath)` so a watched workspace's file list and spec
   snapshot refresh on the next keystroke, and `search.query` watches its context workspace
   (`ensureWatch`), so the root it searches is watched from its first search on.
@@ -751,10 +755,10 @@ enabled/confirmed choice before entering analytics attribution.
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
-  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Four channels are deliberately
-  **not** subscribed and not broadcast: `feedback.interview`, `terminal.data`, `terminal.exit`, and
-  `terminal.detached` are sent with `ws.send` to one addressed client. Adding an addressed channel means
-  wiring a publisher, not a subscription.
+  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Five channels are deliberately
+  **not** subscribed and not broadcast: `feedback.interview`, `terminal.data`, `terminal.exit`,
+  `terminal.detached` and `search.textResults` are sent with `ws.send` to one addressed client. Adding
+  an addressed channel means wiring a publisher, not a subscription.
 - **Terminal backpressure never trusts the `drain` event alone.** A backpressured `ws.send` latches the
   client in `terminalBackpressured` and blocks its batchers, and the batcher deliberately retries only on
   `resume()` — so the latch's lift must be guaranteed. Bun's `drain` is the fast path, but a drain lost

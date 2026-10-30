@@ -80,6 +80,29 @@ describe("global hotkey routing", () => {
 		expect(globalHotkeyCommand(key("KeyN", { metaKey: false }), all, false, "MacIntel")).toBeNull();
 	});
 
+	test("routes Mod+Shift+F to find-in-files only when available, never with Alt or behind a modal; plain Mod+F stays the browser's", () => {
+		const withFind = { ...all, findInFiles: true };
+		expect(globalHotkeyCommand(key("KeyF", { shiftKey: true }), withFind, false, "Linux")).toBe(
+			"find-in-files",
+		);
+		expect(
+			globalHotkeyCommand(
+				key("KeyF", { ctrlKey: false, metaKey: true, shiftKey: true }),
+				withFind,
+				false,
+				"MacIntel",
+			),
+		).toBe("find-in-files");
+		expect(globalHotkeyCommand(key("KeyF", { shiftKey: true }), all, false, "Linux")).toBeNull();
+		expect(globalHotkeyCommand(key("KeyF"), withFind, false, "Linux")).toBeNull();
+		expect(
+			globalHotkeyCommand(key("KeyF", { shiftKey: true, altKey: true }), withFind, false, "Linux"),
+		).toBeNull();
+		expect(
+			globalHotkeyCommand(key("KeyF", { shiftKey: true }), withFind, true, "Linux"),
+		).toBeNull();
+	});
+
 	test("does not claim unavailable workspace commands or any panel chord behind a modal", () => {
 		expect(
 			globalHotkeyCommand(

@@ -111,6 +111,13 @@ export function FilePane({ tab }: { tab: FileTab }) {
 						onPlacedThreadIds={onPlacedThreadIds}
 						viewState={tab.viewState}
 						onViewState={saveViewState}
+						{...(tab.reveal
+							? {
+									reveal: tab.reveal,
+									onRevealHandled: (tick: number) =>
+										useAppStore.getState().clearFileTabReveal(tab.workspaceId, tab.id, tick),
+								}
+							: {})}
 					/>
 				</Suspense>
 			</div>

@@ -32,10 +32,9 @@ export const FILE_LIST_LIMITS = {
 	maxRoots: 8,
 } as const;
 
-const WALK_IGNORED = new Set([".git", "node_modules", ".hg", ".svn"]);
-const UNTRACKED_EXCLUDES = [...WALK_IGNORED]
-	.filter((name) => name !== ".git")
-	.flatMap((name) => ["-x", name]);
+export const SEARCH_HIDDEN_DIRS = ["node_modules", ".hg", ".svn"] as const;
+const WALK_IGNORED = new Set<string>([".git", ...SEARCH_HIDDEN_DIRS]);
+const UNTRACKED_EXCLUDES = SEARCH_HIDDEN_DIRS.flatMap((name) => ["-x", name]);
 const TRANSIENT_MESSAGE =
 	/too many open files|resource temporarily unavailable|cannot allocate memory/i;
 const TRANSIENT_CODES = new Set(["EMFILE", "ENFILE", "EAGAIN", "ENOMEM"]);
@@ -179,7 +178,7 @@ export async function walkFileList(
 	return { paths, truncated };
 }
 
-function isHiddenFromSearch(path: string): boolean {
+export function isHiddenFromSearch(path: string): boolean {
 	return path.split("/").some((segment) => WALK_IGNORED.has(segment));
 }
 
