@@ -810,7 +810,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   this client made, the only ones it follows) — the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
   `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
-  current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
+  current), `selectNavigationMarker` (where the user is — the active workspace, the selected project and
+  that workspace's navigation tick; an open that awaits a read activates only while it is unchanged, and
+  the palette's picks and `chat`'s `openWorkspace` share it), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref
   it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a

@@ -791,6 +791,29 @@ re-opened transcripts provider-valid.
     costs one prompt-cache miss per chat, early in it. The write policy and the workspace half of that state are
     not here: the host injects both through `setTitleToolHost({ apply, workspaceNeedsName })`, because naming
     composes `agent` + `workspaces`.
+    The **workspace tools** (`workspaceTools.ts`) let a chat operate other workspaces. There are exactly two,
+    always registered and active (no setting, like `set_title`), and top-level only:
+    - **`start_workspace { prompt, project?, base_branch?, model?, effort?, attachments? }`** starts an
+      ordinary new workspace with a first chat. It returns the new ids once the child's first prompt is
+      accepted (the host's send-ack window), and never waits for the child's turn to finish. It hands pi's
+      abort signal to the host's `start`, because pi awaits a running tool and reports Stop only through
+      that signal: without it, Stop would wait out the base fetch and still spawn the workspace.
+    - **`workspace_status { project?, workspaces? }`** reports chat states, PR state, diff stats and
+      (for named workspaces) each chat's final message. The report is bounded like pi's own tools
+      (`truncateHead` at pi's default line and byte limits) with a footer saying the later workspaces and
+      older chats were cut: a default workspace with dozens of chats would otherwise return their final
+      messages in one unbounded result. A named lookup lists its misses first, so a cut never hides them.
+    `project` defaults to the chat's own project. In a chat without a project it is required, and the
+    host enforces that.
+    Both delegate to a host seam, `setWorkspaceToolsHost({ start, status })`, because they compose
+    `agent` + `projects` + `workspaces` + `git`. Their `promptGuidelines` make the agent **always** act on
+    side/separate/parallel-workspace cues, but only *suggest* splitting work the user did not ask to
+    parallelize. Nothing else is built in by design: no waiting primitive (the agent decides how and whether
+    to wait), no steering, stopping, archiving or merging of another workspace, and no cap or confirmation.
+    `readFinalAssistantTexts(workspaceId, cwd, sessionIds)` serves the status final messages. For a live
+    entry it reads the entry's messages. Otherwise it lists the workspace's transcripts **once** and opens
+    each match read-only, never through `attachDiskSession`, so a status check neither loads nor announces
+    other workspaces' chats, and never re-parses the directory per chat.
     Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a

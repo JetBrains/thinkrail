@@ -311,28 +311,26 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   (`isContinueInWorkspaceRequestMessage` / `isChatHandoffMessage`, both open a round like `reviewFix`):
   `ContinuationRequestCard` names the target project and shows the operation's host-owned phase from
   `ChatActions.continuationOf` — asking, summarizing, creating, "Continued in a new workspace" with
-  **Open** (`openContinuation`), or the failure reason / "host restarted" with **Retry**
+  **Open** (`openWorkspace`), or the failure reason / "host restarted" with **Retry**
   (`retryContinuation` asks the host again for the same project); `HandoffCard` renders the clamped
   summary as Markdown under "Continued from “<title>”" with **Open the original chat**
-  (`openHandoffSource`). The renderers stay props-driven: `ChatTranscript` supplies the three actions and
-  the phase lookup from the store's `chatContinuations` slice, and the app-integration module
-  **`continuations.ts`** owns every continuation read and route (it never imports `panels`, which reuses
-  it). The card's lookup is a pure store read; an effect in `ChatTranscript` over its cards' operation ids
-  and the welcome generation asks `chat.continuationStatus` for each one the slice does not know (a
-  reload) — once per connection (`refreshContinuation`, keyed by the welcome generation), so a read that
-  failed is asked again on the next connection, never on every render; after each welcome
-  `useContinuations` — mounted once by `Shell` — asks again for every operation still
-  `requested`/`summarizing`/`creating` and every one this client started, card or not, so a disconnect
-  cannot strand a card mid-phase. A reply is installed only on the connection it was asked on and only if
-  no push replaced the record meanwhile (the push is newer); the host's `CONTINUATION_UNKNOWN` (neither
-  held nor linked — a restart lost it mid-flight) becomes `lost`, or drops a started-here operation no
-  card shows. Only the initiating client follows `started` (`followContinuation`, once — a follow a
-  reconnect overtook is armed again and followed on the connection that overtook it), and a failure is
-  told once. **Open**, **Open the original chat** and the follow all go through `openContinuationTarget`,
-  which activates the workspace only after a fresh `workspace.list` on the same connection shows its
-  project open and the workspace there (not deletion-pending), and otherwise says it is gone instead of
-  activating an id no row backs. A Retry from the card (`requestContinuation`) registers the new operation
-  as initiated, so this client follows it like the original gesture.
+  (`openHandoffSource`, which opens through `openWorkspace` once it has the Chats container's id). The
+  renderers stay props-driven: `ChatTranscript` supplies the actions and the phase lookup from the
+  store's `chatContinuations` slice, and the app-integration module **`continuations.ts`** owns every
+  continuation read and the follow (it never imports `panels`, which reuses it). The card's lookup is a
+  pure store read; an effect in `ChatTranscript` over its cards' operation ids and the welcome generation
+  asks `chat.continuationStatus` for each one the slice does not know (a reload) — once per connection
+  (`refreshContinuation`, keyed by the welcome generation), so a read that failed is asked again on the
+  next connection, never on every render; after each welcome `useContinuations` — mounted once by
+  `Shell` — asks again for every operation still `requested`/`summarizing`/`creating` and every one this
+  client started, card or not, so a disconnect cannot strand a card mid-phase. A reply is installed only
+  on the connection it was asked on and only if no push replaced the record meanwhile (the push is
+  newer); the host's `CONTINUATION_UNKNOWN` (neither held nor linked — a restart lost it mid-flight)
+  becomes `lost`, or drops a started-here operation no card shows. Only the initiating client follows
+  `started` (`followContinuation`, once, through `openWorkspace` — a follow a reconnect overtook is armed
+  again and followed on the connection that overtook it), and a failure is told once. A Retry from the
+  card (`requestContinuation`) registers the new operation as initiated, so this client follows it like
+  the original gesture.
 
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives
@@ -522,6 +520,21 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action) — and `markResultSeen(target)`, a
   background result row reporting that the user opened it.
+  Plus `openWorkspace({ workspaceId, projectId, sessionId? }, gone?)` (`openWorkspace.ts`), the one way
+  a card opens another workspace's chat: the `start_workspace` card, Continue in workspace's Open and
+  follow, and the handoff's source. A workspace the store holds is activated under its own project while
+  that project is open (closing a project keeps its workspace rows cached, so a held row alone proves
+  nothing). An unknown one first reloads that project's `workspace.list` — `addWorkspace` drops a `workspace.created`
+  push for a project whose list was never loaded — and is activated only if that read, on the same
+  connection, shows it in a project still open, and only if neither a newer open nor any navigation (the
+  store's `selectNavigationMarker`, the palette's guard too) overtook the read: an overtaken open decides
+  silently (`false`), so neither a slow list nor a Continue follow pulls the user back from where they
+  went. A deletion-pending, vanished or unreadable workspace is never activated, and the user is told why
+  (`gone`, a card-specific message); a reconnect that overtakes the read decides nothing (`null`), so the
+  follow is armed again. Next to
+  it sits `WorkspaceName` — an injected component that renders a workspace's **live** store
+  name, so a renderer can show an up-to-date name without importing the store. The `start_workspace`
+  card uses both and hides the open action when there is no provider.
   The optional MCP actions — `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat),
   `openMcpSettings()` (Settings › MCP servers) and `openProviderSettings()` (Settings › Providers for
   provider-backed authentication) — are supplied by `ChatView` (through `ChatTranscript`'s provider)

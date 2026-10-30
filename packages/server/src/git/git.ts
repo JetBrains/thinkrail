@@ -231,6 +231,7 @@ export function remoteRefOid(repoPath: string, ref: string): string | null {
 export async function prefetchBranch(
 	projectId: string,
 	ref: string,
+	signal?: AbortSignal,
 ): Promise<{ ok: boolean; moved: boolean }> {
 	const project = loadProjects().find((p) => p.id === projectId);
 	if (!project || !isSafeRef(ref)) return { ok: false, moved: false };
@@ -240,7 +241,7 @@ export async function prefetchBranch(
 	const result = await gitAsync(
 		project.path,
 		["fetch", remoteName, "--", ref.slice(`${remoteName}/`.length)],
-		{ network: true },
+		{ network: true, ...(signal ? { signal } : {}) },
 	);
 	const after = remoteRefOid(project.path, ref);
 	const moved = after !== null && after !== before;

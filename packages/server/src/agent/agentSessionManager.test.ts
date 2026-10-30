@@ -60,6 +60,7 @@ import {
 	markWorkspaceUnread,
 	nudgeSession,
 	promptSession,
+	readFinalAssistantTexts,
 	refreshAgentReviewTool,
 	refreshAvailableModels,
 	refreshExtensionTools,
@@ -4212,4 +4213,54 @@ test("an extension failing in session_start reaches the client, named, before th
 		setExtUiPublisher(() => {});
 		rmSync(extensionPath, { force: true });
 	}
+});
+
+test("readFinalAssistantTexts reads live and on-disk chats without attaching them", async () => {
+	fauxA.setResponses([fauxAssistantMessage("LIVE_FINAL")]);
+	const cwd = tmpCwd("trpi-final-");
+	const live = await createSession({
+		cwd,
+		workspaceId: "ws-final",
+		model: toWireModel(fauxA.getModel()),
+	});
+	await promptSession(live.sessionId, "hello");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const disk = writeFixtureSession(dir, {
+		cwd,
+		messages: [
+			{ role: "user", text: "do it", timestamp: 1 },
+			{ role: "assistant", text: "DISK_EARLIER", timestamp: 2 },
+			{ role: "user", text: "and then", timestamp: 3 },
+			{ role: "assistant", text: "DISK_FINAL", timestamp: 4 },
+		],
+	});
+	const silent = writeFixtureSession(dir, {
+		cwd,
+		messages: [{ role: "user", text: "only asked", timestamp: 1 }],
+	});
+	const foreign = writeFixtureSession(dir, {
+		cwd: tmpCwd("trpi-final-other-"),
+		messages: [
+			{ role: "user", text: "x", timestamp: 1 },
+			{ role: "assistant", text: "FOREIGN", timestamp: 2 },
+		],
+	});
+
+	const texts = await readFinalAssistantTexts("ws-final", cwd, [
+		live.sessionId,
+		disk.id,
+		silent.id,
+		foreign.id,
+		"missing",
+	]);
+
+	expect(texts.get(live.sessionId)).toBe("LIVE_FINAL");
+	expect(texts.get(disk.id)).toBe("DISK_FINAL");
+	expect(texts.get(silent.id)).toBeNull();
+	expect(texts.get(foreign.id)).toBeNull();
+	expect(texts.get("missing")).toBeNull();
+	expect(hasSession(disk.id)).toBe(false);
+	expect(
+		(await readFinalAssistantTexts("ws-elsewhere", cwd, [live.sessionId])).get(live.sessionId),
+	).toBeNull();
 });

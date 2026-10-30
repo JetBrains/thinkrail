@@ -210,6 +210,38 @@ test("createWorkspace fails with git's own words when the base fetch fails", asy
 	expect(await worktrees()).toHaveLength(0);
 });
 
+test("parallel creates off unfetched remote bases never pick the same branch", async () => {
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main:feature-x", "main:feature-y");
+	git(repo, "update-ref", "-d", "refs/remotes/origin/feature-x");
+	git(repo, "update-ref", "-d", "refs/remotes/origin/feature-y");
+
+	const created = await Promise.all([
+		createWorkspace("p1", undefined, "origin/feature-x"),
+		createWorkspace("p1", undefined, "origin/feature-y"),
+	]);
+
+	expect(created.map((ws) => ws.branch).sort()).toEqual(["workspace-1", "workspace-2"]);
+	expect(await worktrees()).toHaveLength(2);
+});
+
+test("a stopped create cancels its base fetch and cuts no worktree", async () => {
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main:feature-x");
+	git(repo, "update-ref", "-d", "refs/remotes/origin/feature-x");
+	const stopped = new AbortController();
+	stopped.abort();
+
+	await expect(
+		createWorkspace("p1", undefined, "origin/feature-x", stopped.signal),
+	).rejects.toThrow("Could not fetch origin/feature-x: git operation cancelled");
+	expect(await worktrees()).toHaveLength(0);
+});
+
 test("createWorkspace names the refspec when a fetch succeeds without landing the ref", async () => {
 	const remoteRepo = join(dataDir, "narrow.git");
 	git(repo, "init", "--bare", remoteRepo);

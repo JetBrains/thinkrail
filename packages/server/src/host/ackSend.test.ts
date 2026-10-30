@@ -11,6 +11,21 @@ test("a resolution inside the window acks immediately", async () => {
 	expect(Date.now() - start).toBeLessThan(1_000);
 });
 
+test("a stopped caller is acked at once; the turn's later rejection is swallowed", async () => {
+	const stop = new AbortController();
+	let rejectRun: (err: Error) => void = () => {};
+	const run = new Promise<void>((_, reject) => {
+		rejectRun = reject;
+	});
+	const acked = ackSend(run, 5_000, stop.signal);
+	const start = Date.now();
+	stop.abort();
+	await acked;
+	expect(Date.now() - start).toBeLessThan(1_000);
+	rejectRun(new Error("late turn fault"));
+	await new Promise((r) => setTimeout(r, 10));
+});
+
 test("a still-running turn is acked at the window; its later rejection is swallowed", async () => {
 	let rejectRun: (err: Error) => void = () => {};
 	const run = new Promise<void>((_, reject) => {

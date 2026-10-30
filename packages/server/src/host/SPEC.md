@@ -119,8 +119,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconstruct pre-consent work; campaign-only enrichment is inactive while off and restored from its strict
   server record when on without retrying a consumed claim.
   `shutdownAnalytics()` remains a best-effort drain in `stop()` and awaited by graceful shutdown;
-  every capture site lives here, including the existing basic events: `chat_started` in `session.create` and
-  `chat.create` (the host's new-chat
+  every capture site lives here, including the existing basic events: `chat_started` in `chatSession.ts#startChatSession` and the chat-without-a-project start in `chats.ts` (the host's new-chat
   resolution decides `none` for a chat created with no usable model instead of pi's placeholder; otherwise
   the created session's actual model is reported), `message_sent` (via the
   local `trackSend(mode, text)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`
@@ -191,12 +190,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
   the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
-  model list and Pi thinking clamp; `model.default`, `session.create`, `chat.create`, and newly-created
-  review chats share that resolver, and creation passes its model and effort explicitly — a chat's
-  recovery through `session.create` included. A `session.create` or `chat.create` that **named** a
-  model and every `session.setModel` also record the resolved model as recent through `settings`'
-  `noteRecentModel` — a default-resolved creation is the host's choice, not the user's, and is not
-  recorded; `noteNewChat` is that one bookkeeping (recent pick + `chat_started`) for both creation paths. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
+  model list and Pi thinking clamp; `model.default` and chat creation share that resolver.
+  `chatSession.ts#startChatSession` is the one `createSession` call: `session.create`, the review chat,
+  Continue in workspace, `start_workspace`, and a chat without a project — `chat.create` and recovery
+  through `session.create`, inside its per-chat claim, whose `assertClaimed` refuses a chat being deleted
+  before, around and after the agent's barrier — all start their chat through it, so no path can diverge
+  on the scratch folder, the resolver, the explicit model and effort, or `chat_started`. Its one
+  bookkeeping is `noteNewChat` (recent pick + `chat_started`): only a user's pick (`pick` — `session.create`
+  and `chat.create` that **named** a model) is recorded as recent through `settings`' `noteRecentModel`,
+  as is every `session.setModel`; a default-resolved creation, the review chat, Continue's destination and
+  an agent's `start_workspace` are the host's or the agent's choice, not the user's, and are not recorded. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
   adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
   eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
   invalidate catalogs across clients. Existing review chats and plan-review
@@ -431,6 +434,35 @@ channel fan-out, and the process-boot wrapper both launchers share.
   - `workspaceNeedsName(sessionId)` uses the same eligibility rule (managed, not `renamed`), so agent's
     turn-start `pending-naming` reminder and the write policy can't disagree.
   - A target the agent never names stays unnamed; there is no fallback.
+  - `workspaceTools.ts` — the **workspace-tools host** (`setWorkspaceToolsHost`), composing `agent` +
+    `projects` + `workspaces` + `git` + `watch` for `start_workspace` / `workspace_status`:
+    - A spawned workspace is indistinguishable from a hand-made one: the New Workspace dialog's defaults
+      (`listBranches().defaultBranch` plus its prefetch — not `createWorkspace`'s checkout-HEAD fallback;
+      the new-chat model via the shared `chatSession.ts#startChatSession`), the initial terminal,
+      `ensureWatch`, and an auto `workspace-N` name that the
+      child renames itself through `set_title`. The first prompt is plain text, so pi's own `/template`
+      and `/skill:` expansion applies.
+    - Projects are the open repositories, matched by id, slug or name (default: the caller's). The
+      Chats container is never one ([[submodule-server-workspaces]]): it is never resolved or listed,
+      and its chats never match a named status lookup. A chat without a project has no default, so
+      both tools refuse a call without `project` and list the open repositories.
+      Attachments resolve against the caller's worktree: images ride as prompt images, and other files
+      are listed by absolute path, because the child's worktree only has committed refs.
+    - Project, model and attachments are validated **before** any worktree exists. If the chat fails to
+      start after the worktree is created, the workspace is **kept** and the error names it.
+    - Stop cancels a start in progress: the tool's abort signal reaches the default-base prefetch,
+      `createWorkspace`'s fallback fetch and the send-ack wait. A start stopped before the worktree exists
+      creates nothing and says so; one stopped later stops before the chat starts or before its prompt is
+      sent, keeping the workspace and naming it (and its chat, once it exists) as a failed start does. A
+      child whose prompt is on its way runs on.
+    - An agent's spawn is not the user's explicit setup operation, so it records no `worktree_create`
+      setup action ([[submodule-server-analytics]]); its chat still reports `chat_started`.
+    - The prompt goes through `ackSend` + `runObservation.send(…, "internal")`, not `sendUserMessage`: an
+      agent-sent prompt is not a user `message_sent` and never claims the feedback invitation.
+    - Status reuses existing state only: `listSessions` state (labelled working / needs_you / finished /
+      failed / interrupted / idle), the cached `Workspace.review` (no new PR refresh), and diff stats.
+      Start and status take their reads and effects as injected deps, so both are unit-tested without
+      projects, worktrees or sessions.
   - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
     the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
     side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback
@@ -654,10 +686,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   later call for it — pi runs one response's tool calls in parallel — joins it and gets its result, so one
   gesture makes at most one workspace, chat, handoff and link. The apply revalidates the project, moves to
   `creating`, creates the workspace (default base, the shared initial-terminal provisioning) and records
-  its id at once, then the chat (host default model, `noteNewChat`'s bookkeeping) and its id, then sends
-  the `chat-handoff` custom message — the clamped summary plus a link back, the new chat's first turn and
-  run ([[submodule-server-agent]]'s run boundary) — reporting `firstMessage: sent | failed` apart from the
-  phase, remembers the link on the source record (`continuedTo` with the `operationId`,
+  its id at once, then the chat (host default model, through `chatSession.ts#startChatSession`) and its
+  id, then sends the `chat-handoff` custom message — the clamped summary plus a link back, the new chat's
+  first turn and run ([[submodule-server-agent]]'s run boundary) — reporting `firstMessage: sent | failed`
+  apart from the phase, remembers the link on the source record (`continuedTo` with the `operationId`,
   [[submodule-server-workspaces]]) and ends `started`. A failure after the workspace exists keeps its id:
   a new gesture for the same project inherits it while that workspace still exists in that project, so a
   same-host retry reuses it instead of leaving it empty, and a workspace removed in between is simply
@@ -783,10 +815,11 @@ enabled/confirmed choice before entering analytics attribution.
 - **A send (prompt/steer/followUp/respondToTool) is acked when ACCEPTED, not when the turn ends**
   (`ackSend`): pi's send methods resolve only at turn end, and a turn can outlive the client's request
   timeout (long tool rounds and multi-minute reasoning turns are routine) — awaiting completion would
-  surface a phantom "request timed out" over a healthy turn. A rejection inside the ack window still
-  fails the request (bad model / missing key; for `respondToTool` also an unknown/responded/superseded
-  call — `assessRespondability`'s loud verdicts, or a response without a value); later faults reach the
-  client via the event stream.
+  surface a phantom "request timed out" over a healthy turn; a caller whose `signal` aborts (Stop on
+  `start_workspace`) is acked at once. A rejection inside the ack window still fails the request (bad
+  model / missing key; for `respondToTool` also an unknown/responded/superseded call —
+  `assessRespondability`'s loud verdicts, or a response without a value); later faults reach the client
+  via the event stream.
 
 ### Drift & overwrite
 
