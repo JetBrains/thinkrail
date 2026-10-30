@@ -1895,3 +1895,103 @@ export function isPlanReviewResult(value: unknown): value is PlanReviewResult {
 	if (r.verdict === "request_changes" && r.findings.length === 0) return false;
 	return true;
 }
+
+// ---------------------------------------------------------------------------
+// Run — the project's run recipe and runs (submodule-server-run)
+// ---------------------------------------------------------------------------
+
+export type RunTargetKind = "serve" | "task";
+
+export interface RunTarget {
+	id: string;
+	title?: string;
+	/** POSIX sh, run by `/bin/sh` in the target's cwd. */
+	command: string;
+	kind: RunTargetKind;
+	/** Declared port variables this serve target binds; two live targets may not share one. */
+	ports?: string[];
+	/** `http://localhost:${PORT}/` — placeholders only for declared variables; serve targets only. */
+	url?: string;
+	/** Worktree-relative, default `.`. */
+	cwd?: string;
+}
+
+export interface RunRecipe {
+	version: 1;
+	/** Env var name → natural port; the Default workspace prefers it, worktrees scan upward from it. */
+	ports: Record<string, number>;
+	/** Idempotent POSIX sh commands, run before every start in the worktree root. */
+	prepare: string[];
+	targets: RunTarget[];
+	primary: string;
+	notes?: string;
+}
+
+/** Host-stamped provenance of the stored recipe; never caller-supplied. */
+export type RunRecipeAuthor = { sessionId: string; workspaceId: string } | "user";
+
+export interface RunRecipeDocument {
+	recipe: RunRecipe;
+	/** Monotonic; every write carries the revision it read and a mismatch is `RUN_RECIPE_CONFLICT`. */
+	revision: number;
+	learnedAt: number;
+	learnedBy: RunRecipeAuthor;
+}
+
+export interface RunSettings {
+	/** Open the browser once per execution when a serve target starts listening — in the client that started it. */
+	autoOpen: boolean;
+	/** The agent may start, restart and stop targets through `run_project`; reads always work. */
+	agentMayRun: boolean;
+}
+
+export const DEFAULT_RUN_SETTINGS: RunSettings = { autoOpen: false, agentMayRun: true };
+
+export interface ProjectRun {
+	document: RunRecipeDocument | null;
+	settings: RunSettings;
+	/** This host's stable port assignments per workspace of the project. */
+	ports: Record<string, Record<string, number>>;
+}
+
+export interface RunRecipeError {
+	/** JSON-pointer-like path into the recipe, e.g. `targets/1/command` or `primary`. */
+	path: string;
+	message: string;
+}
+
+export type RunStatus = "starting" | "running" | "listening" | "stopping" | "exited" | "stopped";
+
+export interface RunExecution {
+	runId: string;
+	/** The target the execution was started for; `null` for a prepare-only run. */
+	targetId: string | null;
+	tabKey: string;
+	status: RunStatus;
+	startedAt: number;
+	endedAt?: number;
+	/** The script's exit status; `null` when unknown (a host restart, a kill) — never fabricated. */
+	exitCode?: number | null;
+	/** Resolved from the target's `url` or discovered in the output; serve targets only. */
+	url?: string;
+	ports: Record<string, number>;
+	origin: "user" | "agent";
+}
+
+export interface RunWorkspaceState {
+	workspaceId: string;
+	/** Live or last-ended execution per target (`prepare` keyed as `""`). */
+	executions: RunExecution[];
+}
+
+export const RUN_RECIPE_LIMITS = {
+	prepareCommands: 32,
+	targets: 32,
+	commandChars: 4096,
+	documentChars: 32 * 1024,
+	targetIdPattern: /^[a-z0-9][a-z0-9._-]{0,40}$/,
+	portVariablePattern: /^[A-Z_][A-Z0-9_]*$/,
+	reservedPortVariables: ["PATH", "HOME", "SHELL", "USER", "TMPDIR"],
+	reservedPortVariablePrefixes: ["LD_", "DYLD_", "THINKRAIL_", "PI_"],
+	portRange: { min: 1024, max: 65535 },
+} as const;

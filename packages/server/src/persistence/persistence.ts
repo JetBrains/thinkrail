@@ -15,6 +15,8 @@ import {
 	isTerminalWindowsShell,
 	normalizeThemePreference,
 	type Project,
+	type RunRecipeAuthor,
+	type RunSettings,
 	type SessionCompletion,
 	type TerminalTabKind,
 	type TurnChangeSet,
@@ -273,6 +275,132 @@ export function loadTurns(): PersistedTurns {
 
 export function saveTurns(turns: PersistedTurns): void {
 	writeJsonAtomic("turns.json", turns);
+}
+
+export const RUN_VERSION = 1;
+
+/** The stored envelope; `recipe` is re-validated by the run module on load, so it stays `unknown` here. */
+export interface PersistedRunDocument {
+	recipe: unknown;
+	revision: number;
+	learnedAt: number;
+	learnedBy: RunRecipeAuthor;
+}
+
+export interface PersistedRunProject {
+	document: PersistedRunDocument | null;
+	settings: RunSettings;
+}
+
+export interface PersistedLastRun {
+	runId: string;
+	targetId: string | null;
+	startedAt: number;
+	endedAt: number;
+	status: "exited" | "stopped";
+	exitCode: number | null;
+}
+
+export interface PersistedRun {
+	version: typeof RUN_VERSION;
+	projects: Record<string, PersistedRunProject>;
+	/** workspaceId → declared port variable → leased port. */
+	ports: Record<string, Record<string, number>>;
+	/** workspaceId → target id (`""` for prepare) → the last ended execution's metadata. */
+	lastRuns: Record<string, Record<string, PersistedLastRun>>;
+}
+
+function parseRunAuthor(value: unknown): RunRecipeAuthor | undefined {
+	if (value === "user") return "user";
+	if (
+		isRecord(value) &&
+		typeof value.sessionId === "string" &&
+		typeof value.workspaceId === "string"
+	) {
+		return { sessionId: value.sessionId, workspaceId: value.workspaceId };
+	}
+	return undefined;
+}
+
+/** `null` = no document; `undefined` = malformed envelope. */
+function parseRunDocument(value: unknown): PersistedRunDocument | null | undefined {
+	if (value === null || value === undefined) return null;
+	if (!isRecord(value) || !isRecord(value.recipe)) return undefined;
+	if (typeof value.revision !== "number" || typeof value.learnedAt !== "number") return undefined;
+	const learnedBy = parseRunAuthor(value.learnedBy);
+	if (!learnedBy) return undefined;
+	return { recipe: value.recipe, revision: value.revision, learnedAt: value.learnedAt, learnedBy };
+}
+
+/** Structural read only: the recipe's own rules are the run module's validator; a recipe it rejects is dropped there, not repaired here. */
+function parseRun(raw: unknown): PersistedRun | null {
+	if (!isRecord(raw) || raw.version !== RUN_VERSION) return null;
+	if (!isRecord(raw.projects) || !isRecord(raw.ports) || !isRecord(raw.lastRuns)) return null;
+	const projects: Record<string, PersistedRunProject> = {};
+	for (const [projectId, value] of Object.entries(raw.projects)) {
+		if (!isRecord(value) || !isRecord(value.settings)) return null;
+		const { settings } = value;
+		if (typeof settings.autoOpen !== "boolean" || typeof settings.agentMayRun !== "boolean") {
+			return null;
+		}
+		const document = parseRunDocument(value.document);
+		if (document === undefined) return null;
+		projects[projectId] = {
+			document,
+			settings: { autoOpen: settings.autoOpen, agentMayRun: settings.agentMayRun },
+		};
+	}
+	const ports: Record<string, Record<string, number>> = {};
+	for (const [workspaceId, leases] of Object.entries(raw.ports)) {
+		if (!isRecord(leases)) return null;
+		const owned: Record<string, number> = {};
+		for (const [name, port] of Object.entries(leases)) {
+			if (typeof port !== "number" || !Number.isInteger(port)) return null;
+			owned[name] = port;
+		}
+		ports[workspaceId] = owned;
+	}
+	const lastRuns: Record<string, Record<string, PersistedLastRun>> = {};
+	for (const [workspaceId, byTarget] of Object.entries(raw.lastRuns)) {
+		if (!isRecord(byTarget)) return null;
+		const owned: Record<string, PersistedLastRun> = {};
+		for (const [targetId, run] of Object.entries(byTarget)) {
+			if (
+				!isRecord(run) ||
+				typeof run.runId !== "string" ||
+				(run.targetId !== null && typeof run.targetId !== "string") ||
+				typeof run.startedAt !== "number" ||
+				typeof run.endedAt !== "number" ||
+				(run.status !== "exited" && run.status !== "stopped") ||
+				(run.exitCode !== null && typeof run.exitCode !== "number")
+			) {
+				return null;
+			}
+			owned[targetId] = {
+				runId: run.runId,
+				targetId: run.targetId,
+				startedAt: run.startedAt,
+				endedAt: run.endedAt,
+				status: run.status,
+				exitCode: run.exitCode,
+			};
+		}
+		lastRuns[workspaceId] = owned;
+	}
+	return { version: RUN_VERSION, projects, ports, lastRuns };
+}
+
+export function emptyRun(): PersistedRun {
+	return { version: RUN_VERSION, projects: {}, ports: {}, lastRuns: {} };
+}
+
+export function loadRun(): PersistedRun {
+	const loaded = loadSessionMetadata("run.json", parseRun);
+	return loaded.kind === "loaded" ? loaded.value : emptyRun();
+}
+
+export function saveRun(run: PersistedRun): void {
+	writeJsonAtomic("run.json", run);
 }
 
 export function loadProjects(): Project[] {
