@@ -22,7 +22,6 @@
         "pi-todos": "workspace:*",
         "tsrs": "catalog:",
         "turbo": "2.11.10",
-        "typescript": "catalog:",
       },
     },
     "apps/cli": {

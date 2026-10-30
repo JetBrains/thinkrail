@@ -124,8 +124,7 @@
 		"pi-spec-graph": "workspace:*",
 		"pi-todos": "workspace:*",
 		"tsrs": "catalog:",
-		"turbo": "2.11.10",
-		"typescript": "catalog:"
+		"turbo": "2.11.10"
 	},
 	"trustedDependencies": [
 		"@biomejs/biome",
