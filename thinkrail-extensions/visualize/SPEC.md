@@ -79,7 +79,8 @@ result text.
 completed `data-theme` swap, or after a font settings change that moves the code family (resolved from
 `.tr-code-block` through `@thinkrail/ui/fonts`' `watchFont`, re-rendered once that face has loaded) or a
 change to the custom face set, which can change a family's metrics without its name; weight-only changes do
-not re-render, and only the latest render applies. It pins `look: "classic"` and `layout: "dagre"`: mermaid 12's defaults add node glow
+not re-render, and only the latest render applies. Every render, the first included, waits for the code face
+to load, so a cold custom font never leaves labels sized for the fallback. It pins `look: "classic"` and `layout: "dagre"`: mermaid 12's defaults add node glow
 shadows and orthogonal edges, which clash with the app's flat surfaces, and re-lay out existing diagrams. It supports a caller-supplied loading fallback, a fullscreen Dialog, and
 pan/zoom controls. The fullscreen canvas owns modifier-wheel zoom and WebKit gesture pinch from its
 local gesture-start baseline so desktop page zoom does not claim the gesture. Renderer failure shows
