@@ -17,7 +17,7 @@ export function OverviewPage() {
 			<header className="flex flex-col gap-16">
 				<h1 className="tr-heading-xl text-text-default">Components overview</h1>
 				<Markdown
-					source="ThinkRail's shared components, rendered live from `packages/ui` with the app's own stylesheet and themes. Every page shows the real component, its rules and copyable examples."
+					source="ThinkRail's reusable components — the shared primitives in `packages/ui` and the app components used across features — rendered live with the app's own stylesheet and themes. Every page shows the real component, its rules and copyable examples."
 					className="max-w-[48rem]"
 				/>
 			</header>

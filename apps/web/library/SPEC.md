@@ -11,8 +11,10 @@ references: [module-ui, submodule-web-themes]
 
 The single home of ThinkRail's design system. Designers, developers and agents read every design rule
 here, see the foundations (colour, typography, spacing, radius, icons, themes) rendered live from the
-files the app is built from, inspect real components and copy working examples. It covers `Button` and
-`IconButton` today; every shared component gets a page here when it is added or reworked. The design
+files the app is built from, inspect real components and copy working examples. It has a page for every
+reusable building block — each shared primitive and each app component rendered from two or more files
+— grouped as General, Navigation, Data entry, Data display, Feedback, Overlay and Layout; a family that
+exists only as inline JSX gets its page once one implementation becomes a component. The design
 specs `web-color`, `web-typography`, `web-spacing` and `web-notices`, `apps/web/UI-TERMINOLOGY.md`,
 `packages/ui/COMPONENTS.md` and the root `DESIGN.md` are generated from this module.
 
@@ -24,8 +26,13 @@ specs `web-color`, `web-typography`, `web-spacing` and `web-notices`, `apps/web/
   `src/index.css` and adds only its own directory as a Tailwind source, so components render with the
   exact production stylesheet and tokens. `src/index.css` roots Tailwind's detection at `src/`, so the
   library's chrome classes stay out of the app's CSS.
-- **Production source only.** Pages render components imported from `@thinkrail/ui/*` and themes from
-  `@/themes` (`getThemes` / `applyTheme`, every bundled theme). No specimen is redrawn with
+- **Production source only.** Pages render components imported from where they live — `@thinkrail/ui/*`,
+  app components under `@/…` and resource-renderer components from `packages/resource-renderers/src` —
+  and themes from `@/themes` (`getThemes` / `applyTheme`, every bundled theme). A page may import a
+  component from its own module even when the owning module does not export it through its barrel
+  (`@/shell/layout/workbenchTabs`, `StaleComposerNotice`): the library documents components where
+  they are, and these are read-only documentation edges — nothing imports the library, and a page
+  never re-exports, wraps or restyles what it imports. No specimen is redrawn with
   handwritten markup, no screenshot stands in for a component, and states are real interactions or
   real props — never forced pseudo-classes or overriding classes.
 - **One authored source for words; values stay in their files.** Values live where the app reads them —
