@@ -1138,6 +1138,43 @@ and what it loaded, never pi's own types.
   `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_INSTALL_FAILED` and `PACKAGE_SETTINGS_WRITE_FAILED`
   are raised before anything is written, and a client may claim "nothing was added" only for those.
 
+## Project runs
+
+`RUN_PROTOCOL_VERSION` (101) gates the `run.*` methods, the `run.recipeChanged` / `run.stateChanged`
+channels, the `run` layout tool id and the command-tab fields on the terminal wire; a client below it
+sees none of the Run UI and never saves a preset naming the tool. Semantics are
+[[submodule-server-run]]'s; the wire only carries them.
+
+- **`RunRecipe`** / **`RunTarget`** — what the agent learned: declared port variables with natural
+  ports, idempotent `prepare` commands, targets (`serve` or `task`, POSIX `sh` command, optional bound
+  `ports`, `url` template over declared variables, worktree-relative `cwd`), the `primary` target and the
+  agent's `notes`. **`RunRecipeDocument`** wraps it with host-stamped `revision`, `learnedAt` and
+  `learnedBy` (`{ sessionId, workspaceId }` for a tool write, `"user"` for the dialog); every write
+  carries `expectedRevision` and a mismatch is `RUN_RECIPE_CONFLICT`. `RUN_RECIPE_LIMITS` is the one
+  home of the validator's bounds and patterns; a rejected document is `RUN_RECIPE_INVALID` with the
+  host's `RunRecipeError[]` (`path` is pointer-like: `targets/1/url`). **`RunSettings`** (`autoOpen`,
+  `agentMayRun`, defaults in `DEFAULT_RUN_SETTINGS`) are the user's and never written by the tool.
+- **`ProjectRun`** — `run.recipe`'s answer and `run.recipeChanged`'s payload: the document (or `null`),
+  the settings, and this host's port assignments per workspace of the project.
+- **`RunExecution`** — one execution of a target in a workspace: `runId`, `targetId` (`null` for a
+  prepare-only run), the command tab's `tabKey`, `status` (`starting` → `running` → `listening` →
+  `exited`, or `stopping` → `stopped`), timestamps, `exitCode` (`null` when unknown — never fabricated),
+  resolved `url`, the resolved `ports`, and `origin` (`user` | `agent`). **`RunWorkspaceState`** lists
+  the live or last-ended execution per target and is both `run.state`'s answer and
+  `run.stateChanged`'s idempotent full snapshot — subscribe first, then read.
+- Methods: `run.recipe { projectId }`, `run.setRecipe { projectId, recipe, expectedRevision }` (the raw
+  document; the host validates), `run.setPrimary`, `run.setSettings { projectId, settings }` (partial),
+  `run.start { workspaceId, targetId, prepare? }`, `run.restart` (one host operation: stop, await the
+  end, start), `run.stop { …, force? }`, `run.prepare { workspaceId }`, `run.state { workspaceId }`.
+  Codes: `RUN_RECIPE_MISSING`, `RUN_TARGET_UNKNOWN`, `RUN_ALREADY_RUNNING`, `RUN_NOT_RUNNING`,
+  `RUN_PORT_IN_USE`, `RUN_NO_FREE_PORT`, `RUN_SPAWN_FAILED`, `RUN_UNSUPPORTED_PLATFORM` (a win32 host),
+  and `RUN_AGENT_FORBIDDEN` (the tool while *agentMayRun* is off).
+- Terminal wire: **`TerminalTabKind`** (`shell` | `command`) on `TerminalTabInfo` (absent from an older
+  host → shell), **`COMMAND_TAB_KEY_PREFIX`** (`thinkrail-run`; a client may not reserve a shell tab in
+  that namespace), and `terminal.attach`'s `exited?: true` — an ended command tab answers with a
+  placeholder `id`, its last screen as `replay`, and nothing spawned; an older client shows the screen
+  and learns it is detached on its first keystroke.
+
 ## Normalized session state
 
 `SessionState` carries orthogonal host facts: `execution` (`idle | running`) plus stable `runId`, nullable

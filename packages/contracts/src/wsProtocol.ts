@@ -48,6 +48,7 @@ import type {
 	PrBodySource,
 	Project,
 	ProjectPathStatus,
+	ProjectRun,
 	ProjectTrustSummary,
 	ProviderStatusReport,
 	ProviderWarning,
@@ -63,6 +64,10 @@ import type {
 	ReviewCommentStatus,
 	ReviewFixDetails,
 	ReviewSnapshot,
+	RunExecution,
+	RunRecipeDocument,
+	RunSettings,
+	RunWorkspaceState,
 	SessionResources,
 	SessionStateRecord,
 	SpecGraphSnapshot,
@@ -136,12 +141,21 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
+export interface RunRecipeChangedPush {
+	projectId: string;
+	run: ProjectRun;
+}
+
+/** `RunWorkspaceState` itself: an idempotent full snapshot per workspace, like `terminal.tabs`. */
+export type RunStateChangedPush = RunWorkspaceState;
+
 export type TemplateReadLocation =
 	| { workspaceId: string; projectId?: never }
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 101;
+export const PROTOCOL_VERSION = 102;
+export const RUN_PROTOCOL_VERSION = 102;
 export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;
 export const PI_PACKAGES_PROTOCOL_VERSION = 100;
 export const PROVIDER_WARNINGS_PROTOCOL_VERSION = 99;
@@ -316,6 +330,15 @@ export const WS_METHODS = {
 	packagesCheckUpdates: "packages.checkUpdates",
 	packagesSetResourceEnabled: "packages.setResourceEnabled",
 	packagesReveal: "packages.reveal",
+	runRecipe: "run.recipe",
+	runSetRecipe: "run.setRecipe",
+	runSetPrimary: "run.setPrimary",
+	runSetSettings: "run.setSettings",
+	runStart: "run.start",
+	runRestart: "run.restart",
+	runStop: "run.stop",
+	runPrepare: "run.prepare",
+	runState: "run.state",
 	localesList: "locales.list",
 	localesReveal: "locales.reveal",
 	themesList: "themes.list",
@@ -442,6 +465,8 @@ export const WS_CHANNELS = {
 	localesChanged: "locales.changed",
 	themesChanged: "themes.changed",
 	packagesChanged: "packages.changed",
+	runRecipeChanged: "run.recipeChanged",
+	runStateChanged: "run.stateChanged",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -964,6 +989,35 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"packages.reveal": { params: { path: string; workspaceId?: string }; result: Ack };
+	"run.recipe": { params: { projectId: string }; result: ProjectRun };
+	"run.setRecipe": {
+		/** `recipe` is the raw document the user or agent wrote; the host validates and returns field errors on `RUN_RECIPE_INVALID`. */
+		params: { projectId: string; recipe: unknown; expectedRevision: number };
+		result: { document: RunRecipeDocument };
+	};
+	"run.setPrimary": {
+		params: { projectId: string; targetId: string; expectedRevision: number };
+		result: { document: RunRecipeDocument };
+	};
+	"run.setSettings": {
+		params: { projectId: string; settings: Partial<RunSettings> };
+		result: { settings: RunSettings };
+	};
+	"run.start": {
+		/** `targetId` null runs prepare alone; `prepare: false` skips the prepare commands. */
+		params: { workspaceId: string; targetId: string | null; prepare?: boolean };
+		result: { execution: RunExecution };
+	};
+	"run.restart": {
+		params: { workspaceId: string; targetId: string | null; prepare?: boolean };
+		result: { execution: RunExecution };
+	};
+	"run.stop": {
+		params: { workspaceId: string; targetId: string | null; force?: boolean };
+		result: { execution: RunExecution };
+	};
+	"run.prepare": { params: { workspaceId: string }; result: { execution: RunExecution } };
+	"run.state": { params: { workspaceId: string }; result: RunWorkspaceState };
 	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
 	"locales.reveal": { params: Record<string, never>; result: Ack };
 	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
