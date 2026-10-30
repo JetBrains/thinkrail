@@ -785,9 +785,7 @@ describe("reading-band reader intent", () => {
 		harness.setGeometry({ edgeBottom: 490, maxScrollTop: 1_070 });
 		harness.controller.contentChanged();
 		expect(harness.writes.at(-1)).toBe(520);
-		expect(
-			harness.writes.every((write, index) => index === 0 || write >= harness.writes[index - 1]),
-		).toBe(true);
+		expect(harness.writes).toEqual(harness.writes.toSorted((a, b) => a - b));
 		advanceUntilIdle(harness);
 		expect(harness.controller.getMotionKind()).toBeNull();
 		expect(harness.readGeometry().edgeBottom).toBe(450);
@@ -1127,11 +1125,7 @@ describe("reading-band derived room", () => {
 		harness.setGeometry({ maxScrollTop: 170, edgeBottom: 571 });
 		harness.controller.contentChanged();
 		expect(harness.runwayHeights.at(-1)).toBe(30);
-		expect(
-			harness.runwayHeights.every(
-				(value, index, values) => index === 0 || value <= values[index - 1],
-			),
-		).toBe(true);
+		expect(harness.runwayHeights).toEqual(harness.runwayHeights.toSorted((a, b) => b - a));
 		expect(harness.writes).toEqual(writes);
 	});
 
