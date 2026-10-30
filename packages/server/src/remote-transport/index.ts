@@ -12,3 +12,4 @@ export {
 	type HandshakeStep,
 	type HostHandshake,
 } from "./signalingSession";
+export { toRemoteChannel } from "./weriftRemoteChannel";
