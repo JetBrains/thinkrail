@@ -23,15 +23,16 @@ crypto library, it has `RTCPeerConnection`, `WebSocket`, and `crypto.subtle` bui
     `{ id, ok, result | error }` replies by id (as promises, with `RemoteRequestError`), and fans
     `{ channel, data }` pushes to subscribers. Transport-agnostic over `DeviceChannel`, unit-tested with an
     in-memory channel.
-- **Allowed deps:** `contracts` (the shared broker + signaling protocol, once the link/pairing glue lands),
-  browser APIs. Never `server`, `pi`, or any server-only package.
+  - `deviceConnector.ts` — `connectRemoteProject(link)`: parses the `thinkrail://pair` link, connects to the
+    relay as the device, signs the challenge with `crypto.subtle` Ed25519 through the handshake, negotiates a
+    browser `RTCPeerConnection` **answerer**, and resolves a wire client once the DataChannel opens. Uses the
+    shared broker + signaling protocol from `contracts`; browser-only glue (no library bundled).
+- **Allowed deps:** `contracts` (the shared broker + signaling + pairing-URI protocol), browser APIs. Never
+  `server`, `pi`, or any server-only package.
 - **Forbidden:** value-importing `pi` or `server`; a WebRTC/crypto library (use the platform).
 
 ## Not yet here (next slice)
 
-- The link/pairing/WebRTC connector: parse the `thinkrail://pair` link, connect to the relay as the device,
-  sign the challenge (`crypto.subtle` Ed25519) through the handshake, negotiate a browser `RTCPeerConnection`
-  answerer, and hand the opened channel to `createDeviceWireClient`. This needs the signaling + pairing
-  protocol shared into `contracts` (today it lives in the server's `remote-transport`/`remote`).
 - Wiring the client into the store/transport so a remote project opens in the normal UI, and the
-  "add project by link" surface.
+  "add project by link" surface. End-to-end pairing is verifiable only with a deployed relay + a host and a
+  second device.
