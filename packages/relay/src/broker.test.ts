@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
+import type { BrokerToClient } from "@thinkrail/contracts";
 import { type Broker, type BrokerSocket, createBroker } from "./broker";
-import type { BrokerToClient } from "./brokerProtocol";
 
 interface Spy extends BrokerSocket {
 	readonly sent: BrokerToClient[];

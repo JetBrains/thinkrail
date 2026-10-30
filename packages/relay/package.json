@@ -11,6 +11,9 @@
 		"typecheck": "tsc --noEmit",
 		"start": "bun run src/main.ts"
 	},
+	"dependencies": {
+		"@thinkrail/contracts": "workspace:*"
+	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
 		"typescript": "catalog:"

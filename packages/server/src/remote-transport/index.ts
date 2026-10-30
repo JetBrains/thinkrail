@@ -1,4 +1,11 @@
 export type { RemoteChannel } from "./channel";
+export {
+	type BrokerClientSocket,
+	connectHostBroker,
+	createHostBrokerClient,
+	type HostBrokerClient,
+	type HostBrokerDeps,
+} from "./hostBrokerClient";
 export { createWeriftHostPeer, type HostPeer, type HostPeerSignal } from "./hostPeer";
 export { createHostSession, type HostSession, type HostSessionDeps } from "./hostSession";
 export {

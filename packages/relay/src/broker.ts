@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type BrokerToClient, type ClientToBroker, parseClientMessage } from "./brokerProtocol";
+import { type BrokerToClient, type ClientToBroker, parseClientMessage } from "@thinkrail/contracts";
 
 /**
  * The zero-knowledge signaling broker. It pairs a device to the host it names (by the host's public key) and

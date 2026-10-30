@@ -42,9 +42,14 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
     after `accepted` starts the peer and relays the device's answer/candidates into it, handing out the open
     `RemoteChannel` with its `PairedDevice`. An end-to-end in-process test drives a real werift device
     through the handshake + WebRTC to a byte-moving channel.
+  - `hostBrokerClient.ts` — `createHostBrokerClient` (and the `connectHostBroker` WebSocket wrapper): the
+    host's outbound broker client. It registers by public key, maps each brokered session to a
+    `HostSession`, and relays signaling payloads in and out, speaking the shared broker protocol from
+    `contracts` rather than importing the relay service.
 - **Public surface:** the `index.ts` barrel.
-- **Allowed deps:** `remote` (types + the injected pairing primitives), `werift` (host-side WebRTC),
-  `node:crypto`; later the `host` wire protocol behind `RemoteChannel`. Never the browser.
+- **Allowed deps:** `remote` (types + the injected pairing primitives), `contracts` (the shared broker-frame
+  protocol), `werift` (host-side WebRTC), `node:crypto`; later the `host` wire protocol behind
+  `RemoteChannel`. Never the browser.
 - **Forbidden:** importing `host` today, browser bundling, hand-rolled transport crypto.
 
 ## Invariants
@@ -57,9 +62,6 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
 
 ## Not yet here (next slices)
 
-- The host's **outbound broker client**: connecting to the relay, registering by public key, and mapping each
-  brokered session to a `createHostSession` (relaying `frame` payloads in and out). The signaling broker
-  itself is the separate [[module-relay]] package; the host speaks its wire protocol, it does not import it.
 - Running the existing `host` wire protocol over a `RemoteChannel`.
 - coturn deployment/config and the second channel tunnelling `/files` and `/blob`.
 - The CLI command that boots the host for remote access and prints the pairing **link** (the

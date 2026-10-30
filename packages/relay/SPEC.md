@@ -29,12 +29,12 @@ See the home-directory plan and [[submodule-server-remote-transport]] (the host 
     so one host serves many concurrent devices. Lifecycle: device/host disconnect closes the affected
     sessions and notifies the peer. Socket I/O is abstracted (`BrokerSocket`) so the core is unit-tested
     without a network.
-  - `brokerProtocol.ts` — the client↔broker envelope and `parseClientMessage` (untrusted input: validated
-    and bounded; `data` stays opaque).
   - `server.ts` — `startBroker`, the thin Bun WebSocket wrapper over the core; `main.ts` the process entry.
 - **Public surface:** the `index.ts` barrel.
-- **Allowed deps:** none internal (`node:crypto`, Bun only). The broker is content-agnostic and must not
-  depend on `contracts`, `server`, or any domain type.
+- **Allowed deps:** `contracts` (the shared broker-frame protocol — `ClientToBroker` / `BrokerToClient`,
+  `parseClientMessage`, `encodeBrokerFrame`; shared so the host can speak the same wire without importing this
+  service), `node:crypto`, Bun. The broker stays content-agnostic: it must not depend on `server` or any
+  domain type beyond the broker frames.
 - **Forbidden:** parsing or persisting signaling `data`; terminating the E2E channel; any dependency that
   would let it see session content.
 
