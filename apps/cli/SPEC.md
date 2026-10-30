@@ -329,6 +329,30 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
     way — which is why the assertion reports `provider.status`'s `jbcentral` state on failure: `load-failed`
     names that cause, `absent` names a fixture that never ran.
 
+## Container image (`Dockerfile`)
+
+The root `Dockerfile` packages this launcher for headless self-hosting (issue #921): a build stage runs the
+ordinary `bun install --frozen-lockfile` + `bun run build:binary` for the build platform, and the runtime stage
+copies only the single-file binary onto a slim Debian base with the tools the host shells out to (`git`,
+`bash`, `ssh`, `curl`) and `tini` as PID 1, so terminal and agent child processes are reaped and
+SIGTERM reaches the host's normal shutdown path. No container-specific product code exists: the image is the
+CLI with `--no-open` and the documented env defaults `THINKRAIL_HOST=0.0.0.0` / `THINKRAIL_PORT=24242`.
+
+- **State is the user's home.** The host runs as the unprivileged `thinkrail` user (uid 1000) with
+  `HOME=/home/thinkrail`, so app state, worktrees, and pi credentials all land under one directory the user
+  mounts as a volume; `/workspace` is the conventional mount for repositories. `SHELL=/bin/bash` gives the
+  login-shell probe a real shell instead of its `/bin/zsh` fallback.
+- **Auth stays external** ([[architecture]] Decision 7). Binding all interfaces is only safe inside the
+  container's network namespace; `compose.yaml` therefore publishes the port on `127.0.0.1`, and the README
+  tells users to reach it over a private network or an authenticating proxy.
+- **Source identity.** The image builds the from-source `0.0.0-dev` identity, so it carries no update
+  advisory or analytics project key; updating means rebuilding from a newer checkout. Multi-architecture
+  images come from `docker buildx` running each platform's build stage on that platform (a native builder or
+  emulation), as the release recipes compile per runner, rather than cross-compiling: the embedded native
+  libraries are resolved for the platform that builds them.
+- Publishing an official image is release orchestration and belongs to [[module-ci-release]]'s private
+  pipeline, not to this module.
+
 ## Boundary
 
 - **Owns:** `src/args.ts` (pure `parseArgs(argv, env) → CliOptions` + `parseSubcommand` + `USAGE`),

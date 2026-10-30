@@ -1,0 +1,16 @@
+services:
+  thinkrail:
+    build: .
+    image: thinkrail:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:24242:24242"
+    # Provider API keys can be passed here instead of signing in from the app, e.g.
+    # environment:
+    #   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    volumes:
+      - thinkrail-home:/home/thinkrail
+      - ./workspace:/workspace
+
+volumes:
+  thinkrail-home:
