@@ -444,7 +444,11 @@ function declarations(t: Typography, style: Style, indent = "\t"): string {
 }
 
 export function codeRowHeight(t: Typography): number {
-	return Math.round(t.fontSizes[t.codeRow.fontSize] * t.lineHeights[t.codeRow.lineHeight]);
+	const fontSize = t.fontSizes[t.codeRow.fontSize];
+	const lineHeight = t.lineHeights[t.codeRow.lineHeight];
+	if (fontSize === undefined || lineHeight === undefined)
+		throw new Error("codeRow: unknown font size or line height");
+	return Math.round(fontSize * lineHeight);
 }
 
 export function renderCss(t: Typography): string {
