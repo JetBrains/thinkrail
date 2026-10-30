@@ -2129,6 +2129,7 @@
 	"shell.location.review.openLink": "Open {{label}}",
 	"shell.location.review.pullRequest": "Pull request",
 	"shell.location.review.stateLine": "{{label}} · {{state}}",
+	"shell.location.run.moreActions": "More run actions",
 	"shell.location.ship.moreActions": "More actions",
 	"shell.location.ship.noReview": "No {{noun}}",
 	"shell.location.workspace.caption": "Workspace",
