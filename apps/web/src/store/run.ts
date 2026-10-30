@@ -14,9 +14,7 @@ export function isLiveRun(execution: Pick<RunExecution, "status">): boolean {
 
 export function latestExecution(state: RunWorkspaceState | undefined): RunExecution | null {
 	if (!state || state.executions.length === 0) return null;
-	const live = state.executions.filter(isLiveRun);
-	const pool = live.length > 0 ? live : state.executions;
-	return pool.reduce((latest, candidate) =>
+	return state.executions.reduce((latest, candidate) =>
 		candidate.startedAt > latest.startedAt ? candidate : latest,
 	);
 }

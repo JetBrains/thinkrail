@@ -157,9 +157,10 @@ state.
   `Stopped` · `Finished` · `Exited N` · `Ended` for an outcome lost to a host restart) with a live dot —
   or, with nothing run yet, the primary target. Live: **Stop** (disabled while stopping) plus an **Open**
   button once a serve target listens on a declared url; ▾ Restart, Open in browser, Show terminal, the
-  other targets, Fix with agent, Run tab. Idle: **Run <target>** (the followed target, else the primary);
-  a non-zero exit puts **Fix with agent** first and *Run again* second; ▾ the other targets, *Run …
-  without prepare*, *Prepare only*, Show terminal, Fix, Run tab. Starting a run reveals its host-born
+  other targets (*Run <target>*, or *Stop <target>* while one is live), Fix with agent, Run tab. Idle:
+  **Run <target>** (the followed target, else the primary); a non-zero exit puts **Fix with agent** first
+  and *Run again* second; ▾ the other targets, *Run … without prepare*, *Prepare only*, Show terminal,
+  Fix, Run tab. Starting a run reveals its host-born
   command tab in this surface (the `reveal-terminal` intent — host-born tabs never place themselves);
   Open rewrites a loopback url to the transport's hostname for a remote client; auto-open fires only in
   the client that pressed Run, once per execution, falling back to a toast when the browser blocks the

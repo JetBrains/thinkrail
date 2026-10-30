@@ -615,7 +615,7 @@ Record<workspaceId, RunWorkspaceState>`** and **`runByProject: Record<projectId,
 **`applyRunState(state, connectionGeneration?)`** / **`applyProjectRun(push, connectionGeneration?)`**
 folding either a read (generation-fenced) or a push as an idempotent full snapshot, gated by
 `selectSupportsRun` (v101) and dropped for a removed workspace; the pure helpers `latestExecution` (the
-topbar's followed run: the most recently started live execution, else the most recent), `executionForTarget`
+topbar's followed run: the most recently started execution, live or not), `executionForTarget`
 and `isLiveRun` are the only readings of an execution list, so the segment, the Run tab and the terminal
 footer never disagree. Reads live in `panels/useRunHydration` — the store holds no fetch. **`TerminalTab.kind`**
 mirrors the catalog's `shell` | `command` so a command tab is recognised without a key test, and

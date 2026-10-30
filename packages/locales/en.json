@@ -1137,6 +1137,7 @@
 	"panels.run.status.stopped": "Stopped",
 	"panels.run.status.stopping": "Stopping…",
 	"panels.run.stop": "Stop",
+	"panels.run.stopTarget": "Stop {{target}}",
 	"panels.sendReview.file": "Send review ({{total}})",
 	"panels.sendReview.sendAll": "Send all",
 	"panels.sendReview.withCount": "{{verb}} ({{total}})",

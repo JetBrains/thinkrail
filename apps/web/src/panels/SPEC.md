@@ -1639,8 +1639,9 @@ own section. The kebab menu (`plan-menu`, a
 - **Run — the project's run recipe and runs, one derivation for topbar and Run tab.** `runActions(t,
   context)` is the pure table behind the topbar's Run segment and the Run tab's actions ([[submodule-web-shell-location-bar]]
   describes the states): `null` on an older host or a win32 host; **Set up run** without a recipe; the
-  followed execution (`store/run`'s `latestExecution`: the most recently started live run, else the most
-  recent) with its chip, primary and ▾ items. `useRunRunner(workspaceId, projectId)` executes them —
+  followed execution (`store/run`'s `latestExecution`: the most recently started run, live or not) with
+  its chip, primary and ▾ items; every other target appears in ▾ as *Run <target>*, or *Stop <target>*
+  while it is live. `useRunRunner(workspaceId, projectId)` executes them —
   `run.start` (a `null` target is the prepare-only run) / `run.restart` / `run.stop`, revealing the host-born command tab through
   the store's `revealTerminalTab`; **Set up** and **Fix** hand `runPrompts`' plain-English
   `/skill:running-the-project …` prompts to the workspace chat via `openChat`'s `promptWorkspaceChat`

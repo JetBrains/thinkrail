@@ -142,6 +142,29 @@ function startItem(
 	};
 }
 
+function stopItem(t: Translator, target: RunTarget): RunMenuItem {
+	return {
+		action: { kind: "stop", targetId: target.id },
+		label: t("panels.run.stopTarget", { target: targetName(target) }),
+	};
+}
+
+function otherTargetItems(
+	t: Translator,
+	recipe: RunRecipe,
+	state: RunWorkspaceState | undefined,
+	followedId: string | null | undefined,
+): RunMenuItem[] {
+	return recipe.targets
+		.filter((target) => target.id !== followedId)
+		.map((target) => {
+			const execution = state?.executions.find((entry) => entry.targetId === target.id);
+			return execution && isLiveRun(execution)
+				? stopItem(t, target)
+				: startItem(t, target, target.id === recipe.primary);
+		});
+}
+
 export function runActions(t: Translator, context: RunContext): RunSegmentModel | null {
 	if (!runAvailable(context)) return null;
 	const recipe = context.run?.document?.recipe ?? null;
@@ -166,9 +189,6 @@ export function runActions(t: Translator, context: RunContext): RunSegmentModel 
 	const caption = latest
 		? t("panels.run.captionTarget", { target: executionLabel(t, latest, recipe) })
 		: t("panels.run.caption");
-	const targetItems = recipe.targets.map((target) =>
-		startItem(t, target, target.id === recipe.primary),
-	);
 	const fix: RunMenuItem = {
 		action: { kind: "fix", execution: latest },
 		label: t("panels.run.fix.label"),
@@ -203,9 +223,7 @@ export function runActions(t: Translator, context: RunContext): RunSegmentModel 
 					action: { kind: "showTerminal", tabKey: latest.tabKey },
 					label: t("panels.run.showTerminal"),
 				},
-				...targetItems.filter(
-					(item) => item.action.kind === "start" && item.action.targetId !== latest.targetId,
-				),
+				...otherTargetItems(t, recipe, context.state, latest.targetId),
 				fix,
 				openTab,
 			],
@@ -247,9 +265,7 @@ export function runActions(t: Translator, context: RunContext): RunSegmentModel 
 		open: null,
 		secondary: [
 			...(failed(latest) && runAgain ? [runAgain] : []),
-			...targetItems.filter(
-				(item) => item.action.kind === "start" && item.action.targetId !== followed?.id,
-			),
+			...otherTargetItems(t, recipe, context.state, followed?.id ?? null),
 			...withoutPrepare,
 			prepare,
 			...(latest

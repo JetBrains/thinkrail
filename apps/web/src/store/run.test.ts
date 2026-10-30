@@ -16,7 +16,7 @@ function execution(partial: Partial<RunExecution> & { runId: string }): RunExecu
 }
 
 describe("run slice helpers", () => {
-	test("the topbar follows the most recently started live run, else the most recent run", () => {
+	test("the topbar follows the most recently started run, live or not", () => {
 		const state: RunWorkspaceState = {
 			workspaceId: "ws",
 			executions: [
@@ -25,7 +25,7 @@ describe("run slice helpers", () => {
 				execution({ runId: "newest-ended", targetId: "test", startedAt: 20, status: "exited" }),
 			],
 		};
-		expect(latestExecution(state)?.runId).toBe("new-live");
+		expect(latestExecution(state)?.runId).toBe("newest-ended");
 		expect(
 			latestExecution({
 				workspaceId: "ws",

@@ -1231,6 +1231,7 @@
 	"panels.run.status.stopped": "Остановлен",
 	"panels.run.status.stopping": "Останавливается…",
 	"panels.run.stop": "Остановить",
+	"panels.run.stopTarget": "Остановить {{target}}",
 	"panels.sendReview.file": "Отправить отзыв ({{total}})",
 	"panels.sendReview.sendAll": "Отправить всё",
 	"panels.sendReview.withCount": "{{verb}} ({{total}})",

@@ -164,6 +164,32 @@ describe("runActions", () => {
 		expect(unknown?.chip).toEqual({ label: "Ended", tone: "neutral", live: false });
 	});
 
+	test("a later one-shot is followed even while a server runs; the live server offers Stop in the menu", () => {
+		const m = model({
+			workspaceId: "ws",
+			executions: [
+				execution({
+					runId: "server",
+					status: "listening",
+					url: "http://localhost:5174/",
+					startedAt: 1,
+				}),
+				execution({
+					runId: "tests",
+					targetId: "test",
+					tabKey: "thinkrail-run:test",
+					status: "exited",
+					exitCode: 1,
+					startedAt: 2,
+				}),
+			],
+		});
+		expect(m?.caption).toBe("Run · test");
+		expect(m?.primary?.action.kind).toBe("fix");
+		expect(kinds(m?.secondary ?? [])).toContain("stop:dev");
+		expect(kinds(m?.secondary ?? [])).not.toContain("start:dev");
+	});
+
 	test("a prepare-only run is followed too", () => {
 		const m = model({
 			workspaceId: "ws",
