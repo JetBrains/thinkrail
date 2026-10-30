@@ -7649,404 +7649,183 @@ Radix props in common use (passed through unchanged):
 
 #### Basic
 
-A success toast with a title, a message and Dismiss, raised again by Copy. The library places the viewport in the card (`className="static p-0 sm:w-full"`) and keeps the toast open; in the app it sits in the corner and leaves after five seconds.
+`toast.success(message, title)` from a button. The toast appears in the page corner, rendered by the app's own `Toaster`, and leaves after five seconds.
 
 ```tsx
-import { RiCheckboxCircleLine, RiFileCopyLine } from "@remixicon/react";
+import { RiFileCopyLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import {
-	Toast,
-	ToastClose,
-	ToastDescription,
-	ToastProvider,
-	ToastTitle,
-	ToastViewport,
-} from "@thinkrail/ui/toast";
-import { useState } from "react";
+import { toast } from "@/store";
 
 export default function Preview() {
 	const t = useT();
-	const [open, setOpen] = useState(true);
 	return (
-		<ToastProvider>
-			<div className="flex w-full flex-col items-start gap-8">
-				<Button variant="outline" size="m" iconLeft={RiFileCopyLine} onClick={() => setOpen(true)}>
-					{t("common.copy")}
-				</Button>
-				<Toast
-					variant="success"
-					open={open}
-					onOpenChange={setOpen}
-					duration={Number.POSITIVE_INFINITY}
-				>
-					<div className="flex items-start gap-8">
-						<RiCheckboxCircleLine
-							className="mt-2 size-14 shrink-0 text-feedback-success"
-							aria-hidden
-						/>
-						<div className="flex min-w-0 flex-1 flex-col gap-4">
-							<ToastTitle>{t("plan.copied.title")}</ToastTitle>
-							<ToastDescription>{t("plan.copied.message")}</ToastDescription>
-						</div>
-						<ToastClose />
-					</div>
-				</Toast>
-				<ToastViewport className="static p-0 sm:w-full" />
-			</div>
-		</ToastProvider>
+		<Button
+			variant="outline"
+			size="m"
+			iconLeft={RiFileCopyLine}
+			onClick={() => toast.success(t("plan.copied.message"), t("plan.copied.title"))}
+		>
+			{t("common.copy")}
+		</Button>
 	);
 }
 ```
 
 #### Severities
 
-Each `variant` with its icon. Only the border and the icon change colour; the card and the text stay neutral.
+`toast.info`, `toast.success`, `toast.warning` and `toast.error`. Only the border and the icon change colour; the card and the text stay neutral.
 
 ```tsx
-import {
-	RiAlertLine,
-	RiCheckboxCircleLine,
-	RiErrorWarningLine,
-	RiInformationLine,
-} from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import {
-	Toast,
-	ToastClose,
-	ToastDescription,
-	ToastProvider,
-	ToastTitle,
-	ToastViewport,
-} from "@thinkrail/ui/toast";
-import { cn } from "@thinkrail/ui/utils";
+import { Button } from "@thinkrail/ui/button";
+import { toast } from "@/store";
 
 export default function Severities() {
 	const t = useT();
-	const toasts = [
-		{
-			variant: "info",
-			Icon: RiInformationLine,
-			iconClass: "text-feedback-info",
-			title: t("plan.checkAll.runningTitle"),
-			message: t("plan.checkAll.runningMessage"),
-		},
-		{
-			variant: "success",
-			Icon: RiCheckboxCircleLine,
-			iconClass: "text-feedback-success",
-			title: t("plan.review.startedTitle"),
-			message: t("plan.review.startedMessage"),
-		},
-		{
-			variant: "warning",
-			Icon: RiAlertLine,
-			iconClass: "text-feedback-warning",
-			title: t("updates.native.disabled.title"),
-			message: t("updates.native.disabled.detail"),
-		},
-		{
-			variant: "error",
-			Icon: RiErrorWarningLine,
-			iconClass: "text-feedback-error",
-			title: t("plan.copyFailed.title"),
-			message: t("plan.copyFailed.message"),
-		},
-	] as const;
 	return (
-		<ToastProvider>
-			{toasts.map(({ variant, Icon, iconClass, title, message }) => (
-				<Toast key={variant} variant={variant} duration={Number.POSITIVE_INFINITY}>
-					<div className="flex items-start gap-8">
-						<Icon className={cn("mt-2 size-14 shrink-0", iconClass)} aria-hidden />
-						<div className="flex min-w-0 flex-1 flex-col gap-4">
-							<ToastTitle>{title}</ToastTitle>
-							<ToastDescription>{message}</ToastDescription>
-						</div>
-						<ToastClose />
-					</div>
-				</Toast>
-			))}
-			<ToastViewport className="static" />
-		</ToastProvider>
+		<div className="flex flex-wrap gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				onClick={() =>
+					toast.info(t("plan.checkAll.runningMessage"), t("plan.checkAll.runningTitle"))
+				}
+			>
+				info
+			</Button>
+			<Button
+				variant="outline"
+				size="m"
+				onClick={() =>
+					toast.success(t("plan.review.startedMessage"), t("plan.review.startedTitle"))
+				}
+			>
+				success
+			</Button>
+			<Button
+				variant="outline"
+				size="m"
+				onClick={() =>
+					toast.warning(t("updates.native.disabled.detail"), t("updates.native.disabled.title"))
+				}
+			>
+				warning
+			</Button>
+			<Button
+				variant="outline"
+				size="m"
+				onClick={() => toast.error(t("plan.copyFailed.message"), t("plan.copyFailed.title"))}
+			>
+				error
+			</Button>
+		</div>
 	);
 }
 ```
 
 #### Message only
 
-No title: the description takes `text-text-default` and carries the toast alone, as `toast.info(message)` renders.
+`toast.info(message)` with no title: the description carries the toast alone.
 
 ```tsx
-import { RiInformationLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import {
-	Toast,
-	ToastClose,
-	ToastDescription,
-	ToastProvider,
-	ToastViewport,
-} from "@thinkrail/ui/toast";
+import { Button } from "@thinkrail/ui/button";
+import { toast } from "@/store";
 
 export default function MessageOnly() {
 	const t = useT();
 	return (
-		<ToastProvider>
-			<Toast variant="info" duration={Number.POSITIVE_INFINITY}>
-				<div className="flex items-start gap-8">
-					<RiInformationLine className="mt-2 size-14 shrink-0 text-feedback-info" aria-hidden />
-					<div className="flex min-w-0 flex-1 flex-col gap-4">
-						<ToastDescription className="text-text-default">
-							{t("panels.diffSurface.staleView")}
-						</ToastDescription>
-					</div>
-					<ToastClose />
-				</div>
-			</Toast>
-			<ToastViewport className="static" />
-		</ToastProvider>
+		<Button
+			variant="outline"
+			size="m"
+			onClick={() => toast.info(t("panels.diffSurface.staleView"))}
+		>
+			{t("plan.item.checkIt")}
+		</Button>
 	);
 }
 ```
 
 #### Undo receipt
 
-A success receipt with one Undo action in the footer and the 8-second lifetime `pushToast({ action, durationMs: 8000 })` gives it after a revert. Revert file raises it again.
+`pushToast({ action, durationMs: 8000 })` — a success receipt with one Undo action and the longer lifetime a revert gets.
 
 ```tsx
-import { RiArrowGoBackLine, RiCheckboxCircleLine } from "@remixicon/react";
+import { RiArrowGoBackLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import {
-	Toast,
-	ToastAction,
-	ToastClose,
-	ToastDescription,
-	ToastProvider,
-	ToastViewport,
-} from "@thinkrail/ui/toast";
-import { useState } from "react";
+import { useAppStore } from "@/store";
 
 export default function Undo() {
 	const t = useT();
-	const [open, setOpen] = useState(true);
+	const pushToast = useAppStore((s) => s.pushToast);
 	return (
-		<ToastProvider>
-			<div className="flex w-full flex-col items-start gap-8">
-				<Button
-					variant="outline"
-					size="m"
-					iconLeft={RiArrowGoBackLine}
-					onClick={() => setOpen(true)}
-				>
-					{t("panels.diffPane.revertFile")}
-				</Button>
-				<Toast variant="success" open={open} onOpenChange={setOpen} duration={8000}>
-					<div className="flex items-start gap-8">
-						<RiCheckboxCircleLine
-							className="mt-2 size-14 shrink-0 text-feedback-success"
-							aria-hidden
-						/>
-						<div className="flex min-w-0 flex-1 flex-col gap-4">
-							<ToastDescription className="text-text-default">
-								{t("panels.diffSurface.revertedFile", { file: "src/app.ts" })}
-							</ToastDescription>
-						</div>
-						<ToastClose />
-					</div>
-					<div className="mt-12 flex justify-end">
-						<ToastAction altText={t("panels.diffSurface.undo")} asChild>
-							<Button variant="outline" size="m" onClick={() => {}}>
-								{t("panels.diffSurface.undo")}
-							</Button>
-						</ToastAction>
-					</div>
-				</Toast>
-				<ToastViewport className="static" />
-			</div>
-		</ToastProvider>
+		<Button
+			variant="outline"
+			size="m"
+			iconLeft={RiArrowGoBackLine}
+			onClick={() =>
+				pushToast({
+					variant: "success",
+					message: t("panels.diffSurface.revertedFile", { file: "src/app.ts" }),
+					durationMs: 8000,
+					action: { label: t("panels.diffSurface.undo"), onClick: () => {} },
+				})
+			}
+		>
+			{t("panels.diffPane.revertFile")}
+		</Button>
 	);
 }
 ```
 
 #### Long error
 
-An error title with a long, unbroken error text: the description wraps anywhere instead of widening the card. Errors never time out.
+`toast.error` with a long, unbroken error text: the description wraps anywhere instead of widening the card. Errors never time out.
 
 ```tsx
-import { RiErrorWarningLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import {
-	Toast,
-	ToastClose,
-	ToastDescription,
-	ToastProvider,
-	ToastTitle,
-	ToastViewport,
-} from "@thinkrail/ui/toast";
+import { Button } from "@thinkrail/ui/button";
+import { toast } from "@/store";
 
-const detail =
-	"ENOENT: no such file or directory, open '/Users/me/projects/thinkrail/.pi/worktrees/feature-rework-the-review-pipeline/.cache/review-session-0f3c9a.json'";
+const DETAIL =
+	"git push failed: remote rejected refs/heads/feature/a-very-long-branch-name-without-any-breaks-at-all (pre-receive hook declined)";
 
 export default function LongError() {
 	const t = useT();
 	return (
-		<ToastProvider>
-			<Toast variant="error" duration={Number.POSITIVE_INFINITY}>
-				<div className="flex items-start gap-8">
-					<RiErrorWarningLine className="mt-2 size-14 shrink-0 text-feedback-error" aria-hidden />
-					<div className="flex min-w-0 flex-1 flex-col gap-4">
-						<ToastTitle>{t("plan.review.startFailed")}</ToastTitle>
-						<ToastDescription>{detail}</ToastDescription>
-					</div>
-					<ToastClose />
-				</div>
-			</Toast>
-			<ToastViewport className="static" />
-		</ToastProvider>
+		<Button
+			variant="outline"
+			size="m"
+			onClick={() => toast.error(DETAIL, t("plan.review.startFailed"))}
+		>
+			error
+		</Button>
 	);
 }
 ```
 
-#### Raised from an action
+#### Several at once
 
-The real fixed viewport in the bottom-right corner, fed by a local queue like Toaster's: toasts stack newest last, leave after five seconds (the receipt after eight, errors never), pause while hovered or focused, and swipe right to dismiss.
+Three toasts raised together stack newest last; each keeps its own lifetime, and the queue pauses while hovered or focused.
 
 ```tsx
-import {
-	RiAlertLine,
-	RiArrowGoBackLine,
-	RiCheckboxCircleLine,
-	RiErrorWarningLine,
-	RiFileCopyLine,
-	RiInformationLine,
-	RiPlayLine,
-} from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import {
-	Toast,
-	ToastAction,
-	ToastClose,
-	ToastDescription,
-	ToastProvider,
-	ToastTitle,
-	ToastViewport,
-} from "@thinkrail/ui/toast";
-import { cn } from "@thinkrail/ui/utils";
-import { useRef, useState } from "react";
-
-type Variant = "info" | "success" | "warning" | "error";
-
-interface Item {
-	id: number;
-	variant: Variant;
-	message: string;
-	title?: string;
-	durationMs?: number;
-	action?: { label: string; onClick: () => void };
-}
-
-const ICONS: Record<Variant, { Icon: typeof RiAlertLine; className: string }> = {
-	info: { Icon: RiInformationLine, className: "text-feedback-info" },
-	success: { Icon: RiCheckboxCircleLine, className: "text-feedback-success" },
-	warning: { Icon: RiAlertLine, className: "text-feedback-warning" },
-	error: { Icon: RiErrorWarningLine, className: "text-feedback-error" },
-};
+import { toast } from "@/store";
 
 export default function Queue() {
 	const t = useT();
-	const [toasts, setToasts] = useState<Item[]>([]);
-	const nextId = useRef(0);
-	const push = (item: Omit<Item, "id">) => {
-		nextId.current += 1;
-		setToasts((list) => [...list, { ...item, id: nextId.current }]);
+	const raise = () => {
+		toast.info(t("plan.checkAll.runningMessage"), t("plan.checkAll.runningTitle"));
+		toast.success(t("plan.review.startedMessage"), t("plan.review.startedTitle"));
+		toast.error(t("plan.copyFailed.message"), t("plan.copyFailed.title"));
 	};
-	const dismiss = (id: number) => setToasts((list) => list.filter((item) => item.id !== id));
 	return (
-		<ToastProvider swipeDirection="right">
-			<div className="flex flex-wrap gap-8">
-				<Button
-					variant="outline"
-					size="m"
-					iconLeft={RiFileCopyLine}
-					onClick={() =>
-						push({
-							variant: "success",
-							title: t("plan.copied.title"),
-							message: t("plan.copied.message"),
-						})
-					}
-				>
-					{t("common.copy")}
-				</Button>
-				<Button
-					variant="outline"
-					size="m"
-					iconLeft={RiArrowGoBackLine}
-					onClick={() =>
-						push({
-							variant: "success",
-							message: t("panels.diffSurface.revertedFile", { file: "src/app.ts" }),
-							durationMs: 8000,
-							action: { label: t("panels.diffSurface.undo"), onClick: () => {} },
-						})
-					}
-				>
-					{t("panels.diffPane.revertFile")}
-				</Button>
-				<Button
-					variant="outline"
-					size="m"
-					iconLeft={RiPlayLine}
-					onClick={() =>
-						push({
-							variant: "error",
-							title: t("plan.review.startFailed"),
-							message: "The host is not connected.",
-						})
-					}
-				>
-					{t("plan.item.checkIt")}
-				</Button>
-			</div>
-			{toasts.map((item) => {
-				const { Icon, className } = ICONS[item.variant];
-				return (
-					<Toast
-						key={item.id}
-						variant={item.variant}
-						duration={
-							item.durationMs ?? (item.variant === "error" ? Number.POSITIVE_INFINITY : 5000)
-						}
-						onOpenChange={(open) => {
-							if (!open) dismiss(item.id);
-						}}
-					>
-						<div className="flex items-start gap-8">
-							<Icon className={cn("mt-2 size-14 shrink-0", className)} aria-hidden />
-							<div className="flex min-w-0 flex-1 flex-col gap-4">
-								{item.title ? <ToastTitle>{item.title}</ToastTitle> : null}
-								<ToastDescription className={item.title ? undefined : "text-text-default"}>
-									{item.message}
-								</ToastDescription>
-							</div>
-							<ToastClose />
-						</div>
-						{item.action ? (
-							<div className="mt-12 flex justify-end">
-								<ToastAction altText={item.action.label} asChild>
-									<Button variant="outline" size="m" onClick={item.action.onClick}>
-										{item.action.label}
-									</Button>
-								</ToastAction>
-							</div>
-						) : null}
-					</Toast>
-				);
-			})}
-			<ToastViewport />
-		</ToastProvider>
+		<Button variant="outline" size="m" onClick={raise}>
+			{t("plan.item.checkIt")}
+		</Button>
 	);
 }
 ```

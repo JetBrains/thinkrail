@@ -313,37 +313,36 @@ export const toast = {
 			id: "preview",
 			title: "Basic",
 			description:
-				'A success toast with a title, a message and Dismiss, raised again by Copy. The library places the viewport in the card (`className="static p-0 sm:w-full"`) and keeps the toast open; in the app it sits in the corner and leaves after five seconds.',
+				"`toast.success(message, title)` from a button. The toast appears in the page corner, rendered by the app's own `Toaster`, and leaves after five seconds.",
 		},
 		{
 			id: "severities",
 			title: "Severities",
 			description:
-				"Each `variant` with its icon. Only the border and the icon change colour; the card and the text stay neutral.",
+				"`toast.info`, `toast.success`, `toast.warning` and `toast.error`. Only the border and the icon change colour; the card and the text stay neutral.",
 		},
 		{
 			id: "message-only",
 			title: "Message only",
-			description:
-				"No title: the description takes `text-text-default` and carries the toast alone, as `toast.info(message)` renders.",
+			description: "`toast.info(message)` with no title: the description carries the toast alone.",
 		},
 		{
 			id: "undo",
 			title: "Undo receipt",
 			description:
-				"A success receipt with one Undo action in the footer and the 8-second lifetime `pushToast({ action, durationMs: 8000 })` gives it after a revert. Revert file raises it again.",
+				"`pushToast({ action, durationMs: 8000 })` — a success receipt with one Undo action and the longer lifetime a revert gets.",
 		},
 		{
 			id: "long-error",
 			title: "Long error",
 			description:
-				"An error title with a long, unbroken error text: the description wraps anywhere instead of widening the card. Errors never time out.",
+				"`toast.error` with a long, unbroken error text: the description wraps anywhere instead of widening the card. Errors never time out.",
 		},
 		{
 			id: "queue",
-			title: "Raised from an action",
+			title: "Several at once",
 			description:
-				"The real fixed viewport in the bottom-right corner, fed by a local queue like Toaster's: toasts stack newest last, leave after five seconds (the receipt after eight, errors never), pause while hovered or focused, and swipe right to dismiss.",
+				"Three toasts raised together stack newest last; each keeps its own lifetime, and the queue pauses while hovered or focused.",
 		},
 	],
 	usages: [

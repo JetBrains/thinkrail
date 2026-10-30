@@ -32,7 +32,9 @@ specs `web-color`, `web-typography`, `web-spacing` and `web-notices`, `apps/web/
   component from its own module even when the owning module does not export it through its barrel
   (`@/shell/layout/workbenchTabs`, `StaleComposerNotice`): the library documents components where
   they are, and these are read-only documentation edges — nothing imports the library, and a page
-  never re-exports, wraps or restyles what it imports. No specimen is redrawn with
+  never re-exports, wraps or restyles what it imports. The shell mounts the app's own `Toaster` once, as
+  `Shell` does, so toast examples raise real toasts through `pushToast` / `toast.*` from `@/store`; the
+  store is used for nothing else. No specimen is redrawn with
   handwritten markup, no screenshot stands in for a component, and states are real interactions or
   real props — never forced pseudo-classes or overriding classes.
 - **One authored source for words; values stay in their files.** Values live where the app reads them —
