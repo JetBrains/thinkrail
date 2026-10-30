@@ -140,6 +140,7 @@ import {
 	seedWorkspaceHead,
 	setWorkspacePublisher,
 } from "../workspaces";
+import { guardAccess } from "./accessToken";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
@@ -186,6 +187,11 @@ import { markClientStale, reconcilePendingReviewsOnBoot } from "./todoReview";
 export interface CreateServerOptions {
 	port?: number;
 	host?: string;
+	/**
+	 * When set, the HTTP/WS surface (`/ws`, `/files`, `/blob`) requires this token. Unset leaves the
+	 * host unauthenticated for local, same-origin use. See `accessToken.ts` and the remote-access plan.
+	 */
+	accessToken?: string;
 	staticDir?: string;
 	projectPath?: string;
 	appVersion?: string;
@@ -276,6 +282,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const {
 		port = 24242,
 		host = "localhost",
+		accessToken,
 		staticDir,
 		projectPath,
 		appVersion,
@@ -352,6 +359,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		async fetch(req, srv) {
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
+				const denied = guardAccess(req, accessToken);
+				if (denied) return denied;
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
 				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
 				await refreshRecentProjectFolders(RECENT_FOLDER_CHECK_BUDGET_MS);
@@ -363,9 +372,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				return new Response("ok");
 			}
 			if (url.pathname.startsWith(FILES_PREFIX)) {
+				const denied = guardAccess(req, accessToken);
+				if (denied) return denied;
 				return serveWorktreeFile(url.pathname);
 			}
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
+				const denied = guardAccess(req, accessToken);
+				if (denied) return denied;
 				return serveBlob(url.pathname, req.signal);
 			}
 			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {

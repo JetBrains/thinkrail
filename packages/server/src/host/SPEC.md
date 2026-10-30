@@ -50,7 +50,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (checked against `Content-Length` before reading and again while streaming), 409 `too-many`, 422
   `unsupported-collection`/`invalid-font`, or 500 `unreadable`; any other method is 405 with
   `Allow: GET, PUT`, the `fonts` poller's `fonts.changed` nudge reaching
-  only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`, static serving with
+  only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`, an optional
+  **access-token gate** (`accessToken.ts`, `createServer({ accessToken })`) in front of `/ws`, `/files` and
+  `/blob` — `null` for local same-origin use, required once the host is exposed for the remote "add project
+  by QR" mode, read from `Authorization: Bearer` or `?token=` and compared in constant time, with `/health`
+  and static assets left open — and static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
