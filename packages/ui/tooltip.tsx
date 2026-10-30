@@ -43,7 +43,7 @@ function IconTooltip({
 	const [open, setOpen] = useState(false);
 	const quietFocus = useRef(false);
 	const onFocus = (event: React.FocusEvent) => {
-		quietFocus.current = !(event.target as Element).matches(":focus-visible");
+		quietFocus.current = !event.target.matches(":focus-visible");
 		queueMicrotask(() => {
 			quietFocus.current = false;
 		});

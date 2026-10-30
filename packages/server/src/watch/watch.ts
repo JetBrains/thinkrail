@@ -97,7 +97,7 @@ function deliver(sink: string, workspaceId: string, send: () => void): void {
 	try {
 		send();
 	} catch (error) {
-		log.warn(`${sink} publisher failed for workspace ${workspaceId}`, error as Error);
+		log.warn(`${sink} publisher failed for workspace ${workspaceId}`, error);
 	}
 }
 

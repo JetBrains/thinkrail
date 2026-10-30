@@ -30,7 +30,7 @@ export function projectSessionEvent(
 	if (event.type === "tool_execution_update") {
 		return { ...event, partialResult: withoutStructured(event.partialResult) };
 	}
-	return event as PiEvent;
+	return event;
 }
 
 function withoutStructured(result: unknown): unknown {

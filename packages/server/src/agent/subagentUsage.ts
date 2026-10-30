@@ -214,7 +214,7 @@ async function readChildTotals(
 			}
 			if (cached.total) totals.push(cached.total);
 		} catch (error) {
-			log.warn(`subagent usage was not read from ${name}`, error as Error);
+			log.warn(`subagent usage was not read from ${name}`, error);
 		}
 	}
 	return totals;
