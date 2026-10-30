@@ -8,7 +8,14 @@ import {
 	RiStopLine as Stop,
 	RiTerminalBoxLine as Terminal,
 } from "@remixicon/react";
-import type { ProjectRun, RunExecution, RunTarget, Workspace } from "@thinkrail/contracts";
+import type {
+	HostPlatform,
+	ProjectRun,
+	RunExecution,
+	RunTarget,
+	RunWorkspaceState,
+	Workspace,
+} from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import {
@@ -22,11 +29,10 @@ import {
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
-import { useNow } from "../components/useNow";
 import { relativeTime } from "../lib";
 import { executionForTarget, isLiveRun, selectSupportsRun, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
-import { failed, runAvailable, statusChip, targetName } from "./runActions";
+import { failed, type RunAction, runAvailable, statusChip, targetName } from "./runActions";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { useRunHydration } from "./useRunHydration";
 import { useRunRunner } from "./useRunRunner";
@@ -82,21 +88,26 @@ function StatusChip({ execution }: { execution: RunExecution }) {
 	);
 }
 
+export interface RunPanelActions {
+	run: (action: RunAction) => void;
+	openUrl: (url: string) => void;
+	setPrimary: (targetId: string) => void;
+	setSetting: (patch: Partial<ProjectRun["settings"]>) => void;
+	edit: () => void;
+}
+
 function TargetRow({
 	target,
 	primary,
 	execution,
-	workspaceId,
-	onSetPrimary,
+	actions,
 }: {
 	target: RunTarget;
 	primary: boolean;
 	execution: RunExecution | null;
-	workspaceId: string;
-	onSetPrimary: () => void;
+	actions: RunPanelActions;
 }) {
 	const t = useT();
-	const runner = useRunRunner(workspaceId, null);
 	const live = execution !== null && isLiveRun(execution);
 	const port = execution?.ports[target.ports?.[0] ?? ""];
 	return (
@@ -113,7 +124,7 @@ function TargetRow({
 				data-testid="run-target-primary"
 				data-primary={primary}
 				className={cn(primary ? "text-primary" : "text-text-subtle")}
-				onClick={onSetPrimary}
+				onClick={() => actions.setPrimary(target.id)}
 			/>
 			<span className="flex min-w-0 flex-1 flex-col">
 				<span className="truncate tr-text-emphasis text-text-default">{targetName(target)}</span>
@@ -131,7 +142,7 @@ function TargetRow({
 					icon={ExternalLink}
 					label={t("panels.run.open")}
 					data-testid="run-target-open"
-					onClick={() => runner.openUrl(execution.url ?? "")}
+					onClick={() => actions.openUrl(execution.url ?? "")}
 				/>
 			) : null}
 			{execution ? (
@@ -141,7 +152,7 @@ function TargetRow({
 					icon={Terminal}
 					label={t("panels.run.showTerminal")}
 					data-testid="run-target-terminal"
-					onClick={() => runner.run({ kind: "showTerminal", tabKey: execution.tabKey })}
+					onClick={() => actions.run({ kind: "showTerminal", tabKey: execution.tabKey })}
 				/>
 			) : null}
 			{live ? (
@@ -152,7 +163,7 @@ function TargetRow({
 					label={t("panels.run.stop")}
 					data-testid="run-target-stop"
 					disabled={execution.status === "stopping"}
-					onClick={() => runner.run({ kind: "stop", targetId: target.id })}
+					onClick={() => actions.run({ kind: "stop", targetId: target.id })}
 				/>
 			) : (
 				<IconButton
@@ -161,7 +172,7 @@ function TargetRow({
 					icon={Play}
 					label={t("panels.run.start.label", { target: targetName(target) })}
 					data-testid="run-target-start"
-					onClick={() => runner.run({ kind: "start", targetId: target.id, prepare: true })}
+					onClick={() => actions.run({ kind: "start", targetId: target.id, prepare: true })}
 				/>
 			)}
 		</li>
@@ -280,7 +291,6 @@ function template(): unknown {
 
 export function RunPanel({ workspace }: { workspace: Workspace }) {
 	const t = useT();
-	const now = useNow();
 	const supported = useAppStore(selectSupportsRun);
 	const hostPlatform = useAppStore((state) => state.hostPlatform);
 	const run = useAppStore((state) => state.runByProject[workspace.projectId]);
@@ -289,7 +299,75 @@ export function RunPanel({ workspace }: { workspace: Workspace }) {
 	const runner = useRunRunner(workspace.id, workspace.projectId);
 	const [editing, setEditing] = useState(false);
 	const pushToast = useAppStore((s) => s.pushToast);
+	const document = run?.document ?? null;
+	const actions: RunPanelActions = {
+		run: runner.run,
+		openUrl: (url) => void runner.openUrl(url),
+		setPrimary: (targetId) => {
+			if (!document || targetId === document.recipe.primary) return;
+			void getTransport()
+				.request("run.setPrimary", {
+					projectId: workspace.projectId,
+					targetId,
+					expectedRevision: document.revision,
+				})
+				.catch((error) =>
+					pushToast({
+						variant: "error",
+						title: t("panels.run.panel.setPrimaryFailed"),
+						message: errorText(error),
+					}),
+				);
+		},
+		setSetting: (patch) => {
+			void getTransport()
+				.request("run.setSettings", { projectId: workspace.projectId, settings: patch })
+				.catch((error) =>
+					pushToast({
+						variant: "error",
+						title: t("panels.run.panel.settingsFailed"),
+						message: errorText(error),
+					}),
+				);
+		},
+		edit: () => setEditing(true),
+	};
+	return (
+		<>
+			<RunPanelView
+				workspaceId={workspace.id}
+				supported={supported}
+				hostPlatform={hostPlatform}
+				run={run}
+				state={state}
+				actions={actions}
+			/>
+			{editing && run ? (
+				<RecipeEditor projectId={workspace.projectId} run={run} onClose={() => setEditing(false)} />
+			) : null}
+		</>
+	);
+}
 
+/** Props-driven body of the Run tab; `RunPanel` is the only store-connected wrapper. */
+export function RunPanelView({
+	workspaceId,
+	supported,
+	hostPlatform,
+	run,
+	state,
+	actions,
+	now = Date.now(),
+}: {
+	workspaceId: string;
+	supported: boolean;
+	hostPlatform: HostPlatform | null;
+	run: ProjectRun | undefined;
+	state: RunWorkspaceState | undefined;
+	actions: RunPanelActions;
+	now?: number;
+}) {
+	const t = useT();
 	if (!runAvailable({ supported, hostPlatform })) {
 		return (
 			<p data-testid="run-panel-unavailable" className="p-12 tr-text-ui text-text-muted">
@@ -307,7 +385,7 @@ export function RunPanel({ workspace }: { workspace: Workspace }) {
 						size="m"
 						iconLeft={Sparkling}
 						data-testid="run-panel-setup"
-						onClick={() => runner.run({ kind: "setUp" })}
+						onClick={() => actions.run({ kind: "setUp" })}
 					>
 						{t("panels.run.setUp.label")}
 					</Button>
@@ -316,36 +394,9 @@ export function RunPanel({ workspace }: { workspace: Workspace }) {
 		);
 	}
 	const { recipe } = document;
-	const assigned = run.ports[workspace.id] ?? {};
+	const assigned = run.ports[workspaceId] ?? {};
 	const prepareExecution = executionForTarget(state, null);
 	const latestFailed = state?.executions.find((execution) => failed(execution)) ?? null;
-	const setPrimary = (targetId: string) => {
-		if (targetId === recipe.primary) return;
-		void getTransport()
-			.request("run.setPrimary", {
-				projectId: workspace.projectId,
-				targetId,
-				expectedRevision: document.revision,
-			})
-			.catch((error) =>
-				pushToast({
-					variant: "error",
-					title: t("panels.run.panel.setPrimaryFailed"),
-					message: errorText(error),
-				}),
-			);
-	};
-	const setSetting = (patch: Partial<ProjectRun["settings"]>) => {
-		void getTransport()
-			.request("run.setSettings", { projectId: workspace.projectId, settings: patch })
-			.catch((error) =>
-				pushToast({
-					variant: "error",
-					title: t("panels.run.panel.settingsFailed"),
-					message: errorText(error),
-				}),
-			);
-	};
 
 	return (
 		<div data-testid="run-panel" className="flex flex-col">
@@ -357,8 +408,7 @@ export function RunPanel({ workspace }: { workspace: Workspace }) {
 							target={target}
 							primary={target.id === recipe.primary}
 							execution={executionForTarget(state, target.id)}
-							workspaceId={workspace.id}
-							onSetPrimary={() => setPrimary(target.id)}
+							actions={actions}
 						/>
 					))}
 				</ul>
@@ -372,7 +422,7 @@ export function RunPanel({ workspace }: { workspace: Workspace }) {
 						size="s"
 						data-testid="run-panel-prepare-now"
 						disabled={prepareExecution !== null && isLiveRun(prepareExecution)}
-						onClick={() => runner.run({ kind: "start", targetId: null, prepare: true })}
+						onClick={() => actions.run({ kind: "start", targetId: null, prepare: true })}
 					>
 						{t("panels.run.panel.prepareNow")}
 					</Button>
@@ -402,12 +452,7 @@ export function RunPanel({ workspace }: { workspace: Workspace }) {
 				title={t("panels.run.panel.recipe")}
 				testId="run-panel-recipe"
 				action={
-					<Button
-						variant="ghost"
-						size="s"
-						data-testid="run-panel-edit"
-						onClick={() => setEditing(true)}
-					>
+					<Button variant="ghost" size="s" data-testid="run-panel-edit" onClick={actions.edit}>
 						{t("panels.run.panel.edit")}
 					</Button>
 				}
@@ -446,7 +491,7 @@ export function RunPanel({ workspace }: { workspace: Workspace }) {
 						size="s"
 						iconLeft={Sparkling}
 						data-testid="run-panel-setup-again"
-						onClick={() => runner.run({ kind: "setUp" })}
+						onClick={() => actions.run({ kind: "setUp" })}
 					>
 						{t("panels.run.panel.setUpAgain")}
 					</Button>
@@ -455,7 +500,7 @@ export function RunPanel({ workspace }: { workspace: Workspace }) {
 						size="s"
 						iconLeft={Robot}
 						data-testid="run-panel-fix"
-						onClick={() => runner.run({ kind: "fix", execution: latestFailed })}
+						onClick={() => actions.run({ kind: "fix", execution: latestFailed })}
 					>
 						{t("panels.run.fix.label")}
 					</Button>
@@ -468,7 +513,7 @@ export function RunPanel({ workspace }: { workspace: Workspace }) {
 						checked={run.settings.autoOpen}
 						label={t("panels.run.panel.autoOpen")}
 						testId="run-panel-auto-open"
-						onChange={(checked) => setSetting({ autoOpen: checked })}
+						onChange={(checked) => actions.setSetting({ autoOpen: checked })}
 					/>
 				</div>
 				<div className="flex items-center justify-between gap-8">
@@ -477,14 +522,11 @@ export function RunPanel({ workspace }: { workspace: Workspace }) {
 						checked={run.settings.agentMayRun}
 						label={t("panels.run.panel.agentMayRun")}
 						testId="run-panel-agent-may-run"
-						onChange={(checked) => setSetting({ agentMayRun: checked })}
+						onChange={(checked) => actions.setSetting({ agentMayRun: checked })}
 					/>
 				</div>
 				<p className="tr-text-metadata text-text-subtle">{t("panels.run.panel.remoteNote")}</p>
 			</Section>
-			{editing ? (
-				<RecipeEditor projectId={workspace.projectId} run={run} onClose={() => setEditing(false)} />
-			) : null}
 		</div>
 	);
 }
