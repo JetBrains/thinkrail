@@ -34,9 +34,14 @@ import {
 	type InstalledFonts,
 	isRoleDefault,
 } from "./fontCatalog";
+import { SETTINGS_TAG } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
+import { useSettingsDialogContainer } from "./settingsDialogContainer";
 
 const WarningIcon = withIconClass(Alert, "text-feedback-warning");
+
+const PICKER_POPOVER =
+	"flex max-h-[var(--radix-popover-content-available-height)] w-320 flex-col p-0";
 
 export function FamilyName({
 	family,
@@ -63,11 +68,7 @@ export function FamilyName({
 }
 
 export function FontBadge({ children }: { children: ReactNode }) {
-	return (
-		<span className="shrink-0 rounded-full bg-control-bg-selected px-8 text-text-muted tr-text-metadata">
-			{children}
-		</span>
-	);
+	return <span className={cn(SETTINGS_TAG, "text-text-muted")}>{children}</span>;
 }
 
 function InstalledStatus({ state, onRetry }: { state: InstalledFonts; onRetry: () => void }) {
@@ -136,14 +137,18 @@ export function FontList({
 		["installed", t("settings.appearance.fonts.picker.installed")],
 	];
 	return (
-		<Command loop>
+		<Command loop className="min-h-0">
 			<CommandInput
 				placeholder={t("settings.appearance.fonts.picker.search")}
 				value={search}
 				onValueChange={setSearch}
 				data-testid={`${testId}-search`}
 			/>
-			<CommandList label={t("settings.appearance.fonts.picker.label")} className="max-h-[320px]">
+			<CommandList
+				label={t("settings.appearance.fonts.picker.label")}
+				data-testid={`${testId}-list`}
+				className="max-h-[320px] min-h-0"
+			>
 				{offerTyped ? null : (
 					<CommandEmpty>
 						<span className="flex flex-col gap-4 px-12">
@@ -155,9 +160,6 @@ export function FontList({
 					</CommandEmpty>
 				)}
 				{groups.map(([source, heading]) => {
-					if (source === "installed" && installed.status !== "ready") {
-						return <InstalledStatus key={source} state={installed} onRetry={onRetry} />;
-					}
 					const items = options.filter((option) => option.source === source);
 					if (items.length === 0) return null;
 					return (
@@ -222,6 +224,9 @@ export function FontList({
 					</CommandGroup>
 				) : null}
 			</CommandList>
+			{installed.status === "ready" ? null : (
+				<InstalledStatus state={installed} onRetry={onRetry} />
+			)}
 			{monoOnly ? (
 				<div className="border-border-muted border-t px-12 py-8 text-text-muted tr-text-metadata">
 					{t("settings.appearance.fonts.picker.monoOnly")}
@@ -257,6 +262,7 @@ export function FontPicker({
 	unavailable: boolean;
 	onSelect: (ref: FontFamilyRef | null) => void;
 }) {
+	const container = useSettingsDialogContainer();
 	const [open, setOpen] = useState(false);
 	return (
 		<Popover
@@ -288,7 +294,13 @@ export function FontPicker({
 					</FamilyName>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent align="end" className="w-320 p-0">
+			<PopoverContent
+				align="end"
+				container={container}
+				collisionBoundary={container}
+				collisionPadding={8}
+				className={PICKER_POPOVER}
+			>
 				<FontList
 					{...shared}
 					currentKey={choiceKey(value, shared.role)}
@@ -306,14 +318,17 @@ export function FontPicker({
 export function FallbackChips({
 	values,
 	familyOf,
+	addLabel,
 	onChange,
 	...shared
 }: PickerSharedProps & {
 	values: readonly FontFamilyRef[];
 	familyOf: (ref: FontFamilyRef) => string;
+	addLabel: string;
 	onChange: (next: FontFamilyRef[]) => void;
 }) {
 	const t = useT();
+	const container = useSettingsDialogContainer();
 	const [open, setOpen] = useState(false);
 	return (
 		<div className="flex max-w-320 flex-wrap items-center justify-end gap-4">
@@ -355,6 +370,7 @@ export function FallbackChips({
 							variant="outline"
 							size="m"
 							iconLeft={Add}
+							aria-label={addLabel}
 							disabled={shared.disabled}
 							data-testid={`${shared.testId}-add`}
 						>
@@ -363,7 +379,13 @@ export function FallbackChips({
 								: t("settings.appearance.fonts.add")}
 						</Button>
 					</PopoverTrigger>
-					<PopoverContent align="end" className="w-320 p-0">
+					<PopoverContent
+						align="end"
+						container={container}
+						collisionBoundary={container}
+						collisionPadding={8}
+						className={PICKER_POPOVER}
+					>
 						<FontList
 							{...shared}
 							currentKey={null}

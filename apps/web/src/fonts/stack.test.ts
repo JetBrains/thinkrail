@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { familiesOf, fontStack, previewStack, quoteFamily } from "./stack";
+import {
+	familiesOf,
+	fontStack,
+	namedFamilies,
+	previewStack,
+	quoteFamily,
+	refFamily,
+	roleFamily,
+} from "./stack";
 
 const faces = { interface: "Geist Variable", code: "JetBrains Mono Variable" };
 
@@ -52,4 +60,19 @@ test("generic families stay unquoted and computed stacks parse back to names", (
 		"sans-serif",
 	]);
 	expect(previewStack("Fira Code", "code")).toBe('"Fira Code", var(--tr-font-family-code-default)');
+});
+
+test("refs resolve to family names, the role default standing in for no choice", () => {
+	expect(roleFamily(null, "code", faces)).toBe(faces.code);
+	expect(roleFamily({ builtin: "interface" }, "code", faces)).toBe(faces.interface);
+	expect(roleFamily({ name: "Fira Code" }, "code", faces)).toBe("Fira Code");
+	expect(refFamily({ builtin: "code" }, faces)).toBe(faces.code);
+});
+
+test("named families gather every chosen and fallback name, never a bundled ref", () => {
+	const named = namedFamilies([
+		{ family: { name: "Fira Code" }, fallbacks: [{ builtin: "code" }, { name: "Noto Emoji" }] },
+		{ family: null, fallbacks: [{ name: "Fira Code" }] },
+	]);
+	expect([...named]).toEqual(["Fira Code", "Noto Emoji"]);
 });

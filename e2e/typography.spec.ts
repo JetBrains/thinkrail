@@ -10,6 +10,7 @@ import {
 	visibleTerminalScreen,
 	waitTerminalReady,
 } from "./fixtures/app";
+import { pierreLines } from "./fixtures/pierre";
 import { BRAND_FACE, CODE_FACE, INTERFACE_FACE } from "./fixtures/typography";
 
 type TypeInfo = {
@@ -116,11 +117,7 @@ test("Pierre diffs take the dense code size, the code row and the code ligatures
 	writeFileSync(join(workspace.worktreePath, "notes.txt"), "a => b !== c\n");
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "notes.txt" }).dblclick();
-	const line = page
-		.getByTestId("diff-view")
-		.locator("[data-line]")
-		.filter({ hasText: "!==" })
-		.last();
+	const line = pierreLines(page.getByTestId("diff-view"), "!==").last();
 	await expect(line).toBeVisible();
 	const ligatures = () => line.evaluate((el) => getComputedStyle(el).fontVariantLigatures);
 

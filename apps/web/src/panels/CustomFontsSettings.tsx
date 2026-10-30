@@ -1,10 +1,5 @@
+import { RiUploadCloud2Line as Upload } from "@remixicon/react";
 import {
-	RiFileCopyLine as Copy,
-	RiFolderOpenLine as FolderOpen,
-	RiUploadCloud2Line as Upload,
-} from "@remixicon/react";
-import {
-	type FontFamilyRef,
 	USER_FONT_EXTENSIONS,
 	type UserFontFile,
 	type UserFontFileErrorCode,
@@ -12,15 +7,23 @@ import {
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { cn } from "@thinkrail/ui/utils";
 import { useRef, useState } from "react";
-import { copyText } from "@/lib";
-import { toast, useAppStore } from "@/store";
-import { errorText, getTransport, uploadUserFont } from "@/transport";
+import { namedFamilies } from "@/fonts";
+import { useAppStore } from "@/store";
+import { uploadUserFont } from "@/transport";
 import { FamilyName, FontBadge } from "./FontPicker";
-import { customFontFiles, usedFamilies } from "./fontCatalog";
+import { customFamilies } from "./fontCatalog";
+import {
+	type FolderActions,
+	SettingsFileIssue,
+	type SettingsFileIssueItem,
+	SettingsFileIssues,
+	SettingsFolderRow,
+	useFolderActions,
+} from "./SettingsFolder";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
-import { SettingsRow } from "./SettingsRow";
 
 type UploadOutcome = UserFontFile | { fileName: string; ok: false; error: "upload-failed" };
 
@@ -41,29 +44,26 @@ function errorLabel(t: Translator, error: UserFontFileErrorCode | "upload-failed
 	}
 }
 
-function FileIssue({ outcome }: { outcome: Exclude<UploadOutcome, { ok: true }> }) {
-	const t = useT();
-	return (
-		<SettingsNotice variant="warning" testId={`custom-font-issue-${outcome.fileName}`}>
-			<span className="flex flex-col gap-4">
-				<span className="tr-code-text">{outcome.fileName}</span>
-				<span>{errorLabel(t, outcome.error)}</span>
-				{"detail" in outcome && outcome.detail ? (
-					<span className="break-words text-text-muted">{outcome.detail}</span>
-				) : null}
-			</span>
-		</SettingsNotice>
+function fileIssues(t: Translator, outcomes: readonly UploadOutcome[]): SettingsFileIssueItem[] {
+	return outcomes.flatMap((outcome) =>
+		outcome.ok
+			? []
+			: [
+					{
+						fileName: outcome.fileName,
+						label: errorLabel(t, outcome.error),
+						detail: "detail" in outcome ? outcome.detail : undefined,
+					},
+				],
 	);
 }
 
-export interface CustomFontsViewProps {
+export interface CustomFontsViewProps extends FolderActions {
 	snapshot: UserFontsSnapshot;
 	inUse: ReadonlySet<string>;
 	outcomes: readonly UploadOutcome[];
 	busy: boolean;
 	onFiles: (files: File[]) => void;
-	onCopyFolder: (folder: string) => void;
-	onRevealFolder: () => void;
 }
 
 export function CustomFontsView({
@@ -78,19 +78,12 @@ export function CustomFontsView({
 	const t = useT();
 	const input = useRef<HTMLInputElement>(null);
 	const [dragging, setDragging] = useState(false);
-	const families = new Map<string, { files: string[]; monospace: boolean }>();
-	for (const file of customFontFiles(snapshot)) {
-		const previous = families.get(file.face.family);
-		families.set(file.face.family, {
-			files: [...(previous?.files ?? []), file.fileName],
-			monospace: (previous?.monospace ?? false) || file.face.monospace,
-		});
-	}
-	const issues = snapshot.files.filter((file) => !file.ok);
+	const families = customFamilies(snapshot);
+	const issues = fileIssues(t, snapshot.files);
 	const added = [
 		...new Set(outcomes.flatMap((outcome) => (outcome.ok ? [outcome.face.family] : []))),
 	];
-	const failed = outcomes.filter((outcome) => !outcome.ok);
+	const failed = fileIssues(t, outcomes);
 	return (
 		<SettingsGroup
 			title={t("settings.appearance.customFonts.title")}
@@ -143,18 +136,19 @@ export function CustomFontsView({
 					}}
 				/>
 			</section>
-			{added.length > 0 || failed.length > 0 ? (
-				<div className="flex flex-col gap-4 pb-12">
-					{added.length > 0 ? (
-						<SettingsNotice variant="success" testId="custom-fonts-added">
-							{t("settings.appearance.customFonts.added", { families: added.join(", ") })}
-						</SettingsNotice>
-					) : null}
-					{failed.map((outcome) => (
-						<FileIssue key={outcome.fileName} outcome={outcome} />
-					))}
-				</div>
-			) : null}
+			<div
+				role="status"
+				className={cn("flex flex-col gap-4", (added.length > 0 || failed.length > 0) && "pb-12")}
+			>
+				{added.length > 0 ? (
+					<SettingsNotice variant="success" testId="custom-fonts-added">
+						{t("settings.appearance.customFonts.added", { families: added.join(", ") })}
+					</SettingsNotice>
+				) : null}
+				{failed.map((issue) => (
+					<SettingsFileIssue key={issue.fileName} issue={issue} testIdPrefix="custom-font-issue" />
+				))}
+			</div>
 			{[...families].map(([family, entry]) => (
 				<div
 					key={family}
@@ -180,65 +174,32 @@ export function CustomFontsView({
 					) : null}
 				</div>
 			))}
-			<SettingsRow
+			<SettingsFolderRow
 				label={t("settings.appearance.customFonts.folder")}
-				description={
-					<>
-						<code data-testid="custom-fonts-folder-path" className="break-all tr-code-text">
-							{snapshot.dir}
-						</code>
-						<span className="block">{t("settings.appearance.customFonts.removeHint")}</span>
-					</>
-				}
+				folder={snapshot.dir}
+				hint={t("settings.appearance.customFonts.removeHint")}
+				testIdPrefix="custom-fonts"
 				noBorder={issues.length === 0}
-				control={
-					<div className="flex gap-8">
-						<Button
-							variant="outline"
-							size="m"
-							iconLeft={Copy}
-							onClick={() => onCopyFolder(snapshot.dir)}
-						>
-							{t("settings.language.folder.copy")}
-						</Button>
-						<Button
-							variant="outline"
-							size="m"
-							iconLeft={FolderOpen}
-							data-testid="custom-fonts-open-folder"
-							onClick={onRevealFolder}
-						>
-							{t("settings.language.folder.open")}
-						</Button>
-					</div>
-				}
+				onCopyFolder={onCopyFolder}
+				onRevealFolder={onRevealFolder}
 			/>
-			{issues.length > 0 ? (
-				<div className="flex flex-col gap-4 py-12">
-					{issues.map((issue) =>
-						issue.ok ? null : <FileIssue key={issue.fileName} outcome={issue} />,
-					)}
-				</div>
-			) : null}
+			<SettingsFileIssues issues={issues} testIdPrefix="custom-font-issue" />
 		</SettingsGroup>
 	);
 }
 
 export function CustomFontsGroup() {
-	const t = useT();
 	const snapshot = useAppStore((state) => state.userFonts);
 	const interfaceFont = useAppStore((state) => state.interfaceFont);
 	const codeFont = useAppStore((state) => state.codeFont);
+	const folderActions = useFolderActions("fonts.reveal");
 	const [outcomes, setOutcomes] = useState<UploadOutcome[]>([]);
-	const [busy, setBusy] = useState(false);
+	const [uploading, setUploading] = useState(0);
 	if (!snapshot) return null;
-	const refs: FontFamilyRef[] = [interfaceFont, codeFont].flatMap((choice) => [
-		...(choice.family ? [choice.family] : []),
-		...choice.fallbacks,
-	]);
 	const upload = (files: File[]) => {
 		if (files.length === 0) return;
-		setBusy(true);
+		if (uploading === 0) setOutcomes([]);
+		setUploading((count) => count + 1);
 		void Promise.all(
 			files.map((file) =>
 				uploadUserFont(file).catch(
@@ -246,29 +207,25 @@ export function CustomFontsGroup() {
 				),
 			),
 		).then((results) => {
-			setOutcomes(results);
-			setBusy(false);
+			setOutcomes((current) => {
+				const merged = new Map(current.map((outcome) => [outcome.fileName, outcome]));
+				for (const result of results) {
+					merged.delete(result.fileName);
+					merged.set(result.fileName, result);
+				}
+				return [...merged.values()];
+			});
+			setUploading((count) => count - 1);
 		});
 	};
 	return (
 		<CustomFontsView
 			snapshot={snapshot}
-			inUse={usedFamilies(snapshot.files, refs)}
+			inUse={namedFamilies([interfaceFont, codeFont])}
 			outcomes={outcomes}
-			busy={busy}
+			busy={uploading > 0}
 			onFiles={upload}
-			onCopyFolder={(folder) =>
-				void copyText(folder).then((copied) => {
-					if (copied) toast.success(t("settings.language.folderCopied"));
-				})
-			}
-			onRevealFolder={() =>
-				void getTransport()
-					.request("fonts.reveal", {})
-					.catch((error: unknown) =>
-						toast.error(errorText(error, t("settings.language.openFolderFailed"))),
-					)
-			}
+			{...folderActions}
 		/>
 	);
 }

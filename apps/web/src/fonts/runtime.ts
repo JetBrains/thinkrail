@@ -76,7 +76,9 @@ function revisionOf(root: HTMLElement): string {
 
 function publish(root: HTMLElement): void {
 	const revision = revisionOf(root);
-	if (root.dataset.fonts !== revision) root.dataset.fonts = revision;
+	if (root.dataset.fonts === revision) return;
+	root.dataset.fontFaces = String(faceRevision);
+	root.dataset.fonts = revision;
 }
 
 export function applyFontPreference(preference: FontPreference): void {

@@ -1645,12 +1645,14 @@ export interface UserThemesSnapshot {
 	files: UserThemeFile[];
 }
 
-export type UserFontFileErrorCode =
-	| "too-large"
-	| "too-many"
-	| "unsupported-collection"
-	| "invalid-font"
-	| "unreadable";
+const USER_FONT_FILE_ERROR_CODES = [
+	"too-large",
+	"too-many",
+	"unsupported-collection",
+	"invalid-font",
+	"unreadable",
+] as const;
+export type UserFontFileErrorCode = (typeof USER_FONT_FILE_ERROR_CODES)[number];
 
 /** What a user font file declares in its own tables. */
 export interface UserFontFace {
@@ -1683,6 +1685,37 @@ export type UserFontFile = UserFontFileOk | UserFontFileError;
 export interface UserFontsSnapshot {
 	dir: string;
 	files: UserFontFile[];
+}
+
+function isUserFontFace(value: unknown): value is UserFontFace {
+	if (typeof value !== "object" || value === null) return false;
+	const weight = Reflect.get(value, "weight");
+	const style = Reflect.get(value, "style");
+	if (typeof weight !== "object" || weight === null) return false;
+	const min = Reflect.get(weight, "min");
+	const max = Reflect.get(weight, "max");
+	return (
+		isFontFamilyName(Reflect.get(value, "family")) &&
+		(style === "normal" || style === "italic") &&
+		typeof min === "number" &&
+		typeof max === "number" &&
+		min <= max &&
+		typeof Reflect.get(value, "monospace") === "boolean"
+	);
+}
+
+/** The shape `fonts.list` and a `/fonts/` upload report for one file. */
+export function isUserFontFile(value: unknown): value is UserFontFile {
+	if (typeof value !== "object" || value === null) return false;
+	if (typeof Reflect.get(value, "fileName") !== "string") return false;
+	const ok = Reflect.get(value, "ok");
+	if (ok === true) {
+		return (
+			typeof Reflect.get(value, "url") === "string" && isUserFontFace(Reflect.get(value, "face"))
+		);
+	}
+	const error = Reflect.get(value, "error");
+	return ok === false && USER_FONT_FILE_ERROR_CODES.some((code) => code === error);
 }
 
 /** A family the host operating system's font service reports. */

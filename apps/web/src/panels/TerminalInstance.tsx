@@ -14,7 +14,7 @@ import { flushSync } from "react-dom";
 import "@xterm/xterm/css/xterm.css";
 import { i18n, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { fontsLoaded, onFontsChange, resolveFont } from "@thinkrail/ui/fonts";
+import { type ResolvedFont, resolveFont, watchFont } from "@thinkrail/ui/fonts";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
 import { cssColorToHex } from "@/lib";
@@ -332,10 +332,24 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				});
 		};
 		reattachRef.current = () => attach(true);
+		const applyFont = (next: ResolvedFont): void => {
+			term.options.fontFamily = "monospace";
+			term.options.fontFamily = next.family;
+			term.options.fontSize = next.size;
+			term.options.fontWeight = next.weight;
+		};
 		void runAfterTerminalRelayout(
 			() => webFonts.relayout(),
 			() => {
 				if (disposed) return;
+				const latest = resolveFont("tr-code-block");
+				const { fontFamily, fontSize, fontWeight } = term.options;
+				if (
+					fontFamily !== latest.family ||
+					fontSize !== latest.size ||
+					fontWeight !== latest.weight
+				)
+					applyFont(latest);
 				applyFit();
 				attach();
 			},
@@ -352,21 +366,10 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			term.options.theme = readTheme();
 			term.options.minimumContrastRatio = contrastFloor();
 		});
-		let fontGeneration = 0;
-		const stopFontsWatch = onFontsChange(() => {
-			const next = resolveFont("tr-code-block");
-			const { fontFamily, fontSize, fontWeight } = term.options;
-			if (fontFamily === next.family && fontSize === next.size && fontWeight === next.weight)
-				return;
-			fontGeneration = fontGeneration + 1;
-			const generation = fontGeneration;
-			void fontsLoaded(next).then(() => {
-				if (disposed || generation !== fontGeneration) return;
-				term.options.fontFamily = next.family;
-				term.options.fontSize = next.size;
-				term.options.fontWeight = next.weight;
-				applyFit();
-			});
+		const stopFontsWatch = watchFont("tr-code-block", ["family", "size", "weight"], (next) => {
+			if (disposed) return;
+			applyFont(next);
+			applyFit();
 		});
 
 		return () => {

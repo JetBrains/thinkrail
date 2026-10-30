@@ -2,13 +2,12 @@ import { expect, test } from "bun:test";
 import type { UserFontsSnapshot } from "@thinkrail/contracts";
 import {
 	choiceKey,
+	customFamilies,
 	displayFamily,
 	fallbackFontOptions,
 	fontOptions,
 	isRoleDefault,
 	mainFontOptions,
-	refFamilyName,
-	usedFamilies,
 } from "./fontCatalog";
 
 const faces = { interface: "Geist Variable", code: "JetBrains Mono Variable" };
@@ -51,7 +50,7 @@ const probes: Record<string, { renders: boolean; monospace: boolean }> = {
 
 const options = fontOptions({
 	faces,
-	userFonts,
+	custom: customFamilies(userFonts),
 	installed: {
 		status: "ready",
 		families: [
@@ -106,15 +105,16 @@ test("fallback lists offer every font but the ones already in the stack", () => 
 	]);
 });
 
+test("custom files group by family, skipping broken files, monospace when any face is", () => {
+	expect([...customFamilies(userFonts)]).toEqual([
+		["Fira Code", { files: ["FiraCode-Regular.ttf", "FiraCode-Bold.ttf"], monospace: true }],
+	]);
+	expect(customFamilies(null).size).toBe(0);
+});
+
 test("refs resolve to display names, keys and role defaults", () => {
 	expect(displayFamily("JetBrains Mono Variable")).toBe("JetBrains Mono");
-	expect(refFamilyName(null, "code", faces)).toBe("JetBrains Mono Variable");
-	expect(refFamilyName({ builtin: "interface" }, "code", faces)).toBe("Geist Variable");
-	expect(refFamilyName({ name: "Fira Code" }, "code", faces)).toBe("Fira Code");
 	expect(choiceKey(null, "code")).toBe("builtin:code");
 	expect(isRoleDefault({ builtin: "code" }, "code")).toBe(true);
 	expect(isRoleDefault({ builtin: "code" }, "interface")).toBe(false);
-	expect([...usedFamilies(userFonts.files, [{ name: "Fira Code" }, { builtin: "code" }])]).toEqual([
-		"Fira Code",
-	]);
 });

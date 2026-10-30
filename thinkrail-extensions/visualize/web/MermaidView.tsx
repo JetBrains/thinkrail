@@ -2,7 +2,7 @@ import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
-import { fontsLoaded, onFontsChange, resolveFont } from "@thinkrail/ui/fonts";
+import { watchFont } from "@thinkrail/ui/fonts";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type ReactNode, useEffect, useState } from "react";
 import { renderMermaid } from "./mermaid";
@@ -42,15 +42,7 @@ export function MermaidView({
 		setError(null);
 		run();
 		const stopThemeWatch = onThemeSwap(run);
-		let family = resolveFont("tr-code-block").family;
-		const stopFontsWatch = onFontsChange(() => {
-			const font = resolveFont("tr-code-block");
-			if (font.family === family) return;
-			family = font.family;
-			void fontsLoaded(font).then(() => {
-				if (!cancelled && font.family === family) run();
-			});
-		});
+		const stopFontsWatch = watchFont("tr-code-block", ["family"], run);
 		return () => {
 			cancelled = true;
 			stopThemeWatch();

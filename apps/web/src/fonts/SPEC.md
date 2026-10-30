@@ -26,7 +26,8 @@ those tokens; the defaults themselves stay in `typography.json` ([[web-typograph
 - **Public surface:** `index.ts` only — `initializeFonts`, `applyFontPreference`,
   `previewFontWeightOffset`, `installUserFonts`, `subscribeFontFaces` / `fontFacesRevision`,
   `bundledFaces`, `probeFont`, `weightResponse`, `textWeightRange`, `sharesHostFonts`, `writeFontsHint`,
-  `DEFAULT_FONT_PREFERENCE`, `previewStack`, `refFamily`, and the `FontProbe` / `WeightResponse` /
+  `DEFAULT_FONT_PREFERENCE`, `previewStack`, `refFamily` / `roleFamily` (a ref, or no choice, to its
+  family name), `namedFamilies` (every named family a set of choices uses), and the `FontProbe` / `WeightResponse` /
   `BundledFaces` types. The preference is the contracts' `FontSettings`, normalized by
   `normalizeFontSettings` like the host and the store.
 - **Allowed deps:** `@thinkrail/contracts`; `clientPreferences` (native-stable hint storage);
@@ -47,7 +48,8 @@ Application is atomic from consumers' view: every token is written first and the
 `<html>` is published last and only when it changes, mirroring `data-theme`. `@thinkrail/ui/fonts`'s
 `onFontsChange` is the subscription; xterm, Monaco, Pierre and Mermaid re-read the tokens on it. The
 revision also moves when the custom faces change, since a replaced file re-measures text without any token
-changing. `--tr-code-row-height` is recomputed in JS (the dense code size × the default line height,
+changing, and the face revision is published beside it as `data-font-faces`, so `watchFont` consumers
+(xterm, Mermaid) re-measure a family whose name did not change. `--tr-code-row-height` is recomputed in JS (the dense code size × the default line height,
 rounded) because CSS `round()` is missing before Safari 15.4 and Pierre's virtualizer needs a whole pixel.
 
 Custom faces are registered as `FontFace`s from the host's versioned `/fonts/` URLs with `display: block`,

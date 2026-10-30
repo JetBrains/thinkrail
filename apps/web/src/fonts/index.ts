@@ -14,4 +14,4 @@ export {
 	textWeightRange,
 } from "./runtime";
 export type { BundledFaces } from "./stack";
-export { previewStack, refFamily } from "./stack";
+export { namedFamilies, previewStack, refFamily, roleFamily } from "./stack";

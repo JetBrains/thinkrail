@@ -8,6 +8,7 @@ import {
 	type UserFontFile,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
+import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
 import { resetAnalyticsForTests } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { fontsDir, MAX_FONT_FILE_BYTES, MAX_FONT_FILES, readUserFonts } from "../fonts";
@@ -248,5 +249,7 @@ test("the host routes /fonts/ and nudges only sockets that speak the fonts proto
 		resetAnalyticsForTests();
 		resetConfigCache();
 		await resetJbcentralStateForTests();
+		configurePiRuntimeFactory();
+		configurePiRuntime(null);
 	}
 });

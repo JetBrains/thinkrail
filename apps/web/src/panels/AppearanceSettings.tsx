@@ -23,7 +23,6 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { cn } from "@thinkrail/ui/utils";
 import { useState, useSyncExternalStore } from "react";
-import { copyText } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import {
 	deriveSystemThemePair,
@@ -44,6 +43,7 @@ import { FontsGroup } from "./FontsSettings";
 import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsDisclosure } from "./SettingsDisclosure";
+import { useFolderActions } from "./SettingsFolder";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
@@ -328,15 +328,7 @@ export function AppearanceSettings() {
 		if (next.light !== pair.light || next.dark !== pair.dark) update({ systemThemePair: next });
 	};
 
-	const copyThemesFolder = async (folder: string) => {
-		if (await copyText(folder)) toast.success(t("settings.language.folderCopied"));
-	};
-
-	const revealThemesFolder = () => {
-		getTransport()
-			.request("themes.reveal", {})
-			.catch((error) => toast.error(errorText(error, t("settings.language.openFolderFailed"))));
-	};
+	const themesFolderActions = useFolderActions("themes.reveal");
 
 	const fallbacks = systemMode
 		? [
@@ -478,8 +470,7 @@ export function AppearanceSettings() {
 				snapshot={userThemes}
 				issues={userThemeIssues}
 				appVersion={appVersion}
-				onCopyFolder={(folder) => void copyThemesFolder(folder)}
-				onRevealFolder={revealThemesFolder}
+				{...themesFolderActions}
 			/>
 			<SettingsGroup title={t("settings.appearance.editorGroup")}>
 				<LineWidthControl kind="file" />

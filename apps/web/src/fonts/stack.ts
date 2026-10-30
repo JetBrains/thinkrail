@@ -37,14 +37,24 @@ export function refFamily(ref: FontFamilyRef, faces: BundledFaces): string {
 	return "builtin" in ref ? faces[ref.builtin] : ref.name;
 }
 
-export function chosenFamily(choice: FontChoice, role: FontRole, faces: BundledFaces): string {
-	return choice.family ? refFamily(choice.family, faces) : faces[role];
+export function roleFamily(ref: FontFamilyRef | null, role: FontRole, faces: BundledFaces): string {
+	return ref ? refFamily(ref, faces) : faces[role];
+}
+
+export function namedFamilies(choices: readonly FontChoice[]): Set<string> {
+	return new Set(
+		choices.flatMap((choice) =>
+			[choice.family, ...choice.fallbacks].flatMap((ref) =>
+				ref !== null && "name" in ref ? [ref.name] : [],
+			),
+		),
+	);
 }
 
 export function fontStack(choice: FontChoice, role: FontRole, faces: BundledFaces): string | null {
 	if (choice.family === null && choice.fallbacks.length === 0) return null;
 	const names = [
-		chosenFamily(choice, role, faces),
+		roleFamily(choice.family, role, faces),
 		...choice.fallbacks.map((ref) => refFamily(ref, faces)),
 	];
 	return [...new Set(names.filter((name) => name.length > 0))]

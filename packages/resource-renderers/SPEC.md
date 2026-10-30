@@ -529,9 +529,11 @@ it is smooth, and `overflow: "wrap"` (which skips the pairing because both sides
 moderate scrolling but not flings. The virtualizer's `lineHeight` metric is the real row height:
 `.pierre-code-surface` sets `--diffs-line-height` from `--tr-code-row-height` (the dense code size ×
 `default`, a whole pixel — 14 px by default, matching Monaco's rounding), and `codeLineHeight()` reads the
-same token. A font settings change can move that row height, so `PierreFile` / `PierreDiff` key their
-surface on it (`useCodeRowHeight`, subscribed through `onFontsChange`) and remount rather than let Pierre's
-cached row heights drift from the metric. Against
+same token. A font settings change can move that row height, so `usePierreVirtualizer` re-reads it on
+`onFontsChange` and `PierreVirtualizer.setMetrics` hands the new metric to every connected Pierre instance
+(its public `setMetrics` resets the cached row heights) — Pierre's React components read `metrics` only
+when they create an instance, and remounting the surface instead would drop an open line composer and its
+unsaved text. Against
 Pierre's 20 px default estimate the scroll height of a 20k-line file started ~40% too tall and shrank
 while scrolling as rows were measured. Rejected after measurement: mirroring an invisible spacer onto
 the opposite split column (it cut paint area but not dropped frames in either engine) and a larger

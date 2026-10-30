@@ -640,11 +640,19 @@ a project picker, the prompt hero, and the reused
   siblings); `SettingsGroup` is a titled block of `SettingsRow`s — label, optional description, one
   control, wrapping the control below the label at narrow widths; `SegmentedControl` is a native-radio
   group with `value: T | null` (`null` selects nothing, for a host value no option names) and per-option
-  disabled; `SettingsNotice` is the one inline neutral/info/success/warning/error notice. Free-text
-  settings share one **auto-save input pattern**: Enter or blur saves a valid, changed value once (no
-  Save/Apply button); an invalid draft stays visible with `aria-invalid` and a visible range message and is
-  never sent; Escape reverts to the authoritative value; the input carries `data-settings-draft-input`;
-  a rejected save toasts and the authoritative value stays in charge. **`McpSettings`** is the **MCP servers** section
+  disabled; `SettingsNotice` is the one inline neutral/info/success/warning/error notice;
+  `SettingsSubheading` titles a run of rows inside a group; `SETTINGS_TAG` is the bordered row tag;
+  `SettingsRange` is the range-slider skin and segmented track; `SettingsFolder` is a data folder's
+  Copy path / Open folder row (`useFolderActions` binds a `*.reveal` method) and its per-file issue notices,
+  shared by Language, Custom themes and Custom fonts; `saveSettings` is the one `settings.update` call that
+  toasts its failure. Popovers inside the dialog render into the dialog element
+  (`settingsDialogContainer`), because Radix's scroll lock cancels wheel and touch scrolling anywhere
+  outside it. Free-text settings and the font weight slider share one **auto-save input pattern**
+  (`settingsDraft.useSettingsDraft`): Enter, blur or a slider release saves a valid, changed value once
+  (no Save/Apply button); an invalid draft stays visible with `aria-invalid` and a range message linked by
+  `aria-describedby`, and is never sent; Escape reverts to the authoritative value; the input carries
+  `data-settings-draft-input`; a host echo never overwrites an edit in progress or rolls back to a value a
+  newer in-flight save replaces; a rejected save toasts and the field returns to the authoritative value. **`McpSettings`** is the **MCP servers** section
   (hidden below `MCP_PROTOCOL_VERSION`). It describes the active workspace's project
   (no active workspace → "Open a workspace to manage its MCP servers") and reads `mcp.list` through
   `transport`'s `watchMcpWorkspace` — on mount, every welcome, a project-trust change, and with bounded
@@ -882,25 +890,31 @@ a project picker, the prompt hero, and the reused
   and one warning notice per unusable file (`themes`' issue list). The page reads the catalog and issues
   through `onThemesChange`, so a dropped file appears in the lists without reopening. From
   `FONTS_PROTOCOL_VERSION` two groups sit between the theme group and Custom themes ([[submodule-web-fonts]]
-  applies what they save). **Fonts** (`FontsSettings.tsx`) opens with a preview — a chat message in the chat
-  prose system, buttons, an editor sample in `.tr-code-editor` and a terminal sample in `.tr-code-block` —
-  then an **Interface** sub-heading (Font picker; **Text weight** slider, offset −70…+130 in steps of 10,
-  previewed through the fonts runtime while it drags and saved once on release; when a chosen named family
+  applies what they save). **Fonts** (`FontsSettings.tsx`) opens with an inert preview on the chat canvas —
+  a chat message in the chat prose system, buttons, an editor sample in `.tr-code-editor` and a terminal
+  sample in `.tr-code-block` — then an **Interface** sub-heading (Font picker; **Text weight** slider, which
+  shifts code weights too, offset −70…+130 in steps of 10, previewed through the fonts runtime while it
+  drags and saved once on release; when a chosen named family
   does not change between the range's ends on this device — a static face with only regular and bold — an
   info notice under the slider says so and points at variable fonts, and one that changes only one way says
   it moves in steps) and a **Code** sub-heading
   (Font picker listing monospaced fonts only; **Size**, 10–24 on the auto-save input pattern with − / +;
   **Ligatures**), and an **Advanced** disclosure with Interface and Code **fallback fonts** as chips added
-  through the same picker. A row whose value differs from its default carries a reset button. The
-  props-driven picker (`FontPicker.tsx`) groups Built-in / Custom / Installed, draws each name in its own
-  face (typography's one permitted row exception), badges Default / Mono / Not on this device, asks the host
-  for `fonts.installed` on every open (a skeleton while reading, a warning with Retry on failure) and offers
-  a typed name that matches nothing as **Use “X”**; merging, shadowing and the monospace/renders filters are
+  through the same picker. A row whose value differs from its default carries a reset button named for its
+  setting. The props-driven picker (`FontPicker.tsx`) groups Built-in / Custom / Installed, draws each name
+  in its own face through `FamilyName` (typography's one token exception: picker rows, the trigger label,
+  fallback chips and the Custom fonts family list), badges Default / Mono / Not on this device, asks the
+  host for `fonts.installed` on every open — keeping the last list while it re-reads, and through a failed
+  re-read, and dropping a stale answer; a skeleton and a warning with Retry show only until a first list
+  arrives — and offers a
+  typed name that matches nothing as **Use “X”**; merging, shadowing and the monospace/renders filters are
   the pure `fontCatalog.ts`. A named family that does not render on this device puts a warning icon on the
   trigger and a notice under the row while the choice is kept. Choices go through `settings.update` and
-  converge on `settings.changed`; one role's choice saves at a time. **Custom fonts**
+  converge on `settings.changed`; one role's choice saves at a time, its picker, chips and reset disabled
+  until it lands. **Custom fonts**
   (`CustomFontsSettings.tsx`) holds the drop zone with **Choose files…** (each file a `PUT /fonts/<name>`
-  through `transport`'s `uploadUserFont`, outcomes shown inline), the custom families with Mono / In use
+  through `transport`'s `uploadUserFont`; outcomes land in one polite live region, and overlapping drops
+  add to the same list), the custom families with Mono / In use
   badges, the `<dataDir>/fonts` folder row with Copy path / Open folder (`fonts.reveal`) and the rule that
   fonts are removed in the folder, and one warning per unusable file. `SettingsDisclosure` is the shared
   collapsible row both pages use. Fonts live on Appearance, one page with the theme, because a page of their
@@ -2378,10 +2392,14 @@ own section. The kebab menu (`plan-menu`, a
   Relayout failure or deadline expiry falls back to the construction-time measurement rather than stranding
   the pane; on expiry the stale relayout is neutralized first (disposing the addon skips its re-measuring
   `fontFamily` toggle), so a font that finishes loading late cannot re-lay-out an already-attached terminal.
-  A **font settings change** is the one later re-measure: on `onFontsChange` the terminal resolves the
-  generated `.tr-code-block` style (family, code size, weight), waits for that face to load, sets the three
-  options and re-fits, which resyncs the PTY grid; a change that leaves family, size and weight alone is
-  skipped, and only the latest change applies. It never draws ligatures: the DOM renderer merges a run of
+  A **font settings change** is the one later re-measure: through `@thinkrail/ui/fonts`' `watchFont` the
+  terminal resolves the generated `.tr-code-block` style (family, code size, weight), waits for that face to
+  load, sets the three options and re-fits, which resyncs the PTY grid. Only the latest change applies; one
+  that leaves family, size and weight alone is skipped unless the custom face set changed (a replaced file
+  keeps its family name but not its metrics), and a ligatures-only change never re-measures. Each apply sets
+  `fontFamily` to `monospace` and back, because xterm re-measures its cell only when that option's value
+  changes. The relayout start callback applies the latest resolved font before its first fit, so a change
+  that lands while the initial relayout is pending is not lost. It never draws ligatures: the DOM renderer merges a run of
   same-styled cells into one text node, so `index.css` pins `.xterm .xterm-rows` to
   `font-variant-ligatures: none` whatever the Ligatures switch says.
   This ordering also prevents a fallback-width attach followed by a corrective resize from producing

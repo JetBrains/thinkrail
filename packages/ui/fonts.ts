@@ -11,6 +11,10 @@ export function fontsRevision(): string {
 	return document.documentElement.dataset.fonts ?? "";
 }
 
+function fontFacesRevision(): string {
+	return document.documentElement.dataset.fontFaces ?? "";
+}
+
 export interface ResolvedFont {
 	family: string;
 	size: number;
@@ -41,4 +45,25 @@ export function fontsLoaded({ family, size }: ResolvedFont): Promise<void> {
 		() => undefined,
 		() => undefined,
 	);
+}
+
+export function watchFont(
+	className: string,
+	fields: readonly (keyof ResolvedFont)[],
+	onChange: (font: ResolvedFont) => void,
+): () => void {
+	let applied = { font: resolveFont(className), faces: fontFacesRevision() };
+	let latest = 0;
+	return onFontsChange(() => {
+		latest = latest + 1;
+		const request = latest;
+		const next = { font: resolveFont(className), faces: fontFacesRevision() };
+		void fontsLoaded(next.font).then(() => {
+			if (request !== latest) return;
+			const same = fields.every((field) => next.font[field] === applied.font[field]);
+			if (same && next.faces === applied.faces) return;
+			applied = next;
+			onChange(next.font);
+		});
+	});
 }

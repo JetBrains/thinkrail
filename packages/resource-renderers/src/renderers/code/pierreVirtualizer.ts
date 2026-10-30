@@ -5,12 +5,23 @@ import {
 	Virtualizer,
 } from "@pierre/diffs";
 import { onFontsChange } from "@thinkrail/ui/fonts";
-import { type RefCallback, useCallback, useState, useSyncExternalStore } from "react";
+import {
+	type RefCallback,
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+	useSyncExternalStore,
+} from "react";
 
 type ConnectedInstance = Parameters<Virtualizer["connect"]>[1];
 
 interface LinePositioned {
 	getLinePosition(lineNumber: number, side?: AnnotationSide): { top: number } | undefined;
+}
+
+interface MetricsAware {
+	setMetrics(metrics: VirtualFileMetrics): void;
 }
 
 function isLinePositioned(
@@ -19,22 +30,42 @@ function isLinePositioned(
 	return typeof Reflect.get(instance, "getLinePosition") === "function";
 }
 
+function isMetricsAware(instance: ConnectedInstance): instance is ConnectedInstance & MetricsAware {
+	return typeof Reflect.get(instance, "setMetrics") === "function";
+}
+
 export class PierreVirtualizer extends Virtualizer {
 	private connected: { container: HTMLElement; instance: LinePositioned } | undefined;
+	private readonly instances = new Map<HTMLElement, ConnectedInstance>();
+	private metrics: VirtualFileMetrics | undefined;
 
 	override connect(container: HTMLElement, instance: ConnectedInstance): () => void {
+		this.instances.set(container, instance);
 		if (isLinePositioned(instance)) this.connected = { container, instance };
 		return super.connect(container, instance);
 	}
 
 	override disconnect(container: HTMLElement): void {
+		this.instances.delete(container);
 		if (this.connected?.container === container) this.connected = undefined;
 		super.disconnect(container);
 	}
 
 	override cleanUp(): void {
+		this.instances.clear();
 		this.connected = undefined;
 		super.cleanUp();
+	}
+
+	setMetrics(metrics: VirtualFileMetrics): void {
+		const previous = this.metrics;
+		this.metrics = metrics;
+		if (previous === undefined || previous.lineHeight === metrics.lineHeight) return;
+		for (const instance of this.instances.values()) {
+			if (!isMetricsAware(instance)) continue;
+			instance.setMetrics(metrics);
+			this.instanceChanged(instance, true);
+		}
 	}
 
 	revealLine(lineNumber: number, side?: AnnotationSide): boolean {
@@ -59,19 +90,16 @@ function codeLineHeight(): number {
 	return Number.parseFloat(height) || DEFAULT_VIRTUAL_FILE_METRICS.lineHeight;
 }
 
-export function useCodeRowHeight(): number {
-	return useSyncExternalStore(onFontsChange, codeLineHeight);
-}
-
 export function usePierreVirtualizer<T extends HTMLElement>(
 	attachScroller: RefCallback<T>,
 ): { virtualizer: PierreVirtualizer; metrics: VirtualFileMetrics; attach: RefCallback<T> } {
 	const [virtualizer] = useState(() => new PierreVirtualizer({ overscrollSize: OVERSCROLL_SIZE }));
-	const [metrics] = useState<VirtualFileMetrics>(() => ({
-		...DEFAULT_VIRTUAL_FILE_METRICS,
-		lineHeight: codeLineHeight(),
-		hunkLineCount: HUNK_LINE_COUNT,
-	}));
+	const lineHeight = useSyncExternalStore(onFontsChange, codeLineHeight);
+	const metrics = useMemo<VirtualFileMetrics>(
+		() => ({ ...DEFAULT_VIRTUAL_FILE_METRICS, lineHeight, hunkLineCount: HUNK_LINE_COUNT }),
+		[lineHeight],
+	);
+	useEffect(() => virtualizer.setMetrics(metrics), [virtualizer, metrics]);
 	const attach = useCallback<RefCallback<T>>(
 		(node) => {
 			if (node) virtualizer.setup(node);

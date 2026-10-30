@@ -20,7 +20,7 @@ client resolves, and the client confirms rendering and monospacing by measuremen
 
 - **Owns:** creating the folder on start (and on reveal or upload — never from the poller); scanning
   `*.ttf|*.otf|*.woff|*.woff2` (extensions case-insensitive); the per-file status; the caps (50 MiB per
-  file, 128 files — the rest report `too-many`); the in-house sfnt reader; the folder poller; storing an
+  file, 128 files — the rest report `too-many`); the in-house sfnt reader; what its folder watch counts as a change (persistence's `watchDataFolder` polls); storing an
   upload; the installed-font query.
 - **Public surface (barrel):** `fontsDir`, `readUserFonts`, `watchUserFonts`, `saveUserFont`,
   `fontFileKind`, `listInstalledFonts`, `MAX_FONT_FILE_BYTES`, `MAX_FONT_FILES`.
@@ -35,8 +35,9 @@ client resolves, and the client confirms rendering and monospacing by measuremen
   list re-parses only changed files.
 - `saveUserFont(name, body, dir?)` → that file's entry: streams the body into a dot-prefixed temp file in
   the folder, aborting past 50 MiB (`too-large`); refuses a new name when the folder already lists 128 files
-  (`too-many`; replacing an existing name is allowed); parses the temp file and only then renames it over
-  the target, so a rejected upload never touches the existing file; the temp file is always removed.
+  (`too-many`; replacing an existing name is allowed), and checks again right before the rename, so
+  concurrent uploads cannot overfill it; parses the temp file and only then renames it over the target, so
+  a rejected upload never touches the existing file; the temp file is always removed.
 - `watchUserFonts({ dir?, onChange, intervalMs? })` → stop function; a nudge when the scanned names'
   signature (name, inode, size, mtime, ctime) changes — the poll [[submodule-server-locales]] explains.
 - `listInstalledFonts()` → `{ families: [{ name, monospaceHint }] }`, asked of the OS on every call (no
@@ -46,7 +47,7 @@ client resolves, and the client confirms rendering and monospacing by measuremen
   composes all of them, the reveal with `editors`' file-manager reveal, and owns the HTTP route.
 - `testFonts.ts` is a test-only builder of minimal TTF/OTF/WOFF/WOFF2 fonts and a `ttcf` header, outside
   the barrel; tests import it relatively, `host`'s route test included.
-- **Allowed deps:** `persistence` (`dataDir`), `log`, `subprocess` (`runBounded`),
+- **Allowed deps:** `persistence` (`dataDir`, the data-folder helpers), `log`, `subprocess` (`runBounded`),
   `@thinkrail/shared/codedError`, `node:zlib` (Bun built-in) — no font-parsing or compression package.
 - **Forbidden:** HTTP, `settings` (the chosen fonts), `agent`, any workspace path.
 

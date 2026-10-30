@@ -4,8 +4,6 @@ import {
 	type FontRole,
 	fontFamilyRefKey,
 	type InstalledFontFamily,
-	type UserFontFile,
-	type UserFontFileOk,
 	type UserFontsSnapshot,
 } from "@thinkrail/contracts";
 import type { BundledFaces, FontProbe } from "@/fonts";
@@ -31,15 +29,6 @@ export function displayFamily(family: string): string {
 	return family.replace(/ Variable$/, "");
 }
 
-export function refFamilyName(
-	ref: FontFamilyRef | null,
-	role: FontRole,
-	faces: BundledFaces,
-): string {
-	if (ref === null) return faces[role];
-	return "builtin" in ref ? faces[ref.builtin] : ref.name;
-}
-
 export function choiceKey(ref: FontFamilyRef | null, role: FontRole): string {
 	return ref === null ? fontFamilyRefKey({ builtin: role }) : fontFamilyRefKey(ref);
 }
@@ -51,18 +40,32 @@ export function isRoleDefault(ref: FontFamilyRef, role: FontRole): boolean {
 const byLabel = (a: FontOption, b: FontOption) =>
 	a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
 
-export function customFontFiles(snapshot: UserFontsSnapshot | null): UserFontFileOk[] {
-	return (snapshot?.files ?? []).filter((file): file is UserFontFileOk => file.ok);
+export interface CustomFamily {
+	files: string[];
+	monospace: boolean;
+}
+
+export function customFamilies(snapshot: UserFontsSnapshot | null): Map<string, CustomFamily> {
+	const families = new Map<string, CustomFamily>();
+	for (const file of snapshot?.files ?? []) {
+		if (!file.ok) continue;
+		const previous = families.get(file.face.family);
+		families.set(file.face.family, {
+			files: [...(previous?.files ?? []), file.fileName],
+			monospace: (previous?.monospace ?? false) || file.face.monospace,
+		});
+	}
+	return families;
 }
 
 export function fontOptions({
 	faces,
-	userFonts,
+	custom,
 	installed,
 	probe,
 }: {
 	faces: BundledFaces;
-	userFonts: UserFontsSnapshot | null;
+	custom: ReadonlyMap<string, CustomFamily>;
 	installed: InstalledFonts;
 	probe: (family: string) => FontProbe;
 }): FontOption[] {
@@ -76,20 +79,16 @@ export function fontOptions({
 		defaultFor: role,
 		renders: true,
 	}));
-	const custom = new Map<string, FontOption>();
-	for (const file of customFontFiles(userFonts)) {
-		const { family, monospace } = file.face;
-		custom.set(family, {
-			key: fontFamilyRefKey({ name: family }),
-			ref: { name: family },
-			family,
-			label: family,
-			source: "custom",
-			monospace: (custom.get(family)?.monospace ?? false) || monospace,
-			defaultFor: null,
-			renders: true,
-		});
-	}
+	const customOptions: FontOption[] = [...custom].map(([family, { monospace }]) => ({
+		key: fontFamilyRefKey({ name: family }),
+		ref: { name: family },
+		family,
+		label: family,
+		source: "custom",
+		monospace,
+		defaultFor: null,
+		renders: true,
+	}));
 	const taken = new Set([...builtin.map((option) => option.family), ...custom.keys()]);
 	const system: FontOption[] =
 		installed.status === "ready"
@@ -109,7 +108,7 @@ export function fontOptions({
 						};
 					})
 			: [];
-	return [...builtin, ...[...custom.values()].sort(byLabel), ...system];
+	return [...builtin, ...customOptions.sort(byLabel), ...system];
 }
 
 export function mainFontOptions(
@@ -130,14 +129,4 @@ export function fallbackFontOptions(
 ): FontOption[] {
 	const keys = new Set(taken.map(fontFamilyRefKey));
 	return options.filter((option) => !keys.has(option.key));
-}
-
-export function usedFamilies(
-	files: readonly UserFontFile[],
-	refs: readonly FontFamilyRef[],
-): Set<string> {
-	const names = new Set(refs.flatMap((ref) => ("name" in ref ? [ref.name] : [])));
-	return new Set(
-		files.flatMap((file) => (file.ok && names.has(file.face.family) ? [file.face.family] : [])),
-	);
 }

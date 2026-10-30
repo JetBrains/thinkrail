@@ -17,11 +17,13 @@ import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { cn } from "@thinkrail/ui/utils";
+import { useMemo, useRef, useState } from "react";
 import { randomId } from "../lib";
 import { ConfirmDialog } from "../panels/ConfirmDialog";
 import { SettingsGroup } from "../panels/SettingsGroup";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "../panels/SettingsRow";
+import { SETTINGS_INPUT, useSettingsDraft } from "../panels/settingsDraft";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import {
@@ -102,16 +104,16 @@ function GroupLimitInput({
 }) {
 	const t = useT();
 	const saved = useAppStore((state) => state.localLayoutPreferences[limitKey]);
-	const savedText = String(saved);
-	const [draft, setDraft] = useState(savedText);
-	useEffect(() => setDraft(savedText), [savedText]);
-	const parsed = parseGroupLimit(draft);
-	const invalid = parsed === null;
+	const { invalid, inputProps } = useSettingsDraft({
+		saved: String(saved),
+		isValid: (draft) => parseGroupLimit(draft) !== null,
+		commit: (draft) => {
+			const parsed = parseGroupLimit(draft);
+			if (parsed !== null) commitGroupLimit(limitKey, parsed);
+			return undefined;
+		},
+	});
 	const errorId = `${id}-error`;
-
-	const commit = () => {
-		if (parsed !== null) commitGroupLimit(limitKey, parsed);
-	};
 
 	return (
 		<span className="flex flex-col items-end gap-2">
@@ -122,22 +124,13 @@ function GroupLimitInput({
 				max={GROUP_LIMIT_MAX}
 				step={1}
 				inputMode="numeric"
-				value={draft}
+				{...inputProps}
 				aria-label={label}
-				aria-invalid={invalid}
 				aria-describedby={invalid ? errorId : undefined}
-				data-settings-draft-input
-				onChange={(event) => setDraft(event.currentTarget.value)}
-				onBlur={commit}
-				onKeyDown={(event) => {
-					if (event.key === "Enter") {
-						event.preventDefault();
-						commit();
-					} else if (event.key === "Escape") {
-						setDraft(savedText);
-					}
-				}}
-				className="h-32 w-64 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary aria-invalid:border-feedback-error"
+				className={cn(
+					SETTINGS_INPUT,
+					"w-64 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+				)}
 			/>
 			{invalid ? (
 				<span id={errorId} className="text-feedback-error tr-text-metadata">

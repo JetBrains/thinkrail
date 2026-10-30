@@ -17,7 +17,7 @@ translation logic: validation and file naming come from [[module-locales]].
 ## Boundary
 
 - **Owns:** creating the folder on start; scanning `*.json` (non-JSON and dot-prefixed names ignored);
-  per-file status; the folder poller; the size caps (2 MB per file, 64 files — the rest are
+  per-file status; what its folder watch counts as a change (persistence's `watchDataFolder` polls); the size caps (2 MB per file, 64 files — the rest are
   reported as errors).
 - **Public surface (barrel):** `localesDir()`, `readLocalLocales(dir?)` (read on every request — a
   handful of small files, so no cache to invalidate), `watchLocalLocales({ dir?, onChange, intervalMs? })` → stop
@@ -28,7 +28,7 @@ translation logic: validation and file naming come from [[module-locales]].
   `invalid-json`, `not-object`) the client translates and `detail` is the untranslated parser/OS text;
   `locales.changed` is an **invalidation nudge, not data** — clients re-read `locales.list`, the same
   pattern as `workspace.fsChanged`; `locales.reveal` → `Ack` (`host` composes `localesDir()` with `editors`' file-manager reveal).
-- **Allowed deps:** `persistence` (`dataDir`), `log`; external
+- **Allowed deps:** `persistence` (`dataDir`, the data-folder helpers), `log`; external
   `@thinkrail/locales` root.
 - **Forbidden:** `settings` (the chosen language is an `AppConfig` field; which tag is effective is a
   client decision), `agent`, any workspace path.

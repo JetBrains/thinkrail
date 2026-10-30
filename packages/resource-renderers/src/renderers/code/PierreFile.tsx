@@ -18,7 +18,7 @@ import {
 	threadLineRange,
 	usePierreFocus,
 } from "./pierreReview";
-import { useCodeRowHeight, usePierreVirtualizer } from "./pierreVirtualizer";
+import { usePierreVirtualizer } from "./pierreVirtualizer";
 
 const NO_PLACED_THREADS: ReadonlySet<string> = new Set();
 
@@ -207,10 +207,9 @@ function PierreFileSurface({
 }
 
 export default function PierreFile(props: ResourceViewProps) {
-	const rowHeight = useCodeRowHeight();
 	return (
 		<PierreProvider>
-			<PierreFileSurface key={rowHeight} {...props} />
+			<PierreFileSurface {...props} />
 		</PierreProvider>
 	);
 }

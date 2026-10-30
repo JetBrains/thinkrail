@@ -55,7 +55,8 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 
 Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
 `BRAND_MARK_SEGMENTS` monogram regions, joined into the `BRAND_MARK_PATH` the shell logo fills and clipped to by the components' working badge), `clientPreferences.ts` (feature-neutral
-access to the optional native stable string adapter), and `styles/` — which holds the three
+access to the optional native stable string adapter, and `firstPaintPreferenceStorage` — that adapter, else
+`localStorage` — which the theme and font first-paint hints share), and `styles/` — which holds the three
 design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
 structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
 [TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md);
@@ -380,12 +381,13 @@ themselves.
   **REPLACE**. Attempt-level `agent_end` never means idle; automatic work ends only at `agent_settled`.
 - Panels stay arrangement-agnostic so the mobile shell is an additive layer, not a rewrite.
 - **Every host HTTP route the app composes is proxied by the Vite dev server.** The app reaches the host
-  over `/ws` and over the two byte routes `/files` and `/blob` (images, PDFs, notebooks, markdown-relative
-  images), always composed through one function (`panels/resourcePane.resourceBytesUrl`) on the
-  transport's HTTP origin. Under `bun run dev` that origin is Vite, and a route Vite does not proxy
-  answers the SPA `index.html` with status 200 — an `<img>` shows nothing and a PDF fetch "succeeds" with
-  HTML, while the host-served build and the e2e suite stay green. `vite.config.ts` therefore proxies
-  `/files` and `/blob` beside `/ws`, and `devProxy.test.ts` pins the list to the composer's constants.
+  over `/ws`, over the two byte routes `/files` and `/blob` (images, PDFs, notebooks, markdown-relative
+  images), always composed through one function (`panels/resourcePane.resourceBytesUrl`), and over
+  `/fonts/` (custom font files and uploads, composed by `transport/fonts.ts`), all on the transport's HTTP
+  origin. Under `bun run dev` that origin is Vite, and a route Vite does not proxy answers the SPA
+  `index.html` with status 200 — an `<img>` shows nothing and a PDF fetch "succeeds" with HTML, while the
+  host-served build and the e2e suite stay green. `vite.config.ts` therefore proxies `/files`, `/blob` and
+  `/fonts` beside `/ws`, and `devProxy.test.ts` pins the list to the composers' constants.
 - **`typecheck` runs two projects.** `tsconfig.json` checks the browser app with DOM types only;
   `tsconfig.test.json` checks tests, `scripts/`, and `vite.config.ts` with Bun types. Its `exclude` list
   names test files that do not typecheck yet: it only shrinks — fix a file and drop its entry, never add one.

@@ -1,5 +1,5 @@
 import { statSync } from "node:fs";
-import { extname, join } from "node:path";
+import { join } from "node:path";
 import {
 	USER_FONT_UPLOAD_HEADER,
 	USER_FONTS_ROUTE,
@@ -9,12 +9,6 @@ import {
 import { fontFileKind, fontsDir, MAX_FONT_FILE_BYTES, saveUserFont } from "../fonts";
 
 const ALLOWED_METHODS = "GET, PUT";
-const FONT_TYPES: Record<string, string> = {
-	".ttf": "font/ttf",
-	".otf": "font/otf",
-	".woff": "font/woff",
-	".woff2": "font/woff2",
-};
 const ERROR_STATUS: Record<UserFontFileErrorCode, number> = {
 	"too-large": 413,
 	"too-many": 409,
@@ -48,11 +42,7 @@ function serveFont(fileName: string | null): Response {
 		return plain(404, "not found");
 	}
 	return new Response(Bun.file(path), {
-		headers: {
-			"Content-Type": FONT_TYPES[extname(fileName).toLowerCase()] ?? "application/octet-stream",
-			"Cache-Control": "no-cache",
-			"X-Content-Type-Options": "nosniff",
-		},
+		headers: { "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff" },
 	});
 }
 

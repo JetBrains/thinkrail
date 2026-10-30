@@ -9,6 +9,7 @@ import type {
 	SessionStateRecord,
 	TerminalTabsPush,
 	WorkspaceFsChangedPayload,
+	WsChannel,
 } from "@thinkrail/contracts";
 import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
@@ -759,27 +760,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		),
 	);
 	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
-	const stopLocalesWatch = watchLocalLocales({
-		onChange: () =>
-			server.publish(
-				WS_CHANNELS.localesChanged,
-				JSON.stringify({ channel: WS_CHANNELS.localesChanged, data: {} }),
-			),
-	});
-	const stopThemesWatch = watchUserThemes({
-		onChange: () =>
-			server.publish(
-				WS_CHANNELS.themesChanged,
-				JSON.stringify({ channel: WS_CHANNELS.themesChanged, data: {} }),
-			),
-	});
-	const stopFontsWatch = watchUserFonts({
-		onChange: () =>
-			server.publish(
-				WS_CHANNELS.fontsChanged,
-				JSON.stringify({ channel: WS_CHANNELS.fontsChanged, data: {} }),
-			),
-	});
+	const nudge = (channel: WsChannel) => () =>
+		server.publish(channel, JSON.stringify({ channel, data: {} }));
+	const stopLocalesWatch = watchLocalLocales({ onChange: nudge(WS_CHANNELS.localesChanged) });
+	const stopThemesWatch = watchUserThemes({ onChange: nudge(WS_CHANNELS.themesChanged) });
+	const stopFontsWatch = watchUserFonts({ onChange: nudge(WS_CHANNELS.fontsChanged) });
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);

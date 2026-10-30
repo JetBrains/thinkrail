@@ -16,6 +16,8 @@ import type {
 	Workspace,
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
+	WsParams,
+	WsResult,
 } from "@thinkrail/contracts";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
@@ -170,50 +172,57 @@ function hydrateSessionStates(connectionGeneration: number): void {
 	attempt();
 }
 
-function refreshLocalLocales(connectionGeneration: number): void {
+type FolderSnapshotMethod = "locales.list" | "themes.list" | "fonts.list";
+
+function refreshFolderSnapshot<M extends FolderSnapshotMethod>(
+	method: M,
+	params: WsParams<M>,
+	minProtocolVersion: number,
+	install: (store: ReturnType<typeof useAppStore.getState>, snapshot: WsResult<M> | null) => void,
+	connectionGeneration: number,
+): void {
 	const store = useAppStore.getState();
-	if (store.protocolVersion === null || store.protocolVersion < LOCALES_PROTOCOL_VERSION) {
-		store.installLocalLocales(null);
+	if (store.protocolVersion === null || store.protocolVersion < minProtocolVersion) {
+		install(store, null);
 		return;
 	}
 	void getTransport()
-		.request("locales.list", {})
+		.request(method, params)
 		.then((snapshot) => {
 			const current = useAppStore.getState();
-			if (isConnectedGeneration(current, connectionGeneration))
-				current.installLocalLocales(snapshot);
+			if (isConnectedGeneration(current, connectionGeneration)) install(current, snapshot);
 		})
 		.catch(() => {});
+}
+
+function refreshLocalLocales(connectionGeneration: number): void {
+	refreshFolderSnapshot(
+		"locales.list",
+		{},
+		LOCALES_PROTOCOL_VERSION,
+		(store, snapshot) => store.installLocalLocales(snapshot),
+		connectionGeneration,
+	);
 }
 
 function refreshUserThemes(connectionGeneration: number): void {
-	const store = useAppStore.getState();
-	if (!supportsUserThemes(store.protocolVersion)) {
-		store.installUserThemes(null);
-		return;
-	}
-	void getTransport()
-		.request("themes.list", {})
-		.then((snapshot) => {
-			const current = useAppStore.getState();
-			if (isConnectedGeneration(current, connectionGeneration)) current.installUserThemes(snapshot);
-		})
-		.catch(() => {});
+	refreshFolderSnapshot(
+		"themes.list",
+		{},
+		USER_THEMES_PROTOCOL_VERSION,
+		(store, snapshot) => store.installUserThemes(snapshot),
+		connectionGeneration,
+	);
 }
 
 function refreshUserFonts(connectionGeneration: number): void {
-	const store = useAppStore.getState();
-	if (!supportsFonts(store.protocolVersion)) {
-		store.installUserFonts(null);
-		return;
-	}
-	void getTransport()
-		.request("fonts.list", {})
-		.then((snapshot) => {
-			const current = useAppStore.getState();
-			if (isConnectedGeneration(current, connectionGeneration)) current.installUserFonts(snapshot);
-		})
-		.catch(() => {});
+	refreshFolderSnapshot(
+		"fonts.list",
+		{},
+		FONTS_PROTOCOL_VERSION,
+		(store, snapshot) => store.installUserFonts(snapshot),
+		connectionGeneration,
+	);
 }
 
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {

@@ -352,6 +352,12 @@ async function sendUserMessage(
 	return { ok: true };
 }
 
+function revealDataFolder(dir: string) {
+	mkdirSync(dir, { recursive: true });
+	revealInFileManager(dir);
+	return { ok: true } as const;
+}
+
 function resolveTemplateReadDirs(params: TemplateReadLocation) {
 	const { workspaceId, projectId } = params;
 	if (workspaceId !== undefined && projectId !== undefined) {
@@ -991,27 +997,12 @@ const handlers: WsHandlers = {
 	"packages.setResourceEnabled": (p) => packagesSetResourceEnabled(p),
 	"packages.reveal": (p) => packagesReveal(p),
 	"locales.list": () => readLocalLocales(),
-	"locales.reveal": () => {
-		const dir = localesDir();
-		mkdirSync(dir, { recursive: true });
-		revealInFileManager(dir);
-		return { ok: true } as const;
-	},
+	"locales.reveal": () => revealDataFolder(localesDir()),
 	"themes.list": () => readUserThemes(),
-	"themes.reveal": () => {
-		const dir = themesDir();
-		mkdirSync(dir, { recursive: true });
-		revealInFileManager(dir);
-		return { ok: true } as const;
-	},
+	"themes.reveal": () => revealDataFolder(themesDir()),
 	"fonts.list": () => readUserFonts(),
 	"fonts.installed": () => listInstalledFonts(),
-	"fonts.reveal": () => {
-		const dir = fontsDir();
-		mkdirSync(dir, { recursive: true });
-		revealInFileManager(dir);
-		return { ok: true } as const;
-	},
+	"fonts.reveal": () => revealDataFolder(fontsDir()),
 	"project.acknowledgeSkills": (p) => {
 		return acknowledgeProjectSkills(p.id, p.names);
 	},

@@ -22,7 +22,7 @@ import {
 	type UserFontsSnapshot,
 } from "@thinkrail/contracts";
 import { logger } from "../log";
-import { dataDir } from "../persistence";
+import { dataDir, fileStatSignature, listDataFolder, watchDataFolder } from "../persistence";
 import { FontFormatError, readFontFace } from "./sfnt";
 
 const log = logger("fonts");
@@ -31,7 +31,6 @@ export const MAX_FONT_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_FONT_FILES = 128;
 const COLLECTION_EXTENSIONS = new Set([".ttc", ".otc"]);
 const UNPORTABLE_NAME_CHARACTERS = /[/\\<>:"|?*]/;
-const POLL_MS = 1_000;
 
 const parsedFiles = new Map<string, { version: string; entry: UserFontFile }>();
 
@@ -77,10 +76,7 @@ function parseFont(fileName: string, bytes: Uint8Array): UserFontFace | UserFont
 }
 
 function fileVersion(stat: Stats): string {
-	return createHash("sha256")
-		.update(`${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`)
-		.digest("base64url")
-		.slice(0, 16);
+	return createHash("sha256").update(fileStatSignature(stat)).digest("base64url").slice(0, 16);
 }
 
 function fontEntry(fileName: string, version: string, face: UserFontFace): UserFontFile {
@@ -112,26 +108,7 @@ function readFontFile(dir: string, fileName: string): UserFontFile {
 }
 
 function fontFileNames(dir: string): string[] {
-	try {
-		return readdirSync(dir)
-			.filter((name) => fontFileKind(name) !== null)
-			.sort();
-	} catch {
-		return [];
-	}
-}
-
-function folderSignature(dir: string): string {
-	return fontFileNames(dir)
-		.map((name) => {
-			try {
-				const stat = statSync(join(dir, name));
-				return `${name}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
-			} catch {
-				return `${name}:gone`;
-			}
-		})
-		.join("\n");
+	return listDataFolder(dir, (name) => fontFileKind(name) !== null);
 }
 
 export function readUserFonts(dir: string = fontsDir()): UserFontsSnapshot {
@@ -180,6 +157,9 @@ export async function saveUserFont(
 		if (!(await writeCapped(temp, body))) return failure(fileName, "too-large");
 		const parsed = parseFont(fileName, readFileSync(temp));
 		if ("ok" in parsed) return parsed;
+		if (!existsSync(target) && fontFileNames(dir).length >= MAX_FONT_FILES) {
+			return failure(fileName, "too-many");
+		}
 		renameSync(temp, target);
 		const version = fileVersion(statSync(target));
 		const entry = fontEntry(fileName, version, parsed);
@@ -198,26 +178,28 @@ interface FontsWatchOptions {
 	intervalMs?: number;
 }
 
-export function watchUserFonts({
-	dir = fontsDir(),
-	onChange,
-	intervalMs = POLL_MS,
-}: FontsWatchOptions): () => void {
+function sweepUploadLeftovers(dir: string): void {
 	try {
-		mkdirSync(dir, { recursive: true });
 		for (const name of readdirSync(dir)) {
 			if (name.startsWith(UPLOAD_PREFIX)) rmSync(join(dir, name), { force: true });
 		}
 	} catch {
-		log.warn(`could not prepare font folder ${dir}`);
+		return;
 	}
-	let signature = folderSignature(dir);
-	const timer = setInterval(() => {
-		const next = folderSignature(dir);
-		if (next === signature) return;
-		signature = next;
-		onChange();
-	}, intervalMs);
-	timer.unref();
-	return () => clearInterval(timer);
+}
+
+export function watchUserFonts({
+	dir = fontsDir(),
+	onChange,
+	intervalMs,
+}: FontsWatchOptions): () => void {
+	const stop = watchDataFolder({
+		dir,
+		list: fontFileNames,
+		onChange,
+		onCreateFailed: () => log.warn(`could not create font folder ${dir}`),
+		...(intervalMs === undefined ? {} : { intervalMs }),
+	});
+	sweepUploadLeftovers(dir);
+	return stop;
 }

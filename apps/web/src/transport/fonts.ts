@@ -1,17 +1,13 @@
-import { USER_FONT_UPLOAD_HEADER, USER_FONTS_ROUTE, type UserFontFile } from "@thinkrail/contracts";
+import {
+	isUserFontFile,
+	USER_FONT_UPLOAD_HEADER,
+	USER_FONTS_ROUTE,
+	type UserFontFile,
+} from "@thinkrail/contracts";
 import { getTransport } from "./wireTransport";
 
 export function hostUrl(path: string): string {
 	return `${getTransport().httpBase()}${path}`;
-}
-
-function isUserFontFile(value: unknown): value is UserFontFile {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		typeof Reflect.get(value, "fileName") === "string" &&
-		typeof Reflect.get(value, "ok") === "boolean"
-	);
 }
 
 export async function uploadUserFont(file: File): Promise<UserFontFile> {

@@ -165,6 +165,20 @@ test("a full folder refuses a new name but still accepts a replacement", async (
 	expect(await saveUserFont("f000.ttf", body(font), dir)).toMatchObject({ ok: true });
 });
 
+test("concurrent uploads into the last free slot admit exactly one new file", async () => {
+	const dir = tempDir();
+	const font = buildTestFont("ttf");
+	for (let index = 0; index < MAX_FONT_FILES - 1; index++) {
+		writeFileSync(join(dir, `f${String(index).padStart(3, "0")}.ttf`), font);
+	}
+	const results = await Promise.all(
+		["a.ttf", "b.ttf", "c.ttf"].map((name) => saveUserFont(name, body(font), dir)),
+	);
+	expect(results.filter((result) => result.ok)).toHaveLength(1);
+	expect(results.filter((result) => !result.ok && result.error === "too-many")).toHaveLength(2);
+	expect(readdirSync(dir).filter((name) => name.endsWith(".ttf"))).toHaveLength(MAX_FONT_FILES);
+});
+
 test("the watcher creates the folder and nudges once per burst, ignoring upload temp files", async () => {
 	const poll = 50;
 	const dir = join(tempDir(), "fonts");

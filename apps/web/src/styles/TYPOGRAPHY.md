@@ -270,8 +270,8 @@ unresolved (`calc(13px - 2px)`), so it resolves it through an element's computed
 - **Brand is fixed.** The `brand` family is not selectable and spells its interface fallback faces
   literally, and its weight is excluded from the offset, so no user setting reaches the wordmark or hero.
 - **Host defaults mirror the JSON.** `DEFAULT_CONFIG`'s `codeFontSize`, `codeLigatures` and
-  `fontWeightOffset` equal these defaults (the runtime writes nothing at a default); `typography.test.ts`
-  pins them.
+  `fontWeightOffset`, and the contracts' `CODE_FONT_SIZE.editorDelta`, equal these defaults (the runtime
+  writes nothing at a default); `typography.test.ts` pins them.
 
 ## Mono policy
 
@@ -310,9 +310,9 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 |---|---|
 | `resource-renderers/support/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `fontWeight` / `fontLigatures` / `lineHeight` as JS options — it resolves the generated `.tr-code-editor` style through `@thinkrail/ui/fonts`' `resolveFont` (the dense size is an unresolved `calc()` token) and reads `--tr-line-height-default`, so it cannot drift from Pierre's dense rows |
 | `resource-renderers/renderers/code/pierreVirtualizer.ts` | Pierre's virtualizer takes its row height as a JS metric — it reads the generated `--tr-code-row-height`, the same value `.pierre-code-surface` gives `--diffs-line-height` |
-| `panels/TerminalInstance.tsx` | xterm, same reason — it resolves the generated `.tr-code-block` style (family, code size, weight) through `resolveFont`, re-reads it on `onFontsChange`, and owns row height through its own `lineHeight` option rather than a CSS line-height |
+| `panels/TerminalInstance.tsx` | xterm, same reason — it resolves the generated `.tr-code-block` style (family, code size, weight) through `resolveFont`, follows it through `watchFont` (latest change wins; a new face set re-measures even when the family string is unchanged), and owns row height through its own `lineHeight` option rather than a CSS line-height |
 | `thinkrail-extensions/visualize/web/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
-| `panels/FontPicker.tsx` | each picker row draws its family in that face by scoping `--tr-font-family-interface` on the row element — the one token write outside `fonts/`, and never on `:root` |
+| `panels/FontPicker.tsx` | its `FamilyName` draws a family in that face by scoping `--tr-font-family-interface` on its own element — the picker rows, the trigger label, the fallback chips and the Custom fonts family list — the one token write outside `fonts/`, and never on `:root` |
 | `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves; `.pierre-code-surface` passes the code family, the dense size, the code row height and the code ligatures (`font-variant-ligatures`, which Pierre's Shadow DOM inherits; its `--diffs-font-features` stays unset) into Pierre's Shadow DOM, and `.xterm .xterm-rows` pins `font-variant-ligatures: none`, because xterm's DOM renderer joins same-styled cells into one text run and the terminal never draws ligatures |
 
 The OTP code is **not** an exception any more: it is the named `code.otp` style (`.tr-code-otp`).
