@@ -35,7 +35,7 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `generatedFiles.test.ts` | pins that definition — content drift and a missing file are stale, a CRLF working tree is not. |
 | `compiler-census.ts` | CLI. Runs the `oxc-transform-react` React Compiler with diagnostics on over app, shared UI, and extension web sources (tests, stories and generated data excluded) and prints every function the compiler bails out on as `file:line: [fn] category: reason`, plus totals ("functions memoized" counts `_c(N)` memo caches in the output, so a function compiled with no cache is not counted); `--json` prints the full census. Run: `bun run --cwd apps/web compiler:census [--json]`. `--write` renders the bailed-out functions to `compiler-census.baseline.txt` as `file fnName`, line-free so edits above them don't churn it. `fnName` is lexical, never positional: the binding a function is assigned to (through wrapping calls like `memo(…)`), else its own name, qualified by its named enclosing functions (`factory.Row`). Two compiler units in one file with the same identity fail the census, because neither a line nor an ordinal survives an insertion above them. `--check` (`bun run check:compiler`, CI) fails on any drift and names each function that newly bails out or now compiles. A new bail-out is fixed, or accepted by regenerating (`bun run compiler:census:generate`). |
 | `compiler-census.baseline.txt` | The committed census baseline. |
-| `compiler-census.test.ts` | pins that a function's baseline identity survives inserting a sibling before it, that nested functions are qualified by their owners, that a function expression takes its variable's name, that a diagnostic after multi-byte text maps to the right unit, line and category, that same-named plain helpers are not units, and that indistinguishable compiler units are rejected. |
+| `compiler-census.test.ts` | pins that a function's baseline identity survives inserting a sibling before it, that nested functions are qualified by their owners, that a function expression takes its variable's name, that a diagnostic after multi-byte text maps to the right unit, line and category, that same-named plain helpers are not units, that each child unit of a plain factory keeps its own key, that an opt-out directive is recorded as a skip, and that indistinguishable compiler units are rejected. |
 
 `designSources.ts` owns the shared adoption-guard and compiler-census source scan: app source, `packages/ui`, and every
 `thinkrail-extensions/*/web` source tree, excluding tests, generated output, and installed dependencies.
@@ -68,10 +68,12 @@ in agreement about the same functions.
   the real build. Build-time compiler validations differ from the lint rules (for example
   `StaticComponents` is lint-only), so its counts differ from an oxlint React scan by design.
 - **Census units:** a diagnostic belongs to the outermost compiler unit around its first label. A unit
-  calls a hook or renders JSX and is a `memo`/`forwardRef` argument, a component- or hook-named
-  function declaration, or a function expression bound to such a variable (its own id is ignored, as
-  the compiler does). The rule mirrors the compiler's `infer` mode by hand, so recheck it on an
-  `oxc-transform-react` bump.
+  calls a hook or renders JSX in its own body (nested function bodies don't count, so the children of
+  a plain factory are units of their own) and is a `memo`/`forwardRef` argument, a component- or
+  hook-named function declaration, or a function expression bound to such a variable (its own id is
+  ignored, as the compiler does). A unit under a `"use no memo"`/`"use no forget"` directive, its own
+  or the file's, is recorded as a `Skip`, because the compiler skips it without a diagnostic. The rule
+  mirrors the compiler's `infer` mode by hand, so recheck it on an `oxc-transform-react` bump.
 - **Imported by:** `apps/web/package.json` scripts (`typography:generate` / `:validate` / `:check`,
   `colors:generate` / `:check`, `spacing:generate` / `:check`, `provider-glyphs:generate` / `:check`, `compiler:census:generate`, re-exported from the root `package.json`, plus `compiler:census:check` as the root `check:compiler`; `compiler:census` itself is web-only), and
   `src/styles/typography.test.ts` + `src/styles/typographyUsage.test.ts` +

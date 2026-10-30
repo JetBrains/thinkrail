@@ -5,6 +5,7 @@ import {
 	type ArrowFunctionExpression,
 	type Function as FunctionLike,
 	type Node,
+	type Program,
 	parseSync,
 	visitorKeys,
 } from "oxc-parser";
@@ -19,6 +20,10 @@ const UNIT_NAME = /^(?:[A-Z]|use[A-Z0-9])/;
 const HOOK_NAME = /^use[A-Z0-9]/;
 const UNIT_WRAPPERS = new Set(["memo", "forwardRef"]);
 const MEMO_CACHE = /\b_c\d*\(\d+\)/g;
+// The compiler skips a unit under one of these directives without a diagnostic.
+const OPT_OUT_DIRECTIVES = COMPILER_OPTIONS.ignoreUseNoForget
+	? []
+	: (COMPILER_OPTIONS.customOptOutDirectives ?? ["use no memo", "use no forget"]);
 
 const WEB_ROOT = resolve(import.meta.dir, "..");
 const BASELINE = resolve(import.meta.dir, "compiler-census.baseline.txt");
@@ -43,6 +48,12 @@ interface Unit {
 	start: number;
 	end: number;
 	name: string;
+	optOut: OptOut | null;
+}
+
+interface OptOut {
+	directive: string;
+	start: number;
 }
 
 type FunctionNode = FunctionLike | ArrowFunctionExpression;
@@ -129,7 +140,17 @@ function isHookCallee(node: Node) {
 function callsHooksOrCreatesJsx(node: Node): boolean {
 	if (node.type === "JSXElement" || node.type === "JSXFragment") return true;
 	if (node.type === "CallExpression" && isHookCallee(node.callee)) return true;
-	return children(node).some(callsHooksOrCreatesJsx);
+	return children(node).some((child) => !isFunction(child) && callsHooksOrCreatesJsx(child));
+}
+
+function optOutDirective(statements: Node[]): OptOut | null {
+	for (const statement of statements) {
+		if (statement.type !== "ExpressionStatement" || !statement.directive) break;
+		if (OPT_OUT_DIRECTIVES.includes(statement.directive)) {
+			return { directive: statement.directive, start: statement.start };
+		}
+	}
+	return null;
 }
 
 function unitName(node: FunctionNode, parent: Node | undefined) {
@@ -148,8 +169,9 @@ function isCompilerUnit(node: FunctionNode, ancestors: Node[]) {
 	return unitShaped && callsHooksOrCreatesJsx(node);
 }
 
-function collectUnits(program: Node) {
+function collectUnits(program: Program) {
 	const units: Unit[] = [];
+	const moduleOptOut = optOutDirective(program.body);
 	function visit(node: Node, ancestors: Node[], owners: string[], inUnit: boolean) {
 		let nextOwners = owners;
 		let nextInUnit = inUnit;
@@ -160,6 +182,9 @@ function collectUnits(program: Node) {
 					start: node.start,
 					end: node.end,
 					name: [...owners, own ?? "<anonymous>"].join("."),
+					optOut:
+						moduleOptOut ??
+						(node.body?.type === "BlockStatement" ? optOutDirective(node.body.body) : null),
 				});
 				nextInUnit = true;
 			}
@@ -184,20 +209,35 @@ function assertDistinctUnits(file: string, units: Unit[]) {
 	}
 }
 
+function lineAt(code: string, offset: number) {
+	return code.slice(0, offset).split("\n").length;
+}
+
 function toBailout(file: string, code: string, units: Unit[], error: OxcError): Bailout {
-	const lineAt = (offset: number) => code.slice(0, offset).split("\n").length;
 	const label = error.labels[0];
 	const offset = label ? Buffer.from(code).subarray(0, label.start).toString("utf8").length : null;
 	const unit = offset === null ? undefined : units.find((u) => u.start <= offset && offset < u.end);
-	const fnLine = unit ? lineAt(unit.start) : null;
+	const fnLine = unit ? lineAt(code, unit.start) : null;
 	return {
 		file,
-		line: offset === null ? (fnLine ?? 0) : lineAt(offset),
+		line: offset === null ? (fnLine ?? 0) : lineAt(code, offset),
 		fnLine,
 		fnName: unit?.name ?? null,
 		reason: error.message,
 		description: error.helpMessage,
 		category: error.codeframe?.match(/react-compiler\((\w+)\)/)?.[1] ?? error.severity,
+	};
+}
+
+function toSkip(file: string, code: string, unit: Unit, { directive, start }: OptOut): Bailout {
+	return {
+		file,
+		line: lineAt(code, start),
+		fnLine: lineAt(code, unit.start),
+		fnName: unit.name,
+		reason: `Skipped due to '${directive}' directive.`,
+		description: null,
+		category: "Skip",
 	};
 }
 
@@ -219,7 +259,10 @@ export function censusFile(absPath: string, code: string): FileResult {
 	}
 	return {
 		memoized: result.code.match(MEMO_CACHE)?.length ?? 0,
-		bailouts: result.errors.map((error) => toBailout(file, code, units, error)),
+		bailouts: [
+			...units.flatMap((unit) => (unit.optOut ? [toSkip(file, code, unit, unit.optOut)] : [])),
+			...result.errors.map((error) => toBailout(file, code, units, error)),
+		],
 	};
 }
 

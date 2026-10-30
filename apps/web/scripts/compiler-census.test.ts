@@ -71,6 +71,35 @@ describe("compiler census identities", () => {
 		).toEqual(["scripts/fixture.tsx Row"]);
 	});
 
+	it("keys each child unit of a non-unit factory on its own", () => {
+		const factory = (firstBails: boolean) =>
+			`export function Factory() { function First() ${body(firstBails)} function Second() ${body(!firstBails)} return [First, Second]; }`;
+		expect(entries([factory(true)])).toEqual(["scripts/fixture.tsx Factory.First"]);
+		expect(entries([factory(false)])).toEqual(["scripts/fixture.tsx Factory.Second"]);
+	});
+
+	it("records units skipped by an opt-out directive, which the compiler does not report", () => {
+		expect(entries([`export function Row() { "use no memo"; return <p />; }`])).toEqual([
+			"scripts/fixture.tsx Row",
+		]);
+		expect(
+			census([`export const Row = () => { "use no forget"; return <p />; };`]).bailouts,
+		).toEqual([expect.objectContaining({ fnName: "Row", line: 2, category: "Skip" })]);
+		const moduleOptOut = [
+			'"use no memo";',
+			'import { memo, useRef } from "react";',
+			"export function A() { return <p />; }",
+			`export const B = ${memoRow(false)};`,
+		].join("\n");
+		expect(baselineEntries(censusFile(FIXTURE, moduleOptOut).bailouts)).toEqual([
+			"scripts/fixture.tsx A",
+			"scripts/fixture.tsx B",
+		]);
+		expect(
+			entries([`export function Outer() { function Inner() { "use no memo"; } return <p />; }`]),
+		).toEqual([]);
+	});
+
 	it("refuses compiler units it cannot tell apart", () => {
 		expect(() => census([`export const rows = [${memoRow(true)}, ${memoRow(false)}];`])).toThrow(
 			"two compiler units named memo(…)",
