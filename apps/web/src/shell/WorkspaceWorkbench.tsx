@@ -15,10 +15,13 @@ import {
 	useCallback,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 } from "react";
 import { useShallow } from "zustand/react/shallow";
+import type { ChatSubmit } from "../chat/ChatView";
 import { prepareChatTitle } from "../chat/chatTitle";
+import type { ChatAttachment } from "../chat/types";
 import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { preloadedLazy } from "../components/preloadedLazy";
@@ -185,14 +188,92 @@ function EditorResourceBody({ workspaceId, tab }: { workspaceId: string; tab: Ed
 
 const CHAT_RETRY_DELAY_MS = 4000;
 
+function SplitChatBody({
+	workspaceId,
+	primarySessionId,
+	secondarySessionId,
+	onOpenFile,
+	onUnsplit,
+}: {
+	workspaceId: string;
+	primarySessionId: string;
+	secondarySessionId: string;
+	onOpenFile: (path: string) => void;
+	onUnsplit: () => void;
+}) {
+	const t = useT();
+	const [footer, setFooter] = useState<HTMLElement | null>(null);
+	const secondarySubmit = useRef<ChatSubmit | null>(null);
+	const submitSecondary = useCallback(
+		(text: string, attachments: ChatAttachment[]) => {
+			const submit = secondarySubmit.current;
+			if (!submit) return { accepted: false as const, reason: t("chat.view.secondChatLoading") };
+			const streaming = useAppStore.getState().sessions[secondarySessionId]?.isStreaming ?? false;
+			return submit(text, attachments, streaming ? "steer" : "send");
+		},
+		[secondarySessionId, t],
+	);
+	const restoreSharedDraft = useCallback(
+		(text: string) => {
+			const state = useAppStore.getState();
+			const current = state.sessions[primarySessionId]?.draft ?? "";
+			state.setChatDraft(
+				primarySessionId,
+				[text, current].filter((part) => part.trim()).join("\n\n"),
+			);
+		},
+		[primarySessionId],
+	);
+	return (
+		<div
+			data-testid="split-chat-view"
+			className="flex h-full min-h-0 min-w-0 flex-col [container-type:size]"
+		>
+			<div className="flex min-h-0 flex-1">
+				<div className="min-w-0 flex-1 border-border-default border-r">
+					{footer ? (
+						<ChatView
+							sessionId={primarySessionId}
+							workspaceId={workspaceId}
+							onOpenFile={onOpenFile}
+							composerTarget={footer}
+							onSecondarySubmit={submitSecondary}
+							onUnsplit={onUnsplit}
+						/>
+					) : null}
+				</div>
+				<div className="min-w-0 flex-1">
+					<ChatView
+						sessionId={secondarySessionId}
+						workspaceId={workspaceId}
+						onOpenFile={onOpenFile}
+						hideComposer
+						onRestoreDraft={restoreSharedDraft}
+						onSubmitReady={(submit) => {
+							secondarySubmit.current = submit;
+						}}
+					/>
+				</div>
+			</div>
+			<div ref={setFooter} className="shrink-0" />
+		</div>
+	);
+}
+
 function ChatResourceBody({
 	workspaceId,
 	tab,
 	onOpenFile,
+	secondarySessionId,
+	onSplit,
+	onUnsplit,
 }: {
 	workspaceId: string;
 	tab: Extract<LayoutCenterTab, { kind: "chat" }>;
 	onOpenFile: (path: string) => void;
+	secondarySessionId?: string;
+	onSplit: () => void;
+	onUnsplit: () => void;
 }) {
 	const t = useT();
 	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
@@ -211,7 +292,22 @@ function ChatResourceBody({
 				resetKeys={[workspaceId, tab.id]}
 			>
 				<Suspense fallback={<MissingResource kind="chat" />}>
-					<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
+					{secondarySessionId ? (
+						<SplitChatBody
+							workspaceId={workspaceId}
+							primarySessionId={tab.sessionId}
+							secondarySessionId={secondarySessionId}
+							onOpenFile={onOpenFile}
+							onUnsplit={onUnsplit}
+						/>
+					) : (
+						<ChatView
+							sessionId={tab.sessionId}
+							workspaceId={workspaceId}
+							onOpenFile={onOpenFile}
+							onSplit={onSplit}
+						/>
+					)}
 				</Suspense>
 			</ErrorBoundary>
 		);
@@ -312,6 +408,8 @@ function useTerminalReservation(workspaceId: string): void {
 
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const t = useT();
+	const [chatPairs, setChatPairs] = useState<Record<string, string>>({});
+	const splitStarts = useRef(new Set<string>());
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const canRenameChat = useAppStore(selectCanRenameChat);
@@ -323,6 +421,22 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
+	useEffect(() => {
+		const placed = new Set(
+			editorTabs.filter((tab) => tab.kind === "chat").map((tab) => tab.sessionId),
+		);
+		setChatPairs((pairs) => {
+			let next: Record<string, string> | null = null;
+			for (const [key, secondaryId] of Object.entries(pairs)) {
+				if (!key.startsWith(`${workspaceId}:`)) continue;
+				const primaryId = key.slice(workspaceId.length + 1);
+				if (placed.has(primaryId) && placed.has(secondaryId)) continue;
+				if (!next) next = { ...pairs };
+				delete next[key];
+			}
+			return next ?? pairs;
+		});
+	}, [editorTabs, workspaceId]);
 	const planSessionIds = useMemo(() => {
 		const seen = new Set<string>();
 		for (const tab of editorTabs) {
@@ -578,11 +692,60 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		useShallow((state) => selectUnnamedChatFirstPrompts(state, workspaceId)),
 	);
 	const rendered = document && attention ? { document, attention } : pendingProjection;
+	const splitChat = useCallback(
+		(primarySessionId: string, groupId: string | undefined) => {
+			const key = `${workspaceId}:${primarySessionId}`;
+			if (splitStarts.current.has(key)) return;
+			splitStarts.current.add(key);
+			void startChatInTab(workspaceId, {
+				...(groupId ? { preferredGroupId: groupId } : {}),
+				background: true,
+			})
+				.then((secondarySessionId) => {
+					if (secondarySessionId) {
+						setChatPairs((pairs) => ({ ...pairs, [key]: secondarySessionId }));
+					}
+				})
+				.finally(() => splitStarts.current.delete(key));
+		},
+		[workspaceId],
+	);
+	const unsplitChat = useCallback(
+		(primarySessionId: string) => {
+			const key = `${workspaceId}:${primarySessionId}`;
+			setChatPairs((pairs) => {
+				const next = { ...pairs };
+				delete next[key];
+				return next;
+			});
+		},
+		[workspaceId],
+	);
 
 	const renderResourceBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => {
 			if (tab.kind === "chat") {
-				return <ChatResourceBody workspaceId={workspaceId} tab={tab} onOpenFile={openToolFile} />;
+				const pairedId = chatPairs[`${workspaceId}:${tab.sessionId}`];
+				const secondarySessionId = editorTabs.some(
+					(candidate) => candidate.kind === "chat" && candidate.sessionId === pairedId,
+				)
+					? pairedId
+					: undefined;
+				return (
+					<ChatResourceBody
+						workspaceId={workspaceId}
+						tab={tab}
+						onOpenFile={openToolFile}
+						{...(secondarySessionId ? { secondarySessionId } : {})}
+						onSplit={() =>
+							splitChat(
+								tab.sessionId,
+								document ? findTabLocation(document, tab.id)?.groupId : undefined,
+							)
+						}
+						onUnsplit={() => unsplitChat(tab.sessionId)}
+					/>
+				);
 			}
 			if (tab.kind === "document") {
 				if (deletedSessions?.[tab.sourceId]) return <MissingResource kind="plan" />;
@@ -624,7 +787,18 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			}
 			return <EditorResourceBody workspaceId={workspaceId} tab={tab} />;
 		},
-		[deletedSessions, document, openToolFile, t, terminalByKey, workspaceId],
+		[
+			chatPairs,
+			deletedSessions,
+			document,
+			editorTabs,
+			openToolFile,
+			splitChat,
+			t,
+			terminalByKey,
+			unsplitChat,
+			workspaceId,
+		],
 	);
 	const renderTabBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => (

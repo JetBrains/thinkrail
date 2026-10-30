@@ -27,9 +27,12 @@ export async function startChatInTab(
 		preferredGroupId,
 		prompt,
 		draft,
-	}: { preferredGroupId?: string; prompt?: string; draft?: string } = {},
-): Promise<void> {
-	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, preferredGroupId);
+		background = false,
+	}: { preferredGroupId?: string; prompt?: string; draft?: string; background?: boolean } = {},
+): Promise<string | null> {
+	const navigation = background
+		? null
+		: useAppStore.getState().beginCenterNavigation(workspaceId, preferredGroupId);
 	useAppStore.getState().beginChatStart(workspaceId);
 	try {
 		const {
@@ -43,18 +46,23 @@ export async function startChatInTab(
 			model,
 			thinkingLevel,
 			syncedTick,
-			layoutOpenOptionsForNavigation(store, workspaceId, navigation),
+			background
+				? { ...(preferredGroupId ? { targetGroupId: preferredGroupId } : {}), activate: false }
+				: layoutOpenOptionsForNavigation(store, workspaceId, navigation),
 		);
 		if (prompt) sendPrompt(sessionId, prompt);
 		else if (draft) store.setChatDraft(sessionId, draft);
+		return sessionId;
 	} catch {
 		const state = useAppStore.getState();
 		if (
-			layoutOpenOptionsForNavigation(state, workspaceId, navigation).activate !== false &&
+			(background ||
+				layoutOpenOptionsForNavigation(state, workspaceId, navigation).activate !== false) &&
 			!state.removedWorkspaceIds[workspaceId]
 		) {
 			toast.error(t("panels.openChat.sessionCreateFailed"), t("panels.openChat.startFailed"));
 		}
+		return null;
 	} finally {
 		useAppStore.getState().endChatStart(workspaceId);
 	}
@@ -155,7 +163,10 @@ export async function promptWorkspaceChat(
 	sessionId: string | null,
 	text: string,
 ): Promise<void> {
-	if (!sessionId) return startChatInTab(workspaceId, { prompt: text });
+	if (!sessionId) {
+		await startChatInTab(workspaceId, { prompt: text });
+		return;
+	}
 	await openChatInTab(workspaceId, sessionId);
 	const runtime = useAppStore.getState().sessions[sessionId];
 	if (!runtime) return;

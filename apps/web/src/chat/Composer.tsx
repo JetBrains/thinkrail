@@ -170,6 +170,7 @@ interface ComposerProps {
 		attachments: ChatAttachment[],
 		behavior: SubmitBehavior,
 	) => ComposerSubmitDisposition;
+	onSecondarySubmit?: (text: string, attachments: ChatAttachment[]) => ComposerSubmitDisposition;
 	onAbort: () => void;
 	onHistoryOpen?: () => void;
 	onPickTemplate?: (name: string) => void;
@@ -207,6 +208,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onSelectModel,
 		onSelectThinking,
 		onSubmit,
+		onSecondarySubmit,
 		onAbort,
 		onHistoryOpen,
 		onPickTemplate,
@@ -310,7 +312,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		pickerRef.current?.open(query);
 	};
 
-	const submitText = (raw: string, behavior: SubmitBehavior) => {
+	const submitText = (raw: string, behavior: SubmitBehavior, secondary = false) => {
 		if (!canSubmit(raw)) return;
 		const text = raw.trim();
 		const modelQuery = parseModelCommand(text);
@@ -318,11 +320,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			openModelPicker(modelQuery);
 			return;
 		}
-		const disposition = onSubmit(
-			text,
-			images.map(({ name, content }) => ({ name, content })),
-			behavior,
-		);
+		const attachments = images.map(({ name, content }) => ({ name, content }));
+		const disposition =
+			secondary && onSecondarySubmit
+				? onSecondarySubmit(text, attachments)
+				: onSubmit(text, attachments, behavior);
 		if (!disposition.accepted) {
 			setSubmitError(disposition.reason);
 			return;
@@ -389,8 +391,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		},
 	}));
 
-	const submit = (behavior: SubmitBehavior) => {
-		submitText(finalizeTemplateSlotSession(value, slotSession), behavior);
+	const submit = (behavior: SubmitBehavior, secondary = false) => {
+		submitText(finalizeTemplateSlotSession(value, slotSession), behavior, secondary);
 	};
 
 	const stepSlot = (direction: 1 | -1) => {
@@ -474,6 +476,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
+			if (onSecondarySubmit && (e.metaKey || e.ctrlKey)) {
+				submit("send", true);
+				return;
+			}
 			const behavior: SubmitBehavior = isStreaming
 				? e.metaKey || e.ctrlKey
 					? "followUp"
@@ -492,6 +498,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			data-streaming={isStreaming}
 			className="relative flex shrink-0 flex-col border-border-muted border-t bg-container-workspace-bg"
 		>
+			{onSecondarySubmit ? (
+				<div className="px-chat-gutter pt-4 text-text-muted tr-text-metadata">
+					{t("chat.composer.splitHint")}
+				</div>
+			) : null}
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
