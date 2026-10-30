@@ -10,7 +10,7 @@
 	},
 	"scripts": {
 		"test": "bun test",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsrs --noEmit"
 	},
 	"dependencies": {
 		"i18next": "26.5.11",
@@ -25,6 +25,6 @@
 		"@types/react-dom": "catalog:",
 		"react": "catalog:",
 		"react-dom": "catalog:",
-		"typescript": "catalog:"
+		"tsrs": "catalog:"
 	}
 }

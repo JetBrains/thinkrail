@@ -18,7 +18,7 @@
 		"spec-graph"
 	],
 	"scripts": {
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsrs --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
@@ -33,8 +33,8 @@
 		"@earendil-works/pi-ai": "catalog:",
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@types/bun": "catalog:",
-		"typebox": "catalog:",
-		"typescript": "catalog:"
+		"tsrs": "catalog:",
+		"typebox": "catalog:"
 	},
 	"pi": {
 		"extensions": [

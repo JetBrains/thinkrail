@@ -43,7 +43,7 @@
 		]
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsrs --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
@@ -60,7 +60,7 @@
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@earendil-works/pi-tui": "catalog:",
 		"@types/bun": "catalog:",
-		"typebox": "catalog:",
-		"typescript": "catalog:"
+		"tsrs": "catalog:",
+		"typebox": "catalog:"
 	}
 }
