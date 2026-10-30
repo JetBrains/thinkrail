@@ -39,17 +39,17 @@ export interface ComponentDoc {
 	alternatives: readonly { name: string; when: string }[];
 	anatomy: readonly { part: string; description: string }[];
 	props: Readonly<Record<string, PropDoc>>;
-	nativeProps: Readonly<Record<string, PropDoc>>;
-	variants: Readonly<Record<string, string>>;
-	sizes: Readonly<Record<string, string>>;
-	tones: Readonly<Record<string, string>>;
+	nativeProps?: { title: string; props: Readonly<Record<string, PropDoc>> };
+	variants?: Readonly<Record<string, string>>;
+	sizes?: Readonly<Record<string, string>>;
+	tones?: { note: string; docs: Readonly<Record<string, string>> };
 	states: readonly StateDoc[];
 	accessibility: readonly string[];
 	keyboard: readonly { keys: string; action: string }[];
 	rules: readonly Rule[];
 	examples: readonly ExampleDoc[];
 	usages: readonly UsageLocation[];
-	contract: string;
+	contract?: string;
 }
 
 export type DocArea = "guides" | "foundations" | "patterns" | "vocabulary";

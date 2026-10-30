@@ -65,32 +65,39 @@ export const iconButton = {
 		},
 	} satisfies Record<OwnProps<IconButtonProps>, PropDoc>,
 	nativeProps: {
-		type: {
-			type: '"button" | "submit" | "reset"',
-			default: '"button"',
-			description: "Native button type.",
-		},
-		disabled: {
-			type: "boolean",
-			description: "Disabled roles; the tooltip still opens on hover so the reason stays readable.",
-		},
-		onClick: {
-			type: "MouseEventHandler",
-			description: "Activation handler (pointer, Enter, Space).",
-		},
-		className: {
-			type: "string",
-			description:
-				"Placement only, including whole-button hover reveal (`opacity-0 group-hover:opacity-100`).",
-		},
-	} satisfies Partial<Record<keyof IconButtonProps, PropDoc>>,
+		title: "Native button props",
+		props: {
+			type: {
+				type: '"button" | "submit" | "reset"',
+				default: '"button"',
+				description: "Native button type.",
+			},
+			disabled: {
+				type: "boolean",
+				description:
+					"Disabled roles; the tooltip still opens on hover so the reason stays readable.",
+			},
+			onClick: {
+				type: "MouseEventHandler",
+				description: "Activation handler (pointer, Enter, Space).",
+			},
+			className: {
+				type: "string",
+				description:
+					"Placement only, including whole-button hover reveal (`opacity-0 group-hover:opacity-100`).",
+			},
+		} satisfies Partial<Record<keyof IconButtonProps, PropDoc>>,
+	},
 	variants: variantDocs,
 	sizes: {
 		...sizeDocs,
 		m: "The default for IconButton — panel headers, tab strips, toolbars and toasts.",
 		l: "Standalone icon actions next to L buttons.",
 	},
-	tones: toneDocs,
+	tones: {
+		note: "`tone` applies to `outline` and `ghost`; other variants ignore it.",
+		docs: toneDocs,
+	},
 	states: [
 		{
 			state: "Default",

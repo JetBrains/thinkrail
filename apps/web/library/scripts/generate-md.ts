@@ -117,24 +117,35 @@ function component(doc: ComponentDoc): string {
 		),
 		"### Props",
 		propsTable(doc.props),
-		"Native button props:",
-		propsTable(doc.nativeProps),
-		"### Variants",
-		table(
-			["Variant", "Use it for"],
-			Object.entries(doc.variants).map(([name, text]) => [code(name), text]),
-		),
-		"### Sizes",
-		table(
-			["Size", "Use it for"],
-			Object.entries(doc.sizes).map(([name, text]) => [code(name), text]),
-		),
-		"### Tone",
-		"`tone` applies to `outline` and `ghost`; other variants ignore it.",
-		table(
-			["Tone", "Use it for"],
-			Object.entries(doc.tones).map(([name, text]) => [code(name), text]),
-		),
+		...(doc.nativeProps ? [`${doc.nativeProps.title}:`, propsTable(doc.nativeProps.props)] : []),
+		...(doc.variants
+			? [
+					"### Variants",
+					table(
+						["Variant", "Use it for"],
+						Object.entries(doc.variants).map(([name, text]) => [code(name), text]),
+					),
+				]
+			: []),
+		...(doc.sizes
+			? [
+					"### Sizes",
+					table(
+						["Size", "Use it for"],
+						Object.entries(doc.sizes).map(([name, text]) => [code(name), text]),
+					),
+				]
+			: []),
+		...(doc.tones
+			? [
+					"### Tone",
+					doc.tones.note,
+					table(
+						["Tone", "Use it for"],
+						Object.entries(doc.tones.docs).map(([name, text]) => [code(name), text]),
+					),
+				]
+			: []),
 		"### States",
 		table(
 			["State", "How", "Appearance"],
@@ -174,14 +185,17 @@ function shiftHeadings(markdown: string, by: number): string {
 
 function componentsMarkdown(): string {
 	const guides = docs.filter((page) => page.area === "guides" && page.slug === "using");
-	const contracts = [...new Set(components.map((doc) => doc.contract))];
+	const contracts = [...new Set(components.flatMap((doc) => (doc.contract ? [doc.contract] : [])))];
 	const body = [
 		banner("apps/web/library/content and apps/web/library/examples"),
 		"# ThinkRail components",
 		`The written reference of the component library. The live library renders the same content with the production components, styles and themes: ${SITE}, or \`bun run library:build\` for the static site.`,
 		...guides.map((page) => `## ${page.title}\n\n${shiftHeadings(content(page.file), 1)}`),
 		...components.map(component),
-		...contracts.map((file) => `## Button system contract\n\n${shiftHeadings(content(file), 1)}`),
+		...contracts.map((file) => {
+			const owners = components.filter((doc) => doc.contract === file).map((doc) => doc.name);
+			return `## ${owners.join(" and ")} contract\n\n${shiftHeadings(content(file), 1)}`;
+		}),
 	].join("\n\n");
 	return `${portable(body, COMPONENTS_PATH)}\n`;
 }

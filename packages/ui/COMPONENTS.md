@@ -851,7 +851,7 @@ export default function Tone() {
 | `apps/web/src/shell/layout/workbenchTabs.tsx` | Tab close and the open-tabs search trigger. |
 | `apps/web/src/chat/CopyButton.tsx` | Message copy action at size S, revealed on hover. |
 
-## Button system contract
+## Button and IconButton contract
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /
 `iconRight`), `IconButton` (icon only — `label` is required and becomes both the `aria-label` and the shared

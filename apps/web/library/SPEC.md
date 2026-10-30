@@ -33,7 +33,12 @@ specs `web-color`, `web-typography`, `web-spacing` and `web-notices`, `apps/web/
   are edited only there. Every word lives in `content/`: `guides/`, `foundations/`, `patterns/` and
   `vocabulary/` are Markdown pages registered in `content/index.ts`; `components/<name>.ts` are typed
   component docs with `examples/<component>/<id>.tsx` as runnable files shown verbatim, and
-  `components/button-system.md` is the Button system's implementation contract. Prose never restates a
+  `components/button-system.md` is the Button system's implementation contract. A component doc is generic
+  (variants, sizes, tones, native props and a contract are optional); anything specific to one
+  component — a variant × size matrix, a live state matrix, a playground — is its `showcase/<slug>.tsx`,
+  registered in `showcase/index.ts`: data-driven sections the page renders in order (a section with id
+  `states` gets the doc's state table appended, otherwise a plain States section is added) and an
+  optional declarative playground (choice and flag controls, a live preview, generated code). Prose never restates a
   value: a `:::live <block>` line renders one of the `live/` blocks, which import the JSON, `tokens.css`
   (raw), the bundled manifests and `public/custom-icons/` at build time, reusing the generators' own
   pure models (`scripts/typographyModel.ts`, `scripts/colorsModel.ts`). Variant, size and tone tables

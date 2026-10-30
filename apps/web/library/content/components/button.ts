@@ -148,30 +148,36 @@ export const button = {
 		},
 	} satisfies Record<OwnProps<ButtonProps>, PropDoc>,
 	nativeProps: {
-		children: { type: "ReactNode", description: 'The label. Use a locale key: `{t("…")}`.' },
-		type: {
-			type: '"button" | "submit" | "reset"',
-			default: '"button"',
-			description: "Native button type.",
-		},
-		disabled: {
-			type: "boolean",
-			description:
-				"Keeps the button in place on the disabled roles (never hidden, never opacity) and blocks pointer and keyboard activation.",
-		},
-		onClick: {
-			type: "MouseEventHandler",
-			description: "Activation handler (pointer, Enter, Space).",
-		},
-		className: {
-			type: "string",
-			description:
-				"Placement only: margins, flex/grid placement, `w-full`, positioning, responsive visibility.",
-		},
-	} satisfies Partial<Record<keyof ButtonProps, PropDoc>>,
+		title: "Native button props",
+		props: {
+			children: { type: "ReactNode", description: 'The label. Use a locale key: `{t("…")}`.' },
+			type: {
+				type: '"button" | "submit" | "reset"',
+				default: '"button"',
+				description: "Native button type.",
+			},
+			disabled: {
+				type: "boolean",
+				description:
+					"Keeps the button in place on the disabled roles (never hidden, never opacity) and blocks pointer and keyboard activation.",
+			},
+			onClick: {
+				type: "MouseEventHandler",
+				description: "Activation handler (pointer, Enter, Space).",
+			},
+			className: {
+				type: "string",
+				description:
+					"Placement only: margins, flex/grid placement, `w-full`, positioning, responsive visibility.",
+			},
+		} satisfies Partial<Record<keyof ButtonProps, PropDoc>>,
+	},
 	variants: variantDocs,
 	sizes: sizeDocs,
-	tones: toneDocs,
+	tones: {
+		note: "`tone` applies to `outline` and `ghost`; other variants ignore it.",
+		docs: toneDocs,
+	},
 	states: [
 		{ state: "Default", how: "Rest.", appearance: "The variant's fill, border and label colour." },
 		{

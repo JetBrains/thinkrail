@@ -26,7 +26,10 @@ describe("generated docs", () => {
 });
 
 describe("content", () => {
-	const files = [...docs.map((page) => page.file), ...components.map((doc) => doc.contract)];
+	const files = [
+		...docs.map((page) => page.file),
+		...components.flatMap((doc) => (doc.contract ? [doc.contract] : [])),
+	];
 
 	test("every authored Markdown file is registered and every registered file exists", () => {
 		const authored = readdirSync(CONTENT, { recursive: true, encoding: "utf8" })
@@ -100,12 +103,12 @@ test("Button defaults match the documented defaults", () => {
 	const rendered = attrs(render(createElement(Button, null, "x")));
 	expect(rendered.variant).toBe(unquote(button.props.variant.default));
 	expect(rendered.size).toBe(unquote(button.props.size.default));
-	expect(rendered.type).toBe(unquote(button.nativeProps.type.default));
+	expect(rendered.type).toBe(unquote(button.nativeProps.props.type.default));
 });
 
 test("IconButton defaults match the documented defaults", () => {
 	const rendered = attrs(render(createElement(IconButton, { icon: () => null, label: "x" })));
 	expect(rendered.variant).toBe(unquote(iconButton.props.variant.default));
 	expect(rendered.size).toBe(unquote(iconButton.props.size.default));
-	expect(rendered.type).toBe(unquote(iconButton.nativeProps.type.default));
+	expect(rendered.type).toBe(unquote(iconButton.nativeProps.props.type.default));
 });
