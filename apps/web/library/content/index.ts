@@ -1,5 +1,6 @@
 import { attentionDot } from "./components/attention-dot";
 import { attentionLine } from "./components/attention-line";
+import { auxiliaryPaneHeader } from "./components/auxiliary-pane-header";
 import { button } from "./components/button";
 import { collapsible } from "./components/collapsible";
 import { command } from "./components/command";
@@ -14,6 +15,8 @@ import { fileChip } from "./components/file-chip";
 import { headerIconButton } from "./components/header-icon-button";
 import { iconButton } from "./components/icon-button";
 import { popover } from "./components/popover";
+import { quietScrollArea } from "./components/quiet-scroll-area";
+import { resizable } from "./components/resizable";
 import { runningIcon } from "./components/running-icon";
 import { segmentedControl } from "./components/segmented-control";
 import { settingsNotice } from "./components/settings-notice";
@@ -206,4 +209,7 @@ export const components: readonly ComponentDoc[] = [
 	dropdownMenu,
 	contextMenu,
 	command,
+	resizable,
+	quietScrollArea,
+	auxiliaryPaneHeader,
 ];

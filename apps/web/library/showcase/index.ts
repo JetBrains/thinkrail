@@ -2,6 +2,7 @@ import { button } from "../content/components/button";
 import { iconButton } from "../content/components/icon-button";
 import { attentionDotShowcase } from "./attention-dot";
 import { attentionLineShowcase } from "./attention-line";
+import { auxiliaryPaneHeaderShowcase } from "./auxiliary-pane-header";
 import { buttonShowcase } from "./button";
 import { collapsibleShowcase } from "./collapsible";
 import { commandShowcase } from "./command";
@@ -15,6 +16,8 @@ import { errorBoundaryShowcase } from "./error-boundary";
 import { fileChipShowcase } from "./file-chip";
 import { headerIconButtonShowcase } from "./header-icon-button";
 import { popoverShowcase } from "./popover";
+import { quietScrollAreaShowcase } from "./quiet-scroll-area";
+import { resizableShowcase } from "./resizable";
 import { runningIconShowcase } from "./running-icon";
 import { segmentedControlShowcase } from "./segmented-control";
 import { settingsNoticeShowcase } from "./settings-notice";
@@ -64,6 +67,9 @@ export const showcases: Readonly<Record<string, Showcase>> = {
 	"dropdown-menu": dropdownMenuShowcase,
 	"context-menu": contextMenuShowcase,
 	command: commandShowcase,
+	resizable: resizableShowcase,
+	"quiet-scroll-area": quietScrollAreaShowcase,
+	"auxiliary-pane-header": auxiliaryPaneHeaderShowcase,
 };
 
 export type { PlaygroundConfig, PlaygroundControl, PlaygroundValues, Showcase } from "./types";

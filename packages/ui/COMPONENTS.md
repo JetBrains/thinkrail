@@ -13352,6 +13352,1423 @@ export default function Separator() {
 | `apps/web/src/shell/layout/workbenchTabs.tsx` | Open-tab search behind an IconButton, with tab ids as values and names as `keywords`. |
 | `apps/web/src/panels/NewWorkspaceDialog.tsx` | Project picker pill in the New workspace dialog. |
 
+## Resizable
+
+Split layouts the user can resize: `react-resizable-panels` with ThinkRail's group layout and its hairline separator. It owns the geometry (panel sizes in percent of the group, minimums, maximums, collapse), pointer and keyboard resizing, the separator semantics and optional size persistence; the call site provides the panels' content and surfaces, the sizes and constraints, and — in the workbench — the committed layout it re-applies. `ImperativePanelHandle` and `ImperativePanelGroupHandle` are re-exported for imperative collapse, expand and `setLayout`.
+
+```tsx
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+```
+
+### When to use
+
+- Regions of one window that share its space and that the user sizes: the workbench's side columns, center and bottom panel, Project Home's Projects pane beside Welcome.
+- Stacked groups in one side or bottom region (Specs above Files), with a vertical group.
+- A side pane that collapses to nothing and comes back at its last size, driven by a rail button through `ImperativePanelHandle`.
+- Splitting a center group in two (`workbenchCenter`), with the separator disabled while the group is too small to split.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Collapsible | Content folds in place inside a pane (a long tool output); nothing is resized. |
+| TabStrip | Several resources share one region and only one shows at a time. |
+| QuietScrollArea | The content is longer than its fixed region; scroll it instead of letting the user grow the region. |
+| Dialog | A focused task that temporarily covers the layout instead of taking a share of it. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| ResizablePanelGroup | `PanelGroup` with `flex h-full w-full`, and `flex-col` when `data-panel-group-direction` is `vertical`. It fills its parent, so give the parent a height (or `flex-1 min-h-0`). Holds the layout: one size per panel, summing to 100. |
+| ResizablePanel | `Panel` itself, re-exported unchanged: a `div` whose `flex-grow` is its size, with `overflow: hidden` and `data-panel`, `data-panel-id`, `data-panel-size` and `data-panel-collapsible`. It has no surface; the child sets the region's background (`bg-container-sidebar-bg`, `bg-container-content-bg`). |
+| ResizableHandle | `PanelResizeHandle` with `role="separator"` between two panels. The element is `w-9` (horizontal) or `h-9` (vertical) with a matching `-mr-8` / `-mb-8`, so it adds a hairline to the layout and overlaps the following panel at `z-10`. Its `::before` is the visible line at the leading edge (`before:w-px` / `before:h-px`) in `border-default`. There is no grip. |
+| Hit area | `hitAreaMargins` extends the pointer target around the element: a fine pointer reaches only one pixel past it, so the preceding panel's trailing scrollbar stays usable; a coarse (touch) pointer gets a wide margin. |
+| Imperative handles | `ref` on a panel gives an `ImperativePanelHandle` (`collapse`, `expand`, `resize`, `getSize`, `isCollapsed`, `isExpanded`); on a group an `ImperativePanelGroupHandle` (`getLayout`, `setLayout`). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `ResizablePanelGroup.direction` | `"horizontal" \| "vertical"` | — | Required. `horizontal` lays panels out side by side, `vertical` stacks them. Pass the same value to every ResizableHandle in the group. |
+| `ResizablePanelGroup.autoSaveId` | `string \| null` | `null` | Persists the layout in `storage` under this key and restores it on mount (Project Home's `thinkrail-shell-welcome`). Conditional panels need `id` and `order` so each panel set is saved separately. |
+| `ResizablePanelGroup.storage` | `PanelGroupStorage` | `localStorage` | `getItem` / `setItem` used with `autoSaveId`. |
+| `ResizablePanelGroup.keyboardResizeBy` | `number \| null` | `null` | Percent moved per arrow key on a focused handle; `null` moves 10. Shift+arrow always moves to the limit. |
+| `ResizablePanelGroup.onLayout` | `(layout: number[]) => void` | — | Called with every panel's size on mount and on every change — each pointer move during a drag. Commit on drag end, not here (the workbench projects the drag here and commits from `onDragging(false)`). |
+| `ResizablePanelGroup.tagName` | `keyof HTMLElementTagNameMap` | `"div"` | The element the group renders. |
+| `ResizablePanelGroup.ref` | `Ref<ImperativePanelGroupHandle>` | — | `getLayout()` and `setLayout(sizes)` — the workbench re-applies its committed sizes and resets presets through it. |
+| `ResizablePanel.id` | `string` | — | Stable panel id, used for persistence and `aria-controls`. Required, with `order`, whenever panels are rendered conditionally. |
+| `ResizablePanel.order` | `number` | — | Position of a conditionally rendered panel, so it returns to the same place when it is added again. |
+| `ResizablePanel.defaultSize` | `number` | — | Initial size in percent of the group. Read when the panel set changes, not on every render; resize a mounted panel through `ref` or the group's `setLayout`. Defaults in a group should sum to 100. |
+| `ResizablePanel.minSize` | `number` | `0` | Smallest size in percent. Dragging stops here (or collapses when `collapsible`). |
+| `ResizablePanel.maxSize` | `number` | `100` | Largest size in percent (the workbench's bottom panel cap). |
+| `ResizablePanel.collapsible` | `boolean` | `false` | Lets a drag past `minSize` or Enter on the handle snap the panel to `collapsedSize`. |
+| `ResizablePanel.collapsedSize` | `number` | `0` | Size of a collapsed panel. ThinkRail always collapses to `0`. |
+| `ResizablePanel.onCollapse` | `() => void` | — | Called when the panel reaches `collapsedSize` — by drag, keyboard or `collapse()`. Mirror it into the state that hides the pane's content and its handle. |
+| `ResizablePanel.onExpand` | `() => void` | — | Called when a collapsed panel grows again. |
+| `ResizablePanel.onResize` | `(size: number, prevSize: number \| undefined) => void` | — | Called with the panel's new size in percent. |
+| `ResizablePanel.tagName` | `keyof HTMLElementTagNameMap` | `"div"` | The element the panel renders. |
+| `ResizablePanel.ref` | `Ref<ImperativePanelHandle>` | — | `collapse()`, `expand(minSize?)`, `resize(size)`, `getSize()`, `isCollapsed()`, `isExpanded()` — how a rail button or `Mod+B` hides and restores a pane. |
+| `ResizableHandle.direction` | `"horizontal" \| "vertical"` | `"horizontal"` | Added by ThinkRail. The group's direction: picks the line, the cursor (`cursor-col-resize` / `cursor-row-resize`) and `aria-orientation`. It is not read from the group, so a vertical group needs `direction="vertical"` here too. |
+| `ResizableHandle.hitAreaMargins` | `{ coarse: number; fine: number }` | `{ coarse: 15, fine: 1 }` | Pointer margins around the handle. ThinkRail narrows the library's fine margin so the hit area does not cover the preceding panel's scrollbar; keep the default. |
+| `ResizableHandle.disabled` | `boolean` | `false` | Stops pointer and keyboard resizing and the hover colour. The handle stays in the Tab order unless you also pass `tabIndex={-1}`. |
+| `ResizableHandle.onDragging` | `(isDragging: boolean) => void` | — | `true` on pointer down, `false` on release — where the workbench commits a drag. Keyboard resizing does not call it. |
+| `ResizableHandle.tagName` | `keyof HTMLElementTagNameMap` | `"div"` | The element the handle renders. |
+
+Passed-through attributes in common use:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `ResizablePanelGroup.className` | `string` | — | Merged after the group's own classes. Placement only: `min-h-0 min-w-0 flex-1`, `h-full`. |
+| `ResizablePanelGroup.id` | `string \| null` | — | Group id; generated when omitted. |
+| `ResizableHandle.tabIndex` | `number` | `0` | `-1` takes a hidden or disabled handle out of the Tab order (Project Home, while Projects is collapsed). |
+| `ResizableHandle.aria-hidden` | `boolean` | — | Hides the separator of a collapsed pane from assistive tech. |
+| `ResizableHandle.className` | `string` | — | Merged last. Only `hidden` for a collapsed pane's handle; never restyle the line. |
+| `ResizableHandle.onKeyDownCapture` | `KeyboardEventHandler` | — | With `onKeyUpCapture`, how the workbench tracks a keyboard resize and commits it on key up. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Rest | Default. | A hairline in `border-default` at the leading edge of the handle; the pointer cursor is `col-resize` / `row-resize` over the hit area. |
+| Hover | Pointer within the handle or its hit-area margin. | `data-resize-handle-state="hover"`: the line turns `primary` with the colour transition. |
+| Dragging | Pointer down on the handle and moving. | `data-resize-handle-state="drag"` and `data-resize-handle-active="pointer"`: the line stays `primary`, the library forces the resize cursor on the whole document (a one-way resize cursor once a limit is reached); `onDragging(true)` fires. |
+| Keyboard focus | Tab to the handle. | `data-resize-handle-active="keyboard"`. No ThinkRail treatment: the line keeps `border-default` and only the browser's default focus outline shows. |
+| Collapsed panel | `collapsible` panel dragged past `minSize`, Enter on its handle, or `collapse()`. | The panel is at `collapsedSize` (`0`), `onCollapse` fires. The call site hides the handle (`className="hidden"`, `tabIndex={-1}`, `aria-hidden`) and makes the pane `inert`. |
+| Disabled | `disabled` on the handle. | The line stays `border-default` on hover; no drag or keyboard resize. The resize cursor class and the Tab stop remain. |
+
+### Accessibility
+
+- Each handle is a focusable `role="separator"` with `aria-controls` pointing at the panel before it and `aria-valuenow` / `aria-valuemin` / `aria-valuemax` as that panel's size in whole percent.
+- ThinkRail sets `aria-orientation` from `direction`: `vertical` for a side-by-side split (the line is vertical), `horizontal` for a stacked one.
+- The handle has no accessible name of its own; it is described by the panel it controls. Give that panel a labelled region (`<section aria-label>`), as Project Home and the workbench do.
+- A collapsed pane is removed from the reading and Tab order by the call site: `inert` and `aria-hidden` on the pane, `tabIndex={-1}` and `aria-hidden` on its handle. Moving focus in and out on collapse is the call site's job (`useCollapsibleRegion`).
+- Pointer is never the only way: every resize the pointer can make is reachable from the focused handle with the keys below.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from each handle. |
+| `← / → (horizontal), ↑ / ↓ (vertical)` | Resizes the panel before the handle by `keyboardResizeBy`, or 10 percent. |
+| `Shift+arrow` | Resizes as far as the constraints allow in that direction. |
+| `Home / End` | Shrinks or grows the panel before the handle to its limit. |
+| `Enter` | Collapses the panel before the handle when it is `collapsible`, or expands it back to `minSize`. |
+| `F6 / Shift+F6` | Moves focus to the next or previous handle of the same group. |
+
+### Usage rules
+
+- **RSZ-1** — Pass the group's `direction` to every ResizableHandle in it; the handle does not read it from the group, and a mismatch draws the wrong line, cursor and `aria-orientation`.
+- **RSZ-2** — Give every panel that can appear or disappear a stable `id` and `order`, and add or remove it in place — never key or remount the group to change its shape, or the panes inside lose their DOM and state.
+- **RSZ-3** — Sizes are percentages of the group. Set `defaultSize` for the panel set, constraints with `minSize` / `maxSize`, and move a mounted layout with `ref` (`setLayout`, `collapse`, `expand`), not by changing `defaultSize`.
+- **RSZ-4** — Commit a resize once: from `onDragging(false)` for a pointer and from key up for the keyboard. `onLayout` fires on every move and is for projection only.
+- **RSZ-5** — Collapse to `collapsedSize={0}` and hide the collapsed pane completely: `inert` / `aria-hidden` on its content, `hidden`, `tabIndex={-1}` and `aria-hidden` on its handle.
+- **RSZ-6** — Keep the handle as it is: no grip, no colour, width or hit-area overrides. The default `hitAreaMargins` keeps the preceding panel's scrollbar usable.
+- **RSZ-7** — Panels carry no surface: the child sets the region's background and its own scrolling (QuietScrollArea), and the group's parent gives it a height (`h-full`, or `min-h-0 flex-1`).
+
+### Examples
+
+#### Side pane and content
+
+Two panels with a minimum each and one handle between them.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<div className="h-160 w-full">
+			<ResizablePanelGroup direction="horizontal">
+				<ResizablePanel defaultSize={30} minSize={20}>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.projects")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle />
+				<ResizablePanel defaultSize={70} minSize={40}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("workbench.center.group")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Collapsible pane
+
+Project Home's Projects pane: a pressed toggle collapses and expands it through `ImperativePanelHandle`; while collapsed the pane is `inert` and its handle is hidden.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	type ImperativePanelHandle,
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@thinkrail/ui/resizable";
+import { useRef, useState } from "react";
+
+export default function CollapsiblePane() {
+	const t = useT();
+	const panelRef = useRef<ImperativePanelHandle>(null);
+	const [collapsed, setCollapsed] = useState(false);
+	const toggle = () => {
+		if (collapsed) panelRef.current?.expand();
+		else panelRef.current?.collapse();
+	};
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				className="self-start"
+				selected={!collapsed}
+				aria-pressed={!collapsed}
+				aria-controls="library-projects-pane"
+				onClick={toggle}
+			>
+				{t("workbench.tool.projects")}
+			</Button>
+			<div className="h-160 w-full">
+				<ResizablePanelGroup direction="horizontal">
+					<ResizablePanel
+						ref={panelRef}
+						id="left"
+						order={1}
+						defaultSize={30}
+						minSize={15}
+						collapsedSize={0}
+						collapsible
+						onCollapse={() => setCollapsed(true)}
+						onExpand={() => setCollapsed(false)}
+					>
+						<section
+							id="library-projects-pane"
+							aria-label={t("shell.projectHome.projects")}
+							aria-hidden={collapsed || undefined}
+							inert={collapsed ? true : undefined}
+							className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted"
+						>
+							{t("shell.projectHome.projects")}
+						</section>
+					</ResizablePanel>
+					<ResizableHandle
+						aria-hidden={collapsed}
+						tabIndex={collapsed ? -1 : 0}
+						{...(collapsed ? { className: "hidden" } : {})}
+					/>
+					<ResizablePanel id="welcome" order={2} defaultSize={70} minSize={40}>
+						<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+							{t("workbench.center.group")}
+						</div>
+					</ResizablePanel>
+				</ResizablePanelGroup>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Vertical stack
+
+Two groups stacked in one side region; `direction="vertical"` on the group and the handle.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function VerticalStack() {
+	const t = useT();
+	return (
+		<div className="h-240 w-full max-w-[16rem]">
+			<ResizablePanelGroup direction="vertical">
+				<ResizablePanel defaultSize={50} minSize={20}>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.specs")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle direction="vertical" />
+				<ResizablePanel defaultSize={50} minSize={20}>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.files")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Three columns
+
+The workbench columns: collapsible sides around a center with its own minimum, each panel with `id` and `order`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function ThreeColumns() {
+	const t = useT();
+	return (
+		<div className="h-160 w-full">
+			<ResizablePanelGroup direction="horizontal">
+				<ResizablePanel
+					id="layout-left"
+					order={1}
+					defaultSize={25}
+					minSize={15}
+					collapsedSize={0}
+					collapsible
+				>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.projects")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle />
+				<ResizablePanel id="layout-center" order={2} defaultSize={50} minSize={30}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("workbench.center.group")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle />
+				<ResizablePanel
+					id="layout-right"
+					order={3}
+					defaultSize={25}
+					minSize={15}
+					collapsedSize={0}
+					collapsible
+				>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.review")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Nested groups
+
+A vertical group holding the main row (itself a horizontal group) and a bottom panel capped with `maxSize`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function Nested() {
+	const t = useT();
+	return (
+		<div className="h-240 w-full">
+			<ResizablePanelGroup direction="vertical">
+				<ResizablePanel id="main-row" order={1} defaultSize={65} minSize={40}>
+					<ResizablePanelGroup direction="horizontal">
+						<ResizablePanel id="main-left" order={1} defaultSize={30} minSize={15}>
+							<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+								{t("workbench.tool.projects")}
+							</div>
+						</ResizablePanel>
+						<ResizableHandle />
+						<ResizablePanel id="main-center" order={2} defaultSize={70} minSize={40}>
+							<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+								{t("workbench.center.group")}
+							</div>
+						</ResizablePanel>
+					</ResizablePanelGroup>
+				</ResizablePanel>
+				<ResizableHandle direction="vertical" />
+				<ResizablePanel id="bottom" order={2} defaultSize={35} minSize={20} maxSize={60}>
+					<div className="flex h-full items-center justify-center bg-container-terminal-bg tr-text-ui text-text-muted">
+						{t("workbench.rail.terminal")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Showing and hiding a panel
+
+The bottom panel is added and removed in place with a stable `id` and `order`; the main row keeps its DOM.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+import { useState } from "react";
+
+export default function ConditionalPanel() {
+	const t = useT();
+	const [bottomVisible, setBottomVisible] = useState(true);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				className="self-start"
+				selected={bottomVisible}
+				aria-pressed={bottomVisible}
+				onClick={() => setBottomVisible((visible) => !visible)}
+			>
+				{t("workbench.rail.terminal")}
+			</Button>
+			<div className="h-240 w-full">
+				<ResizablePanelGroup direction="vertical">
+					<ResizablePanel
+						id="layout-main-row"
+						order={1}
+						defaultSize={bottomVisible ? 65 : 100}
+						minSize={40}
+					>
+						<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+							{t("workbench.center.group")}
+						</div>
+					</ResizablePanel>
+					{bottomVisible ? (
+						<>
+							<ResizableHandle direction="vertical" />
+							<ResizablePanel
+								id="layout-bottom"
+								order={2}
+								defaultSize={35}
+								minSize={20}
+								maxSize={60}
+							>
+								<div className="flex h-full items-center justify-center bg-container-terminal-bg tr-text-ui text-text-muted">
+									{t("workbench.rail.terminal")}
+								</div>
+							</ResizablePanel>
+						</>
+					) : null}
+				</ResizablePanelGroup>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Disabled handle
+
+A center split whose handle is `disabled`, as the workbench does while the group is narrower than two minimum widths.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function DisabledHandle() {
+	const t = useT();
+	return (
+		<div className="h-160 w-full">
+			<ResizablePanelGroup direction="horizontal">
+				<ResizablePanel id="center-split-0" order={1} defaultSize={50} minSize={4}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("store.chatTab.defaultName")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle disabled />
+				<ResizablePanel id="center-split-1" order={2} defaultSize={50} minSize={4}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("store.chatTab.defaultName")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Committing a resize
+
+`onLayout` tracks every move; the sizes shown update only on release (`onDragging(false)`) or key up.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+import { useRef, useState } from "react";
+
+export default function LayoutEvents() {
+	const t = useT();
+	const latest = useRef<number[]>([30, 70]);
+	const [committed, setCommitted] = useState<number[]>([30, 70]);
+	const commit = () => setCommitted(latest.current.map(Math.round));
+	return (
+		<div className="h-160 w-full">
+			<ResizablePanelGroup
+				direction="horizontal"
+				onLayout={(layout) => {
+					latest.current = layout;
+				}}
+			>
+				<ResizablePanel defaultSize={30} minSize={15}>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.files")} · {committed[0]}%
+					</div>
+				</ResizablePanel>
+				<ResizableHandle
+					onDragging={(dragging) => {
+						if (!dragging) commit();
+					}}
+					onKeyUpCapture={commit}
+				/>
+				<ResizablePanel defaultSize={70} minSize={40}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("workbench.center.group")} · {committed[1]}%
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Resetting the layout
+
+`setLayout` on the group's `ref` restores the default sizes.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	type ImperativePanelGroupHandle,
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@thinkrail/ui/resizable";
+import { useRef } from "react";
+
+const DEFAULT_LAYOUT = [25, 50, 25];
+
+export default function ResetLayout() {
+	const t = useT();
+	const groupRef = useRef<ImperativePanelGroupHandle>(null);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				className="self-start"
+				onClick={() => groupRef.current?.setLayout(DEFAULT_LAYOUT)}
+			>
+				{t("workbench.layoutSettings.resetToDefault")}
+			</Button>
+			<div className="h-160 w-full">
+				<ResizablePanelGroup ref={groupRef} direction="horizontal">
+					<ResizablePanel defaultSize={DEFAULT_LAYOUT[0]} minSize={10}>
+						<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+							{t("workbench.tool.projects")}
+						</div>
+					</ResizablePanel>
+					<ResizableHandle />
+					<ResizablePanel defaultSize={DEFAULT_LAYOUT[1]} minSize={30}>
+						<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+							{t("workbench.center.group")}
+						</div>
+					</ResizablePanel>
+					<ResizableHandle />
+					<ResizablePanel defaultSize={DEFAULT_LAYOUT[2]} minSize={10}>
+						<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+							{t("workbench.tool.review")}
+						</div>
+					</ResizablePanel>
+				</ResizablePanelGroup>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Remembered layout
+
+`autoSaveId` keeps the split in `localStorage`: resize it and reload the page.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function RememberLayout() {
+	const t = useT();
+	return (
+		<div className="h-160 w-full">
+			<ResizablePanelGroup direction="horizontal" autoSaveId="library-resizable-remember">
+				<ResizablePanel id="left" order={1} defaultSize={30} minSize={15}>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("shell.projectHome.projects")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle />
+				<ResizablePanel id="welcome" order={2} defaultSize={70} minSize={40}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("workbench.center.group")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/shell/ProjectHome.tsx` | Projects beside Welcome: `autoSaveId`, a collapsible pane driven by `ImperativePanelHandle`, the handle hidden while collapsed. |
+| `apps/web/src/shell/layout/Workbench.tsx` | Outer columns, the aligned row and the bottom column: nested groups, conditional panels with `id` / `order`, `maxSize`, committed sizes through `ref`. |
+| `apps/web/src/shell/layout/workbenchCenter.tsx` | A center split in either direction, with the handle `disabled` while the group is too small. |
+| `apps/web/src/shell/layout/workbenchSide.tsx` | A side region's vertical stack of groups (handles via `PanelWithHandle` in `workbenchShared.tsx`). |
+| `apps/web/src/shell/layout/workbenchBottom.tsx` | The bottom region's groups side by side. |
+
+## QuietScrollArea
+
+The scroll container for tool panes: an ordinary native scroll viewport whose thumb stays hidden until the user shows intent, with a soft curtain on every clipped edge. It owns the viewport, the intent signal (hover, focus inside, active scrolling, a pointer drag, touch), overflow measurement and the curtains; the thumb's look is the app-wide scrollbar in `styles/global.css`. The call site provides a sized host, the inset (`viewportClassName`) and the `surface` the curtains fade into. `QuietScrollFrame`, from the same module, gives a third-party scroller it does not own (xterm) the same treatment.
+
+```tsx
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+```
+
+### When to use
+
+- The scrolling body of a side or bottom pane: Projects, Specs, Files, Changes and Review.
+- Any long list on `container-sidebar-bg` whose header or toolbar stays fixed above it (put the header outside the area).
+- A caller that saves and restores the scroll position needs the native viewport: `viewportRef` (`panels/RememberedScrollArea`).
+- A third-party view with its own scroll element on `container-terminal-bg` — use `QuietScrollFrame` with `viewportSelector` and, when the library knows its position better than the DOM, `edges`.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| A plain `overflow-auto` element | Content scrolls on a surface other than the sidebar or terminal (a dialog body, the chat transcript, an editor); it gets the same quiet thumb from the global scrollbar rule, without curtains. |
+| Collapsible | A long block inside a scrolling transcript should be capped and expanded on demand instead of scrolling on its own. |
+| Resizable | The user should be able to give the region more room; put the QuietScrollArea inside the panel. |
+| LoadingRegion and SkeletonRows | The pane's content is still loading; render the placeholder in place of the list. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Host | The outer `div` with `quiet-scroll-host relative min-h-0 min-w-0 overflow-hidden` and `data-quiet-scroll-surface`. Receives `className` and every other `div` attribute; it needs a height from its parent (`h-full`, or `min-h-0 flex-1` in a column). |
+| Viewport | The inner `div` with `quiet-scroll-viewport size-full overflow-auto` that actually scrolls and holds `children`. It takes `viewportClassName` (the pane inset, `p-panel-inset`), `viewportTestId` and `viewportRef`, and carries `data-quiet-scroll-intent` while the user shows intent. |
+| Thumb | The native scrollbar, styled once for the whole app in `styles/global.css`: transparent track and resting thumb, `border-default` while the viewport is hovered or carries the intent attribute, `text-muted` while the thumb itself is hovered or dragged. |
+| Curtains | An `aria-hidden`, pointer-transparent overlay (`data-testid="quiet-scroll-cues"`, `z-20`) with four `quiet-scroll-curtain` gradients, `h-16` / `w-16`, from the surface colour to transparent. Each shows (`data-visible`) only on an edge where content is clipped; left and right only with `axis="both"`. |
+| QuietScrollFrame | The same host and curtains around `children` it does not own. It finds the scroll element with `viewportSelector`, puts the intent attribute on it, and either measures it or shows the `edges` it is given; with `edges` it also sets `data-quiet-scroll-overflow-y`, which lets the global CSS reveal xterm's own slider as the same thumb. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `viewportClassName` | `string` | — | Classes for the scrolling element: the content inset (`p-panel-inset` in every tool pane). Do not set overflow or a background here. |
+| `viewportTestId` | `string` | — | `data-testid` for the scrolling element, for tests that scroll it. |
+| `viewportRef` | `RefCallback<HTMLDivElement>` | — | Called with the scrolling element when it mounts (and `null` when it unmounts), so a caller can save and restore `scrollTop`. |
+| `surface` | `"sidebar" \| "terminal"` | `"sidebar"` | The background the area sits on, which the curtains fade from: `container-sidebar-bg` or `container-terminal-bg`. Always state it; it is never inferred from placement. |
+| `axis` | `"vertical" \| "both"` | `"vertical"` | `both` also measures horizontal overflow and shows the left and right curtains. |
+| `QuietScrollFrame.viewportSelector` | `string` | — | Required on QuietScrollFrame. A selector for the third-party scroll element inside `children` (`.xterm-scrollable-element`); the frame follows it if the library replaces it. |
+| `QuietScrollFrame.edges` | `QuietScrollEdges` | — | `{ top, right, bottom, left }` from the scroller's own model (xterm's `viewportY` / `baseY`). Replaces DOM measurement, and `top \|\| bottom` marks vertical overflow for the xterm slider. |
+
+Host attributes:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `children` | `ReactNode` | — | Required. The scrolling content (QuietScrollFrame: the third-party view). |
+| `className` | `string` | — | Merged after the host classes. Size and placement only: `h-full`, `min-h-0 flex-1`, `absolute inset-12`. |
+| `inert` | `boolean` | — | Passed through; the terminal makes its frame `inert` while a start failure covers it. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| No overflow | Content fits the viewport. | No curtains and no thumb; the area looks like plain content. |
+| Clipped edge | Content continues past an edge (below at rest, above after scrolling, both in the middle). | A curtain fades in on that edge with the fast transition; it reaches `opacity-100` and fades out again when the edge is reached. |
+| At rest | No pointer, focus or scrolling in the area. | The thumb is transparent; only the curtains tell that there is more. |
+| Intent | Pointer over the area, focus inside it, a scroll in the last moment (wheel, keys, touch), or a pointer drag that started inside and left it. | `data-quiet-scroll-intent` on the viewport; the thumb shows in `border-default`. It hides again a short grace period after scrolling stops. |
+| Thumb hover / drag | Pointer on the thumb, or dragging it. | The thumb turns `text-muted`; in a high-contrast theme it also fills its gutter. |
+| High-contrast theme | A bundled theme with `data-theme-contrast="high"`. | A resting hairline thumb in `text-subtle`; full width in `border-default` on intent. |
+| Forced colours | OS high-contrast mode (`forced-colors: active`). | A system-colour thumb at all times; the curtains are removed. |
+| Reduced motion | `prefers-reduced-motion: reduce`. | Curtains and thumb change without a transition. |
+
+### Accessibility
+
+- The viewport is a plain `div` with native scrolling: no role, no `tabindex` of its own. Keyboard users scroll it by moving focus through its content, and focus inside counts as intent, so the thumb shows while they are there.
+- The curtains are `aria-hidden` and `pointer-events-none`; they never intercept clicks, selection or a drag on the scrollbar.
+- Name the pane, not the scroller: the surrounding `<section aria-label>` or tool region labels the content.
+- Forced-colours mode keeps a system-colour thumb and drops the curtains; high-contrast themes keep a resting hairline so the scrollbar is findable without hovering.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves through the content; the browser scrolls the focused element into view and the thumb shows while focus is inside. |
+| `↑ / ↓, Page Up / Page Down, Home / End, Space` | Native scrolling of the viewport when focus is on a non-editable element inside it. |
+
+### Usage rules
+
+- **QSA-1** — Use QuietScrollArea for the scrolling body of every side and bottom tool pane; do not add your own `overflow-auto`, scrollbar styles or fade overlays there.
+- **QSA-2** — Match `surface` to the background behind the area — `sidebar` on `container-sidebar-bg`, `terminal` on `container-terminal-bg` — or the curtains will show as bands of the wrong colour.
+- **QSA-3** — Keep headers, toolbars and filters outside the area so they stay fixed; only the list scrolls.
+- **QSA-4** — Size the host from its parent (`h-full`, or `min-h-0 flex-1` in a flex column) and put the inset on `viewportClassName` (`p-panel-inset`), never padding on the host.
+- **QSA-5** — Reach the scrolling element only through `viewportRef` (saving and restoring position); never query the DOM for `.quiet-scroll-viewport`.
+- **QSA-6** — Wrap a scroller you do not own with `QuietScrollFrame` and its `viewportSelector`, and pass `edges` when the library reports its own position — never a QuietScrollArea around a component that scrolls itself.
+
+### Examples
+
+#### Files list
+
+A tree of TreeRows in a sidebar pane; the bottom curtain shows there is more.
+
+```tsx
+import { useState } from "react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { TreeRow } from "@/panels/TreeRow";
+
+const FILES = Array.from({ length: 24 }, (_, index) => `component-${index + 1}.tsx`);
+
+export default function Preview() {
+	const [active, setActive] = useState(FILES[0]);
+	return (
+		<div className="h-160 w-full max-w-[20rem] bg-container-sidebar-bg">
+			<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
+				<ul className="flex flex-col">
+					{FILES.map((name) => (
+						<li key={name}>
+							<TreeRow
+								testid="file-node"
+								kind="file"
+								active={active === name}
+								label={name}
+								onClick={() => setActive(name)}
+							/>
+						</li>
+					))}
+				</ul>
+			</QuietScrollArea>
+		</div>
+	);
+}
+```
+
+#### Under a pane header
+
+The Specs pane: the header stays fixed and the area fills the rest with `min-h-0 flex-1`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { TreeRow } from "@/panels/TreeRow";
+import { AuxiliaryPaneHeader } from "@/shell/layout/AuxiliaryPaneHeader";
+
+const SPECS = Array.from({ length: 18 }, (_, index) => `module-${index + 1}/SPEC.md`);
+
+export default function PaneHeader() {
+	const t = useT();
+	return (
+		<section
+			aria-label={t("workbench.tool.specs")}
+			className="flex h-240 w-full max-w-[20rem] flex-col bg-container-sidebar-bg"
+		>
+			<AuxiliaryPaneHeader title={t("workbench.tool.specs")} />
+			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-panel-inset">
+				<ul className="flex flex-col">
+					{SPECS.map((name) => (
+						<li key={name}>
+							<TreeRow testid="spec-node" kind="file" label={name} onClick={() => {}} />
+						</li>
+					))}
+				</ul>
+			</QuietScrollArea>
+		</section>
+	);
+}
+```
+
+#### Content that fits
+
+Review's empty message: no curtains and no thumb.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+
+export default function ShortContent() {
+	const t = useT();
+	return (
+		<div className="h-120 w-full max-w-[20rem] bg-container-sidebar-bg">
+			<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
+				<p className="px-8 py-4 tr-text-metadata text-text-subtle">{t("review.panel.empty")}</p>
+			</QuietScrollArea>
+		</div>
+	);
+}
+```
+
+#### Growing content
+
+Curtains follow the content as rows are added; no prop changes are needed.
+
+```tsx
+import { RiAddLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function GrowingContent() {
+	const t = useT();
+	const [count, setCount] = useState(3);
+	const names = Array.from({ length: count }, (_, index) => `workspace-${index + 1}`);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				className="self-start"
+				iconLeft={RiAddLine}
+				onClick={() => setCount((value) => value + 1)}
+			>
+				{t("common.add")}
+			</Button>
+			<div className="h-160 w-full max-w-[20rem] bg-container-sidebar-bg">
+				<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
+					<ul className="flex flex-col">
+						{names.map((name) => (
+							<li key={name}>
+								<TreeRow testid="workspace-node" kind="dir" label={name} onClick={() => {}} />
+							</li>
+						))}
+					</ul>
+				</QuietScrollArea>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Remembered position
+
+`viewportRef` saves `scrollTop`; hide and show the pane and it reopens where you left it.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useEffect, useRef, useState } from "react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { TreeRow } from "@/panels/TreeRow";
+
+const FILES = Array.from({ length: 40 }, (_, index) => `src/file-${index + 1}.ts`);
+
+export default function RememberedScroll() {
+	const t = useT();
+	const [shown, setShown] = useState(true);
+	const savedTop = useRef(0);
+	const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
+	useEffect(() => {
+		if (!viewport) return;
+		viewport.scrollTop = savedTop.current;
+		const save = () => {
+			savedTop.current = viewport.scrollTop;
+		};
+		viewport.addEventListener("scroll", save, { passive: true });
+		return () => viewport.removeEventListener("scroll", save);
+	}, [viewport]);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				className="self-start"
+				selected={shown}
+				aria-pressed={shown}
+				onClick={() => setShown((value) => !value)}
+			>
+				{t("workbench.tool.files")}
+			</Button>
+			<div className="h-160 w-full max-w-[20rem] bg-container-sidebar-bg">
+				{shown ? (
+					<QuietScrollArea
+						className="h-full"
+						viewportClassName="p-panel-inset"
+						viewportRef={setViewport}
+					>
+						<ul className="flex flex-col">
+							{FILES.map((name) => (
+								<li key={name}>
+									<TreeRow testid="file-node" kind="file" label={name} onClick={() => {}} />
+								</li>
+							))}
+						</ul>
+					</QuietScrollArea>
+				) : null}
+			</div>
+		</div>
+	);
+}
+```
+
+#### Both axes
+
+`axis="both"` adds the left and right curtains for wide content.
+
+```tsx
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+
+const LINES = Array.from(
+	{ length: 20 },
+	(_, index) =>
+		`${String(index + 1).padStart(2, " ")}  export const step${index + 1} = createStep({ id: "step-${index + 1}", retries: 3, timeoutMs: 30_000, onFailure: "pause" });`,
+);
+
+export default function BothAxes() {
+	return (
+		<div className="h-160 w-full max-w-[24rem] bg-container-sidebar-bg">
+			<QuietScrollArea axis="both" className="h-full" viewportClassName="p-panel-inset">
+				<pre className="w-max tr-code-text text-text-default">{LINES.join("\n")}</pre>
+			</QuietScrollArea>
+		</div>
+	);
+}
+```
+
+#### Terminal surface
+
+`surface="terminal"` on `container-terminal-bg`.
+
+```tsx
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+
+const OUTPUT = Array.from(
+	{ length: 30 },
+	(_, index) => `✓ src/panels/test-${index + 1}.test.ts (${index + 3} tests)`,
+);
+
+export default function TerminalSurface() {
+	return (
+		<div className="h-160 w-full bg-container-terminal-bg">
+			<QuietScrollArea surface="terminal" className="h-full" viewportClassName="p-12">
+				<pre className="tr-code-text text-text-default">{OUTPUT.join("\n")}</pre>
+			</QuietScrollArea>
+		</div>
+	);
+}
+```
+
+#### Third-party scroller
+
+`QuietScrollFrame` finds the scroll element with `viewportSelector` and shows the `edges` the view reports, as the terminal does with xterm.
+
+```tsx
+import { type UIEvent, useState } from "react";
+import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
+
+const OUTPUT = Array.from(
+	{ length: 40 },
+	(_, index) => `[${index + 1}] compiling chunk ${index + 1}`,
+);
+
+/** Stands in for a third-party view (xterm) that owns its scroll element and reports its own position. */
+function ThirdPartyLog({ onEdges }: { onEdges: (edges: QuietScrollEdges) => void }) {
+	const report = (event: UIEvent<HTMLDivElement>) => {
+		const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+		onEdges({
+			top: scrollTop > 0,
+			right: false,
+			bottom: scrollTop < scrollHeight - clientHeight - 1,
+			left: false,
+		});
+	};
+	return (
+		<div className="log-viewport absolute inset-0 overflow-auto" onScroll={report}>
+			<pre className="tr-code-text text-text-default">{OUTPUT.join("\n")}</pre>
+		</div>
+	);
+}
+
+export default function Frame() {
+	const [edges, setEdges] = useState<QuietScrollEdges>({
+		top: false,
+		right: false,
+		bottom: true,
+		left: false,
+	});
+	return (
+		<div className="relative h-160 w-full bg-container-terminal-bg">
+			<QuietScrollFrame
+				viewportSelector=".log-viewport"
+				surface="terminal"
+				edges={edges}
+				className="absolute inset-12"
+			>
+				<ThirdPartyLog onEdges={setEdges} />
+			</QuietScrollFrame>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/shell/WorkspaceWorkbench.tsx` | The Projects and Specs tool bodies: `h-full` with `p-panel-inset`. |
+| `apps/web/src/shell/ProjectHome.tsx` | The Projects tree under its pane header on Project Home (`min-h-0 flex-1`). |
+| `apps/web/src/panels/ReviewPanel.tsx` | Review's file list below its fixed toolbar. |
+| `apps/web/src/panels/RememberedScrollArea.tsx` | Files and Changes: `viewportRef` saves and restores the tree's scroll position. |
+
+## AuxiliaryPaneHeader
+
+The plain header of an auxiliary (edge) pane: a fixed-height row with the pane's title and its trailing actions, and `AuxiliaryPaneHideButton`, the pane's Hide control. It owns the height, surface, border and title type, and — given `dragTab` — turns the title into a drag handle for that tool. The call site provides the title, the actions and the region the Hide button controls.
+
+```tsx
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+```
+
+### When to use
+
+- An auxiliary pane whose selected tab is a singleton tool (Projects, Specs, Files, Review, TODO List): the tool's name as the title, draggable with `dragTab`.
+- An empty auxiliary pane: *Tools* on a side, *Terminal* at the bottom, with the add menu and Remove group.
+- Project Home's Projects pane, composed around its own geometry without drag data, so the tool looks the same with or without the workbench.
+- `AuxiliaryPaneHideButton` as the last action of every expanded auxiliary pane — including a terminal pane's TabStrip.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| TabStrip | The pane's selected tab is a terminal: it shows the pane's named session tabs instead of a title. |
+| HeaderIconButton | A toggle in a feature panel's own header, inside the pane body. |
+| Collapsible | Folding a block of content inside a panel, not hiding a whole edge pane. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Header | A `h-panel-header-row` row on `container-header-bg` with a `border-muted` bottom border; spreads the rest of its props onto the `<div>`. |
+| Title | A `tr-title-compact` span in `text-default` with `px-12` that takes the free width. It is itself a flex box, so its `truncate` draws no ellipsis: a long title is cut off where the actions begin. |
+| Drag handle | With `dragTab`, the title becomes a dnd-kit draggable carrying `{ tab }` — the same drag data as the tool's rail entry — with a grab cursor. |
+| Actions | `actions`, after the title. |
+| Hide button | `AuxiliaryPaneHideButton`: IconButton `ghost` `m` with a close icon, named *Hide pane*, `shrink-0 self-center`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `title` | `string` | — | The pane's name: the selected tool's `layoutTabName`, or `workbench.pane.tools` / `workbench.rail.terminal` for an empty pane. Replaces the native `title` attribute. |
+| `dragTab` | `LayoutTab` | — | Makes the title a drag handle for this tab. Pass the selected tool inside the workbench's `DndContext`; omit it outside the workbench. |
+| `actions` | `ReactNode` | — | Trailing actions — IconButton `ghost` `m` with `shrink-0 self-center`: the add menu, Remove group on an empty pane, then the Hide button. |
+| `ref` | `Ref<HTMLDivElement>` | — | Forwarded to the header `<div>`; the workbench attaches its join droppable here. |
+| `className` | `string` | — | Merged after the base classes. The workbench passes its drop-hint and drop-active fills here, keyed on the `data-drop-*` attributes it sets; otherwise placement only. |
+
+AuxiliaryPaneHideButton props:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `controls` | `string` | — | `aria-controls`: the id of the pane region it hides. |
+| `testId` | `string` | — | `data-testid`: `side-group-fold` on a side, `bottom-group-fold` at the bottom (e2e tests rely on it). |
+| `onClick` | `() => void` | — | Hides or folds the pane. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Default | Rest. | Header surface, muted bottom border, the title in default text. |
+| Drag handle hover | Pointer over a title with `dragTab`. | Grab cursor; no fill. |
+| Dragging | Drag the title in a `DndContext`. | Grabbing cursor (`data-dragging`); the header itself does not move. |
+| Drop hint / drop active | A tool drag that can join this pane (workbench only). | No treatment of its own: the workbench sets `data-drop-hint` / `data-drop-active` and passes `primary-subtle` / `primary-soft` fills through `className`. |
+| Long title | A narrow pane. | The title is clipped at the actions with no ellipsis; actions keep their size. |
+| Hide button | Hover, press, Tab. | IconButton `ghost` states and the *Hide pane* tooltip. |
+| Disabled / selected | — | No distinct treatment. |
+
+### Accessibility
+
+- The header is a plain `<div>` and its title a `<span>`, not a heading: name the pane on its region (`<section aria-label>`), as Project Home and the workbench tool body do.
+- The drag handle receives only pointer listeners — it is not focusable and has no role. Keyboard users arrange tools from the rail entry's menu instead.
+- `AuxiliaryPaneHideButton` is named *Hide pane*, sets `aria-controls` to the pane and `aria-expanded="true"` (it renders only while the pane is open).
+- After hiding, the pane's rail entry stays the way back; the workbench moves focus there.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves between the actions; the title is skipped. |
+| `Enter / Space` | Activates the focused action; on Hide, hides the pane. |
+
+### Usage rules
+
+- **APH-1** — Use AuxiliaryPaneHeader when the pane's selected tab is a tool or nothing; when it is a terminal, render the pane's TabStrip of sessions instead.
+- **APH-2** — The title is the pane's name from `layoutTabName` or the empty-pane locale key — never a custom label, heading or extra content.
+- **APH-3** — Pass `dragTab` only for a placed tool inside the workbench's `DndContext`; Project Home and other frame-less surfaces compose the header without it.
+- **APH-4** — Every expanded auxiliary pane ends with `AuxiliaryPaneHideButton`, last in `actions`, with `controls` set to the pane's region id.
+- **APH-5** — Actions are IconButton `ghost` `m` with `shrink-0 self-center`, shown only when they can act — Remove group only on an empty pane.
+- **APH-6** — Do not restyle the header: no height, surface, border or type classes. It is the one owner of edge-pane header styling, shared by the workbench and Project Home.
+
+### Examples
+
+#### Preview
+
+A pane title with the Hide button.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<section
+			id="preview-projects-pane"
+			aria-label={t("shell.projectHome.projects")}
+			className="w-full"
+		>
+			<AuxiliaryPaneHeader
+				title={t("shell.projectHome.projects")}
+				actions={
+					<AuxiliaryPaneHideButton
+						testId="side-group-fold"
+						controls="preview-projects-pane"
+						onClick={() => {}}
+					/>
+				}
+			/>
+		</section>
+	);
+}
+```
+
+#### Project Home
+
+The rail entry and the Hide button toggle the same pane, as on Project Home.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import { AuxiliaryRail, AuxiliaryRailToolButton } from "@/shell/layout/AuxiliaryRail";
+import type { AuxiliaryRailToolEntry } from "@/shell/layout/auxiliaryPresentation";
+
+const PANE_ID = "example-projects-pane";
+
+export default function ProjectHome() {
+	const t = useT();
+	const [collapsed, setCollapsed] = useState(false);
+	const toggle = () => setCollapsed((value) => !value);
+	const entry: AuxiliaryRailToolEntry = {
+		key: "projects",
+		region: "left",
+		kind: "tool",
+		groupId: null,
+		tool: "projects",
+		tab: null,
+		selected: true,
+		expanded: !collapsed,
+	};
+	return (
+		<div className="flex h-[8rem] w-full">
+			<AuxiliaryRail
+				region="left"
+				entries={[entry]}
+				renderEntry={(_, control) => (
+					<AuxiliaryRailToolButton
+						entry={entry}
+						controls={PANE_ID}
+						control={control}
+						onActivate={toggle}
+					/>
+				)}
+			/>
+			<section
+				id={PANE_ID}
+				aria-label={t("shell.projectHome.projects")}
+				hidden={collapsed}
+				className="flex min-w-0 flex-1 flex-col"
+			>
+				<AuxiliaryPaneHeader
+					title={t("shell.projectHome.projects")}
+					actions={
+						<AuxiliaryPaneHideButton testId="side-group-fold" controls={PANE_ID} onClick={toggle} />
+					}
+				/>
+			</section>
+		</div>
+	);
+}
+```
+
+#### Tool pane
+
+The selected tool's name as a drag handle (`dragTab`), the pane's add menu and Hide.
+
+```tsx
+import { DndContext, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { useT } from "@thinkrail/locales/react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import { layoutTabName, toolTab } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { SideGroupMenu } from "@/shell/layout/workbenchSide";
+
+const FILES = toolTab("files");
+
+const DOCUMENT: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [{ id: "left", weight: 1, folded: false, tabs: [toolTab("projects")] }],
+	},
+	right: {
+		visible: true,
+		width: 0.25,
+		groups: [{ id: "right", weight: 1, folded: false, tabs: [toolTab("specs"), FILES] }],
+	},
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function ToolPane() {
+	const t = useT();
+	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+	const group = DOCUMENT.right.groups[0];
+	return (
+		<DndContext sensors={sensors}>
+			<div className="w-full">
+				<AuxiliaryPaneHeader
+					title={layoutTabName(t, FILES)}
+					dragTab={FILES}
+					actions={
+						<>
+							{group ? (
+								<SideGroupMenu
+									document={DOCUMENT}
+									side="right"
+									group={group}
+									limit={6}
+									onNewTerminal={() => {}}
+									onRevealTool={() => {}}
+								/>
+							) : null}
+							<AuxiliaryPaneHideButton
+								testId="side-group-fold"
+								controls="example-files-pane"
+								onClick={() => {}}
+							/>
+						</>
+					}
+				/>
+			</div>
+		</DndContext>
+	);
+}
+```
+
+#### Pane stack
+
+Two right panes: a tool pane and an empty *Tools* pane whose Remove group commits `removeLayoutGroup`.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import {
+	isLayoutUnavailable,
+	layoutTabName,
+	removeLayoutGroup,
+	toolTab,
+} from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { groupPanelId } from "@/shell/layout/workbenchShared";
+import { SideGroupMenu } from "@/shell/layout/workbenchSide";
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [{ id: "left", weight: 1, folded: false, tabs: [toolTab("projects")] }],
+	},
+	right: {
+		visible: true,
+		width: 0.25,
+		groups: [
+			{ id: "tools", weight: 0.5, folded: false, tabs: [toolTab("files"), toolTab("review")] },
+			{ id: "empty", weight: 0.5, folded: false, tabs: [] },
+		],
+	},
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function PaneStack() {
+	const t = useT();
+	const [document, setDocument] = useState(INITIAL);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			{document.right.groups.map((group) => {
+				const location = { area: "right", groupId: group.id } as const;
+				const selected = group.tabs[0];
+				const removal = removeLayoutGroup(t, document, location);
+				return (
+					<AuxiliaryPaneHeader
+						key={group.id}
+						title={selected ? layoutTabName(t, selected) : t("workbench.pane.tools")}
+						{...(selected?.kind === "tool" ? { dragTab: selected } : {})}
+						data-group-id={group.id}
+						actions={
+							<>
+								<SideGroupMenu
+									document={document}
+									side="right"
+									group={group}
+									limit={6}
+									onNewTerminal={() => {}}
+									onRevealTool={() => {}}
+								/>
+								{group.tabs.length === 0 ? (
+									<IconButton
+										variant="ghost"
+										size="m"
+										icon={RiCloseLine}
+										label={t("workbench.group.remove")}
+										tooltip={
+											isLayoutUnavailable(removal) ? removal.reason : t("workbench.group.remove")
+										}
+										wrapTrigger
+										disabled={isLayoutUnavailable(removal)}
+										onClick={() => {
+											if (!isLayoutUnavailable(removal)) setDocument(removal.document);
+										}}
+										className="shrink-0 self-center"
+									/>
+								) : null}
+								<AuxiliaryPaneHideButton
+									testId="side-group-fold"
+									controls={groupPanelId(location)}
+									onClick={() => {}}
+								/>
+							</>
+						}
+					/>
+				);
+			})}
+		</div>
+	);
+}
+```
+
+#### Empty bottom pane
+
+An empty bottom pane titled *Terminal*, with its add menu and Hide.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import { toolTab } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { groupPanelId } from "@/shell/layout/workbenchShared";
+import { SideGroupMenu } from "@/shell/layout/workbenchSide";
+
+const DOCUMENT: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [{ id: "left", weight: 1, folded: false, tabs: [toolTab("projects")] }],
+	},
+	right: {
+		visible: true,
+		width: 0.25,
+		groups: [{ id: "right", weight: 1, folded: false, tabs: [toolTab("files")] }],
+	},
+	bottom: {
+		visible: true,
+		height: 0.3,
+		alignment: "center",
+		groups: [{ id: "bottom", weight: 1, folded: false, tabs: [] }],
+	},
+	toolRestoreTargets: {},
+};
+
+export default function BottomEmpty() {
+	const t = useT();
+	const group = DOCUMENT.bottom.groups[0];
+	return (
+		<div className="w-full">
+			<AuxiliaryPaneHeader
+				title={t("workbench.rail.terminal")}
+				actions={
+					<>
+						{group ? (
+							<SideGroupMenu
+								document={DOCUMENT}
+								side="bottom"
+								group={group}
+								limit={3}
+								onNewTerminal={() => {}}
+								onRevealTool={() => {}}
+							/>
+						) : null}
+						<AuxiliaryPaneHideButton
+							testId="bottom-group-fold"
+							controls={groupPanelId({ area: "bottom", groupId: "bottom" })}
+							onClick={() => {}}
+						/>
+					</>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Long title
+
+In a narrow pane the actions keep their size and the title is cut off — without an ellipsis, because the title span is a flex box.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import { layoutTabName, toolTab } from "@/shell/layout/model";
+
+export default function LongTitle() {
+	const t = useT();
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<div className="w-[12rem]">
+				<AuxiliaryPaneHeader
+					title={layoutTabName(t, toolTab("plan"))}
+					actions={
+						<AuxiliaryPaneHideButton
+							testId="side-group-fold"
+							controls="example-plan-pane"
+							onClick={() => {}}
+						/>
+					}
+				/>
+			</div>
+			<div className="w-[5rem]">
+				<AuxiliaryPaneHeader
+					title={layoutTabName(t, toolTab("plan"))}
+					actions={
+						<AuxiliaryPaneHideButton
+							testId="side-group-fold"
+							controls="example-plan-pane"
+							onClick={() => {}}
+						/>
+					}
+				/>
+			</div>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/shell/layout/workbenchSide.tsx` | `AuxiliaryGroupHeader`: tool and empty panes with `dragTab`, the add menu, Remove group, Hide and the join drop cues. |
+| `apps/web/src/shell/ProjectHome.tsx` | The Projects pane header without drag data, with the Hide button beside the rail entry. |
+
 ## Button and IconButton contract
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /
