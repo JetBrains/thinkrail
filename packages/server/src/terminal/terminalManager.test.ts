@@ -254,7 +254,9 @@ test("reserving a tab persists catalog membership without starting its shell", (
 		kind: "shell",
 	});
 	expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Reserved", kind: "shell" }]);
-	expect(seen).toEqual([{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "Reserved", kind: "shell" }] }]);
+	expect(seen).toEqual([
+		{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "Reserved", kind: "shell" }] },
+	]);
 	expect(attachTerminal(WS, "tab-a", "client-1").created).toBe(true);
 
 	resetTerminalState();
@@ -495,7 +497,9 @@ test("opening and closing a tab broadcasts the new list", () => {
 
 	attachTerminal(WS, "tab-a", "client-1", { title: "One" });
 	attachTerminal(WS, "tab-a", "client-1");
-	expect(seen).toEqual([{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "One", kind: "shell" }] }]);
+	expect(seen).toEqual([
+		{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "One", kind: "shell" }] },
+	]);
 
 	closeTerminalTab(WS, "tab-a", true);
 	expect(seen.at(-1)).toEqual({ workspaceId: WS, tabs: [] });
