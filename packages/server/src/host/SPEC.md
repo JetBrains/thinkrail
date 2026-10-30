@@ -41,7 +41,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   send `X-Content-Type-Options: nosniff`; active same-origin types (`text/html`,
   `application/xhtml+xml`, `image/svg+xml`) additionally receive
   `Content-Security-Policy: sandbox; default-src 'none'`, so direct navigation cannot execute repository
-  script, static serving with
+  script. An optional **access-token gate** (`accessToken.ts`, `createServer({ accessToken })`) fronts `/ws`,
+  `/files` and `/blob`: it is `null` for local same-origin use and required once the host is exposed for the
+  remote "add project by QR" mode, read from `Authorization: Bearer` or `?token=` and compared in constant
+  time; `/health` and static assets stay open. Static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
