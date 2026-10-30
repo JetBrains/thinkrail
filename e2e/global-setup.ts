@@ -25,6 +25,7 @@ import {
 	E2E_GH_LOG,
 	E2E_GH_SCENARIO,
 	E2E_HOME_DIR,
+	E2E_INSTALLED_FONTS,
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
@@ -99,6 +100,7 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 		seedAgentDefinitionFixtures();
 		seedFixtureRepo();
 		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+		writeFileSync(E2E_INSTALLED_FONTS, "[]");
 	} catch (error) {
 		if (!centralMode) throw error;
 		removeTree(E2E_DATA_DIR);

@@ -92,6 +92,8 @@ export const E2E_DESKTOP_USER_DATA = join(E2E_DATA_DIR, "desktop-user-data");
 
 export const E2E_PICK_DIR_POINTER = join(E2E_DATA_DIR, "pick-dir");
 
+export const E2E_INSTALLED_FONTS = join(E2E_DATA_DIR, "installed-fonts.json");
+
 export const E2E_PLAIN_DIR = join(E2E_DATA_DIR, "plain-folder");
 
 export const E2E_CENTRAL_STATE = join(E2E_DATA_DIR, "central-state");

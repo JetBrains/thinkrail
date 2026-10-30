@@ -1257,6 +1257,92 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
+export const FONT_ROLES = ["interface", "code"] as const;
+export type FontRole = (typeof FONT_ROLES)[number];
+
+/** A bundled face named by the role it ships for, or a family name the client resolves. */
+export type FontFamilyRef = { builtin: FontRole } | { name: string };
+
+/** One role's font: `family: null` is the role's bundled default; fallbacks draw what it lacks. */
+export interface FontChoice {
+	family: FontFamilyRef | null;
+	fallbacks: FontFamilyRef[];
+}
+
+export const FONT_FAMILY_NAME_MAX_LENGTH = 128;
+export const FONT_FALLBACKS_MAX = 8;
+/** `editorDelta`: the editor and diffs render this many px below the code size. */
+export const CODE_FONT_SIZE = { min: 10, max: 24, default: 13, editorDelta: 2 } as const;
+export const FONT_WEIGHT_OFFSET = { min: -70, max: 130, step: 10, default: 0 } as const;
+
+const FONT_NAME_DELIMITERS = /["\\;{}]/;
+
+export function hasControlCharacter(text: string): boolean {
+	return [...text].some((char) => {
+		const code = char.codePointAt(0) ?? 0;
+		return code < 0x20 || code === 0x7f;
+	});
+}
+
+export function isFontFamilyName(value: unknown): value is string {
+	return (
+		typeof value === "string" &&
+		value.length > 0 &&
+		value.length <= FONT_FAMILY_NAME_MAX_LENGTH &&
+		value.trim() === value &&
+		!FONT_NAME_DELIMITERS.test(value) &&
+		!hasControlCharacter(value)
+	);
+}
+
+export function isFontRole(value: unknown): value is FontRole {
+	return FONT_ROLES.some((role) => role === value);
+}
+
+export function isFontFamilyRef(value: unknown): value is FontFamilyRef {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const keys = Object.keys(value);
+	if (keys.length !== 1) return false;
+	if (keys[0] === "builtin") return isFontRole(Reflect.get(value, "builtin"));
+	return keys[0] === "name" && isFontFamilyName(Reflect.get(value, "name"));
+}
+
+export function fontFamilyRefKey(ref: FontFamilyRef): string {
+	return "builtin" in ref ? `builtin:${ref.builtin}` : `name:${ref.name}`;
+}
+
+export function isFontChoice(value: unknown): value is FontChoice {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const family = Reflect.get(value, "family");
+	const fallbacks = Reflect.get(value, "fallbacks");
+	return (
+		(family === null || isFontFamilyRef(family)) &&
+		Array.isArray(fallbacks) &&
+		fallbacks.length <= FONT_FALLBACKS_MAX &&
+		fallbacks.every(isFontFamilyRef) &&
+		new Set(fallbacks.map(fontFamilyRefKey)).size === fallbacks.length
+	);
+}
+
+export function isCodeFontSize(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= CODE_FONT_SIZE.min &&
+		value <= CODE_FONT_SIZE.max
+	);
+}
+
+export function isFontWeightOffset(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= FONT_WEIGHT_OFFSET.min &&
+		value <= FONT_WEIGHT_OFFSET.max &&
+		value % FONT_WEIGHT_OFFSET.step === 0
+	);
+}
+
 export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
@@ -1371,6 +1457,16 @@ export interface AppConfig extends ThemePreference {
 	locale: string;
 	/** The user finished or skipped the cold-start onboarding wizard. */
 	onboardingDismissed: boolean;
+	/** All UI, chat and documents; the brand face is not user-changeable. */
+	interfaceFont: FontChoice;
+	/** The editor, diffs, code blocks and the terminal. */
+	codeFont: FontChoice;
+	/** Terminal and code blocks, in px; the editor and diffs render 2 px smaller. */
+	codeFontSize: number;
+	/** Ligatures in the editor, diffs and code in chat and documents; the terminal never draws them. */
+	codeLigatures: boolean;
+	/** Shifts every text weight but the brand face's together. */
+	fontWeightOffset: number;
 }
 
 export interface ExtensionCatalogEntry {
@@ -1549,6 +1645,99 @@ export interface UserThemesSnapshot {
 	files: UserThemeFile[];
 }
 
+const USER_FONT_FILE_ERROR_CODES = [
+	"too-large",
+	"too-many",
+	"unsupported-collection",
+	"invalid-font",
+	"unreadable",
+] as const;
+export type UserFontFileErrorCode = (typeof USER_FONT_FILE_ERROR_CODES)[number];
+
+/** What a user font file declares in its own tables. */
+export interface UserFontFace {
+	family: string;
+	style: "normal" | "italic";
+	/** One value for a static face; the `wght` axis range for a variable one. */
+	weight: { min: number; max: number };
+	monospace: boolean;
+}
+
+export interface UserFontFileOk {
+	fileName: string;
+	ok: true;
+	/** Same-origin path serving the file, versioned by its content signature. */
+	url: string;
+	face: UserFontFace;
+}
+
+export interface UserFontFileError {
+	fileName: string;
+	ok: false;
+	error: UserFontFileErrorCode;
+	/** Parser or OS detail for `invalid-font` / `unreadable`, untranslated. */
+	detail?: string;
+}
+
+export type UserFontFile = UserFontFileOk | UserFontFileError;
+
+/** The host's user font files (`<dataDir>/fonts/`), as `fonts.list` reports them. */
+export interface UserFontsSnapshot {
+	dir: string;
+	files: UserFontFile[];
+}
+
+function isUserFontFace(value: unknown): value is UserFontFace {
+	if (typeof value !== "object" || value === null) return false;
+	const weight = Reflect.get(value, "weight");
+	const style = Reflect.get(value, "style");
+	if (typeof weight !== "object" || weight === null) return false;
+	const min = Reflect.get(weight, "min");
+	const max = Reflect.get(weight, "max");
+	return (
+		isFontFamilyName(Reflect.get(value, "family")) &&
+		(style === "normal" || style === "italic") &&
+		typeof min === "number" &&
+		typeof max === "number" &&
+		min <= max &&
+		typeof Reflect.get(value, "monospace") === "boolean"
+	);
+}
+
+/** The shape `fonts.list` and a `/fonts/` upload report for one file. */
+export function isUserFontFile(value: unknown): value is UserFontFile {
+	if (typeof value !== "object" || value === null) return false;
+	if (typeof Reflect.get(value, "fileName") !== "string") return false;
+	const ok = Reflect.get(value, "ok");
+	if (ok === true) {
+		return (
+			typeof Reflect.get(value, "url") === "string" && isUserFontFace(Reflect.get(value, "face"))
+		);
+	}
+	const error = Reflect.get(value, "error");
+	return ok === false && USER_FONT_FILE_ERROR_CODES.some((code) => code === error);
+}
+
+/** A family the host operating system's font service reports. */
+export interface InstalledFontFamily {
+	name: string;
+	/** Advisory: clients confirm by measuring the face they actually render. */
+	monospaceHint: boolean;
+}
+
+export interface InstalledFontsResult {
+	families: InstalledFontFamily[];
+}
+
+/** Serves (`GET`) and accepts (`PUT`) user font files by base name. */
+export const USER_FONTS_ROUTE = "/fonts/";
+/** Required on `PUT` uploads: a non-simple header forces a CORS preflight the host never answers. */
+export const USER_FONT_UPLOAD_HEADER = {
+	name: "X-ThinkRail-Request",
+	value: "font-upload",
+} as const;
+export const USER_FONT_EXTENSIONS = [".ttf", ".otf", ".woff", ".woff2"] as const;
+
 export const SUBAGENT_MAX_CONCURRENT = { min: 1, max: 16, default: 4 } as const;
 
 export function isSubagentMaxConcurrent(value: unknown): value is number {
@@ -1598,7 +1787,37 @@ export const DEFAULT_CONFIG: AppConfig = {
 	disabledPackages: [],
 	locale: SYSTEM_LOCALE_PREFERENCE,
 	onboardingDismissed: false,
+	interfaceFont: { family: null, fallbacks: [] },
+	codeFont: { family: null, fallbacks: [] },
+	codeFontSize: CODE_FONT_SIZE.default,
+	codeLigatures: false,
+	fontWeightOffset: FONT_WEIGHT_OFFSET.default,
 };
+
+export type FontSettings = Pick<
+	AppConfig,
+	"interfaceFont" | "codeFont" | "codeFontSize" | "codeLigatures" | "fontWeightOffset"
+>;
+
+/** Each font field independently: a malformed one falls back to its own default. */
+export function normalizeFontSettings(value: unknown): FontSettings {
+	const record = typeof value === "object" && value !== null ? value : {};
+	const interfaceFont = Reflect.get(record, "interfaceFont");
+	const codeFont = Reflect.get(record, "codeFont");
+	const codeFontSize = Reflect.get(record, "codeFontSize");
+	const codeLigatures = Reflect.get(record, "codeLigatures");
+	const fontWeightOffset = Reflect.get(record, "fontWeightOffset");
+	return {
+		interfaceFont: isFontChoice(interfaceFont) ? interfaceFont : DEFAULT_CONFIG.interfaceFont,
+		codeFont: isFontChoice(codeFont) ? codeFont : DEFAULT_CONFIG.codeFont,
+		codeFontSize: isCodeFontSize(codeFontSize) ? codeFontSize : DEFAULT_CONFIG.codeFontSize,
+		codeLigatures:
+			typeof codeLigatures === "boolean" ? codeLigatures : DEFAULT_CONFIG.codeLigatures,
+		fontWeightOffset: isFontWeightOffset(fontWeightOffset)
+			? fontWeightOffset
+			: DEFAULT_CONFIG.fontWeightOffset,
+	};
+}
 
 export function normalizeThemePreference(value: unknown): ThemePreference {
 	const record = typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};

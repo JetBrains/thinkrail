@@ -9,13 +9,16 @@ import type {
 	SessionStateRecord,
 	TerminalTabsPush,
 	WorkspaceFsChangedPayload,
+	WsChannel,
 } from "@thinkrail/contracts";
 import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
+	FONTS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
@@ -93,6 +96,7 @@ import {
 	releaseInvitation,
 	setFeedbackPublisher,
 } from "../feedback";
+import { watchUserFonts } from "../fonts";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -136,6 +140,7 @@ import {
 	setWorkspacePublisher,
 } from "../workspaces";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
+import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestErrorReport, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -362,6 +367,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
 				return serveBlob(url.pathname, req.signal);
 			}
+			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {
+				return serveUserFonts(req, url.pathname);
+			}
 			if (staticDir) {
 				return serveStatic(url.pathname, staticDir);
 			}
@@ -404,6 +412,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.themesChanged);
 				if (ws.data.protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.packagesChanged);
+				if (ws.data.protocolVersion >= FONTS_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.fontsChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -750,20 +760,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		),
 	);
 	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
-	const stopLocalesWatch = watchLocalLocales({
-		onChange: () =>
-			server.publish(
-				WS_CHANNELS.localesChanged,
-				JSON.stringify({ channel: WS_CHANNELS.localesChanged, data: {} }),
-			),
-	});
-	const stopThemesWatch = watchUserThemes({
-		onChange: () =>
-			server.publish(
-				WS_CHANNELS.themesChanged,
-				JSON.stringify({ channel: WS_CHANNELS.themesChanged, data: {} }),
-			),
-	});
+	const nudge = (channel: WsChannel) => () =>
+		server.publish(channel, JSON.stringify({ channel, data: {} }));
+	const stopLocalesWatch = watchLocalLocales({ onChange: nudge(WS_CHANNELS.localesChanged) });
+	const stopThemesWatch = watchUserThemes({ onChange: nudge(WS_CHANNELS.themesChanged) });
+	const stopFontsWatch = watchUserFonts({ onChange: nudge(WS_CHANNELS.fontsChanged) });
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);
@@ -996,6 +997,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopUserMcpWatch();
 		stopLocalesWatch();
 		stopThemesWatch();
+		stopFontsWatch();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();

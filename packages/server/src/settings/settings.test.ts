@@ -931,3 +931,70 @@ test("locale defaults to system, keeps an unavailable tag, and rejects non-canon
 	expect(getConfig().locale).toBe("pt-BR");
 	expect(updateConfig({ locale: "system" }).locale).toBe("system");
 });
+
+test("font settings default to the bundled faces, round-trip, and normalize a malformed stored value", () => {
+	expect(getConfig()).toMatchObject({
+		interfaceFont: { family: null, fallbacks: [] },
+		codeFont: { family: null, fallbacks: [] },
+		codeFontSize: 13,
+		codeLigatures: false,
+		fontWeightOffset: 0,
+	});
+	const codeFont = { family: { name: "Fira Code" }, fallbacks: [{ name: "MesloLGS NF" }] };
+	const next = updateConfig({
+		interfaceFont: { family: { builtin: "code" }, fallbacks: [] },
+		codeFont,
+		codeFontSize: 15,
+		codeLigatures: true,
+		fontWeightOffset: 40,
+	});
+	expect(next.codeFont).toEqual(codeFont);
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({
+		interfaceFont: { family: { builtin: "code" }, fallbacks: [] },
+		codeFont,
+		codeFontSize: 15,
+		codeLigatures: true,
+		fontWeightOffset: 40,
+	});
+
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			interfaceFont: { family: "Inter" },
+			codeFont: { family: { name: "Fira Code" }, fallbacks: "Meslo" },
+			codeFontSize: 40,
+			codeLigatures: "yes",
+			fontWeightOffset: 15,
+		}),
+	);
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({
+		interfaceFont: DEFAULT_CONFIG.interfaceFont,
+		codeFont: DEFAULT_CONFIG.codeFont,
+		codeFontSize: DEFAULT_CONFIG.codeFontSize,
+		codeLigatures: DEFAULT_CONFIG.codeLigatures,
+		fontWeightOffset: DEFAULT_CONFIG.fontWeightOffset,
+	});
+});
+
+test("invalid font updates are rejected before persistence or broadcast", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	for (const [update, message] of [
+		[
+			{ codeFont: { family: { name: 'Fira"; x' }, fallbacks: [] } },
+			"codeFont must be a font family",
+		],
+		[{ interfaceFont: { family: null } }, "interfaceFont must be a font family"],
+		[{ codeFontSize: 9 }, "codeFontSize must be a whole number from 10 to 24"],
+		[{ fontWeightOffset: 25 }, "fontWeightOffset must be a multiple of 10 from -70 to 130"],
+		[{ codeLigatures: "on" }, "codeLigatures must be a boolean"],
+	] as const) {
+		expect(() => updateConfig(update as unknown as AppConfigUpdate)).toThrow(message);
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});

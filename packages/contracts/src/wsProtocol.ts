@@ -24,6 +24,7 @@ import type {
 	HostEnvironment,
 	HostEnvironmentStatus,
 	HostEnvironmentUpdateResult,
+	InstalledFontsResult,
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
@@ -77,6 +78,7 @@ import type {
 	TodoPlan,
 	TodoStatus,
 	TurnChangeSet,
+	UserFontsSnapshot,
 	UserThemesSnapshot,
 	Workspace,
 } from "./domain";
@@ -133,7 +135,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 101;
+export const PROTOCOL_VERSION = 102;
+export const FONTS_PROTOCOL_VERSION = 102;
 export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;
 export const PI_PACKAGES_PROTOCOL_VERSION = 100;
 export const PROVIDER_WARNINGS_PROTOCOL_VERSION = 99;
@@ -312,6 +315,9 @@ export const WS_METHODS = {
 	localesReveal: "locales.reveal",
 	themesList: "themes.list",
 	themesReveal: "themes.reveal",
+	fontsList: "fonts.list",
+	fontsInstalled: "fonts.installed",
+	fontsReveal: "fonts.reveal",
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
@@ -434,6 +440,7 @@ export const WS_CHANNELS = {
 	localesChanged: "locales.changed",
 	themesChanged: "themes.changed",
 	packagesChanged: "packages.changed",
+	fontsChanged: "fonts.changed",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -959,6 +966,9 @@ export interface WsMethodMap {
 	"locales.reveal": { params: Record<string, never>; result: Ack };
 	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
 	"themes.reveal": { params: Record<string, never>; result: Ack };
+	"fonts.list": { params: Record<string, never>; result: UserFontsSnapshot };
+	"fonts.installed": { params: Record<string, never>; result: InstalledFontsResult };
+	"fonts.reveal": { params: Record<string, never>; result: Ack };
 	"session.create": {
 		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
@@ -1282,7 +1292,8 @@ export type WsErrorCode =
 	| "PACKAGE_REMOVE_FAILED"
 	| "PACKAGE_UPDATE_FAILED"
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
-	| "REQUEST_REPLAY_OVERFLOW";
+	| "REQUEST_REPLAY_OVERFLOW"
+	| "INSTALLED_FONTS_UNAVAILABLE";
 
 export interface WsResponse {
 	id: string;

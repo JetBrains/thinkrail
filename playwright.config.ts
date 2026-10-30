@@ -23,6 +23,7 @@ import {
 	E2E_EDITOR_LOG,
 	E2E_FAKE_BIN_DIR,
 	E2E_HOME_DIR,
+	E2E_INSTALLED_FONTS,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
 	E2E_PORT,
@@ -87,6 +88,8 @@ export default defineConfig({
 			// control *file* (seeded to the git fixture in globalSetup); a test can rewrite it to hand the
 			// picker a different folder (e.g. a non-git one) without restarting the shared host.
 			THINKRAIL_PICK_DIR: E2E_PICK_DIR_POINTER,
+			// The host's installed-font list, read from this file per request instead of the OS font service.
+			THINKRAIL_INSTALLED_FONTS: E2E_INSTALLED_FONTS,
 			// Force the New-Workspace dialog's `gh` probe to "Not connected" so the suite is deterministic
 			// regardless of the dev machine's real `gh` auth — and exercises the offline/local-branch degrade path.
 			THINKRAIL_GH_OFFLINE: "1",

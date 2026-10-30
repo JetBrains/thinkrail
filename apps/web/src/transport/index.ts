@@ -4,6 +4,7 @@ export {
 	reportClientError,
 } from "./errorReports";
 export { errorText } from "./errorText";
+export { hostUrl, uploadUserFont } from "./fonts";
 export { requestMcpList, watchMcpWorkspace } from "./mcp";
 export { RequestError, RequestTimeoutError, wsErrorCode } from "./requestError";
 export {
@@ -21,6 +22,7 @@ export {
 	respondToTool,
 	runHostUpdate,
 	supportsChangeMutations,
+	supportsFonts,
 	supportsHostUpdateRun,
 	supportsPiPackages,
 	supportsPlanReview,

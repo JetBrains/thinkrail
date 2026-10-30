@@ -25,6 +25,7 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
+import { SETTINGS_TAG } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 
 /** `rowKey` is the row the action came from — what the page marks busy or shows an error on. */
@@ -48,7 +49,6 @@ export function piPackageKey(target: { scope: PiPackageScope; source: string }):
 }
 
 export const CHIP_CLASS = "rounded-full bg-control-bg-selected px-8 text-text-muted";
-const TAG_CLASS = "shrink-0 rounded-xs border border-border-default px-4 tr-text-label-pill";
 
 const KIND_LABEL: Record<PiPackageSummary["kind"], MessageKey> = {
 	npm: "settings.packages.kind.npm",
@@ -350,16 +350,16 @@ export function PackageRow({
 				<span className={cn("min-w-0 truncate tr-title-compact", titleClass)} title={summary.name}>
 					{summary.name}
 				</span>
-				<span data-testid="package-kind" className={cn(TAG_CLASS, "text-text-muted")}>
+				<span data-testid="package-kind" className={cn(SETTINGS_TAG, "text-text-muted")}>
 					{t(KIND_LABEL[summary.kind])}
 				</span>
-				<span data-testid="package-scope" className={cn(TAG_CLASS, "text-text-muted")}>
+				<span data-testid="package-scope" className={cn(SETTINGS_TAG, "text-text-muted")}>
 					{t(SCOPE_LABEL[summary.scope])}
 				</span>
 				{updateAvailable ? (
 					<span
 						data-testid="package-update-available"
-						className={cn(TAG_CLASS, "border-feedback-warning text-feedback-warning")}
+						className={cn(SETTINGS_TAG, "border-feedback-warning text-feedback-warning")}
 					>
 						{t("settings.packages.updateAvailable")}
 					</span>
@@ -367,7 +367,7 @@ export function PackageRow({
 				{installedPath === undefined ? (
 					<span
 						data-testid="package-not-installed"
-						className={cn(TAG_CLASS, "border-feedback-warning text-feedback-warning")}
+						className={cn(SETTINGS_TAG, "border-feedback-warning text-feedback-warning")}
 					>
 						{t("settings.packages.notInstalled")}
 					</span>
@@ -481,8 +481,10 @@ export function LooseRow({
 				>
 					{entry.displayName}
 				</span>
-				<span className={cn(TAG_CLASS, "text-text-muted")}>{t("settings.packages.kind.file")}</span>
-				<span className={cn(TAG_CLASS, "text-text-muted")}>{t(SCOPE_LABEL[entry.scope])}</span>
+				<span className={cn(SETTINGS_TAG, "text-text-muted")}>
+					{t("settings.packages.kind.file")}
+				</span>
+				<span className={cn(SETTINGS_TAG, "text-text-muted")}>{t(SCOPE_LABEL[entry.scope])}</span>
 			</div>
 			<span
 				className={cn("truncate tr-text-metadata", off ? "text-text-subtle" : "text-text-muted")}
@@ -738,7 +740,9 @@ export function PiBuiltinsGroup({
 									<span className="tr-title-compact text-text-default">
 										{builtinTitle(t, builtin.name)}
 									</span>
-									<code className={cn(TAG_CLASS, "tr-code-text-small text-text-muted")}>{key}</code>
+									<code className={cn(SETTINGS_TAG, "tr-code-text-small text-text-muted")}>
+										{key}
+									</code>
 								</span>
 								{copy ? (
 									<span className="tr-text-metadata text-text-muted">{t(copy.description)}</span>

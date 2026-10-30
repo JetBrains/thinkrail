@@ -38,7 +38,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   holds — the ring is 20 deep and dies with the process), and **`UNSUPPORTED_CHANGE`** (the selected
   change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses), plus
   the four `feedback.survey.submit` refusals `SURVEY_INVALID`, `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` and
-  `SURVEY_NOT_SENT`), so a client can react to one specific failure
+  `SURVEY_NOT_SENT`, and `fonts.installed`'s `INSTALLED_FONTS_UNAVAILABLE`: the host's OS font service could
+  not be read, a failure analytics tells apart from a lost connection while the font picker offers Retry for
+  either), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it or Error Tracking must tell it apart (it never sees `message`): **`REQUEST_REPLAY_OVERFLOW`** is the
   latter — the host's replay namespace for this page is full ([[submodule-server-host]]), and the page treats
@@ -58,6 +60,16 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   user theme files are `UserThemesSnapshot` / `UserThemeFile`, served by `themes.list` from
   `USER_THEMES_PROTOCOL_VERSION`, v92, with each ok file's `manifest` deliberately `unknown` because the
   theme schema is owned by [[submodule-web-themes]]),
+  the font settings — `FONT_ROLES`, `FontFamilyRef` (a bundled face named by its role, or a family name),
+  `FontChoice` (family or `null` for the role's default, plus ≤ `FONT_FALLBACKS_MAX` distinct fallbacks),
+  `CODE_FONT_SIZE` (with the editor's `editorDelta`), `FONT_WEIGHT_OFFSET`, and the guards `isFontFamilyName`
+  (no CSS delimiters or control characters, ≤ `FONT_FAMILY_NAME_MAX_LENGTH`), `isFontFamilyRef`, `isFontRole`,
+  `isFontChoice`, `isCodeFontSize`, `isFontWeightOffset`, `fontFamilyRefKey`, `FontSettings` +
+  `normalizeFontSettings`, and `hasControlCharacter` (shared with the host's font file-name rule) — and user font files as
+  `UserFontsSnapshot` / `UserFontFile` (closed error codes, guarded by `isUserFontFile`) plus
+  `InstalledFontsResult`, served by `fonts.list` /
+  `fonts.installed` from `FONTS_PROTOCOL_VERSION`, v102, with `USER_FONTS_ROUTE`, `USER_FONT_UPLOAD_HEADER` and
+  `USER_FONT_EXTENSIONS` naming the host's `/fonts/` route and its upload guard,
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `parsePiPackageInput` (§ pi packages),
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
@@ -407,7 +419,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
-  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, onboardingDismissed }` — an extensible bag; the line-width fields join
+  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, onboardingDismissed, interfaceFont,
+  codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible bag; the five font fields join at
+  v102 and normalize together through `normalizeFontSettings` (host load, web store, fonts runtime); the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. `onboardingDismissed` (v94, default `false`)
   records that the user finished or skipped the cold-start onboarding wizard, so it never returns. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
   v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are

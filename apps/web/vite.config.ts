@@ -33,6 +33,7 @@ export default defineConfig(({ mode }) => {
 				},
 				"/files": { target: `http://localhost:${hostPort}` },
 				"/blob": { target: `http://localhost:${hostPort}` },
+				"/fonts": { target: `http://localhost:${hostPort}` },
 			},
 		},
 		worker: { format: "es" },
