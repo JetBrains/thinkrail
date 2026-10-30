@@ -5,10 +5,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { type ResourceHost, ResourceHostProvider, ResourcePreferencesProvider } from "../host";
 import type { ResourceViewProps } from "../registry";
 import { TestMarkdown as Markdown, testLinks } from "../testing/markdown";
-import { MarkdownOutline } from "./MarkdownOutline";
+import { MarkdownOutline, revealInList } from "./MarkdownOutline";
 import MarkdownPreview, { MarkdownSplicedArticle } from "./MarkdownPreview";
 import { alertComponents } from "./markdownAlerts";
-import { activeHeadingId, extractMarkdownOutline, scrollHeadingIntoView } from "./outlineHeadings";
+import {
+	activeHeadingId,
+	activeHeadingIdFromElements,
+	extractMarkdownOutline,
+	scrollHeadingIntoView,
+} from "./outlineHeadings";
 
 function render(node: ReactNode): string {
 	return renderToStaticMarkup(<TooltipProvider>{node}</TooltipProvider>);
@@ -75,6 +80,28 @@ test("the active entry follows a simulated scroll", () => {
 		},
 	} as unknown as HTMLElement;
 	expect(activeHeadingId(scroller, ["alpha", "beta", "gamma"])).toBe("gamma");
+});
+
+test("revealing the active entry moves only the outline list's scrollTop", () => {
+	const list = {
+		scrollTop: 50,
+		getBoundingClientRect: () => ({ top: 100, bottom: 300 }),
+	} as unknown as HTMLElement;
+	const below = {
+		getBoundingClientRect: () => ({ top: 320, bottom: 340 }),
+	} as unknown as HTMLElement;
+	revealInList(list, below);
+	expect(list.scrollTop).toBe(90);
+	const above = {
+		getBoundingClientRect: () => ({ top: 60, bottom: 80 }),
+	} as unknown as HTMLElement;
+	revealInList(list, above);
+	expect(list.scrollTop).toBe(50);
+	const visible = {
+		getBoundingClientRect: () => ({ top: 150, bottom: 170 }),
+	} as unknown as HTMLElement;
+	revealInList(list, visible);
+	expect(list.scrollTop).toBe(50);
 });
 
 test("the toggle hides the outline", () => {
@@ -194,4 +221,39 @@ between
 	expect(html).toContain('id="user-content-repeat-1"');
 	expect(html.match(/id="user-content-repeat"/g)?.length).toBe(1);
 	expect(html).toContain('data-testid="review-thread-card"');
+});
+
+test("selecting a heading inside closed details opens the details first", () => {
+	const details = { tagName: "DETAILS", attrs: new Set<string>(), parentElement: null as unknown };
+	const detailsEl = {
+		...details,
+		hasAttribute: (name: string) => details.attrs.has(name),
+		setAttribute: (name: string) => details.attrs.add(name),
+	};
+	const heading = { parentElement: detailsEl, getBoundingClientRect: () => ({ top: 100 }) };
+	const scroller = {
+		scrollTop: 0,
+		getBoundingClientRect: () => ({ top: 0 }),
+		querySelector: () => heading,
+		scrollTo: () => {},
+	} as unknown as HTMLElement;
+	detailsEl.parentElement = scroller;
+	scrollHeadingIntoView(scroller, "hidden-section");
+	expect(details.attrs.has("open")).toBe(true);
+});
+
+test("the active heading lookup reads a bounded number of rects", () => {
+	let reads = 0;
+	const headings = Array.from({ length: 1024 }, (_, i) => ({
+		id: `h${i}`,
+		element: {
+			getBoundingClientRect: () => {
+				reads += 1;
+				return { top: i * 10 - 5000 };
+			},
+		} as unknown as HTMLElement,
+	}));
+	const scroller = { getBoundingClientRect: () => ({ top: 0 }) } as unknown as HTMLElement;
+	expect(activeHeadingIdFromElements(scroller, headings, "h0")).toBe("h500");
+	expect(reads).toBeLessThanOrEqual(12);
 });

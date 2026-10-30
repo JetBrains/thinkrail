@@ -9,7 +9,7 @@ import {
 	type ResourceReviewSendProps,
 	registerBundledResourceRenderers,
 } from "@thinkrail/resource-renderers";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { Markdown } from "../chat/Markdown";
 import { cssColorToHex, usePhoneViewport } from "../lib";
 import { SHIKI_FILE_LANGUAGES, shikiLanguageId } from "../lib/highlighter";
@@ -21,7 +21,9 @@ import { selectFileChangeSince, useAppStore } from "../store";
 import { resolveThinkrailShikiTheme } from "../themes";
 import { getTransport } from "../transport";
 import {
+	markdownOutlineSideSnapshot,
 	readMarkdownOutlineVisible,
+	subscribeMarkdownOutlineSide,
 	writeMarkdownOutlineVisible,
 } from "./markdownOutlinePreference";
 
@@ -69,6 +71,10 @@ export function AppResourceHost({ children }: { children: ReactNode }) {
 		writeMarkdownOutlineVisible(visible);
 		setMarkdownOutlineVisibleState(visible);
 	}, []);
+	const markdownOutlineSide = useSyncExternalStore(
+		subscribeMarkdownOutlineSide,
+		markdownOutlineSideSnapshot,
+	);
 	const mobile = usePhoneViewport();
 	const preferences = useMemo<ResourcePreferences>(
 		() => ({
@@ -76,8 +82,15 @@ export function AppResourceHost({ children }: { children: ReactNode }) {
 			fileLineWidthBounded,
 			markdownOutlineVisible,
 			setMarkdownOutlineVisible,
+			markdownOutlineSide,
 		}),
-		[fileLineWidth, fileLineWidthBounded, markdownOutlineVisible, setMarkdownOutlineVisible],
+		[
+			fileLineWidth,
+			fileLineWidthBounded,
+			markdownOutlineVisible,
+			setMarkdownOutlineVisible,
+			markdownOutlineSide,
+		],
 	);
 	const environment = useMemo<ResourceEnvironment>(() => ({ mobile }), [mobile]);
 	return (

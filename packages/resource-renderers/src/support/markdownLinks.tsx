@@ -86,36 +86,68 @@ function headingId(text: string, seen: Map<string, number>): string {
 	return n === 0 ? base : `${base}-${n}`;
 }
 
-export function collectMarkdownHeadings(tree: unknown, ids?: readonly string[]): MarkdownHeading[] {
+/**
+ * Heading ids for one slice of a document, keyed by the slice-local source line of each heading.
+ * `reserved` holds every id the whole document uses, so a heading that only parses inside the slice
+ * cannot take an id that belongs to another heading.
+ */
+export interface HeadingIdAssignment {
+	byLine: ReadonlyMap<number, string>;
+	reserved: ReadonlySet<string>;
+}
+
+type HeadingIdOptions = readonly string[] | HeadingIdAssignment;
+
+function isHeadingIdAssignment(value: unknown): value is HeadingIdAssignment {
+	return typeof value === "object" && value !== null && Reflect.get(value, "byLine") instanceof Map;
+}
+
+function unreservedHeadingId(
+	text: string,
+	seen: Map<string, number>,
+	reserved: ReadonlySet<string>,
+): string {
+	for (;;) {
+		const id = headingId(text, seen);
+		if (!reserved.has(id)) return id;
+	}
+}
+
+export function collectMarkdownHeadings(tree: unknown, ids?: HeadingIdOptions): MarkdownHeading[] {
 	const seen = new Map<string, number>();
 	const headings: MarkdownHeading[] = [];
+	const assignment = isHeadingIdAssignment(ids) ? ids : undefined;
+	const ordinal = assignment ? undefined : (ids as readonly string[] | undefined);
 	let i = 0;
 	walk(tree, (node) => {
 		if (node.type !== "heading" || typeof node.depth !== "number") return;
 		const text = headingText(node);
-		const id = ids?.[i] ?? headingId(text, seen);
+		const line = headingLine(node);
+		const id = assignment
+			? (assignment.byLine.get(line) ?? unreservedHeadingId(text, seen, assignment.reserved))
+			: (ordinal?.[i] ?? headingId(text, seen));
 		i += 1;
 		headings.push({
 			depth: node.depth,
 			text: text.replace(/\s+/g, " ").trim() || text,
 			id,
-			line: headingLine(node),
+			line,
 		});
 		node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id } };
 	});
 	return headings;
 }
 
-export function remarkHeadingIds(ids?: readonly string[]) {
-	const assigned = Array.isArray(ids) ? ids : undefined;
+export function remarkHeadingIds(ids?: HeadingIdOptions) {
+	const assigned = Array.isArray(ids) || isHeadingIdAssignment(ids) ? ids : undefined;
 	return (tree: unknown): void => {
 		collectMarkdownHeadings(tree, assigned);
 	};
 }
 
 export function headingIdPlugin(
-	ids: readonly string[],
-): [typeof remarkHeadingIds, readonly string[]] {
+	ids: HeadingIdOptions,
+): [typeof remarkHeadingIds, HeadingIdOptions] {
 	return [remarkHeadingIds, ids];
 }
 

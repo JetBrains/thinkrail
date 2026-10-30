@@ -18,7 +18,7 @@ function ids(markdown: string): string[] {
 	return flattenOutlineHeadings(extractMarkdownOutline(markdown)).map((entry) => entry.heading.id);
 }
 
-function renderHeadings(markdown: string, ids?: readonly string[]): string {
+function renderHeadings(markdown: string, ids?: Parameters<typeof headingIdPlugin>[0]): string {
 	return renderToStaticMarkup(
 		createElement(Markdown, {
 			text: stripFrontmatter(markdown),
@@ -162,12 +162,35 @@ between
 	]);
 	const first = "## Repeat\n\nbetween";
 	const second = "\n## Repeat\n";
-	expect(headingIdsInSlice(outline, 0, first)).toEqual(["repeat"]);
-	expect(headingIdsInSlice(outline, 3, second)).toEqual(["repeat-1"]);
-	const html = `${renderHeadings(first, ["repeat"])}${renderHeadings(second, ["repeat-1"])}`;
+	const firstIds = headingIdsInSlice(outline, 0, first);
+	const secondIds = headingIdsInSlice(outline, 3, second);
+	expect([...firstIds.byLine]).toEqual([[1, "repeat"]]);
+	expect([...secondIds.byLine]).toEqual([[2, "repeat-1"]]);
+	const html = `${renderHeadings(first, firstIds)}${renderHeadings(second, secondIds)}`;
 	expect(html).toContain('id="user-content-repeat"');
 	expect(html).toContain('id="user-content-repeat-1"');
 	expect(html.match(/id="user-content-repeat"/g)?.length).toBe(1);
+});
+
+test("a heading that only parses inside a segment cannot take a later heading's id", () => {
+	const markdown = "# Top\n\nFirst\nSecond\n----\n\n## Last\n";
+	const outline = extractMarkdownOutline(markdown);
+	expect(
+		flattenOutlineHeadings(outline).map((entry) => [entry.heading.id, entry.heading.line]),
+	).toEqual([
+		["top", 1],
+		["first-second", 3],
+		["last", 7],
+	]);
+	const head = "# Top\n\nFirst";
+	const tail = "Second\n----\n\n## Last\n";
+	const html = `${renderHeadings(head, headingIdsInSlice(outline, 0, head))}${renderHeadings(
+		tail,
+		headingIdsInSlice(outline, 3, tail),
+	)}`;
+	expect(html.match(/id="user-content-last"/g)?.length).toBe(1);
+	expect(html).toMatch(/<h2 id="user-content-last">Last<\/h2>/);
+	expect(html).toContain('id="user-content-second"');
 });
 
 test("outline ids match the ids the renderer stamps on headings", () => {

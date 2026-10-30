@@ -573,8 +573,14 @@ content's own height.
   heading inside the preview scroller, the last heading at or above the viewport top is `aria-current`,
   and a toggle hides the outline. Heading ids are allocated once per document from a GFM parse shared
   with rendering — Unicode headings get a nonempty slug, ASCII slugs stay as they were — and those ids
-  are reused for the outline and every spliced preview segment, so a review comment or composer cannot
-  renumber duplicates. The choice persists through the host's client-preference adapter;
+  are reused for the outline and every spliced preview segment, matched by source line rather than by
+  ordinal, so a review comment or composer cannot renumber duplicates and a heading that only parses
+  inside a segment (a setext underline split from its paragraph) gets an unreserved id instead of a later
+  heading's. Following the active entry adjusts only the outline list's own scroll, never an ancestor's
+  (an enclosing chat transcript must not jump). Selecting an entry opens any closed `<details>` around its
+  heading first. Active-section tracking resolves heading elements once per render and binary-searches
+  them at most once per animation frame. `markdownOutlineSide` (`left` | `right`, default right, set in
+  Appearance settings) picks the edge the outline sits on. The choice persists through the host's client-preference adapter;
   below `MARKDOWN_OUTLINE_NARROW_WIDTH` (720px of the preview container) the outline starts hidden.
   Fewer than two headings omit both the outline and the toggle. Rendered diffs and source view stay
   unchanged.

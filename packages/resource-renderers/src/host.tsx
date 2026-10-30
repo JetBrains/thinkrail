@@ -80,6 +80,8 @@ export interface ResourcePreferences {
 	fileLineWidthBounded: boolean;
 	markdownOutlineVisible: boolean | null;
 	setMarkdownOutlineVisible: (visible: boolean) => void;
+	/** Which edge of the Markdown preview the outline sits on; hosts without a setting omit it (right). */
+	markdownOutlineSide?: "left" | "right";
 }
 
 const ResourceHostContext = createContext<ResourceHost | null>(null);

@@ -1,3 +1,4 @@
+import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, type RefObject, useMemo } from "react";
 import {
 	type ResourceHost,
@@ -183,19 +184,28 @@ function MarkdownPreviewShell({
 	scrollerRef: RefObject<HTMLDivElement | null>;
 	children: ReactNode;
 }) {
-	const { markdownOutlineVisible, setMarkdownOutlineVisible } = useResourcePreferences();
+	const { markdownOutlineVisible, setMarkdownOutlineVisible, markdownOutlineSide } =
+		useResourcePreferences();
+	const side = markdownOutlineSide ?? "right";
 	const { ref: sizeRef, size } = useElementSize<HTMLDivElement>();
 	const showToggle = flattenOutlineHeadings(headings).length >= 2;
 	const open =
 		showToggle &&
 		(markdownOutlineVisible ?? (size !== null && size.width >= MARKDOWN_OUTLINE_NARROW_WIDTH));
 	return (
-		<div ref={sizeRef} className="relative flex h-full min-h-0 bg-container-workspace-bg">
+		<div
+			ref={sizeRef}
+			className={cn(
+				"relative flex h-full min-h-0 bg-container-workspace-bg",
+				side === "left" && "flex-row-reverse",
+			)}
+		>
 			{children}
 			{showToggle ? (
 				<MarkdownOutline
 					headings={headings}
 					open={open}
+					side={side}
 					scrollerRef={scrollerRef}
 					onOpenChange={setMarkdownOutlineVisible}
 				/>

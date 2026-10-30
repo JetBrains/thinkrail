@@ -56,3 +56,52 @@ export function writeMarkdownOutlineVisible(
 		browserStorage()?.setItem(markdownOutlineStorageKey(getTransport().httpBase()), encoded);
 	} catch {}
 }
+
+export type MarkdownOutlineSide = "left" | "right";
+
+export const MARKDOWN_OUTLINE_SIDE_KEY = "markdown-outline-side";
+
+export function parseMarkdownOutlineSide(value: string | null): MarkdownOutlineSide {
+	return value === "left" ? "left" : "right";
+}
+
+function sideStorageKey(): string {
+	return `${STORAGE_PREFIX}${MARKDOWN_OUTLINE_SIDE_KEY}:${getTransport().httpBase()}`;
+}
+
+export function readMarkdownOutlineSide(
+	stablePreferences: StablePreferenceAdapter | null = getStablePreferenceAdapter(),
+): MarkdownOutlineSide {
+	try {
+		if (stablePreferences)
+			return parseMarkdownOutlineSide(stablePreferences.getItem(MARKDOWN_OUTLINE_SIDE_KEY));
+		return parseMarkdownOutlineSide(browserStorage()?.getItem(sideStorageKey()) ?? null);
+	} catch {
+		return "right";
+	}
+}
+
+const sideListeners = new Set<() => void>();
+let cachedSide: MarkdownOutlineSide | null = null;
+
+export function writeMarkdownOutlineSide(
+	side: MarkdownOutlineSide,
+	stablePreferences: StablePreferenceAdapter | null = getStablePreferenceAdapter(),
+): void {
+	try {
+		if (stablePreferences) stablePreferences.setItem(MARKDOWN_OUTLINE_SIDE_KEY, side);
+		else browserStorage()?.setItem(sideStorageKey(), side);
+	} catch {}
+	cachedSide = side;
+	for (const listener of sideListeners) listener();
+}
+
+export function subscribeMarkdownOutlineSide(listener: () => void): () => void {
+	sideListeners.add(listener);
+	return () => sideListeners.delete(listener);
+}
+
+export function markdownOutlineSideSnapshot(): MarkdownOutlineSide {
+	cachedSide ??= readMarkdownOutlineSide();
+	return cachedSide;
+}
