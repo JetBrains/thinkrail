@@ -1,5 +1,6 @@
 export const DEFAULT_PORT = 24242;
 export const DEFAULT_HOST = "localhost";
+export const DEFAULT_RELAY_URL = "ws://localhost:24243";
 
 export interface CliOptions {
 	port: number;
@@ -9,6 +10,8 @@ export interface CliOptions {
 	verbose: boolean;
 	staticDir: string | undefined;
 	projectDir: string | undefined;
+	remote: boolean;
+	relayUrl: string;
 	help: boolean;
 	version: boolean;
 }
@@ -40,6 +43,9 @@ Options:
                  The saved sharing preference lives in Settings → Privacy.
   --verbose      Debug-level logging (terminal + the rotated log files under
                  ~/.thinkrail/logs).
+  --remote       Also connect out to a signaling relay and print a pairing link
+                 so another machine can open this host's project remotely.
+  --relay <url>  Relay URL for --remote (default ${DEFAULT_RELAY_URL}); implies --remote.
   -v, --version  Print the version and exit.
   -h, --help     Show this help.
 
@@ -67,6 +73,8 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 	let verbose = false;
 	let help = false;
 	let version = false;
+	let remote = false;
+	let relayUrl: string | undefined;
 	let projectDir: string | undefined;
 
 	for (let i = 0; i < argv.length; i += 1) {
@@ -77,6 +85,13 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 			noAnalytics = true;
 		} else if (arg === "--verbose") {
 			verbose = true;
+		} else if (arg === "--remote") {
+			remote = true;
+		} else if (arg === "--relay" || arg.startsWith("--relay=")) {
+			const { value, consumed } = readFlagValue(arg, argv[i + 1]);
+			relayUrl = value;
+			remote = true;
+			i += consumed - 1;
 		} else if (arg === "-h" || arg === "--help") {
 			help = true;
 		} else if (arg === "-v" || arg === "--version") {
@@ -114,6 +129,8 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 		verbose,
 		staticDir: env.THINKRAIL_STATIC_DIR,
 		projectDir,
+		remote,
+		relayUrl: relayUrl ?? env.THINKRAIL_RELAY_URL ?? DEFAULT_RELAY_URL,
 		help,
 		version,
 	};
