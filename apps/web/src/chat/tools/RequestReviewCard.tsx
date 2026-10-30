@@ -3,7 +3,7 @@ import {
 	RiErrorWarningFill as ChangesIcon,
 } from "@remixicon/react";
 import { isPlanReviewResult, type PlanReviewResult } from "@thinkrail/contracts";
-import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 import { ReviewPackageComments } from "../ReviewPackageComments";
@@ -39,12 +39,19 @@ export function RequestReviewCard({ toolCallId, result, status }: ToolRenderProp
 	const t = useT();
 	const review = readPlanReview(result);
 	if (!review) {
-		return (
-			<span className="tr-text-ui text-text-muted">
-				{status === "running"
-					? t("tools.requestReview.running")
-					: t("tools.requestReview.noVerdict")}
-			</span>
+		if (status === "running") {
+			return <span className="tr-text-ui text-text-muted">{t("tools.requestReview.running")}</span>;
+		}
+		const failure = status === "error" ? resultText(result) : "";
+		return failure ? (
+			<pre
+				data-testid="request-review-error"
+				className="overflow-auto px-8 py-4 text-feedback-error tr-code-text"
+			>
+				{failure}
+			</pre>
+		) : (
+			<span className="tr-text-ui text-text-muted">{t("tools.requestReview.noVerdict")}</span>
 		);
 	}
 	const blocked = review.blockedByOpenFindings ?? 0;
