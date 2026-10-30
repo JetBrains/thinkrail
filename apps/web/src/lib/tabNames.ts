@@ -1,4 +1,4 @@
-import type { GitDiffScope } from "@thinkrail/contracts";
+import { COMMAND_TAB_KEY_PREFIX, type GitDiffScope } from "@thinkrail/contracts";
 import { localeOf, type Translator } from "@thinkrail/locales/react";
 import { fileName } from "./utils";
 
@@ -63,9 +63,22 @@ export function defaultTerminalIndex(title: string): number | null {
 	return match ? Number(match[1]) : null;
 }
 
-export function terminalName(t: Translator, title: string): string {
+export function terminalName(t: Translator, title: string, tabKey?: string): string {
+	const target = tabKey === undefined ? null : commandTabTarget(tabKey);
+	if (target !== null) {
+		return target === ""
+			? t("store.terminal.prepareTitle")
+			: t("store.terminal.runTitle", { target });
+	}
 	const index = defaultTerminalIndex(title);
 	return index === null ? title : t("store.terminal.defaultTitle", { index });
+}
+
+/** The target id a command tab key names (`""` for the prepare-only tab), or `null` for a shell tab. */
+export function commandTabTarget(tabKey: string): string | null {
+	if (tabKey === `${COMMAND_TAB_KEY_PREFIX}-prepare`) return "";
+	const prefix = `${COMMAND_TAB_KEY_PREFIX}:`;
+	return tabKey.startsWith(prefix) ? tabKey.slice(prefix.length) : null;
 }
 
 export function turnTimeLabel(t: Translator, startedAt: number): string {

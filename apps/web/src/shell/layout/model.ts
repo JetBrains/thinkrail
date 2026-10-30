@@ -126,7 +126,7 @@ export function layoutTabName(
 		case "chat":
 			return chatDisplayName(t, tab.name, chatFirstPrompts[tab.sessionId]);
 		case "terminal":
-			return terminalName(t, tab.name);
+			return terminalName(t, tab.name, tab.tabKey);
 		case "changes":
 			return changesTabName(t, tab.scope);
 		case "diff":

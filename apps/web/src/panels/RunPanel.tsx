@@ -195,24 +195,21 @@ function RecipeEditor({
 			return;
 		}
 		setSaving(true);
-		try {
-			await getTransport().request("run.setRecipe", {
-				projectId,
-				recipe: parsed,
-				expectedRevision: revision,
-			});
+		const outcome = await getTransport()
+			.request("run.setRecipe", { projectId, recipe: parsed, expectedRevision: revision })
+			.then(() => null)
+			.catch((error: unknown) => error);
+		setSaving(false);
+		if (outcome === null) {
 			onClose();
-		} catch (error) {
-			const code = wsErrorCode(error);
-			if (code === "RUN_RECIPE_CONFLICT") {
-				setConflict(true);
-				setErrors([]);
-			} else {
-				setConflict(false);
-				setErrors(errorText(error).split("; "));
-			}
-		} finally {
-			setSaving(false);
+			return;
+		}
+		if (wsErrorCode(outcome) === "RUN_RECIPE_CONFLICT") {
+			setConflict(true);
+			setErrors([]);
+		} else {
+			setConflict(false);
+			setErrors(errorText(outcome).split("; "));
 		}
 	};
 

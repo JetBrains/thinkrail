@@ -78,6 +78,9 @@ export function useRunRunner(workspaceId: string | null, projectId: string | nul
 		void promptWorkspaceChat(workspaceId, sessionId, text).catch(fail(t("panels.run.askFailed")));
 	};
 
+	const tabTitle = (targetId: string | null): string =>
+		targetLabel(targetId) ?? t("panels.run.caption");
+
 	return {
 		openUrl: openExternal,
 		run: (action) => {
@@ -136,8 +139,4 @@ export function useRunRunner(workspaceId: string | null, projectId: string | nul
 			}
 		},
 	};
-
-	function tabTitle(targetId: string | null): string {
-		return targetLabel(targetId) ?? t("panels.run.caption");
-	}
 }
