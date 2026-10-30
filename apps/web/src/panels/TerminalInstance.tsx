@@ -21,6 +21,7 @@ import { SettingsSection, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
+import { createTerminalImeBridge } from "./terminalImeBridge";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 const RESIZE_DEBOUNCE_MS = 60;
@@ -157,6 +158,19 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		tryLoad(() => term.loadAddon(webFonts));
 		termRef.current = term;
 		term.open(host);
+		// WebKit feeds the macOS Korean IME to xterm as insertText + insertReplacementText (upstream #5704) — see panels/SPEC.md.
+		const imeBridge = createTerminalImeBridge((data) => term.input(data, true));
+		const onImeInput = (event: Event): void => {
+			if (event instanceof InputEvent) imeBridge.input(event);
+		};
+		const onImeKeydown = (event: Event): void => {
+			if (event instanceof KeyboardEvent) imeBridge.keydown(event);
+		};
+		const onImeHandover = (): void => imeBridge.flush();
+		host.addEventListener("input", onImeInput, true);
+		host.addEventListener("keydown", onImeKeydown, true);
+		host.addEventListener("compositionstart", onImeHandover, true);
+		host.addEventListener("focusout", onImeHandover);
 		const updateScrollEdges = () => {
 			const buffer = term.buffer.active;
 			const next = {
@@ -365,6 +379,10 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			unsubscribe();
 			unsubscribeExit();
 			unsubscribeDetached();
+			host.removeEventListener("input", onImeInput, true);
+			host.removeEventListener("keydown", onImeKeydown, true);
+			host.removeEventListener("compositionstart", onImeHandover, true);
+			host.removeEventListener("focusout", onImeHandover);
 			serverIdRef.current = null;
 			term.dispose();
 		};
