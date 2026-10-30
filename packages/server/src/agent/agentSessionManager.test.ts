@@ -951,7 +951,7 @@ test("a streaming chat defers its tool-set change until agent_settled", async ()
 
 function visualizeToolState(context: TranscriptContext): string {
 	const toolActive = getCurrentTools(context.messages).some((tool) => tool.name === "visualize");
-	const guidanceInPrompt = getCurrentSystemPrompt(context.messages).includes("visualize");
+	const guidanceInPrompt = getCurrentSystemPrompt(context.messages).includes("\n- visualize: ");
 	if (toolActive && guidanceInPrompt) return "VISUALIZE_ON";
 	if (!toolActive && !guidanceInPrompt) return "VISUALIZE_OFF";
 	return "VISUALIZE_INCONSISTENT";

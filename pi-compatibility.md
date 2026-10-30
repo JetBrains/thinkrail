@@ -41,7 +41,7 @@ was checked against the installed catalog version. **No removal gate is satisfie
   Restored truncated-call recovery now omits the paired tool result too, but does not replace
   `sessionRepair`'s host-restart and questionnaire repair. No host summarizer, effort-default change,
   reserve tuning, wire migration or session migration is introduced.
-- Pi 1.3's resumed tool-loadout restore adds one host seam, the registry-tool reconcile at attach below.
+- Pi 1.3's resumed tool-loadout restore adds one host seam, the registry-tool reconcile at attach and reload below.
 - The bundled chat catalogue changes from 1,554 to 1,599 provider/model pairs: 71 removed and 116 added.
   Removed pairs include `openai-codex/gpt-5.5` and `openai-codex/gpt-5.3-codex-spark`;
   `openai/gpt-5.5` remains. This is a bundled-catalogue change, not a claim that providers retired those
@@ -126,9 +126,9 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
 
 ## Other pi-sensitive host seams
 
-**Registry-tool reconcile at attach** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
+**Registry-tool reconcile at attach and reload** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
 restores a resumed chat's recorded tool loadout and keeps recorded removals inactive, so a tool withheld
-while its registry extension was disabled would stay off after re-enabling. Attach re-activates enabled
+while its registry extension was disabled would stay off after re-enabling. Attach and successful gated resource reloads re-activate enabled
 registry-extension tools by mirroring Pi's private `_isActivatedOnRegistration` (declarable exposure,
 `defaultActive !== false`); re-check that rule on upgrades. If the host ever calls `navigateTree`, which
 re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way to keep host-withheld tools
@@ -181,6 +181,9 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   and the image-resize override bridge resources a single-file artifact cannot discover or load.
   Replace each only when pi supplies an equivalent artifact seam; run `check:seams` and the relevant
   binary/desktop artifact probes, including extension value imports and images.
+  The separate web-access raw-TypeScript/Jiti adapter is removed: `pi-web-access` ships compiled
+  JavaScript ([[module-ext-web-access]]). This does not replace the SDK's bundled extension loader
+  or its image override; the CLI and desktop probes still exercise those seams.
 - **Account-scoped model availability** — [[submodule-server-agent]], `modelAvailability.ts`. Pi's
   `openai` provider lists its whole API catalog under Sign in with ChatGPT (its `filterAllModels` drops
   only classifiers), so the host keeps the ids in pi's `openai-codex` catalog; Central proxies advertise

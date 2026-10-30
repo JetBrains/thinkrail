@@ -758,7 +758,8 @@ re-opened transcripts provider-valid.
     only if the generation moved, judging the **new** loader. An unchanged resend or a skill-less toggle
     during a reload therefore costs nothing extra. Settings are the
     source of truth across restarts: Pi ≥ 1.3 restores a resumed chat's recorded tool loadout, keeping
-    recorded removals inactive, so attach first re-activates every tool of an enabled registry extension
+    recorded removals inactive, so attach and successful gated resource reloads first re-activate every
+    tool of an enabled registry extension
     that Pi's activated-on-registration rule would activate (declarable exposure, not `defaultActive:
     false`), then withholds disabled ones. Built-in, MCP, subagent and review tools keep Pi's restored
     selection. A registry tool switched off by anything other than Settings therefore returns after a
@@ -854,7 +855,7 @@ re-opened transcripts provider-valid.
     tools + its `before_agent_start` rule), **`pi-thinkrail-workflow`** (the workflow-router rule +
     workflow skills), and **`pi-todos`** (the `todo_*` tools + its skill) — and the **ThinkRail extensions
     from the server registry** ([[submodule-server-extensions]]; `visualize`, `ask-user-question`, and
-    `web-access` with `pi-web-access`'s tools and `librarian` skill) as named inline extensions. Existing personal aliases are Claude
+    `web-access` with `pi-web-access`'s tools and the preserved `librarian` skill) as named inline extensions. Existing personal aliases are Claude
     (`${CLAUDE_CONFIG_DIR:-~/.claude}/skills`), Codex (`${CODEX_HOME:-~/.codex}/skills`), Copilot
     (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
     plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
@@ -1042,7 +1043,7 @@ re-opened transcripts provider-valid.
   resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph`); the sibling `extensions` registry module (the ThinkRail extensions' inline factories and
   skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly; the barrel
   stays Node-loadable for the workflow harness ([[module-workflow-tests]]) because a registry extension
-  over raw third-party `.ts` loads it lazily, see [[module-ext-web-access]]); `typebox` (the host tools' parameter schemas); `jsonc-parser` (targeted
+  for web access lazily imports compiled JavaScript, see [[module-ext-web-access]]); `typebox` (the host tools' parameter schemas); `jsonc-parser` (targeted
   `models.json` edits in `modelContext`); `trash` (reached only through the
   sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to
   throw, never degraded to `unlink`; the launcher's staged-helper and procfs-parser seams live there too,
