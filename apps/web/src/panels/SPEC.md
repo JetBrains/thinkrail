@@ -1616,6 +1616,13 @@ own section. The kebab menu (`plan-menu`, a
   **Fill template with agent** (`pr.generate`) replaces the field's text with the host's one-shot draft;
   nothing is pushed until submit, and a `null` draft toasts instead of clearing the field.
 
+## Chat opening helper
+
+`openChat.startChatInTab` returns the created session id, or `null` after reporting a creation
+failure. Its `background` option opens the ordinary session tab without activating it or claiming
+center navigation; the shell uses this to pair chats while preserving the selected tab. Existing
+prompt and draft options retain their foreground behavior.
+
 ## Get right
 
 - **Workbench tab chrome is not a feature panel.** The shell layout module supplies one selected-tab
