@@ -42,6 +42,12 @@ describe("piPackageIdentity", () => {
 		expect(piPackageIdentity("git:git@github.com:acme/pi-tools@main", resolveLocal)).toBe(
 			"git:github.com/acme/pi-tools",
 		);
+		expect(piPackageIdentity("git:github:acme/pi-tools", resolveLocal)).toBe(
+			"git:github.com/acme/pi-tools",
+		);
+		expect(piPackageIdentity("git:gitlab:acme/pi-tools@v1", resolveLocal)).toBe(
+			"git:gitlab.com/acme/pi-tools",
+		);
 		expect(piPackageIdentity("./tools", resolveLocal)).toBe("local:/abs/./tools");
 	});
 	it("classifies sources the way pi does: only git: and scheme URLs are git, everything else is a path", () => {
@@ -325,13 +331,14 @@ describe("listPiPackageCatalog", () => {
 			false,
 		);
 		invalidatePiPackageCatalog();
+		const projectKey = `local:project:${project}:tools`;
 		const off = await listPiPackageCatalog({
 			...options,
-			disabledPackages: new Set(["local:project:tools"]),
+			disabledPackages: new Set([projectKey]),
 		});
 		expect(off.packages[0]?.enabled).toBe(false);
 		const view = createPiSettings(project, agentDir, { projectTrusted: true, packages: "enabled" });
-		setDisabledPackagesResolver(() => new Set(["local:project:tools"]));
+		setDisabledPackagesResolver(() => new Set([projectKey]));
 		try {
 			expect(view.getGlobalSettings().packages).toEqual([]);
 			expect(view.getProjectSettings().packages).toEqual([]);
@@ -377,33 +384,41 @@ describe("listPiPackageCatalog", () => {
 		}
 	});
 
-	it("keys a repository's local package by its path inside the worktree, shared across worktrees", async () => {
-		const worktrees = ["wt-a", "wt-b"].map((name) => join(root, name));
-		for (const worktree of worktrees) {
+	it("keys a repository's local package by repository and worktree path: shared across worktrees, not across repositories", async () => {
+		const main = join(root, "repo");
+		const linked = join(root, "repo-wt-b");
+		const other = join(root, "other-repo");
+		mkdirSync(join(main, ".git", "worktrees", "repo-wt-b"), { recursive: true });
+		mkdirSync(linked, { recursive: true });
+		writeFileSync(
+			join(linked, ".git"),
+			`gitdir: ${join(main, ".git", "worktrees", "repo-wt-b")}\n`,
+		);
+		mkdirSync(join(other, ".git"), { recursive: true });
+		for (const worktree of [main, linked, other]) {
 			mkdirSync(join(worktree, ".pi"), { recursive: true });
 			writeFixturePiPackage(join(worktree, "tools"));
 			writeFileSync(
 				join(worktree, ".pi", "settings.json"),
-				JSON.stringify({ packages: ["../tools", pkg] }),
+				JSON.stringify({ packages: ["../tools"] }),
 			);
 		}
-		const identities = await Promise.all(
-			worktrees.map(async (cwd) => {
+		const key = `local:project:${main}:tools`;
+		const rows = await Promise.all(
+			[main, linked, other].map(async (cwd) => {
 				const catalog = await listPiPackageCatalog({
 					cwd,
 					agentDir,
 					projectTrusted: true,
 					builtinExtensions: [],
-					disabledPackages: new Set(["local:project:tools"]),
+					disabledPackages: new Set([key]),
 				});
 				return catalog.packages.map((p) => [p.identity, p.enabled]);
 			}),
 		);
-		expect(identities[0]).toEqual([
-			["local:project:tools", false],
-			[`local:${pkg}`, true],
-		]);
-		expect(identities[1]).toEqual(identities[0]);
+		expect(rows[0]).toEqual([[key, false]]);
+		expect(rows[1]).toEqual([[key, false]]);
+		expect(rows[2]).toEqual([[`local:project:${other}:tools`, true]]);
 	});
 
 	it("excludes the host's excluded extension path and reads repository packages only when trusted", async () => {

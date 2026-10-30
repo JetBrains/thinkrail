@@ -37,11 +37,15 @@ this module never spawns npm or git itself.
 - `identity.ts` — `piPackageSourceKind` (pi's rule: `npm:` is npm; `git:` or a `scheme://` URL is git;
   everything else, including `git@host:…` and `github:…`, is a path), `piPackageIdentity` (a port of
   pi's private `getPackageIdentity`: npm by name, git by `host/path` with the ref split at the first
-  `@`/`#` inside the repository path, local by resolved path), `piDeclarationIdentity` (pi's
+  `@`/`#` inside the repository path and pi's hosted shorthands — `github:`, `gitlab:`, `bitbucket:`,
+  `sourcehut:` — expanded to their hosts, local by resolved path), `piDeclarationIdentity` (pi's
   equivalence of two declarations — what decides shadowing, deltas and dedupe), `packageSourceIdentity`
   (the **switch key**: the same, except a repository declaration's local source inside the worktree is
-  keyed by its worktree-relative path, `local:project:tools`, so every worktree of the project shares
-  the switch as they share its npm/git declarations) and `disabledDeclarationIdentities` (the switch
+  keyed by the repository and the worktree-relative path, `local:project:<main worktree>:tools`, so
+  every worktree of the project shares the switch as they share its npm/git declarations while two
+  unrelated repositories declaring `./tools` do not; `repositoryRoot` reads a linked worktree's `.git`
+  file — `gitdir: …/.git/worktrees/<name>` — back to the main worktree without spawning git, and a
+  folder that is no checkout is its own root) and `disabledDeclarationIdentities` (the switch
   set closed over pi's equivalence: when any declaration of a pi identity is switched off, every alias
   is — hiding one must never let pi load the package through another; the `enabled` view and the
   catalog's `enabled` both use it), `resolveLocalSource` (pi's private `resolvePath` for a local
@@ -96,8 +100,10 @@ this module never spawns npm or git itself.
   - **Input vs declared source:** pi stores a local source relative to its settings file but matches an
     *input* against the process cwd, so Remove and Update hand pi the absolute path (`declaredAsInput`).
   - `setPiResourceEnabled`: re-resolves, finds the resource by path and scope, writes `±<relative path>`
-    into the scope's array of that kind (keeping a plain explicit entry beside its override — pi's TUI
-    replaces it, after which the file is no longer discovered) or `±builtin:<name>` in the scope that
+    into the scope's array of that kind, replacing an existing override of the same file whether it was
+    written relative to the scope's base dir or absolute — pi honours both spellings (keeping a plain
+    explicit entry beside its override — pi's TUI replaces it, after which the file is no longer
+    discovered) or `±builtin:<name>` in the scope that
     decides the built-in; a resource inside a package is refused with `PACKAGE_SOURCE_INVALID`.
   - Error codes: `PACKAGE_SOURCE_INVALID`, `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
     `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,

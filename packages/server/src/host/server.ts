@@ -22,6 +22,7 @@ import {
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	admissionContextFor,
+	bumpPackageSwitchGeneration,
 	cancelAllMcpProbes,
 	cancelMcpProbesOwnedBy,
 	disposeAllSessions,
@@ -778,6 +779,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (appliedUpdate.subagentsEnabled !== undefined) refreshSubagentTools();
 		if (appliedUpdate.subagentMaxConcurrent !== undefined) refreshSubagentConcurrency();
 		if (appliedUpdate.agentReviewEnabled !== undefined) refreshAgentReviewTool();
+		if (appliedUpdate.disabledPackages !== undefined) bumpPackageSwitchGeneration();
 		if (
 			appliedUpdate.disabledExtensions !== undefined ||
 			appliedUpdate.disabledPackages !== undefined

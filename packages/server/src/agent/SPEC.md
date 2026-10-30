@@ -785,8 +785,10 @@ re-opened transcripts provider-valid.
     *Rejected:* filtering resolved paths and `skillsOverride` / `promptsOverride` after pi resolved (the
     first implementation): pi had already installed the package by then, pi assigns `sourceInfo.source`
     only after the overrides run, and delegated children bypass those overrides. The **package policy**
-    (`packagePolicyKey`: the disabled set plus a `packagesRevision` that `refreshPiPackages` bumps on
-    every install, remove, update or outside settings change) joins the extension policy generation
+    (`packagePolicyKey`: the disabled set, a `packagesRevision` that `refreshPiPackages` bumps on every
+    install, remove, update or outside settings change, and a switch generation the host bumps on every
+    `disabledPackages` write — so a loader that resolved while a package was flipped off and back on
+    never compares equal to the restored set) joins the extension policy generation
     above, and each session loader records the key it last resolved under; `isLoaderPackagePolicyStale`
     is one more predicate of the reconciliation `applyExtensionTools` runs at registration, after every
     reload and on `refreshExtensionTools`, so a session prepared under an older policy reloads when it

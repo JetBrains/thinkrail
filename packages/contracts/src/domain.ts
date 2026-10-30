@@ -841,15 +841,32 @@ function unwrapQuotes(text: string): string {
 	return text;
 }
 
-/** Whitespace-separated words, where a quoted span is one word without its quotes. */
+/** Shell-style words: quotes group, a backslash escapes the next character (inside double quotes only `\"` / `\\`). */
 function shellWords(text: string): string[] {
 	const words: string[] = [];
 	let current = "";
 	let quote: string | null = null;
 	let inWord = false;
-	for (const char of text) {
-		if (quote) {
-			if (char === quote) quote = null;
+	const chars = [...text];
+	for (let i = 0; i < chars.length; i += 1) {
+		const char = chars[i] ?? "";
+		if (quote === "'") {
+			if (char === "'") quote = null;
+			else current += char;
+			continue;
+		}
+		if (
+			char === "\\" &&
+			i + 1 < chars.length &&
+			(quote === null || /["\\]/.test(chars[i + 1] ?? ""))
+		) {
+			current += chars[i + 1];
+			inWord = true;
+			i += 1;
+			continue;
+		}
+		if (quote === '"') {
+			if (char === '"') quote = null;
 			else current += char;
 			continue;
 		}

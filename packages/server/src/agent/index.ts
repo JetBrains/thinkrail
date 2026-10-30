@@ -19,6 +19,7 @@ export {
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
+	bumpPackageSwitchGeneration,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,

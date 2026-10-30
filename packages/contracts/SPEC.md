@@ -1060,8 +1060,8 @@ and what it loaded, never pi's own types.
   (the dialog then selects the repository scope when one is available); a
   `https://pi.dev/packages/<name>` or `https://[www.]npmjs.com/package/<name>[/v/<version>]` URL
   (percent-encoded or not; a malformed encoding falls back to the raw text) yields `npm:<name>[@version]`;
-  a pasted command is read with shell quoting (`pi install -l "./my tools"`) and names nothing when it
-  has zero or several source words;
+  a pasted command is read with shell quoting and backslash escapes (`pi install -l "./my tools"`,
+  `./my\ tools`) and names nothing when it has zero or several source words;
   a bare npm spec (`@scope/name`, `name`, either with `@version`) yields `npm:…` with `bareName` set
   unless it ends in an extension-file suffix (`.ts`, `.js`, …), which stays a path — the host prefers a
   folder or file of that bare name when one exists next to the workspace, as pi's CLI would read it.
@@ -1081,8 +1081,9 @@ and what it loaded, never pi's own types.
   disk is pi's to install at a chat's next load — until then it is listed as not installed so it can be
   removed.
 - **`PiPackageSummary`** — `identity` (the host-wide switch key: npm by name, git by repo without ref, local
-  by resolved path — except a repository declaration's local source inside the worktree, keyed by its
-  worktree-relative path so every worktree of the project shares the switch; the host closes the switch
+  by resolved path — except a repository declaration's local source inside the worktree, keyed by the
+  repository (its main worktree) and the worktree-relative path so every worktree of the project shares
+  the switch and unrelated repositories do not; the host closes the switch
   over pi's own equivalence, so switching off any declaration of a package switches off its aliases too), `source` **as declared** (`npm:@scope/pkg@1.2.0`, `../pkgs/tools`), `kind`, `scope`,
   `name` / `version` / `description` from its `package.json`, `installedPath`, `switchKeys` (every
   `disabledPackages` key that covers the package: its own `identity` and those of pi-equivalent

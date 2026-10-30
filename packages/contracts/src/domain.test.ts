@@ -504,6 +504,12 @@ describe("parsePiPackageInput", () => {
 			local: true,
 		});
 		expect(parsePiPackageInput('"npm:foo"')).toEqual({ source: "npm:foo", local: false });
+		expect(parsePiPackageInput("pi install ./my\\ tools")).toEqual({
+			source: "./my tools",
+			local: false,
+		});
+		expect(source('pi install "./say \\"hi\\" tools"')).toBe('./say "hi" tools');
+		expect(source("pi install 'a\\b'")).toBe("a\\b");
 		expect(source("pi install a b")).toBe("");
 		expect(source("pi install --local")).toBe("");
 		expect(source('"unbalanced')).toBe('"unbalanced');

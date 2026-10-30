@@ -204,7 +204,8 @@ test("installing for the repository a folder the user already declares returns t
 	const tools = join(repo, "tools");
 	writeFixturePiPackage(tools, { prompts: [] });
 	writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [tools] }));
-	updateConfig({ disabledPackages: ["local:project:tools"] });
+	const projectKey = `local:project:${repo}:tools`;
+	updateConfig({ disabledPackages: [projectKey] });
 	expect((await list("w1")).packages[0]).toMatchObject({
 		scope: "user",
 		enabled: true,
@@ -216,7 +217,7 @@ test("installing for the repository a folder the user already declares returns t
 		CTX,
 	)) as PiPackageSummary;
 	expect(summary).toMatchObject({ scope: "project", enabled: true });
-	expect(summary.switchKeys.sort()).toEqual([`local:${tools}`, "local:project:tools"].sort());
+	expect(summary.switchKeys.sort()).toEqual([`local:${tools}`, projectKey].sort());
 	expect(getConfig().disabledPackages).toEqual([]);
 	const rows = (await list("w1")).packages;
 	expect(rows.map((row) => [row.scope, row.enabled, row.shadowed ?? false])).toEqual([

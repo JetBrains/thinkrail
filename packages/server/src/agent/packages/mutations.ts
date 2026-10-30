@@ -308,9 +308,12 @@ function findResource(
 	});
 }
 
-function isExactOverrideOf(entry: string, pattern: string): boolean {
+// pi matches an exact override by its path relative to the scope's base dir or by its absolute path.
+function isExactOverrideOf(entry: string, target: string, baseDir: string | undefined): boolean {
 	if (!entry.startsWith("+") && !entry.startsWith("-")) return false;
-	return normalizeExactPattern(entry.slice(1)) === pattern;
+	const own = entry.slice(1);
+	if (baseDir === undefined) return own === target;
+	return resolve(baseDir, normalizeExactPattern(own)) === resolve(baseDir, target);
 }
 
 function normalizeExactPattern(pattern: string): string {
@@ -326,17 +329,16 @@ function toggleTopLevelResource(
 	toggle: PiResourceToggle,
 ): void {
 	const isBuiltin = resource.metadata.source === "builtin";
-	const pattern = isBuiltin
-		? resource.path
-		: normalizeExactPattern(
-				relative(
-					resource.metadata.baseDir ?? settingsBaseDir(ctx.cwd, ctx.agentDir, toggle.scope),
-					resource.path,
-				),
-			);
+	const baseDir = isBuiltin
+		? undefined
+		: (resource.metadata.baseDir ?? settingsBaseDir(ctx.cwd, ctx.agentDir, toggle.scope));
+	const pattern =
+		baseDir === undefined ? resource.path : normalizeExactPattern(relative(baseDir, resource.path));
 	const scoped =
 		toggle.scope === "project" ? settings.getProjectSettings() : settings.getGlobalSettings();
-	const kept = (scoped[toggle.type] ?? []).filter((entry) => !isExactOverrideOf(entry, pattern));
+	const kept = (scoped[toggle.type] ?? []).filter(
+		(entry) => !isExactOverrideOf(entry, pattern, baseDir),
+	);
 	writeTopLevelPaths(settings, toggle.type, toggle.scope, [
 		...kept,
 		`${toggle.enabled ? "+" : "-"}${pattern}`,

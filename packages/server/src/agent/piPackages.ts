@@ -203,7 +203,7 @@ const RESOURCE_KEYS = ["packages", "extensions", "skills", "prompts"] as const;
 
 function resourceFingerprint(path: string): string {
 	try {
-		const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
+		const raw: unknown = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
 		const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
 		return JSON.stringify(RESOURCE_KEYS.map((key) => record[key] ?? null));
 	} catch {

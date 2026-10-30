@@ -393,4 +393,20 @@ describe("pi package mutations", () => {
 			}),
 		).rejects.toMatchObject({ code: "PACKAGE_UNKNOWN" });
 	});
+
+	it("replaces an absolute-path override of the same file when toggling a loose extension", async () => {
+		mkdirSync(join(agentDir, "extensions"), { recursive: true });
+		const guard = join(agentDir, "extensions", "guard.ts");
+		writeFileSync(guard, extensionSource("guard_tool"));
+		writeFileSync(settingsPath, JSON.stringify({ extensions: [`-${guard}`] }));
+		expect(await resolvedEnabled(ctx, "extensions", guard)).toBe(false);
+		await setPiResourceEnabled(ctx, {
+			path: guard,
+			type: "extensions",
+			scope: "user",
+			enabled: true,
+		});
+		expect(readSettings(settingsPath).extensions).toEqual(["+extensions/guard.ts"]);
+		expect(await resolvedEnabled(ctx, "extensions", guard)).toBe(true);
+	});
 });

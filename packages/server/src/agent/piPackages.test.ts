@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isLoaderPackagePolicyStale, packagePolicyKey } from "./extensions";
+import {
+	bumpPackageSwitchGeneration,
+	isLoaderPackagePolicyStale,
+	packagePolicyKey,
+} from "./extensions";
 import { watchUserMcpConfig } from "./mcpSessions";
 import {
 	handlePiSettingsFileChanged,
@@ -60,6 +64,20 @@ describe("pi package settings changes", () => {
 
 		writeFileSync(settingsPath, "{ not json");
 		expect(handlePiSettingsFileChanged(settingsPath)).toBe(true);
+	});
+
+	it("reads a BOM-prefixed settings file like pi does", () => {
+		writeFileSync(settingsPath, `\uFEFF${JSON.stringify({ packages: ["npm:a"] })}`);
+		primeUserPiSettings();
+		writeFileSync(settingsPath, `\uFEFF${JSON.stringify({ packages: [] })}`);
+		expect(handlePiSettingsFileChanged(settingsPath)).toBe(true);
+		expect(published).toBe(1);
+	});
+
+	it("a switch flipped off and back on during a reload still leaves that loader stale", () => {
+		const before = packagePolicyKey();
+		bumpPackageSwitchGeneration();
+		expect(packagePolicyKey()).not.toBe(before);
 	});
 
 	it("treats a repository .pi/settings.json the same way, keyed by worktree", () => {

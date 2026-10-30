@@ -1,5 +1,6 @@
+import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PackageSource } from "@earendil-works/pi-coding-agent";
 import type { PiPackageScope, PiPackageSourceKind } from "@thinkrail/contracts";
@@ -49,7 +50,14 @@ function gitHostAndPath(source: string): string {
 	let host = "";
 	let path = "";
 	const scp = url.match(/^git@([^:]+):(.+)$/);
-	if (scp) {
+	const shorthand = url.match(/^([a-z]+):([^/].*)$/i);
+	const shorthandHost = shorthand
+		? HOSTED_SHORTHANDS[shorthand[1]?.toLowerCase() ?? ""]
+		: undefined;
+	if (shorthandHost && shorthand) {
+		host = shorthandHost;
+		path = shorthand[2] ?? "";
+	} else if (scp) {
 		host = scp[1] ?? "";
 		path = scp[2] ?? "";
 	} else if (url.includes("://")) {
@@ -72,6 +80,13 @@ function gitHostAndPath(source: string): string {
 }
 
 /** pi's private `getPackageIdentity` rule: npm by name, git by host/path without ref, local by absolute path. */
+const HOSTED_SHORTHANDS: Readonly<Record<string, string>> = {
+	github: "github.com",
+	gitlab: "gitlab.com",
+	bitbucket: "bitbucket.org",
+	sourcehut: "git.sr.ht",
+};
+
 export function piPackageIdentity(source: string, resolveLocal: (path: string) => string): string {
 	const kind = piPackageSourceKind(source);
 	if (kind === "npm") return `npm:${npmPackageName(source.trim().slice(4).trim())}`;
@@ -90,8 +105,9 @@ export function piDeclarationIdentity(
 	return piPackageIdentity(source, (path) => resolveLocalSource(path, baseDir));
 }
 
-// The switch key: pi's identity, except that a repository's local package is keyed by its path inside
-// the worktree, so every worktree of the project shares its switch like its npm and git declarations.
+// The switch key: pi's identity, except that a repository's local package is keyed by the repository
+// and its path inside the worktree, so every worktree of the project shares its switch like its npm
+// and git declarations — and two unrelated repositories declaring `./tools` do not.
 export function packageSourceIdentity(
 	source: string,
 	scope: PiPackageScope,
@@ -104,9 +120,50 @@ export function packageSourceIdentity(
 		if (scope !== "project" || cwd === undefined) return absolute;
 		const inside = relative(resolve(cwd), absolute);
 		return inside && !inside.startsWith("..") && !isAbsolute(inside)
-			? `project:${inside.split(sep).join("/")}`
+			? `project:${repositoryRoot(cwd)}:${inside.split(sep).join("/")}`
 			: absolute;
 	});
+}
+
+const repositoryRoots = new Map<string, string>();
+
+/**
+ * The main worktree's path for a git checkout — what every linked worktree's `.git` file points back
+ * to — read from the filesystem (`gitdir: …/.git/worktrees/<name>`), never by spawning git; a folder
+ * that is not a checkout is its own root.
+ */
+export function repositoryRoot(cwd: string): string {
+	const start = resolve(cwd);
+	const cached = repositoryRoots.get(start);
+	if (cached !== undefined) return cached;
+	let dir = start;
+	let root = start;
+	for (;;) {
+		const dotGit = join(dir, ".git");
+		try {
+			const stat = statSync(dotGit);
+			if (stat.isDirectory()) {
+				root = dir;
+				break;
+			}
+			if (stat.isFile()) {
+				const pointer = readFileSync(dotGit, "utf8")
+					.match(/^gitdir:\s*(.+)$/m)?.[1]
+					?.trim();
+				if (pointer) {
+					const gitDir = resolve(dir, pointer);
+					const linked = gitDir.match(/^(.*)[\\/]worktrees[\\/][^\\/]+$/);
+					root = dirname(linked ? (linked[1] ?? gitDir) : gitDir);
+					break;
+				}
+			}
+		} catch {}
+		const parent = dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
+	}
+	repositoryRoots.set(start, root);
+	return root;
 }
 
 export interface PackageDeclaration {

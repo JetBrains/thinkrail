@@ -287,9 +287,16 @@ export function bumpPackagesRevision(): void {
 	packagesRevision += 1;
 }
 
-/** The package policy a loader is built against: the disabled set and the install revision. */
+let switchGeneration = 0;
+
+/** Every change to the package switch set; a loader that resolved across an off-and-on flip is stale. */
+export function bumpPackageSwitchGeneration(): void {
+	switchGeneration += 1;
+}
+
+/** The package policy a loader is built against: the install revision, the switch generation and the disabled set. */
 export function packagePolicyKey(): string {
-	return `${packagesRevision}\n${[...disabledPackages()].sort().join("\n")}`;
+	return `${packagesRevision}\n${switchGeneration}\n${[...disabledPackages()].sort().join("\n")}`;
 }
 
 const loaderPackagePolicies = new WeakMap<ResourceLoader, string>();
