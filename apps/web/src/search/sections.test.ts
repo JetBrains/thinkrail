@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { RiChat2Line, RiCommandLine, RiGitBranchLine } from "@remixicon/react";
+import { RiChat2Line, RiCommandLine, RiGitBranchLine, RiHeading } from "@remixicon/react";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { EMPTY_LEARNING, recordPick } from "./learning";
 import type { PaletteItem } from "./model";
 import { parseSearchQuery } from "./query";
-import { buildSections, flattenRows, startEligible, startPrompt } from "./sections";
+import { askEligible, buildSections, flattenRows, startEligible, startPrompt } from "./sections";
 
 const chat = (id: string, title: string, extra: Partial<PaletteItem> = {}): PaletteItem => ({
 	id: `chat:${id}`,
@@ -208,6 +208,51 @@ describe("buildSections", () => {
 		expect(mixed.slice(3).sort()).toEqual(["chat:late", "chat:later"]);
 		const workspaceLate = workspace("w-late", "Refresh space", { late: 1 });
 		expect(rows([onScreen, workspaceLate])).toEqual(["chat:early", "start", "workspace:w-late"]);
+	});
+
+	test("in the specs scope the Ask the agent row is always last, after title matches and sections, and never elsewhere", () => {
+		const asked: string[] = [];
+		const ask = { ask: (text: string) => asked.push(text), target: "Default" };
+		const section: PaletteItem = {
+			id: "section:w1:SPEC.md:7",
+			kind: "section",
+			title: "Sample › Goal",
+			group: "sections",
+			scope: "specs",
+			icon: RiHeading,
+			match: { tier: 5, score: 3, ranges: {} },
+		};
+		const spec: PaletteItem = {
+			...section,
+			id: "spec:w1:SPEC.md",
+			kind: "spec",
+			title: "Goal keeper",
+			group: "specs",
+			match: { tier: 1, score: 1, ranges: {} },
+		};
+		const scoped = (raw: string, items: PaletteItem[]) =>
+			sections(raw, { rootItems: items, ask: { ask, text: raw.slice(1) } });
+		expect(scoped("#goal", [section, spec]).map((group) => group.id)).toEqual([
+			"specs",
+			"sections",
+			"ask",
+		]);
+		const [row] = scoped("#goal", []).at(-1)?.items ?? [];
+		expect(row?.item).toMatchObject({
+			kind: "ask",
+			title: "Ask the agent: “goal”",
+			subtitle: "New chat in Default · the agent finds the sections and cites them",
+			shortcut: { key: "↵", alt: true },
+		});
+		row?.item.run?.();
+		expect(asked).toEqual(["goal"]);
+		expect(sections("goal", { ask: { ask, text: "goal" } }).at(-1)?.id).not.toBe("ask");
+		expect(askEligible(parseSearchQuery("@goal"))).toBe(false);
+		expect(askEligible(parseSearchQuery("#  "))).toBe(false);
+		const untargeted = sections("#goal", { ask: { ask: { ask: () => {} }, text: "goal" } });
+		expect(untargeted.at(-1)?.items[0]?.item.subtitle).toBe(
+			"New chat · the agent finds the sections and cites them",
+		);
 	});
 
 	test("the prompt is the text as typed: the scope prefix goes, inner whitespace and quotes stay", () => {

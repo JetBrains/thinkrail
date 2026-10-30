@@ -7,6 +7,7 @@ import {
 	evictSpecRoot,
 	invalidateSpecSnapshot,
 	projectHasSpecs,
+	searchSpecSections,
 	specGraph,
 	specSnapshot,
 } from "./specs";
@@ -146,4 +147,39 @@ test("an evicted root is never brought back by a build still pending for it", as
 	await settle();
 	expect(snapshotIds(worktree)).toEqual(["root"]);
 	evictSpecRoot(worktree);
+});
+
+function nextTick(): Promise<void> {
+	return new Promise((resolve) => setImmediate(resolve));
+}
+
+test("section search builds its index off the request, then ranks sections and follows edits", async () => {
+	writeFileSync(
+		join(worktree, "SPEC.md"),
+		"---\nid: root\ntype: module-design\ntitle: Root\n---\n## Session titles\nrenameSession writes the chat title.\n",
+	);
+	expect(searchSpecSections(worktree, "rename title", 5)).toEqual({
+		hits: [],
+		total: 0,
+		indexing: true,
+	});
+	await nextTick();
+	const ready = searchSpecSections(worktree, "rename title", 5);
+	expect(ready.indexing).toBe(false);
+	expect(ready.hits.map((hit) => [hit.path, hit.heading, hit.line])).toEqual([
+		["SPEC.md", "Session titles", 6],
+	]);
+
+	mkdirSync(join(worktree, "zoo"));
+	writeFileSync(
+		join(worktree, "zoo", "SPEC.md"),
+		"---\nid: zoo\ntype: module-design\ntitle: Zoo\n---\n## Zebra\nA zebra crossing.\n",
+	);
+	invalidateSpecSnapshot(worktree);
+	const stale = searchSpecSections(worktree, "zebra", 5);
+	expect(stale).toMatchObject({ hits: [], indexing: true });
+	await nextTick();
+	expect(searchSpecSections(worktree, "zebra", 5).hits.map((hit) => hit.path)).toEqual([
+		"zoo/SPEC.md",
+	]);
 });

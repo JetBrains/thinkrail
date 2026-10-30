@@ -5,6 +5,7 @@ import {
 	isSubagentMaxConcurrent,
 	RECENT_MODELS_LIMIT,
 	type ReviewFixDetails,
+	SEARCH_KINDS,
 	SETTLE_IDLE_DAYS,
 	SUBAGENT_MAX_CONCURRENT,
 } from "./domain";
@@ -50,6 +51,7 @@ import {
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
+	SPEC_SECTIONS_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
@@ -266,8 +268,14 @@ test("host search and its previews are pinned to v99", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
+test("spec sections in search are pinned to v103", () => {
+	expect(PROTOCOL_VERSION).toBe(103);
+	expect(SPEC_SECTIONS_PROTOCOL_VERSION).toBe(103);
+	expect(SEARCH_KINDS).toContain("section");
+});
+
 test("find in files is pinned to v102", () => {
-	expect(PROTOCOL_VERSION).toBe(102);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TEXT_SEARCH_PROTOCOL_VERSION);
 	expect(TEXT_SEARCH_PROTOCOL_VERSION).toBe(102);
 	expect(WS_METHODS.searchText).toBe("search.text");
 	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");

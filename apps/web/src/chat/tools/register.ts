@@ -24,6 +24,7 @@ registerToolRenderer("write", WriteCard, {
 });
 
 for (const toolName of [
+	"spec_search",
 	"spec_grep",
 	"spec_get",
 	"spec_graph",

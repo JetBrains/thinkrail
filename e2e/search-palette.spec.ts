@@ -1,4 +1,11 @@
-import { appendFileSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	mkdirSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
@@ -12,6 +19,7 @@ import {
 } from "@thinkrail/contracts";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
+	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	openFixtureProject,
@@ -336,7 +344,7 @@ test("Tab, Alt+digit and the chips switch the scope and write its prefix", async
 	await expect(preview).toHaveAttribute("aria-pressed", "false");
 });
 
-test("host search: a file by name opens as a tab, a spec by body opens in the Specs tool", async ({
+test("host search: a file by name opens as a tab, a spec section by its words opens in the Specs tool", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -364,10 +372,10 @@ test("host search: a file by name opens as a tab, a spec by body opens in the Sp
 
 	await openPalette(page);
 	await page.getByTestId("search-input").fill("#SPECGRAPHPROBE");
-	const spec = page.locator('[data-testid="search-row"][data-kind="spec"]');
-	await expect(spec).toHaveCount(1, { timeout: 15_000 });
-	await expect(spec).toContainText("Sample Project");
-	await expect(spec).toContainText("SPECGRAPHPROBE");
+	const section = page.locator('[data-testid="search-row"][data-kind="section"]');
+	await expect(section).toHaveCount(1, { timeout: 15_000 });
+	await expect(section).toContainText("Sample Project › Goal");
+	await expect(section).toContainText("SPECGRAPHPROBE");
 	await pressPlatformShortcut(page, "i");
 	await expect(preview.getByRole("heading", { name: "Goal" })).toBeVisible();
 	await pressPlatformShortcut(page, "i");
@@ -376,6 +384,96 @@ test("host search: a file by name opens as a tab, a spec by body opens in the Sp
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "SPEC.md" }),
 	).toBeVisible();
+});
+
+test("spec sections: words in any order find a section that opens and previews at its heading, and Alt+Enter asks the agent in a new chat", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const filler = Array.from(
+		{ length: 60 },
+		(_, index) => `## Topic ${index}\n\nUnrelated filler paragraph number ${index}.\n`,
+	).join("\n");
+	mkdirSync(join(workspace.worktreePath, "guide"), { recursive: true });
+	writeFileSync(
+		join(workspace.worktreePath, "guide", "SPEC.md"),
+		`---\nid: sample-guide\ntype: module-design\ntitle: Sample Guide\n---\n\n${filler}\n## Session titles\n\nThe manager is the only durable writer: renameSession sets a chat's title.\n`,
+	);
+	await expect(
+		page.locator('[data-testid="spec-node"][data-spec-id="sample-guide"]'),
+	).toBeVisible();
+	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	const chatsBefore = await chatTabs.count();
+	const rows = page.getByTestId("search-row");
+
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("#title rename chat");
+	const section = page.locator('[data-testid="search-row"][data-kind="section"]').first();
+	await expect(section).toContainText("Sample Guide › Session titles", { timeout: 15_000 });
+	await expect(section).toContainText("renameSession");
+	await expect(section).toContainText("3/3 words");
+	await expect(rows.last()).toHaveAttribute("data-kind", "ask");
+	await expect(rows.last()).toContainText("Ask the agent: “title rename chat”");
+	await pressPlatformShortcut(page, "i");
+	await expect(
+		page.getByTestId("search-file-preview").getByRole("heading", { name: "Session titles" }),
+	).toBeInViewport();
+	await pressPlatformShortcut(page, "i");
+	await page.keyboard.press("Enter");
+	await expect(palette(page)).toBeHidden();
+	const pane = page.getByTestId("editor-pane");
+	const sessionTitles = pane.getByRole("heading", { name: "Session titles", exact: true });
+	const firstTopic = pane.getByRole("heading", { name: "Topic 0", exact: true });
+	await expect(sessionTitles).toBeInViewport();
+
+	await pane.getByTestId("markdown-preview").evaluate((scroller) => scroller.scrollTo(0, 0));
+	await expect(firstTopic).toBeInViewport();
+	await chatTabs.first().click();
+	await expect(firstTopic).toHaveCount(0);
+	await page
+		.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "SPEC.md" })
+		.click();
+	await expect(firstTopic).toBeInViewport();
+	await expect(sessionTitles).not.toBeInViewport();
+
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("#who keeps my chats");
+	await expect(rows.last()).toHaveAttribute("data-kind", "ask");
+	await page.keyboard.press("Alt+Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(chatTabs).toHaveCount(chatsBefore + 1);
+	const asked = page.locator('[data-testid="chat-message"][data-role="user"]').last();
+	await expect(asked).toContainText("who keeps my chats");
+	await expect(asked).toContainText(
+		"Find the answer in this project's specs and cite the sections.",
+	);
+
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("rename chat title");
+	await expect(page.getByTestId("search-host-pending")).toHaveCount(0, { timeout: 15_000 });
+	await expect(page.locator('[data-testid="search-row"][data-kind="section"]')).toHaveCount(0);
+	await expect(page.locator('[data-testid="search-row"][data-kind="ask"]')).toHaveCount(0);
+});
+
+test("from Project Home, the Ask the agent row names the Default workspace and Alt+Enter starts its chat there", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await expect(defaultWorkspaceRow(page)).not.toHaveAttribute("data-active", "true");
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("#where is the fixture token");
+	const ask = page.locator('[data-testid="search-row"][data-kind="ask"]');
+	await expect(ask).toContainText("Ask the agent: “where is the fixture token”");
+	await expect(ask).toContainText("New chat in Default");
+	await page.keyboard.press("Alt+Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	const asked = page.locator('[data-testid="chat-message"][data-role="user"]').last();
+	await expect(asked).toContainText("where is the fixture token");
+	await expect(asked).toContainText(
+		"Find the answer in this project's specs and cite the sections.",
+	);
 });
 
 test("host search: an image and an HTML file render in the preview pane, and from Project Home a hit enters the project's workspace", async ({

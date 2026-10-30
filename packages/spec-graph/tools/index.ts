@@ -4,11 +4,13 @@ import { registerSpecDelete } from "./delete.ts";
 import { registerSpecGet } from "./get.ts";
 import { registerSpecGraph } from "./graph.ts";
 import { registerSpecGrep } from "./grep.ts";
+import { registerSpecSearch } from "./search.ts";
 import { registerSpecUpdate } from "./update.ts";
 import { registerSpecValidate } from "./validate.ts";
 
 export function registerSpecTools(pi: ExtensionAPI): void {
 	registerSpecGrep(pi);
+	registerSpecSearch(pi);
 	registerSpecGet(pi);
 	registerSpecGraph(pi);
 	registerSpecCreate(pi);

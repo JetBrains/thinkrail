@@ -50,7 +50,10 @@ export function SpecsPanel({
 	useEffect(() => {
 		if (specRequest?.workspaceId !== workspaceId) return;
 		if (useAppStore.getState().specRequest !== specRequest) return;
-		void openFileInTab(workspaceId, specRequest.path, "preview", specRequest.navigation);
+		const { path, line, navigation } = specRequest;
+		void openFileInTab(workspaceId, path, "preview", navigation).then(() => {
+			if (line !== undefined) useAppStore.getState().revealFileTab(workspaceId, path, { line });
+		});
 		useAppStore.getState().clearSpecRequest();
 	}, [specRequest, workspaceId]);
 

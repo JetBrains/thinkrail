@@ -8,17 +8,10 @@ import {
 } from "@thinkrail/contracts";
 import type { HistorySession } from "../history";
 import { makeSnippet, matchesTerms } from "../history";
-import type { SpecSnapshot } from "../spec";
+import type { SpecSectionSearch, SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import type { FileListCache } from "./files";
-import {
-	buildGroup,
-	compactWhitespace,
-	compareHits,
-	type Deadline,
-	lineSnippet,
-	termRanges,
-} from "./hits";
+import { buildGroup, compactWhitespace, compareHits, type Deadline, termRanges } from "./hits";
 
 export interface SearchRoot {
 	readonly root: string;
@@ -29,13 +22,13 @@ export interface SearchRoot {
 }
 
 export interface ProviderInput {
+	readonly text: string;
 	readonly terms: readonly MatchTerm[];
 	readonly limit: number;
 	readonly deadline: Deadline;
 }
 
 const SCAN_CHECK_EVERY = 1_000;
-const MIN_BODY_TERM_LENGTH = 3;
 const TRANSCRIPT_TEXT_PREVIEW = 160;
 
 function isSubsequence(text: string, term: string): boolean {
@@ -154,8 +147,6 @@ export function searchSpecs(
 	input: ProviderInput,
 ): SearchGroup {
 	const hits: SearchHit[] = [];
-	const texts = input.terms.map((term) => term.text);
-	const bodyTerms = texts.some((text) => text.length >= MIN_BODY_TERM_LENGTH);
 	const { entries, rebuilding } = snapshot(root.root);
 	for (const entry of entries) {
 		if (input.deadline.expired()) {
@@ -167,33 +158,57 @@ export function searchSpecs(
 			{ key: "path", text: entry.path, path: true, secondary: true },
 		];
 		const match = matchFields(input.terms, fields);
-		const base = {
+		if (!match) continue;
+		hits.push({
 			id: `spec:${root.workspaceId}:${entry.path}`,
-			kind: "spec" as const,
+			kind: "spec",
 			title: entry.title,
 			subtitle: entry.path,
+			tier: match.tier,
+			score: match.score,
+			ranges: rangesOf(match),
 			size: Buffer.byteLength(entry.content),
 			projectId: root.projectId,
 			workspaceId: root.workspaceId,
 			path: entry.path,
 			specId: entry.id,
-		};
-		if (match) {
-			hits.push({ ...base, tier: match.tier, score: match.score, ranges: rangesOf(match) });
-			continue;
-		}
-		if (!bodyTerms || !matchesTerms(entry.content, texts)) continue;
-		const snippet = lineSnippet(entry.content, texts);
-		if (snippet === null) continue;
-		hits.push({
-			...base,
-			snippet,
-			tier: MATCH_TIER.content,
-			score: 0,
-			ranges: { snippet: termRanges(snippet, texts) },
 		});
 	}
 	return buildGroup("spec", hits, input.limit, rebuilding ? "indexing" : "ready");
+}
+
+export function searchSections(
+	root: SearchRoot,
+	sections: (root: string, query: string, limit: number) => SpecSectionSearch,
+	input: ProviderInput,
+): SearchGroup {
+	const { hits, total, indexing } = sections(root.root, input.text, input.limit);
+	return {
+		kind: "section",
+		hits: hits.map(
+			(hit): SearchHit => ({
+				id: `section:${root.workspaceId}:${hit.path}:${hit.heading}#${hit.occurrence}`,
+				kind: "section",
+				title: hit.title,
+				subtitle: hit.path,
+				snippet: hit.snippet,
+				tier: MATCH_TIER.content,
+				score: hit.score,
+				ranges: {
+					title: hit.ranges.title,
+					heading: hit.ranges.heading,
+					snippet: hit.ranges.snippet,
+				},
+				projectId: root.projectId,
+				workspaceId: root.workspaceId,
+				path: hit.path,
+				specId: hit.id,
+				section: { heading: hit.heading, line: hit.line, matched: hit.matched, terms: hit.terms },
+			}),
+		),
+		total,
+		state: indexing ? "indexing" : "ready",
+	};
 }
 
 export interface ChatLabel {

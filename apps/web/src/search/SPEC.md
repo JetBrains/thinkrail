@@ -22,7 +22,7 @@ the injected `PaletteStart`).
 
 ## Boundary
 
-- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`,
+- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`, `PaletteAsk`,
   `SearchSettings`, `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`,
   `waitingItems`, `WorkItemsState`, `commandItems`, `SearchScope`, `PaletteItem`, `PaletteItemKind`,
   `PalettePreview`, `PaletteFile`.
@@ -97,7 +97,8 @@ each again against the current terms on the fields the host matches it on (a fil
 title / id / path, a chat's or plan's title, a workspace's name and branch), so it takes the tier the
 host's answer will give it, and a body or message hit stays in the `content` tier and must still
 contain every term in its snippet as a case-folded substring — the content providers' rule, so never an
-acronym; a row that no longer matches leaves at once, and Enter can only open a row
+acronym — and a section row must still show every term across its spec title, heading and snippet (the
+section engine ranks by words, so this keeps only rows it would surely return); a row that no longer matches leaves at once, and Enter can only open a row
 the typed text matches; their counts are ignored.
 A fresh reply's rows carry the host's matcher result as `PaletteItem.match`, ranked with the local rows
 by the same tiers instead of re-matching the title. A host chat or workspace hit is dropped only when
@@ -125,6 +126,29 @@ or open it). A host row opens through the injected `PaletteHost.openHit`. The `/
 offered only when the host searches files and specs and a context project gives them a root, and the
 placeholder names files and specs exactly then.
 
+## Spec sections
+
+`#` asks the host for spec titles **and** sections; All never asks for sections (`scopeKinds`), so they
+stay out of the mixed list. A section row is the host's `section` hit — ranked by words by the engine the
+agent's `spec_search` uses, so both answer a question with the same sections — titled `Spec › Heading`
+with the spec's name muted (`PaletteItem.titleLead`), the section's best line beneath with the matched
+words highlighted, and an `n/m words` badge. Its group, **Sections**, follows the title matches by tier.
+`↵` opens the spec in the Specs tool scrolled to the heading (`requestSpecView` with the heading line);
+`Mod+I` previews the rendered spec at the section (`PaletteFile.line`).
+
+## Ask the agent
+
+Word search cannot meet a question that shares no words with the spec (a paraphrase, another language),
+so whenever `#` has text its **last** row is «Ask the agent: “<text>”», naming the workspace it opens
+in. `↵` on it, or `Alt+↵` from any row (`askEligible`, the one rule the row, the shortcut and its footer
+hint share), closes the palette and calls the injected `PaletteAsk.ask(text)`: shell starts a **new**
+chat in the context workspace — the active one, on Project Home the project's Default — with the text
+as typed and the visible note «Find the answer in this project's specs and cite the sections.», so the
+agent searches with its own model's words and the current chat is not interrupted. The row is always
+there rather than only when results look weak: a fixed place keeps muscle memory, where a "weak results"
+heuristic misfires both ways. It needs no offline state — `#` itself exists only while the host serves
+search — and like Start work it is never remembered by the learning store.
+
 ## Preview pane
 
 `Mod+I` opens a pane with one of three renderings, chosen by the selected row: a **transcript window**
@@ -133,7 +157,7 @@ connection, with the focused message marked — the hit's `anchorText` travels w
 transcript compacted since the search still focuses the right message, or none); a **file or spec**
 rendered by the shell-injected `renderFilePreview` over `PaletteItem.file` (`{ workspaceId, path, size }`)
 — the shared resource renderers, so code highlights, images and sandboxed HTML display, and a `SPEC.md`
-renders as markdown, the same path as a preview tab; or the local **metadata card** (`PaletteItem.preview`)
+renders as markdown (scrolled to `line` for a section), the same path as a preview tab; or the local **metadata card** (`PaletteItem.preview`)
 for a project, workspace or chat without a transcript hit. A host preview is read only once the
 selection rests on its row for 150 ms, so sweeping the mouse or arrows across rows reads only the row it
 stops on, and a file or spec whose hit is over `MAX_SEARCH_PREVIEW_BYTES` (2 MiB) is not read at all — the
@@ -175,7 +199,7 @@ an interactive control inside the palette (a preview's own buttons) stays that c
 ↑/↓ select, ↵ opens or runs the row and closes the palette, Tab/Shift+Tab and `Alt+1…n` change scope (a
 chip writes its prefix into the query, so the prefix is the one source of scope), `Mod+I` toggles the
 preview pane, `Mod+K` closes the palette (the chord that opened it), `Mod+↵` starts work from the typed text
-(above). Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command — closes outright. An active
+and `Alt+↵` asks the agent from a `#` query (above). Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command — closes outright. An active
 IME owns every key (`isComposing` or the `keyCode` 229 sentinel): composing Escape, arrows, Enter and
 `Alt+n` do nothing to the palette, and Tab only stays in the input. Plain `Ctrl+R` is swallowed while
 the palette is open; `Ctrl+Shift+R` still reloads. Mutating rows are disabled while offline or before

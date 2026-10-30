@@ -62,6 +62,8 @@ export function specToolPaths(
 ): string[] {
 	const details = objectValue(result)?.details;
 	switch (toolName) {
+		case "spec_search":
+			return uniquePaths(objectsField(details, "hits").map((hit) => stringField(hit, "path")));
 		case "spec_grep":
 			return uniquePaths(
 				objectsField(details, "matches").map((match) => stringField(match, "path")),
@@ -154,6 +156,11 @@ function LinkedResultText({
 
 export function specToolSummary({ toolName, args }: ToolRenderProps, t: Translator): string {
 	switch (toolName) {
+		case "spec_search": {
+			const query = args.query;
+			const first = Array.isArray(query) ? query[0] : query;
+			return typeof first === "string" ? first : "";
+		}
 		case "spec_grep":
 			return strArg(args, "pattern");
 		case "spec_graph":

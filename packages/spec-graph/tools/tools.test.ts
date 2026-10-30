@@ -291,16 +291,122 @@ async function seedGraph(root: string): Promise<void> {
 	);
 }
 
-test("registers exactly the seven spec tools", () => {
+test("registers exactly the eight spec tools", () => {
 	expect([...tools.keys()].sort()).toEqual([
 		"spec_create",
 		"spec_delete",
 		"spec_get",
 		"spec_graph",
 		"spec_grep",
+		"spec_search",
 		"spec_update",
 		"spec_validate",
 	]);
+});
+
+function writeSpec(root: string, path: string, frontmatter: string, body: string): void {
+	mkdirSync(join(root, path, ".."), { recursive: true });
+	writeFileSync(join(root, path), `---\n${frontmatter}\n---\n${body}`);
+}
+
+async function seedSections(root: string): Promise<void> {
+	writeSpec(
+		root,
+		"agent/SPEC.md",
+		"id: agent\ntype: module-design\ntitle: Agent sessions",
+		"## Session titles\nrenameSession(sessionId, title) is the only durable chat-title writer.\n## Compaction\nOld turns are summarized when the context fills.\n",
+	);
+	writeSpec(
+		root,
+		"shell/SPEC.md",
+		"id: shell\ntype: submodule-design\ntitle: Shell\nparent: agent\ntags: [ui]",
+		"## Chat title controls\nA chat tab's menu gains Rename chat.\n",
+	);
+	writeSpec(
+		root,
+		"arch.md",
+		"id: arch\ntype: architecture-design\ntitle: Architecture",
+		"## Decisions\npi runs in-process; a fatal fault can take down the host.\n",
+	);
+}
+
+test("spec_search lists ranked sections as path:line with the spec, heading and snippet", async () => {
+	await withRoot(async (root) => {
+		await seedSections(root);
+		const result = await run("spec_search", { query: "renaming chat titles" }, root);
+		const lines = text(result).split("\n");
+		expect(lines[0]).toMatch(/^\d+ of \d+ matching section\(s\), best first:$/);
+		expect(lines.slice(1, 3).sort()).toEqual([
+			"agent/SPEC.md:6  Agent sessions › Session titles — renameSession(sessionId, title) is the only durable chat-title writer.",
+			"shell/SPEC.md:8  Shell › Chat title controls — A chat tab's menu gains Rename chat.",
+		]);
+		const details = result.details as { hits: { path: string; line: number }[]; total: number };
+		expect(
+			details.hits
+				.slice(0, 2)
+				.map((hit) => `${hit.path}:${hit.line}`)
+				.sort(),
+		).toEqual(["agent/SPEC.md:6", "shell/SPEC.md:8"]);
+		expect(details.total).toBe(details.hits.length);
+	});
+});
+
+test("spec_search fuses several phrasings, marks partial matches, filters and clamps the limit", async () => {
+	await withRoot(async (root) => {
+		await seedSections(root);
+		const fused = await run(
+			"spec_search",
+			{ query: ["subprocess isolation", "fatal fault host"] },
+			root,
+		);
+		expect(text(fused).split("\n")[1]?.startsWith("arch.md:6  Architecture › Decisions")).toBe(
+			true,
+		);
+
+		const partial = text(await run("spec_search", { query: "compaction zebra" }, root));
+		expect(partial.split("\n")[1]?.endsWith("(1/2 words)")).toBe(true);
+
+		const tagged = (await run("spec_search", { query: "chat", tag: "ui" }, root)).details as {
+			hits: { path: string }[];
+		};
+		expect(tagged.hits.map((hit) => hit.path)).toEqual(["shell/SPEC.md"]);
+		const typed = (await run("spec_search", { query: "chat", type: "module-design" }, root))
+			.details as { hits: { path: string }[] };
+		expect(typed.hits.every((hit) => hit.path === "agent/SPEC.md")).toBe(true);
+		const children = (await run("spec_search", { query: "chat", parent: "agent" }, root))
+			.details as { hits: { path: string }[] };
+		expect(children.hits.map((hit) => hit.path)).toEqual(["shell/SPEC.md"]);
+
+		const one = (await run("spec_search", { query: "chat", limit: 1 }, root)).details as {
+			hits: unknown[];
+			total: number;
+		};
+		expect(one.hits.length).toBe(1);
+		expect(one.total).toBeGreaterThan(1);
+		const many = (await run("spec_search", { query: "chat", limit: 999 }, root)).details as {
+			hits: unknown[];
+		};
+		expect(many.hits.length).toBeLessThanOrEqual(25);
+	});
+});
+
+test("spec_search says so when nothing matches and sees an edit on the next call", async () => {
+	await withRoot(async (root) => {
+		await seedSections(root);
+		expect(text(await run("spec_search", { query: "zebra crossing" }, root))).toStartWith(
+			"No matching sections.",
+		);
+		writeSpec(
+			root,
+			"zoo/SPEC.md",
+			"id: zoo\ntype: module-design\ntitle: Zoo",
+			"## Zebra\nA zebra crossing.\n",
+		);
+		const found = (await run("spec_search", { query: "zebra crossing" }, root)).details as {
+			hits: { path: string; line: number }[];
+		};
+		expect(found.hits[0]).toMatchObject({ path: "zoo/SPEC.md", line: 6 });
+	});
 });
 
 test("spec_create scaffolds frontmatter + body; spec_get resolves it (no body)", async () => {

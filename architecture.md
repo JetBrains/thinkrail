@@ -39,7 +39,8 @@ packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; .
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
-                    its pi-free core/ read model also backs the host's spec.graph read method)
+                    its pi-free core/ read model also backs the host's spec.graph read method and the
+                    palette's ranked section search — the engine the agent's spec_search uses)
 packages/pi-delegation         portable pure-pi package: the delegation core — controlled child sessions
                     for live session parents or independent resource owners
 packages/pi-dag               portable durable backend DAGs over pi-delegation; host-owned resources;

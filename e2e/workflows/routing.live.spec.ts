@@ -15,6 +15,7 @@ const DIRECT_WORK_FORBIDDEN_SKILLS = [
 	...SETUP_WORKERS,
 ];
 const DIRECT_WORK_FORBIDDEN_TOOLS = [
+	"spec_search",
 	"spec_grep",
 	"spec_get",
 	"spec_graph",

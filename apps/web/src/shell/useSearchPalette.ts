@@ -31,6 +31,7 @@ import {
 import {
 	buildWorkItems,
 	commandItems,
+	type PaletteAsk,
 	type PaletteHost,
 	type PaletteItem,
 	type PaletteStart,
@@ -121,10 +122,23 @@ const hostHitTargets: HostHitTargets = {
 	navigateToWorkspace: paletteNavigator.navigateToWorkspace,
 	loadWorkspaceRow: paletteNavigator.loadWorkspaceRow,
 	openFile: (workspaceId, path) => openFileInTab(workspaceId, path, "keep"),
-	openSpec: (workspaceId, path) => useAppStore.getState().requestSpecView(workspaceId, path),
+	openSpec: (workspaceId, path, line) =>
+		useAppStore.getState().requestSpecView(workspaceId, path, line),
 	openChatLocation: (location) => useAppStore.getState().requestChatLocation(location),
 	openPlan: (workspaceId) => useAppStore.getState().requestToolView(workspaceId, "plan"),
 };
+
+export async function askTheAgent(
+	workspaceId: string | null,
+	projectId: string | null,
+	text: string,
+	stillWanted: () => boolean = paletteNavigator.beginPick(),
+): Promise<void> {
+	const target =
+		workspaceId ??
+		(projectId ? ((await enterDefaultWorkspace(projectId, stillWanted))?.id ?? null) : null);
+	if (target) await startChatInTab(target, { prompt: `${text}\n\n${globalT("search.ask.note")}` });
+}
 
 export interface SearchPaletteOptions {
 	readonly openNewWorkspace: (projectId: string | null, initialPrompt?: string) => void;
@@ -240,6 +254,19 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				: undefined,
 		[contextRepoProject, canStartChat, openNewWorkspace],
 	);
+
+	const ask = useMemo<PaletteAsk | undefined>(() => {
+		const projectId = contextRepoProject?.id ?? null;
+		if (!hostSearch || (!activeWorkspaceId && !projectId)) return undefined;
+		const target =
+			activeWorkspace ??
+			(projectId ? workspaces[projectId]?.find(isDefaultWorkspace) : undefined) ??
+			null;
+		return {
+			ask: (text) => void askTheAgent(activeWorkspaceId, projectId, text),
+			...(target ? { target: workspaceName(t, target) } : {}),
+		};
+	}, [hostSearch, activeWorkspaceId, activeWorkspace, contextRepoProject, workspaces, t]);
 
 	const binding = useMemo(() => {
 		const store = () => useAppStore.getState();
@@ -425,6 +452,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				: LOCAL_SCOPES,
 		...(host ? { host } : {}),
 		...(start ? { start } : {}),
+		...(ask ? { ask } : {}),
 		...(online
 			? hostSearch
 				? {}

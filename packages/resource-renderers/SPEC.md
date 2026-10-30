@@ -58,8 +58,13 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   through `ResourceViewProps.onRevealHandled`, so a caller that keeps the reveal (a tab) can drop it and a
   remount restores the saved view state rather than the old hit; a caller repeats a reveal of the same line
   by bumping `tick`, and names the source renderer by id so a Markdown or HTML file opens at a line rather
-  than as its rendered document. Only the code renderer's views honour `reveal`; the others ignore it, so
-  a reveal through a rich renderer is a plain open;
+  than as its rendered document. The rendered Markdown view honours `reveal` too, without a mark:
+  it scrolls the block whose source-line stamp (`data-md-line-start`, frontmatter offset applied — both
+  of its branches stamp) is the last one at or before `line` to the top — the first block when `line`
+  precedes them all (a preamble hit on the blank line after the frontmatter) — waiting for the document to
+  render if it has not yet, and reports the tick through `onRevealHandled` like the code views, so a spec
+  opens at a heading and a remount keeps the reading position; the other rich renderers ignore `reveal`,
+  so a reveal through them is a plain open;
 - the pieces every surface composes a renderer from, so a file tab, a diff tab, a Changes section and
   `ResourcePreview` run one sequence:
   - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the

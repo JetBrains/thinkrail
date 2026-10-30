@@ -27,11 +27,11 @@ reader's own containment rule), the same shape as `host/historyScope.ts`.
 - **Internals:** the file-list cache, root resolution, the providers and the text search are composed
   by the service and reached by tests per file, never through the barrel.
 - **Allowed deps:** `contracts` (DTOs + the matcher), `history` (`HistoryIndex.sessions()` — the
-  narrow read of titles and entries), `spec` (`specSnapshot` / `invalidateSpecSnapshot`), `todos`
-  (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files` and `grep`), `log` (a failed load or
-  provider, error type only), `shared` (`CodedError` for a text search failure's code), Node `fs`
-  (`readdir` for a walk; `stat` / `readFile` for a chat folder's text search). A file hit's size and readability come
-  from the injected `stat`, never a second containment rule here.
+  narrow read of titles and entries), `spec` (`specSnapshot` / `invalidateSpecSnapshot` /
+  `searchSpecSections`), `todos` (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files` and
+  `grep`), `log` (a failed load or provider, error type only), `shared` (`CodedError` for a text search
+  failure's code), Node `fs` (`readdir` for a walk; `stat` / `readFile` for a chat folder's text search).
+  A file hit's size and readability come from the injected `stat`, never a second containment rule here.
 - **Forbidden:** `host`, `workspaces`, `projects`, `persistence`, `agent` (projects and records are
   injected; a preview never attaches a pi session); writing anything; a second matcher.
 
@@ -58,8 +58,8 @@ transcript may still be on disk, but nothing may reopen it.
 
 - Terms come from `parseMatchTerms` over the query clamped to `MAX_SEARCH_QUERY_LENGTH`; an empty
   query answers empty groups (the browser owns the empty state). Field matches go through the matcher
-  with the terms as parsed (a quoted term is a literal); a body or transcript match takes each term's
-  text as a case-insensitive substring, so a quoted phrase matches as one. `kinds` narrows the providers; the
+  with the terms as parsed (a quoted term is a literal); a transcript match takes each term's text as
+  a case-insensitive substring, so a quoted phrase matches as one. `kinds` narrows the providers; the
   per-group `limit` is clamped to `MAX_SEARCH_GROUP_LIMIT`, `total` keeps the true count.
 - **Per-client superseding:** the service remembers the latest `seq` per `clientKey`; an older `seq`
   is answered `{ superseded: true }` immediately, and a query that was overtaken while it awaited the
@@ -103,10 +103,19 @@ transcript may still be on disk, but nothing may reopen it.
   finds gone, so a mass of deleted paths answers `truncated` in time rather than stalling the host.
 - **Specs:** the `spec` module's per-root snapshot — every build runs off the request path, the first
   included (a root's first read answers `indexing` with no hits), and only on a read after its TTL lapsed
-  or the worktree changed, the previous snapshot answering meanwhile (title / id / path through the
-  matcher; a body match from three characters becomes a `content`-tier hit with the matching line as
-  `snippet`). Body matching folds case only, unlike the matcher's diacritic folding: folding every
-  body per keystroke costs too much.
+  or the worktree changed, the previous snapshot answering meanwhile — title / id / path through the
+  matcher.
+- **Sections:** the spec bodies, through the `spec` module's `searchSpecSections` — the ranked section
+  engine of `pi-spec-graph/core` that the agent's `spec_search` also uses, so both surfaces answer a
+  question with the same sections. The provider hands it the query **as typed** (the engine has its own
+  tokenizer; the matcher's terms would lose a phrase), and maps each hit to a `section` hit: one per
+  section, `content` tier with the engine's score (so `buildGroup`'s order is the engine's), the spec
+  title as `title`, the path as `subtitle`, the best line as `snippet`, `ranges` for the title, the
+  heading and the snippet, and `section: { heading, line, matched, terms }`; the id names the section by
+  its heading trail and its occurrence among same-named sections of the file, never by its line, so a
+  re-index after an edit replaces a kept row instead of listing the section twice. The group is `indexing` until the root's first index lands and while the
+  snapshot is being re-read. Sections replaced the old line-substring `content` spec hits — a body hit
+  is a section, never a line.
 - **Chats and transcripts:** two providers with a budget each. Title hits through the matcher over every
   chat. Transcript hits are substring-AND over entries (the history index's rule; case folded only), one
   per message, `content` tier with an equal score so the timestamp alone orders them newest first (a

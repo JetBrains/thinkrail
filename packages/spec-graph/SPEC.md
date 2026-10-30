@@ -11,7 +11,7 @@ tags: [spec-graph, pi-extension]
 ## Responsibility
 
 `pi-spec-graph` is a portable pi-package that teaches the `pi` agent the project's **spec-graph** and lets
-it search, navigate, and manage specs. It ships a **skill**, seven **`spec_*` custom tools**, and a
+it search, navigate, and manage specs. It ships a **skill**, eight **`spec_*` custom tools**, and a
 project-wide **`before_agent_start` rule**. It depends on nothing in this monorepo, so it runs under
 vanilla `pi`; thinkrail bundles it into every session of a repository workspace (a chat without a
 project opts its sessions out of the tools and the rule, and its delegated children load no copy).
@@ -25,15 +25,15 @@ used), and leaves every byte of the body untouched.
 
 ## Boundary
 
-- **Owns:** the spec model (the is-a-spec rule, the derived graph, the read index, validation), the seven
+- **Owns:** the spec model (the is-a-spec rule, the derived graph, the read index, validation), the eight
   tools, and the skill + `before_agent_start` rule.
 - **Public surface:** the extension entry `index.ts` (default `ExtensionFactory`, plus `SPEC_SECTION`, the
   `systemPromptOptions.sections` key of the rule, so a host can drop the rule for a session after this
   extension's `before_agent_start` handler wrote it) and the `pi` manifest in
   `package.json` (`{ extensions: ["./index.ts"], skills: ["./skills"] }`) — how vanilla `pi` (`pi install`)
   and thinkrail (`additionalExtensionPaths` / `additionalSkillPaths`) load it — plus the **`pi-spec-graph/core`
-  export** (the pi-free read model), consumable by hosts (thinkrail's server) without going through the
-  agent. `tools/` stays internal.
+  export** (the pi-free read model and its ranked section search), consumable by hosts (thinkrail's
+  server) without going through the agent. `tools/` stays internal.
 - **Allowed deps:** `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `typebox` (peer); `yaml`
   (frontmatter parse/serialize); Node built-ins.
 - **Forbidden:** any `@thinkrail/*` package — the dependency edge is one-way (thinkrail → this
@@ -62,7 +62,8 @@ keeping byte length identical (negligible; a content hash is the sanctioned esca
 
 ## Tools
 
-Read — `spec_grep` (content search, narrowable by metadata), `spec_get` (a node's frontmatter, resolved
+Read — `spec_search` (the sections that answer a question, ranked by words — see *Ranked section search*
+in `submodule-spec-graph-core`), `spec_grep` (content search, narrowable by metadata), `spec_get` (a node's frontmatter, resolved
 links, and path — no body), `spec_graph` (a bounded subtree/ancestors/neighbors slice). Manage —
 `spec_create` (which refuses any path the index could never see — see `resolveSpecPath` in
 `submodule-spec-graph-core` — and any parameters that would write a file born a non-spec),

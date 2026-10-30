@@ -6,6 +6,7 @@ export const REVIEWER_TOOLS = [
 	"find",
 	"ls",
 	"bash",
+	"spec_search",
 	"spec_grep",
 	"spec_get",
 	"spec_graph",

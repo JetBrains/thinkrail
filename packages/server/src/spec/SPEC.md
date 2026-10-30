@@ -47,11 +47,20 @@ core/SPEC.md), not an async wrapper — that would still block the loop in one p
   60 s TTL or after `invalidateSpecSnapshot(root)` (the host calls it on `workspace.fsChanged`) marked
   the root stale — never eagerly, so a worktree an agent keeps writing in costs nothing while nobody
   searches it. At most eight roots are kept (least recently read out first), and
-  **`evictSpecRoot(root)`** drops a root's snapshot, its index and a pending build (the host calls it
-  when a workspace is removed). The walk stays synchronous and bounded by the parse cache; a
+  **`evictSpecRoot(root)`** drops a root's snapshot, its indexes and any pending build (the host calls
+  it when a workspace is removed). The walk stays synchronous and bounded by the parse cache; a
   glob/parse failure degrades to an empty snapshot.
+  **`searchSpecSections(root, query, limit) → SpecSectionSearch`** — the palette's ranked section
+  search: `pi-spec-graph/core`'s `searchSpecs` over a per-root section index. A root's first search only
+  schedules the index (`setImmediate`) and answers `indexing`, so no request tokenizes a tree; every
+  later snapshot rebuild (a read after the TTL or after `workspace.fsChanged`) re-syncs it, re-tokenizing
+  only the specs whose content changed, and the answer stays `indexing` while that rebuild is pending.
+  Indexes cost several MB on a large repo, so the module keeps the four most recently searched roots and
+  drops the oldest (an evicted root is rebuilt on its next search). Its hits are core's
+  `SpecSectionHit`, re-exported as a type so `search` never imports the package.
 - **Public surface (barrel):** `specGraph`, `evictSpecIndex`, `projectHasSpecs`, `specSnapshot`,
-  `invalidateSpecSnapshot`, `evictSpecRoot`, `SpecSnapshot`, `SpecSnapshotEntry`.
+  `invalidateSpecSnapshot`, `evictSpecRoot`, `searchSpecSections`, `SpecSnapshot`, `SpecSnapshotEntry`,
+  `SpecSectionSearch`, `SpecSectionHit`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (DTOs); **`pi-spec-graph/core`** (the
   pi-free read model — the one host-side value-import of the extension package, sanctioned in
   `module-spec-graph`).

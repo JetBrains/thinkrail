@@ -12,8 +12,9 @@ tags: [spec-graph, pi-extension]
 The pi-free spec model: the is-a-spec rule, frontmatter parse/serialize and in-place edit (via the
 `yaml` library, with link/metadata lists inline), the derived graph (parent tree +
 `depends-on`/`references`/`implements` DAG + reverse edges), the on-demand in-memory read index, content
-grep with metadata filters, bounded graph slices, and structural validation. Imports **no
-`@earendil-works/*`**, so it is unit-testable on its own (`core/core.test.ts`).
+grep with metadata filters, ranked section search, bounded graph slices, and structural validation.
+Imports **no `@earendil-works/*`**, so it is unit-testable on its own (`core/core.test.ts`,
+`core/search.test.ts`, the `core/bench/` benchmark).
 
 ## Boundary
 
@@ -39,7 +40,68 @@ Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`val
 | `graph.ts` | files → nodes + edges (parent tree, DAG + reverse); duplicate-id tracking | `parse` |
 | `query.ts` | content grep with metadata filters; bounded graph slices | `parse`, `graph` |
 | `validate.ts` | dangling links, duplicate ids, parent cycles | `parse`, `graph` |
+| `tokenize.ts` | text → index terms (the tokenizer, stopwords, the light stemmer) and the flattened form a phrase check compares | — |
+| `sections.ts` | a spec → its sections by heading, with file line numbers | `parse` |
+| `search.ts` | the section index (`indexSections`) and ranked section search (`searchSpecs`) | `parse`, `query`, `sections`, `tokenize` |
 | `store.ts` | `SpecIndex`: the on-demand fs glob + per-file parse cache + memoized graph (the `core/index` module); the indexable-path rule (`resolveSpecPath`) | `parse`, `graph`, `query` |
+
+## Ranked section search
+
+One engine answers both the agent's `spec_search` and the host palette's `#` sections, so a question
+gets the same sections on both surfaces. It ranks by **words**, with no model and no download: meaning
+without shared words (paraphrases, other languages) is the agent's job, whose own model reformulates a
+question into words — `searchSpecs` takes several phrasings for exactly that. Semantic/embedding search
+stays a non-goal of [[module-spec-graph]]; a second ranker could be fused behind the same call. The engine
+lives here because `core/` is the one place both the agent (vanilla pi, the CLI's bundled extension) and
+the host can reach. Rejected: pi's own BM25 ranker (not a public export, and it re-tokenizes every
+document per call), `minisearch`/Orama (a dependency outside this module's allowed set, for ~150 lines),
+and a local embedding model — transformers.js runs in Bun/Node only through native `onnxruntime-node`
+(~300 MB) and breaks `bun build --compile`, and BM25 alone already scores about what a small model
+does on retrieval benchmarks.
+
+- **Sections.** An ATX heading up to the next heading of any level, found in CommonMark's block structure
+  as micromark — the web's renderer — builds it, so a hit's section is the one the reader sees there: list
+  items and block quotes are containers (a heading inside one is a section too; an item that opens on a
+  blank line ends at a second one), and a fenced code block or an HTML block holds no heading and ends
+  with its container. HTML blocks are the raw `pre`/`script`/`style`/`textarea` tags, comments, processing
+  instructions, declarations, CDATA, block-level tags and a lone complete tag that does not continue a
+  paragraph. A backtick fence's info string holds no backtick, so a line like ```` ```x``` ```` is prose;
+  tabs expand to 4-column stops. Where micromark departs from CommonMark's text, sections follow
+  micromark: a lazy line ends a list item or quote at any list marker, a lazy complete tag opens an HTML
+  block, an indented code block ends at a lazy line and while open keeps an empty list item or an ordered
+  list not starting at `1` from interrupting it, and an unquoted attribute value ends at `/`. Text before
+  the first heading is a section named by the spec. A lone leading `#` heading names the document and
+  stays out of every trail. A section keeps its heading trail and its file line numbers (frontmatter
+  included), so a hit is a `path:line` a reader opens directly; a hit also names its `occurrence` among
+  the file's sections with the same trail, which, unlike the line, survives an edit above it.
+- **Terms.** Lowercased Unicode words; a compound identifier also yields its parts (`renameSession` →
+  `renamesession`, `rename`, `session`); English stopwords and one-character words drop. The stemmer is
+  Porter's step 1 (plurals, `-eed`/`-ed`/`-ing`, terminal `y`), Snowball's `-ly` rule and the final
+  `e` — word forms meet (`renaming` ↔ `rename`) while derivations stay apart (`isolation` ≠
+  `isolate`), which keeps unrelated words from merging. Non-ASCII words are never stemmed.
+- **Score.** BM25F (k1 1.2, b 0.75) over three fields — spec title + id ×3, heading trail ×2, body ×1;
+  times the squared idf-weighted share of query words the section contains, so every word beats some
+  of them; doubled when the section contains the query as a word-start phrase (punctuation-insensitive),
+  so a verbatim match still ranks first. A query word absent from the corpus (≥ 3 characters) completes
+  to the terms it starts, or to the stem a partial `-ing` extends, at 0.7 weight — the palette's
+  as-you-type word. Ties: durable specs before task-specs, then path, then line.
+- **Fusion.** Several phrasings rank separately and fuse by reciprocal rank (k 60); a hit keeps the
+  snippet and word count of its best-placed phrasing.
+- **Snippet.** The body line with the most distinct query terms (then the phrase, then the count),
+  markdown stripped, cut to 160 characters around its first match, with `[start, end)` ranges; the
+  title and the heading trail carry ranges too.
+- **Index.** `indexSections(entries, previous)` is deterministic: same entries → same ranking. It re-tokenizes
+  only files whose content differs from `previous` and returns `previous` itself when nothing changed,
+  so a caller re-syncs it on every read for the price of one string compare per file. Terms are ids in
+  an append-only vocabulary the chain of indexes shares (a vanished term keeps its id); a section stores
+  sorted id/count arrays. About 2 MB of specs index in ~160 ms into ~9 MB of heap on a developer machine
+  (~3 s on a loaded CI runner, which is why the test's bound is a 20 s blowup guard rather than a speed
+  gate) — callers bound how many roots they keep. Indexing is synchronous: a caller on a shared event loop
+  pays a root's first build in one turn (a corpus of tens of megabytes would hold it for seconds).
+- **Benchmark.** `core/bench/` holds a frozen copy of 15 real specs (`*.md.txt`, so no indexer sees a
+  duplicate id) and 20 questions written without the engine in view; the test gates on ≥ 16 with the
+  expected section in the top 3. Five paraphrase misses are recorded but not gated. `bun
+  core/bench/live.ts [root]` prints the same report over a live tree and never fails.
 
 ## Invariants
 

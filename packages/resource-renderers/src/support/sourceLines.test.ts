@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { frontmatterOffset, indivisibleSpans, snapSplitLine } from "./sourceLines";
+import {
+	frontmatterOffset,
+	indivisibleSpans,
+	revealSourceLine,
+	snapSplitLine,
+	sourceBlockAt,
+} from "./sourceLines";
 
 const DOC = [
 	"# Title", // 1
@@ -70,4 +76,90 @@ test("frontmatterOffset reports the lines stripFrontmatter removed", () => {
 	const raw = ["---", "title: x", "---", "# Doc", "body"].join("\n");
 	expect(frontmatterOffset(raw, ["# Doc", "body"].join("\n"))).toBe(3);
 	expect(frontmatterOffset("# Doc\nbody", "# Doc\nbody")).toBe(0);
+});
+
+test("sourceBlockAt picks the outermost block that starts closest at or before the line", () => {
+	const block = (id: string, start: number) => ({ id, dataset: { mdLineStart: String(start) } });
+	const blocks = [
+		block("h1", 6),
+		block("p", 8),
+		block("h2", 12),
+		block("code-in-h2", 12),
+		block("p2", 14),
+	];
+	const container = {
+		querySelectorAll: () => blocks,
+	} as unknown as ParentNode;
+	const at = (line: number) =>
+		(sourceBlockAt(container, line) as unknown as { id: string } | null)?.id;
+	expect(at(12)).toBe("h2");
+	expect(at(13)).toBe("h2");
+	expect(at(9)).toBe("p");
+	expect(at(40)).toBe("p2");
+	expect(at(3)).toBeUndefined();
+});
+
+function revealContainer(starts: number[], scrolled: string[]) {
+	const blocks = starts.map((start) => ({
+		id: `block-${start}`,
+		dataset: { mdLineStart: String(start) },
+		scrollIntoView: () => scrolled.push(`block-${start}`),
+	}));
+	const rendered = { blocks: [] as typeof blocks };
+	const container = {
+		querySelectorAll: () => rendered.blocks,
+		querySelector: () => rendered.blocks[0] ?? null,
+	} as unknown as HTMLElement;
+	return { container, render: () => (rendered.blocks = blocks) };
+}
+
+test("revealSourceLine scrolls the line's block, or the first one for a line before every block, and reports it", () => {
+	const scrolled: string[] = [];
+	const { container, render } = revealContainer([7, 12], scrolled);
+	render();
+	let reported = 0;
+	revealSourceLine(container, 13, () => {
+		reported += 1;
+	})();
+	revealSourceLine(container, 6, () => {
+		reported += 1;
+	})();
+	expect(scrolled).toEqual(["block-12", "block-7"]);
+	expect(reported).toBe(2);
+});
+
+test("revealSourceLine waits for a document still rendering and reports once it scrolled", () => {
+	const scrolled: string[] = [];
+	const { container, render } = revealContainer([3], scrolled);
+	const observers: { notify: () => void; disconnected: boolean }[] = [];
+	const RealObserver = globalThis.MutationObserver;
+	globalThis.MutationObserver = class {
+		disconnected = false;
+		constructor(private readonly callback: () => void) {
+			observers.push(this as unknown as { notify: () => void; disconnected: boolean });
+		}
+		notify() {
+			this.callback();
+		}
+		observe() {}
+		disconnect() {
+			this.disconnected = true;
+		}
+	} as unknown as typeof MutationObserver;
+	try {
+		let reported = 0;
+		revealSourceLine(container, 5, () => {
+			reported += 1;
+		});
+		expect(reported).toBe(0);
+		observers[0]?.notify();
+		expect(reported).toBe(0);
+		render();
+		observers[0]?.notify();
+		expect(scrolled).toEqual(["block-3"]);
+		expect(reported).toBe(1);
+		expect(observers[0]?.disconnected).toBe(true);
+	} finally {
+		globalThis.MutationObserver = RealObserver;
+	}
 });

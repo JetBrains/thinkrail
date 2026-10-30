@@ -1498,7 +1498,15 @@ export interface HistorySearchResult {
 	indexing: boolean;
 }
 
-export const SEARCH_KINDS = ["chat", "transcript", "workspace", "file", "spec", "plan"] as const;
+export const SEARCH_KINDS = [
+	"chat",
+	"transcript",
+	"workspace",
+	"file",
+	"spec",
+	"section",
+	"plan",
+] as const;
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 
@@ -1532,12 +1540,23 @@ export interface SearchHit {
 	sessionId?: string;
 	messageIndex?: number;
 	anchorText?: string;
-	/** Root-relative POSIX path of a file or spec hit. */
+	/** Root-relative POSIX path of a file, spec or section hit. */
 	path?: string;
 	/** Bytes on disk of a file or spec hit, so the client can decline to preview a large one. */
 	size?: number;
 	specId?: string;
+	section?: SearchHitSection;
 	timestamp?: number;
+}
+
+/** Where a `section` hit sits in its spec, and how many of the query's words it holds. */
+export interface SearchHitSection {
+	/** The heading trail joined by ` › `; empty for the text before the first heading. */
+	heading: string;
+	/** 1-based line of the heading in the file. */
+	line: number;
+	matched: number;
+	terms: number;
 }
 
 export type SearchGroupState = "ready" | "truncated" | "indexing" | "failed";
