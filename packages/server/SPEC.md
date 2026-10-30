@@ -91,7 +91,8 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `todos` | a chat's per-session TODO plan read/write (`todo.*`), via `pi-todos/core` | [todos/SPEC.md](src/todos/SPEC.md) |
 | `reviews` | draft review comments on files/diffs: store + anchoring + context-package render | [reviews/SPEC.md](src/reviews/SPEC.md) |
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
-| `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
+| `terminal` | workspace-scoped `bun-pty` terminals: the user's shell tabs and host-born command tabs | [terminal/SPEC.md](src/terminal/SPEC.md) |
+| `run` | the per-project run recipe (machine-local), per-workspace port leases, and project runs executed as terminal command tabs (`run.*`) | [run/SPEC.md](src/run/SPEC.md) |
 | `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `extensions` | the server registry of ThinkRail extensions (`@thinkrail/ext-*/server`): ordered descriptors + public specifiers, inline flattening, owner-scoped skill resolution | [extensions/SPEC.md](src/extensions/SPEC.md) |
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
@@ -111,8 +112,9 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `run`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
+- `run` → `terminal` (command tabs: start/stop/ended/recording), `workspaces` (worktree + kind lookup, sibling workspaces of a project), `projects` (project lookup), `persistence` (`run.json`), `log`; `@thinkrail/shared/freePort` (external, the TCP probe). The agent-side `run_project` tool reaches it through a seam `host` installs (`agent.setRunToolHost` → `run`), the same inversion as `set_title`; `run` never imports `agent`. Workspace removal and host stop call `run.stopWorkspaceRuns` from `host` **before** terminals close and the worktree is reclaimed
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
 - `projects` → `git` (shared runner), `persistence`
@@ -153,7 +155,8 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher` + `setSessionCreatedPublisher` + `setSessionDeletedPublisher` +
 `setSessionStatePublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
-`workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
+`workspace.created`/`updated`/`removed` lifecycle trio, `run`'s `setRunPublisher` for the
+`run.recipe`/`run.state` snapshots, `settings`' `setSettingsPublisher` for
 `settings.changed` (full merged config plus the successful applied update for host-side explicit-field effects),
 `feedback`'s addressed invitation publisher, and auth's Central action analytics +
 `provider.changed` invalidation publishers) that
