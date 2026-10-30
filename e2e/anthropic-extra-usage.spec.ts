@@ -75,7 +75,9 @@ test("an Anthropic subscription sign-in warns about extra usage before the user 
 	const dialog = await openAnthropicSignIn(page);
 	const notice = dialog.getByTestId("extra-usage-notice");
 	await expect(notice).toHaveAttribute("data-context", "signIn");
-	await expect(notice).toContainText("Claude Pro/Max usage here is billed as extra usage.");
+	await expect(notice).toContainText(
+		"Current Claude Pro/Max setup is billed as extra usage per token.",
+	);
 	await expect(notice.getByRole("link", { name: "Manage extra usage" })).toHaveAttribute(
 		"href",
 		"https://claude.ai/settings/usage",
@@ -105,7 +107,9 @@ test("the chat banner dismisses per chat, and Don't warn again turns pi's warnin
 	wire.notice(id);
 	const banner = page.getByTestId("extra-usage-notice");
 	await expect(banner).toHaveAttribute("data-context", "chat");
-	await expect(banner).toContainText("Anthropic is billing this chat as extra usage.");
+	await expect(banner).toContainText(
+		"Anthropic bills this chat as extra usage per token ignoring your normal plan limits, because in the current setup Pi is connected directly via API.",
+	);
 	await shot(page.getByTestId("chat-view"), "anthropic-extra-usage", "chat-banner");
 
 	await banner.getByTestId("extra-usage-dismiss").click();

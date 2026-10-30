@@ -10,14 +10,16 @@ test("the chat notice links usage and offers dismiss and Don't warn again", () =
 		</TooltipProvider>,
 	);
 	expect(html).toContain(`href="${CLAUDE_USAGE_URL}"`);
-	expect(html).toContain("Anthropic is billing this chat as extra usage.");
+	expect(html).toContain(
+		"Anthropic bills this chat as extra usage per token ignoring your normal plan limits, because in the current setup Pi is connected directly via API.",
+	);
 	expect(html).toContain('data-testid="extra-usage-disable"');
 	expect(html).toContain('data-testid="extra-usage-dismiss"');
 });
 
 test("the sign-in notice is informational only", () => {
 	const html = renderToStaticMarkup(<ExtraUsageNotice context="signIn" />);
-	expect(html).toContain("Claude Pro/Max usage here is billed as extra usage.");
+	expect(html).toContain("Current Claude Pro/Max setup is billed as extra usage per token.");
 	expect(html).toContain(`href="${CLAUDE_USAGE_URL}"`);
 	expect(html).not.toContain("extra-usage-disable");
 	expect(html).not.toContain("extra-usage-dismiss");

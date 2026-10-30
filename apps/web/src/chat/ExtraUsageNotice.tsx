@@ -49,12 +49,14 @@ export function ExtraUsageNotice({
 		>
 			<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
 			<div className="flex min-w-0 flex-1 flex-col gap-4 tr-text-ui text-text-default">
-				<p>
-					<strong className="tr-text-emphasis">
-						{t(chat ? "chat.extraUsage.chatTitle" : "chat.extraUsage.signInTitle")}
-					</strong>{" "}
-					{t(chat ? "chat.extraUsage.chatBody" : "chat.extraUsage.signInBody")}
-				</p>
+				{chat ? (
+					<p>{t("chat.extraUsage.chat")}</p>
+				) : (
+					<p>
+						<strong className="tr-text-emphasis">{t("chat.extraUsage.signInTitle")}</strong>{" "}
+						{t("chat.extraUsage.signInBody")}
+					</p>
+				)}
 				<div className="flex flex-wrap items-center gap-x-16 gap-y-4">
 					<NoticeLink href={CLAUDE_USAGE_URL}>{t("chat.extraUsage.manage")}</NoticeLink>
 					{onDisable ? (
