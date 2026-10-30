@@ -59,6 +59,13 @@ function readFlagValue(arg: string, next: string | undefined): { value: string; 
 	return { value: next, consumed: 2 };
 }
 
+function parsePort(value: string): number | undefined {
+	const parsed = Number(value);
+	return value.trim() !== "" && Number.isInteger(parsed) && parsed >= 0 && parsed <= 65535
+		? parsed
+		: undefined;
+}
+
 export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptions {
 	let port: number | undefined;
 	let host: string | undefined;
@@ -83,11 +90,8 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 			version = true;
 		} else if (arg === "--port" || arg.startsWith("--port=")) {
 			const { value, consumed } = readFlagValue(arg, argv[i + 1]);
-			const parsed = Number(value);
-			if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
-				throw new Error(`Invalid --port: ${value}`);
-			}
-			port = parsed;
+			port = parsePort(value);
+			if (port === undefined) throw new Error(`Invalid --port: ${value}`);
 			i += consumed - 1;
 		} else if (arg === "--host" || arg.startsWith("--host=")) {
 			const { value, consumed } = readFlagValue(arg, argv[i + 1]);
@@ -102,9 +106,10 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 		}
 	}
 
-	const envPort = env.THINKRAIL_PORT !== undefined ? Number(env.THINKRAIL_PORT) : undefined;
 	const resolvedPort =
-		port ?? (envPort !== undefined && Number.isInteger(envPort) ? envPort : DEFAULT_PORT);
+		port ??
+		(env.THINKRAIL_PORT !== undefined ? parsePort(env.THINKRAIL_PORT) : undefined) ??
+		DEFAULT_PORT;
 
 	return {
 		port: resolvedPort,
