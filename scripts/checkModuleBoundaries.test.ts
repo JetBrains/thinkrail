@@ -20,6 +20,7 @@ const modules = {
 	"packages/server": "@thinkrail/server",
 	"apps/web": "@thinkrail/web",
 	"apps/cli": "@thinkrail/cli",
+	"apps/mobile": "@thinkrail/mobile",
 	"apps/desktop": "@thinkrail/desktop",
 } as const;
 
@@ -61,6 +62,10 @@ function fixture(): string {
 		"apps/cli": {
 			"@thinkrail/server": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
+		},
+		"apps/mobile": {
+			"@thinkrail/contracts": "workspace:*",
+			"@thinkrail/remote-client": "workspace:*",
 		},
 		"apps/desktop": {
 			"@thinkrail/server": "workspace:*",
