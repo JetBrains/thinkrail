@@ -25,6 +25,16 @@ test("RFC-4180 parsing handles quoted, escaped, multiline, and CRLF fields", () 
 	]);
 });
 
+test("a leading UTF-8 BOM is not part of the first cell", () => {
+	const table = parseCsv('\uFEFF"name","note"\r\nAda,ok');
+	expect(table.rows.map((row) => row.cells)).toEqual([
+		["name", "note"],
+		["Ada", "ok"],
+	]);
+	expect(table.rows[0]?.raw).toBe('"name","note"');
+	expect(parseCsv("\uFEFFid,name\n1,Ann").rows[0]?.cells).toEqual(["id", "name"]);
+});
+
 test("TSV parsing keeps delimiters inside quoted fields", () => {
 	const table = parseCsv('a\tb\n1\t"two\tparts"', "\t");
 	expect(table.rows[1]?.cells).toEqual(["1", "two\tparts"]);

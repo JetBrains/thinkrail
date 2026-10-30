@@ -89,8 +89,10 @@ export function parseCsv(text: string, delimiter: CsvDelimiter = ","): CsvTable 
 	let inQuotes = false;
 	let line = 1;
 	let rowStartLine = 1;
-	let rowStartOffset = 0;
-	let index = 0;
+	// A UTF-8 BOM (spreadsheet exports) is not part of the first cell; left
+	// in, it also keeps a quoted first field's quotes from being parsed.
+	let index = text.startsWith("\uFEFF") ? 1 : 0;
+	let rowStartOffset = index;
 
 	const finishRow = (endOffset: number) => {
 		cells.push(field);
