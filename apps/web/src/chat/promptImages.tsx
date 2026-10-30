@@ -12,18 +12,19 @@ import {
 	useState,
 } from "react";
 import { FileChip } from "./FileChip";
-import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
+import { fileToAttachedImage } from "./imageAttachment";
+import {
+	newPromptImagesState,
+	type PromptImage,
+	type PromptImageError,
+	type PromptImagesState,
+} from "./promptImageState";
 import type { ChatAttachment } from "./types";
 
-export interface PromptImage extends AttachedImage {
-	id: string;
-	name: string;
-}
-
-export interface PromptImageError {
-	id: string;
-	name: string;
-	reason: string;
+export interface PromptImagesOwner {
+	state: PromptImagesState;
+	read: () => PromptImagesState;
+	update: (change: (current: PromptImagesState) => PromptImagesState) => void;
 }
 
 export interface PromptImagesController {
@@ -60,87 +61,110 @@ export function imagePasteDropHandlers(controller: Pick<PromptImagesController, 
 	};
 }
 
-export function usePromptImages(): PromptImagesController {
-	const [images, setImages] = useState<PromptImage[]>([]);
-	const imagesRef = useRef<PromptImage[]>([]);
-	const [pending, setPending] = useState(0);
-	const [errors, setErrors] = useState<PromptImageError[]>([]);
-	// Bumped on reset; a stale-generation decode discards its results (still balancing pending).
-	const generation = useRef(0);
-
-	const commit = useCallback((next: PromptImage[]) => {
-		imagesRef.current = next;
-		setImages(next);
-	}, []);
+export function usePromptImages(owner?: PromptImagesOwner): PromptImagesController {
+	const [local, setLocal] = useState(newPromptImagesState);
+	const localRef = useRef(local);
+	const { images, pending, errors } = owner?.state ?? local;
+	const read = useCallback(() => owner?.read() ?? localRef.current, [owner]);
+	const update = useCallback(
+		(change: (current: PromptImagesState) => PromptImagesState) => {
+			if (owner) owner.update(change);
+			else {
+				localRef.current = change(localRef.current);
+				setLocal(localRef.current);
+			}
+		},
+		[owner],
+	);
 
 	const addFiles = useCallback(
 		(files: File[]) => {
 			const picked = files.filter((f) => f.type.startsWith("image/"));
 			if (picked.length === 0) return;
-			const startedGeneration = generation.current;
-			setPending((n) => n + picked.length);
+			const startedGeneration = read().generation;
+			update((current) => ({ ...current, pending: current.pending + picked.length }));
 			const decode = async () => {
 				const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
-				if (startedGeneration !== generation.current) return;
-				let used = imagesRef.current.reduce((sum, p) => sum + p.content.data.length, 0);
-				const additions: PromptImage[] = [];
-				const nextErrors: PromptImageError[] = [];
-				settled.forEach((result, i) => {
-					const name = picked[i]?.name || translate("chat.promptImages.fallbackName");
-					if (result.status !== "fulfilled" || result.value === null) {
-						nextErrors.push({
-							id: crypto.randomUUID(),
-							name,
-							reason: translate("chat.promptImages.unsupported"),
-						});
-						return;
-					}
-					const size = result.value.content.data.length;
-					if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
-						nextErrors.push({
-							id: crypto.randomUUID(),
-							name,
-							reason: translate("chat.promptImages.limitReached"),
-						});
-						return;
-					}
-					used += size;
-					additions.push({ id: crypto.randomUUID(), name, ...result.value });
+				update((current) => {
+					if (current.generation !== startedGeneration) return current;
+					let used = current.images.reduce((sum, p) => sum + p.content.data.length, 0);
+					const additions: PromptImage[] = [];
+					const nextErrors: PromptImageError[] = [];
+					settled.forEach((result, i) => {
+						const name = picked[i]?.name || translate("chat.promptImages.fallbackName");
+						if (result.status !== "fulfilled" || result.value === null) {
+							nextErrors.push({
+								id: crypto.randomUUID(),
+								name,
+								reason: translate("chat.promptImages.unsupported"),
+							});
+							return;
+						}
+						const size = result.value.content.data.length;
+						if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
+							nextErrors.push({
+								id: crypto.randomUUID(),
+								name,
+								reason: translate("chat.promptImages.limitReached"),
+							});
+							return;
+						}
+						used += size;
+						additions.push({ id: crypto.randomUUID(), name, ...result.value });
+					});
+					return {
+						...current,
+						images: [...current.images, ...additions],
+						errors: [...current.errors, ...nextErrors],
+					};
 				});
-				if (additions.length > 0) commit([...imagesRef.current, ...additions]);
-				if (nextErrors.length > 0) setErrors((prev) => [...prev, ...nextErrors]);
 			};
-			void decode().finally(() => setPending((n) => n - picked.length));
+			void decode().finally(() =>
+				update((current) =>
+					current.generation !== startedGeneration
+						? current
+						: { ...current, pending: current.pending - picked.length },
+				),
+			);
 		},
-		[commit],
+		[read, update],
 	);
 
 	const removeImage = useCallback(
-		(id: string) => commit(imagesRef.current.filter((p) => p.id !== id)),
-		[commit],
+		(id: string) =>
+			update((current) => ({
+				...current,
+				images: current.images.filter((p) => p.id !== id),
+			})),
+		[update],
 	);
 
 	const dismissError = useCallback(
-		(id: string) => setErrors((prev) => prev.filter((p) => p.id !== id)),
-		[],
+		(id: string) =>
+			update((current) => ({
+				...current,
+				errors: current.errors.filter((p) => p.id !== id),
+			})),
+		[update],
 	);
 
 	const restore = useCallback(
 		(attachments: ChatAttachment[]) => {
 			if (attachments.length === 0) return;
-			commit([
-				...attachments.map((attachment) => ({ id: crypto.randomUUID(), ...attachment })),
-				...imagesRef.current,
-			]);
+			update((current) => ({
+				...current,
+				images: [
+					...attachments.map((attachment) => ({ id: crypto.randomUUID(), ...attachment })),
+					...current.images,
+				],
+			}));
 		},
-		[commit],
+		[update],
 	);
 
 	const reset = useCallback(() => {
-		generation.current += 1;
-		commit([]);
-		setErrors([]);
-	}, [commit]);
+		update(newPromptImagesState);
+	}, [update]);
 
 	return { images, pending, errors, addFiles, removeImage, dismissError, restore, reset };
 }

@@ -15,6 +15,7 @@ import {
 	type WorkspaceFsChangedPayload,
 	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
+import type { PromptImage } from "../chat/promptImageState";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
 import {
@@ -1506,6 +1507,44 @@ test("closeChatRuntime drops only its own runtime", () => {
 	expect(rt("b").isStreaming).toBe(true);
 });
 
+test("image drafts stay with their own runtime and unknown-session updates are ignored", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+	const image: PromptImage = {
+		id: "picked",
+		name: "picked.png",
+		content: { type: "image", mimeType: "image/png", data: "eA==" },
+	};
+	store.updateChatPromptImages("a", (current) => ({ ...current, images: [image], pending: 1 }));
+	store.setChatDraft("a", "keep this image");
+	expect(rt("a").promptImages.images).toEqual([image]);
+	expect(rt("a").promptImages.pending).toBe(1);
+	expect(rt("b").promptImages.images).toEqual([]);
+	expect(rt("b").promptImages.pending).toBe(0);
+	store.updateChatPromptImages("missing", () => {
+		throw new Error("a missing runtime must not run an image update");
+	});
+	expect(useAppStore.getState().sessions.missing).toBeUndefined();
+});
+
+test("closing a chat drops its image draft and reopening gets a new decode generation", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.updateChatPromptImages("a", (current) => ({ ...current, pending: 1 }));
+	const generation = rt("a").promptImages.generation;
+	store.closeChatRuntime("a");
+	store.updateChatPromptImages("a", () => {
+		throw new Error("a late decode must not resurrect its closed runtime");
+	});
+	expect(useAppStore.getState().sessions.a).toBeUndefined();
+	store.openChatSession("ws1", "a", null, "medium");
+	expect(rt("a").promptImages.generation).not.toBe(generation);
+	expect(rt("a").promptImages.images).toEqual([]);
+	expect(rt("a").promptImages.pending).toBe(0);
+	expect(rt("a").promptImages.errors).toEqual([]);
+});
+
 test("applyExtUi routes a dialog to its session; the reply clears only that one", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -2188,6 +2227,7 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "sync", null, "medium");
 	store.setChatDraft("sync", "keep my draft");
+	store.updateChatPromptImages("sync", (current) => ({ ...current, pending: 1 }));
 	store.appendUserMessage("sync", "old summarized prompt");
 	store.handlePiEvent(agentStart, "sync");
 	store.handlePiEvent({ type: "compaction_start", reason: "overflow" }, "sync");
@@ -2250,6 +2290,7 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 		resuming: true,
 	});
 	expect(after.draft).toBe("keep my draft");
+	expect(after.promptImages).toBe(before.promptImages);
 	expect(after.queue).toEqual({ steering: [], followUp: ["continue afterward"] });
 	expect(after.thinkingLevel).toBe("high");
 	expect(after.syncedConnectionGeneration).toBe(7);

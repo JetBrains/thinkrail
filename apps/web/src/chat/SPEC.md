@@ -799,7 +799,14 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   provider-accepted** (`ACCEPTED_IMAGE_TYPES`, shared via `contracts`); undecodable + unsupported
   (HEIC…) is **refused** (`fileToAttachedImage` → `null`) — raw pass-through would 400 every later
   turn — and surfaced as a dismissible error chip (`composer-image-error` testid) in the attachment
-  strip, cleared on send. One message's batch is also bounded by the request-wide
+  strip, cleared on send. The chat's image draft belongs to its browser-local `SessionRuntime`,
+  beside the text draft: ready images, pending decodes, errors and the decode generation survive
+  file/chat tab and workspace remounts. `usePromptImages` accepts that owner from `ChatView` through
+  `Composer`; other prompt dialogs keep a local owner. Decode completion updates the owner's current
+  state atomically, so concurrent or remounted decodes share one request budget. Every new owner and
+  reset gets a fresh opaque generation; a late completion cannot populate a reset or closed/reopened
+  session. Session/workspace retirement releases the draft with its runtime. This state is never
+  persisted or added to a wire contract. One message's batch is also bounded by the request-wide
   **`REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB per-request cap):
   files that would push the batch over it are refused with the same error-chip surface. The server's
   `imageGuard` extension is the second line of defense for history. While files are still decoding, a placeholder chip renders
