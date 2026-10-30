@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, statSync } from "node:fs";
 import type {
 	Ack,
 	OpenBranchReview,
@@ -117,7 +117,7 @@ import {
 	surveyIsCompleted,
 	surveyResponse,
 } from "../feedback";
-import { readDir, readFile } from "../fs";
+import { readDir, readFile, resolveWorktreeFile } from "../fs";
 import {
 	commitsAheadOf,
 	countPushDivergence,
@@ -181,7 +181,7 @@ import {
 	updateComment,
 } from "../reviews";
 import { getConfig, noteRecentModel, updateConfig } from "../settings";
-import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
+import { evictSpecIndex, evictSpecRoot, projectHasSpecs, specGraph } from "../spec";
 import {
 	deleteTemplate,
 	getTemplate,
@@ -279,6 +279,7 @@ import {
 import { startPlanReview } from "./requestReview";
 import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
+import { hostSearch } from "./search";
 import { scheduleLifecyclePass } from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -697,6 +698,7 @@ const handlers: WsHandlers = {
 		const ws = forgetWorkspace(id);
 		if (ws) {
 			evictSpecIndex(ws.id);
+			evictSpecRoot(ws.worktreePath);
 			removeWorkspaceReviews(ws.id);
 			forgetWorkspaceChanges(ws.id);
 			forgetWorkspaceTurns(ws.id);
@@ -779,6 +781,12 @@ const handlers: WsHandlers = {
 	},
 	"fs.readFile": (p) => {
 		void ensureWatch(p.workspaceId);
+		if (
+			p.maxBytes !== undefined &&
+			statSync(resolveWorktreeFile(p.workspaceId, p.path)).size > p.maxBytes
+		) {
+			throw new CodedError("FILE_TOO_LARGE", "The file is larger than the read allows");
+		}
 		return readFile(p.workspaceId, p.path);
 	},
 	"spec.graph": (p) => {
@@ -1365,6 +1373,12 @@ const handlers: WsHandlers = {
 			limit: clampLimit(p.limit),
 		});
 	},
+
+	"search.query": (p, ctx) => {
+		if (p.context.workspaceId) void ensureWatch(p.context.workspaceId);
+		return hostSearch().query(ctx.clientKey, p);
+	},
+	"search.preview": (p) => hostSearch().preview(p),
 
 	"review.get": async (p) => {
 		ensureWatch(p.workspaceId);

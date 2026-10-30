@@ -1,5 +1,5 @@
 import {
-	buildSessionContext,
+	buildSessionProjection,
 	migrateSessionEntries,
 	parseSessionEntries,
 	type SessionEntry,
@@ -11,6 +11,7 @@ export interface HistoryEntry {
 	role: "user" | "assistant";
 	timestamp: number;
 	messageIndex: number;
+	entryId: string;
 }
 
 export interface ExtractedSession {
@@ -43,21 +44,27 @@ export function extractSession(jsonl: string): ExtractedSession | null {
 	for (const entry of entries) {
 		if (entry.type === "session_info") title = entry.name?.trim() || undefined;
 	}
-	const { messages } = buildSessionContext(entries);
-
-	const renderable = messages.filter((message) => isTranscriptMessageRole(message.role));
+	const sourced = buildSessionProjection(entries).entries.flatMap(({ sourceEntry, messages }) =>
+		messages.map((message, part) => ({
+			message,
+			entryId: messages.length === 1 ? sourceEntry.id : `${sourceEntry.id}:${part}`,
+		})),
+	);
+	const renderable = sourced.filter(({ message }) => isTranscriptMessageRole(message.role));
+	const messages = renderable.map(({ message }) => message);
 	const out: HistoryEntry[] = [];
-	for (const [index, message] of renderable.entries()) {
+	for (const [index, { message, entryId }] of renderable.entries()) {
 		if (message.role !== "user" && message.role !== "assistant") continue;
 		const text = textOf(message.content);
 		if (!text.trim()) continue;
 		if (message.role === "user" && isControlMessage(text)) continue;
-		if (isRetriedAttempt(renderable, index)) continue;
+		if (isRetriedAttempt(messages, index)) continue;
 		out.push({
 			text,
 			role: message.role,
 			timestamp: message.timestamp,
 			messageIndex: index,
+			entryId,
 		});
 	}
 	return {

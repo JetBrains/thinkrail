@@ -4,13 +4,15 @@ import {
 	RiHome4Line,
 	RiTerminalBoxLine,
 } from "@remixicon/react";
-import { useT } from "@thinkrail/locales/react";
+import type { SearchContext, Workspace } from "@thinkrail/contracts";
+import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Command, CommandContext } from "../commands";
 import { copyText } from "../lib";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
+import { openFileInTab } from "../panels/openTabs";
 import { settingsNavGroups } from "../panels/settingsNav";
 import {
 	canSettleWorkspace,
@@ -26,12 +28,14 @@ import {
 import {
 	buildWorkItems,
 	commandItems,
+	type PaletteHost,
 	type PaletteItem,
 	type SearchPaletteProps,
 	type SearchScope,
 	waitingItems,
 } from "../search";
 import {
+	isDefaultWorkspace,
 	selectActiveWorkspace,
 	selectContextProject,
 	selectHistoryTarget,
@@ -43,9 +47,12 @@ import {
 	selectWorkspaceReadAction,
 	selectWorkspaceSettledReason,
 	supportsWorkspaceReadState,
+	toast,
 	useAppStore,
+	workspaceName,
 } from "../store";
-import { getTransport, wsErrorCode } from "../transport";
+import { errorText, getTransport, supportsHostSearch, wsErrorCode } from "../transport";
+import { type HostHitTargets, openHostHit } from "./openHostHit";
 import { createPaletteBackfill, mergeProjectWorkspaces } from "./paletteBackfill";
 import {
 	buildCommands,
@@ -56,7 +63,22 @@ import {
 import { createPaletteNavigator } from "./paletteNavigation";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
 
-const SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
+export function paletteSearchContext(
+	contextProjectId: string | null,
+	activeWorkspaceId: string | null,
+	workspaces: Readonly<Record<string, readonly Workspace[]>>,
+): SearchContext {
+	const workspaceId =
+		activeWorkspaceId ??
+		(contextProjectId ? workspaces[contextProjectId]?.find(isDefaultWorkspace)?.id : undefined);
+	return {
+		...(contextProjectId ? { projectId: contextProjectId } : {}),
+		...(workspaceId ? { workspaceId } : {}),
+	};
+}
+
+const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
+const HOST_SCOPES: readonly SearchScope[] = ["all", "work", "files", "specs", "commands"];
 const BACKFILL_CONCURRENCY = 4;
 
 const paletteBackfill = createPaletteBackfill({
@@ -78,6 +100,15 @@ function useChatTitleBackfill(): void {
 	useEffect(() => paletteBackfill.watch(), []);
 }
 
+const hostHitTargets: HostHitTargets = {
+	navigateToWorkspace: paletteNavigator.navigateToWorkspace,
+	loadWorkspaceRow: paletteNavigator.loadWorkspaceRow,
+	openFile: (workspaceId, path) => openFileInTab(workspaceId, path, "keep"),
+	openSpec: (workspaceId, path) => useAppStore.getState().requestSpecView(workspaceId, path),
+	openChatLocation: (location) => useAppStore.getState().requestChatLocation(location),
+	openPlan: (workspaceId) => useAppStore.getState().requestToolView(workspaceId, "plan"),
+};
+
 export interface SearchPaletteOptions {
 	readonly openNewWorkspace: (projectId: string) => void;
 	readonly toggleProjectsHome: () => void;
@@ -85,6 +116,7 @@ export interface SearchPaletteOptions {
 	readonly enterHostPath: () => void;
 	readonly startNewProject: () => void;
 	readonly hasUpdateSettings: boolean;
+	readonly renderFilePreview: PaletteHost["renderFilePreview"];
 }
 
 export function useSearchPalette(options: SearchPaletteOptions): SearchPaletteProps {
@@ -126,6 +158,34 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const [settingsShortcut] = useState(() => readSettingsShortcutLabel() !== null);
 
 	const online = status === "connected" && welcomeGeneration > 0 && protocolVersion !== null;
+	const hostSearch = online && supportsHostSearch(protocolVersion);
+	const host = useMemo<PaletteHost | undefined>(() => {
+		if (!hostSearch) return undefined;
+		const names = new Map(projects.map((project) => [project.id, project.name]));
+		const workspaceNames = new Map<string, string>();
+		for (const list of Object.values(workspaces)) {
+			for (const workspace of list) workspaceNames.set(workspace.id, workspaceName(t, workspace));
+		}
+		return {
+			context: paletteSearchContext(contextProject?.id ?? null, activeWorkspaceId, workspaces),
+			openHit: (hit) => {
+				void openHostHit(hit, hostHitTargets).catch((err: unknown) =>
+					toast.error(errorText(err, globalT("search.item.openFailed"))),
+				);
+			},
+			projectName: (projectId) => names.get(projectId),
+			workspaceName: (workspaceId) => workspaceNames.get(workspaceId),
+			renderFilePreview: options.renderFilePreview,
+		};
+	}, [
+		hostSearch,
+		projects,
+		workspaces,
+		contextProject,
+		activeWorkspaceId,
+		t,
+		options.renderFilePreview,
+	]);
 	const context: CommandContext = useMemo(
 		() => ({
 			online,
@@ -293,9 +353,12 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 
 	return {
 		onClose: () => useAppStore.getState().closeSearch(),
-		scopes: SCOPES,
+		scopes: hostSearch && contextProject ? HOST_SCOPES : LOCAL_SCOPES,
+		...(host ? { host } : {}),
 		...(online
-			? {}
+			? hostSearch
+				? {}
+				: { notice: t("search.palette.olderHost") }
 			: {
 					notice: t(
 						status === "disconnected" ? "search.palette.offline" : "search.palette.connecting",

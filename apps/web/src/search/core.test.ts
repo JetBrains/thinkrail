@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { RiChat2Line } from "@remixicon/react";
-import { parseMatchTerms } from "@thinkrail/contracts";
+import { MAX_SEARCH_QUERY_LENGTH, parseMatchTerms } from "@thinkrail/contracts";
 import { createDoubleShiftDetector, DOUBLE_SHIFT } from "./doubleShift";
 import {
 	adaptiveCounts,
@@ -48,6 +48,14 @@ describe("parseSearchQuery", () => {
 				{ text: "unread", literal: false },
 			],
 		});
+	});
+
+	test("the text is cut to the host's query length, so local and host terms come from the same characters", () => {
+		const long = `${"word ".repeat(MAX_SEARCH_QUERY_LENGTH / 5)}distinguishing`;
+		const parsed = parseSearchQuery(`@ ${long}`);
+		expect(parsed.text).toBe(long.slice(0, MAX_SEARCH_QUERY_LENGTH));
+		expect(parsed.terms).toEqual(parseMatchTerms(parsed.text.slice(0, MAX_SEARCH_QUERY_LENGTH)));
+		expect(parsed.terms.map((term) => term.text)).not.toContain("distinguishing");
 	});
 
 	test("scope prefixes round-trip, so a chip can write its prefix back", () => {

@@ -346,6 +346,13 @@ before the already-enqueued replacement pass has reconciled the current plan.
   `approveTodoReview(...)` / `requestTodoFix(...) → { pkg, previous }` / `rollbackTodoFix(...)` + the
   pure `renderFixPackage` (the review ops; the send itself is `host`'s composition), and the
   `TodoReviewRecord` type. **Mapping only** — no plan logic; `TodoStore` owns disk.
+  **`listStoredPlans(root) → StoredPlanFile[]`** is the Git-free reader the search palette's host
+  providers use: it enumerates `<root>/.thinkrail/context/todos/<sessionId>.json` (sidecars such as
+  `.baselines.json` are skipped by the id grammar) and hands each plan back as a lazy
+  `TodoStore.read()` — no artifact settling, no git, no review decoration. A read parses a file only when
+  its `mtime` or size changed since the last read (a bounded per-file memo), so a search over every open
+  project's plans costs one `stat` per plan per keystroke; an empty plan is never memoized, since
+  `TodoStore.read()` also answers empty when the read itself failed.
 - **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
   `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
   `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head;

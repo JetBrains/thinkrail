@@ -27,6 +27,15 @@ export function itemFields(item: PaletteItem): MatchField[] {
 	return fields;
 }
 
+export function matchingIds(
+	items: readonly PaletteItem[],
+	terms: readonly MatchTerm[],
+): ReadonlySet<string> {
+	return new Set(
+		items.filter((item) => matchFields(terms, itemFields(item)) !== null).map((item) => item.id),
+	);
+}
+
 export function itemBoost(
 	item: PaletteItem,
 	learning: LearningSnapshot,
@@ -44,7 +53,9 @@ export function itemBoost(
 }
 
 export function compareRanked(a: RankedItem, b: RankedItem): number {
-	return a.match.tier - b.match.tier || b.total - a.total;
+	return (
+		(a.item.late ?? 0) - (b.item.late ?? 0) || a.match.tier - b.match.tier || b.total - a.total
+	);
 }
 
 export function rankItems(
@@ -57,7 +68,13 @@ export function rankItems(
 	const ranked: RankedItem[] = [];
 	const adaptive = adaptiveCounts(learning, query, nowMs);
 	for (const item of items) {
-		const match = matchFields(terms, itemFields(item));
+		const match = item.match
+			? {
+					tier: item.match.tier as MatchResult["tier"],
+					score: item.match.score,
+					fields: Object.entries(item.match.ranges).map(([key, ranges]) => ({ key, ranges })),
+				}
+			: matchFields(terms, itemFields(item));
 		if (!match) continue;
 		const { boost, latched } = itemBoost(item, learning, adaptive, nowMs);
 		ranked.push({ item, match, total: match.score * 100 + boost, latched });
@@ -66,7 +83,7 @@ export function rankItems(
 }
 
 export function pickTopHit(ranked: readonly RankedItem[]): RankedItem | null {
-	const [best, second] = ranked;
+	const [best, second] = ranked.filter((entry) => (entry.item.late ?? 0) === 0);
 	if (!best) return null;
 	if (best.latched >= 2) return best;
 	if (best.match.tier > MATCH_TIER.prefix) return null;

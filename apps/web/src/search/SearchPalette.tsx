@@ -1,4 +1,19 @@
-import { RiCornerDownLeftLine, RiSearchLine, RiSideBarLine, RiWifiOffLine } from "@remixicon/react";
+import {
+	RiCornerDownLeftLine,
+	RiInformationLine,
+	RiSearchLine,
+	RiSideBarLine,
+	RiWifiOffLine,
+} from "@remixicon/react";
+import {
+	MAX_SEARCH_GROUP_LIMIT,
+	MAX_SEARCH_PREVIEW_BYTES,
+	MAX_SEARCH_QUERY_LENGTH,
+	type SearchContext,
+	type SearchHit,
+	type SearchPreviewResult,
+	type SearchPreviewTarget,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -10,6 +25,7 @@ import {
 	type ReactNode,
 	useEffect,
 	useInsertionEffect,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -18,18 +34,35 @@ import { shortcutKeys } from "../commands";
 import { AttentionDot } from "../components/AttentionDot";
 import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier } from "../lib";
+import { NO_ARRIVALS, noteArrivals, type PinnedRow, withPinned } from "./arrivals";
+import { hostItems, hostTotals } from "./hostItems";
+import {
+	createHostPreviewLoader,
+	type HostPreviewLoader,
+	type HostSearchStatus,
+	hostSearchStatus,
+	useHostSearch,
+} from "./hostSearch";
 import { isImeComposing } from "./ime";
 import { recordPick } from "./learning";
-import type { PaletteItem, PaletteRow, PaletteSection } from "./model";
+import type { PaletteFile, PaletteItem, PaletteRow, PaletteSection } from "./model";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
 import {
 	parseSearchQuery,
 	SCOPE_PREFIX,
 	type SearchScope,
+	scopeKinds,
 	stripScopePrefix,
 	withScopePrefix,
 } from "./query";
+import { matchingIds } from "./rank";
 import { buildSections, flattenRows } from "./sections";
+
+const HOST_STATUS_LABELS: Record<HostSearchStatus, MessageKey> = {
+	failed: "search.palette.hostFailed",
+	indexing: "search.palette.hostIndexing",
+	truncated: "search.palette.hostTruncated",
+};
 
 const SCOPE_LABELS: Record<SearchScope, MessageKey> = {
 	all: "search.scope.all",
@@ -39,12 +72,21 @@ const SCOPE_LABELS: Record<SearchScope, MessageKey> = {
 	commands: "search.scope.commands",
 };
 
+export interface PaletteHost {
+	readonly context: SearchContext;
+	readonly openHit: (hit: SearchHit) => void;
+	readonly projectName: (projectId: string) => string | undefined;
+	readonly workspaceName: (workspaceId: string) => string | undefined;
+	readonly renderFilePreview: (file: PaletteFile) => ReactNode;
+}
+
 export interface SearchPaletteProps {
 	readonly onClose: () => void;
 	readonly rootItems: readonly PaletteItem[];
 	readonly waiting: readonly PaletteItem[];
 	readonly actions: readonly PaletteItem[];
 	readonly scopes: readonly SearchScope[];
+	readonly host?: PaletteHost;
 	readonly notice?: string;
 }
 
@@ -67,12 +109,17 @@ function PaletteContent({
 	waiting,
 	actions: emptyActions,
 	scopes,
+	host,
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
 	const [query, setQuery] = useState("");
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_GROUPS);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [arrivals, setArrivals] = useState(NO_ARRIVALS);
+	const [pinned, setPinned] = useState<PinnedRow | null>(null);
+	const onScreen = useRef<ReadonlySet<string>>(new Set());
+	const holdingSelection = useRef(false);
 	const [previewOpen, setPreviewOpen] = useState(readPreviewOpen);
 	const [learning, setLearning] = useState(readLearning);
 	const [nowMs] = useState(Date.now);
@@ -83,21 +130,79 @@ function PaletteContent({
 		const result = parseSearchQuery(query);
 		return scopes.includes(result.scope) ? result : parseSearchQuery(stripScopePrefix(query));
 	}, [query, scopes]);
+	const hostEnabled = host !== undefined;
+	const hostProjectId = host?.context.projectId;
+	const hostWorkspaceId = host?.context.workspaceId;
+	const hostInput = useMemo(
+		() => ({
+			enabled: hostEnabled,
+			text: parsed.text,
+			kinds: scopeKinds(parsed.scope),
+			context: {
+				...(hostProjectId ? { projectId: hostProjectId } : {}),
+				...(hostWorkspaceId ? { workspaceId: hostWorkspaceId } : {}),
+			},
+			...(parsed.scope === "all" ? {} : { limit: MAX_SEARCH_GROUP_LIMIT }),
+		}),
+		[hostEnabled, hostProjectId, hostWorkspaceId, parsed.text, parsed.scope],
+	);
+	const hostState = useHostSearch(hostInput);
+	const [previews] = useState(createHostPreviewLoader);
+	useLayoutEffect(() => {
+		const landed = hostState.stale
+			? []
+			: (hostState.groups?.flatMap((group) => group.hits.map((hit) => hit.id)) ?? []);
+		const shown = onScreen.current;
+		const holding = holdingSelection.current;
+		setArrivals((current) => noteArrivals(current, landed, shown, holding));
+	}, [hostState.groups, hostState.stale]);
+	const localMatches = useMemo(
+		() => matchingIds(rootItems, parsed.terms),
+		[rootItems, parsed.terms],
+	);
+	const hostRows = useMemo(() => {
+		if (!host || !hostState.groups || hostState.groups.length === 0) return [];
+		const context = {
+			t,
+			openHit: host.openHit,
+			projectName: host.projectName,
+			workspaceName: host.workspaceName,
+			localIds: localMatches,
+			late: arrivals.late,
+			staleTerms: hostState.stale ? parsed.terms : null,
+		};
+		return hostItems(context, hostState.groups);
+	}, [host, hostState.groups, hostState.stale, parsed.terms, localMatches, t, arrivals]);
+	const allItems = useMemo(() => {
+		const listed = new Set([...localMatches, ...hostRows.map((item) => item.id)]);
+		return withPinned([...rootItems, ...hostRows], pinned, hostInput, listed);
+	}, [rootItems, hostRows, localMatches, pinned, hostInput]);
+	const totals = useMemo(
+		() => (hostState.groups && !hostState.stale ? hostTotals(hostState.groups) : {}),
+		[hostState.groups, hostState.stale],
+	);
+	const hostStatus = hostSearchStatus(hostState);
 	const sections = useMemo(
 		() =>
 			buildSections({
 				t,
 				parsed,
-				rootItems,
+				hostTotals: totals,
+				rootItems: allItems,
 				waiting,
 				actions: emptyActions,
 				expanded,
 				learning,
 				nowMs,
+				keep: selectedId,
 			}),
-		[t, parsed, rootItems, waiting, emptyActions, expanded, learning, nowMs],
+		[t, parsed, totals, allItems, waiting, emptyActions, expanded, learning, nowMs, selectedId],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
+	useLayoutEffect(() => {
+		onScreen.current = new Set(rows.map((row) => row.item.id));
+		holdingSelection.current = selectedId !== null;
+	}, [rows, selectedId]);
 	const selectedIndex = Math.max(
 		0,
 		rows.findIndex((row) => row.item.id === selectedId),
@@ -116,12 +221,17 @@ function PaletteContent({
 
 	const select = (index: number) => {
 		const row = rows[(index + rows.length) % rows.length];
-		if (row) setSelectedId(row.item.id);
+		if (!row) return;
+		setSelectedId(row.item.id);
+		const hostRow = row.item === pinned?.item || hostRows.includes(row.item);
+		setPinned(hostRow ? { item: row.item, input: hostInput } : null);
 	};
 
 	const resetQuery = (next: string) => {
 		setQuery(next);
 		setSelectedId(null);
+		setPinned(null);
+		setArrivals(NO_ARRIVALS);
 	};
 
 	const changeScope = (scope: SearchScope) => {
@@ -278,13 +388,28 @@ function PaletteContent({
 						autoComplete="off"
 						spellCheck={false}
 						value={query}
-						placeholder={t("search.palette.placeholder")}
+						maxLength={MAX_SEARCH_QUERY_LENGTH}
+						placeholder={t(
+							scopes.includes("files")
+								? "search.palette.placeholderHost"
+								: "search.palette.placeholder",
+						)}
 						onChange={(event) => resetQuery(event.target.value)}
 						className="h-full min-w-0 flex-1 bg-transparent tr-text-reading text-text-default outline-none placeholder:text-text-subtle"
 					/>
 					<Keycaps keys={["esc"]} />
 				</div>
 				<ScopeChips t={t} scopes={scopes} active={parsed.scope} onSelect={changeScope} />
+				{hostStatus ? (
+					<p
+						data-testid="search-host-status"
+						data-status={hostStatus}
+						className="flex shrink-0 items-center gap-8 border-border-muted border-b px-16 py-8 tr-text-metadata text-text-muted"
+					>
+						<RiInformationLine aria-hidden className="size-14 shrink-0" />
+						{t(HOST_STATUS_LABELS[hostStatus])}
+					</p>
+				) : null}
 				{notice ? (
 					<p
 						data-testid="search-notice"
@@ -320,12 +445,23 @@ function PaletteContent({
 							/>
 						)}
 					</div>
-					{previewItem ? <Preview t={t} item={previewItem} /> : null}
+					{previewItem ? (
+						<Preview t={t} item={previewItem} previews={previews} host={host} />
+					) : null}
 				</div>
 				<footer className="flex h-32 shrink-0 items-center gap-12 overflow-hidden border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
 					<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
 					<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
 					<Hint keys={["Tab"]} label={t("search.hint.scope")} />
+					{hostState.pending ? (
+						<span
+							data-testid="search-host-pending"
+							className="flex shrink-0 items-center gap-4 text-text-muted"
+						>
+							<RunningIcon className="size-12" />
+							{t("search.palette.searching")}
+						</span>
+					) : null}
 					<Hint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
 					<span className="flex-1" />
 					<Button
@@ -346,6 +482,8 @@ function PaletteContent({
 				</footer>
 				<p role="status" aria-live="polite" className="sr-only">
 					{t("search.palette.resultCount", { count: rows.length })}
+					{hostState.pending ? ` ${t("search.palette.searching")}` : ""}
+					{hostStatus ? ` ${t(HOST_STATUS_LABELS[hostStatus])}` : ""}
 				</p>
 			</div>
 		</DialogContent>
@@ -353,6 +491,16 @@ function PaletteContent({
 }
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
+const PREVIEW_SETTLE_MS = 150;
+
+function useSettled(key: string, ms: number): boolean {
+	const [settled, setSettled] = useState<string | null>(null);
+	useEffect(() => {
+		const timer = setTimeout(() => setSettled(key), ms);
+		return () => clearTimeout(timer);
+	}, [key, ms]);
+	return settled === key;
+}
 
 function keepInputFocus(event: ReactMouseEvent): void {
 	event.preventDefault();
@@ -587,15 +735,30 @@ function Row({
 	);
 }
 
-function Preview({ t, item }: { t: Translator; item: PaletteItem }) {
+function Preview({
+	t,
+	item,
+	previews,
+	host,
+}: {
+	t: Translator;
+	item: PaletteItem;
+	previews: HostPreviewLoader;
+	host: PaletteHost | undefined;
+}) {
 	const preview = item.preview?.() ?? null;
 	const Icon = item.icon;
 	return (
 		<aside
 			data-testid="search-preview"
-			className="hidden w-[40%] shrink-0 overflow-y-auto border-border-muted border-l px-16 py-16 md:block"
+			data-kind={item.file ? "file" : item.previewTarget ? "transcript" : "card"}
+			className="hidden w-[40%] shrink-0 flex-col overflow-y-auto border-border-muted border-l px-16 py-16 md:flex"
 		>
-			{preview ? (
+			{item.file && host ? (
+				<FilePreview t={t} item={item} file={item.file} host={host} />
+			) : item.previewTarget ? (
+				<HostPreview t={t} item={item} target={item.previewTarget} previews={previews} />
+			) : preview ? (
 				<>
 					<div className="flex items-center gap-8 tr-title-card text-text-default">
 						<Icon aria-hidden className="size-16 shrink-0 text-primary" />
@@ -619,5 +782,113 @@ function Preview({ t, item }: { t: Translator; item: PaletteItem }) {
 				<p className="tr-text-ui text-text-subtle">{t("search.palette.noPreview")}</p>
 			)}
 		</aside>
+	);
+}
+
+function PreviewHeading({ item, title }: { item: PaletteItem; title?: string }) {
+	const Icon = item.icon;
+	return (
+		<>
+			<div className="flex items-center gap-8 tr-title-card text-text-default">
+				<Icon aria-hidden className="size-16 shrink-0 text-primary" />
+				<span className="min-w-0 truncate">{title || item.title}</span>
+			</div>
+			{item.subtitle ? (
+				<p className="mt-4 truncate tr-text-metadata text-text-subtle">{item.subtitle}</p>
+			) : null}
+		</>
+	);
+}
+
+function FilePreview({
+	t,
+	item,
+	file,
+	host,
+}: {
+	t: Translator;
+	item: PaletteItem;
+	file: PaletteFile;
+	host: PaletteHost;
+}) {
+	const settled = useSettled(`${file.workspaceId}:${file.path}`, PREVIEW_SETTLE_MS);
+	const tooLarge = file.size !== undefined && file.size > MAX_SEARCH_PREVIEW_BYTES;
+	return (
+		<div
+			data-testid="search-file-preview"
+			data-state={tooLarge ? "too-large" : settled ? "ready" : "loading"}
+			className="flex min-h-0 flex-1 flex-col"
+		>
+			<PreviewHeading item={item} />
+			{tooLarge ? (
+				<p className="mt-12 tr-text-ui text-text-subtle">{t("search.palette.previewTooLarge")}</p>
+			) : settled ? (
+				<div className="mt-12 min-h-0 flex-1 overflow-auto rounded-sm border border-border-muted">
+					{host.renderFilePreview(file)}
+				</div>
+			) : (
+				<p className="mt-12 tr-text-ui text-text-subtle">{t("search.palette.previewLoading")}</p>
+			)}
+		</div>
+	);
+}
+
+function HostPreview({
+	t,
+	item,
+	target,
+	previews,
+}: {
+	t: Translator;
+	item: PaletteItem;
+	target: SearchPreviewTarget;
+	previews: HostPreviewLoader;
+}) {
+	const [result, setResult] = useState<SearchPreviewResult | null>(null);
+	const key = JSON.stringify(target);
+	useEffect(() => {
+		let current = true;
+		setResult(null);
+		const timer = setTimeout(() => {
+			void previews.load(JSON.parse(key) as SearchPreviewTarget).then((loaded) => {
+				if (current) setResult(loaded);
+			});
+		}, PREVIEW_SETTLE_MS);
+		return () => {
+			current = false;
+			clearTimeout(timer);
+		};
+	}, [key, previews]);
+	return (
+		<div data-testid="search-host-preview" data-state={result?.kind ?? "loading"}>
+			<PreviewHeading item={item} title={result?.kind === "transcript" ? result.title : ""} />
+			{result === null ? (
+				<p className="mt-12 tr-text-ui text-text-subtle">{t("search.palette.previewLoading")}</p>
+			) : result.kind === "unavailable" ? (
+				<p className="mt-12 tr-text-ui text-text-subtle">{t("search.palette.noPreview")}</p>
+			) : (
+				<ol className="mt-12 flex flex-col gap-8">
+					{result.messages.map((message) => (
+						<li
+							key={message.messageIndex}
+							data-focus={message.focus}
+							className={cn(
+								"rounded-sm px-8 py-4 tr-text-ui",
+								message.focus ? "bg-control-bg-selected text-text-default" : "text-text-muted",
+							)}
+						>
+							<span className="block tr-text-eyebrow text-text-subtle">
+								{t(
+									message.role === "user"
+										? "search.preview.roleUser"
+										: "search.preview.roleAssistant",
+								)}
+							</span>
+							<span className="whitespace-pre-wrap break-words">{message.text}</span>
+						</li>
+					))}
+				</ol>
+			)}
+		</div>
 	);
 }

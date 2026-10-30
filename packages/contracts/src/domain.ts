@@ -1481,6 +1481,84 @@ export interface HistorySearchResult {
 	indexing: boolean;
 }
 
+export const SEARCH_KINDS = ["chat", "transcript", "workspace", "file", "spec", "plan"] as const;
+
+export type SearchKind = (typeof SEARCH_KINDS)[number];
+
+export const MAX_SEARCH_QUERY_LENGTH = 200;
+
+export const MAX_SEARCH_GROUP_LIMIT = 50;
+
+export const DEFAULT_SEARCH_GROUP_LIMIT = 20;
+
+export const MAX_SEARCH_PREVIEW_BYTES = 2 * 1024 * 1024;
+
+/** Where the palette is: the active workspace, else the context project's folder, is the one root files and specs are searched in. */
+export interface SearchContext {
+	projectId?: string;
+	workspaceId?: string;
+}
+
+export interface SearchHit {
+	/** `kind:id[:locator]` — stable across replies so the client can keep a selection. */
+	id: string;
+	kind: SearchKind;
+	title: string;
+	subtitle?: string;
+	snippet?: string;
+	/** The shared matcher's tier and score; the client merges host hits with its own by these. */
+	tier: number;
+	score: number;
+	ranges?: Record<string, [number, number][]>;
+	projectId: string;
+	workspaceId?: string;
+	sessionId?: string;
+	messageIndex?: number;
+	anchorText?: string;
+	/** Root-relative POSIX path of a file or spec hit. */
+	path?: string;
+	/** Bytes on disk of a file or spec hit, so the client can decline to preview a large one. */
+	size?: number;
+	specId?: string;
+	timestamp?: number;
+}
+
+export type SearchGroupState = "ready" | "truncated" | "indexing" | "failed";
+
+export interface SearchGroup {
+	kind: SearchKind;
+	hits: SearchHit[];
+	total: number;
+	state: SearchGroupState;
+}
+
+export interface SearchQueryResult {
+	seq: number;
+	groups: SearchGroup[];
+	/** A newer `seq` from the same client arrived while this one ran; `groups` is empty. */
+	superseded?: true;
+}
+
+/** The transcript window around a chat hit; files and specs render client-side through `fs.readFile`. */
+export interface SearchPreviewTarget {
+	kind: "chat";
+	sessionId: string;
+	messageIndex?: number;
+	/** The hit's `anchorText`: the focus moves to the message it starts when compaction shifted the index. */
+	anchorText?: string;
+}
+
+export interface SearchPreviewMessage {
+	role: "user" | "assistant";
+	messageIndex: number;
+	text: string;
+	focus: boolean;
+}
+
+export type SearchPreviewResult =
+	| { kind: "transcript"; title: string; messages: SearchPreviewMessage[]; truncated: boolean }
+	| { kind: "unavailable"; reason: "missing" };
+
 export type TemplateScope = "global" | "project";
 
 export interface TemplateInfo {

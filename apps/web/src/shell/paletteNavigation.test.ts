@@ -103,26 +103,44 @@ describe("palette navigation", () => {
 		expect(await stale).toBe(false);
 		expect(useAppStore.getState().activeWorkspaceId).toBe("w2");
 
-		const late = navigator.navigateToWorkspace({ id: "p1-y", projectId: "p1-tab" });
+		const late = navigator.navigateToWorkspace({ id: "p1-tab-w", projectId: "p1-tab" });
 		useAppStore.setState((state) => ({
 			activeTabByWorkspace: { ...state.activeTabByWorkspace, w2: "a-chat-tab-that-just-opened" },
 		}));
 		loader.finish("p1-tab");
 		expect(await late).toBe(true);
-		expect(useAppStore.getState().activeWorkspaceId).toBe("p1-y");
+		expect(useAppStore.getState().activeWorkspaceId).toBe("p1-tab-w");
 
 		useAppStore.getState().activateWorkspaceFromRoute({ id: "w2", projectId: "p2" });
-		const switched = navigator.navigateToWorkspace({ id: "p1-z", projectId: "p1-switch" });
+		const switched = navigator.navigateToWorkspace({ id: "p1-switch-w", projectId: "p1-switch" });
 		useAppStore.getState().noteNavigation("w2");
 		loader.finish("p1-switch");
 		expect(await switched).toBe(false);
 		expect(useAppStore.getState().activeWorkspaceId).toBe("w2");
 
-		const again = navigator.navigateToWorkspace({ id: "p1-x", projectId: "p1-later" });
+		const again = navigator.navigateToWorkspace({ id: "p1-later-w", projectId: "p1-later" });
 		useAppStore.getState().activateWorkspaceFromRoute({ id: "w2", projectId: "p2" });
 		useAppStore.setState({ selectedProjectId: "p2", activeWorkspaceId: null });
 		loader.finish("p1-later");
 		expect(await again).toBe(false);
 		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
+	});
+
+	test("a workspace its project's list no longer holds does not open, and the user is told why", async () => {
+		useAppStore.setState({ projects: [project("p1")] });
+		const loader = deferredLoader();
+		const navigator = createPaletteNavigator(loader.load);
+		const gone = navigator.navigateToWorkspace({ id: "p1-removed", projectId: "p1" });
+		loader.finish("p1");
+		expect(await gone).toBe(false);
+		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
+		expect(useAppStore.getState().toasts.at(-1)?.message).toBe(
+			"This result is no longer available",
+		);
+
+		const failing = createPaletteNavigator(() => Promise.reject(new Error("socket closed")));
+		expect(await failing.navigateToWorkspace({ id: "p2-w", projectId: "p2" })).toBe(false);
+		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
+		expect(useAppStore.getState().toasts.at(-1)?.message).toBe("socket closed");
 	});
 });

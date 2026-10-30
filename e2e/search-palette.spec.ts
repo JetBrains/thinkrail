@@ -1,5 +1,15 @@
-import { realpathSync, rmSync } from "node:fs";
+import { appendFileSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import {
+	MATCH_TIER,
+	MAX_SEARCH_PREVIEW_BYTES,
+	MAX_SEARCH_QUERY_LENGTH,
+	SEARCH_PROTOCOL_VERSION,
+	WS_CHANNELS,
+	type WsClientMessage,
+	type WsParams,
+} from "@thinkrail/contracts";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
 	defaultWorkspaceRow,
@@ -131,7 +141,9 @@ test("the empty palette lists the chats waiting for you; arrows, Enter, click an
 	}
 });
 
-test("typing finds chats by title and Escape clears before it closes", async ({ page }) => {
+test("typing finds chats by title, a paste is cut to the host's query length, and Escape clears before it closes", async ({
+	page,
+}) => {
 	const repo = realpathSync(E2E_FIXTURE_REPO);
 	await openFixtureProject(page);
 	const seeded = seedAttention(repo);
@@ -143,6 +155,10 @@ test("typing finds chats by title and Escape clears before it closes", async ({ 
 		const chats = page.locator('[data-testid="search-row"][data-kind="chat"]');
 		await expect(chats.first()).toContainText("Unread result chat");
 		await expect(page.locator("mark").first()).toBeVisible();
+
+		await page.getByTestId("search-input").fill("");
+		await page.keyboard.insertText("x".repeat(MAX_SEARCH_QUERY_LENGTH + 20));
+		await expect(page.getByTestId("search-input")).toHaveValue("x".repeat(MAX_SEARCH_QUERY_LENGTH));
 
 		await page.keyboard.press("Escape");
 		await expect(page.getByTestId("search-input")).toHaveValue("");
@@ -300,7 +316,12 @@ test("Tab, Alt+digit and the chips switch the scope and write its prefix", async
 	await page.keyboard.press("Shift+Tab");
 	await expect(chip(page, "all")).toHaveAttribute("aria-pressed", "true");
 	await expect(input).toHaveValue("auth");
-	await page.keyboard.press("Alt+3");
+	const commandsChip = await page
+		.getByTestId("search-chip")
+		.evaluateAll((chips) =>
+			chips.findIndex((chip) => chip.getAttribute("data-scope") === "commands"),
+		);
+	await page.keyboard.press(`Alt+${commandsChip + 1}`);
 	await expect(input).toHaveValue(">auth");
 	await chip(page, "work").click();
 	await expect(input).toHaveValue("@auth");
@@ -313,4 +334,315 @@ test("Tab, Alt+digit and the chips switch the scope and write its prefix", async
 	await page.keyboard.press("ControlOrMeta+Alt+KeyI");
 	await pressPlatformShortcut(page, "i");
 	await expect(preview).toHaveAttribute("aria-pressed", "false");
+});
+
+test("host search: a file by name opens as a tab, a spec by body opens in the Specs tool", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("/notes");
+	await expect(page.locator('[data-testid="search-chip"][data-scope="files"]')).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	const file = page.locator('[data-testid="search-row"][data-kind="file"]', {
+		hasText: "notes.txt",
+	});
+	await expect(file).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByTestId("search-host-pending")).toHaveCount(0);
+	await pressPlatformShortcut(page, "i");
+	const preview = page.getByTestId("search-file-preview");
+	await expect(preview).toContainText("plain-text-fixture");
+	await pressPlatformShortcut(page, "i");
+	await file.click();
+	await expect(palette(page)).toBeHidden();
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "notes.txt" }),
+	).toBeVisible();
+
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("#SPECGRAPHPROBE");
+	const spec = page.locator('[data-testid="search-row"][data-kind="spec"]');
+	await expect(spec).toHaveCount(1, { timeout: 15_000 });
+	await expect(spec).toContainText("Sample Project");
+	await expect(spec).toContainText("SPECGRAPHPROBE");
+	await pressPlatformShortcut(page, "i");
+	await expect(preview.getByRole("heading", { name: "Goal" })).toBeVisible();
+	await pressPlatformShortcut(page, "i");
+	await page.keyboard.press("Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "SPEC.md" }),
+	).toBeVisible();
+});
+
+test("host search: an image and an HTML file render in the preview pane, and from Project Home a hit enters the project's workspace", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await expect(defaultWorkspaceRow(page)).not.toHaveAttribute("data-active", "true");
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("/RENDERERS.png");
+	const image = page.locator('[data-testid="search-row"][data-kind="file"]', {
+		hasText: "RENDERERS.png",
+	});
+	await expect(image).toBeVisible({ timeout: 15_000 });
+	await pressPlatformShortcut(page, "i");
+	const preview = page.getByTestId("search-file-preview");
+	await expect(preview.getByTestId("image-resource")).toBeVisible();
+
+	await page.getByTestId("search-input").fill("/sample.html");
+	await expect(
+		page.locator('[data-testid="search-row"][data-kind="file"]', { hasText: "sample.html" }),
+	).toBeVisible({ timeout: 15_000 });
+	await expect(preview.getByTestId("html-view")).toBeVisible();
+	const frame = preview.frameLocator("iframe");
+	await expect(frame.getByRole("heading", { name: "HTML fixture" })).toBeVisible();
+	await expect(frame.locator("body")).not.toContainText("script-ran");
+	await pressPlatformShortcut(page, "i");
+
+	await page.getByTestId("search-input").fill("/notes");
+	const file = page.locator('[data-testid="search-row"][data-kind="file"]', {
+		hasText: "notes.txt",
+	});
+	await expect(file).toBeVisible({ timeout: 15_000 });
+	await page.keyboard.press("Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "notes.txt" }),
+	).toBeVisible();
+});
+
+test("host search: a transcript hit jumps to its message and the preview shows the window around it", async ({
+	page,
+}) => {
+	const repo = realpathSync(E2E_FIXTURE_REPO);
+	await openFixtureProject(page);
+	const seeded = seedWorkspaceSession(repo, {
+		name: "Watcher chat",
+		messages: [
+			{ role: "user", text: "first question", timestamp: BASE_TS },
+			{ role: "assistant", text: "first answer", timestamp: BASE_TS + 1 },
+			{ role: "user", text: "where is the quantum banana", timestamp: BASE_TS + 2 },
+			{
+				role: "assistant",
+				text: "The quantum banana lives in the fridge.",
+				timestamp: BASE_TS + 3,
+			},
+		],
+	});
+	try {
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await enterDefaultWorkspace(page);
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("quantum banana");
+		const transcripts = page.locator('[data-testid="search-row"][data-kind="transcript"]');
+		await expect(transcripts).toHaveCount(2, { timeout: 15_000 });
+		await expect(transcripts.first()).toContainText("quantum banana");
+		await expect(transcripts.first().locator("mark").first()).toBeVisible();
+
+		await pressPlatformShortcut(page, "i");
+		await transcripts.first().hover();
+		const preview = page.getByTestId("search-host-preview");
+		await expect(preview).toHaveAttribute("data-state", "transcript");
+		await expect(preview).toContainText("first question");
+		await expect(preview.locator("[data-focus='true']")).toContainText("quantum banana");
+		await pressPlatformShortcut(page, "i");
+
+		await transcripts.first().click();
+		await expect(palette(page)).toBeHidden();
+		const flashed = page.locator("[data-flash]");
+		await expect(flashed).toBeVisible({ timeout: 15_000 });
+		await expect(flashed).toContainText("quantum banana");
+	} finally {
+		rmSync(seeded.path, { force: true });
+	}
+});
+
+test("host rows that land after the user moved the selection never push it or the rows above it", async ({
+	page,
+}) => {
+	const repo = realpathSync(E2E_FIXTURE_REPO);
+	const shown = ["a", "b", "c", "d"].map((name) => `zz-${name}-zqxprobe.ts`);
+	const better = ["1", "2", "3", "4", "5"].map((name) => `zqxprobe-${name}.ts`);
+	for (const name of [...shown, ...better]) writeFileSync(join(repo, name), "probe\n");
+	let release = () => {};
+	const released = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const groups = (params: WsParams<"search.query">, names: readonly string[], state: string) =>
+		(params.kinds ?? []).map((kind) =>
+			kind === "file"
+				? {
+						kind,
+						state,
+						total: names.length,
+						hits: names.map((name) => ({
+							id: `file:${params.context.workspaceId}:${name}`,
+							kind,
+							title: name,
+							tier: name.startsWith("zqxprobe") ? MATCH_TIER.prefix : MATCH_TIER.substring,
+							score: 1,
+							projectId: params.context.projectId,
+							workspaceId: params.context.workspaceId,
+							path: name,
+						})),
+					}
+				: { kind, state: "ready", total: 0, hits: [] },
+		);
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		let answered = 0;
+		socket.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as WsClientMessage;
+			const params = "method" in frame && frame.method === "search.query" ? frame.params : null;
+			if (!params || (params as WsParams<"search.query">).query !== "zqxprobe") {
+				server.send(message);
+				return;
+			}
+			const query = params as WsParams<"search.query">;
+			const reply = (names: readonly string[], state: string) =>
+				socket.send(
+					JSON.stringify({
+						id: frame.id,
+						ok: true,
+						result: { seq: query.seq, groups: groups(query, names, state) },
+					}),
+				);
+			answered += 1;
+			if (answered === 1) reply(shown, "indexing");
+			else void released.then(() => reply([...shown, ...better], "ready"));
+		});
+		server.onMessage((message) => socket.send(message));
+	});
+	try {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("zqxprobe");
+		const files = page.locator('[data-testid="search-row"][data-kind="file"]');
+		await expect(files).toHaveCount(4, { timeout: 15_000 });
+		await page.keyboard.press("ArrowDown");
+		const selected = page.locator('[data-testid="search-row"][aria-selected="true"]');
+		await expect(selected).toContainText("zz-b-zqxprobe.ts");
+		release();
+		await expect(page.getByTestId("search-host-pending")).toHaveCount(0, { timeout: 15_000 });
+		await expect(page.locator('[data-testid="search-row"][data-kind="more"]')).toContainText("5");
+		await expect(files.nth(0)).toContainText("zz-a-zqxprobe.ts");
+		await expect(files.nth(1)).toContainText("zz-b-zqxprobe.ts");
+		await expect(selected).toContainText("zz-b-zqxprobe.ts");
+		await page.keyboard.press("Enter");
+		await expect(
+			page.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "zz-b-zqxprobe.ts" }),
+		).toBeVisible();
+	} finally {
+		for (const name of [...shown, ...better]) rmSync(join(repo, name), { force: true });
+	}
+});
+
+test("the preview pane reads a file only under its cap, even one that grows while it is shown", async ({
+	page,
+}) => {
+	const notes = join(realpathSync(E2E_FIXTURE_REPO), "notes.txt");
+	const original = readFileSync(notes);
+	const reads: { maxBytes?: number; refused: boolean; grown: boolean }[] = [];
+	const outstanding = new Set<string>();
+	let grown = false;
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		const asked = new Map<string, { maxBytes?: number; grown: boolean }>();
+		socket.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				id?: string;
+				method?: string;
+				params?: { path?: string; maxBytes?: number };
+			};
+			if (frame.id && frame.method === "fs.readFile" && frame.params?.path === "notes.txt") {
+				asked.set(frame.id, { maxBytes: frame.params.maxBytes, grown });
+				if (grown) outstanding.add(frame.id);
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as { id?: string; errorCode?: string };
+			if (frame.id && asked.has(frame.id)) {
+				const read = asked.get(frame.id);
+				outstanding.delete(frame.id);
+				reads.push({
+					maxBytes: read?.maxBytes,
+					grown: read?.grown === true,
+					refused: frame.errorCode === "FILE_TOO_LARGE",
+				});
+				asked.delete(frame.id);
+			}
+			socket.send(message);
+		});
+	});
+	try {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("/notes");
+		await expect(
+			page.locator('[data-testid="search-row"][data-kind="file"]', { hasText: "notes.txt" }),
+		).toBeVisible({ timeout: 15_000 });
+		await pressPlatformShortcut(page, "i");
+		const preview = page.getByTestId("search-file-preview");
+		await expect(preview).toContainText("plain-text-fixture");
+		writeFileSync(notes, "x".repeat(3 * 1024 * 1024));
+		grown = true;
+		await expect
+			.poll(
+				async () => {
+					appendFileSync(notes, "x");
+					const refused = reads.some((read) => read.grown && read.refused);
+					return refused || (await preview.getAttribute("data-state")) === "too-large";
+				},
+				{ timeout: 20_000, intervals: [500] },
+			)
+			.toBe(true);
+		await expect.poll(() => outstanding.size, { timeout: 10_000 }).toBe(0);
+		expect(reads.filter((read) => read.grown).every((read) => read.refused)).toBe(true);
+		expect(reads.every((read) => read.maxBytes === MAX_SEARCH_PREVIEW_BYTES)).toBe(true);
+	} finally {
+		writeFileSync(notes, original);
+	}
+});
+
+test("an older host gets the local scopes only, with a notice, and never a search.query", async ({
+	page,
+}) => {
+	const hostRequests: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		socket.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as { method?: string };
+			if (frame.method?.startsWith("search.")) hostRequests.push(frame.method);
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				channel?: string;
+				data: { protocolVersion: number };
+			};
+			if (frame.channel === WS_CHANNELS.serverWelcome) {
+				frame.data.protocolVersion = SEARCH_PROTOCOL_VERSION - 1;
+				socket.send(JSON.stringify(frame));
+			} else socket.send(message);
+		});
+	});
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openPalette(page);
+	await expect(page.getByTestId("search-notice")).toContainText("doesn't search files");
+	await expect(page.locator('[data-testid="search-chip"][data-scope="files"]')).toHaveCount(0);
+	await page.getByTestId("search-input").fill("/notes");
+	await expect(page.getByTestId("search-input")).toHaveValue("/notes");
+	await expect(page.locator('[data-testid="search-row"][data-kind="file"]')).toHaveCount(0);
+	await page.waitForTimeout(500);
+	expect(hostRequests).toEqual([]);
 });

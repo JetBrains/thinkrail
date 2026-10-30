@@ -1,10 +1,21 @@
 import type { RemixiconComponentType } from "@remixicon/react";
+import type { MatchField, MatchRange, SearchPreviewTarget } from "@thinkrail/contracts";
 import type { CommandShortcut } from "../commands";
 import type { ChatTitleSource } from "../lib";
 import type { SessionAttention } from "../store";
 import type { SearchScope } from "./query";
 
-export type PaletteItemKind = "command" | "setting" | "project" | "workspace" | "chat" | "more";
+export type PaletteItemKind =
+	| "command"
+	| "setting"
+	| "project"
+	| "workspace"
+	| "chat"
+	| "file"
+	| "spec"
+	| "plan"
+	| "transcript"
+	| "more";
 
 export type PaletteMore =
 	| { readonly kind: "scope"; readonly scope: SearchScope }
@@ -14,6 +25,18 @@ export interface PalettePreview {
 	readonly title: string;
 	readonly subtitle?: string;
 	readonly fields: readonly (readonly [label: string, value: string])[];
+}
+
+export interface PaletteFile {
+	readonly workspaceId: string;
+	readonly path: string;
+	readonly size?: number;
+}
+
+export interface PaletteMatch {
+	readonly tier: number;
+	readonly score: number;
+	readonly ranges: Readonly<Record<string, readonly MatchRange[]>>;
 }
 
 export interface PaletteItem {
@@ -35,6 +58,11 @@ export interface PaletteItem {
 	readonly workspaceId?: string;
 	readonly sessionId?: string;
 	readonly contextBoost?: number;
+	readonly match?: PaletteMatch;
+	readonly late?: number;
+	readonly hostFields?: readonly MatchField[];
+	readonly previewTarget?: SearchPreviewTarget;
+	readonly file?: PaletteFile;
 	readonly disabledReason?: string;
 	readonly more?: PaletteMore;
 	readonly run?: () => void;

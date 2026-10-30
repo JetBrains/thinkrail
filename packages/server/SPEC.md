@@ -101,6 +101,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
+| `search` | the search palette's host providers (files and specs from one root, plans, chats + transcripts, workspaces) and the transcript preview, ranked with the shared matcher | [search/SPEC.md](src/search/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `registerBundledRuntime` seam; explicit package
@@ -111,7 +112,8 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `history`, `search`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `search` → `history` (`HistoryIndex.sessions()`), `spec` (`specSnapshot`), `todos` (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`); projects, workspace records and the file check (`fs.readableFileSize`) are injected by `host/search.ts`, never imported; it reads no file content (files and specs preview client-side over `fs.readFile`)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
@@ -123,7 +125,7 @@ the host from env via `bootHost` for dev/e2e.
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `locales`, `themes`, `analytics`, `feedback` → `persistence` (`locales` also → `@thinkrail/locales` root, external-style: catalog validation and file naming) (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
-  `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`, `resourceHistory`). `persistence` never imports
+  `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`, `resourceHistory`, `search`). `persistence` never imports
   `log` (would cycle); `initLogging` is called only from `host`'s `bootHost`
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `reviews` → `workspaces` (worktree path lookup), `persistence` (data dir), `git` (the review's baseSha

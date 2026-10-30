@@ -6,6 +6,7 @@ export {
 	clampToCodePoints,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
+	DEFAULT_SEARCH_GROUP_LIMIT,
 	DEFAULT_WORKSPACE_NAME,
 	FIRST_PROMPT_MAX_LENGTH,
 	firstPromptHead,
@@ -31,6 +32,9 @@ export {
 	LINE_WIDTH_COLUMNS,
 	MAX_HISTORY_LIMIT,
 	MAX_HISTORY_QUERY_LENGTH,
+	MAX_SEARCH_GROUP_LIMIT,
+	MAX_SEARCH_PREVIEW_BYTES,
+	MAX_SEARCH_QUERY_LENGTH,
 	normalizeThemePreference,
 	PLAN_REVIEW_VERDICTS,
 	RECENT_MODELS_LIMIT,
@@ -42,6 +46,7 @@ export {
 	resourceOutcome,
 	resourceRecordId,
 	resourceTallyTotal,
+	SEARCH_KINDS,
 	SETTLE_IDLE_DAYS,
 	SUBAGENT_MAX_CONCURRENT,
 	SURVEY_OPEN_TEXT_LIMIT,
@@ -61,7 +66,13 @@ export type {
 	MatchTerm,
 	MatchTier,
 } from "./match";
-export { compareMatches, MATCH_TIER, matchFields, parseMatchTerms } from "./match";
+export {
+	compareMatches,
+	foldMatchCase,
+	MATCH_TIER,
+	matchFields,
+	parseMatchTerms,
+} from "./match";
 export type * from "./nativeClient";
 export type * from "./piProtocol";
 export {
