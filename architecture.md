@@ -238,8 +238,14 @@ dependency. This keeps test process drivers outside both launchers and the serve
 
 12. **A shell belongs to a tab, and the host owns the mapping.** Terminals are keyed by
     `(workspaceId, tabKey)`; `terminal.reserve` may durably establish the catalog tab without a process, while
-    one idempotent `terminal.attach` remains the only way its PTY is born. Reservation persists before
-    publishing membership and rolls back its in-memory insertion if persistence fails. This separation lets a
+    one idempotent `terminal.attach` remains the only way a **shell** tab's PTY is born. A tab is a shell
+    tab or a **command tab**: a command tab's process is born only by the host's `startCommandTab` (the
+    `run` module's project runs — one fixed `/bin/sh -c` script with host-injected environment), ends
+    through a terminal-owned ended-callback on every path (natural exit, stop, tab close, workspace close,
+    host stop), is stopped by process-group signals the host sends itself, and is never spawned by an
+    attach or a revive — attaching to an ended command tab shows its last screen. The run owner, not the
+    terminal, decides what an exit means. Reservation persists before publishing membership and rolls
+    back its in-memory insertion if persistence fails. This separation lets a
     synchronized hidden default placement survive reload and another client without starting a shell. The
     client keeps no tab→shell pointer of its own. Shells are **owner-scoped**, matching `history`/`todos`/`templates`, so
     they survive a reload, a closed browser and a different browser — attach is exclusive, and taking a tab

@@ -10,8 +10,10 @@ depends-on: [module-contracts]
 ## Responsibility
 
 Workspace-scoped `bun-pty` terminals rooted in the worktree cwd, and the per-workspace catalog of terminal
-identities. A tab's shell outlives every client that looks at it; each frontend independently references its
-`tabKey` from local workspace-view placement, which this module never receives.
+identities. A tab is a **shell tab** (the user's interactive shell, born by attach) or a **command tab** (a
+host-composed `/bin/sh -c` script the `run` module starts, whose exit status the host must know). A tab's
+process outlives every client that looks at it; each frontend independently references its `tabKey` from
+local workspace-view placement, which this module never receives.
 
 ## Boundary
 
@@ -24,11 +26,14 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `resizeTerminal`, `closeTerminalTab`, `resumeClientTerminals`, `closeWorkspaceTerminals`,
   `persistTerminalSessions`, `reviveTerminalSessions`, `closeAllTerminals`, `clearTerminalClient`,
   `resetTerminalState` (test seam), `setTerminalPublisher`,
-  `setTerminalTabsPublisher`; an accepted `writeTerminal` returns its owning workspace id (a displaced
-  caller returns `null`), so the host counts only input that actually reached a PTY as workspace activity;
-  the `TerminalDeliveryResult` type shared with the host publisher adapter.
-- **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`), `bun-pty`,
-  `Bun.which`, `Bun.spawnSync` (`id -un`), `process.env`.
+  `setTerminalTabsPublisher`; the command-tab surface `startCommandTab`, `stopCommandTab`,
+  `onCommandTabEnded`, `readTerminalRecording` and the `COMMAND_TAB_KEY_PREFIX` constant; an accepted
+  `writeTerminal` returns its owning workspace id (a displaced caller returns `null`), so the host counts
+  only input that actually reached a PTY as workspace activity; the `TerminalDeliveryResult` type shared
+  with the host publisher adapter.
+- **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`, `TerminalTabKind`),
+  `bun-pty`, `Bun.which`, `Bun.spawnSync` (`id -un`), `process.kill` (process-group signals for command
+  tabs), `process.env`.
 - **Forbidden:** `host`; sibling features. No WebSocket type crosses this boundary — clients are opaque keys.
 
 ## Decisions
@@ -110,8 +115,42 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - **Catalog reservation and PTY attachment are separate.** `reserveTerminal` idempotently records a
   client-minted tab identity without spawning. A new reservation is transactional: validate and insert,
   persist the complete catalog, then publish membership; persistence failure removes the in-memory insertion
-  and publishes nothing. `attachTerminal` remains idempotent get-or-create and the only way a PTY is born.
-  This is not a liveness split: a client still never holds the only pointer to a running shell.
+  and publishes nothing. `attachTerminal` remains idempotent get-or-create and the only way a **shell**
+  tab's PTY is born. This is not a liveness split: a client still never holds the only pointer to a running
+  shell.
+- **Command tabs are host-born, host-stopped and host-observed** (architecture Decision 12). The catalog
+  entry carries `kind: "shell" | "command"`, persisted in `terminals.json` (absent → `shell`, so a file
+  written by an older host revives as before). The `run` module is the only caller today; its tab keys
+  start with `COMMAND_TAB_KEY_PREFIX` (`thinkrail-run`), and `reserveTerminal`/`attachTerminal` **reject a
+  shell tab in that namespace** so a client cannot squat a key the host will later start a command on.
+  - `startCommandTab(workspaceId, tabKey, title, { script, env, cwd })` reserves the tab when it does not
+    exist and spawns **`/bin/sh -c script`** at once, with **no attached client**: the recorder captures
+    from the first byte with a **64 KB floor** regardless of `terminalReplayKb` (a run's diagnostics must
+    not depend on the user's replay preference), and the batcher simply holds nothing until a client
+    attaches. The interpreter is deliberately not the user's `$SHELL`: the script is POSIX `sh` by
+    contract, a non-interactive shell has no job control, so the shell and every descendant stay in **one
+    process group** — the group the host signals — and fish/nu users are unaffected. The environment is
+    `terminalPtyEnv()` **overlaid after filtering** with the caller's variables (the filter would otherwise
+    strip `THINKRAIL_RUN_*`); `cwd` is the worktree root. Spawn failure removes a tab this call reserved
+    (no ghost tab) and rethrows; on `win32` it throws `COMMAND_TAB_UNSUPPORTED` before touching the catalog.
+  - `stopCommandTab(workspaceId, tabKey, { force })` sends `SIGTERM` to the **process group**
+    (`process.kill(-pid)`; the PTY child is a session leader, so its pgid is its pid), escalates to
+    `SIGKILL` after 5 s (immediately when `force`), and only closes the handle after the natural exit
+    settled. `bun-pty`'s own `kill()` is never used to end a command tab: it ignores its signal argument and
+    fires a synthetic `exitCode: 0`, which would read as success.
+  - `onCommandTabEnded(cb)` fires **on every end** — natural exit, stop, tab close, workspace close, host
+    stop — with `{ workspaceId, tabKey, reason, exitCode | null }`. The dispose paths call it explicitly,
+    because `disposeTerminalEntry` deletes the entry before killing and `pty.onExit`'s identity guard then
+    skips the removed entry. The terminal reports facts; the run owner decides what an exit *means*.
+  - `readTerminalRecording(workspaceId, tabKey, maxBytes)` returns the live recorder's tail or the retained
+    final screen **without attaching** — the agent's diagnostics and the run module's URL scan must never
+    take the PTY over from the user.
+  - `attachTerminal` on a command tab **never spawns**: live → the normal exclusive attach; ended →
+    `{ id: "<tabKey>#ended", created: false, replay, exited: true }`, so a client (an older one included)
+    shows the last screen and learns it is detached on its first keystroke. Revive restores `kind` and the
+    screen and never starts a command.
+  - A live command tab is **always busy** for `closeTerminalTab`: the command itself may have no children,
+    and closing it is a stop (group kill), confirmed like any busy shell.
 - **The default terminal is a host-composed creation handshake, not layout seeding.** `host` sees the
   workspace's durable pending marker, calls `reserveTerminal` with its deterministic key, and asks
   `workspaces` to clear the marker only after catalog persistence succeeds. Retrying is idempotent; closing
@@ -167,7 +206,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   *catalog* is the exception: which terminals exist is shared domain state (architecture #12), so every
   reservation or removal fans out on `terminal.tabs` as an idempotent per-workspace snapshot.
 - **A shell dies from exactly five causes:** tab closed, workspace archived, natural exit, host stop, orphan
-  sweep on attach. Unmounting a view kills nothing.
+  sweep on attach. A command tab adds a sixth, the explicit `stopCommandTab`. Unmounting a view kills
+  nothing.
 - **No idle culling.** Terminal "activity" can only mean last PTY I/O, so a quiet long-running command would be
   culled mid-flight (Jupyter's `cull_inactive_timeout` does exactly this). **No abandoned-client reap** either.
 - **Revive, not reconnect, across a host restart.** Shells cannot survive it. **Membership is persisted on
@@ -187,6 +227,9 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   attach atomic on Bun's single event loop; an `await` between them reintroduces double-spawn.
 - **`closeTerminalTab` checks `busy` and kills in the same synchronous pass.** A separately-asked question
   lets a process started in between die unannounced.
+- **Every path that ends a command tab reports it.** A new dispose path (or a refactor of an existing one)
+  must fire `onCommandTabEnded`, or the run owner's state stays `running` forever; the real-PTY tests pin
+  tab close, workspace close and host stop.
 - Recorder rules: raw bytes (not a serialized grid); never replay resize events; re-emit observed private
   modes **except mouse tracking (1000/1002/1003/1006)** — those belong to a live foreground program, and a TUI
   that exits without its own `DECRST` leaves the last observed value stuck at `on`, so re-emitting it into a
