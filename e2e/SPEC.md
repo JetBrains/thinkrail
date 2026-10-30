@@ -518,10 +518,14 @@ without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
 `@agent` because only Pi's real row growth exercises that lifecycle. Stream-mount coverage injects
 synthetic `pi.event` frames into the page wire (`fixtures/streamReplay.ts`) under CPU throttling to prove
-a working chat stays shown when it mounts; it is not evidence of provider behavior. Before handoff, every
-app-affecting change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions remain covered by
-`e2e:binary`, `e2e:desktop`, and their shared host probe: a synthetic opaque external extension loads with
-no `pi` executable on `PATH` for default and custom `PI_CODING_AGENT_DIR`; desktop additionally proves its
-staged `.ts` PI runtime and physical resources. Real Central acceptance remains explicitly authorized and
-isolated: the dedicated `@agent` suite stages the opaque artifact, validates the exact model, and proves a
-real turn rather than accepting another provider or a fake agent.
+a working chat stays shown when it mounts; it is not evidence of provider behavior. Stream-pin coverage
+replays a long markdown answer the same way and samples geometry in a `ResizeObserver` registered after the
+app's, so it reads what paints: once the edge reaches the pin line at the viewport bottom, every sample keeps it within 2 px and
+`scrollTop` never moves back by more than 1 px (a sub-pixel content shrink can clamp it by one).
+Before handoff, every app-affecting change runs the complete `bun run e2e` no-agent gate. Artifact-only
+regressions remain covered by `e2e:binary`, `e2e:desktop`, and their shared host probe: a synthetic
+opaque external extension loads with no `pi` executable on `PATH` for default and custom
+`PI_CODING_AGENT_DIR`; desktop additionally proves its staged `.ts` PI runtime and physical resources.
+Real Central acceptance remains explicitly authorized and isolated: the dedicated `@agent` suite stages
+the opaque artifact, validates the exact model, and proves a real turn rather than accepting another
+provider or a fake agent.

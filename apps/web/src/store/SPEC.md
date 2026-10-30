@@ -552,14 +552,11 @@ screen, after `onboardingDismissed` is already persisted, until a project opens 
 cold-start-shaped store (capable host, not dismissed, no open or recent projects). Project Home reads the same
 selector to hide its Projects rail and pane, so onboarding has the whole window. Persisted preference priming
   and final choice updates converge through `applyConfig`; the dialog's visual draft remains component-local.
-  **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
-  StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
+  **`chatMessageOrder: ChatMessageOrder`** is instead a client-local presentation preference, hydrated by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected
-  backend-profile/window-scoped adapter. Message order defaults oldest-first; movement defaults to
-  `{ settle: 75, trigger: 100 }`. `setChatMessageOrder` / `setStreamingResponseMovement` change them
-  without a server round trip, and `applyConfig` can never overwrite either. `ChatView` projects each
-  runtime from order without rewriting canonical turns and passes the movement window into its sole scroll
-  controller. **`hiddenModels: ModelRef[]`** (`{ provider, id }` pairs) is a client-local model visibility
+  backend-profile/window-scoped adapter. It defaults oldest-first. `setChatMessageOrder` changes it
+  without a server round trip, and `applyConfig` can never overwrite it. `ChatView` projects each
+  runtime from order without rewriting canonical turns. **`hiddenModels: ModelRef[]`** (`{ provider, id }` pairs) is a client-local model visibility
   preference with pure **`hydrateHiddenModels(list)`** / **`setModelVisibility(model, visible)`** /
   **`toggleModelVisibility(model)`** actions; the store touches no storage — `chat/modelVisibility`
   hydrates and persists it, and `applyConfig` can never overwrite it. **`selectPickerModels(models,
