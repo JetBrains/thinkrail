@@ -17,7 +17,7 @@
 		"./toolHomes": "./src/toolHomes.ts"
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsrs --noEmit",
 		"test": "bun test",
 		"generate-icons": "bun scripts/generate-icons.ts"
 	},
@@ -28,6 +28,7 @@
 		"@resvg/resvg-js": "2.6.2",
 		"@types/bun": "catalog:",
 		"resedit": "catalog:",
+		"tsrs": "catalog:",
 		"typescript": "catalog:"
 	}
 }

@@ -194,8 +194,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
 - `scripts/build-binary.ts` consumes `@thinkrail/server/build-support`, writes three **transient** generated modules, runs
   `bun build --compile --no-compile-autoload-bunfig --bytecode --format=esm --sourcemap --target=<host|--target>` on
   `src/compiled-entry.ts`, then deletes them (so the artifact cannot execute a project-local
-  `bunfig.toml` preload before ThinkRail boots, and the working tree + `tsc` stay clean); each generated
-  module has a committed `.d.ts` type contract `tsc` resolves against
+  `bunfig.toml` preload before ThinkRail boots, and the working tree + `tsrs` stay clean); each generated
+  module has a committed `.d.ts` type contract `tsrs` resolves against
   when the `.ts` is absent:
   - `src/web-assets.generated.ts` — enumerates `apps/web/dist`: a Bun file-attribute import per asset +
     a `{ route, data }[]` manifest + a content-hash version.

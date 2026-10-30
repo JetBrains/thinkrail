@@ -9,7 +9,7 @@
 	},
 	"scripts": {
 		"test": "bun test",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsrs --noEmit"
 	},
 	"dependencies": {
 		"@remixicon/react": "catalog:",
@@ -25,6 +25,7 @@
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@types/bun": "catalog:",
 		"@types/react": "catalog:",
+		"tsrs": "catalog:",
 		"typescript": "catalog:"
 	}
 }
