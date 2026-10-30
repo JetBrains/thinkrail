@@ -34,10 +34,13 @@ crypto library, it has `RTCPeerConnection`, `WebSocket`, and `crypto.subtle` bui
   `server`, `pi`, or any server-only package.
 - **Forbidden:** value-importing `pi` or `server`; a WebRTC/crypto library (use the platform).
 
-## Not yet here (next slice)
+The UI entry is `panels/ConnectByLinkDialog.tsx` (reached from the `AddProjectMenu` "Open a project by link"
+item): it drives the controller and, on connect, calls `mountRemoteSession` so the remote host's projects and
+sessions render in the normal UI via the shared channel→store wiring.
 
-- The **dialog UI** that calls the controller (link field + status), and **mounting the connected client into
-  the store/transport** so the remote project renders in the full UI. The latter is a multi-host refactor:
-  the store leans on the WS transport's `httpBase` (`/files`, `/blob`), ack/replay, and reconnect, which the
-  DataChannel wire client does not yet provide. End-to-end pairing is verifiable only with a deployed relay,
-  a host, and a second device.
+## Not yet here
+
+- `/files` and `/blob` byte URLs over the data channel (markdown images, diff blobs) — `RemoteTransport.httpBase`
+  returns empty until that tunnel lands.
+- A deployed relay (+coturn) and the real cross-device run: end-to-end pairing is verifiable only with a
+  deployed relay, a host, and a second device — not in this repo's test environment.

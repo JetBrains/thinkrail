@@ -5,7 +5,8 @@ export type RemoteConnectionState =
 	| { status: "idle" }
 	| { status: "connecting"; link: string }
 	| { status: "connected"; connection: RemoteConnection }
-	| { status: "error"; message: string };
+	| { status: "error"; kind: "invalid-link" }
+	| { status: "error"; kind: "failed"; message: string };
 
 export interface RemoteConnectionController {
 	getState(): RemoteConnectionState;
@@ -41,7 +42,7 @@ export function createRemoteConnectionController(
 		},
 		async connect(link, label) {
 			if (!parsePairingUri(link)) {
-				set({ status: "error", message: "That is not a valid ThinkRail pairing link." });
+				set({ status: "error", kind: "invalid-link" });
 				return;
 			}
 			set({ status: "connecting", link });
@@ -49,7 +50,11 @@ export function createRemoteConnectionController(
 				const connection = await connector(link, { label });
 				set({ status: "connected", connection });
 			} catch (error) {
-				set({ status: "error", message: error instanceof Error ? error.message : String(error) });
+				set({
+					status: "error",
+					kind: "failed",
+					message: error instanceof Error ? error.message : String(error),
+				});
 			}
 		},
 		reset() {
