@@ -1962,7 +1962,10 @@ describe("reading-band quantized scroll writes", () => {
 
 	it("follows a fractional growth once under reduced motion after the reader returns", () => {
 		for (const returnPath of ["returnToEdge", "readerReachedEdge"] as const) {
-			const harness = returnedMidStream({ reducedMotion: true, snap: webkitTruncation }, returnPath);
+			const harness = returnedMidStream(
+				{ reducedMotion: true, snap: webkitTruncation },
+				returnPath,
+			);
 			harness.setGeometry({ edgeBottom: 450.8 });
 			expect(() => harness.controller.contentChanged()).not.toThrow();
 			expect(harness.readGeometry().scrollTop).toBe(100);
@@ -2037,8 +2040,16 @@ describe("reading-band quantized scroll writes", () => {
 		expect(harness.writes.at(-1)).toBe(101.2);
 		expect(harness.readGeometry().scrollTop).toBe(101);
 
+		target = 101.8;
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBe(101.8);
+		const settledWrites = harness.writes.length;
+		harness.advance(16);
+		expect(harness.writes).toHaveLength(settledWrites);
+
 		harness.setGeometry({ scrollTop: 90 });
 		harness.advance(16);
+		expect(harness.writes).toHaveLength(settledWrites + 1);
 		expect(harness.readGeometry().scrollTop).toBe(101);
 
 		const writes = harness.writes.length;
