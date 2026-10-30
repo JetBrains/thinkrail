@@ -638,6 +638,18 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   only settings **`isSharedModelContextTarget`** accepts (no override, or one inside the range): an
   override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
   existing `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
+  **`customEndpoints.list`** / **`customEndpoints.probe`** / **`customEndpoints.save`** /
+  **`customEndpoints.remove`** (v101, `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; the user's OpenAI-compatible
+  servers stored as pi `models.json` providers whose ids carry **`CUSTOM_ENDPOINT_ID_PREFIX`** (`custom-`,
+  tested by `isCustomEndpointId`). A `CustomEndpointModel` carries only what a server reported —
+  `contextWindow` / `maxTokens` / `reasoning` / `vision` are `null` when it did not say (distinct from an
+  explicit `false`, so a re-detect can clear a capability), and a `tools` hint is never saved. Probing takes `{baseUrl, apiKey? | endpointId?}` (an `endpointId` without `apiKey` reuses
+  that endpoint's saved key host-side, only for its unchanged address) and returns either the normalized
+  `baseUrl` with the models, or a closed `CustomEndpointProbeFailure` (`invalid-url`, `unauthorized`,
+  `timeout`, `unreachable`, `not-openai` with an optional HTTP `status`, `no-models`) so the client
+  localizes it. Saves take a `CustomEndpointDraft` (absent `id` = add; absent `apiKey` = keep, `""` =
+  clear). Every list/save/remove returns `CustomEndpoint[]` (`id`, `name`, `baseUrl`, `hasApiKey` rather
+  than the key, models); a save or removal that changes `models.json` emits `provider.changed`) /
   **`model.clampThinking`** (pi's
   `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
   client re-derives pi's policy) / **`provider.status`**

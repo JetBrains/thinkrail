@@ -80,6 +80,11 @@ create the tools it needs based on how you actually work.
   — say a personal `~/.pi/agent-personal` — or to pass extra environment variables to the agent, terminals
   and MCP servers, set them in Settings → Environment; they apply on the next start. A variable you set
   when launching (`PI_CODING_AGENT_DIR=… thinkrail`) still wins.
+- **Your own model servers.** Settings → Providers → **Custom servers** connects a company LLM gateway or a
+  model running on your own machine — any OpenAI-compatible server, such as LiteLLM, sglang, vLLM, Ollama,
+  LM Studio or llama.cpp. **Find models** lists what the server serves, with the context and capabilities it
+  reports. The server is saved to `pi`'s `models.json`, so its models appear in the chat model picker and in
+  the `pi` CLI alike.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your
   browser. Both embed the same engine host; app state lives under `~/.thinkrail`.
 - **Your language.** Settings → Language follows your system language or a language you pick; English,

@@ -106,8 +106,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   read-only Specs tool renders it as a tree ([[module-spec-graph]], [[submodule-server-spec]]).
 - **Workflows** — bundled workflow skills for project setup, design brainstorming, and shipping a PR
   ([[module-thinkrail-workflow]]).
-- **Providers** — in-app sign-in and API keys through pi's auth, and JetBrains AI through the user's
-  `central` CLI ([[submodule-server-auth]], [[central-integration]]).
+- **Providers** — in-app sign-in and API keys through pi's auth, JetBrains AI through the user's
+  `central` CLI, and the user's own OpenAI-compatible servers (a company gateway or a local model server)
+  added from Settings into pi's `models.json` ([[submodule-server-auth]], [[central-integration]],
+  [[submodule-server-agent]]).
 - **Pi configuration** — the user's own pi config folder, or another one (a personal vs a work setup), plus
   extra environment variables, chosen in Settings and applied to the whole host at the next start; one setup
   per host, not per project ([[submodule-server-environment]]).

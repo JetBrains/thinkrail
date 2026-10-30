@@ -10,6 +10,12 @@ export {
 	stopSubagent,
 } from "./chatResources";
 export {
+	listCustomEndpoints,
+	probeCustomEndpoint,
+	removeCustomEndpoint,
+	saveCustomEndpoint,
+} from "./customEndpoints";
+export {
 	type ReviewSubagentRun,
 	readChildTranscript,
 	refreshSubagentConcurrency,
@@ -59,10 +65,10 @@ export {
 export { setModelListingPublisher } from "./modelAvailability";
 export {
 	listModelContextSettings,
-	setModelContextPublisher,
 	setModelContextWindow,
 } from "./modelContext";
 export { preferredDefaultModel } from "./modelDefaults";
+export { setModelsFilePublisher } from "./modelsFile";
 export * from "./oneshot";
 export {
 	handlePiSettingsFileChanged,
