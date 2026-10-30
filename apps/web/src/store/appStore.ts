@@ -1373,7 +1373,12 @@ interface AppState {
 	applyExtUi: (request: ExtUiRequest) => void;
 	reserveLogin: () => boolean;
 	finishLoginStart: () => void;
-	beginLogin: (loginId: string, providerId: string, target?: LoginPush["target"]) => void;
+	beginLogin: (
+		loginId: string,
+		providerId: string,
+		target?: LoginPush["target"],
+		method?: LoginState["method"],
+	) => void;
 	applyLoginFrame: (push: LoginPush) => void;
 	clearLoginInput: () => void;
 	clearLogin: (loginId?: string) => void;
@@ -4318,10 +4323,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 	silenceNotice: (notice) =>
 		set((s) => {
 			const silenced = Object.entries(s.sessions).filter(([, rt]) => rt.notice === notice);
-			if (silenced.length === 0) return {};
-			const sessions = { ...s.sessions };
+			const orphans = s.extUiOrphans.filter(
+				(frame) => frame.kind !== "notice" || frame.notice !== notice,
+			);
+			const sessions = silenced.length > 0 ? { ...s.sessions } : s.sessions;
 			for (const [id, rt] of silenced) sessions[id] = { ...rt, notice: null };
-			return { sessions };
+			return {
+				...(sessions !== s.sessions ? { sessions } : {}),
+				...(orphans.length !== s.extUiOrphans.length ? { extUiOrphans: orphans } : {}),
+			};
 		}),
 	clearPendingExtUi: (sessionId, id) =>
 		set((s) =>
@@ -4345,12 +4355,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 		return true;
 	},
 	finishLoginStart: () => set({ loginStarting: false }),
-	beginLogin: (loginId, providerId, target) =>
+	beginLogin: (loginId, providerId, target, method) =>
 		set((s) => {
 			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
-			if (s.activeLogin?.loginId === loginId || s.activeLogin?.status === "active") return {};
+			if (s.activeLogin?.loginId === loginId)
+				return method && !s.activeLogin.method ? { activeLogin: { ...s.activeLogin, method } } : {};
+			if (s.activeLogin?.status === "active") return {};
 			const early = s.unheldLoginFrame?.loginId === loginId ? s.unheldLoginFrame.frame : null;
-			const fresh = newLoginState(loginId, providerId, target);
+			const fresh = {
+				...newLoginState(loginId, providerId, target),
+				...(method ? { method } : {}),
+			};
 			return {
 				activeLogin: early ? foldLoginFrame(fresh, early) : fresh,
 				unheldLoginFrame: null,

@@ -38,7 +38,6 @@ import {
 import { errorText, getTransport, watchMcpWorkspace } from "@/transport";
 import type { ResultTarget } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
-import { ExtraUsageNotice } from "./ExtraUsageNotice";
 import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
 import {
 	Composer,
@@ -47,6 +46,7 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import { ExtraUsageNotice } from "./ExtraUsageNotice";
 import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
