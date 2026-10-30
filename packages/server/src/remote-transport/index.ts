@@ -10,6 +10,13 @@ export { createWeriftHostPeer, type HostPeer, type HostPeerSignal } from "./host
 export { createHostSession, type HostSession, type HostSessionDeps } from "./hostSession";
 export { type RemoteAccess, type RemoteAccessOptions, startRemoteAccess } from "./remoteAccess";
 export {
+	bridgeRemoteWire,
+	type RemoteWireBridge,
+	type RemoteWireBridgeDeps,
+	type WireDispatch,
+	type WireDispatchContext,
+} from "./remoteWireBridge";
+export {
 	type DeviceMessage,
 	encodeHostMessage,
 	type HostMessage,

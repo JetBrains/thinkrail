@@ -46,6 +46,13 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
     host's outbound broker client. It registers by public key, maps each brokered session to a
     `HostSession`, and relays signaling payloads in and out, speaking the shared broker protocol from
     `contracts` rather than importing the relay service.
+  - `remoteAccess.ts` — `startRemoteAccess`, the composition root: loads identity, connects to the broker,
+    runs each device's handshake + WebRTC, and mints one-time pairing links (`issueLink`). On the server
+    public surface for the CLI.
+  - `remoteWireBridge.ts` — `bridgeRemoteWire`, which runs the host wire protocol over a `RemoteChannel`:
+    it decodes request frames, dispatches them through the host's `handleRequest` (injected), replies with
+    the WS's `{ id, ok, result | error }` framing, and `push`es `{ channel, data }` events. Replay/ack is
+    omitted (the DataChannel has no mid-stream reconnect to replay).
 - **Public surface:** the `index.ts` barrel.
 - **Allowed deps:** `remote` (types + the injected pairing primitives), `contracts` (the shared broker-frame
   protocol), `werift` (host-side WebRTC), `node:crypto`; later the `host` wire protocol behind
@@ -62,7 +69,9 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
 
 ## Not yet here (next slices)
 
-- Running the existing `host` wire protocol over a `RemoteChannel`.
+- **Host integration in `createServer`:** move `startRemoteAccess` into the host composition so each paired
+  channel is bridged with the real `handleRequest`, and mirror every `server.publish` fan-out to the set of
+  live `RemoteWireBridge`s (today pushes reach only Bun sockets). `bridgeRemoteWire` is the adapter for this;
+  the wiring is invasive (one wrapper over ~20 publish sites) and only verifiable with the full stack.
+- The web "add project by link" flow (device side: native WebRTC + the wire client over the channel).
 - coturn deployment/config and the second channel tunnelling `/files` and `/blob`.
-- The CLI command that boots the host for remote access and prints the pairing **link** (the
-  `thinkrail://pair` URI as copyable text — no QR needed), and the web "add project by link" flow.
