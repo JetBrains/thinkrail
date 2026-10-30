@@ -101,6 +101,16 @@ Place images in an `images/` subdirectory and reference them with relative paths
 
 Astro resolves, optimizes, and fingerprints them automatically during build.
 
+The original files are also published at `/blog/<slug>/images/<file>`, so a link to `./images/<file>`
+opens the full-resolution image. An image inside a table is shown as a thumbnail. Wrap it in a link
+so that clicking it shows the original file:
+
+```markdown
+| Feature | Screenshot |
+|---|---|
+| The settings panel | [![The settings panel](./images/settings.png)](./images/settings.png) |
+```
+
 ### YouTube Videos
 
 Embed YouTube videos using the `<iframe>` tag:
