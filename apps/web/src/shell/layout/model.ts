@@ -7,6 +7,7 @@ import {
 	isPreviewCompatibleTabKind,
 	type LayoutAttention,
 	layoutResourceIdentity,
+	nullProto,
 	planDocumentName,
 	randomId,
 	readLayoutNavigationClock,
@@ -1261,7 +1262,7 @@ export function reconcileAttention(
 	const groups = collectAllGroups(document);
 	const oldGroups = previousDocument ? collectAllGroups(previousDocument) : [];
 	const centerGroups = groups.filter((group) => group.location.area === "center");
-	const selectedByGroup = Object.create(null) as Record<string, string>;
+	const selectedByGroup = nullProto<Record<string, string>>();
 	for (const group of groups) {
 		const previousId = previous ? readLayoutSelection(previous, group.location.groupId) : undefined;
 		const exact = group.tabs.find((tab) => tab.id === previousId);
@@ -1290,9 +1291,7 @@ export function reconcileAttention(
 		(oldCenterIndex >= 0
 			? centerGroups[Math.min(oldCenterIndex, centerGroups.length - 1)]
 			: centerGroups[0]);
-	const lastFocusedSideGroupId = Object.create(null) as Partial<
-		Record<LayoutAuxiliaryRegion, string>
-	>;
+	const lastFocusedSideGroupId = nullProto<Partial<Record<LayoutAuxiliaryRegion, string>>>();
 	for (const region of ["left", "right", "bottom"] as const) {
 		const auxiliaryGroups = groups.filter((group) => group.location.area === region);
 		const previousGroup = previous?.lastFocusedSideGroupId[region];
@@ -1307,15 +1306,14 @@ export function reconcileAttention(
 				: auxiliaryGroups[0]);
 		if (group) lastFocusedSideGroupId[region] = group.location.groupId;
 	}
-	const navigationClockByGroup = Object.assign(
-		Object.create(null),
+	const navigationClockByGroup = nullProto<Record<string, number>>(
 		Object.fromEntries(
 			centerGroups.map((group) => [
 				group.location.groupId,
 				previous ? (readLayoutNavigationClock(previous, group.location.groupId) ?? 0) : 0,
 			]),
 		),
-	) as Record<string, number>;
+	);
 	return {
 		selectedByGroup,
 		lastFocusedCenterGroupId: center?.location.groupId ?? primaryCenterGroupId(document),
@@ -1347,7 +1345,7 @@ export function adoptToolSelections(
 		if (current && current.kind !== "tool") continue;
 		if (currentId === sourceId) continue;
 		const nextSelectedByGroup =
-			selectedByGroup ?? Object.assign(Object.create(null), attention.selectedByGroup);
+			selectedByGroup ?? nullProto<Record<string, string>>(attention.selectedByGroup);
 		nextSelectedByGroup[groupId] = sourceId;
 		selectedByGroup = nextSelectedByGroup;
 	}
@@ -1390,24 +1388,26 @@ export function selectTab(
 	) {
 		return attention;
 	}
+	let lastFocusedSideGroupId = attention.lastFocusedSideGroupId;
+	if (location.area !== "center") {
+		lastFocusedSideGroupId = nullProto<LayoutAttention["lastFocusedSideGroupId"]>(
+			attention.lastFocusedSideGroupId,
+		);
+		lastFocusedSideGroupId[location.area] = location.groupId;
+	}
 	return {
 		...attention,
-		selectedByGroup: Object.assign(Object.create(null), attention.selectedByGroup, {
+		selectedByGroup: nullProto<Record<string, string>>(attention.selectedByGroup, {
 			[location.groupId]: tabId,
-		}) as Record<string, string>,
+		}),
 		lastFocusedCenterGroupId:
 			location.area === "center" ? location.groupId : attention.lastFocusedCenterGroupId,
-		lastFocusedSideGroupId:
-			location.area === "center"
-				? attention.lastFocusedSideGroupId
-				: (Object.assign(Object.create(null), attention.lastFocusedSideGroupId, {
-						[location.area]: location.groupId,
-					}) as Partial<Record<LayoutAuxiliaryRegion, string>>),
+		lastFocusedSideGroupId,
 		navigationClockByGroup:
 			location.area === "center" && countNavigation
-				? (Object.assign(Object.create(null), attention.navigationClockByGroup, {
+				? nullProto<Record<string, number>>(attention.navigationClockByGroup, {
 						[location.groupId]: (readLayoutNavigationClock(attention, location.groupId) ?? 0) + 1,
-					}) as Record<string, number>)
+					})
 				: attention.navigationClockByGroup,
 	};
 }

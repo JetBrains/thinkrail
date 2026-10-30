@@ -16,7 +16,13 @@ import {
 	ResizablePanelGroup,
 } from "@thinkrail/ui/resizable";
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
-import { readLayoutNavigationClock, readLayoutSelection, tupleKey } from "../../lib";
+import {
+	type LayoutAttention,
+	nullProto,
+	readLayoutNavigationClock,
+	readLayoutSelection,
+	tupleKey,
+} from "../../lib";
 import { projectWorkbenchRatio, restoreWorkbenchRatio } from "./auxiliaryPresentation";
 import { closeRequestTarget } from "./closeRequest";
 import {
@@ -225,8 +231,7 @@ export function Workbench({
 			if (location.area === "bottom") {
 				onAttentionChange({
 					...attention,
-					lastFocusedSideGroupId: Object.assign(
-						Object.create(null),
+					lastFocusedSideGroupId: nullProto<LayoutAttention["lastFocusedSideGroupId"]>(
 						attention.lastFocusedSideGroupId,
 						{ bottom: location.groupId },
 					),
@@ -319,14 +324,13 @@ export function Workbench({
 								nextAttention = {
 									...nextAttention,
 									lastFocusedCenterGroupId: focusLocation.groupId,
-									navigationClockByGroup: Object.assign(
-										Object.create(null),
+									navigationClockByGroup: nullProto<Record<string, number>>(
 										nextAttention.navigationClockByGroup,
 										{
 											[focusLocation.groupId]:
 												(readLayoutNavigationClock(nextAttention, focusLocation.groupId) ?? 0) + 1,
 										},
-									) as Record<string, number>,
+									),
 								};
 							}
 						}
@@ -703,14 +707,11 @@ export function Workbench({
 				return;
 			}
 			if (target.location.area !== "center") {
-				onAttentionChange({
-					...currentAttention,
-					lastFocusedSideGroupId: Object.assign(
-						Object.create(null),
-						currentAttention.lastFocusedSideGroupId,
-						{ [target.location.area]: target.location.groupId },
-					),
-				});
+				const lastFocusedSideGroupId = nullProto<LayoutAttention["lastFocusedSideGroupId"]>(
+					currentAttention.lastFocusedSideGroupId,
+				);
+				lastFocusedSideGroupId[target.location.area] = target.location.groupId;
+				onAttentionChange({ ...currentAttention, lastFocusedSideGroupId });
 				setLocalFocusRequest({
 					workspaceId,
 					key: createLayoutId("focus-group"),
@@ -721,14 +722,13 @@ export function Workbench({
 			const nextAttention = {
 				...currentAttention,
 				lastFocusedCenterGroupId: target.location.groupId,
-				navigationClockByGroup: Object.assign(
-					Object.create(null),
+				navigationClockByGroup: nullProto<Record<string, number>>(
 					currentAttention.navigationClockByGroup,
 					{
 						[target.location.groupId]:
 							(readLayoutNavigationClock(currentAttention, target.location.groupId) ?? 0) + 1,
 					},
-				) as Record<string, number>,
+				),
 			};
 			onAttentionChange(nextAttention);
 			setLocalFocusRequest({

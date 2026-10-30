@@ -1,4 +1,4 @@
-import { isPreviewCompatibleTabKind, layoutResourceIdentity } from "../../lib";
+import { isPreviewCompatibleTabKind, layoutResourceIdentity, nullProto } from "../../lib";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
@@ -133,7 +133,7 @@ export function workbenchFrameFromDocument(document: WorkspaceLayoutDocument): W
 }
 
 export function workspaceViewFromDocument(document: WorkspaceLayoutDocument): WorkspaceViewState {
-	const groups = Object.create(null) as Record<string, WorkspaceGroupView>;
+	const groups = nullProto<Record<string, WorkspaceGroupView>>();
 	const visitCenter = (node: LayoutCenterNode): void => {
 		if (node.kind === "split") {
 			visitCenter(node.children[0]);
@@ -225,7 +225,7 @@ export function projectWorkspaceLayout(
 }
 
 export function emptyWorkspaceView(): WorkspaceViewState {
-	return { groups: Object.create(null) as Record<string, WorkspaceGroupView> };
+	return { groups: nullProto<Record<string, WorkspaceGroupView>>() };
 }
 
 function frameLocations(frame: WorkbenchFrame): FrameGroupLocation[] {
@@ -293,7 +293,7 @@ export function reconcileWorkspaceView(
 	const previousLocations = frameLocations(previousFrame);
 	const previousById = new Map(previousLocations.map((location) => [location.groupId, location]));
 	const nextById = locationMap(nextFrame);
-	const groups = Object.create(null) as Record<string, WorkspaceGroupView>;
+	const groups = nullProto<Record<string, WorkspaceGroupView>>();
 	const resourceKeys = new Set<string>();
 	const append = (
 		tab: LayoutCenterTab,
