@@ -31,7 +31,9 @@ test("auto-summary is eligible only when every step is done and no summary exist
 	expect(planIsCompleteWithoutSummary(plan({ todos: [item("done")] }))).toBe(true);
 	expect(
 		planIsCompleteWithoutSummary(
-			plan({ groups: [{ id: "g", title: "T", todos: [item("done"), item("done")] }] }),
+			plan({
+				groups: [{ id: "g", title: "T", status: "done", todos: [item("done"), item("done")] }],
+			}),
 		),
 	).toBe(true);
 	// An open step, a lingering summary, or an empty plan are all ineligible.

@@ -345,7 +345,7 @@ test("expanded, the fold reveals the rest in order, offers the next page with wh
 		status: "completed" as const,
 		finishedAt: NOW - index * 60_000,
 	}));
-	const props = {
+	const withoutLoadMore = {
 		...inspectorProps,
 		finishedSubagents: finished,
 		history: { commands: noTally, subagents: { ...noTally, done: 30 } },
@@ -353,8 +353,8 @@ test("expanded, the fold reveals the rest in order, offers the next page with wh
 		newIds: new Set(["child-7"]),
 		expanded: { subagent: true },
 		selectedId: "child-6",
-		onLoadMore: () => {},
 	};
+	const props = { ...withoutLoadMore, onLoadMore: () => {} };
 	const html = renderInspector(<resources.ResourcesInspector {...props} />);
 	const shown = [...html.matchAll(/data-resource-id="([^"]+)"/g)].map((match) => match[1]);
 	expect(shown).toEqual(finished.map((item) => item.childSessionId));
@@ -381,7 +381,7 @@ test("expanded, the fold reveals the rest in order, offers the next page with wh
 	expect(failed).toMatch(/role="alert"[^>]*>History read failed/);
 
 	const older = renderInspector(
-		<resources.ResourcesInspector {...props} remaining={{}} onLoadMore={undefined} />,
+		<resources.ResourcesInspector {...withoutLoadMore} remaining={{}} />,
 	);
 	expect(older).not.toContain('data-testid="resources-show-more"');
 	expect(older).toContain('data-testid="resources-collapse"');
