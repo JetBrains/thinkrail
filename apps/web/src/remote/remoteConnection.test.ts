@@ -19,10 +19,7 @@ test("rejects an invalid link without calling the connector", async () => {
 		return connection();
 	});
 	await controller.connect("not a link", "Phone");
-	expect(controller.getState()).toEqual({
-		status: "error",
-		message: "That is not a valid ThinkRail pairing link.",
-	});
+	expect(controller.getState()).toEqual({ status: "error", kind: "invalid-link" });
 	expect(called).toBe(false);
 });
 
@@ -41,7 +38,11 @@ test("surfaces a connector failure as an error state", async () => {
 		throw new Error("relay connection failed");
 	});
 	await controller.connect(LINK, "Phone");
-	expect(controller.getState()).toEqual({ status: "error", message: "relay connection failed" });
+	expect(controller.getState()).toEqual({
+		status: "error",
+		kind: "failed",
+		message: "relay connection failed",
+	});
 	controller.reset();
 	expect(controller.getState()).toEqual({ status: "idle" });
 });

@@ -10,6 +10,7 @@ import { PRODUCT_NAME } from "../constants/branding";
 import { selectOnboardingEligible, selectSupportsOnboarding, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { ConnectByLinkDialog } from "./ConnectByLinkDialog";
 import { ConnectedLine, type ConnectedSummary } from "./ConnectedLine";
 import { connectedProviderName } from "./ConnectProviderOptions";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
@@ -40,6 +41,7 @@ export function WelcomePanel() {
 	const wizard = useAppStore((s) => s.onboardingWizard);
 	const setWizard = useAppStore((s) => s.setOnboardingWizard);
 	const [justConnected, setJustConnected] = useState<ConnectedSummary | null>(null);
+	const [connectByLink, setConnectByLink] = useState(false);
 
 	useEffect(() => {
 		if (wizard !== "pending" || protocolVersion === null) return;
@@ -108,6 +110,7 @@ export function WelcomePanel() {
 			onOpen={() => void pickAndOpen()}
 			onEnterHostPath={enterHostPath}
 			onClone={cloneRepository}
+			onConnectByLink={() => setConnectByLink(true)}
 			onOpenRecent={(path) => void openProject(path)}
 			align="start"
 		>
@@ -247,6 +250,7 @@ export function WelcomePanel() {
 					}}
 				/>
 			) : null}
+			{connectByLink ? <ConnectByLinkDialog onClose={() => setConnectByLink(false)} /> : null}
 			{dialogs}
 		</div>
 	);
