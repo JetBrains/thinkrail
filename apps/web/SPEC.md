@@ -390,7 +390,8 @@ themselves.
   `/fonts` beside `/ws`, and `devProxy.test.ts` pins the list to the composers' constants.
 - **`typecheck` runs two projects.** `tsconfig.json` checks the browser app with DOM types only;
   `tsconfig.test.json` checks tests, `scripts/`, and `vite.config.ts` with Bun types. Every
-  test file is checked; the test project has no exclude list.
+  test file is checked; the test project has no exclude list. A test never shares its base name with a
+  sibling of the other extension (`x.test.ts` beside `x.test.tsx`): `tsc` keeps only the `.ts` one.
 
 ## Later
 
