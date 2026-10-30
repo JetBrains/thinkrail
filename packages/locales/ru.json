@@ -1707,6 +1707,7 @@
 	"settings.chat.workspaceSubagentsFailed": "Не удалось изменить настройки субагентов для этой рабочей области",
 	"settings.customEndpoints.add": "Добавить сервер",
 	"settings.customEndpoints.addTitle": "Добавить сервер",
+	"settings.customEndpoints.addressMoved": "Адрес сервера менять нельзя. Чтобы подключить другой сервер, добавьте его как новый.",
 	"settings.customEndpoints.apiKey": "Ключ API",
 	"settings.customEndpoints.apiKeyOptional": "Необязательно · можно $ПЕРЕМЕННАЯ",
 	"settings.customEndpoints.apiKeyRemoved": "Сохранённый ключ будет удалён",

@@ -1579,6 +1579,7 @@
 	"settings.chat.workspaceSubagentsFailed": "Couldn't change subagents for this workspace",
 	"settings.customEndpoints.add": "Add server",
 	"settings.customEndpoints.addTitle": "Add server",
+	"settings.customEndpoints.addressMoved": "A server keeps its address. To use another server, add it as a new one.",
 	"settings.customEndpoints.apiKey": "API key",
 	"settings.customEndpoints.apiKeyOptional": "Optional · $ENV_VAR works",
 	"settings.customEndpoints.apiKeyRemoved": "The saved key will be removed",

@@ -364,27 +364,19 @@ test("edits keep hand-added fields, clear managed overrides and guard the saved 
 	});
 	expect(saved?.models).toEqual([expect.objectContaining({ id: "a", temperature: 0.2 })]);
 
-	await expect(
-		saveCustomEndpoint({
-			id: "custom-gw",
-			name: "Gateway",
-			baseUrl: "https://elsewhere.example/v1",
-			models: [model("a")],
-		}),
-	).rejects.toThrow("The server address changed");
 	await saveCustomEndpoint({
 		id: "custom-gw",
 		name: "Gateway",
-		baseUrl: "https://elsewhere.example/v1",
+		baseUrl: "https://gw.example/v1",
 		apiKey: "",
 		models: [model("a")],
 	});
 	expect(providers()["custom-gw"]?.apiKey).toBe("thinkrail-no-key");
 });
 
-test("an endpoint carrying custom headers can't move to another origin from the form", async () => {
+test("an edit never moves a server to another origin, whatever its key or headers", async () => {
 	await runtime();
-	const withHeaders = (headers: Record<string, unknown>) =>
+	const seed = (extra: Record<string, unknown>) =>
 		writeFileSync(
 			path,
 			JSON.stringify({
@@ -394,39 +386,102 @@ test("an endpoint carrying custom headers can't move to another origin from the 
 						api: "openai-completions",
 						apiKey: "sk-saved",
 						models: [{ id: "a" }],
-						...headers,
+						...extra,
 					},
 				},
 			}),
 		);
-	const move = (apiKey: string) =>
+	const save = (baseUrl: string, apiKey?: string) =>
 		saveCustomEndpoint({
 			id: "custom-gw",
 			name: "GW",
-			baseUrl: "https://elsewhere.example/v1",
-			apiKey,
+			baseUrl,
+			...(apiKey === undefined ? {} : { apiKey }),
 			models: [model("a")],
 		});
-	for (const headers of [
-		{ headers: { Authorization: "Bearer old-secret" } },
-		{ models: [{ id: "a", headers: { "x-api-key": "old" } }] },
-		{ modelOverrides: { a: { headers: { "x-api-key": "old" } } } },
-	]) {
-		withHeaders(headers);
-		for (const apiKey of ["sk-new", ""])
-			await expect(move(apiKey)).rejects.toThrow("custom headers");
-		expect(providers()["custom-gw"]?.baseUrl).toBe("https://gw.example/v1");
-	}
-	withHeaders({ headers: { Authorization: "Bearer old-secret" } });
-	await saveCustomEndpoint({
-		id: "custom-gw",
-		name: "GW",
-		baseUrl: "https://gw.example/openai/v1",
-		models: [model("a")],
-	});
+	seed({ headers: { Authorization: "Bearer old-secret" } });
+	for (const apiKey of [undefined, "sk-new", ""])
+		await expect(save("https://elsewhere.example/v1", apiKey)).rejects.toThrow("keeps its address");
+	expect(providers()["custom-gw"]?.baseUrl).toBe("https://gw.example/v1");
+	await save("https://gw.example/openai/v1");
 	expect(providers()["custom-gw"]).toMatchObject({
 		baseUrl: "https://gw.example/openai/v1",
+		apiKey: "sk-saved",
 		headers: { Authorization: "Bearer old-secret" },
+	});
+});
+
+test("a server whose models route to another origin is left to models.json", async () => {
+	await runtime();
+	for (const extra of [
+		{ models: [{ id: "a", baseUrl: "https://other.example/v1" }] },
+		{ models: [{ id: "a" }], modelOverrides: { a: { baseUrl: "https://other.example/v1" } } },
+	]) {
+		writeFileSync(
+			path,
+			JSON.stringify({
+				providers: {
+					"custom-gw": {
+						baseUrl: "https://gw.example/v1",
+						api: "openai-completions",
+						apiKey: "sk-saved",
+						...extra,
+					},
+				},
+			}),
+		);
+		await expect(
+			saveCustomEndpoint({
+				id: "custom-gw",
+				name: "GW",
+				baseUrl: "https://gw.example/v1",
+				apiKey: "sk-new",
+				models: [model("a")],
+			}),
+		).rejects.toThrow("routed to another address");
+		expect(providers()["custom-gw"]?.apiKey).toBe("sk-saved");
+	}
+});
+
+test("a saved address carrying credentials or a query is never listed", async () => {
+	await runtime();
+	writeFileSync(
+		path,
+		JSON.stringify({
+			providers: {
+				"custom-query": {
+					baseUrl: "https://gw.example/v1?api_key=secret",
+					api: "openai-completions",
+					models: [{ id: "a" }],
+				},
+				"custom-userinfo": {
+					baseUrl: "https://user:secret@gw.example/v1",
+					api: "openai-completions",
+					models: [{ id: "a" }],
+				},
+			},
+		}),
+	);
+	expect(await listCustomEndpoints()).toEqual([]);
+	expect(await removeCustomEndpoint("custom-query")).toEqual([]);
+	expect(providers()["custom-query"]).toBeDefined();
+});
+
+test("a failed /v1 fallback reports its own reason", async () => {
+	const { url } = serve({
+		"GET /v1/models": () => new Response("no", { status: 401 }),
+	});
+	expect(await probeCustomEndpoint({ baseUrl: url, apiKey: "wrong" })).toEqual({
+		ok: false,
+		reason: "unauthorized",
+		status: 401,
+	});
+	server?.stop(true);
+	const { url: missing } = serve({});
+	expect(await probeCustomEndpoint({ baseUrl: missing })).toEqual({
+		ok: false,
+		reason: "not-openai",
+		status: 404,
 	});
 });
 

@@ -26,6 +26,7 @@ import { errorText, getTransport } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
 	addManualModel,
+	addressMoved,
 	applyPreset,
 	canSave,
 	draftParams,
@@ -195,6 +196,14 @@ function EndpointDialog({
 							placeholder={t("settings.customEndpoints.urlPlaceholder")}
 							onChange={(event) => setDraft({ ...draft, baseUrl: event.currentTarget.value })}
 						/>
+						{addressMoved(draft) ? (
+							<p
+								data-testid="custom-endpoints-address-moved"
+								className="tr-text-metadata text-feedback-warning"
+							>
+								{t("settings.customEndpoints.addressMoved")}
+							</p>
+						) : null}
 						<div className="flex flex-wrap items-center gap-4">
 							<span className="tr-text-metadata text-text-muted">
 								{t("settings.customEndpoints.local")}
@@ -369,14 +378,18 @@ function EndpointDialog({
 	);
 }
 
-export function CustomEndpointsSettings() {
-	const t = useT();
+export interface CustomEndpointsState {
+	endpoints: CustomEndpoint[] | null;
+	failed: boolean;
+	load: () => Promise<void>;
+	replace: (next: CustomEndpoint[]) => void;
+}
+
+export function useCustomEndpoints(): CustomEndpointsState | null {
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const providerVersion = useAppStore((state) => state.providerVersion);
 	const [endpoints, setEndpoints] = useState<CustomEndpoint[] | null>(null);
 	const [failed, setFailed] = useState(false);
-	const [dialog, setDialog] = useState<EndpointDraft | null>(null);
-	const [removing, setRemoving] = useState<CustomEndpoint | null>(null);
 	const sequence = useRef(0);
 
 	const load = useCallback(async () => {
@@ -396,12 +409,23 @@ export function CustomEndpointsSettings() {
 		void load();
 	}, [load, providerVersion]);
 
-	if (!supported(protocolVersion)) return null;
-
-	const replace = (next: CustomEndpoint[]) => {
+	const replace = useCallback((next: CustomEndpoint[]) => {
 		sequence.current++;
 		setEndpoints(next);
-	};
+	}, []);
+
+	if (!supported(protocolVersion)) return null;
+	return { endpoints, failed, load, replace };
+}
+
+export function CustomEndpointsSettings({
+	state: { endpoints, failed, load, replace },
+}: {
+	state: CustomEndpointsState;
+}) {
+	const t = useT();
+	const [dialog, setDialog] = useState<EndpointDraft | null>(null);
+	const [removing, setRemoving] = useState<CustomEndpoint | null>(null);
 
 	const remove = async (endpoint: CustomEndpoint) => {
 		try {

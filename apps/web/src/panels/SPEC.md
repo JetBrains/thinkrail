@@ -782,12 +782,14 @@ a project picker, the prompt hero, and the reused
   field); a "configured outside the app" note for rows with neither flag; **`CustomEndpointsSettings`**
   (v101, hidden below `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; re-read on `providerVersion`) — the **Custom
   servers** group listing every `customEndpoints.list` endpoint (name, address, model count; **Edit** and a
-  **Remove** icon behind a `ConfirmDialog`) plus **Add server**. `custom-*` providers are filtered out of the
-  generic provider rows so each appears once; hand-written `models.json` providers stay in Connected as
+  **Remove** icon behind a `ConfirmDialog`) plus **Add server**. Providers the group lists are filtered out of the
+  generic provider rows so each appears once (only listed ids: an unlisted `custom-*` provider, or any on
+  a host without the group, stays a generic row); hand-written `models.json` providers stay in Connected as
   "Managed", not repeated here. The dialog is one form for a company gateway and a local server: name,
   address with local preset chips (Ollama, LM Studio, vLLM, llama.cpp — they only fill the address and an
   empty or preset name; there is no server-kind choice), a password key field (blank keeps a saved key on
-  edit; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
+  edit; an edit that changes the address's origin shows a warning and disables Save, since a different
+  server is added as a new one; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
   (`customEndpoints.probe`, run automatically when an edit opens), a per-model use switch, and a manual
   model-id field for gateways that list nothing. **A model row has no editable parameters** (decision: they
   describe the server rather than configure it — its real limits are set by whoever runs it). It shows only

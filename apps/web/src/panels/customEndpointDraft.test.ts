@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { CustomEndpointModel } from "@thinkrail/contracts";
 import {
 	addManualModel,
+	addressMoved,
 	applyPreset,
 	canSave,
 	draftParams,
@@ -150,4 +151,12 @@ test("re-detecting keeps an unreported capability and clears one the server now 
 		models: [model("a", { reasoning: false, vision: false })],
 	});
 	expect(denied.models[0]).toMatchObject({ reasoning: false, vision: false });
+});
+
+test("an edit can change the path but not the origin of a saved server", () => {
+	const draft = editEndpointDraft(saved);
+	expect(addressMoved({ ...draft, baseUrl: "https://gw.example/openai/v1" })).toBe(false);
+	expect(addressMoved({ ...draft, baseUrl: "https://other.example/v1" })).toBe(true);
+	expect(canSave({ ...draft, baseUrl: "https://other.example/v1" })).toBe(false);
+	expect(addressMoved({ ...newEndpointDraft(), baseUrl: "https://other.example/v1" })).toBe(false);
 });

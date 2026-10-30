@@ -277,10 +277,8 @@ export async function probeCustomEndpoint(
 	let listing = await fetchJson(`${baseUrl}/models`, key, LIST_TIMEOUT_MS);
 	if (!listing.ok && listing.status === 404 && !baseUrl.endsWith("/v1")) {
 		const versioned = await fetchJson(`${baseUrl}/v1/models`, key, LIST_TIMEOUT_MS);
-		if (versioned.ok) {
-			baseUrl = `${baseUrl}/v1`;
-			listing = versioned;
-		}
+		if (versioned.ok) baseUrl = `${baseUrl}/v1`;
+		if (versioned.ok || versioned.status !== 404) listing = versioned;
 	}
 	if (!listing.ok)
 		return {
@@ -317,7 +315,7 @@ function readEndpoints(config: Node | undefined): CustomEndpoint[] {
 	return Object.entries(providersOf(config)).flatMap(([id, provider]) => {
 		if (!isCustomEndpointId(id) || !isObject(provider)) return [];
 		if (provider.api !== API || typeof provider.baseUrl !== "string") return [];
-		if (!Array.isArray(provider.models)) return [];
+		if (!parseBaseUrl(provider.baseUrl) || !Array.isArray(provider.models)) return [];
 		const overrides = isObject(provider.modelOverrides) ? provider.modelOverrides : {};
 		const apiKey = typeof provider.apiKey === "string" ? provider.apiKey : undefined;
 		return [
@@ -437,14 +435,14 @@ function originOf(url: string): string | null {
 	}
 }
 
-function hasHeaders(provider: Json | undefined): boolean {
-	const nonEmpty = (value: unknown) => isObject(value) && Object.keys(value).length > 0;
+function routesElsewhere(provider: Json | undefined, baseUrl: string): boolean {
 	if (!provider) return false;
+	const origin = originOf(baseUrl);
 	const models = Array.isArray(provider.models) ? provider.models : [];
 	const overrides = isObject(provider.modelOverrides) ? Object.values(provider.modelOverrides) : [];
-	return (
-		nonEmpty(provider.headers) ||
-		[...models, ...overrides].some((entry) => isObject(entry) && nonEmpty(entry.headers))
+	return [...models, ...overrides].some(
+		(entry) =>
+			isObject(entry) && typeof entry.baseUrl === "string" && originOf(entry.baseUrl) !== origin,
 	);
 }
 
@@ -455,14 +453,11 @@ function providerConfig(draft: CustomEndpointDraft, previous: Json | undefined):
 			? previousUrl
 			: (parseBaseUrl(draft.baseUrl) ?? draft.baseUrl.trim());
 	const previousKey = typeof previous?.apiKey === "string" ? previous.apiKey : undefined;
-	const moved = previousUrl !== undefined && originOf(previousUrl) !== originOf(baseUrl);
-	if (moved && hasHeaders(previous))
+	if (previousUrl !== undefined && originOf(previousUrl) !== originOf(baseUrl))
+		throw new Error("A server keeps its address. Add a different server as a new one.");
+	if (routesElsewhere(previous, baseUrl))
 		throw new Error(
-			"This server sends custom headers from models.json. Change its address there, or remove the headers first.",
-		);
-	if (draft.apiKey === undefined && previousKey !== undefined && previousKey !== NO_KEY && moved)
-		throw new Error(
-			"The server address changed. Enter the API key for the new address, or remove the saved key.",
+			"Some of this server's models are routed to another address in models.json. Edit it there.",
 		);
 	const previousModels = new Map<string, Json>();
 	for (const model of Array.isArray(previous?.models) ? previous.models : [])

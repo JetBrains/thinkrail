@@ -159,10 +159,13 @@ re-opened transcripts provider-valid.
     gateway or a local llama.cpp / vLLM / sglang / Ollama / LM Studio server), again a `models.json` editor
     and not a registry: each is a `custom-*` provider with `api: "openai-completions"`, served by pi like any
     hand-written one, so the pi CLI sees the same models. Only `custom-*` entries are listed, edited or
-    removed; every other provider is left byte-for-byte alone.
+    removed; every other provider is left byte-for-byte alone. A saved address the form would refuse
+    (credentials, a query string, not http/https) is not listed either, so its secret never reaches a
+    client; pi still serves it.
     - **Probe without a server kind.** The base URL loses `/models` / `/chat/completions` / `/completions`
       suffixes and is refused with credentials or a query string. The host `GET`s `<base>/models` (5s) and,
-      only on a 404 for a base without `/v1`, `<base>/v1/models` once. The only standard part of that
+      only on a 404 for a base without `/v1`, `<base>/v1/models` once (whose failure is reported unless it
+      is also a 404). The only standard part of that
       listing is the model ids, so limits come from what servers add to it — `max_model_len` (vLLM, sglang),
       `max_input_tokens` / `max_output_tokens` (LiteLLM), `context_length`, llama.cpp `meta.n_ctx` — and from
       same-origin best-effort extras run in parallel (3s each): llama.cpp `/props` (per-slot `n_ctx`, an
@@ -192,12 +195,14 @@ re-opened transcripts provider-valid.
       never pi's `runtime.getAuth`, which runs `!command` keys and may still hold an older file's
       configuration — so a command-backed key is probed without a key (the user can type one), and an
       externally changed address never receives the previous key. Any other address is probed without it,
-      and a keyed probe refuses redirects. A save that
-      moves an endpoint to another origin without a new key fails, so a bearer never follows a changed
-      address; a move to another origin is refused outright while the provider, a model or a model
-      override carries hand-written `headers`, since those may hold credentials the form neither shows
-      nor manages (same-origin edits keep them); an empty key writes the `thinkrail-no-key` placeholder pi needs to count the provider as
-      available.
+      and a keyed probe refuses redirects.
+    - **A server keeps its origin (decision).** pi resolves auth by provider id at request time while a
+      live session keeps the model object it was created with, so changing a provider's origin under the
+      same id lets a refreshed key reach the old origin from an open chat, or an old key and hand-written
+      `headers` reach the new one. An edit may change the path within the same origin; a different server
+      is added as a new one, with a new id. A save is also refused while a model or model override routes
+      to its own `baseUrl` on another origin, which the form neither shows nor manages. An empty key writes
+      the `thinkrail-no-key` placeholder pi needs to count the provider as available.
     - A save or removal that changes the file refreshes the runtime (best-effort; a refresh failure is
       logged, since the file is already written) and publishes `provider.changed`; a no-op does neither.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its

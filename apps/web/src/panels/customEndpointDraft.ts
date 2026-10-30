@@ -123,8 +123,21 @@ export function draftParams(draft: EndpointDraft): CustomEndpointDraft {
 	};
 }
 
+function originOf(address: string): string | null {
+	try {
+		return new URL(address.trim()).origin;
+	} catch {
+		return null;
+	}
+}
+
+export function addressMoved(draft: EndpointDraft): boolean {
+	return draft.savedBaseUrl !== null && originOf(draft.baseUrl) !== originOf(draft.savedBaseUrl);
+}
+
 export function canSave(draft: EndpointDraft): boolean {
 	return (
+		!addressMoved(draft) &&
 		draft.name.trim() !== "" &&
 		draft.baseUrl.trim() !== "" &&
 		draft.models.some((model) => model.selected)

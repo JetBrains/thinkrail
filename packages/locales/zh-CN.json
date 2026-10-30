@@ -1476,6 +1476,7 @@
 	"settings.chat.workspaceSubagentsFailed": "无法更改此工作区的子 agent 设置",
 	"settings.customEndpoints.add": "添加服务器",
 	"settings.customEndpoints.addTitle": "添加服务器",
+	"settings.customEndpoints.addressMoved": "服务器地址不可更改。要使用其他服务器，请将其添加为新服务器。",
 	"settings.customEndpoints.apiKey": "API 密钥",
 	"settings.customEndpoints.apiKeyOptional": "可选 · 支持 $ENV_VAR",
 	"settings.customEndpoints.apiKeyRemoved": "已保存的密钥将被删除",

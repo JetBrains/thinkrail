@@ -5,7 +5,6 @@ import {
 } from "@remixicon/react";
 import {
 	type AppConfigUpdate,
-	isCustomEndpointId,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	type ProviderStatus,
 } from "@thinkrail/contracts";
@@ -16,7 +15,7 @@ import { useCallback, useState } from "react";
 import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { CustomEndpointsSettings } from "./CustomEndpointsSettings";
+import { CustomEndpointsSettings, useCustomEndpoints } from "./CustomEndpointsSettings";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
 import { ProviderRow } from "./ProviderRow";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
@@ -63,7 +62,9 @@ export function ProvidersSettings() {
 						saveQuotaSetting({ jbcentralQuotaRefreshSeconds: seconds }),
 				}
 			: null;
-	const providers = (report?.providers ?? []).filter((p) => !isCustomEndpointId(p.id));
+	const customEndpoints = useCustomEndpoints();
+	const shownElsewhere = new Set(customEndpoints?.endpoints?.map((endpoint) => endpoint.id));
+	const providers = (report?.providers ?? []).filter((p) => !shownElsewhere.has(p.id));
 	const configured = providers.filter((p) => p.configured);
 	const unconfigured = providers.filter((p) => !p.configured);
 	const subscriptionRows = unconfigured.filter((p) => p.canOAuth);
@@ -120,7 +121,7 @@ export function ProvidersSettings() {
 						/>
 					) : null}
 
-					<CustomEndpointsSettings />
+					{customEndpoints ? <CustomEndpointsSettings state={customEndpoints} /> : null}
 
 					{subscriptionRows.length > 0 ? (
 						<SettingsGroup
