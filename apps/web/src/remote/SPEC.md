@@ -27,12 +27,17 @@ crypto library, it has `RTCPeerConnection`, `WebSocket`, and `crypto.subtle` bui
     relay as the device, signs the challenge with `crypto.subtle` Ed25519 through the handshake, negotiates a
     browser `RTCPeerConnection` **answerer**, and resolves a wire client once the DataChannel opens. Uses the
     shared broker + signaling protocol from `contracts`; browser-only glue (no library bundled).
+  - `remoteConnection.ts` — `createRemoteConnectionController`: the "add a project by link" lifecycle
+    (validate link → connecting → connected | error), with the connector injected so it is unit-tested
+    without a browser. The UI surface subscribes to it.
 - **Allowed deps:** `contracts` (the shared broker + signaling + pairing-URI protocol), browser APIs. Never
   `server`, `pi`, or any server-only package.
 - **Forbidden:** value-importing `pi` or `server`; a WebRTC/crypto library (use the platform).
 
 ## Not yet here (next slice)
 
-- Wiring the client into the store/transport so a remote project opens in the normal UI, and the
-  "add project by link" surface. End-to-end pairing is verifiable only with a deployed relay + a host and a
-  second device.
+- The **dialog UI** that calls the controller (link field + status), and **mounting the connected client into
+  the store/transport** so the remote project renders in the full UI. The latter is a multi-host refactor:
+  the store leans on the WS transport's `httpBase` (`/files`, `/blob`), ack/replay, and reconnect, which the
+  DataChannel wire client does not yet provide. End-to-end pairing is verifiable only with a deployed relay,
+  a host, and a second device.
