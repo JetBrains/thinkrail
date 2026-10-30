@@ -4,8 +4,9 @@ import type {
 	TerminalDetachedPush,
 	TerminalExitPush,
 	TerminalTabInfo,
+	TerminalTabKind,
 } from "@thinkrail/contracts";
-import { TERMINAL_REPLAY_KB, WS_CHANNELS } from "@thinkrail/contracts";
+import { COMMAND_TAB_KEY_PREFIX, TERMINAL_REPLAY_KB, WS_CHANNELS } from "@thinkrail/contracts";
 import { type IPty, spawn } from "bun-pty";
 import {
 	loadConfig,
@@ -41,6 +42,23 @@ interface TerminalEntry {
 interface TabRecord {
 	tabKey: string;
 	title: string;
+	kind: TerminalTabKind;
+}
+
+function tabInfo({ tabKey, title, kind }: TabRecord): TerminalTabInfo {
+	return { tabKey, title, kind };
+}
+
+export function isCommandTabKey(tabKey: string): boolean {
+	return tabKey.startsWith(COMMAND_TAB_KEY_PREFIX);
+}
+
+function assertShellTabKey(tabKey: string): void {
+	if (isCommandTabKey(tabKey)) throw new Error("Reserved terminal tab key");
+}
+
+function endedCommandTabId(tabKey: string): string {
+	return `${tabKey}#ended`;
 }
 
 const OUTPUT_BATCH = {
@@ -230,12 +248,13 @@ export function reserveTerminal(
 	title: string,
 ): TerminalTabInfo {
 	assertTerminalTabKey(tabKey);
+	assertShellTabKey(tabKey);
 	assertTerminalTitle(title);
 	const tabs = tabsFor(workspaceId);
 	const existing = tabs.find((tab) => tab.tabKey === tabKey);
-	if (existing) return { tabKey: existing.tabKey, title: existing.title };
+	if (existing) return tabInfo(existing);
 	assertTerminalCatalogCapacity(tabs);
-	const tab = { tabKey, title };
+	const tab: TabRecord = { tabKey, title, kind: "shell" };
 	tabs.push(tab);
 	try {
 		persistTerminalSessions();
@@ -245,13 +264,14 @@ export function reserveTerminal(
 		throw error;
 	}
 	broadcastTabs(workspaceId, listTerminals(workspaceId));
-	return tab;
+	return tabInfo(tab);
 }
 
 export interface AttachResult {
 	id: string;
 	created: boolean;
 	replay?: string;
+	exited?: true;
 }
 
 export function attachTerminal(
@@ -265,15 +285,27 @@ export function attachTerminal(
 	if (options.cols !== undefined) assertTerminalGridDimension(options.cols);
 	if (options.rows !== undefined) assertTerminalGridDimension(options.rows);
 	const tabs = tabsFor(workspaceId);
-	const isNewTab = !tabs.some((tab) => tab.tabKey === tabKey);
+	const tab = tabs.find((candidate) => candidate.tabKey === tabKey);
+	const isNewTab = tab === undefined;
 	if (isNewTab) {
+		assertShellTabKey(tabKey);
 		assertTerminalCatalogCapacity(tabs);
-		tabs.push({ tabKey, title: options.title ?? `Terminal ${tabs.length + 1}` });
+		tabs.push({ tabKey, title: options.title ?? `Terminal ${tabs.length + 1}`, kind: "shell" });
 	}
 
 	const index = tabIndex(workspaceId, tabKey);
 	const existingId = ptyByTab.get(index);
 	const existing = existingId === undefined ? undefined : terminals.get(existingId);
+
+	if (tab?.kind === "command" && !existing) {
+		const replay = pendingReplay.get(index);
+		return {
+			id: endedCommandTabId(tabKey),
+			created: false,
+			...(replay ? { replay } : {}),
+			exited: true,
+		};
+	}
 
 	if (existing && existingId) {
 		if (existing.attachedClient && existing.attachedClient !== clientKey) {
@@ -307,7 +339,7 @@ export function attachTerminal(
 }
 
 export function listTerminals(workspaceId: string): TerminalTabInfo[] {
-	return tabsFor(workspaceId).map(({ tabKey, title }) => ({ tabKey, title }));
+	return tabsFor(workspaceId).map(tabInfo);
 }
 
 function attachedEntry(id: string, caller: string): TerminalEntry | undefined {
@@ -405,12 +437,17 @@ export function persistTerminalSessions(): void {
 	const sessions: PersistedTerminalSessions = {};
 	for (const [workspaceId, tabs] of tabsByWorkspace) {
 		if (tabs.length === 0) continue;
-		sessions[workspaceId] = tabs.map(({ tabKey, title }) => {
+		sessions[workspaceId] = tabs.map(({ tabKey, title, kind }) => {
 			const index = tabIndex(workspaceId, tabKey);
 			const id = ptyByTab.get(index);
 			const entry = id === undefined ? undefined : terminals.get(id);
 			const recorded = entry ? entry.recorder.snapshot() : pendingReplay.get(index);
-			return { tabKey, title, ...(recorded ? { recorded } : {}) };
+			return {
+				tabKey,
+				title,
+				...(kind === "command" ? { kind } : {}),
+				...(recorded ? { recorded } : {}),
+			};
 		});
 	}
 	saveTerminalSessions(sessions);
@@ -423,7 +460,8 @@ export function reviveTerminalSessions(): void {
 		for (const tab of tabs.slice(0, MAX_TERMINAL_TABS_PER_WORKSPACE)) {
 			if (!isValidTerminalTabKey(tab?.tabKey)) continue;
 			const title = isValidTerminalTitle(tab.title) ? tab.title : "Terminal";
-			restored.push({ tabKey: tab.tabKey, title });
+			const kind: TerminalTabKind = tab.kind === "command" ? "command" : "shell";
+			restored.push({ tabKey: tab.tabKey, title, kind });
 			if (typeof tab.recorded === "string" && tab.recorded !== "") {
 				pendingReplay.set(tabIndex(workspaceId, tab.tabKey), tab.recorded);
 			}

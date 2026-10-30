@@ -171,7 +171,7 @@ test("a shell spawn failure is actionable and preserves replay for retry", () =>
 		expect(() => attachTerminal(WS, "tab-a", "client-1")).toThrow(
 			"Couldn’t start the shell configured by SHELL",
 		);
-		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Terminal" }]);
+		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Terminal", kind: "shell" }]);
 		expect(pushed).toEqual([]);
 	} finally {
 		if (savedShell === undefined) delete process.env.SHELL;
@@ -246,18 +246,20 @@ test("reserving a tab persists catalog membership without starting its shell", (
 	expect(reserveTerminal(WS, "tab-a", "Reserved")).toEqual({
 		tabKey: "tab-a",
 		title: "Reserved",
+		kind: "shell",
 	});
 	expect(reserveTerminal(WS, "tab-a", "Ignored rename")).toEqual({
 		tabKey: "tab-a",
 		title: "Reserved",
+		kind: "shell",
 	});
-	expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Reserved" }]);
-	expect(seen).toEqual([{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "Reserved" }] }]);
+	expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Reserved", kind: "shell" }]);
+	expect(seen).toEqual([{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "Reserved", kind: "shell" }] }]);
 	expect(attachTerminal(WS, "tab-a", "client-1").created).toBe(true);
 
 	resetTerminalState();
 	reviveTerminalSessions();
-	expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Reserved" }]);
+	expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Reserved", kind: "shell" }]);
 });
 
 test("a failed reservation persistence rolls back without publishing membership", () => {
@@ -325,7 +327,7 @@ test("revival bounds the catalog and sanitizes durable identities", () => {
 		],
 	});
 	reviveTerminalSessions();
-	expect(listTerminals(WS)).toEqual([{ tabKey: "kept", title: "Terminal" }]);
+	expect(listTerminals(WS)).toEqual([{ tabKey: "kept", title: "Terminal", kind: "shell" }]);
 
 	resetTerminalState();
 	saveTerminalSessions({
@@ -339,13 +341,54 @@ test("revival bounds the catalog and sanitizes durable identities", () => {
 	expect(listTerminals(WS).at(-1)?.tabKey).toBe("tab-255");
 });
 
+test("a client cannot mint a shell tab in the command-tab namespace", () => {
+	expect(() => reserveTerminal(WS, "thinkrail-run:dev", "Run: dev")).toThrow(
+		"Reserved terminal tab key",
+	);
+	expect(() => attachTerminal(WS, "thinkrail-run-prepare", "client-1")).toThrow(
+		"Reserved terminal tab key",
+	);
+	expect(listTerminals(WS)).toEqual([]);
+});
+
+test("a revived command tab keeps its kind and its attach shows the last screen without spawning", () => {
+	saveTerminalSessions({
+		[WS]: [
+			{ tabKey: "thinkrail-run:dev", title: "Run: dev", kind: "command", recorded: "listening" },
+			{ tabKey: "tab-a", title: "Terminal 1" },
+		],
+	});
+	reviveTerminalSessions();
+	expect(listTerminals(WS)).toEqual([
+		{ tabKey: "thinkrail-run:dev", title: "Run: dev", kind: "command" },
+		{ tabKey: "tab-a", title: "Terminal 1", kind: "shell" },
+	]);
+
+	expect(attachTerminal(WS, "thinkrail-run:dev", "client-1")).toEqual({
+		id: "thinkrail-run:dev#ended",
+		created: false,
+		replay: "listening",
+		exited: true,
+	});
+	expect(writeTerminal("thinkrail-run:dev#ended", "x", "client-1")).toBeNull();
+
+	persistTerminalSessions();
+	resetTerminalState();
+	reviveTerminalSessions();
+	expect(listTerminals(WS)[0]).toEqual({
+		tabKey: "thinkrail-run:dev",
+		title: "Run: dev",
+		kind: "command",
+	});
+});
+
 test("the tab list is the host's, in creation order", () => {
 	attachTerminal(WS, "tab-a", "client-1", { title: "One" });
 	attachTerminal(WS, "tab-b", "client-1", { title: "Two" });
 
 	expect(listTerminals(WS)).toEqual([
-		{ tabKey: "tab-a", title: "One" },
-		{ tabKey: "tab-b", title: "Two" },
+		{ tabKey: "tab-a", title: "One", kind: "shell" },
+		{ tabKey: "tab-b", title: "Two", kind: "shell" },
 	]);
 });
 
@@ -391,7 +434,7 @@ test(
 
 		expect(listTerminals(WS)).toHaveLength(0);
 		reviveTerminalSessions();
-		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Kept" }]);
+		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Kept", kind: "shell" }]);
 
 		const revived = attachTerminal(WS, "tab-a", "client-1");
 		expect(revived.created).toBe(true);
@@ -452,7 +495,7 @@ test("opening and closing a tab broadcasts the new list", () => {
 
 	attachTerminal(WS, "tab-a", "client-1", { title: "One" });
 	attachTerminal(WS, "tab-a", "client-1");
-	expect(seen).toEqual([{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "One" }] }]);
+	expect(seen).toEqual([{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "One", kind: "shell" }] }]);
 
 	closeTerminalTab(WS, "tab-a", true);
 	expect(seen.at(-1)).toEqual({ workspaceId: WS, tabs: [] });
@@ -566,7 +609,7 @@ describe("membership survives an ungraceful exit", () => {
 		resetTerminalState();
 		reviveTerminalSessions();
 
-		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Survivor" }]);
+		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Survivor", kind: "shell" }]);
 	});
 
 	test("archiving a workspace before a crash takes its tabs with it", () => {

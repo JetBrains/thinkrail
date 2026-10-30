@@ -16,6 +16,7 @@ import {
 	normalizeThemePreference,
 	type Project,
 	type SessionCompletion,
+	type TerminalTabKind,
 	type TurnChangeSet,
 	type WireModel,
 	type Workspace,
@@ -299,6 +300,7 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 export interface PersistedTerminalTab {
 	tabKey: string;
 	title: string;
+	kind?: TerminalTabKind;
 	recorded?: string;
 }
 

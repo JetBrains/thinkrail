@@ -118,9 +118,17 @@ export interface TerminalDetachedPush {
 
 export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
 
+/** A shell tab is the user's interactive shell; a command tab runs a host-composed script (architecture #12). */
+export type TerminalTabKind = "shell" | "command";
+
+/** Tab keys the host reserves for command tabs; a client may not mint a shell tab in this namespace. */
+export const COMMAND_TAB_KEY_PREFIX = "thinkrail-run";
+
 export interface TerminalTabInfo {
 	tabKey: string;
 	title: string;
+	/** Absent on hosts that predate command tabs — read as `shell`. */
+	kind?: TerminalTabKind;
 }
 
 export interface TerminalTabsPush {
@@ -911,7 +919,8 @@ export interface WsMethodMap {
 	};
 	"terminal.attach": {
 		params: { workspaceId: string; tabKey: string; title?: string; cols?: number; rows?: number };
-		result: { id: string; created: boolean; replay?: string };
+		/** `exited` marks an ended command tab: `id` is a placeholder, `replay` its last screen, and nothing was spawned. */
+		result: { id: string; created: boolean; replay?: string; exited?: true };
 	};
 	"terminal.list": {
 		params: { workspaceId: string };
