@@ -780,7 +780,7 @@ a project picker, the prompt hero, and the reused
   (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
   URL / paste a code / answer the provider's own key prompts, `provider.loginReply` — no inline key
   field); a "configured outside the app" note for rows with neither flag; **`CustomEndpointsSettings`**
-  (v100, hidden below `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; re-read on `providerVersion`) — the **Custom
+  (v101, hidden below `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; re-read on `providerVersion`) — the **Custom
   servers** group listing every `customEndpoints.list` endpoint (name, address, model count; **Edit** and a
   **Remove** icon behind a `ConfirmDialog`) plus **Add server**. `custom-*` providers are filtered out of the
   generic provider rows so each appears once; hand-written `models.json` providers stay in Connected as
