@@ -9285,6 +9285,4073 @@ export default function Narrow() {
 | `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx` | `canRespond ? <AttentionLine announced={announced} /> : null` above the question card; `announced` set by the one-shot attention claim. |
 | `apps/web/src/chat/ExtUiPrompt.tsx` | `<AttentionLine live={false} />` above every extension prompt; `ChatTranscript` owns the polite announcement. |
 
+## Dialog
+
+The modal surface for a focused task or decision: Radix Dialog with ThinkRail's overlay, a centred elevated card, header, footer, title and description parts and a Close icon button. It owns the portal, the overlay, focus trapping and return, scroll lock, Escape and outside-click dismissal and the title and description type; the call site provides the open state, the content, the actions and the width. `DialogPanel` is the non-modal, in-place variant, and `useModalLayerOpen()` tells any surface whether a modal dialog covers it.
+
+```tsx
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@thinkrail/ui/dialog";
+```
+
+### When to use
+
+- A short task that must be finished or cancelled before going back: a form (new template, clone repository, open a host path), a login, a merge.
+- A larger view of something already on screen: a tool's full output, an image attachment at full size.
+- A decision that needs more than yes/no — extra fields, a live count, a gated confirm button (Stop all subagents).
+- A caller-positioned, non-modal panel that still needs dialog semantics, Escape and focus return — `DialogPanel` in `<Dialog modal={false}>` (the Resources inspector).
+- Knowing that a modal covers your surface — `useModalLayerOpen()` (the chat transcript holds completion acknowledgement while one is open).
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ConfirmDialog | A plain yes/no with a title, a description, Cancel and one confirm button. Do not rebuild it from Dialog parts. |
+| ConfirmPopover | A yes/no anchored to the dedicated control that asked for it. |
+| Popover | Light, non-blocking content next to its trigger; the rest of the page stays usable. |
+| Toast | Reporting a result that needs no decision. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Dialog | Radix `Root`. Holds the open state (`open` + `onOpenChange`, or `defaultOpen`); renders nothing itself. |
+| DialogTrigger | Radix `Trigger`. Use `asChild` on a Button or IconButton; it gets `aria-haspopup`, `aria-expanded`, `aria-controls` and `data-state`, and focus returns to it on close. |
+| Overlay | Rendered by DialogContent: a fixed, full-window `bg-overlay` layer at `z-50` with `data-modal-layer` and `data-testid="dialog-overlay"`. A click on it dismisses the dialog. |
+| DialogContent | Portalled to `document.body` and centred in the window: a `rounded-lg` card with a `border-default` border on `container-elevated-bg`, the large shadow, `p-16`, its children stacked with `gap-16`, `w-full` up to `max-w-[28rem]`. |
+| Close button | An IconButton (ghost, M, `RiCloseLine`, label `common.close`) at `top-12 right-12` inside the card, wrapped in Radix `Close`. Rendered last, after the children. Omitted with `hideClose`. |
+| DialogHeader | A `div` stacking the title and description with `gap-4`. |
+| DialogTitle | Radix `Title`, an `h2` in `tr-title-dialog` and `text-default`. The dialog's accessible name. |
+| DialogDescription | Radix `Description`, a `p` in `tr-text-ui` and `text-muted`. Referenced by the dialog's `aria-describedby`. |
+| DialogFooter | A `div` for the actions: stacked in reverse order (`flex-col-reverse`, `gap-8`) under `sm`, a right-aligned row from `sm`. Put the dismiss action first and the main action last. |
+| DialogClose | Radix `Close`. `asChild` on a Button closes an uncontrolled dialog through `onOpenChange(false)`. |
+| DialogPanel | Radix `Content` rendered in place — no portal, overlay or Close button — with the elevated background, the default border colour (the caller sets which sides) and no outline. The caller positions it. |
+| useModalLayerOpen() | A hook returning `true` while any `[data-modal-layer][data-state="open"]` element is in the document — a DialogContent overlay. It observes `document.body`; on the server it returns `false`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `hideClose` | `boolean` | `false` | `DialogContent` only. Omits the built-in Close button, for content that owns its dismissal: a confirmation or notice whose footer decides, a command palette, or `hideClose={busy}` while an operation must not be abandoned (with `onOpenChange` ignoring the close too). |
+
+Radix props in common use (passed through unchanged):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `open` | `boolean` | — | `Dialog`. Controlled open state — the usual form in the app. |
+| `defaultOpen` | `boolean` | `false` | `Dialog`. Initial state of an uncontrolled dialog opened by a DialogTrigger. |
+| `onOpenChange` | `(open: boolean) => void` | — | `Dialog`. Called by the trigger, every Close, Escape and an overlay click. Clear the state that opened the dialog here; ignore `false` to keep a busy dialog open. |
+| `modal` | `boolean` | `true` | `Dialog`. `false` only with DialogPanel: no focus trap, no scroll lock, the page stays interactive. |
+| `onOpenAutoFocus` | `(event: Event) => void` | — | `DialogContent` / `DialogPanel`. By default focus moves to the first focusable element, or to an element with `autoFocus`. Call `event.preventDefault()` and focus something else (the session switcher's command list, the inspector's selected row). |
+| `onCloseAutoFocus` | `(event: Event) => void` | — | `DialogContent` / `DialogPanel`. By default focus returns to the DialogTrigger; without one it lands on the document body. Call `event.preventDefault()` and focus the element the dialog came from. |
+| `onEscapeKeyDown` | `(event: KeyboardEvent) => void` | — | `DialogContent` / `DialogPanel`. `preventDefault()` keeps the dialog open. |
+| `onInteractOutside` | `(event: Event) => void` | — | `DialogContent` / `DialogPanel`. Pointer down or focus outside; `preventDefault()` keeps it open (the Resources inspector panel does). |
+| `role` | `AriaRole` | `"dialog"` | `DialogContent`. `"alertdialog"` for a confirmation (ConfirmDialog sets it). |
+| `aria-describedby` | `string \| undefined` | — | `DialogContent` / `DialogPanel`. Radix points it at the DialogDescription; pass `undefined` when the dialog has none. |
+| `className` | `string` | — | Size and layout only: width (`max-w-*`), a height cap with overflow, `gap-12`, or `p-0 gap-0` for chromeless content. Never colour, border, radius, shadow or type. |
+| `asChild` | `boolean` | — | `DialogTrigger` / `DialogClose`. Merge onto the child Button or IconButton. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | `open` is false. | Nothing is rendered; the content unmounts, so local field state resets unless the caller keeps it. The trigger has `data-state="closed"`. |
+| Open (modal) | `open`, a DialogTrigger, or `defaultOpen`. | `bg-overlay` dims the whole window, the card sits centred above it, page scroll is locked and everything outside is hidden from assistive tech. Opens and closes without a transition. A Button or IconButton trigger shows its selected look under the overlay. |
+| Without Close button | `hideClose`. | No corner button; the footer, Escape and the overlay dismiss. |
+| Close button hover / focus | Pointer over the Close button, or Tab to it. | The IconButton's own ghost hover and focus ring; its `common.close` tooltip on hover and keyboard-visible focus — not when it is autofocused after a pointer open. |
+| Non-modal panel | `DialogPanel` inside `<Dialog modal={false}>`. | No overlay and no Close button; the panel sits where the caller placed it and the page around it stays interactive. |
+| Busy, loading, error | — | No distinct treatment: the content shows its own status or error line and the footer buttons take `disabled` or `loading`. |
+
+### Accessibility
+
+- DialogContent renders `role="dialog"` with `aria-labelledby` pointing at DialogTitle and `aria-describedby` at DialogDescription. Every dialog needs a DialogTitle; without a description pass `aria-describedby={undefined}`.
+- A modal dialog traps Tab inside the card, locks page scroll and sets `aria-hidden` on everything outside it.
+- On open, focus moves to the first focusable element in DOM order (the Close button comes last), or to an element with `autoFocus`.
+- On close, focus returns to the DialogTrigger. A dialog opened without one — from a plain button, a menu item or a store flag — sends focus to the document body; return it in `onCloseAutoFocus`.
+- The Close button is an IconButton labelled `common.close`; with `hideClose`, a footer button must offer the way out.
+- DialogPanel keeps the dialog role, title, Escape and focus return but does not trap focus or hide the page.
+- `useModalLayerOpen()` counts only modal DialogContent overlays; it does not depend on how `aria-hidden` treats live regions.
+
+| Keys | Action |
+| --- | --- |
+| `Enter / Space` | On a DialogTrigger: opens the dialog. |
+| `Tab / Shift+Tab` | Moves through the dialog's controls and wraps at the ends (modal only). |
+| `Escape` | Closes the dialog through onOpenChange(false). An open tooltip inside closes in the same press. |
+| `Enter` | In a form inside the dialog: submits it (a `type="submit"` Button). |
+
+### Usage rules
+
+- **DLG-1** — Use a modal Dialog only for a task or decision that must be finished before going on. A plain yes/no is a ConfirmDialog; anything anchored to its control is a Popover or ConfirmPopover.
+- **DLG-2** — Every dialog has a DialogTitle, and a DialogDescription when it has a sentence of context. With no description, pass `aria-describedby={undefined}`.
+- **DLG-3** — Build the body from DialogHeader and DialogFooter. In the footer the dismiss action comes first and the main action last, at the Button default size; one `primary` per dialog (BTN-1).
+- **DLG-4** — `className` on DialogContent sets size and layout only — `max-w-*`, a height cap with `overflow-y-auto`, `gap-12`, `p-0 gap-0` for chromeless content. Never colour, border, radius, shadow or type.
+- **DLG-5** — Keep the Close button unless the content owns dismissal: `hideClose` for confirmation and notice footers, command palettes, and `hideClose={busy}` while an operation must not be abandoned. With the button, keep the header text clear of it (`pr-24` on DialogHeader).
+- **DLG-6** — Open from `DialogTrigger asChild` whenever a control opens the dialog, also for a controlled `open`, so focus comes back to it. A dialog opened without a trigger returns focus itself in `onCloseAutoFocus`; otherwise focus falls to the document body.
+- **DLG-7** — `DialogPanel` is only for a caller-positioned, non-modal panel inside `<Dialog modal={false}>`. It is not a way to restyle a modal.
+- **DLG-8** — To know whether a modal covers a surface, call `useModalLayerOpen()`; never keep a registry of open dialogs.
+
+### Examples
+
+#### Basic
+
+A DialogTrigger, a header with title and description, and a footer of DialogClose buttons.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<Dialog>
+			<DialogTrigger asChild>
+				<Button variant="outline">{t("settings.notifications.enable")}</Button>
+			</DialogTrigger>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>{t("notifications.permission.title")}</DialogTitle>
+					<DialogDescription>{t("notifications.permission.description")}</DialogDescription>
+				</DialogHeader>
+				<DialogFooter>
+					<DialogClose asChild>
+						<Button variant="outline">{t("notifications.permission.notNow")}</Button>
+					</DialogClose>
+					<DialogClose asChild>
+						<Button>{t("notifications.permission.enable")}</Button>
+					</DialogClose>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Form
+
+A controlled dialog with a DialogTrigger around a form: the field takes `autoFocus`, Save submits and stays disabled until there is input.
+
+```tsx
+import { RiAddLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useState } from "react";
+
+export default function Form() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [body, setBody] = useState("");
+	const close = (next: boolean) => {
+		if (!next) setBody("");
+		setOpen(next);
+	};
+	return (
+		<Dialog open={open} onOpenChange={close}>
+			<DialogTrigger asChild>
+				<Button variant="outline" iconLeft={RiAddLine}>
+					{t("chat.templateEditor.newTitle")}
+				</Button>
+			</DialogTrigger>
+			<DialogContent aria-describedby={undefined} className="max-w-xl gap-12">
+				<DialogHeader>
+					<DialogTitle>{t("chat.templateEditor.newTitle")}</DialogTitle>
+				</DialogHeader>
+				<form
+					className="flex flex-col gap-12"
+					onSubmit={(event) => {
+						event.preventDefault();
+						close(false);
+					}}
+				>
+					<label htmlFor="example-template-body" className="flex flex-col gap-4 tr-text-ui">
+						{t("chat.templateEditor.body")}
+						<Textarea
+							id="example-template-body"
+							autoFocus
+							rows={6}
+							value={body}
+							onChange={(event) => setBody(event.target.value)}
+							placeholder={t("chat.templateEditor.bodyPlaceholder")}
+						/>
+					</label>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => close(false)}>
+							{t("common.cancel")}
+						</Button>
+						<Button type="submit" disabled={!body.trim()}>
+							{t("common.save")}
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Notice without a Close button
+
+`hideClose`: the single footer action is the way out, as in the Notice Dialog.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+import { useState } from "react";
+
+export default function HideClose() {
+	const t = useT();
+	const [error, setError] = useState<string | null>(null);
+	return (
+		<Dialog
+			open={error !== null}
+			onOpenChange={(open) => {
+				if (!open) setError(null);
+			}}
+		>
+			<DialogTrigger asChild>
+				<Button
+					variant="outline"
+					onClick={() => setError(t("panels.openProject.missing", { path: "~/old-repo" }))}
+				>
+					{t("panels.openProjectPath.submit")}
+				</Button>
+			</DialogTrigger>
+			<DialogContent className="max-w-sm" hideClose>
+				<DialogHeader>
+					<DialogTitle>{t("panels.openProject.openFailed")}</DialogTitle>
+					<DialogDescription className="whitespace-pre-line">{error}</DialogDescription>
+				</DialogHeader>
+				<DialogFooter>
+					<Button onClick={() => setError(null)}>{t("panels.noticeDialog.ok")}</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Not closable while busy
+
+`hideClose={busy}` and an `onOpenChange` that ignores closing while the clone runs; Cancel stops the operation first.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+import { useRef, useState } from "react";
+
+export default function Busy() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [busy, setBusy] = useState(false);
+	const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+	const clone = () => {
+		setBusy(true);
+		timer.current = setTimeout(() => {
+			setBusy(false);
+			setOpen(false);
+		}, 3000);
+	};
+	const cancel = () => {
+		clearTimeout(timer.current);
+		setBusy(false);
+		if (!busy) setOpen(false);
+	};
+	return (
+		<Dialog
+			open={open}
+			onOpenChange={(next) => {
+				if (next || !busy) setOpen(next);
+			}}
+		>
+			<DialogTrigger asChild>
+				<Button variant="outline">{t("panels.cloneProject.title")}</Button>
+			</DialogTrigger>
+			<DialogContent hideClose={busy} className="max-w-lg gap-12">
+				<DialogHeader>
+					<DialogTitle>{t("panels.cloneProject.title")}</DialogTitle>
+					<DialogDescription>{t("panels.cloneProject.description")}</DialogDescription>
+				</DialogHeader>
+				{busy ? (
+					<p role="status" className="tr-text-ui text-text-muted">
+						{t("panels.cloneProject.cloning")}
+					</p>
+				) : null}
+				<DialogFooter>
+					<Button variant="outline" onClick={cancel}>
+						{t("common.cancel")}
+					</Button>
+					<Button disabled={busy} onClick={clone}>
+						{t("panels.cloneProject.clone")}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Large content
+
+A wider card with a height cap and a scrolling body; the header keeps clear of the Close button.
+
+```tsx
+import { RiFileTextLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+
+const lines = Array.from({ length: 80 }, (_, index) => `[${index + 1}] list_issues → 200 OK`);
+
+export default function LargeContent() {
+	const t = useT();
+	return (
+		<Dialog>
+			<DialogTrigger asChild>
+				<Button variant="ghost" size="s" iconLeft={RiFileTextLine}>
+					{t("mcp.fullOutput.title")}
+				</Button>
+			</DialogTrigger>
+			<DialogContent className="max-h-[85vh] max-w-3xl">
+				<DialogHeader className="pr-24">
+					<DialogTitle>{t("mcp.fullOutput.title")}</DialogTitle>
+					<DialogDescription className="truncate">github · list_issues</DialogDescription>
+				</DialogHeader>
+				<pre className="min-h-0 overflow-auto tr-code-text">{lines.join("\n")}</pre>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Return focus without a trigger
+
+A controlled dialog opened from a plain Button returns focus to it in `onCloseAutoFocus`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogTitle,
+} from "@thinkrail/ui/dialog";
+import { useRef, useState } from "react";
+
+export default function ReturnFocus() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const opener = useRef<HTMLButtonElement>(null);
+	return (
+		<>
+			<Button ref={opener} variant="ghost" size="m" tone="danger" onClick={() => setOpen(true)}>
+				{t("resources.inspector.stopAll")}
+			</Button>
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent
+					onCloseAutoFocus={(event) => {
+						event.preventDefault();
+						opener.current?.focus();
+					}}
+				>
+					<DialogTitle>{t("chat.view.stopAllTitle")}</DialogTitle>
+					<DialogDescription>{t("chat.view.stopAllDescription", { count: 3 })}</DialogDescription>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => setOpen(false)}>
+							{t("common.cancel")}
+						</Button>
+						<Button variant="destructive" onClick={() => setOpen(false)}>
+							{t("chat.view.stopAllConfirm", { count: 3 })}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		</>
+	);
+}
+```
+
+#### Non-modal panel
+
+`DialogPanel` in `<Dialog modal={false}>`, placed over its own region; Escape or Close dismisses it and the page stays usable.
+
+```tsx
+import { RiCloseLine, RiStackLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import { Dialog, DialogClose, DialogPanel, DialogTitle, DialogTrigger } from "@thinkrail/ui/dialog";
+
+export default function Panel() {
+	const t = useT();
+	return (
+		<div className="relative flex h-[12rem] w-full flex-col items-start gap-8">
+			<Dialog modal={false}>
+				<DialogTrigger asChild>
+					<Button variant="outline" size="m" iconLeft={RiStackLine}>
+						{t("resources.inspector.title")}
+					</Button>
+				</DialogTrigger>
+				<DialogPanel
+					aria-describedby={undefined}
+					onInteractOutside={(event) => event.preventDefault()}
+					className="absolute inset-0 gap-8 border p-8"
+				>
+					<div className="flex items-center gap-8">
+						<DialogTitle className="flex-1">{t("resources.inspector.title")}</DialogTitle>
+						<DialogClose asChild>
+							<IconButton icon={RiCloseLine} label={t("resources.inspector.close")} />
+						</DialogClose>
+					</div>
+					<p className="tr-text-ui text-text-muted">{t("resources.inspector.empty")}</p>
+				</DialogPanel>
+			</Dialog>
+		</div>
+	);
+}
+```
+
+#### Covered by a modal
+
+`useModalLayerOpen()` turns true while any modal dialog is open.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+	useModalLayerOpen,
+} from "@thinkrail/ui/dialog";
+
+function CoveredByModal() {
+	const modalOpen = useModalLayerOpen();
+	return <output className="tr-code-text">useModalLayerOpen() → {String(modalOpen)}</output>;
+}
+
+export default function ModalLayer() {
+	const t = useT();
+	return (
+		<div className="flex flex-wrap items-center gap-12">
+			<Dialog>
+				<DialogTrigger asChild>
+					<Button variant="outline" size="m">
+						{t("mcp.fullOutput.title")}
+					</Button>
+				</DialogTrigger>
+				<DialogContent aria-describedby={undefined}>
+					<DialogHeader>
+						<DialogTitle>{t("mcp.fullOutput.title")}</DialogTitle>
+					</DialogHeader>
+					<CoveredByModal />
+				</DialogContent>
+			</Dialog>
+			<CoveredByModal />
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/notifications/NotificationPermissionPrompt.tsx` | The canonical layout: header, description, Not now (outline) and Enable (primary) in the footer. |
+| `apps/web/src/panels/CloneProjectDialog.tsx` | A form dialog with `hideClose={busy}` and an `onOpenChange` that ignores closing while cloning. |
+| `apps/web/src/chat/tools/mcp/McpActions.tsx` | DialogTrigger on a text action; a wide, height-capped dialog with `pr-24` on the header. |
+| `apps/web/src/shell/SessionSwitcher.tsx` | Chromeless: `hideClose`, `p-0 gap-0`, a Command inside and `onOpenAutoFocus` moving focus to it. |
+| `apps/web/src/chat/ChatView.tsx` | Stop all subagents, opened without a trigger: `onCloseAutoFocus` returns focus to the Resources button or the composer. |
+| `apps/web/src/panels/ConfirmDialog.tsx` | ConfirmDialog: `role="alertdialog"`, `hideClose` and a narrower card. |
+
+## ConfirmDialog
+
+The app's modal yes/no: a narrow `alertdialog` built on Dialog with a title, an optional description, Cancel and one confirm button. It owns the layout, the button variants, the warning icon of a destructive confirmation and closing after either choice; the call site provides the open state, the words and what confirming does.
+
+```tsx
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+```
+
+### When to use
+
+- Confirming an action that has no stable anchor on screen: it was chosen from a menu, a shortcut or a row that may move (close a project, remove a workspace).
+- Confirming an irreversible or risky step before it runs: remove an MCP server, close a terminal with a running process, delete a remote branch, stop trusting a project.
+- Asking before a consequential but safe step: initialise a git repository, push straight to the base branch, apply a layout.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ConfirmPopover | The question belongs to a dedicated control that stays on screen (deleting a template); the popover anchors to it. |
+| Dialog | The decision needs more than two buttons and text: fields, a gated or loading confirm button, a live count (Stop all subagents). |
+| Toast | The action is reversible or already done; report it instead of asking first. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | DialogContent with `role="alertdialog"`, `hideClose`, `max-w-[24rem]` and `data-testid="confirm-dialog"`, over the Dialog overlay. |
+| Warning icon | Only when `destructive`: `RiAlertLine` in `feedback-error` before the title, at icon size 16. |
+| Title | DialogTitle with the `title` string; the accessible name. |
+| Description | DialogDescription, rendered only when `description` is given. |
+| Cancel | An `outline` Button, first in the footer and so focused on open; label `cancelLabel` or `common.cancel`. |
+| Confirm | A `destructive` Button when `destructive`, otherwise `primary`; label `confirmLabel` or `common.confirm`; `data-testid` from `confirmTestId`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `open` | `boolean` | — | Required. Controlled open state, usually derived from the pending target (`open={target !== null}`). |
+| `onOpenChange` | `(open: boolean) => void` | — | Required. Called with `false` by Cancel, by Confirm after `onConfirm`, by Escape and by an overlay click. Clear the pending target here. |
+| `title` | `string` | — | Required. The question, naming its object: `Close {name}?`. |
+| `description` | `ReactNode` | — | What confirming does and what it keeps. A string, or `<T>` with an emphasised name or path. |
+| `confirmLabel` | `string` | `t("common.confirm")` | The confirm button's label; repeat the action's verb (`Close project`, `Remove`). |
+| `cancelLabel` | `string` | `t("common.cancel")` | The cancel button's label. |
+| `destructive` | `boolean` | `false` | Uses the `destructive` confirm button and adds the warning icon before the title. |
+| `confirmTestId` | `string` | — | `data-testid` on the confirm button, for end-to-end tests. |
+| `onConfirm` | `() => void` | — | Required. Runs when Confirm is pressed, just before the dialog closes. Start the action here; the dialog does not wait for it. |
+| `onClosedAutoFocus` | `() => void` | — | Called instead of the default focus return after closing (it prevents Radix's). Without it focus lands on the document body, because ConfirmDialog has no trigger; focus the row or button the dialog came from. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | `open` is false. | Nothing is rendered. |
+| Open, neutral | `open` without `destructive`. | Title without an icon; `outline` Cancel beside a `primary` confirm button. |
+| Open, destructive | `destructive`. | `feedback-error` warning icon before the title; `outline` Cancel beside a `destructive` confirm button. |
+| No description | `description` omitted. | Only the title above the buttons. |
+| Narrow window | Below `sm`. | The buttons stack, confirm on top of Cancel (DialogFooter). |
+| Busy, disabled | — | No distinct treatment: neither button can be disabled or show loading, and the dialog closes as soon as Confirm is pressed. |
+
+### Accessibility
+
+- `role="alertdialog"`, named by the title and described by the description through Dialog's `aria-labelledby` / `aria-describedby`.
+- Cancel is first in DOM order, so it receives focus when the dialog opens; a stray Enter cancels instead of confirming.
+- Focus is trapped while open; Escape and an overlay click dismiss like Cancel.
+- ConfirmDialog has no trigger, so after it closes focus lands on the document body. Pass `onClosedAutoFocus` to put it back on the button, row or menu trigger it came from.
+- The warning icon is decoration; the title and the confirm label must say what is destructive.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves between Cancel and Confirm, wrapping inside the dialog. |
+| `Enter / Space` | Activates the focused button — Cancel when the dialog opens. |
+| `Escape` | Closes without confirming. |
+
+### Usage rules
+
+- **CFD-1** — Every modal yes/no in the app is a ConfirmDialog; do not assemble one from Dialog parts. When the question belongs to a control that stays on screen, use ConfirmPopover.
+- **CFD-2** — Set `destructive` only when confirming deletes, ends or revokes something (remove workspace, close a busy terminal, delete a remote branch, stop trusting). Closing a project, initialising a repo or pushing stays neutral.
+- **CFD-3** — Write the title as the question with its object (`Remove {name}?`) and pass a `confirmLabel` that repeats the verb; the default `Confirm` is a fallback, not a label.
+- **CFD-4** — Derive `open` from the pending target and clear the target in `onOpenChange`; read the target in `onConfirm` from that state, never from the row that opened it.
+- **CFD-5** — `onConfirm` starts the action and the dialog closes at once: no optimistic UI, let the result arrive and report failure with a toast. A confirm that must be disabled or show progress is a Dialog.
+- **CFD-6** — Restore focus with `onClosedAutoFocus` — ConfirmDialog has no trigger, so focus otherwise falls to the document body. Give the confirm button a `confirmTestId`.
+
+### Examples
+
+#### Neutral
+
+Close a project: a `primary` confirm that repeats the verb; `onClosedAutoFocus` returns focus to the button.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+export default function Preview() {
+	const t = useT();
+	const opener = useRef<HTMLButtonElement>(null);
+	const [open, setOpen] = useState(false);
+	return (
+		<>
+			<Button ref={opener} variant="outline" onClick={() => setOpen(true)}>
+				{t("panels.projectTree.closeProject")}
+			</Button>
+			<ConfirmDialog
+				open={open}
+				onOpenChange={setOpen}
+				title={t("panels.projectTree.closeTitle", { name: "thinkrail" })}
+				description={t("panels.projectTree.closeDescription")}
+				confirmLabel={t("panels.projectTree.closeProject")}
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => opener.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+#### Destructive
+
+A busy terminal's close: warning icon and a `destructive` Close anyway.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+export default function Destructive() {
+	const t = useT();
+	const opener = useRef<HTMLButtonElement>(null);
+	const [open, setOpen] = useState(false);
+	return (
+		<>
+			<IconButton
+				ref={opener}
+				icon={RiCloseLine}
+				label={t("common.close")}
+				onClick={() => setOpen(true)}
+			/>
+			<ConfirmDialog
+				open={open}
+				onOpenChange={setOpen}
+				title={t("panels.terminalWorkbench.busyTitle")}
+				description={t("panels.terminalWorkbench.busyDescription", { title: "bun run dev" })}
+				confirmLabel={t("panels.terminalWorkbench.closeAnyway")}
+				destructive
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => opener.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+#### Rich description
+
+`description` as a `<T>` element that emphasises the folder path.
+
+```tsx
+import { T, useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+export default function RichDescription() {
+	const t = useT();
+	const opener = useRef<HTMLButtonElement>(null);
+	const [path, setPath] = useState<string | null>(null);
+	return (
+		<>
+			<Button ref={opener} variant="outline" onClick={() => setPath("~/notes")}>
+				{t("panels.openProjectPath.submit")}
+			</Button>
+			<ConfirmDialog
+				open={path !== null}
+				onOpenChange={(open) => {
+					if (!open) setPath(null);
+				}}
+				title={t("panels.openProject.initTitle")}
+				description={
+					<T
+						i18nKey="panels.openProject.initDescription"
+						values={{ path }}
+						components={[<span key="path" className="tr-text-emphasis text-text-default" />]}
+					/>
+				}
+				confirmLabel={t("panels.openProject.initConfirm")}
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => opener.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+#### Pending target
+
+`open` is derived from the row waiting for confirmation; `onConfirm` acts on that state.
+
+```tsx
+import { RiDeleteBinLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+interface Server {
+	name: string;
+	source: string;
+}
+
+const initial: Server[] = [
+	{ name: "github", source: "~/.pi/agent/mcp.json" },
+	{ name: "linear", source: ".pi/mcp.json" },
+];
+
+export default function PendingTarget() {
+	const t = useT();
+	const [servers, setServers] = useState(initial);
+	const [removing, setRemoving] = useState<Server | null>(null);
+	const list = useRef<HTMLDivElement>(null);
+	const opener = useRef<HTMLButtonElement | null>(null);
+	return (
+		<div ref={list} className="flex w-full flex-col gap-4">
+			{servers.map((server) => (
+				<div key={server.name} className="flex items-center gap-8 tr-text-ui">
+					<span className="flex-1">{server.name}</span>
+					<IconButton
+						icon={RiDeleteBinLine}
+						label={t("common.remove")}
+						onClick={(event) => {
+							opener.current = event.currentTarget;
+							setRemoving(server);
+						}}
+					/>
+				</div>
+			))}
+			<ConfirmDialog
+				open={removing !== null}
+				onOpenChange={(open) => {
+					if (!open) setRemoving(null);
+				}}
+				title={t("mcp.remove.title", { name: removing?.name ?? "" })}
+				description={
+					removing ? t("mcp.remove.description", { source: removing.source }) : undefined
+				}
+				confirmLabel={t("common.remove")}
+				destructive
+				confirmTestId="mcp-remove-confirm"
+				onClosedAutoFocus={() => {
+					const target = opener.current?.isConnected ? opener.current : null;
+					(target ?? list.current?.querySelector("button"))?.focus();
+				}}
+				onConfirm={() => {
+					const row = removing;
+					if (!row) return;
+					const rest = servers.filter((server) => server.name !== row.name);
+					setServers(rest.length > 0 ? rest : initial);
+				}}
+			/>
+		</div>
+	);
+}
+```
+
+#### Opened from a menu
+
+A dropdown item opens the confirmation; `onClosedAutoFocus` returns focus to the menu button.
+
+```tsx
+import { RiMore2Line } from "@remixicon/react";
+import { T, useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+export default function FromMenu() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const trigger = useRef<HTMLButtonElement>(null);
+	return (
+		<>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<IconButton
+						ref={trigger}
+						icon={RiMore2Line}
+						label={t("shell.location.ship.moreActions")}
+					/>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="start">
+					<DropdownMenuItem onSelect={() => {}}>{t("common.rename")}</DropdownMenuItem>
+					<DropdownMenuItem onSelect={() => setOpen(true)}>{t("common.remove")}</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+			<ConfirmDialog
+				open={open}
+				onOpenChange={setOpen}
+				title={t("panels.removeWorkspace.title", { name: "fix-login" })}
+				description={
+					<T
+						i18nKey="panels.removeWorkspace.description"
+						values={{ branch: "fix/login" }}
+						components={[<span key="branch" className="tr-text-emphasis text-text-default" />]}
+					/>
+				}
+				confirmLabel={t("common.remove")}
+				destructive
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => trigger.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+#### Interpolated labels
+
+Title, plural description and confirm label all name the branch.
+
+```tsx
+import { RiUploadCloud2Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+export default function Push() {
+	const t = useT();
+	const opener = useRef<HTMLButtonElement>(null);
+	const [branch, setBranch] = useState<string | null>(null);
+	const ahead = 2;
+	return (
+		<>
+			<Button
+				ref={opener}
+				variant="outline"
+				size="m"
+				iconLeft={RiUploadCloud2Line}
+				onClick={() => setBranch("main")}
+			>
+				{t("panels.ship.confirmPush.confirm", { branch: "main" })}
+			</Button>
+			<ConfirmDialog
+				open={branch !== null}
+				onOpenChange={(open) => {
+					if (!open) setBranch(null);
+				}}
+				title={t("panels.ship.confirmPush.title", { branch })}
+				description={t("panels.ship.confirmPush.descriptionCommits", { count: ahead, branch })}
+				confirmLabel={t("panels.ship.confirmPush.confirm", { branch })}
+				confirmTestId="ship-confirm-base-push"
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => opener.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ProjectTree.tsx` | Close project (neutral) from the row menu, with `onClosedAutoFocus` restoring row focus. |
+| `apps/web/src/panels/RemoveWorkspaceDialog.tsx` | Remove workspace: `destructive`, a `<T>` description emphasising the branch. |
+| `apps/web/src/panels/McpSettings.tsx` | Remove an MCP server: `open={removing !== null}`, destructive `common.remove`. |
+| `apps/web/src/panels/TerminalWorkbench.tsx` | Closing a terminal with a running process: destructive Close anyway. |
+| `apps/web/src/panels/useShipRunner.tsx` | Push to the base branch (neutral) and delete the remote branch (destructive). |
+| `apps/web/src/panels/useOpenProject.tsx` | Initialise a git repository before opening a folder (neutral). |
+
+## Popover
+
+A non-modal floating panel anchored to a trigger: Radix Popover with ThinkRail's elevated surface. `PopoverContent` owns the portal (to the body or a given `container`), placement next to the trigger with a fixed offset, the border, radius and shadow, and Radix's focus, Escape and outside-click handling. The call site provides the trigger, the content, its width and padding, and usually the open state.
+
+```tsx
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+```
+
+### When to use
+
+- A searchable picker behind a select-like trigger: branches, projects, models, open tabs — a Command inside the popover.
+- Details about the control that opened it, with a few actions: the branch segment's facts and Copy branch name.
+- A short list of rows that needs more than a menu row allows — a meaning line per option, inline rename, per-row actions (recently closed chats, send options).
+- A small form tied to one control: naming a new layout preset.
+- A yes/no anchored to the control that asked — use ConfirmPopover, which is built on it.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| DropdownMenu | The panel is a list of commands or one choice among a few: it brings menu roles, arrow keys and typeahead. |
+| Dialog | The task needs the user's full attention, blocks the page or has no on-screen anchor. |
+| Tooltip and IconTooltip | The text only explains a control and contains nothing interactive. |
+| ConfirmPopover | The panel only asks to confirm one action; it fixes the layout, roles and buttons. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Popover | Radix Root. Owns the open state, uncontrolled by default or `open` / `onOpenChange`; non-modal. |
+| PopoverTrigger | Radix Trigger, unstyled: toggles on click and carries `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls` and `data-state`. Usually `asChild` on a Button or IconButton. |
+| PopoverAnchor | Radix Anchor: positions the content against another element than the trigger. Exported, but no production call site uses it yet. |
+| PopoverContent | The portalled panel (`role="dialog"`): `z-50`, `rounded-md`, `border-border-default`, `bg-container-elevated-bg`, `text-text-default`, `--shadow-md`, `overflow-hidden`, no outline and no padding of its own. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `PopoverContent.container` | `HTMLElement \| null` | — | The element the content portals into; `null` or omitted portals to `document.body`. Pass the host DialogContent node (`ref={setDialogEl}`) when the popover opens inside a modal dialog, so its list scrolls under the dialog's scroll lock. |
+| `PopoverContent.align` | `"start" \| "center" \| "end"` | `"center"` | Alignment against the trigger. Call sites use `start` under a left-edge trigger (pickers, branch details) and `end` for a trailing icon trigger (chat history, tab search, send options). |
+| `PopoverContent.sideOffset` | `number` | `6` | Gap to the trigger. The wrapper sets 6; Radix's own default is 0. |
+| `Popover.open` | `boolean` | — | Controlled open state. Every production popover controls it, so a row can close it after a choice or a second control can open it. |
+| `Popover.onOpenChange` | `(open: boolean) => void` | — | Called on every open and close (trigger, Escape, outside click, focus leaving). Start a refresh here when the content loads on open (`if (next) refresh()`). |
+| `Popover.defaultOpen` | `boolean` | `false` | Uncontrolled initial state, for a popover nothing else needs to close. |
+| `Popover.modal` | `boolean` | `false` | Traps focus, blocks outside pointer events and locks page scroll while open. No ThinkRail call site sets it; popovers stay non-modal. |
+| `PopoverTrigger.asChild` | `boolean` | — | Merges the trigger onto its child. Use it with a Button or IconButton, which shows its selected look while `data-state="open"`. An IconButton child also needs `wrapTrigger`, which keeps its tooltip's and the popover's `data-state` on separate elements. |
+| `PopoverTrigger.disabled` | `boolean` | — | Blocks opening. With `asChild`, set `disabled` on the Button child instead. |
+| `PopoverAnchor.asChild` | `boolean` | — | Merges the anchor onto its child. While a PopoverAnchor is mounted the content positions against it instead of the trigger. |
+
+Radix PopoverContent props that pass through:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `side` | `"top" \| "right" \| "bottom" \| "left"` | `"bottom"` | Preferred side; Radix flips and shifts the content when the viewport is too small. `top` for triggers at the bottom of a surface (the composer's send options). |
+| `onOpenAutoFocus` | `(event: Event) => void` | — | Runs before focus moves into the content (by default its first focusable element). `event.preventDefault()` and focus something else — the content itself (branch details) or an input. |
+| `onCloseAutoFocus` | `(event: Event) => void` | — | Runs before focus returns to the trigger. `event.preventDefault()` when a choice should move focus elsewhere (the tab it selected). |
+| `onEscapeKeyDown` | `(event: KeyboardEvent) => void` | — | `event.preventDefault()` keeps the popover open, for example while an inline rename inside it owns Escape. |
+| `className` | `string` | — | Width (`w-288`, `w-320`, `min-w-[16rem]`), padding by content (`p-0` around a Command, `p-4` around rows, `p-12` around details and forms), layout and a height bound such as `max-h-[min(60vh,var(--radix-popover-content-available-height))] overflow-y-auto`. The surface, border, radius and shadow come from the wrapper. |
+| `ref` | `Ref<HTMLDivElement>` | — | The content element (`role="dialog"`, `tabIndex={-1}`), for focusing it from `onOpenAutoFocus`. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | Rest. | The content is unmounted; the trigger carries `data-state="closed"`. |
+| Open | Click the trigger, Enter or Space on it, or `open`. | The panel appears on `side` with the wrapper's offset; the trigger gets `data-state="open"` and `aria-expanded`, so a Button or IconButton trigger shows its selected fill. |
+| Flipped | Not enough room on `side`. | Radix moves the panel to the opposite side or shifts it along the edge; no distinct treatment otherwise. |
+| Inside a dialog | `container` set to the DialogContent node. | Same panel, portalled inside the dialog so it scrolls and receives the wheel under the dialog's scroll lock. |
+| Entering and leaving | Opening or closing. | No distinct treatment: the wrapper has no enter or exit animation. |
+| Focus inside | Focus on the content element itself. | No distinct treatment: the panel has `outline-none`; focused controls inside show their own focus ring. |
+
+### Accessibility
+
+- The content is `role="dialog"`; give it a name with `aria-label` or `aria-labelledby` on its heading, as the chat history popover does.
+- The trigger is a native button with `aria-haspopup="dialog"`, `aria-expanded` and `aria-controls` from Radix; an icon-only trigger is an IconButton with a `label`.
+- Non-modal: the rest of the page stays interactive and readable, nothing is hidden from assistive tech and the page does not scroll-lock.
+- On open, focus moves to the first focusable element in the content, or to the content itself when there is none. Redirect it with `onOpenAutoFocus`.
+- On Escape or a choice, focus returns to the trigger; after an outside click it stays where the user clicked. Redirect it with `onCloseAutoFocus`.
+- A popover is not a menu: rows are plain buttons in Tab order, without menu roles or arrow keys. A Command inside adds combobox semantics and arrow-key navigation.
+
+| Keys | Action |
+| --- | --- |
+| `Enter / Space` | On the trigger: opens or closes the popover. |
+| `Tab / Shift+Tab` | Moves through the content's controls and wraps from the last to the first. |
+| `Escape` | Closes the popover and returns focus to the trigger (one Escape also closes an open tooltip). |
+| `ArrowUp / ArrowDown / Enter` | Inside a Command: move the highlight and choose the item. |
+
+### Usage rules
+
+- **POP-1** — Use a Popover for an anchored panel with its own content — a picker, details, a short form. A list of commands is a DropdownMenu; a modal task is a Dialog; a lone confirmation is a ConfirmPopover.
+- **POP-2** — Open it from a real trigger: `PopoverTrigger asChild` on a Button or IconButton, which then shows the open state. Add `wrapTrigger` to an IconButton trigger; never hand-roll a tooltip span around it.
+- **POP-3** — Inside a modal Dialog pass `container={dialogEl}` (the DialogContent node) so the popover stays inside the dialog's scroll lock.
+- **POP-4** — The wrapper owns the surface; the call site sets only width, padding by content (`p-0` around a Command, `p-4` around rows, `p-12` around details) and layout. Bound a list's height with Radix's available height and let it scroll.
+- **POP-5** — Control `open` and close the popover yourself after a choice; start any data refresh in `onOpenChange` when it opens.
+- **POP-6** — Name the panel with `aria-label` or `aria-labelledby`, and move focus on purpose: `onOpenAutoFocus` to the content or an input, `onCloseAutoFocus` to what the choice selected.
+- **POP-7** — Reuse shared rows inside: Command parts for searchable lists and `menuItemClass` for plain rows. Do not restyle the panel.
+
+### Examples
+
+#### Details
+
+A Button trigger opens facts about it, aligned to its start edge.
+
+```tsx
+import { RiArrowDownSLine, RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<Popover>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" iconLeft={RiGitBranchLine} iconRight={RiArrowDownSLine}>
+					feature/popover-docs
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				align="start"
+				aria-label={t("shell.location.branch.caption")}
+				className="w-288 p-12"
+			>
+				<dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-12 gap-y-8">
+					<dt className="tr-text-metadata text-text-subtle">
+						{t("shell.location.branch.caption")}
+					</dt>
+					<dd className="truncate tr-code-text">feature/popover-docs</dd>
+					<dt className="tr-text-metadata text-text-subtle">
+						{t("shell.location.branch.basedOn")}
+					</dt>
+					<dd className="truncate tr-code-text">main</dd>
+				</dl>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Searchable picker
+
+The branch picker: a Command in a `p-0` panel, refreshed on open, closing after a choice.
+
+```tsx
+import { RiArrowDownSLine, RiCheckLine, RiGitBranchLine, RiRefreshLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const REMOTE = ["origin/main", "origin/release/1.4"];
+const LOCAL = ["main", "feature/popover-docs", "fix/flaky-login"];
+
+export default function Picker() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [selected, setSelected] = useState("origin/main");
+	const [refreshing, setRefreshing] = useState(false);
+	const refresh = () => {
+		setRefreshing(true);
+		setTimeout(() => setRefreshing(false), 1200);
+	};
+	const item = (ref: string) => (
+		<CommandItem
+			key={ref}
+			value={ref}
+			onSelect={() => {
+				setSelected(ref);
+				setOpen(false);
+			}}
+		>
+			<span className="min-w-0 flex-1 truncate">{ref}</span>
+			{ref === selected ? <RiCheckLine aria-hidden className="size-14 text-primary" /> : null}
+		</CommandItem>
+	);
+	return (
+		<Popover
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next);
+				if (next) refresh();
+			}}
+		>
+			<PopoverTrigger asChild>
+				<Button variant="ghost" size="m" iconLeft={RiGitBranchLine} iconRight={RiArrowDownSLine}>
+					{selected}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				align="start"
+				aria-label={t("shell.location.branch.caption")}
+				className="w-320 p-0"
+			>
+				<div className="flex items-center justify-end border-border-muted border-b py-4 pr-8 pl-12">
+					<IconButton
+						icon={RiRefreshLine}
+						label={t("panels.branchPicker.refresh")}
+						wrapTrigger
+						loading={refreshing}
+						spinIcon
+						onClick={refresh}
+					/>
+				</div>
+				<Command>
+					<CommandInput placeholder={t("panels.branchPicker.search")} />
+					<CommandList>
+						<CommandEmpty>{t("panels.branchPicker.empty")}</CommandEmpty>
+						<CommandGroup heading={t("panels.branchPicker.remote")}>
+							{REMOTE.map(item)}
+						</CommandGroup>
+						<CommandGroup heading={t("panels.branchPicker.local")}>{LOCAL.map(item)}</CommandGroup>
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Inside a dialog
+
+`container` portals the project picker into the DialogContent so its list scrolls under the dialog's lock.
+
+```tsx
+import { RiArrowDownSLine, RiBox3Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const PROJECTS = Array.from({ length: 14 }, (_, index) => `project-${index + 1}`);
+
+export default function InDialog() {
+	const t = useT();
+	const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+	const [pickerOpen, setPickerOpen] = useState(false);
+	const [project, setProject] = useState(PROJECTS[0]);
+	return (
+		<Dialog>
+			<DialogTrigger asChild>
+				<Button variant="outline">{t("panels.newWorkspace.titleIsolated")}</Button>
+			</DialogTrigger>
+			<DialogContent ref={setDialogEl}>
+				<DialogHeader>
+					<DialogTitle>{t("panels.newWorkspace.titleIsolated")}</DialogTitle>
+					<DialogDescription>{t("panels.newWorkspace.descriptionIsolated")}</DialogDescription>
+				</DialogHeader>
+				<Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+					<PopoverTrigger asChild>
+						<Button
+							variant="outline"
+							size="m"
+							iconLeft={RiBox3Line}
+							iconRight={RiArrowDownSLine}
+							className="self-start"
+						>
+							{project}
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent
+						align="start"
+						container={dialogEl}
+						aria-label={t("panels.newWorkspace.projectFallback")}
+						className="w-288 p-0"
+					>
+						<Command>
+							<CommandInput placeholder={t("panels.newWorkspace.searchProjects")} />
+							<CommandList>
+								<CommandEmpty>{t("panels.newWorkspace.noProjects")}</CommandEmpty>
+								<CommandGroup>
+									{PROJECTS.map((name) => (
+										<CommandItem
+											key={name}
+											value={name}
+											onSelect={() => {
+												setProject(name);
+												setPickerOpen(false);
+											}}
+										>
+											<RiBox3Line aria-hidden className="size-14 shrink-0 text-text-muted" />
+											<span className="truncate">{name}</span>
+										</CommandItem>
+									))}
+								</CommandGroup>
+							</CommandList>
+						</Command>
+					</PopoverContent>
+				</Popover>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Icon trigger and bounded list
+
+Chat history: an IconButton with `wrapTrigger`, a labelled panel of `menuItemClass` rows and a height bound.
+
+```tsx
+import { RiArrowGoBackLine, RiHistoryLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { menuItemClass } from "@thinkrail/ui/menu-styles";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { cn } from "@thinkrail/ui/utils";
+import { useId, useState } from "react";
+
+const CLOSED_CHATS = [
+	"Fix flaky e2e login test",
+	"Refactor popover docs",
+	"Explain the build cache",
+];
+
+export default function IconTrigger() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const headingId = useId();
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<IconButton
+					icon={RiHistoryLine}
+					label={t("shell.chatHistory.reopen")}
+					tooltip={t("shell.chatHistory.view")}
+					wrapTrigger
+				/>
+			</PopoverTrigger>
+			<PopoverContent
+				align="end"
+				aria-labelledby={headingId}
+				className="max-h-[min(60vh,var(--radix-popover-content-available-height))] min-w-[16rem] overflow-y-auto p-4"
+			>
+				<div id={headingId} className="px-8 py-4 tr-text-eyebrow text-text-muted">
+					{t("shell.chatHistory.recentlyClosed")}
+				</div>
+				{CLOSED_CHATS.map((title) => (
+					<button
+						key={title}
+						type="button"
+						className={cn(menuItemClass, "w-full")}
+						onClick={() => setOpen(false)}
+					>
+						<span className="flex-1 truncate text-left">{title}</span>
+						<RiArrowGoBackLine aria-hidden />
+					</button>
+				))}
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Opening upward
+
+Send options under the composer: `side="top"` and `align="end"`; Radix flips the panel down when there is no room above.
+
+```tsx
+import { RiArrowDownSLine } from "@remixicon/react";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { menuItemClass } from "@thinkrail/ui/menu-styles";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { cn } from "@thinkrail/ui/utils";
+import { useState } from "react";
+
+const MODES: { name: MessageKey; meaning: MessageKey; keys: string }[] = [
+	{ name: "chat.composer.mode.steer", meaning: "chat.composer.mode.steerMeaning", keys: "Enter" },
+	{
+		name: "chat.composer.mode.queue",
+		meaning: "chat.composer.mode.queueMeaning",
+		keys: "Cmd/Ctrl+Enter",
+	},
+	{
+		name: "chat.composer.mode.interrupt",
+		meaning: "chat.composer.mode.interruptMeaning",
+		keys: "Cmd/Ctrl+Shift+Enter",
+	},
+];
+
+export default function OpenUpward() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<IconButton
+					variant="outline"
+					icon={RiArrowDownSLine}
+					label={t("chat.composer.sendOptions")}
+					wrapTrigger
+				/>
+			</PopoverTrigger>
+			<PopoverContent
+				side="top"
+				align="end"
+				aria-label={t("chat.composer.sendOptions")}
+				className="flex w-320 flex-col gap-2 p-4"
+			>
+				{MODES.map((mode) => (
+					<button
+						key={mode.name}
+						type="button"
+						className={cn(menuItemClass, "w-full flex-col items-start gap-2")}
+						onClick={() => setOpen(false)}
+					>
+						<span className="flex w-full items-baseline justify-between gap-8">
+							<span>{t(mode.name)}</span>
+							<span className="tr-text-metadata text-text-muted">{mode.keys}</span>
+						</span>
+						<span className="tr-text-metadata text-text-muted">{t(mode.meaning)}</span>
+					</button>
+				))}
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Focus the panel on open
+
+Branch details focus the content itself, so the Copy button's tooltip does not open.
+
+```tsx
+import { RiFileCopyLine, RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useRef } from "react";
+
+const BRANCH = "feature/popover-docs";
+
+export default function InitialFocus() {
+	const t = useT();
+	const contentRef = useRef<HTMLDivElement>(null);
+	return (
+		<Popover>
+			<PopoverTrigger asChild>
+				<Button variant="ghost" size="m" iconLeft={RiGitBranchLine}>
+					{BRANCH}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				ref={contentRef}
+				align="start"
+				aria-label={t("shell.location.branch.caption")}
+				className="flex w-288 flex-col gap-8 p-12"
+				onOpenAutoFocus={(event) => {
+					event.preventDefault();
+					contentRef.current?.focus();
+				}}
+			>
+				<div className="flex items-center gap-8">
+					<span className="min-w-0 flex-1 truncate tr-code-text">{BRANCH}</span>
+					<IconButton
+						icon={RiFileCopyLine}
+						label={t("shell.location.branch.copyName")}
+						onClick={() => void navigator.clipboard?.writeText(BRANCH)}
+					/>
+				</div>
+				<span className="tr-text-metadata text-text-muted">
+					{t("shell.location.branch.basedOn")} main
+				</span>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Opened by a second control
+
+The `to push` chip beside the branch trigger opens the same controlled popover.
+
+```tsx
+import { RiArrowDownSLine, RiArrowUpLine, RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+export default function Controlled() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<div className="flex flex-wrap items-center gap-8">
+				<PopoverTrigger asChild>
+					<Button variant="ghost" size="m" iconLeft={RiGitBranchLine} iconRight={RiArrowDownSLine}>
+						feature/popover-docs
+					</Button>
+				</PopoverTrigger>
+				<Button
+					variant="ghost"
+					size="s"
+					tone="warning"
+					iconLeft={RiArrowUpLine}
+					onClick={() => setOpen(true)}
+				>
+					{t("shell.location.remote.unpushedChip", { count: 2 })}
+				</Button>
+			</div>
+			<PopoverContent
+				align="start"
+				aria-label={t("shell.location.branch.caption")}
+				className="w-288 p-12"
+			>
+				<dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-12 gap-y-8">
+					<dt className="tr-text-metadata text-text-subtle">
+						{t("shell.location.branch.caption")}
+					</dt>
+					<dd className="truncate tr-code-text">feature/popover-docs</dd>
+					<dt className="tr-text-metadata text-text-subtle">
+						{t("shell.location.remote.caption")}
+					</dt>
+					<dd className="truncate tr-text-ui">
+						{t("shell.location.remote.unpushedCommits", { count: 2 })}
+					</dd>
+				</dl>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Focus the choice on close
+
+Tab search: `onCloseAutoFocus` moves focus to the chosen tab instead of the trigger.
+
+```tsx
+import { RiSearchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useRef, useState } from "react";
+
+const TABS = ["Composer.tsx", "README.md", "Terminal 1"];
+
+export default function CloseFocus() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [active, setActive] = useState("Composer.tsx");
+	const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+	const focusTarget = useRef<string | null>(null);
+	return (
+		<div className="flex flex-wrap items-center gap-4">
+			{TABS.map((tab) => (
+				<Button
+					key={tab}
+					ref={(node) => {
+						if (node) tabRefs.current.set(tab, node);
+						else tabRefs.current.delete(tab);
+					}}
+					variant="ghost"
+					size="m"
+					selected={tab === active}
+					aria-pressed={tab === active}
+					onClick={() => setActive(tab)}
+				>
+					{tab}
+				</Button>
+			))}
+			<Popover open={open} onOpenChange={setOpen}>
+				<PopoverTrigger asChild>
+					<IconButton icon={RiSearchLine} label={t("workbench.tabs.search")} wrapTrigger />
+				</PopoverTrigger>
+				<PopoverContent
+					align="end"
+					aria-label={t("workbench.tabs.search")}
+					className="w-288 p-0"
+					onCloseAutoFocus={(event) => {
+						const target = focusTarget.current;
+						if (!target) return;
+						focusTarget.current = null;
+						event.preventDefault();
+						tabRefs.current.get(target)?.focus();
+					}}
+				>
+					<Command>
+						<CommandInput placeholder={t("workbench.tabs.findPlaceholder")} />
+						<CommandList>
+							<CommandEmpty>{t("workbench.tabs.noMatches")}</CommandEmpty>
+							{TABS.map((tab) => (
+								<CommandItem
+									key={tab}
+									value={tab}
+									onSelect={() => {
+										focusTarget.current = tab;
+										setActive(tab);
+										setOpen(false);
+									}}
+								>
+									<span className="truncate">{tab}</span>
+								</CommandItem>
+							))}
+						</CommandList>
+					</Command>
+				</PopoverContent>
+			</Popover>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/BranchPicker.tsx` | Searchable branch picker: Command in `p-0`, refresh row, `container` for dialogs. |
+| `apps/web/src/panels/NewWorkspaceDialog.tsx` | Project picker portalled into the dialog with `container`. |
+| `apps/web/src/shell/locationBar/BranchSegment.tsx` | Branch details: content focused in `onOpenAutoFocus`, opened by the remote chips too. |
+| `apps/web/src/shell/WorkspaceChatHistory.tsx` | IconButton trigger with `wrapTrigger`, `aria-labelledby`, bounded height, `onEscapeKeyDown` during rename. |
+| `apps/web/src/shell/layout/workbenchTabs.tsx` | Open-tab search with `onCloseAutoFocus` focusing the chosen tab. |
+| `apps/web/src/chat/Composer.tsx` | Send options opening upward (`side="top"`, `align="end"`). |
+
+## ConfirmPopover
+
+The app's anchored yes/no: a Popover whose panel is a small `alertdialog` with a title, an optional description, Cancel and one confirm button, opening from the control that asked. It owns the panel's layout and width, the button variants, the warning icon of a destructive confirmation and closing after either choice; the call site provides the open state, the words, what confirming does, and the trigger — a `PopoverTrigger` inside its `children`.
+
+```tsx
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+```
+
+### When to use
+
+- Confirming a destructive action that has its own control on screen: the Delete button of a template row, a draft comment's Delete, the review panel's Clear.
+- A quick check where the page should stay visible and interactive around the question, next to the thing it affects.
+- Rows that each need their own confirmation: every row renders its own ConfirmPopover with its own open state.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ConfirmDialog | The action has no stable anchor — it was chosen from a menu, a shortcut or a row that may move — or it deserves a modal pause (remove a workspace, stop trusting a project). |
+| Popover | The panel needs more than two buttons and text: a field, a choice, a gated or loading confirm button. |
+| Toast | The action is reversible or already done; report it instead of asking first. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Popover | A controlled Popover root wrapping `children`, so a `PopoverTrigger` inside them toggles it and anchors the panel. |
+| Trigger | Supplied by the call site: a `PopoverTrigger asChild` somewhere in `children`, on the Button or IconButton that asks. `children` may be a whole row around it. |
+| Panel | PopoverContent with `role="alertdialog"`, `w-288`, `p-12`, `gap-8`, `data-testid="confirm-popover"`, on `side` and `align`. |
+| Warning icon | Only when `destructive`: `RiAlertLine` in `feedback-error` before the title, at icon size 16. |
+| Title | The `title` string in `tr-title-compact`; the panel's accessible name. |
+| Description | `tr-text-metadata` in `text-text-muted`, rendered only when `description` is given; the accessible description. |
+| Cancel | An `outline` Button at size `m`, first in the footer and so focused on open; label `cancelLabel` or `common.cancel`. |
+| Confirm | A `destructive` Button when `destructive`, otherwise `primary`, at size `m`; label `confirmLabel` or `common.confirm`; `data-testid` from `confirmTestId`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `open` | `boolean` | — | Required. Controlled open state; keep one per ConfirmPopover (per row). |
+| `onOpenChange` | `(open: boolean) => void` | — | Required. Called with `true` by the trigger and with `false` by Cancel, by Confirm after `onConfirm`, by Escape and by an outside click. |
+| `title` | `string` | — | Required. The question, naming its object: `Delete {name}?`. |
+| `description` | `ReactNode` | — | What confirming does and whether it can be undone. Omit it when the title says everything (`Delete this draft?`). |
+| `confirmLabel` | `string` | `t("common.confirm")` | The confirm button's label; repeat the action's verb (`Delete`, `Clear`). |
+| `cancelLabel` | `string` | `t("common.cancel")` | The cancel button's label. |
+| `destructive` | `boolean` | `false` | Uses the `destructive` confirm button and adds the warning icon before the title. |
+| `confirmTestId` | `string` | — | `data-testid` on the confirm button, for end-to-end tests. |
+| `onConfirm` | `() => void` | — | Required. Runs when Confirm is pressed, just before the panel closes. Start the action here; the panel does not wait for it. |
+| `side` | `"top" \| "right" \| "bottom" \| "left"` | `"bottom"` | Preferred side of the trigger; Radix flips it when there is no room. |
+| `align` | `"start" \| "center" \| "end"` | `"start"` | Alignment against the trigger. Every call site passes `end`, because the trigger sits at the trailing edge of a row or header. |
+| `children` | `ReactNode` | — | Required. The content that contains the `PopoverTrigger` — the trigger alone, or the row it lives in. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | `open` is false. | Only `children` render; the trigger carries `data-state="closed"`. |
+| Open, destructive | `open` with `destructive`. | `feedback-error` warning icon before the title; `outline` Cancel beside a `destructive` confirm button. A Button or IconButton trigger shows its selected fill. |
+| Open, neutral | `open` without `destructive`. | Title without an icon; `outline` Cancel beside a `primary` confirm button. |
+| No description | `description` omitted. | Only the title above the buttons; no `aria-describedby`. |
+| Long title | A long `title` such as a long template name. | Wraps inside the fixed `w-288` panel; the panel never grows. |
+| Busy, disabled | — | No distinct treatment: neither button can be disabled or show loading, and the panel closes as soon as Confirm is pressed. |
+
+### Accessibility
+
+- The panel is `role="alertdialog"`, named by the title (`aria-labelledby`) and described by the description (`aria-describedby`) when there is one.
+- Cancel is the first focusable element, so it receives focus when the panel opens; a stray Enter cancels instead of confirming.
+- Non-modal: the page stays interactive. Tab wraps between Cancel and Confirm; Escape and an outside click close it like Cancel.
+- After Cancel, Confirm or Escape focus returns to the trigger; after an outside click it stays where the user clicked. If the action removes the trigger, focus falls to the document body.
+- The trigger is a real button with an accessible name — an IconButton `label` or the Button's text — and gets `aria-expanded` from the popover.
+- The warning icon is decoration; the title and the confirm label must say what is destructive.
+
+| Keys | Action |
+| --- | --- |
+| `Enter / Space` | On the trigger: opens the panel with Cancel focused. |
+| `Tab / Shift+Tab` | Moves between Cancel and Confirm, wrapping inside the panel. |
+| `Enter / Space` | In the panel: activates the focused button. |
+| `Escape` | Closes without confirming and returns focus to the trigger. |
+
+### Usage rules
+
+- **CFP-1** — Use ConfirmPopover when the question belongs to a control that stays on screen; use ConfirmDialog when it comes from a menu, a shortcut or a row that may move. Do not assemble a confirmation from Popover parts.
+- **CFP-2** — Put exactly one `PopoverTrigger asChild` in `children`, on the Button or IconButton that asks; add `wrapTrigger` so its tooltip and the popover keep separate `data-state`. `children` may be the trigger alone or the row that contains it.
+- **CFP-3** — Set `destructive` when confirming deletes, discards or archives something; the trigger then reads as dangerous with `tone="danger"`, not with colour classes.
+- **CFP-4** — Write the title as the question with its object and pass a `confirmLabel` that repeats the verb; add a `description` only when it says what is lost or kept.
+- **CFP-5** — Each row owns its own open state and ConfirmPopover; `onConfirm` acts on that row's data.
+- **CFP-6** — `onConfirm` starts the action and the panel closes at once: report failure with a toast. A confirmation that must be disabled or show progress is a Popover with its own buttons.
+- **CFP-7** — Pass `align="end"` for triggers at a trailing edge, and give the confirm button a `confirmTestId`.
+
+### Examples
+
+#### Delete from a row
+
+A template row as `children`; its Delete IconButton is the trigger and the panel aligns to its end.
+
+```tsx
+import { RiDeleteBin6Line, RiPencilLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function Preview() {
+	const t = useT();
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const name = "review-checklist";
+	return (
+		<ConfirmPopover
+			open={confirmOpen}
+			onOpenChange={setConfirmOpen}
+			title={t("settings.templates.deleteTitle", { name })}
+			description={t("settings.templates.deleteDescription")}
+			confirmLabel={t("common.delete")}
+			destructive
+			onConfirm={() => {}}
+			align="end"
+		>
+			<div className="flex w-full max-w-[24rem] items-center gap-8 rounded-sm bg-control-bg px-12 py-8">
+				<div className="flex min-w-0 flex-1 flex-col">
+					<span className="truncate tr-text-ui text-text-default">{name}</span>
+					<span className="truncate tr-text-metadata text-text-muted">
+						Walk the diff against the checklist
+					</span>
+				</div>
+				<div className="flex shrink-0 items-center gap-4">
+					<IconButton icon={RiPencilLine} label={t("common.edit")} onClick={() => {}} />
+					<PopoverTrigger asChild>
+						<IconButton
+							icon={RiDeleteBin6Line}
+							label={t("common.delete")}
+							tone="danger"
+							wrapTrigger
+						/>
+					</PopoverTrigger>
+				</div>
+			</div>
+		</ConfirmPopover>
+	);
+}
+```
+
+#### Title only
+
+Deleting a draft comment: the title says it all, so there is no description.
+
+```tsx
+import { RiDeleteBin6Line, RiSendPlaneLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function TitleOnly() {
+	const t = useT();
+	const [confirmDelete, setConfirmDelete] = useState(false);
+	return (
+		<div className="flex items-center gap-4">
+			<IconButton size="s" icon={RiSendPlaneLine} label={t("review.comment.send")} />
+			<ConfirmPopover
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title={t("review.panel.deleteTitle")}
+				confirmLabel={t("common.delete")}
+				destructive
+				onConfirm={() => {}}
+				align="end"
+			>
+				<PopoverTrigger asChild>
+					<IconButton
+						size="s"
+						icon={RiDeleteBin6Line}
+						label={t("review.comment.deleteDraft")}
+						tone="danger"
+						wrapTrigger
+					/>
+				</PopoverTrigger>
+			</ConfirmPopover>
+		</div>
+	);
+}
+```
+
+#### Header action
+
+The review panel's Clear: a text Button with a tooltip and a confirm label that repeats the verb.
+
+```tsx
+import { RiDeleteBin6Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function HeaderAction() {
+	const t = useT();
+	const [clearing, setClearing] = useState(false);
+	return (
+		<div className="flex w-full justify-end">
+			<ConfirmPopover
+				open={clearing}
+				onOpenChange={setClearing}
+				title={t("review.panel.clearTitle")}
+				description={t("review.panel.clearDescription")}
+				confirmLabel={t("review.panel.clear")}
+				destructive
+				onConfirm={() => {}}
+				align="end"
+			>
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						size="m"
+						tone="danger"
+						iconLeft={RiDeleteBin6Line}
+						aria-label={t("review.panel.clearLabel")}
+						tooltip={t("review.panel.clearTooltip")}
+						wrapTrigger
+					>
+						{t("review.panel.clear")}
+					</Button>
+				</PopoverTrigger>
+			</ConfirmPopover>
+		</div>
+	);
+}
+```
+
+#### One per row
+
+Each draft row keeps its own open state; confirming removes that row.
+
+```tsx
+import { RiDeleteBin6Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+const DRAFTS = ["Rename this prop", "Missing null check", "Split this effect"];
+
+function DraftRow({ text, onDelete }: { text: string; onDelete: () => void }) {
+	const t = useT();
+	const [confirmDelete, setConfirmDelete] = useState(false);
+	return (
+		<li className="flex items-center gap-8 px-8 py-4">
+			<span className="min-w-0 flex-1 truncate tr-text-ui">{text}</span>
+			<ConfirmPopover
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title={t("review.panel.deleteTitle")}
+				confirmLabel={t("common.delete")}
+				destructive
+				onConfirm={onDelete}
+				align="end"
+			>
+				<PopoverTrigger asChild>
+					<IconButton
+						size="s"
+						icon={RiDeleteBin6Line}
+						label={t("review.comment.deleteDraft")}
+						tone="danger"
+						wrapTrigger
+					/>
+				</PopoverTrigger>
+			</ConfirmPopover>
+		</li>
+	);
+}
+
+export default function PerRow() {
+	const t = useT();
+	const [drafts, setDrafts] = useState(DRAFTS);
+	if (drafts.length === 0)
+		return <p className="tr-text-metadata text-text-subtle">{t("review.panel.empty")}</p>;
+	return (
+		<ul className="flex w-full max-w-[24rem] flex-col">
+			{drafts.map((text) => (
+				<DraftRow
+					key={text}
+					text={text}
+					onDelete={() => setDrafts((current) => current.filter((draft) => draft !== text))}
+				/>
+			))}
+		</ul>
+	);
+}
+```
+
+#### Neutral
+
+Without `destructive`: no icon and a `primary` confirm. No production call site uses the neutral style yet.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function Neutral() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<ConfirmPopover
+			open={open}
+			onOpenChange={setOpen}
+			title={t("workbench.layoutSettings.applyTitle")}
+			description={t("workbench.layoutSettings.applyDescription")}
+			confirmLabel={t("workbench.layoutSettings.applyConfirm")}
+			onConfirm={() => {}}
+		>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m">
+					{t("workbench.layoutSettings.applyNow")}
+				</Button>
+			</PopoverTrigger>
+		</ConfirmPopover>
+	);
+}
+```
+
+#### Opening upward
+
+`side="top"` for a trigger near the bottom of a surface.
+
+```tsx
+import { RiDeleteBin6Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function OpenUpward() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<ConfirmPopover
+			open={open}
+			onOpenChange={setOpen}
+			title={t("settings.templates.deleteTitle", { name: "review-checklist" })}
+			description={t("settings.templates.deleteDescription")}
+			confirmLabel={t("common.delete")}
+			destructive
+			onConfirm={() => {}}
+			side="top"
+			align="end"
+		>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" tone="danger" iconLeft={RiDeleteBin6Line}>
+					{t("common.delete")}
+				</Button>
+			</PopoverTrigger>
+		</ConfirmPopover>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/TemplatesSettings.tsx` | Delete a template: the row is `children`, destructive with a description, `align="end"`. |
+| `apps/web/src/panels/ReviewPanel.tsx` | Clear the review from the panel header, and Delete a draft comment (title only). |
+
+## Tooltip and IconTooltip
+
+A short text hint for a control, shown on hover and keyboard focus. `IconTooltip` is the component call sites use: it wraps one child, opens only on hover or *keyboard-visible* focus, and closes on the same Escape that dismisses the dialog or menu beneath it. The call site provides the trigger, which carries its own accessible name, and the `label`. `Button` and `IconButton` render IconTooltip themselves from `tooltip` and `label`; the Radix parts `Tooltip`, `TooltipTrigger` and `TooltipContent` are what it is built from, and `TooltipProvider` sits once at the app root.
+
+```tsx
+import { IconTooltip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@thinkrail/ui/tooltip";
+```
+
+### When to use
+
+- Name an icon-only control for sighted users — automatic on IconButton through `label`.
+- Explain what a control will do or why it is unavailable: a Switch's on/off hint, a disabled reload while a turn runs.
+- Add detail to a compact status or chip (quota, transport, checks) whose text is also available to screen readers.
+- Identify rail entries, with `side` pointing away from the rail edge.
+- Explain a control that has no `tooltip` prop of its own: a link styled with `buttonVariants`, a Switch, a trigger shared with a popover or menu.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| IconButton | The trigger is an icon-only action: its `label` is the name and the tooltip, no wrapper needed. |
+| Button | The trigger is a text action: pass `tooltip` (and `wrapTrigger` when it is also a Radix trigger). |
+| Popover | The content is interactive, longer than a line or two, or must open on click and stay open. |
+| SettingsNotice | The information must be read, not discovered on hover: put it on the surface. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| TooltipProvider | Radix provider, rendered once at the app root (`apps/web/src/main.tsx`) with the shared delays. Tests that render tooltips wrap in it. |
+| Tooltip | Radix root: open state. IconTooltip controls it. |
+| TooltipTrigger | Radix trigger, always `asChild`: merges pointer and focus handlers, `data-state` and `aria-describedby` into the child — or into IconTooltip's `wrapTrigger` `<span class="flex">`. |
+| TooltipContent | Portalled to `document.body`, offset by `sideOffset`. Elevated container surface with the default border, `rounded-sm`, the small shadow, `tr-text-metadata` in the default text colour, `px-8 py-4`. No arrow and no animation. Stacks at `z-150`, above dialogs and the toast viewport. |
+| Screen-reader copy | Radix renders a visually hidden `role="tooltip"` copy of the content; the trigger points at it with `aria-describedby` while open. |
+| IconTooltip | The composed wrapper: controlled open state, the focus-visible gate, the Escape listener and `side` / `align` forwarding to TooltipContent. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `label` | `ReactNode` | — | The tooltip content. Usually a locale string; a node for a structured hint (a name and a second line). Not interactive. |
+| `children` | `ReactNode` | — | The trigger: exactly one element that accepts a ref and event props and carries its own accessible name. |
+| `side` | `"top" \| "right" \| "bottom" \| "left"` | — | Preferred side, forwarded to TooltipContent; omitted means Radix's `"top"`. Flips when there is no room. |
+| `align` | `"start" \| "center" \| "end"` | — | Alignment along that side; omitted means `"center"`. |
+| `wrapTrigger` | `boolean` | — | Wraps the child in a `<span class="flex">` that becomes the trigger. Needed when the child is disabled (it ignores the pointer) or is itself a Radix trigger whose `data-state` the tooltip would overwrite. |
+
+Radix parts (props ThinkRail sets or call sites use; other Radix props pass through):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `TooltipProvider.delayDuration` | `number` | `700` | Hover delay before a tooltip opens. The app root sets `delayDuration={250}` in `apps/web/src/main.tsx` (the library mirrors it); do not override it per tooltip. |
+| `TooltipProvider.skipDelayDuration` | `number` | `300` | Window after a tooltip closes in which the next one opens without delay. The app root sets `400`. |
+| `TooltipProvider.disableHoverableContent` | `boolean` | `false` | Radix pass-through. Left `false`: the pointer may move from the trigger onto the tooltip without closing it. |
+| `Tooltip.open` | `boolean` | — | Controlled open state. `IconTooltip` always controls it; set it yourself only when composing the parts. |
+| `Tooltip.onOpenChange` | `(open: boolean) => void` | — | Called by Radix on hover, focus, blur, pointer down, click and dismissal. |
+| `Tooltip.defaultOpen` | `boolean` | — | Uncontrolled initial state (Radix). |
+| `Tooltip.delayDuration` | `number` | — | Per-tooltip delay override (Radix). No call site uses it. |
+| `TooltipTrigger.asChild` | `boolean` | — | Merge the trigger's handlers, `data-state` and `aria-describedby` into the single child instead of rendering a `<button>`. Always `true` in ThinkRail. |
+| `TooltipContent.sideOffset` | `number` | `4` | Gap between trigger and tooltip. The ThinkRail default (Radix's is `0`). |
+| `TooltipContent.side` | `"top" \| "right" \| "bottom" \| "left"` | `"top"` | Preferred side; Radix flips it when there is no room. |
+| `TooltipContent.align` | `"start" \| "center" \| "end"` | `"center"` | Alignment along the side. |
+| `TooltipContent.className` | `string` | — | Merged after the tooltip skin. No call site passes one; the surface, type and stacking are fixed. |
+| `TooltipContent.aria-label` | `string` | — | Radix: replaces the children in the visually hidden `role="tooltip"` copy that screen readers announce. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | Rest. | Nothing rendered; the trigger carries `data-state="closed"`. |
+| Open on hover | Pointer rests on the trigger for the provider delay; within the skip window after another tooltip, it opens at once. | TooltipContent on `side` (top by default); trigger and content carry `data-state="delayed-open"` or `"instant-open"`. The pointer may move onto the tooltip. |
+| Open on keyboard focus | Tab to the trigger (focus matches `:focus-visible`). | Opens immediately, no delay, beside the trigger's focus ring. |
+| Quiet focus | Focus that is not `:focus-visible`: a dialog's or popover's autofocus after a pointer open, focus returning to a clicked trigger, `.focus()` after a click. | No tooltip (IconTooltip only; the raw parts open on any focus). |
+| Pressed | Pointer down, click, Enter or Space on the trigger. | Closes, and stays closed until the pointer leaves and re-enters or focus arrives again. |
+| Disabled trigger | A disabled child with `wrapTrigger` (automatic in Button and IconButton). | Opens on hover over the span. Without `wrapTrigger` it never opens, because the disabled control ignores the pointer. Never on keyboard: a disabled control is not focusable. |
+| Dismissed | Escape, blur, pointer leaving trigger and tooltip, scrolling a container of the trigger, or another tooltip opening. | Closes; only one tooltip is open at a time. |
+
+### Accessibility
+
+- The tooltip describes; it never names. Radix links the trigger to a visually hidden `role="tooltip"` copy with `aria-describedby` only while open, so the trigger needs its own name (`aria-label` on an icon-only control — IconButton sets it from `label`).
+- Opens on hover and keyboard-visible focus only. Programmatic focus after a pointer action does not open it, because an open tooltip is the topmost dismissable layer and would swallow the Escape meant for the dialog beneath.
+- An open IconTooltip closes itself synchronously on Escape in a window capture listener, before Radix's layer handling, so one Escape closes the tooltip and the dialog, popover or menu under it.
+- A tooltip on a non-focusable element (a status chip, a glyph) is hover-only: repeat its text for screen readers (`sr-only` text or `aria-label`).
+- A disabled control cannot take focus, so its reason reaches pointer users only; where the reason matters, also set `aria-description` on the control (the Skills switches do).
+- Radix ignores touch pointers, so tooltips never open on touch. Never put the only copy of essential information, or anything interactive, in a tooltip.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Focusing the trigger opens the tooltip at once; moving focus away closes it. |
+| `Enter / Space` | Activates the trigger and closes the tooltip. |
+| `Escape` | Closes the tooltip; the same keypress also closes the dialog, popover or menu beneath. |
+
+### Usage rules
+
+- **TIP-1** — Explain a control with IconTooltip, never with a native `title`. `title` remains only for non-control truncation fallbacks and surfaces outside the provider.
+- **TIP-2** — Button and IconButton already render IconTooltip: pass `tooltip` (and IconButton's `label`). Do not wrap an IconButton in another IconTooltip.
+- **TIP-3** — Use `wrapTrigger` for a disabled child or a child that is also a Radix trigger (`PopoverTrigger asChild`, `DropdownMenuTrigger asChild`). Never hand-roll the `<span className="flex">` wrapper — `packages/ui/tooltip.test.tsx` rejects it.
+- **TIP-4** — The trigger names itself; the tooltip repeats or extends that name. Labels are short, come from locale keys and contain no links or buttons.
+- **TIP-5** — Call sites use IconTooltip, not the Radix parts: the parts alone open on every focus, and an open one takes the Escape meant for the dialog or menu beneath. Compose the parts only inside `packages/ui`.
+- **TIP-6** — One TooltipProvider at the app root sets the delays. Do not add providers or per-tooltip delays in features; tests that render tooltips wrap in their own provider.
+- **TIP-7** — A tooltip is supplementary: it never opens on touch and is hover-only on non-focusable content. Keep essential information on the surface and repeat a status tooltip's text for screen readers.
+- **TIP-8** — Leave `side` at its default unless the trigger sits against an edge: rail entries point away from their rail (`railTooltipSide`).
+
+### Examples
+
+#### Link with a tooltip
+
+A link styled with `buttonVariants` has no `tooltip` prop, so it is wrapped; `aria-label` names it.
+
+```tsx
+import { RiExternalLinkLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { buttonDataAttributes, buttonVariants } from "@thinkrail/ui/button";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+
+export default function Preview() {
+	const t = useT();
+	const label = t("shell.location.review.openLink", { label: "PR #951" });
+	return (
+		<IconTooltip label={label}>
+			<a
+				href="#/tooltip"
+				aria-label={label}
+				{...buttonDataAttributes({ variant: "ghost", size: "m", iconOnly: true })}
+				className={buttonVariants({ variant: "ghost", size: "m", shape: "icon" })}
+			>
+				<RiExternalLinkLine aria-hidden />
+			</a>
+		</IconTooltip>
+	);
+}
+```
+
+#### Built into Button and IconButton
+
+IconButton's `label` is its tooltip, `tooltip` overrides the text, and Button takes `tooltip` — no wrapper.
+
+```tsx
+import { RiFileCopyLine, RiHistoryLine, RiRefreshLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+
+export default function BuiltIn() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-8">
+			<IconButton icon={RiFileCopyLine} label={t("common.copy")} onClick={() => {}} />
+			<IconButton
+				icon={RiHistoryLine}
+				label={t("shell.chatHistory.reopen")}
+				tooltip={t("shell.chatHistory.view")}
+				onClick={() => {}}
+			/>
+			<Button
+				variant="outline"
+				size="m"
+				iconLeft={RiRefreshLine}
+				tooltip={t("chat.skills.reloadHint")}
+				onClick={() => {}}
+			>
+				{t("chat.skills.reload")}
+			</Button>
+		</div>
+	);
+}
+```
+
+#### Side and structured labels
+
+Rail entries point their tooltip away from the rail; a node label adds a second line.
+
+```tsx
+import { RiFolderLine, RiListCheck3, RiTerminalBoxLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+
+export default function Rail() {
+	const t = useT();
+	const group = t("workbench.rail.terminalGroup", { position: 1, count: 2 });
+	return (
+		<div className="flex items-center gap-24">
+			<IconButton icon={RiFolderLine} label={t("workbench.rail.leftTools")} tooltipSide="right" />
+			<IconButton
+				icon={RiTerminalBoxLine}
+				label={group}
+				tooltip={
+					<span>
+						{group}
+						<br />
+						zsh, bun run dev
+					</span>
+				}
+				tooltipSide="top"
+			/>
+			<IconButton icon={RiListCheck3} label={t("workbench.rail.rightTools")} tooltipSide="left" />
+		</div>
+	);
+}
+```
+
+#### Disabled control
+
+A Switch keeps its hint; `wrapTrigger` lets the disabled one still show its reason on hover.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { useState } from "react";
+
+export default function DisabledControl() {
+	const t = useT();
+	const [checked, setChecked] = useState(true);
+	const hint = checked ? t("chat.skills.switchOn") : t("chat.skills.switchOff");
+	const blocked = t("chat.skills.blockedByTrust");
+	return (
+		<div className="flex items-center gap-24">
+			<IconTooltip label={hint}>
+				<Switch
+					checked={checked}
+					label="code-review"
+					aria-description={hint}
+					onCheckedChange={setChecked}
+				/>
+			</IconTooltip>
+			<IconTooltip label={blocked} wrapTrigger>
+				<Switch
+					checked={false}
+					disabled
+					label="release-notes"
+					aria-description={blocked}
+					onCheckedChange={() => {}}
+				/>
+			</IconTooltip>
+		</div>
+	);
+}
+```
+
+#### On a popover trigger
+
+`wrapTrigger` keeps the popover's open state on the button. Button and IconButton express the same with `tooltip` and `wrapTrigger`.
+
+```tsx
+import { RiDeleteBinLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function RadixTrigger() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<ConfirmPopover
+			open={open}
+			onOpenChange={setOpen}
+			title={t("review.panel.clearTitle")}
+			description={t("review.panel.clearDescription")}
+			confirmLabel={t("review.panel.clear")}
+			destructive
+			onConfirm={() => {}}
+		>
+			<IconTooltip label={t("review.panel.clearTooltip")} wrapTrigger>
+				<PopoverTrigger asChild>
+					<Button variant="ghost" size="m" iconLeft={RiDeleteBinLine}>
+						{t("review.panel.clear")}
+					</Button>
+				</PopoverTrigger>
+			</IconTooltip>
+		</ConfirmPopover>
+	);
+}
+```
+
+#### Non-focusable status
+
+A transport chip explained on hover; the same text is in `sr-only` for screen readers, since the chip takes no focus.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+
+export default function Status() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-8">
+			<span>filesystem</span>
+			<IconTooltip label={t("mcp.server.stdioTooltip")} wrapTrigger>
+				<span>
+					{t("mcp.transport.stdio")}
+					<span className="sr-only">{` ${t("mcp.server.stdioSrOnly")}`}</span>
+				</span>
+			</IconTooltip>
+		</div>
+	);
+}
+```
+
+#### Inside a dialog
+
+Open it with a click: the autofocused Reload shows no tooltip. Hover Reload and press Escape once — the tooltip and the dialog close together. Open it with Enter and Reload's tooltip shows.
+
+```tsx
+import { RiBookOpenLine, RiRefreshLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@thinkrail/ui/dialog";
+import { useState } from "react";
+
+export default function DialogEscape() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<Dialog open={open} onOpenChange={setOpen}>
+			<IconButton
+				variant="outline"
+				icon={RiBookOpenLine}
+				label={t("chat.skills.title")}
+				onClick={() => setOpen(true)}
+			/>
+			<DialogContent>
+				<div className="flex items-center justify-between gap-8 pr-32">
+					<DialogTitle>{t("chat.skills.title")}</DialogTitle>
+					<Button
+						variant="outline"
+						size="m"
+						iconLeft={RiRefreshLine}
+						tooltip={t("chat.skills.reloadHint")}
+						onClick={() => {}}
+					>
+						{t("chat.skills.reload")}
+					</Button>
+				</div>
+				<DialogDescription>{t("chat.skills.reloadedBody")}</DialogDescription>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### The Radix parts
+
+What IconTooltip is built from. No call site composes them: without IconTooltip a tooltip opens on every focus and swallows the first Escape.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
+
+export default function Parts() {
+	const t = useT();
+	return (
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<Button variant="outline" size="m">
+					{t("review.panel.clear")}
+				</Button>
+			</TooltipTrigger>
+			<TooltipContent side="bottom" align="start">
+				{t("review.panel.clearTooltip")}
+			</TooltipContent>
+		</Tooltip>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `packages/ui/button.tsx` | `withTooltip` renders IconTooltip for every Button `tooltip` and IconButton `label`, with `wrapTrigger` while disabled. |
+| `apps/web/src/chat/SkillsDialog.tsx` | Skill switches with an on/off hint and `wrapTrigger={disabled}` for the blocked reason. |
+| `apps/web/src/panels/ReviewPanel.tsx` | `wrapTrigger` over `PopoverTrigger asChild` for Clear review; plain hints on row actions. |
+| `apps/web/src/panels/McpSettings.tsx` | The stdio transport chip, with its text repeated in `sr-only`. |
+| `apps/web/src/shell/layout/workbenchRails.tsx` | Rail entries with `side` from `railTooltipSide` and a two-line terminal-group label. |
+| `apps/web/src/shell/locationBar/BranchSegment.tsx` | A review link styled with `buttonVariants`, and the checks status on the review chip. |
+
+## DropdownMenu
+
+A list of actions or options that opens from a trigger — a kebab, a `+`, a split-button chevron or a select-like button. It is Radix DropdownMenu with ThinkRail's menu surface, row, label and separator styling (shared with ContextMenu through `menu-styles`), a portal and a viewport-bounded, scrolling height. The call site provides the trigger, the rows' icons and labels, and the actions.
+
+```tsx
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@thinkrail/ui/dropdown-menu";
+```
+
+### When to use
+
+- Overflow actions behind a kebab or `+` in a header or a row: Copy, Save .md, Open in, Rename, Reveal.
+- Choosing one value from a short list behind a select-like Button (theme, MCP exposure, bottom panel alignment), with `DropdownMenuRadioGroup`.
+- A secondary-actions chevron beside a primary action (the ship split button).
+- A row whose actions also open on right-click: one controlled dropdown, two triggers.
+- A grouped menu with headings and a nested level (`DropdownMenuLabel`, `DropdownMenuSub`).
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ContextMenu | The menu has no visible trigger and opens at the pointer on right-click or long press. |
+| Command | The list is long or searchable — open tabs, branches, files — and needs a filter field. |
+| SegmentedControl | Two to four always-visible options where the choice should stay on screen. |
+| Popover | The panel holds a form, editable rows or rich content rather than a list of commands; reuse `menuItemClass` for its rows. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| DropdownMenu | Radix Root. Owns open state, uncontrolled by default or `open` / `onOpenChange`. |
+| DropdownMenuTrigger | Radix Trigger, unstyled. With `asChild` it lends its ARIA and `data-state` to a Button or IconButton. |
+| DropdownMenuContent | Portalled surface: `menuContentClass` (elevated container, default border, `rounded-md`, `--shadow-md`, `p-4`, minimum width) plus a height bounded by the smaller of 60vh and Radix's available height; it scrolls vertically and clips horizontally. |
+| DropdownMenuItem | One row with `menuItemClass`: optional leading icon (sized and muted by the row), label, optional trailing metadata; `tr-text-ui`, `px-8 py-4`, `gap-4`. |
+| DropdownMenuLabel | A non-interactive section heading in `tr-text-eyebrow` and `text-text-muted`. |
+| DropdownMenuGroup | An unstyled `role="group"` wrapper for related items. |
+| DropdownMenuRadioGroup / DropdownMenuRadioItem | A single choice. The item has the row style and `aria-checked`, but no built-in indicator — the call site renders the check. |
+| DropdownMenuSeparator | A full-bleed 1px `border-default` line between sections (`menuSeparatorClass`). |
+| DropdownMenuSub / DropdownMenuSubTrigger / DropdownMenuSubContent | A nested level. The sub-trigger is a row with a trailing chevron that keeps the selected fill while open; the sub-content is its own portalled surface beside it. |
+| menu-styles | `menuContentClass`, `menuItemClass` and `menuSeparatorClass` from `@thinkrail/ui/menu-styles`: the same surface, row and separator for menu-like rows outside a Radix menu. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `DropdownMenu.open` | `boolean` | — | Controlled open state. Control it when the menu loads data on open, opens from a second trigger (right-click on a row) or keeps a row highlighted while open. |
+| `DropdownMenu.onOpenChange` | `(open: boolean) => void` | — | Called on every open and close; pair with `open`. |
+| `DropdownMenu.modal` | `boolean` | `true` | While open, outside pointer events and page scroll are blocked and focus stays in the menu. No ThinkRail call site changes it. |
+| `DropdownMenuTrigger.asChild` | `boolean` | — | Merges the trigger onto its child. Use it with a Button or IconButton, which then shows its selected look while the menu is open. |
+| `DropdownMenuTrigger.disabled` | `boolean` | — | Blocks opening. With `asChild` and a Button or IconButton child, set `disabled` on the child instead, as AppearanceSettings does; the child's own prop wins over the trigger's. |
+| `DropdownMenuContent.align` | `"start" \| "center" \| "end"` | `"center"` | Alignment against the trigger. Call sites use `start` under a left-edge trigger and `end` for a trailing kebab or `+`. |
+| `DropdownMenuContent.side` | `"top" \| "right" \| "bottom" \| "left"` | `"bottom"` | Preferred side; Radix flips it when the viewport is too small. |
+| `DropdownMenuContent.sideOffset` | `number` | `4` | Gap to the trigger. The ThinkRail wrapper sets it to 4; Radix's own default is 0. |
+| `DropdownMenuContent.onCloseAutoFocus` | `(event: Event) => void` | — | Runs before focus returns to the trigger. Call `event.preventDefault()` when an item moved focus on purpose (an inline rename, a dialog). |
+| `DropdownMenuContent.className` | `string` | — | Width bounds only — `max-w-[…]` for menus with long rows, `min-w-[var(--radix-dropdown-menu-trigger-width)]` to match a select-like trigger, a fixed `w-*`. The surface, padding and height bound come from the wrapper. |
+| `DropdownMenuItem.onSelect` | `(event: Event) => void` | — | The action. The menu closes afterwards unless the handler calls `event.preventDefault()`. |
+| `DropdownMenuItem.disabled` | `boolean` | `false` | Keeps the item visible but unfocusable and unselectable. Put the reason in the label. |
+| `DropdownMenuItem.className` | `string` | — | Content layout only: `items-start` for two-line rows, `justify-between` for a trailing indicator. |
+| `DropdownMenuLabel.className` | `string` | — | `truncate` for a long heading such as a workspace name; nothing else. |
+| `DropdownMenuRadioGroup.value` | `string` | — | The selected item's `value`. |
+| `DropdownMenuRadioGroup.onValueChange` | `(value: string) => void` | — | Called with the chosen item's `value`; narrow the string before storing it. |
+| `DropdownMenuRadioItem.value` | `string` | — | Required. The value this option selects. |
+| `DropdownMenuRadioItem.disabled` | `boolean` | `false` | As on `DropdownMenuItem`. |
+| `DropdownMenuSubTrigger.children` | `ReactNode` | — | Icon and label of the submenu row. The wrapper appends the right chevron; do not add one. |
+| `DropdownMenuSubContent.className` | `string` | — | Width bounds only. The submenu already has its own surface, bounded height and scrolling. |
+
+Radix props that pass through:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `DropdownMenu.defaultOpen` | `boolean` | — | Uncontrolled initial state. Every other Radix prop of every part passes through unchanged. |
+| `DropdownMenuContent.loop` | `boolean` | `false` | Wrap arrow-key focus from the last item to the first. |
+| `DropdownMenuContent.collisionPadding` | `number \| Partial<Record<Side, number>>` | `0` | Distance kept from the viewport edges when Radix flips or shifts the menu. |
+| `DropdownMenuItem.textValue` | `string` | — | Typeahead text when the item's content is not plain text (a two-line row). |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | Rest. | Only the trigger is rendered; it carries `data-state="closed"`. |
+| Open | Click the trigger, or Enter, Space or ArrowDown on it. | The surface appears beside the trigger; the trigger gets `data-state="open"` and `aria-expanded`, so a Button or IconButton trigger shows its selected fill. |
+| Highlighted item | Pointer over an item, or arrow keys. | `control-bg-selected` fill. Radix focuses the item under the pointer, so hover and keyboard highlight are the same state. |
+| Disabled item | `disabled`. | Label and icon in `control-disabled-text`; no highlight, skipped by the arrow keys, no pointer events. |
+| Checked radio item | `DropdownMenuRadioGroup value` equals the item's `value`. | `aria-checked="true"` and `data-state="checked"`; no distinct treatment from the primitive — the call site draws the check. |
+| Open submenu | Hover the sub-trigger, or ArrowRight / Enter / Space on it. | The sub-trigger keeps the `control-bg-selected` fill while its submenu is open. |
+| Overflowing | More rows than fit the viewport or 60vh. | The surface stops at the bound and scrolls; wide rows are clipped, so long labels need `truncate`. |
+
+### Accessibility
+
+- The trigger gets `aria-haspopup="menu"`, `aria-expanded` and `aria-controls` from Radix; its accessible name is the Button text or the IconButton `label` — name the subject when there are several (`Actions for {path}`).
+- The content is `role="menu"`, labelled by the trigger. Items are `menuitem`, radio items `menuitemradio` with `aria-checked`, groups `group`, separators `separator`.
+- `DropdownMenuLabel` is a visual heading only; it is not wired to the group with `aria-labelledby`.
+- Disabled items get `aria-disabled` and stay in the list, so the reason written in their label is still read.
+- The menu is modal: focus moves into it on open and returns to the trigger on close, unless `onCloseAutoFocus` prevents it to hand focus to a dialog or an inline editor.
+- Explain an item in its label or a second line, not with a tooltip or `title`; menu rows have no tooltip path.
+
+| Keys | Action |
+| --- | --- |
+| `Enter / Space / ArrowDown` | On the trigger: opens the menu; with the keyboard, focus moves to the first item. |
+| `ArrowDown / ArrowUp` | Moves between enabled items; stops at the ends (no wrap). |
+| `Home / End` | First / last enabled item. |
+| `Letters` | Typeahead: jumps to the next item whose text starts with them. |
+| `Enter / Space` | Runs the item (or selects the radio option) and closes the menu. |
+| `ArrowRight / ArrowLeft` | Opens a submenu from its trigger / closes it back to the trigger. |
+| `Escape` | Closes the whole menu, including open submenus, and returns focus to the trigger. |
+| `Tab` | Does nothing inside an open menu; close it first. |
+
+### Usage rules
+
+- **MNU-1** — Open a menu from a Button or IconButton through `DropdownMenuTrigger asChild`, so the trigger shows its selected look while open; an icon-only trigger's `label` names what the menu acts on. A hand-styled trigger is reserved for a component that owns its own control (the location-bar pills, a chip).
+- **MNU-2** — Build rows only from the parts — Item, RadioItem, Label, Separator, Sub. Call-site classes are limited to width bounds, `truncate` and content layout. The row sizes and mutes every icon inside it, so a colour class on a row icon has no effect. Menu-like rows outside a Radix menu use `menuItemClass` from `menu-styles`.
+- **MNU-3** — Keep a temporarily unavailable action in place as a `disabled` item whose label says why (`workbench.menu.unavailable`, *No uncommitted changes*); never show an unexplained empty menu.
+- **MNU-4** — A single choice is a `DropdownMenuRadioGroup` of `DropdownMenuRadioItem`s so `aria-checked` follows the value. Draw a check on the current option and a same-size blank on the others so labels align.
+- **MNU-5** — Load menu data on open (controlled `open` / `onOpenChange`), not on mount; show `LoadingRegion` inside the menu while it loads and a disabled item when it is empty.
+- **MNU-6** — Do not set your own height or scrolling on `DropdownMenuContent` or `DropdownMenuSubContent`; both are already bounded by 60vh and the viewport.
+- **MNU-7** — An action that removes something asks first: call `event.preventDefault()` in `onSelect` and open a ConfirmDialog.
+- **MNU-8** — A row with visible actions that should also open on right-click uses one controlled DropdownMenu with two triggers — the menu button (the touch and keyboard path) and the row's `onContextMenu` — not a separate ContextMenu.
+
+### Examples
+
+#### Overflow actions
+
+A kebab IconButton with icon rows and a separator, aligned to the trigger's end.
+
+```tsx
+import {
+	RiDownloadLine,
+	RiFileCopyLine,
+	RiGitPullRequestLine,
+	RiListCheck3,
+	RiMore2Line,
+} from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+
+export default function Actions() {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<IconButton icon={RiMore2Line} label={t("plan.menu.label")} wrapTrigger />
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiFileCopyLine />
+					{t("common.copy")}
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiDownloadLine />
+					{t("plan.menu.saveMarkdown")}
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiGitPullRequestLine />
+					{t("plan.menu.openDraftPr")}
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiListCheck3 />
+					{t("plan.menu.checkAllCount", { count: 3 })}
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Sections and a heading
+
+Separators, a `DropdownMenuLabel` and a `DropdownMenuGroup` of truncated recent paths.
+
+```tsx
+import {
+	RiAddLine,
+	RiEditLine,
+	RiFolderLine,
+	RiGlobalLine,
+	RiSparkling2Line,
+} from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+
+const recents = ["~/code/thinkrail", "~/code/thinkrail-extensions", "~/work/design-tokens"];
+
+export default function Sections() {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="outline" size="m" iconLeft={RiAddLine}>
+					{t("panels.projectTree.addProject")}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start">
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiSparkling2Line />
+					<span>{t("panels.addProject.startNew")}</span>
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiFolderLine />
+					<span>{t("panels.addProject.open")}</span>
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiEditLine />
+					<span>{t("panels.addProject.enterHostPath")}</span>
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiGlobalLine />
+					<span>{t("panels.addProject.clone")}</span>
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuLabel>{t("panels.addProject.recents")}</DropdownMenuLabel>
+				<DropdownMenuGroup>
+					{recents.map((path) => (
+						<DropdownMenuItem key={path} onSelect={() => {}}>
+							<RiFolderLine />
+							<span className="truncate">{path}</span>
+						</DropdownMenuItem>
+					))}
+				</DropdownMenuGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Single choice
+
+A select-like Button opens a radio group as wide as the trigger; the current option shows a check.
+
+```tsx
+import { RiArrowDownSLine, RiCheckLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { useState } from "react";
+
+const THEMES = {
+	dark: "settings.appearance.themeName.dark",
+	minimalDark: "settings.appearance.themeName.minimalDark",
+	highContrastDark: "settings.appearance.themeName.highContrastDark",
+} as const;
+type ThemeId = keyof typeof THEMES;
+const isTheme = (value: string): value is ThemeId => value in THEMES;
+
+export default function SingleChoice() {
+	const t = useT();
+	const [theme, setTheme] = useState<ThemeId>("dark");
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="outline"
+					size="l"
+					iconRight={RiArrowDownSLine}
+					aria-label={t("settings.appearance.darkThemeTrigger", { theme: t(THEMES[theme]) })}
+				>
+					<span className="truncate">{t(THEMES[theme])}</span>
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="min-w-[var(--radix-dropdown-menu-trigger-width)]">
+				<DropdownMenuRadioGroup
+					value={theme}
+					onValueChange={(value) => {
+						if (isTheme(value)) setTheme(value);
+					}}
+				>
+					{(Object.keys(THEMES) as ThemeId[]).map((id) => (
+						<DropdownMenuRadioItem key={id} value={id}>
+							{id === theme ? <RiCheckLine /> : <span aria-hidden className="size-14 shrink-0" />}
+							<span>{t(THEMES[id])}</span>
+						</DropdownMenuRadioItem>
+					))}
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Options with a hint
+
+Two-line radio rows under a heading, the check aligned with the first line.
+
+```tsx
+import { RiArrowDownSLine, RiCheckLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuLabel,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { useState } from "react";
+
+const EXPOSURES = {
+	direct: { label: "mcp.exposure.direct", hint: "mcp.exposure.directHint" },
+	deferred: { label: "mcp.exposure.deferred", hint: "mcp.exposure.deferredHint" },
+	hidden: { label: "mcp.exposure.hidden", hint: "mcp.exposure.hiddenHint" },
+} as const;
+type Exposure = keyof typeof EXPOSURES;
+const isExposure = (value: string): value is Exposure => value in EXPOSURES;
+
+export default function Hints() {
+	const t = useT();
+	const [exposure, setExposure] = useState<Exposure>("deferred");
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="outline"
+					size="s"
+					iconRight={RiArrowDownSLine}
+					aria-label={t("mcp.exposure.menuAria", { exposure })}
+				>
+					{t(EXPOSURES[exposure].label)}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="max-w-[20rem]">
+				<DropdownMenuLabel>{t("mcp.exposure.menuTitle")}</DropdownMenuLabel>
+				<DropdownMenuRadioGroup
+					value={exposure}
+					onValueChange={(value) => {
+						if (isExposure(value)) setExposure(value);
+					}}
+				>
+					{(Object.keys(EXPOSURES) as Exposure[]).map((id) => (
+						<DropdownMenuRadioItem key={id} value={id} className="items-start">
+							{id === exposure ? (
+								<RiCheckLine className="mt-2" />
+							) : (
+								<span aria-hidden className="size-14 shrink-0" />
+							)}
+							<span className="flex flex-col gap-2">
+								<span>{t(EXPOSURES[id].label)}</span>
+								<span className="tr-text-metadata text-text-muted">{t(EXPOSURES[id].hint)}</span>
+							</span>
+						</DropdownMenuRadioItem>
+					))}
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Submenu
+
+An *Open in* level beside the row's other actions.
+
+```tsx
+import {
+	RiExternalLinkLine,
+	RiFileCopyLine,
+	RiFolderOpenLine,
+	RiMore2Line,
+	RiPencilLine,
+} from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+
+const editors = ["VS Code", "Cursor", "Zed"];
+
+export default function Submenu() {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<IconButton
+					size="s"
+					icon={RiMore2Line}
+					label={t("panels.projectTree.workspaceActions", { name: "feature-login" })}
+				/>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuSub>
+					<DropdownMenuSubTrigger>
+						<RiExternalLinkLine />
+						{t("panels.projectTree.openIn")}
+					</DropdownMenuSubTrigger>
+					<DropdownMenuSubContent>
+						{editors.map((editor) => (
+							<DropdownMenuItem key={editor} onSelect={() => {}}>
+								{editor}
+							</DropdownMenuItem>
+						))}
+					</DropdownMenuSubContent>
+				</DropdownMenuSub>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiPencilLine />
+					{t("common.rename")}
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiFileCopyLine />
+					{t("panels.projectTree.copyPath")}
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiFolderOpenLine />
+					{t("panels.projectTree.reveal")}
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Unavailable action
+
+A disabled item stays in the menu and its label says why.
+
+```tsx
+import { RiAddLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+
+const missingTools = ["Files", "Changes"];
+
+export default function Unavailable() {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<IconButton icon={RiAddLine} label={t("workbench.group.addTo")} wrapTrigger />
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuItem disabled onSelect={() => {}}>
+					{t("workbench.menu.unavailable", {
+						label: t("workbench.group.newTerminalPaneBelow"),
+						reason: t("workbench.tab.limitedTo", { limit: 4 }),
+					})}
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				{missingTools.map((name) => (
+					<DropdownMenuItem key={name} onSelect={() => {}}>
+						{t("workbench.tab.showTool", { name })}
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Loaded on open
+
+A controlled menu fetches its rows when it opens and shows a loading region until they arrive.
+
+```tsx
+import { RiArrowDownSLine, RiGitCommitLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { useRef, useState } from "react";
+
+interface Commit {
+	sha: string;
+	subject: string;
+	meta: string;
+}
+
+const COMMITS: Commit[] = [
+	{
+		sha: "4f2a9c1",
+		subject: "Bound long menus to the viewport",
+		meta: "4f2a9c1 · Julia · 2 h ago",
+	},
+	{ sha: "b81e07d", subject: "Share menu row geometry", meta: "b81e07d · Alex · yesterday" },
+	{ sha: "09cd3aa", subject: "Add the Open in submenu", meta: "09cd3aa · Julia · 3 days ago" },
+];
+
+export default function LoadOnOpen() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [commits, setCommits] = useState<Commit[] | null>(null);
+	const timer = useRef(0);
+	const load = () => {
+		setCommits(null);
+		window.clearTimeout(timer.current);
+		timer.current = window.setTimeout(() => setCommits(COMMITS), 1200);
+	};
+	return (
+		<DropdownMenu
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next);
+				if (next) load();
+			}}
+		>
+			<DropdownMenuTrigger asChild>
+				<Button variant="ghost" size="m" iconLeft={RiGitCommitLine} iconRight={RiArrowDownSLine}>
+					{t("changes.scopeMenu.commits")}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="max-w-[22rem]">
+				<DropdownMenuLabel>{t("changes.scopeMenu.commits")}</DropdownMenuLabel>
+				{commits === null ? (
+					<LoadingRegion
+						rows={3}
+						label={t("changes.scopeMenu.loadingCommits")}
+						className="px-8 py-4"
+					/>
+				) : commits.length === 0 ? (
+					<DropdownMenuItem disabled>{t("changes.scopeMenu.noCommits")}</DropdownMenuItem>
+				) : (
+					commits.map((commit) => (
+						<DropdownMenuItem key={commit.sha} onSelect={() => {}}>
+							<RiGitCommitLine />
+							<span className="flex min-w-0 flex-col">
+								<span className="truncate">{commit.subject}</span>
+								<span className="truncate tr-text-metadata text-text-muted">{commit.meta}</span>
+							</span>
+						</DropdownMenuItem>
+					))
+				)}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Row menu and right-click
+
+`ChangeRowActions`: a hover-revealed menu button and right-click on the row open the same dropdown.
+
+```tsx
+import { useState } from "react";
+import { ChangeRowActions } from "@/panels/ChangeRowActions";
+import { TreeRow } from "@/panels/TreeRow";
+
+const files = ["src/panels/PlanPane.tsx", "packages/ui/menu-styles.ts"];
+
+export default function RowMenu() {
+	const [active, setActive] = useState<string | null>(null);
+	return (
+		<div className="flex w-full max-w-[20rem] flex-col">
+			{files.map((path) => (
+				<ChangeRowActions
+					key={path}
+					path={path}
+					active={active === path}
+					onView={() => setActive(path)}
+					onOpenTab={() => setActive(path)}
+				>
+					{({ onContextMenu }) => (
+						<TreeRow
+							testid="change-item"
+							kind="file"
+							highlight="wrapper"
+							active={active === path}
+							label={path.split("/").pop() ?? path}
+							onClick={() => setActive(path)}
+							onContextMenu={onContextMenu}
+						/>
+					)}
+				</ChangeRowActions>
+			))}
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/PlanPane.tsx` | Plan header kebab: Copy, Save .md, Open draft PR, Check All. |
+| `apps/web/src/panels/AddProjectMenu.tsx` | Separators, a *Recents* label and a group of truncated paths. |
+| `apps/web/src/shell/locationBar/WorkspaceSegment.tsx` | *Open in* and *Settled* submenus, a *Switch to* label, trailing shortcut and branch metadata. |
+| `apps/web/src/panels/AppearanceSettings.tsx` | Theme picker: radio group as wide as its outline Button trigger. |
+| `apps/web/src/panels/ChangesScopeMenu.tsx` | Loads commits on open, `LoadingRegion` while loading, disabled empty and unavailable rows. |
+| `apps/web/src/panels/ChangeRowActions.tsx` | One controlled menu opened by a row button and by right-click. |
+
+## ContextMenu
+
+A menu that opens at the pointer when a row or tab is right-clicked, or long-pressed on touch. It is Radix ContextMenu with the same surface, rows and separators as DropdownMenu (`menu-styles`), portalled and bounded to the viewport. It exports only items and separators; the call site provides the trigger element, the actions and — because the trigger has no visible affordance — another path to the same actions.
+
+```tsx
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@thinkrail/ui/context-menu";
+```
+
+### When to use
+
+- Secondary actions on a row or tab that has no visible menu button: a project row, a workbench tab.
+- Actions that belong to the thing under the pointer, without selecting or opening it first.
+- A flat list of actions, optionally split into sections by separators.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| DropdownMenu | The row has a visible menu button, the menu needs a heading, a single choice or a submenu, or right-click should open the same menu as a button (`ChangeRowActions`). |
+| IconButton | The action is primary for the row (Create workspace `+`): keep it visible and repeat it in the context menu. |
+| Command | The user is looking for an action by name across the app. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| ContextMenu | Radix Root. Owns open state, uncontrolled by default or `open` / `onOpenChange`. |
+| ContextMenuTrigger | The area that reacts to right-click and a touch long press. Unstyled and without ARIA; with `asChild` it is the row itself. |
+| ContextMenuContent | Portalled surface placed at the pointer: `menuContentClass` plus a height bounded by the smaller of 60vh and Radix's available height, scrolling vertically. |
+| ContextMenuItem | One row with `menuItemClass`: optional leading icon (sized and muted by the row) and label. |
+| ContextMenuSeparator | A full-bleed 1px line between sections (`menuSeparatorClass`). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `ContextMenu.open` | `boolean` | — | Controlled open state — to keep the row highlighted while its menu is open, or to close the menu before opening a dialog. |
+| `ContextMenu.onOpenChange` | `(open: boolean) => void` | — | Called on every open and close; pair with `open`. |
+| `ContextMenu.modal` | `boolean` | `true` | While open, outside pointer events and page scroll are blocked and focus stays in the menu. No ThinkRail call site changes it. |
+| `ContextMenuTrigger.asChild` | `boolean` | — | Merges the trigger onto its child — the row element that owns the gesture. Without it the trigger renders a `<span>`. |
+| `ContextMenuTrigger.disabled` | `boolean` | `false` | Stops opening; right-click then falls through to the browser's own menu. |
+| `ContextMenuTrigger.onKeyDown` | `KeyboardEventHandler` | — | Radix has no keyboard opener. Handle the Context Menu key and Shift+F10 here and dispatch a `contextmenu` event at the row (see the Keyboard example). |
+| `ContextMenuContent.onCloseAutoFocus` | `(event: Event) => void` | — | Runs before focus returns. Call `event.preventDefault()` when an item hands focus to a dialog or an inline editor, then restore focus yourself. |
+| `ContextMenuContent.className` | `string` | — | Width bounds only. Surface, padding and the height bound come from the wrapper; position is Radix's (right of the pointer, start-aligned, flipped on collision) and cannot be changed. |
+| `ContextMenuItem.onSelect` | `(event: Event) => void` | — | The action. The menu closes afterwards unless the handler calls `event.preventDefault()`. |
+| `ContextMenuItem.disabled` | `boolean` | `false` | Keeps the item visible but unfocusable and unselectable. Put the reason in the label. |
+| `ContextMenuItem.className` | `string` | — | Content layout only; the row style comes from `menuItemClass`. |
+
+Radix props that pass through:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `ContextMenuContent.loop` | `boolean` | `false` | Wrap arrow-key focus from the last item to the first. Every other Radix prop of every part passes through unchanged; the wrapper adds none. |
+| `ContextMenuContent.alignOffset` | `number` | `0` | Shifts the menu along the pointer's vertical axis. |
+| `ContextMenuItem.textValue` | `string` | — | Typeahead text when the item's content is not plain text. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | Rest. | Only the trigger element; it carries `data-state="closed"` and no styling from the menu. |
+| Open | Right-click the trigger, long-press it on touch, or the call site's keyboard opener. | The surface appears at the pointer; the trigger gets `data-state="open"`. The menu draws nothing on the trigger — a row that should stay highlighted reads controlled `open`. |
+| Highlighted item | Pointer over an item, or arrow keys. | `control-bg-selected` fill; hover and keyboard highlight are the same state. |
+| Disabled item | `disabled`. | Label and icon in `control-disabled-text`; no highlight, skipped by the arrow keys, no pointer events. |
+| Disabled trigger | `ContextMenuTrigger disabled`. | No distinct treatment; the browser's native menu opens instead. |
+| Overflowing | More rows than fit the viewport or 60vh. | The surface stops at the bound and scrolls. |
+
+### Accessibility
+
+- The trigger gets no ARIA and is not announced as having a menu, so nothing may live only in a context menu: keep a visible control or a keyboard path for every action.
+- Radix opens the menu only from a pointer. Rows that take keyboard focus add the Context Menu key and Shift+F10 on the trigger, as the project rows do.
+- The content is `role="menu"`; items are `menuitem` with `aria-disabled` when disabled; separators are `separator`.
+- Focus moves into the menu on open and back to the previously focused element on close, unless `onCloseAutoFocus` prevents it.
+- Write the reason for a disabled item into its label, not into a tooltip or `title`; menu rows have no tooltip path.
+
+| Keys | Action |
+| --- | --- |
+| `Context Menu key / Shift+F10` | Opens the menu under the focused row — only where the call site adds the handler. |
+| `ArrowDown / ArrowUp` | Moves between enabled items; stops at the ends (no wrap). |
+| `Home / End` | First / last enabled item. |
+| `Letters` | Typeahead: jumps to the next item whose text starts with them. |
+| `Enter / Space` | Runs the item and closes the menu. |
+| `Escape` | Closes the menu; focus returns to where it was. |
+| `Tab` | Does nothing inside an open menu; close it first. |
+
+### Usage rules
+
+- **CTX-1** — A context menu is a shortcut, never the only way: every action in it is also reachable by a visible control, a keyboard path or a shortcut — touch has no right-click and long press is not discoverable.
+- **CTX-2** — If the row takes keyboard focus, open the same menu from the Context Menu key and Shift+F10 on the trigger.
+- **CTX-3** — Opening the menu must not select, open or navigate the row it belongs to; wrap the whole row with `ContextMenuTrigger asChild` so right-click works anywhere on it.
+- **CTX-4** — Keep it a flat list of items and separators. When the menu needs a heading, a single choice or a submenu, or the row has a visible menu button, use a DropdownMenu (with right-click opening it) instead.
+- **CTX-5** — Keep an unavailable action in place as a `disabled` item whose label says why (*Move left — already first*).
+- **CTX-6** — To open a dialog from an item, call `event.preventDefault()` in `onSelect`, close the menu, open the dialog on the next frame and manage focus in `onCloseAutoFocus`.
+
+### Examples
+
+#### Row actions
+
+Right-click (or long-press) the row: icon items in two sections.
+
+```tsx
+import { RiAddLine, RiCloseLine, RiFolderOpenLine, RiPencilLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function ProjectRow() {
+	const t = useT();
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger asChild>
+				<div className="w-224">
+					<TreeRow testid="project-item" kind="dir" label="thinkrail" onClick={() => {}} />
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiAddLine />
+					{t("panels.projectTree.createWorkspace")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiFolderOpenLine />
+					{t("panels.projectTree.openExistingWorktree")}
+				</ContextMenuItem>
+				<ContextMenuSeparator />
+				<ContextMenuItem onSelect={() => {}}>
+					<RiPencilLine />
+					{t("common.rename")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiCloseLine />
+					{t("panels.projectTree.closeProject")}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
+	);
+}
+```
+
+#### Row with its own button
+
+The trigger wraps the whole row; the visible `+` stays the direct path and the menu repeats it.
+
+```tsx
+import { RiAddLine, RiFolderOpenLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function RowWithActions() {
+	const t = useT();
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger asChild>
+				<div className="flex w-224 items-center gap-4">
+					<TreeRow testid="project-item" kind="dir" label="thinkrail" onClick={() => {}} />
+					<IconButton
+						icon={RiAddLine}
+						label={t("panels.projectTree.createWorkspace")}
+						size="s"
+						className="shrink-0"
+						onClick={() => {}}
+					/>
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiAddLine />
+					{t("panels.projectTree.createWorkspace")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiFolderOpenLine />
+					{t("panels.projectTree.openExistingWorktree")}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
+	);
+}
+```
+
+#### Keyboard opener
+
+Tab to the row and press Shift+F10 or the Context Menu key.
+
+```tsx
+import { RiAddLine, RiFolderOpenLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import type { KeyboardEvent } from "react";
+import { TreeRow } from "@/panels/TreeRow";
+
+/** The Context Menu key and Shift+F10 open the menu under the focused row. */
+function openFromKeyboard(event: KeyboardEvent<HTMLElement>) {
+	if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+	event.preventDefault();
+	const rect = event.currentTarget.getBoundingClientRect();
+	event.currentTarget.dispatchEvent(
+		new MouseEvent("contextmenu", { bubbles: true, clientX: rect.left, clientY: rect.bottom }),
+	);
+}
+
+export default function Keyboard() {
+	const t = useT();
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger asChild onKeyDown={openFromKeyboard}>
+				<div className="w-224">
+					<TreeRow testid="project-item" kind="dir" label="thinkrail" onClick={() => {}} />
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiAddLine />
+					{t("panels.projectTree.createWorkspace")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiFolderOpenLine />
+					{t("panels.projectTree.openExistingWorktree")}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
+	);
+}
+```
+
+#### Highlight while open
+
+Controlled `open` keeps the row highlighted while its menu is open.
+
+```tsx
+import { RiFileCopyLine, RiFolderOpenLine, RiPencilLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import { useState } from "react";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function OpenHighlight() {
+	const t = useT();
+	const [menuOpen, setMenuOpen] = useState(false);
+	return (
+		<ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
+			<ContextMenuTrigger asChild>
+				<div className="w-224">
+					<TreeRow
+						testid="project-item"
+						kind="dir"
+						label="design-tokens"
+						active={menuOpen}
+						onClick={() => {}}
+					/>
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiPencilLine />
+					{t("common.rename")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiFileCopyLine />
+					{t("panels.projectTree.copyPath")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiFolderOpenLine />
+					{t("panels.projectTree.reveal")}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
+	);
+}
+```
+
+#### Sections and unavailable actions
+
+Tab actions split by separators; the unavailable ones stay disabled with the reason in the label.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function TabActions() {
+	const t = useT();
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger asChild>
+				<div className="w-224">
+					<TreeRow testid="editor-tab" kind="file" label="PlanPane.tsx" onClick={() => {}} />
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent>
+				<ContextMenuItem onSelect={() => {}}>{t("workbench.tab.focus")}</ContextMenuItem>
+				<ContextMenuItem disabled onSelect={() => {}}>
+					{t("workbench.tab.keepPreviewUnavailable")}
+				</ContextMenuItem>
+				<ContextMenuItem disabled onSelect={() => {}}>
+					{t("workbench.tab.moveLeftFirst")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>{t("workbench.tab.moveRight")}</ContextMenuItem>
+				<ContextMenuSeparator />
+				<ContextMenuItem onSelect={() => {}}>{t("workbench.center.splitRight")}</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>{t("workbench.center.splitDown")}</ContextMenuItem>
+				<ContextMenuSeparator />
+				<ContextMenuItem onSelect={() => {}}>
+					{t("workbench.tab.moveToRightPane", { group: "Files" })}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
+	);
+}
+```
+
+#### Confirm after the menu
+
+An item closes the menu first, opens a ConfirmDialog on the next frame, and focus returns to the row when the dialog closes.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function ConfirmAfterMenu() {
+	const t = useT();
+	const rowRef = useRef<HTMLButtonElement>(null);
+	const openingDialogRef = useRef(false);
+	const [menuOpen, setMenuOpen] = useState(false);
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const openDialogAfterMenu = (openDialog: () => void) => {
+		openingDialogRef.current = true;
+		setMenuOpen(false);
+		requestAnimationFrame(openDialog);
+	};
+	return (
+		<>
+			<ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
+				<ContextMenuTrigger asChild>
+					<div className="w-224">
+						<TreeRow
+							ref={rowRef}
+							testid="project-item"
+							kind="dir"
+							label="thinkrail"
+							onClick={() => {}}
+						/>
+					</div>
+				</ContextMenuTrigger>
+				<ContextMenuContent
+					onCloseAutoFocus={(event) => {
+						event.preventDefault();
+						if (!openingDialogRef.current) rowRef.current?.focus();
+						openingDialogRef.current = false;
+					}}
+				>
+					<ContextMenuItem
+						onSelect={(event) => {
+							event.preventDefault();
+							openDialogAfterMenu(() => setConfirmOpen(true));
+						}}
+					>
+						<RiCloseLine />
+						{t("panels.projectTree.closeProject")}
+					</ContextMenuItem>
+				</ContextMenuContent>
+			</ContextMenu>
+			<ConfirmDialog
+				open={confirmOpen}
+				onOpenChange={setConfirmOpen}
+				title={t("panels.projectTree.closeTitle", { name: "thinkrail" })}
+				description={t("panels.projectTree.closeDescription")}
+				confirmLabel={t("panels.projectTree.closeProject")}
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => rowRef.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ProjectTree.tsx` | Project row menu: Shift+F10 / Context Menu key opener, controlled `open` for the row highlight, dialogs opened after the menu closes. |
+| `apps/web/src/shell/layout/workbenchTabs.tsx` | Tab menu: focus, rename, move and split actions with separators and disabled-with-reason items. |
+
+## Command
+
+The searchable list body of every ThinkRail picker and palette — branch, project, model and open-tab pickers and the session switcher. It wraps [cmdk](https://cmdk.paco.me): cmdk owns filtering, ranking, the keyboard highlight and the combobox semantics; the wrapper adds ThinkRail's input, list, group, row and separator styling and a localized list label. The call site provides the surface it sits in (a Popover or Dialog), the rows, their `value`s and what happens `onSelect`.
+
+```tsx
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@thinkrail/ui/command";
+```
+
+### When to use
+
+- Picking one value from a list long enough to need search: branches, projects, models, open tabs.
+- A keyboard palette that jumps somewhere, opened in a Dialog (the `Mod+K` session switcher).
+- Grouped results under headings (Remote / Local, Pinned / Recent / providers), including nested groups.
+- Rows that carry a secondary line, a trailing badge, a check for the current value or a small row action.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| DropdownMenu | A short, fixed set of actions that needs no search (Rename, Delete, Open in…). |
+| ContextMenu | The same actions offered on right-click of the object itself. |
+| SettingsRadioCards | A few mutually exclusive options that should all stay visible in a settings page. |
+| SegmentedControl | Two to four inline options switched in place, with no list to open. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Command | The cmdk root (`[cmdk-root]`): a column with `overflow-hidden` on `container-elevated-bg` and `text-default`. Owns the search, filter and highlight state and the keyboard handling; renders a visually hidden `<label>` with `label`. Focusable (`tabIndex -1`) so a palette without an input can take focus. |
+| CommandInput | A row with a `border-muted` bottom border holding a muted search icon and the `<input>` (`tr-text-ui`, muted placeholder, no outline). `className` reaches the `<input>`, not the row. |
+| CommandList | The scrolling `listbox` with an inner `p-4` inset and a capped height; vertical scroll only. Its `aria-label` defaults to the localized `common.suggestions`. |
+| CommandEmpty | Rendered by cmdk only while no item matches the search: centred `tr-text-ui` in `text-muted`. |
+| CommandGroup | A section of rows with an optional `heading`, padded `px-8 py-4` in `text-muted`. cmdk hides the whole group while none of its items match. Groups nest. |
+| CommandItem | One `option` row: `flex items-center gap-4`, `rounded-sm`, `px-8 py-4`, `tr-text-ui`. The highlighted row (`data-selected`) fills with `control-bg-selected`. Carries `data-row`, so a ghost IconButton inside it uses the raised row-action hover. |
+| CommandSeparator | A `border-muted` hairline with `my-4`, rendered only while the search is empty (unless `alwaysRender`). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `Command.label` | `string` | — | The input's accessible name, rendered as a visually hidden `<label>` that the input is `aria-labelledby`. Without it the combobox has no name — the placeholder does not count. Use a locale key. |
+| `Command.shouldFilter` | `boolean` | `true` | `false` turns off cmdk's filtering and sorting: every rendered item shows and the call site decides what to render (the session switcher, which lists live sessions without a search). |
+| `Command.filter` | `(value: string, search: string, keywords?: string[]) => number` | — | Custom score from 0 (hidden) to 1 (best match). The model pickers pass `pickerFilter` so a provider header matches when any of its models does. |
+| `Command.value` | `string` | — | Controlled value of the highlighted item (the keyboard cursor), not the chosen value. |
+| `Command.defaultValue` | `string` | — | Initially highlighted item value. Without it cmdk highlights the first enabled item. |
+| `Command.onValueChange` | `(value: string) => void` | — | Called when the highlighted item changes. |
+| `Command.loop` | `boolean` | `false` | Arrow keys wrap from the last item to the first and back. |
+| `Command.disablePointerSelection` | `boolean` | `false` | Pointer movement no longer moves the highlight; clicks still select. |
+| `Command.vimBindings` | `boolean` | `true` | Ctrl+N / Ctrl+J and Ctrl+P / Ctrl+K move the highlight. Set `false` where the surface binds one of those chords itself — the session switcher closes on `Mod+K`, which is Ctrl+K off macOS. |
+| `CommandInput.value` | `string` | — | Controlled search text. Pair with `onValueChange`. |
+| `CommandInput.onValueChange` | `(search: string) => void` | — | Called with the new search text; use it to react to the query (expand groups, show a hint). |
+| `CommandList.label` | `string` | `t("common.suggestions")` | `aria-label` of the listbox. The ThinkRail wrapper defaults it to the localized *Suggestions*; cmdk's own default is English. |
+| `CommandGroup.heading` | `ReactNode` | — | Visible heading, hidden from assistive tech and used to label the group. Pass a node to add an icon or a type class. |
+| `CommandGroup.value` | `string` | — | Unique group id; required when the group has no `heading`. |
+| `CommandGroup.forceMount` | `boolean` | `false` | Keeps the group rendered while none of its own items match — for a parent whose matches live in nested groups. |
+| `CommandItem.value` | `string` | — | Unique, stable identity used for filtering and highlighting. Inferred from the text content when omitted; pass it whenever labels can repeat or change. |
+| `CommandItem.keywords` | `string[]` | — | Extra terms matched by the filter besides `value`. |
+| `CommandItem.onSelect` | `(value: string) => void` | — | Called on click and on Enter while highlighted. |
+| `CommandItem.disabled` | `boolean` | `false` | Sets `aria-disabled`; the row is skipped by the keyboard, ignores the pointer and cannot be selected. |
+| `CommandItem.forceMount` | `boolean` | `false` | Keeps the row rendered regardless of the search. |
+| `CommandSeparator.alwaysRender` | `boolean` | `false` | Keeps the separator while a search is active (useful with `shouldFilter={false}`). |
+
+Native props that matter:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `*.className` | `string` | — | Merged onto every part except CommandEmpty. Placement and sizing only: `bg-transparent` on Command inside a surface, a `max-h-*` on CommandList, row layout (`items-start`, `gap-8`, an indent) on CommandItem. On CommandInput it reaches the `<input>`. |
+| `CommandInput.placeholder` | `string` | — | The visible prompt (`Search branches…`). Use a locale key. |
+| `CommandItem.children` | `ReactNode` | — | The row content: a leading icon (`size-14`), a truncated label, optional secondary line, badge or check. |
+| `CommandEmpty.children` | `ReactNode` | — | The no-match message. Use a locale key. |
+| `*.asChild` | `boolean` | — | cmdk's slot composition on the root, list, group, item and separator. Unused in ThinkRail. |
+| `*.ref` | `Ref<HTMLDivElement \| HTMLInputElement>` | — | Forwarded to the part's element (React 19 ref prop). |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Rest | No search; pointer outside the list. | Rows on the surface with no fill except the highlighted one: cmdk highlights the first enabled item on mount. |
+| Highlighted | Pointer moves over a row (unless `disablePointerSelection`), or the arrow keys, Home / End. | `control-bg-selected` fill on the row (`data-selected`, `aria-selected`). There is no separate hover treatment: hover moves the highlight. |
+| Input focus | Click or Tab into the input. | No distinct treatment — the input has no outline; the highlighted row shows where Enter goes. |
+| Root focus | A palette without an input focuses `[cmdk-root]` on open. | No ThinkRail treatment: the root sets no outline style, so the browser's default focus outline draws around the list. |
+| Filtered | Typing in the input. | Non-matching rows unmount, rows are ranked by score, groups with no match are hidden, separators disappear; the first match is highlighted. |
+| Empty | The search matches nothing. | CommandEmpty shows its centred muted message; nothing else in the list renders. |
+| Disabled item | `disabled` on CommandItem. | No distinct treatment: the row looks like an enabled one but cannot be highlighted or selected. |
+| Row action | A ghost IconButton inside a row. | The row's `data-row` gives the button a `container-elevated-bg` hover, so it stays visible on a highlighted row. |
+
+### Accessibility
+
+- The input is a `combobox` (`aria-autocomplete="list"`, `aria-controls` the list, `aria-activedescendant` the highlighted row); focus stays in the input while the highlight moves.
+- The input is `aria-labelledby` the root's visually hidden `<label>`, which holds Command `label`. Without `label` that label is empty and the combobox is unnamed — the placeholder is not used — so always pass one.
+- The list is a `listbox` named by CommandList `label` (localized *Suggestions* by default); rows are `option`s with `aria-selected` on the highlight and `aria-disabled` when disabled.
+- A group's items form a `group` labelled by its heading; the heading element itself is `aria-hidden`, so the heading text is announced once.
+- A row that expands a group (the model pickers' provider headers) sets `aria-expanded` itself.
+- The surrounding Popover or Dialog owns focus trapping, Escape and focus return. A palette without an input focuses `[cmdk-root]` in `onOpenAutoFocus` so the arrows work at once.
+
+| Keys | Action |
+| --- | --- |
+| `Type` | Filters and ranks the rows; the first match is highlighted. |
+| `ArrowDown / ArrowUp` | Moves the highlight to the next / previous enabled row; wraps with `loop`. |
+| `Ctrl+N / Ctrl+J, Ctrl+P / Ctrl+K` | Same as ArrowDown / ArrowUp while `vimBindings` is on (the default). |
+| `Alt+ArrowDown / Alt+ArrowUp` | Jumps to the first row of the next / previous group. |
+| `Meta+ArrowDown / Meta+ArrowUp` | Jumps to the last / first row. |
+| `Home / End` | Jumps to the first / last row (cmdk takes these keys from the input caret). |
+| `Enter` | Runs the highlighted row's `onSelect`. |
+| `Escape` | Closes the Popover or Dialog the list sits in (Radix). |
+| `Tab` | Leaves the input; rows are not tab stops. |
+
+### Usage rules
+
+- **CMD-1** — Use Command for a searchable choice or a keyboard palette, mounted inside PopoverContent (`p-0`) or DialogContent (`p-0 gap-0`); the surface supplies border, radius and shadow. A short action list without search is a DropdownMenu.
+- **CMD-2** — Pass Command `label` from a locale key whenever there is a CommandInput; it is the input's only accessible name.
+- **CMD-3** — Give every CommandItem a stable, unique `value` — an id or the full ref — and put the display name and other search terms in `keywords`. Never rely on inferred text values when labels can repeat or change.
+- **CMD-4** — Act in `onSelect`, never `onClick`: it runs for both click and Enter. Close the overlay there, and reset a controlled query.
+- **CMD-5** — The highlight (`data-selected`) is the keyboard cursor, not the chosen value. Mark the current value inside the row — a check in a fixed slot — so it stays visible wherever the highlight is.
+- **CMD-6** — CommandEmpty is for *no match*, with a locale key. When you filter yourself (`shouldFilter={false}`) or the source list is empty, render your own message: CommandEmpty only follows cmdk's match count.
+- **CMD-7** — A row action is an `IconButton` (ghost, size `s`) whose `onClick` calls `event.stopPropagation()`, so pressing it does not select the row.
+- **CMD-8** — Style a group heading by passing a node (`heading={<span …>}`); a `[&_[cmdk-group-heading]]:tr-*` class produces nothing (TYPOGRAPHY.md, *When the element is not yours*).
+
+### Examples
+
+#### Grouped picker
+
+The body every picker starts from — input, two headed groups and a no-match message — in a Popover opened by a Button.
+
+```tsx
+import { RiArrowDownSLine, RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const REMOTE = ["origin/main", "origin/release-2.4"];
+const LOCAL = ["main", "feature/command-docs"];
+
+export default function Preview() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [selected, setSelected] = useState("main");
+	const row = (ref: string) => (
+		<CommandItem
+			key={ref}
+			value={ref}
+			onSelect={() => {
+				setSelected(ref);
+				setOpen(false);
+			}}
+		>
+			<RiGitBranchLine className="size-14 shrink-0 text-text-muted" />
+			<span className="truncate">{ref}</span>
+		</CommandItem>
+	);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" iconLeft={RiGitBranchLine} iconRight={RiArrowDownSLine}>
+					{selected}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-288 p-0">
+				<Command label={t("panels.branchPicker.search")}>
+					<CommandInput placeholder={t("panels.branchPicker.search")} />
+					<CommandList>
+						<CommandEmpty>{t("panels.branchPicker.empty")}</CommandEmpty>
+						<CommandGroup heading={t("panels.branchPicker.remote")}>{REMOTE.map(row)}</CommandGroup>
+						<CommandGroup heading={t("panels.branchPicker.local")}>{LOCAL.map(row)}</CommandGroup>
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Branch picker
+
+A Popover picker with nested Remote groups, a check for the current branch and a default badge; picking closes it.
+
+```tsx
+import { RiArrowDownSLine, RiCheckLine, RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const REMOTES = [
+	{ remote: "origin", branches: ["main", "release-2.4"] },
+	{ remote: "upstream", branches: ["main"] },
+];
+const LOCAL = ["main", "feature/command-docs"];
+const DEFAULT_BRANCH = "origin/main";
+
+export default function BranchPicker() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [selected, setSelected] = useState("main");
+
+	const row = (ref: string, label = ref) => (
+		<CommandItem
+			key={ref}
+			value={ref}
+			onSelect={() => {
+				setSelected(ref);
+				setOpen(false);
+			}}
+		>
+			<span className="flex w-14 shrink-0 justify-center">
+				{ref === selected ? <RiCheckLine className="size-14 text-primary" /> : null}
+			</span>
+			<RiGitBranchLine className="size-14 shrink-0 text-text-muted" />
+			<span className="truncate tr-text-metadata">{label}</span>
+			{ref === DEFAULT_BRANCH ? (
+				<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">
+					{t("panels.branchPicker.defaultBadge")}
+				</span>
+			) : null}
+		</CommandItem>
+	);
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button variant="ghost" size="m" iconLeft={RiGitBranchLine} iconRight={RiArrowDownSLine}>
+					{selected}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-320 p-0">
+				<Command label={t("panels.branchPicker.search")}>
+					<CommandInput placeholder={t("panels.branchPicker.search")} />
+					<CommandList>
+						<CommandEmpty>{t("panels.branchPicker.empty")}</CommandEmpty>
+						<CommandGroup
+							heading={t("panels.branchPicker.remote")}
+							forceMount
+							className="not-has-[[cmdk-group]:not([hidden])]:hidden"
+						>
+							{REMOTES.map((group) => (
+								<CommandGroup key={group.remote} heading={group.remote} className="pl-8">
+									{group.branches.map((branch) => row(`${group.remote}/${branch}`, branch))}
+								</CommandGroup>
+							))}
+						</CommandGroup>
+						<CommandGroup heading={t("panels.branchPicker.local")}>
+							{LOCAL.map((ref) => row(ref))}
+						</CommandGroup>
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Open-tab search
+
+An IconButton opens the list; each row's `value` is the tab id and its name and kind are `keywords`.
+
+```tsx
+import {
+	RiChat3Line,
+	RiFileTextLine,
+	RiGitPullRequestLine,
+	RiSearchLine,
+	RiTerminalBoxLine,
+} from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const TABS = [
+	{ id: "chat:1", name: "Fix the flaky login test", kind: "chat", icon: RiChat3Line },
+	{ id: "file:1", name: "command.tsx", kind: "packages/ui/command.tsx", icon: RiFileTextLine },
+	{ id: "terminal:1", name: "bun test", kind: "terminal", icon: RiTerminalBoxLine },
+	{ id: "changes:1", name: "Changes", kind: "diff review", icon: RiGitPullRequestLine },
+];
+
+export default function TabSearch() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [active, setActive] = useState(TABS[0]?.id);
+	return (
+		<div className="flex items-center gap-8">
+			<span className="tr-text-metadata text-text-muted">
+				{TABS.find((tab) => tab.id === active)?.name}
+			</span>
+			<Popover open={open} onOpenChange={setOpen}>
+				<PopoverTrigger asChild>
+					<IconButton icon={RiSearchLine} label={t("workbench.tabs.search")} wrapTrigger />
+				</PopoverTrigger>
+				<PopoverContent align="end" className="w-288 p-0">
+					<Command label={t("workbench.tabs.search")}>
+						<CommandInput placeholder={t("workbench.tabs.findPlaceholder")} />
+						<CommandList>
+							<CommandEmpty>{t("workbench.tabs.noMatches")}</CommandEmpty>
+							{TABS.map((tab) => (
+								<CommandItem
+									key={tab.id}
+									value={tab.id}
+									keywords={[tab.name, tab.kind]}
+									onSelect={() => {
+										setActive(tab.id);
+										setOpen(false);
+									}}
+								>
+									<tab.icon className="size-14 shrink-0 text-text-muted" />
+									<span className="truncate">{tab.name}</span>
+								</CommandItem>
+							))}
+						</CommandList>
+					</Command>
+				</PopoverContent>
+			</Popover>
+		</div>
+	);
+}
+```
+
+#### Palette in a dialog
+
+The session switcher pattern: no input, `shouldFilter={false}`, `loop`, icon headings, two-line rows and the root focused on open.
+
+```tsx
+import { RiChat2Line, RiFolderLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Command, CommandGroup, CommandItem, CommandList } from "@thinkrail/ui/command";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@thinkrail/ui/dialog";
+import { useState } from "react";
+import { AttentionDot } from "@/components/AttentionDot";
+
+const PROJECTS = [
+	{
+		id: "thinkrail",
+		name: "thinkrail",
+		sessions: [
+			{ id: "s1", title: "Fix the flaky login test", workspace: "fix-login" },
+			{ id: "s2", title: "Document the command list", workspace: "command-docs" },
+		],
+	},
+	{
+		id: "website",
+		name: "website",
+		sessions: [{ id: "s3", title: "Update the pricing page", workspace: "pricing" }],
+	},
+];
+
+export default function SessionPalette() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<Dialog open={open} onOpenChange={setOpen}>
+			<DialogTrigger asChild>
+				<Button variant="outline">{t("shell.sessionSwitcher.title")}</Button>
+			</DialogTrigger>
+			<DialogContent
+				className="gap-0 overflow-hidden p-0"
+				hideClose
+				data-testid="session-palette"
+				onOpenAutoFocus={(event) => {
+					event.preventDefault();
+					document
+						.querySelector<HTMLElement>('[data-testid="session-palette"] [cmdk-root]')
+						?.focus();
+				}}
+			>
+				<DialogTitle className="border-border-default border-b px-16 py-12">
+					{t("shell.sessionSwitcher.title")}
+				</DialogTitle>
+				<Command className="bg-transparent" loop shouldFilter={false} vimBindings={false}>
+					<CommandList className="px-8 pt-4 pb-8">
+						{PROJECTS.map((project) => (
+							<CommandGroup
+								key={project.id}
+								heading={
+									<span className="flex h-28 items-center gap-4 px-4">
+										<RiFolderLine className="size-14 shrink-0 text-text-muted" />
+										<span className="min-w-0 flex-1 truncate">{project.name}</span>
+									</span>
+								}
+							>
+								{project.sessions.map((session) => (
+									<CommandItem
+										key={session.id}
+										value={session.id}
+										className="group gap-8 pl-24"
+										onSelect={() => setOpen(false)}
+									>
+										<RiChat2Line className="size-14 shrink-0 text-text-muted group-data-[selected=true]:text-primary" />
+										<span className="flex min-w-0 flex-1 flex-col">
+											<span className="truncate group-data-[selected=true]:text-primary">
+												{session.title}
+											</span>
+											<span className="truncate text-text-subtle tr-text-metadata">
+												{session.workspace}
+											</span>
+										</span>
+										<AttentionDot />
+									</CommandItem>
+								))}
+							</CommandGroup>
+						))}
+					</CommandList>
+				</Command>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Collapsible groups
+
+A model picker whose provider headers are rows with `aria-expanded`; a controlled search expands every group and a header matches through its models' `keywords`.
+
+```tsx
+import { RiArrowDownSLine, RiArrowRightSLine, RiCheckLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const PROVIDERS = [
+	{
+		provider: "anthropic",
+		models: [
+			{ id: "claude-opus-4", name: "Claude Opus 4", context: "200K" },
+			{ id: "claude-sonnet-4", name: "Claude Sonnet 4", context: "200K" },
+		],
+	},
+	{
+		provider: "openai",
+		models: [
+			{ id: "gpt-5", name: "GPT-5", context: "400K" },
+			{ id: "gpt-5-mini", name: "GPT-5 mini", context: "400K" },
+		],
+	},
+];
+
+export default function ModelGroups() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [query, setQuery] = useState("");
+	const [current, setCurrent] = useState("claude-sonnet-4");
+	const [expanded, setExpanded] = useState<string[]>(["anthropic"]);
+	const searching = query !== "";
+	const toggle = (provider: string) =>
+		setExpanded((open) =>
+			open.includes(provider) ? open.filter((p) => p !== provider) : [...open, provider],
+		);
+	const currentName = PROVIDERS.flatMap((group) => group.models).find(
+		(model) => model.id === current,
+	)?.name;
+	return (
+		<Popover
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next);
+				if (next) setQuery("");
+			}}
+		>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" iconRight={RiArrowDownSLine}>
+					{currentName}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-340 p-0">
+				<Command label={t("chat.modelPicker.selectModel")}>
+					<CommandInput
+						placeholder={t("chat.modelPicker.search")}
+						value={query}
+						onValueChange={setQuery}
+					/>
+					<CommandList>
+						<CommandEmpty>{t("chat.modelPicker.noMatch")}</CommandEmpty>
+						{PROVIDERS.map((group) => {
+							const open = searching || expanded.includes(group.provider);
+							return (
+								<CommandGroup key={group.provider} value={`group:${group.provider}`}>
+									<CommandItem
+										value={`provider:${group.provider}`}
+										keywords={group.models.flatMap((m) => [m.name, m.id])}
+										aria-expanded={open}
+										onSelect={() => toggle(group.provider)}
+										className="gap-8 py-8"
+									>
+										<span className="min-w-0 flex-1 truncate tr-text-emphasis">
+											{group.provider}
+										</span>
+										<span className="shrink-0 text-text-muted tr-text-metadata">
+											{group.models.length}
+										</span>
+										{open ? (
+											<RiArrowDownSLine className="size-14 shrink-0 text-text-muted" />
+										) : (
+											<RiArrowRightSLine className="size-14 shrink-0 text-text-muted" />
+										)}
+									</CommandItem>
+									{open
+										? group.models.map((model) => (
+												<CommandItem
+													key={model.id}
+													value={`all:${model.id}`}
+													keywords={[model.name, model.id, group.provider]}
+													onSelect={() => {
+														setCurrent(model.id);
+														setOpen(false);
+													}}
+													className="ml-24 items-start gap-8"
+												>
+													<span className="flex min-w-0 flex-1 flex-col">
+														<span className="truncate">{model.name}</span>
+														<span className="truncate text-text-muted tr-text-metadata">
+															{t("chat.modelPicker.context", { size: model.context })}
+														</span>
+													</span>
+													{model.id === current ? (
+														<RiCheckLine className="mt-2 size-14 shrink-0 text-primary" />
+													) : null}
+												</CommandItem>
+											))
+										: null}
+								</CommandGroup>
+							);
+						})}
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Row action
+
+A pin toggle inside the row that does not select it, revealed on row hover or highlight.
+
+```tsx
+import { RiArrowDownSLine, RiStarFill, RiStarLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { cn } from "@thinkrail/ui/utils";
+import { useState } from "react";
+
+const MODELS = [
+	{ id: "claude-opus-4", name: "Claude Opus 4" },
+	{ id: "claude-sonnet-4", name: "Claude Sonnet 4" },
+	{ id: "gpt-5", name: "GPT-5" },
+];
+
+export default function RowAction() {
+	const t = useT();
+	const [pinned, setPinned] = useState<string[]>(["claude-sonnet-4"]);
+	const [current, setCurrent] = useState("gpt-5");
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" iconRight={RiArrowDownSLine}>
+					{MODELS.find((model) => model.id === current)?.name}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-320 p-0">
+				<Command label={t("chat.modelPicker.selectModel")}>
+					<CommandInput placeholder={t("chat.modelPicker.search")} />
+					<CommandList>
+						<CommandEmpty>{t("chat.modelPicker.noMatch")}</CommandEmpty>
+						<CommandGroup>
+							{MODELS.map((model) => {
+								const isPinned = pinned.includes(model.id);
+								return (
+									<CommandItem
+										key={model.id}
+										value={model.id}
+										keywords={[model.name]}
+										onSelect={() => {
+											setCurrent(model.id);
+											setOpen(false);
+										}}
+										className="group/row gap-8"
+									>
+										<span className="min-w-0 flex-1 truncate">{model.name}</span>
+										<IconButton
+											icon={isPinned ? RiStarFill : RiStarLine}
+											size="s"
+											label={
+												isPinned
+													? t("chat.modelPicker.unpin", { model: model.name })
+													: t("chat.modelPicker.pin", { model: model.name })
+											}
+											aria-pressed={isPinned}
+											selected={isPinned}
+											tone={isPinned ? "warning" : undefined}
+											onClick={(event) => {
+												event.stopPropagation();
+												setPinned((ids) =>
+													isPinned ? ids.filter((id) => id !== model.id) : [...ids, model.id],
+												);
+											}}
+											className={cn(
+												"shrink-0",
+												!isPinned &&
+													"opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100",
+											)}
+										/>
+									</CommandItem>
+								);
+							})}
+						</CommandGroup>
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Separator
+
+A project picker where CommandSeparator sets an Add project action apart; it disappears while searching. No production list uses the separator yet.
+
+```tsx
+import { RiAddLine, RiArrowDownSLine, RiFolderLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+	CommandSeparator,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const PROJECTS = ["thinkrail", "website", "design-tokens"];
+
+export default function Separator() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [project, setProject] = useState("thinkrail");
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" iconLeft={RiFolderLine} iconRight={RiArrowDownSLine}>
+					{project}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-288 p-0">
+				<Command label={t("panels.newWorkspace.searchProjects")}>
+					<CommandInput placeholder={t("panels.newWorkspace.searchProjects")} />
+					<CommandList>
+						<CommandEmpty>{t("panels.newWorkspace.noProjects")}</CommandEmpty>
+						<CommandGroup>
+							{PROJECTS.map((name) => (
+								<CommandItem
+									key={name}
+									value={name}
+									onSelect={() => {
+										setProject(name);
+										setOpen(false);
+									}}
+								>
+									<RiFolderLine className="size-14 shrink-0 text-text-muted" />
+									<span className="truncate">{name}</span>
+								</CommandItem>
+							))}
+						</CommandGroup>
+						<CommandSeparator />
+						<CommandGroup>
+							<CommandItem value="action:add" onSelect={() => setOpen(false)}>
+								<RiAddLine className="size-14 shrink-0 text-text-muted" />
+								<span className="truncate">{t("panels.projectTree.addProject")}</span>
+							</CommandItem>
+						</CommandGroup>
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/BranchPicker.tsx` | Branch picker in a Popover: nested Remote groups with `forceMount`, Local group, check and default badge. |
+| `apps/web/src/chat/ModelSelector.tsx` | Model picker: controlled search, custom `filter`, collapsible provider groups, pin row action. |
+| `apps/web/src/chat/ModelEffortPicker.tsx` | Composer model + effort picker: Default, Pinned, Recent and provider groups above the effort slider. |
+| `apps/web/src/shell/SessionSwitcher.tsx` | `Mod+K` palette in a Dialog: no input, `shouldFilter={false}`, `loop`, `vimBindings={false}`. |
+| `apps/web/src/shell/layout/workbenchTabs.tsx` | Open-tab search behind an IconButton, with tab ids as values and names as `keywords`. |
+| `apps/web/src/panels/NewWorkspaceDialog.tsx` | Project picker pill in the New workspace dialog. |
+
 ## Button and IconButton contract
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /

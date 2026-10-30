@@ -2,11 +2,18 @@ import { attentionDot } from "./components/attention-dot";
 import { attentionLine } from "./components/attention-line";
 import { button } from "./components/button";
 import { collapsible } from "./components/collapsible";
+import { command } from "./components/command";
+import { confirmDialog } from "./components/confirm-dialog";
+import { confirmPopover } from "./components/confirm-popover";
+import { contextMenu } from "./components/context-menu";
+import { dialog } from "./components/dialog";
 import { diffStatBadge } from "./components/diff-stat-badge";
+import { dropdownMenu } from "./components/dropdown-menu";
 import { errorBoundary } from "./components/error-boundary";
 import { fileChip } from "./components/file-chip";
 import { headerIconButton } from "./components/header-icon-button";
 import { iconButton } from "./components/icon-button";
+import { popover } from "./components/popover";
 import { runningIcon } from "./components/running-icon";
 import { segmentedControl } from "./components/segmented-control";
 import { settingsNotice } from "./components/settings-notice";
@@ -20,6 +27,7 @@ import { tabStrip } from "./components/tab-strip";
 import { textarea } from "./components/textarea";
 import { toast } from "./components/toast";
 import { toggleSegment } from "./components/toggle-segment";
+import { tooltip } from "./components/tooltip";
 import { treeRow } from "./components/tree-row";
 import type { ComponentDoc, DocArea, DocPage } from "./types";
 
@@ -190,4 +198,12 @@ export const components: readonly ComponentDoc[] = [
 	runningIcon,
 	attentionDot,
 	attentionLine,
+	dialog,
+	confirmDialog,
+	popover,
+	confirmPopover,
+	tooltip,
+	dropdownMenu,
+	contextMenu,
+	command,
 ];

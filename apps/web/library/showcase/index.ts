@@ -4,10 +4,17 @@ import { attentionDotShowcase } from "./attention-dot";
 import { attentionLineShowcase } from "./attention-line";
 import { buttonShowcase } from "./button";
 import { collapsibleShowcase } from "./collapsible";
+import { commandShowcase } from "./command";
+import { confirmDialogShowcase } from "./confirm-dialog";
+import { confirmPopoverShowcase } from "./confirm-popover";
+import { contextMenuShowcase } from "./context-menu";
+import { dialogShowcase } from "./dialog";
 import { diffStatBadgeShowcase } from "./diff-stat-badge";
+import { dropdownMenuShowcase } from "./dropdown-menu";
 import { errorBoundaryShowcase } from "./error-boundary";
 import { fileChipShowcase } from "./file-chip";
 import { headerIconButtonShowcase } from "./header-icon-button";
+import { popoverShowcase } from "./popover";
 import { runningIconShowcase } from "./running-icon";
 import { segmentedControlShowcase } from "./segmented-control";
 import { settingsNoticeShowcase } from "./settings-notice";
@@ -21,6 +28,7 @@ import { tabStripShowcase } from "./tab-strip";
 import { textareaShowcase } from "./textarea";
 import { toastShowcase } from "./toast";
 import { toggleSegmentShowcase } from "./toggle-segment";
+import { tooltipShowcase } from "./tooltip";
 import { treeRowShowcase } from "./tree-row";
 import type { Showcase } from "./types";
 
@@ -48,6 +56,14 @@ export const showcases: Readonly<Record<string, Showcase>> = {
 	"running-icon": runningIconShowcase,
 	"attention-dot": attentionDotShowcase,
 	"attention-line": attentionLineShowcase,
+	dialog: dialogShowcase,
+	"confirm-dialog": confirmDialogShowcase,
+	popover: popoverShowcase,
+	"confirm-popover": confirmPopoverShowcase,
+	tooltip: tooltipShowcase,
+	"dropdown-menu": dropdownMenuShowcase,
+	"context-menu": contextMenuShowcase,
+	command: commandShowcase,
 };
 
 export type { PlaygroundConfig, PlaygroundControl, PlaygroundValues, Showcase } from "./types";

@@ -149,3 +149,11 @@ Radius steps: `rounded-xs` 2px · `rounded-sm` 4px · `rounded-md` 6px · `round
 | RunningIcon | `import { RunningIcon } from "@/components/RunningIcon";` | — | — |
 | AttentionDot | `import { AttentionDot } from "@/components/AttentionDot";` | — | — |
 | AttentionLine | `import { AttentionLine } from "@thinkrail/ui/attention-line";` | — | — |
+| Dialog | `import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@thinkrail/ui/dialog";` | — | — |
+| ConfirmDialog | `import { ConfirmDialog } from "@/panels/ConfirmDialog";` | — | — |
+| Popover | `import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";` | — | — |
+| ConfirmPopover | `import { ConfirmPopover } from "@/panels/ConfirmPopover";` | — | — |
+| Tooltip and IconTooltip | `import { IconTooltip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@thinkrail/ui/tooltip";` | — | — |
+| DropdownMenu | `import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@thinkrail/ui/dropdown-menu";` | — | — |
+| ContextMenu | `import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@thinkrail/ui/context-menu";` | — | — |
+| Command | `import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@thinkrail/ui/command";` | — | — |
