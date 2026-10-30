@@ -41,6 +41,7 @@ function fixture(): string {
 			"@thinkrail/server": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
 		},
+		"packages/relay": { "@thinkrail/contracts": "workspace:*" },
 		"packages/shared": { "@thinkrail/contracts": "workspace:*" },
 		"packages/pi-subagents": { "pi-delegation": "workspace:*" },
 		"packages/pi-dag": { "pi-delegation": "workspace:*" },

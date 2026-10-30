@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { encodeBrokerFrame } from "@thinkrail/contracts";
 import { type Broker, type BrokerSocket, createBroker } from "./broker";
-import { encode } from "./brokerProtocol";
 
 export interface RunningBroker {
 	readonly port: number;
@@ -26,7 +26,7 @@ export function startBroker(
 		websocket: {
 			open(ws) {
 				const socket: BrokerSocket = {
-					send: (message) => void ws.send(encode(message)),
+					send: (message) => void ws.send(encodeBrokerFrame(message)),
 					close: () => ws.close(),
 				};
 				broker.connect(ws.data.id, socket);

@@ -301,6 +301,9 @@
     "packages/relay": {
       "name": "@thinkrail/relay",
       "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/contracts": "workspace:*",
+      },
       "devDependencies": {
         "@types/bun": "catalog:",
         "typescript": "catalog:",
