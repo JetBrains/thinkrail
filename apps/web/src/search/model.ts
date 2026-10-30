@@ -15,6 +15,7 @@ export type PaletteItemKind =
 	| "spec"
 	| "plan"
 	| "transcript"
+	| "start"
 	| "more";
 
 export type PaletteMore =
@@ -67,6 +68,11 @@ export interface PaletteItem {
 	readonly more?: PaletteMore;
 	readonly run?: () => void;
 	readonly preview?: () => PalettePreview | null;
+}
+
+/** Start work from the typed text: the shell opens its Create-workspace dialog with the text as the prompt. */
+export interface PaletteStart {
+	readonly openDialog: (text: string) => void;
 }
 
 export interface PaletteSection {

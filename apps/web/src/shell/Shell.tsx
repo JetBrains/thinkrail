@@ -92,7 +92,10 @@ export function Shell() {
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
 	const windowControls = useNativeWindowControls();
-	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
+	const [newWorkspace, setNewWorkspace] = useState<{
+		projectId: string;
+		initialPrompt?: string;
+	} | null>(null);
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
 	const [searchShortcut] = useState(() => shortcutLabel({ key: "K", mod: true }));
@@ -156,7 +159,7 @@ export function Shell() {
 				}
 			: {}),
 		...(contextProject
-			? { onNewWorkspace: () => setNewWorkspaceProjectId(contextProject.id) }
+			? { onNewWorkspace: () => setNewWorkspace({ projectId: contextProject.id }) }
 			: {}),
 		onSearch: () => useAppStore.getState().openSearch(),
 	});
@@ -181,7 +184,7 @@ export function Shell() {
 							branchStatus={branchStatus}
 							noteOpenReview={noteOpenReview}
 							refreshBranchStatus={refreshBranchStatus}
-							onNewWorkspace={() => setNewWorkspaceProjectId(contextProject.id)}
+							onNewWorkspace={() => setNewWorkspace({ projectId: contextProject.id })}
 						/>
 					) : null}
 				</div>
@@ -252,12 +255,15 @@ export function Shell() {
 					keyboardSettings={<SearchSettings />}
 					updateSettings={updates ? <UpdateSettings updates={updates} /> : undefined}
 				/>
-				{newWorkspaceProjectId !== null ? (
+				{newWorkspace !== null ? (
 					<NewWorkspaceDialog
 						open
-						projectId={newWorkspaceProjectId}
+						projectId={newWorkspace.projectId}
+						{...(newWorkspace.initialPrompt === undefined
+							? {}
+							: { initialPrompt: newWorkspace.initialPrompt })}
 						onOpenChange={(isOpen) => {
-							if (!isOpen) setNewWorkspaceProjectId(null);
+							if (!isOpen) setNewWorkspace(null);
 						}}
 					/>
 				) : null}
@@ -276,7 +282,12 @@ export function Shell() {
 			)}
 			<SurveyWindow />
 			<SearchPaletteHost
-				onNewWorkspace={setNewWorkspaceProjectId}
+				onNewWorkspace={(projectId, initialPrompt) =>
+					setNewWorkspace(
+						(open) =>
+							open ?? (initialPrompt === undefined ? { projectId } : { projectId, initialPrompt }),
+					)
+				}
 				onToggleProjectsHome={homeProjects.toggle}
 				hasUpdateSettings={updates !== null}
 			/>

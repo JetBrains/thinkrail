@@ -1,17 +1,23 @@
-import { RiMoreLine } from "@remixicon/react";
+import { RiMoreLine, RiSparkling2Line } from "@remixicon/react";
 import { type MatchTerm, matchFields } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { HostTotal } from "./hostItems";
 import { frecencyScore, type LearningSnapshot } from "./learning";
-import type { PaletteItem, PaletteRow, PaletteSection } from "./model";
+import type { PaletteItem, PaletteRow, PaletteSection, PaletteStart } from "./model";
 import type { ParsedQuery, SearchScope } from "./query";
 import { compareRanked, pickTopHit, plainRow, type RankedItem, rankItems, toRow } from "./rank";
+
+export interface StartInput {
+	readonly start: PaletteStart;
+	readonly text: string;
+}
 
 export interface SectionsInput {
 	readonly t: Translator;
 	readonly parsed: ParsedQuery;
 	readonly hostTotals?: Readonly<Record<string, HostTotal>>;
+	readonly start?: StartInput;
 	readonly rootItems: readonly PaletteItem[];
 	readonly waiting: readonly PaletteItem[];
 	readonly actions: readonly PaletteItem[];
@@ -31,6 +37,7 @@ const GROUP_LABELS: Readonly<Record<string, MessageKey>> = {
 	projects: "search.group.projects",
 	commands: "search.group.commands",
 	settings: "search.group.settings",
+	start: "search.group.start",
 	files: "search.group.files",
 	specs: "search.group.specs",
 	plans: "search.group.plans",
@@ -225,6 +232,56 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 	);
 }
 
+export const START_ROW_ID = "start";
+
+export function startRow(t: Translator, input: StartInput): PaletteItem {
+	const { start, text } = input;
+	return {
+		id: START_ROW_ID,
+		kind: "start",
+		title: t("search.start.title", { text }),
+		subtitle: t("search.start.subtitle"),
+		group: "start",
+		scope: "all",
+		icon: RiSparkling2Line,
+		shortcut: { key: "↵", mod: true },
+		run: () => start.openDialog(text),
+	};
+}
+
+/** The one rule for the Start work row and the `Mod+↵` shortcut: a typed query in the All or Work scope. */
+export function startEligible(parsed: ParsedQuery): boolean {
+	return (
+		parsed.terms.length > 0 &&
+		parsed.text.trim().length > 0 &&
+		(parsed.scope === "all" || parsed.scope === "work")
+	);
+}
+
+/** The prompt is the text as typed — only the scope prefix stripped, whitespace and tokens untouched. */
+export function startPrompt(raw: string, parsed: ParsedQuery): string {
+	const trimmed = raw.trim();
+	return (parsed.scope === "all" ? trimmed : trimmed.slice(1)).trim();
+}
+
+function onlyLate(section: PaletteSection): boolean {
+	return section.items.every((row) => row.item.kind === "more" || (row.item.late ?? 0) > 0);
+}
+
+function withStart(sections: PaletteSection[], input: SectionsInput): PaletteSection[] {
+	const { start, parsed, t } = input;
+	if (!start || !startEligible(parsed)) return sections;
+	const row = {
+		id: "start",
+		title: groupLabel(t, "start"),
+		items: [plainRow(startRow(t, start))],
+	};
+	const late = sections.findIndex(onlyLate);
+	return late === -1
+		? [...sections, row]
+		: [...sections.slice(0, late), row, ...sections.slice(late)];
+}
+
 export function buildSections(input: SectionsInput): PaletteSection[] {
 	const { t, parsed } = input;
 	if (parsed.terms.length === 0) return emptyRootSections(input);
@@ -234,9 +291,12 @@ export function buildSections(input: SectionsInput): PaletteSection[] {
 	const top = scoped ? null : pickTopHit(ranked);
 	const rest = top ? ranked.filter((entry) => entry !== top) : ranked;
 	const sections = groupRanked(t, rest, scoped, input);
-	return top
-		? [{ id: "top", title: groupLabel(t, "top"), items: [toRow(top, true)] }, ...sections]
-		: sections;
+	return withStart(
+		top
+			? [{ id: "top", title: groupLabel(t, "top"), items: [toRow(top, true)] }, ...sections]
+			: sections,
+		input,
+	);
 }
 
 export function flattenRows(sections: readonly PaletteSection[]): PaletteRow[] {

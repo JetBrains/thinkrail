@@ -45,7 +45,7 @@ import {
 } from "./hostSearch";
 import { isImeComposing } from "./ime";
 import { recordPick } from "./learning";
-import type { PaletteFile, PaletteItem, PaletteRow, PaletteSection } from "./model";
+import type { PaletteFile, PaletteItem, PaletteRow, PaletteSection, PaletteStart } from "./model";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
 import {
 	parseSearchQuery,
@@ -56,7 +56,7 @@ import {
 	withScopePrefix,
 } from "./query";
 import { matchingIds } from "./rank";
-import { buildSections, flattenRows } from "./sections";
+import { buildSections, flattenRows, startEligible, startPrompt } from "./sections";
 
 const HOST_STATUS_LABELS: Record<HostSearchStatus, MessageKey> = {
 	failed: "search.palette.hostFailed",
@@ -87,6 +87,7 @@ export interface SearchPaletteProps {
 	readonly actions: readonly PaletteItem[];
 	readonly scopes: readonly SearchScope[];
 	readonly host?: PaletteHost;
+	readonly start?: PaletteStart;
 	readonly notice?: string;
 }
 
@@ -110,6 +111,7 @@ function PaletteContent({
 	actions: emptyActions,
 	scopes,
 	host,
+	start,
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
@@ -182,12 +184,18 @@ function PaletteContent({
 		[hostState.groups, hostState.stale],
 	);
 	const hostStatus = hostSearchStatus(hostState);
+	const startText = startEligible(parsed) ? startPrompt(parsed.raw, parsed) : "";
+	const startInput = useMemo(
+		() => (start && startText ? { start, text: startText } : undefined),
+		[start, startText],
+	);
 	const sections = useMemo(
 		() =>
 			buildSections({
 				t,
 				parsed,
 				hostTotals: totals,
+				...(startInput ? { start: startInput } : {}),
 				rootItems: allItems,
 				waiting,
 				actions: emptyActions,
@@ -196,7 +204,19 @@ function PaletteContent({
 				nowMs,
 				keep: selectedId,
 			}),
-		[t, parsed, totals, allItems, waiting, emptyActions, expanded, learning, nowMs, selectedId],
+		[
+			t,
+			parsed,
+			totals,
+			startInput,
+			allItems,
+			waiting,
+			emptyActions,
+			expanded,
+			learning,
+			nowMs,
+			selectedId,
+		],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
 	useLayoutEffect(() => {
@@ -260,10 +280,16 @@ function PaletteContent({
 			return;
 		}
 		if (item.run) {
-			remember(item);
+			if (item.kind !== "start") remember(item);
 			onClose();
 			item.run();
 		}
+	};
+
+	const startFromText = () => {
+		if (!startInput) return;
+		onClose();
+		startInput.start.openDialog(startInput.text);
 	};
 
 	const cycleScope = (delta: number) => {
@@ -320,6 +346,11 @@ function PaletteContent({
 			cycleScope(event.shiftKey ? -1 : 1);
 			return;
 		}
+		if (mod && event.key === "Enter" && !event.altKey && !event.shiftKey) {
+			event.preventDefault();
+			if (!event.repeat) startFromText();
+			return;
+		}
 		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
 			event.preventDefault();
 			togglePreview();
@@ -344,7 +375,7 @@ function PaletteContent({
 				return;
 			case "Enter":
 				event.preventDefault();
-				activate(selected);
+				if (!event.repeat) activate(selected);
 				return;
 		}
 	};
@@ -453,6 +484,9 @@ function PaletteContent({
 					<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
 					<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
 					<Hint keys={["Tab"]} label={t("search.hint.scope")} />
+					{startInput ? (
+						<Hint keys={shortcutKeys({ key: "↵", mod: true })} label={t("search.hint.start")} />
+					) : null}
 					{hostState.pending ? (
 						<span
 							data-testid="search-host-pending"
@@ -481,7 +515,9 @@ function PaletteContent({
 					</Button>
 				</footer>
 				<p role="status" aria-live="polite" className="sr-only">
-					{t("search.palette.resultCount", { count: rows.length })}
+					{t("search.palette.resultCount", {
+						count: rows.filter((row) => row.item.kind !== "start").length,
+					})}
 					{hostState.pending ? ` ${t("search.palette.searching")}` : ""}
 					{hostStatus ? ` ${t(HOST_STATUS_LABELS[hostStatus])}` : ""}
 				</p>
@@ -509,6 +545,7 @@ function keepInputFocus(event: ReactMouseEvent): void {
 function enterLabel(item: PaletteItem | undefined): MessageKey {
 	if (!item) return "search.hint.open";
 	if (item.kind === "command") return "search.hint.run";
+	if (item.kind === "start") return "search.hint.start";
 	return "search.hint.open";
 }
 
