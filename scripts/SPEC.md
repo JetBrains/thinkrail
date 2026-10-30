@@ -17,7 +17,7 @@ Repository-wide development orchestration and conformance gates that do not belo
 
 - **Owns:** the multi-process development launcher; the on-demand provider sign-in smoke (`smoke:logins`); exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; the UI-text gate (`check:i18n`); declared-spec-surface to TypeScript-barrel conformance; the on-demand CI flake report (`ci:flakes`); and focused root contract tests that compose otherwise independent product implementations.
 - **Public surface:** the root `package.json` commands consumed by developers, Husky, and CI.
-- **Allowed deps:** Bun/Node, the developer's authenticated `gh` CLI (read-only, `ci:flakes` only), the TypeScript compiler API, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
+- **Allowed deps:** Bun/Node, the developer's authenticated `gh` CLI (read-only, `ci:flakes` only), the `tsrs` TypeScript 7 API (`tsrs/async`, `tsrs/ast`, `tsrs/ast/is`) for the spec-surface and `check:i18n` checks, `oxc-parser` for the syntax-only import scans of the boundary and binary-seam checks, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
 - **Forbidden:** product runtime logic, a second source of package or feature behavior, editing source as part of a check, or application-internal imports outside focused root contract tests. A root contract test may compose implementations but must not become the protocol source or a product dependency.
 
 `smoke:logins` boots a throwaway host in a temp HOME/data/pi-agent sandbox (no ambient credentials, real
@@ -58,11 +58,11 @@ passes in otherwise green jobs are not seen, because only failed jobs' logs are 
 
 `check:spec-surface` enrolls only valid specs tagged `public-surface-checked`. Enrollment is explicit so adding prose cannot silently turn enforcement off: an enrolled spec must retain a bare backticked identifier list and a discoverable TypeScript barrel, or the check fails. Unenrolled prose surfaces remain descriptive and are reported only by `--list-skipped`.
 
-The TypeScript compiler resolves the barrel's effective export names, including type-only and default exports and transitive re-exports; a CommonJS `export =` assignment is the module's singular `default` surface rather than the assigned value's synthetic members. An unresolved re-export is a violation rather than a silently incomplete surface. The declared and effective name sets must match in both directions. Filesystem-level tests exercise enrollment, resolution, and failure behavior through the same runner CI invokes.
+The TypeScript 7 checker, reached through `tsrs`'s API server, resolves the barrel's effective export names, including type-only and default exports and transitive re-exports; a CommonJS `export =` assignment is the module's singular `default` surface rather than the assigned value's synthetic members. An unresolved re-export is a violation rather than a silently incomplete surface. The declared and effective name sets must match in both directions. The check uses the async API because the sync client reads Node-internal pipe handles that Bun does not expose; one API process serves every compiler group and is closed before the check returns. Filesystem-level tests exercise enrollment, resolution, and failure behavior through the same runner CI invokes.
 
 `check:i18n` enforces [[architecture]] Decision 23 over `apps/web/src`, `packages/ui`, and extension `web/`
-halves (tests and generated files excluded). With the TypeScript AST it rejects literal UI text in four
-shapes: JSX text; text-bearing JSX attributes (`aria-label`, `title`, `placeholder`, `alt`, `label`,
+halves (tests and generated files excluded). With the TypeScript 7 AST (through `tsrs`) it rejects literal
+UI text in four shapes: JSX text; text-bearing JSX attributes (`aria-label`, `title`, `placeholder`, `alt`, `label`,
 `description`, `hint`, and `*Label`/`*Title`/`*Description`/… props), including literals reached through
 conditionals, `||`/`??`, `+`, and template parts; literal children inside `{…}`; prose in text-named object
 properties (`label`, `title`, `description`, `detail`, `hint`, `message`, `reason`, …); and literal
@@ -71,7 +71,7 @@ symbols, so `⌘K`, `·`, and counts pass; the bare brand `ThinkRail` is the one
 heuristic floor, not a proof: review still owns strings returned from plain functions. It also checks
 `packages/locales/en.json`: keys sorted, values non-empty, and every key (plural base for `_one`/`_other`)
 referenced as a string literal by some UI, desktop, or locales source, so removed UI leaves no orphaned
-translations. Finally it builds the web TypeScript program and fails on any **render-time read of the global
+translations. Finally, on the same `tsrs` API process, it builds the web TypeScript 7 program and fails on any **render-time read of the global
 translator** ([[module-locales]] § Render reads the translator as a value): a reference to `t`, `i18n`,
 `currentLocale` or `currentTranslator` from `@thinkrail/locales/react` evaluated in a render root — a
 component or hook body, a class `render()`, and what they run synchronously: `useMemo`/`useState`

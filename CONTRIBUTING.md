@@ -64,9 +64,13 @@ Run the fast gates before opening a PR (they also run as the husky pre-commit ho
 
 ```bash
 bun run lint        # biome
-bun run typecheck   # tsc across all packages
+bun run typecheck   # tsrs across all packages
 bun run test        # unit tests (root tooling + each package)
 ```
+
+`tsrs` has no Windows arm64 binary, so `bun run typecheck`, `bun run test` (root script tests load the
+`tsrs` API), `check:i18n`, `check:spec-surface` and the pre-commit hook (`.husky/pre-commit` runs
+typecheck) cannot run there.
 
 Every change that touches the app is verified by the end-to-end suite against the
 real UI. The no-agent gate builds once and automatically uses isolated parallel

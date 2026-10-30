@@ -63,6 +63,8 @@ binary.
   - *Lint caveat:* Biome parses only `.astro` frontmatter, so `noUnusedVariables`/`noUnusedImports`
     are disabled for `*.astro` in `biome.json` (template usage is invisible to it — every flag would
     be a false positive). `astro check` covers the templates instead.
+  - *TypeScript 6 is website-only:* `astro check` (`@astrojs/check`) peers on TypeScript 5 or 6, so this
+    module is the repo's only `typescript` consumer; every other package typechecks with `tsrs`.
 
 The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
 

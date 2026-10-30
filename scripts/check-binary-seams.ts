@@ -2,7 +2,7 @@
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
-import ts from "typescript";
+import { parseSync, Visitor } from "oxc-parser";
 
 const ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {
 	"pi-ai/dist/auth/oauth/load.js": {
@@ -52,29 +52,21 @@ function listJsFiles(dir: string): string[] {
 }
 
 function opaqueImportsIn(fileName: string, source: string): string[] {
-	const sourceFile = ts.createSourceFile(
-		fileName,
-		source,
-		ts.ScriptTarget.Latest,
-		false,
-		ts.ScriptKind.JS,
-	);
+	const { program, errors } = parseSync(fileName, source, { lang: "jsx" });
+	if (errors.length > 0) {
+		throw new Error(`cannot parse ${fileName}: ${errors.map((error) => error.message).join("; ")}`);
+	}
 	const found: string[] = [];
-	const visit = (node: ts.Node): void => {
-		if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-			const specifier = node.arguments[0];
+	new Visitor({
+		ImportExpression({ source: specifier }) {
 			const isConstant =
-				specifier !== undefined &&
-				(ts.isStringLiteral(specifier) || ts.isNoSubstitutionTemplateLiteral(specifier));
+				(specifier.type === "Literal" && typeof specifier.value === "string") ||
+				(specifier.type === "TemplateLiteral" && specifier.expressions.length === 0);
 			if (!isConstant) {
-				found.push(
-					specifier ? specifier.getText(sourceFile).replace(/\s+/g, " ").trim() : "<no argument>",
-				);
+				found.push(source.slice(specifier.start, specifier.end).replace(/\s+/g, " ").trim());
 			}
-		}
-		ts.forEachChild(node, visit);
-	};
-	visit(sourceFile);
+		},
+	}).visit(program);
 	return found.sort();
 }
 
@@ -113,7 +105,7 @@ for (const [name, root] of roots) {
 		}
 		const source = readFileSync(file, "utf8");
 		if (!/\bimport\s*\(/.test(source)) continue;
-		const imports = opaqueImportsIn(file, source);
+		const imports = opaqueImportsIn(id, source);
 		if (imports.length === 0) continue;
 		found.set(id, imports);
 	}

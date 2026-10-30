@@ -8,7 +8,7 @@
 		"dev": "electrobun dev",
 		"package:canary": "electrobun build --env=canary",
 		"package:stable": "electrobun build --env=stable",
-		"typecheck": "electrobun prepare && tsc --noEmit",
+		"typecheck": "electrobun prepare && tsrs --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
@@ -21,6 +21,6 @@
 		"@types/bun": "catalog:",
 		"electrobun": "2.0.5",
 		"resedit": "catalog:",
-		"typescript": "catalog:"
+		"tsrs": "catalog:"
 	}
 }
