@@ -1,5 +1,6 @@
 import { type SessionStateRecord, WS_CHANNELS } from "@thinkrail/contracts";
 import { connectSavedHost, type RemoteConnection } from "./deviceConnector";
+import type { DeviceWireClient } from "./deviceWireClient";
 import type { SavedHost } from "./hostRegistry";
 
 export interface RemoteSessionItem {
@@ -13,6 +14,8 @@ export interface RemoteSessionsController {
 	connect(host: SavedHost): Promise<void>;
 	/** Every tracked session across all connected hosts (for the mobile session list). */
 	items(): RemoteSessionItem[];
+	/** The wire client for a connected host — a session screen uses it to stream, send, and approve. */
+	clientFor(hostKey: string): DeviceWireClient | null;
 	subscribe(listener: () => void): () => void;
 	stop(): void;
 }
@@ -66,6 +69,9 @@ export function createRemoteSessions(
 				}
 			}
 			return all;
+		},
+		clientFor(hostKey) {
+			return hosts.get(hostKey)?.connection.client ?? null;
 		},
 		subscribe(listener) {
 			listeners.add(listener);

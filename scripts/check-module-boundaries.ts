@@ -57,6 +57,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		],
 	},
 	{ root: "apps/cli", allowed: ["packages/server", "packages/shared"] },
+	{ root: "apps/mobile", allowed: ["packages/contracts", "packages/remote-client"] },
 	{
 		root: "apps/desktop",
 		allowed: ["packages/server", "packages/shared", "packages/contracts", "packages/locales"],
