@@ -8,7 +8,7 @@ export function initializeThemes(): void {
 	const bundled = import.meta.glob("./bundled/*.theme.json", {
 		eager: true,
 		import: "default",
-	}) as Record<string, unknown>;
+	});
 
 	installThemeCatalog(buildThemeCatalog(bundled));
 	installCachedUserThemes();

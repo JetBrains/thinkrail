@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { PlanReviewResult } from "@thinkrail/contracts";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 
 export const REQUEST_REVIEW_TOOL_NAME = "request_review";
 
@@ -9,8 +9,6 @@ export const RequestReviewSchema = Type.Object({
 		description: "The plan item id (todo id) whose completed change set should be reviewed.",
 	}),
 });
-
-export type RequestReviewParams = Static<typeof RequestReviewSchema>;
 
 const DESCRIPTION = `Request an independent review of a completed plan step's change set. Spawns a review subagent that inspects the step's commits/files and returns a structured verdict — "approve" or "request_changes" with inline findings. Call this right after you mark a step done. Then do exactly what the tool result's next action says — it encodes the current review policy: it may tell you to fix the findings and request_review again, or to stop and report them to the user. The reviewer is read-only; it never edits your files.`;
 
@@ -51,7 +49,7 @@ export function createRequestReviewTool(): ToolDefinition<
 		promptGuidelines: PROMPT_GUIDELINES,
 		parameters: RequestReviewSchema,
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-			const { itemId } = params as RequestReviewParams;
+			const { itemId } = params;
 			const { result, text } = await handler(ctx.sessionManager.getSessionId(), itemId, signal);
 			return { content: [{ type: "text", text }], details: result };
 		},

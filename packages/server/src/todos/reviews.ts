@@ -75,7 +75,7 @@ function readFile(root: string, sessionId: string): ReviewsFile {
 				if (typeof at !== "string") continue;
 				const shas =
 					Array.isArray(entry?.shas) && entry.shas.every((s) => typeof s === "string")
-						? (entry.shas as string[])
+						? entry.shas
 						: undefined;
 				pending[id] = { at, ...(shas ? { shas } : {}) };
 			}

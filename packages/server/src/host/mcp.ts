@@ -157,7 +157,7 @@ function ownedSession(workspaceId: string, sessionId: string): void {
 function reloadLiveSessions(workspaceIds: readonly string[]): void {
 	const sessionIds = workspaceIds.flatMap((workspaceId) => liveSessionIdsOf(workspaceId));
 	void reconcileMcpSessions(sessionIds).catch((error) => {
-		log.warn("MCP config change was not applied to the open chats", error as Error);
+		log.warn("MCP config change was not applied to the open chats", error);
 	});
 }
 
