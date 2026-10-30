@@ -122,6 +122,13 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   `canAutoFix`. So `requestReviewTool`'s description/promptGuidelines must NOT hardcode “always fix and
   re-review” — they tell the worker to follow the tool result's stated next action, so a stronger
   system-level prompt can't override the configured stop.
+- **The static tool guidance scopes the call to steps with a change set.** `reviewableItem` refuses a
+  step with no `commit`/`change` artifact (`has no change set to review`), and a plan routinely holds
+  steps that change no files — running checks, opening a PR, replying to a comment. Guidance that said
+  "call it after every step you mark done" made the worker issue a call the host was certain to refuse
+  on each of those, surfacing a failed tool card every time. So the description and promptGuidelines
+  say to call it when the step changed files and to skip it otherwise; the refusal stays as the guard
+  for a mis-scoped call. Pinned by the guidance test in `agent/requestReviewTool.test.ts`.
 - **The worker-facing finding identity is the persisted comment, not the model's id.** `fileFinding`
   persists each finding as a new `rc_*` comment; the model's own ids (`f1`…) are transient. On the tool
   path the tool result *is* the delivery, so when the worker is asked to fix (`canAutoFix`), `recordVerdict`
