@@ -298,6 +298,14 @@
         "typebox": "*",
       },
     },
+    "packages/relay": {
+      "name": "@thinkrail/relay",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/resource-renderers": {
       "name": "@thinkrail/resource-renderers",
       "version": "0.0.0",
@@ -1307,6 +1315,8 @@
     "@thinkrail/pi-ask-user-question": ["@thinkrail/pi-ask-user-question@workspace:pi-extensions/ask-user-question"],
 
     "@thinkrail/pi-visualize": ["@thinkrail/pi-visualize@workspace:pi-extensions/visualize"],
+
+    "@thinkrail/relay": ["@thinkrail/relay@workspace:packages/relay"],
 
     "@thinkrail/resource-renderers": ["@thinkrail/resource-renderers@workspace:packages/resource-renderers"],
 

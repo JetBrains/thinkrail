@@ -23,6 +23,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: ["apps/cli", "packages/server", "packages/shared"],
 	},
 	{ root: "packages/contracts", allowed: [] },
+	{ root: "packages/relay", allowed: [] },
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
 	{ root: "packages/pi-delegation", allowed: [] },
 	{ root: "packages/pi-background-commands", allowed: [] },
