@@ -271,12 +271,13 @@ const status = (over: Partial<BranchStatus> = {}): BranchStatus => ({
 	...over,
 });
 
+const unpublished = (over: Partial<BranchStatus> = {}): BranchStatus => {
+	const { ahead: _ahead, behind: _behind, ...rest } = status({ published: false, ...over });
+	return rest;
+};
+
 test("v87: Remote and Pull request render for a review-free branch with the next action", () => {
-	const html = render(
-		worktree,
-		null,
-		status({ published: false, ahead: undefined, behind: undefined }),
-	);
+	const html = render(worktree, null, unpublished());
 	const ids = testids(html);
 	expect(ids).toContain("scope-remote-segment");
 	expect(ids).toContain("scope-review-segment");
@@ -308,17 +309,7 @@ test("v87: a diverged branch keeps its chips beside Sync; an open review keeps i
 });
 
 test("v87: without an origin the Remote says so and the PR segment only holds the merge stub", () => {
-	const html = render(
-		worktree,
-		null,
-		status({
-			hasOrigin: false,
-			provider: null,
-			published: false,
-			ahead: undefined,
-			behind: undefined,
-		}),
-	);
+	const html = render(worktree, null, unpublished({ hasOrigin: false, provider: null }));
 	expect(html).toMatch(/data-kind="noOrigin"/);
 	expect(html).toContain("No remote");
 	expect(testids(html)).toContain("scope-ship-review-menu");

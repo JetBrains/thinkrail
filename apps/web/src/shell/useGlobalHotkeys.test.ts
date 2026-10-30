@@ -86,7 +86,13 @@ describe("global hotkey routing", () => {
 		expect(
 			globalHotkeyCommand(
 				key("KeyJ", { shiftKey: true }),
-				{ projects: true, workspace: false, bottom: false, newWorkspace: false },
+				{
+					projects: true,
+					workspace: false,
+					bottom: false,
+					newWorkspace: false,
+					sessionSwitcher: false,
+				},
 				false,
 				"Linux",
 			),
