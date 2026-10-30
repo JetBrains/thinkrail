@@ -31,11 +31,15 @@ compiled artifact. The one way anything in the host destroys a user's file.
 
 ## Consumers
 
-Two features need "remove this file, recoverably", which is why this is a module of its own rather than
-a helper inside either of them:
+Three features need "remove this, recoverably", which is why this is a module of its own rather than
+a helper inside any of them:
 
 - `agent` — a chat's delete moves pi's transcript to the trash and rolls its tombstone back when that
-  fails (see [[submodule-server-agent]]).
+  fails, and deleting a chat without a project moves its delegated conversations' store there too (see
+  [[submodule-server-agent]]).
 - `changes` — a whole-file revert of an added/untracked file trashes the worktree file and records
   where, so the most likely destructive mistake in review stays recoverable even after the host's own
   undo receipt is gone (see [[submodule-server-changes]]).
+- `host` — deleting a chat without a project trashes the chat's whole folder after the agent trashed its
+  transcripts, so the files the agent wrote there survive a mistaken delete (see
+  [[submodule-server-host]]); `workspaces` itself never trashes, the host composes it.

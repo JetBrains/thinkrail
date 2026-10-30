@@ -167,7 +167,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   host dropped** (`diffBase` re-pointed back to the creation base, the last `skillOverrides` entry removed,
   or `subagentsOverride` returned to inherited),
   leaving the client labelling and keying reads off a value the host no longer has; a project never fetched or an id absent from its list is a **no-op** — the next
-  `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
+  `workspace.list` reconciles (**`replaceProjectMembership(projectId, rows)`** — the Chats container's
+  reconnect read — first removes every held row the list lacks through `applyWorkspaceRemoved`, then
+  installs the list); **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
   reaction (`removeWorkspace` drops the row + `clearWorkspaceState` drops its
   local view/attention/terminal maps and chat runtimes + recency drops the dead id,
   and **if it was this client's active workspace** → activate the most recently selected loaded workspace
@@ -198,7 +200,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   that document once; a missing or invalid document is represented by a Balanced frame with no workspace views. `clearWorkspaceTabs` removes the
   workspace view, attention, and associated local state when the workspace disappears. A page-lifetime
   `removedWorkspaceIds` tombstone rejects stale catalog/session/cache/workspace arrivals so an in-flight read
-  cannot recreate it.
+  cannot recreate it. No route enters a tombstoned workspace or a chat whose deletion did not finish
+  (`deletionPending`): `activateWorkspace`, `activateWorkspaceFromRoute`, `requestChatLocation`,
+  `requestHistoryOpen` and the removal fallback refuse them (`refusesEntry`), while a pending chat that is
+  already active stays active, its rows offering Retry.
 
   **Browser-local resource render state** is keyed by workspace + canonical resource id, never embedded in
   the frame. Loaded file/diff content and metadata, renderer choice, opaque renderer view state, diff layout,
@@ -780,7 +785,14 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
-  `selectContextProject`, the layout placement selectors (recursive center plus left/right/bottom auxiliary
+  `selectContextProject`, **`selectContextRepoProject`** (the repository new work is created in — the
+  context project unless it is the Chats container, else the selected or first repository; the dialog,
+  `Mod+N` and the palette read this one), the **chats without a project** selectors — `isChatWorkspace`,
+  `isChatsContainer`, `selectRepoProjects` (every repository listing and fallback, incl.
+  `reconcileProjectNavigation`'s project loss), `selectChatsContainer`, `selectChatWorkspaces` (newest
+  activity first), `selectChatWorkspaceTitle` (the host's `SessionStateRecord.title`, also the first
+  answer of `selectKnownChatTitle`), `selectChatWorkspaceFirstPrompt` (the conversation's
+  `selectChatFirstPrompt`, for the unnamed chat's label), `supportsProjectlessChats` — the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
   `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
   current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's

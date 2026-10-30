@@ -60,8 +60,7 @@ function describeRun(sessionId: string): Omit<RunProperties, "origin"> | null {
 	const workspace = getWorkspace(workspaceId);
 	const bucket = sessionProviderAnalytics(sessionId);
 	return {
-		workspace_kind:
-			workspace.kind === "default" || workspace.kind === "external" ? workspace.kind : "managed",
+		workspace_kind: workspace.kind ?? "managed",
 		provider: bucket.provider,
 		model: bucket.model,
 	};

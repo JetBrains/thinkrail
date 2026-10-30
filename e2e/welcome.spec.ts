@@ -35,7 +35,8 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	await expect(page.getByTestId("welcome-title")).toHaveText("ThinkRail");
 	await expect(page.getByTestId("onboarding-wizard")).toHaveCount(0);
 	await expect(page.getByTestId("welcome-cta")).toContainText("Start a new project");
-	await expect(page.getByTestId("welcome-action")).toHaveCount(1);
+	await expect(page.getByTestId("welcome-action")).toHaveCount(2);
+	await expect(page.getByTestId("welcome-action").nth(1)).toContainText("Chat without a project");
 
 	await page.getByTestId("welcome-action").filter({ hasText: "Open project" }).click();
 	await expect(page.getByTestId("menu-open-project")).toBeVisible();

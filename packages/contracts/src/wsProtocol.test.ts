@@ -14,6 +14,7 @@ import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
+	CHATS_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	completionDelivery,
@@ -257,10 +258,18 @@ test("client error reports are pinned to v90", () => {
 });
 
 test("host search and its previews are pinned to v99", () => {
-	expect(PROTOCOL_VERSION).toBe(99);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SEARCH_PROTOCOL_VERSION);
 	expect(SEARCH_PROTOCOL_VERSION).toBe(99);
 	expect(WS_METHODS.searchQuery).toBe("search.query");
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
+});
+
+test("chats without a project are pinned to v100", () => {
+	expect(PROTOCOL_VERSION).toBe(100);
+	expect(CHATS_PROTOCOL_VERSION).toBe(100);
+	expect(WS_METHODS.chatCreate).toBe("chat.create");
+	expect(WS_METHODS.chatDelete).toBe("chat.delete");
+	expect(WS_METHODS.chatInspect).toBe("chat.inspect");
 });
 
 test("project rename is pinned to v85", () => {

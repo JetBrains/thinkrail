@@ -13,7 +13,7 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Suspense, useMemo } from "react";
 import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
-import { useAppStore } from "../store";
+import { selectWorkspaceById, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
@@ -27,6 +27,9 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const t = useT();
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
+	const reviewable = useAppStore(
+		(state) => selectWorkspaceById(state, tab.workspaceId)?.kind !== "chat",
+	);
 	const reviewComments = useAppStore(
 		(state) => state.reviewsByWorkspace[tab.workspaceId]?.comments,
 	);
@@ -56,7 +59,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	const content = resourceContent(tab.content, tab.meta, () =>
 		resourceBytesUrl(tab.workspaceId, tab.path),
 	);
-	const reviews = [review.worktree];
+	const reviews = reviewable ? [review.worktree] : [];
 	const showToolbar = candidates.length >= 2 || fileHasDraft;
 	const saveViewState = (state: unknown) => {
 		const current = useAppStore
@@ -104,7 +107,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 						mobile={mobile}
 						resource={resource}
 						content={content}
-						review={review.worktree}
+						{...(reviewable ? { review: review.worktree } : {})}
 						onPlacedThreadIds={onPlacedThreadIds}
 						viewState={tab.viewState}
 						onViewState={saveViewState}

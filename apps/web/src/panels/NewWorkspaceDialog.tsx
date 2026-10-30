@@ -4,6 +4,7 @@ import {
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
 	type RemixiconComponentType as LucideIcon,
+	RiChat3Line,
 	RiSparkling2Line as Sparkles,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
@@ -38,6 +39,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import {
 	deriveProjectTrustNotice,
@@ -75,13 +77,21 @@ import {
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
 } from "@/prompt";
-import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
+import {
+	selectCatalogModel,
+	selectChatsContainer,
+	selectPickerModels,
+	selectRepoProjects,
+	toast,
+	useAppStore,
+} from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
+import { canStartProjectlessChat, startProjectlessChat } from "./chatActions";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
-type WorkspaceTarget = "worktree" | "default";
+type WorkspaceTarget = "worktree" | "default" | "chat";
 
 export function reconcileModel(
 	models: readonly WireModel[],
@@ -110,17 +120,26 @@ export function NewWorkspaceDialog({
 	onOpenChange,
 }: {
 	open: boolean;
-	projectId: string;
+	/** The repository new work starts in; `null` when none is open — the chat target is the only one left. */
+	projectId: string | null;
 	initialPrompt?: string;
 	promptNote?: string;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const t = useT();
 	const projects = useAppStore((s) => s.projects);
+	const repoProjects = useAppStore(useShallow(selectRepoProjects));
+	const chatsContainer = useAppStore(selectChatsContainer);
+	const canChat = useAppStore(canStartProjectlessChat);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 
-	const [selectedProjectId, setSelectedProjectId] = useState(projectId);
-	const [target, setTarget] = useState<WorkspaceTarget>("worktree");
+	const initialTarget: WorkspaceTarget = projectId === null ? "chat" : "worktree";
+	const [selectedProjectId, setSelectedProjectId] = useState(
+		projectId ?? repoProjects[0]?.id ?? chatsContainer?.id ?? "",
+	);
+	const [target, setTarget] = useState<WorkspaceTarget>(initialTarget);
+	const chat = target === "chat";
+	const scopeProjectId = chat && chatsContainer ? chatsContainer.id : selectedProjectId;
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [prompt, setPrompt] = useState("");
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
@@ -159,11 +178,11 @@ export function NewWorkspaceDialog({
 	const loadTemplate = useCallback(
 		(name: string) => {
 			const location: TemplateReadLocation = supportsProjectTemplatePreview
-				? { projectId: selectedProjectId }
+				? { projectId: scopeProjectId }
 				: {};
 			return getTransport().request("template.get", { ...location, name });
 		},
-		[selectedProjectId, supportsProjectTemplatePreview],
+		[scopeProjectId, supportsProjectTemplatePreview],
 	);
 	const applyTemplate = useCallback(
 		(template: ParsedTemplate) => {
@@ -175,7 +194,7 @@ export function NewWorkspaceDialog({
 	);
 	const { pending: templatePending, pick: pickTemplate } = useTemplateCommandPicker({
 		draft: prompt,
-		contextKey: `${selectedProjectId}:${supportsProjectTemplatePreview ? "project" : "global"}`,
+		contextKey: `${scopeProjectId}:${supportsProjectTemplatePreview ? "project" : "global"}`,
 		load: loadTemplate,
 		onApply: applyTemplate,
 	});
@@ -203,21 +222,31 @@ export function NewWorkspaceDialog({
 
 	useEffect(() => {
 		if (!open) return;
-		setSelectedProjectId(projectId);
+		const opened = useAppStore.getState();
+		setSelectedProjectId(
+			projectId ?? selectRepoProjects(opened)[0]?.id ?? selectChatsContainer(opened)?.id ?? "",
+		);
 		updatePromptDraft(initialPrompt ?? "", null);
-		setTarget("worktree");
+		setTarget(initialTarget);
 		setCreating(false);
 		attachedImages.reset();
 		hostDefaultAsked.current = false;
 		setExplicitPair(false);
-	}, [open, projectId, initialPrompt, updatePromptDraft, attachedImages.reset]);
+	}, [open, projectId, initialTarget, initialPrompt, updatePromptDraft, attachedImages.reset]);
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open || chat) return;
 		if (projects.some((p) => p.id === selectedProjectId)) return;
 		onOpenChange(false);
 		toast.info(i18n.t("panels.newWorkspace.projectClosed"));
-	}, [open, projects, selectedProjectId, onOpenChange]);
+	}, [open, chat, projects, selectedProjectId, onOpenChange]);
+
+	const chooseTarget = (next: WorkspaceTarget) => {
+		setTarget(next);
+		if (next === "chat" || repoProjects.some((p) => p.id === selectedProjectId)) return;
+		const first = repoProjects[0];
+		if (first) setSelectedProjectId(first.id);
+	};
 
 	useEffect(() => {
 		if (!open) return;
@@ -225,20 +254,20 @@ export function NewWorkspaceDialog({
 		setSkillCommands([]);
 		setTemplates([]);
 		void slashCommandCatalogOrEmpty(() =>
-			getTransport().request("skill.list", { projectId: selectedProjectId }),
+			getTransport().request("skill.list", { projectId: scopeProjectId }),
 		).then((commands) => {
 			if (!cancelled) setSkillCommands(commands);
 		});
 		return () => {
 			cancelled = true;
 		};
-	}, [open, selectedProjectId]);
+	}, [open, scopeProjectId]);
 
 	useEffect(() => {
 		if (!open || !slashActive) return;
 		let cancelled = false;
 		const location: TemplateReadLocation = supportsProjectTemplatePreview
-			? { projectId: selectedProjectId }
+			? { projectId: scopeProjectId }
 			: {};
 		getTransport()
 			.request("template.list", location)
@@ -251,9 +280,9 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, selectedProjectId, slashActive, supportsProjectTemplatePreview]);
+	}, [open, scopeProjectId, slashActive, supportsProjectTemplatePreview]);
 
-	const trustSummary = useProjectTrustSummary(selectedProjectId, open);
+	const trustSummary = useProjectTrustSummary(selectedProjectId, open && !chat);
 
 	const {
 		models: allModels,
@@ -355,7 +384,7 @@ export function NewWorkspaceDialog({
 		failed: branchesFailed,
 		refreshing,
 		refresh: refreshBranches,
-	} = useBranchList(open ? selectedProjectId : null, (list) => {
+	} = useBranchList(open && !chat ? selectedProjectId : null, (list) => {
 		setBaseRef(list.defaultBranch);
 		prefetchBase(list.defaultBranch);
 	});
@@ -366,6 +395,16 @@ export function NewWorkspaceDialog({
 		setCreating(true);
 		const text = finalizeTemplateSlotSession(prompt, slotSession).trim();
 		const attachments = attachedImages.images.map(({ name, content }) => ({ name, content }));
+		if (target === "chat") {
+			const started = await startProjectlessChat({
+				text,
+				images: attachments,
+				...(model && explicitPair ? { model: { model, thinkingLevel } } : {}),
+			});
+			setCreating(false);
+			if (started) onOpenChange(false);
+			return;
+		}
 		let workspace: Workspace;
 		if (target === "default") {
 			const def = await enterDefaultWorkspace(selectedProjectId);
@@ -453,7 +492,7 @@ export function NewWorkspaceDialog({
 	};
 
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
-	const trustNotice = deriveProjectTrustNotice(selectedProject, trustSummary);
+	const trustNotice = deriveProjectTrustNotice(chat ? undefined : selectedProject, trustSummary);
 	const trustEnables = trustNotice.kind === "untrusted" ? trustEnablesText(t, trustNotice) : null;
 	const isolated = target === "worktree";
 
@@ -481,14 +520,18 @@ export function NewWorkspaceDialog({
 			>
 				<DialogHeader>
 					<DialogTitle>
-						{isolated
-							? t("panels.newWorkspace.titleIsolated")
-							: t("panels.newWorkspace.titleDefault")}
+						{chat
+							? t("panels.newWorkspace.titleChat")
+							: isolated
+								? t("panels.newWorkspace.titleIsolated")
+								: t("panels.newWorkspace.titleDefault")}
 					</DialogTitle>
 					<DialogDescription>
-						{isolated
-							? t("panels.newWorkspace.descriptionIsolated")
-							: t("panels.newWorkspace.descriptionDefault")}
+						{chat
+							? t("panels.newWorkspace.descriptionChat")
+							: isolated
+								? t("panels.newWorkspace.descriptionIsolated")
+								: t("panels.newWorkspace.descriptionDefault")}
 					</DialogDescription>
 				</DialogHeader>
 
@@ -497,31 +540,47 @@ export function NewWorkspaceDialog({
 					className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
 				>
 					<legend className="sr-only">{t("panels.newWorkspace.targetLegend")}</legend>
-					<TargetOption
-						icon={GitBranch}
-						label={t("panels.newWorkspace.targetIsolated")}
-						name={targetGroupName}
-						active={isolated}
-						testid="ws-target-worktree"
-						onSelect={() => setTarget("worktree")}
-					/>
-					<TargetOption
-						icon={House}
-						label={t("panels.newWorkspace.targetDefault")}
-						name={targetGroupName}
-						active={!isolated}
-						testid="ws-target-default"
-						onSelect={() => setTarget("default")}
-					/>
+					{repoProjects.length > 0 ? (
+						<>
+							<TargetOption
+								icon={GitBranch}
+								label={t("panels.newWorkspace.targetIsolated")}
+								name={targetGroupName}
+								active={isolated}
+								testid="ws-target-worktree"
+								onSelect={() => chooseTarget("worktree")}
+							/>
+							<TargetOption
+								icon={House}
+								label={t("panels.newWorkspace.targetDefault")}
+								name={targetGroupName}
+								active={target === "default"}
+								testid="ws-target-default"
+								onSelect={() => chooseTarget("default")}
+							/>
+						</>
+					) : null}
+					{canChat ? (
+						<TargetOption
+							icon={RiChat3Line}
+							label={t("panels.newWorkspace.targetChat")}
+							name={targetGroupName}
+							active={chat}
+							testid="ws-target-chat"
+							onSelect={() => chooseTarget("chat")}
+						/>
+					) : null}
 				</fieldset>
 
 				<div className="flex flex-wrap items-center gap-8">
-					<ProjectPicker
-						projects={projects}
-						current={selectedProject?.name ?? t("panels.newWorkspace.projectFallback")}
-						container={dialogEl}
-						onSelect={setSelectedProjectId}
-					/>
+					{chat ? null : (
+						<ProjectPicker
+							projects={repoProjects}
+							current={selectedProject?.name ?? t("panels.newWorkspace.projectFallback")}
+							container={dialogEl}
+							onSelect={setSelectedProjectId}
+						/>
+					)}
 					{isolated ? (
 						<BranchPicker
 							branches={branches}
@@ -536,11 +595,13 @@ export function NewWorkspaceDialog({
 							onRefresh={refreshBranches}
 						/>
 					) : null}
-					<SkillsButton
-						onOpen={() => setManageSkills(true)}
-						testId="ws-manage-skills"
-						className="ml-auto"
-					/>
+					{chat ? null : (
+						<SkillsButton
+							onOpen={() => setManageSkills(true)}
+							testId="ws-manage-skills"
+							className="ml-auto"
+						/>
+					)}
 				</div>
 
 				{trustNotice.kind === "untrusted" ? (
@@ -708,7 +769,7 @@ export function NewWorkspaceDialog({
 					</Button>
 				</div>
 				<SkillsDialog
-					projectId={selectedProjectId}
+					projectId={scopeProjectId}
 					open={manageSkills}
 					onOpenChange={setManageSkills}
 				/>

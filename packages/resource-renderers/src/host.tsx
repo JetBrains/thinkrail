@@ -54,7 +54,7 @@ export interface ResourceFileReviewProps {
 	path: string;
 	kind: "inline" | "diff";
 	sessionId?: string | undefined;
-	children: (review: SurfaceReview) => ReactNode;
+	children: (review: SurfaceReview | undefined) => ReactNode;
 }
 
 export interface ResourceHost {

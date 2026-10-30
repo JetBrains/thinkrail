@@ -9,16 +9,49 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { useShallow } from "zustand/react/shallow";
+import { startProjectlessChat } from "../../panels/chatActions";
 import { useOpenProject } from "../../panels/useOpenProject";
-import { goToProjectHome } from "../../panels/workspaceActions";
-import { useAppStore } from "../../store";
+import { goToProjectHome, loadProjectWorkspaces } from "../../panels/workspaceActions";
+import {
+	isChatsContainer,
+	selectChatsContainer,
+	selectChatWorkspaces,
+	selectRepoProjects,
+	supportsProjectlessChats,
+	toast,
+	useAppStore,
+} from "../../store";
 import { projectInitial } from "./locationModel";
 import { PillChevron, pillClass, Segment } from "./Segment";
 
 export function ProjectSegment({ project, atHome }: { project: Project; atHome: boolean }) {
 	const t = useT();
-	const projects = useAppStore((s) => s.projects);
+	const projects = useAppStore(useShallow(selectRepoProjects));
+	const chatsContainer = useAppStore((s) =>
+		supportsProjectlessChats(s.protocolVersion) ? selectChatsContainer(s) : null,
+	);
+	const isChats = isChatsContainer(project);
+	const name = isChats ? t("shell.locationBar.chats") : project.name;
 	const { pickAndOpen, dialogs } = useOpenProject((opened) => goToProjectHome(opened.id));
+	const goToChats = async () => {
+		const state = useAppStore.getState();
+		const container = selectChatsContainer(state);
+		if (!container) return;
+		if (state.workspaces[container.id] === undefined) {
+			try {
+				await loadProjectWorkspaces(container.id);
+			} catch {
+				toast.error(t("panels.chats.loadFailed"));
+				return;
+			}
+		}
+		const newest = selectChatWorkspaces(useAppStore.getState()).find(
+			(chat) => chat.deletionPending !== true,
+		);
+		if (newest) useAppStore.getState().activateWorkspace(newest);
+		else void startProjectlessChat();
+	};
 	return (
 		<Segment
 			caption={t("shell.location.project.caption")}
@@ -28,22 +61,34 @@ export function ProjectSegment({ project, atHome }: { project: Project; atHome: 
 			<DropdownMenu>
 				<DropdownMenuTrigger
 					data-testid="scope-project"
-					aria-label={t("shell.location.project.label", { name: project.name })}
+					aria-label={t("shell.location.project.label", { name })}
 					className={pillClass}
 				>
 					<span
 						aria-hidden="true"
 						className="inline-flex size-16 shrink-0 items-center justify-center rounded-sm bg-control-bg-selected text-text-muted tr-text-caption"
 					>
-						{projectInitial(project.name)}
+						{projectInitial(name)}
 					</span>
 					<span data-testid="scope-project-name" className="truncate tr-title-section">
-						{project.name}
+						{name}
 					</span>
 					<PillChevron />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="start" data-testid="scope-project-menu">
 					<DropdownMenuLabel>{t("shell.location.project.menuTitle")}</DropdownMenuLabel>
+					{chatsContainer ? (
+						<DropdownMenuItem
+							data-testid="scope-project-chats"
+							data-active={isChats || undefined}
+							onSelect={() => void goToChats()}
+						>
+							<span className="flex w-14 shrink-0 justify-center">
+								{isChats ? <Check className="text-primary" /> : null}
+							</span>
+							<span className="truncate">{t("shell.locationBar.chats")}</span>
+						</DropdownMenuItem>
+					) : null}
 					{projects.map((candidate) => (
 						<DropdownMenuItem
 							key={candidate.id}
@@ -58,14 +103,16 @@ export function ProjectSegment({ project, atHome }: { project: Project; atHome: 
 						</DropdownMenuItem>
 					))}
 					<DropdownMenuSeparator />
-					<DropdownMenuItem
-						data-testid="scope-project-home"
-						disabled={atHome}
-						onSelect={() => goToProjectHome(project.id)}
-					>
-						<House />
-						{t("shell.location.project.home")}
-					</DropdownMenuItem>
+					{isChats ? null : (
+						<DropdownMenuItem
+							data-testid="scope-project-home"
+							disabled={atHome}
+							onSelect={() => goToProjectHome(project.id)}
+						>
+							<House />
+							{t("shell.location.project.home")}
+						</DropdownMenuItem>
+					)}
 					<DropdownMenuItem data-testid="scope-project-add" onSelect={() => void pickAndOpen()}>
 						<Plus />
 						{t("shell.location.project.add")}

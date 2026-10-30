@@ -239,7 +239,9 @@ function PreviewView(props: ResolvedProps & { file: ReadyFile }) {
 	);
 }
 
-function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: SurfaceReview }) {
+function ReviewedPreviewView(
+	props: ResolvedProps & { file: ReadyFile; review: SurfaceReview | undefined },
+) {
 	const { workspaceId, path, file, rendererId, onRendererId, review } = props;
 	const resource = useMemo(
 		() => describeResource(workspaceId, path, file.meta),
@@ -248,7 +250,7 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 	const { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds } =
 		useRendererSelection(resource, "view", rendererId);
 	const paths = useMemo(() => [path], [path]);
-	const reviews = useMemo(() => [review], [review]);
+	const reviews = useMemo(() => (review ? [review] : []), [review]);
 
 	return (
 		<PreviewFrame
@@ -275,7 +277,7 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 				mobile={mobile}
 				resource={resource}
 				content={file.content}
-				review={review}
+				{...(review ? { review } : {})}
 				onPlacedThreadIds={onPlacedThreadIds}
 				{...implementationViewState(props, implementationKey)}
 			/>
@@ -300,11 +302,15 @@ function PreviewDiff(props: ResolvedProps & DiffSides) {
 }
 
 function ReviewedPreviewDiff(
-	props: ResolvedProps & DiffSides & { after: SurfaceReview; prior: SurfaceReview },
+	props: ResolvedProps &
+		DiffSides & { after: SurfaceReview | undefined; prior: SurfaceReview | undefined },
 ) {
 	const { workspaceId, path, before, original, modified, rendererId, onRendererId, after, prior } =
 		props;
-	const review = useMemo(() => ({ worktree: after, base: prior }), [after, prior]);
+	const review = useMemo(
+		() => (after && prior ? { worktree: after, base: prior } : undefined),
+		[after, prior],
+	);
 	const descriptorMeta = useMemo(
 		() => diffResourceMeta(original.meta, modified.meta),
 		[original.meta, modified.meta],
@@ -320,7 +326,7 @@ function ReviewedPreviewDiff(
 	const { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds } =
 		useRendererSelection(resource, "diff", rendererId);
 	const paths = useMemo(() => [path, before], [path, before]);
-	const reviews = useMemo(() => [after, prior], [after, prior]);
+	const reviews = useMemo(() => (after && prior ? [after, prior] : []), [after, prior]);
 	const layout = mobile ? "unified" : (props.layout ?? "unified");
 	const { onLayout } = props;
 	const lineCount = useMemo(
@@ -373,7 +379,7 @@ function ReviewedPreviewDiff(
 				modified={modified.content}
 				layout={layout}
 				ignoreWhitespace={false}
-				review={review}
+				{...(review ? { review } : {})}
 				onPlacedThreadIds={onPlacedThreadIds}
 				lineCount={lineCount}
 				{...implementationViewState(props, implementationKey)}

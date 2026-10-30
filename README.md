@@ -55,6 +55,10 @@ create the tools it needs based on how you actually work.
   a preview pane on `⌘I` — runs the app's commands with their shortcuts shown, and jumps to a Settings
   section. Whatever you typed can also become work: `⌘↵` opens Create workspace with it as the prompt. With
   nothing typed it lists the chats waiting for you.
+- **Chats without a project.** Ask, plan or draft without a repository: a chat gets its own scratch
+  folder under **Chats** (files, terminal and plan work there; no branch, review or pull request), starts
+  from the Welcome screen, the Create dialog, the palette or the Chats section, and deletes to the Trash
+  as a whole.
 - **Specs as ground truth.** A connected graph of `SPEC.md` files lives beside the code; the agent reads,
   searches, and maintains it through dedicated `spec_*` tools, so intent survives the session. The
   read-only Specs tool renders the graph as a tree in the workbench.

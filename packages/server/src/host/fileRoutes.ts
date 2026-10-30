@@ -1,7 +1,7 @@
 import { statSync } from "node:fs";
 import { CONTENT_SNIFF_BYTES, classifyBytes, mimeFromPath, resolveWorktreeFile } from "../fs";
 import { readBlobSizeAtAsync, readBlobStreamAtAsync } from "../git";
-import { loadWorkspaces } from "../persistence";
+import { isChatWorkspace, loadWorkspaces } from "../persistence";
 
 export const FILES_PREFIX = "/files/";
 export const BLOB_PREFIX = "/blob/";
@@ -75,10 +75,9 @@ export async function serveBlob(pathname: string, signal?: AbortSignal): Promise
 	if (workspace === null || blob === null || relPath === null) return notFound();
 	if (!OID.test(blob.segment)) return notFound();
 	try {
-		const worktreePath = loadWorkspaces().find(
-			(candidate) => candidate.id === workspace.segment,
-		)?.worktreePath;
-		if (worktreePath === undefined) return notFound();
+		const record = loadWorkspaces().find((candidate) => candidate.id === workspace.segment);
+		if (record === undefined || isChatWorkspace(record)) return notFound();
+		const { worktreePath } = record;
 		resolveWorktreeFile(workspace.segment, relPath);
 		const size = await readBlobSizeAtAsync(worktreePath, blob.segment, relPath);
 		if (size === null) return notFound();

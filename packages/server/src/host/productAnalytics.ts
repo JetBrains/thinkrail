@@ -19,6 +19,7 @@ import {
 	setAdditionalAnalyticsEnabled,
 } from "../analytics";
 import { listProjects } from "../projects";
+import { isChatsContainer } from "../workspaces";
 
 type SetupState = Extract<AdditionalAnalyticsEvent, { name: "setup_state_observed" }>["params"];
 type SetupResult = Extract<AdditionalAnalyticsEvent, { name: "setup_action_finished" }>["params"];
@@ -164,7 +165,9 @@ export class SetupObservation {
 export const setupObservation = new SetupObservation();
 
 async function currentSetupState(): Promise<SetupState> {
-	const project_present = listProjects().length > 0 ? "yes" : "no";
+	const project_present = listProjects().some((project) => !isChatsContainer(project))
+		? "yes"
+		: "no";
 	try {
 		return await usePiRuntime((runtime, generation) => {
 			const modelsAvailable = settledAvailableModels(runtime).length > 0;

@@ -11,6 +11,8 @@ import type { Translator } from "@thinkrail/locales/react";
 import { chatLabel } from "../lib";
 import {
 	getSessionAttention,
+	isChatsContainer,
+	isChatWorkspace,
 	isDefaultWorkspace,
 	type SessionAttention,
 	type SwitcherSession,
@@ -84,6 +86,7 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 	const items: PaletteItem[] = [];
 	const projectNames = new Map(state.projects.map((project) => [project.id, project.name]));
 	for (const project of state.projects) {
+		if (isChatsContainer(project)) continue;
 		items.push({
 			id: `project:${project.id}`,
 			kind: "project",
@@ -113,6 +116,7 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 	const attentionByWorkspace = new Map<string, SessionAttention>();
 	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
 		const workspace = workspaceById.get(workspaceId);
+		if (workspace?.deletionPending === true) continue;
 		let attention: SessionAttention | undefined;
 		for (const record of Object.values(records)) {
 			const recordAttention = getSessionAttention(record.state);
@@ -124,12 +128,13 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			if (projectName === undefined) continue;
 			const label = chatLabel(t, knownTitle, firstPrompt);
 			const title = label.text;
-			const where = workspace
-				? t("search.item.inWorkspace", {
-						project: projectName,
-						workspace: workspaceName(t, workspace),
-					})
-				: projectName;
+			const where =
+				workspace && !isChatWorkspace(workspace)
+					? t("search.item.inWorkspace", {
+							project: projectName,
+							workspace: workspaceName(t, workspace),
+						})
+					: projectName;
 			items.push({
 				id: `chat:${record.sessionId}`,
 				kind: "chat",
@@ -163,6 +168,7 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 		if (attention) attentionByWorkspace.set(workspaceId, attention);
 	}
 	for (const workspace of workspaceById.values()) {
+		if (isChatWorkspace(workspace)) continue;
 		const projectName = projectNames.get(workspace.projectId) ?? "";
 		const review = workspace.review;
 		const attention = attentionByWorkspace.get(workspace.id);

@@ -381,7 +381,9 @@ re-opened transcripts provider-valid.
     returned result is not persisted ahead of attach-time repair. `disposeAllSessions` remains the synchronous
     emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
-    lookup the host's `set_title` handler keys on); `removeSession`/`disposeAllSessions`;
+    lookup the host's `set_title` handler keys on) and `getSessionAttribution(sessionId)` (the same, also for a
+    session still preparing — the extension-UI publisher's scope, since `session_start` runs before
+    registration); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: close session admission for
     the workspace before its first await, capture every registered parent, synchronously close its resource
     owners, and start parent abort/removal while concurrently draining preparations from the retired
@@ -728,20 +730,26 @@ re-opened transcripts provider-valid.
     owner, so already-running detached children finish and retain completion delivery; a disabled launch is still rejected immediately by the live
     predicate even before a streaming parent's tool set can be refreshed.
     The plan-review `request_review` tool follows the same live-toggle shape: it is always registered, but
-    `setAgentReviewEnabledResolver` (host-injected, global — no `agent` → settings edge) decides whether it
-    stays in a session's active set, and `refreshAgentReviewTool(workspaceId?)` applies a change idle-sync /
+    `setAgentReviewEnabledResolver` (host-injected, per workspace — no `agent` → settings edge; the host
+    answers the global setting, and `false` for a chat without a project) decides whether it stays in a
+    session's active set, and `refreshAgentReviewTool(workspaceId?)` applies a change idle-sync /
     streaming-deferred to `agent_settled`, exactly like the subagent tools. Because `setActiveToolsByName`
-    rebuilds the system prompt from active tools' guidelines, dropping the tool drops its guidance too. Only
+    rebuilds the system prompt from active tools' guidelines, dropping the tool drops its guidance too.
+    `setSpecsEnabledResolver` (host-injected, per workspace; `false` for a chat without a project) is the
+    same kind of gate for pi-spec-graph: such a workspace's sessions drop every `spec_*` tool from their
+    active set at registration and after a reload, a per-session inline extension deletes the spec rule's
+    prompt section after pi-spec-graph wrote it (inline extensions load after path and bundled ones), and
+    `childExtensionFactories(workspaceId)` leaves pi-spec-graph out of their delegated children. Only
     the tool is gated — the `startPlanReview` button path is a separate host seam. See `submodule-server-host-plan-review`.
     **Registry extensions** follow the same shape, keyed by extension name instead of workspace. A
     host-injected `setDisabledExtensionsResolver(() => ReadonlySet<string>)` (global — no `agent` →
     settings edge; a throwing resolver means nothing disabled) is read by `buildResourceLoader` at **every
     loader reload** (snapshotted beside project trust), so the gated registry factories skip a disabled
     extension and `extensionsOverride` omits its `<inline:…>` entry — new parents never load it — and by
-    `childExtensionFactories()` when a hidden child's loader runs. `refreshExtensionTools()` updates live
-    sessions: tools whose `sourceInfo.path` belongs to a disabled registry extension leave the active set
-    (remembered per entry so re-enabling restores exactly the withheld tools, never ones that were inactive
-    by default) idle-sync / streaming-deferred to `agent_settled`, latest policy wins, and
+    `childExtensionFactories(workspaceId)` when a hidden child's loader runs. `refreshExtensionTools()`
+    updates live sessions: tools whose `sourceInfo.path` belongs to a disabled registry extension leave
+    the active set (remembered per entry so re-enabling restores exactly the withheld tools, never ones
+    that were inactive by default) idle-sync / streaming-deferred to `agent_settled`, latest policy wins, and
     `setActiveToolsByName` drops their guidance with them. Hooks of a disabled extension keep running in an
     open session until its next resource reload — pi cannot unload an extension, and reloading on every
     disable would bust the prompt cache. Two cases do reload, gated through `requestSessionReload`: an
@@ -988,7 +996,7 @@ re-opened transcripts provider-valid.
   `describeToolResponse`/`buildToolResponseMessage`/`awaitingToolCallId`); normalized-state operations
   (`listSessionStates`/`acknowledgeCompletion`/`markWorkspaceUnread`/`markWorkspaceRead`/`nudgeSession` +
   publisher/project seams);
-  `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript` + `trashWorkspaceDelegation`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
@@ -1097,7 +1105,14 @@ length limit, resolves the session strictly inside the supplied workspace/cwd, a
 normalized title is already current. A live session writes through `AgentSession.setSessionName`; a disk-only
 session opens its exact transcript with `SessionManager.open(...).appendSessionInfo(...)` without attaching an
 agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
-`SessionSummary.title` remains the hydration projection.
+`SessionSummary.title` remains the hydration projection. Every `pi.event` publication hands the
+host its workspace beside the payload (`setSessionPublisher`'s second argument, never on the wire), so a
+detached session's event is attributable without a live entry to look it up by. The title is also **exposed, not copied, on the
+state record**: `SessionStateRecord.title` carries pi's current session name (live entries from
+`sessionName`, disk records from the transcript header), the publication fingerprint includes it so a
+title-only change republishes `session.state`, and the disk-only rename path publishes a fresh record
+itself — the Chats rows, the topbar and the palette read titles from there, with no per-workspace
+`session.list` backfill needed for a host of this protocol.
 
 The guarded write remains authoritative across the async race. `onlyIfUnnamed` performs the check immediately
 beside the append and is the compare-and-set the `set_title` handler uses (its `false` return is how the
@@ -1178,7 +1193,15 @@ workspace archive close command admission and signal command/child work before a
 under the existing host shutdown budget. A per-session teardown tombstone prevents a persisted parent
 from reattaching until its previous resource cascade settles. Workspace archive closes a generation and
 awaits in-flight parent preparation before removing delegation/transcript storage, so stale preparation
-cannot register after teardown. Resource closure runs for every captured workspace parent before
+cannot register after teardown. That barrier is public on its own as **`closeWorkspaceSessions(workspaceId,
+teardown)`**: generation bump and closed admission, drained preparations, stopped and disposed live
+sessions and settled child cascades, then `teardown` before admission reopens. Archive's
+`removeWorkspaceSessions` runs its permanent purge inside it; deleting a chat without a project runs its
+Trash moves inside it ([[submodule-server-host]]), so no session can start in a folder being trashed and
+the transcripts are listed only once nothing can still write one. Its delegated conversations go with it
+through **`trashWorkspaceDelegation(workspaceId)`** — the recoverable twin of archive's
+`removeWorkspaceDelegation` (`rmSync`): after the child cascades settled, the workspace's delegation store
+moves to the Trash, and only then is its delegation service released, so a failed move keeps both for Retry. Resource closure runs for every captured workspace parent before
 any parent abort is awaited; individual removal likewise signals resources before waiting for the main turn.
 Streaming destructive removal reuses the manager's queue-draining Stop path, discarding the drained
 input while retaining the same bounded accepted-answer persistence grace before the parent is disposed.

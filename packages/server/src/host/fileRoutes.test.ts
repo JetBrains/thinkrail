@@ -107,6 +107,37 @@ test("/blob 404s on malformed locations, absent blobs, and tree paths", async ()
 	expect((await serveBlob("/blob/w1/")).status).toBe(404);
 });
 
+test("/blob refuses a chat without a project before any git, while /files still serves its folder", async () => {
+	writeFileSync(
+		join(dataDir, "chats.json"),
+		JSON.stringify({
+			version: 1,
+			container: {
+				id: "c",
+				name: "Chats",
+				path: join(dataDir, "chats"),
+				slug: "chats",
+				lastOpened: 1,
+				kind: "chats",
+			},
+			chats: [
+				{
+					id: "chat1",
+					projectId: "c",
+					kind: "chat",
+					name: "Chat",
+					branch: "",
+					worktreePath: repo,
+					baseBranch: "",
+				},
+			],
+		}),
+	);
+	expect((await serveBlob(`/blob/w1/${head}/notes.md`)).status).toBe(200);
+	expect((await serveBlob(`/blob/chat1/${head}/notes.md`)).status).toBe(404);
+	expect((await serveWorktreeFile("/files/chat1/notes.md")).status).toBe(200);
+});
+
 test("/files streams the worktree's current bytes with sniffed headers and never caches them", async () => {
 	writeFileSync(join(repo, "notes.md"), "# edited\n");
 	const response = await serveWorktreeFile("/files/w1/notes.md");

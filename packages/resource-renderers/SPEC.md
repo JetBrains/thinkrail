@@ -97,7 +97,9 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   content and live refresh (`null` paths mean "anything may have changed": a truncated batch or a new
   connection, whose missed pushes are never replayed). A read may come back without `meta` from a host that
   predates resource metadata; the preview shows it as provisional text, exactly as the file and diff panes do.
-- `FileReview` (a render-prop component: `{ workspaceId, path, kind, sessionId?, children(review) }`) and
+- `FileReview` (a render-prop component: `{ workspaceId, path, kind, sessionId?, children(review) }`, where
+  `review` is `undefined` when the host keeps no review for that file — no threads, no commenting, and the
+  preview renders without both) and
   `ReviewSend` — the host's review surface and Send review control; the optional session routes sends. The
   seam is a component, not a hook on the host object: passing hooks around as values breaks React's rules and
   made the React Compiler bail out of the preview; a before/after nests two `FileReview`s.

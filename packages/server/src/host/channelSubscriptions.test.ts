@@ -15,7 +15,9 @@ async function sourceFiles(): Promise<string[]> {
 test("every channel the host broadcasts is one every socket subscribes to at open", async () => {
 	const published = new Set<string>();
 	for (const file of await sourceFiles()) {
-		for (const match of readFileSync(file, "utf8").matchAll(/\.publish\(\s*WS_CHANNELS\.(\w+)/g)) {
+		for (const match of readFileSync(file, "utf8").matchAll(
+			/(?:\.publish|publishScoped)\(\s*WS_CHANNELS\.(\w+)/g,
+		)) {
 			published.add(match[1] ?? "");
 		}
 	}

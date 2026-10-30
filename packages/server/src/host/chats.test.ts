@@ -1,0 +1,687 @@
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
+import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { ChatCreateResult, Project, Workspace, WsResult } from "@thinkrail/contracts";
+import { CHATS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	configurePiRuntime,
+	disposeAllSessions,
+	hasSession,
+	initializeSessionStates,
+	listSessions,
+	promptSession,
+	setSessionManagerFactory,
+	settleSessionsForShutdown,
+} from "../agent";
+import { loadChats, resetChatsStoreForTests } from "../persistence";
+import { openProject } from "../projects";
+import { getConfig, resetConfigCache } from "../settings";
+import { setTrashImplementationForTests } from "../trash";
+import { stopAllWatches } from "../watch";
+import {
+	chatsRoot,
+	createChatRecord,
+	ensureChatsContainer,
+	getChatWorkspace,
+	resetChatIdCache,
+} from "../workspaces";
+import { inspectChat } from "./chats";
+import { applyGitCeiling } from "./gitCeiling";
+import { handleRequest } from "./handlers";
+
+const CTX = { clientKey: "chats-test" };
+const OLD_CLIENT = { clientKey: "old-client", protocolVersion: CHATS_PROTOCOL_VERSION - 1 };
+const NEW_CLIENT = { clientKey: "new-client", protocolVersion: CHATS_PROTOCOL_VERSION };
+
+const model = {
+	id: "chats-model",
+	name: "chats-model",
+	reasoning: false,
+	input: ["text"] as ("text" | "image")[],
+	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+	contextWindow: 100_000,
+	maxTokens: 4096,
+};
+const thinker = { ...model, id: "chats-thinker", name: "chats-thinker", reasoning: true };
+const faux = createFauxCore({
+	provider: "chats",
+	api: "chats",
+	models: [model, thinker],
+	tokensPerSecond: 10000,
+});
+const saved = {
+	agent: process.env.PI_CODING_AGENT_DIR,
+	data: process.env.THINKRAIL_DATA_DIR,
+	offline: process.env.PI_OFFLINE,
+	ceiling: process.env.GIT_CEILING_DIRECTORIES,
+};
+const root = realpathSync.native(mkdtempSync(join(tmpdir(), "trpi-chats-host-")));
+const trashed: string[] = [];
+const recordTrash = async (input: string | readonly string[]) => {
+	for (const path of typeof input === "string" ? [input] : input) {
+		trashed.push(path);
+		rmSync(path, { recursive: true, force: true });
+	}
+};
+const gitSpawns: { argv: string[]; cwd: string | undefined }[] = [];
+const realSpawn = Bun.spawn;
+const realSpawnSync = Bun.spawnSync;
+
+function git(cwd: string, ...args: string[]): { ok: boolean; out: string } {
+	const result = realSpawnSync(["git", "-C", cwd, ...args], {
+		stdout: "pipe",
+		stderr: "pipe",
+		env: { ...process.env },
+	});
+	return { ok: result.success, out: new TextDecoder().decode(result.stdout).trim() };
+}
+
+function gitRepo(path: string): string {
+	mkdirSync(path, { recursive: true });
+	for (const args of [
+		["init", "-b", "main"],
+		["config", "user.email", "t@thinkrail.test"],
+		["config", "user.name", "test"],
+		["config", "commit.gpgsign", "false"],
+	]) {
+		if (!git(path, ...args).ok) throw new Error(`git ${args.join(" ")} failed`);
+	}
+	writeFileSync(join(path, "README.md"), "# repo\n");
+	git(path, "add", "-A");
+	git(path, "commit", "-m", "init");
+	return path;
+}
+
+function recordGitSpawns(): void {
+	const record = (argv: unknown, options: unknown) => {
+		const command = Array.isArray(argv) ? argv.map(String) : [];
+		if (command[0] === "git") {
+			const cwd = (options as { cwd?: string } | undefined)?.cwd;
+			gitSpawns.push({ argv: command, cwd });
+		}
+	};
+	(Bun as { spawn: typeof Bun.spawn }).spawn = ((argv: unknown, options?: unknown) => {
+		record(argv, options);
+		return (realSpawn as (a: unknown, o?: unknown) => ReturnType<typeof Bun.spawn>)(argv, options);
+	}) as typeof Bun.spawn;
+	(Bun as { spawnSync: typeof Bun.spawnSync }).spawnSync = ((argv: unknown, options?: unknown) => {
+		record(argv, options);
+		return (realSpawnSync as (a: unknown, o?: unknown) => ReturnType<typeof Bun.spawnSync>)(
+			argv,
+			options,
+		);
+	}) as typeof Bun.spawnSync;
+}
+
+const dataDir = join(root, "enclosing-repo", "data");
+
+beforeAll(async () => {
+	gitRepo(join(root, "enclosing-repo"));
+	mkdirSync(dataDir, { recursive: true });
+	process.env.PI_CODING_AGENT_DIR = join(root, "agent");
+	process.env.THINKRAIL_DATA_DIR = dataDir;
+	process.env.PI_OFFLINE = "1";
+	delete process.env.GIT_CEILING_DIRECTORIES;
+	resetConfigCache();
+	resetChatIdCache();
+	const runtime = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	runtime.registerProvider("chats", {
+		api: faux.api,
+		apiKey: "test",
+		baseUrl: "http://faux.local",
+		streamSimple: faux.streamSimple,
+		models: [
+			{ ...model, api: faux.api },
+			{ ...thinker, api: faux.api },
+		],
+	});
+	configurePiRuntime(runtime);
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	await initializeSessionStates([]);
+	setTrashImplementationForTests(recordTrash);
+	recordGitSpawns();
+});
+
+beforeEach(() => {
+	gitSpawns.length = 0;
+});
+
+afterAll(async () => {
+	(Bun as { spawn: typeof Bun.spawn }).spawn = realSpawn;
+	(Bun as { spawnSync: typeof Bun.spawnSync }).spawnSync = realSpawnSync;
+	setTrashImplementationForTests(undefined);
+	stopAllWatches();
+	await settleSessionsForShutdown();
+	disposeAllSessions();
+	configurePiRuntime(null);
+	resetChatIdCache();
+	for (const [key, value] of [
+		["PI_CODING_AGENT_DIR", saved.agent],
+		["THINKRAIL_DATA_DIR", saved.data],
+		["PI_OFFLINE", saved.offline],
+		["GIT_CEILING_DIRECTORIES", saved.ceiling],
+	] as const) {
+		if (value === undefined) delete process.env[key];
+		else process.env[key] = value;
+	}
+	rmSync(root, { recursive: true, force: true });
+});
+
+function deferred(): { promise: Promise<void>; resolve(): void } {
+	let resolve = () => {};
+	const promise = new Promise<void>((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
+
+/** Holds every session preparation inside pi's extension binding until released: a first session still starting. */
+function holdSessionPreparations(): {
+	entered: Promise<void>;
+	release(): void;
+	sessionIds: string[];
+	restore(): void;
+} {
+	const original = AgentSession.prototype.bindExtensions;
+	const entered = deferred();
+	const release = deferred();
+	const sessionIds: string[] = [];
+	AgentSession.prototype.bindExtensions = async function (bindings) {
+		await original.call(this, bindings);
+		sessionIds.push(this.sessionId);
+		entered.resolve();
+		await release.promise;
+	};
+	return {
+		entered: entered.promise,
+		release: release.resolve,
+		sessionIds,
+		restore: () => {
+			release.resolve();
+			AgentSession.prototype.bindExtensions = original;
+		},
+	};
+}
+
+function newChatId(known: ReadonlySet<string>): string {
+	const chat = loadChats().chats.find((candidate) => !known.has(candidate.id));
+	if (!chat) throw new Error("no new chat record");
+	return chat.id;
+}
+
+function gitUnderChats(): typeof gitSpawns {
+	return gitSpawns.filter(
+		(spawn) =>
+			spawn.cwd?.startsWith(chatsRoot()) || spawn.argv.some((arg) => arg.startsWith(chatsRoot())),
+	);
+}
+
+test("the container is found or created by kind, and the ceiling keeps git from walking out of a chat folder", () => {
+	applyGitCeiling();
+	const container = ensureChatsContainer();
+	expect(container).toMatchObject({ kind: "chats", path: chatsRoot(), trusted: false });
+	expect(ensureChatsContainer().id).toBe(container.id);
+	expect(loadChats().container?.id).toBe(container.id);
+	expect(existsSync(chatsRoot())).toBe(true);
+
+	const nested = join(chatsRoot(), "probe");
+	mkdirSync(nested, { recursive: true });
+	expect(git(join(root, "enclosing-repo"), "rev-parse", "--show-toplevel").ok).toBe(true);
+	expect(git(nested, "rev-parse", "--show-toplevel").ok).toBe(false);
+	rmSync(nested, { recursive: true, force: true });
+});
+
+test("a chat is created with its folder, record and one session, listed without git, and refused every repository door", async () => {
+	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
+	const { workspace } = created;
+	expect(workspace).toMatchObject({ kind: "chat", name: "Chat", branch: "", baseBranch: "" });
+	expect(workspace.worktreePath.startsWith(chatsRoot())).toBe(true);
+	expect(/\/\d{4}-\d{2}-\d{2}-[0-9a-f]{6}$/.test(workspace.worktreePath)).toBe(true);
+	expect(existsSync(workspace.worktreePath)).toBe(true);
+	expect(created.sessionId).toBeTruthy();
+	expect(loadChats().chats.map((chat) => chat.id)).toEqual([workspace.id]);
+	expect(JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[]).toEqual(
+		[],
+	);
+
+	const rows = (await handleRequest(
+		"workspace.list",
+		{ projectId: workspace.projectId },
+		CTX,
+	)) as Workspace[];
+	expect(rows.map((row) => row.id)).toEqual([workspace.id]);
+	expect(rows[0]?.diffStats).toBeUndefined();
+
+	await expect(handleRequest("session.create", { workspaceId: workspace.id }, CTX)).rejects.toThrow(
+		"holds one conversation",
+	);
+	await expect(handleRequest("workspace.remove", { id: workspace.id }, CTX)).rejects.toThrow(
+		"cannot be removed here",
+	);
+	await expect(
+		handleRequest("workspace.rename", { id: workspace.id, name: "Named" }, CTX),
+	).rejects.toThrow("cannot be renamed");
+	await expect(handleRequest("workspace.settle", { id: workspace.id }, CTX)).rejects.toThrow(
+		"cannot be settled",
+	);
+	await expect(
+		handleRequest("workspace.setDiffBase", { id: workspace.id, ref: "main" }, CTX),
+	).rejects.toThrow("asked about git");
+	await expect(handleRequest("git.status", { workspaceId: workspace.id }, CTX)).rejects.toThrow(
+		"asked about git",
+	);
+	await expect(
+		handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).rejects.toThrow("branch status");
+	for (const [method, params] of [
+		["todo.startReview", { workspaceId: workspace.id, sessionId: created.sessionId, id: "t1" }],
+		["todo.reviewAll", { workspaceId: workspace.id, sessionId: created.sessionId }],
+		["todo.review", { workspaceId: workspace.id, sessionId: created.sessionId, id: "t1" }],
+		[
+			"todo.requestFix",
+			{ workspaceId: workspace.id, sessionId: created.sessionId, id: "t1", feedback: "x" },
+		],
+		["spec.graph", { workspaceId: workspace.id }],
+	] as const) {
+		await expect(handleRequest(method, params, CTX)).rejects.toMatchObject({
+			code: "CHAT_WORKSPACE",
+		});
+	}
+	writeFileSync(join(workspace.worktreePath, "notes.md"), "notes\n");
+	const listed = (await handleRequest(
+		"fs.readDir",
+		{ workspaceId: workspace.id, path: "" },
+		CTX,
+	)) as WsResult<"fs.readDir">;
+	expect(listed.map((node) => node.path)).toContain("notes.md");
+	await expect(
+		handleRequest(
+			"session.delete",
+			{ workspaceId: workspace.id, sessionId: created.sessionId },
+			CTX,
+		),
+	).rejects.toThrow("delete the chat");
+	for (const [method, params] of [
+		["project.close", { id: workspace.projectId }],
+		["project.rename", { id: workspace.projectId, name: "Mine" }],
+		["project.setTrust", { id: workspace.projectId, trusted: true }],
+		["workspace.create", { projectId: workspace.projectId }],
+		["workspace.listExisting", { projectId: workspace.projectId }],
+		["git.listBranches", { projectId: workspace.projectId }],
+	] as const) {
+		await expect(handleRequest(method, params, CTX)).rejects.toThrow("not a repository");
+	}
+	await expect(
+		handleRequest("project.open", { path: workspace.worktreePath }, CTX),
+	).rejects.toThrow("cannot be opened as a project");
+	await expect(
+		handleRequest("project.init", { path: workspace.worktreePath }, CTX),
+	).rejects.toThrow("cannot be opened as a project");
+	await expect(
+		handleRequest("project.create", { parentPath: workspace.worktreePath, name: "nested" }, CTX),
+	).rejects.toThrow("cannot be opened as a project");
+	expect(existsSync(join(workspace.worktreePath, "nested"))).toBe(false);
+	expect(gitUnderChats()).toEqual([]);
+
+	faux.setResponses([fauxAssistantMessage("noted")]);
+	await promptSession(created.sessionId, "remember this");
+	await handleRequest("chat.delete", { workspaceId: workspace.id }, CTX);
+	expect(existsSync(workspace.worktreePath)).toBe(false);
+	expect(trashed.some((path) => path === workspace.worktreePath)).toBe(true);
+	expect(trashed.some((path) => path.endsWith(`_${created.sessionId}.jsonl`))).toBe(true);
+	expect(loadChats().chats).toEqual([]);
+	expect(gitUnderChats()).toEqual([]);
+}, 30_000);
+
+test("an older client never reads the container, its chats or their session states", async () => {
+	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
+	const { workspace } = created;
+	faux.setResponses([fauxAssistantMessage("hello")]);
+	await promptSession(created.sessionId, "say hello");
+	try {
+		const newProjects = (await handleRequest("project.list", {}, NEW_CLIENT)) as Project[];
+		const oldProjects = (await handleRequest("project.list", {}, OLD_CLIENT)) as Project[];
+		expect(newProjects.some((project) => project.kind === "chats")).toBe(true);
+		expect(oldProjects.some((project) => project.kind === "chats")).toBe(false);
+
+		const newStates = (await handleRequest("session.stateList", {}, NEW_CLIENT)) as {
+			workspaceId: string;
+		}[];
+		const oldStates = (await handleRequest("session.stateList", {}, OLD_CLIENT)) as {
+			workspaceId: string;
+		}[];
+		expect(newStates.some((record) => record.workspaceId === workspace.id)).toBe(true);
+		expect(oldStates.some((record) => record.workspaceId === workspace.id)).toBe(false);
+
+		const list = { projectId: workspace.projectId };
+		expect(
+			((await handleRequest("workspace.list", list, NEW_CLIENT)) as Workspace[]).map(
+				(row) => row.id,
+			),
+		).toContain(workspace.id);
+		expect(await handleRequest("workspace.list", list, OLD_CLIENT)).toEqual([]);
+		expect(
+			(
+				(await handleRequest(
+					"session.list",
+					{ workspaceId: workspace.id },
+					NEW_CLIENT,
+				)) as WsResult<"session.list">
+			).map((summary) => summary.sessionId),
+		).toEqual([created.sessionId]);
+		await expect(
+			handleRequest("session.list", { workspaceId: workspace.id }, OLD_CLIENT),
+		).rejects.toThrow("Unknown workspace");
+
+		const search = (seq: number, ctx: typeof OLD_CLIENT) =>
+			handleRequest(
+				"search.query",
+				{
+					seq,
+					query: "notes",
+					kinds: ["file"],
+					context: { projectId: workspace.projectId, workspaceId: workspace.id },
+				},
+				ctx,
+			) as Promise<WsResult<"search.query">>;
+		expect((await search(1, OLD_CLIENT)).groups[0]).toMatchObject({ state: "ready", hits: [] });
+		expect((await search(1, NEW_CLIENT)).groups[0]?.state).toBe("indexing");
+	} finally {
+		await handleRequest("chat.delete", { workspaceId: workspace.id }, CTX);
+	}
+}, 30_000);
+
+test("the Chats root is reserved at every project door, also through an alias, before any side effect", async () => {
+	const repo = gitRepo(join(root, "reserved-repo"));
+	const project = openProject(repo);
+	const worktree = join(chatsRoot(), "registered-worktree");
+	expect(git(repo, "worktree", "add", "-b", "stray", worktree).ok).toBe(true);
+	const alias = join(root, "chats-alias");
+	symlinkSync(chatsRoot(), alias);
+	const touching = () =>
+		gitSpawns.filter((spawn) =>
+			[spawn.cwd ?? "", ...spawn.argv].some(
+				(arg) => arg.startsWith(chatsRoot()) || arg.startsWith(alias),
+			),
+		);
+	try {
+		for (const [method, params] of [
+			["project.inspect", { path: join(alias, "not-yet") }],
+			["project.open", { path: alias }],
+			["project.init", { path: join(alias, "not-yet") }],
+			["project.create", { parentPath: alias, name: "made" }],
+			["project.cloneDestination", { parentPath: alias, name: "cloned" }],
+			[
+				"project.clone",
+				{ url: pathToFileURL(repo).href, parentPath: alias, name: "cloned", operationId: "op-1" },
+			],
+			[
+				"workspace.openExisting",
+				{ projectId: project.id, path: join(alias, "registered-worktree") },
+			],
+		] as const) {
+			await expect(handleRequest(method, params, CTX)).rejects.toMatchObject({
+				code: "CHATS_CONTAINER",
+			});
+		}
+		expect(existsSync(join(chatsRoot(), "made"))).toBe(false);
+		expect(existsSync(join(chatsRoot(), "cloned"))).toBe(false);
+		expect(existsSync(join(chatsRoot(), "not-yet"))).toBe(false);
+		expect(touching()).toEqual([]);
+		const offered = (await handleRequest(
+			"workspace.listExisting",
+			{ projectId: project.id },
+			CTX,
+		)) as WsResult<"workspace.listExisting">;
+		expect(offered.map((candidate) => candidate.path)).not.toContain(worktree);
+		expect(
+			((await handleRequest("project.inspect", { path: repo }, CTX)) as { kind: string }).kind,
+		).toBe("repo");
+	} finally {
+		rmSync(alias, { force: true });
+		git(repo, "worktree", "remove", "--force", worktree);
+	}
+}, 30_000);
+
+test("a chat whose session never started gets exactly one through session.create, while a repository takes many", async () => {
+	const repo = gitRepo(join(root, "repo"));
+	const project = openProject(repo);
+	const rows = (await handleRequest(
+		"workspace.list",
+		{ projectId: project.id },
+		CTX,
+	)) as Workspace[];
+	const defaultId = rows[0]?.id ?? "";
+	expect(rows[0]?.kind).toBe("default");
+	const first = (await handleRequest(
+		"session.create",
+		{ workspaceId: defaultId },
+		CTX,
+	)) as WsResult<"session.create">;
+	const second = (await handleRequest(
+		"session.create",
+		{ workspaceId: defaultId },
+		CTX,
+	)) as WsResult<"session.create">;
+	expect(second.sessionId).not.toBe(first.sessionId);
+
+	const workspace = createChatRecord();
+	expect(await listSessions(workspace.id, workspace.worktreePath)).toEqual([]);
+	const recovered = (await handleRequest(
+		"session.create",
+		{ workspaceId: workspace.id },
+		CTX,
+	)) as WsResult<"session.create">;
+	expect(recovered.model).toMatchObject({ provider: "chats", id: "chats-model" });
+	expect(
+		(await listSessions(workspace.id, workspace.worktreePath)).map((summary) => summary.sessionId),
+	).toEqual([recovered.sessionId]);
+	await expect(
+		handleRequest("session.create", { workspaceId: workspace.id }, CTX),
+	).rejects.toMatchObject({ code: "CHAT_HAS_SESSION" });
+	await handleRequest("chat.delete", { workspaceId: workspace.id }, CTX);
+}, 30_000);
+
+test("an explicit model and effort reach a chat's session on creation and on recovery, and become recent", async () => {
+	const models = (await handleRequest("model.list", {}, CTX)) as WsResult<"model.list">;
+	const picked = models.find((candidate) => candidate.id === "chats-thinker");
+	if (!picked) throw new Error("the reasoning fixture model is not listed");
+	const created = (await handleRequest(
+		"chat.create",
+		{ model: picked, thinkingLevel: "high" },
+		CTX,
+	)) as ChatCreateResult;
+	expect(created.model).toMatchObject({ provider: "chats", id: "chats-thinker" });
+	expect(created.thinkingLevel).toBe("high");
+	expect(getConfig().recentModels[0]).toMatchObject({ provider: "chats", id: "chats-thinker" });
+
+	const workspace = createChatRecord();
+	const recovered = (await handleRequest(
+		"session.create",
+		{ workspaceId: workspace.id, model: picked, thinkingLevel: "low" },
+		CTX,
+	)) as WsResult<"session.create">;
+	expect(recovered.model).toMatchObject({ provider: "chats", id: "chats-thinker" });
+	expect(recovered.thinkingLevel).toBe("low");
+	for (const id of [created.workspace.id, workspace.id]) {
+		await handleRequest("chat.delete", { workspaceId: id }, CTX);
+	}
+}, 30_000);
+
+test("two recoveries at once join the one session the first starts, with its real model", async () => {
+	const workspace = createChatRecord();
+	const hold = holdSessionPreparations();
+	try {
+		const first = handleRequest("session.create", { workspaceId: workspace.id }, CTX);
+		await hold.entered;
+		const second = handleRequest("session.create", { workspaceId: workspace.id }, CTX);
+		hold.release();
+		const [a, b] = (await Promise.all([first, second])) as [
+			WsResult<"session.create">,
+			WsResult<"session.create">,
+		];
+		expect(b).toEqual(a);
+		expect(b.model).toMatchObject({ provider: "chats", id: "chats-model" });
+		expect(hold.sessionIds).toHaveLength(1);
+		expect(
+			(await listSessions(workspace.id, workspace.worktreePath)).map(
+				(summary) => summary.sessionId,
+			),
+		).toEqual([a.sessionId]);
+	} finally {
+		hold.restore();
+		await handleRequest("chat.delete", { workspaceId: workspace.id }, CTX);
+	}
+}, 30_000);
+
+test("deleting a chat while its first session is still starting leaves no session behind", async () => {
+	const known = new Set(loadChats().chats.map((chat) => chat.id));
+	const hold = holdSessionPreparations();
+	try {
+		const creating = handleRequest("chat.create", {}, CTX);
+		creating.catch(() => {});
+		await hold.entered;
+		const workspaceId = newChatId(known);
+		const folder = getChatWorkspace(workspaceId).worktreePath;
+		const deleting = handleRequest("chat.delete", { workspaceId }, CTX);
+		hold.release();
+		await deleting;
+		await expect(creating).rejects.toMatchObject({ code: "CHAT_DELETING" });
+		expect(hold.sessionIds).toHaveLength(1);
+		expect(hasSession(hold.sessionIds[0] ?? "")).toBe(false);
+		expect(existsSync(folder)).toBe(false);
+		expect(trashed).toContain(folder);
+		expect(loadChats().chats.some((chat) => chat.id === workspaceId)).toBe(false);
+	} finally {
+		hold.restore();
+	}
+}, 30_000);
+
+test("a chat whose deletion did not finish refuses attach, terminals, sessions and history after a restart, and Retry completes it", async () => {
+	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
+	const { workspace, sessionId } = created;
+	faux.setResponses([fauxAssistantMessage("kept")]);
+	await promptSession(sessionId, "keep this");
+	const historyHits = async () => {
+		const result = (await handleRequest(
+			"history.search",
+			{ query: "keep this", scope: { kind: "all" } },
+			NEW_CLIENT,
+		)) as WsResult<"history.search">;
+		return result.prompts.filter((hit) => hit.sessionId === sessionId).length;
+	};
+	expect(await historyHits()).toBe(1);
+	setTrashImplementationForTests(async () => {
+		throw new Error("trash unavailable");
+	});
+	try {
+		await expect(handleRequest("chat.delete", { workspaceId: workspace.id }, CTX)).rejects.toThrow(
+			"trash unavailable",
+		);
+	} finally {
+		setTrashImplementationForTests(recordTrash);
+	}
+	expect(getChatWorkspace(workspace.id).deletionPending).toBe(true);
+	expect(hasSession(sessionId)).toBe(false);
+	expect(await historyHits()).toBe(0);
+
+	disposeAllSessions();
+	resetChatIdCache();
+	resetChatsStoreForTests();
+	for (const [method, params] of [
+		["session.getMessages", { workspaceId: workspace.id, sessionId }],
+		["session.resources", { workspaceId: workspace.id, sessionId }],
+		["session.create", { workspaceId: workspace.id }],
+		["terminal.attach", { workspaceId: workspace.id, tabKey: "after-restart" }],
+		["terminal.reserve", { workspaceId: workspace.id, tabKey: "after-restart", title: "Shell" }],
+	] as const) {
+		await expect(handleRequest(method, params, CTX)).rejects.toMatchObject({
+			code: "CHAT_DELETION_PENDING",
+		});
+	}
+	expect(hasSession(sessionId)).toBe(false);
+
+	await handleRequest("chat.delete", { workspaceId: workspace.id }, CTX);
+	expect(existsSync(workspace.worktreePath)).toBe(false);
+	expect(trashed).toContain(workspace.worktreePath);
+	expect(trashed.some((path) => path.endsWith(`_${sessionId}.jsonl`))).toBe(true);
+	expect(loadChats().chats.some((chat) => chat.id === workspace.id)).toBe(false);
+}, 30_000);
+
+test("a chat's delegated conversations go to the Trash with it", async () => {
+	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
+	const store = join(dataDir, "delegation", created.workspace.id);
+	mkdirSync(join(store, created.sessionId), { recursive: true });
+	writeFileSync(join(store, created.sessionId, "child.jsonl"), "{}\n");
+	await handleRequest("chat.delete", { workspaceId: created.workspace.id }, CTX);
+	expect(trashed).toContain(store);
+	expect(existsSync(store)).toBe(false);
+}, 30_000);
+
+test("chat.inspect counts a chat's own files, not ThinkRail's scaffolding, never follows a symlink and yields while it walks", async () => {
+	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
+	const folder = created.workspace.worktreePath;
+	const inspect = () =>
+		handleRequest("chat.inspect", { workspaceId: created.workspace.id }, CTX) as Promise<
+			WsResult<"chat.inspect">
+		>;
+	let yielded = false;
+	setImmediate(() => {
+		yielded = true;
+	});
+	expect(await inspect()).toEqual({ files: 0, truncated: false });
+	expect(yielded).toBe(true);
+
+	writeFileSync(join(folder, "notes.md"), "notes\n");
+	mkdirSync(join(folder, "drafts"));
+	writeFileSync(join(folder, "drafts", "outline.md"), "outline\n");
+	const elsewhere = join(root, "linked-tree");
+	mkdirSync(elsewhere, { recursive: true });
+	for (let index = 0; index < 5; index += 1) writeFileSync(join(elsewhere, `f${index}`), "x");
+	symlinkSync(elsewhere, join(folder, "linked"));
+	expect(await inspect()).toEqual({ files: 3, truncated: false });
+	await handleRequest("chat.delete", { workspaceId: created.workspace.id }, CTX);
+}, 30_000);
+
+test("chat.inspect answers truncated at its entry budget, folders included, and at its time budget", async () => {
+	const created = (await handleRequest("chat.create", {}, CTX)) as ChatCreateResult;
+	const { id, worktreePath } = created.workspace;
+	for (let index = 0; index < 20; index += 1) mkdirSync(join(worktreePath, `empty-${index}`));
+	expect(await inspectChat(id, { entries: 10, ms: 60_000 })).toEqual({ files: 0, truncated: true });
+	expect(await inspectChat(id, { entries: 1_000, ms: 60_000 })).toEqual({
+		files: 0,
+		truncated: false,
+	});
+	let clock = 0;
+	expect(await inspectChat(id, { entries: 1_000, ms: 25 }, () => (clock += 10))).toMatchObject({
+		truncated: true,
+	});
+	for (let index = 2; index < 20; index += 1)
+		rmSync(join(worktreePath, `empty-${index}`), { recursive: true });
+	rmSync(join(worktreePath, ".thinkrail"), { recursive: true, force: true });
+	let calls = 0;
+	const lateAfterTheRoot = () => (++calls > 4 ? 1_000 : 0);
+	expect(await inspectChat(id, { entries: 1_000, ms: 10 }, lateAfterTheRoot)).toEqual({
+		files: 0,
+		truncated: true,
+	});
+	await handleRequest("chat.delete", { workspaceId: id }, CTX);
+}, 30_000);

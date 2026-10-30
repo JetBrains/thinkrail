@@ -89,6 +89,24 @@ describe("buildWorkItems", () => {
 		expect(result.find((item) => item.id === "workspace:w1")?.attention).toBe("needs-input");
 	});
 
+	test("a chat without a project whose deletion is pending is never offered as a destination", () => {
+		const chatRecord = (pending: boolean) =>
+			buildWorkItems({
+				t: currentTranslator(),
+				state: state([waiting], {
+					workspaces: {
+						p1: [{ ...workspace, kind: "chat", ...(pending ? { deletionPending: true } : {}) }],
+					},
+				}),
+				contextProjectId: null,
+				firstPrompts: { "s-waiting": "Draft the release notes" },
+				navigateToProject: () => {},
+				navigateToWorkspace: () => {},
+			}).filter((item) => item.kind === "chat");
+		expect(chatRecord(false)).toHaveLength(1);
+		expect(chatRecord(true)).toEqual([]);
+	});
+
 	test("an idle chat is listed only once its title is known", () => {
 		expect(items([record("s-idle")]).some((item) => item.kind === "chat")).toBe(false);
 		const titled = items([record("s-idle")], { "s-idle": "Spec review" });

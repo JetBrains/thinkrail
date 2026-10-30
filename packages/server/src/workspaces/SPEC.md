@@ -21,6 +21,28 @@ folder itself (git's *main working tree*) — the "just work in my project folde
 **non-removable and non-renamable**. Any **existing worktree** the user explicitly attaches is recorded in
 place as `kind: "external"` — outside the data dir, never created or mutated here.
 
+A third kind is **ThinkRail-owned and never git**: a **chat without a project** (`kind: "chat"`) is its own
+folder `<dataDir>/chats/<yyyy-mm-dd>-<short id>` (local date; the id extends on collision — no words from
+the prompt, architecture Decision 8 stands) in the one built-in **Chats container** project
+(`Project.kind: "chats"`, root `<dataDir>/chats`, slug `chats`, permanently untrusted, found or created by
+kind with an opaque id, never closed). The record keeps the required wire fields with inert values
+(`branch: ""`, `baseBranch: ""`, `name: "Chat"`, `renamed: true` so `set_title` names only the
+conversation); `kind` is the only marker and every git consumer gates on it. `chats.ts` owns the container
+and chat records: `ensureChatsContainer`, `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`,
+`markChatDeletionPending` (persisted before any destructive step so a crash leaves a visible
+"deletion incomplete" chat, never a half-gone one), `dropChatRecord`, an in-memory chat-id cache for the
+host's per-event push scoping (`isChatWorkspaceId` / `isChatsContainerId` — only this process writes the
+store), and the refusal helpers (`assertNotChatsContainer`, `assertNotChatWorkspace`) the doors below use.
+The session, the terminal and the teardown are composed in `host` (`host/chats.ts`): a chat owns exactly
+one top-level session, a second one is a new chat, and deleting trashes the transcripts file by file, the
+delegated conversations and then the folder (`trash` is not this module's dependency). Refused here: `renameWorkspace`, settle /
+unsettle, `setWorkspaceDiffBase`, `forgetWorkspace` / `removeWorkspace` (delete the chat instead),
+`workspaceDiffStats`; `reclaimWorktree`, `recordWorkspaceHead` and `setWorkspaceReview` are no-ops;
+`listWorkspaces(container)` returns the chat rows without Default ensure, external refresh or diff stats;
+`openProjectById` never hands the container to `createWorkspace` / `openExistingWorktree`, and a worktree
+registered under the chats root is neither offered by `listExistingWorktrees` nor admitted by
+`openExistingWorktree` (the projects barrel's reserved-root check, before any Git read).
+
 ## Boundary
 
 - **Owns:** `listExistingWorktrees(projectId)` (**async** — parses `git worktree list --porcelain -z` read
@@ -254,7 +276,11 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
   `setWorkspaceSubagentsOverride`, `setWorkspaceSubagentMaxConcurrent`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
-  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`.
+  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
+  `CHATS_CONTAINER_NAME`, `CHAT_WORKSPACE_NAME`, `chatsRoot`, `isUnderChatsRoot`, `isChatsContainer`, `isChatWorkspace`,
+  `isChatsContainerId`, `isChatWorkspaceId`, `resetChatIdCache`, `ensureChatsContainer`, `findChatsContainer`,
+  `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`, `markChatDeletionPending`, `dropChatRecord`,
+  `setChatPublishers`, `assertNotChatsContainer`, `assertNotChatWorkspace`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

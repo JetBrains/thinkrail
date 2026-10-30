@@ -48,7 +48,7 @@ test("the tool is registered for top-level sessions, never in a subagent child's
 	} as unknown as ExtensionAPI;
 	setTitleExtension(pi);
 	expect(registered).toEqual([SET_TITLE_TOOL_NAME]);
-	expect(childExtensionFactories()).not.toContain(setTitleExtension);
+	expect(childExtensionFactories("w1")).not.toContain(setTitleExtension);
 });
 
 test("pendingNamingRule names exactly what is still unnamed, and vanishes once both are named", () => {

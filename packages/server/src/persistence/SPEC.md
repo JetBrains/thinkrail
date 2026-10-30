@@ -14,7 +14,30 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 ## Boundary
 
 - **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`, always resolved to an absolute path — a relative override would otherwise land managed worktrees in two places: `mkdirSync` resolves it against the host's cwd, `git -C <project>` against the project); project/workspace/config load-save operations and fieldwise validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; versioned atomic `session-lifecycle.json` (latest observed settled completion + explicit-cancel run id), `session-receipts.json` (first-install baseline complete + session→handled completion id) and `turns.json` (per-workspace agent-run change sets, owned by `turns`); server-only `installation.json` (`{ id, appInstalled?: true }`) and campaign-only `attribution.json`; the structural load/save of `environment.json` (`loadHostEnvironment` / `saveHostEnvironment`, atomic, mode `0600`, semantics owned by [[submodule-server-environment]]). The non-rotating install UUID never crosses the wire.
-- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, session receipt load-save operations, `ensureInstallation()` returning only `{ id }`, narrow install/browser claim operations, and strict acquisition read/save. Initial ID creation publishes a complete sibling temp via atomic no-overwrite hard link and rereads a concurrent winner; malformed existing records are preserved. An exclusive install-claim marker elects one packaged host across processes. The complete installation JSON is atomically replaced; caught replacement failures remove the marker and temp for retry, while a crash after claiming may consume the event without emission. Legacy installed records remain claimed.
+- **Chats store:** the Chats container (`Project.kind: "chats"`) and chat workspaces (`Workspace.kind: "chat"`)
+  live in a separate **`chats.json`** (`PersistedChats` v1, written atomically). `loadProjects` /
+  `loadWorkspaces` merge it in; `saveProjects` / `saveWorkspaces` **partition on save by kind** for both
+  legacy files, so every writer that rewrites `projects.json` / `workspaces.json` wholesale (activity
+  stamps, slug backfill, review stamps…) keeps a chat or container record out of them — an older host
+  (the CLI is the supported rollback artifact) never sees a chat and its reclaim path can never `rm -rf`
+  a chat folder. The store is **schema-validated** (the container's and every chat's required fields,
+  each chat in that container, ids unique). Only a file that is not JSON, or is not a valid version-1
+  store and names no newer version, is set aside as `.corrupt-<epoch>`: it loads as empty and chat writes
+  are refused until restart. A store whose integer `version` is newer is **left untouched** (an older
+  host must not destroy a newer host's chats): it loads as empty and refuses writes. Any other read
+  failure (`EBUSY`, `EPERM`, a directory in its place) renames nothing and is not remembered — that load
+  answers empty and refuses writes, the next one reads again. `chatsStoreProblem()` names which
+  (`set-aside` / `newer` / `unreadable`, or `null`), and `workspaces` turns it into
+  `CHATS_STORE_UNAVAILABLE`. The parsed store is **cached** while `chats.json` keeps the identity
+  (inode, size, mtime) it was read or written at — a write replaces the cache, an outside change or a
+  deleted file is read again — and every load hands out a copy. A partitioning save builds only on that
+  cached store, never on a fresh read, so a save after a failed load cannot overwrite the chats the load
+  missed; the legacy files keep saving either way. `chatsRoot()`
+  (`<dataDir>/chats`) names the reserved folder: `isUnderChatsRoot()` is the lexical test for spellings
+  ThinkRail stored or pi recorded, `landsInChatsRoot()` the door policy for a path someone typed or picked
+  (lexical, or canonical through the nearest existing ancestors — [[submodule-server-projects]]).
+- **Public surface (barrel):** `dataDir`, `chatsRoot`, `isUnderChatsRoot`, `landsInChatsRoot`, `loadChats`, `chatsStoreProblem` (+ `ChatsStoreProblem`),
+  `isChatsContainer`, `isChatWorkspace`, `PersistedChats`, `CHATS_FILE_VERSION`, project/workspace/config and terminal-catalog load-save operations, session receipt load-save operations, `ensureInstallation()` returning only `{ id }`, narrow install/browser claim operations, and strict acquisition read/save. Initial ID creation publishes a complete sibling temp via atomic no-overwrite hard link and rereads a concurrent winner; malformed existing records are preserved. An exclusive install-claim marker elects one packaged host across processes. The complete installation JSON is atomically replaced; caught replacement failures remove the marker and temp for retry, while a crash after claiming may consume the event without emission. Legacy installed records remain claimed.
 - **Browser attempt:** `attribution.json` exclusively creates its first `{ browserClaimAttempted: true }` marker with `wx`. Redeem atomically replaces it with strict first/last touch fields (bounded UTM values, referrer class, timestamp, and policy version); failed network or replacement work leaves the attempt terminal. Retention is 30 days after `last_touch`: expired or invalid records become terminal. The persisted schema rejects claim/verifier/challenge/URL, journey/bridge IDs, IP, and user agent. Other state has no cross-process lock.
 - **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `HostEnvironment`, `LayoutPreset`, `DEFAULT_CONFIG`,
   `isTerminalWindowsShell`); Node `fs`/`os`/`path`.

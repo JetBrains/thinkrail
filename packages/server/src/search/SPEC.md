@@ -43,7 +43,13 @@ open projects' folders and sibling worktrees are never searched (the field walke
 multi-root file search: one root is faster and predictable). Chats and transcripts come from sessions
 whose `cwd` is a persisted worktree of an open project (pi-CLI sessions and closed projects are
 dropped, like `history.search`'s labels); plans from every open project's workspace records, skipping
-plan files whose session has no transcript on disk (orphans).
+plan files whose session has no transcript on disk (orphans). **Audience:** `query` and `preview` take
+what the asking client may learn of (`{ chats }`, from the host's one visibility policy; in-process callers
+see everything). A client older than chats without a project gets the projects without the Chats
+container, so every corpus — workspace records, the root, files, plans, chat titles, transcripts and
+previews — is built without its chats before any provider ranks or pages, and totals never count them.
+A chat whose deletion did not finish (`deletionPending`) is out of every corpus for every audience: its
+transcript may still be on disk, but nothing may reopen it.
 
 ## Query
 
@@ -110,7 +116,11 @@ plan files whose session has no transcript on disk (orphans).
   per-file memo). While the history index is still building, a plan whose session it has not reached yet
   is skipped and the group answers `indexing`, so the client asks again once the session is known.
 - **Workspaces:** name, branch and `#<pr>` through the matcher over persisted records — the client
-  dedupes against the workspaces it already knows.
+  dedupes against the workspaces it already knows. A chat without a project's record is never a
+  workspace hit (it has no branch or PR; its chats are found as chats and transcripts).
+- **A chat's root** (`SearchRoot.git: false`) is never a repository: its file list is always walked —
+  the cache keeps the git mode each root was loaded with through every TTL or invalidation reload — and
+  it answers no specs (an empty `spec` group), while its files, transcripts and plans stay searchable.
 
 ## Preview
 

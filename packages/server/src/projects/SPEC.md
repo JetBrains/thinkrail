@@ -91,6 +91,19 @@ bootstrap it into one so it can be opened.
   leaving it untouched otherwise; `trusted: false` revokes both. A trust change persists and publishes the
   record, so every client shows the persisted trust even when the host request that made it then fails
   (an open chat could not reload).
+## The reserved Chats root
+
+Chats without a project keep their folders under `<dataDir>/chats` ([[submodule-server-workspaces]]),
+which is never a repository. **One policy refuses it at every door** that would make a project or
+workspace of a folder — `inspectProjectPath`, `openProject`, `initProject`, `createProject`,
+`inspectCloneDestination` (so `cloneProject` refuses before it reserves a folder or Git downloads
+anything) and, through this barrel, `workspaces`' existing-worktree admission: `assertOutsideChatsRoot`
+throws `CHATS_CONTAINER` before any filesystem or Git side effect. Containment is persistence's
+`landsInChatsRoot` — the lexical check plus canonical containment, the nearest existing ancestor of the
+path and of the root each resolved through `realpath`, so an alias spelling (`/tmp` for `/private/tmp`,
+a symlink, a folder that does not exist yet) cannot slip past. The check only answers; the path the door
+records keeps its resolved spelling (architecture Decision 22).
+
 ## Repository cloning
 
 `inspectCloneDestination` returns the validated absolute destination for the UI preview without reserving
@@ -114,6 +127,7 @@ Git diagnostics are redacted before truncation: user-configured URL rewrites can
 and truncating first can separate a secret suffix from the URL prefix needed to recognize it.
 
 - **Public surface (barrel):** `cloneProject`, `inspectCloneDestination`, `startProjectClone`, `cancelProjectClone`, `openProject`, `listProjects`, `listRecentProjects`,
+  `assertOutsideChatsRoot`,
   `refreshRecentProjectFolders`, `closeProject`, `renameProject`,
   `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `createProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,

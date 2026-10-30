@@ -14,6 +14,7 @@ export {
 	refreshSubagentConcurrency,
 	runReviewSubagent,
 	setSubagentConcurrencyResolver,
+	trashWorkspaceDelegation,
 } from "./delegation";
 export {
 	type BundledExtensionFactory,
@@ -23,6 +24,7 @@ export {
 	listSkillCommands,
 	registerBundledRuntime,
 	setDisabledExtensionsResolver,
+	setSpecsEnabledResolver,
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,
