@@ -35,6 +35,13 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
   - `weriftRemoteChannel.ts` — `toRemoteChannel`, adapting a werift `RTCDataChannel` to `RemoteChannel`.
     werift (pure TS) is **validated under Bun** (offer/answer, ICE, DataChannel, byte transfer via a
     loopback test), so the host needs no native WebRTC binding.
+  - `hostPeer.ts` — `createWeriftHostPeer`, the host as WebRTC **offerer** (creates the DataChannel + offer,
+    emits local SDP/ICE, consumes the device's answer/candidates, surfaces a `RemoteChannel`), behind a
+    `HostPeer` interface so the orchestrator is testable with a fake.
+  - `hostSession.ts` — `createHostSession`, one device session's orchestration: runs the handshake, and only
+    after `accepted` starts the peer and relays the device's answer/candidates into it, handing out the open
+    `RemoteChannel` with its `PairedDevice`. An end-to-end in-process test drives a real werift device
+    through the handshake + WebRTC to a byte-moving channel.
 - **Public surface:** the `index.ts` barrel.
 - **Allowed deps:** `remote` (types + the injected pairing primitives), `werift` (host-side WebRTC),
   `node:crypto`; later the `host` wire protocol behind `RemoteChannel`. Never the browser.
@@ -50,10 +57,9 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
 
 ## Not yet here (next slices)
 
-- Peer negotiation orchestration: driving an `RTCPeerConnection` as offerer, emitting local SDP/ICE to the
-  signaling layer and consuming the remote's, resolving a `RemoteChannel` on open. (`toRemoteChannel`, the
-  DataChannel→`RemoteChannel` adapter, has landed.)
-- The signaling WS server brokering frames between host and device, and the host's outbound connection to it.
+- The host's **outbound broker client**: connecting to the relay, registering by public key, and mapping each
+  brokered session to a `createHostSession` (relaying `frame` payloads in and out). The signaling broker
+  itself is the separate [[module-relay]] package; the host speaks its wire protocol, it does not import it.
 - Running the existing `host` wire protocol over a `RemoteChannel`.
 - coturn deployment/config and the second channel tunnelling `/files` and `/blob`.
 - The CLI command that boots the host for remote access and prints the pairing **link** (the
