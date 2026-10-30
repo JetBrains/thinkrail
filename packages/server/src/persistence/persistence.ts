@@ -292,12 +292,14 @@ export interface PersistedRunProject {
 	settings: RunSettings;
 }
 
+/** Written at start as `interrupted` with no `endedAt` and overwritten at the end: a boot that still finds it
+ * learns the run never ended on the host's watch — "ended, outcome unknown" — never a running status. */
 export interface PersistedLastRun {
 	runId: string;
 	targetId: string | null;
 	startedAt: number;
-	endedAt: number;
-	status: "exited" | "stopped";
+	endedAt: number | null;
+	status: "exited" | "stopped" | "interrupted";
 	exitCode: number | null;
 }
 
@@ -370,8 +372,8 @@ function parseRun(raw: unknown): PersistedRun | null {
 				typeof run.runId !== "string" ||
 				(run.targetId !== null && typeof run.targetId !== "string") ||
 				typeof run.startedAt !== "number" ||
-				typeof run.endedAt !== "number" ||
-				(run.status !== "exited" && run.status !== "stopped") ||
+				(run.endedAt !== null && typeof run.endedAt !== "number") ||
+				(run.status !== "exited" && run.status !== "stopped" && run.status !== "interrupted") ||
 				(run.exitCode !== null && typeof run.exitCode !== "number")
 			) {
 				return null;
