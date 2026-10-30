@@ -75,7 +75,11 @@ function Showcases({ doc }: { doc: ComponentDoc }) {
 						key={id}
 						id={sectionId(doc, id)}
 						title={title}
-						description={description ? <InlineMarkdown source={description} /> : undefined}
+						description={
+							description || (id === "tone" && doc.tones) ? (
+								<InlineMarkdown source={description ?? doc.tones?.note ?? ""} />
+							) : undefined
+						}
 					>
 						{Render ? <Render /> : null}
 						{table ? (

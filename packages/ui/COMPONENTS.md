@@ -7831,7 +7831,7 @@ export default function Severities() {
 					toast.info(t("plan.checkAll.runningMessage"), t("plan.checkAll.runningTitle"))
 				}
 			>
-				info
+				{t("plan.checkAll.runningTitle")}
 			</Button>
 			<Button
 				variant="outline"
@@ -7840,7 +7840,7 @@ export default function Severities() {
 					toast.success(t("plan.review.startedMessage"), t("plan.review.startedTitle"))
 				}
 			>
-				success
+				{t("plan.review.startedTitle")}
 			</Button>
 			<Button
 				variant="outline"
@@ -7849,14 +7849,14 @@ export default function Severities() {
 					toast.warning(t("updates.native.disabled.detail"), t("updates.native.disabled.title"))
 				}
 			>
-				warning
+				{t("updates.native.disabled.title")}
 			</Button>
 			<Button
 				variant="outline"
 				size="m"
 				onClick={() => toast.error(t("plan.copyFailed.message"), t("plan.copyFailed.title"))}
 			>
-				error
+				{t("plan.copyFailed.title")}
 			</Button>
 		</div>
 	);
@@ -7939,7 +7939,7 @@ export default function LongError() {
 			size="m"
 			onClick={() => toast.error(DETAIL, t("plan.review.startFailed"))}
 		>
-			error
+			{t("plan.review.startFailed")}
 		</Button>
 	);
 }

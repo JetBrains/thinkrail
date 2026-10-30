@@ -162,7 +162,11 @@ function component(doc: ComponentDoc): string {
 			: []),
 		...(doc.sections ?? []).flatMap((section) => [
 			`### ${section.title}`,
-			...(section.description ? [section.description] : []),
+			...(section.description
+				? [section.description]
+				: section.id === "tone" && doc.tones
+					? [doc.tones.note]
+					: []),
 			...(section.table ? [table(section.table.head, section.table.rows)] : []),
 			...(section.id === "variants" ? variantBlocks(doc, false) : []),
 			...(section.id === "tone" ? toneBlock(doc, null) : []),

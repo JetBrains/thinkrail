@@ -13,7 +13,7 @@ export default function LongError() {
 			size="m"
 			onClick={() => toast.error(DETAIL, t("plan.review.startFailed"))}
 		>
-			error
+			{t("plan.review.startFailed")}
 		</Button>
 	);
 }

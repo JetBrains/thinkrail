@@ -82,12 +82,23 @@ describe("examples", () => {
 		});
 });
 
+function showcaseFile(slug: string): string | null {
+	const registry = readFileSync(join(SHOWCASE, "index.ts"), "utf8");
+	const entry = new RegExp(`^\\s*"?${slug}"?: (\\w+)`, "m").exec(registry)?.[1];
+	const module = entry
+		? new RegExp(`import \\{[^}]*\\b${entry}\\b[^}]*\\} from "\\./([a-z-]+)"`).exec(registry)?.[1]
+		: undefined;
+	const path = module ? join(SHOWCASE, `${module}.tsx`) : "";
+	return module && existsSync(path) ? path : null;
+}
+
 describe("showcases", () => {
 	for (const doc of components)
 		test(`${doc.name}: every showcase section has its words in the doc`, () => {
 			const documented = (doc.sections ?? []).map((section) => section.id);
-			const file = join(SHOWCASE, `${doc.slug}.tsx`);
-			const source = existsSync(file) ? readFileSync(file, "utf8") : "";
+			const file = showcaseFile(doc.slug);
+			expect(file).not.toBeNull();
+			const source = readFileSync(file ?? "", "utf8");
 			const rendered = [...source.matchAll(/\{\s*id:\s*"([a-z-]+)",\s*Render:/g)].map(
 				(match) => match[1],
 			);

@@ -186,11 +186,7 @@ export const button = {
 			description:
 				"Every cell is the real component. Hover and press the first column, or click into the page and press Tab to see keyboard focus. Disabled, loading and selected are real props.",
 		},
-		{
-			id: "tone",
-			title: "Tone",
-			description: "`tone` applies to `outline` and `ghost`; other variants ignore it.",
-		},
+		{ id: "tone", title: "Tone" },
 	],
 	states: [
 		{ state: "Default", how: "Rest.", appearance: "The variant's fill, border and label colour." },
