@@ -8,6 +8,9 @@ on:
   merge_group:
     types: [checks_requested]
 
+env:
+  THINKRAIL_WEB_BUILD_TYPECHECK: "0"
+
 # Supersede in-flight runs when a PR is updated.
 concurrency:
   group: ci-${{ github.ref }}
@@ -52,12 +55,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run check:deps
       - run: bun run check:boundaries
@@ -79,12 +76,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run test
 
@@ -103,17 +94,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run check:pi-packages
 
   e2e-shard:
-    name: E2E (no-agent) shard ${{ matrix.shard }}/2
+    name: E2E (no-agent) shard ${{ matrix.shard }}/3
     timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.app == 'true'
@@ -121,20 +106,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     env:
-      THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/2
+      THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/3
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Install Playwright Chromium
         run: .github/scripts/install-playwright.sh
@@ -164,12 +143,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       # Build the single-file binary for the runner's platform, then boot the artifact and assert it
       # serves the staged UI + skills, completes a real OAuth login up to its auth URL, and shuts down
@@ -182,7 +155,9 @@ jobs:
         run: .github/scripts/install-playwright.sh
       # This shard of the no-agent e2e suite against the artifact (grep-inverts @dev-seam too — the fake
       # login providers only exist in the dev boot): the broad net for works-from-source/broken-in-the-binary.
-      - run: bun run e2e:binary --shard=${{ matrix.shard }}/4
+      - run: bun run e2e:binary
+        env:
+          THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/4
       - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v5
@@ -243,12 +218,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Install desktop runtime packages
         uses: ./.github/actions/desktop-apt
@@ -279,7 +248,9 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run smoke:desktop
       - name: Run no-agent e2e against the embedded desktop host
-        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run e2e:desktop --shard=${{ matrix.shard }}/4
+        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run e2e:desktop
+        env:
+          THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/4
       - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v5

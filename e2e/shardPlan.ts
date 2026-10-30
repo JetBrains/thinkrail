@@ -85,12 +85,139 @@ export function parseJobShard(raw: string | undefined): JobShard | undefined {
 	return { index, total };
 }
 
-export function laneShardArgs(
+export interface LaneShard {
+	job: JobShard | undefined;
+	lane: number;
+	laneCount: number;
+}
+
+export function laneShard(
 	job: JobShard | undefined,
 	lane: number,
 	laneCount: number,
-): string[] {
-	const index = job ? (job.index - 1) * laneCount + lane : lane;
-	const total = (job?.total ?? 1) * laneCount;
-	return total === 1 ? [] : [`--shard=${index}/${total}`];
+): LaneShard | undefined {
+	return job || laneCount > 1 ? { job, lane, laneCount } : undefined;
+}
+
+export function isShardArg(arg: string): boolean {
+	return arg === "--shard" || arg.startsWith("--shard=");
+}
+
+export interface ListedTest {
+	file: string;
+	titles: string[];
+}
+
+const TEST_LIST_DELIMITER = "\u203A";
+
+type JsonRecord = Record<string, unknown>;
+
+function record(value: unknown): JsonRecord | null {
+	return value !== null && typeof value === "object" ? (value as JsonRecord) : null;
+}
+
+function collectSuiteTests(value: unknown, file: string, parents: string[], tests: ListedTest[]) {
+	const suite = record(value);
+	if (!suite) return;
+	if (Array.isArray(suite.specs)) {
+		for (const value of suite.specs) {
+			const spec = record(value);
+			if (spec && typeof spec.title === "string") {
+				const titles = [...parents, spec.title];
+				if (spec.file !== file) {
+					throw new Error(
+						`${file}: test ${JSON.stringify(titles.join(" > "))} is declared in ${String(spec.file)}; a Playwright test list cannot select it`,
+					);
+				}
+				tests.push({ file, titles });
+			}
+		}
+	}
+	if (Array.isArray(suite.suites)) {
+		for (const child of suite.suites) {
+			const title = record(child)?.title;
+			if (typeof title === "string") {
+				collectSuiteTests(child, file, title === "" ? parents : [...parents, title], tests);
+			}
+		}
+	}
+}
+
+function startsWithTitles(titles: readonly string[], prefix: readonly string[]): boolean {
+	return prefix.length <= titles.length && prefix.every((title, index) => titles[index] === title);
+}
+
+function assertAddressable(tests: readonly ListedTest[]): void {
+	const byFile = new Map<string, ListedTest[]>();
+	for (const test of tests) byFile.set(test.file, [...(byFile.get(test.file) ?? []), test]);
+	for (const [file, fileTests] of byFile) {
+		for (const test of fileTests) {
+			const bad = test.titles.find(
+				(title) =>
+					title === "" ||
+					title !== title.trim() ||
+					/[\r\n]/.test(title) ||
+					title.includes(TEST_LIST_DELIMITER),
+			);
+			if (bad !== undefined) {
+				throw new Error(
+					`${file}: title ${JSON.stringify(bad)} cannot be addressed by a Playwright test list`,
+				);
+			}
+			const clash = fileTests.find(
+				(other) => other !== test && startsWithTitles(other.titles, test.titles),
+			);
+			if (clash) {
+				throw new Error(
+					`${file}: test ${JSON.stringify(test.titles.join(" > "))} also selects ${JSON.stringify(clash.titles.join(" > "))}; give it a unique title`,
+				);
+			}
+		}
+	}
+}
+
+export function listedPlaywrightTests(output: string): ListedTest[] {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(output);
+	} catch {
+		throw new Error("Playwright shard listing did not return JSON");
+	}
+	const report = record(parsed);
+	if (!report || !Array.isArray(report.suites) || !Array.isArray(report.errors)) {
+		throw new Error("Playwright shard listing returned an invalid report");
+	}
+	if (report.errors.length > 0) {
+		const message = record(report.errors[0])?.message;
+		throw new Error(
+			typeof message === "string"
+				? `Playwright shard listing failed: ${message}`
+				: "Playwright shard listing failed",
+		);
+	}
+	const listed: ListedTest[] = [];
+	for (const value of report.suites) {
+		const file = record(value)?.file;
+		if (typeof file === "string") collectSuiteTests(value, file, [], listed);
+	}
+	const seen = new Set<string>();
+	const tests = listed.filter((test) => {
+		const key = JSON.stringify([test.file, ...test.titles]);
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	});
+	assertAddressable(tests);
+	return tests;
+}
+
+function dealt<T>(items: readonly T[], index: number, total: number): T[] {
+	return items.filter((_, position) => position % total === index - 1);
+}
+
+export function interleavedTestList(tests: readonly ListedTest[], shard: LaneShard): string {
+	const slice = shard.job ? dealt(tests, shard.job.index, shard.job.total) : tests;
+	return dealt(slice, shard.lane, shard.laneCount)
+		.map((test) => `${[test.file, ...test.titles].join(` ${TEST_LIST_DELIMITER} `)}\n`)
+		.join("");
 }

@@ -41,7 +41,9 @@ only when its change can affect artifacts (change classifier below). Real-provid
 
 The three browser suites dominate wall time, so each runs as a matrix of Playwright shards on separate
 runners ([[module-browser-e2e]] owns the slicing). Shard counts trade runner minutes for wall time and are
-tuned against observed per-job durations.
+tuned against observed per-job durations. The source suite gets three jobs to the artifact suites' four
+runners because each of its jobs runs two lanes, and because it alone is the critical path of every app PR
+that does not touch artifacts.
 
 **Required gate.** The ruleset requires one check, "CI passed": an aggregate job that succeeds only when the
 change classifier, conformance/lint/typecheck and unit tests succeeded and every other job either succeeded
@@ -79,7 +81,15 @@ no job is re-run automatically. They install Chromium without `--with-deps`: the
 carries its shared libraries, and the extra apt packages (CJK/Thai/X fonts) feed no assertion while their
 Ubuntu-mirror download was the slowest step of the job, often for minutes. A missing library fails
 Chromium's launch loudly. The browsers themselves are not cached: the Playwright CDN download takes seconds,
-no slower than an Actions-cache restore of the same bytes.
+no slower than an Actions-cache restore of the same bytes. Linux jobs, here and in the website workflows,
+install dependencies without the Actions cache for the same reason: a cold `bun install --frozen-lockfile` on a hosted runner takes 3–4 s,
+while restoring the ~600 MB Bun cache took 12–16 s before an install of 1–3 s, and every PR and merge-group
+ref saved its own copy, crowding the 10 GB quota the apt cache depends on.
+
+Every web build inside a browser or artifact job skips the web `tsc --noEmit` its build script otherwise
+runs (`THINKRAIL_WEB_BUILD_TYPECHECK=0` at workflow level): the identical command already gates the run in
+Lint & Typecheck, which no classifier skips, and repeating it cost about 20 s on each of a full run's thirteen
+web builds, critical path included. The generator `--check`s stay in the build, so they keep gating.
 
 Native artifact smokes run only in shard 1: repeating an identical probe per shard adds no coverage and
 multiplies exposure to runner-environment faults.

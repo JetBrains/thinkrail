@@ -12,11 +12,12 @@ import {
 } from "./processRunner";
 import {
 	type JobShard,
-	laneShardArgs,
+	laneShard,
 	parseJobShard,
 	parseRunnerArgs,
 	resolveShardCount,
 } from "./shardPlan";
+import { shardTestListArgs } from "./shardTestLists";
 
 const rootDir = E2E_ROOT_DIR;
 const bun = process.execPath;
@@ -75,17 +76,24 @@ function jobLabel(job: JobShard | undefined): string {
 	return job ? ` for job slice ${job.index}/${job.total}` : "";
 }
 
-async function runSerial(playwrightArgs: string[], job: JobShard | undefined): Promise<number> {
+async function runSerial(
+	playwrightArgs: string[],
+	job: JobShard | undefined,
+	testListArgs: Promise<string[][]>,
+): Promise<number> {
 	console.log(`E2E: running serially (one host, one worker)${jobLabel(job)}`);
-	return run(playwrightCommand([...playwrightArgs, ...laneShardArgs(job, 1, 1)]), childEnv());
+	const [laneArgs = []] = await testListArgs;
+	return run(playwrightCommand([...playwrightArgs, ...laneArgs]), childEnv());
 }
 
 async function runShards(
 	shardCount: number,
 	playwrightArgs: string[],
 	job: JobShard | undefined,
+	testListArgs: Promise<string[][]>,
 ): Promise<number> {
 	const startedAt = performance.now();
+	const laneArgs = await testListArgs;
 	const reportDir = mkdtempSync(join(tmpdir(), "thinkrail-e2e-blobs-"));
 	const children: Promise<number>[] = [];
 
@@ -102,7 +110,7 @@ async function runShards(
 		const outputDir = join(reportDir, `artifacts-${shard}`);
 		const command = playwrightCommand([
 			...playwrightArgs,
-			...laneShardArgs(job, shard, shardCount),
+			...(laneArgs[shard - 1] ?? []),
 			"--workers=1",
 			"--reporter=blob",
 			`--output=${outputDir}`,
@@ -158,9 +166,6 @@ async function main(): Promise<number> {
 	await holdE2eIdleSleep();
 	const { playwrightArgs, shardOverride } = parseRunnerArgs(process.argv.slice(2));
 	const job = parseJobShard(process.env.THINKRAIL_E2E_JOB_SHARD);
-	if (job && playwrightArgs.some((arg) => arg === "--shard" || arg.startsWith("--shard="))) {
-		throw new Error("THINKRAIL_E2E_JOB_SHARD cannot be combined with an explicit --shard");
-	}
 	const shardCount = resolveShardCount({
 		shardOverride,
 		envValue: process.env.THINKRAIL_E2E_SHARDS,
@@ -168,17 +173,29 @@ async function main(): Promise<number> {
 		hasPlaywrightArgs: playwrightArgs.length > 0,
 	});
 
-	if (!playwrightArgs.includes("--list") && process.env.THINKRAIL_E2E_SKIP_BUILD !== "1") {
-		const buildStartedAt = performance.now();
-		console.log("E2E: building web once before host startup");
-		const buildCode = await run([bun, "run", "build:web"]);
-		if (buildCode !== 0) return buildCode;
-		console.log(`E2E: web build ready in ${elapsed(buildStartedAt)}`);
-	}
+	const listDir = mkdtempSync(join(tmpdir(), "thinkrail-e2e-test-lists-"));
+	const lanes = Array.from({ length: shardCount }, (_, lane) =>
+		laneShard(job, lane + 1, shardCount),
+	);
+	let testListArgs: Promise<string[][]> | undefined;
+	try {
+		testListArgs = shardTestListArgs(playwrightArgs, lanes, childEnv(), listDir);
+		testListArgs.catch(() => {});
+		if (!playwrightArgs.includes("--list") && process.env.THINKRAIL_E2E_SKIP_BUILD !== "1") {
+			const buildStartedAt = performance.now();
+			console.log("E2E: building web once before host startup");
+			const buildCode = await run([bun, "run", "build:web"]);
+			if (buildCode !== 0) return buildCode;
+			console.log(`E2E: web build ready in ${elapsed(buildStartedAt)}`);
+		}
 
-	return shardCount === 1
-		? runSerial(playwrightArgs, job)
-		: runShards(shardCount, playwrightArgs, job);
+		return shardCount === 1
+			? await runSerial(playwrightArgs, job, testListArgs)
+			: await runShards(shardCount, playwrightArgs, job, testListArgs);
+	} finally {
+		await testListArgs?.catch(() => {});
+		rmSync(listDir, { recursive: true, force: true });
+	}
 }
 
 try {
