@@ -78,7 +78,7 @@ export class TurnTracker {
 		if (!run) return Promise.resolve();
 		const headTree = this.snapshot(run.worktreePath);
 		const job = this.settle(sessionId, run, headTree).catch((error) => {
-			log.warn(`turn change set was not recorded for ${sessionId}`, error as Error);
+			log.warn(`turn change set was not recorded for ${sessionId}`, error);
 		});
 		this.recording.add(job);
 		void job.then(() => this.recording.delete(job));

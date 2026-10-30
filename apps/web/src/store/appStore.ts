@@ -40,7 +40,6 @@ import type {
 	ThinkingLevel,
 	TurnChangeSet,
 	UserFontsSnapshot,
-	UserMessage,
 	UserThemesSnapshot,
 	WireModel,
 	Workspace,
@@ -703,7 +702,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					turns: clearTurnStreaming(rt.turns),
 				};
 			if (event.message.role === "user") {
-				const message = event.message as UserMessage;
+				const message = event.message;
 				const text = userText(message.content);
 				if (isControlMessage(text)) return rt;
 				const last = rt.turns[rt.turns.length - 1];
@@ -1704,7 +1703,7 @@ function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 }
 
 function appendLayoutIntent(intents: LayoutIntent[], input: LayoutIntentInput): LayoutIntent[] {
-	return [...intents, { ...input, id: randomId("layout-intent") } as LayoutIntent];
+	return [...intents, { ...input, id: randomId("layout-intent") }];
 }
 
 function layoutOpenIntentFields(options: LayoutOpenOptions) {
@@ -2960,7 +2959,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) =>
 			state.removedWorkspaceIds[intent.workspaceId]
 				? {}
-				: { layoutIntents: [...state.layoutIntents, { ...intent, id } as LayoutIntent] },
+				: { layoutIntents: [...state.layoutIntents, { ...intent, id }] },
 		);
 		return id;
 	},

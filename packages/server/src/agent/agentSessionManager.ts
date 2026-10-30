@@ -654,10 +654,7 @@ function markCancelledRun(entry: Entry): void {
 	try {
 		saveSessionLifecycle(next);
 	} catch (error) {
-		log.warn(
-			`session cancellation state was not persisted for ${entry.session.sessionId}`,
-			error as Error,
-		);
+		log.warn(`session cancellation state was not persisted for ${entry.session.sessionId}`, error);
 	}
 }
 
@@ -813,7 +810,7 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	) {
 		void requestSessionReload(session.sessionId).catch((error) => {
 			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(session.sessionId)) {
-				log.warn(`extension reload failed for ${session.sessionId}`, error as Error);
+				log.warn(`extension reload failed for ${session.sessionId}`, error);
 			}
 		});
 	}
@@ -955,7 +952,7 @@ function reconsiderPendingReload(entry: Entry): void {
 			hasFailedMcpReload(sessionId)
 		)
 			return;
-		log.warn(`deferred resource reload failed for ${sessionId}`, error as Error);
+		log.warn(`deferred resource reload failed for ${sessionId}`, error);
 		notifyExtUi(
 			sessionId,
 			`This chat could not reload its resources after a settings change and still runs with the previous ones — close or reload it. ${(error as Error).message ?? String(error)}`,
@@ -1131,7 +1128,7 @@ function resolveWireModel(
 	const available = settledAvailableModels(runtime);
 	const match = available.find((model) => sameModel(model, ref));
 	if (!match) throw new Error(`Unknown or unavailable model: ${ref.provider}/${ref.id}`);
-	return match as unknown as Model<string>;
+	return match;
 }
 
 const RENAMED_PI_PROVIDERS: Readonly<Record<string, string>> = {
@@ -1274,7 +1271,7 @@ async function prepareSessionEntry(
 			try {
 				recordSettlement(entry, terminal);
 			} catch (error) {
-				log.warn(`session state settlement was not persisted for ${sessionId}`, error as Error);
+				log.warn(`session state settlement was not persisted for ${sessionId}`, error);
 			}
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
 			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
@@ -1324,9 +1321,7 @@ async function prepareSessionEntry(
 		entry,
 		result: {
 			sessionId,
-			model: session.model
-				? sessionWireModel(session.model as unknown as Model<string>, generation)
-				: null,
+			model: session.model ? sessionWireModel(session.model, generation) : null,
 			thinkingLevel: session.thinkingLevel,
 		},
 	};
@@ -1596,9 +1591,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		workspaceId: entry.workspaceId,
 		title: session.sessionName ?? "",
 		...entryFirstPrompt(entry),
-		model: session.model
-			? sessionWireModel(session.model as unknown as Model<string>, entry.generation)
-			: null,
+		model: session.model ? sessionWireModel(session.model, entry.generation) : null,
 		thinkingLevel: session.thinkingLevel,
 		isStreaming: session.isStreaming,
 		messageCount: session.messages.length,
@@ -1735,7 +1728,7 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 				title: info.name ?? "",
 				...firstPromptOf(manager.getEntries()),
 				model: null,
-				thinkingLevel: "medium" as ThinkingLevel,
+				thinkingLevel: "medium",
 				isStreaming: false,
 				messageCount: info.messageCount,
 				updatedAt: info.modified.getTime(),
@@ -2616,7 +2609,7 @@ function reconcileSubagentUsageInBackground(workspaceId: string, sessionId: stri
 	void reconcileSessionSubagentUsage(workspaceId, sessionId, () =>
 		usageWritableEntry(sessionId)?.session.sessionManager.getEntries(),
 	).catch((error: unknown) =>
-		log.warn(`subagent usage was not reconciled for ${sessionId}`, error as Error),
+		log.warn(`subagent usage was not reconciled for ${sessionId}`, error),
 	);
 }
 
@@ -2642,7 +2635,7 @@ function cutTornUsageAppend(
 	try {
 		if (file && size !== undefined && statSync(file).size > size) truncateSync(file, size);
 	} catch (error) {
-		log.warn(`a failed usage append was not cut back for ${sessionId}`, error as Error);
+		log.warn(`a failed usage append was not cut back for ${sessionId}`, error);
 	}
 }
 
@@ -2661,13 +2654,13 @@ export function recordSessionUsage(
 		sessionManager.appendUsage(kind, provider, model, usage, note);
 	} catch (error) {
 		cutTornUsageAppend(sessionId, file, size);
-		log.warn(`${kind} usage was not persisted for ${sessionId}`, error as Error);
+		log.warn(`${kind} usage was not persisted for ${sessionId}`, error);
 		return false;
 	}
 	try {
 		publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
 	} catch (error) {
-		log.warn(`usage invalidation was not published for ${sessionId}`, error as Error);
+		log.warn(`usage invalidation was not published for ${sessionId}`, error);
 	}
 	return true;
 }
@@ -2871,7 +2864,7 @@ function settleShutdownStep(entry: Entry, step: () => Promise<unknown>): Promise
 	return running.then(
 		() => {},
 		(error) => {
-			log.debug(`session ${entry.session.sessionId} shutdown handlers failed`, error as Error);
+			log.debug(`session ${entry.session.sessionId} shutdown handlers failed`, error);
 		},
 	);
 }
@@ -3077,7 +3070,7 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 		try {
 			removeSessionStateMetadata(info.id);
 		} catch (error) {
-			log.warn(`session state metadata was not pruned for ${info.id}`, error as Error);
+			log.warn(`session state metadata was not pruned for ${info.id}`, error);
 		}
 	}
 }
@@ -3150,7 +3143,7 @@ async function runDeleteTransaction(
 	try {
 		removeSessionStateMetadata(sessionId);
 	} catch (error) {
-		log.warn(`session state metadata was not pruned for ${sessionId}`, error as Error);
+		log.warn(`session state metadata was not pruned for ${sessionId}`, error);
 	}
 	publishDeleted({ workspaceId, sessionId });
 }
