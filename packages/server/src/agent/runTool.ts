@@ -15,6 +15,42 @@ const OUTPUT_DEFAULT_CHARS = 16 * 1024;
 const OUTPUT_MAX_CHARS = 64 * 1024;
 const LIVE = new Set<RunExecution["status"]>(["starting", "running", "listening", "stopping"]);
 
+const RecipeTargetSchema = Type.Object({
+	id: Type.String({ description: "Lowercase letters, digits, '.', '_' or '-'." }),
+	title: Type.Optional(Type.String()),
+	command: Type.String({ description: "POSIX sh, run by /bin/sh." }),
+	kind: Type.Union([Type.Literal("serve"), Type.Literal("task")]),
+	ports: Type.Optional(
+		Type.Array(Type.String(), {
+			description: "serve: the declared port variables this target binds.",
+		}),
+	),
+	url: Type.Optional(
+		Type.String({ description: `serve: e.g. http://localhost:\${PORT}/ over declared variables.` }),
+	),
+	cwd: Type.Optional(Type.String({ description: "Worktree-relative; default '.'." })),
+});
+
+export const RecipeSchema = Type.Object(
+	{
+		version: Type.Literal(1),
+		ports: Type.Optional(
+			Type.Record(Type.String(), Type.Integer(), {
+				description: "Env variable name → the project's natural port, e.g. { PORT: 5173 }.",
+			}),
+		),
+		prepare: Type.Optional(
+			Type.Array(Type.String(), {
+				description: "Idempotent POSIX sh commands run before every start.",
+			}),
+		),
+		targets: Type.Array(RecipeTargetSchema),
+		primary: Type.String({ description: "The id of the target the Run button starts." }),
+		notes: Type.Optional(Type.String({ description: "Caveats for the user and future agents." })),
+	},
+	{ description: "The whole recipe document, as an object." },
+);
+
 export const RunProjectSchema = Type.Object({
 	action: Type.Union(
 		[
@@ -31,9 +67,7 @@ export const RunProjectSchema = Type.Object({
 		},
 	),
 	target: Type.Optional(Type.String({ description: "Target id for run / output / stop." })),
-	recipe: Type.Optional(
-		Type.Unknown({ description: "set_recipe: the whole recipe document (see the recipe action)." }),
-	),
+	recipe: Type.Optional(RecipeSchema),
 	expectedRevision: Type.Optional(
 		Type.Integer({
 			description: "set_recipe: the revision you read; defaults to the current one.",

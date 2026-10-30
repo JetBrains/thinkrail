@@ -27,8 +27,7 @@ The agent uses the same recipe and the same runs to verify its work.
   `startRun` (a `null` target is the prepare-only run), `restartRun`, `stopRun`, `listRunState`,
   `readRunOutput`, `stopWorkspaceRuns`, `stopAllRuns`, `forgetWorkspaceRuns`, `setRunPublisher` (+
   `RunPublisher`), `resetRunState` (test seam); the recipe validator `validateRecipe` / `assertRecipe` /
-  `RecipeInvalidError`; `allocatePorts`; `stripAnsi`; the tab-key vocabulary `runTabKey`,
-  `targetIdOfTabKey`, `PREPARE_TAB_KEY`; `RUN_OUTPUT_TAIL_CHARS`.
+  `RecipeInvalidError`.
 - **Consumers:** `host` serves `run.*`, wires the publisher, installs the agent tool's seam, and calls
   `stopWorkspaceRuns(id, { force: true })` from workspace removal and host stop — before terminals close
   and the worktree is reclaimed. The `run_project` tool (`agent`) reaches every operation through that
@@ -114,8 +113,9 @@ strip from an *inherited* environment and that can never collide with the host's
    and the target the script creates a **sentinel file** (`<data dir>/run-sentinels/<runId>`); the module
    polls it (with the port probe) and its appearance is both the `starting → running` transition and the
    release of the workspace's prepare queue — observed from the filesystem, never parsed from output.
-5. The command tab is `thinkrail-run:<targetId>`, titled by the target; `runPrepare` uses
-   `thinkrail-run-prepare`, outside the target namespace, with the same lifecycle.
+5. The command tab is `thinkrail-run:<targetId>`, titled by the target; the prepare-only run
+   (`startRun(workspaceId, null)`) uses `thinkrail-run-prepare`, outside the target namespace, with the
+   same lifecycle.
 
 **State** per slot: `starting → running → listening → exited { code }`, or `stopping → stopped`, plus the
 persisted `lastRun` for an idle slot. `listening` comes from a TCP probe of the url's port every second,

@@ -1641,7 +1641,7 @@ own section. The kebab menu (`plan-menu`, a
   describes the states): `null` on an older host or a win32 host; **Set up run** without a recipe; the
   followed execution (`store/run`'s `latestExecution`: the most recently started live run, else the most
   recent) with its chip, primary and ▾ items. `useRunRunner(workspaceId, projectId)` executes them —
-  `run.start` / `run.restart` / `run.stop` / `run.prepare`, revealing the host-born command tab through
+  `run.start` (a `null` target is the prepare-only run) / `run.restart` / `run.stop`, revealing the host-born command tab through
   the store's `revealTerminalTab`; **Set up** and **Fix** hand `runPrompts`' plain-English
   `/skill:running-the-project …` prompts to the workspace chat via `openChat`'s `promptWorkspaceChat`
   (the log is not inlined: the agent pulls `run_project output` for the execution named in the prompt);
@@ -1653,7 +1653,7 @@ own section. The kebab menu (`plan-menu`, a
   (hydrate-then-stream). `RunPanel` is the store-connected wrapper of the props-driven **`RunPanelView`**
   (static-render tested): targets with status chips, per-row Open / Show terminal / Start / Stop and a
   star that makes a target primary (`run.setPrimary` with the read revision); Prepare commands with **Run
-  now** (`run.prepare`); recipe facts — assigned ports, learned when and by whom, the agent's notes — with
+  now**; recipe facts — assigned ports, learned when and by whom, the agent's notes — with
   **Edit**, **Set up again with agent** and **Fix with agent**; the project's two switches
   (`run.setSettings`); empty / Windows / older-host states. **Edit** is a monospace text area holding the
   recipe JSON (`RecipeEditor`): the browser only parses JSON, the host validates on `run.setRecipe` with the

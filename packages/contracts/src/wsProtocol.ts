@@ -337,7 +337,6 @@ export const WS_METHODS = {
 	runStart: "run.start",
 	runRestart: "run.restart",
 	runStop: "run.stop",
-	runPrepare: "run.prepare",
 	runState: "run.state",
 	localesList: "locales.list",
 	localesReveal: "locales.reveal",
@@ -1016,7 +1015,6 @@ export interface WsMethodMap {
 		params: { workspaceId: string; targetId: string | null; force?: boolean };
 		result: { execution: RunExecution };
 	};
-	"run.prepare": { params: { workspaceId: string }; result: { execution: RunExecution } };
 	"run.state": { params: { workspaceId: string }; result: RunWorkspaceState };
 	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
 	"locales.reveal": { params: Record<string, never>; result: Ack };

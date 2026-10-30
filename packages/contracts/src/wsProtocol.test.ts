@@ -567,7 +567,6 @@ test("project runs are pinned to v102 with their methods, channels, codes and th
 	expect(WS_METHODS.runStart).toBe("run.start");
 	expect(WS_METHODS.runRestart).toBe("run.restart");
 	expect(WS_METHODS.runStop).toBe("run.stop");
-	expect(WS_METHODS.runPrepare).toBe("run.prepare");
 	expect(WS_METHODS.runState).toBe("run.state");
 	expect(WS_CHANNELS.runRecipeChanged).toBe("run.recipeChanged");
 	expect(WS_CHANNELS.runStateChanged).toBe("run.stateChanged");

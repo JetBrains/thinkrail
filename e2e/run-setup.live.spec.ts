@@ -28,11 +28,40 @@ function makeRunnable(worktreePath: string): void {
 	writeFileSync(join(worktreePath, "test.py"), 'print("TR_TESTS_OK")\n');
 }
 
-async function waitForTurnEnd(page: Page): Promise<void> {
+/** Answer every questionnaire the skill's interview raises with its first (recommended) options. */
+async function answerQuestionnaires(page: Page): Promise<void> {
+	const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]').first();
+	if ((await card.count()) === 0) return;
+	for (let step = 0; step < 12; step += 1) {
+		const option = card.getByTestId("ask-option").first();
+		if ((await option.count()) > 0 && (await option.getAttribute("data-selected")) !== "true") {
+			await option.click();
+		}
+		const submit = card.getByTestId("ask-submit");
+		if ((await submit.count()) > 0 && (await submit.isEnabled())) {
+			await submit.click();
+			return;
+		}
+		const next = card.getByTestId("ask-continue");
+		if ((await next.count()) > 0) {
+			await next.click();
+			continue;
+		}
+		return;
+	}
+}
+
+async function waitForTurnEnd(page: Page, timeoutMs = 420_000): Promise<void> {
 	const done = page
 		.locator('[data-testid="chat-message"][data-role="system"]')
 		.filter({ hasText: "Done" });
-	await expect(done.last()).toBeVisible({ timeout: 240_000 });
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if ((await done.count()) > 0) return;
+		await answerQuestionnaires(page);
+		await page.waitForTimeout(1_000);
+	}
+	await expect(done.last()).toBeVisible();
 }
 
 const primary = (page: Page) => page.getByTestId("scope-run-primary");

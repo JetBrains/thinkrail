@@ -1165,7 +1165,8 @@ sees none of the Run UI and never saves a preset naming the tool. Semantics are
 - Methods: `run.recipe { projectId }`, `run.setRecipe { projectId, recipe, expectedRevision }` (the raw
   document; the host validates), `run.setPrimary`, `run.setSettings { projectId, settings }` (partial),
   `run.start { workspaceId, targetId, prepare? }`, `run.restart` (one host operation: stop, await the
-  end, start), `run.stop { …, force? }`, `run.prepare { workspaceId }`, `run.state { workspaceId }`.
+  end, start), `run.stop { …, force? }`, `run.state { workspaceId }`; a `null` `targetId` on `run.start`
+  is the prepare-only run.
   Codes: `RUN_RECIPE_MISSING`, `RUN_TARGET_UNKNOWN`, `RUN_ALREADY_RUNNING`, `RUN_NOT_RUNNING`,
   `RUN_PORT_IN_USE`, `RUN_NO_FREE_PORT`, `RUN_SPAWN_FAILED`, `RUN_UNSUPPORTED_PLATFORM` (a win32 host),
   and `RUN_AGENT_FORBIDDEN` (the tool while *agentMayRun* is off).

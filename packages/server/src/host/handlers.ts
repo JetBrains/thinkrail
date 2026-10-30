@@ -1040,9 +1040,6 @@ const handlers: WsHandlers = {
 	"run.stop": (p) => ({
 		execution: stopRun(p.workspaceId, p.targetId, { force: p.force ?? false }),
 	}),
-	"run.prepare": async (p) => ({
-		execution: await startRun(p.workspaceId, null, { origin: "user" }),
-	}),
 	"run.state": (p) => {
 		getWorkspace(p.workspaceId);
 		return listRunState(p.workspaceId);
