@@ -9,6 +9,7 @@ import {
 	createAgentSession,
 	type ExtensionCommandContext,
 	type ExtensionError,
+	type ExtensionFactory,
 	type ExtensionUIContext,
 	getAgentDir,
 	type McpServerConfig,
@@ -1477,6 +1478,7 @@ async function createParentSessionInternal(
 					subagents.extension,
 					createBackgroundCommandsExtension({ service: commands }),
 					...mcpHost.extensions,
+					extraUsageModelSelectExtension(sessionId),
 				],
 				toolResponseSessionServices(toolResponseWaiters),
 			),
@@ -2492,8 +2494,16 @@ export async function setSessionModel(sessionId: string, model: WireModel): Prom
 	const entry = mustGetEntry(sessionId);
 	const resolved = resolveWireModel(entry.generation.runtime, model);
 	await entry.session.setModel(resolved);
-	void warnAnthropicExtraUsage(entry);
 	return sessionWireModel(resolved, entry.generation);
+}
+
+function extraUsageModelSelectExtension(sessionId: string): ExtensionFactory {
+	return (pi) => {
+		pi.on("model_select", () => {
+			const entry = sessions.get(sessionId);
+			if (entry) void warnAnthropicExtraUsage(entry);
+		});
+	};
 }
 
 function extraUsageSubject(entry: Entry): ExtraUsageSubject {

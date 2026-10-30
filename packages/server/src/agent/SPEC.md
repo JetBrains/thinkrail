@@ -1106,8 +1106,12 @@ shared with the pi CLI. There is no ThinkRail copy of the setting.
   That final setting check reads pi's settings **from disk** (the session's cwd and trust), not the
   session's in-memory `SettingsManager`. A manager loaded before an opt-out would still say "on":
   a chat mid-create or mid-attach when another client clicks Don't warn again, or a lookup still in
-  flight. A concurrent re-check cannot double-warn, and the opt-out always wins. Triggers mirror pi's: `registerSession` (create and attach),
-  `setSessionModel`, and `recheckAnthropicExtraUsage` after a successful Anthropic login in `auth`.
+  flight. A concurrent re-check cannot double-warn, and the opt-out always wins.
+- **Triggers mirror pi's:** `registerSession` (create and attach), pi's `model_select` extension event,
+  and `recheckAnthropicExtraUsage` after a successful Anthropic login in `auth`. A per-session inline
+  extension (`extraUsageModelSelectExtension`) listens for `model_select`. It therefore covers the
+  host's `setSessionModel` and an extension's `pi.setModel` or a model cycle alike; a
+  host-wrapper-only hook would miss the last two.
 - **Central-replaced `anthropic`** is skipped (`opaqueProviderIds`): its credential is Central's and is
   never read.
 - **Delivery** is a `notice` frame on the ExtUi channel (`publishSessionNotice`). It carries a closed
