@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
+	AbandonmentReportBudget,
 	heaviestReplayMethod,
 	RequestReplayCache,
 	RequestReplayConflictError,
@@ -104,8 +105,8 @@ describe("request replay cache", () => {
 		expect(errorCodeOf(first)).toBe("REQUEST_REPLAY_OVERFLOW");
 		expect(first.message).not.toContain("page");
 		expect(first.load).toEqual({
-			"git.status": { pending: 2, settled: 0 },
-			"session.resources": { pending: 0, settled: 8 },
+			"git.status": { pending: 2, settled: 0, abandoned: 0 },
+			"session.resources": { pending: 0, settled: 8, abandoned: 0 },
 		});
 		expect(heaviestReplayMethod(first.load ?? {})).toBe("session.resources");
 		expect(overflow("refused-2").load).toBeNull();
@@ -118,9 +119,9 @@ describe("request replay cache", () => {
 		await cache.run("page", "below-low-water", "below-low-water", () => "ok");
 		await cache.run("page", "refill", "refill", () => "ok");
 		expect(overflow("refused-4").load).toEqual({
-			"git.status": { pending: 2, settled: 0 },
-			"session.resources": { pending: 0, settled: 5 },
-			"unknown method": { pending: 0, settled: 3 },
+			"git.status": { pending: 2, settled: 0, abandoned: 0 },
+			"session.resources": { pending: 0, settled: 5, abandoned: 0 },
+			"unknown method": { pending: 0, settled: 3, abandoned: 0 },
 		});
 	});
 
@@ -128,20 +129,20 @@ describe("request replay cache", () => {
 		expect(heaviestReplayMethod({})).toBeUndefined();
 		expect(
 			heaviestReplayMethod({
-				"git.status": { pending: 1, settled: 0 },
-				"fs.readFile": { pending: 0, settled: 12 },
+				"git.status": { pending: 1, settled: 0, abandoned: 0 },
+				"fs.readFile": { pending: 0, settled: 12, abandoned: 0 },
 			}),
 		).toBe("fs.readFile");
 		expect(
 			heaviestReplayMethod({
-				"fs.readFile": { pending: 0, settled: 2 },
-				"git.status": { pending: 2, settled: 0 },
+				"fs.readFile": { pending: 0, settled: 2, abandoned: 0 },
+				"git.status": { pending: 2, settled: 0, abandoned: 0 },
 			}),
 		).toBe("git.status");
 		expect(
 			heaviestReplayMethod({
-				"session.resources": { pending: 1, settled: 1 },
-				"fs.readFile": { pending: 1, settled: 1 },
+				"session.resources": { pending: 1, settled: 1, abandoned: 0 },
+				"fs.readFile": { pending: 1, settled: 1, abandoned: 0 },
 			}),
 		).toBe("fs.readFile");
 	});
@@ -228,7 +229,7 @@ describe("request replay cache", () => {
 		expect(lostExecutions).toBe(1);
 	});
 
-	test("a receipt for work still in flight is ignored, not obeyed", async () => {
+	test("a receipt for work still in flight abandons it: joined while running, dropped once settled", async () => {
 		const cache = new RequestReplayCache<string>();
 		const run = deferred<string>();
 		let executions = 0;
@@ -237,13 +238,113 @@ describe("request replay cache", () => {
 			return run.promise;
 		};
 
-		const inFlight = cache.run("page", "picker", "same", execute);
-		cache.acknowledge("page", ["picker"]);
+		const inFlight = cache.run("page", "picker", "same", execute, "dialog.pickDirectory");
+		expect(cache.acknowledge("page", ["picker"])).toEqual(["dialog.pickDirectory"]);
+		expect(cache.acknowledge("page", ["picker"])).toEqual([]);
 		expect(cache.run("page", "picker", "same", execute)).toBe(inFlight);
 
 		run.resolve("/picked/path");
 		expect(await inFlight).toBe("/picked/path");
 		expect(executions).toBe(1);
+		await Promise.resolve();
+		expect(await cache.run("page", "picker", "same", () => "not retained")).toBe("not retained");
+	});
+
+	test("abandoned work frees live slots, still counts toward the tracked ceiling, and leaves both when it settles", async () => {
+		const cache = new RequestReplayCache<string>(2, undefined, 4);
+		const hung = deferred<string>();
+		const a = cache.run("page", "a", "a", () => hung.promise, "git.status");
+		const b = cache.run("page", "b", "b", () => hung.promise, "git.status");
+		expect(() => cache.run("page", "c", "c", () => "no room")).toThrow(RequestReplayOverflowError);
+
+		cache.acknowledge("page", ["a"]);
+		cache.retain("page", []);
+		expect(await cache.run("page", "c", "c", () => "room")).toBe("room");
+		expect(await cache.run("page", "d", "d", () => "room")).toBe("room");
+		expect(() => cache.run("page", "e", "e", () => "x")).toThrow(RequestReplayOverflowError);
+
+		hung.resolve("late");
+		expect(await a).toBe("late");
+		expect(await b).toBe("late");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(() => cache.run("page", "e", "e", () => "x")).toThrow(RequestReplayOverflowError);
+
+		for (const cycle of [1, 2]) {
+			const again = deferred<string>();
+			cache.acknowledge("page", cycle === 1 ? ["c", "d"] : ["f", "g"]);
+			const first = cache.run("page", `h${cycle}`, `h${cycle}`, () => again.promise);
+			const second = cache.run("page", `i${cycle}`, `i${cycle}`, () => again.promise);
+			cache.retain("page", []);
+			again.resolve("late");
+			await Promise.all([first, second]);
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			expect(await cache.run("page", cycle === 1 ? "f" : "j", "f1", () => "ok")).toBe("ok");
+			expect(await cache.run("page", cycle === 1 ? "g" : "k", "g1", () => "ok")).toBe("ok");
+			expect(() => cache.run("page", `full${cycle}`, "x", () => "x")).toThrow(
+				RequestReplayOverflowError,
+			);
+		}
+	});
+
+	test("the tracked ceiling refuses admission even with live slots free, and names the abandoned occupant", () => {
+		const cache = new RequestReplayCache<string>(2, undefined, 3);
+		const hung = new Promise<string>(() => {});
+		void cache.run("page", "a", "a", () => hung, "session.resources");
+		void cache.run("page", "b", "b", () => hung, "session.resources");
+		expect(cache.acknowledge("page", ["a", "b"])).toEqual([
+			"session.resources",
+			"session.resources",
+		]);
+		void cache.run("page", "c", "c", () => hung, "git.status");
+
+		let refused: RequestReplayOverflowError | undefined;
+		try {
+			void cache.run("page", "d", "d", () => "x", "git.status");
+		} catch (error) {
+			refused = error as RequestReplayOverflowError;
+		}
+		expect(refused?.load).toEqual({
+			"session.resources": { pending: 0, settled: 0, abandoned: 2 },
+			"git.status": { pending: 1, settled: 0, abandoned: 0 },
+		});
+		expect(heaviestReplayMethod(refused?.load ?? {})).toBe("session.resources");
+	});
+
+	test("abandoned work still running declines client retirement, so reap cleanup never races it", async () => {
+		const cache = new RequestReplayCache<string>();
+		const hung = deferred<string>();
+		const run = cache.run("page", "probe", "probe", () => hung.promise, "mcp.testConnection");
+		cache.acknowledge("page", ["probe"]);
+		expect(cache.clearClient("page")).toBe(false);
+		hung.resolve("done");
+		await run;
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(cache.clearClient("page")).toBe(true);
+	});
+
+	test("abandonment reports admit each method once and stop at a fixed allowance", () => {
+		const budget = new AbandonmentReportBudget(2);
+		expect(budget.admit("session.resources")).toBe(true);
+		expect(budget.admit("session.resources")).toBe(false);
+		expect(budget.admit("git.status")).toBe(true);
+		expect(budget.admit("fs.readFile")).toBe(false);
+		expect(budget.admit("git.status")).toBe(false);
+	});
+
+	test("a replaced namespace is never charged by the old one's late settlement", async () => {
+		const cache = new RequestReplayCache<string>(1);
+		const old = deferred<string>();
+		const first = cache.run("page", "a", "a", () => old.promise);
+		cache.acknowledge("page", ["a"]);
+		cache.clear();
+		const replacement = deferred<string>();
+		const second = cache.run("page", "a", "a", () => replacement.promise);
+
+		old.resolve("old");
+		expect(await first).toBe("old");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(cache.run("page", "a", "a", () => "rerun")).toBe(second);
+		expect(() => cache.run("page", "b", "b", () => "x")).toThrow(RequestReplayOverflowError);
 	});
 
 	test("receipts for unknown ids and unknown clients are ignored", () => {
@@ -269,7 +370,7 @@ describe("request replay cache", () => {
 		expect(await cache.run("page", "fresh", "four", execute)).toBe("1");
 	});
 
-	test("reconnect reconciliation keeps in-flight work the page did not name", async () => {
+	test("reconnect reconciliation abandons in-flight work the page did not name", async () => {
 		const cache = new RequestReplayCache<string>();
 		const run = deferred<string>();
 		let executions = 0;
@@ -278,13 +379,17 @@ describe("request replay cache", () => {
 			return run.promise;
 		};
 
-		const inFlight = cache.run("page", "picker", "same", execute);
-		cache.retain("page", []);
+		const inFlight = cache.run("page", "picker", "same", execute, "git.status");
+		const named = cache.run("page", "named", "named", () => new Promise<string>(() => {}));
+		expect(cache.retain("page", ["named"])).toEqual(["git.status"]);
 		expect(cache.run("page", "picker", "same", execute)).toBe(inFlight);
+		expect(cache.run("page", "named", "named", execute)).toBe(named);
 
 		run.resolve("/picked/path");
 		expect(await inFlight).toBe("/picked/path");
 		expect(executions).toBe(1);
+		await Promise.resolve();
+		expect(await cache.run("page", "picker", "same", () => "not retained")).toBe("not retained");
 	});
 
 	test("reconciling an unknown client is a no-op", () => {

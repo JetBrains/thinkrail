@@ -149,8 +149,10 @@ import {
 	setupObservation,
 } from "./productAnalytics";
 import {
+	AbandonmentReportBudget,
 	heaviestReplayMethod,
 	type ReplayLoad,
+	RequestAbandonedError,
 	RequestReplayCache,
 	RequestReplayOverflowError,
 } from "./requestReplayCache";
@@ -227,10 +229,21 @@ const log = logger("host");
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
 function formatReplayLoad(load: ReplayLoad): string {
+	const occupancy = ({ pending, settled, abandoned }: ReplayLoad[string]) =>
+		pending + settled + abandoned;
 	return Object.entries(load)
-		.sort(([, a], [, b]) => b.pending + b.settled - (a.pending + a.settled))
-		.map(([method, { pending, settled }]) => `${method} ${pending} pending/${settled} settled`)
+		.sort(([, a], [, b]) => occupancy(b) - occupancy(a))
+		.map(
+			([method, { pending, settled, abandoned }]) =>
+				`${method} ${pending} pending/${settled} settled/${abandoned} abandoned`,
+		)
 		.join(", ");
+}
+
+function countMethods(methods: readonly string[]): string {
+	const counts = new Map<string, number>();
+	for (const method of methods) counts.set(method, (counts.get(method) ?? 0) + 1);
+	return [...counts].map(([method, count]) => `${method} ×${count}`).join(", ");
 }
 
 function clientProtocolVersion(value: string | null): number {
@@ -282,6 +295,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
+	const abandonmentReports = new AbandonmentReportBudget();
+	const reportAbandoned = (methods: readonly string[]): void => {
+		if (methods.length === 0) return;
+		log.warn(`requests abandoned before their handlers settled: ${countMethods(methods)}`);
+		for (const method of new Set(methods)) {
+			if (abandonmentReports.admit(method))
+				reportError(new RequestAbandonedError(), requestErrorReport(method));
+		}
+	};
 	const terminalBackpressured = new Set<string>();
 	let hostUpdateNotice: HostUpdateNotice | undefined;
 	let hostUpdateTimer: ReturnType<typeof setInterval> | undefined;
@@ -423,11 +445,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				if (typeof req !== "object" || req === null) return;
 				if ("ack" in req && Array.isArray(req.ack)) {
-					requestReplays.acknowledge(ws.data.clientKey, req.ack.filter(isRequestId));
+					reportAbandoned(
+						requestReplays.acknowledge(ws.data.clientKey, req.ack.filter(isRequestId)),
+					);
 					return;
 				}
 				if ("resume" in req && Array.isArray(req.resume)) {
-					requestReplays.retain(ws.data.clientKey, req.resume.filter(isRequestId));
+					reportAbandoned(requestReplays.retain(ws.data.clientKey, req.resume.filter(isRequestId)));
 					return;
 				}
 				if (

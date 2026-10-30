@@ -118,6 +118,7 @@ export class WsTransport {
 		return new Promise<WsResult<M>>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.pending.delete(id);
+				if (this.ws?.readyState === WebSocket.OPEN) this.queueAck(id);
 				reject(new RequestTimeoutError(t("app.transport.timedOut", { method })));
 			}, timeoutMs);
 			this.pending.set(id, {

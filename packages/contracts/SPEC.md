@@ -847,7 +847,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `(clientKey, requestId)` instead of executing the handler again. Two client→host frames that are *not* requests close
   that loop (hence **`WsClientMessage`**, discriminated on the key): **`WsAck`** (`{ ack: string[] }`) names
   responses the client has *read* — the only thing that distinguishes a reply the page received from one that
-  died in a socket buffer, and so the only thing that lets the host free a retained result — and **`WsResume`**
+  died in a socket buffer, and so the only thing that lets the host free a retained result — or requests whose
+  client deadline fired, which the host then abandons ([[submodule-server-host]]); an older host ignores a receipt
+  for work still running, so this needs no protocol bump — and **`WsResume`**
   (`{ resume: string[] }`), sent on every (re)connect ahead of the replays, names the complete set the page
   still considers unresolved, so the host can release everything else. `resume` exists because a receipt is only
   as reliable as the socket carrying it and nothing would ever re-send a lost one: restating the live set beats
