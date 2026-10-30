@@ -393,6 +393,7 @@ export type LayoutIntent =
 	  }
 	| { id: string; kind: "close-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "select-terminal"; workspaceId: string; tabKey: string }
+	| { id: string; kind: "reveal-terminal"; workspaceId: string; tabKey: string; title: string }
 	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" }
 	| { id: string; kind: "toggle-bottom"; workspaceId: string };
 export type LayoutIntentInput = LayoutIntent extends infer Intent
@@ -1300,6 +1301,8 @@ interface AppState {
 	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
 	closeTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
 	setActiveTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
+	/** Select a host terminal that is already placed in this surface, else place it (host-born tabs never place themselves). */
+	revealTerminalTab: (workspaceId: string, tabKey: string, title: string) => void;
 	beginChatStart: (workspaceId: string) => void;
 	endChatStart: (workspaceId: string) => void;
 	beginWorktreeCreation: (projectId: string) => void;
@@ -3581,6 +3584,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 									}),
 								}
 							: {}),
+						activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
+					},
+		),
+	revealTerminalTab: (workspaceId, tabKey, title) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? {}
+				: {
+						layoutIntents: appendLayoutIntent(s.layoutIntents, {
+							kind: "reveal-terminal",
+							workspaceId,
+							tabKey,
+							title,
+						}),
 						activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 					},
 		),
