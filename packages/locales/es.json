@@ -1962,8 +1962,6 @@
 	"shell.quitHint.hold": "Mantén {{shortcut}} o pulsa dos veces para salir",
 	"shell.quitHint.quitting": "Saliendo…",
 	"shell.quitHint.release": "Suelta para salir",
-	"shell.sessionSwitcher.empty": "No hay sesiones activas",
-	"shell.sessionSwitcher.title": "Cambiar de sesión",
 	"shell.topbar.settings": "Ajustes",
 	"shell.topbar.settingsWithShortcut": "Ajustes ({{shortcut}})",
 	"shell.windowControls.maximize": "Maximizar",

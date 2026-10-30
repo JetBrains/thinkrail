@@ -10,15 +10,10 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { useOpenProject } from "../../panels/useOpenProject";
-import { loadProjectWorkspaces } from "../../panels/workspaceActions";
+import { goToProjectHome } from "../../panels/workspaceActions";
 import { useAppStore } from "../../store";
 import { projectInitial } from "./locationModel";
 import { PillChevron, pillClass, Segment } from "./Segment";
-
-function goToProjectHome(projectId: string): void {
-	useAppStore.getState().selectProject(projectId, { reveal: true });
-	void loadProjectWorkspaces(projectId).catch(() => {});
-}
 
 export function ProjectSegment({ project, atHome }: { project: Project; atHome: boolean }) {
 	const t = useT();

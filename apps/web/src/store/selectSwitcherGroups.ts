@@ -5,8 +5,7 @@ import {
 	type Workspace,
 } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
-import type { ClosedChat, SessionRuntime } from "./appStore";
-import { selectChatFirstPrompt } from "./selectors";
+import type { ClosedChat } from "./appStore";
 
 export type SessionAttention = "needs-input" | "error" | "unread" | "running";
 
@@ -17,7 +16,6 @@ export interface SwitcherSession {
 	workspaceName: string;
 	workspaceKind: Workspace["kind"] | undefined;
 	chatTitle: string | null;
-	firstPrompt: string | undefined;
 	attention: SessionAttention;
 }
 
@@ -31,13 +29,12 @@ export interface SwitcherProject {
 interface SwitcherGroupsState {
 	projects: Project[];
 	workspaces: Record<string, Workspace[]>;
-	sessions: Record<string, SessionRuntime>;
 	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
 }
 
-function getSessionAttention(state: SessionStateRecord["state"]): SessionAttention | null {
+export function getSessionAttention(state: SessionStateRecord["state"]): SessionAttention | null {
 	if (state.needsInput !== null) return "needs-input";
 	if (state.completionUnread && state.completion?.outcome === "failed") return "error";
 	if (state.completionUnread) return "unread";
@@ -56,8 +53,8 @@ function compareSessionsByAttention(a: SwitcherSession, b: SwitcherSession): num
 	return ATTENTION_PRIORITY[a.attention] - ATTENTION_PRIORITY[b.attention];
 }
 
-function resolveChatTitle(
-	state: SwitcherGroupsState,
+export function selectKnownChatTitle(
+	state: Pick<SwitcherGroupsState, "layoutDocumentsByWorkspace" | "closedChatsByWorkspace">,
 	workspaceId: string,
 	sessionId: string,
 ): string | null {
@@ -73,7 +70,7 @@ function resolveChatTitle(
 			return null;
 		};
 		const fromLayout = visit(document.center);
-		if (fromLayout !== null) return fromLayout;
+		if (fromLayout) return fromLayout;
 	}
 	const closed = state.closedChatsByWorkspace[workspaceId] ?? [];
 	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
@@ -101,8 +98,7 @@ export function selectSwitcherGroups(state: SwitcherGroupsState): SwitcherProjec
 				projectId: record.projectId,
 				workspaceName: workspace?.name ?? "",
 				workspaceKind: workspace?.kind,
-				chatTitle: resolveChatTitle(state, record.workspaceId, record.sessionId),
-				firstPrompt: selectChatFirstPrompt(state, record.workspaceId, record.sessionId),
+				chatTitle: selectKnownChatTitle(state, record.workspaceId, record.sessionId),
 				attention,
 			});
 			sessionsByProject.set(record.projectId, sessions);
