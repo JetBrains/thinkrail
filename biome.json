@@ -23,7 +23,13 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"preset": "recommended"
+			"preset": "recommended",
+			"style": {
+				"noEnum": "error",
+				"noNamespace": "error",
+				"noParameterProperties": "error",
+				"useReadonlyClassProperties": "error"
+			}
 		}
 	},
 	"javascript": {

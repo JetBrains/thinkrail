@@ -48,8 +48,10 @@ class Wire {
 	private seq = 0;
 	private readonly replies = new Map<string, Reply>();
 	readonly frames = new Map<string, LoginFrame[]>();
+	private readonly socket: WebSocket;
 
-	private constructor(private readonly socket: WebSocket) {
+	private constructor(socket: WebSocket) {
+		this.socket = socket;
 		socket.addEventListener("close", () => {
 			for (const reply of this.replies.values()) reply.reject(new Error("host connection closed"));
 			this.replies.clear();

@@ -54,14 +54,21 @@ function recordTurn(turn: TurnChangeSet): void {
 export class TurnTracker {
 	private readonly pending = new Map<string, PendingRun>();
 	private readonly recording = new Set<Promise<void>>();
+	private readonly resolve: (
+		sessionId: string,
+	) => { workspaceId: string; worktreePath: string } | null;
+	private readonly now: () => number;
+	private readonly snapshot: (worktreePath: string) => Promise<string | null>;
 
 	constructor(
-		private readonly resolve: (
-			sessionId: string,
-		) => { workspaceId: string; worktreePath: string } | null,
-		private readonly now: () => number = Date.now,
-		private readonly snapshot: (worktreePath: string) => Promise<string | null> = snapshotWorktree,
-	) {}
+		resolve: (sessionId: string) => { workspaceId: string; worktreePath: string } | null,
+		now: () => number = Date.now,
+		snapshot: (worktreePath: string) => Promise<string | null> = snapshotWorktree,
+	) {
+		this.resolve = resolve;
+		this.now = now;
+		this.snapshot = snapshot;
+	}
 
 	observe(sessionId: string, event: PiEvent): Promise<void> {
 		if (event.type === "agent_start") {

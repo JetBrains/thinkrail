@@ -99,13 +99,21 @@ export class QuestionnaireComponent implements Component, Focusable {
 	private readonly editor: Editor;
 	private settled = false;
 	private cache: { width: number; lines: string[] } | undefined;
+	private readonly args: AskUserQuestionArgs;
+	private readonly tui: TUI;
+	private readonly theme: Theme;
+	private readonly finish: (outcome: AskOutcome) => void;
 
 	constructor(
-		private readonly args: AskUserQuestionArgs,
-		private readonly tui: TUI,
-		private readonly theme: Theme,
-		private readonly finish: (outcome: AskOutcome) => void,
+		args: AskUserQuestionArgs,
+		tui: TUI,
+		theme: Theme,
+		finish: (outcome: AskOutcome) => void,
 	) {
+		this.args = args;
+		this.tui = tui;
+		this.theme = theme;
+		this.finish = finish;
 		this.states = args.questions.map(() => emptyQuestionState());
 		this.cursors = [...args.questions.map(() => 0), args.questions.length];
 		this.editor = new Editor(tui, editorTheme(theme));

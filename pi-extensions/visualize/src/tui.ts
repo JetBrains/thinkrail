@@ -78,13 +78,17 @@ export class DiagramComponent implements Component {
 	private cachedWidth: number | undefined;
 	private cachedLines: string[] | undefined;
 	private art: MermaidArt | undefined | null = null;
+	private readonly source: string;
+	private readonly title: string | undefined;
+	private readonly expanded: boolean;
+	private readonly theme: Theme;
 
-	constructor(
-		private readonly source: string,
-		private readonly title: string | undefined,
-		private readonly expanded: boolean,
-		private readonly theme: Theme,
-	) {}
+	constructor(source: string, title: string | undefined, expanded: boolean, theme: Theme) {
+		this.source = source;
+		this.title = title;
+		this.expanded = expanded;
+		this.theme = theme;
+	}
 
 	private completeArt(): MermaidArt | undefined {
 		if (this.art === null) {
