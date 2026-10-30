@@ -8,7 +8,7 @@
 	},
 	"scripts": {
 		"test": "bun test",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsrs --noEmit"
 	},
 	"dependencies": {
 		"@pierre/diffs": "1.5.1",
@@ -35,6 +35,7 @@
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",
 		"remark-gfm": "catalog:",
+		"tsrs": "catalog:",
 		"typescript": "catalog:"
 	}
 }
