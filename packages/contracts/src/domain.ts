@@ -1896,10 +1896,6 @@ export function isPlanReviewResult(value: unknown): value is PlanReviewResult {
 	return true;
 }
 
-// ---------------------------------------------------------------------------
-// Run — the project's run recipe and runs (submodule-server-run)
-// ---------------------------------------------------------------------------
-
 export type RunTargetKind = "serve" | "task";
 
 export interface RunTarget {

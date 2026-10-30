@@ -870,7 +870,9 @@ re-opened transcripts provider-valid.
     The **`run_project`** tool (`runTool.ts`) is the agent's door to [[submodule-server-run]]: `recipe`
     (the document plus the contract text — POSIX sh, declared port variables, the `THINKRAIL_RUN_*`
     environment — and this workspace's assigned ports), `set_recipe` (whole-document replace, host-stamped
-    with the session; `expectedRevision` defaults to the revision just read), `run { target, prepare?, wait?,
+    with the session; `expectedRevision` defaults to the revision just read; the `recipe` parameter is a full
+    TypeBox schema, not `Unknown`, so pi's argument validation shows the model the exact shape — an untyped
+    parameter had one live run spend minutes probing how to pass the document), `run { target, prepare?, wait?,
     timeoutSec? }`, `status`, `output { target, runId?, maxBytes? }` and `stop`. It is always registered for
     the same prompt-cache reason as `set_title`; `run` and `stop` are refused at call time while the
     project's *Let the agent run targets* setting is off (`RUN_AGENT_FORBIDDEN`) or on a win32 host
