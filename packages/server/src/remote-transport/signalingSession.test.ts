@@ -14,6 +14,10 @@ function deps(over: Partial<HandshakeDeps> = {}): {
 			consumeToken: (token) => (token === "good" ? { projectRef: "proj", expiresAt: 1 } : null),
 			verifyProof: (proof) => proof.signature === "valid",
 			registerDevice: (device) => registered.push(device),
+			findDevice: (key) =>
+				key === "KNOWNKEY"
+					? { id: "dev-known", label: "Known phone", publicKey: "KNOWNKEY", pairedAt: 1 }
+					: null,
 			now: () => 123,
 			newDeviceId: () => "dev-xyz",
 			...over,
@@ -55,6 +59,26 @@ test("a bad proof is rejected and registers nothing", () => {
 	expect(step.send?.kind).toBe("rejected");
 	expect(step.done).toBe(true);
 	expect(registered).toHaveLength(0);
+});
+
+test("resume re-authorizes a known device without a token, preserving its id", () => {
+	const { deps: d, registered } = deps();
+	const hs = createHostHandshake(d);
+
+	expect(hs.handle({ kind: "resume", devicePublicKey: "KNOWNKEY" })).toEqual({
+		send: { kind: "challenge", challenge: "CHALLENGE" },
+	});
+	const step = hs.handle({ kind: "proof", signature: "valid" });
+	expect(step.authorized?.device.id).toBe("dev-known");
+	expect(step.authorized?.device.label).toBe("Known phone");
+	expect(registered.at(-1)?.id).toBe("dev-known");
+});
+
+test("resume for an unknown device is rejected", () => {
+	const { deps: d } = deps();
+	const step = createHostHandshake(d).handle({ kind: "resume", devicePublicKey: "STRANGER" });
+	expect(step.send?.kind).toBe("rejected");
+	expect(step.done).toBe(true);
 });
 
 test("out-of-order frames are rejected, and frames after close are ignored", () => {

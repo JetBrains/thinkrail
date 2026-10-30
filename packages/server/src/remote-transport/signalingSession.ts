@@ -8,6 +8,8 @@ export interface HandshakeDeps {
 	consumeToken: (token: string) => PairingRequest | null;
 	verifyProof: (proof: PairingProof) => boolean;
 	registerDevice: (device: PairedDevice) => void;
+	/** Looks up an already-paired device by public key; used for token-less reconnect (`resume`). */
+	findDevice: (devicePublicKey: string) => PairedDevice | null;
 	now?: () => number;
 	newDeviceId?: () => string;
 }
@@ -32,6 +34,8 @@ type State =
 			label: string;
 			challenge: string;
 			projectRef: string;
+			/** Set when resuming an already-paired device, so its id is preserved rather than minted anew. */
+			deviceId?: string;
 	  }
 	| { phase: "closed" };
 
@@ -60,18 +64,34 @@ export function createHostHandshake(deps: HandshakeDeps): HostHandshake {
 			if (state.phase === "closed") return { done: true };
 
 			if (state.phase === "await-hello") {
-				if (message.kind !== "hello") return reject("expected hello");
-				const request = deps.consumeToken(message.token);
-				if (!request) return reject("invalid or expired pairing code");
-				const challenge = deps.newChallenge();
-				state = {
-					phase: "await-proof",
-					devicePublicKey: message.devicePublicKey,
-					label: message.label,
-					challenge,
-					projectRef: request.projectRef,
-				};
-				return { send: { kind: "challenge", challenge } };
+				if (message.kind === "hello") {
+					const request = deps.consumeToken(message.token);
+					if (!request) return reject("invalid or expired pairing code");
+					const challenge = deps.newChallenge();
+					state = {
+						phase: "await-proof",
+						devicePublicKey: message.devicePublicKey,
+						label: message.label,
+						challenge,
+						projectRef: request.projectRef,
+					};
+					return { send: { kind: "challenge", challenge } };
+				}
+				if (message.kind === "resume") {
+					const known = deps.findDevice(message.devicePublicKey);
+					if (!known) return reject("unknown device; pair again with a fresh link");
+					const challenge = deps.newChallenge();
+					state = {
+						phase: "await-proof",
+						devicePublicKey: known.publicKey,
+						label: known.label,
+						challenge,
+						projectRef: "",
+						deviceId: known.id,
+					};
+					return { send: { kind: "challenge", challenge } };
+				}
+				return reject("expected hello or resume");
 			}
 
 			if (message.kind !== "proof") return reject("expected proof");
@@ -82,7 +102,7 @@ export function createHostHandshake(deps: HandshakeDeps): HostHandshake {
 			});
 			if (!ok) return reject("pairing proof rejected");
 			const device: PairedDevice = {
-				id: newDeviceId(),
+				id: state.deviceId ?? newDeviceId(),
 				label: state.label,
 				publicKey: state.devicePublicKey,
 				pairedAt: now(),

@@ -16,6 +16,9 @@ export interface RemoteConnection {
 	close(): void;
 }
 
+const DEVICE_KEY_STORAGE = "thinkrail.remote.deviceKey";
+const MAX_BACKOFF_MS = 10_000;
+
 function base64urlToBytes(value: string): Uint8Array<ArrayBuffer> {
 	const padded = value
 		.replace(/-/g, "+")
@@ -33,11 +36,46 @@ function bytesToBase64url(bytes: Uint8Array): string {
 	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+interface DeviceKey {
+	privateKey: CryptoKey;
+	publicKeyRaw: string;
+}
+
+/** A stable per-browser Ed25519 identity, so a reconnect re-authorizes as the same (already-paired) device. */
+async function loadOrCreateDeviceKey(): Promise<DeviceKey> {
+	const stored = localStorage.getItem(DEVICE_KEY_STORAGE);
+	if (stored) {
+		try {
+			const parsed = JSON.parse(stored) as { privateJwk: JsonWebKey; publicKeyRaw: string };
+			const privateKey = await crypto.subtle.importKey(
+				"jwk",
+				parsed.privateJwk,
+				{ name: "Ed25519" },
+				true,
+				["sign"],
+			);
+			return { privateKey, publicKeyRaw: parsed.publicKeyRaw };
+		} catch {
+			// fall through and regenerate
+		}
+	}
+	const keyPair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, [
+		"sign",
+		"verify",
+	])) as CryptoKeyPair;
+	const privateJwk = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
+	const publicKeyRaw = (await crypto.subtle.exportKey("jwk", keyPair.publicKey)).x;
+	if (!publicKeyRaw) throw new Error("could not derive the device key");
+	localStorage.setItem(DEVICE_KEY_STORAGE, JSON.stringify({ privateJwk, publicKeyRaw }));
+	return { privateKey: keyPair.privateKey, publicKeyRaw };
+}
+
 /**
- * The device side of "open a project by link": parse the link, connect to the relay, run the pairing
- * handshake (Ed25519 via `crypto.subtle`), negotiate a browser WebRTC answer, and hand the opened DataChannel
- * to the wire client. Resolves once the channel is open. Browser-only — it uses the platform's WebSocket,
- * RTCPeerConnection, and SubtleCrypto; there is no library to bundle.
+ * Opens (or re-opens) a remote session: connect to the relay, authorize (first time with the one-time pairing
+ * token, reconnects with `resume` against the already-registered device key), negotiate a browser WebRTC
+ * answer, and attach the opened channel to the wire client. A dropped connection auto-reconnects with backoff;
+ * in-flight requests survive and replay (see `deviceWireClient`). Browser-only — uses the platform WebSocket,
+ * RTCPeerConnection, and SubtleCrypto.
  */
 export async function connectRemoteProject(
 	link: string,
@@ -45,98 +83,139 @@ export async function connectRemoteProject(
 ): Promise<RemoteConnection> {
 	const pairing = parsePairingUri(link);
 	if (!pairing) throw new Error("Invalid pairing link");
+	const key = await loadOrCreateDeviceKey();
+	const client = createDeviceWireClient();
 
-	const keyPair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, [
-		"sign",
-		"verify",
-	])) as CryptoKeyPair;
-	const devicePublicKey = (await crypto.subtle.exportKey("jwk", keyPair.publicKey)).x;
-	if (!devicePublicKey) throw new Error("could not derive the device key");
+	let closed = false;
+	let backoff = 500;
+	let active: { ws: WebSocket; pc: RTCPeerConnection } | null = null;
 
-	const ws = new WebSocket(pairing.signalingUrl);
-	const pc = new RTCPeerConnection();
-
-	const teardown = (): void => {
+	const teardownActive = (): void => {
+		if (!active) return;
 		try {
-			ws.close();
+			active.ws.close();
 		} catch {}
 		try {
-			pc.close();
+			active.pc.close();
 		} catch {}
+		active = null;
 	};
-	const sendSignal = (message: DeviceMessage): void =>
-		ws.send(encodeBrokerFrame({ t: "frame", data: encodeDeviceMessage(message) }));
 
-	pc.addEventListener("icecandidate", (event) => {
-		if (event.candidate) {
-			sendSignal({ kind: "candidate", candidate: JSON.stringify(event.candidate.toJSON()) });
-		}
-	});
-
-	return await new Promise<RemoteConnection>((resolve, reject) => {
-		const fail = (reason: string): void => {
-			teardown();
-			reject(new Error(reason));
-		};
-
-		pc.addEventListener("datachannel", (event) => {
-			const channel = event.channel;
-			channel.addEventListener("open", () =>
-				resolve({
-					client: createDeviceWireClient(toDeviceChannel(channel)),
-					projectRef: pairing.projectRef,
-					close: teardown,
-				}),
-			);
-		});
-
-		const onHost = async (message: HostMessage): Promise<void> => {
-			switch (message.kind) {
-				case "challenge": {
-					const signature = await crypto.subtle.sign(
-						{ name: "Ed25519" },
-						keyPair.privateKey,
-						base64urlToBytes(message.challenge),
-					);
-					sendSignal({ kind: "proof", signature: bytesToBase64url(new Uint8Array(signature)) });
-					return;
-				}
-				case "accepted":
-					return;
-				case "rejected":
-					fail(message.reason);
-					return;
-				case "offer": {
-					await pc.setRemoteDescription({ type: "offer", sdp: message.sdp });
-					const answer = await pc.createAnswer();
-					await pc.setLocalDescription(answer);
-					if (answer.sdp) sendSignal({ kind: "answer", sdp: answer.sdp });
-					return;
-				}
-				case "candidate":
-					await pc.addIceCandidate(JSON.parse(message.candidate) as RTCIceCandidateInit);
-					return;
-			}
-		};
-
-		ws.addEventListener("open", () =>
-			ws.send(encodeBrokerFrame({ t: "connect", hostKey: pairing.hostPublicKey })),
+	const sign = async (challenge: string): Promise<string> => {
+		const signature = await crypto.subtle.sign(
+			{ name: "Ed25519" },
+			key.privateKey,
+			base64urlToBytes(challenge),
 		);
-		ws.addEventListener("error", () => fail("relay connection failed"));
-		ws.addEventListener("message", (event: MessageEvent) => {
-			if (typeof event.data !== "string") return;
-			const frame = parseBrokerMessage(event.data);
-			if (!frame) return;
-			if (frame.t === "error") return fail(frame.reason);
-			if (frame.t === "close") return fail("the host closed the connection");
-			if (frame.t === "ready") {
-				sendSignal({ kind: "hello", token: pairing.token, devicePublicKey, label: options.label });
-				return;
-			}
-			if (frame.t === "frame") {
-				const host = parseHostMessage(frame.data);
-				if (host) void onHost(host).catch((error: unknown) => fail(String(error)));
-			}
+		return bytesToBase64url(new Uint8Array(signature));
+	};
+
+	/** Runs one connection attempt; resolves when its DataChannel opens, rejects on failure. */
+	const attempt = (initiate: DeviceMessage): Promise<void> =>
+		new Promise<void>((resolve, reject) => {
+			const ws = new WebSocket(pairing.signalingUrl);
+			const pc = new RTCPeerConnection();
+			active = { ws, pc };
+			let settled = false;
+
+			const dropped = (reason: string): void => {
+				if (settled) {
+					if (!closed) scheduleReconnect();
+				} else {
+					settled = true;
+					reject(new Error(reason));
+				}
+			};
+
+			const send = (message: DeviceMessage): void =>
+				ws.send(encodeBrokerFrame({ t: "frame", data: encodeDeviceMessage(message) }));
+
+			pc.addEventListener("icecandidate", (event) => {
+				if (event.candidate)
+					send({ kind: "candidate", candidate: JSON.stringify(event.candidate.toJSON()) });
+			});
+			pc.addEventListener("connectionstatechange", () => {
+				if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+					teardownActive();
+					dropped("peer connection lost");
+				}
+			});
+			pc.addEventListener("datachannel", (event) => {
+				event.channel.addEventListener("open", () => {
+					client.attach(toDeviceChannel(event.channel));
+					settled = true;
+					backoff = 500;
+					resolve();
+				});
+			});
+
+			const onHost = async (message: HostMessage): Promise<void> => {
+				switch (message.kind) {
+					case "challenge":
+						send({ kind: "proof", signature: await sign(message.challenge) });
+						return;
+					case "rejected":
+						dropped(message.reason);
+						return;
+					case "offer": {
+						await pc.setRemoteDescription({ type: "offer", sdp: message.sdp });
+						const answer = await pc.createAnswer();
+						await pc.setLocalDescription(answer);
+						if (answer.sdp) send({ kind: "answer", sdp: answer.sdp });
+						return;
+					}
+					case "candidate":
+						await pc.addIceCandidate(JSON.parse(message.candidate) as RTCIceCandidateInit);
+						return;
+					default:
+						return;
+				}
+			};
+
+			ws.addEventListener("open", () =>
+				ws.send(encodeBrokerFrame({ t: "connect", hostKey: pairing.hostPublicKey })),
+			);
+			ws.addEventListener("error", () => dropped("relay connection failed"));
+			ws.addEventListener("close", () => dropped("relay connection closed"));
+			ws.addEventListener("message", (event: MessageEvent) => {
+				if (typeof event.data !== "string") return;
+				const frame = parseBrokerMessage(event.data);
+				if (!frame) return;
+				if (frame.t === "error") return dropped(frame.reason);
+				if (frame.t === "ready") return send(initiate);
+				if (frame.t === "frame") {
+					const host = parseHostMessage(frame.data);
+					if (host) void onHost(host).catch((error: unknown) => dropped(String(error)));
+				}
+			});
 		});
+
+	const scheduleReconnect = (): void => {
+		if (closed) return;
+		const delay = backoff;
+		backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
+		setTimeout(() => {
+			if (closed) return;
+			attempt({ kind: "resume", devicePublicKey: key.publicKeyRaw }).catch(() =>
+				scheduleReconnect(),
+			);
+		}, delay);
+	};
+
+	await attempt({
+		kind: "hello",
+		token: pairing.token,
+		devicePublicKey: key.publicKeyRaw,
+		label: options.label,
 	});
+
+	return {
+		client,
+		projectRef: pairing.projectRef,
+		close: () => {
+			closed = true;
+			teardownActive();
+			client.close();
+		},
+	};
 }

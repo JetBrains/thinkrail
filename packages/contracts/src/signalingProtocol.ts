@@ -4,6 +4,7 @@ const MAX_FIELD = 8192;
 /** Frames a device sends over the signaling channel (untrusted on the host — validated by `parseDeviceMessage`). */
 export type DeviceMessage =
 	| { kind: "hello"; token: string; devicePublicKey: string; label: string }
+	| { kind: "resume"; devicePublicKey: string }
 	| { kind: "proof"; signature: string }
 	| { kind: "offer"; sdp: string }
 	| { kind: "answer"; sdp: string }
@@ -56,6 +57,10 @@ export function parseDeviceMessage(raw: string): DeviceMessage | null {
 					}
 				: null;
 		}
+		case "resume":
+			return field(message.devicePublicKey)
+				? { kind: "resume", devicePublicKey: message.devicePublicKey }
+				: null;
 		case "proof":
 			return field(message.signature) ? { kind: "proof", signature: message.signature } : null;
 		case "offer":

@@ -45,6 +45,7 @@ test("host orchestration pairs a device over the handshake and opens a working W
 				consumeToken: (t) => tokens.consume(t),
 				verifyProof: verifyPairingProof,
 				registerDevice: (d) => addDevice(d, dir),
+				findDevice: (key) => loadDevices(dir).find((d) => d.publicKey === key) ?? null,
 				newDeviceId: () => "dev-1",
 			}),
 			peer,
