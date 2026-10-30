@@ -5094,6 +5094,1543 @@ export default function Narrow() {
 | `apps/web/src/panels/NotificationsSettings.tsx` | Untitled `SETTINGS_ROWS_CONTAINER` section: a switch row with notice blocks under it. |
 | `apps/web/src/shell/LayoutSettings.tsx` | Reset to default row with an outline Button, and a nested `SettingsGroup` of limit inputs. |
 
+## DiffStatBadge
+
+The one `+N −M` diff-count badge: lines added in the success colour, lines removed in the error colour, in metadata type with tabular figures. It owns the signs, colours, type and its own absence — it renders nothing when both counts are zero. The call site passes the two counts (a file's, a folder's aggregate, a commit's or a whole scope's) and places it in a row.
+
+```tsx
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+```
+
+### When to use
+
+- A changed file's line counts, trailing its row in the Changes list or tree, a plan step's file list or a review section header.
+- A collapsed folder's aggregate in the Changes tree — only while it is collapsed; an expanded folder's children already carry the counts.
+- The size of a commit, a revision or a plan step's change set, next to its short sha.
+- The totals of a review scope or a workspace's branch, inline with other metadata such as a file count.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| AttentionDot | A row needs the user's attention; a presence marker, not a magnitude. |
+| RunningIcon | Work is in progress; the badge reports a finished diff, never activity. |
+| FileChip | A file or attachment is the object itself (a composer image, an attachment in the transcript), not a count about it. |
+| TreeRow | The file row itself; the badge goes into its `trailing` slot. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | An inline `<span>` in `tr-text-metadata` with `tabular-nums` and `shrink-0`, so it never gives way in a flex row; `className` is appended. |
+| Added | `+` and `added`, in `text-feedback-success`. |
+| Separator | A single space between the two counts. |
+| Removed | `−` (the minus sign U+2212, not a hyphen) and `removed`, in `text-feedback-error`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `added` | `number` | — | Lines added. Always shown (as `+0` when only lines were removed). Pass `?? 0` for an optional count such as `GitFileChange.added`. |
+| `removed` | `number` | — | Lines removed. Always shown (as `−0` when only lines were added). When both counts are zero or below the badge renders `null`. |
+| `className` | `string` | — | Placement only (margins, order, responsive visibility). Production passes none; the badge owns its type and colours. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Added and removed | Both counts positive. | `+N` in the success colour, a space, `−M` in the error colour. |
+| One-sided | One count is `0`. | Both sides still render: `+34 −0` or `+0 −12`. The zero side keeps its colour. |
+| Empty | Both counts `0` (or below). | Renders nothing — no `+0 −0`, no placeholder, and the row's gap closes. A call site that has no stat at all (`stat ? … : null`) gets the same result. |
+| Long numbers | Large counts (a whole branch). | Tabular figures keep digits aligned; the badge never truncates or shrinks, so the neighbouring label gives way instead. |
+| Hover, focus, selected, disabled | — | No distinct treatment; the badge is not interactive and keeps its colours on a hovered or active row. |
+
+### Accessibility
+
+- Plain inline text with no role or label: it is read as part of its row, for example “+12 −4” after the file name inside a TreeRow button.
+- The meaning is carried by the `+` and `−` signs, not only by colour.
+- It is not a live region; a changing count is not announced.
+- Inside an interactive row the row is the focus target and the badge's text becomes part of the row's accessible name.
+
+| Keys | Action |
+| --- | --- |
+| `—` | None. The badge is never focusable; the row around it is. |
+
+### Usage rules
+
+- **DSB-1** — Every `+N −M` line count is a DiffStatBadge — never hand-written `+`/`−` spans with success and error colours.
+- **DSB-2** — Pass the counts and let the badge hide itself: do not guard `added + removed > 0` at the call site, and do not render `+0 −0`. Default an optional count with `?? 0`.
+- **DSB-3** — Place it after the label in a row's trailing position (a TreeRow's `trailing`, after a truncating path). The badge is `shrink-0`; the label is what truncates.
+- **DSB-4** — Show a folder's aggregate only while the folder is collapsed; once expanded, its children carry the counts.
+- **DSB-5** — Use it for line counts of a diff only — not for file counts, finding counts or review progress, which are their own metadata text beside it.
+- **DSB-6** — No colour, type or weight classes at the call site; `className` is placement only, such as hiding it below `sm` with its sha in a dense meta strip.
+
+### Examples
+
+#### Badge
+
+Lines added and removed for one change.
+
+```tsx
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+
+export default function Preview() {
+	return <DiffStatBadge added={128} removed={42} />;
+}
+```
+
+#### Counts
+
+Both sides always render once either is positive; tabular figures keep large counts aligned.
+
+```tsx
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+
+export default function Counts() {
+	return (
+		<div className="flex flex-col items-end gap-4">
+			<DiffStatBadge added={12} removed={4} />
+			<DiffStatBadge added={34} removed={0} />
+			<DiffStatBadge added={0} removed={7} />
+			<DiffStatBadge added={12045} removed={3871} />
+		</div>
+	);
+}
+```
+
+#### Empty scope
+
+A scope with no line changes renders no badge — switch the scope to see it disappear without a guard at the call site.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+
+const SCOPES = {
+	uncommitted: { files: 3, added: 48, removed: 9 },
+	lastTurn: { files: 0, added: 0, removed: 0 },
+} as const;
+
+export default function Empty() {
+	const t = useT();
+	const [scope, setScope] = useState<keyof typeof SCOPES>("uncommitted");
+	const totals = SCOPES[scope];
+	return (
+		<div className="flex flex-col items-start gap-8">
+			<div className="flex gap-2">
+				<ToggleSegment
+					testid="scope-uncommitted"
+					label={t("changes.scope.uncommitted")}
+					active={scope === "uncommitted"}
+					onClick={() => setScope("uncommitted")}
+				/>
+				<ToggleSegment
+					testid="scope-last-turn"
+					label={t("changes.scope.lastTurn")}
+					active={scope === "lastTurn"}
+					onClick={() => setScope("lastTurn")}
+				/>
+			</div>
+			<span className="flex items-center gap-4 tr-text-metadata text-text-muted">
+				<span>{t("changes.review.fileCount", { count: totals.files })}</span>
+				<DiffStatBadge added={totals.added} removed={totals.removed} />
+			</span>
+		</div>
+	);
+}
+```
+
+#### Changes tree
+
+Per-file badges in TreeRow's `trailing`; a folder shows its aggregate only while collapsed — click the folder.
+
+```tsx
+import { useState } from "react";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+
+const FILES = [
+	{ name: "Composer.tsx", added: 42, removed: 17 },
+	{ name: "FileChip.tsx", added: 8, removed: 0 },
+	{ name: "promptImages.tsx", added: 0, removed: 5 },
+];
+const TOTAL = FILES.reduce(
+	(sum, file) => ({ added: sum.added + file.added, removed: sum.removed + file.removed }),
+	{ added: 0, removed: 0 },
+);
+
+export default function Tree() {
+	const [expanded, setExpanded] = useState(false);
+	return (
+		<ul className="flex w-full max-w-[20rem] flex-col">
+			<li>
+				<TreeRow
+					testid="change-tree-folder"
+					kind="dir"
+					expanded={expanded}
+					label="src/chat"
+					onClick={() => setExpanded((value) => !value)}
+					trailing={expanded ? null : <DiffStatBadge added={TOTAL.added} removed={TOTAL.removed} />}
+				/>
+				{expanded ? (
+					<ul className="flex flex-col pl-tree-indent">
+						{FILES.map((file) => (
+							<li key={file.name}>
+								<TreeRow
+									testid="change-item"
+									kind="file"
+									label={file.name}
+									onClick={() => {}}
+									trailing={<DiffStatBadge added={file.added} removed={file.removed} />}
+								/>
+							</li>
+						))}
+					</ul>
+				) : null}
+			</li>
+		</ul>
+	);
+}
+```
+
+#### Plan file rows
+
+The plan's changed-file rows, where an optional count defaults with `?? 0` and a file without counts shows no badge.
+
+```tsx
+import type { GitFileChange } from "@thinkrail/contracts";
+import { FileRow } from "@/panels/planFileRow";
+
+const FILES: GitFileChange[] = [
+	{ path: "apps/web/src/chat/Composer.tsx", status: "modified", added: 42, removed: 17 },
+	{ path: "apps/web/src/chat/FileChip.tsx", status: "added", added: 61 },
+	{ path: "apps/web/src/chat/legacyChip.tsx", status: "deleted", removed: 38 },
+	{ path: "apps/web/public/preview.png", status: "added" },
+];
+
+export default function FileRows() {
+	return (
+		<ul className="flex w-full max-w-[28rem] flex-col">
+			{FILES.map((file) => (
+				<FileRow key={file.path} file={file} onOpen={() => {}} />
+			))}
+		</ul>
+	);
+}
+```
+
+#### Review summary
+
+Scope totals between the file count and the viewed count in the review header's metadata line.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+
+export default function ReviewSummary() {
+	const t = useT();
+	return (
+		<span className="flex min-w-0 items-center gap-4 tr-text-metadata text-text-muted">
+			<span>{t("changes.review.fileCount", { count: 7 })}</span>
+			<DiffStatBadge added={214} removed={63} />
+			<span>{t("changes.review.viewedCount", { viewed: 2, total: 7 })}</span>
+		</span>
+	);
+}
+```
+
+#### Commit meta
+
+Beside a short sha in a revision list; a revision whose stat no longer resolves shows no badge.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+
+const REVISIONS = [
+	{ sha: "3f9c2e1a", stat: { added: 120, removed: 14 } },
+	{ sha: "b81d07c4", stat: null },
+	{ sha: "e4a5f9d2", stat: { added: 9, removed: 22 }, unreviewed: true },
+];
+
+export default function Revisions() {
+	const t = useT();
+	return (
+		<ol className="flex flex-col gap-4">
+			{REVISIONS.map((rev, index) => (
+				<li key={rev.sha} className="flex items-center gap-8">
+					<span className="tr-text-metadata text-text-muted">#{index + 1}</span>
+					<span className="tr-code-text text-text-subtle">{rev.sha.slice(0, 7)}</span>
+					{rev.stat ? <DiffStatBadge added={rev.stat.added} removed={rev.stat.removed} /> : null}
+					{rev.unreviewed ? (
+						<span className="tr-text-metadata text-feedback-warning">
+							{t("plan.revisions.unreviewed")}
+						</span>
+					) : null}
+				</li>
+			))}
+		</ol>
+	);
+}
+```
+
+#### Narrow row
+
+In a narrow pane the file name truncates and the badge keeps its full width.
+
+```tsx
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function Narrow() {
+	return (
+		<div className="w-full max-w-[12rem]">
+			<TreeRow
+				testid="change-item"
+				kind="file"
+				label="ChangesReviewPane.integration.test.tsx"
+				onClick={() => {}}
+				trailing={<DiffStatBadge added={1204} removed={387} />}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ChangesTree.tsx` | Per-file badge in TreeRow `trailing`; a folder's aggregate only while collapsed. |
+| `apps/web/src/panels/ChangesPanel.tsx` | Flat list rows after the truncating path and the viewed mark. |
+| `apps/web/src/panels/ChangesFileSection.tsx` | Review section header, after the status letter and path. |
+| `apps/web/src/panels/ChangesReviewPane.tsx` | Scope totals between the file count and the viewed count. |
+| `apps/web/src/panels/PlanPane.tsx` | Change-set summary, step meta strip (hidden below `sm` with the sha), revisions and the branch totals. |
+| `apps/web/src/panels/planFileRow.tsx` | Plan change-set file rows with `?? 0` counts. |
+
+## FileChip
+
+A compact, bounded chip for one file or attachment: a file icon, a truncating label, an optional `meta` suffix and an optional trailing action. It owns its border, fill, padding, type and the `default` / `error` tones, and becomes a `<button>` when given `onClick`. The call site provides the label, the suffix that must stay readable, and any action.
+
+```tsx
+import { FileChip } from "@/chat/FileChip";
+```
+
+### When to use
+
+- An image attached to the composer or the new-workspace prompt, with its `· W×H` size and a Remove action.
+- An attachment shown in a sent message, opening a preview when clicked.
+- An attach failure in the attachment strip — the file name plus the reason, dismissible (`tone="error"`, no icon).
+- A placeholder while files are still decoding (“Attaching 2…”), or a one-line command error in the composer's chip row.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| DiffStatBadge | Only the line counts of a changed file are shown, inside its row. |
+| TreeRow | A file in a navigable list or tree (Changes, Files) rather than a single attachment. |
+| SettingsNotice | An error or notice that needs a sentence and actions, not a chip-sized line. |
+| Toast | A transient error that is not tied to an attachment the user can see and dismiss. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | A `<span>`, or a `<button type="button">` when `onClick` is set: `max-w-full` flex row with a `rounded-sm` border, `px-8 py-4` and `tr-text-metadata`; the tone sets border, fill and text colour. |
+| Icon | `RiFileLine` at `size-12`, never shrinks. Omitted with `icon={false}`. |
+| Label | `label` in a `min-w-0 truncate` span — the only part that gives way. |
+| Meta | Optional `meta`, never shrinks: the text that must stay readable at any width (the image size, an error's reason). |
+| Trailing | Optional `trailing`, a non-shrinking flex slot for one action (Remove, Dismiss). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `label` | `ReactNode` | — | The file name or message. Truncates with an ellipsis; pair a long, user-controlled name with `title`. |
+| `meta` | `ReactNode` | — | A suffix after the label that never truncates. Include its own separator, as in `· 1280×720` or `— unsupported image format`. |
+| `trailing` | `ReactNode` | — | One trailing action, usually an `IconButton` at size `s`. Only on a static chip — a chip with `onClick` is already a button. |
+| `onClick` | `() => void` | — | Makes the chip a `<button>` with a hover fill and a focus ring, for opening the file. Give it an `aria-label`. |
+| `tone` | `"default" \| "error"` | `"default"` | `default`: neutral elevated fill and default text. `error`: error-muted border, error-subtle fill and error text. |
+| `icon` | `boolean` | `true` | Shows the leading file icon. Error and command chips pass `false`. |
+
+Passed-through attributes:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `title` | `string` | — | Native hover text for the full label (or the full error) when it truncates. Spread onto the chip element. |
+| `aria-label` | `string` | — | Accessible name for a clickable chip, from a locale key (`chat.turn.viewAttachment`). |
+| `data-testid` | `string` | — | Test hook, spread onto the chip element. |
+| `data-width` | `number \| undefined` | — | Image width hook for e2e (`composer-image` chips). |
+| `data-height` | `number \| undefined` | — | Image height hook for e2e. |
+| `data-mime` | `string \| undefined` | — | Image MIME type hook for e2e. |
+
+### Tone
+
+`tone` sets the chip's border, fill and text together; the trailing action keeps its own colours.
+
+| Tone | Use it for |
+| --- | --- |
+| `default` | Every file or attachment — composer images, sent attachments and the pending placeholder. |
+| `error` | A refused attachment or a failed command in the composer's chip row, with the icon off. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Static | No `onClick`. | A `<span>`; no hover or focus treatment. Its trailing action has its own states. |
+| Hover | Pointer over a chip with `onClick`. | `bg-control-bg-hovered` fill, with a colour transition. |
+| Keyboard focus | Tab to a chip with `onClick`. | `ring-2` in `primary` around the chip. The chip does not set `outline-none`, so the browser's own focus outline also shows inside the ring. |
+| Error | `tone="error"`. | Error-muted border, error-subtle fill and error text. Production error chips are static, so they have no hover change. |
+| Truncated | The label is wider than the space available. | The label ends in an ellipsis; icon, `meta` and `trailing` keep their full width. |
+| Pending | The call site passes a muted label (“Attaching 2…”). | No distinct treatment from the chip itself; the label carries the muted colour. |
+| Selected, disabled, loading | — | No distinct treatment; the chip has no such props. |
+
+### Accessibility
+
+- Static chips are plain text; with `onClick` the chip is a native `<button type="button">`, so focus and activation come from the platform.
+- A clickable chip needs an `aria-label` that names the action and the file (`chat.turn.viewAttachment`), since the visible label is only the file name.
+- `title` is native hover text only — it does not reach touch or keyboard users. Anything the user must read on a phone goes in `meta`, which never truncates.
+- The trailing action carries its own accessible name (an IconButton `label` such as `chat.promptImages.remove`).
+- The file icon is decorative and carries no label.
+- A clickable chip opens its Dialog from `onClick`, not through a `DialogTrigger`, so on close Radix has no trigger to return focus to and focus falls to the document body (as in `turns.tsx`'s `AttachmentChip`).
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Reaches a clickable chip, or the trailing action of a static chip. |
+| `Enter / Space` | Activates a clickable chip (opens the attachment). |
+
+### Usage rules
+
+- **FCH-1** — Every attachment, image or file token in the composer and transcript is a FileChip — composer images, sent attachments, attach errors and the pending placeholder share the one skin.
+- **FCH-2** — Put what must stay readable in `meta`, not `label`: the `· W×H` size and an error's reason. The label is the only part that truncates; the file name gives way first.
+- **FCH-3** — Errors are `tone="error"` with `icon={false}`, the file name in `label`, the reason in `meta` and the full sentence in `title` — never a colour class.
+- **FCH-4** — A chip is either clickable (`onClick` + `aria-label`) or carries one `trailing` action — never both, which would nest a button in a button.
+- **FCH-5** — Trailing actions are an `IconButton` at size `s` with a locale-key `label` (Remove image, Dismiss).
+- **FCH-6** — Keep the chip bounded: place chips in a `flex flex-wrap gap-4` strip and do not override `max-w-full` or the label's truncation; filenames are user-controlled.
+
+### Examples
+
+#### Attached image
+
+A composer image with its size in `meta` and a Remove action.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { FileChip } from "@/chat/FileChip";
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<FileChip
+			title="screenshot.png"
+			label="screenshot.png"
+			meta=" · 1280×720"
+			trailing={
+				<IconButton
+					icon={RiCloseLine}
+					size="s"
+					label={t("chat.promptImages.remove")}
+					onClick={() => {}}
+				/>
+			}
+		/>
+	);
+}
+```
+
+#### Attachment strip
+
+The composer's chip row: an attach error, images and the pending placeholder. Remove and dismiss work.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { FileChip } from "@/chat/FileChip";
+
+const IMAGES = [
+	{ id: "a", name: "screenshot.png", width: 1280, height: 720 },
+	{ id: "b", name: "mockup-final-v3.jpg", width: 2048, height: 1536 },
+];
+
+export default function AttachmentStrip() {
+	const t = useT();
+	const [images, setImages] = useState(IMAGES);
+	const [errors, setErrors] = useState([{ id: "e", name: "photo.heic" }]);
+	return (
+		<div className="flex flex-wrap gap-4">
+			{errors.map((err) => (
+				<FileChip
+					key={err.id}
+					tone="error"
+					icon={false}
+					title={t("chat.promptImages.attachFailedDetail", {
+						name: err.name,
+						reason: t("chat.promptImages.unsupported"),
+					})}
+					label={t("chat.promptImages.attachFailed", { name: err.name })}
+					meta={`— ${t("chat.promptImages.unsupported")}`}
+					trailing={
+						<IconButton
+							icon={RiCloseLine}
+							size="s"
+							label={t("common.dismiss")}
+							onClick={() => setErrors((list) => list.filter((item) => item.id !== err.id))}
+						/>
+					}
+				/>
+			))}
+			{images.map((img) => (
+				<FileChip
+					key={img.id}
+					data-width={img.width}
+					data-height={img.height}
+					title={img.name}
+					label={img.name}
+					meta={` · ${img.width}×${img.height}`}
+					trailing={
+						<IconButton
+							icon={RiCloseLine}
+							size="s"
+							label={t("chat.promptImages.remove")}
+							onClick={() => setImages((list) => list.filter((item) => item.id !== img.id))}
+						/>
+					}
+				/>
+			))}
+			<FileChip
+				label={
+					<span className="text-text-muted">{t("chat.promptImages.attaching", { count: 1 })}</span>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Attach error
+
+`tone="error"` without the icon: the name truncates, the reason in `meta` stays, the full sentence is the `title`.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { FileChip } from "@/chat/FileChip";
+
+export default function ErrorChip() {
+	const t = useT();
+	const [shown, setShown] = useState(true);
+	const name = "holiday-photo-from-the-beach.heic";
+	const reason = t("chat.promptImages.unsupported");
+	if (!shown) return null;
+	return (
+		<div className="flex w-full max-w-[20rem] flex-wrap gap-4">
+			<FileChip
+				tone="error"
+				icon={false}
+				title={t("chat.promptImages.attachFailedDetail", { name, reason })}
+				label={t("chat.promptImages.attachFailed", { name })}
+				meta={`— ${reason}`}
+				trailing={
+					<IconButton
+						icon={RiCloseLine}
+						size="s"
+						label={t("common.dismiss")}
+						onClick={() => setShown(false)}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Pending
+
+The placeholder while images are still decoding; sends wait for it.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { FileChip } from "@/chat/FileChip";
+
+export default function Pending() {
+	const t = useT();
+	return (
+		<div className="flex flex-wrap gap-4">
+			<FileChip
+				label={
+					<span className="text-text-muted">{t("chat.promptImages.attaching", { count: 1 })}</span>
+				}
+			/>
+			<FileChip
+				label={
+					<span className="text-text-muted">{t("chat.promptImages.attaching", { count: 3 })}</span>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Clickable attachment
+
+A sent message's attachment: `onClick` makes the chip a button that opens the image in a Dialog.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { useState } from "react";
+import { FileChip } from "@/chat/FileChip";
+
+export default function Attachment() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const label = "favicon.svg";
+	return (
+		<>
+			<FileChip
+				title={label}
+				aria-label={t("chat.turn.viewAttachment", { label })}
+				onClick={() => setOpen(true)}
+				label={label}
+			/>
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent className="flex w-auto flex-col gap-8">
+					<DialogHeader>
+						<DialogTitle>{label}</DialogTitle>
+					</DialogHeader>
+					<img src="favicon.svg" alt="" className="h-auto w-[16rem] max-w-full rounded-sm" />
+				</DialogContent>
+			</Dialog>
+		</>
+	);
+}
+```
+
+#### Command error
+
+A failed slash command in the composer's chip row — label only, no icon.
+
+```tsx
+import { FileChip } from "@/chat/FileChip";
+
+export default function CommandError() {
+	const message = "Unknown command: /deploy";
+	return (
+		<div className="flex flex-wrap gap-4">
+			<FileChip tone="error" icon={false} title={message} label={message} />
+		</div>
+	);
+}
+```
+
+#### Long file name
+
+In a narrow column the label truncates while the icon, `meta` and the Remove action keep their width.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { FileChip } from "@/chat/FileChip";
+
+export default function Truncation() {
+	const t = useT();
+	const name = "Screenshot 2025-03-14 at 09.41.27 — design review, second pass.png";
+	return (
+		<div className="flex w-full max-w-[16rem] flex-wrap gap-4">
+			<FileChip
+				title={name}
+				label={name}
+				meta=" · 2880×1800"
+				trailing={
+					<IconButton
+						icon={RiCloseLine}
+						size="s"
+						label={t("chat.promptImages.remove")}
+						onClick={() => {}}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/chat/promptImages.tsx` | `PromptImageChips`: attach errors, image chips with size and Remove, and the pending placeholder. |
+| `apps/web/src/chat/turns.tsx` | `AttachmentChip`: a clickable chip in a sent message that opens the image in a Dialog. |
+| `apps/web/src/chat/Composer.tsx` | The command-submit error chip, passed as the strip's `leading` chip. |
+
+## Collapsible
+
+The “Show all N lines” fold for long tool output inside a chat tool card. Above 24 lines it caps the content at `max-h-384` behind a bottom fade and adds a text toggle; at 24 lines or fewer it renders the children untouched. It owns the cap, the fade, the toggle label and the remembered fold state; the call site provides a stable tool-call-derived `id`, the content's line count (usually `countLines(text)`) and the content itself.
+
+```tsx
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+```
+
+### When to use
+
+- The body of a chat tool renderer whose output can run long: file contents (`read`, `write`), edit diffs, web results, MCP arguments and output, spec tool results, a subagent's task.
+- Content whose length you can count in lines before rendering — pass the count; the component never measures.
+- Inside the transcript, where the fold must survive virtualization remounts and keep the reader's scroll anchor (it registers with `FoldGeometryProvider` through `useFold`).
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| QuietScrollArea | Content that should scroll inside a fixed region rather than grow to its full length on demand. |
+| TreeRow | A hierarchy the user expands folder by folder, not one long block of text. |
+| Button | A disclosure outside the chat tool renderers; Collapsible's toggle, fade and fold cache are specific to tool output. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Pass-through | At `lines` ≤ 24 the children are returned as they are — no wrapper, no toggle, no `data-testid`. |
+| Root | A `flex flex-col gap-4` `<div data-testid="collapsible" data-chat-fold-root>` carrying `data-expanded`. |
+| Clip | Wraps the children. Collapsed it is `relative max-h-384 overflow-hidden`; expanded it has no class and the content grows to full height. |
+| Fade | Collapsed only: a `pointer-events-none` `h-32` strip pinned to the clip's bottom edge, painted with `fadeClass` (a gradient from `container-header-bg` to transparent by default). |
+| Toggle | A native `<button data-testid="collapsible-toggle">` below the clip, `self-start`, `text-primary` `tr-text-metadata`, underlined on hover. Its label is “Show all N lines” (`tools.collapsible.showAll`, pluralised by `lines`) or “Show less” (`tools.collapsible.showLess`). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | — | Required. The key in the shared `foldState` cache and the fold anchor id. Derive it from the tool call (`<toolCallId>:content`, `<toolCallId>:task`) so the user's toggle survives re-derivation and virtualization; two folds with the same id share one remembered value. |
+| `lines` | `number` | — | Required. The content's line count. Above 24 the content folds; it is also the N in “Show all N lines”. Use `countLines(text)` (a trailing newline adds no line) or sum the parts you render. |
+| `children` | `ReactNode` | — | The content: a `CodeBlock`, `Markdown`, `ToolArgList`, a diff. It keeps its own surface; the fold adds none. |
+| `fadeClass` | `string` | `"bg-[linear-gradient(to_top,var(--container-header-bg),transparent)]"` | Background classes for the fade strip. The default ends on `container-header-bg`, the code-block surface; pass the gradient to `--container-elevated-bg` when the content's bottom edge is the card itself (EditCard's coloured diff rows). |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Short | `lines` ≤ 24. | The children only. No cap, fade or toggle. |
+| Collapsed | `lines` > 24 and no remembered toggle for `id` (the initial state). | Content clipped at `max-h-384` with the fade over its last `h-32`; toggle reads “Show all N lines”; `data-expanded=false`, `aria-expanded=false`. |
+| Expanded | Click the toggle (or remount after the user expanded the same `id`). | Full-height content, no fade; toggle reads “Show less”; `data-expanded=true`, `aria-expanded=true`. |
+| Toggle hover | Pointer over the toggle. | Label underlined (`hover:underline`); colour unchanged. |
+| Toggle keyboard focus | Tab to the toggle. | The browser's default focus outline — the toggle sets no `focus-visible` ring of its own. |
+| Disabled, loading, error | — | No distinct treatment. Running and empty states are rendered by the tool renderer instead of a Collapsible; error output keeps the colour its content sets. |
+
+### Accessibility
+
+- The toggle is a native `<button>` with `aria-expanded`; its visible label is its accessible name and changes between “Show all N lines” and “Show less”.
+- The toggle has no `aria-controls`; it sits directly below the content it reveals.
+- Collapsed content is clipped visually only — it stays in the DOM, so screen readers and in-page search still reach the hidden lines.
+- The fade is `pointer-events-none` and carries no text, so it never intercepts clicks or selection.
+- Toggling goes through the transcript's fold-geometry seam, which keeps the reader's anchor in place instead of jumping the scroll position.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from the toggle. |
+| `Enter / Space` | Expands or collapses the content. |
+
+### Usage rules
+
+- **COL-1** — Use Collapsible for long output inside chat tool renderers only; it is the tool-output fold, not a general disclosure.
+- **COL-2** — Give every fold a stable id derived from the tool call (`<toolCallId>:content`, `<toolCallId>:task`, a per-part suffix) — never an index, a random value or a content hash — so a manual toggle survives streaming and virtualization.
+- **COL-3** — Pass the real line count of what you render: `countLines(text)` for one block, the sum of the parts for a list (as McpArgs and EditCard do). Do not measure pixels or pre-truncate the content.
+- **COL-4** — Wrap only real output. Running and empty states are one-line messages rendered instead of the fold, never inside it; long error output may fold (spec and MCP results do), a one-line error does not need to.
+- **COL-5** — Keep the default fade for content that ends on a code-block surface; override `fadeClass` only to match the surface the content actually ends on, and never to add another colour.
+- **COL-6** — Do not nest Collapsibles or put one around a whole tool card; the ToolCard header already folds the card.
+
+### Examples
+
+#### Long file output
+
+A 40-line read result, capped behind the fade with “Show all 40 lines”.
+
+```tsx
+import { CodeBlock } from "@/chat/tools/CodeBlock";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const output = Array.from({ length: 40 }, (_, i) => `export const step${i + 1} = ${i + 1};`).join(
+	"\n",
+);
+
+export default function Preview() {
+	return (
+		<div className="w-full">
+			<Collapsible id="library-collapsible-preview:content" lines={countLines(output)}>
+				<CodeBlock code={output} lang="ts" />
+			</Collapsible>
+		</div>
+	);
+}
+```
+
+#### Read and write cards
+
+`CodeBlock` content counted with `countLines`, keyed `<toolCallId>:content` — the ReadCard and WriteCard pattern.
+
+```tsx
+import { CodeBlock } from "@/chat/tools/CodeBlock";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const toolCallId = "library-read-output";
+const output = `${Array.from(
+	{ length: 16 },
+	(_, i) => `export function handler${i + 1}(input: string) {\n\treturn input.trim();\n}`,
+).join("\n")}\n`;
+
+export default function ReadOutput() {
+	return (
+		<div className="w-full">
+			<Collapsible id={`${toolCallId}:content`} lines={countLines(output)}>
+				<CodeBlock code={output} lang="ts" />
+			</Collapsible>
+		</div>
+	);
+}
+```
+
+#### Web result
+
+A long Markdown answer from a web tool, folded with the default fade.
+
+```tsx
+import { Markdown } from "@/chat/Markdown";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const output = [
+	"Found 14 pages for the query:",
+	"",
+	...Array.from(
+		{ length: 14 },
+		(_, i) =>
+			`${i + 1}. **Result ${i + 1}** — example.com/docs/page-${i + 1}\n   A short summary of what this page says about the query.`,
+	),
+].join("\n");
+
+export default function MarkdownResult() {
+	return (
+		<div className="w-full">
+			<Collapsible id="library-web-result:content" lines={countLines(output)}>
+				<Markdown text={output} />
+			</Collapsible>
+		</div>
+	);
+}
+```
+
+#### Summed line count
+
+MCP arguments: the line count is the sum of every argument's lines, so the fold matches what is rendered.
+
+```tsx
+import { ToolArgList, toolArgEntries } from "@/chat/ToolArgList";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const args = {
+	repository: "thinkrail/thinkrail",
+	query: "is:open label:bug",
+	fields: ["title", "author", "labels", "assignees", "milestone", "createdAt", "updatedAt"],
+	filters: { state: "open", sort: "updated", direction: "desc", perPage: 50, page: 1 },
+};
+
+export default function ToolArgs() {
+	const entries = toolArgEntries(args);
+	const lines = entries.reduce((total, entry) => total + Math.max(1, countLines(entry.value)), 0);
+	return (
+		<div className="w-full">
+			<Collapsible id="library-mcp-call:args" lines={lines}>
+				<ToolArgList entries={entries} />
+			</Collapsible>
+		</div>
+	);
+}
+```
+
+#### Edit diff with its own fade
+
+The real EditCard: the diff's coloured rows end on the card, so it passes a `fadeClass` ending on `container-elevated-bg`.
+
+```tsx
+import { EditCard } from "@/chat/tools/EditCard";
+
+const oldText = Array.from({ length: 14 }, (_, i) => `const limit${i + 1} = ${i + 1};`).join("\n");
+const newText = Array.from({ length: 14 }, (_, i) => `const limit${i + 1} = ${(i + 1) * 2};`).join(
+	"\n",
+);
+
+export default function EditCardExample() {
+	return (
+		<div className="w-full">
+			<EditCard
+				toolCallId="library-edit-card"
+				toolName="edit"
+				args={{ path: "src/limits.ts", oldText, newText }}
+				result={{ content: [{ type: "text", text: "Edited src/limits.ts" }] }}
+				status="done"
+				streaming={false}
+			/>
+		</div>
+	);
+}
+```
+
+#### Threshold
+
+24 lines render as they are; 25 lines fold. The toggle label counts the lines you pass.
+
+```tsx
+import { CodeBlock } from "@/chat/tools/CodeBlock";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const lines = (count: number) =>
+	Array.from({ length: count }, (_, i) => `line ${i + 1}`).join("\n");
+const short = lines(24);
+const long = lines(25);
+
+export default function Threshold() {
+	return (
+		<div className="grid w-full grid-cols-2 items-start gap-16">
+			<Collapsible id="library-threshold-24:content" lines={countLines(short)}>
+				<CodeBlock code={short} lang="text" />
+			</Collapsible>
+			<Collapsible id="library-threshold-25:content" lines={countLines(long)}>
+				<CodeBlock code={long} lang="text" />
+			</Collapsible>
+		</div>
+	);
+}
+```
+
+#### Remembered fold
+
+Expand, then collapse and reopen the tool card: the same `id` restores the expanded state on remount.
+
+```tsx
+import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { CodeBlock } from "@/chat/tools/CodeBlock";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const toolCallId = "library-remembered";
+const output = Array.from({ length: 30 }, (_, i) => `entry ${i + 1}`).join("\n");
+
+export default function Remembered() {
+	const t = useT();
+	const [cardOpen, setCardOpen] = useState(true);
+	return (
+		<div className="flex w-full flex-col items-start gap-8">
+			<Button
+				variant="ghost"
+				size="s"
+				iconLeft={cardOpen ? RiArrowDownSLine : RiArrowRightSLine}
+				aria-expanded={cardOpen}
+				onClick={() => setCardOpen((open) => !open)}
+			>
+				{cardOpen ? t("resources.inspector.collapse") : t("changes.section.expand")}
+			</Button>
+			{cardOpen ? (
+				<div className="w-full">
+					<Collapsible id={`${toolCallId}:content`} lines={countLines(output)}>
+						<CodeBlock code={output} lang="text" />
+					</Collapsible>
+				</div>
+			) : null}
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/chat/tools/ReadCard.tsx` | File contents in a `CodeBlock`, keyed `<toolCallId>:content`. |
+| `apps/web/src/chat/tools/EditCard.tsx` | Old and new lines counted together, with the `container-elevated-bg` fade. |
+| `apps/web/src/chat/tools/web/WebResultBody.tsx` | Markdown web results; running, error and empty states stay outside the fold. |
+| `apps/web/src/chat/tools/mcp/McpCardParts.tsx` | MCP arguments (summed line count) and MCP output. |
+| `apps/web/src/chat/tools/subagent/AgentCard.tsx` | A subagent's task text, keyed `<toolCallId>:task`. |
+
+## TreeRow
+
+The file-style tree row shared by the Files tree and the Changes tree, so the two stay identical. It is one full-width button at `h-panel-row` with a chevron (folders) or a spacer (files), a folder or file icon, a truncated label and a trailing slot; it owns the geometry, the icons, the hover and selected fills and the focus ring. The call site provides the label, the kind, the open and active state, the label colour for git status, the trailing marks, the nesting (`pl-tree-indent` lists) and every handler.
+
+```tsx
+import { TreeRow } from "@/panels/TreeRow";
+```
+
+### When to use
+
+- A row of a file or folder hierarchy in a side panel: the workspace Files tree and the Changes tree view.
+- Any new file-like tree that must look and behave exactly like those two — reuse TreeRow instead of drawing another row.
+- A file row that needs a trailing status letter, change dot, `+N −M` badge or viewed mark.
+- A row whose hover and selected fill must cover a wider wrapper with a row-actions menu (`highlight="wrapper"`).
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| FileChip | A file reference inline in chat or a composer, not a row in a hierarchy. |
+| Collapsible | Folding one long block of tool output rather than a nested list. |
+| ContextMenu | The row only needs a right-click menu; compose it around the row instead of extending TreeRow. |
+| Command | Finding a file by name across the workspace; a tree is for browsing by structure. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Row | A native `<button type="button">`, `flex h-panel-row w-full min-w-0 items-center gap-4 rounded-sm px-4`, `tr-text-ui`, with `data-testid`, `data-kind`, `data-active`, `data-status` and `data-viewed`. `min-w-0` lets it shrink beside a trailing control on the same flex line. |
+| Lead | Folders: a `size-16` chevron, right when collapsed and down when `expanded`. Files: an empty `size-14` spacer. |
+| Icon | `size-14` folder or file icon — the line icon, or the fill icon while `active`. |
+| Label | `label`, one line, truncated with an ellipsis; `labelClassName` adds status colour or a line-through. |
+| Trailing slot | `trailing`, rendered after the label inside the button: a status letter, a change dot, DiffStatBadge, the viewed mark. |
+| Nesting | Not part of the row: call sites nest children in a `<ul className="flex flex-col pl-tree-indent">` under the folder's `<li>`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `label` | `string` | — | Required. The file or folder name — or a slash-joined compact run (`apps/web/src`). Also the accessible name with the trailing text. |
+| `kind` | `"dir" \| "file"` | — | Required. Folders get the chevron and folder icon; files a spacer and file icon. |
+| `testid` | `string` | — | Required. Written to `data-testid` (`"file-node"`, `"change-item"`, `"change-tree-folder"`). |
+| `expanded` | `boolean` | — | Folders only: chevron down when true, right otherwise. The call site renders the children. |
+| `active` | `boolean` | — | The row's resource is the open one. Fill icon, `data-active`, and the selected fill when `highlight` is `self`. |
+| `subtle` | `boolean` | `false` | Dims the label and icons from `text-text-muted` to `text-text-subtle` — gitignored entries. |
+| `labelClassName` | `string` | — | Classes for the label span only: git status colour from `statusNameClass` / `statusMarkClass`, `opacity-60` for a viewed file. Never geometry. |
+| `trailing` | `ReactNode` | — | Marks after the label, inside the button: give them `shrink-0` so the label truncates first. |
+| `highlight` | `"self" \| "wrapper"` | `"self"` | `self`: the row paints its own hover and selected fill. `wrapper`: it paints none, so a surrounding element (ChangeRowActions) can paint one fill across the row and its menu button. |
+| `dataStatus` | `string` | — | Written to `data-status` (git status, or `"ignored"`) for tests and styling hooks. |
+| `dataViewed` | `boolean` | — | Sets `data-viewed` when true — a change marked viewed. |
+| `onClick` | `(event: MouseEvent) => void` | — | Activation. Folders toggle; files open as preview, wrapped in `firstClickOnly` so a double click's second click does nothing. |
+| `onDoubleClick` | `() => void` | — | Files: keep the preview tab (open it permanently). |
+| `onContextMenu` | `(event: MouseEvent) => void` | — | Right-click or the context-menu key — ChangeRowActions opens its menu here. |
+| `onWarm` | `(trigger: "hover" \| "focus") => void` | — | Called on pointer enter (`hover`) and focus (`focus`) so a file's editor can preload. FileTree warms at once on focus and through `warmOnHover` on hover. |
+| `ref` | `Ref<HTMLButtonElement>` | — | Forwarded to the `<button>` — FileTree scrolls a revealed file into view with it. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Default | Rest. | No fill; label and icons `text-text-muted`. |
+| Hover | Pointer over the row, `highlight="self"`. | `control-bg-hovered` fill. With `wrapper` the row paints nothing; the wrapper does. |
+| Keyboard focus | Tab to the row. | A 2px inset `primary` ring (`focus-visible:ring-2 ring-inset`); no outline. |
+| Active | `active`. | Fill icon, `data-active`, and the `control-bg-selected` fill with `highlight="self"` (the wrapper paints it otherwise). |
+| Expanded / collapsed | `expanded` on a folder. | Chevron down or right. Nothing else changes; the call site shows or hides the children. |
+| Subtle | `subtle`. | Label and icons `text-text-subtle` (gitignored). |
+| Git status | `labelClassName` from `statusNameClass` / `statusMarkClass`. | Added and untracked green, deleted red with a line-through, renamed blue, modified plain on the name (Changes) or warning-coloured (Files). |
+| Disabled, loading, empty | — | No distinct treatment. The tree shows LoadingRegion while loading and an empty message instead of rows. |
+
+### Accessibility
+
+- Each row is a native `<button type="button">`; its accessible name is the label plus any trailing text. The icons have no label.
+- The trees are plain nested `<ul>` / `<li>` lists, not an ARIA `tree`: rows carry no `role="treeitem"`, `aria-expanded`, `aria-level` or `aria-selected`, so folder state and the active file are visual only.
+- Every row is a separate Tab stop; there is no roving focus or arrow-key navigation.
+- Focus shows the inset `primary` ring, so it is not clipped by the panel's scroll container.
+- A double click (keep) has no keyboard equivalent on the row; activating an already-active preview keeps it, and the strip offers a Keep Preview command.
+- `trailing` marks that carry meaning need their own name — ViewedMark has `role="img"` and a label; a coloured dot or name colour alone is not announced.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus row by row; the focus ring appears. |
+| `Enter / Space` | Activates: toggles a folder, opens a file as preview. |
+| `Shift+F10 / Context menu key` | Fires `onContextMenu` — opens the row-actions menu in the Changes tree. |
+
+### Usage rules
+
+- **TRW-1** — Every file or folder row in a side-panel tree is a TreeRow, so the Files and Changes trees stay identical — never a hand-drawn row or a menu item restyled as one.
+- **TRW-2** — Nest with `<ul className="flex flex-col pl-tree-indent">` inside the folder's `<li>`; never indent with padding on the row.
+- **TRW-3** — Show git status on the name through `labelClassName` from `changesModel` (`statusNameClass`, `statusMarkClass`); never invent another status colour.
+- **TRW-4** — Put marks in `trailing` with `shrink-0` so the label truncates first; a folder shows an aggregate DiffStatBadge only while collapsed.
+- **TRW-5** — Open files as preview on click with `firstClickOnly`, keep on double click; folders toggle on click.
+- **TRW-6** — Use `highlight="wrapper"` only when a wrapper paints the hover and selected fill for the row and its actions (ChangeRowActions); otherwise leave the default.
+- **TRW-7** — Compact a run of single-child folders into one slash-joined `label`; the row expands and collapses the deepest folder.
+
+### Examples
+
+#### File tree
+
+A folder with its files nested under `pl-tree-indent`; one file is active.
+
+```tsx
+import { useState } from "react";
+import { TreeRow } from "@/panels/TreeRow";
+
+const files = ["Button.tsx", "Dialog.tsx", "index.ts"];
+
+export default function Preview() {
+	const [expanded, setExpanded] = useState(true);
+	const [active, setActive] = useState("Button.tsx");
+	return (
+		<ul className="flex w-full max-w-[16rem] flex-col">
+			<li>
+				<TreeRow
+					testid="file-node"
+					kind="dir"
+					expanded={expanded}
+					label="components"
+					onClick={() => setExpanded((open) => !open)}
+				/>
+				{expanded && (
+					<ul className="flex flex-col pl-tree-indent">
+						{files.map((name) => (
+							<li key={name}>
+								<TreeRow
+									testid="file-node"
+									kind="file"
+									active={active === name}
+									label={name}
+									onClick={() => setActive(name)}
+								/>
+							</li>
+						))}
+					</ul>
+				)}
+			</li>
+		</ul>
+	);
+}
+```
+
+#### Files panel
+
+A working tree: folders toggle, a click opens a file, gitignored entries are subtle and changed files show a status letter and their folder a dot.
+
+```tsx
+import type { GitFileStatus } from "@thinkrail/contracts";
+import { useState } from "react";
+import { statusLetter } from "@/chat/planView";
+import { firstClickOnly } from "@/lib";
+import { statusMarkClass } from "@/panels/changesModel";
+import { TreeRow } from "@/panels/TreeRow";
+
+interface Node {
+	path: string;
+	name: string;
+	kind: "dir" | "file";
+	ignored?: boolean;
+	status?: GitFileStatus;
+	changed?: boolean;
+	children?: Node[];
+}
+
+const nodes: Node[] = [
+	{ path: "dist", name: "dist", kind: "dir", ignored: true, children: [] },
+	{
+		path: "src",
+		name: "src",
+		kind: "dir",
+		changed: true,
+		children: [
+			{ path: "src/App.tsx", name: "App.tsx", kind: "file", status: "modified" },
+			{ path: "src/routes.ts", name: "routes.ts", kind: "file", status: "added" },
+			{ path: "src/main.tsx", name: "main.tsx", kind: "file" },
+		],
+	},
+	{ path: ".env.local", name: ".env.local", kind: "file", ignored: true },
+	{ path: "package.json", name: "package.json", kind: "file" },
+];
+
+export default function FilesTree() {
+	const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set(["src"]));
+	const [activePath, setActivePath] = useState<string | null>("src/App.tsx");
+	const toggle = (path: string) =>
+		setExpanded((current) => {
+			const next = new Set(current);
+			if (!next.delete(path)) next.add(path);
+			return next;
+		});
+
+	const renderNode = (node: Node) => {
+		const isDir = node.kind === "dir";
+		const open = expanded.has(node.path);
+		return (
+			<li key={node.path}>
+				<TreeRow
+					testid="file-node"
+					kind={node.kind}
+					expanded={open}
+					active={!isDir && activePath === node.path}
+					subtle={node.ignored === true}
+					dataStatus={node.ignored ? "ignored" : undefined}
+					label={node.name}
+					labelClassName={
+						node.status
+							? statusMarkClass(node.status)
+							: node.changed
+								? statusMarkClass("modified")
+								: ""
+					}
+					trailing={
+						node.status ? (
+							<span className={`shrink-0 tr-text-metadata ${statusMarkClass(node.status)}`}>
+								{statusLetter(node.status)}
+							</span>
+						) : node.changed ? (
+							<span className="mr-4 size-6 shrink-0 rounded-full bg-feedback-warning" />
+						) : undefined
+					}
+					onClick={isDir ? () => toggle(node.path) : firstClickOnly(() => setActivePath(node.path))}
+				/>
+				{isDir && open && node.children && (
+					<ul className="flex flex-col pl-tree-indent">{node.children.map(renderNode)}</ul>
+				)}
+			</li>
+		);
+	};
+
+	return <ul className="flex w-full max-w-[18rem] flex-col">{nodes.map(renderNode)}</ul>;
+}
+```
+
+#### Changes tree
+
+Status on the name, a `+N −M` badge per file, and a folder's aggregate badge only while it is collapsed.
+
+```tsx
+import type { GitFileStatus } from "@thinkrail/contracts";
+import { useState } from "react";
+import { firstClickOnly } from "@/lib";
+import { statusNameClass } from "@/panels/changesModel";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+
+interface Change {
+	path: string;
+	name: string;
+	status: GitFileStatus;
+	added: number;
+	removed: number;
+}
+
+const folders: { path: string; name: string; files: Change[] }[] = [
+	{
+		path: "src/panels",
+		name: "src/panels",
+		files: [
+			{
+				path: "src/panels/TreeRow.tsx",
+				name: "TreeRow.tsx",
+				status: "modified",
+				added: 12,
+				removed: 4,
+			},
+			{
+				path: "src/panels/FileTree.tsx",
+				name: "FileTree.tsx",
+				status: "added",
+				added: 86,
+				removed: 0,
+			},
+			{
+				path: "src/panels/OldTree.tsx",
+				name: "OldTree.tsx",
+				status: "deleted",
+				added: 0,
+				removed: 140,
+			},
+		],
+	},
+	{
+		path: "docs",
+		name: "docs",
+		files: [{ path: "docs/tree.md", name: "tree.md", status: "renamed", added: 3, removed: 1 }],
+	},
+];
+
+const total = (files: Change[], key: "added" | "removed") =>
+	files.reduce((sum, file) => sum + file[key], 0);
+
+export default function ChangesTree() {
+	const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set(["docs"]));
+	const [activePath, setActivePath] = useState("src/panels/TreeRow.tsx");
+	const toggle = (path: string) =>
+		setCollapsed((current) => {
+			const next = new Set(current);
+			if (!next.delete(path)) next.add(path);
+			return next;
+		});
+	return (
+		<ul className="flex w-full max-w-[20rem] flex-col">
+			{folders.map((folder) => {
+				const expanded = !collapsed.has(folder.path);
+				return (
+					<li key={folder.path}>
+						<TreeRow
+							testid="change-tree-folder"
+							kind="dir"
+							expanded={expanded}
+							label={folder.name}
+							onClick={() => toggle(folder.path)}
+							trailing={
+								expanded ? null : (
+									<DiffStatBadge
+										added={total(folder.files, "added")}
+										removed={total(folder.files, "removed")}
+									/>
+								)
+							}
+						/>
+						{expanded && (
+							<ul className="flex flex-col pl-tree-indent">
+								{folder.files.map((file) => (
+									<li key={file.path}>
+										<TreeRow
+											testid="change-item"
+											kind="file"
+											active={activePath === file.path}
+											dataStatus={file.status}
+											label={file.name}
+											labelClassName={statusNameClass(file.status)}
+											onClick={firstClickOnly(() => setActivePath(file.path))}
+											trailing={<DiffStatBadge added={file.added} removed={file.removed} />}
+										/>
+									</li>
+								))}
+							</ul>
+						)}
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+```
+
+#### Row actions
+
+`highlight="wrapper"` inside ChangeRowActions: one fill covers the row and its menu; right-click opens the same menu.
+
+```tsx
+import { useState } from "react";
+import { firstClickOnly } from "@/lib";
+import { ChangeRowActions } from "@/panels/ChangeRowActions";
+import { statusNameClass } from "@/panels/changesModel";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+
+const changes = [
+	{
+		path: "src/panels/TreeRow.tsx",
+		name: "TreeRow.tsx",
+		status: "modified",
+		added: 12,
+		removed: 4,
+	},
+	{ path: "src/panels/FileTree.tsx", name: "FileTree.tsx", status: "added", added: 86, removed: 0 },
+] as const;
+
+export default function RowActions() {
+	const [activePath, setActivePath] = useState<string>(changes[0].path);
+	return (
+		<ul className="flex w-full max-w-[20rem] flex-col">
+			{changes.map((change) => (
+				<li key={change.path}>
+					<ChangeRowActions
+						path={change.path}
+						active={activePath === change.path}
+						onView={() => setActivePath(change.path)}
+						onOpenTab={() => setActivePath(change.path)}
+					>
+						{({ onContextMenu }) => (
+							<TreeRow
+								testid="change-item"
+								kind="file"
+								highlight="wrapper"
+								active={activePath === change.path}
+								dataStatus={change.status}
+								label={change.name}
+								labelClassName={statusNameClass(change.status)}
+								onClick={firstClickOnly(() => setActivePath(change.path))}
+								onContextMenu={onContextMenu}
+								trailing={<DiffStatBadge added={change.added} removed={change.removed} />}
+							/>
+						)}
+					</ChangeRowActions>
+				</li>
+			))}
+		</ul>
+	);
+}
+```
+
+#### Kind and state
+
+Folder collapsed and expanded, file, active file and a gitignored entry.
+
+```tsx
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function States() {
+	return (
+		<ul className="flex w-full max-w-[16rem] flex-col">
+			<li>
+				<TreeRow testid="file-node" kind="dir" label="collapsed" />
+			</li>
+			<li>
+				<TreeRow testid="file-node" kind="dir" expanded label="expanded" />
+			</li>
+			<li>
+				<TreeRow testid="file-node" kind="file" label="file.ts" />
+			</li>
+			<li>
+				<TreeRow testid="file-node" kind="file" active label="active.ts" />
+			</li>
+			<li>
+				<TreeRow testid="file-node" kind="dir" subtle dataStatus="ignored" label="node_modules" />
+			</li>
+		</ul>
+	);
+}
+```
+
+#### Status on the name
+
+`statusNameClass` for each git status, and a viewed change dimmed with the viewed mark.
+
+```tsx
+import type { GitFileStatus } from "@thinkrail/contracts";
+import { statusNameClass } from "@/panels/changesModel";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+import { ViewedMark } from "@/panels/ViewedMark";
+
+const changes: { name: string; status: GitFileStatus; viewed?: boolean }[] = [
+	{ name: "added.ts", status: "added" },
+	{ name: "untracked.ts", status: "untracked" },
+	{ name: "modified.ts", status: "modified" },
+	{ name: "renamed.ts", status: "renamed" },
+	{ name: "deleted.ts", status: "deleted" },
+	{ name: "viewed.ts", status: "modified", viewed: true },
+];
+
+export default function StatusNames() {
+	return (
+		<ul className="flex w-full max-w-[18rem] flex-col">
+			{changes.map((change) => (
+				<li key={change.name}>
+					<TreeRow
+						testid="change-item"
+						kind="file"
+						dataStatus={change.status}
+						dataViewed={change.viewed === true}
+						label={change.name}
+						labelClassName={`${statusNameClass(change.status)} ${change.viewed ? "opacity-60" : ""}`}
+						trailing={
+							<>
+								{change.viewed ? <ViewedMark /> : null}
+								<DiffStatBadge added={4} removed={2} />
+							</>
+						}
+					/>
+				</li>
+			))}
+		</ul>
+	);
+}
+```
+
+#### Compact folders and long names
+
+A single-child folder run is one slash-joined row; long names truncate before the trailing marks.
+
+```tsx
+import { useState } from "react";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function CompactFolders() {
+	const [expanded, setExpanded] = useState(true);
+	return (
+		<ul className="flex w-full max-w-[14rem] flex-col">
+			<li>
+				<TreeRow
+					testid="file-node"
+					kind="dir"
+					expanded={expanded}
+					label="apps/web/src/panels"
+					onClick={() => setExpanded((open) => !open)}
+				/>
+				{expanded && (
+					<ul className="flex flex-col pl-tree-indent">
+						<li>
+							<TreeRow
+								testid="file-node"
+								kind="file"
+								label="WorkspaceFilesPanelToolbar.tsx"
+								trailing={<DiffStatBadge added={128} removed={37} />}
+							/>
+						</li>
+						<li>
+							<TreeRow testid="file-node" kind="file" label="TreeRow.tsx" />
+						</li>
+					</ul>
+				)}
+			</li>
+		</ul>
+	);
+}
+```
+
+#### Preview, keep and warm
+
+A click opens a preview, a double click keeps it, and hover or focus reports a warm-up.
+
+```tsx
+import { useState } from "react";
+import { firstClickOnly } from "@/lib";
+import { warmOnHover } from "@/panels/editorWarm";
+import { TreeRow } from "@/panels/TreeRow";
+
+const files = ["README.md", "package.json", "tsconfig.json"];
+
+export default function OpenGestures() {
+	const [opened, setOpened] = useState<{ name: string; intent: "preview" | "keep" } | null>(null);
+	const [warmed, setWarmed] = useState<string | null>(null);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<ul className="flex w-full max-w-[16rem] flex-col">
+				{files.map((name) => (
+					<li key={name}>
+						<TreeRow
+							testid="file-node"
+							kind="file"
+							active={opened?.name === name}
+							label={name}
+							onClick={firstClickOnly(() => setOpened({ name, intent: "preview" }))}
+							onDoubleClick={() => setOpened({ name, intent: "keep" })}
+							onWarm={(trigger) =>
+								trigger === "focus"
+									? setWarmed(`${name} · focus`)
+									: warmOnHover(() => setWarmed(`${name} · hover`))
+							}
+						/>
+					</li>
+				))}
+			</ul>
+			<div className="flex gap-16 tr-text-metadata text-text-muted">
+				<output>{opened ? `${opened.intent} · ${opened.name}` : "—"}</output>
+				<output>{warmed ?? "—"}</output>
+			</div>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/FileTree.tsx` | Workspace Files tree: compact folders, gitignored `subtle` rows, status letters, editor warm-up and reveal via `ref`. |
+| `apps/web/src/panels/ChangesTree.tsx` | Changes tree: status-coloured names, DiffStatBadge, viewed marks and `highlight="wrapper"` inside ChangeRowActions. |
+
 ## Button and IconButton contract
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /

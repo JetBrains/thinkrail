@@ -137,3 +137,7 @@ Radius steps: `rounded-xs` 2px · `rounded-sm` 4px · `rounded-md` 6px · `round
 | Textarea | `import { Textarea } from "@thinkrail/ui/textarea";` | — | — |
 | SettingsRadioCards | `import { SettingsRadioCards, type SettingsRadioChoice } from "@/panels/SettingsRadioCards";` | — | — |
 | SettingsRow and SettingsGroup | `import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "@/panels/SettingsRow"; import { SettingsGroup, SettingsPageContainer } from "@/panels/SettingsGroup";` | — | — |
+| DiffStatBadge | `import { DiffStatBadge } from "@/panels/DiffStatBadge";` | — | — |
+| FileChip | `import { FileChip } from "@/chat/FileChip";` | — | — |
+| Collapsible | `import { Collapsible, countLines } from "@/chat/tools/Collapsible";` | — | — |
+| TreeRow | `import { TreeRow } from "@/panels/TreeRow";` | — | — |

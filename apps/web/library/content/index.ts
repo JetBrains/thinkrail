@@ -1,4 +1,7 @@
 import { button } from "./components/button";
+import { collapsible } from "./components/collapsible";
+import { diffStatBadge } from "./components/diff-stat-badge";
+import { fileChip } from "./components/file-chip";
 import { headerIconButton } from "./components/header-icon-button";
 import { iconButton } from "./components/icon-button";
 import { segmentedControl } from "./components/segmented-control";
@@ -9,6 +12,7 @@ import { switchDoc } from "./components/switch";
 import { tabStrip } from "./components/tab-strip";
 import { textarea } from "./components/textarea";
 import { toggleSegment } from "./components/toggle-segment";
+import { treeRow } from "./components/tree-row";
 import type { ComponentDoc, DocArea, DocPage } from "./types";
 
 export type AreaId = DocArea | "components";
@@ -166,4 +170,8 @@ export const components: readonly ComponentDoc[] = [
 	textarea,
 	settingsRadioCards,
 	settingsRow,
+	diffStatBadge,
+	fileChip,
+	collapsible,
+	treeRow,
 ];
