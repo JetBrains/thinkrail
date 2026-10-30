@@ -9,6 +9,7 @@ import type { ExtUiRequest, WireModel } from "@thinkrail/contracts";
 import {
 	createSession,
 	disposeAllSessions,
+	promptSession,
 	recheckAnthropicExtraUsage,
 	setSessionManagerFactory,
 	setSessionModel,
@@ -214,6 +215,36 @@ describe("session extra-usage notice", () => {
 		expect(notices).toEqual([]);
 
 		await setSessionModel(sessionId, anthropicModel());
+		await settle();
+		expect(notices).toEqual([
+			expect.objectContaining({ sessionId, notice: "anthropicExtraUsage" }),
+		]);
+	});
+
+	test("warns when an extension switches the chat to Anthropic through pi.setModel", async () => {
+		await signIn(OAUTH);
+		const target = anthropicModel();
+		mkdirSync(join(agentDir, "extensions"), { recursive: true });
+		writeFileSync(
+			join(agentDir, "extensions", "to-anthropic.ts"),
+			[
+				"export default function toAnthropic(pi) {",
+				'  pi.registerCommand("to-anthropic", { description: "probe", handler: async (_args, ctx) => {',
+				`    await pi.setModel(ctx.modelRegistry.find("anthropic", ${JSON.stringify(target.id)}));`,
+				"  } });",
+				"}",
+				"",
+			].join("\n"),
+		);
+		const { sessionId } = await createSession({
+			cwd,
+			workspaceId: "ws",
+			model: toWireModel(faux.getModel()),
+		});
+		await settle();
+		expect(notices).toEqual([]);
+
+		await promptSession(sessionId, "/to-anthropic");
 		await settle();
 		expect(notices).toEqual([
 			expect.objectContaining({ sessionId, notice: "anthropicExtraUsage" }),

@@ -138,7 +138,7 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   Pi's warning exists only in interactive mode (`maybeWarnAboutAnthropicSubscriptionAuth`), and its
   `sk-ant-oat` predicate and warning text are module-private. So the host mirrors the trigger: it uses
   the public `ModelRuntime.checkAuth` / `getAuth`, gates on `SettingsManager.getWarnings()`, and copies
-  the prefix check. The re-check points (session start, model switch, Anthropic login) are mirrored too.
+  the prefix check. The re-check points are mirrored too: session start, every model change via pi's `model_select` event, and Anthropic login.
   **Removal gate:** pi exports the predicate, or a host-consumable warning event; then drop the copy.
   On upgrades, re-diff the interactive check and its call sites, and run
   `agent/anthropicExtraUsage.test.ts`.
