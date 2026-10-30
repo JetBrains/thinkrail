@@ -26,6 +26,7 @@ export interface ChatResourceProjection {
 	connectionGeneration: number | null;
 	fresh: boolean;
 	error: string | null;
+	retrying?: boolean;
 }
 
 export type ChatResourceSnapshots = Record<string, Record<string, ChatResourceProjection>>;

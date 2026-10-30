@@ -1,3 +1,5 @@
+import { CodedError } from "@thinkrail/shared/codedError";
+
 export class RequestReplayConflictError extends Error {
 	constructor(id: string) {
 		super(`request id "${id}" was reused with a different payload`);
@@ -5,10 +7,13 @@ export class RequestReplayConflictError extends Error {
 	}
 }
 
-export class RequestReplayOverflowError extends Error {
-	constructor(clientKey: string) {
+export type ReplayLoad = Record<string, { pending: number; settled: number }>;
+
+export class RequestReplayOverflowError extends CodedError {
+	constructor(readonly load: ReplayLoad | null) {
 		super(
-			`replay namespace for client "${clientKey}" is full: unacknowledged results must be read first`,
+			"REQUEST_REPLAY_OVERFLOW",
+			"replay namespace is full: unacknowledged results must be read first",
 		);
 		this.name = "RequestReplayOverflowError";
 	}
@@ -23,6 +28,7 @@ export class RequestReplayUnretainedError extends Error {
 
 interface ReplayEntry<T> {
 	readonly fingerprint: string;
+	readonly label: string;
 	result: Promise<T> | null;
 	settled: boolean;
 	weight: number;
@@ -31,25 +37,50 @@ interface ReplayEntry<T> {
 interface ClientNamespace<T> {
 	readonly requests: Map<string, ReplayEntry<T>>;
 	weight: number;
+	overflowing: boolean;
+}
+
+function replayLoad(entries: Iterable<{ label: string; settled: boolean }>): ReplayLoad {
+	const load: ReplayLoad = {};
+	for (const entry of entries) {
+		const counts = load[entry.label] ?? { pending: 0, settled: 0 };
+		if (entry.settled) counts.settled++;
+		else counts.pending++;
+		load[entry.label] = counts;
+	}
+	return load;
+}
+
+export function heaviestReplayMethod(load: ReplayLoad): string | undefined {
+	const occupancy = (counts: ReplayLoad[string]) => counts.pending + counts.settled;
+	return Object.entries(load).sort(
+		([nameA, a], [nameB, b]) =>
+			occupancy(b) - occupancy(a) || b.pending - a.pending || nameA.localeCompare(nameB),
+	)[0]?.[0];
 }
 
 export class RequestReplayCache<T> {
 	private readonly clients = new Map<string, ClientNamespace<T>>();
 
+	private readonly overflowLowWater: number;
+
 	constructor(
 		private readonly maxRequestsPerClient = 512,
 		private readonly maxWeightPerClient = 16 * 1024 * 1024,
-	) {}
+	) {
+		this.overflowLowWater = Math.floor(maxRequestsPerClient * 0.9);
+	}
 
 	run(
 		clientKey: string,
 		requestId: string,
 		fingerprint: string,
 		execute: () => Promise<T> | T,
+		label = "unknown method",
 	): Promise<T> {
 		let namespace = this.clients.get(clientKey);
 		if (!namespace) {
-			namespace = { requests: new Map(), weight: 0 };
+			namespace = { requests: new Map(), weight: 0, overflowing: false };
 			this.clients.set(clientKey, namespace);
 		}
 		const requests = namespace.requests;
@@ -62,11 +93,14 @@ export class RequestReplayCache<T> {
 		}
 
 		if (requests.size >= this.maxRequestsPerClient) {
-			throw new RequestReplayOverflowError(clientKey);
+			const load = namespace.overflowing ? null : replayLoad(requests.values());
+			namespace.overflowing = true;
+			throw new RequestReplayOverflowError(load);
 		}
+		if (requests.size < this.overflowLowWater) namespace.overflowing = false;
 
 		const result = Promise.resolve().then(execute);
-		const entry: ReplayEntry<T> = { fingerprint, result, settled: false, weight: 0 };
+		const entry: ReplayEntry<T> = { fingerprint, label, result, settled: false, weight: 0 };
 		requests.set(requestId, entry);
 		result.then(
 			(value) => this.markSettled(clientKey, namespace, entry, this.resultWeight(value)),

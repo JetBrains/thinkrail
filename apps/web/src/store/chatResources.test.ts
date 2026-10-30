@@ -8,6 +8,7 @@ import {
 	selectChatResourceAuthority,
 	selectChatResourceGroups,
 	selectChatResourceProjection,
+	selectChatResourcesStaleness,
 	useAppStore,
 } from "./index";
 
@@ -172,10 +173,10 @@ test("atomic invalidation and installation preserve stale snapshots and reject o
 	expect(projection()?.snapshot).toBe(snapshot);
 	expect(selectChatResourceAuthority(state(), scope)).toBe(false);
 	state().installChatResources(first, { ...snapshot, commands: [] });
-	state().failChatResources(first, "old error");
+	state().failChatResources(first, "old error", true);
 	expect(projection()?.snapshot).toBe(snapshot);
 	expect(projection()?.error).toBeNull();
-	state().failChatResources(read(), "read failed");
+	state().failChatResources(read(), "read failed", true);
 	expect(projection()).toMatchObject({ snapshot, fresh: false, error: "read failed" });
 	state().installChatResources(read(), snapshot);
 	expect(projection()).toMatchObject({ fresh: true, error: null });
@@ -207,6 +208,22 @@ test("disconnect preserves stale data; reconnect fences late responses and old h
 	expect(state().resourceSnapshots).toEqual({});
 	state().installChatResources(current, snapshot);
 	expect(state().resourceSnapshots).toEqual({});
+});
+
+test("staleness names a dropped socket apart from a failed or in-flight refresh", () => {
+	const staleness = () => selectChatResourcesStaleness(state(), scope);
+	state().invalidateChatResources(scope);
+	expect(staleness()).toBeNull();
+	state().installChatResources(read(), snapshot);
+	expect(staleness()).toBeNull();
+	state().invalidateChatResources(scope);
+	expect(staleness()).toBe("refreshing");
+	state().failChatResources(read(), "replay namespace is full", true);
+	expect(staleness()).toBe("refreshFailed");
+	state().failChatResources(read(), "worktree gone", false);
+	expect(staleness()).toBe("unavailable");
+	state().setStatus("disconnected");
+	expect(staleness()).toBe("disconnected");
 });
 
 test("clear and rehydrate use distinct revisions so a late read cannot resurrect a projection", () => {

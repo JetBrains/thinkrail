@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
+	heaviestReplayMethod,
 	RequestReplayCache,
 	RequestReplayConflictError,
 	RequestReplayOverflowError,
@@ -79,6 +81,69 @@ describe("request replay cache", () => {
 		cache.acknowledge("page", ["first"]);
 		expect(await cache.run("page", "third", "three", execute)).toBe("3");
 		expect(() => cache.run("page", "fourth", "four", execute)).toThrow(RequestReplayOverflowError);
+	});
+
+	test("an overflow is coded and names what the namespace holds once per episode", async () => {
+		const cache = new RequestReplayCache<string>(10);
+		const hung = deferred<string>();
+		void cache.run("page", "h1", "h1", () => hung.promise, "git.status");
+		void cache.run("page", "h2", "h2", () => hung.promise, "git.status");
+		for (let i = 0; i < 8; i++)
+			await cache.run("page", `s${i}`, `s${i}`, () => "done", "session.resources");
+
+		const overflow = (id: string) => {
+			try {
+				void cache.run("page", id, id, () => "x", "session.resources");
+			} catch (error) {
+				return error as RequestReplayOverflowError;
+			}
+			throw new Error("expected an overflow");
+		};
+		const first = overflow("refused-1");
+		expect(first.code).toBe("REQUEST_REPLAY_OVERFLOW");
+		expect(errorCodeOf(first)).toBe("REQUEST_REPLAY_OVERFLOW");
+		expect(first.message).not.toContain("page");
+		expect(first.load).toEqual({
+			"git.status": { pending: 2, settled: 0 },
+			"session.resources": { pending: 0, settled: 8 },
+		});
+		expect(heaviestReplayMethod(first.load ?? {})).toBe("session.resources");
+		expect(overflow("refused-2").load).toBeNull();
+
+		cache.acknowledge("page", ["s0"]);
+		await cache.run("page", "near-cap", "near-cap", () => "ok");
+		expect(overflow("refused-3").load).toBeNull();
+
+		cache.acknowledge("page", ["s1", "s2"]);
+		await cache.run("page", "below-low-water", "below-low-water", () => "ok");
+		await cache.run("page", "refill", "refill", () => "ok");
+		expect(overflow("refused-4").load).toEqual({
+			"git.status": { pending: 2, settled: 0 },
+			"session.resources": { pending: 0, settled: 5 },
+			"unknown method": { pending: 0, settled: 3 },
+		});
+	});
+
+	test("the heaviest method is the largest occupant, then the most pending, then by name", () => {
+		expect(heaviestReplayMethod({})).toBeUndefined();
+		expect(
+			heaviestReplayMethod({
+				"git.status": { pending: 1, settled: 0 },
+				"fs.readFile": { pending: 0, settled: 12 },
+			}),
+		).toBe("fs.readFile");
+		expect(
+			heaviestReplayMethod({
+				"fs.readFile": { pending: 0, settled: 2 },
+				"git.status": { pending: 2, settled: 0 },
+			}),
+		).toBe("git.status");
+		expect(
+			heaviestReplayMethod({
+				"session.resources": { pending: 1, settled: 1 },
+				"fs.readFile": { pending: 1, settled: 1 },
+			}),
+		).toBe("fs.readFile");
 	});
 
 	test("in-flight work is never evicted to make room, and counts against admission", async () => {

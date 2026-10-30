@@ -29,6 +29,8 @@ export type ResourceActions = Record<string, ResourceAction>;
 
 export type Resource = ResourceRecord;
 
+export type ResourcesStaleness = "disconnected" | "refreshFailed" | "unavailable" | "refreshing";
+
 export type ResourceState =
 	| "working"
 	| "queued"
