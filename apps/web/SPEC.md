@@ -389,8 +389,8 @@ themselves.
   host-served build and the e2e suite stay green. `vite.config.ts` therefore proxies `/files`, `/blob` and
   `/fonts` beside `/ws`, and `devProxy.test.ts` pins the list to the composers' constants.
 - **`typecheck` runs two projects.** `tsconfig.json` checks the browser app with DOM types only;
-  `tsconfig.test.json` checks tests, `scripts/`, and `vite.config.ts` with Bun types. Its `exclude` list
-  names test files that do not typecheck yet: it only shrinks — fix a file and drop its entry, never add one.
+  `tsconfig.test.json` checks tests, `scripts/`, and `vite.config.ts` with Bun types. Every
+  test file is checked; the test project has no exclude list.
 
 ## Later
 

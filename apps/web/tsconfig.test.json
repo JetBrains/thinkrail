@@ -11,6 +11,6 @@
 		"scripts",
 		"vite.config.ts"
 	],
-	"exclude": [
-	]
+	// Empty on purpose: overrides the test exclude inherited from `tsconfig.json`.
+	"exclude": []
 }
