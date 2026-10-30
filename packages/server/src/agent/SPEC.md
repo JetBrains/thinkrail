@@ -625,6 +625,43 @@ re-opened transcripts provider-valid.
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
     brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
     unit-tested with hand-built header bytes.
+  - `skillCarryover` — the post-compaction skill restorer: an inline extension in both
+    `buildResourceLoader`'s shared factories and `childBaseExtensionFactories`, so delegated children
+    carry it too. Pi's compaction summarizes a loaded skill's body away while the system prompt keeps
+    only its name and description, and `WORKFLOW_RULE` forbids re-routing work already routed. A
+    `SKILL.md` loaded by `read` — the normal path — is worse off: pi hands every tool result to the
+    summarizer cut to 2000 characters, so later rules never reach the summary. The agent then keeps
+    "following" a skill it can no longer see. Modeled on Claude Code's post-compaction re-attachment
+    of invoked skills: a **`context` handler** inserts ONE `thinkrail/skill-carryover` custom message
+    (`display: false`) right after the `compactionSummary` in every request while the branch has a
+    compaction. It restores each skill pi loaded (`before_agent_start`'s `systemPromptOptions.skills`)
+    that has a load — a `parseSkillBlock` user block or a successful `read` resolving to that skill's
+    `filePath` (after pi's `@`/`~`/`file://` handling and symlinks) — before the latest cut, unless the
+    loads at or after it already show the whole file; reads of other `SKILL.md` files do not count.
+    Any load before the cut, an excerpt included, is invocation evidence. In the kept tail each load
+    counts by the lines it showed, computed like pi's `read` (1-indexed `offset`, `limit`, and
+    `details.truncation.outputLines` when truncated; a `/skill:` block shows all): only when their union
+    covers every line of the current file does the body survive, so an excerpt never hides a compacted
+    load, and pages that together show the file are not paid for twice. Skills are ordered by their
+    latest load. Bodies are
+    re-read from the admitted skill file (frontmatter stripped, wrapped like pi's `/skill:` block) and
+    budgeted at 5K tokens of body per skill and min(25K, 10% of the context window) for the whole
+    rendered message (preamble, wrappers, truncation notices), newest first, truncated from the end
+    with a pointer to the file. The window must be the dispatched model's: `ctx.model` is the
+    selection, and a virtual selection's limits (0 by default) say nothing about the physical model
+    it routes to — pi's routed-capacity check runs before this handler — so a virtual selection, or
+    any model without a known window, gets no carry-over. The text is memoized per compaction entry, so
+    the injected prefix stays cache-stable. A per-request injection is the only placement that reaches
+    the first request after **mid-run threshold** and **overflow-retry** compaction: a
+    `session_compact`-time `sendMessage` is deferred to `turn_end` while a run is active, so those
+    requests went out without it. Nothing is written to the session, so the carry-over never reaches
+    the next summarizer as user text and pi's "Already compacted" guard still holds. Rejected for now:
+    a custom `session_before_compact` summary that records the active workflow step (it would replace
+    pi's summarizer call and own its credentials). `skillCarryover.test.ts` drives a faux pi session
+    through manual, mid-run threshold and overflow-retry compaction. The live `skill-after-compaction` spec pins that phases after a
+    compaction keep every rule with no re-read of `SKILL.md`: without the carry-over the agent recovered
+    by re-reading after each compaction (pi's summary told it to), so compliance alone did not tell the
+    two apart.
   - `delegation` — ThinkRail's embedding of the portable **`pi-delegation`** core +
     **`pi-subagents`** layer ([[module-pi-delegation]], [[module-pi-subagents]]): binds what only
     the host knows — the delegation root under the data dir (`<dataDir>/delegation`),
@@ -786,9 +823,18 @@ re-opened transcripts provider-valid.
     [[submodule-server-extensions]]; today `web-access`'s `pi-web-access`) — deliberately not the parent's
     full set
     (rationale + the listed-children carve-out: core decision #25). **Every** child, opted in or not,
-    also loads the core's base set (`childBaseExtensionFactories`, same decision): just
-    `oversizedImageGuard`, since a child's `read` returns raw images under the shared settings (see the
-    `buildSessionSettings` bullet).
+    also loads the core's base set (`childBaseExtensionFactories`, same decision): `oversizedImageGuard`,
+    since a child's `read` returns raw images under the shared settings (see the `buildSessionSettings`
+    bullet), and `skillCarryover`, since children auto-compact under those settings too.
+    A child on an extension-registered provider's model also loads that provider's **owning
+    extension** (core decision #32: such a provider may serve only sessions its extension observed):
+    `liveParentContext.providerExtensionPaths(provider)` answers from a process-wide owner map that
+    `buildResourceLoader`'s `extensionsOverride` fills from pi's load-time registration queues
+    (provenance: [[pi-compatibility]]), intersected with the parent's own loaded extensions. Process-wide
+    because an extension may register its provider only on its first load in a process; the intersection
+    keeps a child from loading an extension its parent lacks. Inline factories are never owners. While the
+    child's trust (the same `isProjectTrusted`) is false, project-scoped owners are left out too: a revoke
+    deferred on a busy parent leaves them in its loader, and an explicit path would load them anyway.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves
@@ -914,7 +960,8 @@ re-opened transcripts provider-valid.
     the host machine and block on it). It is host-owned and unconditional, never part of the `web-access`
     extension, because it compensates for the host's UI and must also cover a user's own install of
     `pi-web-access`, which runs exactly when that extension is switched off;
-    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
+    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet),
+    `skillCarryover` (see its bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
     (`llama.cpp`, `codemode`, `tool-search`, `mcp`) are loaded only by pi's CLI; an SDK host opts in per
@@ -1080,14 +1127,37 @@ live session context, effective shell settings and lifecycle in source and packa
 first version loads this capability into parent chats only, not the curated hidden-child extension
 set; ordinary child Bash remains visible in its transcript.
 
-A small agent-barrel facade serves the resource snapshot, command output/stop and subagent
-stop/stop-all operations defined in [[module-contracts]]. It projects command services plus
-`DelegationService.childrenOf(parent)`; no aggregate registry owns copies of their lifecycles.
-Subagent summaries include direct foreground and background children and omit handles with no run
-snapshot yet. Keep all active children and the latest twenty terminal children by record creation order,
-without disposing older handles or transcripts. Task and role summaries are capped at 2,000 and 200
+A small agent-barrel facade serves the resource snapshot, history pages, command output/stop and
+subagent stop/stop-all operations defined in [[module-contracts]]. Live rows come from the command
+services plus `DelegationService.childrenOf(parent)`; no aggregate registry owns copies of their
+lifecycles. Finished rows come from [[submodule-server-resource-history]], merged with whatever the
+owners still hold — an owner's own terminal record wins over an archived in-flight one, so a failed
+archive write never turns finished work into Interrupted. The snapshot carries every live record plus
+the newest twenty finished per kind and the per-kind outcome tallies; older ones page through
+`session.resourceHistory`, and `backgroundCommand.output` falls back to the archived log tail once the
+owner has evicted or lost the command. Subagent summaries include direct foreground and background
+children (the plan reviewer too) and omit handles with no run snapshot yet; older handles and
+transcripts are never disposed for the window. Task and role summaries are capped at 2,000 and 200
 characters. One lifecycle subscription per workspace service and each command service's change subscription
 publish scoped invalidations through a host-injected publisher; no per-token/output broadcast is added.
+
+The same subscriptions feed the archive synchronously: command admission, stop request and terminal edges
+(with the retained log tail), subagent queued/started/terminal edges (with the terminal time). A command's
+archive subscription outlives the manager's own and closes only once the command service's disposal settles
+(or its budget expires), so the terminal edges that teardown itself causes are still recorded. A failed
+archive write is logged and never retried for the same status; the owner's record still wins while it lives. **Interrupted** is decided here, once:
+a command that ends `stopped` while its chat's resources are closing, without a stop requested before
+the closing began, is archived `interrupted`, and so is a command still unsettled when the cascade gives
+up (in flight, with its log so far). For subagents the closing cascade marks its own cancellation: before
+`disposeChildrenOf` it aborts every child with the reason `interrupted`, and since [[module-pi-delegation]]
+keeps a run's first cancellation reason, only a run that teardown cancelled first is archived `interrupted`.
+A run already cancelled when teardown lands keeps its own provenance and reads Stopped — a user stop
+(`"user"`) as well as a foreground child the parent's own Stop cancelled through its tool signal, which
+carries no reason (an AIR review finding on PR #1004: inferring teardown from a missing reason mislabelled
+exactly that run). A user or tool stop that merely settles during teardown stays Stopped. Interrupted work is shown to the user only: it never wakes the parent and nothing tells the
+agent its acknowledged run is gone (user-settled, 2026-10). Work a dead host left in flight is the archive's own derivation. Workspace archive removes the
+workspace's history after its delegation store; late lifecycle events of a retired delegation service are not
+archived, so they cannot recreate it. Chat deletion leaves the history in place.
 
 Each operation validates actual workspace/session membership, child lineage and the manager's deletion
 gate before touching a handle. Persisted parents use the existing single-flighted attachment path;

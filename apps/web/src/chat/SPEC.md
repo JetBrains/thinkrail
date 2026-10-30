@@ -233,8 +233,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   unexplained box. Expanding shows the bounded excerpt (escaped plain text, wrapped, natural height, no
   inner scroll) or the report Markdown without pi-subagents' `Subagent "x" (id) status:` header. The open
   action comes from `ChatActions.resultOpener`: `ChatView` opens the Resources inspector at that row while
-  the snapshot holds it, a subagent that left the in-memory registry (host restart, older than the latest
-  twenty) falls back to the transcript dialog, and a command has no fallback (no action). A row whose
+  the client holds it (the snapshot's window or a page loaded past it), a subagent it does not hold falls
+  back to the transcript dialog, and a command has no fallback (no action). A row whose
   details carry a `delivery` marker leads with whether the agent received it ("Agent received") or will
   react with the user's next message (`appended`); expanding or opening it marks the result seen
   through `ChatActions.markResultSeen`. The rows never infer current resource authority. Never folded
@@ -1503,14 +1503,16 @@ none — and there is no immediate per-server stop.
 
 **New results.** `useFreshResults` tells the user a background result exists before or regardless of
 when the agent receives it (user-settled, 2026-10: "Resources announces, the chat marks receipt").
-A finished command or background (`detached`) subagent is **new** until the user opens it — its dock
-row, the inspector selection once it has finished, or its chat result row
-(`ChatActions.markResultSeen`) — or sends the next message.
-`ChatView` passes the new ones to the dock (highlighted, with dismiss) and their count to the trigger.
+A finished command or background (`detached`) subagent is **new** until the user opens it — the
+inspector selection once it has finished, or its chat result row (`ChatActions.markResultSeen`) — or
+sends the next message. `ChatView` passes their count to the dock's finished line and the trigger, and
+lands that line's Open on the newest new result, else the newest finished one (`newestResourceId`).
 The seen set is client UI state under a host-qualified localStorage key per chat: a client's first
 visit baselines everything already finished as seen (an acknowledgement before that first
 authoritative snapshot keeps the baseline pending), later visits surface what finished while away,
-and every send resets the set to the current finished list, so it stays bounded by the snapshot.
+and every send resets the set to the current finished list, so it stays bounded by the snapshot. Only the
+snapshot's window of recent finished records (`groups.recentFinished`) can be new: history paged in later
+predates every visit that could have seen it, so it never lights up.
 
 The dependency edges are `ChatView`/`useChatResources` → `resources`, `store`, `transport`,
 `BackgroundResult` → `resources` (`ResultRow`, the run label as its `metaLead`), `tools/subagent`
@@ -1529,7 +1531,13 @@ is the inspector's selection. The shared `detailPolling` loop handles command ou
 single-flight replacement snapshots, stopping on terminal/permanently unavailable results, and capped
 transient backoff with visibly retryable failures. Resource controls keep pending/error state scoped
 to their action and current connection; acknowledgement and detail-close focus semantics belong to
-[[submodule-web-chat-resources]]. No per-token subagent progress or tool-result rewriting is needed
+[[submodule-web-chat-resources]]. Older history is one more such control, `loadOlder(kind)` (keyed
+`history:<kind>`, offered only by a host at `RESOURCE_HISTORY_PROTOCOL_VERSION` whose snapshot carries
+`history`): it asks `session.resourceHistory` for the page before the oldest finished record the store
+holds and hands it to the store, which keeps it only if it still continues that chain. `ChatView` owns the
+inspector's per-kind expansion beside its selection and resets both on every open; it passes the current
+new results as the inspector's `newIds` and tells the command log whether its row was interrupted and
+whether the host keeps logs (`retained`). No per-token subagent progress or tool-result rewriting is needed
 for the header count.
 
 `backgroundCommandCompletion` is a fold-breaking historical row and a round opener, recognized by the

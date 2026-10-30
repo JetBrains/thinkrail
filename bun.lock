@@ -344,7 +344,7 @@
         "@thinkrail/extension-api": "workspace:*",
         "@thinkrail/locales": "workspace:*",
         "@thinkrail/shared": "workspace:*",
-        "bun-pty": "0.4.10",
+        "bun-pty": "0.5.1",
         "jsonc-parser": "3.3.1",
         "pi-background-commands": "workspace:*",
         "pi-delegation": "workspace:*",
@@ -1491,7 +1491,7 @@
 
     "buffer-equal-constant-time": ["buffer-equal-constant-time@1.0.1", "", {}, "sha512-zRpUiDwd/xk6ADqPMATG8vc9VPrkck7T07OIx0gnjmJAnHnTVXNQG3vfvWNuiZIkwu9KrKdA1iJKfsfTVxE6NA=="],
 
-    "bun-pty": ["bun-pty@0.4.10", "", {}, "sha512-7WFtCw9MwG9gMMvkX+pwUOavNbgmfL+masMWmO9d/HdFCz8VdR+5G4Q3UCLhy2OJ/ImbWuJ1FHFmm0KdgW102w=="],
+    "bun-pty": ["bun-pty@0.5.1", "", {}, "sha512-YkC0pnw15fTpvDaPu8wEhzoBqUPDh6X83Oft6GJv4JVl9fFEOqQiGyGqXP80n/tDX93ufe+OBEq3NRgjRNyinA=="],
 
     "bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 

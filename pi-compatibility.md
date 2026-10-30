@@ -4,7 +4,7 @@ type: architecture-design
 status: draft
 title: Pi compatibility — host adaptations and upgrade removal gates
 parent: architecture
-references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands]
+references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands, module-pi-delegation]
 tags: [pi, compatibility]
 ---
 
@@ -159,6 +159,18 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   replace option. Re-verify the three facts in the installed dist, and run the collision tests in
   `agentSessionManager.test.ts` (same-name questionnaire before and after reload, and a chat created with
   ours off that re-enables it over the package) on every upgrade.
+- **Provider-registration provenance** — [[submodule-server-agent]], `recordProviderOwners` in the
+  session loader's `extensionsOverride` ([[module-pi-delegation]] decision #32). Pi keeps no
+  provider-to-extension provenance: `LoadExtensionsResult.runtime.pendingProviderRegistrations` /
+  `pendingNativeProviderRegistrations` carry `extensionPath` only until `bindCore` flushes them, and the
+  post-bind `registerProvider` it installs drops the path. The host reads the queues during every session
+  load; a provider registered only after binding stays unowned, so its children keep the narrow set.
+  Children use the same queues the other way: a child drops its owners' queued registrations before
+  bind, so the shared runtime keeps the parent's; a post-bind re-registration would still replace it.
+  **Removal gate:** a public surface naming the providers each extension registered. Re-verify that the
+  queues still carry `extensionPath` and are filled before `extensionsOverride` runs; run the provider-owner
+  regressions in `agent/extensions.test.ts`, `agent/delegation.test.ts` and `pi-delegation`'s
+  `service.test.ts` on every upgrade.
 - **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
   pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))
   and retains image content lost by the destructive queue API. Remove the corresponding workaround
@@ -218,6 +230,14 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   extension can withdraw, delivered at the next step rather than at run end — even then, keep the
   claim-on-pull rule. Run the `pi-subagents` and `pi-background-commands` suites and
   `agent/chatResources.test.ts`.
+- **Skill bodies across compaction** — [[submodule-server-agent]], `skillCarryover.ts`. Pi's compaction
+  summarizes loaded skill text away (a `read` result reaches the summarizer cut to 2000 characters) and
+  nothing re-supplies it, so a host `context` handler re-attaches compacted skill bodies to every
+  request after a compaction. Remove it when pi's compaction preserves or re-attaches loaded skills
+  natively; verify with `skillCarryover.test.ts` and `bun run e2e:full e2e/skill-after-compaction.live.spec.ts`.
+  It skips virtual selections by matching pi's unexported `"pi-virtual"` model API, since a `context`
+  handler sees only the selection, not the routed model; replace that check when pi exposes the
+  dispatched model (or `isVirtualModel`) to `context` handlers.
 
 ## Context-budget limitations
 

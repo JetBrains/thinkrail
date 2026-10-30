@@ -32,6 +32,7 @@ import {
 	deleteSession,
 	ensureSessionAttached,
 	followUpSession,
+	getResourceHistoryPage,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionResources,
@@ -78,6 +79,7 @@ import {
 } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
+	captureSurveyResponse,
 	reportClientError,
 	type SendMode,
 	track,
@@ -103,7 +105,18 @@ import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
 import { listExtensionCatalog } from "../extensions";
-import { recordAcceptedMessage, respondToInterview } from "../feedback";
+import {
+	completeSurvey,
+	confirmInAppSurvey,
+	currentInAppSurvey,
+	localizeSurvey,
+	parseSurveySubmission,
+	recordAcceptedMessage,
+	refreshInAppSurvey,
+	respondToInvitation,
+	surveyIsCompleted,
+	surveyResponse,
+} from "../feedback";
 import { readDir, readFile } from "../fs";
 import {
 	commitsAheadOf,
@@ -486,6 +499,35 @@ function resourceParams<K extends string>(params: unknown, keys: K[]): Record<K,
 	return result;
 }
 
+function resourceHistoryParams(params: unknown): WsParams<"session.resourceHistory"> {
+	if (!params || typeof params !== "object" || Array.isArray(params))
+		throw new Error("Invalid resource history request");
+	const { kind, before, limit, ...scope } = params as Record<string, unknown>;
+	const { workspaceId, sessionId } = resourceParams(scope, ["workspaceId", "sessionId"]);
+	if (kind !== "command" && kind !== "subagent") throw new Error("Invalid resource history kind");
+	if (limit !== undefined && (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1))
+		throw new Error("Invalid resource history limit");
+	const request: WsParams<"session.resourceHistory"> = {
+		workspaceId,
+		sessionId,
+		kind,
+		...(limit === undefined ? {} : { limit }),
+	};
+	if (before === undefined) return request;
+	if (!before || typeof before !== "object" || Array.isArray(before))
+		throw new Error("Invalid resource history cursor");
+	const { at, id, ...extra } = before as Record<string, unknown>;
+	if (
+		Object.keys(extra).length > 0 ||
+		typeof at !== "number" ||
+		!Number.isFinite(at) ||
+		typeof id !== "string" ||
+		!(kind === "subagent" ? isPiSessionId(id) : isHostResourceId(id))
+	)
+		throw new Error("Invalid resource history cursor");
+	return { ...request, before: { at, id } };
+}
+
 async function deliverToolResponse(
 	sessionId: string,
 	toolCallId: string,
@@ -495,6 +537,14 @@ async function deliverToolResponse(
 	if (response === undefined) throw new Error("A tool response must carry a value");
 	await ackSend(respondToTool(sessionId, toolCallId, response));
 	return { ok: true };
+}
+
+function invalidSurveyOnThrow<T>(build: () => T): T {
+	try {
+		return build();
+	} catch {
+		throw new CodedError("SURVEY_INVALID", "Invalid survey submission");
+	}
 }
 
 const handlers: WsHandlers = {
@@ -1128,6 +1178,10 @@ const handlers: WsHandlers = {
 		const p = resourceParams(params, ["workspaceId", "sessionId"]);
 		return getSessionResources(p.workspaceId, p.sessionId, resourceCwd(p.workspaceId));
 	},
+	"session.resourceHistory": (params) => {
+		const { workspaceId, sessionId, ...request } = resourceHistoryParams(params);
+		return getResourceHistoryPage(workspaceId, sessionId, resourceCwd(workspaceId), request);
+	},
 	"backgroundCommand.output": (params) => {
 		const p = resourceParams(params, ["workspaceId", "sessionId", "commandId"]);
 		return readBackgroundCommandOutput(
@@ -1257,7 +1311,43 @@ const handlers: WsHandlers = {
 	"environment.get": () => hostEnvironmentStatus(),
 	"environment.update": (params) => updateHostEnvironment(params.environment),
 	"feedback.respond": (params) => {
-		respondToInterview(params.action);
+		respondToInvitation(params.action);
+		return { ok: true } as const;
+	},
+	"feedback.survey": async (params) => {
+		await refreshInAppSurvey();
+		const survey = currentInAppSurvey();
+		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) return { survey: null };
+		const language =
+			typeof params?.language === "string" && params.language.length <= 35
+				? params.language
+				: undefined;
+		return { survey: localizeSurvey(survey, language) };
+	},
+	"feedback.survey.submit": async (params) => {
+		const submission = invalidSurveyOnThrow(() => parseSurveySubmission(params));
+		const survey = await confirmInAppSurvey().catch(() => {
+			throw new CodedError("SURVEY_NOT_SENT", "Survey could not be confirmed");
+		});
+		if (!survey || surveyIsCompleted(survey.id, survey.iteration)) {
+			throw new CodedError("SURVEY_UNAVAILABLE", "Survey is unavailable");
+		}
+		if (
+			survey.id !== submission.surveyId ||
+			survey.iteration !== submission.iteration ||
+			localizeSurvey(survey, submission.language).language !== submission.language
+		) {
+			throw new CodedError("SURVEY_CHANGED", "Survey changed");
+		}
+		const properties = invalidSurveyOnThrow(() => surveyResponse(survey, submission));
+		if (!captureSurveyResponse(properties)) {
+			throw new CodedError("SURVEY_NOT_SENT", "Survey answers were not sent");
+		}
+		try {
+			completeSurvey(survey.id, survey.iteration);
+		} catch (error) {
+			log.warn("survey completion was not persisted", error);
+		}
 		return { ok: true } as const;
 	},
 	"client.reportError": (params) => {

@@ -14,8 +14,10 @@ export {
 } from "./skillLoad";
 export type { ConnectionStatus, TransportOptions } from "./transport";
 export {
+	forgetInAppSurvey,
 	getTransport,
 	initTransport,
+	loadInAppSurvey,
 	respondToTool,
 	runHostUpdate,
 	supportsChangeMutations,

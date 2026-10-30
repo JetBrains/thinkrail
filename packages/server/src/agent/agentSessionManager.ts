@@ -73,8 +73,9 @@ import {
 	saveSessionLifecycle,
 	saveSessionReceipts,
 } from "../persistence";
+import { removeWorkspaceResourceHistory } from "../resourceHistory";
 import { trashFile } from "../trash";
-import { publishSessionResourcesChanged } from "./chatResources";
+import { archiveCommandHistory, publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
 	hasLiveSessionChildren,
@@ -87,6 +88,7 @@ import {
 	buildResourceLoader,
 	disabledExtensions,
 	loadsDisabledExtensionSkills,
+	providerExtensionPaths,
 	toSkillCommands,
 } from "./extensions";
 import {
@@ -152,6 +154,7 @@ interface Entry {
 	subagents: Subagents;
 	commands: BackgroundCommands;
 	unsubscribeCommands: () => void;
+	commandHistory: ReturnType<typeof archiveCommandHistory>;
 	resourceCascade?: Promise<void>;
 	shutdown?: { runner: AgentSession["extensionRunner"]; settled: Promise<void> };
 	resourcesClosing: boolean;
@@ -1120,6 +1123,7 @@ async function prepareSessionEntry(
 		subagents,
 		resourcesClosing: false,
 		unsubscribeCommands: () => {},
+		commandHistory: { finish: () => {} },
 		session,
 		generation,
 		unsubscribe: () => {},
@@ -1148,6 +1152,12 @@ async function prepareSessionEntry(
 		toolResponseWaiters,
 		mcpHost,
 	};
+	entry.commandHistory = archiveCommandHistory(
+		workspaceId,
+		sessionId,
+		commands,
+		() => entry.resourcesClosing,
+	);
 	entry.unsubscribeCommands = commands.onChange(() => {
 		if (canUseSessionResources(sessionId, workspaceId))
 			publishSessionResourcesChanged(workspaceId, sessionId);
@@ -2722,13 +2732,16 @@ export function liveParentContext(sessionId: string): ParentContext | undefined 
 	const entry = sessions.get(sessionId);
 	if (!entry || !canUseSessionResources(sessionId, entry.workspaceId)) return undefined;
 	const { session, workspaceId } = entry;
+	const isProjectTrusted = () =>
+		session.settingsManager.isProjectTrusted() && piResourceTrustFor(workspaceId);
 	return {
 		cwd: session.sessionManager.getCwd(),
 		model: session.model,
 		thinkingLevel: session.thinkingLevel,
 		modelRuntime: session.modelRuntime,
-		isProjectTrusted: () =>
-			session.settingsManager.isProjectTrusted() && piResourceTrustFor(workspaceId),
+		isProjectTrusted,
+		providerExtensionPaths: (provider) =>
+			providerExtensionPaths(session.resourceLoader, provider, isProjectTrusted()),
 	};
 }
 
@@ -2791,7 +2804,9 @@ function closeSessionResources(entry: Entry, timeoutMs?: number): Promise<void> 
 	if (entry.resourceCascade) return entry.resourceCascade;
 	entry.resourcesClosing = true;
 	entry.subagents.dispose();
-	const closing = entry.commands.dispose(timeoutMs === undefined ? undefined : { timeoutMs });
+	const closing = entry.commands
+		.dispose(timeoutMs === undefined ? undefined : { timeoutMs })
+		.finally(() => entry.commandHistory.finish());
 	const children = disposeSessionChildren(entry.workspaceId, entry.session.sessionId);
 	const shutdown = emitSessionShutdown(entry, timeoutMs);
 	entry.resourceCascade = trackCascade(
@@ -2941,6 +2956,7 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 		]);
 		await Promise.all([...(pendingCascades.get(workspaceId) ?? [])]);
 		removeWorkspaceDelegation(workspaceId);
+		removeWorkspaceResourceHistory(workspaceId);
 		if (cwd) await purgeDiskSessions(cwd);
 	} finally {
 		const remainingClosures = (closingWorkspaces.get(workspaceId) ?? 1) - 1;

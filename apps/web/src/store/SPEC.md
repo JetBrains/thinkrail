@@ -21,7 +21,17 @@ one atomic store action. A monotonic invalidation revision and connection genera
 read installation and failure; tombstones and cleared entries reject late replies. Connection status
 changes mark retained snapshots stale, and an unsupported welcome clears them. `selectors.ts` is the
 canonical owner of Resources selectors and predicates, including active counts and active/finished
-grouping; the host already bounds recent records. Components do not derive these independently.
+grouping (through the contracts' `isLiveResource`, so an interrupted run is never live) and the finished
+totals: the host's per-kind `history` tallies, or tallies of the snapshot's own finished records from an
+older host. The host bounds the snapshot to a window of recent finished records; anything older the user
+pages in lives on the same projection as `older`, one contiguous run per kind right after that window
+(`chatResources.ts`): a new snapshot carries a kind's run only while its window still reaches into the old
+chain (else drops it, rather than show a list with a silent hole), a new connection generation drops it (a
+restart may surface interrupted runs inside it), and `appendChatResourceHistory` keeps a page only if the
+chain still ends where the page was asked from. `selectChatResourceGroups(snapshot, includeMcp, older)`
+hands back every held finished record per kind (window then run, newest first), the window alone as
+`recentFinished` (the only records that can be new), and what the host holds beyond them (`remaining`);
+`selectChatResourceOldest` names the next page's anchor. Components do not derive these independently.
 `chatResources.ts` is the store's private implementation file for resource projection/state/scope/read
 types and the `staleChatResources` state transform. A parent settling does not clear its still-running
 resources or change the Projects rail's existing activity contract. The optional `mcpServers` list is part
@@ -502,11 +512,13 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   ephemeral **`notificationPromptOpen`** plus **`openNotificationPrompt()`** / **`closeNotificationPrompt()`**
   is the client-local render flag for the attention-notification permission preface (cadence/snooze and the
   trigger live in [[submodule-web-notifications]], never the store). The
-  ephemeral **`interviewPromptOpen`** plus
-  **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
-  invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so
-  a host restart cannot leave a stale projection, and the panel hides it after `feedback.respond` is
-  acknowledged. Counts, postponement, dismissal, and client claims never live in the store. The **theme**
+  ephemeral **`surveyInvitationOpen`** plus
+  **`showSurveyInvitation()`** / **`hideSurveyInvitation()`** is the render projection of the host's addressed
+  survey invitation, cleared before each valid welcome. **`surveyWindowOpen`** is the one survey window both
+  the invitation and Settings → Feedback open; **`openSurveyWindow()`** opens it and closes the invitation and
+  Settings in the same update, **`closeSurveyWindow()`** closes it. **`inAppSurvey`** (written by
+  **`setInAppSurvey`**) is the narrowed launched survey the Feedback pane and the window draw. Counts,
+  dismissal and completion stay in host `feedback.json`. The **theme**
   preference state — **`theme: ThemeId`** (the retained opaque fixed choice), **`themeMode: ThemeMode`**,
   and optional **`systemThemePair: SystemThemePair`** — arrives through **`applyConfig(config)`** from
   `server.welcome` / the `settings.changed` broadcast. A welcome from a pre-feature host (or any malformed
@@ -534,7 +546,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   controls, and shell quota read sides. Analytics preference and confirmation default independently to false;
   the store never upgrades a preference to confirmation. A selector combines host capability, hydrated
   configuration, and absent confirmation to drive the one first-launch prompt; `selectOnboardingActive`
-holds it (and the interview invitation) while the client-local **`onboardingWizard`** gate
+holds it (and the survey invitation) while the client-local **`onboardingWizard`** gate
 (`pending | shown | hidden`, set by Welcome through `setOnboardingWizard`) is shown — including its done
 screen, after `onboardingDismissed` is already persisted, until a project opens — or still pending on a
 cold-start-shaped store (capable host, not dismissed, no open or recent projects). Project Home reads the same

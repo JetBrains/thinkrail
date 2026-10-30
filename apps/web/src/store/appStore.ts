@@ -1,5 +1,6 @@
 import type {
 	AppConfig,
+	AppSurvey,
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
@@ -15,7 +16,9 @@ import type {
 	Project,
 	ProviderStatusReport,
 	RefreshedModels,
+	ResourceKind,
 	ResourceMeta,
+	ResourceRecord,
 	ReviewChangedPayload,
 	ReviewSnapshot,
 	SessionEventPayload,
@@ -95,9 +98,11 @@ import type {
 } from "../shell/layout";
 import type { ConnectionStatus } from "../transport";
 import {
+	appendOlderResources,
 	type ChatResourceRead,
 	type ChatResourceScope,
 	type ChatResourceSnapshots,
+	carryOlderResources,
 	staleChatResources,
 } from "./chatResources";
 import {
@@ -110,6 +115,7 @@ import {
 } from "./mcp";
 import {
 	type HistoryTarget,
+	isChatResourceConnectionCurrent,
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
 	isConnectedGeneration,
@@ -950,6 +956,12 @@ interface AppState {
 	invalidateChatResources: (scope: ChatResourceScope) => void;
 	installChatResources: (read: ChatResourceRead, snapshot: SessionResources) => void;
 	failChatResources: (read: ChatResourceRead, error: string) => void;
+	appendChatResourceHistory: (
+		read: ChatResourceScope & { connectionGeneration: number },
+		kind: ResourceKind,
+		after: string,
+		page: readonly ResourceRecord[],
+	) => void;
 	clearChatResources: (scope: ChatResourceScope) => void;
 	mcpByWorkspace: Record<string, McpWorkspaceProjection>;
 	mcpRevision: number;
@@ -1040,7 +1052,9 @@ interface AppState {
 	unheldLoginFrame: LoginPush | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
-	interviewPromptOpen: boolean;
+	surveyInvitationOpen: boolean;
+	surveyWindowOpen: boolean;
+	inAppSurvey: AppSurvey | null;
 	notificationPromptOpen: boolean;
 	sessionSwitcherOpen: boolean;
 	theme: ThemeId;
@@ -1360,8 +1374,11 @@ interface AppState {
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
-	showInterviewPrompt: () => void;
-	hideInterviewPrompt: () => void;
+	showSurveyInvitation: () => void;
+	hideSurveyInvitation: () => void;
+	openSurveyWindow: () => void;
+	closeSurveyWindow: () => void;
+	setInAppSurvey: (survey: AppSurvey | null) => void;
 	openNotificationPrompt: () => void;
 	closeNotificationPrompt: () => void;
 	openSessionSwitcher: () => void;
@@ -2307,7 +2324,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	unheldLoginFrame: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
-	interviewPromptOpen: false,
+	surveyInvitationOpen: false,
+	surveyWindowOpen: false,
+	inAppSurvey: null,
 	notificationPromptOpen: false,
 	sessionSwitcherOpen: false,
 	theme: DEFAULT_CONFIG.theme,
@@ -2421,6 +2440,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						...state.resourceSnapshots[scope.workspaceId],
 						[scope.sessionId]: {
 							snapshot: previous?.snapshot ?? null,
+							...(previous?.older ? { older: previous.older } : {}),
 							connectionGeneration: previous?.connectionGeneration ?? null,
 							revision,
 							fresh: false,
@@ -2438,6 +2458,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				snapshot.sessionId !== read.sessionId
 			)
 				return {};
+			const previous = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
+			const older =
+				previous?.connectionGeneration === read.connectionGeneration
+					? carryOlderResources(previous, snapshot)
+					: undefined;
 			return {
 				resourceSnapshots: {
 					...state.resourceSnapshots,
@@ -2445,11 +2470,33 @@ export const useAppStore = create<AppState>((set, get) => ({
 						...state.resourceSnapshots[read.workspaceId],
 						[read.sessionId]: {
 							snapshot,
+							...(older ? { older } : {}),
 							connectionGeneration: read.connectionGeneration,
 							revision: read.revision,
 							fresh: true,
 							error: null,
 						},
+					},
+				},
+			};
+		}),
+	appendChatResourceHistory: (read, kind, after, page) =>
+		set((state) => {
+			const projection = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
+			if (
+				!projection ||
+				projection.connectionGeneration !== read.connectionGeneration ||
+				!isChatResourceConnectionCurrent(state, read)
+			)
+				return {};
+			const older = appendOlderResources(projection, kind, after, page);
+			if (!older) return {};
+			return {
+				resourceSnapshots: {
+					...state.resourceSnapshots,
+					[read.workspaceId]: {
+						...state.resourceSnapshots[read.workspaceId],
+						[read.sessionId]: { ...projection, older },
 					},
 				},
 			};
@@ -4337,9 +4384,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSessionSwitcher: () => set({ sessionSwitcherOpen: false }),
 	toggleSessionSwitcher: () =>
 		set((state) => ({ sessionSwitcherOpen: !state.sessionSwitcherOpen })),
-	showInterviewPrompt: () =>
-		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
-	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),
+	showSurveyInvitation: () =>
+		set((state) => (state.surveyInvitationOpen ? state : { surveyInvitationOpen: true })),
+	hideSurveyInvitation: () => set({ surveyInvitationOpen: false }),
+	openSurveyWindow: () =>
+		set({ surveyWindowOpen: true, surveyInvitationOpen: false, settingsOpen: false }),
+	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
+	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
 	setStreamingResponseMovement: (streamingResponseMovement) => set({ streamingResponseMovement }),
 	setChatPreferences: (chatMessageOrder, streamingResponseMovement) =>

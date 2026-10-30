@@ -2,6 +2,7 @@ import { beforeEach, expect, test } from "bun:test";
 import {
 	type BackgroundCommandOutputResult,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
+	type ResourceHistoryPage,
 	type SessionResources,
 } from "@thinkrail/contracts";
 import { type ChatResourceScope, selectChatResourceProjection, useAppStore } from "@/store";
@@ -234,6 +235,70 @@ test("MCP controls act only on servers the chat reports and keep one request per
 	expect(f.actions()["mcp:broken"]).toEqual({ pending: false, error: "Reconnect failed" });
 	expect(f.actions()["mcp:docs"]).toEqual({ pending: false, error: null });
 	f.controls.dispose();
+});
+
+test("loading older history asks from the oldest held record, appends once, and reports a failed page on its own key", async () => {
+	const finished = (id: string, finishedAt: number) => ({
+		id,
+		sessionId: scope.sessionId,
+		name: id,
+		command: "bun test",
+		status: "completed" as const,
+		exitCode: 0,
+		startedAt: 1,
+		finishedAt,
+	});
+	state().invalidateChatResources(scope);
+	state().installChatResources(
+		{
+			...scope,
+			connectionGeneration: state().connectionGeneration,
+			revision: projection()?.revision ?? -1,
+		},
+		{ ...snapshot, commands: [finished("newer", 20), finished("older", 10)] },
+	);
+	const pages: {
+		kind: string;
+		at: number;
+		id: string;
+		page: ReturnType<typeof deferred<ResourceHistoryPage>>;
+	}[] = [];
+	let actions: ResourceActionState = {};
+	const controls = createChatResourceControls(scope, {
+		state,
+		stopCommand: async () => {},
+		stopSubagent: async () => {},
+		stopAll: async () => {},
+		setMcpEnabled: async () => {},
+		reconnectMcp: async () => {},
+		readHistory: (kind, before) => {
+			const page = deferred<ResourceHistoryPage>();
+			pages.push({ kind, ...before, page });
+			return page.promise;
+		},
+		onChange: (next) => {
+			actions = next;
+		},
+	});
+	controls.loadOlder("command");
+	controls.loadOlder("command");
+	controls.loadOlder("subagent");
+	expect(pages.map(({ kind, at, id }) => ({ kind, at, id }))).toEqual([
+		{ kind: "command", at: 10, id: "older" },
+	]);
+	expect(actions["history:command"]).toEqual({ pending: true, error: null });
+	pages[0]?.page.resolve({ kind: "command", items: [finished("oldest", 5)], hasMore: false });
+	await flush();
+	expect(projection()?.older?.map((record) => record.summary)).toEqual([finished("oldest", 5)]);
+	expect(actions["history:command"]).toEqual({ pending: false, error: null });
+
+	controls.loadOlder("command");
+	expect(pages[1]).toMatchObject({ kind: "command", at: 5, id: "oldest" });
+	pages[1]?.page.reject(new Error("History read failed"));
+	await flush();
+	expect(actions["history:command"]).toEqual({ pending: false, error: "History read failed" });
+	expect(projection()?.older).toHaveLength(1);
+	controls.dispose();
 });
 
 test("individual controls prevent duplicates, expose row errors and never synthesize terminal state", async () => {

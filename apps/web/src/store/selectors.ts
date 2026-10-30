@@ -6,6 +6,7 @@ import {
 	DEFAULT_WORKSPACE_NAME,
 	firstPromptOfTexts,
 	type GitDiffScope,
+	isLiveResource,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
 	type McpServerResourceSummary,
@@ -14,14 +15,20 @@ import {
 	PROJECT_CLONE_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
+	RESOURCE_HISTORY_PROTOCOL_VERSION,
+	type ResourceKind,
+	type ResourceRecord,
+	resourceTallyTotal,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
+	type SessionResourceHistory,
 	type SessionResources,
 	type SessionState,
 	type SessionStateRecord,
 	type SpecGraphNode,
 	type SubagentResourceSummary,
 	sameModel,
+	tallyResources,
 	type WireModel,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
@@ -59,7 +66,12 @@ import type {
 	SessionRuntime,
 	TerminalTab,
 } from "./appStore";
-import type { ChatResourceRead, ChatResourceScope, ChatResourceState } from "./chatResources";
+import {
+	type ChatResourceRead,
+	type ChatResourceScope,
+	type ChatResourceState,
+	finishedChain,
+} from "./chatResources";
 
 export function selectLoginBusy(state: {
 	activeLogin: LoginState | null;
@@ -246,11 +258,11 @@ export function selectChatResourcesStale(
 }
 
 export function isActiveBackgroundCommand(command: BackgroundCommandSummary): boolean {
-	return command.status === "running" || command.status === "stopping";
+	return isLiveResource({ kind: "command", summary: command });
 }
 
 export function isActiveSubagent(child: SubagentResourceSummary): boolean {
-	return child.status === "queued" || child.status === "running";
+	return isLiveResource({ kind: "subagent", summary: child });
 }
 
 export function orderMcpResources(
@@ -268,30 +280,62 @@ export function orderMcpResources(
 export function selectChatResourceGroups(
 	snapshot: SessionResources | null | undefined,
 	includeMcp = true,
+	older: readonly ResourceRecord[] = [],
 ) {
 	const commands: BackgroundCommandSummary[] = [];
 	const subagents: SubagentResourceSummary[] = [];
-	const finishedCommands: BackgroundCommandSummary[] = [];
-	const finishedSubagents: SubagentResourceSummary[] = [];
+	const recentCommands: BackgroundCommandSummary[] = [];
+	const recentSubagents: SubagentResourceSummary[] = [];
 	for (const command of snapshot?.commands ?? []) {
-		(isActiveBackgroundCommand(command) ? commands : finishedCommands).push(command);
+		(isActiveBackgroundCommand(command) ? commands : recentCommands).push(command);
 	}
 	for (const child of snapshot?.subagents ?? []) {
-		(isActiveSubagent(child) ? subagents : finishedSubagents).push(child);
+		(isActiveSubagent(child) ? subagents : recentSubagents).push(child);
 	}
+	const held = { snapshot: snapshot ?? null, older };
+	const finishedCommands = finishedChain(held, "command").flatMap((record) =>
+		record.kind === "command" ? [record.summary] : [],
+	);
+	const finishedSubagents = finishedChain(held, "subagent").flatMap((record) =>
+		record.kind === "subagent" ? [record.summary] : [],
+	);
 	const mcpServers =
 		includeMcp && snapshot?.mcpServers ? orderMcpResources(snapshot.mcpServers) : null;
+	const history: SessionResourceHistory = snapshot?.history ?? {
+		commands: tallyResources(recentCommands.map((summary) => ({ kind: "command", summary }))),
+		subagents: tallyResources(recentSubagents.map((summary) => ({ kind: "subagent", summary }))),
+	};
+	const left = (total: number, held: number) => (snapshot?.history ? Math.max(0, total - held) : 0);
 	return {
 		commands,
 		subagents,
 		finishedCommands,
 		finishedSubagents,
+		recentFinished: { finishedCommands: recentCommands, finishedSubagents: recentSubagents },
+		history,
+		finishedCount: resourceTallyTotal(history.commands) + resourceTallyTotal(history.subagents),
+		remaining: {
+			command: left(resourceTallyTotal(history.commands), finishedCommands.length),
+			subagent: left(resourceTallyTotal(history.subagents), finishedSubagents.length),
+		} satisfies Record<ResourceKind, number>,
 		activeCount: commands.length + subagents.length,
 		mcpServers,
 		mcpActiveCount: mcpServers?.filter((server) => isMcpActiveState(server.state)).length ?? 0,
 		mcpAttentionCount:
 			mcpServers?.filter((server) => isMcpAttentionState(server.state)).length ?? 0,
 	};
+}
+
+export function selectChatResourceOldest(
+	state: ChatResourceState,
+	scope: ChatResourceScope,
+	kind: ResourceKind,
+): ResourceRecord | undefined {
+	return finishedChain(selectChatResourceProjection(state, scope), kind).at(-1);
+}
+
+export function supportsResourceHistory(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= RESOURCE_HISTORY_PROTOCOL_VERSION;
 }
 
 export function selectHasNormalizedSessionState(state: ProtocolState): boolean {

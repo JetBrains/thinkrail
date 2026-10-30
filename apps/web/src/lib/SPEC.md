@@ -47,7 +47,9 @@ not this module; the theme-aware highlighter remains app-local.
   (clipboard write reporting whether it landed — one place for the *degradation*: an insecure context
   (plain-http remote access) or a denied permission has no clipboard, and every caller's answer is the same
   — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
-  `getRandomValues`, which remains available to a plain-HTTP remote client),
+  `getRandomValues`, which remains available to a plain-HTTP remote client) and **`randomUuid()`** (the same
+  source shaped as an RFC 4122 v4 UUID, for wire ids the host validates as UUIDs; `crypto.randomUUID` is
+  missing on such a client),
   **`DOUBLE_CLICK_SETTLE_MS`** (the click→double-click window, used only where a single click would
   commit something a double click contradicts: a single click (or keyboard activation) on the active
   preview tab, so a double click is not read as two keeps, the Changes review-tab preview, and the Review
@@ -115,7 +117,7 @@ not this module; the theme-aware highlighter remains app-local.
   boundary at 48 UTF-16 units with `…` — never inside a surrogate pair — as `source: "prompt"` with the full
   head as `tooltip`; else `chatName`'s generic label as `source: "default"`; every surface that shows a chat
   title renders one `chatLabel`, so trimming, the `data-title-source` marker and the tooltip agree and the
-  agent's or user's title replaces the label everywhere at once), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
+  agent's or user's title replaces the label everywhere at once), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`, `randomUuid`,
   `MCP_STATE_KEY`, `mcpStateLabel`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
   `isMcpActiveState`, the `McpStateTone` type,
   `DOUBLE_CLICK_SETTLE_MS`, `firstClickOnly`, `doubleClickPendingMs`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,

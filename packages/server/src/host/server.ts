@@ -11,7 +11,7 @@ import type {
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
 import {
-	FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
+	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
@@ -64,6 +64,7 @@ import {
 	reportError,
 	shutdownAnalytics,
 	startAttributionClaim,
+	surveyEndpoint,
 	track,
 } from "../analytics";
 import {
@@ -76,7 +77,13 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
-import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
+import {
+	configureSurveySource,
+	redeliverInvitation,
+	refreshInAppSurvey,
+	releaseInvitation,
+	setFeedbackPublisher,
+} from "../feedback";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -283,7 +290,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					return;
 				}
 				clearTerminalClient(clientKey);
-				releaseInterview(clientKey);
+				releaseInvitation(clientKey);
 				cancelMcpProbesOwnedBy(clientKey);
 			}, CLIENT_REPLAY_RETENTION_MS),
 		);
@@ -380,7 +387,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					terminalBackpressured.add(ws.data.clientKey);
 				}
 				resumeClientTerminals(ws.data.clientKey);
-				redeliverInterview(ws.data.clientKey);
+				redeliverInvitation(ws.data.clientKey);
 			},
 			async message(ws, message) {
 				const raw = typeof message === "string" ? message : message.toString();
@@ -566,7 +573,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setFeedbackPublisher((clientKey) => {
 		const ws = sockets.get(clientKey);
-		if (!ws || ws.data.protocolVersion < FEEDBACK_INTERVIEW_PROTOCOL_VERSION) return false;
+		if (!ws || ws.data.protocolVersion < FEEDBACK_SURVEY_PROTOCOL_VERSION) return false;
 		try {
 			return ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} })) !== 0;
 		} catch {
@@ -871,6 +878,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		...(analytics ?? {}),
 		additionalEnabled: initialAdditionalAnalyticsEnabled(initialConfig),
 	});
+	configureSurveySource(surveyEndpoint());
+	void refreshInAppSurvey();
 	observeLoggedErrors((scope, error) =>
 		reportError(error, { source: "host_logged", handled: true, scope }),
 	);
@@ -914,6 +923,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		persistTerminalSessions();
 		closeAllTerminals();
 		setFeedbackPublisher(null);
+		configureSurveySource(null);
 		setSettingsPublisher(null);
 		setModelContextPublisher(null);
 		setModelListingPublisher(null);

@@ -2,19 +2,23 @@ import {
 	RiCheckboxBlankCircleFill,
 	RiCheckboxCircleFill,
 	RiCloseCircleFill,
-	RiCloseLine,
 	RiIndeterminateCircleLine,
 	RiLoader4Line,
 	RiRobot2Line,
+	RiShutDownLine,
 	RiStopFill,
 	RiTerminalBoxLine,
 	RiTimeLine,
 } from "@remixicon/react";
-import type {
-	BackgroundCommandStatus,
-	BackgroundCommandSummary,
-	DelegationRunStatus,
-	SubagentResourceSummary,
+import {
+	type BackgroundCommandStatus,
+	type BackgroundCommandSummary,
+	compareResourceHistory,
+	type DelegationRunStatus,
+	type ResourceRecord,
+	resourceHistoryCursor,
+	resourceRecordId,
+	type SubagentResourceSummary,
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
@@ -23,11 +27,16 @@ import type { KeyboardEvent, ReactNode } from "react";
 export type ResourceAction = { pending: boolean; error: string | null };
 export type ResourceActions = Record<string, ResourceAction>;
 
-export type Resource =
-	| { kind: "command"; summary: BackgroundCommandSummary }
-	| { kind: "subagent"; summary: SubagentResourceSummary };
+export type Resource = ResourceRecord;
 
-export type ResourceState = "working" | "queued" | "stopping" | "done" | "failed" | "stopped";
+export type ResourceState =
+	| "working"
+	| "queued"
+	| "stopping"
+	| "done"
+	| "failed"
+	| "stopped"
+	| "interrupted";
 
 export type ResourceTarget =
 	| { kind: "command"; id: string }
@@ -39,9 +48,7 @@ export function resourceTarget(resource: Resource): ResourceTarget {
 		: { kind: "subagent", childSessionId: resource.summary.childSessionId };
 }
 
-export function resourceId(resource: Resource): string {
-	return resource.kind === "command" ? resource.summary.id : resource.summary.childSessionId;
-}
+export const resourceId: (resource: Resource) => string = resourceRecordId;
 
 export function actionKey(resource: Resource): string {
 	return `${resource.kind}:${resourceId(resource)}`;
@@ -74,6 +81,7 @@ export function subagentState(status: DelegationRunStatus): ResourceState {
 }
 
 export function resourceState(resource: Resource): ResourceState {
+	if (resource.summary.interrupted) return "interrupted";
 	return resource.kind === "command"
 		? commandState(resource.summary.status, resource.summary.exitCode)
 		: subagentState(resource.summary.status);
@@ -87,10 +95,6 @@ export function startedAt(resource: Resource): number {
 	return resource.kind === "command"
 		? resource.summary.startedAt
 		: Date.parse(resource.summary.createdAt);
-}
-
-export function finishedAt(resource: Resource): number | undefined {
-	return resource.kind === "command" ? resource.summary.finishedAt : undefined;
 }
 
 export function toResources(
@@ -111,7 +115,15 @@ export function sortLive(resources: readonly Resource[]): Resource[] {
 export function sortSettled(resources: readonly Resource[]): Resource[] {
 	return resources
 		.slice()
-		.sort((a, b) => (finishedAt(b) ?? startedAt(b)) - (finishedAt(a) ?? startedAt(a)));
+		.sort((a, b) => compareResourceHistory(resourceHistoryCursor(a), resourceHistoryCursor(b)));
+}
+
+export function newestResourceId(
+	commands: readonly BackgroundCommandSummary[],
+	subagents: readonly SubagentResourceSummary[],
+): string | null {
+	const newest = sortSettled(toResources(commands, subagents))[0];
+	return newest ? resourceId(newest) : null;
 }
 
 export function resourceName(t: Translator, resource: Resource): string {
@@ -138,6 +150,8 @@ export function stateLabel(t: Translator, state: ResourceState, kind: Resource["
 			return t("resources.state.failed");
 		case "stopped":
 			return t("resources.state.stopped");
+		case "interrupted":
+			return t("resources.state.interrupted");
 	}
 }
 
@@ -176,6 +190,7 @@ const STATE_TEXT: Record<ResourceState, string> = {
 	done: "text-feedback-success",
 	failed: "text-feedback-error",
 	stopped: "text-text-subtle",
+	interrupted: "text-text-subtle",
 };
 
 const STATE_DOT: Record<ResourceState, string> = {
@@ -185,6 +200,7 @@ const STATE_DOT: Record<ResourceState, string> = {
 	done: "bg-feedback-success",
 	failed: "bg-feedback-error",
 	stopped: "bg-text-subtle",
+	interrupted: "bg-text-subtle",
 };
 
 export function StateIcon({ state }: { state: ResourceState }) {
@@ -196,6 +212,8 @@ export function StateIcon({ state }: { state: ResourceState }) {
 			return <RiCloseCircleFill className={className} />;
 		case "stopped":
 			return <RiIndeterminateCircleLine className={className} />;
+		case "interrupted":
+			return <RiShutDownLine className={className} />;
 		case "queued":
 			return <RiTimeLine className={className} />;
 		case "stopping":
@@ -316,17 +334,26 @@ export interface ResourceRowProps {
 	fresh?: boolean;
 	onSelect: () => void;
 	onStop: () => void;
-	onDismiss?: (() => void) | undefined;
 }
 
 const ACCESSIBLE_ACTIVITY_LIMIT = 80;
 
-function accessibleName(t: Translator, name: string, activity: string, state: string): string {
+function accessibleName(
+	t: Translator,
+	name: string,
+	activity: string,
+	state: string,
+	fresh: boolean,
+): string {
 	const trimmed =
 		activity.length > ACCESSIBLE_ACTIVITY_LIMIT
 			? `${activity.slice(0, ACCESSIBLE_ACTIVITY_LIMIT - 1)}…`
 			: activity;
-	return t("resources.row.accessibleName", { name, activity: trimmed, state });
+	return t(fresh ? "resources.row.accessibleNameNew" : "resources.row.accessibleName", {
+		name,
+		activity: trimmed,
+		state,
+	});
 }
 
 export function ResourceRow({
@@ -340,7 +367,6 @@ export function ResourceRow({
 	fresh = false,
 	onSelect,
 	onStop,
-	onDismiss,
 }: ResourceRowProps) {
 	const t = useT();
 	const state = resourceState(resource);
@@ -389,14 +415,6 @@ export function ResourceRow({
 				>
 					<RiStopFill className="size-14" />
 				</RowActionButton>
-			) : onDismiss ? (
-				<RowActionButton
-					label={t("resources.action.dismiss")}
-					testId="resource-dismiss"
-					onClick={onDismiss}
-				>
-					<RiCloseLine className="size-14" />
-				</RowActionButton>
 			) : null}
 		</span>
 	);
@@ -424,13 +442,13 @@ export function ResourceRow({
 				className={cn(
 					rowClass,
 					"grid-cols-[minmax(0,1fr)_auto]",
-					selected && "bg-control-bg-selected",
+					selected ? "bg-control-bg-selected" : fresh && "bg-primary-subtle",
 				)}
 			>
 				<div
 					role="option"
 					aria-selected={selected}
-					aria-label={accessibleName(t, name, activity, label)}
+					aria-label={accessibleName(t, name, activity, label, fresh)}
 					tabIndex={0}
 					onClick={onSelect}
 					onKeyDown={onKeyDown}
@@ -444,8 +462,15 @@ export function ResourceRow({
 							</span>
 							{meta}
 						</span>
-						<span className={activityClass} title={activity}>
-							{activity}
+						<span className="flex min-w-0 items-baseline gap-4">
+							{fresh ? (
+								<span className="shrink-0 rounded-full bg-primary-subtle px-4 tr-text-label-pill text-primary">
+									{t("resources.row.new")}
+								</span>
+							) : null}
+							<span className={activityClass} title={activity}>
+								{activity}
+							</span>
 						</span>
 						{failure}
 					</span>
@@ -455,10 +480,7 @@ export function ResourceRow({
 		);
 	}
 	return (
-		<li
-			{...dataAttributes}
-			className={cn(rowClass, "grid-cols-[auto_minmax(0,1fr)_auto]", fresh && "bg-primary-subtle")}
-		>
+		<li {...dataAttributes} className={cn(rowClass, "grid-cols-[auto_minmax(0,1fr)_auto]")}>
 			<KindGlyph kind={resource.kind} state={state} />
 			<span className="flex min-w-0 flex-col">
 				<button

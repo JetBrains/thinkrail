@@ -86,6 +86,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `changes` | host-owned revert of a hunk or a file's whole change in the worktree, with undo receipts | [changes/SPEC.md](src/changes/SPEC.md) |
 | `turns` | per-agent-run worktree snapshots → the change set each run produced (`workspace.turns`, `turn.changed`) | [turns/SPEC.md](src/turns/SPEC.md) |
 | `trash` | move a path to the OS trash through the bundled helpers (never `unlink`) | [trash/SPEC.md](src/trash/SPEC.md) |
+| `resourceHistory` | the durable per-chat archive of background commands and subagents behind Resources (records + command log tails) | [resourceHistory/SPEC.md](src/resourceHistory/SPEC.md) |
 | `spec` | the worktree's spec-graph snapshot (`spec.graph`) + project-level `projectHasSpecs`, via `pi-spec-graph/core` | [spec/SPEC.md](src/spec/SPEC.md) |
 | `todos` | a chat's per-session TODO plan read/write (`todo.*`), via `pi-todos/core` | [todos/SPEC.md](src/todos/SPEC.md) |
 | `reviews` | draft review comments on files/diffs: store + anchoring + context-package render | [reviews/SPEC.md](src/reviews/SPEC.md) |
@@ -96,7 +97,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (plan summaries, PR descriptions) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | always-on basic events + sanitized error reports, and preference-controlled optional insights → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
-| `feedback` | host-scoped usage count + addressed product-interview invitation lifecycle | [feedback/SPEC.md](src/feedback/SPEC.md) |
+| `feedback` | host-scoped usage count, addressed survey invitation lifecycle and the launched PostHog survey | [feedback/SPEC.md](src/feedback/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
@@ -122,7 +123,7 @@ the host from env via `bootHost` for dev/e2e.
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `locales`, `themes`, `analytics`, `feedback` → `persistence` (`locales` also → `@thinkrail/locales` root, external-style: catalog validation and file naming) (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
-  `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`). `persistence` never imports
+  `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`, `resourceHistory`). `persistence` never imports
   `log` (would cycle); `initLogging` is called only from `host`'s `bootHost`
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `reviews` → `workspaces` (worktree path lookup), `persistence` (data dir), `git` (the review's baseSha
@@ -137,11 +138,13 @@ the host from env via `bootHost` for dev/e2e.
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
 - `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations),
-  `trash` (a chat delete's recoverable transcript move), `extensions` (the registry's flattened parent and
+  `trash` (a chat delete's recoverable transcript move), `resourceHistory` (records its owners' lifecycle and reads
+  what they no longer hold), `extensions` (the registry's flattened parent and
   child inline extensions plus, in unbundled dev, its skill roots) — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
 - `extensions` → `@thinkrail/ext-*/server` + `@thinkrail/extension-api/server` (external); `buildSupport.ts`
   (build-only) also reads it to stage the extensions' skill roots
+- `resourceHistory` → `persistence` (`dataDir`), `log`
 - `persistence`, `dialog`, `history`, `templates`, `subprocess`, `trash` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
@@ -177,7 +180,9 @@ The Chat Resources integration adds `agent` → `pi-background-commands` as an e
 package edge, alongside its existing delegation packages. `host` continues to compose the wire
 through the `agent` barrel; there is no new resource-manager sibling or `agent` → `terminal` /
 `subprocess` / `settings` edge. Command lifecycle and bounded output belong to the portable package,
-while the manager owns its association with an actual parent session.
+while the manager owns its association with an actual parent session. What must outlive the host — the
+chat's finished records and command log tails — lives in the `resourceHistory` leaf, which only `agent`
+feeds and reads; `host` reaches it solely through the `agent` barrel.
 
 Subagent availability is also host-mediated: `settings` owns the global default, `workspaces` owns the
 optional local override, and `host` injects their effective value into `agent` plus requests live-session

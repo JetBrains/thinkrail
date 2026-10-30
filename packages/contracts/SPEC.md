@@ -37,7 +37,9 @@ that must agree across the independently shipped client and host. The one packag
   being described), **`RANGE_INVALID`** (a span lies outside the side it names, or a range revert was
   asked of a byte-only resource), **`RECEIPT_UNKNOWN`** (an undo of a receipt the host no longer
   holds — the ring is 20 deep and dies with the process), and **`UNSUPPORTED_CHANGE`** (the selected
-  change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)), so a client can react to one specific failure
+  change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses), plus
+  the four `feedback.survey.submit` refusals `SURVEY_INVALID`, `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` and
+  `SURVEY_NOT_SENT`), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
@@ -445,8 +447,8 @@ that must agree across the independently shipped client and host. The one packag
   `server.welcome`, mutated via `settings.update`). Every new user chat receives the resolved model and
   effort explicitly, so the session agrees with `model.default`; explicit request fields win individually,
   while an effort-only request uses the configured or fallback model. Plan-review subagents keep their own model policy.
-  **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
-  feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
+  **`SurveyInvitationResponse`** is the closed `"postpone" | "never"` action accepted from the automatic
+  survey invitation. No usage count, eligibility, dismissal state, or client identity crosses the wire.
   Contracts deliberately exports no theme catalog enum/list/labels: a future manifest can mint an id
   unknown when the host was built, and a client missing it resolves a same-appearance bundled fallback;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
@@ -741,10 +743,21 @@ that must agree across the independently shipped client and host. The one packag
   because values may be secrets; `get` → `HostEnvironmentStatus` with `restartRequired`, `launchOverridden`
   names and the `effectiveAgentDir`; `update` replaces the whole record and returns
   `{ ok: false, issues }` per field/row index instead of saving anything when it is invalid) /
-  **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists the automatic invitation's book,
-  postpone, or permanent-dismiss result; the Settings link never calls it;
-  `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction so the host does not
-  claim an independently shipped older client that omits the current `?protocol=` socket capability) /
+  **`feedback.respond`** (`{ action: SurveyInvitationResponse }` → ack; persists postpone or the permanent
+  dismissal; neither stops message counting) /
+  **`feedback.survey`** (`{ language? }`, the client's UI language → `{ survey: AppSurvey | null }`; the
+  launched survey named `in-app-feedback` in the PostHog translation that language matches, with
+  `AppSurvey.language` naming it, or the original text without `language`; null when it is off or this id
+  and iteration were already submitted) /
+  **`feedback.survey.submit`** (`SurveySubmitParams { submissionId, surveyId, iteration, language?, answers, others? }` → ack;
+  `language` echoes `AppSurvey.language`; `answers` hold only picked choices (as shown), ratings and open text,
+  while a choice question's typed **Other** text travels in `others`, so it is never read as a choice;
+  one call when the user presses Send, whatever the analytics setting; fails with `SURVEY_INVALID`,
+  `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` (the survey moved to another id or iteration — the client reloads
+  and restarts) or `SURVEY_NOT_SENT`; `FEEDBACK_SURVEY_PROTOCOL_VERSION` pins both methods and the
+  invitation channel to v97; `SURVEY_TRANSLATIONS_PROTOCOL_VERSION` pins `language` and `others` to v98 —
+  a client sends a pre-v98 host the older shape, Other text inline in `answers` and no `language`, and a
+  submission without `others` is read in that shape) /
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
@@ -788,8 +801,8 @@ that must agree across the independently shipped client and host. The one packag
   other frontends can list it in history without opening local placement) / **`session.deleted`** (workspace +
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) / **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
-  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
-  frontend; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
+  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to a protocol v97
+  client when the launched in-app survey is eligible; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
   before any session exists) / **`provider.changed`** — a data-free invalidation broadcast after a watched
@@ -842,20 +855,33 @@ v70 must not receive these requests. No native Pi background-task protocol is im
 without importing that package. Subagents retain their Pi child session ids and delegation statuses.
 
 - `session.resources({workspaceId, sessionId})` returns separate command and subagent summaries:
-  all currently active records plus bounded recent terminal records. The snapshot echoes workspace
+  every live record plus the newest twenty finished ones per kind. The snapshot echoes workspace
   and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
   child/parent ids, role, task, status, creation time, the child's actual `model` (`provider/id`) and
   effective `thinkingLevel` (both optional — absent from an older host), optional abort reason,
   `detached: true` for a background run (from the child's `info`; absent for a foreground run and from
   an older host) and — once terminal — the run duration [[module-pi-delegation]] measured
-  (`durationMs`), not usage or reports.
-  Subagent role/task summaries are capped at 200/2,000 characters, with the latest twenty terminal
-  children by creation order retained in the projection. These are runtime catalogs; neither historical
-  tool acknowledgements nor persisted PIDs supply live authority after restart.
+  (`durationMs`) and, from a v96 host, the finish time (`finishedAt`); not usage or reports.
+  Subagent role/task summaries are capped at 200/2,000 characters. Finished records outlive the host
+  ([[submodule-server-resource-history]]) but never carry authority: neither archived records,
+  historical tool acknowledgements nor persisted PIDs make anything stoppable after a restart.
+- **History (v96, `RESOURCE_HISTORY_PROTOCOL_VERSION`).** The snapshot adds `history`: per kind, a
+  `ResourceTally` of every finished record by `ResourceOutcome` (`done` / `failed` / `stopped` /
+  `interrupted`). `interrupted: true` on either summary means the host or the chat's teardown ended the
+  run, and such a run always travels with a terminal status — the owner's, or `stopped` / `aborted` when the
+  owner never settled it (`interruptedResource`) — so an older client reads it as Stopped, never as a live
+  row it cannot stop. `isLiveResource` is false for it whatever status it last reported.
+  `session.resourceHistory({workspaceId, sessionId, kind, before?, limit?})` pages one kind's finished
+  records newest first (default 20, at most 100) after an opaque-to-the-UI `{at, id}` cursor taken from
+  the last row it holds and answers `{kind, items, hasMore}`. Order, outcome and cursor are the shared
+  pure helpers `resourceHistoryCursor` / `compareResourceHistory` (finish time, else start time; id breaks
+  ties), `resourceOutcome`, `isLiveResource` and `resourceRecordId` over the `ResourceRecord` union, so the
+  host and the UI never derive them twice.
 - `backgroundCommand.output({workspaceId, sessionId, commandId})` returns the current bounded
-  `{available: true, command, output: {text, truncated}}`, or `{available: false}` for an unknown,
-  foreign or evicted command after validating its parent. Output REPLACES the previous snapshot;
-  truncation is explicit. It accepts no filesystem path or PID.
+  `{available: true, command, output: {text, truncated}}` — from a v96 host also the archived tail of a
+  finished command the owner no longer holds — or `{available: false}` for an unknown, foreign or
+  unarchived command after validating its parent. Output REPLACES the previous snapshot; truncation is
+  explicit. It accepts no filesystem path or PID.
 - `backgroundCommand.stop({workspaceId, sessionId, commandId})` and
   `subagent.stop({workspaceId, parentSessionId, childSessionId})` request cancellation of one owned
   resource. Known terminal resources are idempotent successes; unknown, expired or foreign ids

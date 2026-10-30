@@ -1,4 +1,12 @@
-import type { SessionResources } from "@thinkrail/contracts";
+import {
+	compareResourceHistory,
+	isLiveResource,
+	type ResourceKind,
+	type ResourceRecord,
+	resourceHistoryCursor,
+	resourceRecordId,
+	type SessionResources,
+} from "@thinkrail/contracts";
 import type { ConnectionStatus } from "../transport";
 
 export interface ChatResourceScope {
@@ -13,6 +21,7 @@ export interface ChatResourceRead extends ChatResourceScope {
 
 export interface ChatResourceProjection {
 	snapshot: SessionResources | null;
+	older?: readonly ResourceRecord[];
 	revision: number;
 	connectionGeneration: number | null;
 	fresh: boolean;
@@ -42,4 +51,73 @@ export function staleChatResources(snapshots: ChatResourceSnapshots): ChatResour
 			),
 		]),
 	);
+}
+
+function snapshotRecords(snapshot: SessionResources | null | undefined): ResourceRecord[] {
+	return [
+		...(snapshot?.commands ?? []).map((summary): ResourceRecord => ({ kind: "command", summary })),
+		...(snapshot?.subagents ?? []).map(
+			(summary): ResourceRecord => ({ kind: "subagent", summary }),
+		),
+	];
+}
+
+function newestFirst(records: ResourceRecord[]): ResourceRecord[] {
+	return records.sort((a, b) =>
+		compareResourceHistory(resourceHistoryCursor(a), resourceHistoryCursor(b)),
+	);
+}
+
+export function finishedChain(
+	projection: Pick<ChatResourceProjection, "snapshot" | "older"> | undefined,
+	kind: ResourceKind,
+): ResourceRecord[] {
+	const current = snapshotRecords(projection?.snapshot).filter((record) => record.kind === kind);
+	const held = new Set(current.map(resourceRecordId));
+	const older = (projection?.older ?? []).filter(
+		(record) => record.kind === kind && !held.has(resourceRecordId(record)),
+	);
+	return [...newestFirst(current.filter((record) => !isLiveResource(record))), ...older];
+}
+
+export function carryOlderResources(
+	previous: ChatResourceProjection | undefined,
+	next: SessionResources,
+): readonly ResourceRecord[] | undefined {
+	const carried = (["command", "subagent"] as const).flatMap((kind) => {
+		if (!previous?.older?.some((record) => record.kind === kind)) return [];
+		const chain = finishedChain(previous, kind);
+		const window = finishedChain({ snapshot: next }, kind);
+		const oldest = window.at(-1);
+		const at = oldest
+			? chain.findIndex((record) => resourceRecordId(record) === resourceRecordId(oldest))
+			: -1;
+		if (at === -1) return [];
+		const taken = new Set(
+			snapshotRecords(next)
+				.filter((record) => record.kind === kind)
+				.map(resourceRecordId),
+		);
+		return chain.slice(at + 1).filter((record) => !taken.has(resourceRecordId(record)));
+	});
+	return carried.length > 0 ? carried : undefined;
+}
+
+export function appendOlderResources(
+	projection: ChatResourceProjection,
+	kind: ResourceKind,
+	after: string,
+	page: readonly ResourceRecord[],
+): readonly ResourceRecord[] | null {
+	const chain = finishedChain(projection, kind);
+	const last = chain.at(-1);
+	if (!last || resourceRecordId(last) !== after) return null;
+	const known = new Set([
+		...chain.map(resourceRecordId),
+		...snapshotRecords(projection.snapshot).map(resourceRecordId),
+	]);
+	return [
+		...(projection.older ?? []),
+		...page.filter((record) => record.kind === kind && !known.has(resourceRecordId(record))),
+	];
 }

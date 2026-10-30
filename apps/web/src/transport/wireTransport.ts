@@ -19,6 +19,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -30,6 +31,7 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
+import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
@@ -229,7 +231,7 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
 		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
-		useAppStore.getState().hideInterviewPrompt();
+		useAppStore.getState().hideSurveyInvitation();
 		useAppStore
 			.getState()
 			.installWelcomeSnapshot(
@@ -255,6 +257,7 @@ export function initTransport(): WsTransport {
 			sessionStateHydration = null;
 			useAppStore.getState().installSessionStateSnapshot([]);
 		}
+		void loadInAppSurvey();
 	});
 
 	transport.subscribe(WS_CHANNELS.hostUpdateAvailable, (data) => {
@@ -341,7 +344,9 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
-		useAppStore.getState().showInterviewPrompt();
+		const state = useAppStore.getState();
+		if ((state.protocolVersion ?? 0) < FEEDBACK_SURVEY_PROTOCOL_VERSION) return;
+		state.showSurveyInvitation();
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
@@ -396,4 +401,27 @@ export function initTransport(): WsTransport {
 export function getTransport(): WsTransport {
 	if (!transport) throw new Error("transport not initialized — call initTransport() first");
 	return transport;
+}
+
+let surveyLoadGeneration = 0;
+
+export function loadInAppSurvey(): Promise<void> {
+	const protocol = useAppStore.getState().protocolVersion;
+	if (protocol === null || protocol < FEEDBACK_SURVEY_PROTOCOL_VERSION) {
+		useAppStore.getState().setInAppSurvey(null);
+		return Promise.resolve();
+	}
+	const generation = ++surveyLoadGeneration;
+	return getTransport()
+		.request("feedback.survey", { language: currentLocale() })
+		.then((result) => {
+			if (generation !== surveyLoadGeneration) return;
+			useAppStore.getState().setInAppSurvey(result.survey);
+		})
+		.catch(() => {});
+}
+
+export function forgetInAppSurvey(): void {
+	surveyLoadGeneration += 1;
+	useAppStore.getState().setInAppSurvey(null);
 }

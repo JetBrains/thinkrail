@@ -1,5 +1,11 @@
 import {
 	type BackgroundCommandOutputResult,
+	type ResourceHistoryCursor,
+	type ResourceHistoryPage,
+	type ResourceKind,
+	type ResourceRecord,
+	resourceHistoryCursor,
+	resourceRecordId,
 	type SessionResources,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
@@ -12,12 +18,14 @@ import {
 	isChatResourceScopeAlive,
 	selectChatResourceAuthority,
 	selectChatResourceGroups,
+	selectChatResourceOldest,
 	selectChatResourceProjection,
 	selectChatResourcesLoading,
 	selectChatResourcesStale,
 	selectChatResourcesVisible,
 	selectSupportsMcp,
 	supportsChatResources,
+	supportsResourceHistory,
 	useAppStore,
 } from "@/store";
 import { errorText, getTransport, wsErrorCode } from "@/transport";
@@ -95,6 +103,10 @@ export function createChatResourceControls(
 		stopAll: () => Promise<unknown>;
 		setMcpEnabled: (name: string, enabled: boolean) => Promise<unknown>;
 		reconnectMcp: (name: string) => Promise<unknown>;
+		readHistory?: (
+			kind: ResourceKind,
+			before: ResourceHistoryCursor,
+		) => Promise<ResourceHistoryPage>;
 		onChange: (actions: ResourceActionState) => void;
 	},
 ) {
@@ -151,6 +163,28 @@ export function createChatResourceControls(
 		reconnectMcp: (name: string) => {
 			if (mcpServer(name)) void run(`mcp:${name}`, () => deps.reconnectMcp(name));
 		},
+		loadOlder: (kind: ResourceKind) => {
+			const readHistory = deps.readHistory;
+			const oldest = selectChatResourceOldest(deps.state(), scope, kind);
+			if (!readHistory || !oldest) return;
+			void run(`history:${kind}`, async () => {
+				const page = await readHistory(kind, resourceHistoryCursor(oldest));
+				if (page.kind !== kind) throw new Error("Resource history page belongs to another kind.");
+				const records: ResourceRecord[] =
+					page.kind === "command"
+						? page.items.map((summary) => ({ kind: "command", summary }))
+						: page.items.map((summary) => ({ kind: "subagent", summary }));
+				if (current())
+					deps
+						.state()
+						.appendChatResourceHistory(
+							{ ...scope, connectionGeneration: generation },
+							kind,
+							resourceRecordId(oldest),
+							records,
+						);
+			});
+		},
 		dispose: () => {
 			active = false;
 		},
@@ -173,9 +207,10 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 	const knownUnsupported = isChatResourcesKnownUnsupported(protocol);
 	const supportsMcp = selectSupportsMcp({ protocolVersion: protocol });
 	const groups = useMemo(
-		() => selectChatResourceGroups(projection?.snapshot, supportsMcp),
-		[projection?.snapshot, supportsMcp],
+		() => selectChatResourceGroups(projection?.snapshot, supportsMcp, projection?.older),
+		[projection?.snapshot, supportsMcp, projection?.older],
 	);
+	const pageable = supportsResourceHistory(protocol) && !!projection?.snapshot?.history;
 	const sync = useRef<ReturnType<typeof startChatResourceSync> | null>(null);
 	const controls = useRef<ReturnType<typeof createChatResourceControls> | null>(null);
 	const [actionState, setActionState] = useState<{
@@ -215,6 +250,12 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 			setMcpEnabled: (name, enabled) =>
 				transport.request("mcp.setSessionOverride", { ...scope, name, enabled }),
 			reconnectMcp: (name) => transport.request("mcp.reconnect", { ...scope, name }),
+			...(supportsResourceHistory(protocol)
+				? {
+						readHistory: (kind: ResourceKind, before: ResourceHistoryCursor) =>
+							transport.request("session.resourceHistory", { ...scope, kind, before }),
+					}
+				: {}),
 			onChange: (actions) => setActionState({ scope, generation, actions }),
 		});
 		sync.current = reader;
@@ -225,8 +266,9 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 			sync.current = null;
 			controls.current = null;
 		};
-	}, [scope, workspaceId, sessionId, status, supported, alive, generation, welcome]);
+	}, [scope, workspaceId, sessionId, status, supported, alive, generation, welcome, protocol]);
 
+	const loadOlder = useCallback((kind: ResourceKind) => controls.current?.loadOlder(kind), []);
 	return {
 		visible,
 		loading,
@@ -245,6 +287,8 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 			[],
 		),
 		reconnectMcp: useCallback((name: string) => controls.current?.reconnectMcp(name), []),
+		retained: pageable,
+		loadOlder: pageable ? loadOlder : undefined,
 	};
 }
 

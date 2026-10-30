@@ -20,6 +20,7 @@ import {
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
@@ -38,6 +39,7 @@ import {
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
@@ -47,6 +49,7 @@ import {
 	SESSION_TITLE_MAX_LENGTH,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
+	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TOOL_RESPONSE_CUSTOM_TYPE,
@@ -277,11 +280,18 @@ test("review details and the GitHub review actions are pinned to v88", () => {
 });
 
 test("project create and the onboarding dismissal are pinned to v94", () => {
-	expect(PROTOCOL_VERSION).toBe(95);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ONBOARDING_PROTOCOL_VERSION);
 	expect(ONBOARDING_PROTOCOL_VERSION).toBe(94);
 	expect(WS_METHODS.projectCreate).toBe("project.create");
 	expect(WS_METHODS.providerDetect).toBe("provider.detect");
 	expect(DEFAULT_CONFIG.onboardingDismissed).toBe(false);
+});
+
+test("in-app surveys are pinned to v97", () => {
+	expect(FEEDBACK_SURVEY_PROTOCOL_VERSION).toBe(97);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FEEDBACK_SURVEY_PROTOCOL_VERSION);
+	expect(WS_METHODS.feedbackSurvey).toBe("feedback.survey");
+	expect(WS_METHODS.feedbackSurveySubmit).toBe("feedback.survey.submit");
 });
 
 test("repository cloning and cancellation are registered", () => {
@@ -444,6 +454,12 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
 });
 
+test("resource history pages a chat's finished records from v96", () => {
+	expect(RESOURCE_HISTORY_PROTOCOL_VERSION).toBe(96);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(RESOURCE_HISTORY_PROTOCOL_VERSION);
+	expect(WS_METHODS.sessionResourceHistory).toBe("session.resourceHistory");
+});
+
 describe("completionDelivery", () => {
 	test("reads the delivery marker and treats a missing or unknown value as absent", () => {
 		expect(completionDelivery({ delivery: "wake" })).toBe("wake");
@@ -497,4 +513,9 @@ describe("tool response guards", () => {
 			}),
 		).toBeNull();
 	});
+});
+
+test("survey translations and separate Other text are pinned to v98", () => {
+	expect(SURVEY_TRANSLATIONS_PROTOCOL_VERSION).toBe(98);
+	expect(PROTOCOL_VERSION).toBe(98);
 });

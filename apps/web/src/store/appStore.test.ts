@@ -179,7 +179,9 @@ beforeEach(() => {
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
-		interviewPromptOpen: false,
+		surveyInvitationOpen: false,
+		surveyWindowOpen: false,
+		inAppSurvey: null,
 		chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 		fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
 		chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
@@ -3756,20 +3758,38 @@ test("openSettings deep-links to a section (default providers); closeSettings hi
 	expect(useAppStore.getState().settingsSection).toBe("providers");
 });
 
-test("the interview prompt show action is idempotent and hide clears it", () => {
+test("the survey invitation show action is idempotent and hide clears it", () => {
 	let updates = 0;
 	const unsubscribe = useAppStore.subscribe(() => {
 		updates += 1;
 	});
 
-	useAppStore.getState().showInterviewPrompt();
-	useAppStore.getState().showInterviewPrompt();
-	expect(useAppStore.getState().interviewPromptOpen).toBe(true);
+	useAppStore.getState().showSurveyInvitation();
+	useAppStore.getState().showSurveyInvitation();
+	expect(useAppStore.getState().surveyInvitationOpen).toBe(true);
 	expect(updates).toBe(1);
 
-	useAppStore.getState().hideInterviewPrompt();
-	expect(useAppStore.getState().interviewPromptOpen).toBe(false);
+	useAppStore.getState().hideSurveyInvitation();
+	expect(useAppStore.getState().surveyInvitationOpen).toBe(false);
 	expect(updates).toBe(2);
+	unsubscribe();
+});
+
+test("opening the survey window closes the invitation and Settings in one update", () => {
+	useAppStore.setState({ surveyInvitationOpen: true, settingsOpen: true });
+	let updates = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		updates += 1;
+	});
+	useAppStore.getState().openSurveyWindow();
+	expect(useAppStore.getState()).toMatchObject({
+		surveyWindowOpen: true,
+		surveyInvitationOpen: false,
+		settingsOpen: false,
+	});
+	expect(updates).toBe(1);
+	useAppStore.getState().closeSurveyWindow();
+	expect(useAppStore.getState().surveyWindowOpen).toBe(false);
 	unsubscribe();
 });
 
