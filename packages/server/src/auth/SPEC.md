@@ -40,6 +40,9 @@ ourselves and never surface a credential value over the wire.
     attempt drop the shared cache because each can make the observation stale. An out-of-band change inside
     the TTL window is deliberately served stale until the next read past it. The probe never runs mid-action
     or while a rebuild is outstanding, so it cannot delay a Connect or a candidate cutover.
+    The report also carries `warnings`: pi's *global* `warnings.*` switches from `agent`'s
+    `globalProviderWarnings()`. Today the only one is `anthropicExtraUsage`, which gates the sign-in
+    dialog's notice.
     Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice, unit-tested with
     fixture data; the kind/detail mapping itself is `agent`'s `describeProviderAuth`, shared with the
     catalog's per-model `WireModel.auth` projection so a provider row and a picker row never disagree. Its runtime reads are restricted to the generation's provider-id allowlist captured before
@@ -110,7 +113,9 @@ ourselves and never surface a credential value over the wire.
       `signal` abort (pi cancelling the loser of its browser-vs-paste race) settles
       the parked input — identity-guarded so a late abort can't clear a newer parked prompt. pi persists
       the credential **and refreshes availability inside `login()`**, so success just pushes `success`;
-      on throw, `error`.
+      on throw, `error`. A successful `anthropic` login then calls `agent`'s `recheckAnthropicExtraUsage`,
+      so live chats on Anthropic models get the extra-usage notice ([[submodule-server-agent]] Billing
+      warnings).
     - `resolveLogin({ loginId, value })` — the browser's reply resolves the parked interaction.
     - `cancelLogin(loginId)` — aborts the signal **and** settles the parked input with `undefined` (which
       makes the awaiting `prompt` throw), because the signal alone won't stop a provider's

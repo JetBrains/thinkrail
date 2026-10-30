@@ -269,7 +269,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
   stats read) / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
-  promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
+  promise) + `extUiStatus` / `extUiWidget`), and **`notice`**: the host's closed `ProviderWarning` code
+  (ExtUi `notice`, replayed like `notify`). `dismissSessionNotice(sessionId)` clears one chat;
+  `silenceNotice(notice)` clears every chat once "Don't warn again" lands, and also drops
+  buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
   `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
@@ -423,7 +426,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   banner a session error gets — an extension crash must not read as chatter); every other level stays a
   `system` turn. Level is the *only* input, so the host's own error notifies ride the same road: the
   `Review send failed: …` that `host/handlers` publishes after a rolled-back send renders as that banner
-  too. That is deliberate — a send that silently rolled back is exactly what a user must not scroll past. A **fire-and-forget** ext-UI frame (`notify`/`setStatus`/`setWidget`/`setTitle`)
+  too. That is deliberate — a send that silently rolled back is exactly what a user must not scroll past. A **fire-and-forget** ext-UI frame (`notify`/`setStatus`/`setWidget`/`setTitle`/`notice`)
   that has **no runtime to land in** is held in **`extUiOrphans`** (bounded, newest 64) instead of being
   dropped, and **both** runtime-installing actions — `openChatSession` *and* `hydrateSession` — drain that
   session's frames through the shared `replayExtUiOrphans` the moment its runtime exists. The admission

@@ -203,7 +203,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     it into the session, and an older host simply omits it (the client shows its generic label).
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
-    `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel. A round-trip
+    `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel. One member is
+    host-authored, not pi's: `notice` (v99) carries a closed `ProviderWarning` code for a session, such
+    as the Anthropic extra-usage warning. It has no text, so the client localizes it, and older clients
+    ignore the unknown kind. A round-trip
     request's optional `toolCallId` names the tool call it is about; absent, it is tied to none (the host
     anchors a dialog only when it knows the call: explicitly, or while exactly one call runs). An explicit
     anchor may add `toolInput` — the input that call will run with, as the asking host saw it — which the
@@ -341,7 +344,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   whose registration the JetBrains AI (Central) extension replaced, derived from registration identity
   alone, never from Central's configuration; plus `canOAuth`/`canApiKey`/`canLogout`,
   which gate the strip's in-app Sign-in / Sign-out affordances — `canLogout` is true only for a removable
-  auth.json credential, false for env / runtime / models.json auth the host can't unset); the **in-app login wire** — **`LoginFrame`** (the streamed
+  auth.json credential, false for env / runtime / models.json auth the host can't unset; optional
+  `warnings`, v99: pi's global `warnings.*` switches keyed by the closed **`ProviderWarning`** code
+  (`anthropicExtraUsage`), absent from older hosts, where the client treats them as on); the **in-app login wire** — **`LoginFrame`** (the streamed
   flow updates: `authUrl` / `deviceCode` / `select` / `prompt` / `progress` / `success` / `error`, which
   **accumulate** client-side, never a credential value), **`LoginPush`** (the `provider.login` frame,
   `{ loginId, providerId, frame }`) and **`LoginReply`** (`{ loginId, value }` — the browser's answer to a
@@ -640,7 +645,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   (**`loginStart`** — mints a `loginId` and runs pi's login flow **detached** (`type` `"oauth"` |
   `"api_key"`, issue #97 — both auth routes ride one channel; a flow can take minutes and must
   not sit on the request nor block the WS pump) / **`loginReply`** — answers a live `select`/`prompt`,
-  correlated by `loginId` / **`loginCancel`** / **`logout`** /
+  correlated by `loginId` / **`loginCancel`** / **`logout`** / **`disableWarning`** (v99,
+  **`PROVIDER_WARNINGS_PROTOCOL_VERSION`**: `{ warning: ProviderWarning }` turns off pi's global
+  `warnings.<warning>`, the chat notice's "Don't warn again"; no client-side way to turn it back on) /
   the **JetBrains AI** set **`jbcentralConnect`** / **`jbcentralDisconnect`** /
   **`jbcentralStartProxy`** / **`jbcentralUpdate`** / **`jbcentralLogin`** (native global Central actions
   returning `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from

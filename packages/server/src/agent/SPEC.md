@@ -983,7 +983,9 @@ re-opened transcripts provider-valid.
   `provider.changed` seam); `piLoginOptions` (pi login options
   carrying the lazily created installation device id, for `auth`);
   `completeOnce`/`pickModel` +
-  `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `toolResponses` mailbox
+  `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams (including `publishSessionNotice`);
+  `recheckAnthropicExtraUsage` / `disableAnthropicExtraUsageWarning` / `globalProviderWarnings` (see
+  Billing warnings); the `toolResponses` mailbox
   and pure helpers (`createToolResponseWaiters`/`toolResponseSessionServices`/`assessRespondability`/
   `describeToolResponse`/`buildToolResponseMessage`/`awaitingToolCallId`); normalized-state operations
   (`listSessionStates`/`acknowledgeCompletion`/`markWorkspaceUnread`/`markWorkspaceRead`/`nudgeSession` +
@@ -1088,6 +1090,34 @@ A finished but malformed event keeps the non-retryable parse error. Observed fai
 `data=` and only the `event:` line in `raw=`. A split CRLF always leaves that signature and a random cut
 rarely does, so the split CRLF is likely what users hit. Unconfirmed: whether api.anthropic.com or a
 proxy on the path sends CRLF. The guard test and removal gate live in [[pi-compatibility]].
+
+## Billing warnings
+
+The host owns the warning that pi's interactive mode shows: Claude Pro/Max auth (OAuth) bills
+third-party-harness usage as Anthropic extra usage, per token. So does an `sk-ant-oat` subscription
+token used as an API key. `anthropicExtraUsage.ts` decides with pi's public auth reads:
+`checkAuth("anthropic").type === "oauth"`, otherwise `getAuth` returns an `apiKey` with the
+subscription prefix. A failed lookup means no warning. The check is gated on the session's
+`settingsManager.getWarnings().anthropicExtraUsage !== false`, which is pi's own setting, default on,
+shared with the pi CLI. There is no ThinkRail copy of the setting.
+
+- **Once per session per host run.** The entry's `extraUsageWarned` flag is set only after the async
+  check passes, the entry is still registered with the same provider, and the setting is *still* on.
+  A concurrent re-check therefore cannot double-warn, and a Don't warn again that lands mid-lookup
+  wins. Triggers mirror pi's: `registerSession` (create and attach),
+  `setSessionModel`, and `recheckAnthropicExtraUsage` after a successful Anthropic login in `auth`.
+- **Central-replaced `anthropic`** is skipped (`opaqueProviderIds`): its credential is Central's and is
+  never read.
+- **Delivery** is a `notice` frame on the ExtUi channel (`publishSessionNotice`). It carries a closed
+  code, never text, so the web localizes it. The web replays it like `notify`, so a push that beats
+  `session.create`'s response survives. A reload before dismissal loses it, like pi's transient line.
+- **Don't warn again** (`provider.disableWarning`): `disableAnthropicExtraUsageWarning` writes pi's
+  *global* `warnings.anthropicExtraUsage = false` (other global warnings are kept), flushes, then
+  reloads every live session's settings manager so later checks see it. Re-enabling is pi's
+  `/settings` or `settings.json`; ThinkRail has no switch by design. `globalProviderWarnings()` feeds
+  `ProviderStatusReport.warnings`, which gates the sign-in dialog notice.
+
+The parity entry and its removal gate live in [[pi-compatibility]].
 
 ## Session titles
 
