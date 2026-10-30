@@ -73,7 +73,7 @@ test("a historical questionnaire still renders its answers while the extension i
 }) => {
 	await openFixtureProject(page);
 	await setExtension(page, "ask-user-question", false);
-	const args: AskUserQuestionArgs = {
+	const args = {
 		questions: [
 			{
 				question: "Which runtime?",
@@ -84,7 +84,7 @@ test("a historical questionnaire still renders its answers while the extension i
 				],
 			},
 		],
-	};
+	} satisfies AskUserQuestionArgs;
 	const result: AskUserQuestionResult = {
 		cancelled: false,
 		answers: [{ questionIndex: 0, question: "Which runtime?", kind: "option", answer: "Bun" }],

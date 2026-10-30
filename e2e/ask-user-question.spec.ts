@@ -1,7 +1,7 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import type { ToolResponsePendingDetails } from "@thinkrail/contracts";
+import type { ToolCall, ToolResponsePendingDetails } from "@thinkrail/contracts";
 import type {
 	AskUserQuestionArgs,
 	AskUserQuestionOption,
@@ -31,7 +31,7 @@ function tallPreview(pageName: string): string {
 	).join("\n\n");
 }
 
-function optionsFor(pageName: string): AskUserQuestionOption[] {
+function optionsFor(pageName: string) {
 	return [
 		{
 			label: `${pageName} alpha`,
@@ -40,7 +40,7 @@ function optionsFor(pageName: string): AskUserQuestionOption[] {
 		},
 		{ label: `${pageName} beta`, description: "Use the second deterministic fixture choice." },
 		{ label: `${pageName} gamma`, description: "Use the third deterministic fixture choice." },
-	];
+	] satisfies AskUserQuestionOption[];
 }
 
 async function openPersistedChatAfterInput(page: Page, title: string): Promise<void> {
@@ -63,7 +63,11 @@ async function selectOldestFirst(page: Page): Promise<void> {
 	await page.keyboard.press("Escape");
 }
 
-function seedQuestionnaire(name: string, toolCallId: string, args: AskUserQuestionArgs) {
+function seedQuestionnaire(
+	name: string,
+	toolCallId: string,
+	args: AskUserQuestionArgs & ToolCall["arguments"],
+) {
 	const ack: ToolResponsePendingDetails = { kind: "ack" };
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name,

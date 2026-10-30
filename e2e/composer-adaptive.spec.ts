@@ -65,14 +65,14 @@ test("panel width changes expand and collapse the same textarea", async ({ page 
 		"Keep the same focused draft and selection while a narrower mounted chat panel makes this line wrap.",
 	);
 	await expect(composer).toHaveAttribute("data-expanded", "false");
-	await input.evaluate((element) => element.setSelectionRange(18, 18));
+	await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(18, 18));
 
 	await page.setViewportSize({ width: 700, height: 900 });
 	await expect(composer).toHaveAttribute("data-expanded", "true");
 	expect(await input.evaluate((element, initial) => element === initial, initialElement)).toBe(
 		true,
 	);
-	expect(await input.evaluate((element) => element.selectionStart)).toBe(18);
+	expect(await input.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(18);
 
 	await page.setViewportSize({ width: 1920, height: 900 });
 	await expect(composer).toHaveAttribute("data-expanded", "false");

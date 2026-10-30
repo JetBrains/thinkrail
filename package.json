@@ -66,7 +66,7 @@
 		"smoke:subagents": "bun scripts/smoke-pure-pi-subagents.ts",
 		"smoke:logins": "bun scripts/smoke-provider-logins.ts",
 		"typecheck": "turbo run typecheck typecheck:root",
-		"typecheck:root": "tsc -p tsconfig.json",
+		"typecheck:root": "tsc -p tsconfig.json && tsc -p e2e/tsconfig.json",
 		"test": "bun test ./scripts/ && turbo run test --continue",
 		"lint": "biome check .",
 		"format": "biome check --write .",
