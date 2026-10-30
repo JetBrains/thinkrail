@@ -34,6 +34,8 @@ test("Windows picker: a PowerShell FolderBrowserDialog, -Sta, owned by a top-mos
 		expect(script).toContain("AttachThreadInput($me, $fg, $true)");
 		expect(script).toContain("AttachThreadInput($me, $fg, $false)");
 		expect(script).toContain("} catch { }");
+		expect(script).toContain("[System.Text.Encoding]::UTF8.GetBytes($d.SelectedPath)");
+		expect(script).toContain("[Convert]::ToBase64String($bytes)");
 	}
 });
 
@@ -137,11 +139,22 @@ test("picker output is trimmed, the platform's trailing separators dropped, empt
 	if (!posix || !windows) throw new Error("expected darwin and win32 pickers");
 	expect(posix("/Users/me/project/\n")).toBe("/Users/me/project");
 	expect(posix("/Users/me/odd\\")).toBe("/Users/me/odd\\");
-	expect(windows("C:\\Users\\me\\project\\\r\n")).toBe("C:\\Users\\me\\project");
+	expect(windows(Buffer.from("C:\\Users\\me\\project\\\r\n", "utf8").toString("base64"))).toBe(
+		"C:\\Users\\me\\project",
+	);
 	for (const parse of [posix, windows]) {
 		expect(parse("   ")).toBeNull();
 		expect(parse("")).toBeNull();
 	}
+});
+
+test("Windows picker decodes a UTF-8 path before applying Windows path rules", () => {
+	const windows = pickersFor("win32")[0]?.parse;
+	if (!windows) throw new Error("expected win32 picker");
+	const picked = "C:\\Users\\me\\Desktop\\测试目录\\";
+	expect(windows(Buffer.from(picked, "utf8").toString("base64"))).toBe(
+		"C:\\Users\\me\\Desktop\\测试目录",
+	);
 });
 
 test("a picked filesystem root stays a root", () => {
@@ -149,9 +162,11 @@ test("a picked filesystem root stays a root", () => {
 	const windows = pickersFor("win32")[0]?.parse;
 	if (!posix || !windows) throw new Error("expected linux and win32 pickers");
 	expect(posix("/\n")).toBe("/");
-	expect(windows("C:\\")).toBe("C:\\");
-	expect(windows("D:/")).toBe("D:/");
-	expect(windows("\\\\server\\share\\")).toBe("\\\\server\\share\\");
+	expect(windows(Buffer.from("C:\\", "utf8").toString("base64"))).toBe("C:\\");
+	expect(windows(Buffer.from("D:/", "utf8").toString("base64"))).toBe("D:/");
+	expect(windows(Buffer.from("\\\\server\\share\\", "utf8").toString("base64"))).toBe(
+		"\\\\server\\share\\",
+	);
 });
 
 test("THINKRAIL_PICK_DIR overrides the native picker", async () => {

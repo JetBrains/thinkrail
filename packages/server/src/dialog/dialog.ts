@@ -36,6 +36,11 @@ function pickedPath(path: typeof posix, trailingSeparators: RegExp) {
 
 const toPosixPath = pickedPath(posix, /\/+$/);
 const toWindowsPath = pickedPath(win32, /[/\\]+$/);
+const fromWindowsPicker = (stdout: string): string | null => {
+	const encoded = stdout.trim();
+	if (!encoded) return null;
+	return toWindowsPath(Buffer.from(encoded, "base64").toString("utf8"));
+};
 
 const appleScriptCancellation = ({ stderr }: PickerExecution): boolean => stderr.includes("(-128)");
 const linuxCancellation = ({ code, stderr }: PickerExecution): boolean =>
@@ -67,7 +72,10 @@ const WINDOWS_PICKER = [
 	"$d.Description = 'Open project'",
 	"$ok = $d.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK",
 	"$owner.Close()",
-	"if ($ok) { Write-Output $d.SelectedPath }",
+	"if ($ok) {",
+	"  $bytes = [System.Text.Encoding]::UTF8.GetBytes($d.SelectedPath)",
+	"  Write-Output ([Convert]::ToBase64String($bytes))",
+	"}",
 ].join("\n");
 
 const ENCODED_WINDOWS_PICKER = Buffer.from(WINDOWS_PICKER, "utf16le").toString("base64");
@@ -98,7 +106,7 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 		case "win32":
 			return ["powershell.exe", "pwsh.exe"].map((shell) => ({
 				cmd: [shell, "-NoProfile", "-Sta", "-EncodedCommand", ENCODED_WINDOWS_PICKER],
-				parse: toWindowsPath,
+				parse: fromWindowsPicker,
 				isCancellation: noNonZeroCancellation,
 			}));
 		default:
