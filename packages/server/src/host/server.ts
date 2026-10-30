@@ -56,6 +56,7 @@ import {
 	setModelsFilePublisher,
 	setPiPackagesPublisher,
 	setReviewCommentHandler,
+	setRunToolHost,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionProjectResolver,
@@ -165,6 +166,7 @@ import {
 	setReviewFailedPublisher,
 } from "./requestReview";
 import { runObservation } from "./runAnalytics";
+import { runToolHost } from "./runTool";
 import {
 	REVIEW_REFRESH_INTERVAL_MS,
 	refreshOpenProjectReviews,
@@ -823,6 +825,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 	installRequestReviewSeam();
 	setTitleToolHost(titleToolHost);
+	setRunToolHost(runToolHost);
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config, appliedUpdate) => {

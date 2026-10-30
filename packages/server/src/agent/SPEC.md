@@ -867,6 +867,22 @@ re-opened transcripts provider-valid.
     costs one prompt-cache miss per chat, early in it. The write policy and the workspace half of that state are
     not here: the host injects both through `setTitleToolHost({ apply, workspaceNeedsName })`, because naming
     composes `agent` + `workspaces`.
+    The **`run_project`** tool (`runTool.ts`) is the agent's door to [[submodule-server-run]]: `recipe`
+    (the document plus the contract text — POSIX sh, declared port variables, the `THINKRAIL_RUN_*`
+    environment — and this workspace's assigned ports), `set_recipe` (whole-document replace, host-stamped
+    with the session; `expectedRevision` defaults to the revision just read), `run { target, prepare?, wait?,
+    timeoutSec? }`, `status`, `output { target, runId?, maxBytes? }` and `stop`. It is always registered for
+    the same prompt-cache reason as `set_title`; `run` and `stop` are refused at call time while the
+    project's *Let the agent run targets* setting is off (`RUN_AGENT_FORBIDDEN`) or on a win32 host
+    (`RUN_UNSUPPORTED_PLATFORM`), reads always work, and a session without a workspace gets a plain error.
+    **`wait`** is bound to the execution the call started, polls host state, honours the tool's
+    `AbortSignal` (Stop in the chat ends the wait, never the run), defaults to 60 s for `listening` and
+    600 s for `exit` with an 1800 s cap, and reports a timeout as "the run keeps going" with the tail so
+    far; `listening` is refused for a target that declares neither a url nor ports. The `promptGuidelines`
+    stay to two lines (the contract lives in the `recipe` output and the `running-the-project` skill); a
+    one-line **`project-run`** system-prompt section names the targets while a recipe exists — one prompt-cache
+    miss per recipe change, accepted. Everything host-side comes through `setRunToolHost(RunToolHost)`
+    (`host/runTool.ts` composes `run` + `workspaces` + `projects`); `agent` never imports `run`.
     Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
@@ -1158,6 +1174,8 @@ re-opened transcripts provider-valid.
   the extension on/off seams **`setDisabledExtensionsResolver`** + **`refreshExtensionTools`** (host owns the
   set; this module owns compose-time filtering and live activation timing);
   the `set_title` seam (`setTitleToolHost` + `TitleToolHost`/`SET_TITLE_TOOL_NAME`/`SetTitleParams`);
+  the `run_project` seam (`setRunToolHost` + `RunToolHost`/`RunToolContext`/`RUN_PROJECT_TOOL_NAME`/
+  `RunProjectParams`, plus `executeRunProject`, `recipeContract` and `runRecipeRule` for tests);
   the bundled-artifact seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
