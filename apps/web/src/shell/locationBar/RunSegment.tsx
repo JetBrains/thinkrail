@@ -24,7 +24,7 @@ import { cn } from "@thinkrail/ui/utils";
 import { type RunAction, type RunMenuItem, runActions } from "../../panels/runActions";
 import { useRunHydration } from "../../panels/useRunHydration";
 import { useRunRunner } from "../../panels/useRunRunner";
-import { selectSupportsRun, useAppStore } from "../../store";
+import { latestExecution, selectSupportsRun, useAppStore } from "../../store";
 import { chipClass, Segment, type SplitTone, splitFrameClass, splitPartClass } from "./Segment";
 
 function iconFor(action: RunAction): RemixiconComponentType {
@@ -78,6 +78,7 @@ export function RunSegment({ workspace }: { workspace: Workspace }) {
 	const model = runActions(t, { supported, hostPlatform, run, state });
 	if (!model) return null;
 	const { primary, chip, open, secondary } = model;
+	const followed = latestExecution(state);
 	const tone = splitTone(primary);
 	const PrimaryIcon = primary ? iconFor(primary.action) : null;
 	const live = chip?.live === true || chip?.tone === "warning";
@@ -88,7 +89,11 @@ export function RunSegment({ workspace }: { workspace: Workspace }) {
 			className={cn("shrink-0", live ? "flex" : "hidden md:flex")}
 		>
 			{chip ? (
-				<span data-testid="scope-run-status" className={chipClass(chip.tone)}>
+				<span
+					data-testid="scope-run-status"
+					data-status={followed?.status}
+					className={chipClass(chip.tone)}
+				>
 					{chip.live && chip.tone !== "warning" ? (
 						<span
 							aria-hidden="true"

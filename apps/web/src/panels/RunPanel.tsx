@@ -58,12 +58,10 @@ function Section({
 	return (
 		<section
 			data-testid={testId}
-			className="flex flex-col gap-6 border-border-muted border-b px-12 py-10"
+			className="flex flex-col gap-6 border-border-muted border-b px-12 py-8"
 		>
 			<header className="flex h-20 items-center justify-between gap-8">
-				<h3 className="truncate tr-text-metadata text-text-subtle uppercase tracking-wide">
-					{title}
-				</h3>
+				<h3 className="truncate tr-text-eyebrow text-text-subtle">{title}</h3>
 				{action}
 			</header>
 			{children}
@@ -123,12 +121,12 @@ function TargetRow({
 				label={primary ? t("panels.run.panel.primary") : t("panels.run.panel.setPrimary")}
 				data-testid="run-target-primary"
 				data-primary={primary}
-				className={cn(primary ? "text-primary" : "text-text-subtle")}
+				selected={primary}
 				onClick={() => actions.setPrimary(target.id)}
 			/>
 			<span className="flex min-w-0 flex-1 flex-col">
 				<span className="truncate tr-text-emphasis text-text-default">{targetName(target)}</span>
-				<span className="truncate font-mono tr-text-metadata text-text-subtle">
+				<span className="truncate tr-code-text-small text-text-subtle">
 					{target.command}
 					{target.kind === "task" ? ` · ${t("panels.run.panel.oneShot")}` : ""}
 					{port !== undefined ? ` · :${port}` : ""}
@@ -236,7 +234,7 @@ function RecipeEditor({
 					value={text}
 					onChange={(event) => setText(event.target.value)}
 					spellCheck={false}
-					className="min-h-[320px] resize-y font-mono tr-text-metadata"
+					className="min-h-320 resize-y tr-code-text-small"
 				/>
 				{conflict ? (
 					<p data-testid="run-recipe-conflict" className="tr-text-metadata text-feedback-warning">
@@ -433,7 +431,7 @@ export function RunPanelView({
 				) : (
 					<ul className="flex flex-col gap-2">
 						{recipe.prepare.map((command) => (
-							<li key={command} className="truncate font-mono tr-text-metadata text-text-muted">
+							<li key={command} className="truncate tr-code-text-small text-text-muted">
 								{command}
 							</li>
 						))}
@@ -459,7 +457,7 @@ export function RunPanelView({
 			>
 				<dl className="grid grid-cols-[auto_1fr] gap-x-12 gap-y-4 tr-text-metadata">
 					<dt className="text-text-subtle">{t("panels.run.panel.ports")}</dt>
-					<dd data-testid="run-panel-ports" className="font-mono text-text-default">
+					<dd data-testid="run-panel-ports" className="tr-code-text-small text-text-default">
 						{Object.keys(recipe.ports).length === 0
 							? t("panels.run.panel.noPorts")
 							: Object.entries(recipe.ports)
