@@ -1,10 +1,14 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { API } from "tsrs/async";
 import { renderReachViolations } from "./i18nRenderReach";
 
 const roots: string[] = [];
+const api = new API({ cwd: import.meta.dir });
+
+afterAll(() => api.close());
 
 afterEach(() => {
 	for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -33,12 +37,12 @@ function fixture(app: string, extra: Record<string, string> = {}): string {
 	return root;
 }
 
-const texts = (app: string, extra: Record<string, string> = {}) =>
-	renderReachViolations(fixture(app, extra), ["app/tsconfig.json"])
+const texts = async (app: string, extra: Record<string, string> = {}) =>
+	(await renderReachViolations(api, fixture(app, extra), ["app/tsconfig.json"]))
 		.filter((v) => v.file.endsWith("app.tsx"))
 		.map((v) => `${v.line}:${v.text}`);
 
-test("flags render-time global reads, translating helpers, selectors and getters", () => {
+test("flags render-time global reads, translating helpers, selectors and getters", async () => {
 	const app = [
 		'import { t, currentLocale, useT, type Translator } from "../../packages/locales/src/react";',
 		"declare function useAppStore<T>(selector: (state: number) => T): T;",
@@ -58,7 +62,7 @@ test("flags render-time global reads, translating helpers, selectors and getters
 		"  return [a, b, c, d, e, onClick];",
 		"}",
 	].join("\n");
-	expect(texts(app)).toEqual([
+	expect(await texts(app)).toEqual([
 		"6:translating getter",
 		"10:wrapped",
 		"11:select",
@@ -67,7 +71,7 @@ test("flags render-time global reads, translating helpers, selectors and getters
 	]);
 });
 
-test("catches the reviewed bypasses: currentTranslator, defaults, classes, render props, module load, namespaces, summaries", () => {
+test("catches the reviewed bypasses: currentTranslator, defaults, classes, render props, module load, namespaces, summaries", async () => {
 	const helpers = [
 		'import { t } from "../../packages/locales/src/react";',
 		"export function describe(kind: string) { return t(kind); }",
@@ -89,7 +93,7 @@ test("catches the reviewed bypasses: currentTranslator, defaults, classes, rende
 		"  return [a, b, c, translate, <List send={() => t('later')}>{(item) => t(item)}</List>];",
 		"}",
 	].join("\n");
-	expect(texts(app, { "helpers.ts": helpers })).toEqual([
+	expect(await texts(app, { "helpers.ts": helpers })).toEqual([
 		"5:t",
 		"6:summary reads the global translator",
 		"7:t",
@@ -100,7 +104,7 @@ test("catches the reviewed bypasses: currentTranslator, defaults, classes, rende
 	]);
 });
 
-test("normalizes namespace callables and named summaries", () => {
+test("normalizes namespace callables and named summaries", async () => {
 	const helpers = [
 		'import { t } from "../../packages/locales/src/react";',
 		"export function label(kind?: unknown) { return t(String(kind)); }",
@@ -115,7 +119,7 @@ test("normalizes namespace callables and named summaries", () => {
 		"  return [0].map(helpers.label);",
 		"}",
 	].join("\n");
-	expect(texts(app, { "helpers.ts": helpers })).toEqual([
+	expect(await texts(app, { "helpers.ts": helpers })).toEqual([
 		"3:label",
 		"4:summary reads the global translator",
 		"5:summary reads the global translator",
