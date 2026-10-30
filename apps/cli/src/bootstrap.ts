@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { type BuildKind, bootHost, startRemoteAccess } from "@thinkrail/server";
+import { type BuildKind, bootHost } from "@thinkrail/server";
 import { spawnDetached } from "@thinkrail/shared/spawn";
 import { printStartupMark } from "@thinkrail/shared/startupMark";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
@@ -78,6 +78,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 			...(options.open ? { openExternal: openBrowser } : {}),
 		},
 		...(hostUpdate ? { hostUpdate } : {}),
+		...(options.remote ? { remote: { relayUrl: options.relayUrl } } : {}),
 		...(options.projectDir ? { projectPath: resolve(process.cwd(), options.projectDir) } : {}),
 	});
 	if (port !== requested) {
@@ -90,15 +91,11 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	console.log(`thinkrail → ${url}`);
 	openUiThenStartAttribution(options.open, url, openBrowser, server.startAttributionClaim);
 
-	if (options.remote) {
-		const remote = startRemoteAccess({
-			relayUrl: options.relayUrl,
-			onPaired: (device) => console.log(`thinkrail remote: device paired — ${device.label}`),
-		});
+	if (server.remote) {
 		const projectRef = options.projectDir ? resolve(process.cwd(), options.projectDir) : "default";
 		console.log(
 			`thinkrail remote: relay ${options.relayUrl}\n` +
-				`thinkrail remote: open this project on another machine with:\n  ${remote.issueLink(projectRef)}`,
+				`thinkrail remote: open this project on another machine with:\n  ${server.remote.issueLink(projectRef)}`,
 		);
 	}
 }

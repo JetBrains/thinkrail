@@ -97,6 +97,12 @@ import {
 	setPiTrustSeed,
 	setProjectPublisher,
 } from "../projects";
+import {
+	bridgeRemoteWire,
+	type RemoteAccess,
+	type RemoteWireBridge,
+	startRemoteAccess,
+} from "../remote-transport";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
@@ -169,6 +175,8 @@ export interface CreateServerOptions {
 	 * host unauthenticated for local, same-origin use. See `accessToken.ts` and the remote-access plan.
 	 */
 	accessToken?: string;
+	/** When set, the host connects out to this signaling relay so paired devices can drive it remotely. */
+	remote?: { relayUrl: string };
 	staticDir?: string;
 	projectPath?: string;
 	appVersion?: string;
@@ -201,6 +209,8 @@ export interface CreateServerOptions {
 export interface RunningServer {
 	readonly port: number;
 	startAttributionClaim: () => void;
+	/** Present when the host was started with `remote`; mints pairing links and tears the connection down. */
+	remote?: RemoteAccess;
 	stop: () => void;
 	shutdown: () => Promise<void>;
 }
@@ -242,6 +252,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		port = 24242,
 		host = "localhost",
 		accessToken,
+		remote,
 		staticDir,
 		projectPath,
 		appVersion,
@@ -490,6 +501,43 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			},
 		},
 	});
+
+	// Remote (WebRTC) clients are not Bun sockets, so they can't join Bun's native pub/sub. Wrapping
+	// `server.publish` once mirrors every broadcast — already framed as `{ channel, data }` — to each live
+	// remote bridge, with no cost when no device is paired. Targeted `ws.send`s stay host-local by design.
+	const remoteBridges = new Set<RemoteWireBridge>();
+	const nativePublish = server.publish.bind(server);
+	const forwardingPublish: typeof server.publish = (topic, data, compress) => {
+		const status = nativePublish(topic, data, compress);
+		if (remoteBridges.size > 0 && typeof data === "string") {
+			try {
+				const parsed = JSON.parse(data) as { channel?: unknown; data?: unknown };
+				if (typeof parsed.channel === "string") {
+					for (const bridge of remoteBridges) bridge.push(parsed.channel, parsed.data);
+				}
+			} catch {}
+		}
+		return status;
+	};
+	server.publish = forwardingPublish;
+
+	let remoteAccess: RemoteAccess | undefined;
+	if (remote) {
+		remoteAccess = startRemoteAccess({
+			relayUrl: remote.relayUrl,
+			onPaired: (device, channel) => {
+				const clientKey = `remote:${device.id}`;
+				const bridge = bridgeRemoteWire(channel, {
+					clientKey,
+					dispatch: (method, params) =>
+						handleRequest(method, params, { clientKey, protocolVersion: PROTOCOL_VERSION }),
+					errorCodeOf,
+				});
+				remoteBridges.add(bridge);
+				channel.onClose(() => remoteBridges.delete(bridge));
+			},
+		});
+	}
 
 	const backpressureReconciler = setInterval(() => {
 		const drained = drainedClientKeys(terminalBackpressured, (clientKey) =>
@@ -943,6 +991,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		setJbcentralAppliedPublisher(() => {});
 		setJbcentralChangedPublisher(() => {});
 		setLogoutPublisher(() => {});
+		remoteAccess?.stop();
 		server.stop(true);
 	};
 	const shutdown = (): Promise<void> => {
@@ -970,6 +1019,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return server.port ?? port;
 		},
 		startAttributionClaim: startAttributionClaimWhenReady,
+		...(remoteAccess ? { remote: remoteAccess } : {}),
 		stop,
 		shutdown,
 	};

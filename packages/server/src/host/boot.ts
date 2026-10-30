@@ -16,6 +16,7 @@ export interface BootHostOptions {
 	appVersion?: string;
 	analytics?: CreateServerOptions["analytics"];
 	hostUpdate?: CreateServerOptions["hostUpdate"];
+	remote?: CreateServerOptions["remote"];
 	verbose?: boolean;
 	resolveShellEnv?: boolean;
 }
@@ -81,6 +82,7 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 		...(options.appVersion ? { appVersion: options.appVersion } : {}),
 		...(options.analytics ? { analytics: options.analytics } : {}),
 		...(options.hostUpdate ? { hostUpdate: options.hostUpdate } : {}),
+		...(options.remote ? { remote: options.remote } : {}),
 	});
 	const server = attachProcessSignals(running);
 	log.info(`listening on port ${server.port}`);

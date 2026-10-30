@@ -117,6 +117,7 @@ the host from env via `bootHost` for dev/e2e.
 - `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
 - `remote` → `persistence` (`dataDir` — identity + paired-device files)
 - `remote-transport` → `remote` (types + the injected pairing primitives for the host handshake)
+- `host` → `remote-transport` (`startRemoteAccess` + `bridgeRemoteWire`: paired devices drive `handleRequest` and receive the mirrored `server.publish` fan-out) — listed among `host`'s composed modules above
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
