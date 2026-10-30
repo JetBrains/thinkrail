@@ -1,5 +1,5 @@
 import { parsePairingUri } from "@thinkrail/contracts";
-import { connectRemoteProject, type RemoteConnection } from "./deviceConnector";
+import { connectRemoteProject, type RemoteConnection } from "@thinkrail/remote-client";
 
 export type RemoteConnectionState =
 	| { status: "idle" }

@@ -1,5 +1,5 @@
 import type { WsMethodName, WsParams, WsResult } from "@thinkrail/contracts";
-import type { DeviceWireClient } from "../remote/deviceWireClient";
+import type { DeviceWireClient } from "@thinkrail/remote-client";
 import type { RequestOptions, Transport } from "./transport";
 
 /**

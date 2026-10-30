@@ -10,6 +10,7 @@ const modules = {
 	"packages/artifact-tests": "@thinkrail/artifact-tests",
 	"packages/contracts": "@thinkrail/contracts",
 	"packages/relay": "@thinkrail/relay",
+	"packages/remote-client": "@thinkrail/remote-client",
 	"packages/shared": "@thinkrail/shared",
 	"packages/pi-delegation": "pi-delegation",
 	"packages/pi-background-commands": "pi-background-commands",
@@ -42,6 +43,7 @@ function fixture(): string {
 			"@thinkrail/shared": "workspace:*",
 		},
 		"packages/relay": { "@thinkrail/contracts": "workspace:*" },
+		"packages/remote-client": { "@thinkrail/contracts": "workspace:*" },
 		"packages/shared": { "@thinkrail/contracts": "workspace:*" },
 		"packages/pi-subagents": { "pi-delegation": "workspace:*" },
 		"packages/pi-dag": { "pi-delegation": "workspace:*" },
@@ -52,7 +54,10 @@ function fixture(): string {
 			"pi-background-commands": "workspace:*",
 			"pi-subagents": "workspace:*",
 		},
-		"apps/web": { "@thinkrail/contracts": "workspace:*" },
+		"apps/web": {
+			"@thinkrail/contracts": "workspace:*",
+			"@thinkrail/remote-client": "workspace:*",
+		},
 		"apps/cli": {
 			"@thinkrail/server": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
