@@ -46,6 +46,10 @@ function row(overrides: Partial<McpServerRow> = {}, summary: Partial<McpServerSu
 	return value;
 }
 
+function uncounted({ toolCount: _toolCount, ...value }: McpServerRow): McpServerRow {
+	return value;
+}
+
 function render(value: McpServerRow, options: { readOnly?: boolean; error?: string } = {}) {
 	return renderToStaticMarkup(
 		<TooltipProvider>
@@ -77,9 +81,11 @@ test("a row shows the status, scope and transport chips, exposure, and an enable
 
 test("a pending repository entry offers Review & approve and locks its switch and exposure", () => {
 	const html = render(
-		row(
-			{ state: "pending-approval", toolCount: undefined, attention: true, approvalPending: true },
-			{ scope: "project", approval: { state: "pending", fingerprint: "f" } },
+		uncounted(
+			row(
+				{ state: "pending-approval", attention: true, approvalPending: true },
+				{ scope: "project", approval: { state: "pending", fingerprint: "f" } },
+			),
 		),
 	);
 	expect(html).toMatch(/data-testid="mcp-server-action"[^>]*data-action="review"/);
@@ -94,19 +100,17 @@ test("rows offer the status table's per-state actions: Reconnect and Show log, R
 		[...html.matchAll(/data-testid="mcp-server-(action|secondary)" data-action="([a-z-]+)"/g)].map(
 			([, slot, action]) => `${slot}:${action}`,
 		);
-	const failed = render(row({ state: "failed", toolCount: undefined, attention: true }));
+	const failed = render(uncounted(row({ state: "failed", attention: true })));
 	expect(actions(failed)).toEqual(["secondary:show-log", "action:reconnect"]);
 	expect(failed).toContain("Show log");
 	expect(failed).toContain("Reconnect");
-	expect(actions(render(row({ state: "disconnected", toolCount: undefined })))).toEqual([
-		"action:reconnect",
-	]);
-	const reload = render(row({ state: "pending-reload", toolCount: undefined }));
+	expect(actions(render(uncounted(row({ state: "disconnected" }))))).toEqual(["action:reconnect"]);
+	const reload = render(uncounted(row({ state: "pending-reload" })));
 	expect(actions(reload)).toEqual(["action:reload"]);
 	expect(reload).toContain("Reload now");
-	const idle = { state: "not-running" as const, toolCount: undefined };
-	expect(actions(render(row(idle)))).toEqual(["action:open-chat"]);
-	const http = render(row(idle, { transport: "http" }));
+	const idle = { state: "not-running" as const };
+	expect(actions(render(uncounted(row(idle))))).toEqual(["action:open-chat"]);
+	const http = render(uncounted(row(idle, { transport: "http" })));
 	expect(actions(http)).toEqual(["secondary:test-connection", "action:open-chat"]);
 	expect(http).toContain("Open a chat");
 });
@@ -266,7 +270,7 @@ test("a stale approval refreshes the summary without approving changed content u
 });
 
 test("read-only rows disable every control and row errors render as alerts", () => {
-	const html = render(row({ state: "not-running", toolCount: undefined }, { transport: "http" }), {
+	const html = render(uncounted(row({ state: "not-running" }, { transport: "http" })), {
 		readOnly: true,
 		error: "MCP_CONFIG_INVALID: bad",
 	});
