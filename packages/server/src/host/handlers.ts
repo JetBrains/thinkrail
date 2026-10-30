@@ -186,6 +186,18 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
+import {
+	forgetWorkspaceRuns,
+	getProjectRun,
+	listRunState,
+	restartRun,
+	setPrimaryTarget,
+	setRecipe,
+	setRunSettings,
+	startRun,
+	stopRun,
+	stopWorkspaceRuns,
+} from "../run";
 import { getConfig, noteRecentModel, updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
 import {
@@ -320,6 +332,12 @@ type WsHandler<M extends WsMethodName> = (
 ) => WsResult<M> | Promise<WsResult<M>>;
 
 type WsHandlers = { [M in WsMethodName]: WsHandler<M> };
+
+function assertProject(projectId: string): void {
+	if (!listProjects().some((project) => project.id === projectId)) {
+		throw new Error(`Unknown project: ${projectId}`);
+	}
+}
 
 async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
@@ -716,7 +734,9 @@ const handlers: WsHandlers = {
 			forgetWorkspaceChanges(ws.id);
 			forgetWorkspaceTurns(ws.id);
 			stopWatch(ws.id);
+			void stopWorkspaceRuns(ws.id, { force: true });
 			closeWorkspaceTerminals(ws.id);
+			forgetWorkspaceRuns(ws.id);
 			void archiveTeardown(ws);
 		}
 		return { ok: true } as const;
@@ -989,6 +1009,44 @@ const handlers: WsHandlers = {
 	"packages.checkUpdates": (p) => packagesCheckUpdates(p),
 	"packages.setResourceEnabled": (p) => packagesSetResourceEnabled(p),
 	"packages.reveal": (p) => packagesReveal(p),
+	"run.recipe": (p) => {
+		assertProject(p.projectId);
+		return getProjectRun(p.projectId);
+	},
+	"run.setRecipe": (p) => {
+		assertProject(p.projectId);
+		return { document: setRecipe(p.projectId, p.recipe, p.expectedRevision, "user") };
+	},
+	"run.setPrimary": (p) => {
+		assertProject(p.projectId);
+		return { document: setPrimaryTarget(p.projectId, p.targetId, p.expectedRevision) };
+	},
+	"run.setSettings": (p) => {
+		assertProject(p.projectId);
+		return { settings: setRunSettings(p.projectId, p.settings) };
+	},
+	"run.start": async (p) => ({
+		execution: await startRun(p.workspaceId, p.targetId, {
+			origin: "user",
+			...(p.prepare === undefined ? {} : { prepare: p.prepare }),
+		}),
+	}),
+	"run.restart": async (p) => ({
+		execution: await restartRun(p.workspaceId, p.targetId, {
+			origin: "user",
+			...(p.prepare === undefined ? {} : { prepare: p.prepare }),
+		}),
+	}),
+	"run.stop": (p) => ({
+		execution: stopRun(p.workspaceId, p.targetId, { force: p.force ?? false }),
+	}),
+	"run.prepare": async (p) => ({
+		execution: await startRun(p.workspaceId, null, { origin: "user" }),
+	}),
+	"run.state": (p) => {
+		getWorkspace(p.workspaceId);
+		return listRunState(p.workspaceId);
+	},
 	"locales.list": () => readLocalLocales(),
 	"locales.reveal": () => {
 		const dir = localesDir();

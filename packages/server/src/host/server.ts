@@ -3,6 +3,7 @@ import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
 	HostUpdateNotice,
+	RunRecipeChangedPush,
 	ServerWelcome,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
@@ -16,6 +17,7 @@ import {
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	RUN_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
@@ -107,6 +109,7 @@ import {
 	setProjectPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
+import { setRunPublisher, stopAllRuns } from "../run";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
 	clearTerminalClient,
@@ -404,6 +407,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.themesChanged);
 				if (ws.data.protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.packagesChanged);
+				if (ws.data.protocolVersion >= RUN_PROTOCOL_VERSION) {
+					ws.subscribe(WS_CHANNELS.runRecipeChanged);
+					ws.subscribe(WS_CHANNELS.runStateChanged);
+				}
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -705,6 +712,22 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 
+	setRunPublisher({
+		recipe: (projectId, run) => {
+			const data: RunRecipeChangedPush = { projectId, run };
+			server.publish(
+				WS_CHANNELS.runRecipeChanged,
+				JSON.stringify({ channel: WS_CHANNELS.runRecipeChanged, data }),
+			);
+		},
+		state: (data) => {
+			server.publish(
+				WS_CHANNELS.runStateChanged,
+				JSON.stringify({ channel: WS_CHANNELS.runStateChanged, data }),
+			);
+		},
+	});
+
 	setWorkspacePublisher((event) => {
 		const channel =
 			event.kind === "created"
@@ -1003,8 +1026,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		clearInterval(backpressureReconciler);
 		terminalBackpressured.clear();
 		requestReplays.clear();
+		void stopAllRuns();
 		persistTerminalSessions();
 		closeAllTerminals();
+		setRunPublisher(null);
 		setFeedbackPublisher(null);
 		configureSurveySource(null);
 		setSettingsPublisher(null);
