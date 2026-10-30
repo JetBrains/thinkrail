@@ -1,12 +1,19 @@
 import { expect, test } from "bun:test";
-import type { RemoteConnection } from "./deviceConnector";
+import type { RemoteConnection } from "@thinkrail/remote-client";
 import { createRemoteConnectionController } from "./remoteConnection";
 
 const LINK = "thinkrail://pair?v=1&s=ws://relay:1&t=tok&k=KEY&p=proj";
 
 function connection(): RemoteConnection {
 	return {
-		client: { request: async () => null, subscribe: () => () => {}, close: () => {} },
+		client: {
+			attach: () => {},
+			request: async () => null,
+			subscribe: () => () => {},
+			close: () => {},
+		},
+		hostKey: "KEY",
+		relayUrl: "ws://relay:1",
 		projectRef: "proj",
 		close: () => {},
 	};

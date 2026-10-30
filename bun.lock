@@ -69,6 +69,7 @@
         "@thinkrail/ext-visualize": "workspace:*",
         "@thinkrail/extension-api": "workspace:*",
         "@thinkrail/locales": "workspace:*",
+        "@thinkrail/remote-client": "workspace:*",
         "@thinkrail/resource-renderers": "workspace:*",
         "@thinkrail/ui": "workspace:*",
         "@xterm/addon-clipboard": "0.2.0",
@@ -300,6 +301,17 @@
     },
     "packages/relay": {
       "name": "@thinkrail/relay",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/contracts": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/remote-client": {
+      "name": "@thinkrail/remote-client",
       "version": "0.0.0",
       "dependencies": {
         "@thinkrail/contracts": "workspace:*",
@@ -1320,6 +1332,8 @@
     "@thinkrail/pi-visualize": ["@thinkrail/pi-visualize@workspace:pi-extensions/visualize"],
 
     "@thinkrail/relay": ["@thinkrail/relay@workspace:packages/relay"],
+
+    "@thinkrail/remote-client": ["@thinkrail/remote-client@workspace:packages/remote-client"],
 
     "@thinkrail/resource-renderers": ["@thinkrail/resource-renderers@workspace:packages/resource-renderers"],
 

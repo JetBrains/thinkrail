@@ -32,7 +32,7 @@ import {
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { currentLocale } from "@thinkrail/locales/react";
-import type { DeviceWireClient } from "../remote/deviceWireClient";
+import type { DeviceWireClient } from "@thinkrail/remote-client";
 import { isConnectedGeneration, useAppStore } from "../store";
 import {
 	createPiEventBatcher,
