@@ -3,111 +3,200 @@ title: "GUI overview"
 slug: gui-overview
 date: 2026-10-28
 author: maciej-gorywoda
-excerpt: "Below, you will find a table describing ThinkRail's graphical components."
+excerpt: "A guided tour of ThinkRail's interface: the chat, the workspace panels around it, and the settings, one screenshot each."
 draft: false
 tags:
   - gui
   - overview
 ---
 
-This blog post is going to be a bit different from the others. We will take a quick walk through ThinkRail's 
-Graphical User Interface. Below, you will find a table describing ThinkRail's graphical components. For each component, 
-there will be a screenshot with the most important visual elements highlighted, plus a one-sentence description 
-of the component's purpose. In addition, if we have already published a separate blog post about the given feature, 
-there will be a link to it. If we plan to publish a blog post but have not yet, there will be a note to that effect.
+This blog post is going to be a bit different from the others. We will take a quick walk through ThinkRail's
+Graphical User Interface. Below, you will find ThinkRail's graphical components, grouped into the chat, the workspace
+around it, and the settings. For each component, there is a screenshot with the most important visual elements
+highlighted, plus a one-sentence description of the component's purpose. Click a screenshot to see it in full size.
+In addition, if we have already published a separate blog post about the given feature, there is a link to it.
 
-Please note that ThinkRail is still in development. This blog post discusses features and their visual elements 
-as they appear in version 0.3.0 (Nightly) on October 27, 2026. If you are reading this a few months later, 
+---
+
+|  |  |
+|---|---|
+| The main GUI | [![The main GUI](./images/00_whole_screen.png)](./images/00_whole_screen.png) |
+
+Please note that ThinkRail is still in development. This blog post discusses features and their visual elements
+as they appear in version 0.3.0 (Nightly) on October 27, 2026. If you are reading this a few months later,
 your experience may differ.
 
-| The chat tab where you talk with the AI agent | [![The chat tab where you talk with the AI agent](./images/01_chat_window_tab.png)](./images/01_chat_window_tab.png) |
-|---|---|
+---
 
-| [![The read-only code tab in the same window where you can review your agent's work](./images/02_chat_window_code_highlight.png)](./images/02_chat_window_code_highlight.png) | The read-only code tab in the same window where you can review your agent's work |
-|---|---|
+## The chat
 
-| The chat history popup that you can use to return to previous conversations |  [![The chat history popup that you can use to return to previous conversations](./images/03_view_chat_history_popup.png)](./images/03_view_chat_history_popup.png) | 
+|  |  |
 |---|---|
+| **1**. The chat tab where you talk with the AI agent. A turn that changed files ends with a summary and a **Review turn** button ([ThinkRail 0.2.0](/blog/thinkrail-0-2-0-review-the-turn/)). | [![Chat tab with a finished turn and the message box](./images/01_chat_window_tab.png)](./images/01_chat_window_tab.png) |
 
-|[![A new terminal opens as a tab in the main window ](./images/04_new_terminal_in_this_group.png)](./images/04_new_terminal_in_this_group.png) | A new terminal opens as a tab in the main window  | 
+|  |  |
 |---|---|
+| [![A file opened in a tab next to the chat](./images/02_chat_window_code_highlight.png)](./images/02_chat_window_code_highlight.png) | **2**. A read-only file tab in the same window, where you can read the code your agent wrote. |
 
-|Here you can see your token usage | [![Here you can see your token usage](./images/05_token_usage.png)](./images/05_token_usage.png) | 
+|  |  |
 |---|---|
+| **3**. The chat history popup, where you can reopen, rename, or delete previous conversations. | [![Chat history popup listing recently closed chats](./images/03_view_chat_history_popup.png)](./images/03_view_chat_history_popup.png) |
 
-| [![A popup where you can track the tools and MCP connections your agent is using](./images/06_resources.png)](./images/06_resources.png) | A popup where you can track the tools and MCP connections your agent is using |
+|  |  |
 |---|---|
+| [![The New terminal in this group button](./images/04_new_terminal_in_this_group.png)](./images/04_new_terminal_in_this_group.png) | **4**. A button that opens a new terminal as a tab next to your chats. |
 
-| A popup for choosing the skills used by the agent | [![A popup for choosing the skills used by the agent](./images/07_skills.png)](./images/07_skills.png) |
+|  |  |
 |---|---|
+| **5**. Token usage of the current chat: input, output, cache reads and writes, cost, and how full the context window is. | [![Token usage bar above the chat](./images/05_token_usage.png)](./images/05_token_usage.png) |
 
-| [![A popup for choosing the LLM for the current agent and its reasoning level](./images/08_llms.png)](./images/08_llms.png) | A popup for choosing the LLM for the current agent and its reasoning level | 
+|  |  |
 |---|---|
+| [![Resources popup with background work and MCP servers](./images/06_resources.png)](./images/06_resources.png) | **6**. The Resources popup, where you can follow the background commands and subagents your agent started, and the MCP servers the chat uses. |
 
-| The main terminal window where you can type commands and work with your OS | [![The main terminal window where you can type commands and work with your OS](./images/09_pty.png)](./images/09_pty.png) |
+|  |  |
 |---|---|
+| **7**. The Skills popup, where you can switch skills on and off for the chat and reload them when they change on disk ([An agentic IDE that follows Pi's philosophy](/blog/thinkrail-pi-skills-and-desktop-apps/)). | [![Skills popup with a switch for each skill](./images/07_skills.png)](./images/07_skills.png) |
 
-| [![A list of open projects and the workspaces in them](./images/10_projects.png)](./images/10_projects.png) | A list of open projects and the workspaces in them |
+|  |  |
 |---|---|
+| [![Model picker with recent models and the effort slider](./images/08_llms.png)](./images/08_llms.png) | **8**. The Model picker, where you choose the LLM for the current chat and its reasoning effort. |
 
-| The path of the current project, workspace, branch, etc. | [![The path of the current project, workspace, branch, etc.](./images/11_current_project.png)](./images/11_current_project.png) |
+---
+
+## The workspace
+
+|  |  |
 |---|---|
+| **9**. The Terminal panel, where you can type commands and work with your OS. | [![Terminal panel with a restored session](./images/09_pty.png)](./images/09_pty.png) |
 
-|[![The Specs panel where you can read all the specifications of the project](./images/12_specs.png)](./images/12_specs.png) | The Specs panel where you can read all the specifications of the project | 
+|  |  |
 |---|---|
+| [![Projects panel with three projects and their workspaces](./images/10_projects.png)](./images/10_projects.png) | **10**. The Projects panel: your open projects, the workspaces in each, and the Settled shelf for finished ones ([ThinkRail Workspaces](/blog/thinkrail-workspaces/)). |
 
-|The Files panel where you can browse and open files in the project's codebase | [![The Files panel where you can browse and open files in the project's codebase](./images/13_files.png)](./images/13_files.png) | 
+|  |  |
 |---|---|
+| **11**. The current project, workspace, and branch, and how the branch stands against its remote and pull request. | [![Top bar with project, workspace, branch, remote, and pull request](./images/11_current_project.png)](./images/11_current_project.png) |
 
-| [![The Changes panel where you can review the recent changes made by the agent](./images/14_changes.png)](./images/14_changes.png) | The Changes panel where you can review the recent changes made by the agent |
+|  |  |
 |---|---|
+| [![Specs panel showing the spec tree](./images/12_specs.png)](./images/12_specs.png) | **12**. The Specs panel, where you can browse all the specifications of the project ([ThinkRail Spec-Driven Development](/blog/thinkrail-sdd/)). |
 
-|The TODO list where you and your agent can plan the next steps | [![The TODO list where you and your agent can plan the next steps](./images/16_todo.png)](./images/16_todo.png) | 
+|  |  |
 |---|---|
+| **13**. The Files panel, where you can browse and open the project's files, or show only the changed ones. | [![Files panel with the All and Changed views](./images/13_files.png)](./images/13_files.png) |
 
-|[![The Settings view where you can customize the list of LLMs you use](./images/17_settings_models.png)](./images/17_settings_models.png) | The Settings view where you can customize the list of LLMs you use | 
+|  |  |
 |---|---|
+| [![Changes tab with a side-by-side diff and the changed files](./images/14_changes.png)](./images/14_changes.png) | **14**. The Changes panel, where you review what the agent changed in the last turn or on the whole branch ([ThinkRail 0.2.0](/blog/thinkrail-0-2-0-review-the-turn/)). |
 
-| ... and where you can manage your list of LLM providers | [![The Settings view where you can manage your list of LLM providers](./images/18_settings_providers.png)](./images/18_settings_providers.png) |
+|  |  |
 |---|---|
+| **15**. The Review panel, where you collect comments on lines of files and diffs and send them to the agent. | [![Review panel next to a diff](./images/15_review.png)](./images/15_review.png) |
 
-|[![The Settings view where you can set up your MCP connections](./images/19_mcp_servers.png)](./images/19_mcp_servers.png) | The Settings view where you can set up your MCP connections | 
+|  |  |
 |---|---|
+| [![TODO List rail next to the plan of a chat](./images/16_todo.png)](./images/16_todo.png) | **16**. The TODO list, where you and your agent plan the next steps, with the full plan one click away ([ThinkRail 0.2.0](/blog/thinkrail-0-2-0-review-the-turn/)). |
 
-| Here you can create templates for your most frequently used prompts | [![Here you can create templates for your most frequently used prompts](./images/20_prompt_templates.png)](./images/20_prompt_templates.png) |
+---
+
+## Create project
+
+|  |  |
 |---|---|
+| The Welcome screen lets you choose between starting a new project by drafting specifications, start to code immediately in a new workspace, or simply open an existing project. ([Introducing ThinkRail](/blog/introducing-thinkrail/)| [![Welcome screen](./images/34_welcome_screen.png)](./images/34_welcome_screen.png) |
 
-| [![Set the path to the Pi config folder and manage environment variables](./images/21_environment.png)](./images/21_environment.png) | Set the path to the Pi config folder and manage environment variables |
+|  |  |
 |---|---|
+| [![Create a workspace](./images/35_create_workspace.png)](./images/35_create_workspace.png) | The window that lets you create a configure a new workspace (git worktree) within your project. ([ThinkRail Workspaces](/blog/thinkrail-workspaces/)) |
 
-|Configure what ThinkRail looks like | [![Configure what ThinkRail looks like](./images/23_appearance.png)](./images/23_appearance.png) | 
+|  |  |
 |---|---|
+| A popup that lets you create a new project from the Projects list in the main GUI | [![Create Project popup](./images/33_new_project.png)](./images/33_new_project.png) |
 
-|[![Change the language](./images/24_language.png)](./images/24_language.png) | Change the language | 
+---
+
+## Settings
+
+|  |  |
 |---|---|
+| Choose the default model for new chats and for reviews, and which models show up in the picker. | [![Settings, Models page](./images/17_settings_models.png)](./images/17_settings_models.png) |
 
-| Configure ThinkRail's appearance even more | [![Configure ThinkRail's appearance even more](./images/25_layout.png)](./images/25_layout.png) |
+|  |  |
 |---|---|
+| [![Settings, Providers page](./images/18_settings_providers.png)](./images/18_settings_providers.png) | Connect your LLM providers, with a subscription or an API key. |
 
-|[![Set the time after which each idle workspace becomes settled](./images/27_settings_workspaces.png)](./images/27_settings_workspaces.png) | Set the time after which each idle workspace becomes settled | 
+|  |  |
 |---|---|
+| Add MCP servers from presets or your own configuration; ThinkRail asks in the chat before calls that may change data ([ThinkRail 0.2.0](/blog/thinkrail-0-2-0-review-the-turn/)). | [![Settings, MCP servers page](./images/19_mcp_servers.png)](./images/19_mcp_servers.png) |
 
-| Connect your GitHub account | [![Connect your GitHub account](./images/28_integrations.png)](./images/28_integrations.png) |
+|  |  |
 |---|---|
+| [![Settings, Prompt templates page](./images/20_prompt_templates.png)](./images/20_prompt_templates.png) | Create templates for your most frequently used prompts, for one project or for all of them. |
 
-| [![Enable Mermaid diagrams](./images/29_extensions.png)](./images/29_extensions.png) | Enable Mermaid diagrams | 
+|  |  |
 |---|---|
+| Choose the Pi config folder ThinkRail uses, and set environment variables for the agent, terminals, and MCP servers. | [![Settings, Environment page](./images/21_environment.png)](./images/21_environment.png) |
 
-| Decide whether you want to share anonymous analytics data with us | [![Decide whether you want to share anonymous analytics data with us](./images/31_privacy.png)](./images/31_privacy.png) |
+|  |  |
 |---|---|
+| [![Settings, Chat page](./images/22_chat.png)](./images/22_chat.png) | Tune the chat: message order, message box size, line width, how the view follows a streaming answer, and how many subagents a chat may run. |
 
-| [![Schedule an interview and share your thoughts with us](./images/32_feedback.png)](./images/32_feedback.png) | Schedule an interview and share your thoughts with us |
+|  |  |
 |---|---|
+| Pick a theme and contrast level, and the line width for files and diffs. | [![Settings, Appearance page](./images/23_appearance.png)](./images/23_appearance.png) |
 
+|  |  |
+|---|---|
+| [![Settings, Language page](./images/24_language.png)](./images/24_language.png) | Change the interface language, or add your own translation. |
+
+|  |  |
+|---|---|
+| Switch between layout presets (Balanced, Focus, Review) or save your own panel arrangement. | [![Settings, Layout page](./images/25_layout.png)](./images/25_layout.png) |
+
+|  |  |
+|---|---|
+| [![Settings, Terminal page](./images/26_terminal.png)](./images/26_terminal.png) | Choose how much terminal output to restore when you come back to a terminal. |
+
+|  |  |
+|---|---|
+| Set the time after which an idle workspace moves to the Settled shelf. | [![Settings, Workspaces page](./images/27_settings_workspaces.png)](./images/27_settings_workspaces.png) |
+
+|  |  |
+|---|---|
+| [![Settings, Integrations page](./images/28_integrations.png)](./images/28_integrations.png) | Check that the GitHub CLI is signed in, so you can create workspaces from remote branches. |
+
+|  |  |
+|---|---|
+| Switch ThinkRail's extensions on or off, such as Visualize, which lets the agent draw diagrams, comparisons, and mockups in the chat. | [![Settings, Extensions page](./images/29_extensions.png)](./images/29_extensions.png) |
+
+|  |  |
+|---|---|
+| [![Settings, Notifications page](./images/30_notifications.png)](./images/30_notifications.png) | Get notified when a workspace needs your attention. |
+
+|  |  |
+|---|---|
+| Decide whether you want to share additional anonymous usage data with us. | [![Settings, Privacy page](./images/31_privacy.png)](./images/31_privacy.png) |
+
+|  |  |
+|---|---|
+| [![Settings, Feedback page](./images/32_feedback.png)](./images/32_feedback.png) | Schedule an interview, or join our Discord server, and share your thoughts with us. |
+
+---
+
+## Other features, not pictured here
+
+Some features don't fit in a single screenshot, for example that in ThinkRail the agent asks you multiple-choice 
+questions in the chat instead of guessing what you want, and that it can display mockups for "before" and "after" right 
+in the conversation, when working on diagrams, infographics, icons, etc. There is also the **Cmd/Ctrl+K** key shortcut 
+that takes you to the chat waiting for you; the approval prompt on MCP calls that may change data; the full Plan page, 
+where each finished step shows its summary and verification; and the top bar actions which you can use to publish 
+your branch, open a pull request, and show its CI checks. The [ThinkRail 0.2.0 post](/blog/thinkrail-0-2-0-review-the-turn/) discusses some of those 
+features in more detail.
 
 ## Try out ThinkRail
 
-Grab the desktop app below, or see the rest of what ThinkRail does on [**our main webpage**](https://thinkrail.ai/?utm_source=blog&utm_medium=organic-social&utm_campaign=release-0-2-0). 
+Grab the desktop app below, or see the rest of what ThinkRail does on [**our main webpage**](https://thinkrail.ai/?utm_source=blog&utm_medium=organic-social&utm_campaign=gui-overview).
 
 Find us on social media platforms: [**X/Twitter**](https://x.com/ThinkRailAI), [**YouTube**](https://www.youtube.com/@ThinkRailAI), and [**TikTok**](https://www.tiktok.com/@thinkrail).
 You can also browse [**our GitHub repository**](https://github.com/JetBrains/thinkrail),

@@ -2465,6 +2465,7 @@ html:not(.anim) .term-caret {
 /* ── Blog Post Content ──────────────────────────────────────────────────── */
 
 .blog-post-content {
+	container-type: inline-size;
 	font-size: var(--text-lg);
 	line-height: 1.75;
 }
@@ -2609,11 +2610,32 @@ html:not(.anim) .term-caret {
 	vertical-align: middle;
 }
 
+.blog-post-content thead:not(:has(th:not(:empty))) {
+	display: none;
+}
+
+.blog-post-content td:has(> a > img) {
+	width: 67%;
+}
+
+@container (max-width: 520px) {
+	.blog-post-content tr:has(> td > a > img) > td {
+		display: block;
+		width: auto;
+	}
+
+	.blog-post-content tr:has(> td > a > img) > td:first-child {
+		border-bottom: none;
+	}
+}
+
 .blog-post-content table img {
 	display: block;
-	width: min(280px, 40vw);
-	max-width: none;
+	width: 100%;
 	margin: 0;
+}
+
+.blog-post-content table a > img {
 	cursor: zoom-in;
 }
 
