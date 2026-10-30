@@ -52,6 +52,10 @@ actions through the panels-owned ship runner; it owns no host state.
   pills' own padding (≈42px text to text, 8px between hover fills) is the separation, because full-height
   rules read as a table and never line up with the tab strip's dividers below. A caption fragment (`· from <base>`,
   `· settled`) uses the caption's own face — never a second typeface inside the caption.
+- The 40/14/20px heights are the default-scale values of the `h-topbar-row` / `h-topbar-caption` /
+  `h-topbar-value` roles, never literal `h-14` / `h-20`: the reader's font scale grows them with the
+  text (`styles/fontScale.ts`), so a caption or value is never cut off at 160%
+  (`e2e/font-scale.spec.ts`).
 - Values are pills (`pillClass`: 20px, `window-no-drag`, hover `control-bg-hovered`, open
   `control-bg-selected`; the chevron is hidden at rest and appears on hover, keyboard focus, or while open)
   or status chips (`chipClass`: 20px, rounded-full, `tr-text-emphasis`, feedback-tinted `-subtle` fill with

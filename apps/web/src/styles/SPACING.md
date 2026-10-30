@@ -79,6 +79,9 @@ mapped into Tailwind by `index.css`'s `@theme inline` — the same shape as `--p
 |---|---|---|---|
 | `--panel-header-row-height` | `28px` | `h-` / `w-panel-header-row` | the height of every header strip (tab strips, pane headers, chat toolbar, bottom tool rail) and the width of its full-height square actions |
 | `--panel-header-control-height` | `calc(var(--panel-header-row-height) - var(--space-4))` | `h-panel-header-control` | every control floating inside a header strip, so it keeps clearing the strip’s 1px border whenever the header height changes |
+| `--topbar-row-height` | `40px` | `h-topbar-row` | the top bar and the native window controls that sit in it |
+| `--topbar-caption-height` | `14px` | `h-topbar-caption` | the caption row of every location-bar segment |
+| `--topbar-value-height` | `20px` | `h-topbar-value` | the value row of every location-bar segment and every pill, chip, split control and rename field in it |
 | `--panel-row-height` | `22px` | `h-` / `min-h-` / `size-panel-row` | every side-pane row (file, change, spec, project, workspace) and the row-height icon buttons inside them |
 | `--panel-inset` | `var(--space-8)` | `p-panel-inset` | the content inset of every tool pane (Projects, Specs, Files, Review) |
 | `--tree-indent` | `var(--space-8)` | `pl-tree-indent` | per-depth indentation of the Files, Changes and Specs trees |
@@ -87,6 +90,9 @@ mapped into Tailwind by `index.css`'s `@theme inline` — the same shape as `--p
 - A **rhythm role aliases a canonical step** (`var(--space-<n>)`), never a raw length, so `spacing.json`
   stays the only source of rhythm lengths and `tokens.css` still holds no scale of its own. A sizing role
   (`--panel-row-height`) is geometry and stays free-form px, like all sizing.
+- The three `--topbar-*` heights are the only sizing roles the reader's font scale moves:
+  `styles/fontScale.ts` scales them with the text, because the top bar is the one strip whose rows are
+  sized to hold exactly one line of their text (see "One runtime exception" in `TYPOGRAPHY.md`).
 - Mint a role only for a value with several consumers that must stay equal; a one-off length stays a
   numeric utility. Roles are not t-shirt aliases and never replace the scale.
 - A role name is kebab-case with **two or more words** (`panel-inset`). `cn` (`@thinkrail/ui/utils`)

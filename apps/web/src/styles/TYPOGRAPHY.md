@@ -265,13 +265,33 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 
 | Surface | Why it cannot use a semantic class |
 |---|---|
-| `resource-renderers/support/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
-| `resource-renderers/renderers/code/pierreVirtualizer.ts` | Pierre's virtualizer takes its row height as a JS metric — it reads the generated `--tr-code-row-height`, the same value `.pierre-code-surface` gives `--diffs-line-height` |
+| `resource-renderers/support/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, and takes the code size and row height (`codeRow`: `s11` × `default`, the same pair `.pierre-code-surface` uses) from `ResourcePreferences.codeFontSize` / `codeRowHeight`, so it cannot drift from a code block and follows the reader's font scale while open |
+| `resource-renderers/renderers/code/pierreVirtualizer.ts` | Pierre's virtualizer takes its row height as a JS metric — it reads the generated `--tr-code-row-height`, the same value `.pierre-code-surface` gives `--diffs-line-height`, and takes the reader's scaled row from `ResourcePreferences.codeRowHeight` when the host supplies one |
 | `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-code` + `--tr-font-size-s13` (the primitives behind `code.text`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
 | `thinkrail-extensions/visualize/web/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
 | `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves; `.pierre-code-surface` passes the code family, `s11`, and the default line-height (rounded to whole pixels) into Pierre's Shadow DOM |
 
 The OTP code is **not** an exception any more: it is the named `code.otp` style (`.tr-code-otp`).
+
+### One runtime exception: the reader's font scale
+
+`styles/fontScale.ts` is the single place that overrides a generated primitive at runtime. It scales
+the `--tr-font-size-*` properties and `--tr-code-row-height` on `documentElement` from the reader's
+own preference (`Settings → Appearance → Font size`), together with the three top-bar row heights
+(`--topbar-row-height`, `--topbar-caption-height`, `--topbar-value-height`), which hold exactly one
+line of their text and would otherwise cut it off from 125% up. So someone who wants larger text gets it
+without a rebuild. It is not a design token: it never changes what the system *is*, only the one
+multiplier a reader applies to it, and at the default scale it removes every override so the
+generated CSS is used verbatim. Nothing else may touch these properties at runtime, and no
+component may read or write them directly — go through `applyFontScale` / `readFontScale` /
+`writeFontScale`. A component that needs the scaled value as a number reads it through the resource
+host's `codeRowHeight` / `codeFontSize` preferences, which `AppResourceHost` derives from
+`currentFontScale()` and republishes through `subscribeFontScale`. Reading the custom property during
+render is not enough: React cannot see it change, so a memoised render (the React Compiler memoises
+`fileEditorOptions` on its arguments) keeps the old size. That is why Monaco takes both numbers as
+values and Pierre, which cannot re-read a metric once its instance exists, is keyed on the row height.
+The slider applies the properties before it notifies, so a render that does read them sees the new
+sizes, and `currentFontScale()` keeps the chosen scale even when storage refuses to persist it.
 
 ## Adding or changing a style
 
@@ -287,6 +307,9 @@ The OTP code is **not** an exception any more: it is the named `code.otp` style 
 Do **not**: add a typography utility or `--text-*` mapping to `index.css`, add a font alias to
 `tokens.css`, declare a font property in a component, or edit `styles/generated/typography.css`. The
 pre-commit hook and `apps/web build` run `typography:check`, so stale generated CSS cannot land.
+
+The one runtime exception — the reader's font scale — is documented under "Permitted exceptions"
+above and lives in `styles/fontScale.ts`.
 
 This primitives + semantic-tokens + schema + generator shape is the pattern a **colours** JSON should
 mirror; nothing here is Tailwind-specific, and Tailwind merely consumes the generated CSS.
