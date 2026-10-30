@@ -14,6 +14,7 @@ import type {
 	McpStatusSnapshot,
 	PiEvent,
 	Project,
+	ProjectRun,
 	ProviderStatusReport,
 	ProviderWarning,
 	RefreshedModels,
@@ -22,6 +23,8 @@ import type {
 	ResourceRecord,
 	ReviewChangedPayload,
 	ReviewSnapshot,
+	RunRecipeChangedPush,
+	RunWorkspaceState,
 	SessionEventPayload,
 	SessionQueueState,
 	SessionResources,
@@ -33,6 +36,7 @@ import type {
 	SpecGraphNode,
 	SystemThemePair,
 	TerminalTabInfo,
+	TerminalTabKind,
 	TerminalWindowsShell,
 	ThemeId,
 	ThemeMode,
@@ -114,6 +118,7 @@ import {
 	type McpWorkspaceProjection,
 	withoutMcpSession,
 } from "./mcp";
+import { sameProjectRun, sameRunState, selectSupportsRun } from "./run";
 import {
 	type HistoryTarget,
 	isChatResourceConnectionCurrent,
@@ -434,6 +439,7 @@ export interface TerminalTab {
 	tabKey: string;
 	workspaceId: string;
 	title: string;
+	kind?: TerminalTabKind;
 	initialCommand?: string;
 	reservationPending?: true;
 }
@@ -1046,6 +1052,8 @@ interface AppState {
 	} | null;
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
+	runByWorkspace: Record<string, RunWorkspaceState>;
+	runByProject: Record<string, ProjectRun>;
 	reviewFocusRequest: {
 		workspaceId: string;
 		commentId: string;
@@ -1419,6 +1427,9 @@ interface AppState {
 	requestReviewFocus: (workspaceId: string, commentId: string, surface: ReviewFocusSurface) => void;
 	clearReviewFocus: (commentId?: string) => void;
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
+	/** A `run.state` read that landed (fenced by generation) or a `run.stateChanged` push. */
+	applyRunState: (state: RunWorkspaceState, connectionGeneration?: number) => void;
+	applyProjectRun: (push: RunRecipeChangedPush, connectionGeneration?: number) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
 }
@@ -2328,6 +2339,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	specRequest: null,
 	specsByWorkspace: {},
 	reviewsByWorkspace: {},
+	runByWorkspace: {},
+	runByProject: {},
 	reviewFocusRequest: null,
 	changesView: "tree",
 	filesMode: "all",
@@ -2686,6 +2699,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
+				runByWorkspace: omitKey(state.runByWorkspace, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
 				specRequest: state.specRequest?.workspaceId === workspaceId ? null : state.specRequest,
@@ -3460,6 +3474,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						tabKey: tab.tabKey,
 						workspaceId,
 						title: tab.title,
+						...(tab.kind ? { kind: tab.kind } : {}),
 						...(existing?.initialCommand ? { initialCommand: existing.initialCommand } : {}),
 					};
 				}),
@@ -4585,6 +4600,27 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return sameReviewSnapshot(s.reviewsByWorkspace[payload.workspaceId], next)
 				? {}
 				: { reviewsByWorkspace: { ...s.reviewsByWorkspace, [payload.workspaceId]: next } };
+		}),
+	applyRunState: (state, connectionGeneration) =>
+		set((s) => {
+			if (
+				!selectSupportsRun(s) ||
+				s.removedWorkspaceIds[state.workspaceId] ||
+				(connectionGeneration !== undefined && !isConnectedGeneration(s, connectionGeneration)) ||
+				sameRunState(s.runByWorkspace[state.workspaceId], state)
+			)
+				return {};
+			return { runByWorkspace: { ...s.runByWorkspace, [state.workspaceId]: state } };
+		}),
+	applyProjectRun: (push, connectionGeneration) =>
+		set((s) => {
+			if (
+				!selectSupportsRun(s) ||
+				(connectionGeneration !== undefined && !isConnectedGeneration(s, connectionGeneration)) ||
+				sameProjectRun(s.runByProject[push.projectId], push.run)
+			)
+				return {};
+			return { runByProject: { ...s.runByProject, [push.projectId]: push.run } };
 		}),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(

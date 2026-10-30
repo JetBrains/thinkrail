@@ -7,6 +7,8 @@ import type {
 	McpStatusPayload,
 	Project,
 	ReviewChangedPayload,
+	RunRecipeChangedPush,
+	RunWorkspaceState,
 	ServerWelcome,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
@@ -397,6 +399,14 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.turnChanged, (data) => {
 		useAppStore.getState().applyTurnChanged(data as TurnChangeSet);
+	});
+
+	transport.subscribe(WS_CHANNELS.runStateChanged, (data) => {
+		useAppStore.getState().applyRunState(data as RunWorkspaceState);
+	});
+
+	transport.subscribe(WS_CHANNELS.runRecipeChanged, (data) => {
+		useAppStore.getState().applyProjectRun(data as RunRecipeChangedPush);
 	});
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
