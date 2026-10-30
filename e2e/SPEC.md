@@ -91,6 +91,21 @@ compaction to keep the request small and deterministic, restoring the settings b
 It neither changes the provider/effort selection nor proves removal of a fixed output cap; the focused
 SDK reserve-independence canary owns that assertion.
 
+## Project runs
+
+`run.spec.ts` seeds a run recipe over the wire — a `python3 -m http.server "$PORT"` serve target on the
+lane's `E2E_RUN_PORT` and a one-shot that exits 3 — and drives the Run segment and tab without an agent:
+set-up state, a run to `listening` with the leased port (Default takes the natural port, a worktree the
+next), the host-born `Run: <target>` tab with prepare and server output, a real TCP check, Stop freeing
+the port, the failed one-shot's chip, Fix-first primary and terminal footer, Run again, the Run tab's
+targets and host-validated hand edit, a persisted switch, a second client that sees the state but gains no
+terminal placement, workspace removal freeing the port, and a faked win32 welcome hiding the segment.
+`resetApp` force-stops live runs per workspace before it removes worktrees and drops `run.json`.
+`run-setup.live.spec.ts` (`@agent`) makes the fixture worktree runnable (a README that names the
+`PORT`-reading dev server and `python3 test.py`), presses **Set up run**, answers the skill's interview
+with first options, and asserts a saved recipe with a port-aware serve target whose Run then listens; a
+second case seeds a broken one-shot, presses **Fix with agent** and expects the target to exit 0 afterwards.
+
 ## Repository cloning
 
 `clone-project.spec.ts` clones disposable local `file:` repositories through the Welcome and rail menus,

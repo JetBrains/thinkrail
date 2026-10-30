@@ -81,6 +81,7 @@ export const LAYOUT_TOOLS: readonly LayoutToolId[] = [
 	"files",
 	"review",
 	"plan",
+	"run",
 ];
 
 export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
@@ -89,6 +90,7 @@ export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
 	files: "right",
 	review: "right",
 	plan: "right",
+	run: "right",
 };
 
 const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
@@ -97,6 +99,7 @@ const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
 	files: "Files",
 	review: "Review",
 	plan: "TODO List",
+	run: "Run",
 };
 
 const LAYOUT_TOOL_NAME_KEYS = {
@@ -105,6 +108,7 @@ const LAYOUT_TOOL_NAME_KEYS = {
 	files: "workbench.tool.files",
 	review: "workbench.tool.review",
 	plan: "workbench.tool.plan",
+	run: "workbench.tool.run",
 } as const satisfies Record<LayoutToolId, MessageKey>;
 
 export type ChatFirstPrompts = Readonly<Record<string, string>>;
@@ -122,7 +126,7 @@ export function layoutTabName(
 		case "chat":
 			return chatDisplayName(t, tab.name, chatFirstPrompts[tab.sessionId]);
 		case "terminal":
-			return terminalName(t, tab.name);
+			return terminalName(t, tab.name, tab.tabKey);
 		case "changes":
 			return changesTabName(t, tab.scope);
 		case "diff":

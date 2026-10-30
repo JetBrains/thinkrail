@@ -5,6 +5,7 @@ import { resolveBranchReview } from "../../panels/useBranchStatus";
 import { useAppStore } from "../../store";
 import { BranchSegment } from "./BranchSegment";
 import { ProjectSegment } from "./ProjectSegment";
+import { RunSegment } from "./RunSegment";
 import { ShipStrip } from "./ShipSegments";
 import { useActiveWorkspaceSettled, WorkspaceSegment } from "./WorkspaceSegment";
 
@@ -63,6 +64,7 @@ export function LocationBar({
 					refresh={refreshBranchStatus}
 				/>
 			) : null}
+			{workspace ? <RunSegment key={`run-${workspace.id}`} workspace={workspace} /> : null}
 		</div>
 	);
 }

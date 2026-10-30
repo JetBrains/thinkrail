@@ -202,6 +202,7 @@ flowchart LR
 | `choosing-a-workflow` | router (root) — classification + routing for workflow-eligible work | — (conditional pointer from the always-on rule, rule 4) | active; every classification, including the default entry for small behavior changes and bug reports, observed green by the routing suite (2026-10) |
 | `writing-workflow-skills` | worker — authoring checklist for adding workflows | — (self-trigger only, rule 4) | active |
 | `shipping-a-pr` | worker — PR lifecycle (create with gates / body or screenshot maintenance / up-to-date sync / checks / review comments — phases as sibling docs) | `choosing-a-workflow` (root) + narrow self-trigger | active; snapshot-by-default completion and verification reuse unverified by use (rule 14 suspended) |
+| `running-the-project` | worker — learn, verify and save the project's run recipe through `run_project` (set-up branch), or diagnose a failed target and fix the project or the recipe (fix branch) | — (direct entry: the app's `/skill:running-the-project` seeds behind **Set up run** / **Fix with agent**, plus a narrow self-trigger; outside the routing table per rule 4 — configuring how a project runs changes no product behavior) | active; unverified by use (rule 14 suspended) — the live `e2e/run-setup.live.spec.ts` exercises the set-up branch on demand |
 
 The family is open and grows from real use; candidates (research/spike, refactor, a composing
 skill in the composer pattern with its stage workers, and **extending an existing spec graph** — the
@@ -219,8 +220,8 @@ so every workflow gets it) and grilling's "confirm shared understanding" gate (a
 proceeds; each workflow's own gates still apply).
 Meta-rule 4's entry model is in effect: at the start of new work the parent module's
 `before_agent_start` rule points workflow-eligible work at `choosing-a-workflow`, which routes to today's
-family; already-routed work resumes, and direct work bypasses the router. `writing-workflow-skills` (self-trigger only) and the concept skills (reached by name) sit outside
-the routing table.
+family; already-routed work resumes, and direct work bypasses the router. `writing-workflow-skills` (self-trigger only), `running-the-project` (direct entry from the Run
+button's `/skill:` seeds) and the concept skills (reached by name) sit outside the routing table.
 
 ## Current limitations & gaps
 

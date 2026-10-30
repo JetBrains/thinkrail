@@ -115,6 +115,33 @@ workflowTest(
 
 workflowTest(
 	defineScenario({
+		name: "direct entry: the Run button's seed reaches running-the-project without the router",
+		skill: "running-the-project",
+		workspace: "code-only",
+		entry: {
+			skill: "running-the-project",
+			args: "Set up how this project is prepared and run in this workspace: learn the recipe, try it, and save it with run_project.",
+		},
+		stopWhen: [signals.toolCall("run_project")],
+		forbid: [
+			signals.skillRead("brainstorming"),
+			...SETUP_WORKERS.map((name) => signals.skillRead(name)),
+		],
+		expect: [
+			checks.expectNoSkillRead(["brainstorming", "choosing-a-workflow"]),
+			checks.expectToolCalled("run_project"),
+			checks.expectToolNotCalled("edit"),
+		],
+		judge: {
+			rubric: [
+				"The agent followed running-the-project's contract-first step (reading the recipe through run_project) instead of treating the request as a feature to brainstorm.",
+			],
+		},
+	}),
+);
+
+workflowTest(
+	defineScenario({
 		name: "root router: PR checks route to shipping-a-pr",
 		skill: "choosing-a-workflow",
 		workspace: "code-only",

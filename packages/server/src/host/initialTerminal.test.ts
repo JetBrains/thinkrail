@@ -53,6 +53,6 @@ test("failed initial reservation stays pending; retry completes once without dup
 	expect(repeated.initialTerminalPending).toBeUndefined();
 	expect(loadWorkspaces()[0]?.initialTerminalPending).toBeUndefined();
 	expect(listTerminals(workspace.id)).toEqual([
-		{ tabKey: INITIAL_TERMINAL_TAB_KEY, title: "Terminal 1" },
+		{ tabKey: INITIAL_TERMINAL_TAB_KEY, title: "Terminal 1", kind: "shell" },
 	]);
 });

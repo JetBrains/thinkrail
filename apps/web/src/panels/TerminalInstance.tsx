@@ -106,9 +106,15 @@ interface Props {
 	tabKey: string;
 	workspaceId: string;
 	initialCommand?: string;
+	runGeneration?: string | null;
 }
 
-export default function TerminalInstance({ tabKey, workspaceId, initialCommand }: Props) {
+export default function TerminalInstance({
+	tabKey,
+	workspaceId,
+	initialCommand,
+	runGeneration = null,
+}: Props) {
 	const t = useT();
 	const rootRef = useRef<HTMLDivElement>(null);
 	const hostRef = useRef<HTMLDivElement>(null);
@@ -269,13 +275,24 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			prebind = attemptPrebind;
 			void getTransport()
 				.request("terminal.attach", { workspaceId, tabKey, ...spawnedAt })
-				.then(({ id, created, replay }) => {
+				.then(({ id, created, replay, exited: endedCommand }) => {
 					if (disposed) return;
 					if (attachGeneration !== startedAt || prebind !== attemptPrebind) {
 						attemptPrebind.stop();
 						return;
 					}
 					const finishAttach = (): void => {
+						if (endedCommand) {
+							attemptPrebind.stop();
+							serverIdRef.current = null;
+							setExited(true);
+							setReady(true);
+							setDetached(false);
+							setFailureMessage(null);
+							setRetrying(false);
+							applyFit();
+							return;
+						}
 						if (disposed || attachGeneration !== startedAt || prebind !== attemptPrebind) {
 							attemptPrebind.stop();
 							return;
@@ -379,6 +396,15 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 	}, []);
 
 	const retry = useCallback(() => reattachRef.current?.(), []);
+
+	const seenRunGeneration = useRef(runGeneration);
+	useEffect(() => {
+		if (runGeneration === seenRunGeneration.current) return;
+		seenRunGeneration.current = runGeneration;
+		if (runGeneration === null || detached) return;
+		termRef.current?.reset();
+		reattachRef.current?.();
+	}, [detached, runGeneration]);
 	const openTerminalSettings = useCallback(
 		() => useAppStore.getState().openSettings(SettingsSection.Terminal),
 		[],

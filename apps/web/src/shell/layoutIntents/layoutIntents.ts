@@ -442,14 +442,32 @@ export function useLayoutIntentProcessing(
 				if (tab) result = closeLayoutTab(document, tab.id);
 				break;
 			}
-			case "select-terminal": {
+			case "select-terminal":
+			case "reveal-terminal": {
 				const tab = collectAllGroups(document)
 					.flatMap((group) => group.tabs)
 					.find(
 						(candidate) =>
 							candidate.kind === "terminal" && candidate.tabKey === layoutIntent.tabKey,
 					);
-				if (!tab) break;
+				if (!tab) {
+					if (layoutIntent.kind !== "reveal-terminal") break;
+					const placed = placeTerminalForIntent(
+						document,
+						attention,
+						withAvailablePlacementId(document, {
+							kind: "terminal" as const,
+							id: terminalLayoutId(layoutIntent.tabKey),
+							name: layoutIntent.title,
+							tabKey: layoutIntent.tabKey,
+						}),
+						undefined,
+						{ maxSideGroups, maxBottomGroups },
+						true,
+					);
+					if (!isLayoutUnavailable(placed)) result = placed;
+					break;
+				}
 				const location = findTabLocation(document, tab.id);
 				if (location) {
 					changeAttention(selectTab(attention, location, tab.id));

@@ -119,7 +119,9 @@ Dependency direction is one-way: `scenario` → everything; `dialog`/`signals`/`
   default entry: a small, explicitly specified behavior change and a bug report (which must reach the
   bug branch before any source edit). Pass = the routed worker's skill-load signal; direct-work
   rows bypass worker skills and produce a grounded outcome. Direct-edit assertions pin the resulting
-  worktree, not incidental report vocabulary or which valid mutation tool the agent chose.
+  worktree, not incidental report vocabulary or which valid mutation tool the agent chose. The
+  `running-the-project` row enters through the Run button's exact `/skill:` seed and stops at the first
+  `run_project` call — the skill's contract-first step — forbidding `brainstorming` and the setup workers.
 - `smoke.live.spec.ts` — the infra-proving live scenarios: a mid-flow `brainstorming` round-trip that
   must resume without re-entering the root router
   (artifact preset + persona answer + user simulator + on-disk decision), and transcript continuation

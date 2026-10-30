@@ -48,6 +48,7 @@ import type {
 	PrBodySource,
 	Project,
 	ProjectPathStatus,
+	ProjectRun,
 	ProjectTrustSummary,
 	ProviderStatusReport,
 	ProviderWarning,
@@ -63,6 +64,10 @@ import type {
 	ReviewCommentStatus,
 	ReviewFixDetails,
 	ReviewSnapshot,
+	RunExecution,
+	RunRecipeDocument,
+	RunSettings,
+	RunWorkspaceState,
 	SessionResources,
 	SessionStateRecord,
 	SpecGraphSnapshot,
@@ -118,9 +123,17 @@ export interface TerminalDetachedPush {
 
 export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
 
+/** A shell tab is the user's interactive shell; a command tab runs a host-composed script (architecture #12). */
+export type TerminalTabKind = "shell" | "command";
+
+/** Tab keys the host reserves for command tabs; a client may not mint a shell tab in this namespace. */
+export const COMMAND_TAB_KEY_PREFIX = "thinkrail-run";
+
 export interface TerminalTabInfo {
 	tabKey: string;
 	title: string;
+	/** Absent on hosts that predate command tabs — read as `shell`. */
+	kind?: TerminalTabKind;
 }
 
 export interface TerminalTabsPush {
@@ -128,12 +141,21 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
+export interface RunRecipeChangedPush {
+	projectId: string;
+	run: ProjectRun;
+}
+
+/** `RunWorkspaceState` itself: an idempotent full snapshot per workspace, like `terminal.tabs`. */
+export type RunStateChangedPush = RunWorkspaceState;
+
 export type TemplateReadLocation =
 	| { workspaceId: string; projectId?: never }
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 101;
+export const PROTOCOL_VERSION = 102;
+export const RUN_PROTOCOL_VERSION = 102;
 export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;
 export const PI_PACKAGES_PROTOCOL_VERSION = 100;
 export const PROVIDER_WARNINGS_PROTOCOL_VERSION = 99;
@@ -308,6 +330,14 @@ export const WS_METHODS = {
 	packagesCheckUpdates: "packages.checkUpdates",
 	packagesSetResourceEnabled: "packages.setResourceEnabled",
 	packagesReveal: "packages.reveal",
+	runRecipe: "run.recipe",
+	runSetRecipe: "run.setRecipe",
+	runSetPrimary: "run.setPrimary",
+	runSetSettings: "run.setSettings",
+	runStart: "run.start",
+	runRestart: "run.restart",
+	runStop: "run.stop",
+	runState: "run.state",
 	localesList: "locales.list",
 	localesReveal: "locales.reveal",
 	themesList: "themes.list",
@@ -434,6 +464,8 @@ export const WS_CHANNELS = {
 	localesChanged: "locales.changed",
 	themesChanged: "themes.changed",
 	packagesChanged: "packages.changed",
+	runRecipeChanged: "run.recipeChanged",
+	runStateChanged: "run.stateChanged",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -911,7 +943,8 @@ export interface WsMethodMap {
 	};
 	"terminal.attach": {
 		params: { workspaceId: string; tabKey: string; title?: string; cols?: number; rows?: number };
-		result: { id: string; created: boolean; replay?: string };
+		/** `exited` marks an ended command tab: `id` is a placeholder, `replay` its last screen, and nothing was spawned. */
+		result: { id: string; created: boolean; replay?: string; exited?: true };
 	};
 	"terminal.list": {
 		params: { workspaceId: string };
@@ -955,6 +988,34 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"packages.reveal": { params: { path: string; workspaceId?: string }; result: Ack };
+	"run.recipe": { params: { projectId: string }; result: ProjectRun };
+	"run.setRecipe": {
+		/** `recipe` is the raw document the user or agent wrote; the host validates and returns field errors on `RUN_RECIPE_INVALID`. */
+		params: { projectId: string; recipe: unknown; expectedRevision: number };
+		result: { document: RunRecipeDocument };
+	};
+	"run.setPrimary": {
+		params: { projectId: string; targetId: string; expectedRevision: number };
+		result: { document: RunRecipeDocument };
+	};
+	"run.setSettings": {
+		params: { projectId: string; settings: Partial<RunSettings> };
+		result: { settings: RunSettings };
+	};
+	"run.start": {
+		/** `targetId` null runs prepare alone; `prepare: false` skips the prepare commands. */
+		params: { workspaceId: string; targetId: string | null; prepare?: boolean };
+		result: { execution: RunExecution };
+	};
+	"run.restart": {
+		params: { workspaceId: string; targetId: string | null; prepare?: boolean };
+		result: { execution: RunExecution };
+	};
+	"run.stop": {
+		params: { workspaceId: string; targetId: string | null; force?: boolean };
+		result: { execution: RunExecution };
+	};
+	"run.state": { params: { workspaceId: string }; result: RunWorkspaceState };
 	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
 	"locales.reveal": { params: Record<string, never>; result: Ack };
 	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
@@ -1282,7 +1343,18 @@ export type WsErrorCode =
 	| "PACKAGE_REMOVE_FAILED"
 	| "PACKAGE_UPDATE_FAILED"
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
-	| "REQUEST_REPLAY_OVERFLOW";
+	| "REQUEST_REPLAY_OVERFLOW"
+	| "RUN_RECIPE_INVALID"
+	| "RUN_RECIPE_CONFLICT"
+	| "RUN_RECIPE_MISSING"
+	| "RUN_TARGET_UNKNOWN"
+	| "RUN_ALREADY_RUNNING"
+	| "RUN_NOT_RUNNING"
+	| "RUN_PORT_IN_USE"
+	| "RUN_NO_FREE_PORT"
+	| "RUN_SPAWN_FAILED"
+	| "RUN_AGENT_FORBIDDEN"
+	| "RUN_UNSUPPORTED_PLATFORM";
 
 export interface WsResponse {
 	id: string;

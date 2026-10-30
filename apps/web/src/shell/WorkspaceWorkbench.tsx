@@ -7,6 +7,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { t, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { cn } from "@thinkrail/ui/utils";
 import {
 	Fragment,
 	lazy,
@@ -31,6 +32,7 @@ import { startChatInTab } from "../panels/openChat";
 import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
+import { RunPanel } from "../panels/RunPanel";
 import { reviewFlagForPaths, reviewFlags, tabReviewPaths } from "../panels/reviewModel";
 import { SpecsPanel } from "../panels/SpecsPanel";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
@@ -45,6 +47,7 @@ import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	isFileComparison,
+	isLiveRun,
 	type LayoutIntent,
 	selectCanRenameChat,
 	selectContextProject,
@@ -651,6 +654,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			),
 			files: <FilesPanel key={workspaceId} workspaceId={workspaceId} />,
 			review: <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />,
+			run: workspace ? (
+				<QuietScrollArea className="h-full">
+					<RunPanel key={workspaceId} workspace={workspace} />
+				</QuietScrollArea>
+			) : null,
 			plan: railPlanSessionId ? (
 				<ErrorBoundary
 					label={t("shell.workbench.panel.planRail")}
@@ -682,7 +690,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			);
 		}
 		return bodies;
-	}, [railPlanSessionId, review.failed, specs.failed, specs.reload, t, workspaceId]);
+	}, [railPlanSessionId, review.failed, specs.failed, specs.reload, t, workspace, workspaceId]);
 	const renderToolBody = useCallback((tool: LayoutToolId) => toolBodies[tool], [toolBodies]);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);
@@ -698,8 +706,30 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[changeAttention, workspaceId],
 	);
 
+	const runExecutions = useAppStore((state) => state.runByWorkspace[workspaceId]?.executions);
 	const renderTabAdornment = useCallback(
 		(tab: LayoutTab): ReactNode => {
+			if (tab.kind === "terminal") {
+				const execution = runExecutions?.find((candidate) => candidate.tabKey === tab.tabKey);
+				if (!execution) return null;
+				const live = isLiveRun(execution);
+				const failedRun =
+					execution.status === "exited" &&
+					execution.exitCode !== 0 &&
+					execution.exitCode !== undefined;
+				if (!live && !failedRun) return null;
+				return (
+					<span
+						data-testid="run-tab-dot"
+						data-status={execution.status}
+						aria-hidden="true"
+						className={cn(
+							"inline-block size-6 shrink-0 rounded-full",
+							live ? "bg-feedback-success" : "bg-feedback-warning",
+						)}
+					/>
+				);
+			}
 			if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {
 				return (
 					<span
@@ -726,7 +756,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</span>
 			) : null;
 		},
-		[reviewDraftCount, reviewFlagByPath, t],
+		[reviewDraftCount, reviewFlagByPath, runExecutions, t],
 	);
 
 	const renderEmptyCenter = useCallback(

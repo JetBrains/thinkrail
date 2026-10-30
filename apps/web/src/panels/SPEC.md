@@ -1636,6 +1636,40 @@ own section. The kebab menu (`plan-menu`, a
   **Fill template with agent** (`pr.generate`) replaces the field's text with the host's one-shot draft;
   nothing is pushed until submit, and a `null` draft toasts instead of clearing the field.
 
+- **Run — the project's run recipe and runs, one derivation for topbar and Run tab.** `runActions(t,
+  context)` is the pure table behind the topbar's Run segment and the Run tab's actions ([[submodule-web-shell-location-bar]]
+  describes the states): `null` on an older host or a win32 host; **Set up run** without a recipe; the
+  followed execution (`store/run`'s `latestExecution`: the most recently started run, live or not) with
+  its chip, primary and ▾ items; every other target appears in ▾ as *Run <target>*, or *Stop <target>*
+  while it is live. `useRunRunner(workspaceId, projectId)` executes them —
+  `run.start` (a `null` target is the prepare-only run) / `run.restart` / `run.stop`, revealing the host-born command tab through
+  the store's `revealTerminalTab`; **Set up** and **Fix** hand `runPrompts`' plain-English
+  `/skill:running-the-project …` prompts to the workspace chat via `openChat`'s `promptWorkspaceChat`
+  (the log is not inlined: the agent pulls `run_project output` for the execution named in the prompt);
+  **Open** rewrites a loopback url to the transport hostname (`browserUrl`, only when the client is
+  remote) and opens with `noopener`; **auto-open** fires once per `runId`, only for runs this client
+  started, and a blocked popup becomes a toast with the link. `useRunHydration(workspaceId, projectId)`
+  is the slice's read — `run.state` and `run.recipe` on every connection and activation, fenced by the
+  connection generation, while the pushes subscribed at transport bootstrap keep it current
+  (hydrate-then-stream). `RunPanel` is the store-connected wrapper of the props-driven **`RunPanelView`**
+  (static-render tested): targets with status chips, per-row Open / Show terminal / Start / Stop and a
+  star that makes a target primary (`run.setPrimary` with the read revision); Prepare commands with **Run
+  now**; recipe facts — assigned ports, learned when and by whom, the agent's notes — with
+  **Edit**, **Set up again with agent** and **Fix with agent**; the project's two switches
+  (`run.setSettings`); empty / Windows / older-host states. **Edit** is a monospace text area holding the
+  recipe JSON (`RecipeEditor`): the browser only parses JSON, the host validates on `run.setRecipe` with the
+  revision the dialog read, its field errors (`path: message`, split from the `RUN_RECIPE_INVALID` message)
+  render under the text, and a `RUN_RECIPE_CONFLICT` keeps the draft and asks to reload — no Monaco, no
+  client-side copy of the validator. **Command tabs in the terminal UI:** `TerminalWorkbenchBody` joins a
+  `kind: "command"` tab to its execution by `tabKey`, passes the `runId` as `TerminalInstance`'s
+  `runGeneration` (a change means a new process under the same tab: the body resets xterm and re-attaches —
+  only while it still holds the attach, a displaced observer never reclaims), and shows the
+  `RunTerminalFooter` on an ended run (status chip · **Fix with agent** · **Run again**); an attach that
+  answers `exited: true` renders the last screen with no live id. The tab's name derives from its key
+  (`lib/tabNames`' `terminalName(t, title, tabKey)` → `Run: <target>` / `Prepare`) so it is localized like
+  `Terminal N`.
+
+## Get right
 ## Get right
 
 - **Workbench tab chrome is not a feature panel.** The shell layout module supplies one selected-tab

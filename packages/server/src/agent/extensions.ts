@@ -40,6 +40,7 @@ export { disabledPackages, setDisabledPackagesResolver };
 
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
+import { runProjectExtension } from "./runTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import { skillCarryover } from "./skillCarryover";
 import {
@@ -352,6 +353,7 @@ export async function buildResourceLoader(
 		reviewToolExtension,
 		requestReviewExtension,
 		setTitleExtension,
+		runProjectExtension,
 		oversizedImageGuard,
 		skillCarryover,
 		...extraFactories,

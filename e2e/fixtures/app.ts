@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import type { SessionSummary, Workspace } from "@thinkrail/contracts";
+import type { RunWorkspaceState, SessionSummary, Workspace } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import {
 	isRealCentralE2e,
@@ -50,6 +50,7 @@ export async function hideAuxiliaryWorkbench(page: Page): Promise<void> {
 function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
 	rmSync(join(E2E_DATA_DIR, "turns.json"), { force: true });
+	rmSync(join(E2E_DATA_DIR, "run.json"), { force: true });
 	removeTree(join(E2E_DATA_DIR, "reviews"));
 	removeTree(join(E2E_DATA_DIR, "resource-history"));
 	removeTree(join(E2E_DATA_DIR, "worktrees"));
@@ -139,6 +140,7 @@ async function disposeLiveSessions(page: Page): Promise<void> {
 	const port = Number(hostUrl.port) || (hostUrl.protocol === "https:" ? 443 : 80);
 	const wire = await E2eWire.connect(port);
 	try {
+		const LIVE_RUN = new Set(["starting", "running", "listening", "stopping"]);
 		for (const workspace of workspaces) {
 			const sessions: SessionSummary[] = await wire.request(
 				"session.list",
@@ -148,6 +150,20 @@ async function disposeLiveSessions(page: Page): Promise<void> {
 			for (const session of sessions) {
 				if (session.live) {
 					await wire.request("session.dispose", { sessionId: session.sessionId }, 30_000);
+				}
+			}
+			const runs: RunWorkspaceState = await wire.request(
+				"run.state",
+				{ workspaceId: workspace.id },
+				30_000,
+			);
+			for (const execution of runs.executions) {
+				if (LIVE_RUN.has(execution.status)) {
+					await wire.request(
+						"run.stop",
+						{ workspaceId: workspace.id, targetId: execution.targetId, force: true },
+						30_000,
+					);
 				}
 			}
 		}

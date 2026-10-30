@@ -1,14 +1,21 @@
-import { RiAddLine as Plus } from "@remixicon/react";
-import type { TerminalTabsPush } from "@thinkrail/contracts";
+import {
+	RiAddLine as Plus,
+	RiRestartLine as Restart,
+	RiRobot2Line as Robot,
+} from "@remixicon/react";
+import type { RunExecution, TerminalTabsPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { i18n, useT } from "@thinkrail/locales/react";
-import { IconButton } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import { cn } from "@thinkrail/ui/utils";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { terminalName } from "../lib";
 import type { TerminalTab } from "../store";
-import { isConnectedGeneration, toast, useAppStore } from "../store";
+import { isConnectedGeneration, isLiveRun, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { statusChip } from "./runActions";
+import { useRunRunner } from "./useRunRunner";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
 
@@ -61,8 +68,70 @@ export function useTerminalCatalog(workspaceId: string | null): boolean {
 	return readyFor === workspaceId;
 }
 
+const FOOTER_CHIP: Record<ReturnType<typeof statusChip>["tone"], string> = {
+	neutral: "bg-control-bg-selected text-text-muted",
+	success: "bg-feedback-success-subtle text-feedback-success",
+	warning: "bg-feedback-warning-subtle text-feedback-warning",
+	info: "bg-feedback-info-subtle text-feedback-info",
+};
+
+function RunTerminalFooter({
+	workspaceId,
+	execution,
+}: {
+	workspaceId: string;
+	execution: RunExecution;
+}) {
+	const t = useT();
+	const runner = useRunRunner(workspaceId, null);
+	const chip = statusChip(t, execution);
+	return (
+		<div
+			data-testid="run-terminal-footer"
+			data-status={execution.status}
+			className="absolute right-0 bottom-0 left-0 z-10 flex h-32 items-center justify-between gap-8 border-border-muted border-t bg-container-elevated-bg px-12"
+		>
+			<span
+				className={cn(
+					"inline-flex h-20 items-center gap-4 whitespace-nowrap rounded-full px-8 tr-text-emphasis",
+					FOOTER_CHIP[chip.tone],
+				)}
+			>
+				{chip.label}
+			</span>
+			<span className="flex items-center gap-6">
+				<Button
+					variant="outline"
+					size="s"
+					iconLeft={Robot}
+					data-testid="run-terminal-fix"
+					onClick={() => runner.run({ kind: "fix", execution })}
+				>
+					{t("panels.run.fix.label")}
+				</Button>
+				<Button
+					size="s"
+					iconLeft={Restart}
+					data-testid="run-terminal-again"
+					onClick={() => runner.run({ kind: "start", targetId: execution.targetId, prepare: true })}
+				>
+					{t("panels.run.footer.runAgain")}
+				</Button>
+			</span>
+		</div>
+	);
+}
+
 export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd: () => void }) {
 	const t = useT();
+	const execution = useAppStore((state) =>
+		tab.kind === "command"
+			? (state.runByWorkspace[tab.workspaceId]?.executions.find(
+					(candidate) => candidate.tabKey === tab.tabKey,
+				) ?? null)
+			: null,
+	);
+	const ended = execution !== null && !isLiveRun(execution);
 	return (
 		<div data-testid="terminal-panel" className="relative h-full min-h-0 bg-container-terminal-bg">
 			<IconButton
@@ -74,13 +143,17 @@ export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd:
 				onClick={onAdd}
 				className="absolute top-4 right-4 z-10"
 			/>
-			<Suspense fallback={null}>
-				<TerminalInstance
-					tabKey={tab.tabKey}
-					workspaceId={tab.workspaceId}
-					{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
-				/>
-			</Suspense>
+			<div className={cn("absolute inset-0", ended && "bottom-32")}>
+				<Suspense fallback={null}>
+					<TerminalInstance
+						tabKey={tab.tabKey}
+						workspaceId={tab.workspaceId}
+						{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
+						{...(tab.kind === "command" ? { runGeneration: execution?.runId ?? null } : {})}
+					/>
+				</Suspense>
+			</div>
+			{ended ? <RunTerminalFooter workspaceId={tab.workspaceId} execution={execution} /> : null}
 		</div>
 	);
 }

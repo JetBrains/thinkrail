@@ -12,7 +12,11 @@ import {
 	RiDeleteBin6Line as Trash2,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import { LAYOUT_PLAN_PRESET_PROTOCOL_VERSION, type LayoutPreset } from "@thinkrail/contracts";
+import {
+	LAYOUT_PLAN_PRESET_PROTOCOL_VERSION,
+	type LayoutPreset,
+	RUN_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -56,14 +60,16 @@ const PRESET_ICONS: Record<string, typeof RiDashboardLine> = {
 
 async function updateCustomPresets(customLayoutPresets: LayoutPreset[]): Promise<boolean> {
 	const protocolVersion = useAppStore.getState().protocolVersion ?? 0;
-	if (
+	const tooOldFor: MessageKey | null =
 		protocolVersion < LAYOUT_PLAN_PRESET_PROTOCOL_VERSION &&
 		customLayoutPresets.some((preset) => presetPlacesTool(preset, "plan"))
-	) {
-		toast.error(
-			translate("workbench.layoutSettings.planNeedsNewerHost"),
-			translate("workbench.layoutSettings.saveFailed"),
-		);
+			? "workbench.layoutSettings.planNeedsNewerHost"
+			: protocolVersion < RUN_PROTOCOL_VERSION &&
+					customLayoutPresets.some((preset) => presetPlacesTool(preset, "run"))
+				? "workbench.layoutSettings.runNeedsNewerHost"
+				: null;
+	if (tooOldFor) {
+		toast.error(translate(tooOldFor), translate("workbench.layoutSettings.saveFailed"));
 		return false;
 	}
 	try {

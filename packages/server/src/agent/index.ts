@@ -115,6 +115,16 @@ export {
 	type ResolveCommentOutcome,
 	setReviewCommentHandler,
 } from "./reviewTool";
+export {
+	executeRunProject,
+	RUN_PROJECT_TOOL_NAME,
+	type RunProjectParams,
+	type RunToolContext,
+	type RunToolHost,
+	recipeContract,
+	runRecipeRule,
+	setRunToolHost,
+} from "./runTool";
 export * from "./sessionRepair";
 export * from "./sessionState";
 export {

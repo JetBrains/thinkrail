@@ -242,8 +242,12 @@ fresh workspace the plan is what there is to look at, while review comments only
 topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map
 used to rehome every workspace view. Only custom definitions cross the wire through settings; a set that
-places the TODO List (`plan`) is saved only to a host at `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` or newer — an
-older host's validator rejects the tool, so Layout settings explains that instead of sending it. Built-in preset
+places the TODO List (`plan`) is saved only to a host at `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` or newer, and
+one that places the Run tool (`run`, right side by default, `RiPlay` icons) only to a host at
+`RUN_PROTOCOL_VERSION` or newer — an older host's validator rejects the tool, so Layout settings explains that
+instead of sending it. The Run tool is listed like any other on every host; its body explains itself on a host
+too old for runs or on Windows instead of the model hiding the tool, the same way the TODO List body does
+without a plan. Built-in preset
 names are display copy: `layoutPresetName` renders them through the locale catalog by preset id while the
 definition keeps its stable `name`; custom preset names are user data and render verbatim.
 
