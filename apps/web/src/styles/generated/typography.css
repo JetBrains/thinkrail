@@ -1,12 +1,15 @@
 /*
  * GENERATED FILE — DO NOT EDIT.
  *
- * Source:    src/styles/typography.json (v3.1.0)
+ * Source:    src/styles/typography.json (v3.2.0)
  * Generator: scripts/generate-typography.ts  ·  regenerate: bun run typography:generate
  * Drift gate: bun run typography:check (fails when this file is stale)
  *
  * Contains every typography value the UI is allowed to use: primitive custom properties, the `<body>`
  * base, one class per semantic text style, and one prose system per markdown surface.
+ *
+ * The user-adjustable tokens (the selectable families, code size, weight offset, code ligatures) hold
+ * their DEFAULTS here; only the web `fonts` module overrides them, on `:root`.
  *
  * Two cascade layers, both deliberate. The `<body>` base sits in `@layer base` (after Tailwind's
  * preflight, so it wins there) which means ANY semantic class outranks it. The classes sit in
@@ -17,18 +20,24 @@
  */
 
 :root {
-	/* Font families */
-	--tr-font-family-interface: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-	--tr-font-family-code: "JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
+	/* Font families — a user-selectable family defaults to its `-default` stack */
+	--tr-font-family-interface-default: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--tr-font-family-interface: var(--tr-font-family-interface-default);
+	--tr-font-family-code-default: "JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
+	--tr-font-family-code: var(--tr-font-family-code-default);
 	--tr-font-family-brand: "Orbitron Variable", Orbitron, "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
-	/* Font weights */
-	--tr-font-weight-light: 370;
-	--tr-font-weight-regular: 400;
-	--tr-font-weight-medium: 500;
-	--tr-font-weight-semibold: 600;
+	/* Font ligatures — set on every style of that family */
+	--tr-font-ligatures-code: none;
+
+	/* Font weights — all but `fontWeightOffset.exclude` follow the weight offset */
+	--tr-font-weight-offset: 0;
+	--tr-font-weight-light: calc(370 + var(--tr-font-weight-offset));
+	--tr-font-weight-regular: calc(400 + var(--tr-font-weight-offset));
+	--tr-font-weight-medium: calc(500 + var(--tr-font-weight-offset));
+	--tr-font-weight-semibold: calc(600 + var(--tr-font-weight-offset));
 	--tr-font-weight-brand: 400;
-	--tr-font-weight-button: 470;
+	--tr-font-weight-button: calc(470 + var(--tr-font-weight-offset));
 
 	/* Font sizes (px) */
 	--tr-font-size-s10: 10px;
@@ -42,6 +51,10 @@
 	--tr-font-size-s24: 24px;
 	--tr-font-size-s44: 44px;
 
+	/* Code size — the dense size (editor, diffs) keeps its distance below it */
+	--tr-font-size-code: var(--tr-font-size-s13);
+	--tr-font-size-code-dense: calc(var(--tr-font-size-code) - 2px);
+
 	/* Line heights (unitless) */
 	--tr-line-height-compact: 1.25;
 	--tr-line-height-metadata: 1.25;
@@ -51,7 +64,7 @@
 	--tr-line-height-default: 1.3;
 	--tr-line-height-reading: 1.45;
 
-	/* Code row height (px) — font size × line height, rounded to a whole pixel */
+	/* Code row height (px) — dense code size × line height, rounded to a whole pixel */
 	--tr-code-row-height: 14px;
 
 	/* Letter spacing */
@@ -256,15 +269,37 @@
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
+}
+.tr-code-block {
+	font-family: var(--tr-font-family-code);
+	font-size: var(--tr-font-size-code);
+	font-weight: var(--tr-font-weight-regular);
+	line-height: var(--tr-line-height-relaxed);
+	letter-spacing: var(--tr-letter-spacing-normal);
+	text-transform: none;
+	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
+}
+.tr-code-editor {
+	font-family: var(--tr-font-family-code);
+	font-size: var(--tr-font-size-code-dense);
+	font-weight: var(--tr-font-weight-regular);
+	line-height: var(--tr-line-height-default);
+	letter-spacing: var(--tr-letter-spacing-normal);
+	text-transform: none;
+	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 }
 .tr-code-document {
 	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-s13);
+	font-size: var(--tr-font-size-code);
 	font-weight: var(--tr-font-weight-regular);
 	line-height: var(--tr-line-height-code);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 }
 .tr-code-otp {
 	font-family: var(--tr-font-family-code);
@@ -274,6 +309,7 @@
 	letter-spacing: var(--tr-letter-spacing-widest);
 	text-transform: none;
 	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 }
 .tr-code-text-small {
 	font-family: var(--tr-font-family-code);
@@ -283,6 +319,7 @@
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 }
 
 /* Prose system 'chat' — the markdown typography for that surface. */
@@ -357,15 +394,17 @@
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 }
 .tr-prose-chat :is(pre, pre code) {
 	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-s13);
+	font-size: var(--tr-font-size-code);
 	font-weight: var(--tr-font-weight-regular);
 	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 }
 .tr-prose-chat blockquote {
 	font-family: var(--tr-font-family-interface);
@@ -411,6 +450,7 @@
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 }
 /* Bold: weight only — every other property inherits from the parent element. */
 .tr-prose-chat :is(strong, b) {
@@ -489,15 +529,17 @@
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 }
 .tr-prose-doc :is(pre, pre code) {
 	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-s13);
+	font-size: var(--tr-font-size-code);
 	font-weight: var(--tr-font-weight-regular);
 	line-height: var(--tr-line-height-code);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 }
 .tr-prose-doc blockquote {
 	font-family: var(--tr-font-family-interface);
@@ -543,6 +585,7 @@
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 }
 /* Bold: weight only — every other property inherits from the parent element. */
 .tr-prose-doc :is(strong, b) {

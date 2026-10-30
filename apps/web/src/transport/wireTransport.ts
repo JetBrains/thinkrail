@@ -20,6 +20,7 @@ import type {
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
+	FONTS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
@@ -49,6 +50,10 @@ export function supportsUserThemes(protocolVersion: number | null): boolean {
 
 export function supportsPiPackages(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION;
+}
+
+export function supportsFonts(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= FONTS_PROTOCOL_VERSION;
 }
 
 export function supportsToolResponses(protocolVersion: number | null): boolean {
@@ -196,6 +201,21 @@ function refreshUserThemes(connectionGeneration: number): void {
 		.catch(() => {});
 }
 
+function refreshUserFonts(connectionGeneration: number): void {
+	const store = useAppStore.getState();
+	if (!supportsFonts(store.protocolVersion)) {
+		store.installUserFonts(null);
+		return;
+	}
+	void getTransport()
+		.request("fonts.list", {})
+		.then((snapshot) => {
+			const current = useAppStore.getState();
+			if (isConnectedGeneration(current, connectionGeneration)) current.installUserFonts(snapshot);
+		})
+		.catch(() => {});
+}
+
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
 	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
@@ -256,6 +276,7 @@ export function initTransport(): WsTransport {
 		refreshLoadedWorkspaceLists(connectionGeneration);
 		refreshLocalLocales(connectionGeneration);
 		refreshUserThemes(connectionGeneration);
+		refreshUserFonts(connectionGeneration);
 		if (welcome.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION) {
 			hydrateSessionStates(connectionGeneration);
 		} else {
@@ -350,6 +371,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.packagesChanged, () => {
 		useAppStore.getState().bumpPackagesVersion();
+	});
+
+	transport.subscribe(WS_CHANNELS.fontsChanged, () => {
+		refreshUserFonts(useAppStore.getState().connectionGeneration);
 	});
 
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {

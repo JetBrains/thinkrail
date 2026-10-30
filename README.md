@@ -93,6 +93,9 @@ create the tools it needs based on how you actually work.
   tool output stay as the agent wrote them.
 - **Your themes.** Settings → Appearance ships dark, light, minimal and high-contrast themes. Make your own
   by copying a bundled `*.theme.json`, changing its id and colors, and saving it to `~/.thinkrail/themes`.
+- **Your fonts.** Settings → Appearance picks the interface and code fonts from the bundled Geist and
+  JetBrains Mono, any font installed on your computer, or font files you drop in (kept in
+  `~/.thinkrail/fonts`), with fallback fonts for icon glyphs, a code size, ligatures and a text-weight slider.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/specs-dark.png">

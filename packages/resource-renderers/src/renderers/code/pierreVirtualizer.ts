@@ -4,7 +4,8 @@ import {
 	type VirtualFileMetrics,
 	Virtualizer,
 } from "@pierre/diffs";
-import { type RefCallback, useCallback, useState } from "react";
+import { onFontsChange } from "@thinkrail/ui/fonts";
+import { type RefCallback, useCallback, useState, useSyncExternalStore } from "react";
 
 type ConnectedInstance = Parameters<Virtualizer["connect"]>[1];
 
@@ -56,6 +57,10 @@ function codeLineHeight(): number {
 		"--tr-code-row-height",
 	);
 	return Number.parseFloat(height) || DEFAULT_VIRTUAL_FILE_METRICS.lineHeight;
+}
+
+export function useCodeRowHeight(): number {
+	return useSyncExternalStore(onFontsChange, codeLineHeight);
 }
 
 export function usePierreVirtualizer<T extends HTMLElement>(

@@ -1,8 +1,13 @@
 import {
 	type AppConfig,
 	type AppConfigUpdate,
+	CODE_FONT_SIZE,
 	COMPOSER_GROWTH_LIMITS,
+	FONT_WEIGHT_OFFSET,
+	isCodeFontSize,
 	isComposerGrowthLimit,
+	isFontChoice,
+	isFontWeightOffset,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
@@ -57,6 +62,11 @@ const ACCEPTED_UPDATE_KEYS = {
 	disabledPackages: true,
 	locale: true,
 	onboardingDismissed: true,
+	interfaceFont: true,
+	codeFont: true,
+	codeFontSize: true,
+	codeLigatures: true,
+	fontWeightOffset: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -143,10 +153,32 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		["reviewAutoFix", runtimeUpdate.reviewAutoFix],
 		["agentReviewEnabled", runtimeUpdate.agentReviewEnabled],
 		["onboardingDismissed", runtimeUpdate.onboardingDismissed],
+		["codeLigatures", runtimeUpdate.codeLigatures],
 	] as const) {
 		if (value !== undefined && typeof value !== "boolean") {
 			throw new Error(`${name} must be a boolean`);
 		}
+	}
+	for (const [name, value] of [
+		["interfaceFont", runtimeUpdate.interfaceFont],
+		["codeFont", runtimeUpdate.codeFont],
+	] as const) {
+		if (value !== undefined && !isFontChoice(value)) {
+			throw new Error(`${name} must be a font family or null plus up to 8 distinct fallbacks`);
+		}
+	}
+	if (runtimeUpdate.codeFontSize !== undefined && !isCodeFontSize(runtimeUpdate.codeFontSize)) {
+		throw new Error(
+			`codeFontSize must be a whole number from ${CODE_FONT_SIZE.min} to ${CODE_FONT_SIZE.max}`,
+		);
+	}
+	if (
+		runtimeUpdate.fontWeightOffset !== undefined &&
+		!isFontWeightOffset(runtimeUpdate.fontWeightOffset)
+	) {
+		throw new Error(
+			`fontWeightOffset must be a multiple of ${FONT_WEIGHT_OFFSET.step} from ${FONT_WEIGHT_OFFSET.min} to ${FONT_WEIGHT_OFFSET.max}`,
+		);
 	}
 	if (
 		runtimeUpdate.analyticsConsentConfirmed !== undefined &&

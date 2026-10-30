@@ -527,8 +527,11 @@ scrolling drop from 12–34 to 2–3 dropped frames in WebKit, and the worst spl
 (~45 ms). Split scrolling over dense hunk toolbars still drops frames in WebKit; without the toolbars
 it is smooth, and `overflow: "wrap"` (which skips the pairing because both sides share grid rows) helps
 moderate scrolling but not flings. The virtualizer's `lineHeight` metric is the real row height:
-`.pierre-code-surface` rounds `--diffs-line-height` to whole pixels (`s11` × `default` = 14 px,
-matching Monaco's rounding), and `codeLineHeight()` derives the same number from the tokens. Against
+`.pierre-code-surface` sets `--diffs-line-height` from `--tr-code-row-height` (the dense code size ×
+`default`, a whole pixel — 14 px by default, matching Monaco's rounding), and `codeLineHeight()` reads the
+same token. A font settings change can move that row height, so `PierreFile` / `PierreDiff` key their
+surface on it (`useCodeRowHeight`, subscribed through `onFontsChange`) and remount rather than let Pierre's
+cached row heights drift from the metric. Against
 Pierre's 20 px default estimate the scroll height of a 20k-line file started ~40% too tall and shrank
 while scrolling as rows were measured. Rejected after measurement: mirroring an invisible spacer onto
 the opposite split column (it cut paint area but not dropped frames in either engine) and a larger
@@ -592,9 +595,12 @@ content's own height.
   the selected column with horizontal scrolling in a narrower pane. Broadcast changes update a mounted
   desktop file editor. Pierre diffs and phone files own horizontal overflow and do not consume this Monaco
   preference. Rendered Markdown and rendered Markdown diffs retain their separate ~78ch reading measure.
-  The React Compiler memoizes `MonacoEditor`'s options on width, bounded and path, and the editor calls
-  `updateOptions` only when that object changes; the typography and spacing tokens the options read are
-  static generated CSS (themes set only colours).
+  The React Compiler memoizes `MonacoEditor`'s options on width, bounded, path and the resolved editor
+  font, and the editor calls `updateOptions` only when that object changes. The font is the generated
+  `.tr-code-editor` style resolved through `@thinkrail/ui/fonts` (family, dense code size, weight,
+  ligatures — a computed read, because the token is an unresolved `calc()`), cached per `data-fonts`
+  revision and re-read on `onFontsChange`; a change then waits for that face and calls
+  `remeasureFonts()`. Spacing tokens stay static generated CSS (themes set only colours).
 - **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the
   configured wrapping, generated code typography, minimap/overview-ruler removal and 6px shadowless scrollbar,
   and add read-only messaging, the path as its accessible label, an 8px top inset, three-character line-number

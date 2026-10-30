@@ -41,7 +41,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   send `X-Content-Type-Options: nosniff`; active same-origin types (`text/html`,
   `application/xhtml+xml`, `image/svg+xml`) additionally receive
   `Content-Security-Policy: sandbox; default-src 'none'`, so direct navigation cannot execute repository
-  script, static serving with
+  script, the **`/fonts/<file>`** route (`fontRoutes.ts`, ahead of the static fallback) over the
+  [[submodule-server-fonts]] folder — the host's one HTTP write route and the only route that checks its
+  method: `GET` serves a font by its extension's type (`font/ttf|otf|woff|woff2`) with
+  `Cache-Control: no-cache` (list URLs carry a content version) and 404s any name `fontFileKind` refuses,
+  a collection, or a missing file; `PUT` (behind the upload guard below) answers 400 for a refused name,
+  else stores the body through `saveUserFont` and answers that file's entry as JSON: 200, 413 `too-large`
+  (checked against `Content-Length` before reading and again while streaming), 409 `too-many`, 422
+  `unsupported-collection`/`invalid-font`, or 500 `unreadable`; any other method is 405 with
+  `Allow: GET, PUT`, the `fonts` poller's `fonts.changed` nudge reaching
+  only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`, static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
@@ -619,7 +628,7 @@ enabled/confirmed choice before entering analytics attribution.
   `boot.ts`; `codedError`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
-  routes); Bun/Node.
+  routes, `fonts`' `fontFileKind`/`saveUserFont` for `/fonts/`); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
 
 - **Settled-lifecycle wiring (`settledLifecycle.ts`).** The host is where the three activity sources meet the
@@ -697,6 +706,15 @@ enabled/confirmed choice before entering analytics attribution.
   buffered bytes stays latched, and a latch whose socket is already gone is left to `close`/`open`.
   Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
 - The host is the single place features are wired together — features never reach back into it.
+- **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
+  The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
+  needs a CORS preflight — by the `PUT` method, and by this non-simple header whatever the method — which
+  the route answers 405 with no `Access-Control-*` headers, so another website's write never leaves the
+  browser; the same-origin client needs no preflight. Never add CORS headers to `/fonts/`, and keep the
+  header check should the route ever accept a simple method such as `POST`. It is the host's only HTTP
+  write because the alternatives fail the feature: base64 over the WebSocket hits Bun's 16 MB frame cap
+  (CJK fonts run past 20 MB) and a pending frame is replayed on every reconnect, and the host's native
+  file dialog cannot take a drag-and-drop and opens on the host's screen, not a remote browser's.
 - **Login-shell environment import is opt-in at boot** (`resolveShellEnv: true`, passed by the dev,
   CLI and desktop launchers). Post-mortem: with it on by default, `boot.test.ts` copied the developer's
   login environment — provider API keys included — into the shared `bun test` process (`bun test`

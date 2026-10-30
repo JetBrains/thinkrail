@@ -229,12 +229,17 @@
 	app-region: no-drag;
 }
 
+.xterm .xterm-rows {
+	font-variant-ligatures: none;
+}
+
 .pierre-code-surface {
 	color-scheme: inherit;
 	--diffs-font-family: var(--tr-font-family-code);
 	--diffs-header-font-family: var(--tr-font-family-code);
-	--diffs-font-size: var(--tr-font-size-s11);
+	--diffs-font-size: var(--tr-font-size-code-dense);
 	--diffs-line-height: var(--tr-code-row-height);
+	font-variant-ligatures: var(--tr-font-ligatures-code);
 	--diffs-foreground: var(--code-foreground);
 	--diffs-fg: var(--code-foreground);
 	--diffs-fg-number-override: var(--text-muted);

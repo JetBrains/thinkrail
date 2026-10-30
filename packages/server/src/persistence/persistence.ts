@@ -13,6 +13,7 @@ import {
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
+	normalizeFontSettings,
 	normalizeThemePreference,
 	type Project,
 	type SessionCompletion,
@@ -410,6 +411,7 @@ export function loadConfig(): AppConfig {
 		disabledPackages: storedNameList(value.disabledPackages),
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: value.onboardingDismissed === true,
+		...normalizeFontSettings(value),
 	};
 }
 

@@ -14,6 +14,7 @@ import { flushSync } from "react-dom";
 import "@xterm/xterm/css/xterm.css";
 import { i18n, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { fontsLoaded, onFontsChange, resolveFont } from "@thinkrail/ui/fonts";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
 import { cssColorToHex } from "@/lib";
@@ -137,11 +138,13 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const focusedTab =
 			initialFocusTarget instanceof Element ? initialFocusTarget.closest('[role="tab"]') : null;
 		const initialFocusRequestsTerminal = focusedTab?.parentElement?.dataset.kind === "terminal";
+		const font = resolveFont("tr-code-block");
 		const term = new XTerm({
 			allowProposedApi: true,
 			cursorBlink: true,
-			fontSize: Number.parseFloat(cssVar("--tr-font-size-s13") ?? "") || 13,
-			fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
+			fontSize: font.size || 13,
+			fontFamily: font.family || "monospace",
+			fontWeight: font.weight || "normal",
 			theme: readTheme(),
 			minimumContrastRatio: contrastFloor(),
 			scrollback: 5000,
@@ -349,6 +352,22 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			term.options.theme = readTheme();
 			term.options.minimumContrastRatio = contrastFloor();
 		});
+		let fontGeneration = 0;
+		const stopFontsWatch = onFontsChange(() => {
+			const next = resolveFont("tr-code-block");
+			const { fontFamily, fontSize, fontWeight } = term.options;
+			if (fontFamily === next.family && fontSize === next.size && fontWeight === next.weight)
+				return;
+			fontGeneration = fontGeneration + 1;
+			const generation = fontGeneration;
+			void fontsLoaded(next).then(() => {
+				if (disposed || generation !== fontGeneration) return;
+				term.options.fontFamily = next.family;
+				term.options.fontSize = next.size;
+				term.options.fontWeight = next.weight;
+				applyFit();
+			});
+		});
 
 		return () => {
 			disposed = true;
@@ -358,6 +377,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			clearTimeout(fitTimer);
 			resizeObserver.disconnect();
 			stopThemeWatch();
+			stopFontsWatch();
 			onData.dispose();
 			onViewportScroll.dispose();
 			onBufferWrite.dispose();

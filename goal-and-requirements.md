@@ -135,9 +135,14 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Themes** — light, dark, minimal and high-contrast themes ship built-in, following the system
   appearance or a fixed choice; a user adds a theme by saving a copy of a bundled theme file with new
   colours in `~/.thinkrail/themes`, live on save ([[submodule-web-themes]]).
+- **Fonts** — the interface and code fonts are the user's choice among the bundled faces, the fonts
+  installed on the host machine, and font files added in Settings (kept in `~/.thinkrail/fonts`), with
+  fallback fonts, a code size, code ligatures and one text-weight knob; one choice per host, applied at
+  once in every window, and a font missing on a device falls back to the bundled face with a warning
+  ([[submodule-web-fonts]], [[submodule-server-fonts]]).
 - **Brand** — ThinkRail green accent (bright on dark themes, deepened on light ones so it clears AA on
   both), a Darcula-family dark background, Orbitron for the brand display role, Geist and JetBrains Mono
-  for UI and code ([[submodule-web-themes]], [[web-typography]]).
+  as the default UI and code faces ([[submodule-web-themes]], [[web-typography]]).
 
 ## Non-goals
 

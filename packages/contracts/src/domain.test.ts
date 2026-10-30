@@ -2,15 +2,21 @@ import { describe, expect, test } from "bun:test";
 import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
+	CODE_FONT_SIZE,
 	clampToCodePoints,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
 	FIRST_PROMPT_MAX_LENGTH,
 	firstPromptHead,
 	firstPromptOfTexts,
+	hasControlCharacter,
 	IMAGE_MAX_BASE64_BYTES,
 	interruptedResource,
+	isCodeFontSize,
 	isDelegationRunDetails,
+	isFontChoice,
+	isFontFamilyRef,
+	isFontWeightOffset,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
 	isLiveResource,
@@ -18,6 +24,7 @@ import {
 	isPlanReviewResult,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	normalizeFontSettings,
 	parsePiPackageInput,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	type ResourceRecord,
@@ -527,5 +534,65 @@ describe("parsePiPackageInput", () => {
 			expect(() => parsePiPackageInput(raw)).not.toThrow();
 			expect(source(raw)).toBe(raw);
 		}
+	});
+});
+
+describe("font settings", () => {
+	test("family refs are a bundled role or a safe family name", () => {
+		expect(isFontFamilyRef({ builtin: "code" })).toBe(true);
+		expect(isFontFamilyRef({ name: "Fira Code" })).toBe(true);
+		expect(isFontFamilyRef({ builtin: "brand" })).toBe(false);
+		expect(isFontFamilyRef({ name: " Fira Code" })).toBe(false);
+		expect(isFontFamilyRef({ name: 'Fira"; color: red' })).toBe(false);
+		expect(isFontFamilyRef({ name: "a".repeat(129) })).toBe(false);
+		expect(isFontFamilyRef({ name: "Fira Code", builtin: "code" })).toBe(false);
+	});
+
+	test("a choice holds an optional family and at most eight distinct fallbacks", () => {
+		expect(isFontChoice(DEFAULT_CONFIG.codeFont)).toBe(true);
+		expect(
+			isFontChoice({ family: { name: "Fira Code" }, fallbacks: [{ name: "MesloLGS NF" }] }),
+		).toBe(true);
+		expect(isFontChoice({ family: null, fallbacks: [{ name: "A" }, { name: "A" }] })).toBe(false);
+		expect(
+			isFontChoice({
+				family: null,
+				fallbacks: Array.from({ length: 9 }, (_, index) => ({ name: `F${index}` })),
+			}),
+		).toBe(false);
+		expect(isFontChoice({ family: "Fira Code", fallbacks: [] })).toBe(false);
+	});
+
+	test("font settings normalize field by field to their own defaults", () => {
+		const settings = {
+			interfaceFont: { family: { builtin: "code" as const }, fallbacks: [] },
+			codeFont: { family: { name: "Fira Code" }, fallbacks: [{ name: "MesloLGS NF" }] },
+			codeFontSize: 15,
+			codeLigatures: true,
+			fontWeightOffset: -30,
+		};
+		expect(normalizeFontSettings({ ...settings, theme: "dark" })).toEqual(settings);
+		expect(
+			normalizeFontSettings({
+				interfaceFont: { family: "Inter" },
+				codeFont: settings.codeFont,
+				codeFontSize: 99,
+				codeLigatures: "yes",
+				fontWeightOffset: 15,
+			}),
+		).toEqual({ ...normalizeFontSettings(DEFAULT_CONFIG), codeFont: settings.codeFont });
+		expect(normalizeFontSettings(null)).toEqual(normalizeFontSettings(DEFAULT_CONFIG));
+		expect(hasControlCharacter("Fira\u0007Code")).toBe(true);
+		expect(hasControlCharacter("Fira Code")).toBe(false);
+	});
+
+	test("code size and weight offset are bounded integers", () => {
+		expect(isCodeFontSize(CODE_FONT_SIZE.default)).toBe(true);
+		expect(isCodeFontSize(9)).toBe(false);
+		expect(isCodeFontSize(13.5)).toBe(false);
+		expect(isFontWeightOffset(-70)).toBe(true);
+		expect(isFontWeightOffset(130)).toBe(true);
+		expect(isFontWeightOffset(15)).toBe(false);
+		expect(isFontWeightOffset(140)).toBe(false);
 	});
 });

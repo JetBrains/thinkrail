@@ -48,7 +48,7 @@ import {
 	threadLineRange,
 	usePierreFocus,
 } from "./pierreReview";
-import { usePierreVirtualizer } from "./pierreVirtualizer";
+import { useCodeRowHeight, usePierreVirtualizer } from "./pierreVirtualizer";
 
 type DiffAnnotationMetadata =
 	| { kind: "thread"; id: string }
@@ -526,9 +526,10 @@ function PierreDiffSurface({
 }
 
 export default function PierreDiff(props: ResourceDiffProps) {
+	const rowHeight = useCodeRowHeight();
 	return (
 		<PierreProvider>
-			<PierreDiffSurface {...props} />
+			<PierreDiffSurface key={rowHeight} {...props} />
 		</PierreProvider>
 	);
 }

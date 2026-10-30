@@ -12,6 +12,8 @@ parent: module-web
 weight, line-height, letter-spacing, transform and semantic text style lives there; the CSS the app
 ships is *generated* from it. No component may declare a typography value, no hand-written utility may
 add one, and no other file may hold an alias onto one — change the type of anything by editing the JSON.
+The few [user-adjustable tokens](#user-adjustable-tokens) take their **defaults** from it too; the user's
+font settings override them at runtime, and only on `:root`.
 
 ```
 styles/typography.json            the source (see typography.schema.json for the shape)
@@ -31,8 +33,9 @@ styles/generated/typography.css   GENERATED, committed, never edited by hand
 `bun test` also runs the guard rails: `styles/typography.test.ts` (source + generated output) and
 `styles/typographyUsage.test.ts` (adoption across app source, `packages/ui`, and every extension web
 half, using the shared source scanner). `e2e/typography.spec.ts` asserts *computed* styles on the
-real surfaces (hero, dialog/card titles, entity rows, branch metadata, eyebrow, Monaco, xterm,
-both markdown surfaces, the `<body>` base).
+real surfaces (hero, dialog/card titles, entity rows, branch metadata, eyebrow, Monaco, xterm, Pierre,
+both markdown surfaces, the `<body>` base) and that each user-adjustable token reaches exactly the
+surfaces it governs.
 
 > **On the schema.** `typography.schema.json` is the contract an editor reads via `$schema` — it gives
 > completion and inline errors while you edit. It is **not** the gate: there is no JSON Schema validator
@@ -45,9 +48,9 @@ both markdown surfaces, the `<body>` base).
 
 | Group | Ids |
 |---|---|
-| `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` → **Orbitron Variable** (self-hosted `@fontsource-variable/orbitron`, a distinct display face for the brand role — `wordmark` + `hero`; it was formerly a `$ref` to `interface`). Orbitron is **latin-only** and `brand.hero` renders a project's own name, so the stack falls back to the *interface* face before any system font — a non-Latin name lands on Geist (cyrillic/latin-ext/vietnamese, already bundled) rather than on whatever the OS supplies |
-| `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 400 · `button` 470 |
-| `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px) |
+| `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only; both `userSelectable`, `code` with `ligatures: none`) · `brand` → **Orbitron Variable** (self-hosted `@fontsource-variable/orbitron`, a distinct display face for the brand role — `wordmark` + `hero`; it was formerly a `$ref` to `interface`). Orbitron is **latin-only** and `brand.hero` renders a project's own name, so the stack falls back to the *interface* face before any system font — a non-Latin name lands on Geist (cyrillic/latin-ext/vietnamese, already bundled) rather than on whatever the OS supplies |
+| `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 400 · `button` 470 — the bases the weight offset shifts (`fontWeightOffset.exclude`: `brand`) |
+| `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px); `codeSize` names the code size (`s13`) |
 | `lineHeights` | `compact` 1.25 · `metadata` 1.25 (12px→15px) · `ui` 1.3 (14px→18.2px) · `code` 1.4 · `relaxed` 1.4 (13px→18.2px) · `default` 1.3 (14px→18.2px) · `reading` 1.45 (14px→20.3px) |
 | `letterSpacings` | `normal` · `loose` 0.02em · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
 
@@ -55,7 +58,7 @@ The leading scale is deliberately **dense** (1.25–1.4): Geist’s x-height at 
 the former 1.5–1.6 left an empty band between lines taller than the letters themselves — it read as
 near double spacing. Reading prose — `body.reading`: chat, user messages, documents — is the deliberate exception at
 `reading` 1.45: at the dense value long replies read as a compressed wall, so reading text keeps more leading
-than UI chrome. Monaco and the Pierre diff surface read `--tr-line-height-default` and stay dense; both use a whole-pixel code row (Pierre's virtualizer needs the exact row height). `codeRow` in `typography.json` names its font size and line height, and the generator emits the pre-rounded `--tr-code-row-height`, which Pierre's CSS and its virtualizer both read, because CSS `round()` is missing before Safari 15.4. Values are short exact decimals on purpose: the production minifier rounds custom properties to
+than UI chrome. Monaco and the Pierre diff surface read `--tr-line-height-default` and stay dense; both use a whole-pixel code row (Pierre's virtualizer needs the exact row height). `codeRow` in `typography.json` names its font size — the default dense code size — and line height, and the generator emits the pre-rounded `--tr-code-row-height`, which Pierre's CSS and its virtualizer both read, because CSS `round()` is missing before Safari 15.4. Values are short exact decimals on purpose: the production minifier rounds custom properties to
 five decimals, so a repeating ratio such as 18/14 can never land on a whole pixel (it shipped as `17.9999px`).
 
 **Semantic styles** are what components use. Each names seven primitive references and nothing else, so
@@ -86,11 +89,11 @@ artwork) · **heading** (`xl`, `lg`, `md`, `sm` — the shared document heading 
 (`dialog`, `card`→dialog, `section`, `compact`, `entity`→body.reading)
 · **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow, `caption` — the 10px/compact uppercase
 badge and tile-initial style (row status badges, the topbar project initial), where `eyebrow`'s 18px line would
-not fit, `action`→title.compact, `button` — the shared button label, `ui.default` one weight step heavier, `emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base 13px code style, `document`, `otp`, `textSmall` — an 11px code style for
+not fit, `action`→title.compact, `button` — the shared button label, `ui.default` one weight step heavier, `emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base 13px inline code style, `block` — fenced code at the user's code size, `editor` — code at the dense editor size, `document`, `otp`, `textSmall` — an 11px code style for
 inline code in table cells). `proseSystems` holds one entry per markdown surface, almost entirely aliases
 into the above. Dead aliases are not retained: prose points directly to the semantic style it uses.
 
-**21 canonical definitions + 30 aliases = 51 styles.**
+**23 canonical definitions + 30 aliases = 53 styles.**
 
 One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets **weight only**
 (`--tr-font-weight-medium`), emitted by the generator into each prose system. A complete style there
@@ -128,11 +131,11 @@ The generator derives one class per semantic style, mechanically:
 | `ui.default` · `ui.metadata` | `.tr-text-ui` · `.tr-text-metadata` |
 | `ui.eyebrow` · `ui.labelPill` · `ui.caption` · `ui.action` · `ui.button` · `ui.emphasis` | `.tr-text-eyebrow` · `.tr-text-label-pill` · `.tr-text-caption` · `.tr-text-action` · `.tr-text-button` · `.tr-text-emphasis` |
 | `body.reading` | `.tr-text-reading` |
-| `code.text` · `code.document` · `code.otp` · `code.textSmall` | `.tr-code-text` · `.tr-code-document` · `.tr-code-otp` · `.tr-code-text-small` |
+| `code.text` · `code.block` · `code.editor` · `code.document` · `code.otp` · `code.textSmall` | `.tr-code-text` · `.tr-code-block` · `.tr-code-editor` · `.tr-code-document` · `.tr-code-otp` · `.tr-code-text-small` |
 | `proseSystems.<id>.*` | `.tr-prose-<id>` + one element selector each |
 
 Primitive tokens are also emitted as custom properties — `--tr-font-family-code`,
-`--tr-font-size-s11`, `--tr-line-height-default`, … — for the surfaces that cannot use a class.
+`--tr-font-size-code-dense`, `--tr-line-height-default`, … — for the surfaces that cannot use a class.
 
 **Cascade layers.** Three levels, all deliberate: the token block is unlayered (custom properties have
 nothing to compete with), the `<body>` base sits in `@layer base`, the semantic classes in
@@ -185,7 +188,7 @@ naming its own type. Two exist:
 | h5 | 12 / 500 | 14 / 600 |
 | h6 | 10 / 500 uppercase | 12 / 600 uppercase |
 | inline code | 13 mono | 13 mono |
-| fenced code | 13 mono / 1.54 | 13 mono / 1.5 |
+| fenced code | code size (13) mono / 1.4 (`code.block`) | code size (13) mono / 1.4 (`code.document`) |
 | table body / header | 12 / 370 · 12 / 600 | 14 / 370 · 14 / 600 |
 | table cell inline code | **11 mono / 1.5** (`code.textSmall`) | 13 mono (`code.text`) |
 | `strong` / `b` | weight 500 only | weight 500 only |
@@ -233,6 +236,43 @@ tokens; every one of them is gone, because a second name for a value is the thin
 consumers that cannot use a class read the `--tr-*` tokens directly. Cabinet Grotesk is retired
 repo-wide and must not return.
 
+## User-adjustable tokens
+
+The user's font settings (the host's `AppConfig` font fields) change type through a fixed set of
+custom properties. The generator emits each with the JSON's default; **only the web `fonts`
+module (`apps/web/src/fonts`) writes them, only on `:root`, and only these** — components never set a
+typography value; the font picker's preview rows are the one [permitted exception](#permitted-exceptions).
+`typographyUsage.test.ts` pins the writers by name.
+
+| Token | Default (JSON) | Reaches |
+|---|---|---|
+| `--tr-font-family-interface` | `var(--tr-font-family-interface-default)` (`userSelectable`) | every interface style, the `<body>` base, preflight |
+| `--tr-font-family-code` | `var(--tr-font-family-code-default)` (`userSelectable`) | every code style, Monaco, xterm, Pierre, mermaid, preflight |
+| `--tr-font-size-code` | `var(--tr-font-size-s13)` (`codeSize`) | fenced code in both prose systems (`code.block`, `code.document`), the terminal |
+| `--tr-font-weight-offset` | `0` | every weight primitive but `fontWeightOffset.exclude` (`brand`): `calc(<base> + offset)` |
+| `--tr-font-ligatures-code` | `none` (`fontFamilies.code.ligatures`) | `font-variant-ligatures` of every style on the code family; Pierre via `.pierre-code-surface` |
+| `--tr-code-row-height` | `14px` (`codeRow`, pre-rounded) | Pierre's rows and virtualizer; the runtime rewrites it, rounded in JS, with the code size |
+
+Derived, never written: `--tr-font-size-code-dense` = `calc(var(--tr-font-size-code) - 2px)` (Monaco,
+Pierre, `code.editor`) — the 2px is `codeSize.fontSize` minus `codeRow.fontSize`, so no number lives
+outside the primitives — and the `-default` stacks, which a user stack ends in and the runtime reads the
+bundled face from. Derived tokens resolve where they are declared, so an override must land on `:root`;
+the family tokens are read by each style directly, which is what lets the font picker scope one on a row.
+A style names the code sizes as `"fontSize": "code"` / `"codeDense"`; validation reserves those ids, `offset`
+and `<family>Default`, and keeps the dense size below the code size. A JS reader gets the dense token
+unresolved (`calc(13px - 2px)`), so it resolves it through an element's computed `font-size`.
+
+- **Code size split.** Blocks and the terminal take the code size; Monaco and Pierre stay 2px smaller;
+  inline code — `code.text` (13px) in prose and UI, `code.textSmall` (11px) — keeps its fixed size, so it
+  stays in proportion with the text around it.
+- **Ligatures default off** for every code surface (chat and document code blocks used to draw
+  JetBrains Mono's); the setting turns them on. xterm never draws them.
+- **Brand is fixed.** The `brand` family is not selectable and spells its interface fallback faces
+  literally, and its weight is excluded from the offset, so no user setting reaches the wordmark or hero.
+- **Host defaults mirror the JSON.** `DEFAULT_CONFIG`'s `codeFontSize`, `codeLigatures` and
+  `fontWeightOffset` equal these defaults (the runtime writes nothing at a default); `typography.test.ts`
+  pins them.
+
 ## Mono policy
 
 `code` is for **code and technical content only**: editor and terminal text, code blocks, inline code,
@@ -241,6 +281,7 @@ keycaps, raw tool output, and the OTP exception. It is **never** used for projec
 branch or base refs, model names or ids, skill names, labels, tags, ordinary metadata or statuses —
 those are proportional. Validation enforces this: a monospace family on a non-code style fails
 `typography:validate`, as does a code style on a proportional family, as does a monospace `rootStyle`.
+The policy governs the JSON defaults; a user may still pick a monospaced interface font at runtime.
 
 ## Weight policy
 
@@ -254,6 +295,8 @@ those are proportional. Validation enforces this: a monospace family on a non-co
 - **600** — dialog titles, card titles, alert titles, every `heading.*`, chat prose h1–h3, document
   prose h1–h6 and table headers.
 
+The user's weight offset shifts every one of these together (brand excepted), so the hierarchy holds.
+
 Disabled control colors come from `control-disabled-bg` / `control-disabled-text`; disabled non-control
 text uses `text-disabled`. Typography does not encode disabled state, and controls do not use opacity to
 simulate it.
@@ -265,11 +308,12 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 
 | Surface | Why it cannot use a semantic class |
 |---|---|
-| `resource-renderers/support/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
+| `resource-renderers/support/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `fontWeight` / `fontLigatures` / `lineHeight` as JS options — it resolves the generated `.tr-code-editor` style through `@thinkrail/ui/fonts`' `resolveFont` (the dense size is an unresolved `calc()` token) and reads `--tr-line-height-default`, so it cannot drift from Pierre's dense rows |
 | `resource-renderers/renderers/code/pierreVirtualizer.ts` | Pierre's virtualizer takes its row height as a JS metric — it reads the generated `--tr-code-row-height`, the same value `.pierre-code-surface` gives `--diffs-line-height` |
-| `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-code` + `--tr-font-size-s13` (the primitives behind `code.text`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
+| `panels/TerminalInstance.tsx` | xterm, same reason — it resolves the generated `.tr-code-block` style (family, code size, weight) through `resolveFont`, re-reads it on `onFontsChange`, and owns row height through its own `lineHeight` option rather than a CSS line-height |
 | `thinkrail-extensions/visualize/web/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
-| `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves; `.pierre-code-surface` passes the code family, `s11`, and the default line-height (rounded to whole pixels) into Pierre's Shadow DOM |
+| `panels/FontPicker.tsx` | each picker row draws its family in that face by scoping `--tr-font-family-interface` on the row element — the one token write outside `fonts/`, and never on `:root` |
+| `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves; `.pierre-code-surface` passes the code family, the dense size, the code row height and the code ligatures (`font-variant-ligatures`, which Pierre's Shadow DOM inherits; its `--diffs-font-features` stays unset) into Pierre's Shadow DOM, and `.xterm .xterm-rows` pins `font-variant-ligatures: none`, because xterm's DOM renderer joins same-styled cells into one text run and the terminal never draws ligatures |
 
 The OTP code is **not** an exception any more: it is the named `code.otp` style (`.tr-code-otp`).
 

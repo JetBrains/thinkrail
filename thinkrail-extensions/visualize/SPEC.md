@@ -76,7 +76,9 @@ without rendering. Invalid or streaming arguments remain defensive and tool erro
 result text.
 
 `MermaidView` derives mermaid's strict-mode theme from the host's CSS variables and re-renders after a
-completed `data-theme` swap. It pins `look: "classic"` and `layout: "dagre"`: mermaid 12's defaults add node glow
+completed `data-theme` swap, or after a font settings change that moves the code family (resolved from
+`.tr-code-block`, re-rendered once that face has loaded); weight-only changes do not re-render, and only the
+latest render applies. It pins `look: "classic"` and `layout: "dagre"`: mermaid 12's defaults add node glow
 shadows and orthogonal edges, which clash with the app's flat surfaces, and re-lay out existing diagrams. It supports a caller-supplied loading fallback, a fullscreen Dialog, and
 pan/zoom controls. The fullscreen canvas owns modifier-wheel zoom and WebKit gesture pinch from its
 local gesture-start baseline so desktop page zoom does not claim the gesture. Renderer failure shows

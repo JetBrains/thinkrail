@@ -123,6 +123,7 @@ import {
 	surveyIsCompleted,
 	surveyResponse,
 } from "../feedback";
+import { fontsDir, listInstalledFonts, readUserFonts } from "../fonts";
 import { readDir, readFile } from "../fs";
 import {
 	commitsAheadOf,
@@ -999,6 +1000,14 @@ const handlers: WsHandlers = {
 	"themes.list": () => readUserThemes(),
 	"themes.reveal": () => {
 		const dir = themesDir();
+		mkdirSync(dir, { recursive: true });
+		revealInFileManager(dir);
+		return { ok: true } as const;
+	},
+	"fonts.list": () => readUserFonts(),
+	"fonts.installed": () => listInstalledFonts(),
+	"fonts.reveal": () => {
+		const dir = fontsDir();
 		mkdirSync(dir, { recursive: true });
 		revealInFileManager(dir);
 		return { ok: true } as const;

@@ -7,6 +7,12 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
+import {
+	applyFontPreference,
+	DEFAULT_FONT_PREFERENCE,
+	installUserFonts,
+	writeFontsHint,
+} from "../fonts";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
@@ -33,7 +39,9 @@ import {
 } from "../themes";
 import {
 	type ConnectionStatus,
+	hostUrl,
 	runHostUpdate,
+	supportsFonts,
 	supportsHostUpdateRun,
 	supportsUserThemes,
 } from "../transport";
@@ -121,6 +129,35 @@ export function Shell() {
 		systemThemePair,
 		userThemes,
 		userThemesUnsupported,
+	]);
+	const interfaceFont = useAppStore((s) => s.interfaceFont);
+	const codeFont = useAppStore((s) => s.codeFont);
+	const codeFontSize = useAppStore((s) => s.codeFontSize);
+	const codeLigatures = useAppStore((s) => s.codeLigatures);
+	const fontWeightOffset = useAppStore((s) => s.fontWeightOffset);
+	const userFonts = useAppStore((s) => s.userFonts);
+	const fontsSupported = supportsFonts(protocolVersion);
+	useEffect(() => {
+		if (welcomeGeneration === 0) return;
+		if (!fontsSupported) {
+			installUserFonts([]);
+			applyFontPreference(DEFAULT_FONT_PREFERENCE);
+			writeFontsHint(DEFAULT_FONT_PREFERENCE, []);
+			return;
+		}
+		const preference = { interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset };
+		if (userFonts) installUserFonts(userFonts.files, hostUrl);
+		applyFontPreference(preference);
+		if (userFonts) writeFontsHint(preference, userFonts.files);
+	}, [
+		welcomeGeneration,
+		fontsSupported,
+		interfaceFont,
+		codeFont,
+		codeFontSize,
+		codeLigatures,
+		fontWeightOffset,
+		userFonts,
 	]);
 	useGlobalHotkeys({
 		onProjects: hasActiveWorkspace

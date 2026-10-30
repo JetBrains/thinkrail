@@ -1,3 +1,5 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
@@ -91,6 +93,52 @@ test("Monaco and xterm render the generated code family and size", async ({ page
 	const termType = await typeOf(visibleTerminalScreen(page));
 	expect(termType.family).toMatch(CODE_FACE);
 	expect(termType.size).toBe("13px");
+	const termLigatures = () =>
+		visibleTerminalScreen(page).evaluate((el) => getComputedStyle(el).fontVariantLigatures);
+	expect(await termLigatures()).toBe("none");
+	await page.evaluate(() =>
+		document.documentElement.style.setProperty("--tr-font-ligatures-code", "normal"),
+	);
+	try {
+		expect(await termLigatures()).toBe("none");
+	} finally {
+		await page.evaluate(() =>
+			document.documentElement.style.removeProperty("--tr-font-ligatures-code"),
+		);
+	}
+});
+
+test("Pierre diffs take the dense code size, the code row and the code ligatures token", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, "notes.txt"), "a => b !== c\n");
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "notes.txt" }).dblclick();
+	const line = page
+		.getByTestId("diff-view")
+		.locator("[data-line]")
+		.filter({ hasText: "!==" })
+		.last();
+	await expect(line).toBeVisible();
+	const ligatures = () => line.evaluate((el) => getComputedStyle(el).fontVariantLigatures);
+
+	const row = await typeOf(line);
+	expect(row.family).toMatch(CODE_FACE);
+	expect(row).toMatchObject({ size: "11px", lineHeight: "14px" });
+	expect(await ligatures()).toBe("none");
+
+	await page.evaluate(() =>
+		document.documentElement.style.setProperty("--tr-font-ligatures-code", "normal"),
+	);
+	try {
+		expect(await ligatures()).toBe("normal");
+	} finally {
+		await page.evaluate(() =>
+			document.documentElement.style.removeProperty("--tr-font-ligatures-code"),
+		);
+	}
 });
 
 test("the chat and document markdown surfaces each wear their own prose system", async ({
@@ -123,12 +171,15 @@ test("document headings are larger than document body text", async ({ page }) =>
 		const size = (sel: string) =>
 			Number.parseFloat(getComputedStyle(host.querySelector(sel) as Element).fontSize);
 		const weight = (sel: string) => getComputedStyle(host.querySelector(sel) as Element).fontWeight;
+		const ligatures = (sel: string) =>
+			getComputedStyle(host.querySelector(sel) as Element).fontVariantLigatures;
 		const out = {
 			body: size("p"),
 			h: [1, 2, 3, 4, 5, 6].map((n) => size(`h${n}`)),
 			hWeight: [1, 2, 3, 4, 5, 6].map((n) => weight(`h${n}`)),
 			pre: size("pre"),
 			inline: size(":not(pre) > code"),
+			ligatures: [ligatures("pre"), ligatures("pre code"), ligatures(":not(pre) > code")],
 		};
 		host.remove();
 		return out;
@@ -144,6 +195,7 @@ test("document headings are larger than document body text", async ({ page }) =>
 		expect(Number(w), `h${i + 1} weight`).toBeGreaterThanOrEqual(600);
 	expect(measured.pre).toBe(13);
 	expect(measured.inline).toBe(13);
+	expect(measured.ligatures).toEqual(["none", "none", "none"]);
 });
 
 test("the chat prose system stays compact", async ({ page }) => {
@@ -163,12 +215,114 @@ test("the chat prose system stays compact", async ({ page }) => {
 			h2: size("h2"),
 			h3: size("h3"),
 			pre: size("pre"),
+			preLigatures: getComputedStyle(host.querySelector("pre code") as Element)
+				.fontVariantLigatures,
 		};
 		host.remove();
 		return out;
 	});
 
-	expect(measured).toEqual({ body: 14, h1: 18, h2: 14, h3: 12, pre: 13 });
+	expect(measured).toEqual({ body: 14, h1: 18, h2: 14, h3: 12, pre: 13, preLigatures: "none" });
+});
+
+test("the user-adjustable tokens on :root reach exactly the surfaces they govern", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await expect(page.getByTestId("welcome")).toBeVisible();
+
+	const measure = () =>
+		page.evaluate(() => {
+			const host = document.createElement("div");
+			host.innerHTML =
+				'<span class="tr-text-ui">ui</span><span class="tr-brand-hero">brand</span>' +
+				'<code class="tr-code-text">inline</code><code class="tr-code-text-small">small</code>' +
+				'<pre class="tr-code-editor">editor</pre><pre class="tr-code-document">document</pre>' +
+				'<div class="tr-prose-chat"><p><code>inline</code></p><pre><code>block</code></pre></div>' +
+				'<div class="tr-prose-doc"><pre><code>block</code></pre></div>';
+			document.body.appendChild(host);
+			const read = (sel: string) => {
+				const s = getComputedStyle(host.querySelector(sel) as Element);
+				return {
+					family: s.fontFamily,
+					size: s.fontSize,
+					weight: s.fontWeight,
+					ligatures: s.fontVariantLigatures,
+				};
+			};
+			const out = {
+				ui: read(".tr-text-ui"),
+				brand: read(".tr-brand-hero"),
+				inline: read(".tr-code-text"),
+				small: read(".tr-code-text-small"),
+				editor: read(".tr-code-editor"),
+				document: read(".tr-code-document"),
+				chatInline: read(".tr-prose-chat p code"),
+				chatBlock: read(".tr-prose-chat pre code"),
+				docBlock: read(".tr-prose-doc pre code"),
+				interfaceDefault: getComputedStyle(document.documentElement).getPropertyValue(
+					"--tr-font-family-interface-default",
+				),
+			};
+			host.remove();
+			return out;
+		});
+
+	const defaults = await measure();
+	expect(defaults.ui.family).toMatch(INTERFACE_FACE);
+	expect(defaults.ui.weight).toBe("370");
+	for (const key of ["inline", "editor", "chatBlock", "docBlock"] as const)
+		expect(defaults[key], key).toMatchObject({ weight: "400", ligatures: "none" });
+	expect(defaults.chatBlock.family).toMatch(CODE_FACE);
+	expect(
+		[defaults.chatBlock, defaults.docBlock, defaults.document, defaults.editor].map((s) => s.size),
+	).toEqual(["13px", "13px", "13px", "11px"]);
+
+	await page.evaluate(() => {
+		const root = document.documentElement.style;
+		root.setProperty(
+			"--tr-font-family-interface",
+			'"Courier New", var(--tr-font-family-interface-default)',
+		);
+		root.setProperty("--tr-font-family-code", "serif");
+		root.setProperty("--tr-font-size-code", "16px");
+		root.setProperty("--tr-font-weight-offset", "30");
+		root.setProperty("--tr-font-ligatures-code", "normal");
+	});
+	try {
+		const changed = await measure();
+		expect(changed.ui.family).toMatch(/^"Courier New", /);
+		expect(changed.ui.family).toMatch(INTERFACE_FACE);
+		expect(changed.ui.weight).toBe("400");
+		expect(changed.interfaceDefault).toBe(defaults.interfaceDefault);
+		expect(changed.brand, "brand ignores every override").toEqual(defaults.brand);
+		expect(changed.chatBlock).toEqual({
+			family: "serif",
+			size: "16px",
+			weight: "430",
+			ligatures: "normal",
+		});
+		expect(
+			[changed.docBlock, changed.document, changed.editor].map((s) => s.size),
+			"blocks follow the code size, the editor sample stays 2px below it",
+		).toEqual(["16px", "16px", "14px"]);
+		expect(
+			[changed.inline, changed.chatInline, changed.small].map((s) => s.size),
+			"inline code keeps its fixed size",
+		).toEqual(["13px", "13px", "11px"]);
+		expect(changed.inline).toMatchObject({ family: "serif", ligatures: "normal" });
+	} finally {
+		await page.evaluate(() => {
+			for (const token of [
+				"--tr-font-family-interface",
+				"--tr-font-family-code",
+				"--tr-font-size-code",
+				"--tr-font-weight-offset",
+				"--tr-font-ligatures-code",
+			])
+				document.documentElement.style.removeProperty(token);
+		});
+	}
 });
 
 test("typography survives a narrow mobile viewport without clipping or overflow", async ({

@@ -10,10 +10,12 @@
 		"metadata",
 		"fontFamilies",
 		"fontWeights",
+		"fontWeightOffset",
 		"fontSizes",
 		"lineHeights",
 		"letterSpacings",
 		"rootStyle",
+		"codeSize",
 		"codeRow",
 		"textStyles",
 		"proseSystems"
@@ -70,6 +72,20 @@
 				"maximum": 900
 			}
 		},
+		"fontWeightOffset": {
+			"description": "The user's text-weight offset (`--tr-font-weight-offset`, 0 by default): every weight primitive is emitted as `calc(<value> + offset)` except the ones named in `exclude`, which stay fixed.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["exclude"],
+			"properties": {
+				"exclude": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/tokenId"
+					}
+				}
+			}
+		},
 		"fontSizes": {
 			"type": "object",
 			"minProperties": 1,
@@ -107,8 +123,17 @@
 			"description": "The `<body>` fallback for text that carries no semantic class. Always a `$ref` naming a semantic style, never values of its own, so the document base can never drift from the system.",
 			"$ref": "#/definitions/ref"
 		},
+		"codeSize": {
+			"description": "The default code size (`--tr-font-size-code`), a `fontSizes` id. A style names it as `\"fontSize\": \"code\"`; the user's code size overrides it at runtime.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["fontSize"],
+			"properties": {
+				"fontSize": { "type": "string" }
+			}
+		},
 		"codeRow": {
-			"description": "The dense code row (Monaco, Pierre). Generated as one whole-pixel height so CSS and a JS virtualizer read the same row without CSS `round()`.",
+			"description": "The dense code row (Monaco, Pierre). Its `fontSize` is the default dense code size, emitted as `--tr-font-size-code-dense` at a fixed distance below the code size (a style names it as `\"fontSize\": \"codeDense\"`). Generated as one whole-pixel height so CSS and a JS virtualizer read the same row without CSS `round()`.",
 			"type": "object",
 			"additionalProperties": false,
 			"required": ["fontSize", "lineHeight"],
@@ -194,6 +219,7 @@
 					"$ref": "#/definitions/tokenId"
 				},
 				"fontSize": {
+					"description": "A `fontSizes` id, or `code` / `codeDense` — the user-adjustable code sizes (`codeSize`, `codeRow`).",
 					"$ref": "#/definitions/tokenId"
 				},
 				"fontWeight": {
@@ -246,6 +272,14 @@
 					"minItems": 1,
 					"items": { "type": "string" },
 					"description": "The npm entry points shipping this family's faces. `generate-typography.ts` turns these into `styles/generated/fonts.css`, and fails when one is not a dependency of apps/web \u2014 or when an installed font package is claimed by no family. Omit for families we do not self-host."
+				},
+				"userSelectable": {
+					"type": "boolean",
+					"description": "The user may replace this family at runtime: its stack is emitted as `--tr-font-family-<id>-default` and the family token as `var(…-default)`, the property the web `fonts` module overrides."
+				},
+				"ligatures": {
+					"enum": ["normal", "none"],
+					"description": "The default `font-variant-ligatures` of every style on this family, emitted as `--tr-font-ligatures-<id>` so the user's setting can override it."
 				}
 			}
 		}
