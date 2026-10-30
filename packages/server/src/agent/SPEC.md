@@ -202,7 +202,10 @@ re-opened transcripts provider-valid.
       `headers` reach the new one. An edit may change the path within the same origin; a different server
       is added as a new one, with a new id. A save is also refused while a model or model override routes
       to its own `baseUrl` on another origin, which the form neither shows nor manages. An empty key writes
-      the `thinkrail-no-key` placeholder pi needs to count the provider as available.
+      the `thinkrail-no-key` placeholder pi needs to count the provider as available. For the same reason
+      a new server's id is never reused: it is `custom-<name or host slug>-<6 random hex>`, so removing a
+      server and adding another with the same name can't hand the new key to a chat still open on the old
+      one.
     - A save or removal that changes the file refreshes the runtime (best-effort; a refresh failure is
       logged, since the file is already written) and publishes `provider.changed`; a no-op does neither.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its

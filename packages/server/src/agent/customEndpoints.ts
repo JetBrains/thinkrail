@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import {
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	type CustomEndpoint,
@@ -348,8 +349,9 @@ function newEndpointId(name: string, baseUrl: string, config: Node | undefined):
 	const host = parseBaseUrl(baseUrl);
 	const fallback = host ? slug(new URL(host).hostname) : "";
 	const base = `${CUSTOM_ENDPOINT_ID_PREFIX}${slug(name) || fallback || "server"}`;
-	let id = base;
-	for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+	let id: string;
+	do id = `${base}-${randomBytes(3).toString("hex")}`;
+	while (taken.has(id));
 	return id;
 }
 

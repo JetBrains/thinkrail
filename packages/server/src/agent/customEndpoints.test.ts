@@ -267,7 +267,9 @@ test("save writes only reported facts with derived output and conservative compa
 	});
 	expect(published).toBe(1);
 	expect(readFileSync(path, "utf8")).toContain("// mine");
-	const provider = providers()["custom-company-gateway"];
+	const id = endpoints[0]?.id ?? "";
+	expect(id).toMatch(/^custom-company-gateway-[0-9a-f]{6}$/);
+	const provider = providers()[id];
 	expect(provider).toEqual({
 		name: "Company gateway",
 		baseUrl: "https://llm.corp.example/v1",
@@ -299,7 +301,7 @@ test("save writes only reported facts with derived output and conservative compa
 	expect(providers().ollama).toEqual({ baseUrl: "http://x/v1" });
 	expect(endpoints).toEqual([
 		{
-			id: "custom-company-gateway",
+			id,
 			name: "Company gateway",
 			baseUrl: "https://llm.corp.example/v1",
 			hasApiKey: true,
@@ -315,13 +317,14 @@ test("save writes only reported facts with derived output and conservative compa
 
 test("saved endpoints become available pi models, and a keyless one gets pi's placeholder", async () => {
 	const pi = await runtime();
-	await saveCustomEndpoint({
+	const [saved] = await saveCustomEndpoint({
 		name: "Ollama",
 		baseUrl: "http://127.0.0.1:11434/v1",
 		models: [model("qwen3:14b", { contextWindow: 40_960 })],
 	});
-	expect(providers()["custom-ollama"]?.apiKey).toBe("thinkrail-no-key");
-	const available = settledAvailableModels(pi).find((m) => m.provider === "custom-ollama");
+	const id = saved?.id ?? "";
+	expect(providers()[id]?.apiKey).toBe("thinkrail-no-key");
+	const available = settledAvailableModels(pi).find((m) => m.provider === id);
 	expect(available).toMatchObject({ id: "qwen3:14b", contextWindow: 40_960 });
 	expect((await listCustomEndpoints())[0]?.hasApiKey).toBe(false);
 });
@@ -492,18 +495,33 @@ test("a name with no Latin letters takes its id from the server's host", async (
 		baseUrl: "https://llm.corp.example/v1",
 		models: [model("m")],
 	});
-	expect(endpoint?.id).toBe("custom-llm-corp-example");
+	expect(endpoint?.id).toMatch(/^custom-llm-corp-example-[0-9a-f]{6}$/);
 	expect(endpoint?.name).toBe("Корпоративный шлюз");
+});
+
+test("a removed server's id is never handed to the next one, so an open chat can't reach the new server's key", async () => {
+	await runtime();
+	const draft = { name: "Gateway", baseUrl: "https://a.example/v1", models: [model("m")] };
+	const [first] = await saveCustomEndpoint(draft);
+	await removeCustomEndpoint(first?.id ?? "");
+	const [second] = await saveCustomEndpoint({
+		...draft,
+		baseUrl: "https://b.example/v1",
+		apiKey: "sk-b",
+	});
+	expect(first?.id).toMatch(/^custom-gateway-[0-9a-f]{6}$/);
+	expect(second?.id).toMatch(/^custom-gateway-[0-9a-f]{6}$/);
+	expect(second?.id).not.toBe(first?.id);
 });
 
 test("a re-detected smaller context never keeps an output budget that no longer fits", async () => {
 	await runtime();
-	await saveCustomEndpoint({
+	const [saved] = await saveCustomEndpoint({
 		name: "vLLM",
 		baseUrl: "http://gpu:8000/v1",
 		models: [model("m", { contextWindow: 4_096, maxTokens: 16_384 })],
 	});
-	expect(providers()["custom-vllm"]?.models).toEqual([
+	expect(providers()[saved?.id ?? ""]?.models).toEqual([
 		expect.objectContaining({ contextWindow: 4_096, maxTokens: 1_024 }),
 	]);
 });

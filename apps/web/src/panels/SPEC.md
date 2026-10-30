@@ -782,7 +782,8 @@ a project picker, the prompt hero, and the reused
   field); a "configured outside the app" note for rows with neither flag; **`CustomEndpointsSettings`**
   (v101, hidden below `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; re-read on `providerVersion`) — the **Custom
   servers** group listing every `customEndpoints.list` endpoint (name, address, model count; **Edit** and a
-  **Remove** icon behind a `ConfirmDialog`) plus **Add server**. Providers the group lists are filtered out of the
+  **Remove** icon behind a `ConfirmDialog`) plus **Add server**. The page's **Refresh** reloads the list together with
+  `provider.status`. Providers the group lists are filtered out of the
   generic provider rows so each appears once (only listed ids: an unlisted `custom-*` provider, or any on
   a host without the group, stays a generic row); hand-written `models.json` providers stay in Connected as
   "Managed", not repeated here. The dialog is one form for a company gateway and a local server: name,

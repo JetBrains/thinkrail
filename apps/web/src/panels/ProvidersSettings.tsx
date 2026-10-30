@@ -85,7 +85,10 @@ export function ProvidersSettings() {
 					spinIcon
 					data-testid="providers-refresh"
 					aria-label={t("settings.providers.refreshLabel")}
-					onClick={() => void load()}
+					onClick={() => {
+						void load();
+						void customEndpoints?.load();
+					}}
 				>
 					{t("settings.providers.refresh")}
 				</Button>

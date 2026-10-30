@@ -120,11 +120,12 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 	await expect(dialog).toHaveCount(0);
 
 	const endpoint = group.locator(
-		'[data-testid="custom-endpoints-endpoint"][data-endpoint="custom-company-gateway"]',
+		'[data-testid="custom-endpoints-endpoint"][data-endpoint^="custom-company-gateway-"]',
 	);
 	await expect(endpoint).toContainText(`${origin}/v1`);
+	const providerId = (await endpoint.getAttribute("data-endpoint")) ?? "";
 	const saved = JSON.parse(readFileSync(modelsPath, "utf8"));
-	expect(saved.providers["custom-company-gateway"]).toMatchObject({
+	expect(saved.providers[providerId]).toMatchObject({
 		name: "Company gateway",
 		api: "openai-completions",
 		baseUrl: `${origin}/v1`,
@@ -133,7 +134,7 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 		models: [{ id: MODEL, contextWindow: 65_536, maxTokens: 16_384 }],
 	});
 	await expect(
-		page.locator('[data-testid="provider-row"][data-provider="custom-company-gateway"]'),
+		page.locator(`[data-testid="provider-row"][data-provider="${providerId}"]`),
 	).toHaveCount(0);
 	await shot(group, "providers-settings", "custom-endpoints");
 
@@ -142,7 +143,7 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 		await expect
 			.poll(async () =>
 				(await wire.request("model.list", {})).some(
-					(model) => model.provider === "custom-company-gateway" && model.id === MODEL,
+					(model) => model.provider === providerId && model.id === MODEL,
 				),
 			)
 			.toBe(true);
@@ -155,10 +156,10 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 	await page.keyboard.press("Escape");
 	await page.getByTestId("model-selector").last().click();
 	await revealModelGroups(page);
-	await expandModelGroup(page, "custom-company-gateway");
+	await expandModelGroup(page, providerId);
 	await page
 		.locator(
-			`[data-testid="model-option"][data-provider="custom-company-gateway"][data-model-id="${MODEL}"]`,
+			`[data-testid="model-option"][data-provider="${providerId}"][data-model-id="${MODEL}"]`,
 		)
 		.click();
 	await page.getByTestId("chat-input").fill("Say hello");
@@ -182,9 +183,16 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 	await dialog.getByTestId("custom-endpoints-save").click();
 	await expect(dialog).toHaveCount(0);
 	await expect(endpoint).toContainText("Gateway");
-	expect(
-		JSON.parse(readFileSync(modelsPath, "utf8")).providers["custom-company-gateway"],
-	).toMatchObject({ name: "Gateway", apiKey: KEY });
+	expect(JSON.parse(readFileSync(modelsPath, "utf8")).providers[providerId]).toMatchObject({
+		name: "Gateway",
+		apiKey: KEY,
+	});
+
+	const external = JSON.parse(readFileSync(modelsPath, "utf8"));
+	external.providers[providerId].name = "Renamed outside the app";
+	writeFileSync(modelsPath, JSON.stringify(external));
+	await page.getByTestId("providers-refresh").click();
+	await expect(endpoint).toContainText("Renamed outside the app");
 
 	await endpoint.getByTestId("custom-endpoints-remove").click();
 	await page.getByTestId("custom-endpoints-remove-confirm").click();
