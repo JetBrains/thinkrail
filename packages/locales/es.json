@@ -1566,7 +1566,7 @@
 	"settings.environment.vars.show": "Mostrar valor",
 	"settings.environment.vars.value": "Valor de la variable",
 	"settings.extensions.changeFailed": "No se pudo cambiar la extensión",
-	"settings.extensions.description": "Las extensiones de ThinkRail que este host ofrece al agente. Si desactivas una, sus herramientas y habilidades se quitan de los chats nuevos y de los chats abiertos en cuanto termina su turno actual; los resultados anteriores se siguen mostrando. Tu elección se guarda en el host y te acompaña en todos los dispositivos.",
+	"settings.extensions.descriptionBundledOnly": "Las extensiones de ThinkRail que este host ofrece al agente. Si desactivas una, sus herramientas y habilidades se quitan de los chats nuevos y de los chats abiertos en cuanto termina su turno actual; los resultados anteriores se siguen mostrando. Tu elección se guarda en el host y te acompaña en todos los dispositivos.",
 	"settings.extensions.empty": "Este host no tiene extensiones de ThinkRail registradas.",
 	"settings.extensions.enable": "Habilitar {{title}}",
 	"settings.extensions.loadFailed": "No se pudieron cargar las extensiones de este host.",

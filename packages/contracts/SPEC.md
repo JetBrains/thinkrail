@@ -57,6 +57,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `USER_THEMES_PROTOCOL_VERSION`, v92, with each ok file's `manifest` deliberately `unknown` because the
   theme schema is owned by [[submodule-web-themes]]),
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
+  `parsePiPackageInput` (§ pi packages),
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
   `FIRST_PROMPT_MAX_LENGTH` + **`firstPromptHead(text)`** + **`firstPromptOfTexts(texts)`** +
@@ -722,7 +723,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   frames to the workspaces whose diff base that ref is, so their git-derived reads re-converge) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
   per-skill `decision` + `group` — for a `workspaceId`) / **`extension.list`** (`ExtensionCatalogEntry[]`,
   no params — the host registry joined with `disabledExtensions`; v82, **`EXTENSION_CATALOG_PROTOCOL_VERSION`**;
-  there is no write method — the Settings switch writes `settings.update { disabledExtensions }`) / **`project.skills`** (the same, project-scoped, for
+  there is no write method — the Settings switch writes `settings.update { disabledExtensions }`) / **`packages.*`**
+  (installed pi packages; v99, § pi packages below) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
   `session.*` — `create`/`prompt`/`steer`/`followUp`/**`clearQueue`** (drain Pi's steering+followUp
@@ -1044,6 +1046,81 @@ contracts only.
 - Error codes: `MCP_CONFIG_INVALID` (pi-equivalent validation failed, or a write precondition above does
   not hold), `MCP_PATH_UNSAFE` (symlinked or non-regular project config path), `MCP_HANDLED_ELSEWHERE`,
   `LOGIN_NOT_OWNER`.
+
+## pi packages
+
+`PI_PACKAGES_PROTOCOL_VERSION` (100) gates the `packages.*` methods, the `packages.changed` channel and
+the `disabledPackages` setting. The DTOs describe what the host reads through pi's `DefaultPackageManager`
+and what it loaded, never pi's own types.
+
+- **`parsePiPackageInput(raw)`** (value export from `domain`) is the one reading of the Install field,
+  shared by the web dialog (echo, display name) and the host (`installPiPackage`, which receives the raw
+  text), so both agree by construction. It returns `{ source, local, bareName? }` and never throws: a
+  pasted `pi install [flags] <source>` line yields its source with `local: true` for `-l` / `--local`
+  (the dialog then selects the repository scope when one is available); a
+  `https://pi.dev/packages/<name>` or `https://[www.]npmjs.com/package/<name>[/v/<version>]` URL
+  (percent-encoded or not; a malformed encoding falls back to the raw text) yields `npm:<name>[@version]`;
+  a pasted command is read with shell quoting and backslash escapes (`pi install -l "./my tools"`,
+  `./my\ tools`) and names nothing when it has zero or several source words;
+  a bare npm spec (`@scope/name`, `name`, either with `@version`) yields `npm:…` with `bareName` set
+  unless it ends in an extension-file suffix (`.ts`, `.js`, …), which stays a path — the host prefers a
+  folder or file of that bare name when one exists next to the workspace, as pi's CLI would read it.
+  Everything else — `npm:` / `git:` / `builtin:` / `file:` sources, git URLs, absolute, `~` and
+  relative paths — is returned trimmed, so pi's own syntax keeps working unchanged. Deliberately not
+  inferred: `owner/repo` as a git shorthand (pi reads it as a path).
+
+- **`PiPackagesCatalog`** — `agentDir` and `settingsPath` (the effective pi folder; a client never hardcodes
+  `~/.pi/agent`), `projectSettingsPath` + `projectTrusted` when read for a workspace, then three groups:
+  `packages: PiPackageSummary[]` (one per declaration, with or without loadable resources; a
+  declaration with no install on disk has no `installedPath` and is the "Not installed" row; a user
+  declaration pi leaves aside because the repository declares the same identity is a row marked
+  `shadowed`), `loose: PiLooseExtension[]` (extensions pi discovers outside
+  any package — `<agentDir>/extensions`, `.pi/extensions`, explicit `extensions[]` entries) and `builtins:
+  PiBuiltinExtension[]` (the two pi built-ins the host runs, `mcp` and `tool-search`). There is no
+  "installing" row: installing is the Install dialog's request, and a source declared but absent from
+  disk is pi's to install at a chat's next load — until then it is listed as not installed so it can be
+  removed.
+- **`PiPackageSummary`** — `identity` (the host-wide switch key: npm by name, git by repo without ref, local
+  by resolved path — except a repository declaration's local source inside the worktree, keyed by the
+  repository (its main worktree) and the worktree-relative path so every worktree of the project shares
+  the switch and unrelated repositories do not; the host closes the switch
+  over pi's own equivalence, so switching off any declaration of a package switches off its aliases too), `source` **as declared** (`npm:@scope/pkg@1.2.0`, `../pkgs/tools`), `kind`, `scope`,
+  `name` / `version` / `description` from its `package.json`, `installedPath`, `switchKeys` (every
+  `disabledPackages` key that covers the package: its own `identity` and those of pi-equivalent
+  declarations — a client switching a package on removes them all, off adds `identity`), `enabled`
+  (the host's effective state: `false` when any of `switchKeys` is in `disabledPackages`; a client
+  renders it as is, never recomputes it), `shadowed` (a user declaration pi leaves aside because the
+  repository declares the same identity outright; a repository `autoload: false` override is a delta
+  over the user install, so its resources land on the user row and nothing is shadowed), and
+  `resources: PiPackageResource[]` — every extension, skill and prompt file (themes are terminal-only and
+  never listed) with pi's `enabled` (read-only here: a resource inside a package is switched with its
+  package), pi's `pi config` display name, and for an extension some loader has recorded the `tools`
+  and `commands` it registered or its load `error`. Every row
+  action names its target as `{ source, scope, workspaceId? }`: the same npm package may be declared at
+  user and project scope, and only the switch keys on `identity`.
+- Methods: **`packages.list { workspaceId? }`** (user scope alone without a workspace; repository
+  resources only when the project is pi-trusted) / **`packages.install { source, scope, workspaceId? }`**
+  (resolves to the new row with `enabled: true` — the host clears its `disabledPackages` entry — and is a
+  plain long request: the client sends a generous `timeoutMs`; a timeout does not mean failure, the
+  install may still complete on the host) / **`packages.remove`** / **`packages.update { packages }`**
+  (pi updates every declaration of an identity at both scopes together) / **`packages.checkUpdates`**
+  (the `{ source, scope }` declarations pi reports a newer version for — pi reports no target version
+  and skips pinned npm versions; `force` bypasses the host's short cache for the manual check) / **`packages.setResourceEnabled { path, type, scope, enabled }`**
+  (top-level resources only, written in pi's own format: a `±` pattern in the scope's resource array for
+  a loose file, `±builtin:<name>` in the scope that decides a built-in — the catalog's
+  `PiBuiltinExtension.scope`, which a client must send back; a resource inside a package is refused with
+  `PACKAGE_SOURCE_INVALID`) / **`packages.reveal { path }`**
+  (opens the install folder or a loose file's folder; the path must be in the current catalog). The
+  package switch is `settings.update { disabledPackages }`, converging on `settings.changed` like the
+  extension switches. **`packages.changed`** (no payload) tells an open page to re-list after an outside
+  edit, a chat load that installed something, or an update.
+- Error codes: `PACKAGE_SOURCE_INVALID` (also an unsupported `type` / `scope`, validated at the boundary),
+  `PACKAGE_OFFLINE` (npm/git only; local installs work offline), `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
+  `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
+  `PACKAGE_SETTINGS_WRITE_FAILED`, and `PACKAGE_INSTALLED_UNLISTED` — the declaration was persisted but
+  the host could not produce the row; of the install codes only `PACKAGE_SOURCE_INVALID`,
+  `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_INSTALL_FAILED` and `PACKAGE_SETTINGS_WRITE_FAILED`
+  are raised before anything is written, and a client may claim "nothing was added" only for those.
 
 ## Normalized session state
 

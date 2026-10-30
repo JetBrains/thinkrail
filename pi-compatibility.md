@@ -142,6 +142,49 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   **Removal gate:** pi exports the predicate, or a host-consumable warning event; then drop the copy.
   On upgrades, re-diff the interactive check and its call sites, and run
   `agent/anthropicExtraUsage.test.ts`.
+- **pi package management** — [[submodule-server-agent-packages]], [[submodule-server-agent]]. The
+  Settings → Extensions package catalog and mutations build on pi's public `DefaultPackageManager`
+  (`resolve(onMissing)`, `install`, `remove`, `update`, `checkForAvailableUpdates`,
+  `listConfiguredPackages`, `addSourceToSettings` / `removeSourceFromSettings`) and `SettingsManager`
+  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Eight pi facts the host compensates
+  for, each with its gate:
+  - `resolve()` without `onMissing` installs a declared-but-missing package, and
+    `DefaultResourceLoader.reload()` always calls it that way; the catalog therefore reads with
+    `onMissing → skip`, and the one-off install probe loads through a loader built on
+    `SettingsManager.inMemory({})`.
+    **Gate:** a public no-install resolve or exact-path extension loader.
+  - `pi config`'s toggle writers are a TUI component, not SDK; `mutations.ts` replicates the format for
+    top-level resources only (`±relative` patterns, `±builtin:<name>`) and deliberately keeps a plain
+    explicit `extensions[]` entry beside its `-` override, which the TUI replaces, losing discovery.
+    In-package filters are not written at all (deferred until a public per-resource API: every port of
+    `applyPatterns` / `collectPackageResources` semantics changed what pi loads in some shape). Re-run
+    the round-trip tests through pi's resolver on every bump. **Gate:** a public
+    `setResourceEnabled`-style API.
+  - `getPackageIdentity` is private; `identity.ts` ports it for the host-wide `disabledPackages` key.
+    **Gate:** pi exporting its identity rule.
+  - `installAndPersist` persists before the caller can re-check project trust, and settings writes are
+    queued with swallowed errors; the host sequences `install → trust → addSourceToSettings → flush →
+    drainErrors`. **Gate:** a persist step that reports failure and accepts a trust predicate.
+  - A local *input* source is matched against the process cwd while a *declared* one is stored relative
+    to its settings file (`getSourceMatchKeyForInput` vs `…ForSettings`); mutations pass absolute paths,
+    normalised by a port of pi's private `resolvePath` (`~`, `file://`) in `resolveLocalSource`.
+    **Gate:** pi matching declared strings by settings scope, or exporting `resolvePath`.
+  - `isOfflineModeEnabled` (`PI_OFFLINE` ∈ `1|true|yes`) is private and pi's `install` / `update` turn
+    into silent no-ops offline; `identity.ts` ports the rule so the host can refuse with `PACKAGE_OFFLINE`.
+    **Gate:** pi exporting the predicate or throwing a typed error offline.
+  - `SettingsManager.save()` / `saveProjectSettings()` silently skip a scope whose file failed to parse
+    (private `*SettingsLoadError`); `drainErrors()` is the only signal, so mutations read it per scope
+    before writing. **Gate:** a save that reports the skip.
+  - pi's extension-factory cache is process-wide and is cleared only by a loaded loader's `reload()`;
+    `clearExtensionCache` is not exported. `advancePiExtensionCache` reloads an empty loader twice
+    before the boot runtime and before the install probe. **Gate:** an exported clearer or a per-loader
+    cache.
+  Also relied on: `SettingsManager.getGlobalSettings` / `getProjectSettings` are the only reads pi's
+  package manager makes of declarations, so patching them per instance hides a switched-off package —
+  or every package, for a loader that resolves none — from every install-capable resolve
+  (`createPiSettings`; **gate:** a loader option to exclude declarations); `PackageUpdate`
+  carries no target version; pi skips pinned npm versions in update checks; pi classifies `git@host:…`
+  and `github:…` sources as local paths.
 - **Anthropic SSE framing patch** — [[submodule-server-agent]] (Provider stream framing),
   `patches/@earendil-works%2Fpi-ai@1.4.0.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
   streams fail with the non-retryable "Could not parse Anthropic SSE event": a valid CRLF stream whose

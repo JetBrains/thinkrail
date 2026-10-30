@@ -5,7 +5,7 @@ status: active
 title: agent — in-process pi sessions
 parent: module-server
 depends-on: [module-contracts, module-pi-delegation, module-pi-subagents, module-pi-background-commands]
-references: [module-spec-graph, central-integration, submodule-server-extensions]
+references: [module-spec-graph, central-integration, submodule-server-extensions, submodule-server-agent-packages]
 tags: [pi]
 ---
 
@@ -763,6 +763,36 @@ re-opened transcripts provider-valid.
     false`), then withholds disabled ones. Built-in, MCP, subagent and review tools keep Pi's restored
     selection. A registry tool switched off by anything other than Settings therefore returns after a
     restart, as it does on Pi `reload()`.
+    **Installed pi packages** have a switch of the same global shape, `setDisabledPackagesResolver`
+    (the `disabledPackages` setting; keys are [[submodule-server-agent-packages]] identities, since pi has
+    no "whole package off" concept and the user chose a ThinkRail setting over writing pi filter entries).
+    It is applied where pi reads declarations, not where it emits resources: every `SettingsManager`
+    the host opens comes from [[submodule-server-agent-packages]]' **`createPiSettings(cwd, agentDir,
+    { projectTrusted, packages })`**, whose `packages` view is `all` (the host's own reads and writes:
+    the catalog, the mutations), `enabled` (anything that loads resources for a chat —
+    `buildSessionSettings`, so parents and delegated children share it, `listSkillCommands`,
+    `listSkillCatalog`; the switched-off declarations are hidden from `getGlobalSettings` /
+    `getProjectSettings`, re-evaluated on every read) or `none` (a loader that resolves nothing from
+    packages — the boot runtime and extension-cache advance in `piRuntime`, the MCP sign-in probe,
+    `listProjectAliasSkillNames`, `isBuiltinExtensionEnabled`, the trust default read — since pi's
+    `reload()` resolves and installs declared packages whatever else is switched off). A view refuses
+    `setPackages` / `setProjectPackages`, so pi's `addSourceToSettings` can never persist a filtered
+    list, and a settings-view unit test fails on any other `SettingsManager.create` in the server
+    sources. pi therefore never installs, loads or lists a disabled package's extensions, skills or
+    prompts — including a declared-but-missing one that its install-while-loading would otherwise fetch
+    and whose lifecycle scripts would run — while the files on disk and the user's own per-resource
+    filters stay untouched.
+    *Rejected:* filtering resolved paths and `skillsOverride` / `promptsOverride` after pi resolved (the
+    first implementation): pi had already installed the package by then, pi assigns `sourceInfo.source`
+    only after the overrides run, and delegated children bypass those overrides. The **package policy**
+    (`packagePolicyKey`: the disabled set, a `packagesRevision` that `refreshPiPackages` bumps on every
+    install, remove, update or outside settings change, and a switch generation the host bumps on every
+    `disabledPackages` write — so a loader that resolved while a package was flipped off and back on
+    never compares equal to the restored set) joins the extension policy generation
+    above, and each session loader records the key it last resolved under; `isLoaderPackagePolicyStale`
+    is one more predicate of the reconciliation `applyExtensionTools` runs at registration, after every
+    reload and on `refreshExtensionTools`, so a session prepared under an older policy reloads when it
+    registers and a change mid-reload re-reloads — the fan-out alone would miss both.
     The **`set_title`** tool (`titleTool.ts`) is how chats and workspaces get named: the main agent calls it
     with `chat_title?` / `workspace_name?` / `branch?` (English kebab slug). It is always registered and
     active, and listed via `promptSnippet`; toggling it off after naming would rebuild the system prompt
@@ -835,7 +865,35 @@ re-opened transcripts provider-valid.
     keeps a child from loading an extension its parent lacks. Inline factories are never owners. While the
     child's trust (the same `isProjectTrusted`) is false, project-scoped owners are left out too: a revoke
     deferred on a busy parent leaves them in its loader, and an explicit path would load them anyway.
-  - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
+  - `packages/` ([[submodule-server-agent-packages]]) — pi packages as a thing the host can list and
+    change: the read-only catalog (packages, loose extension files, the two host built-ins; chips and
+    load errors are what a chat's loader last recorded — `buildResourceLoader`'s `extensionsOverride`
+    reports every load through `recordLoadedExtensions` — so listing never executes extension code),
+    pi's identity rule, and the install / remove / update / toggle mutations in pi's own settings format.
+  - `piPackages` — the orchestration above `packages/`: the host-facing façade (`piPackagesCatalog`,
+    `piPackagesInstall`, …) that supplies the agent dir, the Central exclusion from the runtime
+    generation and `HOST_BUILTIN_EXTENSION_NAMES`; `refreshPiPackages()` (bump the package revision,
+    invalidate caches, `refreshExtensionTools()` so every registered session re-decides through the
+    gated reload — idle now, busy at `agent_settled` — and publish `packages.changed`; it runs after
+    Remove and Update **whether or not they succeeded**, since Remove persists before it uninstalls and
+    a batched update may have changed some packages before failing — the watcher cannot catch either,
+    having been primed by the host's own write); and the settings
+    watch: the agent-dir watcher behind `watchUserMcpConfig` also hands it `settings.json` edits, which
+    count only when the `packages` / `extensions` / `skills` / `prompts` arrays differ semantically from
+    the last seen (an unrelated edit or the echo of the host's own write is ignored; a mutation primes
+    the file right after persisting), and a workspace nudge touching `.pi/settings.json` goes through
+    the same comparison per worktree — only for a pi-trusted project, and only after the host primed the
+    file (at boot for every workspace record, and right after each of its own writes through the
+    mutations' `onPersisted` hook), so an untrusted repository's edits, the echo of the host's own
+    project-scope write, or the first sight of a worktree without the file never fan out a reload. A
+    declared-but-missing *enabled* package gets no host install: pi installs it the next time a chat
+    loads its resources, as it always did (a disabled one is hidden from pi, so it is never installed);
+    the page lists it as not installed with Remove.
+    **Known limitations, accepted:** several chats reloading at once can each resolve and install the same missing package
+    (pre-existing, as in pi CLI with two terminals; settings-first Remove narrows but does not close the
+    window for a resolve already in flight); Remove and Update change files on disk at once, so a busy
+    chat whose extension lazily imports or reads package files mid-turn may fail until its turn ends —
+    the same as `pi remove` beside a running pi, and deliberately not solved with a quiescence scheduler.  - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves
     Pi's normal settings/package +
@@ -953,6 +1011,19 @@ re-opened transcripts provider-valid.
     instance. Together the define and the forced transform are the tested artifact seam (the shared artifact
     probe's synthetic extension value-imports pi and fails closed without them); the `server-runtime.ts`
     filename is only a name.
+    When no Central path is excluded — most installs — pi discovers extensions itself from the
+    (`enabled`-view) settings, the branch every session took before packages were managed. Only an
+    excluded Central path switches the loader to **one host-owned path list** (`noExtensions` +
+    `additionalExtensionPaths`, rebuilt in place from pi's `resolve()` at every reload) so that exact
+    identity can be removed before loading. Both branches wrap `reload()` the same way: apply the
+    current policy (trust, disabled extensions, skill paths, the package policy key) and compare which
+    declared packages were on disk before and after — when pi's install-while-loading fetched one, the
+    packages layer is told (`setInstalledPackagesListener`) so the catalog is invalidated and
+    `packages.changed` published, without bumping the revision, so a reload never triggers another
+    reload. The comparison needs only `listConfiguredPackages()`, not the host-owned list, which is
+    why the fast path could return. *Rejected:* a fingerprint of the resolved package set — it was
+    process-global while `resolve()` output is per cwd, so two workspaces flapped it on alternating
+    reloads, and its first observation had to be suppressed, hiding exactly the first-chat install.
     In every mode, the optional Central artifact remains an external filesystem path loaded by PI's public
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (`headlessSearch.ts`, a `tool_call` hook defaulting
@@ -1367,7 +1438,7 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   never runs there) and is not reconciled unless an earlier failed MCP reload remains retryable.
   Reconciliation runs after every
   host mutation, when the user file changes (`watchUserMcpConfig`: one directory watcher on pi's agent dir,
-  300 ms debounce; a missing agent dir is created first — pi creates it on first use anyway — so a file the
+  300 ms debounce, which also dispatches `settings.json` edits to the pi packages layer (`piPackages`); a missing agent dir is created first — pi creates it on first use anyway — so a file the
   user adds later is still seen; a rename or watcher error retires the old watch and rearms it with
   capped retry backoff, including after the agent directory is recreated; stopping cancels retries), when a workspace change nudge touches `.pi`, and at each session's
   `agent_settled` (so an edit the agent made itself applies once the run ends); a deferred reload shows the

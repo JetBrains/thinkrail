@@ -19,11 +19,13 @@ export {
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
+	bumpPackageSwitchGeneration,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
 	registerBundledRuntime,
 	setDisabledExtensionsResolver,
+	setDisabledPackagesResolver,
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,
@@ -62,6 +64,23 @@ export {
 } from "./modelContext";
 export { preferredDefaultModel } from "./modelDefaults";
 export * from "./oneshot";
+export {
+	handlePiSettingsFileChanged,
+	handleProjectPiSettingsChanged,
+	type PiPackagesTarget,
+	piPackagesCatalog,
+	piPackagesCheckUpdates,
+	piPackagesInstall,
+	piPackagesRemove,
+	piPackagesRevealTarget,
+	piPackagesSetResourceEnabled,
+	piPackagesUpdate,
+	primeProjectPiSettings,
+	primeUserPiSettings,
+	publishPiPackagesChanged,
+	refreshPiPackages,
+	setPiPackagesPublisher,
+} from "./piPackages";
 export {
 	activatePiRuntimeGeneration,
 	configurePiRuntime,

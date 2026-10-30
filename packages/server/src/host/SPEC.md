@@ -398,7 +398,20 @@ channel fan-out, and the process-boot wrapper both launchers share.
   workspace's service. Extension on/off is global only: `setDisabledExtensionsResolver` returns
   `AppConfig.disabledExtensions` as a set (unknown names are inert), and `extension.list` answers with the
   `extensions` catalog joined with that same setting — the switch itself writes through `settings.update`,
-  so there is no extension write method. The
+  so there is no extension write method. **Installed pi packages** follow the same pattern one level up:
+  `setDisabledPackagesResolver` returns `AppConfig.disabledPackages`, a change to either list calls
+  `refreshExtensionTools()`, and `host/packages.ts` answers the `packages.*` methods by mapping an
+  optional `workspaceId` onto the checkout plus a fresh project-trust thunk (`host/mcp.ts`'s shape) and
+  delegating to the `agent` façade; a confirmed `packages.install` also drops the new identity from
+  `disabledPackages` before returning the row, so a package the user re-installs is on. `packages.reveal`
+  opens the catalog-validated folder (a single-file package's directory, never the file) through
+  `revealInFileManager`. Boot primes the user settings file and every workspace record's
+  `.pi/settings.json` for the packages watch (`primeUserPiSettings`, `primeProjectPiSettings`) and
+  routes a `.pi/settings.json` workspace nudge to `handleProjectPiSettingsChanged` only for a project
+  whose pi-level trust is granted — an untrusted repository's file never affects resolution, so it must
+  not fan out a reload; a `disabledPackages` change also publishes `packages.changed` so a re-enabled
+  row regains its chips. The channel is subscribed from `PI_PACKAGES_PROTOCOL_VERSION` and published
+  through `setPiPackagesPublisher`. The
   two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
   runtime capability, not frontend state;
   **Review marks are memory-plus-disk, and only the disk half survives a restart.** The serial chain and

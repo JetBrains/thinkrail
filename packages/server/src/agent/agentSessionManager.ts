@@ -18,7 +18,7 @@ import {
 	type SessionEntry,
 	type SessionInfo,
 	SessionManager,
-	SettingsManager,
+	type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
@@ -93,7 +93,9 @@ import {
 import {
 	buildResourceLoader,
 	disabledExtensions,
+	isLoaderPackagePolicyStale,
 	loadsDisabledExtensionSkills,
+	packagePolicyKey,
 	providerExtensionPaths,
 	toSkillCommands,
 } from "./extensions";
@@ -116,6 +118,7 @@ import {
 } from "./mcpSessions";
 import { refreshModelListings } from "./modelAvailability";
 import { preferredDefaultModel } from "./modelDefaults";
+import { createPiSettings } from "./packages";
 import {
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
@@ -767,7 +770,8 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	if (!allowReload || entry.reloadRunning) return;
 	if (
 		enabledExtensionMissing(session, disabled) ||
-		loadsDisabledExtensionSkills(session.resourceLoader.getSkills().skills)
+		loadsDisabledExtensionSkills(session.resourceLoader.getSkills().skills) ||
+		isLoaderPackagePolicyStale(session.resourceLoader)
 	) {
 		void requestSessionReload(session.sessionId).catch((error) => {
 			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(session.sessionId)) {
@@ -814,7 +818,7 @@ function enabledExtensionMissing(session: AgentSession, disabled: ReadonlySet<st
 
 let extensionPolicy = { key: "", generation: 0 };
 function noteExtensionPolicy(): void {
-	const key = [...disabledExtensions()].sort().join("\n");
+	const key = `${[...disabledExtensions()].sort().join("\n")}\0${packagePolicyKey()}`;
 	if (key !== extensionPolicy.key) {
 		extensionPolicy = { key, generation: extensionPolicy.generation + 1 };
 	}
@@ -1002,7 +1006,7 @@ function releasePreflights(entry: Entry): void {
 const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
 
 export function buildSessionSettings(cwd: string, projectTrusted: boolean): SettingsManager {
-	const settings = SettingsManager.create(cwd, undefined, { projectTrusted });
+	const settings = createPiSettings(cwd, undefined, { projectTrusted, packages: "enabled" });
 	const reload = settings.reload.bind(settings);
 	settings.reload = async () => {
 		await reload();

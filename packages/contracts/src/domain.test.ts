@@ -18,6 +18,7 @@ import {
 	isPlanReviewResult,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	parsePiPackageInput,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	type ResourceRecord,
 	resourceHistoryCursor,
@@ -430,5 +431,101 @@ describe("resource history vocabulary", () => {
 			{ at: 2, id: "z" },
 			{ at: 1, id: "a" },
 		]);
+	});
+});
+
+describe("parsePiPackageInput", () => {
+	const source = (raw: string) => parsePiPackageInput(raw).source;
+
+	test("pasted pi install lines, gallery and npm URLs and bare names become npm sources", () => {
+		expect(parsePiPackageInput("pi install npm:@jals1212/pi-spaces")).toEqual({
+			source: "npm:@jals1212/pi-spaces",
+			local: false,
+		});
+		expect(parsePiPackageInput("`pi install -l npm:pi-plain@1.2.0`")).toEqual({
+			source: "npm:pi-plain@1.2.0",
+			local: true,
+		});
+		expect(parsePiPackageInput("pi install --local ./tools")).toEqual({
+			source: "./tools",
+			local: true,
+		});
+		expect(source("https://pi.dev/packages/@jals1212/pi-spaces")).toBe("npm:@jals1212/pi-spaces");
+		expect(source("https://pi.dev/packages/bigpowers/?utm=x#install")).toBe("npm:bigpowers");
+		expect(source("https://www.npmjs.com/package/@jals1212/pi-spaces")).toBe(
+			"npm:@jals1212/pi-spaces",
+		);
+		expect(source("https://npmjs.com/package/@jals1212/pi-spaces/v/0.4.0")).toBe(
+			"npm:@jals1212/pi-spaces@0.4.0",
+		);
+		expect(source("https://www.npmjs.com/package/%40jals1212%2Fpi-spaces")).toBe(
+			"npm:@jals1212/pi-spaces",
+		);
+		expect(parsePiPackageInput("@jals1212/pi-spaces")).toEqual({
+			source: "npm:@jals1212/pi-spaces",
+			local: false,
+			bareName: "@jals1212/pi-spaces",
+		});
+		expect(source("@jals1212/pi-spaces@0.4.0")).toBe("npm:@jals1212/pi-spaces@0.4.0");
+		expect(parsePiPackageInput("  pi-spaces ")).toEqual({
+			source: "npm:pi-spaces",
+			local: false,
+			bareName: "pi-spaces",
+		});
+	});
+
+	test("pi's own sources, git URLs and paths pass through untouched", () => {
+		for (const raw of [
+			"npm:@jals1212/pi-spaces",
+			"git:github.com/acme/pi-tools@v2",
+			"https://github.com/acme/pi-tools.git",
+			"ssh://git@github.com/acme/pi-tools",
+			"/abs/pi/tools",
+			"~/pi/tools",
+			"./tools",
+			"tools/sub",
+			"file:///tmp/tools",
+			"spaces.ts",
+			"builtin:mcp",
+		]) {
+			expect(parsePiPackageInput(raw)).toEqual({ source: raw, local: false });
+		}
+		expect(source("")).toBe("");
+		expect(source("pi install")).toBe("");
+	});
+
+	test("a pasted command keeps a quoted source whole and names nothing when it is ambiguous", () => {
+		expect(parsePiPackageInput('pi install "npm:foo"')).toEqual({
+			source: "npm:foo",
+			local: false,
+		});
+		expect(parsePiPackageInput("pi install -l './my tools'")).toEqual({
+			source: "./my tools",
+			local: true,
+		});
+		expect(parsePiPackageInput('"npm:foo"')).toEqual({ source: "npm:foo", local: false });
+		expect(parsePiPackageInput("pi install ./my\\ tools")).toEqual({
+			source: "./my tools",
+			local: false,
+		});
+		expect(source('pi install "./say \\"hi\\" tools"')).toBe('./say "hi" tools');
+		expect(source("pi install 'a\\b'")).toBe("a\\b");
+		expect(source("pi install a b")).toBe("");
+		expect(source("pi install --local")).toBe("");
+		expect(source('"unbalanced')).toBe('"unbalanced');
+	});
+
+	test("never throws on a half-typed or malformed URL", () => {
+		for (const raw of [
+			"https://pi.dev/packages/%",
+			"https://www.npmjs.com/package/%E0%A4%A",
+			"https://pi.dev/packages/%zz",
+			"https://",
+			"http://[::1",
+			"https://example.com/%",
+		]) {
+			expect(() => parsePiPackageInput(raw)).not.toThrow();
+			expect(source(raw)).toBe(raw);
+		}
 	});
 });

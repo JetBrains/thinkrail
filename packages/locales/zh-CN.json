@@ -1502,7 +1502,7 @@
 	"settings.environment.vars.show": "显示值",
 	"settings.environment.vars.value": "变量值",
 	"settings.extensions.changeFailed": "无法更改扩展",
-	"settings.extensions.description": "此 host 提供给 agent 的 ThinkRail 扩展。关闭其中一项后，它的工具和 Skill 会从新会话中移除，已打开的会话会在当前轮次结束后移除；历史结果仍会正常渲染。您的选择保存在 host 上，并会跟随您到各设备。",
+	"settings.extensions.descriptionBundledOnly": "此 host 提供给 agent 的 ThinkRail 扩展。关闭其中一项后，它的工具和 Skill 会从新会话中移除，已打开的会话会在当前轮次结束后移除；历史结果仍会正常渲染。您的选择保存在 host 上，并会跟随您到各设备。",
 	"settings.extensions.empty": "此 host 上没有注册任何 ThinkRail 扩展。",
 	"settings.extensions.enable": "启用 {{title}}",
 	"settings.extensions.loadFailed": "无法从此 host 加载扩展。",

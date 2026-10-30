@@ -263,6 +263,15 @@ import {
 	mcpUpdate,
 } from "./mcp";
 import { resolveNewChatModel } from "./newChatModel";
+import {
+	packagesCheckUpdates,
+	packagesInstall,
+	packagesList,
+	packagesRemove,
+	packagesReveal,
+	packagesSetResourceEnabled,
+	packagesUpdate,
+} from "./packages";
 import { planReviewRunning } from "./planReviewQueue";
 import {
 	additionalCapture,
@@ -968,6 +977,13 @@ const handlers: WsHandlers = {
 		return listSkillCatalog(ws.worktreePath, admissionContextFor(project, ws.skillOverrides ?? {}));
 	},
 	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
+	"packages.list": (p) => packagesList(p),
+	"packages.install": (p) => packagesInstall(p),
+	"packages.remove": (p) => packagesRemove(p),
+	"packages.update": (p) => packagesUpdate(p),
+	"packages.checkUpdates": (p) => packagesCheckUpdates(p),
+	"packages.setResourceEnabled": (p) => packagesSetResourceEnabled(p),
+	"packages.reveal": (p) => packagesReveal(p),
 	"locales.list": () => readLocalLocales(),
 	"locales.reveal": () => {
 		const dir = localesDir();

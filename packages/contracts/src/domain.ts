@@ -787,6 +787,203 @@ export interface McpListResult {
 	handledElsewhere?: { by: string };
 }
 
+export type PiPackageScope = "user" | "project";
+
+export type PiPackageSourceKind = "npm" | "git" | "local";
+
+const NPM_NAME = String.raw`(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*`;
+const BARE_NPM_SPEC = new RegExp(`^(${NPM_NAME})(?:@([^/\\s@]+))?$`, "i");
+const EXTENSION_FILE = /\.(m|c)?(j|t)sx?$/i;
+const PI_INSTALL_COMMAND = /^pi\s+install\b/;
+const PI_INSTALL_LOCAL_FLAGS = new Set(["-l", "--local"]);
+
+export interface PiPackageInput {
+	/** The source string pi accepts, or "" when the input names nothing. */
+	source: string;
+	/** `true` when a pasted `pi install` line carried `-l` / `--local`. */
+	local: boolean;
+	/** The bare name `source` was inferred from (`bigpowers` → `npm:bigpowers`); absent otherwise. */
+	bareName?: string;
+}
+
+/**
+ * The install field's forgiving forms, reduced to what pi accepts: a pasted `pi install …` line (its
+ * `-l` is reported, not dropped), a pi.dev or npmjs.com package URL and a bare npm name become `npm:…`;
+ * everything else — `npm:` / `git:` sources, git URLs, paths — is returned trimmed. Never throws.
+ */
+export function parsePiPackageInput(raw: string): PiPackageInput {
+	let source = unwrapQuotes(raw.trim());
+	let local = false;
+	if (PI_INSTALL_COMMAND.test(source)) {
+		const words = shellWords(source).slice(2);
+		local = words.some((word) => PI_INSTALL_LOCAL_FLAGS.has(word));
+		const sources = words.filter((word) => !word.startsWith("-"));
+		source = sources.length === 1 ? (sources[0] ?? "") : "";
+	}
+	const fromUrl = packageUrlSource(source);
+	if (fromUrl !== null) return { source: fromUrl, local };
+	if (
+		BARE_NPM_SPEC.test(source) &&
+		!EXTENSION_FILE.test(source) &&
+		!/^(npm|git|builtin|file):/i.test(source)
+	) {
+		return { source: `npm:${source}`, local, bareName: source };
+	}
+	return { source, local };
+}
+
+/** Strips one balanced pair of surrounding quotes or backticks — a pasted `\`pi install …\`` or `"npm:x"`. */
+function unwrapQuotes(text: string): string {
+	const first = text[0];
+	if (first && "`'\"".includes(first) && text.length >= 2 && text.endsWith(first)) {
+		return text.slice(1, -1).trim();
+	}
+	return text;
+}
+
+/** Shell-style words: quotes group, a backslash escapes the next character (inside double quotes only `\"` / `\\`). */
+function shellWords(text: string): string[] {
+	const words: string[] = [];
+	let current = "";
+	let quote: string | null = null;
+	let inWord = false;
+	const chars = [...text];
+	for (let i = 0; i < chars.length; i += 1) {
+		const char = chars[i] ?? "";
+		if (quote === "'") {
+			if (char === "'") quote = null;
+			else current += char;
+			continue;
+		}
+		if (
+			char === "\\" &&
+			i + 1 < chars.length &&
+			(quote === null || /["\\]/.test(chars[i + 1] ?? ""))
+		) {
+			current += chars[i + 1];
+			inWord = true;
+			i += 1;
+			continue;
+		}
+		if (quote === '"') {
+			if (char === '"') quote = null;
+			else current += char;
+			continue;
+		}
+		if (char === '"' || char === "'") {
+			quote = char;
+			inWord = true;
+			continue;
+		}
+		if (/\s/.test(char)) {
+			if (inWord) words.push(current);
+			current = "";
+			inWord = false;
+			continue;
+		}
+		current += char;
+		inWord = true;
+	}
+	if (inWord) words.push(current);
+	return words;
+}
+
+function packageUrlSource(source: string): string | null {
+	if (!/^https?:\/\//i.test(source)) return null;
+	let url: URL;
+	try {
+		url = new URL(source);
+	} catch {
+		return source;
+	}
+	const host = url.hostname.replace(/^www\./, "");
+	if (host !== "pi.dev" && host !== "npmjs.com") return source;
+	let path: string;
+	try {
+		path = decodeURIComponent(url.pathname).replace(/\/+$/, "");
+	} catch {
+		return source;
+	}
+	const piDev = host === "pi.dev" ? path.match(/^\/packages\/(.+)$/) : null;
+	if (piDev?.[1]) return `npm:${piDev[1]}`;
+	const npmjs = host === "npmjs.com" ? path.match(/^\/package\/(.+?)(?:\/v\/([^/]+))?$/) : null;
+	if (npmjs?.[1]) return `npm:${npmjs[1]}${npmjs[2] ? `@${npmjs[2]}` : ""}`;
+	return source;
+}
+
+/** The pi resource kinds the Extensions page lists and toggles; themes are terminal-only and never shown. */
+export type PiPackageResourceType = "extensions" | "skills" | "prompts";
+
+/** One file a pi package contributes, in pi's resolved `enabled` state; `path` is the toggle target. */
+export interface PiPackageResource {
+	type: PiPackageResourceType;
+	path: string;
+	/** pi's `pi config` display rule: `parent/file.ts` for a nested extension, the folder for a skill, else the file name. */
+	displayName: string;
+	enabled: boolean;
+	/** Extensions only, when the host could load the file: the tool and command names it registered. */
+	tools?: string[];
+	commands?: string[];
+	/** Extensions only: pi's load error. */
+	error?: string;
+}
+
+/** One installed pi package as declared in a settings file; every summary is on disk. */
+export interface PiPackageSummary {
+	/** Host-wide identity the package switch keys on: npm by name, git by repo without ref, local by resolved path. */
+	identity: string;
+	/** The source string exactly as declared (`npm:@scope/pkg@1.2.0`, `git:host/owner/repo@ref`, a path). */
+	source: string;
+	kind: PiPackageSourceKind;
+	scope: PiPackageScope;
+	name: string;
+	version?: string;
+	description?: string;
+	/** Absent when the declaration has no install on disk: pi retries at a chat's next start; the row offers Remove only. */
+	installedPath?: string;
+	/** Every `disabledPackages` key that switches this package off: its own `identity` and those of pi-equivalent declarations. */
+	switchKeys: string[];
+	/** The host-wide switch, closed over pi's equivalence: `false` when any of `switchKeys` is in `disabledPackages`. */
+	enabled: boolean;
+	/** `true` for a user declaration pi leaves aside because the repository declares the same identity. */
+	shadowed?: boolean;
+	resources: PiPackageResource[];
+}
+
+/** An extension pi discovers outside any package: a file under `<agentDir>/extensions`, `.pi/extensions`, or an explicit `extensions[]` settings path. */
+export interface PiLooseExtension {
+	path: string;
+	displayName: string;
+	scope: PiPackageScope;
+	/** `true` for an `extensions[]` settings entry, `false` for an auto-discovered directory file. */
+	explicit: boolean;
+	enabled: boolean;
+	tools?: string[];
+	commands?: string[];
+	error?: string;
+}
+
+/** One of pi's built-in extensions the host runs (`mcp`, `tool-search`), toggled through `±builtin:<name>` in pi settings. */
+export interface PiBuiltinExtension {
+	name: string;
+	enabled: boolean;
+	/** `project` when a `.pi/settings.json` entry decides it, else `user`. */
+	scope: PiPackageScope;
+}
+
+export interface PiPackagesCatalog {
+	/** The effective pi folder; every path shown derives from it, never from a hardcoded `~/.pi/agent`. */
+	agentDir: string;
+	settingsPath: string;
+	/** Present when the catalog was read for a workspace. */
+	projectSettingsPath?: string;
+	/** pi-level trust of that workspace's project; repository packages are read only when `true`. */
+	projectTrusted: boolean;
+	packages: PiPackageSummary[];
+	loose: PiLooseExtension[];
+	builtins: PiBuiltinExtension[];
+}
+
 export type BackgroundCommandOutputResult =
 	| {
 			available: true;
@@ -1168,6 +1365,8 @@ export interface AppConfig extends ThemePreference {
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
 	disabledExtensions: string[];
+	/** pi package identities (`PiPackageSummary.identity`) switched off host-wide; pi has no such setting. */
+	disabledPackages: string[];
 	/** UI language: `"system"` (follow the browser) or a BCP-47 tag; an unavailable tag renders English. */
 	locale: string;
 	/** The user finished or skipped the cold-start onboarding wizard. */
@@ -1396,6 +1595,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
 	disabledExtensions: [],
+	disabledPackages: [],
 	locale: SYSTEM_LOCALE_PREFERENCE,
 	onboardingDismissed: false,
 };

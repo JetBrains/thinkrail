@@ -14,6 +14,7 @@ import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
+	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -21,15 +22,21 @@ import {
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	admissionContextFor,
+	bumpPackageSwitchGeneration,
 	cancelAllMcpProbes,
 	cancelMcpProbesOwnedBy,
 	disposeAllSessions,
 	getSessionWorkspaceId,
+	handlePiSettingsFileChanged,
+	handleProjectPiSettingsChanged,
 	initializeSessionStates,
 	isProjectSkillPath,
 	liveSessionIdsOf,
 	mcpPolicyOf,
 	piTrustsProjectPath,
+	primeProjectPiSettings,
+	primeUserPiSettings,
+	publishPiPackagesChanged,
 	reconcileMcpSessions,
 	refreshAgentReviewTool,
 	refreshExtensionTools,
@@ -37,6 +44,7 @@ import {
 	refreshSubagentTools,
 	setAgentReviewEnabledResolver,
 	setDisabledExtensionsResolver,
+	setDisabledPackagesResolver,
 	setExtUiPublisher,
 	setMcpLoginPublisher,
 	setMcpPolicyResolver,
@@ -44,6 +52,7 @@ import {
 	setMcpToolGrantWriter,
 	setModelContextPublisher,
 	setModelListingPublisher,
+	setPiPackagesPublisher,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -120,6 +129,7 @@ import {
 } from "../watch";
 import {
 	getWorkspace,
+	listAllWorkspaceRecords,
 	recordWorkspaceHead,
 	refreshUserOwnedWorkspace,
 	seedWorkspaceHead,
@@ -358,6 +368,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.localesChanged);
 				if (ws.data.protocolVersion >= USER_THEMES_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.themesChanged);
+				if (ws.data.protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.packagesChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -624,6 +636,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
+	setDisabledPackagesResolver(() => new Set(getConfig().disabledPackages));
 
 	setProjectPublisher((project) => {
 		const capture = additionalCapture();
@@ -672,8 +685,27 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		) {
 			void reconcileMcpSessions(liveSessionIdsOf(payload.workspaceId));
 		}
+		if (
+			payload.truncated ||
+			payload.paths.some((path) => path === ".pi" || path === ".pi/settings.json")
+		) {
+			const workspace = listAllWorkspaceRecords().find((ws) => ws.id === payload.workspaceId);
+			const trusted =
+				workspace &&
+				getProjects().find((project) => project.id === workspace.projectId)?.piResourceTrust ===
+					"granted";
+			if (workspace && trusted) handleProjectPiSettingsChanged(workspace.worktreePath);
+		}
 	};
-	const stopUserMcpWatch = watchUserMcpConfig();
+	primeUserPiSettings();
+	for (const workspace of listAllWorkspaceRecords()) primeProjectPiSettings(workspace.worktreePath);
+	setPiPackagesPublisher(() =>
+		server.publish(
+			WS_CHANNELS.packagesChanged,
+			JSON.stringify({ channel: WS_CHANNELS.packagesChanged, data: {} }),
+		),
+	);
+	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
 	const stopLocalesWatch = watchLocalLocales({
 		onChange: () =>
 			server.publish(
@@ -747,7 +779,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (appliedUpdate.subagentsEnabled !== undefined) refreshSubagentTools();
 		if (appliedUpdate.subagentMaxConcurrent !== undefined) refreshSubagentConcurrency();
 		if (appliedUpdate.agentReviewEnabled !== undefined) refreshAgentReviewTool();
-		if (appliedUpdate.disabledExtensions !== undefined) refreshExtensionTools();
+		if (appliedUpdate.disabledPackages !== undefined) bumpPackageSwitchGeneration();
+		if (
+			appliedUpdate.disabledExtensions !== undefined ||
+			appliedUpdate.disabledPackages !== undefined
+		) {
+			refreshExtensionTools();
+		}
+		if (appliedUpdate.disabledPackages !== undefined) publishPiPackagesChanged();
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {

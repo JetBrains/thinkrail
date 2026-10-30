@@ -41,6 +41,10 @@ import type {
 	MergePrResult,
 	OpenBranchReview,
 	OpenPrResult,
+	PiPackageResourceType,
+	PiPackageScope,
+	PiPackageSummary,
+	PiPackagesCatalog,
 	PrBodySource,
 	Project,
 	ProjectPathStatus,
@@ -129,7 +133,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 99;
+export const PROTOCOL_VERSION = 100;
+export const PI_PACKAGES_PROTOCOL_VERSION = 100;
 export const PROVIDER_WARNINGS_PROTOCOL_VERSION = 99;
 export const SURVEY_TRANSLATIONS_PROTOCOL_VERSION = 98;
 export const RESOURCE_HISTORY_PROTOCOL_VERSION = 96;
@@ -295,6 +300,13 @@ export const WS_METHODS = {
 	skillList: "skill.list",
 	skillsState: "skills.state",
 	extensionList: "extension.list",
+	packagesList: "packages.list",
+	packagesInstall: "packages.install",
+	packagesRemove: "packages.remove",
+	packagesUpdate: "packages.update",
+	packagesCheckUpdates: "packages.checkUpdates",
+	packagesSetResourceEnabled: "packages.setResourceEnabled",
+	packagesReveal: "packages.reveal",
 	localesList: "locales.list",
 	localesReveal: "locales.reveal",
 	themesList: "themes.list",
@@ -416,6 +428,7 @@ export const WS_CHANNELS = {
 	mcpStatus: "mcp.status",
 	localesChanged: "locales.changed",
 	themesChanged: "themes.changed",
+	packagesChanged: "packages.changed",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -853,6 +866,34 @@ export interface WsMethodMap {
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
+	"packages.list": { params: { workspaceId?: string }; result: PiPackagesCatalog };
+	"packages.install": {
+		params: { source: string; scope: PiPackageScope; workspaceId?: string };
+		result: PiPackageSummary;
+	};
+	"packages.remove": {
+		params: { source: string; scope: PiPackageScope; workspaceId?: string };
+		result: Ack;
+	};
+	"packages.update": {
+		params: { packages: { source: string; scope: PiPackageScope }[]; workspaceId?: string };
+		result: Ack;
+	};
+	"packages.checkUpdates": {
+		params: { workspaceId?: string; force?: boolean };
+		result: { source: string; scope: PiPackageScope }[];
+	};
+	"packages.setResourceEnabled": {
+		params: {
+			path: string;
+			type: PiPackageResourceType;
+			scope: PiPackageScope;
+			enabled: boolean;
+			workspaceId?: string;
+		};
+		result: Ack;
+	};
+	"packages.reveal": { params: { path: string; workspaceId?: string }; result: Ack };
 	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
 	"locales.reveal": { params: Record<string, never>; result: Ack };
 	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
@@ -1166,7 +1207,16 @@ export type WsErrorCode =
 	| "SURVEY_UNAVAILABLE"
 	| "SURVEY_CHANGED"
 	| "SURVEY_INVALID"
-	| "SURVEY_NOT_SENT";
+	| "SURVEY_NOT_SENT"
+	| "PACKAGE_SOURCE_INVALID"
+	| "PACKAGE_OFFLINE"
+	| "PACKAGE_UNTRUSTED"
+	| "PACKAGE_UNKNOWN"
+	| "PACKAGE_INSTALL_FAILED"
+	| "PACKAGE_INSTALLED_UNLISTED"
+	| "PACKAGE_REMOVE_FAILED"
+	| "PACKAGE_UPDATE_FAILED"
+	| "PACKAGE_SETTINGS_WRITE_FAILED";
 
 export interface WsResponse {
 	id: string;

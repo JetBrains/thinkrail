@@ -1027,6 +1027,8 @@ interface AppState {
 	providerStatusVersion: number;
 	providerStatus: ProviderStatusSnapshot;
 	templatesVersion: number;
+	/** Bumped on `packages.changed`; the Extensions page re-lists installed pi packages when it moves. */
+	packagesVersion: number;
 	modelsRefreshing: boolean;
 	modelsFresh: boolean;
 	changesRequest: {
@@ -1091,6 +1093,7 @@ interface AppState {
 	reviewAutoFix: boolean;
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
+	disabledPackages: string[];
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
 	installLocalLocales: (snapshot: LocalLocalesSnapshot | null) => void;
@@ -1359,6 +1362,7 @@ interface AppState {
 	invalidateProviderStatus: () => void;
 	installProviderStatus: (version: number, report: ProviderStatusReport | null) => void;
 	bumpTemplatesVersion: () => void;
+	bumpPackagesVersion: () => void;
 	beginModelsRefresh: () => number;
 	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	dropModelsFreshness: () => void;
@@ -1487,6 +1491,9 @@ function configPatch(config: AppConfig) {
 		disabledExtensions: Array.isArray(config.disabledExtensions)
 			? config.disabledExtensions
 			: DEFAULT_CONFIG.disabledExtensions,
+		disabledPackages: Array.isArray(config.disabledPackages)
+			? config.disabledPackages
+			: DEFAULT_CONFIG.disabledPackages,
 		locale: isLocalePreference(config.locale) ? config.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: config.onboardingDismissed === true,
 	};
@@ -2314,6 +2321,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	providerStatusVersion: 0,
 	providerStatus: { version: -1, report: null, failed: false },
 	templatesVersion: 0,
+	packagesVersion: 0,
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
@@ -2372,6 +2380,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
+	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,
 	installLocalLocales: (snapshot) => set({ localLocales: snapshot }),
@@ -4293,6 +4302,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				: s,
 		),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
+	bumpPackagesVersion: () => set((s) => ({ packagesVersion: s.packagesVersion + 1 })),
 	beginModelsRefresh: () => {
 		const providerVersion = get().providerVersion;
 		set({ modelsRefreshing: true });

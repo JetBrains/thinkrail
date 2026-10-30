@@ -115,6 +115,11 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   guessing, and inline diagrams, comparisons and file previews in chat; a proposed UI change is shown as
   a rendered before/after mockup through the same renderers and review comments as diff review
   ([[submodule-web-chat-tools-web]], [[module-ext-ask-user-question]], [[module-ext-visualize]]).
+- **Pi packages** — install a pi package by source (npm, git or a local folder) from Settings, for the
+  user or for a repository, and see everything pi loads: each package's extensions, skills and prompts
+  with their tools, hand-dropped extension files, and pi's built-ins — switching any of them off in pi's
+  own settings format, a whole package through a ThinkRail setting. Changes reach open chats when their
+  turn ends ([[submodule-server-agent-packages]], [[submodule-web-panels]]).
 - **MCP servers** — pi's built-in MCP, read from the user's `mcp.json`, managed from Settings and visible
   per chat next to background commands and subagents; a confirm in the chat, on the call, before calls
   that may change data, with a per-project "Always allow" for tools the user trusts

@@ -5,7 +5,7 @@ export {
 } from "./errorReports";
 export { errorText } from "./errorText";
 export { requestMcpList, watchMcpWorkspace } from "./mcp";
-export { RequestError, wsErrorCode } from "./requestError";
+export { RequestError, RequestTimeoutError, wsErrorCode } from "./requestError";
 export {
 	createSessionWithSkillBaseline,
 	getSessionMessagesWithSkillBaseline,
@@ -22,6 +22,7 @@ export {
 	runHostUpdate,
 	supportsChangeMutations,
 	supportsHostUpdateRun,
+	supportsPiPackages,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
 	supportsRichAnchors,
