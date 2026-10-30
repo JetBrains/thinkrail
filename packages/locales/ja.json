@@ -1447,7 +1447,7 @@
 	"settings.environment.vars.show": "値を表示",
 	"settings.environment.vars.value": "変数の値",
 	"settings.extensions.changeFailed": "拡張機能を変更できませんでした",
-	"settings.extensions.description": "このホストがエージェントに提供する ThinkRail の拡張機能です。オフにすると、新しいチャットと、現在のターンが終わった開いているチャットからそのツールとスキルが外れます。過去の結果は引き続き表示されます。選択内容はホストに保存され、デバイス間で引き継がれます。",
+	"settings.extensions.descriptionBundledOnly": "このホストがエージェントに提供する ThinkRail の拡張機能です。オフにすると、新しいチャットと、現在のターンが終わった開いているチャットからそのツールとスキルが外れます。過去の結果は引き続き表示されます。選択内容はホストに保存され、デバイス間で引き継がれます。",
 	"settings.extensions.empty": "このホストに登録された ThinkRail の拡張機能はありません。",
 	"settings.extensions.enable": "{{title}}を有効化",
 	"settings.extensions.loadFailed": "このホストから拡張機能を読み込めませんでした。",
