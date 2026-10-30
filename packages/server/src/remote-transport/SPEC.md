@@ -32,9 +32,12 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
     module's token consume / proof verify / device registry, so an unauthorized peer never reaches
     SDP/ICE exchange.
   - `channel.ts` — `RemoteChannel`, the byte-channel interface the wire protocol runs over.
+  - `weriftRemoteChannel.ts` — `toRemoteChannel`, adapting a werift `RTCDataChannel` to `RemoteChannel`.
+    werift (pure TS) is **validated under Bun** (offer/answer, ICE, DataChannel, byte transfer via a
+    loopback test), so the host needs no native WebRTC binding.
 - **Public surface:** the `index.ts` barrel.
-- **Allowed deps:** `remote` (types + the injected pairing primitives), `node:crypto`; later the WebRTC
-  library + the `host` wire protocol behind `RemoteChannel`. Never the browser.
+- **Allowed deps:** `remote` (types + the injected pairing primitives), `werift` (host-side WebRTC),
+  `node:crypto`; later the `host` wire protocol behind `RemoteChannel`. Never the browser.
 - **Forbidden:** importing `host` today, browser bundling, hand-rolled transport crypto.
 
 ## Invariants
@@ -47,6 +50,11 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
 
 ## Not yet here (next slices)
 
-- The WebRTC adapter implementing `RemoteChannel` over an `RTCPeerConnection` DataChannel.
+- Peer negotiation orchestration: driving an `RTCPeerConnection` as offerer, emitting local SDP/ICE to the
+  signaling layer and consuming the remote's, resolving a `RemoteChannel` on open. (`toRemoteChannel`, the
+  DataChannel→`RemoteChannel` adapter, has landed.)
 - The signaling WS server brokering frames between host and device, and the host's outbound connection to it.
+- Running the existing `host` wire protocol over a `RemoteChannel`.
 - coturn deployment/config and the second channel tunnelling `/files` and `/blob`.
+- The CLI command that boots the host for remote access and prints the pairing **link** (the
+  `thinkrail://pair` URI as copyable text — no QR needed), and the web "add project by link" flow.

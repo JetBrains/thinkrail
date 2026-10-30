@@ -52,7 +52,8 @@ e2e).
   `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `extension-api` (`./server` types)
   + every `thinkrail-extensions/*` **server subpath only** (the registry's composition edge; the host no
   longer depends directly on a pi package an extension owns), `pino` + its pretty/rolling
-  destinations (host diagnostics), `jsonc-parser` (targeted shared Pi configuration edits), Bun/Node.
+  destinations (host diagnostics), `jsonc-parser` (targeted shared Pi configuration edits),
+  `werift` (pure-TS host-side WebRTC for the `remote-transport` data path), Bun/Node.
 - **Deployment obligation:** product behavior lives in the owning server feature module and is composed by
   `host`; launchers only supply boot options and packaged resources. When a demonstrated second environment
   needs a different implementation, the owning feature defines one narrow injected port rather than a
