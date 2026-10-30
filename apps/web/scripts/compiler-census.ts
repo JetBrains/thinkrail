@@ -174,14 +174,14 @@ function isHookCallee(node: Node) {
 	);
 }
 
-/** Nodes in `fn`'s own body that pass `test`, in source order; nested functions and classes are not searched. */
+/** Nodes in `fn`'s own params and body that pass `test`, in source order; nested functions and classes are not searched. */
 function ownNodes(fn: FunctionNode, test: (node: Node) => boolean) {
 	const found: Node[] = [];
 	const search = (node: Node) => {
 		if (test(node)) found.push(node);
 		for (const child of children(node)) if (!isFunction(child) && !isClass(child)) search(child);
 	};
-	search(fn.body);
+	for (const node of [...fn.params, fn.body]) search(node);
 	return found;
 }
 
@@ -206,7 +206,8 @@ function isNonNode(node: Node | null) {
 function hasComponentShape(fn: FunctionNode) {
 	const [first, second, ...more] = fn.params;
 	if (more.length > 0 || first?.type === "RestElement") return false;
-	if (second && !(second.type === "Identifier" && /ref|Ref/.test(second.name))) return false;
+	const ref = second?.type === "AssignmentPattern" ? second.left : second;
+	if (ref && !(ref.type === "Identifier" && /ref|Ref/.test(ref.name))) return false;
 	if (fn.body.type !== "BlockStatement") return !isNonNode(fn.body);
 	// Only the last `return` in the source counts, as in the compiler.
 	const last = ownNodes(fn, (node) => node.type === "ReturnStatement").at(-1);

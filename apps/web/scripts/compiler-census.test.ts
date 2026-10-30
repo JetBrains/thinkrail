@@ -88,7 +88,7 @@ describe("compiler census identities", () => {
 		expect(
 			entries([`export function Table() { ${children} return { Head, Cell, el: <hr /> }; }`]),
 		).toEqual(expected);
-		expect(entries([`export function Row(props, forwardedRef) ${body(true)}`])).toEqual([
+		expect(entries([`export function Row(props, forwardedRef = null) ${body(true)}`])).toEqual([
 			"scripts/fixture.tsx Row",
 		]);
 	});
@@ -117,6 +117,12 @@ describe("compiler census identities", () => {
 		expect(
 			entries([`export function Row(p) { ${inner} if (p.a) return <Inner />; return; }`]),
 		).toEqual(["scripts/fixture.tsx Row.Inner"]);
+	});
+
+	it("counts JSX in a parameter default", () => {
+		expect(
+			entries([`export const Slot = ({ icon = <i /> }) => { icon.x = 1; return icon; };`]),
+		).toEqual(["scripts/fixture.tsx Slot"]);
 	});
 
 	it("looks through TypeScript wrappers for memo arguments only", () => {

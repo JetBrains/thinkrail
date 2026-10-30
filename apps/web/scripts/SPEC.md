@@ -69,17 +69,17 @@ in agreement about the same functions.
   `StaticComponents` is lint-only), so its counts differ from an oxlint React scan by design.
 - **Census units:** a diagnostic belongs to the outermost compiler unit around its first label. The
   census copies the compiler's `infer` rule by hand, so recheck it on an `oxc-transform-react` bump:
-  - A unit calls a hook or renders JSX in its own body (nested functions and classes don't count, so
-    the children of a plain factory are units of their own).
-  - It is a `memo`/`forwardRef` argument (TypeScript `as`/`satisfies`/`!` around the argument are ignored), a
-    hook-named function, or a component-named function that takes at most a props argument and a
-    `ref`-named second one and whose last `return` gives back something renderable (not nothing, an
-    object, a function, a class or a `new` value). A
+  - A unit calls a hook or renders JSX in its own body or parameter defaults (nested functions and
+    classes don't count, so the children of a plain factory are units of their own).
+  - It is a `memo`/`forwardRef` argument (TypeScript `as`/`satisfies`/`!` around the argument are
+    ignored), a hook-named function, or a component-named function that takes at most a props
+    argument and a `ref`-named second one (a default value is allowed) and whose last `return` gives
+    back something renderable (not nothing, an object, a function, a class or a `new` value). A
     function expression takes its variable's name; its own id is ignored, as the compiler does.
   - A function with a `"use memo"` directive is a unit whatever its name or shape. Nothing inside a
     class is.
   - A unit under a `"use no memo"`/`"use no forget"` directive, its own or the file's, is recorded as
-    a `Skip`, because the compiler skips it without a diagnostic.
+    a `Skip`, because the compiler reports nothing for the skip itself.
   - A diagnostic outside every unit (a file-wide lint suppression, or a shape the rule misses) fails
     the census instead of getting a line-number key.
 - **Imported by:** `apps/web/package.json` scripts (`typography:generate` / `:validate` / `:check`,
