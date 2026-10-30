@@ -83,6 +83,7 @@ export type {
 } from "./match";
 export { MATCH_TIER, matchFields, parseMatchTerms } from "./match";
 export type * from "./nativeClient";
+export * from "./pairingUri";
 export type * from "./piProtocol";
 export {
 	assistantToolCallsAreExecutable,
@@ -93,4 +94,5 @@ export {
 } from "./piProtocol";
 export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
+export * from "./signalingProtocol";
 export * from "./wsProtocol";
