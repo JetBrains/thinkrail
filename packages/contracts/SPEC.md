@@ -1140,7 +1140,7 @@ and what it loaded, never pi's own types.
 
 ## Project runs
 
-`RUN_PROTOCOL_VERSION` (101) gates the `run.*` methods, the `run.recipeChanged` / `run.stateChanged`
+`RUN_PROTOCOL_VERSION` (102) gates the `run.*` methods, the `run.recipeChanged` / `run.stateChanged`
 channels, the `run` layout tool id and the command-tab fields on the terminal wire; a client below it
 sees none of the Run UI and never saves a preset naming the tool. Semantics are
 [[submodule-server-run]]'s; the wire only carries them.

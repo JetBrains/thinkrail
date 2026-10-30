@@ -149,7 +149,7 @@ state.
   so a repository without required review can merge once CI allows. The branch card adds a **Checks** row
   and a **Review** row (approved / changes requested by whom, or waiting for review) — the review decision
   is information, never an action gate.
-- **Run** (v101 `RUN_PROTOCOL_VERSION`; absent on an older host and on a win32 host, where project runs
+- **Run** (v102 `RUN_PROTOCOL_VERSION`; absent on an older host and on a win32 host, where project runs
   are not available yet) is `panels/runActions` rendered in the strip's grammar. Without a recipe its
   split button reads **Set up run** (▾ *Run tab…*), which hands `/skill:running-the-project …` to the
   workspace chat. With one, the segment **follows the most recently started run** of the workspace —
