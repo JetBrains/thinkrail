@@ -1,5 +1,37 @@
+import { attentionDot } from "./components/attention-dot";
+import { attentionLine } from "./components/attention-line";
+import { auxiliaryPaneHeader } from "./components/auxiliary-pane-header";
 import { button } from "./components/button";
+import { collapsible } from "./components/collapsible";
+import { command } from "./components/command";
+import { confirmDialog } from "./components/confirm-dialog";
+import { confirmPopover } from "./components/confirm-popover";
+import { contextMenu } from "./components/context-menu";
+import { dialog } from "./components/dialog";
+import { diffStatBadge } from "./components/diff-stat-badge";
+import { dropdownMenu } from "./components/dropdown-menu";
+import { errorBoundary } from "./components/error-boundary";
+import { fileChip } from "./components/file-chip";
+import { headerIconButton } from "./components/header-icon-button";
 import { iconButton } from "./components/icon-button";
+import { popover } from "./components/popover";
+import { quietScrollArea } from "./components/quiet-scroll-area";
+import { resizable } from "./components/resizable";
+import { runningIcon } from "./components/running-icon";
+import { segmentedControl } from "./components/segmented-control";
+import { settingsNotice } from "./components/settings-notice";
+import { settingsRadioCards } from "./components/settings-radio-cards";
+import { settingsRow } from "./components/settings-row";
+import { settingsSwitch } from "./components/settings-switch";
+import { skeleton } from "./components/skeleton";
+import { staleComposerNotice } from "./components/stale-composer-notice";
+import { switchDoc } from "./components/switch";
+import { tabStrip } from "./components/tab-strip";
+import { textarea } from "./components/textarea";
+import { toast } from "./components/toast";
+import { toggleSegment } from "./components/toggle-segment";
+import { tooltip } from "./components/tooltip";
+import { treeRow } from "./components/tree-row";
 import type { ComponentDoc, DocArea, DocPage } from "./types";
 
 export type AreaId = DocArea | "components";
@@ -145,4 +177,39 @@ references: [web-color, web-spacing, web-typography]`,
 	},
 ];
 
-export const components: readonly ComponentDoc[] = [button, iconButton];
+export const components: readonly ComponentDoc[] = [
+	button,
+	iconButton,
+	headerIconButton,
+	tabStrip,
+	settingsSwitch,
+	switchDoc,
+	toggleSegment,
+	segmentedControl,
+	textarea,
+	settingsRadioCards,
+	settingsRow,
+	diffStatBadge,
+	fileChip,
+	collapsible,
+	treeRow,
+	skeleton,
+	staleComposerNotice,
+	settingsNotice,
+	toast,
+	errorBoundary,
+	runningIcon,
+	attentionDot,
+	attentionLine,
+	dialog,
+	confirmDialog,
+	popover,
+	confirmPopover,
+	tooltip,
+	dropdownMenu,
+	contextMenu,
+	command,
+	resizable,
+	quietScrollArea,
+	auxiliaryPaneHeader,
+];

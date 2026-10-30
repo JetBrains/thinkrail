@@ -128,3 +128,35 @@ Radius steps: `rounded-xs` 2px · `rounded-sm` 4px · `rounded-md` 6px · `round
 | --- | --- | --- | --- |
 | Button | `import { Button } from "@thinkrail/ui/button";` | `primary`, `soft-primary`, `outline`, `ghost`, `destructive` | `s`, `m`, `l` |
 | IconButton | `import { IconButton } from "@thinkrail/ui/button";` | `primary`, `soft-primary`, `outline`, `ghost`, `destructive` | `s`, `m`, `l` |
+| HeaderIconButton | `import { HeaderIconButton } from "@/panels/HeaderIconButton";` | — | — |
+| TabStrip | `import { TabStrip, WorkbenchTab } from "@/shell/layout/workbenchTabs";` | — | — |
+| SettingsSwitch | `import { SettingsSwitch } from "@/panels/SettingsSwitch";` | — | — |
+| Switch | `import { Switch } from "@thinkrail/ui/switch";` | — | — |
+| ToggleSegment | `import { ToggleSegment } from "@thinkrail/ui/toggle-segment";` | — | — |
+| SegmentedControl | `import { SegmentedControl, type SegmentedControlOption } from "@/panels/SegmentedControl";` | — | — |
+| Textarea | `import { Textarea } from "@thinkrail/ui/textarea";` | — | — |
+| SettingsRadioCards | `import { SettingsRadioCards, type SettingsRadioChoice } from "@/panels/SettingsRadioCards";` | — | — |
+| SettingsRow and SettingsGroup | `import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "@/panels/SettingsRow"; import { SettingsGroup, SettingsPageContainer } from "@/panels/SettingsGroup";` | — | — |
+| DiffStatBadge | `import { DiffStatBadge } from "@/panels/DiffStatBadge";` | — | — |
+| FileChip | `import { FileChip } from "@/chat/FileChip";` | — | — |
+| Collapsible | `import { Collapsible, countLines } from "@/chat/tools/Collapsible";` | — | — |
+| TreeRow | `import { TreeRow } from "@/panels/TreeRow";` | — | — |
+| LoadingRegion and SkeletonRows | `import { LoadingRegion, SkeletonRows } from "@thinkrail/ui/skeleton";` | — | — |
+| StaleComposerNotice | `import { StaleComposerNotice } from "../StaleComposerNotice";` | — | — |
+| SettingsNotice | `import { SettingsNotice } from "@/panels/SettingsNotice";` | `neutral`, `info`, `success`, `warning`, `error` | — |
+| Toast | `import { Toast, ToastAction, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@thinkrail/ui/toast";` | `info`, `success`, `warning`, `error` | — |
+| ErrorBoundary | `import { ErrorBoundary } from "@/components/ErrorBoundary";` | — | — |
+| RunningIcon | `import { RunningIcon } from "@/components/RunningIcon";` | — | — |
+| AttentionDot | `import { AttentionDot } from "@/components/AttentionDot";` | — | — |
+| AttentionLine | `import { AttentionLine } from "@thinkrail/ui/attention-line";` | — | — |
+| Dialog | `import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@thinkrail/ui/dialog";` | — | — |
+| ConfirmDialog | `import { ConfirmDialog } from "@/panels/ConfirmDialog";` | — | — |
+| Popover | `import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";` | — | — |
+| ConfirmPopover | `import { ConfirmPopover } from "@/panels/ConfirmPopover";` | — | — |
+| Tooltip and IconTooltip | `import { IconTooltip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@thinkrail/ui/tooltip";` | — | — |
+| DropdownMenu | `import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@thinkrail/ui/dropdown-menu";` | — | — |
+| ContextMenu | `import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@thinkrail/ui/context-menu";` | — | — |
+| Command | `import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@thinkrail/ui/command";` | — | — |
+| Resizable | `import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";` | — | — |
+| QuietScrollArea | `import { QuietScrollArea } from "@/components/QuietScrollArea";` | — | — |
+| AuxiliaryPaneHeader | `import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";` | — | — |

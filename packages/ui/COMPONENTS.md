@@ -136,7 +136,7 @@ Native button props:
 | `onClick` | `MouseEventHandler` | — | Activation handler (pointer, Enter, Space). |
 | `className` | `string` | — | Placement only: margins, flex/grid placement, `w-full`, positioning, responsive visibility. |
 
-### Variants
+### Variants and sizes
 
 | Variant | Use it for |
 | --- | --- |
@@ -146,24 +146,15 @@ Native button props:
 | `ghost` | A quiet action with no surface of its own — toolbar, header and row actions, Dismiss. Muted label with a neutral hover fill. |
 | `destructive` | Confirms an irreversible action — Delete, Discard. Danger fill. Ask first; use it on the confirming step. |
 
-### Sizes
-
 | Size | Use it for |
 | --- | --- |
 | `s` | Dense rows, inline chips and comment cards, where the button sits inside a line of content. |
 | `m` | Panel headers, toolbars, popovers and secondary actions in settings rows. |
 | `l` | The default for Button — dialog footers, empty states and standalone actions. |
 
-### Tone
-
-`tone` applies to `outline` and `ghost`; other variants ignore it.
-
-| Tone | Use it for |
-| --- | --- |
-| `warning` | A ghost or outline action whose label must read as a warning in every state (a pending MCP approval). |
-| `danger` | A ghost or outline action whose label must read as dangerous in every state without a danger fill (Stop all). |
-
 ### States
+
+Every cell is the real component. Hover and press the first column, or click into the page and press Tab to see keyboard focus. Disabled, loading and selected are real props.
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -174,6 +165,15 @@ Native button props:
 | Disabled | `disabled`. | Disabled roles, cursor and activation blocked, tooltip still shown. |
 | Loading | `loading` (optionally `spinIcon`). | Spinner at icon size, same width, `aria-busy`, not activatable. |
 | Selected | `selected` or an open Radix trigger. | Selected fill on `outline` / `ghost`; hover look on `soft-primary`; none on `primary` / `destructive`. |
+
+### Tone
+
+`tone` applies to `outline` and `ghost`; other variants ignore it.
+
+| Tone | Use it for |
+| --- | --- |
+| `warning` | A ghost or outline action whose label must read as a warning in every state (a pending MCP approval). |
+| `danger` | A ghost or outline action whose label must read as dangerous in every state without a danger fill (Stop all). |
 
 ### Accessibility
 
@@ -549,7 +549,7 @@ Native button props:
 | `onClick` | `MouseEventHandler` | — | Activation handler (pointer, Enter, Space). |
 | `className` | `string` | — | Placement only, including whole-button hover reveal (`opacity-0 group-hover:opacity-100`). |
 
-### Variants
+### Variants and sizes
 
 | Variant | Use it for |
 | --- | --- |
@@ -559,24 +559,15 @@ Native button props:
 | `ghost` | A quiet action with no surface of its own — toolbar, header and row actions, Dismiss. Muted label with a neutral hover fill. |
 | `destructive` | Confirms an irreversible action — Delete, Discard. Danger fill. Ask first; use it on the confirming step. |
 
-### Sizes
-
 | Size | Use it for |
 | --- | --- |
 | `s` | Dense rows, inline chips and comment cards, where the button sits inside a line of content. |
 | `m` | The default for IconButton — panel headers, tab strips, toolbars and toasts. |
 | `l` | Standalone icon actions next to L buttons. |
 
-### Tone
-
-`tone` applies to `outline` and `ghost`; other variants ignore it.
-
-| Tone | Use it for |
-| --- | --- |
-| `warning` | A ghost or outline action whose label must read as a warning in every state (a pending MCP approval). |
-| `danger` | A ghost or outline action whose label must read as dangerous in every state without a danger fill (Stop all). |
-
 ### States
+
+Every cell is the real component. Hover and press the first column, or click into the page and press Tab to see keyboard focus. Disabled, loading and selected are real props.
 
 | State | How | Appearance |
 | --- | --- | --- |
@@ -587,6 +578,15 @@ Native button props:
 | Disabled | `disabled`. | Disabled roles; tooltip still opens on hover. |
 | Loading | `loading` (optionally `spinIcon`). | Spinner or rotating icon, same square, `aria-busy`. |
 | Selected | `selected` or an open Radix trigger. | Selected fill on `outline` / `ghost`. |
+
+### Tone
+
+`tone` applies to `outline` and `ghost`; other variants ignore it.
+
+| Tone | Use it for |
+| --- | --- |
+| `warning` | A ghost or outline action whose label must read as a warning in every state (a pending MCP approval). |
+| `danger` | A ghost or outline action whose label must read as dangerous in every state without a danger fill (Stop all). |
 
 ### Accessibility
 
@@ -851,7 +851,13936 @@ export default function Tone() {
 | `apps/web/src/shell/layout/workbenchTabs.tsx` | Tab close and the open-tabs search trigger. |
 | `apps/web/src/chat/CopyButton.tsx` | Message copy action at size S, revealed on hover. |
 
-## Button system contract
+## HeaderIconButton
+
+The icon action of a panel header strip — the diff pane, the Changes review toolbar and walk bar, a review section header and the Files switch row. It is a thin wrapper that renders the shared IconButton fixed at `ghost` and `m`, and turns an optional `active` into the toggle contract (`selected`, `aria-pressed` and `data-active` together) and a required `testid` into `data-testid`. The call site provides the icon, the label, the handler and the strip around it; everything else (`tooltip`, `loading`, `tone`, `className`, other sizes and variants) is not exposed.
+
+```tsx
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+```
+
+### When to use
+
+- A one-click icon action in a pane or section header strip: Revert file, Copy file contents, Open as its own tab, Collapse all folders.
+- An on/off header toggle with a familiar icon, such as Hide whitespace changes, with `active` driving `aria-pressed`.
+- Previous / next stepping in a header bar, `disabled` at either end of the list.
+- A pair of bulk actions such as Collapse all files / Expand all files beside the view toggles.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| IconButton | The action needs anything HeaderIconButton does not pass: a `tooltip` that differs from the label, `loading` or `spinIcon`, `tone`, another size or variant, a `className`, or a Radix `asChild` trigger (the section menu beside these buttons is an IconButton). |
+| ToggleSegment | The header chooses one of a few named views (Split \| Inline, Stacked \| One file) rather than turning one option on or off. |
+| Button | The header action needs visible words to be understood, such as Mark as viewed in the review walk bar. |
+| AuxiliaryPaneHeader | The whole header row of an auxiliary pane, with its title and close action, rather than one action inside a strip. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Button | The shared IconButton at `variant="ghost"` and `size="m"`: a native `<button type="button">` square with `aria-label` set to `label`, `data-testid` from `testid`, and — only when `active` is passed — `aria-pressed` and `data-active`. |
+| Icon | `icon`, sized by the button and `aria-hidden`. A tinted glyph (a success check) comes from `withIconClass`. |
+| Selected fill | While `active` is true, the ghost selected role (`control-bg-selected`) through IconButton's `selected`. |
+| Focus ring | IconButton's ghost icon-only ring, drawn inside the square so a clipped header strip keeps it. |
+| Tooltip | Always the `label`, through the shared IconTooltip; it still opens while the button is disabled. |
+| Strip (call site) | The component renders no strip. Call sites place it in a header row with a small flex gap, usually a `role="toolbar"` with an `aria-label`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `testid` | `string` | — | Required. Rendered as `data-testid`; e2e tests select header actions by it (`diff-toggle-whitespace`, `changes-review-next`, `files-collapse-all`). |
+| `label` | `string` | — | Required. The accessible name (`aria-label`) and the tooltip text. Use a locale key. There is no separate tooltip, so a shortcut hint is written into the label (`Previous file (Alt+↑)`). |
+| `active` | `boolean` | — | Makes the button a toggle. `true` paints the selected fill (`selected`) and sets `aria-pressed="true"` and `data-active="true"`; `false` sets both to `"false"`. Omitted, neither attribute is rendered and the button is a plain action. |
+| `disabled` | `boolean` | `false` | Native `disabled`: the disabled roles, out of the Tab order, activation blocked. The tooltip still opens on hover. |
+| `onClick` | `() => void` | — | Required. Activation handler (pointer, Enter, Space). It receives no event. |
+| `icon` | `ButtonIcon` | — | Required. The icon component (pass `RiParagraph`, not `<RiParagraph />`). Swap it for transient feedback, for example to a `withIconClass` success check after a copy. |
+
+### Compared with IconButton
+
+HeaderIconButton renders the shared IconButton and adds no styling of its own. Both rows below are live and render the same button.
+
+| HeaderIconButton | Passed to IconButton as | Note |
+| --- | --- | --- |
+| `<HeaderIconButton testid="…" label={…} active={on} onClick={…} icon={…} />` | `<IconButton variant="ghost" size="m" selected={on} aria-pressed={on} data-active={on} data-testid="…" … />` | The source of the two live rows above. |
+| `icon` | `icon` | Same. |
+| `label` | `label` | aria-label and tooltip; same. |
+| `testid` | `data-testid` | Required here; optional on IconButton. |
+| `active` | `selected={active === true} aria-pressed={active} data-active={active}` | One prop for the whole toggle contract. |
+| `disabled` | `disabled` | Same. |
+| `onClick` | `onClick` | Typed () => void; no event. |
+| (fixed) | `variant="ghost" size="m"` | IconButton's own defaults, pinned. |
+| (not exposed) | `tooltip, tooltipSide, tooltipAlign, wrapTrigger, loading, spinIcon, tone, className, ref, type, other native attributes` | Rest props are not forwarded, so it cannot be a Radix asChild trigger. |
+
+### States
+
+Every cell is the real component. Hover and press the first column, or click into the page and press Tab to see keyboard focus; hover a disabled cell to see its tooltip.
+
+| active | aria-pressed · data-active |
+| --- | --- |
+| `(omitted)` | `absent` |
+| `false` | `"false"` |
+| `true` | `"true"` |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Default | Rest, no `active`. | Ghost: only the muted icon, no surface. |
+| Hover | Pointer over the button. | Ghost hover fill; the tooltip with the label opens after the shared delay. |
+| Pressed | Pointer down or Space held. | Identical to hover. |
+| Keyboard focus | Tab to the button. | Inset focus ring, the ghost hover fill and the tooltip. |
+| Off | `active={false}`. | Same as default; `aria-pressed="false"` and `data-active="false"`. |
+| On | `active={true}`. | Ghost selected fill (`control-bg-selected`), distinct from hover; `aria-pressed="true"` and `data-active="true"`. |
+| Disabled | `disabled`. | The disabled icon colour in place, not hidden, and no hover feedback; the tooltip still opens on hover. With `active`, the selected fill stays under the disabled icon. |
+| Loading | Not exposed. | No distinct treatment; use IconButton with `loading` for an in-flight action. |
+
+### Accessibility
+
+- Renders IconButton, so it is a native `<button type="button">`; role, focus and activation come from the platform.
+- `label` is the accessible name and the tooltip; the icon is `aria-hidden`.
+- `active` maps to `aria-pressed`, so a toggle is announced as pressed or not pressed. Pass it as a boolean on every render of a toggle — omitting it when off removes `aria-pressed` and the button stops being a toggle.
+- The tooltip cannot differ from the name, so any shortcut hint is part of the accessible name (`Next file (Alt+↓)`). The shortcut itself is handled by the pane, not by the button.
+- Call sites group the buttons in a `role="toolbar"` with an `aria-label` (`Diff view mode`, `Changes review`, `Files view`) but add no roving focus: every button stays its own Tab stop.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from each button; the focus ring and tooltip appear. Disabled buttons are skipped. |
+| `Enter / Space` | Activates; on a toggle the call site flips active. |
+| `Escape` | Closes the tooltip. |
+
+### Usage rules
+
+- **HIB-1** — Use HeaderIconButton for icon actions and on/off toggles in panel header strips; anywhere else, or when you need `tooltip`, `loading`, `tone`, another size or a menu trigger, use IconButton directly.
+- **HIB-2** — For a toggle, always pass `active` as a boolean (`active={ignoreWhitespace}`). Leave it out only for one-shot actions; a missing `active` drops `aria-pressed` and `data-active`.
+- **HIB-3** — A toggle keeps one label that names the option (`Hide whitespace changes`); `active` carries the on/off state.
+- **HIB-4** — Give every instance a unique `testid` named `<surface>-<action>` (`diff-copy`, `changes-review-prev`) — tests select header actions by it.
+- **HIB-5** — Hide a header action only when its capability is missing (no hunk actions, no whitespace support); when it exists but cannot run right now, keep it in place with `disabled`.
+- **HIB-6** — The component takes no `className`: place it with the strip's flex gap or a placement wrapper (`ml-auto flex shrink-0`), never by restyling it.
+- **HIB-7** — Show transient success by swapping `icon` for a module-scope `withIconClass(RiCheckLine, "text-feedback-success")` for a moment; the label stays the same.
+
+### Examples
+
+#### Diff pane header
+
+Revert, the whitespace toggle and copy in one toolbar, as in the diff pane.
+
+```tsx
+import { RiArrowGoBackLine, RiFileCopyLine, RiParagraph } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+export default function DiffHeader() {
+	const t = useT();
+	const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
+	return (
+		<div
+			role="toolbar"
+			aria-label={t("panels.diffPane.viewMode")}
+			className="flex items-center gap-4"
+		>
+			<HeaderIconButton
+				testid="diff-revert-file"
+				label={t("panels.diffPane.revertFile")}
+				onClick={() => {}}
+				icon={RiArrowGoBackLine}
+			/>
+			<HeaderIconButton
+				testid="diff-toggle-whitespace"
+				label={t("panels.diffPane.hideWhitespace")}
+				active={ignoreWhitespace}
+				onClick={() => setIgnoreWhitespace(!ignoreWhitespace)}
+				icon={RiParagraph}
+			/>
+			<HeaderIconButton
+				testid="diff-copy"
+				label={t("panels.diffPane.copyContents")}
+				onClick={() => {}}
+				icon={RiFileCopyLine}
+			/>
+		</div>
+	);
+}
+```
+
+#### Toggle
+
+`active` drives the selected fill, `aria-pressed` and `data-active`.
+
+```tsx
+import { RiParagraph } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+export default function Toggle() {
+	const t = useT();
+	const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
+	return (
+		<HeaderIconButton
+			testid="changes-review-toggle-whitespace"
+			label={t("changes.review.hideWhitespace")}
+			active={ignoreWhitespace}
+			onClick={() => setIgnoreWhitespace(!ignoreWhitespace)}
+			icon={RiParagraph}
+		/>
+	);
+}
+```
+
+#### Copy feedback
+
+The icon swaps to a success check for a moment after copying.
+
+```tsx
+import { RiCheckLine, RiFileCopyLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { withIconClass } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+const CopiedCheck = withIconClass(RiCheckLine, "text-feedback-success");
+
+export default function CopyFeedback() {
+	const t = useT();
+	const [copied, setCopied] = useState(false);
+	const copy = () => {
+		setCopied(true);
+		setTimeout(() => setCopied(false), 1500);
+	};
+	return (
+		<HeaderIconButton
+			testid="diff-copy"
+			label={t("panels.diffPane.copyContents")}
+			onClick={copy}
+			icon={copied ? CopiedCheck : RiFileCopyLine}
+		/>
+	);
+}
+```
+
+#### Previous and next
+
+The review walk bar: each end disables its button, and the tooltip still opens.
+
+```tsx
+import { RiArrowLeftSLine, RiArrowRightSLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+const files = ["src/app.ts", "src/store.ts", "README.md"];
+
+export default function FileWalk() {
+	const t = useT();
+	const [index, setIndex] = useState(0);
+	return (
+		<div className="flex items-center gap-4">
+			<HeaderIconButton
+				testid="changes-review-prev"
+				label={t("changes.review.previousFile")}
+				disabled={index === 0}
+				onClick={() => setIndex(index - 1)}
+				icon={RiArrowLeftSLine}
+			/>
+			<span className="tr-text-metadata tabular-nums text-text-muted">
+				{index + 1} / {files.length}
+			</span>
+			<HeaderIconButton
+				testid="changes-review-next"
+				label={t("changes.review.nextFile")}
+				disabled={index >= files.length - 1}
+				onClick={() => setIndex(index + 1)}
+				icon={RiArrowRightSLine}
+			/>
+		</div>
+	);
+}
+```
+
+#### Collapse and expand all
+
+A pair of bulk actions in the stacked review toolbar.
+
+```tsx
+import { RiArrowDownSLine, RiArrowUpSLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+export default function CollapseExpand() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-4">
+			<HeaderIconButton
+				testid="changes-review-collapse-all"
+				label={t("changes.review.collapseAll")}
+				onClick={() => {}}
+				icon={RiArrowUpSLine}
+			/>
+			<HeaderIconButton
+				testid="changes-review-expand-all"
+				label={t("changes.review.expandAll")}
+				onClick={() => {}}
+				icon={RiArrowDownSLine}
+			/>
+		</div>
+	);
+}
+```
+
+#### Placement
+
+No `className`: a placement wrapper pushes Collapse all folders to the end of the Files switch row.
+
+```tsx
+import { RiCollapseVerticalLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+export default function Placement() {
+	const t = useT();
+	const [mode, setMode] = useState<"all" | "changed">("all");
+	return (
+		<div
+			role="toolbar"
+			aria-label={t("panels.files.toolbar")}
+			className="flex w-full max-w-[20rem] items-center gap-4"
+		>
+			<ToggleSegment
+				testid="files-mode-all"
+				label={t("panels.files.all")}
+				active={mode === "all"}
+				onClick={() => setMode("all")}
+			/>
+			<ToggleSegment
+				testid="files-mode-changed"
+				label={t("panels.files.changed")}
+				active={mode === "changed"}
+				onClick={() => setMode("changed")}
+			/>
+			<div className="ml-auto flex shrink-0">
+				<HeaderIconButton
+					testid="files-collapse-all"
+					label={t("panels.files.collapseAll")}
+					onClick={() => {}}
+					icon={RiCollapseVerticalLine}
+				/>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Beside a menu trigger
+
+A review section header: two HeaderIconButtons and an IconButton as the menu trigger, because HeaderIconButton cannot be an `asChild` trigger.
+
+```tsx
+import { RiArrowGoBackLine, RiExternalLinkLine, RiMoreLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+const path = "src/app.ts";
+
+export default function WithMenu() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-4">
+			<HeaderIconButton
+				testid="changes-section-revert"
+				label={t("changes.section.revertFile")}
+				onClick={() => {}}
+				icon={RiArrowGoBackLine}
+			/>
+			<HeaderIconButton
+				testid="changes-section-open-tab"
+				label={t("changes.section.openOwnTab")}
+				onClick={() => {}}
+				icon={RiExternalLinkLine}
+			/>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<IconButton
+						icon={RiMoreLine}
+						label={t("changes.section.actions", { path })}
+						data-testid="changes-section-menu"
+						wrapTrigger
+					/>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					<DropdownMenuItem onSelect={() => {}}>
+						<RiExternalLinkLine />
+						{t("changes.section.openAsTab")}
+					</DropdownMenuItem>
+					<DropdownMenuItem onSelect={() => {}}>
+						<RiArrowGoBackLine />
+						{t("changes.section.revertFile")}
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/DiffPane.tsx` | Revert file, the Hide whitespace toggle and Copy file contents with a success-check swap. |
+| `apps/web/src/panels/ChangesReviewPane.tsx` | Collapse / Expand all, the guide and whitespace toggles, and Previous / Next file with `disabled` at the ends. |
+| `apps/web/src/panels/ChangesFileSection.tsx` | Revert file and Open as its own tab beside the IconButton menu trigger. |
+| `apps/web/src/panels/FilesPanel.tsx` | Collapse all folders at the end of the All \| Changed row. |
+
+## TabStrip
+
+The workbench's resource tab strip: one fixed-height row of `WorkbenchTab`s for a center group or an auxiliary terminal-session group, implementing WAI-ARIA tabs with roving focus. It owns the tab look, horizontal overflow (hidden scrollbar, edge fades, a searchable list), keyboard reorder, the per-tab context menu with every arrangement command, inline chat rename, drag sources and drop targets. The call site provides the layout `document` and group `location`, the selection and preview ids, and callbacks that commit pure layout results; trailing actions go in `trailing`.
+
+```tsx
+import { TabStrip, WorkbenchTab } from "@/shell/layout/workbenchTabs";
+```
+
+### When to use
+
+- The tab row of a center group: files, diffs, Changes, chats, plan documents and center terminals.
+- The session tabs of an auxiliary pane whose selected tab is a terminal (left, right or bottom).
+- Anywhere a group of layout resources must be selectable, closable, reorderable and movable between panes — it is the one renderer of the layout grammar's tabs.
+- `WorkbenchTab` alone, in `rail` mode, for a placed singleton tool on an edge rail; the rail reuses the same menu and drag controller.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ToggleSegment | Switching between a few named views of one surface; it holds no layout resources. |
+| SegmentedControl | Choosing one value from a short fixed list in a form or settings row. |
+| AuxiliaryPaneHeader | An auxiliary pane whose selected tab is a singleton tool or nothing: a plain title, not a strip. |
+| DropdownMenu | Picking one of many items that do not need to stay visible side by side. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Strip | A `h-panel-header-row` row with a bottom border on `container-workspace-bg`; carries `data-area`, `data-group-id` and the group drop cues. |
+| Tab list | `role="tablist"` named after the group (*center group tabs*, *bottom group tabs*…). Scrolls horizontally with the native scrollbar hidden; a vertical wheel scrolls it sideways. |
+| Tab | `WorkbenchTab`: a bordered cell between `min-w-96` and `max-w-192` holding the tab button (kind icon, truncated name, adornment) and its close button. |
+| Kind icon | From `tabIcon`: the kind's Line icon at rest and its Fill icon when active. |
+| Active underline | A 2px `primary` bar along the active tab's bottom edge. |
+| Close button | IconButton `ghost` `s`, *Close {name}*, revealed on hover. Not rendered on tool tabs. |
+| Insertion markers | Two invisible half-width zones per tab; the one under a legal drag shows a 2px `primary` edge. |
+| Edge fades | Pointer-transparent fades from `container-workspace-bg`, shown only on a clipped side. |
+| Trailing | The call site's `trailing` actions, after the tab list. |
+| Overflow search | IconButton *Search open tabs*, only while the list is clipped; opens a Popover with a Command list of the group's tabs. |
+| Tab menu | ContextMenu on every tab: focus, rename, focus groups, keep preview, move, split, move to pane, new group, show tool, hide side, remove group and close. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `document` | `WorkspaceLayoutDocument` | — | The projected layout. The strip reads it to decide which menu commands and drop targets are legal and to build the pure results it hands to `onApply`. |
+| `location` | `LayoutGroupLocation` | — | `{ area, groupId }` of this group. `area` names the tab list, sets the test id and decides which menu items exist (center-only splits and keep preview; auxiliary-only new group, show tool and hide). |
+| `tabs` | `LayoutTab[]` | — | The group's tabs in order — a center group's `tabs`, or only the terminals of an auxiliary group. |
+| `selectedId` | `string \| undefined` | — | The selected tab: `aria-selected`, the roving `tabIndex={0}`, the active fill and underline, scrolled into view when it changes. |
+| `previewId` | `string \| undefined` | — | The group's preview slot (center only): italic name, *Preview — double-click to keep* tooltip, and *Keep preview* enabled in its menu. |
+| `onSelect` | `(tabId: string, keep?: boolean) => void` | — | Click, keyboard navigation and the overflow list. `keep` is `true` when a preview tab is promoted: double-click, a single click on the active preview after the settle window, or *Keep preview*. |
+| `onClose` | `(tab: LayoutTab) => void` | — | Close button, Delete and the menu's *Close*. The workbench routes it through its close request. |
+| `readAttention` | `() => LayoutAttention` | — | Reads the current attention overlay. Used to drop a deferred preview keep when any navigation happened during the settle window. |
+| `selectionEpochRef` | `MutableRefObject<number>` | — | Shared gesture counter. The strip bumps it on every select, close and apply so delayed focus and preview-keep work from an older gesture is skipped. |
+| `maxSideGroups` | `number` | — | Local left/right group limit, for *New … group* availability. |
+| `maxBottomGroups` | `number` | — | Local bottom group limit, for *New … group* availability. |
+| `draggingTab` | `LayoutTab \| null` | — | The tab being dragged (from the workbench's `DndContext`). While it can join this group, the strip shows its drop hint, enables the insertion markers and adds an *Insert at end* zone. |
+| `onApply` | `(result: LayoutMutationResult) => void` | — | Receives one complete pure result (reorder, move, split, new group, remove group) from the tab menu and Alt+Shift+Arrow. Commit `result.document`; never splice tabs yourself. |
+| `onFocusAdjacentGroup` | `(delta: -1 \| 1, fromGroupId?: string) => void` | — | *Focus previous group* / *Focus next group* in the tab menu. |
+| `onHideSide` | `(region: LayoutAuxiliaryRegion) => void` | — | *Hide left side* / *Hide right side* / *Hide bottom* in an auxiliary tab's menu. |
+| `onRevealTool` | `(tool: LayoutToolId) => void` | — | *Show {tool}* in an auxiliary tab's menu, listed for every tool placed nowhere in `document`. |
+| `onRenameChat` | `((sessionId: string, titleInput: string, currentTitle: string) => void) \| undefined` | — | Required key. When set, chat tabs get *Rename chat*, which swaps the label for an inline editor and calls this on commit. Pass `undefined` to omit the item. |
+| `chatFirstPrompts` | `Readonly<Record<string, string>>` | — | First prompt by session id. An unnamed chat (or its plan document) is labelled by it, and the tab's native tooltip shows the full prompt. Presentation only; `tab.name` stays `""`. |
+| `canFocusAdjacentGroup` | `boolean` | — | Enables the two *Focus … group* menu items; when `false` they stay listed, disabled, with their unavailable wording. |
+| `renderTabAdornment` | `(tab: LayoutTab) => ReactNode` | — | A small mark after the tab name (the shell's Review flag, the review draft count on the Review tool). Return `null` for none. Keep the identity stable. |
+| `splitGeometry` | `{ horizontal: boolean; vertical: boolean }` | — | Whether the group has room for a left/right or up/down split. A missing direction keeps its *Split …* item disabled with the size it needs. |
+| `trailing` | `ReactNode` | — | Actions after the tab list — IconButton `ghost` `m` with `shrink-0 self-center`: New chat, Remove group, the pane's add menu and Hide. |
+
+WorkbenchTab props (besides the strip props it shares):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `tab` | `LayoutTab` | — | The tab to render. |
+| `index` | `number` | — | Its index in the group, the base for insertion and reorder targets. |
+| `reorderIndexes` | `{ previous: number \| undefined; next: number \| undefined }` | — | Targets for *Move left/right* (*up/down* on a vertical rail); `undefined` disables that item. Defaults to `index ± 1` within the group. |
+| `rail` | `AuxiliaryRailControlProps & { entryKey; vertical; beforeIndex; afterIndex; onActivate }` | — | Rail mode: an icon-only pressed button in the rail-entry frame with an IconTooltip, roving `tabIndex` from the rail, no close button and *Remove tool from group* instead of *Close*. |
+| `active` | `boolean` | — | Selected (strip) or pressed (rail). |
+| `preview` | `boolean` | — | This tab holds the group's preview slot. |
+| `register` | `(node: HTMLElement \| null) => void` | — | Ref callback for the focusable control, so the strip can focus and reveal it. |
+| `onClose` | `() => void` | — | Closes this tab. |
+| `panelId` | `string` | — | `aria-controls` target: the group's tab panel (`groupPanelId(location)`). |
+| `onKeyDown` | `(event: KeyboardEvent<HTMLButtonElement>) => void` | — | The tab button's key handler; the strip passes roving focus, reorder and Delete here. |
+
+### Tab kinds
+
+Every resource kind's icon from `tabIcon`: Line at rest, Fill when active (the plan document's icon has one form). Names come from `layoutTabName`.
+
+### States
+
+Every strip is the real component with real props. Hover a tab to reveal its close button, click into the page and press Tab to see keyboard focus, right-click a tab for its menu. The drop hint is `draggingTab` set to a tab from another group.
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Rest | A tab that is not `selectedId`. | Muted label and the kind's Line icon; a right border separates tabs. |
+| Hover | Pointer over a tab. | The close button appears; the tab itself has no hover fill. |
+| Active | `selectedId`. | `control-bg-selected` fill, default text, Fill icon and the `primary` underline. |
+| Keyboard focus | Tab into the list, or arrow between tabs. | A 2px inset `primary` ring around the whole tab. |
+| Preview | `previewId`. | Italic name and the *Preview — double-click to keep* tooltip. |
+| Renaming | *Rename chat* in a chat tab's menu (needs `onRenameChat`). | The name becomes an inline text field with the chat icon; the close button stays. |
+| Dragging | Drag a tab more than 5px in a `DndContext`. | The source tab drops to 40% opacity. |
+| Drop hint | `draggingTab` can join this group. | A 1px inset `primary-soft` ring around the strip. |
+| Drop active | That drag is over the strip. | `primary-subtle` fill and a 2px inset `primary` ring; the insertion marker under the pointer shows a 2px `primary` edge. |
+| Overflowing | More tabs than fit. | Edge fades on the clipped sides and the *Search open tabs* button. |
+| Empty | `tabs={[]}`. | An empty strip with its trailing actions; no distinct treatment. |
+| Disabled | — | No distinct treatment: tabs are never disabled. Unavailable menu commands stay listed, disabled, with a reason. |
+
+### Accessibility
+
+- The list is `role="tablist"` named by its area; each tab button is `role="tab"` with `aria-selected` and `aria-controls` pointing at the group's tab panel.
+- Roving focus: only the selected tab has `tabIndex={0}`; arrows move selection and focus together.
+- Each tab advertises its keys with `aria-keyshortcuts`.
+- The close button is named *Close {name}* and is `tabIndex={-1}`; keyboard users close with Delete.
+- The tab button's native `title` carries the preview hint or the full first prompt of an unnamed chat.
+- The rename field is named *Chat name*; Enter and Escape return focus to the tab.
+- In rail mode the control is a pressed button (`aria-pressed`) named by the tool, with its tooltip opening away from the edge.
+- Every drag arrangement has a menu or keyboard equivalent; unavailable commands stay in the menu, disabled, with *{label} — {reason}*.
+
+| Keys | Action |
+| --- | --- |
+| `Tab` | Enters the list on the selected tab, then moves on to the trailing actions. |
+| `ArrowLeft / ArrowRight` | Selects and focuses the previous or next tab, wrapping. |
+| `Home / End` | Selects and focuses the first or last tab. |
+| `Enter / Space` | Activates the focused tab; on the active preview tab, keeps it. |
+| `Delete` | Closes the focused tab. |
+| `Alt+Shift+ArrowLeft / ArrowRight` | Moves the tab one place left or right. |
+| `Shift+F10 / Menu` | Opens the tab menu (the browser's context-menu event on the focused tab). |
+| `Control+F6 / Control+Shift+F6` | Next or previous group — handled by the Workbench root, not the strip. |
+| `Enter / Escape (renaming)` | Commits or cancels the new chat name. |
+
+### Usage rules
+
+- **TAB-1** — Use TabStrip only for groups of layout resources inside the workbench. To switch views of one surface use ToggleSegment or SegmentedControl; never restyle those into tabs or this into a segmented control.
+- **TAB-2** — Commit what `onApply` hands you (`result.document`) as one pure result; never splice `tabs` or reorder them at the call site.
+- **TAB-3** — Pass `tabs` and the layout `document`, not labels: names come from `layoutTabName` at render, and an unnamed chat is labelled through `chatFirstPrompts`, never by writing a name into the tab.
+- **TAB-4** — Trailing actions are IconButton `ghost` `m` with `shrink-0 self-center`, and a control renders only when it can act (Remove group only on an empty group, Hide on every expanded auxiliary pane).
+- **TAB-5** — Tool tabs have no close glyph; terminals and center resources do. Remove a tool through its menu or Delete, and hide the pane with AuxiliaryPaneHideButton.
+- **TAB-6** — Keep the injected callbacks and `renderTabAdornment` referentially stable and `chatFirstPrompts` shallow-stable; the strip and its tabs are memoized and must not re-render on unrelated attention changes.
+- **TAB-7** — An adornment is a small non-interactive mark after the name; return `null` when there is nothing to show. Never put a button or a second close control in it.
+
+### Examples
+
+#### Preview
+
+A center group with a file and a chat: click or arrow to select, hover to close.
+
+```tsx
+import { useRef, useState } from "react";
+import { closeLayoutTab, collectCenterGroups, type LayoutAttention } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "group",
+		id: "center",
+		tabs: [
+			{ kind: "file", id: "auth", name: "auth.ts", path: "src/auth.ts" },
+			{ kind: "chat", id: "chat", name: "Login", sessionId: "s1" },
+		],
+	},
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function Preview() {
+	const [document, setDocument] = useState(INITIAL);
+	const [selectedId, setSelectedId] = useState("auth");
+	const selectionEpochRef = useRef(0);
+	const tabs = collectCenterGroups(document.center)[0]?.tabs ?? [];
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={document}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={tabs}
+				selectedId={selectedId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={setSelectedId}
+				onClose={(tab) => setDocument((current) => closeLayoutTab(current, tab.id).document)}
+				onApply={(result) => setDocument(result.document)}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+			/>
+		</div>
+	);
+}
+```
+
+#### Center group
+
+Every center kind — chat, file, Changes, plan — with the New chat action in `trailing`. Right-click a tab for its menu.
+
+```tsx
+import { RiChatNewLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { closeLayoutTab, collectCenterGroups, type LayoutAttention } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "group",
+		id: "center",
+		tabs: [
+			{ kind: "chat", id: "chat", name: "Fix login redirect", sessionId: "s1" },
+			{ kind: "file", id: "auth", name: "auth.ts", path: "src/auth.ts" },
+			{ kind: "changes", id: "changes", name: "", scope: { kind: "uncommitted" } },
+			{
+				kind: "document",
+				id: "plan",
+				name: "Fix login redirect",
+				documentKind: "todo-plan",
+				sourceId: "s1",
+				docPath: "plan.md",
+			},
+		],
+	},
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function CenterGroup() {
+	const t = useT();
+	const [document, setDocument] = useState(INITIAL);
+	const [selectedId, setSelectedId] = useState("chat");
+	const selectionEpochRef = useRef(0);
+	const tabs = collectCenterGroups(document.center)[0]?.tabs ?? [];
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={document}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={tabs}
+				selectedId={selectedId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={setSelectedId}
+				onClose={(tab) => {
+					const next = closeLayoutTab(document, tab.id).document;
+					setDocument(next);
+					const rest = collectCenterGroups(next.center)[0]?.tabs ?? [];
+					if (tab.id === selectedId && rest[0]) setSelectedId(rest[0].id);
+				}}
+				onApply={(result) => setDocument(result.document)}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+				trailing={
+					<IconButton
+						variant="ghost"
+						size="m"
+						icon={RiChatNewLine}
+						label={t("workbench.center.newChat")}
+						onClick={() => {}}
+						className="shrink-0 self-center"
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Preview slot
+
+`previewId` shows the name in italics. Double-click it, or click it again once active, to keep it.
+
+```tsx
+import { useRef, useState } from "react";
+import { collectCenterGroups, type LayoutAttention } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const DOCUMENT: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "group",
+		id: "center",
+		tabs: [
+			{ kind: "file", id: "auth", name: "auth.ts", path: "src/auth.ts" },
+			{ kind: "file", id: "session", name: "session.ts", path: "src/session.ts" },
+		],
+		previewTabId: "session",
+	},
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function PreviewTab() {
+	const [selectedId, setSelectedId] = useState("session");
+	const [previewId, setPreviewId] = useState<string | undefined>("session");
+	const selectionEpochRef = useRef(0);
+	const tabs = collectCenterGroups(DOCUMENT.center)[0]?.tabs ?? [];
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={DOCUMENT}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={tabs}
+				selectedId={selectedId}
+				previewId={previewId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={(tabId, keep) => {
+					setSelectedId(tabId);
+					if (keep && tabId === previewId) setPreviewId(undefined);
+				}}
+				onClose={() => {}}
+				onApply={() => {}}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+			/>
+		</div>
+	);
+}
+```
+
+#### Overflow
+
+In a narrow group the list scrolls sideways with edge fades, and *Search open tabs* finds any tab.
+
+```tsx
+import { useRef, useState } from "react";
+import { closeLayoutTab, collectCenterGroups, type LayoutAttention } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const FILES = [
+	"auth.ts",
+	"session.ts",
+	"routes.tsx",
+	"login.tsx",
+	"api.ts",
+	"store.ts",
+	"theme.css",
+];
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "group",
+		id: "center",
+		tabs: FILES.map((name) => ({ kind: "file", id: name, name, path: `src/${name}` })),
+	},
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function Overflow() {
+	const [document, setDocument] = useState(INITIAL);
+	const [selectedId, setSelectedId] = useState("login.tsx");
+	const selectionEpochRef = useRef(0);
+	const tabs = collectCenterGroups(document.center)[0]?.tabs ?? [];
+	return (
+		<div className="w-full max-w-[24rem]">
+			<TabStrip
+				document={document}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={tabs}
+				selectedId={selectedId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={setSelectedId}
+				onClose={(tab) => setDocument((current) => closeLayoutTab(current, tab.id).document)}
+				onApply={(result) => setDocument(result.document)}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+			/>
+		</div>
+	);
+}
+```
+
+#### Drag to reorder
+
+Inside a `DndContext`, drag a tab: the strip shows its drop hint and the insertion marker; dropping commits `moveTabToGroup`.
+
+```tsx
+import {
+	DndContext,
+	type DragEndEvent,
+	PointerSensor,
+	pointerWithin,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import { useRef, useState } from "react";
+import {
+	collectCenterGroups,
+	isLayoutUnavailable,
+	type LayoutAttention,
+	moveTabToGroup,
+} from "@/shell/layout/model";
+import type { LayoutTab, WorkspaceLayoutDocument } from "@/shell/layout/types";
+import type { DragData, DropTarget } from "@/shell/layout/workbenchShared";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "group",
+		id: "center",
+		tabs: [
+			{ kind: "file", id: "auth", name: "auth.ts", path: "src/auth.ts" },
+			{ kind: "file", id: "session", name: "session.ts", path: "src/session.ts" },
+			{ kind: "file", id: "routes", name: "routes.tsx", path: "src/routes.tsx" },
+		],
+	},
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function DragReorder() {
+	const [document, setDocument] = useState(INITIAL);
+	const [selectedId, setSelectedId] = useState("auth");
+	const [draggingTab, setDraggingTab] = useState<LayoutTab | null>(null);
+	const selectionEpochRef = useRef(0);
+	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+	const tabs = collectCenterGroups(document.center)[0]?.tabs ?? [];
+	const drop = (event: DragEndEvent) => {
+		const tab = draggingTab;
+		setDraggingTab(null);
+		const target = event.over?.data.current?.target as DropTarget | undefined;
+		if (!tab || target?.kind !== "insert") return;
+		const from = tabs.findIndex((candidate) => candidate.id === tab.id);
+		const index = from >= 0 && from < target.index ? target.index - 1 : target.index;
+		const result = moveTabToGroup(document, tab, target.location, index);
+		if (!isLayoutUnavailable(result)) setDocument(result.document);
+	};
+	return (
+		<DndContext
+			sensors={sensors}
+			collisionDetection={pointerWithin}
+			onDragStart={(event) => setDraggingTab((event.active.data.current as DragData).tab)}
+			onDragCancel={() => setDraggingTab(null)}
+			onDragEnd={drop}
+		>
+			<div className="w-full">
+				<TabStrip
+					document={document}
+					readAttention={() => ATTENTION}
+					selectionEpochRef={selectionEpochRef}
+					location={{ area: "center", groupId: "center" }}
+					tabs={tabs}
+					selectedId={selectedId}
+					maxSideGroups={6}
+					maxBottomGroups={3}
+					draggingTab={draggingTab}
+					onSelect={setSelectedId}
+					onClose={() => {}}
+					onApply={(result) => setDocument(result.document)}
+					onFocusAdjacentGroup={() => {}}
+					onHideSide={() => {}}
+					onRevealTool={() => {}}
+					onRenameChat={undefined}
+					canFocusAdjacentGroup={false}
+					renderTabAdornment={() => null}
+				/>
+			</div>
+		</DndContext>
+	);
+}
+```
+
+#### Chat names
+
+An unnamed chat is labelled by its first prompt. *Rename chat* in the tab menu edits the name inline through `onRenameChat`.
+
+```tsx
+import { useRef, useState } from "react";
+import { collectCenterGroups, type LayoutAttention } from "@/shell/layout/model";
+import type { LayoutCenterTab, WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const FIRST_PROMPTS = { s2: "Why does the login page redirect twice after signing in?" };
+
+const withTabs = (tabs: LayoutCenterTab[]): WorkspaceLayoutDocument => ({
+	version: 2,
+	center: { kind: "group", id: "center", tabs },
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+});
+
+export default function RenameChat() {
+	const [tabs, setTabs] = useState<LayoutCenterTab[]>([
+		{ kind: "chat", id: "c1", name: "Refactor session store", sessionId: "s1" },
+		{ kind: "chat", id: "c2", name: "", sessionId: "s2" },
+	]);
+	const [selectedId, setSelectedId] = useState("c1");
+	const selectionEpochRef = useRef(0);
+	const document = withTabs(tabs);
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={document}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={collectCenterGroups(document.center)[0]?.tabs ?? []}
+				selectedId={selectedId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={setSelectedId}
+				onClose={() => {}}
+				onApply={() => {}}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={(sessionId, titleInput) =>
+					setTabs((current) =>
+						current.map((tab) =>
+							tab.kind === "chat" && tab.sessionId === sessionId
+								? { ...tab, name: titleInput.trim() }
+								: tab,
+						),
+					)
+				}
+				chatFirstPrompts={FIRST_PROMPTS}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+			/>
+		</div>
+	);
+}
+```
+
+#### Terminal sessions
+
+A bottom pane's session strip with the pane's add menu and AuxiliaryPaneHideButton in `trailing`.
+
+```tsx
+import { useRef, useState } from "react";
+import { AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import {
+	closeLayoutTab,
+	type LayoutAttention,
+	type LayoutGroupLocation,
+	toolTab,
+} from "@/shell/layout/model";
+import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { groupPanelId } from "@/shell/layout/workbenchShared";
+import { SideGroupMenu } from "@/shell/layout/workbenchSide";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const LOCATION: LayoutGroupLocation = { area: "bottom", groupId: "terminals" };
+
+const terminal = (index: number): LayoutTerminalTab => ({
+	kind: "terminal",
+	id: `terminal-${index}`,
+	name: `Terminal ${index}`,
+	tabKey: `t${index}`,
+});
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [{ id: "left", weight: 1, folded: false, tabs: [toolTab("projects")] }],
+	},
+	right: {
+		visible: true,
+		width: 0.25,
+		groups: [
+			{
+				id: "right",
+				weight: 1,
+				folded: false,
+				tabs: [toolTab("specs"), toolTab("files"), toolTab("review"), toolTab("plan")],
+			},
+		],
+	},
+	bottom: {
+		visible: true,
+		height: 0.3,
+		alignment: "center",
+		groups: [{ id: "terminals", weight: 1, folded: false, tabs: [terminal(1), terminal(2)] }],
+	},
+	toolRestoreTargets: {},
+};
+
+export default function TerminalStrip() {
+	const [document, setDocument] = useState(INITIAL);
+	const [selectedId, setSelectedId] = useState("terminal-1");
+	const selectionEpochRef = useRef(0);
+	const group = document.bottom.groups[0];
+	const tabs = group?.tabs ?? [];
+	const addTerminal = () => {
+		const next = terminal(tabs.length + 1);
+		setDocument((current) => ({
+			...current,
+			bottom: {
+				...current.bottom,
+				groups: current.bottom.groups.map((group) => ({ ...group, tabs: [...group.tabs, next] })),
+			},
+		}));
+		setSelectedId(next.id);
+	};
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={document}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={LOCATION}
+				tabs={tabs}
+				selectedId={selectedId}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={setSelectedId}
+				onClose={(tab) => setDocument((current) => closeLayoutTab(current, tab.id).document)}
+				onApply={(result) => setDocument(result.document)}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+				trailing={
+					<>
+						{group ? (
+							<SideGroupMenu
+								document={document}
+								side="bottom"
+								group={group}
+								limit={3}
+								onNewTerminal={addTerminal}
+								onRevealTool={() => {}}
+							/>
+						) : null}
+						<AuxiliaryPaneHideButton
+							testId="bottom-group-fold"
+							controls={groupPanelId(LOCATION)}
+							onClick={() => {}}
+						/>
+					</>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Empty group
+
+No tabs: the strip keeps its actions. Remove group is disabled with its reason because the last center group always stays.
+
+```tsx
+import { RiChatNewLine, RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useRef } from "react";
+import { isLayoutUnavailable, type LayoutAttention, removeLayoutGroup } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { TabStrip } from "@/shell/layout/workbenchTabs";
+
+const ATTENTION: LayoutAttention = {
+	selectedByGroup: {},
+	lastFocusedCenterGroupId: "center",
+	lastFocusedSideGroupId: {},
+	navigationClockByGroup: {},
+};
+
+const DOCUMENT: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: { visible: true, width: 0.2, groups: [] },
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function EmptyGroup() {
+	const t = useT();
+	const selectionEpochRef = useRef(0);
+	const removal = removeLayoutGroup(t, DOCUMENT, { area: "center", groupId: "center" });
+	return (
+		<div className="w-full">
+			<TabStrip
+				document={DOCUMENT}
+				readAttention={() => ATTENTION}
+				selectionEpochRef={selectionEpochRef}
+				location={{ area: "center", groupId: "center" }}
+				tabs={[]}
+				maxSideGroups={6}
+				maxBottomGroups={3}
+				draggingTab={null}
+				onSelect={() => {}}
+				onClose={() => {}}
+				onApply={() => {}}
+				onFocusAdjacentGroup={() => {}}
+				onHideSide={() => {}}
+				onRevealTool={() => {}}
+				onRenameChat={undefined}
+				canFocusAdjacentGroup={false}
+				renderTabAdornment={() => null}
+				trailing={
+					<>
+						<IconButton
+							variant="ghost"
+							size="m"
+							icon={RiCloseLine}
+							label={t("workbench.group.remove")}
+							tooltip={isLayoutUnavailable(removal) ? removal.reason : t("workbench.group.remove")}
+							wrapTrigger
+							disabled={isLayoutUnavailable(removal)}
+							onClick={() => {}}
+							className="shrink-0 self-center"
+						/>
+						<IconButton
+							variant="ghost"
+							size="m"
+							icon={RiChatNewLine}
+							label={t("workbench.center.newChat")}
+							onClick={() => {}}
+							className="shrink-0 self-center"
+						/>
+					</>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### WorkbenchTab on a rail
+
+`WorkbenchTab` in `rail` mode inside AuxiliaryRail: pressed icon buttons that select a tool, or fold the pane when pressed again.
+
+```tsx
+import { useRef, useState } from "react";
+import { AuxiliaryRail } from "@/shell/layout/AuxiliaryRail";
+import {
+	type AuxiliaryRailEntry,
+	activateAuxiliaryRailEntry,
+	projectAuxiliaryRail,
+} from "@/shell/layout/auxiliaryPresentation";
+import {
+	isLayoutUnavailable,
+	type LayoutAttention,
+	type LayoutGroupLocation,
+	toolTab,
+} from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { groupPanelId } from "@/shell/layout/workbenchShared";
+import { WorkbenchTab } from "@/shell/layout/workbenchTabs";
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [
+			{
+				id: "tools",
+				weight: 1,
+				folded: false,
+				tabs: [toolTab("projects"), toolTab("specs"), toolTab("files")],
+			},
+		],
+	},
+	right: { visible: true, width: 0.25, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+const LOCATION: LayoutGroupLocation = { area: "left", groupId: "tools" };
+
+export default function RailEntry() {
+	const [document, setDocument] = useState(INITIAL);
+	const [attention, setAttention] = useState<LayoutAttention>({
+		selectedByGroup: { tools: "tool:projects" },
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: { left: "tools" },
+		navigationClockByGroup: {},
+	});
+	const selectionEpochRef = useRef(0);
+	const tabs = document.left.groups[0]?.tabs ?? [];
+	const activate = (entry: AuxiliaryRailEntry) => {
+		const result = activateAuxiliaryRailEntry(document, attention, entry, 6, 3);
+		if (isLayoutUnavailable(result)) return;
+		setDocument(result.document);
+		const focusTabId = result.focusTabId;
+		if (focusTabId)
+			setAttention((current) => ({
+				...current,
+				selectedByGroup: { ...current.selectedByGroup, tools: focusTabId },
+			}));
+	};
+	return (
+		<div className="flex h-[9rem]">
+			<AuxiliaryRail
+				region="left"
+				entries={projectAuxiliaryRail(document, attention, "left")}
+				renderEntry={(entry, control) =>
+					entry.kind === "tool" && entry.tab ? (
+						<WorkbenchTab
+							tab={entry.tab}
+							index={tabs.findIndex((tab) => tab.id === entry.tab?.id)}
+							rail={{
+								...control,
+								entryKey: entry.key,
+								vertical: true,
+								beforeIndex: tabs.findIndex((tab) => tab.id === entry.tab?.id),
+								afterIndex: tabs.findIndex((tab) => tab.id === entry.tab?.id) + 1,
+								onActivate: () => activate(entry),
+							}}
+							location={LOCATION}
+							readAttention={() => attention}
+							selectionEpochRef={selectionEpochRef}
+							active={entry.selected && entry.expanded}
+							preview={false}
+							document={document}
+							maxSideGroups={6}
+							maxBottomGroups={3}
+							register={() => {}}
+							onSelect={() => {}}
+							onClose={() => {}}
+							onApply={(result) => setDocument(result.document)}
+							onFocusAdjacentGroup={() => {}}
+							onHideSide={() => {}}
+							onRevealTool={() => {}}
+							onRenameChat={undefined}
+							canFocusAdjacentGroup={false}
+							renderTabAdornment={() => null}
+							draggingTab={null}
+							panelId={groupPanelId(LOCATION)}
+							onKeyDown={() => {}}
+						/>
+					) : null
+				}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/shell/layout/workbenchCenter.tsx` | Every center group's strip, with preview, split geometry and New chat / Remove group in `trailing`. |
+| `apps/web/src/shell/layout/workbenchSide.tsx` | `AuxiliaryGroupHeader`: the terminal-session strip of a left, right or bottom pane, with the add menu and Hide in `trailing`. |
+
+## SettingsSwitch
+
+The Settings dialog's own on/off control: a `<button role="switch">` whose body is the track, with a sliding knob. It is a second implementation beside Switch from `packages/ui` with the same geometry but a different look and a closed API — five props, no `className`, `ref` or extra attributes. The call site provides `checked`, the accessible `label`, a required `testId`, and the visible text, almost always as the `control` of a SettingsRow.
+
+```tsx
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+```
+
+### When to use
+
+- Maintaining an existing Settings page that already uses it (Privacy, Notifications, Models, Subagents, Visible models, Line width, JetBrains AI quota).
+- A host-persisted on/off setting shown as the `control` of a SettingsRow, whose `checked` follows the saved value.
+- A per-item visibility switch in a Settings list, such as Visible models.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Switch | Any new switch, including in Settings (Extensions and MCP servers already use it), and anywhere you need a hover state, `className`, `ref`, a tooltip trigger or extra ARIA. See *SettingsSwitch and Switch* below for the differences. |
+| SegmentedControl | A setting with more than two named values. |
+| SettingsRadioCards | Choosing one of a few options that each need a title and description. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Track | The `<button type="button" role="switch">` itself: a rounded track, `border-default` off and `primary` on. It also carries the focus ring. |
+| Knob | A round span that slides to the end when on; `container-workspace-bg` in both states. |
+| Visible text | Not part of the component; usually the `label` and `description` of the surrounding SettingsRow. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `checked` | `boolean` | — | Required. The current state; the switch keeps no state of its own. |
+| `disabled` | `boolean` | `false` | Native disabled: no focus, no activation, no pointer events; the whole control is dimmed with `opacity-50`. |
+| `label` | `string` | — | Required. The accessible name (`aria-label`). Use the row's locale key, or a more specific one (`settings.subagents.allowGlobally`, `settings.visibleModels.show`). |
+| `testId` | `string` | — | Required. Rendered as `data-testid`; the e2e handle of the setting (`notifications-toggle`, `review-autofix-toggle`). |
+| `onChange` | `(checked: boolean) => void` | — | Required. Called on every click with the next state (`!checked`). |
+
+### States
+
+Every cell is the real component. Click the first row, or click into the page and press Tab to see keyboard focus; there is no hover treatment. Disabled is the real prop.
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Off | `checked={false}`. | `border-default` track, `container-workspace-bg` knob at the start. |
+| On | `checked`. | `primary` track; the knob stays `container-workspace-bg` and moves to the end. |
+| Hover | Pointer over the switch. | No distinct treatment. |
+| Pressed | Pointer down or Space held. | No distinct treatment. |
+| Keyboard focus | Tab to the switch. | A 2px `primary` ring flush around the track; on the `primary` track it reads as a thicker edge. |
+| Disabled | `disabled`. | The enabled colours at `opacity-50`; no pointer events. |
+| Changing | `checked` flips. | The track colour fades and the knob slides; there is no reduced-motion variant. |
+
+### SettingsSwitch and Switch
+
+Both render a `role="switch"` button with the same track and knob geometry, but they are two implementations (audit F-04). Every cell is the real component: hover and Tab into each column to compare.
+
+| Aspect | Switch | SettingsSwitch |
+| --- | --- | --- |
+| Hit area and hover | The track sits in a larger round hit area that takes `control-bg-hovered` on hover. | The button is the track itself; no hover treatment. |
+| Knob when on | `control-primary-text`, the label colour on the primary fill. | Stays `container-workspace-bg` in both states. |
+| Disabled | Disabled colour roles: track `control-primary-disabled-bg` (on) or `control-disabled-border` (off), knob `control-disabled-text`. | The enabled colours at `opacity-50`. |
+| Focus ring | Drawn around the hit area, clear of the track. | Drawn flush against the track; on the `primary` track it merges with the fill. |
+| Reduced motion | Track and knob transitions stop under `prefers-reduced-motion`. | Transitions always run. |
+| API | `onCheckedChange`; optional `testId`; native button props, `className` and `ref` pass through; `onClick` can cancel with `preventDefault()`. | `onChange`; required `testId`; nothing else is accepted. |
+
+### Accessibility
+
+- A native `<button type="button">` with `role="switch"` and `aria-checked`; `data-active` mirrors `checked`.
+- `label` is the accessible name. The SettingsRow text is not linked to the switch, so the label must name the same setting.
+- No visible On/Off text; the state is `aria-checked` and the knob position.
+- `disabled` is native: the switch leaves the tab order and cannot be activated.
+- It accepts no other attributes and no `ref`, so it cannot carry `aria-description` or be a Radix `asChild` trigger; use Switch when that is needed.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from the switch; the focus ring appears. |
+| `Space / Enter` | Toggles the state (native button activation). |
+
+### Usage rules
+
+- **SSW-1** — Do not add new SettingsSwitch call sites; new switches, in Settings too, use Switch. SettingsSwitch is a duplicate implementation tracked for consolidation (audit F-04, `buttonUsage.test.ts`).
+- **SSW-2** — Place it as the `control` of a SettingsRow (or beside its own visible name in a list row); it has no visible text of its own.
+- **SSW-3** — `label` comes from the row's locale key or a more specific one; in a list it names the item (`settings.visibleModels.show`).
+- **SSW-4** — Give every switch a stable `testId` named after the setting (`<setting>-toggle`); it is required because e2e tests address settings by it.
+- **SSW-5** — `checked` is the saved value: `onChange` writes the setting and the switch follows the broadcast, never an optimistic local copy. Report a failed write with a toast or an inline error and leave `checked` on the saved value.
+- **SSW-6** — Do not wrap, restyle or patch it to get hover, tooltips, `aria-description` or a different disabled look — those are what Switch already provides.
+
+### Examples
+
+#### Basic
+
+The control of a SettingsRow, as in Privacy.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function Basic() {
+	const t = useT();
+	const [enabled, setEnabled] = useState(true);
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsRow
+				noBorder
+				label={t("settings.privacy.share")}
+				control={
+					<SettingsSwitch
+						checked={enabled}
+						label={t("settings.privacy.share")}
+						testId="analytics-toggle"
+						onChange={setEnabled}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### With a description
+
+A SettingsRow with a detail line, as in Notifications.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function Description() {
+	const t = useT();
+	const [enabled, setEnabled] = useState(false);
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsRow
+				noBorder
+				label={t("settings.notifications.enable")}
+				description={t("settings.notifications.osDescription")}
+				control={
+					<SettingsSwitch
+						checked={enabled}
+						label={t("settings.notifications.enable")}
+						testId="notifications-toggle"
+						onChange={setEnabled}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### In a settings group
+
+Two switch rows in the Models page's Review group.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function Group() {
+	const t = useT();
+	const [agentReview, setAgentReview] = useState(true);
+	const [autoFix, setAutoFix] = useState(false);
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsGroup title={t("settings.models.reviewGroup")}>
+				<SettingsRow
+					testId="agent-review-row"
+					label={t("settings.models.agentReview")}
+					description={t("settings.models.agentReviewDescription")}
+					control={
+						<SettingsSwitch
+							checked={agentReview}
+							label={t("settings.models.agentReview")}
+							testId="agent-review-toggle"
+							onChange={setAgentReview}
+						/>
+					}
+				/>
+				<SettingsRow
+					testId="review-autofix-row"
+					label={t("settings.models.autoFix")}
+					description={t("settings.models.autoFixDescription")}
+					control={
+						<SettingsSwitch
+							checked={autoFix}
+							label={t("settings.models.autoFix")}
+							testId="review-autofix-toggle"
+							onChange={setAutoFix}
+						/>
+					}
+				/>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Description follows the state
+
+Subagents: the row's description explains the current state, and `label` is more specific than the row text.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function StateDescription() {
+	const t = useT();
+	const [enabled, setEnabled] = useState(true);
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsRow
+				noBorder
+				label={t("settings.subagents.allow")}
+				description={
+					enabled
+						? t("settings.subagents.allowOnDescription")
+						: t("settings.subagents.allowOffDescription")
+				}
+				control={
+					<SettingsSwitch
+						checked={enabled}
+						label={t("settings.subagents.allowGlobally")}
+						testId="subagents-global-toggle"
+						onChange={setEnabled}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Per-item list
+
+Visible models: one switch per model, each label names its model.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+const MODELS = [
+	{ id: "claude-sonnet-4", name: "Claude Sonnet 4", provider: "anthropic", window: "200K" },
+	{ id: "gpt-5", name: "GPT-5", provider: "openai", window: "400K" },
+	{ id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "google", window: "1M" },
+];
+
+export default function ItemList() {
+	const t = useT();
+	const [hidden, setHidden] = useState<readonly string[]>(["gemini-2.5-pro"]);
+	const toggle = (id: string) =>
+		setHidden((list) => (list.includes(id) ? list.filter((item) => item !== id) : [...list, id]));
+	return (
+		<div className="flex w-full max-w-[28rem] flex-col gap-12">
+			{MODELS.map((model) => (
+				<div key={model.id} className="flex items-center gap-12">
+					<span className="flex min-w-0 flex-1 flex-col">
+						<span className="truncate tr-text-ui text-text-default">{model.name}</span>
+						<span className="truncate tr-text-metadata text-text-muted">
+							{t("settings.visibleModels.meta", { provider: model.provider, window: model.window })}
+						</span>
+					</span>
+					<SettingsSwitch
+						checked={!hidden.includes(model.id)}
+						label={t("settings.visibleModels.show", { name: model.name })}
+						testId={`model-visibility-${model.provider}-${model.id}`}
+						onChange={() => toggle(model.id)}
+					/>
+				</div>
+			))}
+		</div>
+	);
+}
+```
+
+#### Saved through the host
+
+`checked` is the saved value, so the knob moves when the mocked host confirms the write, not on click.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function HostSaved() {
+	const t = useT();
+	// `saved` stands in for the host's saved value.
+	const [saved, setSaved] = useState(false);
+	const update = (next: boolean) => {
+		setTimeout(() => setSaved(next), 600);
+	};
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsRow
+				noBorder
+				label={t("settings.lineWidth.fitToPane")}
+				description={t("settings.lineWidth.fitToPaneDescription")}
+				control={
+					<SettingsSwitch
+						checked={saved}
+						label={t("settings.lineWidth.chat.boundedLabel")}
+						testId="chat-line-width-bounded"
+						onChange={update}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Disabled
+
+Off and on; the whole control is dimmed with `opacity-50`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function Disabled() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-16">
+			<SettingsSwitch
+				checked={false}
+				disabled
+				label={t("panels.analytics.shareLabel")}
+				testId="analytics-toggle-off"
+				onChange={() => {}}
+			/>
+			<SettingsSwitch
+				checked
+				disabled
+				label={t("panels.analytics.shareLabel")}
+				testId="analytics-toggle-on"
+				onChange={() => {}}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/PrivacySettings.tsx` | Analytics sharing as a SettingsRow control; a failed write toasts. |
+| `apps/web/src/panels/ModelsSettings.tsx` | Agent-triggered review and automatic fix cycle rows in the Review group. |
+| `apps/web/src/panels/SubagentSettings.tsx` | Global and per-workspace allow switches; the workspace one sits beside a source tag. |
+| `apps/web/src/panels/VisibleModelsSettings.tsx` | One switch per model in the visibility list. |
+| `apps/web/src/panels/AnalyticsPreferences.tsx` | Shared by Settings and the analytics consent dialog, with `disabled`. |
+| `apps/web/src/panels/JetBrainsAiCard.tsx` | Show-quota switch whose failed save shows an inline error. |
+
+## Switch
+
+The shared on/off control: a native `<button role="switch">` that reports the next state through `onCheckedChange`. It owns the track, the knob, the hover hit area, focus, disabled colours and motion. The call site provides the controlled `checked` value, an accessible `label` and the visible text beside it.
+
+```tsx
+import { Switch } from "@thinkrail/ui/switch";
+```
+
+### When to use
+
+- A setting or option that takes effect as soon as it is flipped: enable an extension or MCP server, load a skill.
+- A yes/no option inside a dialog form that the submit reads: delete the branch after merging, draft specs with the agent.
+- A per-item enable control at the end of a list row, next to the row's other actions.
+- A switch whose state needs a spoken or hovered explanation, wrapped in IconTooltip with `aria-description`.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SettingsSwitch | The existing Settings-dialog switch in `apps/web/src/panels`. It looks and behaves differently (no hover area, opacity-dimmed disabled state, no `className`); see *Switch and SettingsSwitch* below. New code uses Switch. |
+| Button | An action, or a text toggle that changes a view rather than a setting (`selected` with `aria-pressed`). |
+| ToggleSegment | Choosing one of a few views in a header strip. |
+| SegmentedControl | A setting with more than two named values, or two values that are not on/off. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Hit area | The `<button type="button" role="switch">`: a round area slightly larger than the track that takes the hover fill and the focus ring. |
+| Track | An `aria-hidden` rounded span: `border-default` when off, `primary` when on, disabled roles while disabled. |
+| Knob | A round span inside the track that slides to the end when on; `container-workspace-bg` off, `control-primary-text` on. |
+| Visible text | Not part of the component. The call site places the setting's name (and detail) beside it; the switch shows no On/Off text. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `checked` | `boolean` | — | Required. The current state; the switch is fully controlled and keeps no state of its own. |
+| `label` | `string` | — | Required. The accessible name (`aria-label`). Use a locale key that names the setting, and the item in a list (`Enable {{title}}`). |
+| `onCheckedChange` | `(checked: boolean) => void` | — | Required. Called once per activation with the next state (`!checked`). Not called while disabled or when `onClick` called `preventDefault()`. |
+| `testId` | `string` | — | Rendered as `data-testid`. |
+| `ref` | `Ref<HTMLButtonElement>` | — | Forwarded to the `<button>` (React 19 ref prop), so the switch can be a Radix `asChild` trigger. |
+
+Native button props:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `disabled` | `boolean` | `false` | Native disabled: no focus, no activation, no pointer events (so no hover and no tooltip without a wrapper), disabled colour roles. |
+| `onClick` | `MouseEventHandler` | — | Runs before the change; call `event.preventDefault()` to cancel it. `onCheckedChange` is the normal handler. |
+| `className` | `string` | — | Placement only: margins, flex/grid placement, alignment. |
+| `aria-description` | `string` | — | Extra spoken detail, for example the tooltip text that explains the current state or why it is blocked. |
+
+### States
+
+Every cell is the real component. Hover and click the first row, or click into the page and press Tab to see keyboard focus. Disabled is the real prop.
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Off | `checked={false}`. | `border-default` track, `container-workspace-bg` knob at the start. |
+| On | `checked`. | `primary` track, `control-primary-text` knob at the end. |
+| Hover | Pointer over the switch. | The hit area behind the track takes `control-bg-hovered`; the track and knob do not change. |
+| Pressed | Pointer down or Space held. | No distinct treatment. |
+| Keyboard focus | Tab to the switch. | A 2px `primary` ring around the hit area, clear of the track. |
+| Disabled | `disabled`. | Track `control-disabled-border` (off) or `control-primary-disabled-bg` (on), knob `control-disabled-text`; no hover fill, no pointer events. |
+| Changing | `checked` flips. | The track colour fades and the knob slides; both are instant under `prefers-reduced-motion`. |
+
+### Switch and SettingsSwitch
+
+Both render a `role="switch"` button with the same track and knob geometry, but they are two implementations (audit F-04). Every cell is the real component: hover and Tab into each column to compare.
+
+| Aspect | Switch | SettingsSwitch |
+| --- | --- | --- |
+| Hit area and hover | The track sits in a larger round hit area that takes `control-bg-hovered` on hover. | The button is the track itself; no hover treatment. |
+| Knob when on | `control-primary-text`, the label colour on the primary fill. | Stays `container-workspace-bg` in both states. |
+| Disabled | Disabled colour roles: track `control-primary-disabled-bg` (on) or `control-disabled-border` (off), knob `control-disabled-text`. | The enabled colours at `opacity-50`. |
+| Focus ring | Drawn around the hit area, clear of the track. | Drawn flush against the track; on the `primary` track it merges with the fill. |
+| Reduced motion | Track and knob transitions stop under `prefers-reduced-motion`. | Transitions always run. |
+| API | `onCheckedChange`; optional `testId`; native button props, `className` and `ref` pass through; `onClick` can cancel with `preventDefault()`. | `onChange`; required `testId`; nothing else is accepted. |
+
+### Accessibility
+
+- A native `<button type="button">` with `role="switch"` and `aria-checked`, so screen readers announce a switch and its state.
+- `label` is the accessible name. The visible text beside the switch is not linked to it, so the label must say the same thing (or more, such as the item's name).
+- There is no visible On/Off text; the state is carried by `aria-checked` and the knob position (`packages/ui/SPEC.md`).
+- The track and knob are `aria-hidden`; `data-active` mirrors `checked` for tests.
+- `disabled` is native: the switch leaves the tab order and cannot be activated. Because it also stops pointer events, a tooltip on a disabled switch needs IconTooltip's `wrapTrigger`.
+- Explain a state or a block with IconTooltip and the same text in `aria-description`, as the Skills dialog does.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from the switch; the focus ring appears. |
+| `Space / Enter` | Toggles the state (native button activation). |
+
+### Usage rules
+
+- **SWT-1** — Use a switch only for an on/off state that applies when flipped or that a form submits. Actions are Buttons; choosing between views is ToggleSegment or a `selected` Button (LIB-3).
+- **SWT-2** — Always pass `label` from a locale key that names the setting; in a list, name the item (`settings.extensions.enable`, `mcp.server.enable`). Place the visible name beside the switch yourself.
+- **SWT-3** — Never add On/Off text next to the switch. When the state or a block needs words, use IconTooltip and pass the same text as `aria-description`; wrap a disabled switch with `wrapTrigger`.
+- **SWT-4** — Keep it controlled: `checked` comes from the authoritative value. A persisted setting follows the store's broadcast value instead of flipping optimistically (`apps/web/src/panels/SPEC.md`).
+- **SWT-5** — Disable the switch while its change or the surrounding submit is in flight (`disabled={busy}`) instead of hiding it.
+- **SWT-6** — `className` is for placement only; never restyle the track or knob. New switches use Switch, not SettingsSwitch or a hand-rolled `role="switch"` button (LIB-2, audit F-04).
+
+### Examples
+
+#### Basic
+
+A switch with its visible name beside it; `label` repeats the name.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+import { useState } from "react";
+
+export default function Basic() {
+	const t = useT();
+	const [setup, setSetup] = useState(true);
+	return (
+		<div className="flex items-center gap-12">
+			<span className="tr-text-ui text-text-default">{t("panels.createProject.setupTitle")}</span>
+			<Switch
+				checked={setup}
+				label={t("panels.createProject.setupTitle")}
+				onCheckedChange={setSetup}
+			/>
+		</div>
+	);
+}
+```
+
+#### Dialog option
+
+A title, a detail line and the switch, as in the Create project dialog.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+import { useState } from "react";
+
+export default function DialogOption() {
+	const t = useT();
+	const [setup, setSetup] = useState(true);
+	return (
+		<div className="flex w-full max-w-[28rem] items-center gap-12">
+			<span className="min-w-0 flex-1">
+				<span className="block tr-title-compact text-text-default">
+					{t("panels.createProject.setupTitle")}
+				</span>
+				<span className="block tr-text-metadata text-text-muted">
+					{t("panels.createProject.setupDetail")}
+				</span>
+			</span>
+			<Switch
+				checked={setup}
+				onCheckedChange={setSetup}
+				label={t("panels.createProject.setupTitle")}
+				testId="create-project-setup"
+			/>
+		</div>
+	);
+}
+```
+
+#### Disabled while busy
+
+The Merge PR option is disabled while the merge runs.
+
+```tsx
+import { RiGitMergeLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Switch } from "@thinkrail/ui/switch";
+import { useState } from "react";
+
+export default function Busy() {
+	const t = useT();
+	const branch = "feature/login";
+	const [deleteBranch, setDeleteBranch] = useState(true);
+	const [busy, setBusy] = useState(false);
+	const merge = () => {
+		setBusy(true);
+		setTimeout(() => setBusy(false), 1500);
+	};
+	return (
+		<div className="flex w-full max-w-[28rem] flex-col gap-12">
+			<div className="flex items-center justify-between gap-12">
+				<span className="tr-text-ui text-text-default">
+					{t("panels.mergePr.deleteBranch", { branch })}
+				</span>
+				<Switch
+					checked={deleteBranch}
+					label={t("panels.mergePr.deleteBranch", { branch })}
+					testId="merge-pr-delete-branch"
+					disabled={busy}
+					onCheckedChange={setDeleteBranch}
+				/>
+			</div>
+			<div className="flex justify-end">
+				<Button iconLeft={RiGitMergeLine} loading={busy} onClick={merge}>
+					{t("panels.mergePr.method.squash")}
+				</Button>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Per-item list
+
+One switch per extension; each label names its item.
+
+```tsx
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+import { useState } from "react";
+
+const EXTENSIONS: readonly { name: string; title: string; description: MessageKey }[] = [
+	{
+		name: "visualize",
+		title: "Visualize",
+		description: "settings.extensions.visualize.description",
+	},
+	{
+		name: "web-access",
+		title: "Web access",
+		description: "settings.extensions.web-access.description",
+	},
+];
+
+export default function ItemList() {
+	const t = useT();
+	const [disabled, setDisabled] = useState<readonly string[]>(["web-access"]);
+	const toggle = (name: string, enabled: boolean) =>
+		setDisabled((list) => (enabled ? list.filter((item) => item !== name) : [...list, name]));
+	return (
+		<ul className="flex w-full max-w-[28rem] flex-col gap-12">
+			{EXTENSIONS.map((entry) => (
+				<li key={entry.name} className="flex items-start justify-between gap-12">
+					<span className="flex min-w-0 flex-col gap-4">
+						<span className="tr-title-compact text-text-default">{entry.title}</span>
+						<span className="tr-text-metadata text-text-muted">{t(entry.description)}</span>
+					</span>
+					<Switch
+						checked={!disabled.includes(entry.name)}
+						label={t("settings.extensions.enable", { title: entry.title })}
+						testId={`extension-toggle-${entry.name}`}
+						onCheckedChange={(next) => toggle(entry.name, next)}
+					/>
+				</li>
+			))}
+		</ul>
+	);
+}
+```
+
+#### Beside row actions
+
+An MCP server row: the switch sits between the row's action and its menu, and its label says what the next flip does.
+
+```tsx
+import { RiMore2Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { Switch } from "@thinkrail/ui/switch";
+import { useState } from "react";
+
+export default function RowActions() {
+	const t = useT();
+	const name = "github";
+	const [enabled, setEnabled] = useState(true);
+	return (
+		<div className="flex w-full max-w-[28rem] flex-wrap items-center gap-8">
+			<span className="min-w-0 flex-1 truncate tr-title-compact text-text-default">{name}</span>
+			<div className="ml-auto flex shrink-0 items-center gap-8">
+				<Button variant="outline" size="m" onClick={() => {}}>
+					{t("mcp.action.testConnection")}
+				</Button>
+				<Switch
+					checked={enabled}
+					label={t(enabled ? "mcp.server.disable" : "mcp.server.enable", { name })}
+					testId="mcp-server-toggle"
+					onCheckedChange={setEnabled}
+				/>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<IconButton icon={RiMore2Line} label={t("mcp.server.more", { name })} />
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem onSelect={() => {}}>{t("common.edit")}</DropdownMenuItem>
+						<DropdownMenuItem onSelect={() => {}}>{t("common.remove")}</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Tooltip and blocked reason
+
+IconTooltip explains the state; a blocked switch is disabled and keeps its tooltip through `wrapTrigger`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { useState } from "react";
+
+export default function TooltipReason() {
+	const t = useT();
+	const [loaded, setLoaded] = useState(true);
+	const hint = loaded ? t("chat.skills.switchOn") : t("chat.skills.switchOff");
+	const blocked = t("chat.skills.blockedByTrust");
+	return (
+		<div className="flex items-center gap-16">
+			<IconTooltip label={hint}>
+				<Switch
+					checked={loaded}
+					label={t("chat.skills.enableSkill", { skill: "write-spec" })}
+					aria-description={hint}
+					onCheckedChange={setLoaded}
+				/>
+			</IconTooltip>
+			<IconTooltip label={blocked} wrapTrigger>
+				<Switch
+					checked={false}
+					disabled
+					label={t("chat.skills.enableSkill", { skill: "deploy" })}
+					aria-description={blocked}
+					onCheckedChange={() => {}}
+				/>
+			</IconTooltip>
+		</div>
+	);
+}
+```
+
+#### Disabled
+
+Off and on with the disabled colour roles.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+
+export default function Disabled() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-16">
+			<Switch
+				checked={false}
+				disabled
+				label={t("settings.notifications.enable")}
+				onCheckedChange={() => {}}
+			/>
+			<Switch
+				checked
+				disabled
+				label={t("settings.notifications.enable")}
+				onCheckedChange={() => {}}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ExtensionsSettings.tsx` | One switch per extension row, label `settings.extensions.enable`. |
+| `apps/web/src/panels/McpSettings.tsx` | Server enable switch beside the row actions; label depends on scope and state; disabled while busy or locked. |
+| `apps/web/src/chat/SkillsDialog.tsx` | `SkillSwitch`: IconTooltip with `wrapTrigger` while disabled and `aria-description` from the tooltip. |
+| `apps/web/src/panels/MergePrDialog.tsx` | Delete-branch option in the merge form, disabled while merging. |
+| `apps/web/src/panels/CreateProjectDialog.tsx` | Draft-the-specs option with a title and detail line. |
+
+## ToggleSegment
+
+One slim text segment of a view toggle in a header or toolbar strip — List | Tree, Split | Inline, Preview | Source. It renders a single `<button>` with `aria-pressed` and owns its type, padding and the active fill (`control-bg-selected`, the same selected role as tabs). The call site renders one segment per option, decides which one is `active`, and provides the row, the gap and any group label.
+
+```tsx
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+```
+
+### When to use
+
+- Switching how a panel or pane shows the same content: List | Tree, All | Changed, Split | Inline, Stacked | One file.
+- Choosing among resolved renderer candidates (Preview | Source, Image | File) in a pane header.
+- Choosing a preview mode beside the content it controls, such as the HTML preview width or the visual-diff mode.
+- Any place a few short, mutually exclusive view options sit inline in chrome next to other header controls.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SegmentedControl | The choice is a setting or a form value (a radio group with one Tab stop and arrow keys), not a view toggle in chrome. |
+| HeaderIconButton | A single on/off header toggle with a familiar icon (hide whitespace, show the review guide). |
+| TabStrip | The options switch between different documents or panels with their own tabpanels. |
+| DropdownMenu | There are too many options to show inline, or the labels are long. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Segment | A native `<button type="button">` with `aria-pressed`, `data-active` and `data-testid`; `tr-text-metadata` type, compact horizontal padding and a small radius. |
+| Label | The `label` string as the button's only content; there is no icon slot. |
+| Active fill | `control-bg-selected` with `text-default` on the active segment. |
+| Group (call site) | The component renders no group. The call site places segments in a flex row with a small gap, inside a `role="toolbar"` row or a `<fieldset aria-label>` when the set needs a name. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `testid` | `string` | — | Required. Rendered as `data-testid` on the button; e2e tests select segments by it. |
+| `label` | `string` | — | The visible text and the accessible name. Use a locale key; keep it to one or two short words. |
+| `active` | `boolean` | — | Required. Whether this segment is the current view. Sets `aria-pressed` and `data-active` and paints the active fill. The call site keeps exactly one segment of a set active. |
+| `disabled` | `boolean` | `false` | Natively disables the button. Only an inactive segment shows the disabled text colour; an active one keeps its active look. |
+| `onClick` | `() => void` | — | Required. Called on every activation, including on the segment that is already active; set the view to this segment's value. |
+
+### States
+
+Every cell is the real component with real props. Hover the enabled inactive segment, or click into the page and press Tab to see keyboard focus.
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Inactive | `active={false}`. | No fill; `text-muted` label. |
+| Hover | Pointer over an inactive segment. | `control-bg-hovered` fill and `text-default` label. An active segment has no hover change. |
+| Pressed | Pointer down or Space held. | No distinct treatment. |
+| Active | `active`. | `control-bg-selected` fill with a `text-default` label; `aria-pressed="true"`. |
+| Keyboard focus | Tab to the segment. | No component focus treatment; the browser's default focus outline is what shows. |
+| Disabled | `disabled`. | Inactive: `control-disabled-text` label and no hover fill. Active: no distinct treatment — it looks like an enabled active segment. |
+
+### ToggleSegment and SegmentedControl
+
+The same choice in both components, sharing one state. ToggleSegment is for view toggles in chrome; SegmentedControl is for settings.
+
+| Component | Semantics and keyboard |
+| --- | --- |
+| ToggleSegment | Toggle buttons with aria-pressed; each is a Tab stop; Enter / Space. |
+| SegmentedControl | A named radiogroup of native radios; one Tab stop; arrow keys select. |
+
+### Accessibility
+
+- Each segment is a native `<button type="button">` with `aria-pressed`, so assistive technology announces it as a toggle button that is pressed or not pressed.
+- The `label` is the accessible name; there is no `aria-label` prop and no tooltip.
+- The component sets no group role. Name the set where the context does not: the Files and Changes rows are `role="toolbar"` with an `aria-label`, the HTML preview width is a `<fieldset aria-label>`.
+- Exclusivity is not exposed: each segment is an independent toggle, so a reader hears several toggle buttons, one of them pressed.
+- Disabled segments use the native `disabled` attribute and leave the Tab order.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves to the next or previous segment; every enabled segment is its own Tab stop. A surrounding `role="toolbar"` adds no arrow-key movement. |
+| `Enter / Space` | Activates the segment (calls `onClick`). |
+
+### Usage rules
+
+- **TGS-1** — Use ToggleSegment for view toggles in chrome — header rows, pane toolbars, renderer strips. A setting or a form value is a SegmentedControl, because it needs radio semantics and one Tab stop; the MCP server dialogs' transport, exposure and scope pairs are the remaining form use.
+- **TGS-2** — Render a set, never a lone segment: a few short options from one piece of state, with exactly one `active`. A single on/off toggle is a HeaderIconButton or a Button with `selected` and `aria-pressed`.
+- **TGS-3** — Place segments in a flex row with a small gap (`gap-2` or `gap-4`) and add only placement. Never restyle the active segment or add a track behind the set; the selected look is `control-bg-selected`, shared with tabs.
+- **TGS-4** — Separate two independent sets in one row with space (`ml-auto`) or a thin vertical divider, as the review header does, so they never read as one choice.
+- **TGS-5** — Name the set when its labels do not explain it: wrap the segments in a `<fieldset>` with an `aria-label` from a locale key, as the HTML preview width does. A `role="toolbar"` row names the set too, but it adds no arrow-key movement.
+- **TGS-6** — Labels come from locale keys and stay short; a count belongs in the label through its key (`panels.files.changedCount`), not in a badge beside it.
+- **TGS-7** — Give every segment a stable `testid` built from the set and the option (`changes-toggle-list`, `html-viewport-phone`).
+
+### Examples
+
+#### List | Tree
+
+The Changes panel's view toggle in a named toolbar row.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+export default function ListTree() {
+	const t = useT();
+	const [view, setView] = useState<"list" | "tree">("list");
+	return (
+		<div role="toolbar" aria-label={t("changes.panel.toolbar")} className="flex items-center gap-4">
+			<ToggleSegment
+				testid="changes-toggle-list"
+				label={t("changes.panel.list")}
+				active={view === "list"}
+				onClick={() => setView("list")}
+			/>
+			<ToggleSegment
+				testid="changes-toggle-tree"
+				label={t("changes.panel.tree")}
+				active={view === "tree"}
+				onClick={() => setView("tree")}
+			/>
+		</div>
+	);
+}
+```
+
+#### Count in the label
+
+The Files panel's All | Changed pair; the count comes from the label's locale key, and a header action sits at the end of the row.
+
+```tsx
+import { RiCollapseVerticalLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+import { HeaderIconButton } from "@/panels/HeaderIconButton";
+
+export default function FilesMode() {
+	const t = useT();
+	const [mode, setMode] = useState<"all" | "changed">("all");
+	const count = 3;
+	return (
+		<div
+			role="toolbar"
+			aria-label={t("panels.files.toolbar")}
+			className="flex w-full max-w-[20rem] items-center gap-4"
+		>
+			<ToggleSegment
+				testid="files-mode-all"
+				label={t("panels.files.all")}
+				active={mode === "all"}
+				onClick={() => setMode("all")}
+			/>
+			<ToggleSegment
+				testid="files-mode-changed"
+				label={count > 0 ? t("panels.files.changedCount", { count }) : t("panels.files.changed")}
+				active={mode === "changed"}
+				onClick={() => setMode("changed")}
+			/>
+			<div className="ml-auto flex shrink-0">
+				<HeaderIconButton
+					testid="files-collapse-all"
+					label={t("panels.files.collapseAll")}
+					onClick={() => {}}
+					icon={RiCollapseVerticalLine}
+				/>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Two sets in one header
+
+Split | Inline and Stacked | One file, separated by a thin divider.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+export default function TwoSets() {
+	const t = useT();
+	const [view, setView] = useState<"split" | "inline">("split");
+	const [layout, setLayout] = useState<"stacked" | "single">("stacked");
+	return (
+		<span className="flex items-center gap-4">
+			<ToggleSegment
+				testid="changes-review-toggle-split"
+				label={t("changes.review.split")}
+				active={view === "split"}
+				onClick={() => setView("split")}
+			/>
+			<ToggleSegment
+				testid="changes-review-toggle-inline"
+				label={t("changes.review.inline")}
+				active={view === "inline"}
+				onClick={() => setView("inline")}
+			/>
+			<span className="mx-4 h-16 w-px bg-border-default" />
+			<ToggleSegment
+				testid="changes-review-layout-stacked"
+				label={t("changes.review.stacked")}
+				active={layout === "stacked"}
+				onClick={() => setLayout("stacked")}
+			/>
+			<ToggleSegment
+				testid="changes-review-layout-single"
+				label={t("changes.review.oneFile")}
+				active={layout === "single"}
+				onClick={() => setLayout("single")}
+			/>
+		</span>
+	);
+}
+```
+
+#### Renderer candidates
+
+One segment per resolved renderer, mapped from a list, then the diff layout pair.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+const CANDIDATES = [
+	{ id: "markdown", labelKey: "viewer.renderer.preview" },
+	{ id: "code", labelKey: "viewer.renderer.source" },
+] as const;
+
+export default function RendererCandidates() {
+	const t = useT();
+	const [rendererId, setRendererId] = useState<string>("markdown");
+	const [layout, setLayout] = useState<"split" | "unified">("split");
+	return (
+		<span className="flex shrink-0 items-center gap-4">
+			{CANDIDATES.map((candidate) => (
+				<ToggleSegment
+					key={candidate.id}
+					testid={`renderer-${candidate.id}`}
+					label={t(candidate.labelKey)}
+					active={candidate.id === rendererId}
+					onClick={() => setRendererId(candidate.id)}
+				/>
+			))}
+			<ToggleSegment
+				testid="diff-toggle-split"
+				label={t("panels.diffPane.split")}
+				active={layout === "split"}
+				onClick={() => setLayout("split")}
+			/>
+			<ToggleSegment
+				testid="diff-toggle-inline"
+				label={t("panels.diffPane.inline")}
+				active={layout === "unified"}
+				onClick={() => setLayout("unified")}
+			/>
+		</span>
+	);
+}
+```
+
+#### Named set
+
+The HTML preview width as a `<fieldset>` with an `aria-label`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+const VIEWPORTS = [
+	{ id: "fill", labelKey: "viewer.html.viewport.fill" },
+	{ id: "phone", labelKey: "viewer.html.viewport.phone" },
+	{ id: "tablet", labelKey: "viewer.html.viewport.tablet" },
+	{ id: "desktop", labelKey: "viewer.html.viewport.desktop" },
+] as const;
+
+export default function NamedSet() {
+	const t = useT();
+	const [viewport, setViewport] = useState<string>("fill");
+	return (
+		<fieldset aria-label={t("viewer.html.viewport.label")} className="m-0 flex gap-2 border-0 p-0">
+			{VIEWPORTS.map((candidate) => (
+				<ToggleSegment
+					key={candidate.id}
+					testid={`html-viewport-${candidate.id}`}
+					label={t(candidate.labelKey)}
+					active={candidate.id === viewport}
+					onClick={() => setViewport(candidate.id)}
+				/>
+			))}
+		</fieldset>
+	);
+}
+```
+
+#### Mode and side
+
+The visual-diff header: the comparison mode on the left, the comment side pushed to the right.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+const MODES = [
+	{ mode: "2-up", labelKey: "viewer.visualDiff.twoUp" },
+	{ mode: "swipe", labelKey: "viewer.visualDiff.swipe" },
+	{ mode: "onion", labelKey: "viewer.visualDiff.onionSkin" },
+] as const;
+
+export default function ModeAndSide() {
+	const t = useT();
+	const [mode, setMode] = useState<string>("swipe");
+	const [side, setSide] = useState<"base" | "worktree">("worktree");
+	return (
+		<div className="flex w-full flex-wrap items-center gap-4">
+			<div className="flex items-center gap-2">
+				{MODES.map((candidate) => (
+					<ToggleSegment
+						key={candidate.mode}
+						testid={`image-diff-${candidate.mode}`}
+						label={t(candidate.labelKey)}
+						active={mode === candidate.mode}
+						onClick={() => setMode(candidate.mode)}
+					/>
+				))}
+			</div>
+			{mode !== "2-up" ? (
+				<div className="ml-auto flex items-center gap-2">
+					<ToggleSegment
+						testid="image-diff-side-base"
+						label={t("viewer.visualDiff.commentOnOld")}
+						active={side === "base"}
+						onClick={() => setSide("base")}
+					/>
+					<ToggleSegment
+						testid="image-diff-side-worktree"
+						label={t("viewer.visualDiff.commentOnNew")}
+						active={side === "worktree"}
+						onClick={() => setSide("worktree")}
+					/>
+				</div>
+			) : null}
+		</div>
+	);
+}
+```
+
+#### Disabled option
+
+The MCP add dialog's scope pair: Project stays visible but disabled until the project is trusted, with the reason below.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+
+export default function Disabled() {
+	const t = useT();
+	const [scope, setScope] = useState<"user" | "project">("user");
+	const projectScopeAvailable = false;
+	return (
+		<div className="flex flex-col gap-8">
+			<div className="flex flex-wrap items-center gap-2">
+				<ToggleSegment
+					testid="mcp-add-scope-user"
+					label={t("mcp.addDialog.scopeUser")}
+					active={scope === "user"}
+					onClick={() => setScope("user")}
+				/>
+				<ToggleSegment
+					testid="mcp-add-scope-project"
+					label={t("mcp.addDialog.scopeProject")}
+					active={scope === "project"}
+					disabled={!projectScopeAvailable}
+					onClick={() => setScope("project")}
+				/>
+			</div>
+			<p className="tr-text-metadata text-text-muted">{t("mcp.addDialog.untrusted")}</p>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ChangesPanel.tsx` | List \| Tree at the end of the Changes toolbar row. |
+| `apps/web/src/panels/FilesPanel.tsx` | All \| Changed (with the changed-file count) in the Files toolbar row. |
+| `apps/web/src/panels/ChangesReviewPane.tsx` | Split \| Inline and Stacked \| One file in the review header, split by a divider. |
+| `packages/resource-renderers/src/support/RendererToggles.tsx` | Renderer candidates and the diff Split \| Inline pair in file and diff pane headers. |
+| `packages/resource-renderers/src/renderers/html/ViewportSwitch.tsx` | Preview width inside a labelled `<fieldset>`. |
+| `packages/resource-renderers/src/renderers/VisualDiff.tsx` | Comparison mode and comment side in the visual-diff header. |
+
+## SegmentedControl
+
+A single-choice settings control: a row of options on one `control-bg` track, built from native radio inputs inside a named `radiogroup`. It owns the track, the selected segment, focus and disabled looks, and the radio keyboard model. The call site provides a unique `name`, an accessible `label`, the typed options, the current `value` (or `null` when the stored value matches no option) and an `onSelect` that writes the setting.
+
+```tsx
+import { SegmentedControl, type SegmentedControlOption } from "@/panels/SegmentedControl";
+```
+
+### When to use
+
+- A setting with two to five short, mutually exclusive values that applies on selection: Theme mode, Contrast level, Message order, Composer size.
+- A preset choice where the stored value may match no preset — pass `value={null}` and nothing is selected (Terminal scrollback).
+- A choice where some values are unavailable on this host or theme, with per-option `disabled`.
+- A choice that must lock while a write is in flight, with the group-level `disabled`.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ToggleSegment | Switching how a panel shows its content in a header or toolbar strip (List \| Tree, Split \| Inline). |
+| SettingsRadioCards | Each option needs a description or hint, or the labels are too long for one row. |
+| SettingsSwitch | The setting is a plain on/off. |
+| DropdownMenu | There are more options than fit in one row, or the list comes from data. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Track | A `role="radiogroup"` `<div>` named by `label`: an inline-flex row on `control-bg` with a small radius and clipped corners; it carries `testId`. |
+| Option | A `<label>` per option with `data-active` and the option's `testId`; it wraps the input and the segment. |
+| Radio input | A visually hidden native `<input type="radio">` with the group's `name`, the option `id` as its value, `checked` and `disabled`. It receives focus and keyboard input. |
+| Segment | The visible text in `tr-text-ui`, full track height with horizontal padding. The selected one takes `control-bg-selected` with `text-default`. |
+| Focus ring | An inset `ring-2` in `primary` on the segment while its radio has keyboard focus. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `name` | `string` | — | Required. The native radio group name. It must be unique on the page: two controls sharing a name become one radio group. |
+| `label` | `string` | — | Required. The `aria-label` of the radiogroup. Use the row's label key (`settings.appearance.themeMode`); it is not shown. |
+| `options` | `readonly SegmentedControlOption<T>[]` | — | The choices in display order. Fields are listed below. |
+| `value` | `T \| null` | — | Required. The selected option `id`. `null` selects nothing — for a host value that no option names. |
+| `onSelect` | `(value: T) => void` | — | Called with the option `id` when a radio becomes checked — by click or by arrow keys. Not called for the option that is already selected. |
+| `disabled` | `boolean` | `false` | Disables every option, for example while a theme write is pending. Combined with each option's own `disabled`. |
+| `testId` | `string` | — | Rendered as `data-testid` on the radiogroup. |
+
+Option fields (SegmentedControlOption<T>):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `id` | `T extends string` | — | The value passed to `onSelect` and compared with `value`; also the radio's `value`. |
+| `label` | `string` | — | The visible text. Translate it at the call site (`t(option.label)`). |
+| `testId` | `string` | — | Rendered as `data-testid` on the option's `<label>`. |
+| `disabled` | `boolean` | — | Disables this option only, such as a theme mode the current family cannot reach. |
+
+### States
+
+Every row is the real component with real props. Hover an unselected option, click into the page and press Tab, then use the arrow keys.
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Unselected | An option whose `id` is not `value`. | The track shows through; `text-muted` label. |
+| Hover | Pointer over an unselected option. | The label turns `text-default`; no fill. The selected option does not change. |
+| Pressed | Pointer down. | No distinct treatment. |
+| Selected | `value` equals the option `id`. | `control-bg-selected` segment with a small radius and a `text-default` label; the radio is checked. |
+| No selection | `value={null}`. | Every option looks unselected; no radio is checked. |
+| Keyboard focus | Tab into the group, or move with the arrow keys. | An inset `ring-2` in `primary` on the focused segment. |
+| Disabled | Option `disabled`, or the group `disabled`. | `control-disabled-text` label with no hover change and a default cursor. A selected option keeps its `control-bg-selected` fill. |
+
+### SegmentedControl and ToggleSegment
+
+The same choice in both components, sharing one state. SegmentedControl is for settings; ToggleSegment is for view toggles in chrome.
+
+| Component | Semantics and keyboard |
+| --- | --- |
+| ToggleSegment | Toggle buttons with aria-pressed; each is a Tab stop; Enter / Space. |
+| SegmentedControl | A named radiogroup of native radios; one Tab stop; arrow keys select. |
+
+### Accessibility
+
+- The track is `role="radiogroup"` with `aria-label={label}`; each option is a native radio whose accessible name is its wrapping `<label>` text.
+- Selection is native `checked`, so assistive technology announces the option, its position in the group and whether it is selected.
+- The inputs are visually hidden, not removed: focus lands on the radio and the segment shows the focus ring.
+- Disabled options use the native `disabled` attribute; arrow keys skip them and they leave the Tab order.
+- The group carries no description. Put the explanation in the surrounding SettingsRow `description`.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus into the group — to the checked option, or the first enabled one when `value` is `null` — and out of it; the whole group is one Tab stop. |
+| `Arrow Left / Arrow Up` | Moves to the previous enabled option, checks it and calls `onSelect`; wraps at the start. |
+| `Arrow Right / Arrow Down` | Moves to the next enabled option, checks it and calls `onSelect`; wraps at the end. |
+| `Space` | Checks the focused option if it is not checked yet. |
+
+### Usage rules
+
+- **SEG-1** — Use SegmentedControl for settings and form values with a few short options that apply on selection. A view toggle in a header strip is a ToggleSegment.
+- **SEG-2** — Give every control a unique `name` (`theme-mode`, `chat-message-order`) and an accessible `label` from the row's locale key.
+- **SEG-3** — Make `onSelect` cheap and idempotent: arrow keys select as they move, so each press writes the setting. Return early when the value is already current, as the settings pages do.
+- **SEG-4** — When the stored value matches no option, pass `value={null}` — never fall back to a nearby preset that would misreport the setting.
+- **SEG-5** — Keep unavailable options visible with per-option `disabled`; lock the whole control with `disabled` while a write is pending instead of hiding it.
+- **SEG-6** — Place it as the `control` of a SettingsRow, or under a stacked title and description; add no classes — the component takes none.
+- **SEG-7** — Keep labels short and options few: the track never wraps. Use SettingsRadioCards or a DropdownMenu when the choices do not fit one row.
+
+### Examples
+
+#### Basic
+
+Two options with one selected; arrow keys move the selection.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+
+type Order = "oldest-first" | "newest-first";
+
+export default function Basic() {
+	const t = useT();
+	const [order, setOrder] = useState<Order>("oldest-first");
+	return (
+		<SegmentedControl
+			name="chat-message-order"
+			label={t("settings.chat.messageOrder")}
+			options={[
+				{ id: "oldest-first", label: t("settings.chat.order.oldestFirst") },
+				{ id: "newest-first", label: t("settings.chat.order.newestFirst") },
+			]}
+			value={order}
+			onSelect={setOrder}
+			testId="chat-message-order-control"
+		/>
+	);
+}
+```
+
+#### In a settings row
+
+Composer size as the control of a SettingsRow with a description.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+type Growth = "compact" | "roomy" | "half-chat";
+
+export default function InSettingsRow() {
+	const t = useT();
+	const [growth, setGrowth] = useState<Growth>("roomy");
+	return (
+		<div className="w-full">
+			<SettingsRow
+				noBorder
+				label={t("settings.chat.composerSize")}
+				description={t("settings.chat.composerSizeDescription")}
+				control={
+					<SegmentedControl
+						name="composer-growth-limit"
+						label={t("settings.chat.composerSize")}
+						options={[
+							{ id: "compact", label: t("settings.chat.growth.compact") },
+							{ id: "roomy", label: t("settings.chat.growth.roomy") },
+							{ id: "half-chat", label: t("settings.chat.growth.halfChat") },
+						]}
+						value={growth}
+						onSelect={(next) => {
+							if (next === growth) return;
+							setGrowth(next);
+						}}
+						testId="composer-growth-control"
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Unavailable option
+
+Theme mode with System offered and Dark unavailable for the current theme family.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl, type SegmentedControlOption } from "@/panels/SegmentedControl";
+
+type ThemeMode = "system" | "light" | "dark";
+
+export default function OptionDisabled() {
+	const t = useT();
+	const [mode, setMode] = useState<ThemeMode>("light");
+	const options: SegmentedControlOption<ThemeMode>[] = [
+		{ id: "system", label: t("settings.appearance.mode.system"), testId: "theme-mode-system" },
+		{ id: "light", label: t("settings.appearance.mode.light"), testId: "theme-mode-light" },
+		{
+			id: "dark",
+			label: t("settings.appearance.mode.dark"),
+			testId: "theme-mode-dark",
+			disabled: true,
+		},
+	];
+	return (
+		<SegmentedControl
+			name="theme-mode"
+			label={t("settings.appearance.themeMode")}
+			options={options}
+			value={mode}
+			onSelect={setMode}
+			testId="theme-mode-control"
+		/>
+	);
+}
+```
+
+#### Locked while saving
+
+The whole control is `disabled` while the simulated write is in flight.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+
+type Contrast = "normal" | "high";
+
+export default function Pending() {
+	const t = useT();
+	const [contrast, setContrast] = useState<Contrast>("normal");
+	const [pending, setPending] = useState(false);
+	const select = (next: Contrast) => {
+		if (next === contrast) return;
+		setPending(true);
+		setTimeout(() => {
+			setContrast(next);
+			setPending(false);
+		}, 1200);
+	};
+	return (
+		<SegmentedControl
+			name="contrast-level"
+			label={t("settings.appearance.contrastLevel")}
+			options={[
+				{ id: "normal", label: t("common.default"), testId: "contrast-default" },
+				{ id: "high", label: t("settings.appearance.contrast.high"), testId: "contrast-high" },
+			]}
+			value={contrast}
+			disabled={pending}
+			onSelect={select}
+			testId="contrast-level-control"
+		/>
+	);
+}
+```
+
+#### Presets
+
+Terminal scrollback: five presets under a stacked title and description.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+
+type Scrollback = "0" | "16" | "64" | "256" | "1024";
+
+export default function Presets() {
+	const t = useT();
+	const [replayKb, setReplayKb] = useState<Scrollback>("256");
+	return (
+		<div className="flex flex-col gap-12">
+			<div className="flex flex-col gap-2">
+				<span className="tr-text-ui text-text-default">
+					{t("settings.terminal.scrollback.title")}
+				</span>
+				<span className="tr-text-metadata text-text-muted">
+					{t("settings.terminal.scrollback.description")}
+				</span>
+			</div>
+			<SegmentedControl
+				name="terminal-scrollback"
+				label={t("settings.terminal.scrollback.label")}
+				options={[
+					{ id: "0", label: t("common.off"), testId: "terminal-replay-0" },
+					{ id: "16", label: t("settings.terminal.scrollback.kb16"), testId: "terminal-replay-16" },
+					{ id: "64", label: t("settings.terminal.scrollback.kb64"), testId: "terminal-replay-64" },
+					{
+						id: "256",
+						label: t("settings.terminal.scrollback.kb256"),
+						testId: "terminal-replay-256",
+					},
+					{
+						id: "1024",
+						label: t("settings.terminal.scrollback.mb1"),
+						testId: "terminal-replay-1024",
+					},
+				]}
+				value={replayKb}
+				onSelect={setReplayKb}
+				testId="terminal-scrollback-control"
+			/>
+		</div>
+	);
+}
+```
+
+#### No matching option
+
+A stored value that names no preset selects nothing until the user picks one.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+
+const PRESETS = [
+	{ id: "0", label: "common.off" },
+	{ id: "16", label: "settings.terminal.scrollback.kb16" },
+	{ id: "64", label: "settings.terminal.scrollback.kb64" },
+] as const;
+
+export default function NoSelection() {
+	const t = useT();
+	const [replayKb, setReplayKb] = useState(128);
+	const value = PRESETS.find((option) => Number(option.id) === replayKb)?.id ?? null;
+	return (
+		<div className="flex flex-col items-start gap-8">
+			<SegmentedControl
+				name="terminal-scrollback-example"
+				label={t("settings.terminal.scrollback.label")}
+				options={PRESETS.map((option) => ({ ...option, label: t(option.label) }))}
+				value={value}
+				onSelect={(id) => setReplayKb(Number(id))}
+			/>
+			<output className="tr-text-metadata text-text-muted">{replayKb} KB</output>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/AppearanceSettings.tsx` | Theme mode and Contrast level; per-option `disabled` and `disabled` while a theme write is pending. |
+| `apps/web/src/panels/ChatSettings.tsx` | Message order and Composer size as SettingsRow controls. |
+| `apps/web/src/panels/TerminalSettings.tsx` | Scrollback presets with `value={null}` for a non-preset host value. |
+
+## Textarea
+
+The shared multi-line text field for dialogs and forms: a native `<textarea>` with the control border and fill, `tr-text-ui` type, a muted placeholder, a stronger border while focused and the disabled roles. It adds no props of its own — the call site provides the label, `value`/`onChange`, `rows`, any key handling and placement.
+
+```tsx
+import { Textarea } from "@thinkrail/ui/textarea";
+```
+
+### When to use
+
+- A multi-line plain-text value in a dialog or form: a prompt template body, a new workspace prompt, a pull request description.
+- Code-like text the user edits line by line — MCP server arguments, pasted `mcpServers` JSON, an entry's raw JSON — with `tr-code-text`.
+- A field whose Enter key submits the dialog while Shift+Enter inserts a newline, as the new workspace prompt does.
+- A field that fills the remaining height of a dialog column (`flex-1` with a `min-h-*`).
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Native `<input>` | The value is a single line — a name, a URL, a command. Dialogs style those with their own input class. |
+| SettingsRadioCards | The user picks one of a few fixed, described options instead of typing. |
+| SegmentedControl | The value is one of a few short presets. |
+| Command | Typing filters a list the user then picks from (a branch, a session, a model). |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Field | A native `<textarea>`: `w-full`, `rounded-sm`, a `control-border-default` border on `control-bg`, `px-12 py-8` padding and `tr-text-ui` in `text-default`. `resize-none` unless the call site opts in. |
+| Placeholder | The native placeholder in `text-muted`. An example of the content, not the label. |
+| Label (call site) | The component renders none. Production pairs it with a `<label htmlFor>` above it, or relies on the dialog's own heading. |
+| Hint or error (call site) | A `tr-text-metadata` line under the field: a muted hint, or an error in `text-feedback-error` with `role="alert"`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `ref` | `Ref<HTMLTextAreaElement>` | — | Forwarded to the `<textarea>` (React 19 ref prop) — the new workspace prompt uses it to focus the field and place the selection after a template is applied. |
+
+Native textarea props:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `value` | `string` | — | Controlled value. Every production call site is controlled. |
+| `onChange` | `ChangeEventHandler<HTMLTextAreaElement>` | — | Receives every edit; read `event.target.value` or `event.currentTarget.value`. |
+| `rows` | `number` | — | Visible height in lines. The field does not grow with its content; production uses 3 for arguments, 6 to 8 for prompts and JSON, 12 to 14 for raw entries and PR descriptions. |
+| `placeholder` | `string` | — | Example content in `text-muted`. Use a locale key, or a literal code sample. |
+| `disabled` | `boolean` | — | Native disabled: the disabled border, fill and text roles, not focusable. Set it while the owning action runs. |
+| `readOnly` | `boolean` | — | Native read-only; focusable and selectable. No distinct look. |
+| `spellCheck` | `boolean` | — | Production turns it off (`false`) for prompts and template bodies, which are full of code and file names. |
+| `onKeyDown` | `KeyboardEventHandler<HTMLTextAreaElement>` | — | Call-site shortcuts, such as Enter to submit. Check IME composition first (`isPromptKeyEventComposing`). |
+| `id` | `string` | — | Ties the field to a `<label htmlFor>`. |
+| `aria-label` | `string` | — | The accessible name when no visible label is tied to the field. |
+| `className` | `string` | — | Placement and height (`min-h-*`, `flex-1`), `resize-y` for a field the user may stretch, and `tr-code-text` (with `px-8 py-4`) for code-like content. Merged after the base classes. |
+
+### States
+
+Every cell is the real component with real props. Click or Tab into a field to see its focus border; disabled fields cannot be focused.
+
+| State | Props |
+| --- | --- |
+| Empty | `placeholder` |
+| Filled | `value` |
+| Disabled, empty | `disabled` |
+| Disabled, filled | `disabled` |
+| Read-only | `readOnly` |
+| Code-like content | `className="px-8 py-4 tr-code-text"` |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Empty | `value` is empty. | The placeholder in `text-muted` on `control-bg`. |
+| Filled | `value` has text. | `tr-text-ui` in `text-default`; overflow scrolls inside the field. |
+| Hover | Pointer over the field. | No distinct treatment. |
+| Focus | Click or Tab into the field. | The border changes to `control-border-active`. The native outline is removed (`outline-none`) and there is no accent ring. |
+| Disabled | `disabled`. | `control-disabled-border`, `control-disabled-bg` and `control-disabled-text`; the placeholder stays `text-muted`. Not focusable. |
+| Read-only | `readOnly`. | No distinct treatment; it still takes the focus border. |
+| Error | The call site's validation fails. | No distinct treatment on the field; the call site shows a `role="alert"` message below it. |
+
+### Accessibility
+
+- A native `<textarea>`: an implicit multi-line textbox, with focus, selection, undo and IME input from the platform.
+- It has no accessible name of its own. Tie it to a visible `<label htmlFor>` (template body, PR description) or give it `aria-label`; a placeholder is not a label.
+- The focus indicator is the `control-border-active` border, not a ring.
+- `disabled` removes it from the tab order; use `readOnly` when the text must stay selectable.
+- Errors are announced by the call site's `role="alert"` line; the field sets neither `aria-invalid` nor `aria-describedby`.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from the field. |
+| `Enter / Shift+Enter` | Insert a newline, unless the call site's `onKeyDown` handles Enter. |
+| `Arrows, Home, End` | Move the caret; native text editing. |
+
+### Usage rules
+
+- **TXA-1** — Use Textarea for multi-line fields in dialogs and forms. The chat composer, `PlanComposer` and `ReviewComposer` own their own editors; do not rebuild them from Textarea or copy their classes onto it.
+- **TXA-2** — Name every Textarea: a visible `<label htmlFor>` tied to its `id`, or `aria-label` when a heading already names it. The placeholder only shows example content.
+- **TXA-3** — Size it with `rows`, or with `flex-1` and a `min-h-*` inside a flex column. It never grows with its content. It does not resize by default; add `resize-y` only where stretching helps, as on the PR description.
+- **TXA-4** — `className` is for placement, height and resize. Border, fill, focus and disabled come from the component. The one font change in production is `tr-code-text` (with `px-8 py-4` in the MCP dialogs) for code-like content.
+- **TXA-5** — Disable the field with native `disabled` while its action runs (saving a template, creating a workspace, generating a PR body). Never dim it with opacity.
+- **TXA-6** — Show validation as a `role="alert"` line in `text-feedback-error tr-text-metadata` under the field; do not recolour the field's border.
+- **TXA-7** — An Enter shortcut returns early while an IME composition is active (`isPromptKeyEventComposing`) and leaves Shift+Enter as a newline.
+
+### Examples
+
+#### Basic
+
+A controlled field with an accessible name and a placeholder.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useState } from "react";
+
+export default function Preview() {
+	const t = useT();
+	const [body, setBody] = useState("Summarize the changes on $1 since yesterday.");
+	return (
+		<Textarea
+			aria-label={t("chat.templateEditor.body")}
+			value={body}
+			onChange={(event) => setBody(event.target.value)}
+			placeholder={t("chat.templateEditor.bodyPlaceholder")}
+			rows={3}
+			className="max-w-[24rem]"
+		/>
+	);
+}
+```
+
+#### Labelled field with a hint
+
+The template editor's body: a `<label htmlFor>`, eight rows and a syntax hint.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useId, useState } from "react";
+
+export default function Labelled() {
+	const t = useT();
+	const id = useId();
+	const [body, setBody] = useState("");
+	return (
+		<div className="flex w-full flex-col gap-4 tr-text-ui">
+			<label htmlFor={id} className="tr-text-emphasis text-text-default">
+				{t("chat.templateEditor.body")}
+			</label>
+			<Textarea
+				id={id}
+				value={body}
+				onChange={(event) => setBody(event.target.value)}
+				placeholder={t("chat.templateEditor.bodyPlaceholder")}
+				spellCheck={false}
+				rows={8}
+			/>
+			<p className="text-text-muted tr-text-metadata">{t("chat.templateEditor.syntaxHint")}</p>
+		</div>
+	);
+}
+```
+
+#### Code-like content
+
+MCP server arguments, one per line, in `tr-code-text`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useId, useState } from "react";
+
+export default function Code() {
+	const t = useT();
+	const id = useId();
+	const [args, setArgs] = useState("");
+	return (
+		<div className="flex w-full flex-col gap-4">
+			<label htmlFor={id} className="tr-title-compact text-text-default">
+				{t("mcp.form.args")}
+			</label>
+			<Textarea
+				id={id}
+				rows={3}
+				value={args}
+				placeholder={"-y\n@modelcontextprotocol/server-filesystem\n."}
+				onChange={(event) => setArgs(event.currentTarget.value)}
+				className="px-8 py-4 tr-code-text"
+			/>
+			<span className="text-text-muted tr-text-metadata">{t("mcp.form.argsHint")}</span>
+		</div>
+	);
+}
+```
+
+#### Validation message
+
+Pasted `mcpServers` JSON parsed with the real parser; the error is a `role="alert"` line, not a field style.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useId, useState } from "react";
+import { parseMcpServersJson } from "@/panels/mcpEntries";
+
+export default function JsonValidation() {
+	const t = useT();
+	const id = useId();
+	const [text, setText] = useState('{ "mcpServers": { "docs": { "command": "npx" ');
+	const parsed = text.trim() ? parseMcpServersJson(t, text) : null;
+	return (
+		<div className="flex w-full flex-col gap-4">
+			<label htmlFor={id} className="tr-title-compact text-text-default">
+				{t("mcp.import.label")}
+			</label>
+			<Textarea
+				id={id}
+				rows={8}
+				value={text}
+				placeholder={'{ "mcpServers": { … } }'}
+				onChange={(event) => setText(event.currentTarget.value)}
+				className="px-8 py-4 tr-code-text"
+			/>
+			{parsed && !parsed.ok ? (
+				<p role="alert" className="text-feedback-error tr-text-metadata">
+					{parsed.error}
+				</p>
+			) : (
+				<span className="text-text-muted tr-text-metadata">{t("mcp.import.hint")}</span>
+			)}
+		</div>
+	);
+}
+```
+
+#### Disabled while saving
+
+The field takes the disabled roles while its Save action is loading.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useState } from "react";
+
+export default function Disabled() {
+	const t = useT();
+	const [body, setBody] = useState("Review the open pull request and list blocking issues.");
+	const [saving, setSaving] = useState(false);
+	const save = () => {
+		setSaving(true);
+		setTimeout(() => setSaving(false), 1500);
+	};
+	return (
+		<div className="flex w-full flex-col items-end gap-8">
+			<Textarea
+				aria-label={t("chat.templateEditor.body")}
+				disabled={saving}
+				value={body}
+				onChange={(event) => setBody(event.target.value)}
+				rows={4}
+			/>
+			<Button loading={saving} onClick={save}>
+				{t("common.save")}
+			</Button>
+		</div>
+	);
+}
+```
+
+#### Enter submits
+
+The new workspace prompt: Enter submits outside an IME composition, Shift+Enter adds a line. The counter shows submissions.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useState } from "react";
+import { isPromptKeyEventComposing } from "@/prompt/SlashCommandCompletion";
+
+export default function EnterSubmits() {
+	const t = useT();
+	const [prompt, setPrompt] = useState("");
+	const [created, setCreated] = useState<string[]>([]);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Textarea
+				value={prompt}
+				onChange={(event) => setPrompt(event.target.value)}
+				placeholder={t("panels.newWorkspace.promptPlaceholder")}
+				spellCheck={false}
+				rows={6}
+				onKeyDown={(event) => {
+					if (isPromptKeyEventComposing(event.nativeEvent)) return;
+					if (event.key === "Enter" && !event.shiftKey) {
+						event.preventDefault();
+						if (!prompt.trim()) return;
+						setCreated((list) => [...list, prompt.trim()]);
+						setPrompt("");
+					}
+				}}
+			/>
+			<output className="tr-text-metadata text-text-muted">{created.length}</output>
+		</div>
+	);
+}
+```
+
+#### Fills its column
+
+The PR description takes the column's remaining height with `flex-1` and can be stretched with `resize-y`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useId, useState } from "react";
+
+export default function FillColumn() {
+	const t = useT();
+	const id = useId();
+	const [body, setBody] = useState(
+		"## Summary\n\n- Moves the prompt field to the shared Textarea.\n\n## Testing\n\n- bun test",
+	);
+	return (
+		<div className="flex h-[20rem] w-full flex-col">
+			<div className="flex min-h-0 flex-1 flex-col gap-4">
+				<label htmlFor={id} className="tr-text-eyebrow text-text-subtle">
+					{t("panels.prCompose.bodyLabel")}
+				</label>
+				<Textarea
+					id={id}
+					value={body}
+					onChange={(event) => setBody(event.target.value)}
+					rows={14}
+					className="min-h-160 flex-1 resize-y tr-code-text"
+				/>
+			</div>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/chat/TemplateEditorDialog.tsx` | The template body: labelled, eight rows, disabled while loading, with a syntax hint. |
+| `apps/web/src/panels/McpServerDialogs.tsx` | Arguments, `mcpServers` JSON import and raw entry editing in `tr-code-text`, with alert errors. |
+| `apps/web/src/panels/NewWorkspaceDialog.tsx` | The workspace prompt: `ref`, Enter to create, template slots, image paste and drop. |
+| `apps/web/src/panels/PrComposeDialog.tsx` | The PR description filling the dialog with `flex-1 resize-y`, disabled while generating. |
+
+## SettingsRadioCards
+
+A settings radio group drawn as a stack of cards. Each card has a label, an optional short hint and a one-line description, and the selected card shows a check. It renders native radio inputs sharing one `name`, so the browser handles keyboard, focus and checked state. The call site supplies the translated choices, the current `value` from the store and `onSelect`, which writes the setting.
+
+```tsx
+import { SettingsRadioCards, type SettingsRadioChoice } from "@/panels/SettingsRadioCards";
+```
+
+### When to use
+
+- A setting with one value out of a few exclusive options, where each option needs a sentence explaining what it does — the Windows shell, how long before idle workspaces settle.
+- A list whose options can be unavailable and must still show why — language files that are missing or cannot be read.
+- An option that needs a short qualifier next to its name: *Recommended*, *default*, a source such as *Built-in* or *Local file*.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SegmentedControl | The options are a few short presets that need no description, such as Terminal scrollback or Theme mode. |
+| SettingsSwitch | The setting is on or off. |
+| DropdownMenu | The choice sits in a compact row or toolbar, or there are too many options to stack as cards. |
+| SettingsRow and SettingsGroup | Surrounding layout: put the cards inside a SettingsGroup, or use a row when the control is a single button or switch. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Group | A `<div role="radiogroup">` named by `label`; the cards stack in a column with `gap-4`. |
+| Card | A `<label>` for each choice, carrying `data-testid` (the choice's `testId`) and `data-active`. It has a `rounded-sm` border and `px-12 py-8` padding, and the whole card is the click target. |
+| Radio | A visually hidden (`sr-only`) native `<input type="radio">` with the group's `name` and the choice `id` as its value. It holds the checked and disabled state. |
+| Title line | The choice `label` in `tr-title-compact text-text-default`, then the optional `hint` in `tr-text-metadata text-text-muted`. |
+| Description | The choice `description` in `tr-text-metadata text-text-muted`, on its own line. |
+| Check | A `size-16` `RiCheckLine` in `text-primary` at the end of the selected card only. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `name` | `string` | — | The native radio group name. It must be unique on the page: two groups with the same name become one group. |
+| `label` | `string` | — | The group's accessible name (`aria-label`). Production passes the same string as the visible heading above it. |
+| `choices` | `readonly SettingsRadioChoice<T>[]` | — | The cards, in order. Texts are already translated; see *Choice fields*. |
+| `value` | `T` | — | The selected choice `id`, read from the store. A value that matches no choice selects none. |
+| `disabled` | `boolean` | `false` | Disables every radio in the group, for example while the host cannot apply the setting. |
+| `onSelect` | `(value: T) => void` | — | Called with the newly selected `id` from the native `change` event. It does not fire for the card that is already selected. |
+
+Choice fields (SettingsRadioChoice):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `id` | `T` | — | The value written to `onSelect` and compared with `value`; also the radio's `value`. |
+| `label` | `string` | — | The card's name, translated: `t("…")` or an own-language name. |
+| `hint` | `string` | — | Optional short qualifier after the label: *Recommended*, *default*, *File not found*. |
+| `description` | `string` | — | Required. One line on what the choice does or why it is unavailable. |
+| `testId` | `string` | — | Set as the card's `data-testid`. |
+| `disabled` | `boolean` | — | Makes this one choice unselectable while it stays in the list. |
+
+### States
+
+Every cell is the real component with real props and its own radio group. Hover a card, click to select, or click into the page and press Tab, then the arrow keys.
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Rest | A choice that is not `value`. | A `border-default` border with no fill; pointer cursor. |
+| Hover | Pointer over a card that is not selected. | `control-bg-hovered` fill. Disabled cards that are not selected still take it. Selected cards do not change. |
+| Keyboard focus | Tab into the group or move with the arrow keys. | A `ring-2` `primary` ring around the focused card (`has-[:focus-visible]`), drawn from the hidden radio's focus. |
+| Selected | `value` equals the choice `id`. | `primary-muted` border on a `primary-subtle` fill, a `primary` check at the end, and `data-active="true"`. |
+| No selection | `value` matches no choice (a host value outside the presets). | Every card at rest and no check. |
+| Disabled choice | `disabled` on a choice. | The radio is natively disabled and the cursor is the default one. No other distinct treatment: colours, hint and description stay as they are. |
+| Selected and disabled | `value` is a disabled choice (a language file that was selected and then removed). | The selected look with the check. The choice cannot be selected again. |
+| Disabled group | `disabled` on the component. | Every radio disabled, with the same look as a disabled choice; the selected card keeps its look. |
+
+### Accessibility
+
+- The wrapper is a `role="radiogroup"` named by `label`. Each card is a native radio inside its `<label>`, so role, checked and disabled state come from the platform.
+- A radio's accessible name is the whole card text — label, hint and description — because the `<label>` wraps all three.
+- Radios that share `name` form one tab stop with arrow-key movement. Give every group its own `name`.
+- The focus ring is on the card. The input itself is `sr-only`, so nothing else shows focus.
+- Disabled choices are skipped by the arrow keys and cannot be clicked. The reason must be in their hint or description, because nothing else explains it.
+- The check icon repeats the checked state visually; the state itself is the radio's `checked`.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus into the group, onto the selected card (or an end card when none is selected), and out again. The group is one tab stop. |
+| `Arrow Down / Arrow Right` | Selects the next enabled card, wrapping at the end; calls `onSelect`. |
+| `Arrow Up / Arrow Left` | Selects the previous enabled card, wrapping at the start; calls `onSelect`. |
+| `Space` | Selects the focused card when nothing is selected yet. |
+
+### Usage rules
+
+- **SRC-1** — Use SettingsRadioCards in Settings when each exclusive option needs a description. Short presets without one are a SegmentedControl, and an on/off setting is a SettingsSwitch.
+- **SRC-2** — Every choice has a `description` saying what it does. `hint` is only for a short qualifier (*Recommended*, *default*, a source, *File not found*). Keep the choice specs typed as `MessageKey`s and translate them when rendering; own-language names and language tags stay untranslated.
+- **SRC-3** — Keep it controlled by host state. `onSelect` returns early for the current value, sends `settings.update` and shows a toast on failure. `value` changes only when `settings.changed` arrives — never update it optimistically.
+- **SRC-4** — A host value outside the presets selects no card. Never map it to the nearest card or the default.
+- **SRC-5** — Keep unavailable options in the list as disabled choices, with the reason in `hint` and `description`. Disable the whole group while the host cannot apply the setting; hide it when the setting does not apply at all, as the Windows shell picker does on other platforms.
+- **SRC-6** — Give each group a unique `name` and a `label` that repeats the setting's heading. Put the heading and the section description outside the group.
+- **SRC-7** — The component accepts no `className`. Place it with a wrapper (`py-12` inside a SettingsGroup) and do not restyle cards; the selected, hover and focus looks belong to the component.
+
+### Examples
+
+#### Basic
+
+Three shells, one selected, with a *Recommended* hint.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+type Shell = "auto" | "pwsh" | "cmd";
+
+export default function Preview() {
+	const t = useT();
+	const [shell, setShell] = useState<Shell>("auto");
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="terminal-windows-shell-preview"
+				label={t("settings.terminal.shell.title")}
+				choices={[
+					{
+						id: "auto",
+						label: t("settings.terminal.shell.auto.label"),
+						hint: t("settings.terminal.shell.auto.hint"),
+						description: t("settings.terminal.shell.auto.description"),
+						testId: "terminal-shell-auto",
+					},
+					{
+						id: "pwsh",
+						label: t("settings.terminal.shell.pwsh.label"),
+						description: t("settings.terminal.shell.pwsh.description"),
+						testId: "terminal-shell-pwsh",
+					},
+					{
+						id: "cmd",
+						label: t("settings.terminal.shell.cmd.label"),
+						description: t("settings.terminal.shell.cmd.description"),
+						testId: "terminal-shell-cmd",
+					},
+				]}
+				value={shell}
+				onSelect={setShell}
+			/>
+		</div>
+	);
+}
+```
+
+#### Heading and description
+
+The Windows shell picker: `MessageKey` specs translated when rendering, with a heading and a description above the group.
+
+```tsx
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards, type SettingsRadioChoice } from "@/panels/SettingsRadioCards";
+
+type Shell = "auto" | "pwsh" | "powershell" | "cmd";
+
+type ShellChoiceSpec = SettingsRadioChoice<Shell> & {
+	label: MessageKey;
+	hint?: MessageKey;
+	description: MessageKey;
+};
+
+const SHELL_CHOICES: ShellChoiceSpec[] = [
+	{
+		id: "auto",
+		label: "settings.terminal.shell.auto.label",
+		hint: "settings.terminal.shell.auto.hint",
+		description: "settings.terminal.shell.auto.description",
+		testId: "terminal-shell-auto",
+	},
+	{
+		id: "pwsh",
+		label: "settings.terminal.shell.pwsh.label",
+		description: "settings.terminal.shell.pwsh.description",
+		testId: "terminal-shell-pwsh",
+	},
+	{
+		id: "powershell",
+		label: "settings.terminal.shell.powershell.label",
+		description: "settings.terminal.shell.powershell.description",
+		testId: "terminal-shell-powershell",
+	},
+	{
+		id: "cmd",
+		label: "settings.terminal.shell.cmd.label",
+		description: "settings.terminal.shell.cmd.description",
+		testId: "terminal-shell-cmd",
+	},
+];
+
+export default function WindowsShell() {
+	const t = useT();
+	const [shell, setShell] = useState<Shell>("auto");
+	return (
+		<div className="flex w-full flex-col">
+			<div className="flex flex-col gap-2 pb-8">
+				<h3 className="tr-title-section text-text-default">{t("settings.terminal.shell.title")}</h3>
+				<p className="tr-text-metadata text-text-muted">
+					{t("settings.terminal.shell.description")}
+				</p>
+			</div>
+			<SettingsRadioCards
+				name="terminal-windows-shell"
+				label={t("settings.terminal.shell.title")}
+				choices={SHELL_CHOICES.map((choice) => ({
+					...choice,
+					label: t(choice.label),
+					...(choice.hint ? { hint: t(choice.hint) } : {}),
+					description: t(choice.description),
+				}))}
+				value={shell}
+				onSelect={setShell}
+			/>
+		</div>
+	);
+}
+```
+
+#### Plural labels and a default
+
+Settle idle workspaces after: plural day labels, a *default* hint and a *Never* choice.
+
+```tsx
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+type IdleChoice = `${number}` | "never";
+
+const IDLE_CHOICES: readonly {
+	id: IdleChoice;
+	days: number | null;
+	hint?: MessageKey;
+	description: MessageKey;
+	testId: string;
+}[] = [
+	{ id: "1", days: 1, description: "settings.workspaces.idle.oneDay", testId: "settle-idle-1" },
+	{ id: "3", days: 3, description: "settings.workspaces.idle.threeDays", testId: "settle-idle-3" },
+	{
+		id: "7",
+		days: 7,
+		hint: "settings.workspaces.idle.defaultHint",
+		description: "settings.workspaces.idle.sevenDays",
+		testId: "settle-idle-7",
+	},
+	{
+		id: "14",
+		days: 14,
+		description: "settings.workspaces.idle.fourteenDays",
+		testId: "settle-idle-14",
+	},
+	{
+		id: "never",
+		days: null,
+		description: "settings.workspaces.idle.never",
+		testId: "settle-idle-never",
+	},
+];
+
+export default function SettleIdle() {
+	const t = useT();
+	const [choice, setChoice] = useState<IdleChoice>("7");
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="settle-idle-days"
+				label={t("settings.workspaces.title")}
+				choices={IDLE_CHOICES.map(({ days, hint, description, ...rest }) => ({
+					...rest,
+					label:
+						days === null
+							? t("settings.workspaces.idle.neverLabel")
+							: t("settings.workspaces.idle.days", { count: days }),
+					...(hint ? { hint: t(hint) } : {}),
+					description: t(description),
+				}))}
+				value={choice}
+				onSelect={setChoice}
+			/>
+		</div>
+	);
+}
+```
+
+#### Value outside the presets
+
+A host-configured five days selects no card until the user picks one.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+export default function NonPreset() {
+	const t = useT();
+	const [choice, setChoice] = useState<string>("5");
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="settle-idle-days-custom"
+				label={t("settings.workspaces.title")}
+				choices={[
+					{
+						id: "3",
+						label: t("settings.workspaces.idle.days", { count: 3 }),
+						description: t("settings.workspaces.idle.threeDays"),
+						testId: "settle-idle-3",
+					},
+					{
+						id: "7",
+						label: t("settings.workspaces.idle.days", { count: 7 }),
+						hint: t("settings.workspaces.idle.defaultHint"),
+						description: t("settings.workspaces.idle.sevenDays"),
+						testId: "settle-idle-7",
+					},
+					{
+						id: "14",
+						label: t("settings.workspaces.idle.days", { count: 14 }),
+						description: t("settings.workspaces.idle.fourteenDays"),
+						testId: "settle-idle-14",
+					},
+				]}
+				value={choice}
+				onSelect={setChoice}
+			/>
+		</div>
+	);
+}
+```
+
+#### Unavailable choices
+
+A selected language file that went missing and a file that cannot be used stay listed as disabled, with the reason as their hint and description.
+
+```tsx
+import { languageName, SYSTEM_LOCALE } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+export default function Unavailable() {
+	const t = useT();
+	const [value, setValue] = useState("missing:fr");
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="ui-language-unavailable"
+				label={t("settings.language.title")}
+				choices={[
+					{
+						id: SYSTEM_LOCALE,
+						label: t("settings.language.system.label"),
+						description: t("settings.language.system.description", {
+							language: languageName("en"),
+						}),
+						testId: "language-system",
+					},
+					{
+						id: "en",
+						label: languageName("en"),
+						hint: t("settings.language.source.builtin"),
+						description: "en",
+						testId: "language-en",
+					},
+					{
+						id: "missing:fr",
+						label: languageName("fr"),
+						hint: t("settings.language.source.missing"),
+						description: t("settings.language.missingDescription", { tag: "fr" }),
+						testId: "language-missing-fr",
+						disabled: true,
+					},
+					{
+						id: "broken:german.json",
+						label: "german.json",
+						hint: t("settings.language.source.broken"),
+						description: t("settings.language.error.invalidName"),
+						testId: "language-broken-german.json",
+						disabled: true,
+					},
+				]}
+				value={value}
+				onSelect={setValue}
+			/>
+		</div>
+	);
+}
+```
+
+#### Disabled group
+
+`disabled` while the connected host cannot apply the setting.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+export default function GroupDisabled() {
+	const t = useT();
+	const supported = false;
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="settle-idle-days-unsupported"
+				label={t("settings.workspaces.title")}
+				choices={[
+					{
+						id: "7",
+						label: t("settings.workspaces.idle.days", { count: 7 }),
+						hint: t("settings.workspaces.idle.defaultHint"),
+						description: t("settings.workspaces.idle.sevenDays"),
+						testId: "settle-idle-7",
+					},
+					{
+						id: "never",
+						label: t("settings.workspaces.idle.neverLabel"),
+						description: t("settings.workspaces.idle.never"),
+						testId: "settle-idle-never",
+					},
+				]}
+				value="7"
+				disabled={!supported}
+				onSelect={() => {}}
+			/>
+		</div>
+	);
+}
+```
+
+#### Inside a SettingsGroup
+
+The Language page layout: the group's title and description, then the cards.
+
+```tsx
+import { languageName, SYSTEM_LOCALE } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+export default function InSettingsGroup() {
+	const t = useT();
+	const [locale, setLocale] = useState(SYSTEM_LOCALE);
+	return (
+		<div className="w-full">
+			<SettingsGroup
+				title={t("settings.language.title")}
+				description={t("settings.language.description")}
+			>
+				<div className="py-12">
+					<SettingsRadioCards
+						name="ui-language"
+						label={t("settings.language.title")}
+						choices={[
+							{
+								id: SYSTEM_LOCALE,
+								label: t("settings.language.system.label"),
+								description: t("settings.language.system.description", {
+									language: languageName("en"),
+								}),
+								testId: "language-system",
+							},
+							{
+								id: "en",
+								label: languageName("en"),
+								hint: t("settings.language.source.builtin"),
+								description: "en",
+								testId: "language-en",
+							},
+							{
+								id: "ja",
+								label: languageName("ja"),
+								hint: t("settings.language.source.builtin"),
+								description: "ja",
+								testId: "language-ja",
+							},
+						]}
+						value={locale}
+						onSelect={setLocale}
+					/>
+				</div>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Waits for the host
+
+`onSelect` sends the update; the selection moves only when the mocked `settings.changed` arrives.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SettingsRadioCards } from "@/panels/SettingsRadioCards";
+
+type Shell = "auto" | "pwsh" | "cmd";
+
+// Stands in for getTransport().request("settings.update", …) and the settings.changed broadcast.
+function requestUpdate(shell: Shell, onChanged: (shell: Shell) => void) {
+	setTimeout(() => onChanged(shell), 800);
+}
+
+export default function HostConfirmed() {
+	const t = useT();
+	const [shell, setShell] = useState<Shell>("auto");
+	const select = (next: Shell) => {
+		if (next === shell) return;
+		requestUpdate(next, setShell);
+	};
+	return (
+		<div className="w-full">
+			<SettingsRadioCards
+				name="terminal-windows-shell-confirmed"
+				label={t("settings.terminal.shell.title")}
+				choices={[
+					{
+						id: "auto",
+						label: t("settings.terminal.shell.auto.label"),
+						hint: t("settings.terminal.shell.auto.hint"),
+						description: t("settings.terminal.shell.auto.description"),
+						testId: "terminal-shell-auto",
+					},
+					{
+						id: "pwsh",
+						label: t("settings.terminal.shell.pwsh.label"),
+						description: t("settings.terminal.shell.pwsh.description"),
+						testId: "terminal-shell-pwsh",
+					},
+					{
+						id: "cmd",
+						label: t("settings.terminal.shell.cmd.label"),
+						description: t("settings.terminal.shell.cmd.description"),
+						testId: "terminal-shell-cmd",
+					},
+				]}
+				value={shell}
+				onSelect={select}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/TerminalSettings.tsx` | The Windows shell picker (Windows hosts only), with a *Recommended* hint on Auto. |
+| `apps/web/src/panels/WorkspacesSettings.tsx` | Settle idle workspaces after: plural labels, a *default* hint, no selection for a non-preset value, disabled on older hosts. |
+| `apps/web/src/panels/LanguageSettings.tsx` | The interface language: System first, source hints, missing and broken files as disabled choices. |
+
+## SettingsRow and SettingsGroup
+
+The layout kit every Settings section is built from: `SettingsPageContainer` stacks a section's groups, `SettingsGroup` is one titled block of rows, and `SettingsRow` is one setting — a label, an optional description and one control on the right. The kit owns spacing, dividers, label typography and the narrow-width wrap; the call site provides the words and the control (SettingsSwitch, SegmentedControl, Button…), and the control owns its own name, state and saving.
+
+```tsx
+import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "@/panels/SettingsRow";
+import { SettingsGroup, SettingsPageContainer } from "@/panels/SettingsGroup";
+```
+
+### When to use
+
+- Every page of the Settings dialog: wrap the page in `SettingsPageContainer` and give each topic its own `SettingsGroup`.
+- One setting with one control — a switch, a segmented choice, a picker, a Button that starts an action — as a `SettingsRow`.
+- A section with a single, untitled list of rows (Notifications, Terminal, Privacy): put the rows in a `<div className={SETTINGS_ROWS_CONTAINER}>` instead of a group.
+- A row whose control is a small cluster (two Buttons, a source tag beside a switch): wrap the cluster in one flex element and pass it as `control`.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SettingsRadioCards | Each option needs its own description, or the choice is too wide for a row's right column (language, Windows shell, idle settling). Put it in the group below its heading, not in `control`. |
+| SettingsNotice | A message about the setting (a permission prompt, a fallback, a restart hint). Place it as a sibling block under the row, never as the row's `control`. |
+| TreeRow | A navigable, selectable list item in a tree or sidebar rather than a setting. |
+| Collapsible | Advanced settings hidden by default; the rows inside still use this kit. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| SettingsPageContainer | A column that wraps each child in its own block. A block that renders nothing is hidden (`empty:hidden`); a block after a rendered one gets top spacing and a `border-border-muted` rule, so rules appear only between groups that render. |
+| SettingsGroup | A `<section>` with a header — the `<h3>` title in `tr-text-label-pill` / `text-text-subtle` and an optional description in `tr-text-metadata` / `text-text-muted` — over a `SETTINGS_ROWS_CONTAINER` that holds the children. |
+| SETTINGS_ROWS_CONTAINER | An exported class string: a flex column whose last child loses its bottom border, so a list of rows ends without a trailing divider. Used by `SettingsGroup` and directly by untitled sections. |
+| SettingsRow | A wrapping flex row with vertical padding and a `border-border-muted` bottom divider (unless `noBorder`). |
+| Label column | Grows to fill the row with a minimum width (`min-w-160`): the `label` in `tr-text-ui` / `text-text-default` and, under it, the `description` in `tr-text-metadata` / `text-text-muted`. |
+| Control slot | Holds `control` at its natural width on the right, never wider than the row. When it no longer fits beside the label column it wraps below the label. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `label` | `string` | — | The setting's visible name, from a locale key. Plain text only; it is not linked to the control, so the control needs its own accessible label (usually the same string). |
+| `description` | `ReactNode` | — | One short line under the label: what the setting does, or the current consequence of its value. May be a node — a `<code>` path, for example. |
+| `control` | `ReactNode` | — | The one control for this setting: SettingsSwitch, SegmentedControl, a Button, a picker, or one flex element wrapping a small cluster. |
+| `testId` | `string` | — | `data-testid` on the row. |
+| `noBorder` | `boolean` | `false` | Drops the row's bottom divider. Rarely needed: inside `SETTINGS_ROWS_CONTAINER` or `SettingsGroup` the last row already loses it. |
+| `className` | `string` | — | Placement only, such as top margin after a non-row block (`mt-24`). |
+| `SettingsGroup.title` | `string` | — | The group heading (`<h3>`), from a locale key. |
+| `SettingsGroup.description` | `string \| undefined` | — | One explanatory line under the title. Plain text. |
+| `SettingsGroup.children` | `ReactNode` | — | The group's rows, plus any blocks that belong between them (a notice, a radio-card list, a sub-heading). |
+| `SettingsGroup.testId` | `string` | — | `data-testid` on the `<section>`. |
+| `SettingsPageContainer.children` | `ReactNode` | — | The page's groups, in order. Give conditional children a `key` so the others never remount when one appears; `null`/`false` children and components that render `null` leave no rule behind. |
+| `SettingsPageContainer.testId` | `string` | — | `data-testid` on the page column, e.g. `settings-chat`. |
+
+### Narrow columns
+
+The same real row in three column widths. The label column keeps a minimum width (`min-w-160`); when the control no longer fits beside it, the control wraps below the label instead of squeezing it.
+
+### Dividers
+
+Every row draws its own bottom divider. A bare wrapper keeps the last one; `SETTINGS_ROWS_CONTAINER` (also inside every `SettingsGroup`) drops it; `SettingsPageContainer` adds a rule and spacing only between children that render — the middle child here renders `null` and leaves no extra rule.
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Default | A row with `label` and `control`. | Label left, control right, vertically centred; a muted bottom divider under the row. |
+| With description | `description`. | A muted metadata line under the label; the control stays centred on both lines. |
+| Last row | The row is the last child of `SETTINGS_ROWS_CONTAINER` or a `SettingsGroup`. | No bottom divider. |
+| No border | `noBorder`. | No bottom divider wherever the row sits. |
+| Narrow | The column is too narrow for the label column's minimum width plus the control. | The control wraps onto its own line below the label, aligned left. |
+| Hover, focus, disabled | — | No distinct treatment: the row is not interactive. Hover, focus ring and disabled belong to the control (e.g. a SegmentedControl `disabled` while a save is pending). |
+| Empty page child | A `SettingsPageContainer` child is `null` or a component that renders nothing. | Its block is hidden and draws no rule or spacing. |
+
+### Accessibility
+
+- `SettingsRow` renders plain `<div>`/`<span>` elements: the visible `label` is **not** associated with the control. Give every control its own name — `label` on SettingsSwitch and SegmentedControl, the Button's text or `aria-label` — normally the same locale string as the row label.
+- When a row's control is scoped (a workspace override), name it fully in the control's label (`Allow subagents in {{name}}`) even if the row label is short.
+- `SettingsGroup` renders a `<section>` whose title is an `<h3>`, so screen-reader users can jump between groups by heading. The section is not labelled by that heading.
+- The description is plain text next to the label and is not wired to the control with `aria-describedby`; keep anything the user must know to operate the control in the control's own label or tooltip.
+- Reading and Tab order follow the DOM: label, description, then the control. Wrapping at narrow widths does not reorder anything.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves between the rows' controls in document order; the rows themselves take no focus. |
+| `Space / Enter / arrows` | Handled by the control: Space or Enter toggles a SettingsSwitch, arrow keys move within a SegmentedControl. |
+
+### Usage rules
+
+- **SRW-1** — Build every Settings page from the kit: `SettingsPageContainer` → `SettingsGroup` → `SettingsRow`. Do not hand-roll the row shape (`flex justify-between border-b py-12`) or group headers.
+- **SRW-2** — One row, one setting, one control. A small related cluster (Copy path + Open folder, a source tag + its switch) goes in one flex wrapper; a choice with per-option descriptions is SettingsRadioCards below the heading, not a row.
+- **SRW-3** — Always name the control itself — SettingsSwitch and SegmentedControl `label`, Button text — because the row label is not linked to it.
+- **SRW-4** — The row owns layout and typography: pass words through `label` and `description`, never style them, and use `className` for placement only.
+- **SRW-5** — Rows apply immediately; a Settings page has no Save or Apply button. While a save is in flight, disable the control rather than the row, and let the value follow the host's broadcast.
+- **SRW-6** — Let the containers draw dividers: put rows inside `SettingsGroup` or `SETTINGS_ROWS_CONTAINER` so the last one ends clean, and render optional groups as keyed conditional children of `SettingsPageContainer` instead of adding your own rules or margins.
+- **SRW-7** — A notice, sub-heading or other block between rows is a sibling of the rows, not their `control`; give it its own vertical padding so it sits on the row rhythm.
+
+### Examples
+
+#### Group of rows
+
+A titled group with a SegmentedControl row and a SettingsSwitch row.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+type ThemeMode = "system" | "light" | "dark";
+
+export default function Preview() {
+	const t = useT();
+	const [mode, setMode] = useState<ThemeMode>("system");
+	const [autoFix, setAutoFix] = useState(true);
+	return (
+		<div className="w-full max-w-[28rem]">
+			<SettingsGroup title={t("settings.appearance.themeGroup")}>
+				<SettingsRow
+					label={t("settings.appearance.themeMode")}
+					control={
+						<SegmentedControl
+							name="preview-theme-mode"
+							label={t("settings.appearance.themeMode")}
+							options={[
+								{ id: "system", label: t("settings.appearance.mode.system") },
+								{ id: "light", label: t("settings.appearance.mode.light") },
+								{ id: "dark", label: t("settings.appearance.mode.dark") },
+							]}
+							value={mode}
+							onSelect={setMode}
+						/>
+					}
+				/>
+				<SettingsRow
+					label={t("settings.models.autoFix")}
+					description={t("settings.models.autoFixDescription")}
+					control={
+						<SettingsSwitch
+							checked={autoFix}
+							label={t("settings.models.autoFix")}
+							testId="preview-autofix-toggle"
+							onChange={setAutoFix}
+						/>
+					}
+				/>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Settings page
+
+`SettingsPageContainer` with two groups, as Chat settings composes them; the switch row's description follows its value.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+import { SettingsGroup, SettingsPageContainer } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+type Order = "oldest-first" | "newest-first";
+type Growth = "compact" | "roomy" | "half-chat";
+
+export default function Page() {
+	const t = useT();
+	const [order, setOrder] = useState<Order>("oldest-first");
+	const [growth, setGrowth] = useState<Growth>("roomy");
+	const [subagents, setSubagents] = useState(true);
+	return (
+		<div className="w-full max-w-[40rem]">
+			<SettingsPageContainer testId="settings-chat">
+				<SettingsGroup title={t("settings.chat.group")}>
+					<SettingsRow
+						label={t("settings.chat.messageOrder")}
+						description={t("settings.chat.messageOrderDescription")}
+						control={
+							<SegmentedControl
+								name="chat-message-order"
+								label={t("settings.chat.messageOrder")}
+								options={[
+									{ id: "oldest-first", label: t("settings.chat.order.oldestFirst") },
+									{ id: "newest-first", label: t("settings.chat.order.newestFirst") },
+								]}
+								value={order}
+								onSelect={setOrder}
+							/>
+						}
+					/>
+					<SettingsRow
+						label={t("settings.chat.composerSize")}
+						description={t("settings.chat.composerSizeDescription")}
+						control={
+							<SegmentedControl
+								name="composer-growth-limit"
+								label={t("settings.chat.composerSize")}
+								options={[
+									{ id: "compact", label: t("settings.chat.growth.compact") },
+									{ id: "roomy", label: t("settings.chat.growth.roomy") },
+									{ id: "half-chat", label: t("settings.chat.growth.halfChat") },
+								]}
+								value={growth}
+								onSelect={setGrowth}
+							/>
+						}
+					/>
+				</SettingsGroup>
+				<SettingsGroup
+					title={t("settings.subagents.title")}
+					description={t("settings.subagents.description")}
+				>
+					<SettingsRow
+						label={t("settings.subagents.allow")}
+						description={
+							subagents
+								? t("settings.subagents.allowOnDescription")
+								: t("settings.subagents.allowOffDescription")
+						}
+						control={
+							<SettingsSwitch
+								checked={subagents}
+								label={t("settings.subagents.allowGlobally")}
+								testId="subagents-global-toggle"
+								onChange={setSubagents}
+							/>
+						}
+					/>
+				</SettingsGroup>
+			</SettingsPageContainer>
+		</div>
+	);
+}
+```
+
+#### Conditional groups
+
+Sign in or out to move providers between groups; a group appears only while it has rows, and the rule between groups follows.
+
+```tsx
+import { RiLoginBoxLine, RiLogoutBoxLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { SettingsGroup, SettingsPageContainer } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+const PROVIDERS = ["Anthropic", "OpenAI", "GitHub Copilot"];
+
+export default function ConditionalGroups() {
+	const t = useT();
+	const [connected, setConnected] = useState<string[]>([]);
+	const available = PROVIDERS.filter((name) => !connected.includes(name));
+	return (
+		<div className="w-full max-w-[40rem]">
+			<SettingsPageContainer>
+				{connected.length > 0 ? (
+					<SettingsGroup key="connected" title={t("settings.providers.connectedGroup")}>
+						{connected.map((name) => (
+							<SettingsRow
+								key={name}
+								label={name}
+								control={
+									<Button
+										variant="soft-primary"
+										size="m"
+										iconLeft={RiLogoutBoxLine}
+										onClick={() => setConnected((list) => list.filter((item) => item !== name))}
+									>
+										{t("settings.providers.signOut")}
+									</Button>
+								}
+							/>
+						))}
+					</SettingsGroup>
+				) : null}
+				{available.length > 0 ? (
+					<SettingsGroup
+						key="subscriptions"
+						title={t("settings.providers.subscriptionsGroup")}
+						description={t("settings.providers.subscriptionsDescription")}
+					>
+						{available.map((name) => (
+							<SettingsRow
+								key={name}
+								label={name}
+								control={
+									<Button
+										variant="soft-primary"
+										size="m"
+										iconLeft={RiLoginBoxLine}
+										onClick={() => setConnected((list) => [...list, name])}
+									>
+										{t("settings.providers.signIn")}
+									</Button>
+								}
+							/>
+						))}
+					</SettingsGroup>
+				) : null}
+			</SettingsPageContainer>
+		</div>
+	);
+}
+```
+
+#### Pending save
+
+Choosing a value disables the controls until the save lands, as Appearance does; the rows do not change.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+type ThemeMode = "system" | "light" | "dark";
+type Contrast = "normal" | "high";
+
+export default function Pending() {
+	const t = useT();
+	const [mode, setMode] = useState<ThemeMode>("dark");
+	const [contrast, setContrast] = useState<Contrast>("normal");
+	const [pending, setPending] = useState(false);
+	const save = (apply: () => void) => {
+		setPending(true);
+		setTimeout(() => {
+			apply();
+			setPending(false);
+		}, 1200);
+	};
+	return (
+		<div className="w-full max-w-[32rem]">
+			<SettingsGroup title={t("settings.appearance.themeGroup")}>
+				<SettingsRow
+					label={t("settings.appearance.themeMode")}
+					control={
+						<SegmentedControl
+							name="pending-theme-mode"
+							label={t("settings.appearance.themeMode")}
+							options={[
+								{ id: "system", label: t("settings.appearance.mode.system") },
+								{ id: "light", label: t("settings.appearance.mode.light") },
+								{ id: "dark", label: t("settings.appearance.mode.dark") },
+							]}
+							value={mode}
+							disabled={pending}
+							onSelect={(next) => save(() => setMode(next))}
+						/>
+					}
+				/>
+				<SettingsRow
+					label={t("settings.appearance.contrastLevel")}
+					control={
+						<SegmentedControl
+							name="pending-contrast-level"
+							label={t("settings.appearance.contrastLevel")}
+							options={[
+								{ id: "normal", label: t("common.default") },
+								{ id: "high", label: t("settings.appearance.contrast.high") },
+							]}
+							value={contrast}
+							disabled={pending}
+							onSelect={(next) => save(() => setContrast(next))}
+						/>
+					}
+				/>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Action row
+
+A Button as the control, opening a confirmation, with the consequence in the description.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+export default function ButtonControl() {
+	const t = useT();
+	const [confirming, setConfirming] = useState(false);
+	return (
+		<div className="w-full max-w-[32rem]">
+			<SettingsRow
+				label={t("workbench.layoutSettings.resetToDefault")}
+				description={t("workbench.layoutSettings.resetDescription", {
+					name: t("workbench.preset.balanced"),
+				})}
+				control={
+					<Button variant="outline" size="m" onClick={() => setConfirming(true)}>
+						{t("workbench.layoutSettings.reset")}
+					</Button>
+				}
+			/>
+			<ConfirmDialog
+				open={confirming}
+				onOpenChange={setConfirming}
+				title={t("workbench.layoutSettings.applyTitle")}
+				description={t("workbench.layoutSettings.applyDescription")}
+				confirmLabel={t("workbench.layoutSettings.applyConfirm")}
+				onConfirm={() => setConfirming(false)}
+			/>
+		</div>
+	);
+}
+```
+
+#### Rich description and a control cluster
+
+A `<code>` path as the description and two Buttons in one wrapper.
+
+```tsx
+import { RiFileCopyLine, RiFolderOpenLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+export default function FolderRow() {
+	const t = useT();
+	const folder = "~/.thinkrail/locales";
+	return (
+		<div className="w-full max-w-[40rem]">
+			<SettingsGroup title={t("settings.language.add.title")}>
+				<SettingsRow
+					label={t("settings.language.folder.label")}
+					description={<code className="tr-code-text break-all">{folder}</code>}
+					testId="language-folder"
+					control={
+						<div className="flex gap-8">
+							<Button variant="outline" size="m" iconLeft={RiFileCopyLine} onClick={() => {}}>
+								{t("settings.language.folder.copy")}
+							</Button>
+							<Button variant="outline" size="m" iconLeft={RiFolderOpenLine} onClick={() => {}}>
+								{t("settings.language.folder.open")}
+							</Button>
+						</div>
+					}
+				/>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Workspace override
+
+A source tag beside the switch: toggle to make it Custom, click Custom to return to the global value.
+
+```tsx
+import { RiArrowGoBackLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { SettingsGroup } from "@/panels/SettingsGroup";
+import { SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+type Override = "on" | "off" | null;
+
+export default function OverrideTag() {
+	const t = useT();
+	const name = "feature/login";
+	const globalEnabled = false;
+	const [override, setOverride] = useState<Override>("on");
+	const enabled = override === null ? globalEnabled : override === "on";
+	return (
+		<div className="w-full max-w-[32rem]">
+			<SettingsGroup
+				title={t("settings.subagents.workspaceHeading")}
+				description={t("settings.subagents.workspaceDescription", { name })}
+			>
+				<SettingsRow
+					label={t("settings.subagents.allow")}
+					control={
+						<span className="flex items-center gap-8">
+							{override === null ? (
+								<span className="tr-text-metadata text-text-subtle">
+									{t("settings.subagents.source.global")}
+								</span>
+							) : (
+								<Button
+									variant="soft-primary"
+									size="s"
+									iconRight={RiArrowGoBackLine}
+									aria-label={t("settings.subagents.resetEnabled", { name })}
+									tooltip={t("settings.subagents.source.useGlobal")}
+									onClick={() => setOverride(null)}
+								>
+									{t("settings.subagents.source.custom")}
+								</Button>
+							)}
+							<SettingsSwitch
+								checked={enabled}
+								label={t("settings.subagents.allowInWorkspace", { name })}
+								testId="subagents-workspace-toggle"
+								onChange={(next) => setOverride(next ? "on" : "off")}
+							/>
+						</span>
+					}
+				/>
+			</SettingsGroup>
+		</div>
+	);
+}
+```
+
+#### Untitled rows
+
+`SETTINGS_ROWS_CONTAINER` without a group, with a notice block under the row while the setting is on.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "@/panels/SettingsRow";
+import { SettingsSwitch } from "@/panels/SettingsSwitch";
+
+export default function RowsContainer() {
+	const t = useT();
+	const [enabled, setEnabled] = useState(true);
+	return (
+		<div className="w-full max-w-[32rem]">
+			<div data-testid="settings-notifications" className={SETTINGS_ROWS_CONTAINER}>
+				<SettingsRow
+					label={t("settings.notifications.enable")}
+					description={t("settings.notifications.browserDescription")}
+					control={
+						<SettingsSwitch
+							checked={enabled}
+							label={t("settings.notifications.enable")}
+							testId="notifications-toggle"
+							onChange={setEnabled}
+						/>
+					}
+				/>
+				{enabled ? (
+					<div className="py-12">
+						<SettingsNotice
+							variant="info"
+							action={
+								<Button variant="outline" size="m" onClick={() => {}}>
+									{t("settings.notifications.allowInBrowser")}
+								</Button>
+							}
+						>
+							{t("settings.notifications.notGranted")}
+						</SettingsNotice>
+					</div>
+				) : null}
+			</div>
+		</div>
+	);
+}
+```
+
+#### Narrow column
+
+When the control does not fit beside the label, it wraps below it.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { SegmentedControl } from "@/panels/SegmentedControl";
+import { SettingsRow } from "@/panels/SettingsRow";
+
+type Growth = "compact" | "roomy" | "half-chat";
+
+export default function Narrow() {
+	const t = useT();
+	const [growth, setGrowth] = useState<Growth>("roomy");
+	return (
+		<div className="w-full max-w-[20rem]">
+			<SettingsRow
+				label={t("settings.chat.composerSize")}
+				description={t("settings.chat.composerSizeDescription")}
+				control={
+					<SegmentedControl
+						name="narrow-composer-growth"
+						label={t("settings.chat.composerSize")}
+						options={[
+							{ id: "compact", label: t("settings.chat.growth.compact") },
+							{ id: "roomy", label: t("settings.chat.growth.roomy") },
+							{ id: "half-chat", label: t("settings.chat.growth.halfChat") },
+						]}
+						value={growth}
+						onSelect={setGrowth}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ChatSettings.tsx` | `SettingsPageContainer` with the Appearance and behavior group of SegmentedControl rows, followed by the Subagents group. |
+| `apps/web/src/panels/SubagentSettings.tsx` | A `SettingsGroup` with a description; switch rows, number fields and a source tag beside the switch. |
+| `apps/web/src/panels/AppearanceSettings.tsx` | Theme mode and contrast SegmentedControl rows disabled while pending, a conditional read-only row and `SETTINGS_ROWS_CONTAINER` inside a disclosure. |
+| `apps/web/src/panels/LanguageSettings.tsx` | Folder row with a `<code>` description and Copy path / Open folder Buttons, plus a link row. |
+| `apps/web/src/panels/NotificationsSettings.tsx` | Untitled `SETTINGS_ROWS_CONTAINER` section: a switch row with notice blocks under it. |
+| `apps/web/src/shell/LayoutSettings.tsx` | Reset to default row with an outline Button, and a nested `SettingsGroup` of limit inputs. |
+
+## DiffStatBadge
+
+The one `+N −M` diff-count badge: lines added in the success colour, lines removed in the error colour, in metadata type with tabular figures. It owns the signs, colours, type and its own absence — it renders nothing when both counts are zero. The call site passes the two counts (a file's, a folder's aggregate, a commit's or a whole scope's) and places it in a row.
+
+```tsx
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+```
+
+### When to use
+
+- A changed file's line counts, trailing its row in the Changes list or tree, a plan step's file list or a review section header.
+- A collapsed folder's aggregate in the Changes tree — only while it is collapsed; an expanded folder's children already carry the counts.
+- The size of a commit, a revision or a plan step's change set, next to its short sha.
+- The totals of a review scope or a workspace's branch, inline with other metadata such as a file count.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| AttentionDot | A row needs the user's attention; a presence marker, not a magnitude. |
+| RunningIcon | Work is in progress; the badge reports a finished diff, never activity. |
+| FileChip | A file or attachment is the object itself (a composer image, an attachment in the transcript), not a count about it. |
+| TreeRow | The file row itself; the badge goes into its `trailing` slot. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | An inline `<span>` in `tr-text-metadata` with `tabular-nums` and `shrink-0`, so it never gives way in a flex row; `className` is appended. |
+| Added | `+` and `added`, in `text-feedback-success`. |
+| Separator | A single space between the two counts. |
+| Removed | `−` (the minus sign U+2212, not a hyphen) and `removed`, in `text-feedback-error`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `added` | `number` | — | Lines added. Always shown (as `+0` when only lines were removed). Pass `?? 0` for an optional count such as `GitFileChange.added`. |
+| `removed` | `number` | — | Lines removed. Always shown (as `−0` when only lines were added). When both counts are zero or below the badge renders `null`. |
+| `className` | `string` | — | Placement only (margins, order, responsive visibility). Production passes none; the badge owns its type and colours. |
+
+### States
+
+Every cell in the last column is the real component with the props shown. The empty case is the component returning `null`.
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Added and removed | Both counts positive. | `+N` in the success colour, a space, `−M` in the error colour. |
+| One-sided | One count is `0`. | Both sides still render: `+34 −0` or `+0 −12`. The zero side keeps its colour. |
+| Empty | Both counts `0` (or below). | Renders nothing — no `+0 −0`, no placeholder, and the row's gap closes. A call site that has no stat at all (`stat ? … : null`) gets the same result. |
+| Long numbers | Large counts (a whole branch). | Tabular figures keep digits aligned; the badge never truncates or shrinks, so the neighbouring label gives way instead. |
+| Hover, focus, selected, disabled | — | No distinct treatment; the badge is not interactive and keeps its colours on a hovered or active row. |
+
+### Accessibility
+
+- Plain inline text with no role or label: it is read as part of its row, for example “+12 −4” after the file name inside a TreeRow button.
+- The meaning is carried by the `+` and `−` signs, not only by colour.
+- It is not a live region; a changing count is not announced.
+- Inside an interactive row the row is the focus target and the badge's text becomes part of the row's accessible name.
+
+| Keys | Action |
+| --- | --- |
+| `—` | None. The badge is never focusable; the row around it is. |
+
+### Usage rules
+
+- **DSB-1** — Every `+N −M` line count is a DiffStatBadge — never hand-written `+`/`−` spans with success and error colours.
+- **DSB-2** — Pass the counts and let the badge hide itself: do not guard `added + removed > 0` at the call site, and do not render `+0 −0`. Default an optional count with `?? 0`.
+- **DSB-3** — Place it after the label in a row's trailing position (a TreeRow's `trailing`, after a truncating path). The badge is `shrink-0`; the label is what truncates.
+- **DSB-4** — Show a folder's aggregate only while the folder is collapsed; once expanded, its children carry the counts.
+- **DSB-5** — Use it for line counts of a diff only — not for file counts, finding counts or review progress, which are their own metadata text beside it.
+- **DSB-6** — No colour, type or weight classes at the call site; `className` is placement only, such as hiding it below `sm` with its sha in a dense meta strip.
+
+### Examples
+
+#### Badge
+
+Lines added and removed for one change.
+
+```tsx
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+
+export default function Preview() {
+	return <DiffStatBadge added={128} removed={42} />;
+}
+```
+
+#### Counts
+
+Both sides always render once either is positive; tabular figures keep large counts aligned.
+
+```tsx
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+
+export default function Counts() {
+	return (
+		<div className="flex flex-col items-end gap-4">
+			<DiffStatBadge added={12} removed={4} />
+			<DiffStatBadge added={34} removed={0} />
+			<DiffStatBadge added={0} removed={7} />
+			<DiffStatBadge added={12045} removed={3871} />
+		</div>
+	);
+}
+```
+
+#### Empty scope
+
+A scope with no line changes renders no badge — switch the scope to see it disappear without a guard at the call site.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+
+const SCOPES = {
+	uncommitted: { files: 3, added: 48, removed: 9 },
+	lastTurn: { files: 0, added: 0, removed: 0 },
+} as const;
+
+export default function Empty() {
+	const t = useT();
+	const [scope, setScope] = useState<keyof typeof SCOPES>("uncommitted");
+	const totals = SCOPES[scope];
+	return (
+		<div className="flex flex-col items-start gap-8">
+			<div className="flex gap-2">
+				<ToggleSegment
+					testid="scope-uncommitted"
+					label={t("changes.scope.uncommitted")}
+					active={scope === "uncommitted"}
+					onClick={() => setScope("uncommitted")}
+				/>
+				<ToggleSegment
+					testid="scope-last-turn"
+					label={t("changes.scope.lastTurn")}
+					active={scope === "lastTurn"}
+					onClick={() => setScope("lastTurn")}
+				/>
+			</div>
+			<span className="flex items-center gap-4 tr-text-metadata text-text-muted">
+				<span>{t("changes.review.fileCount", { count: totals.files })}</span>
+				<DiffStatBadge added={totals.added} removed={totals.removed} />
+			</span>
+		</div>
+	);
+}
+```
+
+#### Changes tree
+
+Per-file badges in TreeRow's `trailing`; a folder shows its aggregate only while collapsed — click the folder.
+
+```tsx
+import { useState } from "react";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+
+const FILES = [
+	{ name: "Composer.tsx", added: 42, removed: 17 },
+	{ name: "FileChip.tsx", added: 8, removed: 0 },
+	{ name: "promptImages.tsx", added: 0, removed: 5 },
+];
+const TOTAL = FILES.reduce(
+	(sum, file) => ({ added: sum.added + file.added, removed: sum.removed + file.removed }),
+	{ added: 0, removed: 0 },
+);
+
+export default function Tree() {
+	const [expanded, setExpanded] = useState(false);
+	return (
+		<ul className="flex w-full max-w-[20rem] flex-col">
+			<li>
+				<TreeRow
+					testid="change-tree-folder"
+					kind="dir"
+					expanded={expanded}
+					label="src/chat"
+					onClick={() => setExpanded((value) => !value)}
+					trailing={expanded ? null : <DiffStatBadge added={TOTAL.added} removed={TOTAL.removed} />}
+				/>
+				{expanded ? (
+					<ul className="flex flex-col pl-tree-indent">
+						{FILES.map((file) => (
+							<li key={file.name}>
+								<TreeRow
+									testid="change-item"
+									kind="file"
+									label={file.name}
+									onClick={() => {}}
+									trailing={<DiffStatBadge added={file.added} removed={file.removed} />}
+								/>
+							</li>
+						))}
+					</ul>
+				) : null}
+			</li>
+		</ul>
+	);
+}
+```
+
+#### Plan file rows
+
+The plan's changed-file rows, where an optional count defaults with `?? 0` and a file without counts shows no badge.
+
+```tsx
+import type { GitFileChange } from "@thinkrail/contracts";
+import { FileRow } from "@/panels/planFileRow";
+
+const FILES: GitFileChange[] = [
+	{ path: "apps/web/src/chat/Composer.tsx", status: "modified", added: 42, removed: 17 },
+	{ path: "apps/web/src/chat/FileChip.tsx", status: "added", added: 61 },
+	{ path: "apps/web/src/chat/legacyChip.tsx", status: "deleted", removed: 38 },
+	{ path: "apps/web/public/preview.png", status: "added" },
+];
+
+export default function FileRows() {
+	return (
+		<ul className="flex w-full max-w-[28rem] flex-col">
+			{FILES.map((file) => (
+				<FileRow key={file.path} file={file} onOpen={() => {}} />
+			))}
+		</ul>
+	);
+}
+```
+
+#### Review summary
+
+Scope totals between the file count and the viewed count in the review header's metadata line.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+
+export default function ReviewSummary() {
+	const t = useT();
+	return (
+		<span className="flex min-w-0 items-center gap-4 tr-text-metadata text-text-muted">
+			<span>{t("changes.review.fileCount", { count: 7 })}</span>
+			<DiffStatBadge added={214} removed={63} />
+			<span>{t("changes.review.viewedCount", { viewed: 2, total: 7 })}</span>
+		</span>
+	);
+}
+```
+
+#### Commit meta
+
+Beside a short sha in a revision list; a revision whose stat no longer resolves shows no badge.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+
+const REVISIONS = [
+	{ sha: "3f9c2e1a", stat: { added: 120, removed: 14 } },
+	{ sha: "b81d07c4", stat: null },
+	{ sha: "e4a5f9d2", stat: { added: 9, removed: 22 }, unreviewed: true },
+];
+
+export default function Revisions() {
+	const t = useT();
+	return (
+		<ol className="flex flex-col gap-4">
+			{REVISIONS.map((rev, index) => (
+				<li key={rev.sha} className="flex items-center gap-8">
+					<span className="tr-text-metadata text-text-muted">#{index + 1}</span>
+					<span className="tr-code-text text-text-subtle">{rev.sha.slice(0, 7)}</span>
+					{rev.stat ? <DiffStatBadge added={rev.stat.added} removed={rev.stat.removed} /> : null}
+					{rev.unreviewed ? (
+						<span className="tr-text-metadata text-feedback-warning">
+							{t("plan.revisions.unreviewed")}
+						</span>
+					) : null}
+				</li>
+			))}
+		</ol>
+	);
+}
+```
+
+#### Narrow row
+
+In a narrow pane the file name truncates and the badge keeps its full width.
+
+```tsx
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function Narrow() {
+	return (
+		<div className="w-full max-w-[12rem]">
+			<TreeRow
+				testid="change-item"
+				kind="file"
+				label="ChangesReviewPane.integration.test.tsx"
+				onClick={() => {}}
+				trailing={<DiffStatBadge added={1204} removed={387} />}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ChangesTree.tsx` | Per-file badge in TreeRow `trailing`; a folder's aggregate only while collapsed. |
+| `apps/web/src/panels/ChangesPanel.tsx` | Flat list rows after the truncating path and the viewed mark. |
+| `apps/web/src/panels/ChangesFileSection.tsx` | Review section header, after the status letter and path. |
+| `apps/web/src/panels/ChangesReviewPane.tsx` | Scope totals between the file count and the viewed count. |
+| `apps/web/src/panels/PlanPane.tsx` | Change-set summary, step meta strip (hidden below `sm` with the sha), revisions and the branch totals. |
+| `apps/web/src/panels/planFileRow.tsx` | Plan change-set file rows with `?? 0` counts. |
+
+## FileChip
+
+A compact, bounded chip for one file or attachment: a file icon, a truncating label, an optional `meta` suffix and an optional trailing action. It owns its border, fill, padding, type and the `default` / `error` tones, and becomes a `<button>` when given `onClick`. The call site provides the label, the suffix that must stay readable, and any action.
+
+```tsx
+import { FileChip } from "@/chat/FileChip";
+```
+
+### When to use
+
+- An image attached to the composer or the new-workspace prompt, with its `· W×H` size and a Remove action.
+- An attachment shown in a sent message, opening a preview when clicked.
+- An attach failure in the attachment strip — the file name plus the reason, dismissible (`tone="error"`, no icon).
+- A placeholder while files are still decoding (“Attaching 2…”), or a one-line command error in the composer's chip row.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| DiffStatBadge | Only the line counts of a changed file are shown, inside its row. |
+| TreeRow | A file in a navigable list or tree (Changes, Files) rather than a single attachment. |
+| SettingsNotice | An error or notice that needs a sentence and actions, not a chip-sized line. |
+| Toast | A transient error that is not tied to an attachment the user can see and dismiss. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | A `<span>`, or a `<button type="button">` when `onClick` is set: `max-w-full` flex row with a `rounded-sm` border, `px-8 py-4` and `tr-text-metadata`; the tone sets border, fill and text colour. |
+| Icon | `RiFileLine` at `size-12`, never shrinks. Omitted with `icon={false}`. |
+| Label | `label` in a `min-w-0 truncate` span — the only part that gives way. |
+| Meta | Optional `meta`, never shrinks: the text that must stay readable at any width (the image size, an error's reason). |
+| Trailing | Optional `trailing`, a non-shrinking flex slot for one action (Remove, Dismiss). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `label` | `ReactNode` | — | The file name or message. Truncates with an ellipsis; pair a long, user-controlled name with `title`. |
+| `meta` | `ReactNode` | — | A suffix after the label that never truncates. Include its own separator, as in `· 1280×720` or `— unsupported image format`. |
+| `trailing` | `ReactNode` | — | One trailing action, usually an `IconButton` at size `s`. Only on a static chip — a chip with `onClick` is already a button. |
+| `onClick` | `() => void` | — | Makes the chip a `<button>` with a hover fill and a focus ring, for opening the file. Give it an `aria-label`. |
+| `tone` | `"default" \| "error"` | `"default"` | `default`: neutral elevated fill and default text. `error`: error-muted border, error-subtle fill and error text. |
+| `icon` | `boolean` | `true` | Shows the leading file icon. Error and command chips pass `false`. |
+
+Passed-through attributes:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `title` | `string` | — | Native hover text for the full label (or the full error) when it truncates. Spread onto the chip element. |
+| `aria-label` | `string` | — | Accessible name for a clickable chip, from a locale key (`chat.turn.viewAttachment`). |
+| `data-testid` | `string` | — | Test hook, spread onto the chip element. |
+| `data-width` | `number \| undefined` | — | Image width hook for e2e (`composer-image` chips). |
+| `data-height` | `number \| undefined` | — | Image height hook for e2e. |
+| `data-mime` | `string \| undefined` | — | Image MIME type hook for e2e. |
+
+### Tone
+
+`tone` sets the chip's border, fill and text together; the trailing action keeps its own colours.
+
+| Tone | Use it for |
+| --- | --- |
+| `default` | Every file or attachment — composer images, sent attachments and the pending placeholder. |
+| `error` | A refused attachment or a failed command in the composer's chip row, with the icon off. |
+
+### States
+
+Every cell is the real component. Hover the clickable chip, or click into the page and press Tab to see its focus ring.
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Static | No `onClick`. | A `<span>`; no hover or focus treatment. Its trailing action has its own states. |
+| Hover | Pointer over a chip with `onClick`. | `bg-control-bg-hovered` fill, with a colour transition. |
+| Keyboard focus | Tab to a chip with `onClick`. | `ring-2` in `primary` around the chip. The chip does not set `outline-none`, so the browser's own focus outline also shows inside the ring. |
+| Error | `tone="error"`. | Error-muted border, error-subtle fill and error text. Production error chips are static, so they have no hover change. |
+| Truncated | The label is wider than the space available. | The label ends in an ellipsis; icon, `meta` and `trailing` keep their full width. |
+| Pending | The call site passes a muted label (“Attaching 2…”). | No distinct treatment from the chip itself; the label carries the muted colour. |
+| Selected, disabled, loading | — | No distinct treatment; the chip has no such props. |
+
+### Accessibility
+
+- Static chips are plain text; with `onClick` the chip is a native `<button type="button">`, so focus and activation come from the platform.
+- A clickable chip needs an `aria-label` that names the action and the file (`chat.turn.viewAttachment`), since the visible label is only the file name.
+- `title` is native hover text only — it does not reach touch or keyboard users. Anything the user must read on a phone goes in `meta`, which never truncates.
+- The trailing action carries its own accessible name (an IconButton `label` such as `chat.promptImages.remove`).
+- The file icon is decorative and carries no label.
+- A clickable chip opens its Dialog from `onClick`, not through a `DialogTrigger`, so on close Radix has no trigger to return focus to and focus falls to the document body (as in `turns.tsx`'s `AttachmentChip`).
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Reaches a clickable chip, or the trailing action of a static chip. |
+| `Enter / Space` | Activates a clickable chip (opens the attachment). |
+
+### Usage rules
+
+- **FCH-1** — Every attachment, image or file token in the composer and transcript is a FileChip — composer images, sent attachments, attach errors and the pending placeholder share the one skin.
+- **FCH-2** — Put what must stay readable in `meta`, not `label`: the `· W×H` size and an error's reason. The label is the only part that truncates; the file name gives way first.
+- **FCH-3** — Errors are `tone="error"` with `icon={false}`, the file name in `label`, the reason in `meta` and the full sentence in `title` — never a colour class.
+- **FCH-4** — A chip is either clickable (`onClick` + `aria-label`) or carries one `trailing` action — never both, which would nest a button in a button.
+- **FCH-5** — Trailing actions are an `IconButton` at size `s` with a locale-key `label` (Remove image, Dismiss).
+- **FCH-6** — Keep the chip bounded: place chips in a `flex flex-wrap gap-4` strip and do not override `max-w-full` or the label's truncation; filenames are user-controlled.
+
+### Examples
+
+#### Attached image
+
+A composer image with its size in `meta` and a Remove action.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { FileChip } from "@/chat/FileChip";
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<FileChip
+			title="screenshot.png"
+			label="screenshot.png"
+			meta=" · 1280×720"
+			trailing={
+				<IconButton
+					icon={RiCloseLine}
+					size="s"
+					label={t("chat.promptImages.remove")}
+					onClick={() => {}}
+				/>
+			}
+		/>
+	);
+}
+```
+
+#### Attachment strip
+
+The composer's chip row: an attach error, images and the pending placeholder. Remove and dismiss work.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { FileChip } from "@/chat/FileChip";
+
+const IMAGES = [
+	{ id: "a", name: "screenshot.png", width: 1280, height: 720 },
+	{ id: "b", name: "mockup-final-v3.jpg", width: 2048, height: 1536 },
+];
+
+export default function AttachmentStrip() {
+	const t = useT();
+	const [images, setImages] = useState(IMAGES);
+	const [errors, setErrors] = useState([{ id: "e", name: "photo.heic" }]);
+	return (
+		<div className="flex flex-wrap gap-4">
+			{errors.map((err) => (
+				<FileChip
+					key={err.id}
+					tone="error"
+					icon={false}
+					title={t("chat.promptImages.attachFailedDetail", {
+						name: err.name,
+						reason: t("chat.promptImages.unsupported"),
+					})}
+					label={t("chat.promptImages.attachFailed", { name: err.name })}
+					meta={`— ${t("chat.promptImages.unsupported")}`}
+					trailing={
+						<IconButton
+							icon={RiCloseLine}
+							size="s"
+							label={t("common.dismiss")}
+							onClick={() => setErrors((list) => list.filter((item) => item.id !== err.id))}
+						/>
+					}
+				/>
+			))}
+			{images.map((img) => (
+				<FileChip
+					key={img.id}
+					data-width={img.width}
+					data-height={img.height}
+					title={img.name}
+					label={img.name}
+					meta={` · ${img.width}×${img.height}`}
+					trailing={
+						<IconButton
+							icon={RiCloseLine}
+							size="s"
+							label={t("chat.promptImages.remove")}
+							onClick={() => setImages((list) => list.filter((item) => item.id !== img.id))}
+						/>
+					}
+				/>
+			))}
+			<FileChip
+				label={
+					<span className="text-text-muted">{t("chat.promptImages.attaching", { count: 1 })}</span>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Attach error
+
+`tone="error"` without the icon: the name truncates, the reason in `meta` stays, the full sentence is the `title`.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { FileChip } from "@/chat/FileChip";
+
+export default function ErrorChip() {
+	const t = useT();
+	const [shown, setShown] = useState(true);
+	const name = "holiday-photo-from-the-beach.heic";
+	const reason = t("chat.promptImages.unsupported");
+	if (!shown) return null;
+	return (
+		<div className="flex w-full max-w-[20rem] flex-wrap gap-4">
+			<FileChip
+				tone="error"
+				icon={false}
+				title={t("chat.promptImages.attachFailedDetail", { name, reason })}
+				label={t("chat.promptImages.attachFailed", { name })}
+				meta={`— ${reason}`}
+				trailing={
+					<IconButton
+						icon={RiCloseLine}
+						size="s"
+						label={t("common.dismiss")}
+						onClick={() => setShown(false)}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Pending
+
+The placeholder while images are still decoding; sends wait for it.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { FileChip } from "@/chat/FileChip";
+
+export default function Pending() {
+	const t = useT();
+	return (
+		<div className="flex flex-wrap gap-4">
+			<FileChip
+				label={
+					<span className="text-text-muted">{t("chat.promptImages.attaching", { count: 1 })}</span>
+				}
+			/>
+			<FileChip
+				label={
+					<span className="text-text-muted">{t("chat.promptImages.attaching", { count: 3 })}</span>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Clickable attachment
+
+A sent message's attachment: `onClick` makes the chip a button that opens the image in a Dialog.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { useState } from "react";
+import { FileChip } from "@/chat/FileChip";
+
+export default function Attachment() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const label = "favicon.svg";
+	return (
+		<>
+			<FileChip
+				title={label}
+				aria-label={t("chat.turn.viewAttachment", { label })}
+				onClick={() => setOpen(true)}
+				label={label}
+			/>
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent className="flex w-auto flex-col gap-8">
+					<DialogHeader>
+						<DialogTitle>{label}</DialogTitle>
+					</DialogHeader>
+					<img src="favicon.svg" alt="" className="h-auto w-[16rem] max-w-full rounded-sm" />
+				</DialogContent>
+			</Dialog>
+		</>
+	);
+}
+```
+
+#### Command error
+
+A failed slash command in the composer's chip row — label only, no icon.
+
+```tsx
+import { FileChip } from "@/chat/FileChip";
+
+export default function CommandError() {
+	const message = "Unknown command: /deploy";
+	return (
+		<div className="flex flex-wrap gap-4">
+			<FileChip tone="error" icon={false} title={message} label={message} />
+		</div>
+	);
+}
+```
+
+#### Long file name
+
+In a narrow column the label truncates while the icon, `meta` and the Remove action keep their width.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { FileChip } from "@/chat/FileChip";
+
+export default function Truncation() {
+	const t = useT();
+	const name = "Screenshot 2025-03-14 at 09.41.27 — design review, second pass.png";
+	return (
+		<div className="flex w-full max-w-[16rem] flex-wrap gap-4">
+			<FileChip
+				title={name}
+				label={name}
+				meta=" · 2880×1800"
+				trailing={
+					<IconButton
+						icon={RiCloseLine}
+						size="s"
+						label={t("chat.promptImages.remove")}
+						onClick={() => {}}
+					/>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/chat/promptImages.tsx` | `PromptImageChips`: attach errors, image chips with size and Remove, and the pending placeholder. |
+| `apps/web/src/chat/turns.tsx` | `AttachmentChip`: a clickable chip in a sent message that opens the image in a Dialog. |
+| `apps/web/src/chat/Composer.tsx` | The command-submit error chip, passed as the strip's `leading` chip. |
+
+## Collapsible
+
+The “Show all N lines” fold for long tool output inside a chat tool card. Above 24 lines it caps the content at `max-h-384` behind a bottom fade and adds a text toggle; at 24 lines or fewer it renders the children untouched. It owns the cap, the fade, the toggle label and the remembered fold state; the call site provides a stable tool-call-derived `id`, the content's line count (usually `countLines(text)`) and the content itself.
+
+```tsx
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+```
+
+### When to use
+
+- The body of a chat tool renderer whose output can run long: file contents (`read`, `write`), edit diffs, web results, MCP arguments and output, spec tool results, a subagent's task.
+- Content whose length you can count in lines before rendering — pass the count; the component never measures.
+- Inside the transcript, where the fold must survive virtualization remounts and keep the reader's scroll anchor (it registers with `FoldGeometryProvider` through `useFold`).
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| QuietScrollArea | Content that should scroll inside a fixed region rather than grow to its full length on demand. |
+| TreeRow | A hierarchy the user expands folder by folder, not one long block of text. |
+| Button | A disclosure outside the chat tool renderers; Collapsible's toggle, fade and fold cache are specific to tool output. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Pass-through | At `lines` ≤ 24 the children are returned as they are — no wrapper, no toggle, no `data-testid`. |
+| Root | A `flex flex-col gap-4` `<div data-testid="collapsible" data-chat-fold-root>` carrying `data-expanded`. |
+| Clip | Wraps the children. Collapsed it is `relative max-h-384 overflow-hidden`; expanded it has no class and the content grows to full height. |
+| Fade | Collapsed only: a `pointer-events-none` `h-32` strip pinned to the clip's bottom edge, painted with `fadeClass` (a gradient from `container-header-bg` to transparent by default). |
+| Toggle | A native `<button data-testid="collapsible-toggle">` below the clip, `self-start`, `text-primary` `tr-text-metadata`, underlined on hover. Its label is “Show all N lines” (`tools.collapsible.showAll`, pluralised by `lines`) or “Show less” (`tools.collapsible.showLess`). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | — | Required. The key in the shared `foldState` cache and the fold anchor id. Derive it from the tool call (`<toolCallId>:content`, `<toolCallId>:task`) so the user's toggle survives re-derivation and virtualization; two folds with the same id share one remembered value. |
+| `lines` | `number` | — | Required. The content's line count. Above 24 the content folds; it is also the N in “Show all N lines”. Use `countLines(text)` (a trailing newline adds no line) or sum the parts you render. |
+| `children` | `ReactNode` | — | The content: a `CodeBlock`, `Markdown`, `ToolArgList`, a diff. It keeps its own surface; the fold adds none. |
+| `fadeClass` | `string` | `"bg-[linear-gradient(to_top,var(--container-header-bg),transparent)]"` | Background classes for the fade strip. The default ends on `container-header-bg`, the code-block surface; pass the gradient to `--container-elevated-bg` when the content's bottom edge is the card itself (EditCard's coloured diff rows). |
+
+### States
+
+Every cell is the real component. The fold starts collapsed; the toggle is the only way to expand it, and the choice is remembered per `id`.
+
+| State | How |
+| --- | --- |
+| Short | `lines={6}` — 24 lines or fewer render as they are. |
+| Collapsed → expanded | `lines={60}` — capped behind the fade. Click the toggle to expand, click again to collapse. |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Short | `lines` ≤ 24. | The children only. No cap, fade or toggle. |
+| Collapsed | `lines` > 24 and no remembered toggle for `id` (the initial state). | Content clipped at `max-h-384` with the fade over its last `h-32`; toggle reads “Show all N lines”; `data-expanded=false`, `aria-expanded=false`. |
+| Expanded | Click the toggle (or remount after the user expanded the same `id`). | Full-height content, no fade; toggle reads “Show less”; `data-expanded=true`, `aria-expanded=true`. |
+| Toggle hover | Pointer over the toggle. | Label underlined (`hover:underline`); colour unchanged. |
+| Toggle keyboard focus | Tab to the toggle. | The browser's default focus outline — the toggle sets no `focus-visible` ring of its own. |
+| Disabled, loading, error | — | No distinct treatment. Running and empty states are rendered by the tool renderer instead of a Collapsible; error output keeps the colour its content sets. |
+
+### Accessibility
+
+- The toggle is a native `<button>` with `aria-expanded`; its visible label is its accessible name and changes between “Show all N lines” and “Show less”.
+- The toggle has no `aria-controls`; it sits directly below the content it reveals.
+- Collapsed content is clipped visually only — it stays in the DOM, so screen readers and in-page search still reach the hidden lines.
+- The fade is `pointer-events-none` and carries no text, so it never intercepts clicks or selection.
+- Toggling goes through the transcript's fold-geometry seam, which keeps the reader's anchor in place instead of jumping the scroll position.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from the toggle. |
+| `Enter / Space` | Expands or collapses the content. |
+
+### Usage rules
+
+- **COL-1** — Use Collapsible for long output inside chat tool renderers only; it is the tool-output fold, not a general disclosure.
+- **COL-2** — Give every fold a stable id derived from the tool call (`<toolCallId>:content`, `<toolCallId>:task`, a per-part suffix) — never an index, a random value or a content hash — so a manual toggle survives streaming and virtualization.
+- **COL-3** — Pass the real line count of what you render: `countLines(text)` for one block, the sum of the parts for a list (as McpArgs and EditCard do). Do not measure pixels or pre-truncate the content.
+- **COL-4** — Wrap only real output. Running and empty states are one-line messages rendered instead of the fold, never inside it; long error output may fold (spec and MCP results do), a one-line error does not need to.
+- **COL-5** — Keep the default fade for content that ends on a code-block surface; override `fadeClass` only to match the surface the content actually ends on, and never to add another colour.
+- **COL-6** — Do not nest Collapsibles or put one around a whole tool card; the ToolCard header already folds the card.
+
+### Examples
+
+#### Long file output
+
+A 40-line read result, capped behind the fade with “Show all 40 lines”.
+
+```tsx
+import { CodeBlock } from "@/chat/tools/CodeBlock";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const output = Array.from({ length: 40 }, (_, i) => `export const step${i + 1} = ${i + 1};`).join(
+	"\n",
+);
+
+export default function Preview() {
+	return (
+		<div className="w-full">
+			<Collapsible id="library-collapsible-preview:content" lines={countLines(output)}>
+				<CodeBlock code={output} lang="ts" />
+			</Collapsible>
+		</div>
+	);
+}
+```
+
+#### Read and write cards
+
+`CodeBlock` content counted with `countLines`, keyed `<toolCallId>:content` — the ReadCard and WriteCard pattern.
+
+```tsx
+import { CodeBlock } from "@/chat/tools/CodeBlock";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const toolCallId = "library-read-output";
+const output = `${Array.from(
+	{ length: 16 },
+	(_, i) => `export function handler${i + 1}(input: string) {\n\treturn input.trim();\n}`,
+).join("\n")}\n`;
+
+export default function ReadOutput() {
+	return (
+		<div className="w-full">
+			<Collapsible id={`${toolCallId}:content`} lines={countLines(output)}>
+				<CodeBlock code={output} lang="ts" />
+			</Collapsible>
+		</div>
+	);
+}
+```
+
+#### Web result
+
+A long Markdown answer from a web tool, folded with the default fade.
+
+```tsx
+import { Markdown } from "@/chat/Markdown";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const output = [
+	"Found 14 pages for the query:",
+	"",
+	...Array.from(
+		{ length: 14 },
+		(_, i) =>
+			`${i + 1}. **Result ${i + 1}** — example.com/docs/page-${i + 1}\n   A short summary of what this page says about the query.`,
+	),
+].join("\n");
+
+export default function MarkdownResult() {
+	return (
+		<div className="w-full">
+			<Collapsible id="library-web-result:content" lines={countLines(output)}>
+				<Markdown text={output} />
+			</Collapsible>
+		</div>
+	);
+}
+```
+
+#### Summed line count
+
+MCP arguments: the line count is the sum of every argument's lines, so the fold matches what is rendered.
+
+```tsx
+import { ToolArgList, toolArgEntries } from "@/chat/ToolArgList";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const args = {
+	repository: "thinkrail/thinkrail",
+	query: "is:open label:bug",
+	fields: ["title", "author", "labels", "assignees", "milestone", "createdAt", "updatedAt"],
+	filters: { state: "open", sort: "updated", direction: "desc", perPage: 50, page: 1 },
+};
+
+export default function ToolArgs() {
+	const entries = toolArgEntries(args);
+	const lines = entries.reduce((total, entry) => total + Math.max(1, countLines(entry.value)), 0);
+	return (
+		<div className="w-full">
+			<Collapsible id="library-mcp-call:args" lines={lines}>
+				<ToolArgList entries={entries} />
+			</Collapsible>
+		</div>
+	);
+}
+```
+
+#### Edit diff with its own fade
+
+The real EditCard: the diff's coloured rows end on the card, so it passes a `fadeClass` ending on `container-elevated-bg`.
+
+```tsx
+import { EditCard } from "@/chat/tools/EditCard";
+
+const oldText = Array.from({ length: 14 }, (_, i) => `const limit${i + 1} = ${i + 1};`).join("\n");
+const newText = Array.from({ length: 14 }, (_, i) => `const limit${i + 1} = ${(i + 1) * 2};`).join(
+	"\n",
+);
+
+export default function EditCardExample() {
+	return (
+		<div className="w-full">
+			<EditCard
+				toolCallId="library-edit-card"
+				toolName="edit"
+				args={{ path: "src/limits.ts", oldText, newText }}
+				result={{ content: [{ type: "text", text: "Edited src/limits.ts" }] }}
+				status="done"
+				streaming={false}
+			/>
+		</div>
+	);
+}
+```
+
+#### Threshold
+
+24 lines render as they are; 25 lines fold. The toggle label counts the lines you pass.
+
+```tsx
+import { CodeBlock } from "@/chat/tools/CodeBlock";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const lines = (count: number) =>
+	Array.from({ length: count }, (_, i) => `line ${i + 1}`).join("\n");
+const short = lines(24);
+const long = lines(25);
+
+export default function Threshold() {
+	return (
+		<div className="grid w-full grid-cols-2 items-start gap-16">
+			<Collapsible id="library-threshold-24:content" lines={countLines(short)}>
+				<CodeBlock code={short} lang="text" />
+			</Collapsible>
+			<Collapsible id="library-threshold-25:content" lines={countLines(long)}>
+				<CodeBlock code={long} lang="text" />
+			</Collapsible>
+		</div>
+	);
+}
+```
+
+#### Remembered fold
+
+Expand, then collapse and reopen the tool card: the same `id` restores the expanded state on remount.
+
+```tsx
+import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { CodeBlock } from "@/chat/tools/CodeBlock";
+import { Collapsible, countLines } from "@/chat/tools/Collapsible";
+
+const toolCallId = "library-remembered";
+const output = Array.from({ length: 30 }, (_, i) => `entry ${i + 1}`).join("\n");
+
+export default function Remembered() {
+	const t = useT();
+	const [cardOpen, setCardOpen] = useState(true);
+	return (
+		<div className="flex w-full flex-col items-start gap-8">
+			<Button
+				variant="ghost"
+				size="s"
+				iconLeft={cardOpen ? RiArrowDownSLine : RiArrowRightSLine}
+				aria-expanded={cardOpen}
+				onClick={() => setCardOpen((open) => !open)}
+			>
+				{cardOpen ? t("resources.inspector.collapse") : t("changes.section.expand")}
+			</Button>
+			{cardOpen ? (
+				<div className="w-full">
+					<Collapsible id={`${toolCallId}:content`} lines={countLines(output)}>
+						<CodeBlock code={output} lang="text" />
+					</Collapsible>
+				</div>
+			) : null}
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/chat/tools/ReadCard.tsx` | File contents in a `CodeBlock`, keyed `<toolCallId>:content`. |
+| `apps/web/src/chat/tools/EditCard.tsx` | Old and new lines counted together, with the `container-elevated-bg` fade. |
+| `apps/web/src/chat/tools/web/WebResultBody.tsx` | Markdown web results; running, error and empty states stay outside the fold. |
+| `apps/web/src/chat/tools/mcp/McpCardParts.tsx` | MCP arguments (summed line count) and MCP output. |
+| `apps/web/src/chat/tools/subagent/AgentCard.tsx` | A subagent's task text, keyed `<toolCallId>:task`. |
+
+## TreeRow
+
+The file-style tree row shared by the Files tree and the Changes tree, so the two stay identical. It is one full-width button at `h-panel-row` with a chevron (folders) or a spacer (files), a folder or file icon, a truncated label and a trailing slot; it owns the geometry, the icons, the hover and selected fills and the focus ring. The call site provides the label, the kind, the open and active state, the label colour for git status, the trailing marks, the nesting (`pl-tree-indent` lists) and every handler.
+
+```tsx
+import { TreeRow } from "@/panels/TreeRow";
+```
+
+### When to use
+
+- A row of a file or folder hierarchy in a side panel: the workspace Files tree and the Changes tree view.
+- Any new file-like tree that must look and behave exactly like those two — reuse TreeRow instead of drawing another row.
+- A file row that needs a trailing status letter, change dot, `+N −M` badge or viewed mark.
+- A row whose hover and selected fill must cover a wider wrapper with a row-actions menu (`highlight="wrapper"`).
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| FileChip | A file reference inline in chat or a composer, not a row in a hierarchy. |
+| Collapsible | Folding one long block of tool output rather than a nested list. |
+| ContextMenu | The row only needs a right-click menu; compose it around the row instead of extending TreeRow. |
+| Command | Finding a file by name across the workspace; a tree is for browsing by structure. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Row | A native `<button type="button">`, `flex h-panel-row w-full min-w-0 items-center gap-4 rounded-sm px-4`, `tr-text-ui`, with `data-testid`, `data-kind`, `data-active`, `data-status` and `data-viewed`. `min-w-0` lets it shrink beside a trailing control on the same flex line. |
+| Lead | Folders: a `size-16` chevron, right when collapsed and down when `expanded`. Files: an empty `size-14` spacer. |
+| Icon | `size-14` folder or file icon — the line icon, or the fill icon while `active`. |
+| Label | `label`, one line, truncated with an ellipsis; `labelClassName` adds status colour or a line-through. |
+| Trailing slot | `trailing`, rendered after the label inside the button: a status letter, a change dot, DiffStatBadge, the viewed mark. |
+| Nesting | Not part of the row: call sites nest children in a `<ul className="flex flex-col pl-tree-indent">` under the folder's `<li>`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `label` | `string` | — | Required. The file or folder name — or a slash-joined compact run (`apps/web/src`). Also the accessible name with the trailing text. |
+| `kind` | `"dir" \| "file"` | — | Required. Folders get the chevron and folder icon; files a spacer and file icon. |
+| `testid` | `string` | — | Required. Written to `data-testid` (`"file-node"`, `"change-item"`, `"change-tree-folder"`). |
+| `expanded` | `boolean` | — | Folders only: chevron down when true, right otherwise. The call site renders the children. |
+| `active` | `boolean` | — | The row's resource is the open one. Fill icon, `data-active`, and the selected fill when `highlight` is `self`. |
+| `subtle` | `boolean` | `false` | Dims the label and icons from `text-text-muted` to `text-text-subtle` — gitignored entries. |
+| `labelClassName` | `string` | — | Classes for the label span only: git status colour from `statusNameClass` / `statusMarkClass`, `opacity-60` for a viewed file. Never geometry. |
+| `trailing` | `ReactNode` | — | Marks after the label, inside the button: give them `shrink-0` so the label truncates first. |
+| `highlight` | `"self" \| "wrapper"` | `"self"` | `self`: the row paints its own hover and selected fill. `wrapper`: it paints none, so a surrounding element (ChangeRowActions) can paint one fill across the row and its menu button. |
+| `dataStatus` | `string` | — | Written to `data-status` (git status, or `"ignored"`) for tests and styling hooks. |
+| `dataViewed` | `boolean` | — | Sets `data-viewed` when true — a change marked viewed. |
+| `onClick` | `(event: MouseEvent) => void` | — | Activation. Folders toggle; files open as preview, wrapped in `firstClickOnly` so a double click's second click does nothing. |
+| `onDoubleClick` | `() => void` | — | Files: keep the preview tab (open it permanently). |
+| `onContextMenu` | `(event: MouseEvent) => void` | — | Right-click or the context-menu key — ChangeRowActions opens its menu here. |
+| `onWarm` | `(trigger: "hover" \| "focus") => void` | — | Called on pointer enter (`hover`) and focus (`focus`) so a file's editor can preload. FileTree warms at once on focus and through `warmOnHover` on hover. |
+| `ref` | `Ref<HTMLButtonElement>` | — | Forwarded to the `<button>` — FileTree scrolls a revealed file into view with it. |
+
+### States
+
+Every cell is the real component. Hover a cell or click into the page and press Tab to see the hover fill and the inset focus ring. With `highlight="wrapper"` the row paints no fill of its own — only the fill icon marks it active.
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Default | Rest. | No fill; label and icons `text-text-muted`. |
+| Hover | Pointer over the row, `highlight="self"`. | `control-bg-hovered` fill. With `wrapper` the row paints nothing; the wrapper does. |
+| Keyboard focus | Tab to the row. | A 2px inset `primary` ring (`focus-visible:ring-2 ring-inset`); no outline. |
+| Active | `active`. | Fill icon, `data-active`, and the `control-bg-selected` fill with `highlight="self"` (the wrapper paints it otherwise). |
+| Expanded / collapsed | `expanded` on a folder. | Chevron down or right. Nothing else changes; the call site shows or hides the children. |
+| Subtle | `subtle`. | Label and icons `text-text-subtle` (gitignored). |
+| Git status | `labelClassName` from `statusNameClass` / `statusMarkClass`. | Added and untracked green, deleted red with a line-through, renamed blue, modified plain on the name (Changes) or warning-coloured (Files). |
+| Disabled, loading, empty | — | No distinct treatment. The tree shows LoadingRegion while loading and an empty message instead of rows. |
+
+### Accessibility
+
+- Each row is a native `<button type="button">`; its accessible name is the label plus any trailing text. The icons have no label.
+- The trees are plain nested `<ul>` / `<li>` lists, not an ARIA `tree`: rows carry no `role="treeitem"`, `aria-expanded`, `aria-level` or `aria-selected`, so folder state and the active file are visual only.
+- Every row is a separate Tab stop; there is no roving focus or arrow-key navigation.
+- Focus shows the inset `primary` ring, so it is not clipped by the panel's scroll container.
+- A double click (keep) has no keyboard equivalent on the row; activating an already-active preview keeps it, and the strip offers a Keep Preview command.
+- `trailing` marks that carry meaning need their own name — ViewedMark has `role="img"` and a label; a coloured dot or name colour alone is not announced.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus row by row; the focus ring appears. |
+| `Enter / Space` | Activates: toggles a folder, opens a file as preview. |
+| `Shift+F10 / Context menu key` | Fires `onContextMenu` — opens the row-actions menu in the Changes tree. |
+
+### Usage rules
+
+- **TRW-1** — Every file or folder row in a side-panel tree is a TreeRow, so the Files and Changes trees stay identical — never a hand-drawn row or a menu item restyled as one.
+- **TRW-2** — Nest with `<ul className="flex flex-col pl-tree-indent">` inside the folder's `<li>`; never indent with padding on the row.
+- **TRW-3** — Show git status on the name through `labelClassName` from `changesModel` (`statusNameClass`, `statusMarkClass`); never invent another status colour.
+- **TRW-4** — Put marks in `trailing` with `shrink-0` so the label truncates first; a folder shows an aggregate DiffStatBadge only while collapsed.
+- **TRW-5** — Open files as preview on click with `firstClickOnly`, keep on double click; folders toggle on click.
+- **TRW-6** — Use `highlight="wrapper"` only when a wrapper paints the hover and selected fill for the row and its actions (ChangeRowActions); otherwise leave the default.
+- **TRW-7** — Compact a run of single-child folders into one slash-joined `label`; the row expands and collapses the deepest folder.
+
+### Examples
+
+#### File tree
+
+A folder with its files nested under `pl-tree-indent`; one file is active.
+
+```tsx
+import { useState } from "react";
+import { TreeRow } from "@/panels/TreeRow";
+
+const files = ["Button.tsx", "Dialog.tsx", "index.ts"];
+
+export default function Preview() {
+	const [expanded, setExpanded] = useState(true);
+	const [active, setActive] = useState("Button.tsx");
+	return (
+		<ul className="flex w-full max-w-[16rem] flex-col">
+			<li>
+				<TreeRow
+					testid="file-node"
+					kind="dir"
+					expanded={expanded}
+					label="components"
+					onClick={() => setExpanded((open) => !open)}
+				/>
+				{expanded && (
+					<ul className="flex flex-col pl-tree-indent">
+						{files.map((name) => (
+							<li key={name}>
+								<TreeRow
+									testid="file-node"
+									kind="file"
+									active={active === name}
+									label={name}
+									onClick={() => setActive(name)}
+								/>
+							</li>
+						))}
+					</ul>
+				)}
+			</li>
+		</ul>
+	);
+}
+```
+
+#### Files panel
+
+A working tree: folders toggle, a click opens a file, gitignored entries are subtle and changed files show a status letter and their folder a dot.
+
+```tsx
+import type { GitFileStatus } from "@thinkrail/contracts";
+import { useState } from "react";
+import { statusLetter } from "@/chat/planView";
+import { firstClickOnly } from "@/lib";
+import { statusMarkClass } from "@/panels/changesModel";
+import { TreeRow } from "@/panels/TreeRow";
+
+interface Node {
+	path: string;
+	name: string;
+	kind: "dir" | "file";
+	ignored?: boolean;
+	status?: GitFileStatus;
+	changed?: boolean;
+	children?: Node[];
+}
+
+const nodes: Node[] = [
+	{ path: "dist", name: "dist", kind: "dir", ignored: true, children: [] },
+	{
+		path: "src",
+		name: "src",
+		kind: "dir",
+		changed: true,
+		children: [
+			{ path: "src/App.tsx", name: "App.tsx", kind: "file", status: "modified" },
+			{ path: "src/routes.ts", name: "routes.ts", kind: "file", status: "added" },
+			{ path: "src/main.tsx", name: "main.tsx", kind: "file" },
+		],
+	},
+	{ path: ".env.local", name: ".env.local", kind: "file", ignored: true },
+	{ path: "package.json", name: "package.json", kind: "file" },
+];
+
+export default function FilesTree() {
+	const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set(["src"]));
+	const [activePath, setActivePath] = useState<string | null>("src/App.tsx");
+	const toggle = (path: string) =>
+		setExpanded((current) => {
+			const next = new Set(current);
+			if (!next.delete(path)) next.add(path);
+			return next;
+		});
+
+	const renderNode = (node: Node) => {
+		const isDir = node.kind === "dir";
+		const open = expanded.has(node.path);
+		return (
+			<li key={node.path}>
+				<TreeRow
+					testid="file-node"
+					kind={node.kind}
+					expanded={open}
+					active={!isDir && activePath === node.path}
+					subtle={node.ignored === true}
+					dataStatus={node.ignored ? "ignored" : undefined}
+					label={node.name}
+					labelClassName={
+						node.status
+							? statusMarkClass(node.status)
+							: node.changed
+								? statusMarkClass("modified")
+								: ""
+					}
+					trailing={
+						node.status ? (
+							<span className={`shrink-0 tr-text-metadata ${statusMarkClass(node.status)}`}>
+								{statusLetter(node.status)}
+							</span>
+						) : node.changed ? (
+							<span className="mr-4 size-6 shrink-0 rounded-full bg-feedback-warning" />
+						) : undefined
+					}
+					onClick={isDir ? () => toggle(node.path) : firstClickOnly(() => setActivePath(node.path))}
+				/>
+				{isDir && open && node.children && (
+					<ul className="flex flex-col pl-tree-indent">{node.children.map(renderNode)}</ul>
+				)}
+			</li>
+		);
+	};
+
+	return <ul className="flex w-full max-w-[18rem] flex-col">{nodes.map(renderNode)}</ul>;
+}
+```
+
+#### Changes tree
+
+Status on the name, a `+N −M` badge per file, and a folder's aggregate badge only while it is collapsed.
+
+```tsx
+import type { GitFileStatus } from "@thinkrail/contracts";
+import { useState } from "react";
+import { firstClickOnly } from "@/lib";
+import { statusNameClass } from "@/panels/changesModel";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+
+interface Change {
+	path: string;
+	name: string;
+	status: GitFileStatus;
+	added: number;
+	removed: number;
+}
+
+const folders: { path: string; name: string; files: Change[] }[] = [
+	{
+		path: "src/panels",
+		name: "src/panels",
+		files: [
+			{
+				path: "src/panels/TreeRow.tsx",
+				name: "TreeRow.tsx",
+				status: "modified",
+				added: 12,
+				removed: 4,
+			},
+			{
+				path: "src/panels/FileTree.tsx",
+				name: "FileTree.tsx",
+				status: "added",
+				added: 86,
+				removed: 0,
+			},
+			{
+				path: "src/panels/OldTree.tsx",
+				name: "OldTree.tsx",
+				status: "deleted",
+				added: 0,
+				removed: 140,
+			},
+		],
+	},
+	{
+		path: "docs",
+		name: "docs",
+		files: [{ path: "docs/tree.md", name: "tree.md", status: "renamed", added: 3, removed: 1 }],
+	},
+];
+
+const total = (files: Change[], key: "added" | "removed") =>
+	files.reduce((sum, file) => sum + file[key], 0);
+
+export default function ChangesTree() {
+	const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set(["docs"]));
+	const [activePath, setActivePath] = useState("src/panels/TreeRow.tsx");
+	const toggle = (path: string) =>
+		setCollapsed((current) => {
+			const next = new Set(current);
+			if (!next.delete(path)) next.add(path);
+			return next;
+		});
+	return (
+		<ul className="flex w-full max-w-[20rem] flex-col">
+			{folders.map((folder) => {
+				const expanded = !collapsed.has(folder.path);
+				return (
+					<li key={folder.path}>
+						<TreeRow
+							testid="change-tree-folder"
+							kind="dir"
+							expanded={expanded}
+							label={folder.name}
+							onClick={() => toggle(folder.path)}
+							trailing={
+								expanded ? null : (
+									<DiffStatBadge
+										added={total(folder.files, "added")}
+										removed={total(folder.files, "removed")}
+									/>
+								)
+							}
+						/>
+						{expanded && (
+							<ul className="flex flex-col pl-tree-indent">
+								{folder.files.map((file) => (
+									<li key={file.path}>
+										<TreeRow
+											testid="change-item"
+											kind="file"
+											active={activePath === file.path}
+											dataStatus={file.status}
+											label={file.name}
+											labelClassName={statusNameClass(file.status)}
+											onClick={firstClickOnly(() => setActivePath(file.path))}
+											trailing={<DiffStatBadge added={file.added} removed={file.removed} />}
+										/>
+									</li>
+								))}
+							</ul>
+						)}
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+```
+
+#### Row actions
+
+`highlight="wrapper"` inside ChangeRowActions: one fill covers the row and its menu; right-click opens the same menu.
+
+```tsx
+import { useState } from "react";
+import { firstClickOnly } from "@/lib";
+import { ChangeRowActions } from "@/panels/ChangeRowActions";
+import { statusNameClass } from "@/panels/changesModel";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+
+const changes = [
+	{
+		path: "src/panels/TreeRow.tsx",
+		name: "TreeRow.tsx",
+		status: "modified",
+		added: 12,
+		removed: 4,
+	},
+	{ path: "src/panels/FileTree.tsx", name: "FileTree.tsx", status: "added", added: 86, removed: 0 },
+] as const;
+
+export default function RowActions() {
+	const [activePath, setActivePath] = useState<string>(changes[0].path);
+	return (
+		<ul className="flex w-full max-w-[20rem] flex-col">
+			{changes.map((change) => (
+				<li key={change.path}>
+					<ChangeRowActions
+						path={change.path}
+						active={activePath === change.path}
+						onView={() => setActivePath(change.path)}
+						onOpenTab={() => setActivePath(change.path)}
+					>
+						{({ onContextMenu }) => (
+							<TreeRow
+								testid="change-item"
+								kind="file"
+								highlight="wrapper"
+								active={activePath === change.path}
+								dataStatus={change.status}
+								label={change.name}
+								labelClassName={statusNameClass(change.status)}
+								onClick={firstClickOnly(() => setActivePath(change.path))}
+								onContextMenu={onContextMenu}
+								trailing={<DiffStatBadge added={change.added} removed={change.removed} />}
+							/>
+						)}
+					</ChangeRowActions>
+				</li>
+			))}
+		</ul>
+	);
+}
+```
+
+#### Kind and state
+
+Folder collapsed and expanded, file, active file and a gitignored entry.
+
+```tsx
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function States() {
+	return (
+		<ul className="flex w-full max-w-[16rem] flex-col">
+			<li>
+				<TreeRow testid="file-node" kind="dir" label="collapsed" />
+			</li>
+			<li>
+				<TreeRow testid="file-node" kind="dir" expanded label="expanded" />
+			</li>
+			<li>
+				<TreeRow testid="file-node" kind="file" label="file.ts" />
+			</li>
+			<li>
+				<TreeRow testid="file-node" kind="file" active label="active.ts" />
+			</li>
+			<li>
+				<TreeRow testid="file-node" kind="dir" subtle dataStatus="ignored" label="node_modules" />
+			</li>
+		</ul>
+	);
+}
+```
+
+#### Status on the name
+
+`statusNameClass` for each git status, and a viewed change dimmed with the viewed mark.
+
+```tsx
+import type { GitFileStatus } from "@thinkrail/contracts";
+import { statusNameClass } from "@/panels/changesModel";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+import { ViewedMark } from "@/panels/ViewedMark";
+
+const changes: { name: string; status: GitFileStatus; viewed?: boolean }[] = [
+	{ name: "added.ts", status: "added" },
+	{ name: "untracked.ts", status: "untracked" },
+	{ name: "modified.ts", status: "modified" },
+	{ name: "renamed.ts", status: "renamed" },
+	{ name: "deleted.ts", status: "deleted" },
+	{ name: "viewed.ts", status: "modified", viewed: true },
+];
+
+export default function StatusNames() {
+	return (
+		<ul className="flex w-full max-w-[18rem] flex-col">
+			{changes.map((change) => (
+				<li key={change.name}>
+					<TreeRow
+						testid="change-item"
+						kind="file"
+						dataStatus={change.status}
+						dataViewed={change.viewed === true}
+						label={change.name}
+						labelClassName={`${statusNameClass(change.status)} ${change.viewed ? "opacity-60" : ""}`}
+						trailing={
+							<>
+								{change.viewed ? <ViewedMark /> : null}
+								<DiffStatBadge added={4} removed={2} />
+							</>
+						}
+					/>
+				</li>
+			))}
+		</ul>
+	);
+}
+```
+
+#### Compact folders and long names
+
+A single-child folder run is one slash-joined row; long names truncate before the trailing marks.
+
+```tsx
+import { useState } from "react";
+import { DiffStatBadge } from "@/panels/DiffStatBadge";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function CompactFolders() {
+	const [expanded, setExpanded] = useState(true);
+	return (
+		<ul className="flex w-full max-w-[14rem] flex-col">
+			<li>
+				<TreeRow
+					testid="file-node"
+					kind="dir"
+					expanded={expanded}
+					label="apps/web/src/panels"
+					onClick={() => setExpanded((open) => !open)}
+				/>
+				{expanded && (
+					<ul className="flex flex-col pl-tree-indent">
+						<li>
+							<TreeRow
+								testid="file-node"
+								kind="file"
+								label="WorkspaceFilesPanelToolbar.tsx"
+								trailing={<DiffStatBadge added={128} removed={37} />}
+							/>
+						</li>
+						<li>
+							<TreeRow testid="file-node" kind="file" label="TreeRow.tsx" />
+						</li>
+					</ul>
+				)}
+			</li>
+		</ul>
+	);
+}
+```
+
+#### Preview, keep and warm
+
+A click opens a preview, a double click keeps it, and hover or focus reports a warm-up.
+
+```tsx
+import { useState } from "react";
+import { firstClickOnly } from "@/lib";
+import { warmOnHover } from "@/panels/editorWarm";
+import { TreeRow } from "@/panels/TreeRow";
+
+const files = ["README.md", "package.json", "tsconfig.json"];
+
+export default function OpenGestures() {
+	const [opened, setOpened] = useState<{ name: string; intent: "preview" | "keep" } | null>(null);
+	const [warmed, setWarmed] = useState<string | null>(null);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<ul className="flex w-full max-w-[16rem] flex-col">
+				{files.map((name) => (
+					<li key={name}>
+						<TreeRow
+							testid="file-node"
+							kind="file"
+							active={opened?.name === name}
+							label={name}
+							onClick={firstClickOnly(() => setOpened({ name, intent: "preview" }))}
+							onDoubleClick={() => setOpened({ name, intent: "keep" })}
+							onWarm={(trigger) =>
+								trigger === "focus"
+									? setWarmed(`${name} · focus`)
+									: warmOnHover(() => setWarmed(`${name} · hover`))
+							}
+						/>
+					</li>
+				))}
+			</ul>
+			<div className="flex gap-16 tr-text-metadata text-text-muted">
+				<output>{opened ? `${opened.intent} · ${opened.name}` : "—"}</output>
+				<output>{warmed ?? "—"}</output>
+			</div>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/FileTree.tsx` | Workspace Files tree: compact folders, gitignored `subtle` rows, status letters, editor warm-up and reveal via `ref`. |
+| `apps/web/src/panels/ChangesTree.tsx` | Changes tree: status-coloured names, DiffStatBadge, viewed marks and `highlight="wrapper"` inside ChangeRowActions. |
+
+## LoadingRegion and SkeletonRows
+
+The one loading placeholder for a content region. `SkeletonRows` draws pulsing bars of varied widths inside a single labelled `role="status"` region that stays invisible through a short grace and then fades in; `LoadingRegion` wraps it in a plain `div` that takes the region's padding, size and test id. They own the bars, their rhythm and motion and the live-region semantics; the call site picks the row count, the frame and, when it helps, a specific label. Which loading tier a surface takes is the [Loading](../../apps/web/library/content/patterns/loading.md) pattern.
+
+```tsx
+import { LoadingRegion, SkeletonRows } from "@thinkrail/ui/skeleton";
+```
+
+### When to use
+
+- A region that will fill with substantial content is waiting for its first read: a tool panel's list (Files, Specs, Changes, Review), a dialog's list, a menu's list section, a settings section.
+- A tab body or lazy chunk is restoring: the workbench's `MissingResource` and the pane-level `Suspense` fallbacks.
+- Reach for `LoadingRegion` whenever the placeholder needs padding, a height or a test id; use `SkeletonRows` alone only inside a container that already frames it.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Button | An in-flight action pinned to its control: `loading` swaps in the spinner, `loading spinIcon` rotates a refresh icon while the content stays valid. |
+| RunningIcon | An agent session is running; that is activity, not data on the way. |
+| SettingsNotice | The read failed: replace the skeleton with the error and its Retry action, never show both at once. |
+| Nothing | The content may legitimately never appear and absence is a valid steady state (see [Loading](../../apps/web/library/content/patterns/loading.md)). |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Region | `LoadingRegion` only: a plain `div` with the call site's `className` and `data-testid={testId}`. It has no look of its own and never opens a second live region. |
+| Status region | The `SkeletonRows` root: a `div` with `role="status"`, `aria-label`, `aria-busy="true"` and `data-testid="skeleton-rows"`; a vertical `flex` column with `gap-8` that carries `animate-loading-in`. |
+| Bars | One empty `span` per row from a fixed width sequence (`w-3/4`, `w-1/2`, `w-5/6`, …), so every skeleton has the same ragged shape: `h-3`, `rounded-sm`, `bg-control-bg-hovered`, `animate-pulse`. Widths are fractions of the parent, so the parent sets the width. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `rows` | `number` | `6` | How many bars to draw, clamped to 12 (the length of the fixed width sequence). Approximate the content that will arrive: 2 for a short sub-list, 3–5 for a menu section, settings list or panel list, 8–12 for a tab body or a full pane. |
+| `label` | `string` | `t("components.skeleton.loading")` | The status region's `aria-label`. Pass a specific locale key when it tells the reader more than "Loading" — `shell.workbench.restoring.chat`, `panels.existingWorktree.loading`, `mcp.settings.loading`. Threaded through to `SkeletonRows`; an empty string falls back to the default. |
+| `className` | `string` | — | The region's own padding and size, matching the content that replaces it (`px-8 py-4` in side panels, `p-12` in panes, `h-full p-12` for a pane fallback, `min-h-112 p-4` in a dialog list). |
+| `testId` | `string` | — | `data-testid` on the region (`file-pane-loading`, `existing-worktree-loading`). The inner `skeleton-rows` id is shared by every instance. |
+
+SkeletonRows props:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `rows` | `number` | `6` | How many bars to draw, clamped to 12 (the length of the fixed width sequence). Approximate the content that will arrive: 2 for a short sub-list, 3–5 for a menu section, settings list or panel list, 8–12 for a tab body or a full pane. |
+| `label` | `string` | `t("components.skeleton.loading")` | The status region's `aria-label`. Pass a specific locale key when it tells the reader more than "Loading" — `shell.workbench.restoring.chat`, `panels.existingWorktree.loading`, `mcp.settings.loading`. |
+
+### Row counts
+
+Every cell is the real `LoadingRegion`. Bars follow one fixed width sequence, so a count only adds or removes rows from the end; counts above 12 are clamped.
+
+| rows | Used for |
+| --- | --- |
+| `rows={2}` | A short sub-list: workspaces under an expanded project, the Extensions catalog. |
+| `rows={3}` | A settings section, a menu's commit section. |
+| `rows={4}` | A dialog list (existing worktrees, skills), one file section of the review tab. |
+| `rows={5}` | A side-panel list: Changes, Review. |
+| `rows={6}` | The default; the Specs panel. |
+| `rows={8}` | The file tree, the review tab, a plan or a resource preview pane. |
+| `rows={12}` | A restoring tab body, a file or diff pane. The maximum. |
+
+### States
+
+Press Mount to mount a fresh placeholder and watch the grace, the fade-in and the pulse. The resolved text carries `motion-safe:animate-reveal`, as resolved content does in the app.
+
+| Read time | What you see |
+| --- | --- |
+| Resolves within the grace | The region keeps its space but never shows bars; the content fades in. |
+| Resolves after the grace | The bars fade in, pulse, then give way to the content. |
+| Still pending | The bars fade in and keep pulsing until the read lands. |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Grace | Mount (the parent's data is still `null`). | In the layout at full size but transparent through the `animate-loading-in` delay, so a read that lands quickly never flashes bars. The status region and test ids exist from the first paint. |
+| Loading | Still mounted after the grace. | Fades to full opacity; the bars pulse on `bg-control-bg-hovered`. |
+| Resolved | The call site renders its content instead. | The skeleton unmounts; the content's own root fades in with `motion-safe:animate-reveal` where the [Loading](../../apps/web/library/content/patterns/loading.md) pattern allows it. |
+| Failed | The read rejects. | No treatment of its own: the call site replaces the skeleton with its error and Retry. |
+| Reduced motion | `prefers-reduced-motion: reduce`. | No distinct treatment; the grace fade and the pulse still run. |
+| Hover, focus, disabled | — | No distinct treatment; the placeholder is not interactive. |
+
+### Accessibility
+
+- Exactly one `role="status"` region per placeholder, with `aria-busy="true"` and an `aria-label` (default `components.skeleton.loading`). `LoadingRegion` threads `label` to it instead of nesting a second region.
+- The bars are empty spans with no text, so assistive technology hears only the label.
+- Name what is loading when the context does not: restoring a chat tab, reading Git worktrees, loading commits or MCP servers.
+- Not focusable. Inside a menu it is not a menu item, so arrow keys and typeahead skip it.
+
+| Keys | Action |
+| --- | --- |
+| `—` | No keyboard interaction; focus stays on the surrounding dialog, menu or panel while the region loads. |
+
+### Usage rules
+
+- **SKL-1** — Every content region waiting for data renders this placeholder — never bare “Loading…” text, never an empty frame, never a spinner centred in the region. The tier rules are the [Loading](../../apps/web/library/content/patterns/loading.md) pattern.
+- **SKL-2** — Prefer `LoadingRegion` and give its `className` the padding and size of the content that replaces it, so the data lands without a layout jump. Use bare `SkeletonRows` only inside a container that already frames it.
+- **SKL-3** — Choose `rows` from the content's footprint: 2 for a short sub-list, 3–5 for a menu section, settings section or side-panel list, 8–12 for a tab body or full pane.
+- **SKL-4** — Put a specific message on `label` from a locale key; never wrap the placeholder in your own `role="status"` or add visible loading text beside it.
+- **SKL-5** — Never restyle the bars or copy their classes into a hand-made skeleton. A hand-shaped placeholder is only for a footprint rows cannot represent, such as the Welcome panel's card grid.
+- **SKL-6** — Never show Retry beside an active skeleton: the error and its Retry replace it only after a real failure.
+- **SKL-7** — Put `motion-safe:animate-reveal` on the resolved content's own root — never on the skeleton or on a wrapper around both branches.
+
+### Examples
+
+#### Preview
+
+A short list region with the default label.
+
+```tsx
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+
+export default function Preview() {
+	return <LoadingRegion rows={3} className="w-full" />;
+}
+```
+
+#### Side-panel list
+
+The Changes and Review panels: five rows with the panel's own `px-8 py-4` padding.
+
+```tsx
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+
+export default function PanelList() {
+	return (
+		<div className="w-full max-w-[20rem]">
+			<LoadingRegion rows={5} className="px-8 py-4" />
+		</div>
+	);
+}
+```
+
+#### Expand, load, reveal
+
+Expanding a project in the Projects rail: two rows under it while its workspaces load, then the list fades in with `motion-safe:animate-reveal` on its own root. Collapse and expand to replay.
+
+```tsx
+import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
+import { Button } from "@thinkrail/ui/button";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { useEffect, useRef, useState } from "react";
+
+const WORKSPACES = ["main", "design-system-audit", "component-pages"];
+
+export default function LoadThenReveal() {
+	const [expanded, setExpanded] = useState(true);
+	const [list, setList] = useState<string[] | undefined>(undefined);
+	const timer = useRef(0);
+	const load = () => {
+		window.clearTimeout(timer.current);
+		setList(undefined);
+		timer.current = window.setTimeout(() => setList(WORKSPACES), 1500);
+	};
+	useEffect(() => {
+		load();
+		return () => window.clearTimeout(timer.current);
+	}, []);
+	return (
+		<div className="flex min-h-112 w-full max-w-[20rem] flex-col">
+			<Button
+				variant="ghost"
+				size="m"
+				iconLeft={expanded ? RiArrowDownSLine : RiArrowRightSLine}
+				aria-expanded={expanded}
+				className="self-start"
+				onClick={() => {
+					if (!expanded) load();
+					setExpanded(!expanded);
+				}}
+			>
+				thinkrail
+			</Button>
+			{expanded && list === undefined && <LoadingRegion rows={2} className="py-4 pr-8 pl-16" />}
+			{expanded && list !== undefined && (
+				<ul className="mt-2 flex flex-col gap-2 py-4 pl-24 tr-text-ui text-text-default motion-safe:animate-reveal">
+					{list.map((name) => (
+						<li key={name}>{name}</li>
+					))}
+				</ul>
+			)}
+		</div>
+	);
+}
+```
+
+#### Restoring tab body
+
+The workbench's `MissingResource`: twelve rows, a specific label and a full-height region that clips its bars.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+
+export default function RestoringTab() {
+	const t = useT();
+	return (
+		<div className="h-160 w-full">
+			<LoadingRegion
+				rows={12}
+				label={t("shell.workbench.restoring.chat")}
+				className="h-full overflow-hidden p-16"
+			/>
+		</div>
+	);
+}
+```
+
+#### Dialog list with retry after failure
+
+Open existing worktree: a labelled region with a minimum height and a test id; the error and Retry replace it only once the read fails.
+
+```tsx
+import { RiRefreshLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { useRef, useState } from "react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function DialogList() {
+	const t = useT();
+	const [loadError, setLoadError] = useState<string | null>(null);
+	const timer = useRef(0);
+	const load = () => {
+		setLoadError(null);
+		window.clearTimeout(timer.current);
+		timer.current = window.setTimeout(
+			() => setLoadError(t("panels.existingWorktree.listFailed")),
+			2000,
+		);
+	};
+	return (
+		<Dialog
+			onOpenChange={(open) => {
+				if (open) load();
+				else window.clearTimeout(timer.current);
+			}}
+		>
+			<DialogTrigger asChild>
+				<Button variant="outline">{t("panels.projectTree.openExistingWorktree")}</Button>
+			</DialogTrigger>
+			<DialogContent className="max-w-[36rem]">
+				<DialogHeader>
+					<DialogTitle>{t("panels.existingWorktree.title")}</DialogTitle>
+					<DialogDescription>{t("panels.existingWorktree.description")}</DialogDescription>
+				</DialogHeader>
+				{loadError === null ? (
+					<LoadingRegion
+						rows={4}
+						label={t("panels.existingWorktree.loading")}
+						className="min-h-112 p-4"
+						testId="existing-worktree-loading"
+					/>
+				) : (
+					<SettingsNotice
+						variant="error"
+						action={
+							<Button variant="outline" size="m" iconLeft={RiRefreshLine} onClick={load}>
+								{t("common.retry")}
+							</Button>
+						}
+					>
+						{loadError}
+					</SettingsNotice>
+				)}
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Menu section
+
+The Changes scope menu's commit section loads below its label; the commits arrive as plain menu items without a reveal.
+
+```tsx
+import { RiArrowDownSLine, RiGitCommitLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { useRef, useState } from "react";
+
+const COMMITS = [
+	{ sha: "4f2a9c1", subject: "Add the loading page" },
+	{ sha: "b81e07d", subject: "Thread the skeleton label" },
+	{ sha: "09cd3aa", subject: "Fade the skeleton in after a grace" },
+];
+
+export default function MenuSection() {
+	const t = useT();
+	const [commits, setCommits] = useState<typeof COMMITS | null>(null);
+	const timer = useRef(0);
+	return (
+		<DropdownMenu
+			onOpenChange={(open) => {
+				window.clearTimeout(timer.current);
+				if (!open) return;
+				setCommits(null);
+				timer.current = window.setTimeout(() => setCommits(COMMITS), 2000);
+			}}
+		>
+			<DropdownMenuTrigger asChild>
+				<Button variant="ghost" size="m" iconRight={RiArrowDownSLine}>
+					{t("changes.scopeMenu.uncommitted")}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="w-[18rem]">
+				<DropdownMenuItem onSelect={() => {}}>
+					{t("changes.scopeMenu.uncommitted")}
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuLabel>{t("changes.scopeMenu.commits")}</DropdownMenuLabel>
+				{commits === null ? (
+					<LoadingRegion
+						rows={3}
+						label={t("changes.scopeMenu.loadingCommits")}
+						className="px-8 py-4"
+					/>
+				) : (
+					commits.map((commit) => (
+						<DropdownMenuItem key={commit.sha} onSelect={() => {}}>
+							<RiGitCommitLine />
+							<span className="truncate">{commit.subject}</span>
+						</DropdownMenuItem>
+					))
+				)}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Settings section
+
+Settings sections use bare `SkeletonRows` inside their own container, optionally with a specific label.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { SkeletonRows } from "@thinkrail/ui/skeleton";
+
+export default function SettingsSection() {
+	const t = useT();
+	return (
+		<div className="grid w-full grid-cols-2 gap-24">
+			<div data-testid="settings-templates">
+				<SkeletonRows rows={3} />
+			</div>
+			<SkeletonRows rows={3} label={t("mcp.settings.loading")} />
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/shell/WorkspaceWorkbench.tsx` | `MissingResource`: every restoring tab body and lazy-chunk fallback, 12 rows with a per-kind label. |
+| `apps/web/src/panels/ChangesPanel.tsx` | The Changes list while the first status read is pending (`px-8 py-4`). |
+| `apps/web/src/panels/ExistingWorktreeDialog.tsx` | The worktree-candidate list with a label and `testId`, replaced by the error and Retry on failure. |
+| `apps/web/src/panels/ChangesScopeMenu.tsx` | The commit section of a dropdown menu, labelled `changes.scopeMenu.loadingCommits`. |
+| `apps/web/src/panels/FileTree.tsx` | The file tree before its first listing (8 rows, `px-4 py-4`). |
+| `packages/resource-renderers/src/support/ResourcePreview.tsx` | The shared pane fallback (`h-full p-12`) of the resource renderers. |
+
+## StaleComposerNotice
+
+A one-line warning that a review comment composer was closed because the file changed under its selection. It renders a `role="status"` paragraph with a warning icon and the fixed `viewer.composer.fileChanged` message, or nothing while `visible` is false. It owns its look and its words; the renderer keeps it mounted in the composer's slot and passes the composer state's `stale` flag. It is internal to `packages/resource-renderers/src/renderers` and not exported from `@thinkrail/resource-renderers`, so renderers import it by relative path.
+
+```tsx
+import { StaleComposerNotice } from "../StaleComposerNotice";
+```
+
+### When to use
+
+- A renderer with a review composer (select content, then comment) whose content can change on disk while the composer is open.
+- Explaining why an open composer disappeared after a re-read, and what to do next: select again.
+- Every bundled surface that hash-stamps its composer with `useStampedComposer`: Pierre diffs, JSON and CSV views and diffs, notebook views and diffs, and the region review surface.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SettingsNotice | An inline message in settings or a dialog, with its own severity, text and an optional action. |
+| Toast | A transient app-level message that is not tied to one renderer's composer slot. |
+| Refresh-failed notice | A re-read failed and the preview shows the last loaded version: `ResourcePreview`'s `resource-preview-stale` bar, not this notice. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | A `<p role="status" data-testid="review-selection-stale">`: one `flex items-center gap-8` row on the notice surface — `bg-container-elevated-bg`, a `border-feedback-warning-muted` border, `rounded-sm` — at the dense `px-8 py-4` notice padding. |
+| Icon | `RiAlertLine` (the warning glyph) at `size-14` in `text-feedback-warning`, `shrink-0` and `aria-hidden`. |
+| Message | `viewer.composer.fileChanged` in `tr-text-metadata text-text-default`. Fixed: there is no prop for other text and no action. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `visible` | `boolean` | — | Required. Renders the notice when `true` and nothing when `false`. Pass the composer state's `stale` (`composer.stale`, `pending.stale` in the Pierre diff). |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Hidden | `visible={false}` — no composer was open when the content changed, or the reader has selected again. | Renders nothing; the slot takes no space. |
+| Visible | `visible` — the content's stamp changed while a composer was open, so the selection and composer were dropped. | The warning notice in the composer's slot, until the reader makes a new selection, which clears `stale`. |
+| Narrow | A column narrower than the message. | The message wraps; the icon stays vertically centred on the text block. |
+| Hover, focus, disabled | — | No distinct treatment; the notice is not interactive. |
+
+### Accessibility
+
+- `role="status"` makes the message a polite live region. The element is inserted when it becomes visible, rather than updating a region that already exists.
+- The icon is `aria-hidden`; the message text is the whole content.
+- Not focusable and never takes focus; focus is not moved when the composer it replaces unmounts.
+
+| Keys | Action |
+| --- | --- |
+| `—` | No keyboard interaction. The reader selects again with the renderer's own controls. |
+
+### Usage rules
+
+- **STN-1** — Use it only for a review composer whose selection went stale because the content changed. A failed re-read is the preview's refresh-failed notice; any other warning is a SettingsNotice or a Toast.
+- **STN-2** — Keep it mounted and drive `visible` from the composer state's `stale` (`useStampedComposer`); never compute staleness at the call site or wrap it in your own condition.
+- **STN-3** — Place it in the composer's slot — after the reviewed content and before the composer and the thread list, at the end of a notebook's cells, or first inside a scrolling Pierre diff — so it appears where the composer was.
+- **STN-4** — It carries one fixed message and no action. Do not add Retry, Dismiss or custom text; selecting again clears it.
+- **STN-5** — Do not restyle it or copy its classes. It follows the dense notice surface of [Notices](../../apps/web/src/styles/NOTIFICATIONS.md): neutral fill, warning border and the warning icon.
+- **STN-6** — It belongs to the renderers package: import it by relative path inside `packages/resource-renderers/src/renderers`. App code does not render it.
+
+### Examples
+
+#### Preview
+
+The visible notice.
+
+```tsx
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+export default function Preview() {
+	return <StaleComposerNotice visible />;
+}
+```
+
+#### File changed under the composer
+
+Comment on a line, then wait: the file changes on disk, the composer closes and the notice takes its place until you comment again.
+
+```tsx
+import { RiChatNewLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useEffect, useState } from "react";
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+export default function FileChanged() {
+	const t = useT();
+	const [version, setVersion] = useState(1);
+	const [composing, setComposing] = useState(false);
+	const [stale, setStale] = useState(false);
+	useEffect(() => {
+		if (!composing) return;
+		const timer = window.setTimeout(() => {
+			setVersion((value) => value + 1);
+			setComposing(false);
+			setStale(true);
+		}, 2500);
+		return () => window.clearTimeout(timer);
+	}, [composing]);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<pre className="tr-code-text text-text-default">{`const retries = ${version};`}</pre>
+			<Button
+				variant="outline"
+				size="s"
+				iconLeft={RiChatNewLine}
+				className="self-start"
+				onClick={() => {
+					setStale(false);
+					setComposing(true);
+				}}
+			>
+				{t("viewer.code.commentOnLine")}
+			</Button>
+			<StaleComposerNotice visible={stale} />
+			{composing ? <Textarea rows={2} placeholder={t("review.composer.placeholder")} /> : null}
+		</div>
+	);
+}
+```
+
+#### In the composer slot
+
+JSON, CSV and region surfaces render it right after the reviewed content, where the composer opens, and before any thread cards.
+
+```tsx
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+export default function ComposerSlot() {
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<pre className="tr-code-text text-text-default">
+				{'{\n  "name": "thinkrail",\n  "private": true\n}'}
+			</pre>
+			<StaleComposerNotice visible />
+		</div>
+	);
+}
+```
+
+#### Top of a scrolling diff
+
+The Pierre diff renders it as the first child of its scroller, so it sits above the hunks and scrolls with them.
+
+```tsx
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+const LINES = Array.from(
+	{ length: 12 },
+	(_, index) => `${index + 1}  const step${index + 1} = load(${index + 1});`,
+);
+
+export default function DiffTop() {
+	return (
+		<div className="h-128 w-full overflow-auto">
+			<StaleComposerNotice visible />
+			<pre className="tr-code-text text-text-default">{LINES.join("\n")}</pre>
+		</div>
+	);
+}
+```
+
+#### End of a notebook
+
+Notebook views and diffs render it after the last cell.
+
+```tsx
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+const CELLS = ["import pandas as pd", 'df = pd.read_csv("runs.csv")', "df.describe()"];
+
+export default function NotebookEnd() {
+	return (
+		<div className="flex w-full flex-col gap-8">
+			{CELLS.map((cell) => (
+				<section key={cell}>
+					<pre className="tr-code-text text-text-default">{cell}</pre>
+				</section>
+			))}
+			<StaleComposerNotice visible />
+		</div>
+	);
+}
+```
+
+#### Narrow column
+
+In a narrow side-by-side pane the message wraps beside the icon.
+
+```tsx
+import { StaleComposerNotice } from "../../../../../packages/resource-renderers/src/renderers/StaleComposerNotice";
+
+export default function Narrow() {
+	return (
+		<div className="w-[10rem]">
+			<StaleComposerNotice visible />
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `packages/resource-renderers/src/renderers/code/PierreDiff.tsx` | First child of the diff scroller, driven by `pending.stale`. |
+| `packages/resource-renderers/src/renderers/RegionReviewSurface.tsx` | Between the image or page region surface and its composer. |
+| `packages/resource-renderers/src/renderers/csv/View.tsx` | After the table, before the composer and the thread cards. |
+| `packages/resource-renderers/src/renderers/json/Diff.tsx` | The JSON diff's composer slot. |
+| `packages/resource-renderers/src/renderers/notebook/View.tsx` | After the last cell of a notebook. |
+
+## SettingsNotice
+
+The one inline notice inside a Settings page: a `rounded-sm` block on the control background with a severity icon, a line of text and an optional action row beneath it. It owns the surface, the icon per variant and its colour, the text type and the action row; the call site provides the variant, the message and at most one action, and places the notice in its group. How it relates to toasts and other notices is the [Notices](../../apps/web/src/styles/NOTIFICATIONS.md) pattern.
+
+```tsx
+import { SettingsNotice } from "@/panels/SettingsNotice";
+```
+
+### When to use
+
+- A lasting condition on a Settings page that explains why a section does not work as expected: the GitHub CLI is not connected, browser notifications are blocked or not yet allowed.
+- A section that cannot show its content yet, with the next step: open a project to manage its templates, add starter templates.
+- A short empty state inside a Settings group (`neutral`, often `hideIcon`).
+- One notice per problem in a list of issues — one per theme file that failed to load, one per theme fallback.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Toast | Reporting the result of an action, such as a rejected save. Settings toasts a rejected auto-save and keeps the authoritative value. |
+| SettingsRow and SettingsGroup | The text is a setting's description rather than a condition — put it in the row's or group's description. |
+| StaleComposerNotice | A condition in the chat composer, not in Settings. |
+| ConfirmDialog | The user must decide before something happens. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | A `div` with `data-variant` (and `data-testid` from `testId`): `flex items-start gap-8`, `rounded-sm`, `px-12 py-8` on `control-bg` for every variant. No border and no landmark role. |
+| Icon | A `shrink-0` span nudged `mt-2` to the first line, coloured by the variant (`text-muted` for `neutral`, `text-feedback-*` otherwise). It holds the variant's default glyph at `size-14`, or `icon`. Omitted with `hideIcon`. |
+| Text | The children in a `div` with `tr-text-ui` and `text-default`, inside a `flex min-w-0 flex-1 flex-col gap-4` column. A secondary line is the call site's own `tr-text-metadata text-text-muted` element. |
+| Action row | `action`, when given, in a `flex items-center gap-8` row under the text, aligned with its start. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `variant` | `"neutral" \| "info" \| "success" \| "warning" \| "error"` | — | Required. Picks the default glyph and its colour. The surface is the same for every variant. |
+| `children` | `ReactNode` | — | The message, set in `tr-text-ui` / `text-default`. A string, or a `<p>` per line when there is a muted second line; inline code through `<T components>` with `tr-code-text`. |
+| `action` | `ReactNode` | — | One control under the text: a `Button variant="outline" size="m"`, or a disclosure for instructions. `null` renders no row. |
+| `icon` | `ReactNode` | — | Replaces the default glyph for a meaning more specific than the severity (`RiMagicLine` on the starter-templates notice). Size it `size-14`; the colour still comes from `variant`. |
+| `hideIcon` | `boolean` | `false` | Drops the icon so the text starts at the padding — for a `neutral` empty state. |
+| `testId` | `string` | — | Sets `data-testid` on the container. Every production notice sets one. |
+| `className` | `string` | — | Placement only — margins or width. The page's separator and padding belong on a wrapper, as the call sites do. |
+
+### Variants
+
+Every cell is the real SettingsNotice. The surface is the same for all five; the variant picks the glyph and its colour.
+
+| Variant | Use it for |
+| --- | --- |
+| `neutral` | An empty state with no severity — no project templates yet. Muted icon; usually with `hideIcon`. |
+| `info` | A condition the user can resolve or should know about: permission not granted yet, open a project first, no global templates yet. |
+| `success` | A confirmed good state. No production call site yet. |
+| `warning` | A setting that is degraded or not working as configured: GitHub CLI not connected, notifications blocked, a theme fallback, a theme file that failed to load. |
+| `error` | A setting that failed outright. No production call site yet; theme-file problems use `warning`. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Default | Rendered. | Icon, text and the optional action row on `control-bg`. |
+| With action | `action`. | A second row under the text, at the text's start; the action's own states (loading, disabled) apply. |
+| Custom icon | `icon`. | The given glyph in the variant's colour. |
+| No icon | `hideIcon`. | Text and action start at the left padding. |
+| Hover, focus, disabled | — | No distinct treatment: the notice is not interactive; only its action is. |
+
+### Accessibility
+
+- A plain `div` with no role and no live region: it is read in page order, and appearing or changing is not announced. Say what matters in the text.
+- The glyph is decorative and carries no label; the words must state the condition ("Notifications are blocked by your browser"), never just the icon.
+- The action is an ordinary Button (or disclosure button) in the tab order after the text; give it a label that names the fix ("Allow in browser", "Refresh").
+- Use the native semantics of the children — a `<p>` per line, `<code>` for commands and paths.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Skips the notice itself and reaches its action. |
+| `Enter / Space` | Activates the action. |
+
+### Usage rules
+
+- **SNT-1** — Use SettingsNotice for every inline status inside Settings — never a hand-made tinted box. Outside Settings use the surface's own notice; for an action's result use a Toast.
+- **SNT-2** — Pick the variant by meaning: `warning` for something configured that does not work, `info` for a condition the user can resolve, `neutral` for an empty state. Never colour the text or the surface to signal severity.
+- **SNT-3** — At most one action, passed through `action`: a `Button variant="outline" size="m"` (with `loading`/`spinIcon` for a refresh). Never a filled or toned button, and never place the action beside the text yourself.
+- **SNT-4** — Keep the text short and from locale keys. A second line is `tr-text-metadata text-text-muted`; commands and paths go through `<T components>` as `tr-code-text`.
+- **SNT-5** — Replace the icon only with a domain glyph at `size-14`; drop it (`hideIcon`) only on a `neutral` empty state.
+- **SNT-6** — The page places the notice: a wrapper adds the separator and padding (`border-b py-12`), and several notices stack in `flex flex-col gap-4`, one per item, each with a `testId`.
+
+### Examples
+
+#### Basic
+
+A warning with a command in the text and a Refresh action that spins in place — Local GitHub when the CLI is not signed in.
+
+```tsx
+import { RiRefreshLine } from "@remixicon/react";
+import { T, useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function Preview() {
+	const t = useT();
+	const [refreshing, setRefreshing] = useState(false);
+	const refresh = () => {
+		setRefreshing(true);
+		setTimeout(() => setRefreshing(false), 1500);
+	};
+	return (
+		<SettingsNotice
+			variant="warning"
+			action={
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={RiRefreshLine}
+					loading={refreshing}
+					spinIcon
+					onClick={refresh}
+				>
+					{t("settings.github.refresh")}
+				</Button>
+			}
+		>
+			<p>
+				<T
+					i18nKey="settings.github.notConnected"
+					components={[<code key="command" className="tr-code-text" />]}
+				/>
+			</p>
+		</SettingsNotice>
+	);
+}
+```
+
+#### Variants
+
+Every variant with its default glyph. Only the icon changes colour.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function Variants() {
+	const t = useT();
+	return (
+		<div className="flex w-full flex-col gap-4">
+			<SettingsNotice variant="neutral">{t("settings.templates.projectEmpty")}</SettingsNotice>
+			<SettingsNotice variant="info">{t("settings.notifications.notGranted")}</SettingsNotice>
+			<SettingsNotice variant="success">{t("settings.github.connected")}</SettingsNotice>
+			<SettingsNotice variant="warning">{t("settings.notifications.blocked")}</SettingsNotice>
+			<SettingsNotice variant="error">
+				{t("settings.appearance.custom.error.unreadable")}
+			</SettingsNotice>
+		</div>
+	);
+}
+```
+
+#### With an action
+
+An info notice whose one outline action fixes the condition — notification permission not granted yet.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function Permission() {
+	const t = useT();
+	return (
+		<SettingsNotice
+			variant="info"
+			testId="notifications-permission-prompt"
+			action={
+				<Button variant="outline" size="m" onClick={() => {}}>
+					{t("settings.notifications.allowInBrowser")}
+				</Button>
+			}
+		>
+			{t("settings.notifications.notGranted")}
+		</SettingsNotice>
+	);
+}
+```
+
+#### Two lines
+
+A message and a muted second line with an inline path — no project open in Templates.
+
+```tsx
+import { T, useT } from "@thinkrail/locales/react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function TwoLines() {
+	const t = useT();
+	return (
+		<SettingsNotice variant="info" testId="project-templates-unavailable">
+			<p>{t("settings.templates.openProject")}</p>
+			<p className="tr-text-metadata text-text-muted">
+				<T
+					i18nKey="settings.templates.projectLocation"
+					components={[<code key="path" className="tr-code-text" />]}
+				/>
+			</p>
+		</SettingsNotice>
+	);
+}
+```
+
+#### Custom icon
+
+A domain glyph instead of the info icon and an action that fills the empty state — no global templates yet.
+
+```tsx
+import { RiMagicLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function CustomIcon() {
+	const t = useT();
+	const [adding, setAdding] = useState(false);
+	return (
+		<SettingsNotice
+			variant="info"
+			icon={<RiMagicLine className="size-14" />}
+			testId="global-templates-empty"
+			action={
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={RiMagicLine}
+					disabled={adding}
+					onClick={() => {
+						setAdding(true);
+						setTimeout(() => setAdding(false), 1500);
+					}}
+				>
+					{t("settings.templates.addStarters")}
+				</Button>
+			}
+		>
+			<p>{t("settings.templates.globalEmpty")}</p>
+			<p className="tr-text-metadata text-text-muted">
+				{t("settings.templates.globalEmptyDescription")}
+			</p>
+		</SettingsNotice>
+	);
+}
+```
+
+#### Empty state without an icon
+
+`neutral` with `hideIcon` for an empty list.
+
+```tsx
+import { T, useT } from "@thinkrail/locales/react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function HideIcon() {
+	const t = useT();
+	return (
+		<SettingsNotice variant="neutral" hideIcon testId="project-templates-empty">
+			<p>{t("settings.templates.projectEmpty")}</p>
+			<p className="tr-text-metadata text-text-muted">
+				<T
+					i18nKey="settings.templates.projectEmptyLocation"
+					components={[<code key="path" className="tr-code-text" />]}
+				/>
+			</p>
+		</SettingsNotice>
+	);
+}
+```
+
+#### One notice per issue
+
+Theme files that failed to load: a stack of warnings, each naming the file, the problem and the detail.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { SettingsNotice } from "@/panels/SettingsNotice";
+
+export default function IssueList() {
+	const t = useT();
+	const issues = [
+		{
+			fileName: "midnight.json",
+			label: t("settings.appearance.custom.error.invalidJson"),
+			detail: "Unexpected token } in JSON at position 412",
+		},
+		{
+			fileName: "solarized-dusk.json",
+			label: t("settings.appearance.custom.error.invalidTheme"),
+			detail: null,
+		},
+	];
+	return (
+		<div className="flex w-full flex-col gap-4">
+			{issues.map((issue) => (
+				<SettingsNotice
+					key={issue.fileName}
+					variant="warning"
+					testId={`custom-theme-issue-${issue.fileName}`}
+				>
+					<span className="flex flex-col gap-4">
+						<span className="tr-code-text">{issue.fileName}</span>
+						<span>{issue.label}</span>
+						{issue.detail ? (
+							<span className="break-words text-text-muted">{issue.detail}</span>
+						) : null}
+					</span>
+				</SettingsNotice>
+			))}
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/GithubSettings.tsx` | Not connected: `warning` with a `gh auth login` command and the Refresh button as `action`. |
+| `apps/web/src/panels/NotificationsSettings.tsx` | Permission not granted (`info` + Allow in browser) and blocked or unsupported (`warning` + How to enable disclosure). |
+| `apps/web/src/panels/TemplatesSettings.tsx` | No project (`info`, two lines), no project templates (`neutral` + `hideIcon`), no global templates (custom icon + Add starter templates). |
+| `apps/web/src/panels/CustomThemesSettings.tsx` | One `warning` per theme file that failed to load. |
+| `apps/web/src/panels/AppearanceSettings.tsx` | One `warning` per configured theme that fell back to another. |
+
+## Toast
+
+A transient message in the corner of the window: Radix Toast with ThinkRail's viewport, a neutral elevated card whose border carries the severity, title and description type, and a Dismiss icon button. The primitives own the live-region announcement, the timers (paused on hover and focus), swipe and Escape dismissal, and the F8 landmark. The app composes them once in `panels/Toaster` — which adds the severity icon, the layout, the action footer and each toast's lifetime — and features raise toasts through the store's `toast.*` / `pushToast`. The shared look of toasts and inline notices is the [Notices](../../apps/web/src/styles/NOTIFICATIONS.md) pattern.
+
+```tsx
+import { Toast, ToastAction, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@thinkrail/ui/toast";
+```
+
+### When to use
+
+- Reporting the result of something the user just did when the result is not otherwise visible: Plan copied, Review started, Check All started.
+- A failed background or fire-and-forget call with no better place to land — no open dialog, form or chat turn to show it inline.
+- A receipt with one short follow-up: Undo after a revert, Show after workspaces moved to Settled.
+- From a feature: call `toast.success|info|warning|error(message, title?)` or `pushToast({ …, action, durationMs })` from `@/store`. Compose the parts yourself only inside `panels/Toaster`.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| SettingsNotice | A lasting condition on a Settings page — a missing permission, a disconnected CLI, a theme file that failed to load. |
+| StaleComposerNotice | A condition that belongs to the chat composer and stays until the user acts on it. |
+| ConfirmDialog | The user must decide before anything happens. A toast never asks a question. |
+| Inline error | The error can be fixed in place in a form or dialog that stays open — show it there (the template editor's `template-error`). A rejection with nowhere to land, such as a failed workspace create, still toasts. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| ToastProvider | Radix `Provider`, unchanged. Holds the one viewport, the default `duration`, `swipeDirection` and the announcement `label`. Toaster sets `swipeDirection="right"`. |
+| ToastViewport | Radix `Viewport`: an `ol` inside a `role="region"` landmark labelled `common.notificationsRegion` ("Notifications (F8)"). Fixed at `z-[100]`: a full-width column at the bottom of the window, from `sm` a fixed-width column (`sm:w-[380px]`) in the bottom-right corner, toasts stacked with `gap-8` inside `p-12`. It takes no pointer events while empty. |
+| Toast | Radix `Root`, an `li` portalled into the viewport: a `rounded-sm` card on `container-elevated-bg` with a border in `feedback-*-muted`, the medium shadow, `p-12`, `text-default`, children stacked in a column. Slides in on open, out on close and follows a horizontal swipe through `data-state` and `data-swipe`. |
+| Content row | Call-site markup (Toaster): `flex items-start gap-8` holding the severity icon, the text column (`flex min-w-0 flex-1 flex-col gap-4`) and ToastClose. |
+| Severity icon | Call-site markup: one Line glyph per variant, `mt-2 size-14 shrink-0`, `text-feedback-*`, `aria-hidden`. The primitive renders no icon. |
+| ToastTitle | Radix `Title`, a `div` in `tr-title-compact`. Optional. |
+| ToastDescription | Radix `Description`, a `div` in `tr-text-ui` and `text-muted` that breaks long tokens (`[overflow-wrap:anywhere]`). Without a title Toaster sets `text-text-default` so the message reads as the main line. |
+| ToastClose | Radix `Close` with `asChild` around an IconButton (ghost, M, `RiCloseLine`, label `common.dismiss`) pushed right with `ml-auto shrink-0`. `className` reaches the IconButton; children are ignored. |
+| ToastAction | Radix `Action`, unstyled: use `asChild` on a Button (outline, M) in a `mt-12 flex justify-end` footer. Activating it also closes the toast. |
+| toastVariants | The `cva` recipe behind Toast (surface, animation, swipe and the variant border), exported for completeness. Call sites use `<Toast variant>`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `variant` | `"info" \| "success" \| "warning" \| "error"` | `"info"` | `Toast`. The severity: sets the border colour only. Pick the matching icon and colour it with the same `feedback-*` role. |
+| `label` | `string` | `t("common.notificationsRegion")` | `ToastViewport`. The landmark name; ThinkRail localizes Radix's English default. `{hotkey}` is replaced with the hotkey (F8). |
+
+Radix props in common use (passed through unchanged):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `duration` | `number` | `5000` | `ToastProvider` default and per-`Toast` override, in ms. Toaster passes `durationMs ?? (error ? Infinity : 5000)`; `Number.POSITIVE_INFINITY` keeps a toast until it is dismissed. |
+| `open` | `boolean` | — | `Toast`. Controlled open state. Toaster leaves it uncontrolled (open on mount) and removes the item from the queue when it closes. |
+| `defaultOpen` | `boolean` | `true` | `Toast`. An uncontrolled toast opens as soon as it mounts. |
+| `onOpenChange` | `(open: boolean) => void` | — | `Toast`. Called with `false` on timeout, Close, the action, Escape and a completed swipe. Remove the toast from its queue here (`dismissToast(id)`). |
+| `type` | `"foreground" \| "background"` | `"foreground"` | `Toast`. `foreground` announces assertively, `background` politely. Toaster uses the default. |
+| `onPause` | `() => void` | — | `Toast`. The timer paused: pointer over the viewport, focus inside it, or the window lost focus. |
+| `onResume` | `() => void` | — | `Toast`. The timer resumed with the remaining time. |
+| `swipeDirection` | `"up" \| "down" \| "left" \| "right"` | `"right"` | `ToastProvider`. Keep `right`: the toast's swipe classes translate horizontally only. |
+| `swipeThreshold` | `number` | `50` | `ToastProvider`. Pixels a swipe must travel before it dismisses. |
+| `hotkey` | `string[]` | `["F8"]` | `ToastViewport`. The keys that move focus to the viewport. |
+| `altText` | `string` | — | `ToastAction`. Required and non-empty (Radix renders nothing otherwise). Announced instead of the action's own text; Toaster passes the action label. |
+| `asChild` | `boolean` | — | `ToastAction`. Merge onto the child Button. |
+| `className` | `string` | — | Placement only. On ToastDescription the one sanctioned override is `text-text-default` when there is no title. |
+
+### Severities
+
+Each button raises a real toast through `pushToast`, rendered by the app's own `Toaster` in the corner of this page. The variant sets the border; `Toaster` picks the icon. The full look is the [Notices](../../apps/web/src/styles/NOTIFICATIONS.md) pattern.
+
+| Variant | Use it for |
+| --- | --- |
+| `info` | Neutral news and no-ops: Check All is already running, nothing to review, a project was closed, workspaces moved to Settled. The default. |
+| `success` | A finished action the user started: plan copied, review started, a revert with Undo. |
+| `warning` | Something worked only partly or needs attention soon, but nothing failed. Raised through `toast.warning`. |
+| `error` | A failed action with no better place to land — no form or chat turn to show it inline. Persists until dismissed. |
+
+### States
+
+Raise a real five-second toast, then hover it or Tab into it and the timer pauses; leave and it resumes; drag it to the right to swipe it away; Escape or Dismiss closes it. Errors stay until dismissed.
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Entering | A Toast mounts (`data-state="open"`). | The `toast-in` keyframes: it fades in while rising into place. |
+| Closing | Timeout, Close, the action or Escape (`data-state="closed"`). | The `toast-out` keyframes: it fades out while sinking, then unmounts. |
+| Paused | Pointer over the viewport, focus inside it, or the window is not focused. | No distinct treatment; every timer in the viewport stops and resumes on leave. |
+| Persistent | `duration={Number.POSITIVE_INFINITY}` (every error toast). | No distinct treatment; it stays until Close, Escape or a swipe. |
+| Swiping | Drag the toast to the right (`data-swipe`). | `move`: it follows the pointer with transitions off. `cancel` (under the threshold): it snaps back. `end`: it plays `toast-out` and closes. |
+| Focused toast | Tab into the viewport, or F8 then Tab. | No ThinkRail focus style on the card; the browser's default focus outline. |
+| Close hover / focus | Pointer over Dismiss, or Tab to it. | The IconButton's ghost hover and focus ring, and its `common.dismiss` tooltip above the viewport. |
+| Empty viewport | No open toast. | Nothing visible; the landmark stays in the page and takes no pointer events. |
+
+### Accessibility
+
+- ToastViewport is a `role="region"` landmark named by `common.notificationsRegion` ("Notifications (F8)"), so it can be found in the landmark list and reached with F8.
+- Each new toast is announced through a visually hidden `role="status"` live region — assertive for `type="foreground"` (the default), polite for `background` — with the title and description text, prefixed by the ToastProvider `label`.
+- ToastClose and ToastAction are excluded from that announcement; the action is announced as its `altText` instead, so make it say what the action does.
+- Every toast is focusable (`tabIndex=0`). Closing a toast that holds focus moves focus to the viewport rather than losing it.
+- Timers pause while the pointer is over the viewport, while focus is inside it and while the window is in the background, so a toast is not removed while someone is reading or reaching for it.
+- Dismiss is an IconButton labelled `common.dismiss`; its tooltip stacks above the viewport. The severity icon is decorative (`aria-hidden`) — the words must carry the meaning.
+
+| Keys | Action |
+| --- | --- |
+| `F8` | Moves focus to the toast viewport. |
+| `Tab / Shift+Tab` | From the viewport: walks the toasts newest first — each card, then its controls in DOM order (Dismiss, then the action); after the last one focus continues into the page. |
+| `Enter / Space` | On the action or Dismiss: runs it and closes the toast. |
+| `Escape` | With focus on a toast or inside it: closes that toast and moves focus to the viewport. Escape elsewhere does not close toasts. |
+
+### Usage rules
+
+- **TST-1** — Raise toasts with `toast.success|info|warning|error` or `pushToast` from `@/store`. Never mount another ToastProvider or compose Toast parts in a feature: `panels/Toaster`, mounted once by Shell, is the only composer.
+- **TST-2** — Toast an outcome, not a question. A decision is a ConfirmDialog; an error the user can fix in a still-open form stays inline (the template editor's `template-error`); a lasting condition on a page is an inline notice.
+- **TST-3** — Severity is `variant` plus its one Line glyph in the matching `text-feedback-*`. Never tint the fill, add a stripe or colour the text — see [Notices](../../apps/web/src/styles/NOTIFICATIONS.md).
+- **TST-4** — Errors persist until dismissed; every other toast auto-dismisses. A toast with an action gets a bounded `durationMs` long enough to reach it (Undo 8 s, Settled 15 s).
+- **TST-5** — At most one action: `ToastAction altText asChild` around `Button variant="outline" size="m"` in a `mt-12 flex justify-end` footer. Never a filled button, never a second button.
+- **TST-6** — Write a short title and one sentence, or the sentence alone. Without a title the description takes `text-text-default`. Both come from locale keys; dynamic detail (an error text, a file name) goes in the message.
+- **TST-7** — Keep ToastClose on every toast, including ones with an action. `className` on the parts is placement only.
+
+### Examples
+
+#### Basic
+
+`toast.success(message, title)` from a button. The toast appears in the page corner, rendered by the app's own `Toaster`, and leaves after five seconds.
+
+```tsx
+import { RiFileCopyLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { toast } from "@/store";
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<Button
+			variant="outline"
+			size="m"
+			iconLeft={RiFileCopyLine}
+			onClick={() => toast.success(t("plan.copied.message"), t("plan.copied.title"))}
+		>
+			{t("common.copy")}
+		</Button>
+	);
+}
+```
+
+#### Severities
+
+`toast.info`, `toast.success`, `toast.warning` and `toast.error`. Only the border and the icon change colour; the card and the text stay neutral.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { toast } from "@/store";
+
+export default function Severities() {
+	const t = useT();
+	return (
+		<div className="flex flex-wrap gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				onClick={() =>
+					toast.info(t("plan.checkAll.runningMessage"), t("plan.checkAll.runningTitle"))
+				}
+			>
+				{t("plan.checkAll.runningTitle")}
+			</Button>
+			<Button
+				variant="outline"
+				size="m"
+				onClick={() =>
+					toast.success(t("plan.review.startedMessage"), t("plan.review.startedTitle"))
+				}
+			>
+				{t("plan.review.startedTitle")}
+			</Button>
+			<Button
+				variant="outline"
+				size="m"
+				onClick={() =>
+					toast.warning(t("updates.native.disabled.detail"), t("updates.native.disabled.title"))
+				}
+			>
+				{t("updates.native.disabled.title")}
+			</Button>
+			<Button
+				variant="outline"
+				size="m"
+				onClick={() => toast.error(t("plan.copyFailed.message"), t("plan.copyFailed.title"))}
+			>
+				{t("plan.copyFailed.title")}
+			</Button>
+		</div>
+	);
+}
+```
+
+#### Message only
+
+`toast.info(message)` with no title: the description carries the toast alone.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { toast } from "@/store";
+
+export default function MessageOnly() {
+	const t = useT();
+	return (
+		<Button
+			variant="outline"
+			size="m"
+			onClick={() => toast.info(t("panels.diffSurface.staleView"))}
+		>
+			{t("plan.item.checkIt")}
+		</Button>
+	);
+}
+```
+
+#### Undo receipt
+
+`pushToast({ action, durationMs: 8000 })` — a success receipt with one Undo action and the longer lifetime a revert gets.
+
+```tsx
+import { RiArrowGoBackLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useAppStore } from "@/store";
+
+export default function Undo() {
+	const t = useT();
+	const pushToast = useAppStore((s) => s.pushToast);
+	return (
+		<Button
+			variant="outline"
+			size="m"
+			iconLeft={RiArrowGoBackLine}
+			onClick={() =>
+				pushToast({
+					variant: "success",
+					message: t("panels.diffSurface.revertedFile", { file: "src/app.ts" }),
+					durationMs: 8000,
+					action: { label: t("panels.diffSurface.undo"), onClick: () => {} },
+				})
+			}
+		>
+			{t("panels.diffPane.revertFile")}
+		</Button>
+	);
+}
+```
+
+#### Long error
+
+`toast.error` with a long, unbroken error text: the description wraps anywhere instead of widening the card. Errors never time out.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { toast } from "@/store";
+
+const DETAIL =
+	"git push failed: remote rejected refs/heads/feature/a-very-long-branch-name-without-any-breaks-at-all (pre-receive hook declined)";
+
+export default function LongError() {
+	const t = useT();
+	return (
+		<Button
+			variant="outline"
+			size="m"
+			onClick={() => toast.error(DETAIL, t("plan.review.startFailed"))}
+		>
+			{t("plan.review.startFailed")}
+		</Button>
+	);
+}
+```
+
+#### Several at once
+
+Three toasts raised together stack newest last; each keeps its own lifetime, and the queue pauses while hovered or focused.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { toast } from "@/store";
+
+export default function Queue() {
+	const t = useT();
+	const raise = () => {
+		toast.info(t("plan.checkAll.runningMessage"), t("plan.checkAll.runningTitle"));
+		toast.success(t("plan.review.startedMessage"), t("plan.review.startedTitle"));
+		toast.error(t("plan.copyFailed.message"), t("plan.copyFailed.title"));
+	};
+	return (
+		<Button variant="outline" size="m" onClick={raise}>
+			{t("plan.item.checkIt")}
+		</Button>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/Toaster.tsx` | The one composer: severity icon, title and description, Dismiss, the action footer, `swipeDirection="right"` and every lifetime. |
+| `apps/web/src/shell/Shell.tsx` | Mounts `<Toaster />` once above both the workbench and Project Home. |
+| `apps/web/src/store/appStore.ts` | The toast queue: `pushToast` (coalescing, five-toast cap) and the `toast.*` helpers features call. |
+| `packages/ui/labels.test.tsx` | The viewport's landmark label follows the interface language. |
+
+## ErrorBoundary
+
+The app's React error boundary: when a region throws while rendering or loading a lazy chunk, it replaces that region with a themed, self-contained fallback instead of letting the crash blank the whole app. It owns the fallback, the retry, the reload for a stale chunk, the console log and the hand-off to the installed reporter. The call site provides the region's translated `label`, a stable `reportId` and the `resetKeys` that identify the subtree.
+
+```tsx
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+```
+
+### When to use
+
+- Around every independently mounted region — a workbench tab body, a tool body, a rail pane — so one failing panel degrades on its own.
+- Once at the root (`main.tsx`) as the last resort, so a crash that escapes every region shows a recoverable screen rather than an empty page.
+- Around a `Suspense` that loads a lazy chunk (Monaco, xterm, the chat view), so a failed `import()` is caught and steered to a reload.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| LoadingRegion and SkeletonRows | The region is waiting for data, not broken; that is the boundary's `Suspense` fallback, not its error fallback. |
+| SettingsNotice | An expected, recoverable failure inside a settings surface (a list that failed to load, a provider that cannot connect); render it as a state, do not throw. |
+| Toast | An action failed after a click or a request; event handlers and promises never reach a boundary. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Boundary | A class component (`getDerivedStateFromError`). Without an error it renders `children` as is, with no wrapper element. |
+| Fallback container | `role="alert"`, `data-testid="error-boundary-fallback"`: a centred column that fills the region (`h-full`, `min-h-0`, `p-16`, `gap-8`) and scrolls (`overflow-auto`) when the region is too small. |
+| Icon | `RiAlertLine` at `size-24` in `text-feedback-error`. |
+| Title | `tr-title-compact`, `text-default`: “The {label} panel hit an error” (`components.errorBoundary.panelTitle`) with a `label`, otherwise “Something went wrong” (`components.errorBoundary.title`). |
+| Message | `tr-text-metadata`, `text-muted`, capped at `max-w-[28rem]`: the error's own message, `components.errorBoundary.unexpected` when it is empty, or `components.errorBoundary.chunkError` for a chunk load error. |
+| Action | One Button, `outline` at `m`: **Try again** (`RiArrowGoBackLine`, `data-testid="error-retry"`) clears the error and remounts the children; for a chunk load error **Reload page** (`RiRefreshLine`, `data-testid="error-reload"`) calls `window.location.reload()`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `children` | `ReactNode` | — | The protected region. It is unmounted while the fallback shows, so its local state is lost on recovery. |
+| `label` | `string` | — | The region's translated, lowercase name (`t("shell.workbench.panel.editor")`). It is interpolated into the fallback title and the console log; it never reaches the reporter. |
+| `reportId` | `string` | — | A stable, untranslated id (`"editor"`, `"chat"`, `"plan_rail"`) passed to the installed reporter with the error. |
+| `resetKeys` | `readonly unknown[]` | — | The subtree's identity (`[workspaceId, tab.id]`). When the boundary holds an error and any value changes (shallow compare), it resets and renders the children again. |
+
+Module exports:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `isChunkLoadError` | `(error: unknown) => boolean` | — | True when the message reads as a failed dynamic import: a stale or unreachable Vite chunk, Safari's “Importing a module script failed”, or Vite's outdated optimised dependency. The boundary uses it to choose Reload page over Try again. |
+| `setErrorBoundaryReporter` | `(reporter: ((error: Error, reportId: string \| undefined) => void) \| null) => void` | — | Installs the one module-wide reporter every boundary calls from `componentDidCatch`; `null` removes it. `main.tsx` wires it to the transport's client error reports. A reporter that throws is ignored. |
+
+### Fallbacks
+
+Every cell is a real boundary around a child that throws while rendering. Press Open file to crash it; Try again remounts the child.
+
+| Case | Fallback |
+| --- | --- |
+| Render error, labelled | “The editor panel hit an error”, the error message and Try again. |
+| Render error, no label | “Something went wrong”, the error message and Try again. |
+| Empty message | The generic “An unexpected error occurred…” line instead of a blank message. |
+| Chunk load error | The stale-chunk explanation and Reload page, which reloads the page. |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Healthy | No render error below the boundary. | The children, untouched; the boundary adds no element. |
+| Render error | A child throws while rendering, or a lazy component rejects. | The fallback fills the region: error icon, title, the error message and an outline Try again. The crash is logged to the console and handed to the reporter. |
+| Render error without a label | No `label`. | Same fallback with the generic title “Something went wrong”. |
+| Empty message | The thrown error has an empty `message`. | The message line reads “An unexpected error occurred while rendering this view.” |
+| Chunk load error | `isChunkLoadError(error)` is true (a failed `import()`). | The message explains the stale or unreachable resource and the action is Reload page instead of Try again. |
+| Recovered | Try again, or a change in `resetKeys` while the error shows. | The children mount again from scratch; if they throw again, the fallback returns. |
+| Hover, focus, disabled | — | No distinct treatment of its own; the action is a Button with Button's states. |
+
+### Accessibility
+
+- The fallback has `role="alert"`, so assistive technology announces the title and message when a region fails.
+- The action is a native `<button>` named by its label (Try again or Reload page); the alert icon has no accessible name of its own.
+- The boundary does not move focus. Focus inside the crashed subtree is lost with it; the user reaches the action with Tab.
+- The fallback text comes from locale keys; `label` must be translated too, because it is read inside the title.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from the fallback's action. |
+| `Enter / Space` | Activates Try again (remounts the region) or Reload page (reloads the app). |
+
+### Usage rules
+
+- **ERB-1** — Give every independently mounted region its own boundary, plus the one root wrap in `main.tsx`. Where boundaries go is owned by the shell; panels do not wrap themselves, and a boundary is not for a small leaf control — the fallback fills its region.
+- **ERB-2** — Pass `label` as a translated region noun from a locale key (`shell.workbench.panel.*`) and `reportId` as a stable, untranslated id. Reports group by `reportId`, never by the displayed `label`.
+- **ERB-3** — Set `resetKeys` to the subtree's identity — `[workspaceId, tab.id]` — so switching workspace or tab recovers without a click. Do not put values that change on every render in it.
+- **ERB-4** — Put the `Suspense` for a lazy chunk inside the boundary, with the region's loading placeholder as its fallback, so a failed `import()` is caught and offered a reload.
+- **ERB-5** — A boundary catches render and lazy-load errors only. Failures in event handlers, timers and promises (`transport.request`) never reach it; show them as an error turn, a notice or a Toast, and never throw from a handler to trigger the fallback.
+- **ERB-6** — Report crashes only through the one reporter installed with `setErrorBoundaryReporter`; do not call the transport or a store from a boundary or add a second reporting path.
+- **ERB-7** — Do not hand-roll a fallback or a second boundary class. Expected failures (a list that failed to load) are an ordinary state of the panel, not a thrown error.
+
+### Examples
+
+#### Panel boundary
+
+A labelled workbench region. Open file makes the child throw while rendering; Try again remounts it.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+function FileView() {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	if (opened) throw new Error("Cannot read properties of undefined (reading 'title')");
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-8">
+			<span className="tr-text-ui text-text-muted">src/App.tsx</span>
+			<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+				{t("panels.diffSurface.openFile")}
+			</Button>
+		</div>
+	);
+}
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<div className="h-[12rem] w-full">
+			<ErrorBoundary
+				label={t("shell.workbench.panel.editor")}
+				reportId="editor"
+				resetKeys={["workspace-1", "tab-1"]}
+			>
+				<FileView />
+			</ErrorBoundary>
+		</div>
+	);
+}
+```
+
+#### Without a label
+
+The generic title; an error with an empty message falls back to the unexpected-error line.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+function Broken({ message }: { message: string }) {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	if (opened) throw new Error(message);
+	return (
+		<div className="flex h-full items-center justify-center">
+			<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+				{t("panels.diffSurface.openFile")}
+			</Button>
+		</div>
+	);
+}
+
+export default function WithoutLabel() {
+	return (
+		<div className="grid h-[12rem] w-full grid-cols-2 gap-16">
+			<ErrorBoundary>
+				<Broken message="x.localeCompare is not a function" />
+			</ErrorBoundary>
+			<ErrorBoundary>
+				<Broken message="" />
+			</ErrorBoundary>
+		</div>
+	);
+}
+```
+
+#### Failed lazy chunk
+
+`Suspense` inside the boundary; a rejected dynamic import shows Reload page, which reloads the page.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { lazy, Suspense, useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+const FilePane = lazy(() =>
+	Promise.reject(new Error("Failed to fetch dynamically imported module: /assets/FilePane.js")),
+);
+
+export default function ChunkError() {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	return (
+		<div className="h-[12rem] w-full">
+			<ErrorBoundary label={t("shell.workbench.panel.editor")} reportId="editor">
+				{opened ? (
+					<Suspense fallback={<LoadingRegion className="p-16" />}>
+						<FilePane />
+					</Suspense>
+				) : (
+					<div className="flex h-full items-center justify-center">
+						<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+							{t("panels.diffSurface.openFile")}
+						</Button>
+					</div>
+				)}
+			</ErrorBoundary>
+		</div>
+	);
+}
+```
+
+#### Reset on navigation
+
+`resetKeys` holds the open tab; crash one file, then switch tabs to recover without a click.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+const TABS = ["App.tsx", "main.ts"];
+
+function FileView({ path }: { path: string }) {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	if (opened) throw new Error(`Cannot render ${path}`);
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-8">
+			<span className="tr-text-ui text-text-muted">{path}</span>
+			<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+				{t("panels.diffSurface.openFile")}
+			</Button>
+		</div>
+	);
+}
+
+export default function ResetKeys() {
+	const t = useT();
+	const [tab, setTab] = useState("App.tsx");
+	return (
+		<div className="flex h-[14rem] w-full flex-col gap-8">
+			<div className="flex gap-2">
+				{TABS.map((path) => (
+					<ToggleSegment
+						key={path}
+						testid={`tab-${path}`}
+						label={path}
+						active={tab === path}
+						onClick={() => setTab(path)}
+					/>
+				))}
+			</div>
+			<div className="min-h-0 flex-1">
+				<ErrorBoundary
+					label={t("shell.workbench.panel.editor")}
+					reportId="editor"
+					resetKeys={["workspace-1", tab]}
+				>
+					<FileView path={tab} />
+				</ErrorBoundary>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Regions and the root
+
+A root boundary around two region boundaries, as the app mounts them: one panel fails, the other keeps working.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { type ReactNode, useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+function Region({ children }: { children: ReactNode }) {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	if (opened) throw new Error("Cannot read properties of undefined (reading 'rows')");
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-8">
+			<span className="tr-text-ui text-text-muted">{children}</span>
+			<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+				{t("panels.diffSurface.openFile")}
+			</Button>
+		</div>
+	);
+}
+
+export default function Regions() {
+	const t = useT();
+	return (
+		<div className="h-[14rem] w-full">
+			<ErrorBoundary label={t("app.errorBoundary.label")} reportId="app">
+				<div className="grid h-full grid-cols-2 gap-16">
+					<ErrorBoundary label={t("shell.workbench.panel.editor")} reportId="editor">
+						<Region>src/App.tsx</Region>
+					</ErrorBoundary>
+					<ErrorBoundary label={t("shell.workbench.panel.terminal")} reportId="terminal">
+						<Region>zsh</Region>
+					</ErrorBoundary>
+				</div>
+			</ErrorBoundary>
+		</div>
+	);
+}
+```
+
+#### Reporting a crash
+
+`setErrorBoundaryReporter` receives the error with the untranslated `reportId`, never the translated label.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useEffect, useState } from "react";
+import { ErrorBoundary, setErrorBoundaryReporter } from "@/components/ErrorBoundary";
+
+function ChatView() {
+	const t = useT();
+	const [opened, setOpened] = useState(false);
+	if (opened) throw new Error("Cannot read properties of undefined (reading 'turns')");
+	return (
+		<div className="flex h-full items-center justify-center">
+			<Button variant="outline" size="m" onClick={() => setOpened(true)}>
+				{t("mcp.action.openChat")}
+			</Button>
+		</div>
+	);
+}
+
+export default function Reporter() {
+	const t = useT();
+	const [report, setReport] = useState("—");
+	useEffect(() => {
+		setErrorBoundaryReporter((error, reportId) => setReport(`${reportId}: ${error.message}`));
+		return () => setErrorBoundaryReporter(null);
+	}, []);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<div className="h-[12rem]">
+				<ErrorBoundary label={t("shell.workbench.panel.chat")} reportId="chat">
+					<ChatView />
+				</ErrorBoundary>
+			</div>
+			<output className="tr-code-text text-text-muted">{report}</output>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/main.tsx` | The last-resort root boundary (`label` from `app.errorBoundary.label`, `reportId="app"`) and the reporter wired to client error reports. |
+| `apps/web/src/shell/WorkspaceWorkbench.tsx` | One boundary per editor, chat, plan, plan-rail, terminal and tool body, each with `resetKeys={[workspaceId, tab.id]}` and a `Suspense` inside. |
+
+## RunningIcon
+
+The “ThinkRail is working” badge: the brand monogram inside a split rounded-square frame that draws and erases while an agent works. It is drawn in `currentColor`, so it sizes with `size-*` and colours with `text-*` exactly like a Remix icon, and it carries the accessible label “Agent working”. The call site decides from normalized host state whether a session is running and passes only size and colour classes.
+
+```tsx
+import { RunningIcon } from "@/components/RunningIcon";
+```
+
+### When to use
+
+- A top-level session is genuinely working: render it **in place of** the row's identity glyph (folder, branch, chat) — ProjectTree workspace and collapsed-project rows, the location bar's *Switch to* menu, the session switcher.
+- The decorative badge beside a live phase label in the chat stream footer (`StreamIndicator`), where the label is the announcement.
+- Anywhere “an agent is working here” must read at icon size and in the surrounding glyph colour.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Button | An in-flight action pinned to its control — `loading` (or `loading spinIcon` for a refresh) on Button or IconButton, never RunningIcon. |
+| LoadingRegion and SkeletonRows | A content region waiting for data (the loading pattern's first tier). |
+| AttentionDot | The session needs the user (a question or an unread result), not that it is working. The two can coexist on one row. |
+| AttentionLine | A chat-level “needs your answer” line with its own live announcement. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | An `inline-flex` `<span role="img">` that never shrinks, labelled “Agent working”, with `data-testid="running-icon"` and `data-running="true"`. Your `size-*` and `text-*` classes land here. |
+| Frame | Two `aria-hidden` SVG halves of a rounded square (`running-icon-frame`), leaving a gap on the left and meeting on the right; they draw and erase with `animate-loader-frame`. |
+| Monogram | Six wide letter strokes of the “TR” mark, each clipped to its region of `BRAND_MARK_SEGMENTS` (the shell logo's own segments), animated by the `loader-t-*` / `loader-r-*` keyframes. |
+| Clip paths | One `<clipPath>` per monogram segment with an id from `useId`, so any number of badges on a page never share ids. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `className` | `string` | — | Size and colour only: a `size-*` class (`size-14` in rows and menus, `size-16` in the chat footer) and the `text-*` the replaced glyph would wear (`text-primary` active, `text-text-muted` inactive), plus placement such as `mt-2` in a two-line row. |
+
+### Sizes and colours
+
+Every cell is the real badge. It takes its size from `size-*` and its colour from `text-*` through `currentColor`; with reduced motion enabled in the OS every cell shows the static, complete mark.
+
+| Class | Use it for |
+| --- | --- |
+| `size-14` | Rows and menus: ProjectTree, the session switcher, the *Switch to* menu. |
+| `size-16` | The chat stream footer, beside the phase label. |
+| `size-64` | Not a production size — a large specimen to read the draw-and-erase cycle. |
+| `text-primary` | The active or highlighted row, and the chat footer. |
+| `text-text-muted` | An inactive row; a Command row switches to primary while highlighted. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Running | Rendered, with motion allowed. | The frame and the six monogram strokes draw and erase on one shared cycle; a beat with only the frame showing is part of the design. |
+| Reduced motion | `prefers-reduced-motion: reduce`. | Every stroke stays at its fully drawn dash (`motion-safe:` animations off): the static, complete brand mark in the frame. |
+| Not running | The call site does not render it. | No idle, paused or stopped look — the row shows its identity glyph again. Queued, background, stopped and quiet sessions are not running. |
+| Active / selected row | The call site's colour class (`text-primary`, or `group-data-[selected=true]:text-primary` in a Command row). | Takes the colour through `currentColor`; the component has no colour of its own. |
+| Hover, focus, disabled | — | No distinct treatment; the badge is not interactive and inherits the row's state. |
+
+### Accessibility
+
+- Renders `role="img"` with the localized label “Agent working” (`components.runningIcon.label`); the SVG inside is `aria-hidden`.
+- Inside a row button, menu item or command option the label becomes part of that control's name, so the running state is read with the row and never needs a tooltip.
+- Where an adjacent live label already announces the work, wrap it in `<span aria-hidden="true">` as `StreamIndicator` does, so screen readers hear the phase once.
+- Motion respects `prefers-reduced-motion`; the static badge keeps the same shape and name, so no information depends on the animation.
+- Drawn in `currentColor`, so it follows the row's text colour in every theme.
+
+| Keys | Action |
+| --- | --- |
+| `—` | Not focusable. Keyboard behaviour belongs to the row, menu item or option it sits in. |
+
+### Usage rules
+
+- **RUN-1** — Show it only while a top-level session is genuinely working, from normalized host state (`selectWorkspaceIsRunning` and friends) — never for queued, background, stopped or quiet sessions.
+- **RUN-2** — Render it **in place of** the identity glyph, never beside it as a second marker; when work stops the glyph returns.
+- **RUN-3** — Pass only `size-*`, the replaced glyph's `text-*` colour and placement. Do not recolour parts, add a spinner, dot, count or tooltip, or wrap it in a pulse.
+- **RUN-4** — For an in-flight action on a control use Button or IconButton `loading`; for a waiting region use LoadingRegion. RunningIcon means “an agent is working”, nothing else.
+- **RUN-5** — When a visible live label already says what is happening, hide the badge from assistive technology with an `aria-hidden="true"` wrapper (the chat stream footer).
+- **RUN-6** — It is orthogonal to attention: a session that needs input but is still running shows both the badge and the AttentionDot.
+
+### Examples
+
+#### Working badge
+
+The badge at row size in the active and inactive colours, and at the chat-footer size.
+
+```tsx
+import { RunningIcon } from "@/components/RunningIcon";
+
+export default function Preview() {
+	return (
+		<div className="flex items-center gap-16">
+			<RunningIcon className="size-14 text-primary" />
+			<RunningIcon className="size-14 text-text-muted" />
+			<RunningIcon className="size-16 text-primary" />
+		</div>
+	);
+}
+```
+
+#### Replaces the identity glyph
+
+A workspace row swaps its branch glyph for the badge while an agent works; toggle the run to see the glyph return.
+
+```tsx
+import { RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { RunningIcon } from "@/components/RunningIcon";
+
+export default function IdentitySwap() {
+	const t = useT();
+	const [running, setRunning] = useState(true);
+	return (
+		<div className="flex w-full max-w-xs flex-col gap-12">
+			<button type="button" className="flex min-w-0 items-center gap-4 text-left">
+				{running ? (
+					<RunningIcon className="size-14 text-primary" />
+				) : (
+					<RiGitBranchLine className="size-14 shrink-0 text-primary" />
+				)}
+				<span className="truncate tr-text-ui text-primary">fix-login</span>
+			</button>
+			<div>
+				<Button variant="outline" size="m" onClick={() => setRunning((value) => !value)}>
+					{running ? t("chat.composer.stop") : t("chat.composer.send")}
+				</Button>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Row colour
+
+The badge wears the colour the replaced glyph would: `text-primary` on the active row, `text-text-muted` elsewhere.
+
+```tsx
+import { RiGitBranchLine } from "@remixicon/react";
+import { useState } from "react";
+import { RunningIcon } from "@/components/RunningIcon";
+
+const WORKSPACES = [
+	{ id: "fix-login", running: true },
+	{ id: "command-docs", running: true },
+	{ id: "pricing", running: false },
+];
+
+export default function RowColour() {
+	const [activeId, setActiveId] = useState("fix-login");
+	return (
+		<ul className="flex w-full max-w-xs flex-col gap-4">
+			{WORKSPACES.map((workspace) => {
+				const colour = workspace.id === activeId ? "text-primary" : "text-text-muted";
+				return (
+					<li key={workspace.id}>
+						<button
+							type="button"
+							aria-current={workspace.id === activeId || undefined}
+							onClick={() => setActiveId(workspace.id)}
+							className="flex w-full min-w-0 items-center gap-4 text-left"
+						>
+							{workspace.running ? (
+								<RunningIcon className={`size-14 ${colour}`} />
+							) : (
+								<RiGitBranchLine className={`size-14 shrink-0 ${colour}`} />
+							)}
+							<span className={`truncate tr-text-ui ${colour}`}>{workspace.id}</span>
+						</button>
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+```
+
+#### Two-line row
+
+In a row with a branch line the badge aligns to the first line with `mt-2`, like the glyph it replaces.
+
+```tsx
+import { RunningIcon } from "@/components/RunningIcon";
+
+export default function TwoLineRow() {
+	return (
+		<button type="button" className="flex w-full max-w-xs min-w-0 items-start gap-4 text-left">
+			<RunningIcon className="mt-2 size-14 text-primary" />
+			<span className="flex min-w-0 flex-1 flex-col">
+				<span className="truncate tr-text-ui leading-tight text-primary">Login fix</span>
+				<span className="truncate text-text-subtle tr-text-metadata leading-tight">
+					julia/fix-login-redirect
+				</span>
+			</span>
+		</button>
+	);
+}
+```
+
+#### Chat stream footer
+
+`StreamIndicator` shows the badge decoratively beside the live phase label, which is the announcement.
+
+```tsx
+import { StreamIndicator } from "@/chat/StreamIndicator";
+
+export default function StreamFooter() {
+	return (
+		<div className="flex w-full max-w-sm flex-col gap-4">
+			<StreamIndicator status={{ phase: "working" }} />
+			<StreamIndicator status={{ phase: "thinking" }} />
+			<StreamIndicator status={{ phase: "running-tool", toolName: "bash" }} />
+		</div>
+	);
+}
+```
+
+#### Switch to menu
+
+In a dropdown the running workspace's item leads with the badge instead of its branch icon. The menu row's own icon rule (`[&_svg]:text-text-muted`) currently colours the badge's SVG muted, so the `text-primary` passed here does not show.
+
+```tsx
+import { RiArrowDownSLine, RiGitBranchLine, RiHome2Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { RunningIcon } from "@/components/RunningIcon";
+
+const WORKSPACES = [
+	{ id: "command-docs", isDefault: false, running: true },
+	{ id: "thinkrail", isDefault: true, running: false },
+	{ id: "pricing", isDefault: false, running: false },
+];
+
+export default function MenuItem() {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="ghost" size="m" iconRight={RiArrowDownSLine}>
+					fix-login
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start">
+				<DropdownMenuLabel>{t("shell.location.workspace.switchTo")}</DropdownMenuLabel>
+				{WORKSPACES.map((workspace) => {
+					const Icon = workspace.isDefault ? RiHome2Line : RiGitBranchLine;
+					return (
+						<DropdownMenuItem key={workspace.id} onSelect={() => {}}>
+							{workspace.running ? <RunningIcon className="size-14 text-primary" /> : <Icon />}
+							<span className="truncate">{workspace.id}</span>
+						</DropdownMenuItem>
+					);
+				})}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Session switcher rows
+
+Muted at rest and primary on the highlighted option, through the row's `group-data-[selected=true]` colour.
+
+```tsx
+import { RiChat2Line } from "@remixicon/react";
+import { Command, CommandItem, CommandList } from "@thinkrail/ui/command";
+import { AttentionDot } from "@/components/AttentionDot";
+import { RunningIcon } from "@/components/RunningIcon";
+
+const SESSIONS = [
+	{ id: "s1", title: "Fix the flaky login test", running: true },
+	{ id: "s2", title: "Document the command list", running: true },
+	{ id: "s3", title: "Update the pricing page", running: false },
+];
+
+export default function CommandRow() {
+	return (
+		<Command className="w-full max-w-sm" loop shouldFilter={false} vimBindings={false}>
+			<CommandList>
+				{SESSIONS.map((session) => (
+					<CommandItem
+						key={session.id}
+						value={session.id}
+						className="group gap-8"
+						onSelect={() => {}}
+					>
+						{session.running ? (
+							<RunningIcon className="size-14 text-text-muted group-data-[selected=true]:text-primary" />
+						) : (
+							<RiChat2Line className="size-14 shrink-0 text-text-muted group-data-[selected=true]:text-primary" />
+						)}
+						<span className="min-w-0 flex-1 truncate group-data-[selected=true]:text-primary">
+							{session.title}
+						</span>
+						{session.running ? null : <AttentionDot />}
+					</CommandItem>
+				))}
+			</CommandList>
+		</Command>
+	);
+}
+```
+
+#### Working and needs attention
+
+A session waiting on input while still running shows the badge and the dot.
+
+```tsx
+import { AttentionDot } from "@/components/AttentionDot";
+import { RunningIcon } from "@/components/RunningIcon";
+
+export default function WithAttention() {
+	return (
+		<div className="flex w-full max-w-xs min-w-0 items-center gap-8">
+			<button type="button" className="flex min-w-0 flex-1 items-center gap-4 text-left">
+				<RunningIcon className="size-14 text-primary" />
+				<span className="truncate tr-text-ui text-primary">fix-login</span>
+			</button>
+			<AttentionDot />
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ProjectTree.tsx` | Replaces the project folder and workspace branch glyph while a session works (`size-14`, primary or muted). |
+| `apps/web/src/chat/StreamIndicator.tsx` | Decorative `size-16 text-primary` badge beside the stream phase label. |
+| `apps/web/src/shell/SessionSwitcher.tsx` | Replaces the chat glyph on running session rows; primary while the option is highlighted. |
+| `apps/web/src/shell/locationBar/WorkspaceSegment.tsx` | Leads a running workspace's item in the *Switch to* menu. |
+
+## AttentionDot
+
+The one “needs attention” marker: a static accent dot in its own square column, labelled “Needs attention”. It is binary — a session waiting for input and a session with an unread result show the same dot — and it carries no reason, count, tooltip or motion. The call site decides only whether it is present, from normalized host state.
+
+```tsx
+import { AttentionDot } from "@/components/AttentionDot";
+```
+
+### When to use
+
+- A workspace, collapsed project or session needs the user: a question or dialog is waiting, or a finished, failed or interrupted run has an unread result.
+- Rows in ProjectTree, project headings and session rows in the session switcher — trailing the identity button, in its own flex column.
+- Any list that must mirror the rail's attention signal; out-of-app notifications fire on the same dot lighting up.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| RunningIcon | The session is working, not waiting for the user. Both can show on one row. |
+| AttentionLine | Inside the chat itself, where the reason (“Your input is needed”) should be spelled out and announced. |
+| DiffStatBadge | A count or a magnitude must be shown; the dot never carries a number. |
+| Toast | A one-off event the user should notice now, rather than a persistent state on a row. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Box | A `<span role="img">` labelled “Needs attention” (`data-testid="attention-dot"`): a fixed `size-20` flex square that never shrinks and centres the dot, so it lines up with the row's other trailing controls. |
+| Dot | An `aria-hidden` `size-6` `rounded-full` circle filled with `bg-primary`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `className` | `string` | — | Placement only (margins, order). Production passes none; the dot owns its size and colour. |
+
+### States
+
+The rail's two treatments from normalized host state, rendered with the real components. Attention is binary; working replaces the glyph; the two are orthogonal.
+
+| Session | Host state | Markers |
+| --- | --- | --- |
+| Quiet | Quiet, queued, stopped or in the background | identity glyph |
+| Working | Working | RunningIcon |
+| Waiting | Waiting for input (`needsInput`) | identity glyph + AttentionDot |
+| Unread | Finished, failed or interrupted, unread (`completionUnread`) | identity glyph + AttentionDot |
+| Waiting while running | Waiting for input while still running | RunningIcon + AttentionDot |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Present | The call site renders it because attention is positive (`needsInput !== null \|\| completionUnread`). | The static accent dot. Identical for every reason. |
+| Absent | The call site does not render it. | Nothing — there is no hidden, zero or read state, and the column collapses (rows keep `data-attention` only while positive). |
+| Hover, focus, selected, disabled | — | No distinct treatment; the dot is not interactive and does not react to the row's state. |
+| Motion | — | None. It never pulses or animates. |
+
+### Accessibility
+
+- Renders `role="img"` with the localized label “Needs attention” (`components.attentionDot.label`); the inner circle is `aria-hidden`.
+- Inside a command option or row the label is read with that row, so the state is never colour-only.
+- There is no tooltip and no per-reason label by design; the reason is found by opening the session.
+- Clearing is the call site's job (opening the session, *Mark as read*); the dot itself has no dismiss affordance.
+
+| Keys | Action |
+| --- | --- |
+| `—` | Not focusable. Keyboard behaviour belongs to the row or option it sits in. |
+
+### Usage rules
+
+- **ATD-1** — One marker for every attention reason: needs-input and unread-result use the same AttentionDot — no question, check or result glyph, and no status-specific tooltip.
+- **ATD-2** — Decide presence only from normalized host state (`selectWorkspaceNeedsAttention`, the switcher groups), never from client-side guesses; render it or not, with no other prop.
+- **ATD-3** — Give it its own flex column after the identity button and before hover-revealed row actions; do not overlay it on an icon or put it inside the name.
+- **ATD-4** — Never add a count, reason text, colour, size or motion at the call site; `className` is for placement only.
+- **ATD-5** — Attention is orthogonal to running: a running session that needs input shows RunningIcon in place of its glyph and the dot as well.
+- **ATD-6** — Let the user clear an unread result where the dot appears (*Mark as read* in the row menu), and offer *Mark as unread* to bring it back.
+
+### Examples
+
+#### Needs attention
+
+The dot trailing a workspace row, in its own column.
+
+```tsx
+import { RiGitBranchLine } from "@remixicon/react";
+import { AttentionDot } from "@/components/AttentionDot";
+
+export default function Preview() {
+	return (
+		<div className="flex w-full max-w-xs min-w-0 items-center gap-8">
+			<button type="button" className="flex min-w-0 flex-1 items-center gap-4 text-left">
+				<RiGitBranchLine className="size-14 shrink-0 text-text-muted" />
+				<span className="truncate tr-text-ui text-text-muted">fix-login</span>
+			</button>
+			<AttentionDot />
+		</div>
+	);
+}
+```
+
+#### Workspace rows
+
+Rows that need attention carry the dot between the identity button and the hover-revealed actions; quiet rows have nothing there.
+
+```tsx
+import { RiGitBranchLine, RiMore2Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { AttentionDot } from "@/components/AttentionDot";
+
+const WORKSPACES = [
+	{ id: "fix-login", needsAttention: true },
+	{ id: "command-docs", needsAttention: false },
+	{ id: "pricing", needsAttention: true },
+];
+
+export default function WorkspaceRows() {
+	const t = useT();
+	return (
+		<ul className="flex w-full max-w-xs flex-col gap-4">
+			{WORKSPACES.map((workspace) => (
+				<li
+					key={workspace.id}
+					data-attention={workspace.needsAttention || undefined}
+					className="flex min-w-0 items-center gap-8"
+				>
+					<button type="button" className="flex min-w-0 flex-1 items-center gap-4 text-left">
+						<RiGitBranchLine className="size-14 shrink-0 text-text-muted" />
+						<span className="truncate tr-text-ui text-text-muted">{workspace.id}</span>
+					</button>
+					{workspace.needsAttention ? <AttentionDot /> : null}
+					<IconButton
+						icon={RiMore2Line}
+						label={t("panels.projectTree.workspaceActions", { name: workspace.id })}
+						size="s"
+						className="shrink-0"
+					/>
+				</li>
+			))}
+		</ul>
+	);
+}
+```
+
+#### One marker for every reason
+
+The second line names each reason for this demo only; the rail shows the same dot for a waiting question and for a finished or failed run, and never says which.
+
+```tsx
+import { RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { AttentionDot } from "@/components/AttentionDot";
+
+const WORKSPACES = [
+	{ id: "fix-login", reason: "notifications.reason.needsInput" },
+	{ id: "pricing", reason: "notifications.reason.succeeded" },
+	{ id: "migrate-db", reason: "notifications.reason.failed" },
+] as const;
+
+export default function OneMarker() {
+	const t = useT();
+	return (
+		<ul className="flex w-full max-w-xs flex-col gap-8">
+			{WORKSPACES.map((workspace) => (
+				<li key={workspace.id} className="flex min-w-0 items-start gap-8">
+					<span className="flex min-w-0 flex-1 items-start gap-4">
+						<RiGitBranchLine className="mt-2 size-14 shrink-0 text-text-muted" />
+						<span className="flex min-w-0 flex-col">
+							<span className="truncate tr-text-ui leading-tight text-text-muted">
+								{workspace.id}
+							</span>
+							<span className="truncate text-text-subtle tr-text-metadata leading-tight">
+								{t(workspace.reason)}
+							</span>
+						</span>
+					</span>
+					<AttentionDot />
+				</li>
+			))}
+		</ul>
+	);
+}
+```
+
+#### Mark as read
+
+The row menu clears the unread result and brings it back; the call site decides presence.
+
+```tsx
+import { RiGitBranchLine, RiMailOpenLine, RiMailUnreadLine, RiMore2Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { useState } from "react";
+import { AttentionDot } from "@/components/AttentionDot";
+
+export default function MarkRead() {
+	const t = useT();
+	const [unread, setUnread] = useState(true);
+	return (
+		<div className="flex w-full max-w-xs min-w-0 items-center gap-8">
+			<button type="button" className="flex min-w-0 flex-1 items-center gap-4 text-left">
+				<RiGitBranchLine className="size-14 shrink-0 text-text-muted" />
+				<span className="truncate tr-text-ui text-text-muted">pricing</span>
+			</button>
+			{unread ? <AttentionDot /> : null}
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<IconButton
+						icon={RiMore2Line}
+						label={t("panels.projectTree.workspaceActions", { name: "pricing" })}
+						size="s"
+						className="shrink-0"
+					/>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					{unread ? (
+						<DropdownMenuItem onSelect={() => setUnread(false)}>
+							<RiMailOpenLine />
+							{t("panels.projectTree.markRead")}
+						</DropdownMenuItem>
+					) : (
+						<DropdownMenuItem onSelect={() => setUnread(true)}>
+							<RiMailUnreadLine />
+							{t("panels.projectTree.markUnread")}
+						</DropdownMenuItem>
+					)}
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</div>
+	);
+}
+```
+
+#### Working and needs attention
+
+A running session that waits on input shows RunningIcon and the dot together.
+
+```tsx
+import { AttentionDot } from "@/components/AttentionDot";
+import { RunningIcon } from "@/components/RunningIcon";
+
+export default function WithRunning() {
+	return (
+		<div className="flex w-full max-w-xs min-w-0 items-center gap-8">
+			<button type="button" className="flex min-w-0 flex-1 items-center gap-4 text-left">
+				<RunningIcon className="size-14 text-text-muted" />
+				<span className="truncate tr-text-ui text-text-muted">fix-login</span>
+			</button>
+			<AttentionDot />
+		</div>
+	);
+}
+```
+
+#### Session switcher
+
+A project heading shows the dot when any session needs attention, and each waiting session row trails one.
+
+```tsx
+import { RiChat2Line, RiFolderLine } from "@remixicon/react";
+import { Command, CommandGroup, CommandItem, CommandList } from "@thinkrail/ui/command";
+import { AttentionDot } from "@/components/AttentionDot";
+import { RunningIcon } from "@/components/RunningIcon";
+
+const PROJECTS = [
+	{
+		id: "thinkrail",
+		name: "thinkrail",
+		sessions: [
+			{ id: "s1", title: "Fix the flaky login test", running: false },
+			{ id: "s2", title: "Document the command list", running: true },
+		],
+	},
+	{
+		id: "website",
+		name: "website",
+		sessions: [{ id: "s3", title: "Update the pricing page", running: true }],
+	},
+];
+
+export default function SessionSwitcher() {
+	return (
+		<Command className="w-full max-w-sm" loop shouldFilter={false} vimBindings={false}>
+			<CommandList>
+				{PROJECTS.map((project) => (
+					<CommandGroup
+						key={project.id}
+						heading={
+							<span className="flex items-center gap-4">
+								<RiFolderLine className="size-14 shrink-0 text-text-muted" />
+								<span className="min-w-0 flex-1 truncate">{project.name}</span>
+								{project.sessions.some((session) => !session.running) ? <AttentionDot /> : null}
+							</span>
+						}
+					>
+						{project.sessions.map((session) => (
+							<CommandItem
+								key={session.id}
+								value={session.id}
+								className="group gap-8 pl-24"
+								onSelect={() => {}}
+							>
+								{session.running ? (
+									<RunningIcon className="size-14 text-text-muted group-data-[selected=true]:text-primary" />
+								) : (
+									<RiChat2Line className="size-14 shrink-0 text-text-muted group-data-[selected=true]:text-primary" />
+								)}
+								<span className="min-w-0 flex-1 truncate group-data-[selected=true]:text-primary">
+									{session.title}
+								</span>
+								{session.running ? null : <AttentionDot />}
+							</CommandItem>
+						))}
+					</CommandGroup>
+				))}
+			</CommandList>
+		</Command>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ProjectTree.tsx` | Workspace rows and collapsed project rows, between the identity button and the row actions. |
+| `apps/web/src/shell/SessionSwitcher.tsx` | Project group headings and every non-running session row. |
+
+## AttentionLine
+
+The one-line “Your input is needed · Agent is waiting” heading above a chat surface the agent is blocked on. It owns the icon, the fixed words, their colour and type, and an optional polite live region that announces the wait once. The call site decides whether the line is shown at all and, through `announced` and `live`, which copy of the message assistive technology hears.
+
+```tsx
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+```
+
+### When to use
+
+- Directly above an inline prompt the host is waiting on — an `ask_user_question` card or an extension `select` / `confirm` / `input` / `editor` prompt.
+- Only while the host is actually waiting on that request; remove it the moment it no longer is.
+- When the waiting surface should announce itself politely once, without moving focus.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| AttentionDot | A row in a list or rail (a project, a session) needs attention; the dot marks it without words. |
+| StaleComposerNotice | A notice about the composer's own state, not a request the agent is waiting on. |
+| SettingsNotice | A persistent status or warning inside a settings surface. |
+| Toast | A transient confirmation or failure after an action, not a blocking request. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | A `div`, `flex items-center gap-4`, in `text-primary` and `tr-text-action`. |
+| Visible line | A span holding the icon and both texts; `aria-hidden` once `announced` is set or when `live` is `false`. |
+| Icon | `RiQuestionnaireLine` at `size-14`, in the line's `primary` colour. |
+| Message | “Your input is needed” (`chat.attention.needed`). |
+| Waiting note | “· Agent is waiting” (`chat.attention.waiting`) in `tr-text-metadata`, `text-muted`. |
+| Live region | Rendered only when `live`: an `sr-only` `role="status"` `aria-live="polite"` span, empty until `announced`, then “Your input is needed — the agent is waiting.” (`chat.attention.announcement`). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `announced` | `boolean` | `false` | Fills the live region with the announcement and hides the visible line from assistive technology, so exactly one copy is read. Set it a frame after mount, once per request. |
+| `live` | `boolean` | `true` | Renders the component's own polite live region. Pass `false` when a surrounding owner announces the request; the visible line is then always `aria-hidden`. |
+
+### States
+
+The three configurations look identical; they differ only in which copy of the message is in the accessibility tree. Every cell is the real component.
+
+| Props | Visible line | Live region |
+| --- | --- | --- |
+| `default` | Exposed | Mounted, empty |
+| `announced` | `aria-hidden` | “Your input is needed — the agent is waiting.” |
+| `live={false}` | `aria-hidden` | Not rendered — the owner announces |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Waiting, not yet announced | Default props. | The primary line with the muted waiting note; the empty live region is mounted and the visible line is exposed to assistive technology. |
+| Announced | `announced`. | Looks the same; the live region carries the announcement and the visible line is `aria-hidden`. |
+| Announced elsewhere | `live={false}`. | Looks the same; no live region, and the visible line is `aria-hidden`. |
+| Narrow | A container narrower than the line. | The message and the waiting note each wrap in their own column beside the icon, which keeps its size (`shrink-0`). |
+| Hover, focus, disabled | — | No distinct treatment; the line is not interactive. |
+
+### Accessibility
+
+- The live region is a polite `role="status"` that is mounted with the line and filled later: a region inserted together with its text is announced unreliably.
+- Exactly one copy is in the accessibility tree. Before `announced` the visible line is read; after it, only the region's announcement; with `live={false}` neither, because the owner's region speaks.
+- A remount (a virtualised row coming back) starts with `announced={false}`, so the region stays empty and the visible line is exposed again without a second announcement.
+- The line never takes focus; any focus claim belongs to the waiting card or prompt.
+- Colour is not the only signal: the line is words; the icon has no accessible name of its own.
+
+| Keys | Action |
+| --- | --- |
+| `—` | Not focusable; the line has no keyboard interaction. |
+
+### Usage rules
+
+- **ATL-1** — Show the line only while the host is waiting on this request (`canRespond ? <AttentionLine … /> : null`). A call the host is not waiting on never asks for attention.
+- **ATL-2** — Place it directly above the waiting surface in a `flex flex-col gap-4` stack, so it reads as that surface's heading. One line per waiting surface.
+- **ATL-3** — When the line owns the announcement, keep it mounted from the first render and set `announced` a frame later through a one-shot claim per request; never re-announce on a remount.
+- **ATL-4** — When a surrounding owner already announces the request (the chat transcript's polite region for extension prompts), pass `live={false}` so the message is not read twice.
+- **ATL-5** — Do not recreate or restyle it: the words are fixed locale keys and the component takes no `className`. Put the question itself in the card, not in the line.
+- **ATL-6** — Not for list markers or unread results — use AttentionDot there.
+
+### Examples
+
+#### Basic
+
+The default line: its own live region, mounted empty.
+
+```tsx
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+
+export default function Preview() {
+	return <AttentionLine />;
+}
+```
+
+#### One-shot announcement
+
+`announced` is set a frame after mount, so the polite region speaks once and the visible line leaves the accessibility tree.
+
+```tsx
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+import { useEffect, useState } from "react";
+
+export default function Announced() {
+	const [announced, setAnnounced] = useState(false);
+	useEffect(() => {
+		const frame = requestAnimationFrame(() => setAnnounced(true));
+		return () => cancelAnimationFrame(frame);
+	}, []);
+	return <AttentionLine announced={announced} />;
+}
+```
+
+#### Announced by the owner
+
+`live={false}` beside the owner's always-mounted polite region, as the chat transcript does for extension prompts.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+import { useEffect, useState } from "react";
+
+export default function NotLive() {
+	const t = useT();
+	const [announcement, setAnnouncement] = useState("");
+	useEffect(() => {
+		const frame = requestAnimationFrame(() =>
+			setAnnouncement(t("chat.transcript.inputNeeded", { title: "Deploy to staging?" })),
+		);
+		return () => cancelAnimationFrame(frame);
+	}, [t]);
+	return (
+		<div className="flex flex-col gap-4">
+			<span role="status" aria-live="polite" className="sr-only">
+				{announcement}
+			</span>
+			<AttentionLine live={false} />
+		</div>
+	);
+}
+```
+
+#### Extension prompt
+
+The real extension `confirm` prompt, which heads itself with `<AttentionLine live={false} />`.
+
+```tsx
+import { useState } from "react";
+import { ExtUiPrompt } from "@/chat/ExtUiPrompt";
+
+export default function ExtUiPromptExample() {
+	const [reply, setReply] = useState<string | boolean | null | undefined>(undefined);
+	if (reply !== undefined)
+		return <output className="tr-code-text text-text-muted">{String(reply)}</output>;
+	return (
+		<ExtUiPrompt
+			className="w-full"
+			request={{
+				id: "ext-1",
+				sessionId: "session-1",
+				kind: "confirm",
+				title: "Deploy to staging?",
+				message: "The extension will push the current branch and run the deploy script.",
+			}}
+			onReply={setReply}
+		/>
+	);
+}
+```
+
+#### Only while waiting
+
+The line is present only while a response is accepted; answering removes it. Retry asks again.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+
+export default function Awaiting() {
+	const t = useT();
+	const [canRespond, setCanRespond] = useState(true);
+	return (
+		<div className="flex flex-col gap-4">
+			{canRespond ? <AttentionLine /> : null}
+			<div className="flex gap-8">
+				<Button
+					variant="outline"
+					size="m"
+					disabled={!canRespond}
+					onClick={() => setCanRespond(false)}
+				>
+					{t("tools.ask.skip")}
+				</Button>
+				<Button size="m" disabled={!canRespond} onClick={() => setCanRespond(false)}>
+					{t("tools.ask.submit")}
+				</Button>
+				{canRespond ? null : (
+					<Button variant="ghost" size="m" onClick={() => setCanRespond(true)}>
+						{t("common.retry")}
+					</Button>
+				)}
+			</div>
+		</div>
+	);
+}
+```
+
+#### Narrow container
+
+In a narrow column the message and the waiting note wrap side by side; give the line the width of its card instead.
+
+```tsx
+import { AttentionLine } from "@thinkrail/ui/attention-line";
+
+export default function Narrow() {
+	return (
+		<div className="w-[10rem]">
+			<AttentionLine />
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx` | `canRespond ? <AttentionLine announced={announced} /> : null` above the question card; `announced` set by the one-shot attention claim. |
+| `apps/web/src/chat/ExtUiPrompt.tsx` | `<AttentionLine live={false} />` above every extension prompt; `ChatTranscript` owns the polite announcement. |
+
+## Dialog
+
+The modal surface for a focused task or decision: Radix Dialog with ThinkRail's overlay, a centred elevated card, header, footer, title and description parts and a Close icon button. It owns the portal, the overlay, focus trapping and return, scroll lock, Escape and outside-click dismissal and the title and description type; the call site provides the open state, the content, the actions and the width. `DialogPanel` is the non-modal, in-place variant, and `useModalLayerOpen()` tells any surface whether a modal dialog covers it.
+
+```tsx
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@thinkrail/ui/dialog";
+```
+
+### When to use
+
+- A short task that must be finished or cancelled before going back: a form (new template, clone repository, open a host path), a login, a merge.
+- A larger view of something already on screen: a tool's full output, an image attachment at full size.
+- A decision that needs more than yes/no — extra fields, a live count, a gated confirm button (Stop all subagents).
+- A caller-positioned, non-modal panel that still needs dialog semantics, Escape and focus return — `DialogPanel` in `<Dialog modal={false}>` (the Resources inspector).
+- Knowing that a modal covers your surface — `useModalLayerOpen()` (the chat transcript holds completion acknowledgement while one is open).
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ConfirmDialog | A plain yes/no with a title, a description, Cancel and one confirm button. Do not rebuild it from Dialog parts. |
+| ConfirmPopover | A yes/no anchored to the dedicated control that asked for it. |
+| Popover | Light, non-blocking content next to its trigger; the rest of the page stays usable. |
+| Toast | Reporting a result that needs no decision. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Dialog | Radix `Root`. Holds the open state (`open` + `onOpenChange`, or `defaultOpen`); renders nothing itself. |
+| DialogTrigger | Radix `Trigger`. Use `asChild` on a Button or IconButton; it gets `aria-haspopup`, `aria-expanded`, `aria-controls` and `data-state`, and focus returns to it on close. |
+| Overlay | Rendered by DialogContent: a fixed, full-window `bg-overlay` layer at `z-50` with `data-modal-layer` and `data-testid="dialog-overlay"`. A click on it dismisses the dialog. |
+| DialogContent | Portalled to `document.body` and centred in the window: a `rounded-lg` card with a `border-default` border on `container-elevated-bg`, the large shadow, `p-16`, its children stacked with `gap-16`, `w-full` up to `max-w-[28rem]`. |
+| Close button | An IconButton (ghost, M, `RiCloseLine`, label `common.close`) at `top-12 right-12` inside the card, wrapped in Radix `Close`. Rendered last, after the children. Omitted with `hideClose`. |
+| DialogHeader | A `div` stacking the title and description with `gap-4`. |
+| DialogTitle | Radix `Title`, an `h2` in `tr-title-dialog` and `text-default`. The dialog's accessible name. |
+| DialogDescription | Radix `Description`, a `p` in `tr-text-ui` and `text-muted`. Referenced by the dialog's `aria-describedby`. |
+| DialogFooter | A `div` for the actions: stacked in reverse order (`flex-col-reverse`, `gap-8`) under `sm`, a right-aligned row from `sm`. Put the dismiss action first and the main action last. |
+| DialogClose | Radix `Close`. `asChild` on a Button closes an uncontrolled dialog through `onOpenChange(false)`. |
+| DialogPanel | Radix `Content` rendered in place — no portal, overlay or Close button — with the elevated background, the default border colour (the caller sets which sides) and no outline. The caller positions it. |
+| useModalLayerOpen() | A hook returning `true` while any `[data-modal-layer][data-state="open"]` element is in the document — a DialogContent overlay. It observes `document.body`; on the server it returns `false`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `hideClose` | `boolean` | `false` | `DialogContent` only. Omits the built-in Close button, for content that owns its dismissal: a confirmation or notice whose footer decides, a command palette, or `hideClose={busy}` while an operation must not be abandoned (with `onOpenChange` ignoring the close too). |
+
+Radix props in common use (passed through unchanged):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `open` | `boolean` | — | `Dialog`. Controlled open state — the usual form in the app. |
+| `defaultOpen` | `boolean` | `false` | `Dialog`. Initial state of an uncontrolled dialog opened by a DialogTrigger. |
+| `onOpenChange` | `(open: boolean) => void` | — | `Dialog`. Called by the trigger, every Close, Escape and an overlay click. Clear the state that opened the dialog here; ignore `false` to keep a busy dialog open. |
+| `modal` | `boolean` | `true` | `Dialog`. `false` only with DialogPanel: no focus trap, no scroll lock, the page stays interactive. |
+| `onOpenAutoFocus` | `(event: Event) => void` | — | `DialogContent` / `DialogPanel`. By default focus moves to the first focusable element, or to an element with `autoFocus`. Call `event.preventDefault()` and focus something else (the session switcher's command list, the inspector's selected row). |
+| `onCloseAutoFocus` | `(event: Event) => void` | — | `DialogContent` / `DialogPanel`. By default focus returns to the DialogTrigger; without one it lands on the document body. Call `event.preventDefault()` and focus the element the dialog came from. |
+| `onEscapeKeyDown` | `(event: KeyboardEvent) => void` | — | `DialogContent` / `DialogPanel`. `preventDefault()` keeps the dialog open. |
+| `onInteractOutside` | `(event: Event) => void` | — | `DialogContent` / `DialogPanel`. Pointer down or focus outside; `preventDefault()` keeps it open (the Resources inspector panel does). |
+| `role` | `AriaRole` | `"dialog"` | `DialogContent`. `"alertdialog"` for a confirmation (ConfirmDialog sets it). |
+| `aria-describedby` | `string \| undefined` | — | `DialogContent` / `DialogPanel`. Radix points it at the DialogDescription; pass `undefined` when the dialog has none. |
+| `className` | `string` | — | Size and layout only: width (`max-w-*`), a height cap with overflow, `gap-12`, or `p-0 gap-0` for chromeless content. Never colour, border, radius, shadow or type. |
+| `asChild` | `boolean` | — | `DialogTrigger` / `DialogClose`. Merge onto the child Button or IconButton. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | `open` is false. | Nothing is rendered; the content unmounts, so local field state resets unless the caller keeps it. The trigger has `data-state="closed"`. |
+| Open (modal) | `open`, a DialogTrigger, or `defaultOpen`. | `bg-overlay` dims the whole window, the card sits centred above it, page scroll is locked and everything outside is hidden from assistive tech. Opens and closes without a transition. A Button or IconButton trigger shows its selected look under the overlay. |
+| Without Close button | `hideClose`. | No corner button; the footer, Escape and the overlay dismiss. |
+| Close button hover / focus | Pointer over the Close button, or Tab to it. | The IconButton's own ghost hover and focus ring; its `common.close` tooltip on hover and keyboard-visible focus — not when it is autofocused after a pointer open. |
+| Non-modal panel | `DialogPanel` inside `<Dialog modal={false}>`. | No overlay and no Close button; the panel sits where the caller placed it and the page around it stays interactive. |
+| Busy, loading, error | — | No distinct treatment: the content shows its own status or error line and the footer buttons take `disabled` or `loading`. |
+
+### Accessibility
+
+- DialogContent renders `role="dialog"` with `aria-labelledby` pointing at DialogTitle and `aria-describedby` at DialogDescription. Every dialog needs a DialogTitle; without a description pass `aria-describedby={undefined}`.
+- A modal dialog traps Tab inside the card, locks page scroll and sets `aria-hidden` on everything outside it.
+- On open, focus moves to the first focusable element in DOM order (the Close button comes last), or to an element with `autoFocus`.
+- On close, focus returns to the DialogTrigger. A dialog opened without one — from a plain button, a menu item or a store flag — sends focus to the document body; return it in `onCloseAutoFocus`.
+- The Close button is an IconButton labelled `common.close`; with `hideClose`, a footer button must offer the way out.
+- DialogPanel keeps the dialog role, title, Escape and focus return but does not trap focus or hide the page.
+- `useModalLayerOpen()` counts only modal DialogContent overlays; it does not depend on how `aria-hidden` treats live regions.
+
+| Keys | Action |
+| --- | --- |
+| `Enter / Space` | On a DialogTrigger: opens the dialog. |
+| `Tab / Shift+Tab` | Moves through the dialog's controls and wraps at the ends (modal only). |
+| `Escape` | Closes the dialog through onOpenChange(false). An open tooltip inside closes in the same press. |
+| `Enter` | In a form inside the dialog: submits it (a `type="submit"` Button). |
+
+### Usage rules
+
+- **DLG-1** — Use a modal Dialog only for a task or decision that must be finished before going on. A plain yes/no is a ConfirmDialog; anything anchored to its control is a Popover or ConfirmPopover.
+- **DLG-2** — Every dialog has a DialogTitle, and a DialogDescription when it has a sentence of context. With no description, pass `aria-describedby={undefined}`.
+- **DLG-3** — Build the body from DialogHeader and DialogFooter. In the footer the dismiss action comes first and the main action last, at the Button default size; one `primary` per dialog (BTN-1).
+- **DLG-4** — `className` on DialogContent sets size and layout only — `max-w-*`, a height cap with `overflow-y-auto`, `gap-12`, `p-0 gap-0` for chromeless content. Never colour, border, radius, shadow or type.
+- **DLG-5** — Keep the Close button unless the content owns dismissal: `hideClose` for confirmation and notice footers, command palettes, and `hideClose={busy}` while an operation must not be abandoned. With the button, keep the header text clear of it (`pr-24` on DialogHeader).
+- **DLG-6** — Open from `DialogTrigger asChild` whenever a control opens the dialog, also for a controlled `open`, so focus comes back to it. A dialog opened without a trigger returns focus itself in `onCloseAutoFocus`; otherwise focus falls to the document body.
+- **DLG-7** — `DialogPanel` is only for a caller-positioned, non-modal panel inside `<Dialog modal={false}>`. It is not a way to restyle a modal.
+- **DLG-8** — To know whether a modal covers a surface, call `useModalLayerOpen()`; never keep a registry of open dialogs.
+
+### Examples
+
+#### Basic
+
+A DialogTrigger, a header with title and description, and a footer of DialogClose buttons.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<Dialog>
+			<DialogTrigger asChild>
+				<Button variant="outline">{t("settings.notifications.enable")}</Button>
+			</DialogTrigger>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>{t("notifications.permission.title")}</DialogTitle>
+					<DialogDescription>{t("notifications.permission.description")}</DialogDescription>
+				</DialogHeader>
+				<DialogFooter>
+					<DialogClose asChild>
+						<Button variant="outline">{t("notifications.permission.notNow")}</Button>
+					</DialogClose>
+					<DialogClose asChild>
+						<Button>{t("notifications.permission.enable")}</Button>
+					</DialogClose>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Form
+
+A controlled dialog with a DialogTrigger around a form: the field takes `autoFocus`, Save submits and stays disabled until there is input.
+
+```tsx
+import { RiAddLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useState } from "react";
+
+export default function Form() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [body, setBody] = useState("");
+	const close = (next: boolean) => {
+		if (!next) setBody("");
+		setOpen(next);
+	};
+	return (
+		<Dialog open={open} onOpenChange={close}>
+			<DialogTrigger asChild>
+				<Button variant="outline" iconLeft={RiAddLine}>
+					{t("chat.templateEditor.newTitle")}
+				</Button>
+			</DialogTrigger>
+			<DialogContent aria-describedby={undefined} className="max-w-xl gap-12">
+				<DialogHeader>
+					<DialogTitle>{t("chat.templateEditor.newTitle")}</DialogTitle>
+				</DialogHeader>
+				<form
+					className="flex flex-col gap-12"
+					onSubmit={(event) => {
+						event.preventDefault();
+						close(false);
+					}}
+				>
+					<label htmlFor="example-template-body" className="flex flex-col gap-4 tr-text-ui">
+						{t("chat.templateEditor.body")}
+						<Textarea
+							id="example-template-body"
+							autoFocus
+							rows={6}
+							value={body}
+							onChange={(event) => setBody(event.target.value)}
+							placeholder={t("chat.templateEditor.bodyPlaceholder")}
+						/>
+					</label>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => close(false)}>
+							{t("common.cancel")}
+						</Button>
+						<Button type="submit" disabled={!body.trim()}>
+							{t("common.save")}
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Notice without a Close button
+
+`hideClose`: the single footer action is the way out, as in the Notice Dialog.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+import { useState } from "react";
+
+export default function HideClose() {
+	const t = useT();
+	const [error, setError] = useState<string | null>(null);
+	return (
+		<Dialog
+			open={error !== null}
+			onOpenChange={(open) => {
+				if (!open) setError(null);
+			}}
+		>
+			<DialogTrigger asChild>
+				<Button
+					variant="outline"
+					onClick={() => setError(t("panels.openProject.missing", { path: "~/old-repo" }))}
+				>
+					{t("panels.openProjectPath.submit")}
+				</Button>
+			</DialogTrigger>
+			<DialogContent className="max-w-sm" hideClose>
+				<DialogHeader>
+					<DialogTitle>{t("panels.openProject.openFailed")}</DialogTitle>
+					<DialogDescription className="whitespace-pre-line">{error}</DialogDescription>
+				</DialogHeader>
+				<DialogFooter>
+					<Button onClick={() => setError(null)}>{t("panels.noticeDialog.ok")}</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Not closable while busy
+
+`hideClose={busy}` and an `onOpenChange` that ignores closing while the clone runs; Cancel stops the operation first.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+import { useRef, useState } from "react";
+
+export default function Busy() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [busy, setBusy] = useState(false);
+	const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+	const clone = () => {
+		setBusy(true);
+		timer.current = setTimeout(() => {
+			setBusy(false);
+			setOpen(false);
+		}, 3000);
+	};
+	const cancel = () => {
+		clearTimeout(timer.current);
+		setBusy(false);
+		if (!busy) setOpen(false);
+	};
+	return (
+		<Dialog
+			open={open}
+			onOpenChange={(next) => {
+				if (next || !busy) setOpen(next);
+			}}
+		>
+			<DialogTrigger asChild>
+				<Button variant="outline">{t("panels.cloneProject.title")}</Button>
+			</DialogTrigger>
+			<DialogContent hideClose={busy} className="max-w-lg gap-12">
+				<DialogHeader>
+					<DialogTitle>{t("panels.cloneProject.title")}</DialogTitle>
+					<DialogDescription>{t("panels.cloneProject.description")}</DialogDescription>
+				</DialogHeader>
+				{busy ? (
+					<p role="status" className="tr-text-ui text-text-muted">
+						{t("panels.cloneProject.cloning")}
+					</p>
+				) : null}
+				<DialogFooter>
+					<Button variant="outline" onClick={cancel}>
+						{t("common.cancel")}
+					</Button>
+					<Button disabled={busy} onClick={clone}>
+						{t("panels.cloneProject.clone")}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Large content
+
+A wider card with a height cap and a scrolling body; the header keeps clear of the Close button.
+
+```tsx
+import { RiFileTextLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+
+const lines = Array.from({ length: 80 }, (_, index) => `[${index + 1}] list_issues → 200 OK`);
+
+export default function LargeContent() {
+	const t = useT();
+	return (
+		<Dialog>
+			<DialogTrigger asChild>
+				<Button variant="ghost" size="s" iconLeft={RiFileTextLine}>
+					{t("mcp.fullOutput.title")}
+				</Button>
+			</DialogTrigger>
+			<DialogContent className="max-h-[85vh] max-w-3xl">
+				<DialogHeader className="pr-24">
+					<DialogTitle>{t("mcp.fullOutput.title")}</DialogTitle>
+					<DialogDescription className="truncate">github · list_issues</DialogDescription>
+				</DialogHeader>
+				<pre className="min-h-0 overflow-auto tr-code-text">{lines.join("\n")}</pre>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Return focus without a trigger
+
+A controlled dialog opened from a plain Button returns focus to it in `onCloseAutoFocus`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogTitle,
+} from "@thinkrail/ui/dialog";
+import { useRef, useState } from "react";
+
+export default function ReturnFocus() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const opener = useRef<HTMLButtonElement>(null);
+	return (
+		<>
+			<Button ref={opener} variant="ghost" size="m" tone="danger" onClick={() => setOpen(true)}>
+				{t("resources.inspector.stopAll")}
+			</Button>
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent
+					onCloseAutoFocus={(event) => {
+						event.preventDefault();
+						opener.current?.focus();
+					}}
+				>
+					<DialogTitle>{t("chat.view.stopAllTitle")}</DialogTitle>
+					<DialogDescription>{t("chat.view.stopAllDescription", { count: 3 })}</DialogDescription>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => setOpen(false)}>
+							{t("common.cancel")}
+						</Button>
+						<Button variant="destructive" onClick={() => setOpen(false)}>
+							{t("chat.view.stopAllConfirm", { count: 3 })}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		</>
+	);
+}
+```
+
+#### Non-modal panel
+
+`DialogPanel` in `<Dialog modal={false}>`, placed over its own region; Escape or Close dismisses it and the page stays usable.
+
+```tsx
+import { RiCloseLine, RiStackLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import { Dialog, DialogClose, DialogPanel, DialogTitle, DialogTrigger } from "@thinkrail/ui/dialog";
+
+export default function Panel() {
+	const t = useT();
+	return (
+		<div className="relative flex h-[12rem] w-full flex-col items-start gap-8">
+			<Dialog modal={false}>
+				<DialogTrigger asChild>
+					<Button variant="outline" size="m" iconLeft={RiStackLine}>
+						{t("resources.inspector.title")}
+					</Button>
+				</DialogTrigger>
+				<DialogPanel
+					aria-describedby={undefined}
+					onInteractOutside={(event) => event.preventDefault()}
+					className="absolute inset-0 gap-8 border p-8"
+				>
+					<div className="flex items-center gap-8">
+						<DialogTitle className="flex-1">{t("resources.inspector.title")}</DialogTitle>
+						<DialogClose asChild>
+							<IconButton icon={RiCloseLine} label={t("resources.inspector.close")} />
+						</DialogClose>
+					</div>
+					<p className="tr-text-ui text-text-muted">{t("resources.inspector.empty")}</p>
+				</DialogPanel>
+			</Dialog>
+		</div>
+	);
+}
+```
+
+#### Covered by a modal
+
+`useModalLayerOpen()` turns true while any modal dialog is open.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+	useModalLayerOpen,
+} from "@thinkrail/ui/dialog";
+
+function CoveredByModal() {
+	const modalOpen = useModalLayerOpen();
+	return <output className="tr-code-text">useModalLayerOpen() → {String(modalOpen)}</output>;
+}
+
+export default function ModalLayer() {
+	const t = useT();
+	return (
+		<div className="flex flex-wrap items-center gap-12">
+			<Dialog>
+				<DialogTrigger asChild>
+					<Button variant="outline" size="m">
+						{t("mcp.fullOutput.title")}
+					</Button>
+				</DialogTrigger>
+				<DialogContent aria-describedby={undefined}>
+					<DialogHeader>
+						<DialogTitle>{t("mcp.fullOutput.title")}</DialogTitle>
+					</DialogHeader>
+					<CoveredByModal />
+				</DialogContent>
+			</Dialog>
+			<CoveredByModal />
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/notifications/NotificationPermissionPrompt.tsx` | The canonical layout: header, description, Not now (outline) and Enable (primary) in the footer. |
+| `apps/web/src/panels/CloneProjectDialog.tsx` | A form dialog with `hideClose={busy}` and an `onOpenChange` that ignores closing while cloning. |
+| `apps/web/src/chat/tools/mcp/McpActions.tsx` | DialogTrigger on a text action; a wide, height-capped dialog with `pr-24` on the header. |
+| `apps/web/src/shell/SessionSwitcher.tsx` | Chromeless: `hideClose`, `p-0 gap-0`, a Command inside and `onOpenAutoFocus` moving focus to it. |
+| `apps/web/src/chat/ChatView.tsx` | Stop all subagents, opened without a trigger: `onCloseAutoFocus` returns focus to the Resources button or the composer. |
+| `apps/web/src/panels/ConfirmDialog.tsx` | ConfirmDialog: `role="alertdialog"`, `hideClose` and a narrower card. |
+
+## ConfirmDialog
+
+The app's modal yes/no: a narrow `alertdialog` built on Dialog with a title, an optional description, Cancel and one confirm button. It owns the layout, the button variants, the warning icon of a destructive confirmation and closing after either choice; the call site provides the open state, the words and what confirming does.
+
+```tsx
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+```
+
+### When to use
+
+- Confirming an action that has no stable anchor on screen: it was chosen from a menu, a shortcut or a row that may move (close a project, remove a workspace).
+- Confirming an irreversible or risky step before it runs: remove an MCP server, close a terminal with a running process, delete a remote branch, stop trusting a project.
+- Asking before a consequential but safe step: initialise a git repository, push straight to the base branch, apply a layout.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ConfirmPopover | The question belongs to a dedicated control that stays on screen (deleting a template); the popover anchors to it. |
+| Dialog | The decision needs more than two buttons and text: fields, a gated or loading confirm button, a live count (Stop all subagents). |
+| Toast | The action is reversible or already done; report it instead of asking first. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Container | DialogContent with `role="alertdialog"`, `hideClose`, `max-w-[24rem]` and `data-testid="confirm-dialog"`, over the Dialog overlay. |
+| Warning icon | Only when `destructive`: `RiAlertLine` in `feedback-error` before the title, at icon size 16. |
+| Title | DialogTitle with the `title` string; the accessible name. |
+| Description | DialogDescription, rendered only when `description` is given. |
+| Cancel | An `outline` Button, first in the footer and so focused on open; label `cancelLabel` or `common.cancel`. |
+| Confirm | A `destructive` Button when `destructive`, otherwise `primary`; label `confirmLabel` or `common.confirm`; `data-testid` from `confirmTestId`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `open` | `boolean` | — | Required. Controlled open state, usually derived from the pending target (`open={target !== null}`). |
+| `onOpenChange` | `(open: boolean) => void` | — | Required. Called with `false` by Cancel, by Confirm after `onConfirm`, by Escape and by an overlay click. Clear the pending target here. |
+| `title` | `string` | — | Required. The question, naming its object: `Close {name}?`. |
+| `description` | `ReactNode` | — | What confirming does and what it keeps. A string, or `<T>` with an emphasised name or path. |
+| `confirmLabel` | `string` | `t("common.confirm")` | The confirm button's label; repeat the action's verb (`Close project`, `Remove`). |
+| `cancelLabel` | `string` | `t("common.cancel")` | The cancel button's label. |
+| `destructive` | `boolean` | `false` | Uses the `destructive` confirm button and adds the warning icon before the title. |
+| `confirmTestId` | `string` | — | `data-testid` on the confirm button, for end-to-end tests. |
+| `onConfirm` | `() => void` | — | Required. Runs when Confirm is pressed, just before the dialog closes. Start the action here; the dialog does not wait for it. |
+| `onClosedAutoFocus` | `() => void` | — | Called instead of the default focus return after closing (it prevents Radix's). Without it focus lands on the document body, because ConfirmDialog has no trigger; focus the row or button the dialog came from. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | `open` is false. | Nothing is rendered. |
+| Open, neutral | `open` without `destructive`. | Title without an icon; `outline` Cancel beside a `primary` confirm button. |
+| Open, destructive | `destructive`. | `feedback-error` warning icon before the title; `outline` Cancel beside a `destructive` confirm button. |
+| No description | `description` omitted. | Only the title above the buttons. |
+| Narrow window | Below `sm`. | The buttons stack, confirm on top of Cancel (DialogFooter). |
+| Busy, disabled | — | No distinct treatment: neither button can be disabled or show loading, and the dialog closes as soon as Confirm is pressed. |
+
+### Accessibility
+
+- `role="alertdialog"`, named by the title and described by the description through Dialog's `aria-labelledby` / `aria-describedby`.
+- Cancel is first in DOM order, so it receives focus when the dialog opens; a stray Enter cancels instead of confirming.
+- Focus is trapped while open; Escape and an overlay click dismiss like Cancel.
+- ConfirmDialog has no trigger, so after it closes focus lands on the document body. Pass `onClosedAutoFocus` to put it back on the button, row or menu trigger it came from.
+- The warning icon is decoration; the title and the confirm label must say what is destructive.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves between Cancel and Confirm, wrapping inside the dialog. |
+| `Enter / Space` | Activates the focused button — Cancel when the dialog opens. |
+| `Escape` | Closes without confirming. |
+
+### Usage rules
+
+- **CFD-1** — Every modal yes/no in the app is a ConfirmDialog; do not assemble one from Dialog parts. When the question belongs to a control that stays on screen, use ConfirmPopover.
+- **CFD-2** — Set `destructive` only when confirming deletes, ends or revokes something (remove workspace, close a busy terminal, delete a remote branch, stop trusting). Closing a project, initialising a repo or pushing stays neutral.
+- **CFD-3** — Write the title as the question with its object (`Remove {name}?`) and pass a `confirmLabel` that repeats the verb; the default `Confirm` is a fallback, not a label.
+- **CFD-4** — Derive `open` from the pending target and clear the target in `onOpenChange`; read the target in `onConfirm` from that state, never from the row that opened it.
+- **CFD-5** — `onConfirm` starts the action and the dialog closes at once: no optimistic UI, let the result arrive and report failure with a toast. A confirm that must be disabled or show progress is a Dialog.
+- **CFD-6** — Restore focus with `onClosedAutoFocus` — ConfirmDialog has no trigger, so focus otherwise falls to the document body. Give the confirm button a `confirmTestId`.
+
+### Examples
+
+#### Neutral
+
+Close a project: a `primary` confirm that repeats the verb; `onClosedAutoFocus` returns focus to the button.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+export default function Preview() {
+	const t = useT();
+	const opener = useRef<HTMLButtonElement>(null);
+	const [open, setOpen] = useState(false);
+	return (
+		<>
+			<Button ref={opener} variant="outline" onClick={() => setOpen(true)}>
+				{t("panels.projectTree.closeProject")}
+			</Button>
+			<ConfirmDialog
+				open={open}
+				onOpenChange={setOpen}
+				title={t("panels.projectTree.closeTitle", { name: "thinkrail" })}
+				description={t("panels.projectTree.closeDescription")}
+				confirmLabel={t("panels.projectTree.closeProject")}
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => opener.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+#### Destructive
+
+A busy terminal's close: warning icon and a `destructive` Close anyway.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+export default function Destructive() {
+	const t = useT();
+	const opener = useRef<HTMLButtonElement>(null);
+	const [open, setOpen] = useState(false);
+	return (
+		<>
+			<IconButton
+				ref={opener}
+				icon={RiCloseLine}
+				label={t("common.close")}
+				onClick={() => setOpen(true)}
+			/>
+			<ConfirmDialog
+				open={open}
+				onOpenChange={setOpen}
+				title={t("panels.terminalWorkbench.busyTitle")}
+				description={t("panels.terminalWorkbench.busyDescription", { title: "bun run dev" })}
+				confirmLabel={t("panels.terminalWorkbench.closeAnyway")}
+				destructive
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => opener.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+#### Rich description
+
+`description` as a `<T>` element that emphasises the folder path.
+
+```tsx
+import { T, useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+export default function RichDescription() {
+	const t = useT();
+	const opener = useRef<HTMLButtonElement>(null);
+	const [path, setPath] = useState<string | null>(null);
+	return (
+		<>
+			<Button ref={opener} variant="outline" onClick={() => setPath("~/notes")}>
+				{t("panels.openProjectPath.submit")}
+			</Button>
+			<ConfirmDialog
+				open={path !== null}
+				onOpenChange={(open) => {
+					if (!open) setPath(null);
+				}}
+				title={t("panels.openProject.initTitle")}
+				description={
+					<T
+						i18nKey="panels.openProject.initDescription"
+						values={{ path }}
+						components={[<span key="path" className="tr-text-emphasis text-text-default" />]}
+					/>
+				}
+				confirmLabel={t("panels.openProject.initConfirm")}
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => opener.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+#### Pending target
+
+`open` is derived from the row waiting for confirmation; `onConfirm` acts on that state.
+
+```tsx
+import { RiDeleteBinLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+interface Server {
+	name: string;
+	source: string;
+}
+
+const initial: Server[] = [
+	{ name: "github", source: "~/.pi/agent/mcp.json" },
+	{ name: "linear", source: ".pi/mcp.json" },
+];
+
+export default function PendingTarget() {
+	const t = useT();
+	const [servers, setServers] = useState(initial);
+	const [removing, setRemoving] = useState<Server | null>(null);
+	const list = useRef<HTMLDivElement>(null);
+	const opener = useRef<HTMLButtonElement | null>(null);
+	return (
+		<div ref={list} className="flex w-full flex-col gap-4">
+			{servers.map((server) => (
+				<div key={server.name} className="flex items-center gap-8 tr-text-ui">
+					<span className="flex-1">{server.name}</span>
+					<IconButton
+						icon={RiDeleteBinLine}
+						label={t("common.remove")}
+						onClick={(event) => {
+							opener.current = event.currentTarget;
+							setRemoving(server);
+						}}
+					/>
+				</div>
+			))}
+			<ConfirmDialog
+				open={removing !== null}
+				onOpenChange={(open) => {
+					if (!open) setRemoving(null);
+				}}
+				title={t("mcp.remove.title", { name: removing?.name ?? "" })}
+				description={
+					removing ? t("mcp.remove.description", { source: removing.source }) : undefined
+				}
+				confirmLabel={t("common.remove")}
+				destructive
+				confirmTestId="mcp-remove-confirm"
+				onClosedAutoFocus={() => {
+					const target = opener.current?.isConnected ? opener.current : null;
+					(target ?? list.current?.querySelector("button"))?.focus();
+				}}
+				onConfirm={() => {
+					const row = removing;
+					if (!row) return;
+					const rest = servers.filter((server) => server.name !== row.name);
+					setServers(rest.length > 0 ? rest : initial);
+				}}
+			/>
+		</div>
+	);
+}
+```
+
+#### Opened from a menu
+
+A dropdown item opens the confirmation; `onClosedAutoFocus` returns focus to the menu button.
+
+```tsx
+import { RiMore2Line } from "@remixicon/react";
+import { T, useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+export default function FromMenu() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const trigger = useRef<HTMLButtonElement>(null);
+	return (
+		<>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<IconButton
+						ref={trigger}
+						icon={RiMore2Line}
+						label={t("shell.location.ship.moreActions")}
+					/>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="start">
+					<DropdownMenuItem onSelect={() => {}}>{t("common.rename")}</DropdownMenuItem>
+					<DropdownMenuItem onSelect={() => setOpen(true)}>{t("common.remove")}</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+			<ConfirmDialog
+				open={open}
+				onOpenChange={setOpen}
+				title={t("panels.removeWorkspace.title", { name: "fix-login" })}
+				description={
+					<T
+						i18nKey="panels.removeWorkspace.description"
+						values={{ branch: "fix/login" }}
+						components={[<span key="branch" className="tr-text-emphasis text-text-default" />]}
+					/>
+				}
+				confirmLabel={t("common.remove")}
+				destructive
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => trigger.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+#### Interpolated labels
+
+Title, plural description and confirm label all name the branch.
+
+```tsx
+import { RiUploadCloud2Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+
+export default function Push() {
+	const t = useT();
+	const opener = useRef<HTMLButtonElement>(null);
+	const [branch, setBranch] = useState<string | null>(null);
+	const ahead = 2;
+	return (
+		<>
+			<Button
+				ref={opener}
+				variant="outline"
+				size="m"
+				iconLeft={RiUploadCloud2Line}
+				onClick={() => setBranch("main")}
+			>
+				{t("panels.ship.confirmPush.confirm", { branch: "main" })}
+			</Button>
+			<ConfirmDialog
+				open={branch !== null}
+				onOpenChange={(open) => {
+					if (!open) setBranch(null);
+				}}
+				title={t("panels.ship.confirmPush.title", { branch })}
+				description={t("panels.ship.confirmPush.descriptionCommits", { count: ahead, branch })}
+				confirmLabel={t("panels.ship.confirmPush.confirm", { branch })}
+				confirmTestId="ship-confirm-base-push"
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => opener.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ProjectTree.tsx` | Close project (neutral) from the row menu, with `onClosedAutoFocus` restoring row focus. |
+| `apps/web/src/panels/RemoveWorkspaceDialog.tsx` | Remove workspace: `destructive`, a `<T>` description emphasising the branch. |
+| `apps/web/src/panels/McpSettings.tsx` | Remove an MCP server: `open={removing !== null}`, destructive `common.remove`. |
+| `apps/web/src/panels/TerminalWorkbench.tsx` | Closing a terminal with a running process: destructive Close anyway. |
+| `apps/web/src/panels/useShipRunner.tsx` | Push to the base branch (neutral) and delete the remote branch (destructive). |
+| `apps/web/src/panels/useOpenProject.tsx` | Initialise a git repository before opening a folder (neutral). |
+
+## Popover
+
+A non-modal floating panel anchored to a trigger: Radix Popover with ThinkRail's elevated surface. `PopoverContent` owns the portal (to the body or a given `container`), placement next to the trigger with a fixed offset, the border, radius and shadow, and Radix's focus, Escape and outside-click handling. The call site provides the trigger, the content, its width and padding, and usually the open state.
+
+```tsx
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+```
+
+### When to use
+
+- A searchable picker behind a select-like trigger: branches, projects, models, open tabs — a Command inside the popover.
+- Details about the control that opened it, with a few actions: the branch segment's facts and Copy branch name.
+- A short list of rows that needs more than a menu row allows — a meaning line per option, inline rename, per-row actions (recently closed chats, send options).
+- A small form tied to one control: naming a new layout preset.
+- A yes/no anchored to the control that asked — use ConfirmPopover, which is built on it.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| DropdownMenu | The panel is a list of commands or one choice among a few: it brings menu roles, arrow keys and typeahead. |
+| Dialog | The task needs the user's full attention, blocks the page or has no on-screen anchor. |
+| Tooltip and IconTooltip | The text only explains a control and contains nothing interactive. |
+| ConfirmPopover | The panel only asks to confirm one action; it fixes the layout, roles and buttons. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Popover | Radix Root. Owns the open state, uncontrolled by default or `open` / `onOpenChange`; non-modal. |
+| PopoverTrigger | Radix Trigger, unstyled: toggles on click and carries `aria-haspopup="dialog"`, `aria-expanded`, `aria-controls` and `data-state`. Usually `asChild` on a Button or IconButton. |
+| PopoverAnchor | Radix Anchor: positions the content against another element than the trigger. Exported, but no production call site uses it yet. |
+| PopoverContent | The portalled panel (`role="dialog"`): `z-50`, `rounded-md`, `border-border-default`, `bg-container-elevated-bg`, `text-text-default`, `--shadow-md`, `overflow-hidden`, no outline and no padding of its own. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `PopoverContent.container` | `HTMLElement \| null` | — | The element the content portals into; `null` or omitted portals to `document.body`. Pass the host DialogContent node (`ref={setDialogEl}`) when the popover opens inside a modal dialog, so its list scrolls under the dialog's scroll lock. |
+| `PopoverContent.align` | `"start" \| "center" \| "end"` | `"center"` | Alignment against the trigger. Call sites use `start` under a left-edge trigger (pickers, branch details) and `end` for a trailing icon trigger (chat history, tab search, send options). |
+| `PopoverContent.sideOffset` | `number` | `6` | Gap to the trigger. The wrapper sets 6; Radix's own default is 0. |
+| `Popover.open` | `boolean` | — | Controlled open state. Every production popover controls it, so a row can close it after a choice or a second control can open it. |
+| `Popover.onOpenChange` | `(open: boolean) => void` | — | Called on every open and close (trigger, Escape, outside click, focus leaving). Start a refresh here when the content loads on open (`if (next) refresh()`). |
+| `Popover.defaultOpen` | `boolean` | `false` | Uncontrolled initial state, for a popover nothing else needs to close. |
+| `Popover.modal` | `boolean` | `false` | Traps focus, blocks outside pointer events and locks page scroll while open. No ThinkRail call site sets it; popovers stay non-modal. |
+| `PopoverTrigger.asChild` | `boolean` | — | Merges the trigger onto its child. Use it with a Button or IconButton, which shows its selected look while `data-state="open"`. An IconButton child also needs `wrapTrigger`, which keeps its tooltip's and the popover's `data-state` on separate elements. |
+| `PopoverTrigger.disabled` | `boolean` | — | Blocks opening. With `asChild`, set `disabled` on the Button child instead. |
+| `PopoverAnchor.asChild` | `boolean` | — | Merges the anchor onto its child. While a PopoverAnchor is mounted the content positions against it instead of the trigger. |
+
+Radix PopoverContent props that pass through:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `side` | `"top" \| "right" \| "bottom" \| "left"` | `"bottom"` | Preferred side; Radix flips and shifts the content when the viewport is too small. `top` for triggers at the bottom of a surface (the composer's send options). |
+| `onOpenAutoFocus` | `(event: Event) => void` | — | Runs before focus moves into the content (by default its first focusable element). `event.preventDefault()` and focus something else — the content itself (branch details) or an input. |
+| `onCloseAutoFocus` | `(event: Event) => void` | — | Runs before focus returns to the trigger. `event.preventDefault()` when a choice should move focus elsewhere (the tab it selected). |
+| `onEscapeKeyDown` | `(event: KeyboardEvent) => void` | — | `event.preventDefault()` keeps the popover open, for example while an inline rename inside it owns Escape. |
+| `className` | `string` | — | Width (`w-288`, `w-320`, `min-w-[16rem]`), padding by content (`p-0` around a Command, `p-4` around rows, `p-12` around details and forms), layout and a height bound such as `max-h-[min(60vh,var(--radix-popover-content-available-height))] overflow-y-auto`. The surface, border, radius and shadow come from the wrapper. |
+| `ref` | `Ref<HTMLDivElement>` | — | The content element (`role="dialog"`, `tabIndex={-1}`), for focusing it from `onOpenAutoFocus`. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | Rest. | The content is unmounted; the trigger carries `data-state="closed"`. |
+| Open | Click the trigger, Enter or Space on it, or `open`. | The panel appears on `side` with the wrapper's offset; the trigger gets `data-state="open"` and `aria-expanded`, so a Button or IconButton trigger shows its selected fill. |
+| Flipped | Not enough room on `side`. | Radix moves the panel to the opposite side or shifts it along the edge; no distinct treatment otherwise. |
+| Inside a dialog | `container` set to the DialogContent node. | Same panel, portalled inside the dialog so it scrolls and receives the wheel under the dialog's scroll lock. |
+| Entering and leaving | Opening or closing. | No distinct treatment: the wrapper has no enter or exit animation. |
+| Focus inside | Focus on the content element itself. | No distinct treatment: the panel has `outline-none`; focused controls inside show their own focus ring. |
+
+### Accessibility
+
+- The content is `role="dialog"`; give it a name with `aria-label` or `aria-labelledby` on its heading, as the chat history popover does.
+- The trigger is a native button with `aria-haspopup="dialog"`, `aria-expanded` and `aria-controls` from Radix; an icon-only trigger is an IconButton with a `label`.
+- Non-modal: the rest of the page stays interactive and readable, nothing is hidden from assistive tech and the page does not scroll-lock.
+- On open, focus moves to the first focusable element in the content, or to the content itself when there is none. Redirect it with `onOpenAutoFocus`.
+- On Escape or a choice, focus returns to the trigger; after an outside click it stays where the user clicked. Redirect it with `onCloseAutoFocus`.
+- A popover is not a menu: rows are plain buttons in Tab order, without menu roles or arrow keys. A Command inside adds combobox semantics and arrow-key navigation.
+
+| Keys | Action |
+| --- | --- |
+| `Enter / Space` | On the trigger: opens or closes the popover. |
+| `Tab / Shift+Tab` | Moves through the content's controls and wraps from the last to the first. |
+| `Escape` | Closes the popover and returns focus to the trigger (one Escape also closes an open tooltip). |
+| `ArrowUp / ArrowDown / Enter` | Inside a Command: move the highlight and choose the item. |
+
+### Usage rules
+
+- **POP-1** — Use a Popover for an anchored panel with its own content — a picker, details, a short form. A list of commands is a DropdownMenu; a modal task is a Dialog; a lone confirmation is a ConfirmPopover.
+- **POP-2** — Open it from a real trigger: `PopoverTrigger asChild` on a Button or IconButton, which then shows the open state. Add `wrapTrigger` to an IconButton trigger; never hand-roll a tooltip span around it.
+- **POP-3** — Inside a modal Dialog pass `container={dialogEl}` (the DialogContent node) so the popover stays inside the dialog's scroll lock.
+- **POP-4** — The wrapper owns the surface; the call site sets only width, padding by content (`p-0` around a Command, `p-4` around rows, `p-12` around details) and layout. Bound a list's height with Radix's available height and let it scroll.
+- **POP-5** — Control `open` and close the popover yourself after a choice; start any data refresh in `onOpenChange` when it opens.
+- **POP-6** — Name the panel with `aria-label` or `aria-labelledby`, and move focus on purpose: `onOpenAutoFocus` to the content or an input, `onCloseAutoFocus` to what the choice selected.
+- **POP-7** — Reuse shared rows inside: Command parts for searchable lists and `menuItemClass` for plain rows. Do not restyle the panel.
+
+### Examples
+
+#### Details
+
+A Button trigger opens facts about it, aligned to its start edge.
+
+```tsx
+import { RiArrowDownSLine, RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<Popover>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" iconLeft={RiGitBranchLine} iconRight={RiArrowDownSLine}>
+					feature/popover-docs
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				align="start"
+				aria-label={t("shell.location.branch.caption")}
+				className="w-288 p-12"
+			>
+				<dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-12 gap-y-8">
+					<dt className="tr-text-metadata text-text-subtle">
+						{t("shell.location.branch.caption")}
+					</dt>
+					<dd className="truncate tr-code-text">feature/popover-docs</dd>
+					<dt className="tr-text-metadata text-text-subtle">
+						{t("shell.location.branch.basedOn")}
+					</dt>
+					<dd className="truncate tr-code-text">main</dd>
+				</dl>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Searchable picker
+
+The branch picker: a Command in a `p-0` panel, refreshed on open, closing after a choice.
+
+```tsx
+import { RiArrowDownSLine, RiCheckLine, RiGitBranchLine, RiRefreshLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const REMOTE = ["origin/main", "origin/release/1.4"];
+const LOCAL = ["main", "feature/popover-docs", "fix/flaky-login"];
+
+export default function Picker() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [selected, setSelected] = useState("origin/main");
+	const [refreshing, setRefreshing] = useState(false);
+	const refresh = () => {
+		setRefreshing(true);
+		setTimeout(() => setRefreshing(false), 1200);
+	};
+	const item = (ref: string) => (
+		<CommandItem
+			key={ref}
+			value={ref}
+			onSelect={() => {
+				setSelected(ref);
+				setOpen(false);
+			}}
+		>
+			<span className="min-w-0 flex-1 truncate">{ref}</span>
+			{ref === selected ? <RiCheckLine aria-hidden className="size-14 text-primary" /> : null}
+		</CommandItem>
+	);
+	return (
+		<Popover
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next);
+				if (next) refresh();
+			}}
+		>
+			<PopoverTrigger asChild>
+				<Button variant="ghost" size="m" iconLeft={RiGitBranchLine} iconRight={RiArrowDownSLine}>
+					{selected}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				align="start"
+				aria-label={t("shell.location.branch.caption")}
+				className="w-320 p-0"
+			>
+				<div className="flex items-center justify-end border-border-muted border-b py-4 pr-8 pl-12">
+					<IconButton
+						icon={RiRefreshLine}
+						label={t("panels.branchPicker.refresh")}
+						wrapTrigger
+						loading={refreshing}
+						spinIcon
+						onClick={refresh}
+					/>
+				</div>
+				<Command>
+					<CommandInput placeholder={t("panels.branchPicker.search")} />
+					<CommandList>
+						<CommandEmpty>{t("panels.branchPicker.empty")}</CommandEmpty>
+						<CommandGroup heading={t("panels.branchPicker.remote")}>
+							{REMOTE.map(item)}
+						</CommandGroup>
+						<CommandGroup heading={t("panels.branchPicker.local")}>{LOCAL.map(item)}</CommandGroup>
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Inside a dialog
+
+`container` portals the project picker into the DialogContent so its list scrolls under the dialog's lock.
+
+```tsx
+import { RiArrowDownSLine, RiBox3Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@thinkrail/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const PROJECTS = Array.from({ length: 14 }, (_, index) => `project-${index + 1}`);
+
+export default function InDialog() {
+	const t = useT();
+	const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+	const [pickerOpen, setPickerOpen] = useState(false);
+	const [project, setProject] = useState(PROJECTS[0]);
+	return (
+		<Dialog>
+			<DialogTrigger asChild>
+				<Button variant="outline">{t("panels.newWorkspace.titleIsolated")}</Button>
+			</DialogTrigger>
+			<DialogContent ref={setDialogEl}>
+				<DialogHeader>
+					<DialogTitle>{t("panels.newWorkspace.titleIsolated")}</DialogTitle>
+					<DialogDescription>{t("panels.newWorkspace.descriptionIsolated")}</DialogDescription>
+				</DialogHeader>
+				<Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+					<PopoverTrigger asChild>
+						<Button
+							variant="outline"
+							size="m"
+							iconLeft={RiBox3Line}
+							iconRight={RiArrowDownSLine}
+							className="self-start"
+						>
+							{project}
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent
+						align="start"
+						container={dialogEl}
+						aria-label={t("panels.newWorkspace.projectFallback")}
+						className="w-288 p-0"
+					>
+						<Command>
+							<CommandInput placeholder={t("panels.newWorkspace.searchProjects")} />
+							<CommandList>
+								<CommandEmpty>{t("panels.newWorkspace.noProjects")}</CommandEmpty>
+								<CommandGroup>
+									{PROJECTS.map((name) => (
+										<CommandItem
+											key={name}
+											value={name}
+											onSelect={() => {
+												setProject(name);
+												setPickerOpen(false);
+											}}
+										>
+											<RiBox3Line aria-hidden className="size-14 shrink-0 text-text-muted" />
+											<span className="truncate">{name}</span>
+										</CommandItem>
+									))}
+								</CommandGroup>
+							</CommandList>
+						</Command>
+					</PopoverContent>
+				</Popover>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Icon trigger and bounded list
+
+Chat history: an IconButton with `wrapTrigger`, a labelled panel of `menuItemClass` rows and a height bound.
+
+```tsx
+import { RiArrowGoBackLine, RiHistoryLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { menuItemClass } from "@thinkrail/ui/menu-styles";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { cn } from "@thinkrail/ui/utils";
+import { useId, useState } from "react";
+
+const CLOSED_CHATS = [
+	"Fix flaky e2e login test",
+	"Refactor popover docs",
+	"Explain the build cache",
+];
+
+export default function IconTrigger() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const headingId = useId();
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<IconButton
+					icon={RiHistoryLine}
+					label={t("shell.chatHistory.reopen")}
+					tooltip={t("shell.chatHistory.view")}
+					wrapTrigger
+				/>
+			</PopoverTrigger>
+			<PopoverContent
+				align="end"
+				aria-labelledby={headingId}
+				className="max-h-[min(60vh,var(--radix-popover-content-available-height))] min-w-[16rem] overflow-y-auto p-4"
+			>
+				<div id={headingId} className="px-8 py-4 tr-text-eyebrow text-text-muted">
+					{t("shell.chatHistory.recentlyClosed")}
+				</div>
+				{CLOSED_CHATS.map((title) => (
+					<button
+						key={title}
+						type="button"
+						className={cn(menuItemClass, "w-full")}
+						onClick={() => setOpen(false)}
+					>
+						<span className="flex-1 truncate text-left">{title}</span>
+						<RiArrowGoBackLine aria-hidden />
+					</button>
+				))}
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Opening upward
+
+Send options under the composer: `side="top"` and `align="end"`; Radix flips the panel down when there is no room above.
+
+```tsx
+import { RiArrowDownSLine } from "@remixicon/react";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { menuItemClass } from "@thinkrail/ui/menu-styles";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { cn } from "@thinkrail/ui/utils";
+import { useState } from "react";
+
+const MODES: { name: MessageKey; meaning: MessageKey; keys: string }[] = [
+	{ name: "chat.composer.mode.steer", meaning: "chat.composer.mode.steerMeaning", keys: "Enter" },
+	{
+		name: "chat.composer.mode.queue",
+		meaning: "chat.composer.mode.queueMeaning",
+		keys: "Cmd/Ctrl+Enter",
+	},
+	{
+		name: "chat.composer.mode.interrupt",
+		meaning: "chat.composer.mode.interruptMeaning",
+		keys: "Cmd/Ctrl+Shift+Enter",
+	},
+];
+
+export default function OpenUpward() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<IconButton
+					variant="outline"
+					icon={RiArrowDownSLine}
+					label={t("chat.composer.sendOptions")}
+					wrapTrigger
+				/>
+			</PopoverTrigger>
+			<PopoverContent
+				side="top"
+				align="end"
+				aria-label={t("chat.composer.sendOptions")}
+				className="flex w-320 flex-col gap-2 p-4"
+			>
+				{MODES.map((mode) => (
+					<button
+						key={mode.name}
+						type="button"
+						className={cn(menuItemClass, "w-full flex-col items-start gap-2")}
+						onClick={() => setOpen(false)}
+					>
+						<span className="flex w-full items-baseline justify-between gap-8">
+							<span>{t(mode.name)}</span>
+							<span className="tr-text-metadata text-text-muted">{mode.keys}</span>
+						</span>
+						<span className="tr-text-metadata text-text-muted">{t(mode.meaning)}</span>
+					</button>
+				))}
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Focus the panel on open
+
+Branch details focus the content itself, so the Copy button's tooltip does not open.
+
+```tsx
+import { RiFileCopyLine, RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useRef } from "react";
+
+const BRANCH = "feature/popover-docs";
+
+export default function InitialFocus() {
+	const t = useT();
+	const contentRef = useRef<HTMLDivElement>(null);
+	return (
+		<Popover>
+			<PopoverTrigger asChild>
+				<Button variant="ghost" size="m" iconLeft={RiGitBranchLine}>
+					{BRANCH}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				ref={contentRef}
+				align="start"
+				aria-label={t("shell.location.branch.caption")}
+				className="flex w-288 flex-col gap-8 p-12"
+				onOpenAutoFocus={(event) => {
+					event.preventDefault();
+					contentRef.current?.focus();
+				}}
+			>
+				<div className="flex items-center gap-8">
+					<span className="min-w-0 flex-1 truncate tr-code-text">{BRANCH}</span>
+					<IconButton
+						icon={RiFileCopyLine}
+						label={t("shell.location.branch.copyName")}
+						onClick={() => void navigator.clipboard?.writeText(BRANCH)}
+					/>
+				</div>
+				<span className="tr-text-metadata text-text-muted">
+					{t("shell.location.branch.basedOn")} main
+				</span>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Opened by a second control
+
+The `to push` chip beside the branch trigger opens the same controlled popover.
+
+```tsx
+import { RiArrowDownSLine, RiArrowUpLine, RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+export default function Controlled() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<div className="flex flex-wrap items-center gap-8">
+				<PopoverTrigger asChild>
+					<Button variant="ghost" size="m" iconLeft={RiGitBranchLine} iconRight={RiArrowDownSLine}>
+						feature/popover-docs
+					</Button>
+				</PopoverTrigger>
+				<Button
+					variant="ghost"
+					size="s"
+					tone="warning"
+					iconLeft={RiArrowUpLine}
+					onClick={() => setOpen(true)}
+				>
+					{t("shell.location.remote.unpushedChip", { count: 2 })}
+				</Button>
+			</div>
+			<PopoverContent
+				align="start"
+				aria-label={t("shell.location.branch.caption")}
+				className="w-288 p-12"
+			>
+				<dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-12 gap-y-8">
+					<dt className="tr-text-metadata text-text-subtle">
+						{t("shell.location.branch.caption")}
+					</dt>
+					<dd className="truncate tr-code-text">feature/popover-docs</dd>
+					<dt className="tr-text-metadata text-text-subtle">
+						{t("shell.location.remote.caption")}
+					</dt>
+					<dd className="truncate tr-text-ui">
+						{t("shell.location.remote.unpushedCommits", { count: 2 })}
+					</dd>
+				</dl>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Focus the choice on close
+
+Tab search: `onCloseAutoFocus` moves focus to the chosen tab instead of the trigger.
+
+```tsx
+import { RiSearchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useRef, useState } from "react";
+
+const TABS = ["Composer.tsx", "README.md", "Terminal 1"];
+
+export default function CloseFocus() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [active, setActive] = useState("Composer.tsx");
+	const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+	const focusTarget = useRef<string | null>(null);
+	return (
+		<div className="flex flex-wrap items-center gap-4">
+			{TABS.map((tab) => (
+				<Button
+					key={tab}
+					ref={(node) => {
+						if (node) tabRefs.current.set(tab, node);
+						else tabRefs.current.delete(tab);
+					}}
+					variant="ghost"
+					size="m"
+					selected={tab === active}
+					aria-pressed={tab === active}
+					onClick={() => setActive(tab)}
+				>
+					{tab}
+				</Button>
+			))}
+			<Popover open={open} onOpenChange={setOpen}>
+				<PopoverTrigger asChild>
+					<IconButton icon={RiSearchLine} label={t("workbench.tabs.search")} wrapTrigger />
+				</PopoverTrigger>
+				<PopoverContent
+					align="end"
+					aria-label={t("workbench.tabs.search")}
+					className="w-288 p-0"
+					onCloseAutoFocus={(event) => {
+						const target = focusTarget.current;
+						if (!target) return;
+						focusTarget.current = null;
+						event.preventDefault();
+						tabRefs.current.get(target)?.focus();
+					}}
+				>
+					<Command>
+						<CommandInput placeholder={t("workbench.tabs.findPlaceholder")} />
+						<CommandList>
+							<CommandEmpty>{t("workbench.tabs.noMatches")}</CommandEmpty>
+							{TABS.map((tab) => (
+								<CommandItem
+									key={tab}
+									value={tab}
+									onSelect={() => {
+										focusTarget.current = tab;
+										setActive(tab);
+										setOpen(false);
+									}}
+								>
+									<span className="truncate">{tab}</span>
+								</CommandItem>
+							))}
+						</CommandList>
+					</Command>
+				</PopoverContent>
+			</Popover>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/BranchPicker.tsx` | Searchable branch picker: Command in `p-0`, refresh row, `container` for dialogs. |
+| `apps/web/src/panels/NewWorkspaceDialog.tsx` | Project picker portalled into the dialog with `container`. |
+| `apps/web/src/shell/locationBar/BranchSegment.tsx` | Branch details: content focused in `onOpenAutoFocus`, opened by the remote chips too. |
+| `apps/web/src/shell/WorkspaceChatHistory.tsx` | IconButton trigger with `wrapTrigger`, `aria-labelledby`, bounded height, `onEscapeKeyDown` during rename. |
+| `apps/web/src/shell/layout/workbenchTabs.tsx` | Open-tab search with `onCloseAutoFocus` focusing the chosen tab. |
+| `apps/web/src/chat/Composer.tsx` | Send options opening upward (`side="top"`, `align="end"`). |
+
+## ConfirmPopover
+
+The app's anchored yes/no: a Popover whose panel is a small `alertdialog` with a title, an optional description, Cancel and one confirm button, opening from the control that asked. It owns the panel's layout and width, the button variants, the warning icon of a destructive confirmation and closing after either choice; the call site provides the open state, the words, what confirming does, and the trigger — a `PopoverTrigger` inside its `children`.
+
+```tsx
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+```
+
+### When to use
+
+- Confirming a destructive action that has its own control on screen: the Delete button of a template row, a draft comment's Delete, the review panel's Clear.
+- A quick check where the page should stay visible and interactive around the question, next to the thing it affects.
+- Rows that each need their own confirmation: every row renders its own ConfirmPopover with its own open state.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ConfirmDialog | The action has no stable anchor — it was chosen from a menu, a shortcut or a row that may move — or it deserves a modal pause (remove a workspace, stop trusting a project). |
+| Popover | The panel needs more than two buttons and text: a field, a choice, a gated or loading confirm button. |
+| Toast | The action is reversible or already done; report it instead of asking first. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Popover | A controlled Popover root wrapping `children`, so a `PopoverTrigger` inside them toggles it and anchors the panel. |
+| Trigger | Supplied by the call site: a `PopoverTrigger asChild` somewhere in `children`, on the Button or IconButton that asks. `children` may be a whole row around it. |
+| Panel | PopoverContent with `role="alertdialog"`, `w-288`, `p-12`, `gap-8`, `data-testid="confirm-popover"`, on `side` and `align`. |
+| Warning icon | Only when `destructive`: `RiAlertLine` in `feedback-error` before the title, at icon size 16. |
+| Title | The `title` string in `tr-title-compact`; the panel's accessible name. |
+| Description | `tr-text-metadata` in `text-text-muted`, rendered only when `description` is given; the accessible description. |
+| Cancel | An `outline` Button at size `m`, first in the footer and so focused on open; label `cancelLabel` or `common.cancel`. |
+| Confirm | A `destructive` Button when `destructive`, otherwise `primary`, at size `m`; label `confirmLabel` or `common.confirm`; `data-testid` from `confirmTestId`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `open` | `boolean` | — | Required. Controlled open state; keep one per ConfirmPopover (per row). |
+| `onOpenChange` | `(open: boolean) => void` | — | Required. Called with `true` by the trigger and with `false` by Cancel, by Confirm after `onConfirm`, by Escape and by an outside click. |
+| `title` | `string` | — | Required. The question, naming its object: `Delete {name}?`. |
+| `description` | `ReactNode` | — | What confirming does and whether it can be undone. Omit it when the title says everything (`Delete this draft?`). |
+| `confirmLabel` | `string` | `t("common.confirm")` | The confirm button's label; repeat the action's verb (`Delete`, `Clear`). |
+| `cancelLabel` | `string` | `t("common.cancel")` | The cancel button's label. |
+| `destructive` | `boolean` | `false` | Uses the `destructive` confirm button and adds the warning icon before the title. |
+| `confirmTestId` | `string` | — | `data-testid` on the confirm button, for end-to-end tests. |
+| `onConfirm` | `() => void` | — | Required. Runs when Confirm is pressed, just before the panel closes. Start the action here; the panel does not wait for it. |
+| `side` | `"top" \| "right" \| "bottom" \| "left"` | `"bottom"` | Preferred side of the trigger; Radix flips it when there is no room. |
+| `align` | `"start" \| "center" \| "end"` | `"start"` | Alignment against the trigger. Every call site passes `end`, because the trigger sits at the trailing edge of a row or header. |
+| `children` | `ReactNode` | — | Required. The content that contains the `PopoverTrigger` — the trigger alone, or the row it lives in. |
+
+### States
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | `open` is false. | Only `children` render; the trigger carries `data-state="closed"`. |
+| Open, destructive | `open` with `destructive`. | `feedback-error` warning icon before the title; `outline` Cancel beside a `destructive` confirm button. A Button or IconButton trigger shows its selected fill. |
+| Open, neutral | `open` without `destructive`. | Title without an icon; `outline` Cancel beside a `primary` confirm button. |
+| No description | `description` omitted. | Only the title above the buttons; no `aria-describedby`. |
+| Long title | A long `title` such as a long template name. | Wraps inside the fixed `w-288` panel; the panel never grows. |
+| Busy, disabled | — | No distinct treatment: neither button can be disabled or show loading, and the panel closes as soon as Confirm is pressed. |
+
+### Accessibility
+
+- The panel is `role="alertdialog"`, named by the title (`aria-labelledby`) and described by the description (`aria-describedby`) when there is one.
+- Cancel is the first focusable element, so it receives focus when the panel opens; a stray Enter cancels instead of confirming.
+- Non-modal: the page stays interactive. Tab wraps between Cancel and Confirm; Escape and an outside click close it like Cancel.
+- After Cancel, Confirm or Escape focus returns to the trigger; after an outside click it stays where the user clicked. If the action removes the trigger, focus falls to the document body.
+- The trigger is a real button with an accessible name — an IconButton `label` or the Button's text — and gets `aria-expanded` from the popover.
+- The warning icon is decoration; the title and the confirm label must say what is destructive.
+
+| Keys | Action |
+| --- | --- |
+| `Enter / Space` | On the trigger: opens the panel with Cancel focused. |
+| `Tab / Shift+Tab` | Moves between Cancel and Confirm, wrapping inside the panel. |
+| `Enter / Space` | In the panel: activates the focused button. |
+| `Escape` | Closes without confirming and returns focus to the trigger. |
+
+### Usage rules
+
+- **CFP-1** — Use ConfirmPopover when the question belongs to a control that stays on screen; use ConfirmDialog when it comes from a menu, a shortcut or a row that may move. Do not assemble a confirmation from Popover parts.
+- **CFP-2** — Put exactly one `PopoverTrigger asChild` in `children`, on the Button or IconButton that asks; add `wrapTrigger` so its tooltip and the popover keep separate `data-state`. `children` may be the trigger alone or the row that contains it.
+- **CFP-3** — Set `destructive` when confirming deletes, discards or archives something; the trigger then reads as dangerous with `tone="danger"`, not with colour classes.
+- **CFP-4** — Write the title as the question with its object and pass a `confirmLabel` that repeats the verb; add a `description` only when it says what is lost or kept.
+- **CFP-5** — Each row owns its own open state and ConfirmPopover; `onConfirm` acts on that row's data.
+- **CFP-6** — `onConfirm` starts the action and the panel closes at once: report failure with a toast. A confirmation that must be disabled or show progress is a Popover with its own buttons.
+- **CFP-7** — Pass `align="end"` for triggers at a trailing edge, and give the confirm button a `confirmTestId`.
+
+### Examples
+
+#### Delete from a row
+
+A template row as `children`; its Delete IconButton is the trigger and the panel aligns to its end.
+
+```tsx
+import { RiDeleteBin6Line, RiPencilLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function Preview() {
+	const t = useT();
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const name = "review-checklist";
+	return (
+		<ConfirmPopover
+			open={confirmOpen}
+			onOpenChange={setConfirmOpen}
+			title={t("settings.templates.deleteTitle", { name })}
+			description={t("settings.templates.deleteDescription")}
+			confirmLabel={t("common.delete")}
+			destructive
+			onConfirm={() => {}}
+			align="end"
+		>
+			<div className="flex w-full max-w-[24rem] items-center gap-8 rounded-sm bg-control-bg px-12 py-8">
+				<div className="flex min-w-0 flex-1 flex-col">
+					<span className="truncate tr-text-ui text-text-default">{name}</span>
+					<span className="truncate tr-text-metadata text-text-muted">
+						Walk the diff against the checklist
+					</span>
+				</div>
+				<div className="flex shrink-0 items-center gap-4">
+					<IconButton icon={RiPencilLine} label={t("common.edit")} onClick={() => {}} />
+					<PopoverTrigger asChild>
+						<IconButton
+							icon={RiDeleteBin6Line}
+							label={t("common.delete")}
+							tone="danger"
+							wrapTrigger
+						/>
+					</PopoverTrigger>
+				</div>
+			</div>
+		</ConfirmPopover>
+	);
+}
+```
+
+#### Title only
+
+Deleting a draft comment: the title says it all, so there is no description.
+
+```tsx
+import { RiDeleteBin6Line, RiSendPlaneLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function TitleOnly() {
+	const t = useT();
+	const [confirmDelete, setConfirmDelete] = useState(false);
+	return (
+		<div className="flex items-center gap-4">
+			<IconButton size="s" icon={RiSendPlaneLine} label={t("review.comment.send")} />
+			<ConfirmPopover
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title={t("review.panel.deleteTitle")}
+				confirmLabel={t("common.delete")}
+				destructive
+				onConfirm={() => {}}
+				align="end"
+			>
+				<PopoverTrigger asChild>
+					<IconButton
+						size="s"
+						icon={RiDeleteBin6Line}
+						label={t("review.comment.deleteDraft")}
+						tone="danger"
+						wrapTrigger
+					/>
+				</PopoverTrigger>
+			</ConfirmPopover>
+		</div>
+	);
+}
+```
+
+#### Header action
+
+The review panel's Clear: a text Button with a tooltip and a confirm label that repeats the verb.
+
+```tsx
+import { RiDeleteBin6Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function HeaderAction() {
+	const t = useT();
+	const [clearing, setClearing] = useState(false);
+	return (
+		<div className="flex w-full justify-end">
+			<ConfirmPopover
+				open={clearing}
+				onOpenChange={setClearing}
+				title={t("review.panel.clearTitle")}
+				description={t("review.panel.clearDescription")}
+				confirmLabel={t("review.panel.clear")}
+				destructive
+				onConfirm={() => {}}
+				align="end"
+			>
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						size="m"
+						tone="danger"
+						iconLeft={RiDeleteBin6Line}
+						aria-label={t("review.panel.clearLabel")}
+						tooltip={t("review.panel.clearTooltip")}
+						wrapTrigger
+					>
+						{t("review.panel.clear")}
+					</Button>
+				</PopoverTrigger>
+			</ConfirmPopover>
+		</div>
+	);
+}
+```
+
+#### One per row
+
+Each draft row keeps its own open state; confirming removes that row.
+
+```tsx
+import { RiDeleteBin6Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+const DRAFTS = ["Rename this prop", "Missing null check", "Split this effect"];
+
+function DraftRow({ text, onDelete }: { text: string; onDelete: () => void }) {
+	const t = useT();
+	const [confirmDelete, setConfirmDelete] = useState(false);
+	return (
+		<li className="flex items-center gap-8 px-8 py-4">
+			<span className="min-w-0 flex-1 truncate tr-text-ui">{text}</span>
+			<ConfirmPopover
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title={t("review.panel.deleteTitle")}
+				confirmLabel={t("common.delete")}
+				destructive
+				onConfirm={onDelete}
+				align="end"
+			>
+				<PopoverTrigger asChild>
+					<IconButton
+						size="s"
+						icon={RiDeleteBin6Line}
+						label={t("review.comment.deleteDraft")}
+						tone="danger"
+						wrapTrigger
+					/>
+				</PopoverTrigger>
+			</ConfirmPopover>
+		</li>
+	);
+}
+
+export default function PerRow() {
+	const t = useT();
+	const [drafts, setDrafts] = useState(DRAFTS);
+	if (drafts.length === 0)
+		return <p className="tr-text-metadata text-text-subtle">{t("review.panel.empty")}</p>;
+	return (
+		<ul className="flex w-full max-w-[24rem] flex-col">
+			{drafts.map((text) => (
+				<DraftRow
+					key={text}
+					text={text}
+					onDelete={() => setDrafts((current) => current.filter((draft) => draft !== text))}
+				/>
+			))}
+		</ul>
+	);
+}
+```
+
+#### Neutral
+
+Without `destructive`: no icon and a `primary` confirm. No production call site uses the neutral style yet.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function Neutral() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<ConfirmPopover
+			open={open}
+			onOpenChange={setOpen}
+			title={t("workbench.layoutSettings.applyTitle")}
+			description={t("workbench.layoutSettings.applyDescription")}
+			confirmLabel={t("workbench.layoutSettings.applyConfirm")}
+			onConfirm={() => {}}
+		>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m">
+					{t("workbench.layoutSettings.applyNow")}
+				</Button>
+			</PopoverTrigger>
+		</ConfirmPopover>
+	);
+}
+```
+
+#### Opening upward
+
+`side="top"` for a trigger near the bottom of a surface.
+
+```tsx
+import { RiDeleteBin6Line } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function OpenUpward() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<ConfirmPopover
+			open={open}
+			onOpenChange={setOpen}
+			title={t("settings.templates.deleteTitle", { name: "review-checklist" })}
+			description={t("settings.templates.deleteDescription")}
+			confirmLabel={t("common.delete")}
+			destructive
+			onConfirm={() => {}}
+			side="top"
+			align="end"
+		>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" tone="danger" iconLeft={RiDeleteBin6Line}>
+					{t("common.delete")}
+				</Button>
+			</PopoverTrigger>
+		</ConfirmPopover>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/TemplatesSettings.tsx` | Delete a template: the row is `children`, destructive with a description, `align="end"`. |
+| `apps/web/src/panels/ReviewPanel.tsx` | Clear the review from the panel header, and Delete a draft comment (title only). |
+
+## Tooltip and IconTooltip
+
+A short text hint for a control, shown on hover and keyboard focus. `IconTooltip` is the component call sites use: it wraps one child, opens only on hover or *keyboard-visible* focus, and closes on the same Escape that dismisses the dialog or menu beneath it. The call site provides the trigger, which carries its own accessible name, and the `label`. `Button` and `IconButton` render IconTooltip themselves from `tooltip` and `label`; the Radix parts `Tooltip`, `TooltipTrigger` and `TooltipContent` are what it is built from, and `TooltipProvider` sits once at the app root.
+
+```tsx
+import { IconTooltip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@thinkrail/ui/tooltip";
+```
+
+### When to use
+
+- Name an icon-only control for sighted users — automatic on IconButton through `label`.
+- Explain what a control will do or why it is unavailable: a Switch's on/off hint, a disabled reload while a turn runs.
+- Add detail to a compact status or chip (quota, transport, checks) whose text is also available to screen readers.
+- Identify rail entries, with `side` pointing away from the rail edge.
+- Explain a control that has no `tooltip` prop of its own: a link styled with `buttonVariants`, a Switch, a trigger shared with a popover or menu.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| IconButton | The trigger is an icon-only action: its `label` is the name and the tooltip, no wrapper needed. |
+| Button | The trigger is a text action: pass `tooltip` (and `wrapTrigger` when it is also a Radix trigger). |
+| Popover | The content is interactive, longer than a line or two, or must open on click and stay open. |
+| SettingsNotice | The information must be read, not discovered on hover: put it on the surface. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| TooltipProvider | Radix provider, rendered once at the app root (`apps/web/src/main.tsx`) with the shared delays. Tests that render tooltips wrap in it. |
+| Tooltip | Radix root: open state. IconTooltip controls it. |
+| TooltipTrigger | Radix trigger, always `asChild`: merges pointer and focus handlers, `data-state` and `aria-describedby` into the child — or into IconTooltip's `wrapTrigger` `<span class="flex">`. |
+| TooltipContent | Portalled to `document.body`, offset by `sideOffset`. Elevated container surface with the default border, `rounded-sm`, the small shadow, `tr-text-metadata` in the default text colour, `px-8 py-4`. No arrow and no animation. Stacks at `z-150`, above dialogs and the toast viewport. |
+| Screen-reader copy | Radix renders a visually hidden `role="tooltip"` copy of the content; the trigger points at it with `aria-describedby` while open. |
+| IconTooltip | The composed wrapper: controlled open state, the focus-visible gate, the Escape listener and `side` / `align` forwarding to TooltipContent. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `label` | `ReactNode` | — | The tooltip content. Usually a locale string; a node for a structured hint (a name and a second line). Not interactive. |
+| `children` | `ReactNode` | — | The trigger: exactly one element that accepts a ref and event props and carries its own accessible name. |
+| `side` | `"top" \| "right" \| "bottom" \| "left"` | — | Preferred side, forwarded to TooltipContent; omitted means Radix's `"top"`. Flips when there is no room. |
+| `align` | `"start" \| "center" \| "end"` | — | Alignment along that side; omitted means `"center"`. |
+| `wrapTrigger` | `boolean` | — | Wraps the child in a `<span class="flex">` that becomes the trigger. Needed when the child is disabled (it ignores the pointer) or is itself a Radix trigger whose `data-state` the tooltip would overwrite. |
+
+Radix parts (props ThinkRail sets or call sites use; other Radix props pass through):
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `TooltipProvider.delayDuration` | `number` | `700` | Hover delay before a tooltip opens. The app root sets `delayDuration={250}` in `apps/web/src/main.tsx` (the library mirrors it); do not override it per tooltip. |
+| `TooltipProvider.skipDelayDuration` | `number` | `300` | Window after a tooltip closes in which the next one opens without delay. The app root sets `400`. |
+| `TooltipProvider.disableHoverableContent` | `boolean` | `false` | Radix pass-through. Left `false`: the pointer may move from the trigger onto the tooltip without closing it. |
+| `Tooltip.open` | `boolean` | — | Controlled open state. `IconTooltip` always controls it; set it yourself only when composing the parts. |
+| `Tooltip.onOpenChange` | `(open: boolean) => void` | — | Called by Radix on hover, focus, blur, pointer down, click and dismissal. |
+| `Tooltip.defaultOpen` | `boolean` | — | Uncontrolled initial state (Radix). |
+| `Tooltip.delayDuration` | `number` | — | Per-tooltip delay override (Radix). No call site uses it. |
+| `TooltipTrigger.asChild` | `boolean` | — | Merge the trigger's handlers, `data-state` and `aria-describedby` into the single child instead of rendering a `<button>`. Always `true` in ThinkRail. |
+| `TooltipContent.sideOffset` | `number` | `4` | Gap between trigger and tooltip. The ThinkRail default (Radix's is `0`). |
+| `TooltipContent.side` | `"top" \| "right" \| "bottom" \| "left"` | `"top"` | Preferred side; Radix flips it when there is no room. |
+| `TooltipContent.align` | `"start" \| "center" \| "end"` | `"center"` | Alignment along the side. |
+| `TooltipContent.className` | `string` | — | Merged after the tooltip skin. No call site passes one; the surface, type and stacking are fixed. |
+| `TooltipContent.aria-label` | `string` | — | Radix: replaces the children in the visually hidden `role="tooltip"` copy that screen readers announce. |
+
+### States
+
+Every trigger is the real component. The left column is IconTooltip; the right composes the Radix parts directly, without its focus-visible gate.
+
+| Row | Try it | Outcome |
+| --- | --- | --- |
+| Hover · Tab | Hover, or click into the page and press Tab. | Both open: IconTooltip opens on hover and Tab, the Radix parts on hover and any focus. |
+| Focus from code | Click Focus: the target is focused from code after a pointer action, as when a dialog autofocuses. | IconTooltip stays closed. The Radix parts open on any focus, so they would cover a dialog and take its Escape. |
+| Disabled | Hover the disabled button. | With `wrapTrigger` it opens; without it never opens, because the disabled button ignores the pointer. |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | Rest. | Nothing rendered; the trigger carries `data-state="closed"`. |
+| Open on hover | Pointer rests on the trigger for the provider delay; within the skip window after another tooltip, it opens at once. | TooltipContent on `side` (top by default); trigger and content carry `data-state="delayed-open"` or `"instant-open"`. The pointer may move onto the tooltip. |
+| Open on keyboard focus | Tab to the trigger (focus matches `:focus-visible`). | Opens immediately, no delay, beside the trigger's focus ring. |
+| Quiet focus | Focus that is not `:focus-visible`: a dialog's or popover's autofocus after a pointer open, focus returning to a clicked trigger, `.focus()` after a click. | No tooltip (IconTooltip only; the raw parts open on any focus). |
+| Pressed | Pointer down, click, Enter or Space on the trigger. | Closes, and stays closed until the pointer leaves and re-enters or focus arrives again. |
+| Disabled trigger | A disabled child with `wrapTrigger` (automatic in Button and IconButton). | Opens on hover over the span. Without `wrapTrigger` it never opens, because the disabled control ignores the pointer. Never on keyboard: a disabled control is not focusable. |
+| Dismissed | Escape, blur, pointer leaving trigger and tooltip, scrolling a container of the trigger, or another tooltip opening. | Closes; only one tooltip is open at a time. |
+
+### Accessibility
+
+- The tooltip describes; it never names. Radix links the trigger to a visually hidden `role="tooltip"` copy with `aria-describedby` only while open, so the trigger needs its own name (`aria-label` on an icon-only control — IconButton sets it from `label`).
+- Opens on hover and keyboard-visible focus only. Programmatic focus after a pointer action does not open it, because an open tooltip is the topmost dismissable layer and would swallow the Escape meant for the dialog beneath.
+- An open IconTooltip closes itself synchronously on Escape in a window capture listener, before Radix's layer handling, so one Escape closes the tooltip and the dialog, popover or menu under it.
+- A tooltip on a non-focusable element (a status chip, a glyph) is hover-only: repeat its text for screen readers (`sr-only` text or `aria-label`).
+- A disabled control cannot take focus, so its reason reaches pointer users only; where the reason matters, also set `aria-description` on the control (the Skills switches do).
+- Radix ignores touch pointers, so tooltips never open on touch. Never put the only copy of essential information, or anything interactive, in a tooltip.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Focusing the trigger opens the tooltip at once; moving focus away closes it. |
+| `Enter / Space` | Activates the trigger and closes the tooltip. |
+| `Escape` | Closes the tooltip; the same keypress also closes the dialog, popover or menu beneath. |
+
+### Usage rules
+
+- **TIP-1** — Explain a control with IconTooltip, never with a native `title`. `title` remains only for non-control truncation fallbacks and surfaces outside the provider.
+- **TIP-2** — Button and IconButton already render IconTooltip: pass `tooltip` (and IconButton's `label`). Do not wrap an IconButton in another IconTooltip.
+- **TIP-3** — Use `wrapTrigger` for a disabled child or a child that is also a Radix trigger (`PopoverTrigger asChild`, `DropdownMenuTrigger asChild`). Never hand-roll the `<span className="flex">` wrapper — `packages/ui/tooltip.test.tsx` rejects it.
+- **TIP-4** — The trigger names itself; the tooltip repeats or extends that name. Labels are short, come from locale keys and contain no links or buttons.
+- **TIP-5** — Call sites use IconTooltip, not the Radix parts: the parts alone open on every focus, and an open one takes the Escape meant for the dialog or menu beneath. Compose the parts only inside `packages/ui`.
+- **TIP-6** — One TooltipProvider at the app root sets the delays. Do not add providers or per-tooltip delays in features; tests that render tooltips wrap in their own provider.
+- **TIP-7** — A tooltip is supplementary: it never opens on touch and is hover-only on non-focusable content. Keep essential information on the surface and repeat a status tooltip's text for screen readers.
+- **TIP-8** — Leave `side` at its default unless the trigger sits against an edge: rail entries point away from their rail (`railTooltipSide`).
+
+### Examples
+
+#### Link with a tooltip
+
+A link styled with `buttonVariants` has no `tooltip` prop, so it is wrapped; `aria-label` names it.
+
+```tsx
+import { RiExternalLinkLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { buttonDataAttributes, buttonVariants } from "@thinkrail/ui/button";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+
+export default function Preview() {
+	const t = useT();
+	const label = t("shell.location.review.openLink", { label: "PR #951" });
+	return (
+		<IconTooltip label={label}>
+			<a
+				href="#/tooltip"
+				aria-label={label}
+				{...buttonDataAttributes({ variant: "ghost", size: "m", iconOnly: true })}
+				className={buttonVariants({ variant: "ghost", size: "m", shape: "icon" })}
+			>
+				<RiExternalLinkLine aria-hidden />
+			</a>
+		</IconTooltip>
+	);
+}
+```
+
+#### Built into Button and IconButton
+
+IconButton's `label` is its tooltip, `tooltip` overrides the text, and Button takes `tooltip` — no wrapper.
+
+```tsx
+import { RiFileCopyLine, RiHistoryLine, RiRefreshLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+
+export default function BuiltIn() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-8">
+			<IconButton icon={RiFileCopyLine} label={t("common.copy")} onClick={() => {}} />
+			<IconButton
+				icon={RiHistoryLine}
+				label={t("shell.chatHistory.reopen")}
+				tooltip={t("shell.chatHistory.view")}
+				onClick={() => {}}
+			/>
+			<Button
+				variant="outline"
+				size="m"
+				iconLeft={RiRefreshLine}
+				tooltip={t("chat.skills.reloadHint")}
+				onClick={() => {}}
+			>
+				{t("chat.skills.reload")}
+			</Button>
+		</div>
+	);
+}
+```
+
+#### Side and structured labels
+
+Rail entries point their tooltip away from the rail; a node label adds a second line.
+
+```tsx
+import { RiFolderLine, RiListCheck3, RiTerminalBoxLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+
+export default function Rail() {
+	const t = useT();
+	const group = t("workbench.rail.terminalGroup", { position: 1, count: 2 });
+	return (
+		<div className="flex items-center gap-24">
+			<IconButton icon={RiFolderLine} label={t("workbench.rail.leftTools")} tooltipSide="right" />
+			<IconButton
+				icon={RiTerminalBoxLine}
+				label={group}
+				tooltip={
+					<span>
+						{group}
+						<br />
+						zsh, bun run dev
+					</span>
+				}
+				tooltipSide="top"
+			/>
+			<IconButton icon={RiListCheck3} label={t("workbench.rail.rightTools")} tooltipSide="left" />
+		</div>
+	);
+}
+```
+
+#### Disabled control
+
+A Switch keeps its hint; `wrapTrigger` lets the disabled one still show its reason on hover.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { useState } from "react";
+
+export default function DisabledControl() {
+	const t = useT();
+	const [checked, setChecked] = useState(true);
+	const hint = checked ? t("chat.skills.switchOn") : t("chat.skills.switchOff");
+	const blocked = t("chat.skills.blockedByTrust");
+	return (
+		<div className="flex items-center gap-24">
+			<IconTooltip label={hint}>
+				<Switch
+					checked={checked}
+					label="code-review"
+					aria-description={hint}
+					onCheckedChange={setChecked}
+				/>
+			</IconTooltip>
+			<IconTooltip label={blocked} wrapTrigger>
+				<Switch
+					checked={false}
+					disabled
+					label="release-notes"
+					aria-description={blocked}
+					onCheckedChange={() => {}}
+				/>
+			</IconTooltip>
+		</div>
+	);
+}
+```
+
+#### On a popover trigger
+
+`wrapTrigger` keeps the popover's open state on the button. Button and IconButton express the same with `tooltip` and `wrapTrigger`.
+
+```tsx
+import { RiDeleteBinLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { useState } from "react";
+import { ConfirmPopover } from "@/panels/ConfirmPopover";
+
+export default function RadixTrigger() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<ConfirmPopover
+			open={open}
+			onOpenChange={setOpen}
+			title={t("review.panel.clearTitle")}
+			description={t("review.panel.clearDescription")}
+			confirmLabel={t("review.panel.clear")}
+			destructive
+			onConfirm={() => {}}
+		>
+			<IconTooltip label={t("review.panel.clearTooltip")} wrapTrigger>
+				<PopoverTrigger asChild>
+					<Button variant="ghost" size="m" iconLeft={RiDeleteBinLine}>
+						{t("review.panel.clear")}
+					</Button>
+				</PopoverTrigger>
+			</IconTooltip>
+		</ConfirmPopover>
+	);
+}
+```
+
+#### Non-focusable status
+
+A transport chip explained on hover; the same text is in `sr-only` for screen readers, since the chip takes no focus.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+
+export default function Status() {
+	const t = useT();
+	return (
+		<div className="flex items-center gap-8">
+			<span>filesystem</span>
+			<IconTooltip label={t("mcp.server.stdioTooltip")} wrapTrigger>
+				<span>
+					{t("mcp.transport.stdio")}
+					<span className="sr-only">{` ${t("mcp.server.stdioSrOnly")}`}</span>
+				</span>
+			</IconTooltip>
+		</div>
+	);
+}
+```
+
+#### Inside a dialog
+
+Open it with a click: the autofocused Reload shows no tooltip. Hover Reload and press Escape once — the tooltip and the dialog close together. Open it with Enter and Reload's tooltip shows.
+
+```tsx
+import { RiBookOpenLine, RiRefreshLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@thinkrail/ui/dialog";
+import { useState } from "react";
+
+export default function DialogEscape() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<Dialog open={open} onOpenChange={setOpen}>
+			<IconButton
+				variant="outline"
+				icon={RiBookOpenLine}
+				label={t("chat.skills.title")}
+				onClick={() => setOpen(true)}
+			/>
+			<DialogContent>
+				<div className="flex items-center justify-between gap-8 pr-32">
+					<DialogTitle>{t("chat.skills.title")}</DialogTitle>
+					<Button
+						variant="outline"
+						size="m"
+						iconLeft={RiRefreshLine}
+						tooltip={t("chat.skills.reloadHint")}
+						onClick={() => {}}
+					>
+						{t("chat.skills.reload")}
+					</Button>
+				</div>
+				<DialogDescription>{t("chat.skills.reloadedBody")}</DialogDescription>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### The Radix parts
+
+What IconTooltip is built from. No call site composes them: without IconTooltip a tooltip opens on every focus and swallows the first Escape.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
+
+export default function Parts() {
+	const t = useT();
+	return (
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<Button variant="outline" size="m">
+					{t("review.panel.clear")}
+				</Button>
+			</TooltipTrigger>
+			<TooltipContent side="bottom" align="start">
+				{t("review.panel.clearTooltip")}
+			</TooltipContent>
+		</Tooltip>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `packages/ui/button.tsx` | `withTooltip` renders IconTooltip for every Button `tooltip` and IconButton `label`, with `wrapTrigger` while disabled. |
+| `apps/web/src/chat/SkillsDialog.tsx` | Skill switches with an on/off hint and `wrapTrigger={disabled}` for the blocked reason. |
+| `apps/web/src/panels/ReviewPanel.tsx` | `wrapTrigger` over `PopoverTrigger asChild` for Clear review; plain hints on row actions. |
+| `apps/web/src/panels/McpSettings.tsx` | The stdio transport chip, with its text repeated in `sr-only`. |
+| `apps/web/src/shell/layout/workbenchRails.tsx` | Rail entries with `side` from `railTooltipSide` and a two-line terminal-group label. |
+| `apps/web/src/shell/locationBar/BranchSegment.tsx` | A review link styled with `buttonVariants`, and the checks status on the review chip. |
+
+## DropdownMenu
+
+A list of actions or options that opens from a trigger — a kebab, a `+`, a split-button chevron or a select-like button. It is Radix DropdownMenu with ThinkRail's menu surface, row, label and separator styling (shared with ContextMenu through `menu-styles`), a portal and a viewport-bounded, scrolling height. The call site provides the trigger, the rows' icons and labels, and the actions.
+
+```tsx
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@thinkrail/ui/dropdown-menu";
+```
+
+### When to use
+
+- Overflow actions behind a kebab or `+` in a header or a row: Copy, Save .md, Open in, Rename, Reveal.
+- Choosing one value from a short list behind a select-like Button (theme, MCP exposure, bottom panel alignment), with `DropdownMenuRadioGroup`.
+- A secondary-actions chevron beside a primary action (the ship split button).
+- A row whose actions also open on right-click: one controlled dropdown, two triggers.
+- A grouped menu with headings and a nested level (`DropdownMenuLabel`, `DropdownMenuSub`).
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| ContextMenu | The menu has no visible trigger and opens at the pointer on right-click or long press. |
+| Command | The list is long or searchable — open tabs, branches, files — and needs a filter field. |
+| SegmentedControl | Two to four always-visible options where the choice should stay on screen. |
+| Popover | The panel holds a form, editable rows or rich content rather than a list of commands; reuse `menuItemClass` for its rows. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| DropdownMenu | Radix Root. Owns open state, uncontrolled by default or `open` / `onOpenChange`. |
+| DropdownMenuTrigger | Radix Trigger, unstyled. With `asChild` it lends its ARIA and `data-state` to a Button or IconButton. |
+| DropdownMenuContent | Portalled surface: `menuContentClass` (elevated container, default border, `rounded-md`, `--shadow-md`, `p-4`, minimum width) plus a height bounded by the smaller of 60vh and Radix's available height; it scrolls vertically and clips horizontally. |
+| DropdownMenuItem | One row with `menuItemClass`: optional leading icon (sized and muted by the row), label, optional trailing metadata; `tr-text-ui`, `px-8 py-4`, `gap-4`. |
+| DropdownMenuLabel | A non-interactive section heading in `tr-text-eyebrow` and `text-text-muted`. |
+| DropdownMenuGroup | An unstyled `role="group"` wrapper for related items. |
+| DropdownMenuRadioGroup / DropdownMenuRadioItem | A single choice. The item has the row style and `aria-checked`, but no built-in indicator — the call site renders the check. |
+| DropdownMenuSeparator | A full-bleed 1px `border-default` line between sections (`menuSeparatorClass`). |
+| DropdownMenuSub / DropdownMenuSubTrigger / DropdownMenuSubContent | A nested level. The sub-trigger is a row with a trailing chevron that keeps the selected fill while open; the sub-content is its own portalled surface beside it. |
+| menu-styles | `menuContentClass`, `menuItemClass` and `menuSeparatorClass` from `@thinkrail/ui/menu-styles`: the same surface, row and separator for menu-like rows outside a Radix menu. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `DropdownMenu.open` | `boolean` | — | Controlled open state. Control it when the menu loads data on open, opens from a second trigger (right-click on a row) or keeps a row highlighted while open. |
+| `DropdownMenu.onOpenChange` | `(open: boolean) => void` | — | Called on every open and close; pair with `open`. |
+| `DropdownMenu.modal` | `boolean` | `true` | While open, outside pointer events and page scroll are blocked and focus stays in the menu. No ThinkRail call site changes it. |
+| `DropdownMenuTrigger.asChild` | `boolean` | — | Merges the trigger onto its child. Use it with a Button or IconButton, which then shows its selected look while the menu is open. |
+| `DropdownMenuTrigger.disabled` | `boolean` | — | Blocks opening. With `asChild` and a Button or IconButton child, set `disabled` on the child instead, as AppearanceSettings does; the child's own prop wins over the trigger's. |
+| `DropdownMenuContent.align` | `"start" \| "center" \| "end"` | `"center"` | Alignment against the trigger. Call sites use `start` under a left-edge trigger and `end` for a trailing kebab or `+`. |
+| `DropdownMenuContent.side` | `"top" \| "right" \| "bottom" \| "left"` | `"bottom"` | Preferred side; Radix flips it when the viewport is too small. |
+| `DropdownMenuContent.sideOffset` | `number` | `4` | Gap to the trigger. The ThinkRail wrapper sets it to 4; Radix's own default is 0. |
+| `DropdownMenuContent.onCloseAutoFocus` | `(event: Event) => void` | — | Runs before focus returns to the trigger. Call `event.preventDefault()` when an item moved focus on purpose (an inline rename, a dialog). |
+| `DropdownMenuContent.className` | `string` | — | Width bounds only — `max-w-[…]` for menus with long rows, `min-w-[var(--radix-dropdown-menu-trigger-width)]` to match a select-like trigger, a fixed `w-*`. The surface, padding and height bound come from the wrapper. |
+| `DropdownMenuItem.onSelect` | `(event: Event) => void` | — | The action. The menu closes afterwards unless the handler calls `event.preventDefault()`. |
+| `DropdownMenuItem.disabled` | `boolean` | `false` | Keeps the item visible but unfocusable and unselectable. Put the reason in the label. |
+| `DropdownMenuItem.className` | `string` | — | Content layout only: `items-start` for two-line rows, `justify-between` for a trailing indicator. |
+| `DropdownMenuLabel.className` | `string` | — | `truncate` for a long heading such as a workspace name; nothing else. |
+| `DropdownMenuRadioGroup.value` | `string` | — | The selected item's `value`. |
+| `DropdownMenuRadioGroup.onValueChange` | `(value: string) => void` | — | Called with the chosen item's `value`; narrow the string before storing it. |
+| `DropdownMenuRadioItem.value` | `string` | — | Required. The value this option selects. |
+| `DropdownMenuRadioItem.disabled` | `boolean` | `false` | As on `DropdownMenuItem`. |
+| `DropdownMenuSubTrigger.children` | `ReactNode` | — | Icon and label of the submenu row. The wrapper appends the right chevron; do not add one. |
+| `DropdownMenuSubContent.className` | `string` | — | Width bounds only. The submenu already has its own surface, bounded height and scrolling. |
+
+Radix props that pass through:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `DropdownMenu.defaultOpen` | `boolean` | — | Uncontrolled initial state. Every other Radix prop of every part passes through unchanged. |
+| `DropdownMenuContent.loop` | `boolean` | `false` | Wrap arrow-key focus from the last item to the first. |
+| `DropdownMenuContent.collisionPadding` | `number \| Partial<Record<Side, number>>` | `0` | Distance kept from the viewport edges when Radix flips or shifts the menu. |
+| `DropdownMenuItem.textValue` | `string` | — | Typeahead text when the item's content is not plain text (a two-line row). |
+
+### States
+
+One real menu with every part: a heading, a submenu, an enabled and a disabled item, and a radio group. Open it, then hover or arrow through the rows to see the highlight; the disabled row is skipped; ArrowRight opens the submenu, whose trigger keeps its fill while open; choose a radio option to move the check. The trigger shows its selected look while the menu is open.
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | Rest. | Only the trigger is rendered; it carries `data-state="closed"`. |
+| Open | Click the trigger, or Enter, Space or ArrowDown on it. | The surface appears beside the trigger; the trigger gets `data-state="open"` and `aria-expanded`, so a Button or IconButton trigger shows its selected fill. |
+| Highlighted item | Pointer over an item, or arrow keys. | `control-bg-selected` fill. Radix focuses the item under the pointer, so hover and keyboard highlight are the same state. |
+| Disabled item | `disabled`. | Label and icon in `control-disabled-text`; no highlight, skipped by the arrow keys, no pointer events. |
+| Checked radio item | `DropdownMenuRadioGroup value` equals the item's `value`. | `aria-checked="true"` and `data-state="checked"`; no distinct treatment from the primitive — the call site draws the check. |
+| Open submenu | Hover the sub-trigger, or ArrowRight / Enter / Space on it. | The sub-trigger keeps the `control-bg-selected` fill while its submenu is open. |
+| Overflowing | More rows than fit the viewport or 60vh. | The surface stops at the bound and scrolls; wide rows are clipped, so long labels need `truncate`. |
+
+### Accessibility
+
+- The trigger gets `aria-haspopup="menu"`, `aria-expanded` and `aria-controls` from Radix; its accessible name is the Button text or the IconButton `label` — name the subject when there are several (`Actions for {path}`).
+- The content is `role="menu"`, labelled by the trigger. Items are `menuitem`, radio items `menuitemradio` with `aria-checked`, groups `group`, separators `separator`.
+- `DropdownMenuLabel` is a visual heading only; it is not wired to the group with `aria-labelledby`.
+- Disabled items get `aria-disabled` and stay in the list, so the reason written in their label is still read.
+- The menu is modal: focus moves into it on open and returns to the trigger on close, unless `onCloseAutoFocus` prevents it to hand focus to a dialog or an inline editor.
+- Explain an item in its label or a second line, not with a tooltip or `title`; menu rows have no tooltip path.
+
+| Keys | Action |
+| --- | --- |
+| `Enter / Space / ArrowDown` | On the trigger: opens the menu; with the keyboard, focus moves to the first item. |
+| `ArrowDown / ArrowUp` | Moves between enabled items; stops at the ends (no wrap). |
+| `Home / End` | First / last enabled item. |
+| `Letters` | Typeahead: jumps to the next item whose text starts with them. |
+| `Enter / Space` | Runs the item (or selects the radio option) and closes the menu. |
+| `ArrowRight / ArrowLeft` | Opens a submenu from its trigger / closes it back to the trigger. |
+| `Escape` | Closes the whole menu, including open submenus, and returns focus to the trigger. |
+| `Tab` | Does nothing inside an open menu; close it first. |
+
+### Usage rules
+
+- **MNU-1** — Open a menu from a Button or IconButton through `DropdownMenuTrigger asChild`, so the trigger shows its selected look while open; an icon-only trigger's `label` names what the menu acts on. A hand-styled trigger is reserved for a component that owns its own control (the location-bar pills, a chip).
+- **MNU-2** — Build rows only from the parts — Item, RadioItem, Label, Separator, Sub. Call-site classes are limited to width bounds, `truncate` and content layout. The row sizes and mutes every icon inside it, so a colour class on a row icon has no effect. Menu-like rows outside a Radix menu use `menuItemClass` from `menu-styles`.
+- **MNU-3** — Keep a temporarily unavailable action in place as a `disabled` item whose label says why (`workbench.menu.unavailable`, *No uncommitted changes*); never show an unexplained empty menu.
+- **MNU-4** — A single choice is a `DropdownMenuRadioGroup` of `DropdownMenuRadioItem`s so `aria-checked` follows the value. Draw a check on the current option and a same-size blank on the others so labels align.
+- **MNU-5** — Load menu data on open (controlled `open` / `onOpenChange`), not on mount; show `LoadingRegion` inside the menu while it loads and a disabled item when it is empty.
+- **MNU-6** — Do not set your own height or scrolling on `DropdownMenuContent` or `DropdownMenuSubContent`; both are already bounded by 60vh and the viewport.
+- **MNU-7** — An action that removes something asks first: call `event.preventDefault()` in `onSelect` and open a ConfirmDialog.
+- **MNU-8** — A row with visible actions that should also open on right-click uses one controlled DropdownMenu with two triggers — the menu button (the touch and keyboard path) and the row's `onContextMenu` — not a separate ContextMenu.
+
+### Examples
+
+#### Overflow actions
+
+A kebab IconButton with icon rows and a separator, aligned to the trigger's end.
+
+```tsx
+import {
+	RiDownloadLine,
+	RiFileCopyLine,
+	RiGitPullRequestLine,
+	RiListCheck3,
+	RiMore2Line,
+} from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+
+export default function Actions() {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<IconButton icon={RiMore2Line} label={t("plan.menu.label")} wrapTrigger />
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiFileCopyLine />
+					{t("common.copy")}
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiDownloadLine />
+					{t("plan.menu.saveMarkdown")}
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiGitPullRequestLine />
+					{t("plan.menu.openDraftPr")}
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiListCheck3 />
+					{t("plan.menu.checkAllCount", { count: 3 })}
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Sections and a heading
+
+Separators, a `DropdownMenuLabel` and a `DropdownMenuGroup` of truncated recent paths.
+
+```tsx
+import {
+	RiAddLine,
+	RiEditLine,
+	RiFolderLine,
+	RiGlobalLine,
+	RiSparkling2Line,
+} from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+
+const recents = ["~/code/thinkrail", "~/code/thinkrail-extensions", "~/work/design-tokens"];
+
+export default function Sections() {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="outline" size="m" iconLeft={RiAddLine}>
+					{t("panels.projectTree.addProject")}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start">
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiSparkling2Line />
+					<span>{t("panels.addProject.startNew")}</span>
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiFolderLine />
+					<span>{t("panels.addProject.open")}</span>
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiEditLine />
+					<span>{t("panels.addProject.enterHostPath")}</span>
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiGlobalLine />
+					<span>{t("panels.addProject.clone")}</span>
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuLabel>{t("panels.addProject.recents")}</DropdownMenuLabel>
+				<DropdownMenuGroup>
+					{recents.map((path) => (
+						<DropdownMenuItem key={path} onSelect={() => {}}>
+							<RiFolderLine />
+							<span className="truncate">{path}</span>
+						</DropdownMenuItem>
+					))}
+				</DropdownMenuGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Single choice
+
+A select-like Button opens a radio group as wide as the trigger; the current option shows a check.
+
+```tsx
+import { RiArrowDownSLine, RiCheckLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { useState } from "react";
+
+const THEMES = {
+	dark: "settings.appearance.themeName.dark",
+	minimalDark: "settings.appearance.themeName.minimalDark",
+	highContrastDark: "settings.appearance.themeName.highContrastDark",
+} as const;
+type ThemeId = keyof typeof THEMES;
+const isTheme = (value: string): value is ThemeId => value in THEMES;
+
+export default function SingleChoice() {
+	const t = useT();
+	const [theme, setTheme] = useState<ThemeId>("dark");
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="outline"
+					size="l"
+					iconRight={RiArrowDownSLine}
+					aria-label={t("settings.appearance.darkThemeTrigger", { theme: t(THEMES[theme]) })}
+				>
+					<span className="truncate">{t(THEMES[theme])}</span>
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="min-w-[var(--radix-dropdown-menu-trigger-width)]">
+				<DropdownMenuRadioGroup
+					value={theme}
+					onValueChange={(value) => {
+						if (isTheme(value)) setTheme(value);
+					}}
+				>
+					{(Object.keys(THEMES) as ThemeId[]).map((id) => (
+						<DropdownMenuRadioItem key={id} value={id}>
+							{id === theme ? <RiCheckLine /> : <span aria-hidden className="size-14 shrink-0" />}
+							<span>{t(THEMES[id])}</span>
+						</DropdownMenuRadioItem>
+					))}
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Options with a hint
+
+Two-line radio rows under a heading, the check aligned with the first line.
+
+```tsx
+import { RiArrowDownSLine, RiCheckLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuLabel,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { useState } from "react";
+
+const EXPOSURES = {
+	direct: { label: "mcp.exposure.direct", hint: "mcp.exposure.directHint" },
+	deferred: { label: "mcp.exposure.deferred", hint: "mcp.exposure.deferredHint" },
+	hidden: { label: "mcp.exposure.hidden", hint: "mcp.exposure.hiddenHint" },
+} as const;
+type Exposure = keyof typeof EXPOSURES;
+const isExposure = (value: string): value is Exposure => value in EXPOSURES;
+
+export default function Hints() {
+	const t = useT();
+	const [exposure, setExposure] = useState<Exposure>("deferred");
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="outline"
+					size="s"
+					iconRight={RiArrowDownSLine}
+					aria-label={t("mcp.exposure.menuAria", { exposure })}
+				>
+					{t(EXPOSURES[exposure].label)}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="max-w-[20rem]">
+				<DropdownMenuLabel>{t("mcp.exposure.menuTitle")}</DropdownMenuLabel>
+				<DropdownMenuRadioGroup
+					value={exposure}
+					onValueChange={(value) => {
+						if (isExposure(value)) setExposure(value);
+					}}
+				>
+					{(Object.keys(EXPOSURES) as Exposure[]).map((id) => (
+						<DropdownMenuRadioItem key={id} value={id} className="items-start">
+							{id === exposure ? (
+								<RiCheckLine className="mt-2" />
+							) : (
+								<span aria-hidden className="size-14 shrink-0" />
+							)}
+							<span className="flex flex-col gap-2">
+								<span>{t(EXPOSURES[id].label)}</span>
+								<span className="tr-text-metadata text-text-muted">{t(EXPOSURES[id].hint)}</span>
+							</span>
+						</DropdownMenuRadioItem>
+					))}
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Submenu
+
+An *Open in* level beside the row's other actions.
+
+```tsx
+import {
+	RiExternalLinkLine,
+	RiFileCopyLine,
+	RiFolderOpenLine,
+	RiMore2Line,
+	RiPencilLine,
+} from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+
+const editors = ["VS Code", "Cursor", "Zed"];
+
+export default function Submenu() {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<IconButton
+					size="s"
+					icon={RiMore2Line}
+					label={t("panels.projectTree.workspaceActions", { name: "feature-login" })}
+				/>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuSub>
+					<DropdownMenuSubTrigger>
+						<RiExternalLinkLine />
+						{t("panels.projectTree.openIn")}
+					</DropdownMenuSubTrigger>
+					<DropdownMenuSubContent>
+						{editors.map((editor) => (
+							<DropdownMenuItem key={editor} onSelect={() => {}}>
+								{editor}
+							</DropdownMenuItem>
+						))}
+					</DropdownMenuSubContent>
+				</DropdownMenuSub>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiPencilLine />
+					{t("common.rename")}
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiFileCopyLine />
+					{t("panels.projectTree.copyPath")}
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => {}}>
+					<RiFolderOpenLine />
+					{t("panels.projectTree.reveal")}
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Unavailable action
+
+A disabled item stays in the menu and its label says why.
+
+```tsx
+import { RiAddLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+
+const missingTools = ["Files", "Changes"];
+
+export default function Unavailable() {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<IconButton icon={RiAddLine} label={t("workbench.group.addTo")} wrapTrigger />
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuItem disabled onSelect={() => {}}>
+					{t("workbench.menu.unavailable", {
+						label: t("workbench.group.newTerminalPaneBelow"),
+						reason: t("workbench.tab.limitedTo", { limit: 4 }),
+					})}
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				{missingTools.map((name) => (
+					<DropdownMenuItem key={name} onSelect={() => {}}>
+						{t("workbench.tab.showTool", { name })}
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Loaded on open
+
+A controlled menu fetches its rows when it opens and shows a loading region until they arrive.
+
+```tsx
+import { RiArrowDownSLine, RiGitCommitLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { useRef, useState } from "react";
+
+interface Commit {
+	sha: string;
+	subject: string;
+	meta: string;
+}
+
+const COMMITS: Commit[] = [
+	{
+		sha: "4f2a9c1",
+		subject: "Bound long menus to the viewport",
+		meta: "4f2a9c1 · Julia · 2 h ago",
+	},
+	{ sha: "b81e07d", subject: "Share menu row geometry", meta: "b81e07d · Alex · yesterday" },
+	{ sha: "09cd3aa", subject: "Add the Open in submenu", meta: "09cd3aa · Julia · 3 days ago" },
+];
+
+export default function LoadOnOpen() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [commits, setCommits] = useState<Commit[] | null>(null);
+	const timer = useRef(0);
+	const load = () => {
+		setCommits(null);
+		window.clearTimeout(timer.current);
+		timer.current = window.setTimeout(() => setCommits(COMMITS), 1200);
+	};
+	return (
+		<DropdownMenu
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next);
+				if (next) load();
+			}}
+		>
+			<DropdownMenuTrigger asChild>
+				<Button variant="ghost" size="m" iconLeft={RiGitCommitLine} iconRight={RiArrowDownSLine}>
+					{t("changes.scopeMenu.commits")}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="max-w-[22rem]">
+				<DropdownMenuLabel>{t("changes.scopeMenu.commits")}</DropdownMenuLabel>
+				{commits === null ? (
+					<LoadingRegion
+						rows={3}
+						label={t("changes.scopeMenu.loadingCommits")}
+						className="px-8 py-4"
+					/>
+				) : commits.length === 0 ? (
+					<DropdownMenuItem disabled>{t("changes.scopeMenu.noCommits")}</DropdownMenuItem>
+				) : (
+					commits.map((commit) => (
+						<DropdownMenuItem key={commit.sha} onSelect={() => {}}>
+							<RiGitCommitLine />
+							<span className="flex min-w-0 flex-col">
+								<span className="truncate">{commit.subject}</span>
+								<span className="truncate tr-text-metadata text-text-muted">{commit.meta}</span>
+							</span>
+						</DropdownMenuItem>
+					))
+				)}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+```
+
+#### Row menu and right-click
+
+`ChangeRowActions`: a hover-revealed menu button and right-click on the row open the same dropdown.
+
+```tsx
+import { useState } from "react";
+import { ChangeRowActions } from "@/panels/ChangeRowActions";
+import { TreeRow } from "@/panels/TreeRow";
+
+const files = ["src/panels/PlanPane.tsx", "packages/ui/menu-styles.ts"];
+
+export default function RowMenu() {
+	const [active, setActive] = useState<string | null>(null);
+	return (
+		<div className="flex w-full max-w-[20rem] flex-col">
+			{files.map((path) => (
+				<ChangeRowActions
+					key={path}
+					path={path}
+					active={active === path}
+					onView={() => setActive(path)}
+					onOpenTab={() => setActive(path)}
+				>
+					{({ onContextMenu }) => (
+						<TreeRow
+							testid="change-item"
+							kind="file"
+							highlight="wrapper"
+							active={active === path}
+							label={path.split("/").pop() ?? path}
+							onClick={() => setActive(path)}
+							onContextMenu={onContextMenu}
+						/>
+					)}
+				</ChangeRowActions>
+			))}
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/PlanPane.tsx` | Plan header kebab: Copy, Save .md, Open draft PR, Check All. |
+| `apps/web/src/panels/AddProjectMenu.tsx` | Separators, a *Recents* label and a group of truncated paths. |
+| `apps/web/src/shell/locationBar/WorkspaceSegment.tsx` | *Open in* and *Settled* submenus, a *Switch to* label, trailing shortcut and branch metadata. |
+| `apps/web/src/panels/AppearanceSettings.tsx` | Theme picker: radio group as wide as its outline Button trigger. |
+| `apps/web/src/panels/ChangesScopeMenu.tsx` | Loads commits on open, `LoadingRegion` while loading, disabled empty and unavailable rows. |
+| `apps/web/src/panels/ChangeRowActions.tsx` | One controlled menu opened by a row button and by right-click. |
+
+## ContextMenu
+
+A menu that opens at the pointer when a row or tab is right-clicked, or long-pressed on touch. It is Radix ContextMenu with the same surface, rows and separators as DropdownMenu (`menu-styles`), portalled and bounded to the viewport. It exports only items and separators; the call site provides the trigger element, the actions and — because the trigger has no visible affordance — another path to the same actions.
+
+```tsx
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@thinkrail/ui/context-menu";
+```
+
+### When to use
+
+- Secondary actions on a row or tab that has no visible menu button: a project row, a workbench tab.
+- Actions that belong to the thing under the pointer, without selecting or opening it first.
+- A flat list of actions, optionally split into sections by separators.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| DropdownMenu | The row has a visible menu button, the menu needs a heading, a single choice or a submenu, or right-click should open the same menu as a button (`ChangeRowActions`). |
+| IconButton | The action is primary for the row (Create workspace `+`): keep it visible and repeat it in the context menu. |
+| Command | The user is looking for an action by name across the app. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| ContextMenu | Radix Root. Owns open state, uncontrolled by default or `open` / `onOpenChange`. |
+| ContextMenuTrigger | The area that reacts to right-click and a touch long press. Unstyled and without ARIA; with `asChild` it is the row itself. |
+| ContextMenuContent | Portalled surface placed at the pointer: `menuContentClass` plus a height bounded by the smaller of 60vh and Radix's available height, scrolling vertically. |
+| ContextMenuItem | One row with `menuItemClass`: optional leading icon (sized and muted by the row) and label. |
+| ContextMenuSeparator | A full-bleed 1px line between sections (`menuSeparatorClass`). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `ContextMenu.open` | `boolean` | — | Controlled open state — to keep the row highlighted while its menu is open, or to close the menu before opening a dialog. |
+| `ContextMenu.onOpenChange` | `(open: boolean) => void` | — | Called on every open and close; pair with `open`. |
+| `ContextMenu.modal` | `boolean` | `true` | While open, outside pointer events and page scroll are blocked and focus stays in the menu. No ThinkRail call site changes it. |
+| `ContextMenuTrigger.asChild` | `boolean` | — | Merges the trigger onto its child — the row element that owns the gesture. Without it the trigger renders a `<span>`. |
+| `ContextMenuTrigger.disabled` | `boolean` | `false` | Stops opening; right-click then falls through to the browser's own menu. |
+| `ContextMenuTrigger.onKeyDown` | `KeyboardEventHandler` | — | Radix has no keyboard opener. Handle the Context Menu key and Shift+F10 here and dispatch a `contextmenu` event at the row (see the Keyboard example). |
+| `ContextMenuContent.onCloseAutoFocus` | `(event: Event) => void` | — | Runs before focus returns. Call `event.preventDefault()` when an item hands focus to a dialog or an inline editor, then restore focus yourself. |
+| `ContextMenuContent.className` | `string` | — | Width bounds only. Surface, padding and the height bound come from the wrapper; position is Radix's (right of the pointer, start-aligned, flipped on collision) and cannot be changed. |
+| `ContextMenuItem.onSelect` | `(event: Event) => void` | — | The action. The menu closes afterwards unless the handler calls `event.preventDefault()`. |
+| `ContextMenuItem.disabled` | `boolean` | `false` | Keeps the item visible but unfocusable and unselectable. Put the reason in the label. |
+| `ContextMenuItem.className` | `string` | — | Content layout only; the row style comes from `menuItemClass`. |
+
+Radix props that pass through:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `ContextMenuContent.loop` | `boolean` | `false` | Wrap arrow-key focus from the last item to the first. Every other Radix prop of every part passes through unchanged; the wrapper adds none. |
+| `ContextMenuContent.alignOffset` | `number` | `0` | Shifts the menu along the pointer's vertical axis. |
+| `ContextMenuItem.textValue` | `string` | — | Typeahead text when the item's content is not plain text. |
+
+### States
+
+Each row is the real component with a real menu. Hover or arrow through the items to see the highlight; the disabled item is skipped.
+
+| Trigger | Try |
+| --- | --- |
+| `enabled` | Right-click, long-press, or Tab to the row and press Shift+F10. The row stays highlighted while open; the second item is disabled. |
+| `disabled` | Right-click opens the browser's own menu. |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Closed | Rest. | Only the trigger element; it carries `data-state="closed"` and no styling from the menu. |
+| Open | Right-click the trigger, long-press it on touch, or the call site's keyboard opener. | The surface appears at the pointer; the trigger gets `data-state="open"`. The menu draws nothing on the trigger — a row that should stay highlighted reads controlled `open`. |
+| Highlighted item | Pointer over an item, or arrow keys. | `control-bg-selected` fill; hover and keyboard highlight are the same state. |
+| Disabled item | `disabled`. | Label and icon in `control-disabled-text`; no highlight, skipped by the arrow keys, no pointer events. |
+| Disabled trigger | `ContextMenuTrigger disabled`. | No distinct treatment; the browser's native menu opens instead. |
+| Overflowing | More rows than fit the viewport or 60vh. | The surface stops at the bound and scrolls. |
+
+### Accessibility
+
+- The trigger gets no ARIA and is not announced as having a menu, so nothing may live only in a context menu: keep a visible control or a keyboard path for every action.
+- Radix opens the menu only from a pointer. Rows that take keyboard focus add the Context Menu key and Shift+F10 on the trigger, as the project rows do.
+- The content is `role="menu"`; items are `menuitem` with `aria-disabled` when disabled; separators are `separator`.
+- Focus moves into the menu on open and back to the previously focused element on close, unless `onCloseAutoFocus` prevents it.
+- Write the reason for a disabled item into its label, not into a tooltip or `title`; menu rows have no tooltip path.
+
+| Keys | Action |
+| --- | --- |
+| `Context Menu key / Shift+F10` | Opens the menu under the focused row — only where the call site adds the handler. |
+| `ArrowDown / ArrowUp` | Moves between enabled items; stops at the ends (no wrap). |
+| `Home / End` | First / last enabled item. |
+| `Letters` | Typeahead: jumps to the next item whose text starts with them. |
+| `Enter / Space` | Runs the item and closes the menu. |
+| `Escape` | Closes the menu; focus returns to where it was. |
+| `Tab` | Does nothing inside an open menu; close it first. |
+
+### Usage rules
+
+- **CTX-1** — A context menu is a shortcut, never the only way: every action in it is also reachable by a visible control, a keyboard path or a shortcut — touch has no right-click and long press is not discoverable.
+- **CTX-2** — If the row takes keyboard focus, open the same menu from the Context Menu key and Shift+F10 on the trigger.
+- **CTX-3** — Opening the menu must not select, open or navigate the row it belongs to; wrap the whole row with `ContextMenuTrigger asChild` so right-click works anywhere on it.
+- **CTX-4** — Keep it a flat list of items and separators. When the menu needs a heading, a single choice or a submenu, or the row has a visible menu button, use a DropdownMenu (with right-click opening it) instead.
+- **CTX-5** — Keep an unavailable action in place as a `disabled` item whose label says why (*Move left — already first*).
+- **CTX-6** — To open a dialog from an item, call `event.preventDefault()` in `onSelect`, close the menu, open the dialog on the next frame and manage focus in `onCloseAutoFocus`.
+
+### Examples
+
+#### Row actions
+
+Right-click (or long-press) the row: icon items in two sections.
+
+```tsx
+import { RiAddLine, RiCloseLine, RiFolderOpenLine, RiPencilLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function ProjectRow() {
+	const t = useT();
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger asChild>
+				<div className="w-224">
+					<TreeRow testid="project-item" kind="dir" label="thinkrail" onClick={() => {}} />
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiAddLine />
+					{t("panels.projectTree.createWorkspace")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiFolderOpenLine />
+					{t("panels.projectTree.openExistingWorktree")}
+				</ContextMenuItem>
+				<ContextMenuSeparator />
+				<ContextMenuItem onSelect={() => {}}>
+					<RiPencilLine />
+					{t("common.rename")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiCloseLine />
+					{t("panels.projectTree.closeProject")}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
+	);
+}
+```
+
+#### Row with its own button
+
+The trigger wraps the whole row; the visible `+` stays the direct path and the menu repeats it.
+
+```tsx
+import { RiAddLine, RiFolderOpenLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function RowWithActions() {
+	const t = useT();
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger asChild>
+				<div className="flex w-224 items-center gap-4">
+					<TreeRow testid="project-item" kind="dir" label="thinkrail" onClick={() => {}} />
+					<IconButton
+						icon={RiAddLine}
+						label={t("panels.projectTree.createWorkspace")}
+						size="s"
+						className="shrink-0"
+						onClick={() => {}}
+					/>
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiAddLine />
+					{t("panels.projectTree.createWorkspace")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiFolderOpenLine />
+					{t("panels.projectTree.openExistingWorktree")}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
+	);
+}
+```
+
+#### Keyboard opener
+
+Tab to the row and press Shift+F10 or the Context Menu key.
+
+```tsx
+import { RiAddLine, RiFolderOpenLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import type { KeyboardEvent } from "react";
+import { TreeRow } from "@/panels/TreeRow";
+
+function openFromKeyboard(event: KeyboardEvent<HTMLElement>) {
+	if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+	event.preventDefault();
+	const rect = event.currentTarget.getBoundingClientRect();
+	event.currentTarget.dispatchEvent(
+		new MouseEvent("contextmenu", { bubbles: true, clientX: rect.left, clientY: rect.bottom }),
+	);
+}
+
+export default function Keyboard() {
+	const t = useT();
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger asChild onKeyDown={openFromKeyboard}>
+				<div className="w-224">
+					<TreeRow testid="project-item" kind="dir" label="thinkrail" onClick={() => {}} />
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiAddLine />
+					{t("panels.projectTree.createWorkspace")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiFolderOpenLine />
+					{t("panels.projectTree.openExistingWorktree")}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
+	);
+}
+```
+
+#### Highlight while open
+
+Controlled `open` keeps the row highlighted while its menu is open.
+
+```tsx
+import { RiFileCopyLine, RiFolderOpenLine, RiPencilLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import { useState } from "react";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function OpenHighlight() {
+	const t = useT();
+	const [menuOpen, setMenuOpen] = useState(false);
+	return (
+		<ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
+			<ContextMenuTrigger asChild>
+				<div className="w-224">
+					<TreeRow
+						testid="project-item"
+						kind="dir"
+						label="design-tokens"
+						active={menuOpen}
+						onClick={() => {}}
+					/>
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiPencilLine />
+					{t("common.rename")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiFileCopyLine />
+					{t("panels.projectTree.copyPath")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>
+					<RiFolderOpenLine />
+					{t("panels.projectTree.reveal")}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
+	);
+}
+```
+
+#### Sections and unavailable actions
+
+Tab actions split by separators; the unavailable ones stay disabled with the reason in the label.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function TabActions() {
+	const t = useT();
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger asChild>
+				<div className="w-224">
+					<TreeRow testid="editor-tab" kind="file" label="PlanPane.tsx" onClick={() => {}} />
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent>
+				<ContextMenuItem onSelect={() => {}}>{t("workbench.tab.focus")}</ContextMenuItem>
+				<ContextMenuItem disabled onSelect={() => {}}>
+					{t("workbench.tab.keepPreviewUnavailable")}
+				</ContextMenuItem>
+				<ContextMenuItem disabled onSelect={() => {}}>
+					{t("workbench.tab.moveLeftFirst")}
+				</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>{t("workbench.tab.moveRight")}</ContextMenuItem>
+				<ContextMenuSeparator />
+				<ContextMenuItem onSelect={() => {}}>{t("workbench.center.splitRight")}</ContextMenuItem>
+				<ContextMenuItem onSelect={() => {}}>{t("workbench.center.splitDown")}</ContextMenuItem>
+				<ContextMenuSeparator />
+				<ContextMenuItem onSelect={() => {}}>
+					{t("workbench.tab.moveToRightPane", { group: "Files" })}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
+	);
+}
+```
+
+#### Confirm after the menu
+
+An item closes the menu first, opens a ConfirmDialog on the next frame, and focus returns to the row when the dialog closes.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/panels/ConfirmDialog";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function ConfirmAfterMenu() {
+	const t = useT();
+	const rowRef = useRef<HTMLButtonElement>(null);
+	const openingDialogRef = useRef(false);
+	const [menuOpen, setMenuOpen] = useState(false);
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const openDialogAfterMenu = (openDialog: () => void) => {
+		openingDialogRef.current = true;
+		setMenuOpen(false);
+		requestAnimationFrame(openDialog);
+	};
+	return (
+		<>
+			<ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
+				<ContextMenuTrigger asChild>
+					<div className="w-224">
+						<TreeRow
+							ref={rowRef}
+							testid="project-item"
+							kind="dir"
+							label="thinkrail"
+							onClick={() => {}}
+						/>
+					</div>
+				</ContextMenuTrigger>
+				<ContextMenuContent
+					onCloseAutoFocus={(event) => {
+						event.preventDefault();
+						if (!openingDialogRef.current) rowRef.current?.focus();
+						openingDialogRef.current = false;
+					}}
+				>
+					<ContextMenuItem
+						onSelect={(event) => {
+							event.preventDefault();
+							openDialogAfterMenu(() => setConfirmOpen(true));
+						}}
+					>
+						<RiCloseLine />
+						{t("panels.projectTree.closeProject")}
+					</ContextMenuItem>
+				</ContextMenuContent>
+			</ContextMenu>
+			<ConfirmDialog
+				open={confirmOpen}
+				onOpenChange={setConfirmOpen}
+				title={t("panels.projectTree.closeTitle", { name: "thinkrail" })}
+				description={t("panels.projectTree.closeDescription")}
+				confirmLabel={t("panels.projectTree.closeProject")}
+				onConfirm={() => {}}
+				onClosedAutoFocus={() => rowRef.current?.focus()}
+			/>
+		</>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/ProjectTree.tsx` | Project row menu: Shift+F10 / Context Menu key opener, controlled `open` for the row highlight, dialogs opened after the menu closes. |
+| `apps/web/src/shell/layout/workbenchTabs.tsx` | Tab menu: focus, rename, move and split actions with separators and disabled-with-reason items. |
+
+## Command
+
+The searchable list body of every ThinkRail picker and palette — branch, project, model and open-tab pickers and the session switcher. It wraps [cmdk](https://cmdk.paco.me): cmdk owns filtering, ranking, the keyboard highlight and the combobox semantics; the wrapper adds ThinkRail's input, list, group, row and separator styling and a localized list label. The call site provides the surface it sits in (a Popover or Dialog), the rows, their `value`s and what happens `onSelect`.
+
+```tsx
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@thinkrail/ui/command";
+```
+
+### When to use
+
+- Picking one value from a list long enough to need search: branches, projects, models, open tabs.
+- A keyboard palette that jumps somewhere, opened in a Dialog (the `Mod+K` session switcher).
+- Grouped results under headings (Remote / Local, Pinned / Recent / providers), including nested groups.
+- Rows that carry a secondary line, a trailing badge, a check for the current value or a small row action.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| DropdownMenu | A short, fixed set of actions that needs no search (Rename, Delete, Open in…). |
+| ContextMenu | The same actions offered on right-click of the object itself. |
+| SettingsRadioCards | A few mutually exclusive options that should all stay visible in a settings page. |
+| SegmentedControl | Two to four inline options switched in place, with no list to open. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Command | The cmdk root (`[cmdk-root]`): a column with `overflow-hidden` on `container-elevated-bg` and `text-default`. Owns the search, filter and highlight state and the keyboard handling; renders a visually hidden `<label>` with `label`. Focusable (`tabIndex -1`) so a palette without an input can take focus. |
+| CommandInput | A row with a `border-muted` bottom border holding a muted search icon and the `<input>` (`tr-text-ui`, muted placeholder, no outline). `className` reaches the `<input>`, not the row. |
+| CommandList | The scrolling `listbox` with an inner `p-4` inset and a capped height; vertical scroll only. Its `aria-label` defaults to the localized `common.suggestions`. |
+| CommandEmpty | Rendered by cmdk only while no item matches the search: centred `tr-text-ui` in `text-muted`. |
+| CommandGroup | A section of rows with an optional `heading`, padded `px-8 py-4` in `text-muted`. cmdk hides the whole group while none of its items match. Groups nest. |
+| CommandItem | One `option` row: `flex items-center gap-4`, `rounded-sm`, `px-8 py-4`, `tr-text-ui`. The highlighted row (`data-selected`) fills with `control-bg-selected`. Carries `data-row`, so a ghost IconButton inside it uses the raised row-action hover. |
+| CommandSeparator | A `border-muted` hairline with `my-4`, rendered only while the search is empty (unless `alwaysRender`). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `Command.label` | `string` | — | The input's accessible name, rendered as a visually hidden `<label>` that the input is `aria-labelledby`. Without it the combobox has no name — the placeholder does not count. Use a locale key. |
+| `Command.shouldFilter` | `boolean` | `true` | `false` turns off cmdk's filtering and sorting: every rendered item shows and the call site decides what to render (the session switcher, which lists live sessions without a search). |
+| `Command.filter` | `(value: string, search: string, keywords?: string[]) => number` | — | Custom score from 0 (hidden) to 1 (best match). The model pickers pass `pickerFilter` so a provider header matches when any of its models does. |
+| `Command.value` | `string` | — | Controlled value of the highlighted item (the keyboard cursor), not the chosen value. |
+| `Command.defaultValue` | `string` | — | Initially highlighted item value. Without it cmdk highlights the first enabled item. |
+| `Command.onValueChange` | `(value: string) => void` | — | Called when the highlighted item changes. |
+| `Command.loop` | `boolean` | `false` | Arrow keys wrap from the last item to the first and back. |
+| `Command.disablePointerSelection` | `boolean` | `false` | Pointer movement no longer moves the highlight; clicks still select. |
+| `Command.vimBindings` | `boolean` | `true` | Ctrl+N / Ctrl+J and Ctrl+P / Ctrl+K move the highlight. Set `false` where the surface binds one of those chords itself — the session switcher closes on `Mod+K`, which is Ctrl+K off macOS. |
+| `CommandInput.value` | `string` | — | Controlled search text. Pair with `onValueChange`. |
+| `CommandInput.onValueChange` | `(search: string) => void` | — | Called with the new search text; use it to react to the query (expand groups, show a hint). |
+| `CommandList.label` | `string` | `t("common.suggestions")` | `aria-label` of the listbox. The ThinkRail wrapper defaults it to the localized *Suggestions*; cmdk's own default is English. |
+| `CommandGroup.heading` | `ReactNode` | — | Visible heading, hidden from assistive tech and used to label the group. Pass a node to add an icon or a type class. |
+| `CommandGroup.value` | `string` | — | Unique group id; required when the group has no `heading`. |
+| `CommandGroup.forceMount` | `boolean` | `false` | Keeps the group rendered while none of its own items match — for a parent whose matches live in nested groups. |
+| `CommandItem.value` | `string` | — | Unique, stable identity used for filtering and highlighting. Inferred from the text content when omitted; pass it whenever labels can repeat or change. |
+| `CommandItem.keywords` | `string[]` | — | Extra terms matched by the filter besides `value`. |
+| `CommandItem.onSelect` | `(value: string) => void` | — | Called on click and on Enter while highlighted. |
+| `CommandItem.disabled` | `boolean` | `false` | Sets `aria-disabled`; the row is skipped by the keyboard, ignores the pointer and cannot be selected. |
+| `CommandItem.forceMount` | `boolean` | `false` | Keeps the row rendered regardless of the search. |
+| `CommandSeparator.alwaysRender` | `boolean` | `false` | Keeps the separator while a search is active (useful with `shouldFilter={false}`). |
+
+Native props that matter:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `*.className` | `string` | — | Merged onto every part except CommandEmpty. Placement and sizing only: `bg-transparent` on Command inside a surface, a `max-h-*` on CommandList, row layout (`items-start`, `gap-8`, an indent) on CommandItem. On CommandInput it reaches the `<input>`. |
+| `CommandInput.placeholder` | `string` | — | The visible prompt (`Search branches…`). Use a locale key. |
+| `CommandItem.children` | `ReactNode` | — | The row content: a leading icon (`size-14`), a truncated label, optional secondary line, badge or check. |
+| `CommandEmpty.children` | `ReactNode` | — | The no-match message. Use a locale key. |
+| `*.asChild` | `boolean` | — | cmdk's slot composition on the root, list, group, item and separator. Unused in ThinkRail. |
+| `*.ref` | `Ref<HTMLDivElement \| HTMLInputElement>` | — | Forwarded to the part's element (React 19 ref prop). |
+
+### States
+
+Every cell is the real component with real props. Type into the inputs, move the pointer and press the arrow keys inside a list.
+
+| State | What to look for |
+| --- | --- |
+| Rest · highlighted | cmdk highlights the first row. Move the pointer or use the arrows to move the `control-bg-selected` fill; there is no separate hover look. |
+| Filtered | The query `main` keeps only matching rows, ranked; the separator between the groups is gone while searching. |
+| Empty | No match: CommandEmpty replaces the list. |
+| Disabled item | `origin/release-2.4` is `disabled`: skipped by the arrows and the pointer, but drawn like an enabled row. |
+| Separator | CommandSeparator between the groups while the search is empty. |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Rest | No search; pointer outside the list. | Rows on the surface with no fill except the highlighted one: cmdk highlights the first enabled item on mount. |
+| Highlighted | Pointer moves over a row (unless `disablePointerSelection`), or the arrow keys, Home / End. | `control-bg-selected` fill on the row (`data-selected`, `aria-selected`). There is no separate hover treatment: hover moves the highlight. |
+| Input focus | Click or Tab into the input. | No distinct treatment — the input has no outline; the highlighted row shows where Enter goes. |
+| Root focus | A palette without an input focuses `[cmdk-root]` on open. | No ThinkRail treatment: the root sets no outline style, so the browser's default focus outline draws around the list. |
+| Filtered | Typing in the input. | Non-matching rows unmount, rows are ranked by score, groups with no match are hidden, separators disappear; the first match is highlighted. |
+| Empty | The search matches nothing. | CommandEmpty shows its centred muted message; nothing else in the list renders. |
+| Disabled item | `disabled` on CommandItem. | No distinct treatment: the row looks like an enabled one but cannot be highlighted or selected. |
+| Row action | A ghost IconButton inside a row. | The row's `data-row` gives the button a `container-elevated-bg` hover, so it stays visible on a highlighted row. |
+
+### Accessibility
+
+- The input is a `combobox` (`aria-autocomplete="list"`, `aria-controls` the list, `aria-activedescendant` the highlighted row); focus stays in the input while the highlight moves.
+- The input is `aria-labelledby` the root's visually hidden `<label>`, which holds Command `label`. Without `label` that label is empty and the combobox is unnamed — the placeholder is not used — so always pass one.
+- The list is a `listbox` named by CommandList `label` (localized *Suggestions* by default); rows are `option`s with `aria-selected` on the highlight and `aria-disabled` when disabled.
+- A group's items form a `group` labelled by its heading; the heading element itself is `aria-hidden`, so the heading text is announced once.
+- A row that expands a group (the model pickers' provider headers) sets `aria-expanded` itself.
+- The surrounding Popover or Dialog owns focus trapping, Escape and focus return. A palette without an input focuses `[cmdk-root]` in `onOpenAutoFocus` so the arrows work at once.
+
+| Keys | Action |
+| --- | --- |
+| `Type` | Filters and ranks the rows; the first match is highlighted. |
+| `ArrowDown / ArrowUp` | Moves the highlight to the next / previous enabled row; wraps with `loop`. |
+| `Ctrl+N / Ctrl+J, Ctrl+P / Ctrl+K` | Same as ArrowDown / ArrowUp while `vimBindings` is on (the default). |
+| `Alt+ArrowDown / Alt+ArrowUp` | Jumps to the first row of the next / previous group. |
+| `Meta+ArrowDown / Meta+ArrowUp` | Jumps to the last / first row. |
+| `Home / End` | Jumps to the first / last row (cmdk takes these keys from the input caret). |
+| `Enter` | Runs the highlighted row's `onSelect`. |
+| `Escape` | Closes the Popover or Dialog the list sits in (Radix). |
+| `Tab` | Leaves the input; rows are not tab stops. |
+
+### Usage rules
+
+- **CMD-1** — Use Command for a searchable choice or a keyboard palette, mounted inside PopoverContent (`p-0`) or DialogContent (`p-0 gap-0`); the surface supplies border, radius and shadow. A short action list without search is a DropdownMenu.
+- **CMD-2** — Pass Command `label` from a locale key whenever there is a CommandInput; it is the input's only accessible name.
+- **CMD-3** — Give every CommandItem a stable, unique `value` — an id or the full ref — and put the display name and other search terms in `keywords`. Never rely on inferred text values when labels can repeat or change.
+- **CMD-4** — Act in `onSelect`, never `onClick`: it runs for both click and Enter. Close the overlay there, and reset a controlled query.
+- **CMD-5** — The highlight (`data-selected`) is the keyboard cursor, not the chosen value. Mark the current value inside the row — a check in a fixed slot — so it stays visible wherever the highlight is.
+- **CMD-6** — CommandEmpty is for *no match*, with a locale key. When you filter yourself (`shouldFilter={false}`) or the source list is empty, render your own message: CommandEmpty only follows cmdk's match count.
+- **CMD-7** — A row action is an `IconButton` (ghost, size `s`) whose `onClick` calls `event.stopPropagation()`, so pressing it does not select the row.
+- **CMD-8** — Style a group heading by passing a node (`heading={<span …>}`); a `[&_[cmdk-group-heading]]:tr-*` class produces nothing (TYPOGRAPHY.md, *When the element is not yours*).
+
+### Examples
+
+#### Grouped picker
+
+The body every picker starts from — input, two headed groups and a no-match message — in a Popover opened by a Button.
+
+```tsx
+import { RiArrowDownSLine, RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const REMOTE = ["origin/main", "origin/release-2.4"];
+const LOCAL = ["main", "feature/command-docs"];
+
+export default function Preview() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [selected, setSelected] = useState("main");
+	const row = (ref: string) => (
+		<CommandItem
+			key={ref}
+			value={ref}
+			onSelect={() => {
+				setSelected(ref);
+				setOpen(false);
+			}}
+		>
+			<RiGitBranchLine className="size-14 shrink-0 text-text-muted" />
+			<span className="truncate">{ref}</span>
+		</CommandItem>
+	);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" iconLeft={RiGitBranchLine} iconRight={RiArrowDownSLine}>
+					{selected}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-288 p-0">
+				<Command label={t("panels.branchPicker.search")}>
+					<CommandInput placeholder={t("panels.branchPicker.search")} />
+					<CommandList>
+						<CommandEmpty>{t("panels.branchPicker.empty")}</CommandEmpty>
+						<CommandGroup heading={t("panels.branchPicker.remote")}>{REMOTE.map(row)}</CommandGroup>
+						<CommandGroup heading={t("panels.branchPicker.local")}>{LOCAL.map(row)}</CommandGroup>
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Branch picker
+
+A Popover picker with nested Remote groups, a check for the current branch and a default badge; picking closes it.
+
+```tsx
+import { RiArrowDownSLine, RiCheckLine, RiGitBranchLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const REMOTES = [
+	{ remote: "origin", branches: ["main", "release-2.4"] },
+	{ remote: "upstream", branches: ["main"] },
+];
+const LOCAL = ["main", "feature/command-docs"];
+const DEFAULT_BRANCH = "origin/main";
+
+export default function BranchPicker() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [selected, setSelected] = useState("main");
+
+	const row = (ref: string, label = ref) => (
+		<CommandItem
+			key={ref}
+			value={ref}
+			onSelect={() => {
+				setSelected(ref);
+				setOpen(false);
+			}}
+		>
+			<span className="flex w-14 shrink-0 justify-center">
+				{ref === selected ? <RiCheckLine className="size-14 text-primary" /> : null}
+			</span>
+			<RiGitBranchLine className="size-14 shrink-0 text-text-muted" />
+			<span className="truncate tr-text-metadata">{label}</span>
+			{ref === DEFAULT_BRANCH ? (
+				<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">
+					{t("panels.branchPicker.defaultBadge")}
+				</span>
+			) : null}
+		</CommandItem>
+	);
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button variant="ghost" size="m" iconLeft={RiGitBranchLine} iconRight={RiArrowDownSLine}>
+					{selected}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-320 p-0">
+				<Command label={t("panels.branchPicker.search")}>
+					<CommandInput placeholder={t("panels.branchPicker.search")} />
+					<CommandList>
+						<CommandEmpty>{t("panels.branchPicker.empty")}</CommandEmpty>
+						<CommandGroup
+							heading={t("panels.branchPicker.remote")}
+							forceMount
+							className="not-has-[[cmdk-group]:not([hidden])]:hidden"
+						>
+							{REMOTES.map((group) => (
+								<CommandGroup key={group.remote} heading={group.remote} className="pl-8">
+									{group.branches.map((branch) => row(`${group.remote}/${branch}`, branch))}
+								</CommandGroup>
+							))}
+						</CommandGroup>
+						<CommandGroup heading={t("panels.branchPicker.local")}>
+							{LOCAL.map((ref) => row(ref))}
+						</CommandGroup>
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Open-tab search
+
+An IconButton opens the list; each row's `value` is the tab id and its name and kind are `keywords`.
+
+```tsx
+import {
+	RiChat3Line,
+	RiFileTextLine,
+	RiGitPullRequestLine,
+	RiSearchLine,
+	RiTerminalBoxLine,
+} from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const TABS = [
+	{ id: "chat:1", name: "Fix the flaky login test", kind: "chat", icon: RiChat3Line },
+	{ id: "file:1", name: "command.tsx", kind: "packages/ui/command.tsx", icon: RiFileTextLine },
+	{ id: "terminal:1", name: "bun test", kind: "terminal", icon: RiTerminalBoxLine },
+	{ id: "changes:1", name: "Changes", kind: "diff review", icon: RiGitPullRequestLine },
+];
+
+export default function TabSearch() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [active, setActive] = useState(TABS[0]?.id);
+	return (
+		<div className="flex items-center gap-8">
+			<span className="tr-text-metadata text-text-muted">
+				{TABS.find((tab) => tab.id === active)?.name}
+			</span>
+			<Popover open={open} onOpenChange={setOpen}>
+				<PopoverTrigger asChild>
+					<IconButton icon={RiSearchLine} label={t("workbench.tabs.search")} wrapTrigger />
+				</PopoverTrigger>
+				<PopoverContent align="end" className="w-288 p-0">
+					<Command label={t("workbench.tabs.search")}>
+						<CommandInput placeholder={t("workbench.tabs.findPlaceholder")} />
+						<CommandList>
+							<CommandEmpty>{t("workbench.tabs.noMatches")}</CommandEmpty>
+							{TABS.map((tab) => (
+								<CommandItem
+									key={tab.id}
+									value={tab.id}
+									keywords={[tab.name, tab.kind]}
+									onSelect={() => {
+										setActive(tab.id);
+										setOpen(false);
+									}}
+								>
+									<tab.icon className="size-14 shrink-0 text-text-muted" />
+									<span className="truncate">{tab.name}</span>
+								</CommandItem>
+							))}
+						</CommandList>
+					</Command>
+				</PopoverContent>
+			</Popover>
+		</div>
+	);
+}
+```
+
+#### Palette in a dialog
+
+The session switcher pattern: no input, `shouldFilter={false}`, `loop`, icon headings, two-line rows and the root focused on open.
+
+```tsx
+import { RiChat2Line, RiFolderLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { Command, CommandGroup, CommandItem, CommandList } from "@thinkrail/ui/command";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@thinkrail/ui/dialog";
+import { useState } from "react";
+import { AttentionDot } from "@/components/AttentionDot";
+
+const PROJECTS = [
+	{
+		id: "thinkrail",
+		name: "thinkrail",
+		sessions: [
+			{ id: "s1", title: "Fix the flaky login test", workspace: "fix-login" },
+			{ id: "s2", title: "Document the command list", workspace: "command-docs" },
+		],
+	},
+	{
+		id: "website",
+		name: "website",
+		sessions: [{ id: "s3", title: "Update the pricing page", workspace: "pricing" }],
+	},
+];
+
+export default function SessionPalette() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<Dialog open={open} onOpenChange={setOpen}>
+			<DialogTrigger asChild>
+				<Button variant="outline">{t("shell.sessionSwitcher.title")}</Button>
+			</DialogTrigger>
+			<DialogContent
+				className="gap-0 overflow-hidden p-0"
+				hideClose
+				data-testid="session-palette"
+				onOpenAutoFocus={(event) => {
+					event.preventDefault();
+					document
+						.querySelector<HTMLElement>('[data-testid="session-palette"] [cmdk-root]')
+						?.focus();
+				}}
+			>
+				<DialogTitle className="border-border-default border-b px-16 py-12">
+					{t("shell.sessionSwitcher.title")}
+				</DialogTitle>
+				<Command className="bg-transparent" loop shouldFilter={false} vimBindings={false}>
+					<CommandList className="px-8 pt-4 pb-8">
+						{PROJECTS.map((project) => (
+							<CommandGroup
+								key={project.id}
+								heading={
+									<span className="flex h-28 items-center gap-4 px-4">
+										<RiFolderLine className="size-14 shrink-0 text-text-muted" />
+										<span className="min-w-0 flex-1 truncate">{project.name}</span>
+									</span>
+								}
+							>
+								{project.sessions.map((session) => (
+									<CommandItem
+										key={session.id}
+										value={session.id}
+										className="group gap-8 pl-24"
+										onSelect={() => setOpen(false)}
+									>
+										<RiChat2Line className="size-14 shrink-0 text-text-muted group-data-[selected=true]:text-primary" />
+										<span className="flex min-w-0 flex-1 flex-col">
+											<span className="truncate group-data-[selected=true]:text-primary">
+												{session.title}
+											</span>
+											<span className="truncate text-text-subtle tr-text-metadata">
+												{session.workspace}
+											</span>
+										</span>
+										<AttentionDot />
+									</CommandItem>
+								))}
+							</CommandGroup>
+						))}
+					</CommandList>
+				</Command>
+			</DialogContent>
+		</Dialog>
+	);
+}
+```
+
+#### Collapsible groups
+
+A model picker whose provider headers are rows with `aria-expanded`; a controlled search expands every group and a header matches through its models' `keywords`.
+
+```tsx
+import { RiArrowDownSLine, RiArrowRightSLine, RiCheckLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const PROVIDERS = [
+	{
+		provider: "anthropic",
+		models: [
+			{ id: "claude-opus-4", name: "Claude Opus 4", context: "200K" },
+			{ id: "claude-sonnet-4", name: "Claude Sonnet 4", context: "200K" },
+		],
+	},
+	{
+		provider: "openai",
+		models: [
+			{ id: "gpt-5", name: "GPT-5", context: "400K" },
+			{ id: "gpt-5-mini", name: "GPT-5 mini", context: "400K" },
+		],
+	},
+];
+
+export default function ModelGroups() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [query, setQuery] = useState("");
+	const [current, setCurrent] = useState("claude-sonnet-4");
+	const [expanded, setExpanded] = useState<string[]>(["anthropic"]);
+	const searching = query !== "";
+	const toggle = (provider: string) =>
+		setExpanded((open) =>
+			open.includes(provider) ? open.filter((p) => p !== provider) : [...open, provider],
+		);
+	const currentName = PROVIDERS.flatMap((group) => group.models).find(
+		(model) => model.id === current,
+	)?.name;
+	return (
+		<Popover
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next);
+				if (next) setQuery("");
+			}}
+		>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" iconRight={RiArrowDownSLine}>
+					{currentName}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-340 p-0">
+				<Command label={t("chat.modelPicker.selectModel")}>
+					<CommandInput
+						placeholder={t("chat.modelPicker.search")}
+						value={query}
+						onValueChange={setQuery}
+					/>
+					<CommandList>
+						<CommandEmpty>{t("chat.modelPicker.noMatch")}</CommandEmpty>
+						{PROVIDERS.map((group) => {
+							const open = searching || expanded.includes(group.provider);
+							return (
+								<CommandGroup key={group.provider} value={`group:${group.provider}`}>
+									<CommandItem
+										value={`provider:${group.provider}`}
+										keywords={group.models.flatMap((m) => [m.name, m.id])}
+										aria-expanded={open}
+										onSelect={() => toggle(group.provider)}
+										className="gap-8 py-8"
+									>
+										<span className="min-w-0 flex-1 truncate tr-text-emphasis">
+											{group.provider}
+										</span>
+										<span className="shrink-0 text-text-muted tr-text-metadata">
+											{group.models.length}
+										</span>
+										{open ? (
+											<RiArrowDownSLine className="size-14 shrink-0 text-text-muted" />
+										) : (
+											<RiArrowRightSLine className="size-14 shrink-0 text-text-muted" />
+										)}
+									</CommandItem>
+									{open
+										? group.models.map((model) => (
+												<CommandItem
+													key={model.id}
+													value={`all:${model.id}`}
+													keywords={[model.name, model.id, group.provider]}
+													onSelect={() => {
+														setCurrent(model.id);
+														setOpen(false);
+													}}
+													className="ml-24 items-start gap-8"
+												>
+													<span className="flex min-w-0 flex-1 flex-col">
+														<span className="truncate">{model.name}</span>
+														<span className="truncate text-text-muted tr-text-metadata">
+															{t("chat.modelPicker.context", { size: model.context })}
+														</span>
+													</span>
+													{model.id === current ? (
+														<RiCheckLine className="mt-2 size-14 shrink-0 text-primary" />
+													) : null}
+												</CommandItem>
+											))
+										: null}
+								</CommandGroup>
+							);
+						})}
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Row action
+
+A pin toggle inside the row that does not select it, revealed on row hover or highlight.
+
+```tsx
+import { RiArrowDownSLine, RiStarFill, RiStarLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { cn } from "@thinkrail/ui/utils";
+import { useState } from "react";
+
+const MODELS = [
+	{ id: "claude-opus-4", name: "Claude Opus 4" },
+	{ id: "claude-sonnet-4", name: "Claude Sonnet 4" },
+	{ id: "gpt-5", name: "GPT-5" },
+];
+
+export default function RowAction() {
+	const t = useT();
+	const [pinned, setPinned] = useState<string[]>(["claude-sonnet-4"]);
+	const [current, setCurrent] = useState("gpt-5");
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" iconRight={RiArrowDownSLine}>
+					{MODELS.find((model) => model.id === current)?.name}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-320 p-0">
+				<Command label={t("chat.modelPicker.selectModel")}>
+					<CommandInput placeholder={t("chat.modelPicker.search")} />
+					<CommandList>
+						<CommandEmpty>{t("chat.modelPicker.noMatch")}</CommandEmpty>
+						<CommandGroup>
+							{MODELS.map((model) => {
+								const isPinned = pinned.includes(model.id);
+								return (
+									<CommandItem
+										key={model.id}
+										value={model.id}
+										keywords={[model.name]}
+										onSelect={() => {
+											setCurrent(model.id);
+											setOpen(false);
+										}}
+										className="group/row gap-8"
+									>
+										<span className="min-w-0 flex-1 truncate">{model.name}</span>
+										<IconButton
+											icon={isPinned ? RiStarFill : RiStarLine}
+											size="s"
+											label={
+												isPinned
+													? t("chat.modelPicker.unpin", { model: model.name })
+													: t("chat.modelPicker.pin", { model: model.name })
+											}
+											aria-pressed={isPinned}
+											selected={isPinned}
+											tone={isPinned ? "warning" : undefined}
+											onClick={(event) => {
+												event.stopPropagation();
+												setPinned((ids) =>
+													isPinned ? ids.filter((id) => id !== model.id) : [...ids, model.id],
+												);
+											}}
+											className={cn(
+												"shrink-0",
+												!isPinned &&
+													"opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100",
+											)}
+										/>
+									</CommandItem>
+								);
+							})}
+						</CommandGroup>
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+#### Separator
+
+A project picker where CommandSeparator sets an Add project action apart; it disappears while searching. No production list uses the separator yet.
+
+```tsx
+import { RiAddLine, RiArrowDownSLine, RiFolderLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+	CommandSeparator,
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { useState } from "react";
+
+const PROJECTS = ["thinkrail", "website", "design-tokens"];
+
+export default function Separator() {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [project, setProject] = useState("thinkrail");
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button variant="outline" size="m" iconLeft={RiFolderLine} iconRight={RiArrowDownSLine}>
+					{project}
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-288 p-0">
+				<Command label={t("panels.newWorkspace.searchProjects")}>
+					<CommandInput placeholder={t("panels.newWorkspace.searchProjects")} />
+					<CommandList>
+						<CommandEmpty>{t("panels.newWorkspace.noProjects")}</CommandEmpty>
+						<CommandGroup>
+							{PROJECTS.map((name) => (
+								<CommandItem
+									key={name}
+									value={name}
+									onSelect={() => {
+										setProject(name);
+										setOpen(false);
+									}}
+								>
+									<RiFolderLine className="size-14 shrink-0 text-text-muted" />
+									<span className="truncate">{name}</span>
+								</CommandItem>
+							))}
+						</CommandGroup>
+						<CommandSeparator />
+						<CommandGroup>
+							<CommandItem value="action:add" onSelect={() => setOpen(false)}>
+								<RiAddLine className="size-14 shrink-0 text-text-muted" />
+								<span className="truncate">{t("panels.projectTree.addProject")}</span>
+							</CommandItem>
+						</CommandGroup>
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/panels/BranchPicker.tsx` | Branch picker in a Popover: nested Remote groups with `forceMount`, Local group, check and default badge. |
+| `apps/web/src/chat/ModelSelector.tsx` | Model picker: controlled search, custom `filter`, collapsible provider groups, pin row action. |
+| `apps/web/src/chat/ModelEffortPicker.tsx` | Composer model + effort picker: Default, Pinned, Recent and provider groups above the effort slider. |
+| `apps/web/src/shell/SessionSwitcher.tsx` | `Mod+K` palette in a Dialog: no input, `shouldFilter={false}`, `loop`, `vimBindings={false}`. |
+| `apps/web/src/shell/layout/workbenchTabs.tsx` | Open-tab search behind an IconButton, with tab ids as values and names as `keywords`. |
+| `apps/web/src/panels/NewWorkspaceDialog.tsx` | Project picker pill in the New workspace dialog. |
+
+## Resizable
+
+Split layouts the user can resize: `react-resizable-panels` with ThinkRail's group layout and its hairline separator. It owns the geometry (panel sizes in percent of the group, minimums, maximums, collapse), pointer and keyboard resizing, the separator semantics and optional size persistence; the call site provides the panels' content and surfaces, the sizes and constraints, and — in the workbench — the committed layout it re-applies. `ImperativePanelHandle` and `ImperativePanelGroupHandle` are re-exported for imperative collapse, expand and `setLayout`.
+
+```tsx
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+```
+
+### When to use
+
+- Regions of one window that share its space and that the user sizes: the workbench's side columns, center and bottom panel, Project Home's Projects pane beside Welcome.
+- Stacked groups in one side or bottom region (Specs above Files), with a vertical group.
+- A side pane that collapses to nothing and comes back at its last size, driven by a rail button through `ImperativePanelHandle`.
+- Splitting a center group in two (`workbenchCenter`), with the separator disabled while the group is too small to split.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| Collapsible | Content folds in place inside a pane (a long tool output); nothing is resized. |
+| TabStrip | Several resources share one region and only one shows at a time. |
+| QuietScrollArea | The content is longer than its fixed region; scroll it instead of letting the user grow the region. |
+| Dialog | A focused task that temporarily covers the layout instead of taking a share of it. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| ResizablePanelGroup | `PanelGroup` with `flex h-full w-full`, and `flex-col` when `data-panel-group-direction` is `vertical`. It fills its parent, so give the parent a height (or `flex-1 min-h-0`). Holds the layout: one size per panel, summing to 100. |
+| ResizablePanel | `Panel` itself, re-exported unchanged: a `div` whose `flex-grow` is its size, with `overflow: hidden` and `data-panel`, `data-panel-id`, `data-panel-size` and `data-panel-collapsible`. It has no surface; the child sets the region's background (`bg-container-sidebar-bg`, `bg-container-content-bg`). |
+| ResizableHandle | `PanelResizeHandle` with `role="separator"` between two panels. The element is `w-9` (horizontal) or `h-9` (vertical) with a matching `-mr-8` / `-mb-8`, so it adds a hairline to the layout and overlaps the following panel at `z-10`. Its `::before` is the visible line at the leading edge (`before:w-px` / `before:h-px`) in `border-default`. There is no grip. |
+| Hit area | `hitAreaMargins` extends the pointer target around the element: a fine pointer reaches only one pixel past it, so the preceding panel's trailing scrollbar stays usable; a coarse (touch) pointer gets a wide margin. |
+| Imperative handles | `ref` on a panel gives an `ImperativePanelHandle` (`collapse`, `expand`, `resize`, `getSize`, `isCollapsed`, `isExpanded`); on a group an `ImperativePanelGroupHandle` (`getLayout`, `setLayout`). |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `ResizablePanelGroup.direction` | `"horizontal" \| "vertical"` | — | Required. `horizontal` lays panels out side by side, `vertical` stacks them. Pass the same value to every ResizableHandle in the group. |
+| `ResizablePanelGroup.autoSaveId` | `string \| null` | `null` | Persists the layout in `storage` under this key and restores it on mount (Project Home's `thinkrail-shell-welcome`). Conditional panels need `id` and `order` so each panel set is saved separately. |
+| `ResizablePanelGroup.storage` | `PanelGroupStorage` | `localStorage` | `getItem` / `setItem` used with `autoSaveId`. |
+| `ResizablePanelGroup.keyboardResizeBy` | `number \| null` | `null` | Percent moved per arrow key on a focused handle; `null` moves 10. Shift+arrow always moves to the limit. |
+| `ResizablePanelGroup.onLayout` | `(layout: number[]) => void` | — | Called with every panel's size on mount and on every change — each pointer move during a drag. Commit on drag end, not here (the workbench projects the drag here and commits from `onDragging(false)`). |
+| `ResizablePanelGroup.tagName` | `keyof HTMLElementTagNameMap` | `"div"` | The element the group renders. |
+| `ResizablePanelGroup.ref` | `Ref<ImperativePanelGroupHandle>` | — | `getLayout()` and `setLayout(sizes)` — the workbench re-applies its committed sizes and resets presets through it. |
+| `ResizablePanel.id` | `string` | — | Stable panel id, used for persistence and `aria-controls`. Required, with `order`, whenever panels are rendered conditionally. |
+| `ResizablePanel.order` | `number` | — | Position of a conditionally rendered panel, so it returns to the same place when it is added again. |
+| `ResizablePanel.defaultSize` | `number` | — | Initial size in percent of the group. Read when the panel set changes, not on every render; resize a mounted panel through `ref` or the group's `setLayout`. Defaults in a group should sum to 100. |
+| `ResizablePanel.minSize` | `number` | `0` | Smallest size in percent. Dragging stops here (or collapses when `collapsible`). |
+| `ResizablePanel.maxSize` | `number` | `100` | Largest size in percent (the workbench's bottom panel cap). |
+| `ResizablePanel.collapsible` | `boolean` | `false` | Lets a drag past `minSize` or Enter on the handle snap the panel to `collapsedSize`. |
+| `ResizablePanel.collapsedSize` | `number` | `0` | Size of a collapsed panel. ThinkRail always collapses to `0`. |
+| `ResizablePanel.onCollapse` | `() => void` | — | Called when the panel reaches `collapsedSize` — by drag, keyboard or `collapse()`. Mirror it into the state that hides the pane's content and its handle. |
+| `ResizablePanel.onExpand` | `() => void` | — | Called when a collapsed panel grows again. |
+| `ResizablePanel.onResize` | `(size: number, prevSize: number \| undefined) => void` | — | Called with the panel's new size in percent. |
+| `ResizablePanel.tagName` | `keyof HTMLElementTagNameMap` | `"div"` | The element the panel renders. |
+| `ResizablePanel.ref` | `Ref<ImperativePanelHandle>` | — | `collapse()`, `expand(minSize?)`, `resize(size)`, `getSize()`, `isCollapsed()`, `isExpanded()` — how a rail button or `Mod+B` hides and restores a pane. |
+| `ResizableHandle.direction` | `"horizontal" \| "vertical"` | `"horizontal"` | Added by ThinkRail. The group's direction: picks the line, the cursor (`cursor-col-resize` / `cursor-row-resize`) and `aria-orientation`. It is not read from the group, so a vertical group needs `direction="vertical"` here too. |
+| `ResizableHandle.hitAreaMargins` | `{ coarse: number; fine: number }` | `{ coarse: 15, fine: 1 }` | Pointer margins around the handle. ThinkRail narrows the library's fine margin so the hit area does not cover the preceding panel's scrollbar; keep the default. |
+| `ResizableHandle.disabled` | `boolean` | `false` | Stops pointer and keyboard resizing and the hover colour. The handle stays in the Tab order unless you also pass `tabIndex={-1}`. |
+| `ResizableHandle.onDragging` | `(isDragging: boolean) => void` | — | `true` on pointer down, `false` on release — where the workbench commits a drag. Keyboard resizing does not call it. |
+| `ResizableHandle.tagName` | `keyof HTMLElementTagNameMap` | `"div"` | The element the handle renders. |
+
+Passed-through attributes in common use:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `ResizablePanelGroup.className` | `string` | — | Merged after the group's own classes. Placement only: `min-h-0 min-w-0 flex-1`, `h-full`. |
+| `ResizablePanelGroup.id` | `string \| null` | — | Group id; generated when omitted. |
+| `ResizableHandle.tabIndex` | `number` | `0` | `-1` takes a hidden or disabled handle out of the Tab order (Project Home, while Projects is collapsed). |
+| `ResizableHandle.aria-hidden` | `boolean` | — | Hides the separator of a collapsed pane from assistive tech. |
+| `ResizableHandle.className` | `string` | — | Merged last. Only `hidden` for a collapsed pane's handle; never restyle the line. |
+| `ResizableHandle.onKeyDownCapture` | `KeyboardEventHandler` | — | With `onKeyUpCapture`, how the workbench tracks a keyboard resize and commits it on key up. |
+
+### States
+
+Every cell is a real panel group. The handle is a hairline in `border-default` that turns `primary` while the pointer is over it or dragging; click into the page and press Tab to reach a handle from the keyboard.
+
+| Case | Try it |
+| --- | --- |
+| Horizontal | Hover the line, drag it, or Tab to it and press ←/→, Home, End. |
+| Vertical | `direction="vertical"` on the group and on the handle. ↑/↓ resize. |
+| Collapsible side | `collapsible` + `collapsedSize={0}`. Drag past `minSize`, or focus the handle and press Enter. |
+| Disabled | `disabled` on the handle: no hover colour, no drag, no keyboard resize. |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Rest | Default. | A hairline in `border-default` at the leading edge of the handle; the pointer cursor is `col-resize` / `row-resize` over the hit area. |
+| Hover | Pointer within the handle or its hit-area margin. | `data-resize-handle-state="hover"`: the line turns `primary` with the colour transition. |
+| Dragging | Pointer down on the handle and moving. | `data-resize-handle-state="drag"` and `data-resize-handle-active="pointer"`: the line stays `primary`, the library forces the resize cursor on the whole document (a one-way resize cursor once a limit is reached); `onDragging(true)` fires. |
+| Keyboard focus | Tab to the handle. | `data-resize-handle-active="keyboard"`. No ThinkRail treatment: the line keeps `border-default` and only the browser's default focus outline shows. |
+| Collapsed panel | `collapsible` panel dragged past `minSize`, Enter on its handle, or `collapse()`. | The panel is at `collapsedSize` (`0`), `onCollapse` fires. The call site hides the handle (`className="hidden"`, `tabIndex={-1}`, `aria-hidden`) and makes the pane `inert`. |
+| Disabled | `disabled` on the handle. | The line stays `border-default` on hover; no drag or keyboard resize. The resize cursor class and the Tab stop remain. |
+
+### Accessibility
+
+- Each handle is a focusable `role="separator"` with `aria-controls` pointing at the panel before it and `aria-valuenow` / `aria-valuemin` / `aria-valuemax` as that panel's size in whole percent.
+- ThinkRail sets `aria-orientation` from `direction`: `vertical` for a side-by-side split (the line is vertical), `horizontal` for a stacked one.
+- The handle has no accessible name of its own; it is described by the panel it controls. Give that panel a labelled region (`<section aria-label>`), as Project Home and the workbench do.
+- A collapsed pane is removed from the reading and Tab order by the call site: `inert` and `aria-hidden` on the pane, `tabIndex={-1}` and `aria-hidden` on its handle. Moving focus in and out on collapse is the call site's job (`useCollapsibleRegion`).
+- Pointer is never the only way: every resize the pointer can make is reachable from the focused handle with the keys below.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves focus to and from each handle. |
+| `← / → (horizontal), ↑ / ↓ (vertical)` | Resizes the panel before the handle by `keyboardResizeBy`, or 10 percent. |
+| `Shift+arrow` | Resizes as far as the constraints allow in that direction. |
+| `Home / End` | Shrinks or grows the panel before the handle to its limit. |
+| `Enter` | Collapses the panel before the handle when it is `collapsible`, or expands it back to `minSize`. |
+| `F6 / Shift+F6` | Moves focus to the next or previous handle of the same group. |
+
+### Usage rules
+
+- **RSZ-1** — Pass the group's `direction` to every ResizableHandle in it; the handle does not read it from the group, and a mismatch draws the wrong line, cursor and `aria-orientation`.
+- **RSZ-2** — Give every panel that can appear or disappear a stable `id` and `order`, and add or remove it in place — never key or remount the group to change its shape, or the panes inside lose their DOM and state.
+- **RSZ-3** — Sizes are percentages of the group. Set `defaultSize` for the panel set, constraints with `minSize` / `maxSize`, and move a mounted layout with `ref` (`setLayout`, `collapse`, `expand`), not by changing `defaultSize`.
+- **RSZ-4** — Commit a resize once: from `onDragging(false)` for a pointer and from key up for the keyboard. `onLayout` fires on every move and is for projection only.
+- **RSZ-5** — Collapse to `collapsedSize={0}` and hide the collapsed pane completely: `inert` / `aria-hidden` on its content, `hidden`, `tabIndex={-1}` and `aria-hidden` on its handle.
+- **RSZ-6** — Keep the handle as it is: no grip, no colour, width or hit-area overrides. The default `hitAreaMargins` keeps the preceding panel's scrollbar usable.
+- **RSZ-7** — Panels carry no surface: the child sets the region's background and its own scrolling (QuietScrollArea), and the group's parent gives it a height (`h-full`, or `min-h-0 flex-1`).
+
+### Examples
+
+#### Side pane and content
+
+Two panels with a minimum each and one handle between them.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<div className="h-160 w-full">
+			<ResizablePanelGroup direction="horizontal">
+				<ResizablePanel defaultSize={30} minSize={20}>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.projects")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle />
+				<ResizablePanel defaultSize={70} minSize={40}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("workbench.center.group")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Collapsible pane
+
+Project Home's Projects pane: a pressed toggle collapses and expands it through `ImperativePanelHandle`; while collapsed the pane is `inert` and its handle is hidden.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	type ImperativePanelHandle,
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@thinkrail/ui/resizable";
+import { useRef, useState } from "react";
+
+export default function CollapsiblePane() {
+	const t = useT();
+	const panelRef = useRef<ImperativePanelHandle>(null);
+	const [collapsed, setCollapsed] = useState(false);
+	const toggle = () => {
+		if (collapsed) panelRef.current?.expand();
+		else panelRef.current?.collapse();
+	};
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				className="self-start"
+				selected={!collapsed}
+				aria-pressed={!collapsed}
+				aria-controls="library-projects-pane"
+				onClick={toggle}
+			>
+				{t("workbench.tool.projects")}
+			</Button>
+			<div className="h-160 w-full">
+				<ResizablePanelGroup direction="horizontal">
+					<ResizablePanel
+						ref={panelRef}
+						id="left"
+						order={1}
+						defaultSize={30}
+						minSize={15}
+						collapsedSize={0}
+						collapsible
+						onCollapse={() => setCollapsed(true)}
+						onExpand={() => setCollapsed(false)}
+					>
+						<section
+							id="library-projects-pane"
+							aria-label={t("shell.projectHome.projects")}
+							aria-hidden={collapsed || undefined}
+							inert={collapsed ? true : undefined}
+							className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted"
+						>
+							{t("shell.projectHome.projects")}
+						</section>
+					</ResizablePanel>
+					<ResizableHandle
+						aria-hidden={collapsed}
+						tabIndex={collapsed ? -1 : 0}
+						{...(collapsed ? { className: "hidden" } : {})}
+					/>
+					<ResizablePanel id="welcome" order={2} defaultSize={70} minSize={40}>
+						<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+							{t("workbench.center.group")}
+						</div>
+					</ResizablePanel>
+				</ResizablePanelGroup>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Vertical stack
+
+Two groups stacked in one side region; `direction="vertical"` on the group and the handle.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function VerticalStack() {
+	const t = useT();
+	return (
+		<div className="h-240 w-full max-w-[16rem]">
+			<ResizablePanelGroup direction="vertical">
+				<ResizablePanel defaultSize={50} minSize={20}>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.specs")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle direction="vertical" />
+				<ResizablePanel defaultSize={50} minSize={20}>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.files")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Three columns
+
+The workbench columns: collapsible sides around a center with its own minimum, each panel with `id` and `order`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function ThreeColumns() {
+	const t = useT();
+	return (
+		<div className="h-160 w-full">
+			<ResizablePanelGroup direction="horizontal">
+				<ResizablePanel
+					id="layout-left"
+					order={1}
+					defaultSize={25}
+					minSize={15}
+					collapsedSize={0}
+					collapsible
+				>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.projects")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle />
+				<ResizablePanel id="layout-center" order={2} defaultSize={50} minSize={30}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("workbench.center.group")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle />
+				<ResizablePanel
+					id="layout-right"
+					order={3}
+					defaultSize={25}
+					minSize={15}
+					collapsedSize={0}
+					collapsible
+				>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.review")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Nested groups
+
+A vertical group holding the main row (itself a horizontal group) and a bottom panel capped with `maxSize`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function Nested() {
+	const t = useT();
+	return (
+		<div className="h-240 w-full">
+			<ResizablePanelGroup direction="vertical">
+				<ResizablePanel id="main-row" order={1} defaultSize={65} minSize={40}>
+					<ResizablePanelGroup direction="horizontal">
+						<ResizablePanel id="main-left" order={1} defaultSize={30} minSize={15}>
+							<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+								{t("workbench.tool.projects")}
+							</div>
+						</ResizablePanel>
+						<ResizableHandle />
+						<ResizablePanel id="main-center" order={2} defaultSize={70} minSize={40}>
+							<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+								{t("workbench.center.group")}
+							</div>
+						</ResizablePanel>
+					</ResizablePanelGroup>
+				</ResizablePanel>
+				<ResizableHandle direction="vertical" />
+				<ResizablePanel id="bottom" order={2} defaultSize={35} minSize={20} maxSize={60}>
+					<div className="flex h-full items-center justify-center bg-container-terminal-bg tr-text-ui text-text-muted">
+						{t("workbench.rail.terminal")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Showing and hiding a panel
+
+The bottom panel is added and removed in place with a stable `id` and `order`; the main row keeps its DOM.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+import { useState } from "react";
+
+export default function ConditionalPanel() {
+	const t = useT();
+	const [bottomVisible, setBottomVisible] = useState(true);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				className="self-start"
+				selected={bottomVisible}
+				aria-pressed={bottomVisible}
+				onClick={() => setBottomVisible((visible) => !visible)}
+			>
+				{t("workbench.rail.terminal")}
+			</Button>
+			<div className="h-240 w-full">
+				<ResizablePanelGroup direction="vertical">
+					<ResizablePanel
+						id="layout-main-row"
+						order={1}
+						defaultSize={bottomVisible ? 65 : 100}
+						minSize={40}
+					>
+						<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+							{t("workbench.center.group")}
+						</div>
+					</ResizablePanel>
+					{bottomVisible ? (
+						<>
+							<ResizableHandle direction="vertical" />
+							<ResizablePanel
+								id="layout-bottom"
+								order={2}
+								defaultSize={35}
+								minSize={20}
+								maxSize={60}
+							>
+								<div className="flex h-full items-center justify-center bg-container-terminal-bg tr-text-ui text-text-muted">
+									{t("workbench.rail.terminal")}
+								</div>
+							</ResizablePanel>
+						</>
+					) : null}
+				</ResizablePanelGroup>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Disabled handle
+
+A center split whose handle is `disabled`, as the workbench does while the group is narrower than two minimum widths.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function DisabledHandle() {
+	const t = useT();
+	return (
+		<div className="h-160 w-full">
+			<ResizablePanelGroup direction="horizontal">
+				<ResizablePanel id="center-split-0" order={1} defaultSize={50} minSize={4}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("store.chatTab.defaultName")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle disabled />
+				<ResizablePanel id="center-split-1" order={2} defaultSize={50} minSize={4}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("store.chatTab.defaultName")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Committing a resize
+
+`onLayout` tracks every move; the sizes shown update only on release (`onDragging(false)`) or key up.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+import { useRef, useState } from "react";
+
+export default function LayoutEvents() {
+	const t = useT();
+	const latest = useRef<number[]>([30, 70]);
+	const [committed, setCommitted] = useState<number[]>([30, 70]);
+	const commit = () => setCommitted(latest.current.map(Math.round));
+	return (
+		<div className="h-160 w-full">
+			<ResizablePanelGroup
+				direction="horizontal"
+				onLayout={(layout) => {
+					latest.current = layout;
+				}}
+			>
+				<ResizablePanel defaultSize={30} minSize={15}>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("workbench.tool.files")} · {committed[0]}%
+					</div>
+				</ResizablePanel>
+				<ResizableHandle
+					onDragging={(dragging) => {
+						if (!dragging) commit();
+					}}
+					onKeyUpCapture={commit}
+				/>
+				<ResizablePanel defaultSize={70} minSize={40}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("workbench.center.group")} · {committed[1]}%
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+#### Resetting the layout
+
+`setLayout` on the group's `ref` restores the default sizes.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import {
+	type ImperativePanelGroupHandle,
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@thinkrail/ui/resizable";
+import { useRef } from "react";
+
+const DEFAULT_LAYOUT = [25, 50, 25];
+
+export default function ResetLayout() {
+	const t = useT();
+	const groupRef = useRef<ImperativePanelGroupHandle>(null);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				className="self-start"
+				onClick={() => groupRef.current?.setLayout(DEFAULT_LAYOUT)}
+			>
+				{t("workbench.layoutSettings.resetToDefault")}
+			</Button>
+			<div className="h-160 w-full">
+				<ResizablePanelGroup ref={groupRef} direction="horizontal">
+					<ResizablePanel defaultSize={DEFAULT_LAYOUT[0]} minSize={10}>
+						<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+							{t("workbench.tool.projects")}
+						</div>
+					</ResizablePanel>
+					<ResizableHandle />
+					<ResizablePanel defaultSize={DEFAULT_LAYOUT[1]} minSize={30}>
+						<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+							{t("workbench.center.group")}
+						</div>
+					</ResizablePanel>
+					<ResizableHandle />
+					<ResizablePanel defaultSize={DEFAULT_LAYOUT[2]} minSize={10}>
+						<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+							{t("workbench.tool.review")}
+						</div>
+					</ResizablePanel>
+				</ResizablePanelGroup>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Remembered layout
+
+`autoSaveId` keeps the split in `localStorage`: resize it and reload the page.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+
+export default function RememberLayout() {
+	const t = useT();
+	return (
+		<div className="h-160 w-full">
+			<ResizablePanelGroup direction="horizontal" autoSaveId="library-resizable-remember">
+				<ResizablePanel id="left" order={1} defaultSize={30} minSize={15}>
+					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
+						{t("shell.projectHome.projects")}
+					</div>
+				</ResizablePanel>
+				<ResizableHandle />
+				<ResizablePanel id="welcome" order={2} defaultSize={70} minSize={40}>
+					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
+						{t("workbench.center.group")}
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/shell/ProjectHome.tsx` | Projects beside Welcome: `autoSaveId`, a collapsible pane driven by `ImperativePanelHandle`, the handle hidden while collapsed. |
+| `apps/web/src/shell/layout/Workbench.tsx` | Outer columns, the aligned row and the bottom column: nested groups, conditional panels with `id` / `order`, `maxSize`, committed sizes through `ref`. |
+| `apps/web/src/shell/layout/workbenchCenter.tsx` | A center split in either direction, with the handle `disabled` while the group is too small. |
+| `apps/web/src/shell/layout/workbenchSide.tsx` | A side region's vertical stack of groups (handles via `PanelWithHandle` in `workbenchShared.tsx`). |
+| `apps/web/src/shell/layout/workbenchBottom.tsx` | The bottom region's groups side by side. |
+
+## QuietScrollArea
+
+The scroll container for tool panes: an ordinary native scroll viewport whose thumb stays hidden until the user shows intent, with a soft curtain on every clipped edge. It owns the viewport, the intent signal (hover, focus inside, active scrolling, a pointer drag, touch), overflow measurement and the curtains; the thumb's look is the app-wide scrollbar in `styles/global.css`. The call site provides a sized host, the inset (`viewportClassName`) and the `surface` the curtains fade into. `QuietScrollFrame`, from the same module, gives a third-party scroller it does not own (xterm) the same treatment.
+
+```tsx
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+```
+
+### When to use
+
+- The scrolling body of a side or bottom pane: Projects, Specs, Files, Changes and Review.
+- Any long list on `container-sidebar-bg` whose header or toolbar stays fixed above it (put the header outside the area).
+- A caller that saves and restores the scroll position needs the native viewport: `viewportRef` (`panels/RememberedScrollArea`).
+- A third-party view with its own scroll element on `container-terminal-bg` — use `QuietScrollFrame` with `viewportSelector` and, when the library knows its position better than the DOM, `edges`.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| A plain `overflow-auto` element | Content scrolls on a surface other than the sidebar or terminal (a dialog body, the chat transcript, an editor); it gets the same quiet thumb from the global scrollbar rule, without curtains. |
+| Collapsible | A long block inside a scrolling transcript should be capped and expanded on demand instead of scrolling on its own. |
+| Resizable | The user should be able to give the region more room; put the QuietScrollArea inside the panel. |
+| LoadingRegion and SkeletonRows | The pane's content is still loading; render the placeholder in place of the list. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Host | The outer `div` with `quiet-scroll-host relative min-h-0 min-w-0 overflow-hidden` and `data-quiet-scroll-surface`. Receives `className` and every other `div` attribute; it needs a height from its parent (`h-full`, or `min-h-0 flex-1` in a column). |
+| Viewport | The inner `div` with `quiet-scroll-viewport size-full overflow-auto` that actually scrolls and holds `children`. It takes `viewportClassName` (the pane inset, `p-panel-inset`), `viewportTestId` and `viewportRef`, and carries `data-quiet-scroll-intent` while the user shows intent. |
+| Thumb | The native scrollbar, styled once for the whole app in `styles/global.css`: transparent track and resting thumb, `border-default` while the viewport is hovered or carries the intent attribute, `text-muted` while the thumb itself is hovered or dragged. |
+| Curtains | An `aria-hidden`, pointer-transparent overlay (`data-testid="quiet-scroll-cues"`, `z-20`) with four `quiet-scroll-curtain` gradients, `h-16` / `w-16`, from the surface colour to transparent. Each shows (`data-visible`) only on an edge where content is clipped; left and right only with `axis="both"`. |
+| QuietScrollFrame | The same host and curtains around `children` it does not own. It finds the scroll element with `viewportSelector`, puts the intent attribute on it, and either measures it or shows the `edges` it is given; with `edges` it also sets `data-quiet-scroll-overflow-y`, which lets the global CSS reveal xterm's own slider as the same thumb. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `viewportClassName` | `string` | — | Classes for the scrolling element: the content inset (`p-panel-inset` in every tool pane). Do not set overflow or a background here. |
+| `viewportTestId` | `string` | — | `data-testid` for the scrolling element, for tests that scroll it. |
+| `viewportRef` | `RefCallback<HTMLDivElement>` | — | Called with the scrolling element when it mounts (and `null` when it unmounts), so a caller can save and restore `scrollTop`. |
+| `surface` | `"sidebar" \| "terminal"` | `"sidebar"` | The background the area sits on, which the curtains fade from: `container-sidebar-bg` or `container-terminal-bg`. Always state it; it is never inferred from placement. |
+| `axis` | `"vertical" \| "both"` | `"vertical"` | `both` also measures horizontal overflow and shows the left and right curtains. |
+| `QuietScrollFrame.viewportSelector` | `string` | — | Required on QuietScrollFrame. A selector for the third-party scroll element inside `children` (`.xterm-scrollable-element`); the frame follows it if the library replaces it. |
+| `QuietScrollFrame.edges` | `QuietScrollEdges` | — | `{ top, right, bottom, left }` from the scroller's own model (xterm's `viewportY` / `baseY`). Replaces DOM measurement, and `top \|\| bottom` marks vertical overflow for the xterm slider. |
+
+Host attributes:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `children` | `ReactNode` | — | Required. The scrolling content (QuietScrollFrame: the third-party view). |
+| `className` | `string` | — | Merged after the host classes. Size and placement only: `h-full`, `min-h-0 flex-1`, `absolute inset-12`. |
+| `inert` | `boolean` | — | Passed through; the terminal makes its frame `inert` while a start failure covers it. |
+
+### States
+
+Every cell is the real component. A curtain fades in on each clipped edge; hover a cell or scroll it to reveal the thumb.
+
+| Case | How |
+| --- | --- |
+| No overflow | Content fits. |
+| At the start | Overflow below. |
+| In the middle | Overflow on both sides. |
+| At the end | Scrolled to the bottom. |
+| Both axes | `axis="both"`, scrolled to the middle of wide content. |
+| Terminal surface | `surface="terminal"` on `container-terminal-bg`. |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| No overflow | Content fits the viewport. | No curtains and no thumb; the area looks like plain content. |
+| Clipped edge | Content continues past an edge (below at rest, above after scrolling, both in the middle). | A curtain fades in on that edge with the fast transition; it reaches `opacity-100` and fades out again when the edge is reached. |
+| At rest | No pointer, focus or scrolling in the area. | The thumb is transparent; only the curtains tell that there is more. |
+| Intent | Pointer over the area, focus inside it, a scroll in the last moment (wheel, keys, touch), or a pointer drag that started inside and left it. | `data-quiet-scroll-intent` on the viewport; the thumb shows in `border-default`. It hides again a short grace period after scrolling stops. |
+| Thumb hover / drag | Pointer on the thumb, or dragging it. | The thumb turns `text-muted`; in a high-contrast theme it also fills its gutter. |
+| High-contrast theme | A bundled theme with `data-theme-contrast="high"`. | A resting hairline thumb in `text-subtle`; full width in `border-default` on intent. |
+| Forced colours | OS high-contrast mode (`forced-colors: active`). | A system-colour thumb at all times; the curtains are removed. |
+| Reduced motion | `prefers-reduced-motion: reduce`. | Curtains and thumb change without a transition. |
+
+### Accessibility
+
+- The viewport is a plain `div` with native scrolling: no role, no `tabindex` of its own. Keyboard users scroll it by moving focus through its content, and focus inside counts as intent, so the thumb shows while they are there.
+- The curtains are `aria-hidden` and `pointer-events-none`; they never intercept clicks, selection or a drag on the scrollbar.
+- Name the pane, not the scroller: the surrounding `<section aria-label>` or tool region labels the content.
+- Forced-colours mode keeps a system-colour thumb and drops the curtains; high-contrast themes keep a resting hairline so the scrollbar is findable without hovering.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves through the content; the browser scrolls the focused element into view and the thumb shows while focus is inside. |
+| `↑ / ↓, Page Up / Page Down, Home / End, Space` | Native scrolling of the viewport when focus is on a non-editable element inside it. |
+
+### Usage rules
+
+- **QSA-1** — Use QuietScrollArea for the scrolling body of every side and bottom tool pane; do not add your own `overflow-auto`, scrollbar styles or fade overlays there.
+- **QSA-2** — Match `surface` to the background behind the area — `sidebar` on `container-sidebar-bg`, `terminal` on `container-terminal-bg` — or the curtains will show as bands of the wrong colour.
+- **QSA-3** — Keep headers, toolbars and filters outside the area so they stay fixed; only the list scrolls.
+- **QSA-4** — Size the host from its parent (`h-full`, or `min-h-0 flex-1` in a flex column) and put the inset on `viewportClassName` (`p-panel-inset`), never padding on the host.
+- **QSA-5** — Reach the scrolling element only through `viewportRef` (saving and restoring position); never query the DOM for `.quiet-scroll-viewport`.
+- **QSA-6** — Wrap a scroller you do not own with `QuietScrollFrame` and its `viewportSelector`, and pass `edges` when the library reports its own position — never a QuietScrollArea around a component that scrolls itself.
+
+### Examples
+
+#### Files list
+
+A tree of TreeRows in a sidebar pane; the bottom curtain shows there is more.
+
+```tsx
+import { useState } from "react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { TreeRow } from "@/panels/TreeRow";
+
+const FILES = Array.from({ length: 24 }, (_, index) => `component-${index + 1}.tsx`);
+
+export default function Preview() {
+	const [active, setActive] = useState(FILES[0]);
+	return (
+		<div className="h-160 w-full max-w-[20rem] bg-container-sidebar-bg">
+			<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
+				<ul className="flex flex-col">
+					{FILES.map((name) => (
+						<li key={name}>
+							<TreeRow
+								testid="file-node"
+								kind="file"
+								active={active === name}
+								label={name}
+								onClick={() => setActive(name)}
+							/>
+						</li>
+					))}
+				</ul>
+			</QuietScrollArea>
+		</div>
+	);
+}
+```
+
+#### Under a pane header
+
+The Specs pane: the header stays fixed and the area fills the rest with `min-h-0 flex-1`.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { TreeRow } from "@/panels/TreeRow";
+import { AuxiliaryPaneHeader } from "@/shell/layout/AuxiliaryPaneHeader";
+
+const SPECS = Array.from({ length: 18 }, (_, index) => `module-${index + 1}/SPEC.md`);
+
+export default function PaneHeader() {
+	const t = useT();
+	return (
+		<section
+			aria-label={t("workbench.tool.specs")}
+			className="flex h-240 w-full max-w-[20rem] flex-col bg-container-sidebar-bg"
+		>
+			<AuxiliaryPaneHeader title={t("workbench.tool.specs")} />
+			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-panel-inset">
+				<ul className="flex flex-col">
+					{SPECS.map((name) => (
+						<li key={name}>
+							<TreeRow testid="spec-node" kind="file" label={name} onClick={() => {}} />
+						</li>
+					))}
+				</ul>
+			</QuietScrollArea>
+		</section>
+	);
+}
+```
+
+#### Content that fits
+
+Review's empty message: no curtains and no thumb.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+
+export default function ShortContent() {
+	const t = useT();
+	return (
+		<div className="h-120 w-full max-w-[20rem] bg-container-sidebar-bg">
+			<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
+				<p className="px-8 py-4 tr-text-metadata text-text-subtle">{t("review.panel.empty")}</p>
+			</QuietScrollArea>
+		</div>
+	);
+}
+```
+
+#### Growing content
+
+Curtains follow the content as rows are added; no prop changes are needed.
+
+```tsx
+import { RiAddLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { TreeRow } from "@/panels/TreeRow";
+
+export default function GrowingContent() {
+	const t = useT();
+	const [count, setCount] = useState(3);
+	const names = Array.from({ length: count }, (_, index) => `workspace-${index + 1}`);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				className="self-start"
+				iconLeft={RiAddLine}
+				onClick={() => setCount((value) => value + 1)}
+			>
+				{t("common.add")}
+			</Button>
+			<div className="h-160 w-full max-w-[20rem] bg-container-sidebar-bg">
+				<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
+					<ul className="flex flex-col">
+						{names.map((name) => (
+							<li key={name}>
+								<TreeRow testid="workspace-node" kind="dir" label={name} onClick={() => {}} />
+							</li>
+						))}
+					</ul>
+				</QuietScrollArea>
+			</div>
+		</div>
+	);
+}
+```
+
+#### Remembered position
+
+`viewportRef` saves `scrollTop`; hide and show the pane and it reopens where you left it.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { useEffect, useRef, useState } from "react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { TreeRow } from "@/panels/TreeRow";
+
+const FILES = Array.from({ length: 40 }, (_, index) => `src/file-${index + 1}.ts`);
+
+export default function RememberedScroll() {
+	const t = useT();
+	const [shown, setShown] = useState(true);
+	const savedTop = useRef(0);
+	const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
+	useEffect(() => {
+		if (!viewport) return;
+		viewport.scrollTop = savedTop.current;
+		const save = () => {
+			savedTop.current = viewport.scrollTop;
+		};
+		viewport.addEventListener("scroll", save, { passive: true });
+		return () => viewport.removeEventListener("scroll", save);
+	}, [viewport]);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<Button
+				variant="outline"
+				size="m"
+				className="self-start"
+				selected={shown}
+				aria-pressed={shown}
+				onClick={() => setShown((value) => !value)}
+			>
+				{t("workbench.tool.files")}
+			</Button>
+			<div className="h-160 w-full max-w-[20rem] bg-container-sidebar-bg">
+				{shown ? (
+					<QuietScrollArea
+						className="h-full"
+						viewportClassName="p-panel-inset"
+						viewportRef={setViewport}
+					>
+						<ul className="flex flex-col">
+							{FILES.map((name) => (
+								<li key={name}>
+									<TreeRow testid="file-node" kind="file" label={name} onClick={() => {}} />
+								</li>
+							))}
+						</ul>
+					</QuietScrollArea>
+				) : null}
+			</div>
+		</div>
+	);
+}
+```
+
+#### Both axes
+
+`axis="both"` adds the left and right curtains for wide content.
+
+```tsx
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+
+const LINES = Array.from(
+	{ length: 20 },
+	(_, index) =>
+		`${String(index + 1).padStart(2, " ")}  export const step${index + 1} = createStep({ id: "step-${index + 1}", retries: 3, timeoutMs: 30_000, onFailure: "pause" });`,
+);
+
+export default function BothAxes() {
+	return (
+		<div className="h-160 w-full max-w-[24rem] bg-container-sidebar-bg">
+			<QuietScrollArea axis="both" className="h-full" viewportClassName="p-panel-inset">
+				<pre className="w-max tr-code-text text-text-default">{LINES.join("\n")}</pre>
+			</QuietScrollArea>
+		</div>
+	);
+}
+```
+
+#### Terminal surface
+
+`surface="terminal"` on `container-terminal-bg`.
+
+```tsx
+import { QuietScrollArea } from "@/components/QuietScrollArea";
+
+const OUTPUT = Array.from(
+	{ length: 30 },
+	(_, index) => `✓ src/panels/test-${index + 1}.test.ts (${index + 3} tests)`,
+);
+
+export default function TerminalSurface() {
+	return (
+		<div className="h-160 w-full bg-container-terminal-bg">
+			<QuietScrollArea surface="terminal" className="h-full" viewportClassName="p-12">
+				<pre className="tr-code-text text-text-default">{OUTPUT.join("\n")}</pre>
+			</QuietScrollArea>
+		</div>
+	);
+}
+```
+
+#### Third-party scroller
+
+`QuietScrollFrame` finds the scroll element with `viewportSelector` and shows the `edges` the view reports, as the terminal does with xterm.
+
+```tsx
+import { type UIEvent, useState } from "react";
+import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
+
+const OUTPUT = Array.from(
+	{ length: 40 },
+	(_, index) => `[${index + 1}] compiling chunk ${index + 1}`,
+);
+
+function ThirdPartyLog({ onEdges }: { onEdges: (edges: QuietScrollEdges) => void }) {
+	const report = (event: UIEvent<HTMLDivElement>) => {
+		const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+		onEdges({
+			top: scrollTop > 0,
+			right: false,
+			bottom: scrollTop < scrollHeight - clientHeight - 1,
+			left: false,
+		});
+	};
+	return (
+		<div className="log-viewport absolute inset-0 overflow-auto" onScroll={report}>
+			<pre className="tr-code-text text-text-default">{OUTPUT.join("\n")}</pre>
+		</div>
+	);
+}
+
+export default function Frame() {
+	const [edges, setEdges] = useState<QuietScrollEdges>({
+		top: false,
+		right: false,
+		bottom: true,
+		left: false,
+	});
+	return (
+		<div className="relative h-160 w-full bg-container-terminal-bg">
+			<QuietScrollFrame
+				viewportSelector=".log-viewport"
+				surface="terminal"
+				edges={edges}
+				className="absolute inset-12"
+			>
+				<ThirdPartyLog onEdges={setEdges} />
+			</QuietScrollFrame>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/shell/WorkspaceWorkbench.tsx` | The Projects and Specs tool bodies: `h-full` with `p-panel-inset`. |
+| `apps/web/src/shell/ProjectHome.tsx` | The Projects tree under its pane header on Project Home (`min-h-0 flex-1`). |
+| `apps/web/src/panels/ReviewPanel.tsx` | Review's file list below its fixed toolbar. |
+| `apps/web/src/panels/RememberedScrollArea.tsx` | Files and Changes: `viewportRef` saves and restores the tree's scroll position. |
+
+## AuxiliaryPaneHeader
+
+The plain header of an auxiliary (edge) pane: a fixed-height row with the pane's title and its trailing actions, and `AuxiliaryPaneHideButton`, the pane's Hide control. It owns the height, surface, border and title type, and — given `dragTab` — turns the title into a drag handle for that tool. The call site provides the title, the actions and the region the Hide button controls.
+
+```tsx
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+```
+
+### When to use
+
+- An auxiliary pane whose selected tab is a singleton tool (Projects, Specs, Files, Review, TODO List): the tool's name as the title, draggable with `dragTab`.
+- An empty auxiliary pane: *Tools* on a side, *Terminal* at the bottom, with the add menu and Remove group.
+- Project Home's Projects pane, composed around its own geometry without drag data, so the tool looks the same with or without the workbench.
+- `AuxiliaryPaneHideButton` as the last action of every expanded auxiliary pane — including a terminal pane's TabStrip.
+
+### Alternatives
+
+| Instead | When |
+| --- | --- |
+| TabStrip | The pane's selected tab is a terminal: it shows the pane's named session tabs instead of a title. |
+| HeaderIconButton | A toggle in a feature panel's own header, inside the pane body. |
+| Collapsible | Folding a block of content inside a panel, not hiding a whole edge pane. |
+
+### Anatomy
+
+| Part | Description |
+| --- | --- |
+| Header | A `h-panel-header-row` row on `container-header-bg` with a `border-muted` bottom border; spreads the rest of its props onto the `<div>`. |
+| Title | A `tr-title-compact` span in `text-default` with `px-12` that takes the free width. It is itself a flex box, so its `truncate` draws no ellipsis: a long title is cut off where the actions begin. |
+| Drag handle | With `dragTab`, the title becomes a dnd-kit draggable carrying `{ tab }` — the same drag data as the tool's rail entry — with a grab cursor. |
+| Actions | `actions`, after the title. |
+| Hide button | `AuxiliaryPaneHideButton`: IconButton `ghost` `m` with a close icon, named *Hide pane*, `shrink-0 self-center`. |
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `title` | `string` | — | The pane's name: the selected tool's `layoutTabName`, or `workbench.pane.tools` / `workbench.rail.terminal` for an empty pane. Replaces the native `title` attribute. |
+| `dragTab` | `LayoutTab` | — | Makes the title a drag handle for this tab. Pass the selected tool inside the workbench's `DndContext`; omit it outside the workbench. |
+| `actions` | `ReactNode` | — | Trailing actions — IconButton `ghost` `m` with `shrink-0 self-center`: the add menu, Remove group on an empty pane, then the Hide button. |
+| `ref` | `Ref<HTMLDivElement>` | — | Forwarded to the header `<div>`; the workbench attaches its join droppable here. |
+| `className` | `string` | — | Merged after the base classes. The workbench passes its drop-hint and drop-active fills here, keyed on the `data-drop-*` attributes it sets; otherwise placement only. |
+
+AuxiliaryPaneHideButton props:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `controls` | `string` | — | `aria-controls`: the id of the pane region it hides. |
+| `testId` | `string` | — | `data-testid`: `side-group-fold` on a side, `bottom-group-fold` at the bottom (e2e tests rely on it). |
+| `onClick` | `() => void` | — | Hides or folds the pane. |
+
+### States
+
+Every row is the real component. Hover the drag-handle title to see the grab cursor and drag it a few pixels to see the grabbing cursor; hover and Tab to the Hide button for its tooltip and focus ring.
+
+| Title | Props |
+| --- | --- |
+| Plain | `title` |
+| Drag handle | `title dragTab` |
+| No actions | `title` |
+| Clipped (no ellipsis) | `title` (narrow column) |
+
+| State | How | Appearance |
+| --- | --- | --- |
+| Default | Rest. | Header surface, muted bottom border, the title in default text. |
+| Drag handle hover | Pointer over a title with `dragTab`. | Grab cursor; no fill. |
+| Dragging | Drag the title in a `DndContext`. | Grabbing cursor (`data-dragging`); the header itself does not move. |
+| Drop hint / drop active | A tool drag that can join this pane (workbench only). | No treatment of its own: the workbench sets `data-drop-hint` / `data-drop-active` and passes `primary-subtle` / `primary-soft` fills through `className`. |
+| Long title | A narrow pane. | The title is clipped at the actions with no ellipsis; actions keep their size. |
+| Hide button | Hover, press, Tab. | IconButton `ghost` states and the *Hide pane* tooltip. |
+| Disabled / selected | — | No distinct treatment. |
+
+### Accessibility
+
+- The header is a plain `<div>` and its title a `<span>`, not a heading: name the pane on its region (`<section aria-label>`), as Project Home and the workbench tool body do.
+- The drag handle receives only pointer listeners — it is not focusable and has no role. Keyboard users arrange tools from the rail entry's menu instead.
+- `AuxiliaryPaneHideButton` is named *Hide pane*, sets `aria-controls` to the pane and `aria-expanded="true"` (it renders only while the pane is open).
+- After hiding, the pane's rail entry stays the way back; the workbench moves focus there.
+
+| Keys | Action |
+| --- | --- |
+| `Tab / Shift+Tab` | Moves between the actions; the title is skipped. |
+| `Enter / Space` | Activates the focused action; on Hide, hides the pane. |
+
+### Usage rules
+
+- **APH-1** — Use AuxiliaryPaneHeader when the pane's selected tab is a tool or nothing; when it is a terminal, render the pane's TabStrip of sessions instead.
+- **APH-2** — The title is the pane's name from `layoutTabName` or the empty-pane locale key — never a custom label, heading or extra content.
+- **APH-3** — Pass `dragTab` only for a placed tool inside the workbench's `DndContext`; Project Home and other frame-less surfaces compose the header without it.
+- **APH-4** — Every expanded auxiliary pane ends with `AuxiliaryPaneHideButton`, last in `actions`, with `controls` set to the pane's region id.
+- **APH-5** — Actions are IconButton `ghost` `m` with `shrink-0 self-center`, shown only when they can act — Remove group only on an empty pane.
+- **APH-6** — Do not restyle the header: no height, surface, border or type classes. It is the one owner of edge-pane header styling, shared by the workbench and Project Home.
+
+### Examples
+
+#### Preview
+
+A pane title with the Hide button.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+
+export default function Preview() {
+	const t = useT();
+	return (
+		<section
+			id="preview-projects-pane"
+			aria-label={t("shell.projectHome.projects")}
+			className="w-full"
+		>
+			<AuxiliaryPaneHeader
+				title={t("shell.projectHome.projects")}
+				actions={
+					<AuxiliaryPaneHideButton
+						testId="side-group-fold"
+						controls="preview-projects-pane"
+						onClick={() => {}}
+					/>
+				}
+			/>
+		</section>
+	);
+}
+```
+
+#### Project Home
+
+The rail entry and the Hide button toggle the same pane, as on Project Home.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import { AuxiliaryRail, AuxiliaryRailToolButton } from "@/shell/layout/AuxiliaryRail";
+import type { AuxiliaryRailToolEntry } from "@/shell/layout/auxiliaryPresentation";
+
+const PANE_ID = "example-projects-pane";
+
+export default function ProjectHome() {
+	const t = useT();
+	const [collapsed, setCollapsed] = useState(false);
+	const toggle = () => setCollapsed((value) => !value);
+	const entry: AuxiliaryRailToolEntry = {
+		key: "projects",
+		region: "left",
+		kind: "tool",
+		groupId: null,
+		tool: "projects",
+		tab: null,
+		selected: true,
+		expanded: !collapsed,
+	};
+	return (
+		<div className="flex h-[8rem] w-full">
+			<AuxiliaryRail
+				region="left"
+				entries={[entry]}
+				renderEntry={(_, control) => (
+					<AuxiliaryRailToolButton
+						entry={entry}
+						controls={PANE_ID}
+						control={control}
+						onActivate={toggle}
+					/>
+				)}
+			/>
+			<section
+				id={PANE_ID}
+				aria-label={t("shell.projectHome.projects")}
+				hidden={collapsed}
+				className="flex min-w-0 flex-1 flex-col"
+			>
+				<AuxiliaryPaneHeader
+					title={t("shell.projectHome.projects")}
+					actions={
+						<AuxiliaryPaneHideButton testId="side-group-fold" controls={PANE_ID} onClick={toggle} />
+					}
+				/>
+			</section>
+		</div>
+	);
+}
+```
+
+#### Tool pane
+
+The selected tool's name as a drag handle (`dragTab`), the pane's add menu and Hide.
+
+```tsx
+import { DndContext, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { useT } from "@thinkrail/locales/react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import { layoutTabName, toolTab } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { SideGroupMenu } from "@/shell/layout/workbenchSide";
+
+const FILES = toolTab("files");
+
+const DOCUMENT: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [{ id: "left", weight: 1, folded: false, tabs: [toolTab("projects")] }],
+	},
+	right: {
+		visible: true,
+		width: 0.25,
+		groups: [{ id: "right", weight: 1, folded: false, tabs: [toolTab("specs"), FILES] }],
+	},
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function ToolPane() {
+	const t = useT();
+	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+	const group = DOCUMENT.right.groups[0];
+	return (
+		<DndContext sensors={sensors}>
+			<div className="w-full">
+				<AuxiliaryPaneHeader
+					title={layoutTabName(t, FILES)}
+					dragTab={FILES}
+					actions={
+						<>
+							{group ? (
+								<SideGroupMenu
+									document={DOCUMENT}
+									side="right"
+									group={group}
+									limit={6}
+									onNewTerminal={() => {}}
+									onRevealTool={() => {}}
+								/>
+							) : null}
+							<AuxiliaryPaneHideButton
+								testId="side-group-fold"
+								controls="example-files-pane"
+								onClick={() => {}}
+							/>
+						</>
+					}
+				/>
+			</div>
+		</DndContext>
+	);
+}
+```
+
+#### Pane stack
+
+Two right panes: a tool pane and an empty *Tools* pane whose Remove group commits `removeLayoutGroup`.
+
+```tsx
+import { RiCloseLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
+import { useState } from "react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import {
+	isLayoutUnavailable,
+	layoutTabName,
+	removeLayoutGroup,
+	toolTab,
+} from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { groupPanelId } from "@/shell/layout/workbenchShared";
+import { SideGroupMenu } from "@/shell/layout/workbenchSide";
+
+const INITIAL: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [{ id: "left", weight: 1, folded: false, tabs: [toolTab("projects")] }],
+	},
+	right: {
+		visible: true,
+		width: 0.25,
+		groups: [
+			{ id: "tools", weight: 0.5, folded: false, tabs: [toolTab("files"), toolTab("review")] },
+			{ id: "empty", weight: 0.5, folded: false, tabs: [] },
+		],
+	},
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+export default function PaneStack() {
+	const t = useT();
+	const [document, setDocument] = useState(INITIAL);
+	return (
+		<div className="flex w-full flex-col gap-8">
+			{document.right.groups.map((group) => {
+				const location = { area: "right", groupId: group.id } as const;
+				const selected = group.tabs[0];
+				const removal = removeLayoutGroup(t, document, location);
+				return (
+					<AuxiliaryPaneHeader
+						key={group.id}
+						title={selected ? layoutTabName(t, selected) : t("workbench.pane.tools")}
+						{...(selected?.kind === "tool" ? { dragTab: selected } : {})}
+						data-group-id={group.id}
+						actions={
+							<>
+								<SideGroupMenu
+									document={document}
+									side="right"
+									group={group}
+									limit={6}
+									onNewTerminal={() => {}}
+									onRevealTool={() => {}}
+								/>
+								{group.tabs.length === 0 ? (
+									<IconButton
+										variant="ghost"
+										size="m"
+										icon={RiCloseLine}
+										label={t("workbench.group.remove")}
+										tooltip={
+											isLayoutUnavailable(removal) ? removal.reason : t("workbench.group.remove")
+										}
+										wrapTrigger
+										disabled={isLayoutUnavailable(removal)}
+										onClick={() => {
+											if (!isLayoutUnavailable(removal)) setDocument(removal.document);
+										}}
+										className="shrink-0 self-center"
+									/>
+								) : null}
+								<AuxiliaryPaneHideButton
+									testId="side-group-fold"
+									controls={groupPanelId(location)}
+									onClick={() => {}}
+								/>
+							</>
+						}
+					/>
+				);
+			})}
+		</div>
+	);
+}
+```
+
+#### Empty bottom pane
+
+An empty bottom pane titled *Terminal*, with its add menu and Hide.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import { toolTab } from "@/shell/layout/model";
+import type { WorkspaceLayoutDocument } from "@/shell/layout/types";
+import { groupPanelId } from "@/shell/layout/workbenchShared";
+import { SideGroupMenu } from "@/shell/layout/workbenchSide";
+
+const DOCUMENT: WorkspaceLayoutDocument = {
+	version: 2,
+	center: { kind: "group", id: "center", tabs: [] },
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [{ id: "left", weight: 1, folded: false, tabs: [toolTab("projects")] }],
+	},
+	right: {
+		visible: true,
+		width: 0.25,
+		groups: [{ id: "right", weight: 1, folded: false, tabs: [toolTab("files")] }],
+	},
+	bottom: {
+		visible: true,
+		height: 0.3,
+		alignment: "center",
+		groups: [{ id: "bottom", weight: 1, folded: false, tabs: [] }],
+	},
+	toolRestoreTargets: {},
+};
+
+export default function BottomEmpty() {
+	const t = useT();
+	const group = DOCUMENT.bottom.groups[0];
+	return (
+		<div className="w-full">
+			<AuxiliaryPaneHeader
+				title={t("workbench.rail.terminal")}
+				actions={
+					<>
+						{group ? (
+							<SideGroupMenu
+								document={DOCUMENT}
+								side="bottom"
+								group={group}
+								limit={3}
+								onNewTerminal={() => {}}
+								onRevealTool={() => {}}
+							/>
+						) : null}
+						<AuxiliaryPaneHideButton
+							testId="bottom-group-fold"
+							controls={groupPanelId({ area: "bottom", groupId: "bottom" })}
+							onClick={() => {}}
+						/>
+					</>
+				}
+			/>
+		</div>
+	);
+}
+```
+
+#### Long title
+
+In a narrow pane the actions keep their size and the title is cut off — without an ellipsis, because the title span is a flex box.
+
+```tsx
+import { useT } from "@thinkrail/locales/react";
+import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "@/shell/layout/AuxiliaryPaneHeader";
+import { layoutTabName, toolTab } from "@/shell/layout/model";
+
+export default function LongTitle() {
+	const t = useT();
+	return (
+		<div className="flex w-full flex-col gap-8">
+			<div className="w-[12rem]">
+				<AuxiliaryPaneHeader
+					title={layoutTabName(t, toolTab("plan"))}
+					actions={
+						<AuxiliaryPaneHideButton
+							testId="side-group-fold"
+							controls="example-plan-pane"
+							onClick={() => {}}
+						/>
+					}
+				/>
+			</div>
+			<div className="w-[5rem]">
+				<AuxiliaryPaneHeader
+					title={layoutTabName(t, toolTab("plan"))}
+					actions={
+						<AuxiliaryPaneHideButton
+							testId="side-group-fold"
+							controls="example-plan-pane"
+							onClick={() => {}}
+						/>
+					}
+				/>
+			</div>
+		</div>
+	);
+}
+```
+
+### In production
+
+| File | What it shows |
+| --- | --- |
+| `apps/web/src/shell/layout/workbenchSide.tsx` | `AuxiliaryGroupHeader`: tool and empty panes with `dragTab`, the add menu, Remove group, Hide and the join drop cues. |
+| `apps/web/src/shell/ProjectHome.tsx` | The Projects pane header without drag data, with the Hide button beside the rail entry. |
+
+## Button and IconButton contract
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /
 `iconRight`), `IconButton` (icon only — `label` is required and becomes both the `aria-label` and the shared

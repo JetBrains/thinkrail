@@ -98,6 +98,44 @@ function propsTable(props: Readonly<Record<string, PropDoc>>): string {
 	);
 }
 
+const hasSection = (doc: ComponentDoc, id: string) =>
+	doc.sections?.some((section) => section.id === id) ?? false;
+
+function variantBlocks(doc: ComponentDoc, headings: boolean): string[] {
+	const block = (heading: string, label: string, entries?: Readonly<Record<string, string>>) =>
+		entries
+			? [
+					...(headings ? [heading] : []),
+					table(
+						[label, "Use it for"],
+						Object.entries(entries).map(([name, text]) => [code(name), text]),
+					),
+				]
+			: [];
+	return [
+		...block("### Variants", "Variant", doc.variants),
+		...block("### Sizes", "Size", doc.sizes),
+	];
+}
+
+function toneBlock(doc: ComponentDoc, heading: string | null): string[] {
+	if (!doc.tones) return [];
+	return [
+		...(heading ? [heading, doc.tones.note] : []),
+		table(
+			["Tone", "Use it for"],
+			Object.entries(doc.tones.docs).map(([name, text]) => [code(name), text]),
+		),
+	];
+}
+
+function statesTable(doc: ComponentDoc): string {
+	return table(
+		["State", "How", "Appearance"],
+		doc.states.map((state) => [state.state, state.how, state.appearance]),
+	);
+}
+
 function component(doc: ComponentDoc): string {
 	return [
 		`## ${doc.name}`,
@@ -117,29 +155,26 @@ function component(doc: ComponentDoc): string {
 		),
 		"### Props",
 		propsTable(doc.props),
-		"Native button props:",
-		propsTable(doc.nativeProps),
-		"### Variants",
-		table(
-			["Variant", "Use it for"],
-			Object.entries(doc.variants).map(([name, text]) => [code(name), text]),
-		),
-		"### Sizes",
-		table(
-			["Size", "Use it for"],
-			Object.entries(doc.sizes).map(([name, text]) => [code(name), text]),
-		),
-		"### Tone",
-		"`tone` applies to `outline` and `ghost`; other variants ignore it.",
-		table(
-			["Tone", "Use it for"],
-			Object.entries(doc.tones).map(([name, text]) => [code(name), text]),
-		),
-		"### States",
-		table(
-			["State", "How", "Appearance"],
-			doc.states.map((state) => [state.state, state.how, state.appearance]),
-		),
+		...(doc.nativeProps ? [`${doc.nativeProps.title}:`, propsTable(doc.nativeProps.props)] : []),
+		...(hasSection(doc, "variants") ? [] : variantBlocks(doc, true)),
+		...(doc.tones && !doc.sections?.some((section) => section.id === "tone")
+			? toneBlock(doc, "### Tone")
+			: []),
+		...(doc.sections ?? []).flatMap((section) => [
+			`### ${section.title}`,
+			...(section.description
+				? [section.description]
+				: section.id === "tone" && doc.tones
+					? [doc.tones.note]
+					: []),
+			...(section.table ? [table(section.table.head, section.table.rows)] : []),
+			...(section.id === "variants" ? variantBlocks(doc, false) : []),
+			...(section.id === "tone" ? toneBlock(doc, null) : []),
+			...(section.id === "states" ? [statesTable(doc)] : []),
+		]),
+		...(doc.sections?.some((section) => section.id === "states")
+			? []
+			: ["### States", statesTable(doc)]),
 		"### Accessibility",
 		list(doc.accessibility),
 		table(
@@ -174,14 +209,17 @@ function shiftHeadings(markdown: string, by: number): string {
 
 function componentsMarkdown(): string {
 	const guides = docs.filter((page) => page.area === "guides" && page.slug === "using");
-	const contracts = [...new Set(components.map((doc) => doc.contract))];
+	const contracts = [...new Set(components.flatMap((doc) => (doc.contract ? [doc.contract] : [])))];
 	const body = [
 		banner("apps/web/library/content and apps/web/library/examples"),
 		"# ThinkRail components",
 		`The written reference of the component library. The live library renders the same content with the production components, styles and themes: ${SITE}, or \`bun run library:build\` for the static site.`,
 		...guides.map((page) => `## ${page.title}\n\n${shiftHeadings(content(page.file), 1)}`),
 		...components.map(component),
-		...contracts.map((file) => `## Button system contract\n\n${shiftHeadings(content(file), 1)}`),
+		...contracts.map((file) => {
+			const owners = components.filter((doc) => doc.contract === file).map((doc) => doc.name);
+			return `## ${owners.join(" and ")} contract\n\n${shiftHeadings(content(file), 1)}`;
+		}),
 	].join("\n\n");
 	return `${portable(body, COMPONENTS_PATH)}\n`;
 }
@@ -279,8 +317,8 @@ function designMarkdown(): string {
 			components.map((doc) => [
 				doc.name,
 				code(doc.importLine),
-				Object.keys(doc.variants).map(code).join(", "),
-				Object.keys(doc.sizes).map(code).join(", "),
+				doc.variants ? Object.keys(doc.variants).map(code).join(", ") : "—",
+				doc.sizes ? Object.keys(doc.sizes).map(code).join(", ") : "—",
 			]),
 		),
 	].join("\n\n");
