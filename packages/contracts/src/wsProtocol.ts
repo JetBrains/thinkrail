@@ -46,6 +46,7 @@ import type {
 	ProjectPathStatus,
 	ProjectTrustSummary,
 	ProviderStatusReport,
+	ProviderWarning,
 	PrPreview,
 	ResourceHistoryCursor,
 	ResourceHistoryPage,
@@ -128,7 +129,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 98;
+export const PROTOCOL_VERSION = 99;
+export const PROVIDER_WARNINGS_PROTOCOL_VERSION = 99;
 export const SURVEY_TRANSLATIONS_PROTOCOL_VERSION = 98;
 export const RESOURCE_HISTORY_PROTOCOL_VERSION = 96;
 export const PROJECT_CLONE_PROTOCOL_VERSION = 95;
@@ -341,6 +343,7 @@ export const WS_METHODS = {
 	providerLoginReply: "provider.loginReply",
 	providerLoginCancel: "provider.loginCancel",
 	providerLogout: "provider.logout",
+	providerDisableWarning: "provider.disableWarning",
 	providerJbcentralConnect: "provider.jbcentralConnect",
 	providerJbcentralDisconnect: "provider.jbcentralDisconnect",
 	providerJbcentralStartProxy: "provider.jbcentralStartProxy",
@@ -973,6 +976,7 @@ export interface WsMethodMap {
 	"provider.loginReply": { params: LoginReply; result: Ack };
 	"provider.loginCancel": { params: { loginId: string }; result: Ack };
 	"provider.logout": { params: { providerId: string }; result: Ack };
+	"provider.disableWarning": { params: { warning: ProviderWarning }; result: Ack };
 	"provider.jbcentralConnect": { params: Record<string, never>; result: JbcentralConnectResult };
 	"provider.jbcentralDisconnect": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralStartProxy": { params: Record<string, never>; result: JbcentralActionResult };

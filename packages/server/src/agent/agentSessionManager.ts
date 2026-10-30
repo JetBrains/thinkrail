@@ -75,6 +75,11 @@ import {
 } from "../persistence";
 import { removeWorkspaceResourceHistory } from "../resourceHistory";
 import { trashFile } from "../trash";
+import {
+	type ExtraUsageSubject,
+	saveAnthropicExtraUsageWarningOff,
+	shouldWarnAnthropicExtraUsage,
+} from "./anthropicExtraUsage";
 import { archiveCommandHistory, publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
@@ -138,6 +143,7 @@ import {
 	notifyExtensionError,
 	notifyExtUi,
 	pendingExtUiDialog,
+	publishSessionNotice,
 	selectForToolCall,
 	setExtUiStateChanged,
 } from "./webUiContext";
@@ -185,6 +191,7 @@ interface Entry {
 	firstPromptScanned: number;
 	toolResponseWaiters: ToolResponseWaiters;
 	mcpHost: McpSessionHost;
+	extraUsageWarned: boolean;
 }
 
 const sessions = new Map<string, Entry>();
@@ -1151,6 +1158,7 @@ async function prepareSessionEntry(
 		firstPromptScanned: 0,
 		toolResponseWaiters,
 		mcpHost,
+		extraUsageWarned: false,
 	};
 	entry.commandHistory = archiveCommandHistory(
 		workspaceId,
@@ -1343,6 +1351,7 @@ async function registerSession(
 		publishCreated(summaryOf(session.sessionId, prepared.entry));
 	}
 	publishEntryState(prepared.entry);
+	void warnAnthropicExtraUsage(prepared.entry);
 	if (session.settingsManager.isProjectTrusted() !== piResourceTrustFor(workspaceId))
 		await requestSessionReload(session.sessionId);
 	return prepared.result;
@@ -2483,7 +2492,44 @@ export async function setSessionModel(sessionId: string, model: WireModel): Prom
 	const entry = mustGetEntry(sessionId);
 	const resolved = resolveWireModel(entry.generation.runtime, model);
 	await entry.session.setModel(resolved);
+	void warnAnthropicExtraUsage(entry);
 	return sessionWireModel(resolved, entry.generation);
+}
+
+function extraUsageSubject(entry: Entry): ExtraUsageSubject {
+	const { session } = entry;
+	const provider = session.model?.provider;
+	return {
+		model: provider && !entry.generation.opaqueProviderIds.has(provider) ? { provider } : undefined,
+		modelRuntime: session.modelRuntime,
+		settingsManager: session.settingsManager,
+	};
+}
+
+async function warnAnthropicExtraUsage(entry: Entry): Promise<void> {
+	if (entry.extraUsageWarned) return;
+	const subject = extraUsageSubject(entry);
+	if (!(await shouldWarnAnthropicExtraUsage(subject))) return;
+	if (entry.extraUsageWarned || entry.disposed || sessions.get(entry.session.sessionId) !== entry)
+		return;
+	if (entry.session.model?.provider !== subject.model?.provider) return;
+	entry.extraUsageWarned = true;
+	publishSessionNotice(entry.session.sessionId, "anthropicExtraUsage");
+}
+
+export function recheckAnthropicExtraUsage(): void {
+	for (const entry of sessions.values()) void warnAnthropicExtraUsage(entry);
+}
+
+export async function disableAnthropicExtraUsageWarning(): Promise<void> {
+	await saveAnthropicExtraUsageWarningOff();
+	await Promise.all(
+		[...sessions.values()].map((entry) =>
+			entry.session.settingsManager
+				.reload()
+				.catch((error: unknown) => log.warn("session settings were not reloaded", error as Error)),
+		),
+	);
 }
 
 export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel): void {
