@@ -66,6 +66,7 @@ import type { LoginState } from "../auth";
 import { assistantFailure } from "../chat/assistantFailure";
 import type { ChatMessageOrder } from "../chat/chatPreferences";
 import type { HydratedRuntime } from "../chat/hydrate";
+import { newPromptImagesState, type PromptImagesState } from "../chat/promptImageState";
 import { insertRoundCloser } from "../chat/roundCloser";
 import type {
 	ChatAttachment,
@@ -482,6 +483,7 @@ export interface SessionRuntime {
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
+	promptImages: PromptImagesState;
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
@@ -513,6 +515,7 @@ function newRuntime(
 		stats: null,
 		commands: [],
 		draft: "",
+		promptImages: newPromptImagesState(),
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},
@@ -1362,6 +1365,10 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	updateChatPromptImages: (
+		sessionId: string,
+		update: (current: PromptImagesState) => PromptImagesState,
+	) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	applyExtUi: (request: ExtUiRequest) => void;
 	reserveLogin: () => boolean;
@@ -4305,6 +4312,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	updateChatPromptImages: (sessionId, update) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => {
+				const promptImages = update(rt.promptImages);
+				return promptImages === rt.promptImages ? rt : { ...rt, promptImages };
+			}),
+		),
 	clearPendingExtUi: (sessionId, id) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => {

@@ -51,7 +51,12 @@ import {
 	type ModelSelection,
 } from "./ModelEffortPicker";
 import { isModelCommand, parseModelCommand } from "./nativeCommands";
-import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
+import {
+	imagePasteDropHandlers,
+	PromptImageChips,
+	type PromptImagesOwner,
+	usePromptImages,
+} from "./promptImages";
 import type { ChatAttachment } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
 
@@ -149,6 +154,7 @@ function highlightTint(state: SlotHighlightState): string {
 interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
+	imageOwner?: PromptImagesOwner;
 	isStreaming: boolean;
 	growthLimit: ComposerGrowthLimit;
 	commands: SlashCommandItem[];
@@ -190,6 +196,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	{
 		value,
 		onChange,
+		imageOwner,
 		isStreaming,
 		growthLimit,
 		commands,
@@ -219,7 +226,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
 	const [caret, setCaret] = useState(0);
-	const attachedImages = usePromptImages();
+	const attachedImages = usePromptImages(imageOwner);
 	const { images } = attachedImages;
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const pendingImages = attachedImages.pending;
