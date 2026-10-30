@@ -109,14 +109,30 @@ describe("compiler census identities", () => {
 		).toEqual([]);
 	});
 
+	it("decides a component's shape by its last return only, as the compiler does", () => {
+		expect(
+			entries([`export function Row(p) { p.x = 1; if (p.a) return {}; return <p />; }`]),
+		).toEqual(["scripts/fixture.tsx Row"]);
+		const inner = `const Inner = () => ${body(true)};`;
+		expect(
+			entries([`export function Row(p) { ${inner} if (p.a) return <Inner />; return; }`]),
+		).toEqual(["scripts/fixture.tsx Row.Inner"]);
+	});
+
+	it("looks through TypeScript wrappers for memo arguments only", () => {
+		expect(
+			entries([
+				`export const List = ((props) => { function Item() ${body(true)} return <Item />; }) as any;`,
+			]),
+		).toEqual(["scripts/fixture.tsx List.Item"]);
+	});
+
 	it("refuses a diagnostic it cannot place in a function", () => {
 		const fileWide = [
 			"/* eslint-disable react-hooks/exhaustive-deps */",
 			"export function A({ a }) { return <p>{a}</p>; }",
 		].join("\n");
-		expect(() => censusFile(FIXTURE, fileWide)).toThrow(
-			"fixture.tsx:1: cannot tell which function",
-		);
+		expect(() => censusFile(FIXTURE, fileWide)).toThrow("fixture.tsx:1: the compiler reported");
 	});
 
 	it("records units skipped by an opt-out directive, which the compiler does not report", () => {

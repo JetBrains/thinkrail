@@ -71,9 +71,10 @@ in agreement about the same functions.
   census copies the compiler's `infer` rule by hand, so recheck it on an `oxc-transform-react` bump:
   - A unit calls a hook or renders JSX in its own body (nested functions and classes don't count, so
     the children of a plain factory are units of their own).
-  - It is a `memo`/`forwardRef` argument (TypeScript `as`/`satisfies`/`!` around it are ignored), a
+  - It is a `memo`/`forwardRef` argument (TypeScript `as`/`satisfies`/`!` around the argument are ignored), a
     hook-named function, or a component-named function that takes at most a props argument and a
-    `ref`-named second one and never returns an object, function, class or `new` value. A
+    `ref`-named second one and whose last `return` gives back something renderable (not nothing, an
+    object, a function, a class or a `new` value). A
     function expression takes its variable's name; its own id is ignored, as the compiler does.
   - A function with a `"use memo"` directive is a unit whatever its name or shape. Nothing inside a
     class is.

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import {
 	type ArrowFunctionExpression,
+	type CallExpression,
 	type Function as FunctionLike,
 	type Node,
 	type Program,
@@ -32,7 +33,6 @@ const TYPE_WRAPPERS = new Set([
 	"TSSatisfiesExpression",
 	"TSNonNullExpression",
 	"TSTypeAssertion",
-	"ParenthesizedExpression",
 ]);
 // A component that returns one of these cannot be rendering, so the compiler leaves it alone.
 const NON_NODE_RETURNS = new Set([
@@ -113,7 +113,7 @@ function parentOf(node: Node, ancestors: Node[]) {
 	return { parent: ancestors[index], child, above: ancestors.slice(0, Math.max(index, 0)) };
 }
 
-function isWrappedArgument(parent: Node | undefined, child: Node) {
+function isWrappedArgument(parent: Node | undefined, child: Node): parent is CallExpression {
 	return parent?.type === "CallExpression" && parent.callee !== child;
 }
 
@@ -174,25 +174,32 @@ function isHookCallee(node: Node) {
 	);
 }
 
-/** Whether `test` holds for a node in `fn`'s own body; nested functions and classes are not searched. */
-function inOwnBody(fn: FunctionNode, test: (node: Node) => boolean) {
-	const search = (node: Node): boolean =>
-		test(node) || children(node).some((c) => !isFunction(c) && !isClass(c) && search(c));
-	return search(fn.body);
+/** Nodes in `fn`'s own body that pass `test`, in source order; nested functions and classes are not searched. */
+function ownNodes(fn: FunctionNode, test: (node: Node) => boolean) {
+	const found: Node[] = [];
+	const search = (node: Node) => {
+		if (test(node)) found.push(node);
+		for (const child of children(node)) if (!isFunction(child) && !isClass(child)) search(child);
+	};
+	search(fn.body);
+	return found;
 }
 
 function callsHooksOrCreatesJsx(fn: FunctionNode) {
-	return inOwnBody(
-		fn,
-		(node) =>
-			node.type === "JSXElement" ||
-			node.type === "JSXFragment" ||
-			(node.type === "CallExpression" && isHookCallee(node.callee)),
+	return (
+		ownNodes(
+			fn,
+			(node) =>
+				node.type === "JSXElement" ||
+				node.type === "JSXFragment" ||
+				(node.type === "CallExpression" && isHookCallee(node.callee)),
+		).length > 0
 	);
 }
 
+/** A bare `return;` counts too: it cannot be rendering anything. */
 function isNonNode(node: Node | null) {
-	if (!node) return false;
+	if (!node) return true;
 	return NON_NODE_RETURNS.has(node.type) || (node.type === "Literal" && "bigint" in node);
 }
 
@@ -201,7 +208,9 @@ function hasComponentShape(fn: FunctionNode) {
 	if (more.length > 0 || first?.type === "RestElement") return false;
 	if (second && !(second.type === "Identifier" && /ref|Ref/.test(second.name))) return false;
 	if (fn.body.type !== "BlockStatement") return !isNonNode(fn.body);
-	return !inOwnBody(fn, (node) => node.type === "ReturnStatement" && isNonNode(node.argument));
+	// Only the last `return` in the source counts, as in the compiler.
+	const last = ownNodes(fn, (node) => node.type === "ReturnStatement").at(-1);
+	return !(last?.type === "ReturnStatement" && isNonNode(last.argument));
 }
 
 function findDirective(statements: Node[], directives: string[]): OptOut | null {
@@ -229,13 +238,10 @@ function isCompilerUnit(node: FunctionNode, ancestors: Node[]) {
 	if (ownDirective(node, OPT_IN_DIRECTIVES)) return true;
 	const { parent, child } = parentOf(node, ancestors);
 	if (isWrappedArgument(parent, child)) {
-		return (
-			parent?.type === "CallExpression" &&
-			UNIT_WRAPPERS.has(calleeName(parent.callee) ?? "") &&
-			callsHooksOrCreatesJsx(node)
-		);
+		return UNIT_WRAPPERS.has(calleeName(parent.callee) ?? "") && callsHooksOrCreatesJsx(node);
 	}
-	const name = unitName(node, parent);
+	// Unlike a `memo` argument, a variable's function is not looked for through `as`/`satisfies`.
+	const name = unitName(node, ancestors.at(-1));
 	if (HOOK_NAME.test(name)) return callsHooksOrCreatesJsx(node);
 	return UNIT_NAME.test(name) && hasComponentShape(node) && callsHooksOrCreatesJsx(node);
 }
@@ -290,7 +296,7 @@ function toBailout(file: string, code: string, units: Unit[], error: OxcError): 
 	if (offset === null || !unit) {
 		// A line-number key would churn on every edit above it, so refuse to write one.
 		throw new Error(
-			`compiler-census: ${file}:${offset === null ? "?" : lineAt(code, offset)}: cannot tell which function "${error.message}" belongs to. Put a suppression comment inside the function it disables, or teach the census unit rule this function's shape (scripts/SPEC.md).`,
+			`compiler-census: ${file}:${offset === null ? "?" : lineAt(code, offset)}: the compiler reported "${error.message}" outside every function the census counts as a compiler unit. If a file-wide lint suppression caused it, move the suppression into the function. Otherwise the census unit rule (isCompilerUnit, "Census units" in scripts/SPEC.md) no longer matches the compiler.`,
 		);
 	}
 	return {
