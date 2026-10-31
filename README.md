@@ -74,6 +74,9 @@ create the tools it needs based on how you actually work.
   the tools you trust in a project), keeps servers a repository
   defines off until you approve them, signs you in to OAuth servers from Settings, and shows each chat's
   servers next to its background commands and subagents.
+- **Interrupted work stays in context.** After a host restart or chat teardown, your next message tells
+  the agent which background commands and detached subagents were interrupted, so it can adjust its
+  plan instead of waiting for results that will never arrive. Opening a chat does not wake the agent.
 - **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or
   connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
 - **Your pi setup.** ThinkRail reads your existing `pi` configuration (`~/.pi/agent`). To use another one
