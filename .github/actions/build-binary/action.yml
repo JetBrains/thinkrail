@@ -225,6 +225,24 @@ runs:
           echo "update-archive-path=$update_archive_path"
         } >> "$GITHUB_OUTPUT"
 
+    - name: Normalize Linux first-install tarball ownership to root
+      if: startsWith(inputs.target, 'bun-linux-')
+      shell: bash
+      env:
+        ARTIFACT: ${{ steps.resolve-desktop.outputs.path }}
+      run: |
+        set -eu
+        # Electrobun builds the Linux installer tarball on the CI runner, so every
+        # entry records the runner's UID/GID. GNU tar restores those when run as root
+        # (--same-owner is the root default), so extracting the tarball inside $HOME
+        # can leave the home directory owned by a UID that does not exist on the host —
+        # breaking sshd with StrictModes and locking the user out (#1002). Rewrite each
+        # entry as root-owned so a root extraction restores root ownership.
+        tmp="$(mktemp -d)"
+        tar -xzf "$ARTIFACT" -C "$tmp"
+        tar --owner=0 --group=0 -czf "$ARTIFACT" -C "$tmp" .
+        rm -rf "$tmp"
+
     - name: Smoke desktop first-install artifact
       shell: bash
       env:
