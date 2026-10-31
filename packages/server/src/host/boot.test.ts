@@ -12,7 +12,7 @@ import {
 	configurePiRuntimeFactory,
 	refreshSubagentConcurrency,
 } from "../agent";
-import { delegationServiceFor } from "../agent/delegation";
+import { delegationServiceFor, removeWorkspaceDelegation } from "../agent/delegation";
 import {
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
@@ -498,15 +498,19 @@ test("stop() returns the resolvers createServer installed to their defaults", as
 	writeFileSync(join(dir, "config.json"), JSON.stringify({ subagentMaxConcurrent: 16 }));
 	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
 	const workspaceId = "boot-stopped-limit";
-	const service = delegationServiceFor(workspaceId);
-	const resized: number[] = [];
-	service.setMaxConcurrentPerParent = (slots) => {
-		resized.push(slots);
-	};
-	refreshSubagentConcurrency(workspaceId);
-	b.server.stop();
-	refreshSubagentConcurrency(workspaceId);
-	expect(resized).toEqual([16]);
+	try {
+		const service = delegationServiceFor(workspaceId);
+		const resized: number[] = [];
+		service.setMaxConcurrentPerParent = (slots) => {
+			resized.push(slots);
+		};
+		refreshSubagentConcurrency(workspaceId);
+		b.server.stop();
+		refreshSubagentConcurrency(workspaceId);
+		expect(resized).toEqual([16]);
+	} finally {
+		removeWorkspaceDelegation(workspaceId);
+	}
 });
 
 test("boot permits two hosts for the same data directory", async () => {
