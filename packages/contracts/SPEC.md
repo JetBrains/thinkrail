@@ -62,9 +62,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   theme schema is owned by [[submodule-web-themes]]),
   the font settings — `FONT_ROLES`, `FontFamilyRef` (a bundled face named by its role, or a family name),
   `FontChoice` (family or `null` for the role's default, plus ≤ `FONT_FALLBACKS_MAX` distinct fallbacks),
-  `CODE_FONT_SIZE` (with the editor's `editorDelta`), `FONT_WEIGHT_OFFSET`, and the guards `isFontFamilyName`
+  `CODE_FONT_SIZE` (8–22, default 11), `TERMINAL_FONT_SIZE` (10–24, default 13), `FONT_WEIGHT_OFFSET`, and the guards `isFontFamilyName`
   (no CSS delimiters or control characters, ≤ `FONT_FAMILY_NAME_MAX_LENGTH`), `isFontFamilyRef`, `isFontRole`,
-  `isFontChoice`, `isCodeFontSize`, `isFontWeightOffset`, `fontFamilyRefKey`, `FontSettings` +
+  `isFontChoice`, `isCodeFontSize`, `isTerminalFontSize`, `isFontWeightOffset`, `fontFamilyRefKey`, `FontSettings` +
   `normalizeFontSettings`, and `hasControlCharacter` (shared with the host's font file-name rule) — and user font files as
   `UserFontsSnapshot` / `UserFontFile` (closed error codes, guarded by `isUserFontFile`) plus
   `InstalledFontsResult`, served by `fonts.list` /
@@ -131,7 +131,14 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     **`auth`** (`WireModelAuth`: the provider's `ProviderAuthKind` plus pi's `detail` label — the same
     vocabulary `provider.status` reports, projected per model so a picker can say "plan" instead of a
     per-token price without the heavyweight status call) — optional because a host older than
-    **`MODEL_PICKER_PROTOCOL_VERSION`** (v77) omits them; the shape a model takes **on the wire**
+    Font sizes split at `SPLIT_FONT_SIZES_PROTOCOL_VERSION` (v103): code is the actual file/diff size,
+  blocks follow it at +2 px, and terminal is independent. Full config normalization detects legacy
+  data by absence of an own `terminalFontSize` key: old valid 10–24/default 13 becomes code minus 2
+  and terminal unchanged. New-shaped fields normalize independently (defaults 11/13), including
+  malformed terminal values. Normalization is idempotent and never applies to partial updates.
+  Old clients must refresh their UI; the host rejects their size writes with
+  `FONT_SIZES_CLIENT_OUTDATED` before mutation.
+  **`MODEL_PICKER_PROTOCOL_VERSION`** (v77) omits them; the shape a model takes **on the wire**
     (`model.list`/`model.refresh`/`model.default`, the `session.create` result + params,
     `session.setModel` params, `SessionSummary.model`). An **allowlist** of exactly what the UI renders, *not*
     an `Omit`: extension/provider `Model.baseUrl` and `headers` can carry routing credentials, and an allowlist
@@ -420,8 +427,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, onboardingDismissed, interfaceFont,
-  codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible bag; the five font fields join at
-  v102 and normalize together through `normalizeFontSettings` (host load, web store, fonts runtime); the line-width fields join
+  codeFont, codeFontSize, terminalFontSize, codeLigatures, fontWeightOffset }` — an extensible bag; the initial five font fields join at
+  v102; independent `terminalFontSize` joins at v103. All normalize together through `normalizeFontSettings` (host load, web store, fonts runtime); the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. `onboardingDismissed` (v94, default `false`)
   records that the user finished or skipped the cold-start onboarding wizard, so it never returns. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
   v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are

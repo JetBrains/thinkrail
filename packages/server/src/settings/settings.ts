@@ -14,11 +14,13 @@ import {
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isSystemThemePair,
+	isTerminalFontSize,
 	isTerminalWindowsShell,
 	isThemeMode,
 	LINE_WIDTH_COLUMNS,
 	RECENT_MODELS_LIMIT,
 	sameModel,
+	TERMINAL_FONT_SIZE,
 	type WireModel,
 } from "@thinkrail/contracts";
 import { loadConfig, saveConfig } from "../persistence";
@@ -65,6 +67,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	interfaceFont: true,
 	codeFont: true,
 	codeFontSize: true,
+	terminalFontSize: true,
 	codeLigatures: true,
 	fontWeightOffset: true,
 	chatMessageOrder: true,
@@ -166,6 +169,14 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		if (value !== undefined && !isFontChoice(value)) {
 			throw new Error(`${name} must be a font family or null plus up to 8 distinct fallbacks`);
 		}
+	}
+	if (
+		runtimeUpdate.terminalFontSize !== undefined &&
+		!isTerminalFontSize(runtimeUpdate.terminalFontSize)
+	) {
+		throw new Error(
+			`terminalFontSize must be a whole number from ${TERMINAL_FONT_SIZE.min} to ${TERMINAL_FONT_SIZE.max}`,
+		);
 	}
 	if (runtimeUpdate.codeFontSize !== undefined && !isCodeFontSize(runtimeUpdate.codeFontSize)) {
 		throw new Error(

@@ -760,3 +760,5 @@ sound route is snapshot-at-add, never freeze-on-drift.
 One optional persisted `ReviewComment` field carries finding provenance: `origin?: { todoId, reviewedSha,
 sessionId }` — **landed**. The wire `stale?: boolean` is derived by the host per client snapshot, never
 stored. No new tool parameter, no new `status`/`anchorState` enum value.
+
+Font size writes from clients below `SPLIT_FONT_SIZES_PROTOCOL_VERSION` reject with an update-UI error before settings mutation; other compatible writes remain allowed. Internal calls without a protocol version use modern semantics. No alternate config projection is supplied to old clients, whose rendering requires an updated UI.

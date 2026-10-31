@@ -1271,8 +1271,8 @@ export interface FontChoice {
 
 export const FONT_FAMILY_NAME_MAX_LENGTH = 128;
 export const FONT_FALLBACKS_MAX = 8;
-/** `editorDelta`: the editor and diffs render this many px below the code size. */
-export const CODE_FONT_SIZE = { min: 10, max: 24, default: 13, editorDelta: 2 } as const;
+export const CODE_FONT_SIZE = { min: 8, max: 22, default: 11 } as const;
+export const TERMINAL_FONT_SIZE = { min: 10, max: 24, default: 13 } as const;
 export const FONT_WEIGHT_OFFSET = { min: -70, max: 130, step: 10, default: 0 } as const;
 
 const FONT_NAME_DELIMITERS = /["\\;{}]/;
@@ -1330,6 +1330,15 @@ export function isCodeFontSize(value: unknown): value is number {
 		Number.isInteger(value) &&
 		value >= CODE_FONT_SIZE.min &&
 		value <= CODE_FONT_SIZE.max
+	);
+}
+
+export function isTerminalFontSize(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= TERMINAL_FONT_SIZE.min &&
+		value <= TERMINAL_FONT_SIZE.max
 	);
 }
 
@@ -1461,8 +1470,8 @@ export interface AppConfig extends ThemePreference {
 	interfaceFont: FontChoice;
 	/** The editor, diffs, code blocks and the terminal. */
 	codeFont: FontChoice;
-	/** Terminal and code blocks, in px; the editor and diffs render 2 px smaller. */
 	codeFontSize: number;
+	terminalFontSize: number;
 	/** Ligatures in the editor, diffs and code in chat and documents; the terminal never draws them. */
 	codeLigatures: boolean;
 	/** Shifts every text weight but the brand face's together. */
@@ -1790,27 +1799,50 @@ export const DEFAULT_CONFIG: AppConfig = {
 	interfaceFont: { family: null, fallbacks: [] },
 	codeFont: { family: null, fallbacks: [] },
 	codeFontSize: CODE_FONT_SIZE.default,
+	terminalFontSize: TERMINAL_FONT_SIZE.default,
 	codeLigatures: false,
 	fontWeightOffset: FONT_WEIGHT_OFFSET.default,
 };
 
 export type FontSettings = Pick<
 	AppConfig,
-	"interfaceFont" | "codeFont" | "codeFontSize" | "codeLigatures" | "fontWeightOffset"
+	| "interfaceFont"
+	| "codeFont"
+	| "codeFontSize"
+	| "terminalFontSize"
+	| "codeLigatures"
+	| "fontWeightOffset"
 >;
 
-/** Each font field independently: a malformed one falls back to its own default. */
 export function normalizeFontSettings(value: unknown): FontSettings {
 	const record = typeof value === "object" && value !== null ? value : {};
 	const interfaceFont = Reflect.get(record, "interfaceFont");
 	const codeFont = Reflect.get(record, "codeFont");
 	const codeFontSize = Reflect.get(record, "codeFontSize");
+	const terminalFontSize = Reflect.get(record, "terminalFontSize");
+	const legacy = !Object.hasOwn(record, "terminalFontSize");
+	const legacySize =
+		typeof codeFontSize === "number" &&
+		Number.isInteger(codeFontSize) &&
+		codeFontSize >= 10 &&
+		codeFontSize <= 24
+			? codeFontSize
+			: 13;
 	const codeLigatures = Reflect.get(record, "codeLigatures");
 	const fontWeightOffset = Reflect.get(record, "fontWeightOffset");
 	return {
 		interfaceFont: isFontChoice(interfaceFont) ? interfaceFont : DEFAULT_CONFIG.interfaceFont,
 		codeFont: isFontChoice(codeFont) ? codeFont : DEFAULT_CONFIG.codeFont,
-		codeFontSize: isCodeFontSize(codeFontSize) ? codeFontSize : DEFAULT_CONFIG.codeFontSize,
+		codeFontSize: legacy
+			? legacySize - 2
+			: isCodeFontSize(codeFontSize)
+				? codeFontSize
+				: DEFAULT_CONFIG.codeFontSize,
+		terminalFontSize: legacy
+			? legacySize
+			: isTerminalFontSize(terminalFontSize)
+				? terminalFontSize
+				: DEFAULT_CONFIG.terminalFontSize,
 		codeLigatures:
 			typeof codeLigatures === "boolean" ? codeLigatures : DEFAULT_CONFIG.codeLigatures,
 		fontWeightOffset: isFontWeightOffset(fontWeightOffset)

@@ -28,6 +28,7 @@ export {
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
 	supportsRichAnchors,
+	supportsSplitFontSizes,
 	supportsToolResponses,
 	supportsTurnChanges,
 	supportsUserThemes,

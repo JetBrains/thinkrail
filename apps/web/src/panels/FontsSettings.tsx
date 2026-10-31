@@ -9,7 +9,7 @@ import {
 	FONT_WEIGHT_OFFSET,
 	type FontChoice,
 	type FontRole,
-	isCodeFontSize,
+	TERMINAL_FONT_SIZE,
 } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -30,7 +30,7 @@ import {
 	weightResponse,
 } from "@/fonts";
 import { useAppStore } from "@/store";
-import { getTransport } from "@/transport";
+import { getTransport, supportsSplitFontSizes } from "@/transport";
 import { FallbackChips, FontPicker } from "./FontPicker";
 import {
 	customFamilies,
@@ -96,7 +96,13 @@ function WithReset({
 	);
 }
 
-export function FontPreview({ codeFontSize }: { codeFontSize: number }) {
+export function FontPreview({
+	codeFontSize,
+	terminalFontSize,
+}: {
+	codeFontSize: number;
+	terminalFontSize: number;
+}) {
 	const t = useT();
 	return (
 		<div
@@ -135,7 +141,7 @@ export function FontPreview({ codeFontSize }: { codeFontSize: number }) {
 				<div className="flex min-w-0 flex-col gap-4">
 					<span className="text-text-subtle tr-text-eyebrow">
 						{t("settings.appearance.fonts.preview.editor", {
-							size: codeFontSize - CODE_FONT_SIZE.editorDelta,
+							size: codeFontSize,
 						})}
 					</span>
 					<pre className="tr-code-editor m-0 overflow-x-auto rounded-sm border border-border-muted p-8 text-text-default">
@@ -149,9 +155,9 @@ export function FontPreview({ codeFontSize }: { codeFontSize: number }) {
 				</div>
 				<div className="flex min-w-0 flex-col gap-4">
 					<span className="text-text-subtle tr-text-eyebrow">
-						{t("settings.appearance.fonts.preview.terminal", { size: codeFontSize })}
+						{t("settings.appearance.fonts.preview.terminal", { size: terminalFontSize })}
 					</span>
-					<pre className="tr-code-block m-0 overflow-x-auto rounded-sm bg-container-terminal-bg p-8 text-text-default">
+					<pre className="tr-code-terminal m-0 overflow-x-auto rounded-sm bg-container-terminal-bg p-8 text-text-default">
 						{TERMINAL_SAMPLE.join("\n")}
 					</pre>
 				</div>
@@ -267,33 +273,51 @@ function WeightRow({
 	);
 }
 
-function CodeSizeRow({
+function FontSizeRow({
 	value,
 	onCommit,
+	kind,
+	disabled,
 }: {
 	value: number;
+	kind: "code" | "terminal";
+	disabled: boolean;
 	onCommit: (next: number) => Promise<boolean>;
 }) {
 	const t = useT();
+	const limits = kind === "code" ? CODE_FONT_SIZE : TERMINAL_FONT_SIZE;
+	const label =
+		kind === "code"
+			? t("settings.appearance.fonts.codeSize")
+			: t("settings.appearance.fonts.terminalSize");
+	const resetLabel =
+		kind === "code"
+			? t("settings.appearance.fonts.resetSize")
+			: t("settings.appearance.fonts.resetTerminalSize");
 	const { draft, invalid, submit, inputProps } = useSettingsDraft({
 		saved: String(value),
-		isValid: (next) => /^\d+$/.test(next) && isCodeFontSize(Number(next)),
+		isValid: (next) =>
+			/^\d+$/.test(next) && Number(next) >= limits.min && Number(next) <= limits.max,
 		commit: (next) => onCommit(Number(next)),
 	});
 	const current = invalid ? value : Number(draft);
-	const errorId = "font-code-size-error";
+	const errorId = `font-${kind}-size-error`;
 	return (
 		<SettingsRow
-			label={t("settings.appearance.fonts.size")}
-			testId="font-code-size"
+			label={label}
+			testId={`font-${kind}-size`}
 			description={
 				<>
-					{t("settings.appearance.fonts.sizeDescription", { delta: CODE_FONT_SIZE.editorDelta })}
+					{disabled
+						? t("settings.appearance.fonts.splitSizesUnsupported")
+						: kind === "code"
+							? t("settings.appearance.fonts.codeSizeDescription")
+							: t("settings.appearance.fonts.terminalSizeDescription")}
 					{invalid ? (
 						<span id={errorId} className="block text-feedback-error tr-text-metadata">
 							{t("settings.appearance.fonts.sizeInvalid", {
-								min: CODE_FONT_SIZE.min,
-								max: CODE_FONT_SIZE.max,
+								min: limits.min,
+								max: limits.max,
 							})}
 						</span>
 					) : null}
@@ -301,37 +325,39 @@ function CodeSizeRow({
 			}
 			control={
 				<WithReset
-					dirty={value !== DEFAULT_FONT_PREFERENCE.codeFontSize}
-					label={t("settings.appearance.fonts.resetSize")}
-					onReset={() => submit(String(DEFAULT_FONT_PREFERENCE.codeFontSize))}
+					dirty={value !== limits.default}
+					label={resetLabel}
+					disabled={disabled}
+					onReset={() => submit(String(limits.default))}
 				>
 					<div className="flex items-center gap-4">
 						<IconButton
 							icon={Minus}
-							label={t("settings.appearance.fonts.smaller")}
+							label={t("settings.appearance.fonts.decreaseSize", { setting: label })}
 							variant="outline"
 							size="l"
-							disabled={current <= CODE_FONT_SIZE.min}
+							disabled={disabled || current <= limits.min}
 							onClick={() => submit(String(current - 1))}
 						/>
 						<input
 							type="number"
-							min={CODE_FONT_SIZE.min}
-							max={CODE_FONT_SIZE.max}
+							min={limits.min}
+							max={limits.max}
 							step={1}
 							inputMode="numeric"
 							{...inputProps}
-							aria-label={t("settings.appearance.fonts.sizeInput")}
+							aria-label={label}
+							disabled={disabled}
 							aria-describedby={invalid ? errorId : undefined}
-							data-testid="font-code-size-input"
+							data-testid={`font-${kind}-size-input`}
 							className={cn(SETTINGS_INPUT, "w-64 text-center")}
 						/>
 						<IconButton
 							icon={Plus}
-							label={t("settings.appearance.fonts.larger")}
+							label={t("settings.appearance.fonts.increaseSize", { setting: label })}
 							variant="outline"
 							size="l"
-							disabled={current >= CODE_FONT_SIZE.max}
+							disabled={disabled || current >= limits.max}
 							onClick={() => submit(String(current + 1))}
 						/>
 					</div>
@@ -346,6 +372,9 @@ export function FontsGroup() {
 	const interfaceFont = useAppStore((state) => state.interfaceFont);
 	const codeFont = useAppStore((state) => state.codeFont);
 	const codeFontSize = useAppStore((state) => state.codeFontSize);
+	const terminalFontSize = useAppStore((state) => state.terminalFontSize);
+	const protocolVersion = useAppStore((state) => state.protocolVersion);
+	const sizesSupported = supportsSplitFontSizes(protocolVersion);
 	const codeLigatures = useAppStore((state) => state.codeLigatures);
 	const fontWeightOffset = useAppStore((state) => state.fontWeightOffset);
 	const userFonts = useAppStore((state) => state.userFonts);
@@ -532,7 +561,7 @@ export function FontsGroup() {
 			testId="settings-fonts"
 		>
 			<div className="border-border-muted border-b pb-12">
-				<FontPreview codeFontSize={codeFontSize} />
+				<FontPreview codeFontSize={codeFontSize} terminalFontSize={terminalFontSize} />
 			</div>
 			<SettingsSubheading
 				title={t("settings.appearance.fonts.interface.title")}
@@ -549,9 +578,17 @@ export function FontsGroup() {
 				description={t("settings.appearance.fonts.code.description")}
 			/>
 			{fontRow("code")}
-			<CodeSizeRow
+			<FontSizeRow
+				kind="code"
+				disabled={!sizesSupported}
 				value={codeFontSize}
 				onCommit={(next) => saveSettings({ codeFontSize: next }, failure)}
+			/>
+			<FontSizeRow
+				kind="terminal"
+				disabled={!sizesSupported}
+				value={terminalFontSize}
+				onCommit={(next) => saveSettings({ terminalFontSize: next }, failure)}
 			/>
 			<SettingsRow
 				label={t("settings.appearance.fonts.ligatures")}

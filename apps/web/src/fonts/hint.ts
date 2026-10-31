@@ -10,7 +10,7 @@ import { DEFAULT_FONT_PREFERENCE, type FontPreference } from "./runtime";
 import { namedFamilies } from "./stack";
 
 const HINT_KEY = `${STORAGE_PREFIX}fonts`;
-const HINT_VERSION = 1;
+const HINT_VERSION = 2;
 
 function isCachedFace(value: unknown): value is UserFontFileOk {
 	return isUserFontFile(value) && value.ok;
@@ -29,13 +29,20 @@ export function readFontsHint(): FontsHint {
 		if (
 			typeof parsed !== "object" ||
 			parsed === null ||
-			Reflect.get(parsed, "version") !== HINT_VERSION
+			![1, HINT_VERSION].includes(Reflect.get(parsed, "version"))
 		) {
 			return { preference: DEFAULT_FONT_PREFERENCE, files: [] };
 		}
 		const files = Reflect.get(parsed, "files");
+		const rawPreference: unknown = Reflect.get(parsed, "preference");
+		const preference =
+			typeof rawPreference === "object" && rawPreference !== null ? rawPreference : {};
 		return {
-			preference: normalizeFontSettings(Reflect.get(parsed, "preference")),
+			preference: normalizeFontSettings(
+				Reflect.get(parsed, "version") === 1
+					? preference
+					: { terminalFontSize: DEFAULT_FONT_PREFERENCE.terminalFontSize, ...preference },
+			),
 			files: Array.isArray(files) ? files.filter(isCachedFace) : [],
 		};
 	} catch {

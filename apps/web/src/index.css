@@ -237,7 +237,7 @@
 	color-scheme: inherit;
 	--diffs-font-family: var(--tr-font-family-code);
 	--diffs-header-font-family: var(--tr-font-family-code);
-	--diffs-font-size: var(--tr-font-size-code-dense);
+	--diffs-font-size: var(--tr-font-size-code);
 	--diffs-line-height: var(--tr-code-row-height);
 	font-variant-ligatures: var(--tr-font-ligatures-code);
 	--diffs-foreground: var(--code-foreground);

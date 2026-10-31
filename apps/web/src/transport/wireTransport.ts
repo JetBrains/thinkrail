@@ -30,6 +30,7 @@ import {
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
+	SPLIT_FONT_SIZES_PROTOCOL_VERSION,
 	TOOL_RESPONSE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
@@ -52,6 +53,10 @@ export function supportsUserThemes(protocolVersion: number | null): boolean {
 
 export function supportsPiPackages(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION;
+}
+
+export function supportsSplitFontSizes(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= SPLIT_FONT_SIZES_PROTOCOL_VERSION;
 }
 
 export function supportsFonts(protocolVersion: number | null): boolean {
