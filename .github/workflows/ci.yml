@@ -113,7 +113,7 @@ jobs:
       - run: bun run check:pi-packages
 
   e2e-shard:
-    name: E2E (no-agent) shard ${{ matrix.shard }}/2
+    name: E2E (no-agent) shard ${{ matrix.shard }}/3
     timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.app == 'true'
@@ -121,9 +121,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     env:
-      THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/2
+      THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/3
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -191,7 +191,9 @@ jobs:
         run: .github/scripts/install-playwright.sh wait
       # This shard of the no-agent e2e suite against the artifact (grep-inverts @dev-seam too — the fake
       # login providers only exist in the dev boot): the broad net for works-from-source/broken-in-the-binary.
-      - run: bun run e2e:binary --shard=${{ matrix.shard }}/4
+      - run: bun run e2e:binary
+        env:
+          THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/4
       - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v5
@@ -291,7 +293,9 @@ jobs:
         timeout-minutes: 5
         run: .github/scripts/install-playwright.sh wait
       - name: Run no-agent e2e against the embedded desktop host
-        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run e2e:desktop --shard=${{ matrix.shard }}/4
+        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run e2e:desktop
+        env:
+          THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/4
       - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v5

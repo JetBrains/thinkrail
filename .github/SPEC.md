@@ -41,7 +41,9 @@ only when its change can affect artifacts (change classifier below). Real-provid
 
 The three browser suites dominate wall time, so each runs as a matrix of Playwright shards on separate
 runners ([[module-browser-e2e]] owns the slicing). Shard counts trade runner minutes for wall time and are
-tuned against observed per-job durations.
+tuned against observed per-job durations. The source suite gets three jobs to the artifact suites' four
+runners because each of its jobs runs two lanes, and because it alone is the critical path of every app PR
+that does not touch artifacts.
 
 **Required gate.** The ruleset requires one check, "CI passed": an aggregate job that succeeds only when the
 change classifier, conformance/lint/typecheck and unit tests succeeded and every other job either succeeded
