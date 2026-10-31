@@ -7,6 +7,7 @@ import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
 import { openUiThenStartAttribution } from "./attributionReadiness";
 import { BINARY_SOURCE_MAP_BASE } from "./binarySourceMap";
+import { renderQr } from "./qr";
 import { runUninstall } from "./uninstall";
 import { createCliHostUpdate, runUpdate } from "./update";
 
@@ -93,10 +94,12 @@ async function bootstrap(build: BuildKind): Promise<void> {
 
 	if (server.remote) {
 		const projectRef = options.projectDir ? resolve(process.cwd(), options.projectDir) : "default";
+		const link = server.remote.issueLink(projectRef);
 		console.log(
 			`thinkrail remote: relay ${options.relayUrl}\n` +
-				`thinkrail remote: open this project on another machine with:\n  ${server.remote.issueLink(projectRef)}`,
+				`thinkrail remote: scan this QR (or paste the link) on another device:\n  ${link}`,
 		);
+		console.log(await renderQr(link));
 	}
 }
 
