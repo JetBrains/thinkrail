@@ -85,6 +85,7 @@ function model(id: string, patch: Partial<CustomEndpointModel> = {}): CustomEndp
 		reasoning: null,
 		vision: null,
 		tools: null,
+		chatTemplateThinking: null,
 		...patch,
 	};
 }
@@ -219,7 +220,14 @@ test("probes fill facts from Ollama, llama.cpp and LM Studio without a server ki
 		}),
 	});
 	expect(await probeCustomEndpoint({ baseUrl: `${llama.url}/v1` })).toMatchObject({
-		models: [model("gemma", { contextWindow: 8_192, reasoning: true, tools: false })],
+		models: [
+			model("gemma", {
+				contextWindow: 8_192,
+				reasoning: true,
+				tools: false,
+				chatTemplateThinking: true,
+			}),
+		],
 	});
 	server?.stop(true);
 
@@ -655,4 +663,112 @@ test("invalid drafts are refused before models.json is touched", async () => {
 	];
 	for (const draft of bad) await expect(saveCustomEndpoint(draft)).rejects.toThrow();
 	expect(() => readFileSync(path)).toThrow();
+});
+
+test("a chat template that takes enable_thinking gets pi's chat-template thinking format", async () => {
+	await runtime();
+	const [endpoint] = await saveCustomEndpoint({
+		name: "llama",
+		baseUrl: "http://127.0.0.1:8080/v1",
+		models: [
+			model("hybrid", { contextWindow: 32_768, reasoning: true, chatTemplateThinking: true }),
+			model("plain", { contextWindow: 32_768 }),
+		],
+	});
+	const id = endpoint?.id ?? "";
+	const saved = providers()[id] as { models: Record<string, unknown>[] };
+	expect(saved.models[0]?.compat).toEqual({ thinkingFormat: "qwen-chat-template" });
+	expect(saved.models[1]).not.toHaveProperty("compat");
+	expect(endpoint?.models.map((m) => m.chatTemplateThinking)).toEqual([true, null]);
+
+	const config = JSON.parse(readFileSync(path, "utf8"));
+	config.providers[id].models[1].compat = { thinkingFormat: "qwen", supportsStore: false };
+	config.providers[id].modelOverrides = { hybrid: { compat: { thinkingFormat: "openai" } } };
+	writeFileSync(path, JSON.stringify(config));
+	await saveCustomEndpoint({
+		id,
+		name: "llama",
+		baseUrl: "http://127.0.0.1:8080/v1",
+		models: [
+			model("hybrid", { contextWindow: 32_768, reasoning: true, chatTemplateThinking: true }),
+			model("plain", { contextWindow: 32_768 }),
+		],
+	});
+	const edited = providers()[id] as { models: Record<string, unknown>[]; modelOverrides?: unknown };
+	expect(edited.modelOverrides).toBeUndefined();
+	expect(edited.models[1]?.compat).toEqual({ thinkingFormat: "qwen", supportsStore: false });
+
+	await saveCustomEndpoint({
+		id,
+		name: "llama",
+		baseUrl: "http://127.0.0.1:8080/v1",
+		models: [
+			model("hybrid", { contextWindow: 32_768, reasoning: true, chatTemplateThinking: false }),
+		],
+	});
+	expect((providers()[id] as { models: Record<string, unknown>[] }).models[0]).not.toHaveProperty(
+		"compat",
+	);
+});
+
+test("a draft from a client that predates chatTemplateThinking leaves the saved format alone", async () => {
+	await runtime();
+	const [endpoint] = await saveCustomEndpoint({
+		name: "llama",
+		baseUrl: "http://127.0.0.1:8080/v1",
+		models: [model("hybrid", { reasoning: true, chatTemplateThinking: true })],
+	});
+	const id = endpoint?.id ?? "";
+	const { chatTemplateThinking: _omitted, ...older } = model("hybrid", { reasoning: true });
+	await saveCustomEndpoint(
+		JSON.parse(
+			JSON.stringify({ id, name: "llama", baseUrl: "http://127.0.0.1:8080/v1", models: [older] }),
+		),
+	);
+	expect((providers()[id] as { models: Record<string, unknown>[] }).models[0]?.compat).toEqual({
+		thinkingFormat: "qwen-chat-template",
+	});
+});
+
+test("pi turns a chat-template model's thinking off and on through enable_thinking", async () => {
+	const bodies: Record<string, unknown>[] = [];
+	const chunk = (delta: Record<string, unknown>, finish: string | null = null) =>
+		`data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 1, model: "hybrid", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+	const { url } = serve({
+		"POST /v1/chat/completions": async (request) => {
+			bodies.push(JSON.parse(await request.text()));
+			return new Response(
+				`${chunk({ role: "assistant", content: "OK" })}${chunk({}, "stop")}data: [DONE]\n\n`,
+				{
+					headers: { "content-type": "text/event-stream" },
+				},
+			);
+		},
+	});
+	const pi = await runtime();
+	const [endpoint] = await saveCustomEndpoint({
+		name: "llama",
+		baseUrl: `${url}/v1`,
+		models: [
+			model("hybrid", { contextWindow: 32_768, reasoning: true, chatTemplateThinking: true }),
+			model("unreported", { contextWindow: 32_768, reasoning: true }),
+		],
+	});
+	const unreported = settledAvailableModels(pi).find(
+		(m) => m.provider === endpoint?.id && m.id === "unreported",
+	);
+	const saved = settledAvailableModels(pi).find(
+		(m) => m.provider === endpoint?.id && m.id === "hybrid",
+	);
+	if (!saved || !unreported) throw new Error("the saved models are not available");
+	const context = { messages: [{ role: "user" as const, content: "hi", timestamp: Date.now() }] };
+	await pi.completeSimple(saved, context);
+	await pi.completeSimple(saved, context, { reasoning: "medium" });
+	expect(bodies.map((body) => body.chat_template_kwargs)).toMatchObject([
+		{ enable_thinking: false },
+		{ enable_thinking: true },
+	]);
+	expect(bodies.every((body) => !("reasoning_effort" in body))).toBe(true);
+	await pi.completeSimple(unreported, context);
+	expect(bodies.at(-1)).not.toHaveProperty("chat_template_kwargs");
 });

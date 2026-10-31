@@ -656,8 +656,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   **`customEndpoints.remove`** (v101, `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; the user's OpenAI-compatible
   servers stored as pi `models.json` providers whose ids carry **`CUSTOM_ENDPOINT_ID_PREFIX`** (`custom-`,
   tested by `isCustomEndpointId`). A `CustomEndpointModel` carries only what a server reported —
-  `contextWindow` / `maxTokens` / `reasoning` / `vision` are `null` when it did not say (distinct from an
-  explicit `false`, so a re-detect can clear a capability), and a `tools` hint is never saved. Probing takes `{baseUrl, apiKey? | endpointId?}` (an `endpointId` without `apiKey` reuses
+  `contextWindow` / `maxTokens` / `reasoning` / `vision` / `chatTemplateThinking` are `null` when it did
+  not say (distinct from an explicit `false`, so a re-detect can clear a capability), and a `tools` hint is
+  never saved. `chatTemplateThinking` is additive on the wire: a draft without it is read as `null`, so an
+  older client never changes a saved thinking format. Probing takes `{baseUrl, apiKey? | endpointId?}` (an `endpointId` without `apiKey` reuses
   that endpoint's saved key host-side, only for its unchanged address) and returns either the normalized
   `baseUrl` with the models, or a closed `CustomEndpointProbeFailure` (`invalid-url`, `unauthorized`,
   `timeout`, `unreachable`, `not-openai` with an optional HTTP `status`, `no-models`) so the client
