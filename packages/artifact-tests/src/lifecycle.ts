@@ -301,7 +301,7 @@ function containsPathUnder(described: string, root: string): boolean {
 }
 
 const WINDOWS_PROCESS_LISTING =
-	"Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId)`t$($_.ExecutablePath)`t$($_.CommandLine)\" }";
+	"Get-CimInstance Win32_Process | ForEach-Object { @($_.ProcessId, $_.ExecutablePath, $_.CommandLine) -join [char]9 }";
 
 export function windowsProcessesUnder(roots: readonly string[], timeoutMs = 15_000): number[] {
 	const result = Bun.spawnSync(

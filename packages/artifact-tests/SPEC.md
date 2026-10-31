@@ -20,7 +20,7 @@ It consumes finished artifacts; it does not build the application or supply appl
 - **Owns:** artifact locators, isolated environments, native/installer smoke entrypoints, shared host
   probes, their fixtures and helper unit tests, and the public build action's desktop packaging-invocation
   and artifact-collector contract tests.
-- **Public surface:** `locateDesktopLauncher`
+- **Public surface:** `locateDesktopLauncher`, `waitForDocument`
 - **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export; shared
   release identity, its Windows file identity and icon, and retrying teardown; `resedit` to read Windows
   executable resources;
@@ -31,7 +31,7 @@ It consumes finished artifacts; it does not build the application or supply appl
   production packages importing this package, or real-user state mutation during tests.
 
 The root smoke commands execute the CLI, desktop and installer entrypoints directly. Browser E2E
-orchestration stays in [[module-browser-e2e]] and imports the pure locator through this package's barrel.
+orchestration stays in [[module-browser-e2e]] and imports the pure locator and ready-document poller through this package's barrel.
 Unit tests and strict typechecking use ordinary workspace Turbo tasks; there is no package build step,
 SDK preparation, declaration generation, or Playwright test discovery here. Product unit tests remain
 with their owning modules.
@@ -98,11 +98,19 @@ probe needs a release-stamped (keyed) artifact; an unstamped build correctly emi
 
 Every host owns isolated home, data, agent and cache directories; environment overrides respect Windows'
 case-insensitive keys. The native UI launch pre-creates its home directory: on macOS the window never
-reaches DOM-ready when `XDG_CACHE_HOME` is set while `HOME` names a missing directory. Readiness polling owns a finite deadline and observes early root exit; because the launcher writes its ready, route and navigation-probe documents non-atomically, the smoke treats a missing or half-written JSON file as "not yet" and keeps polling rather than failing on a torn read. When a live
-launched root or validated ready-document app/launcher PIDs need failure cleanup, teardown is bounded and
-awaited before shared retrying removal of the temporary installation root. A setup root may exit successfully
-before its app handoff is ready; after that exit, the harness does not infer or discover descendants from the
-setup process. First-install smoke runs the actual DMG app, Windows ZIP setup, or Linux tarball installer,
+reaches DOM-ready when `XDG_CACHE_HOME` is set while `HOME` names a missing directory. Readiness polling owns a finite deadline and observes early root exit; because the launcher writes its ready, route and navigation-probe documents non-atomically, every reader (desktop and installer smoke, desktop-backed Playwright's `waitForDocument`) treats a missing,
+half-written or field-incomplete JSON file as "not yet" and keeps polling rather than failing on a torn read;
+a timeout names the raw contents. The writer stays non-atomic on purpose: tolerant readers already close the
+race, and a Windows rename would add its own transient-lock failure.
+
+A smoke failure must stay diagnosable: it is printed before cleanup starts, and a cleanup failure never
+replaces it — the original error comes first, with cleanup errors as secondary (`runWithCleanup`); a
+cleanup-only failure is labelled as cleanup. Each first-install step names itself in its error. Failure cleanup
+is bounded and awaited before shared retrying removal of the temporary installation root, and targets the live
+launched root, the app/launcher PIDs of any ready document that parses, and on Windows every process whose
+executable path or command line lies under the root (short and long path forms). The Windows root scan exists
+because a setup root may exit successfully before its app handoff is ready; the harness never infers
+descendants from an exited setup process, and an installed app left running there locks the root (`EBUSY`). First-install smoke runs the actual DMG app, Windows ZIP setup, or Linux tarball installer,
 observes the installer's automatic app launch, checks health and normal control-file shutdown, and waits for
 installer/host/launcher exit. The harness-only installer UI autoclose flag dismisses completion dialogs, not
 errors or assertions.
