@@ -6,6 +6,7 @@ import {
 	type CiJob,
 	type CiPull,
 	type CiRun,
+	changeResolver,
 	isCarriedOver,
 	isFlake,
 	jobReports,
@@ -161,8 +162,21 @@ function job(
 	};
 }
 
-function pull(number: number, head: string, bases: string[], headRepo = REPO): CiPull {
-	return { number, head, headRepo, baseRepo: REPO, bases, createdAt: "2026-10-01T00:00:00Z" };
+function pull(
+	number: number,
+	head: string,
+	bases: string[],
+	headRepo = REPO,
+	createdAt = "2026-10-01T00:00:00Z",
+): CiPull {
+	return {
+		number,
+		head,
+		headRepo,
+		baseRepo: REPO,
+		bases: bases.map((ref) => ({ ref, since: createdAt })),
+		createdAt,
+	};
 }
 
 function checkRun(
@@ -371,6 +385,25 @@ describe("stacked PRs", () => {
 	test("count a stack linked by base branches, including a retargeted one, as one change", () => {
 		expect(report.flakes).toEqual([]);
 		expect([...(report.likelyGenuine[0]?.changes ?? [])].sort()).toEqual(["#804", "#950"]);
+	});
+
+	test("join a retargeted PR to the PR that owned its old base then, not a later reuse of that branch", () => {
+		const day = (n: number) => `2026-10-${String(n).padStart(2, "0")}T00:00:00Z`;
+		const resolve = changeResolver([
+			pull(100, "feature", ["main"], REPO, day(1)),
+			{
+				...pull(101, "feature-child", [], REPO, day(2)),
+				bases: [
+					{ ref: "feature", since: day(2) },
+					{ ref: "main", since: day(3) },
+				],
+			},
+			pull(200, "feature", ["main"], REPO, day(10)),
+			pull(300, "other", ["main"], REPO, day(10)),
+		]);
+		const changeOf = (pr: number) =>
+			resolve(run(pr, `branch-${pr}`, `sha-${pr}`, "failure", "pull_request", pr));
+		expect([101, 200, 300].map(changeOf)).toEqual(["#100", "#200", "#300"]);
 	});
 });
 

@@ -17,7 +17,7 @@ export interface CiPull {
 	head: string;
 	headRepo: string | null;
 	baseRepo: string;
-	bases: string[];
+	bases: { ref: string; since: string }[];
 	createdAt: string;
 }
 
@@ -206,6 +206,10 @@ export function changeResolver(pulls: CiPull[]): (run: CiRun) => string {
 	}
 	const openedBy = (key: string, at: string) =>
 		byHead.get(key)?.find((pull) => pull.createdAt <= at)?.number;
+	const ownerAt = (key: string, at: string) => {
+		const owners = byHead.get(key);
+		return openedBy(key, at) ?? (owners?.length === 1 ? owners[0]?.number : undefined);
+	};
 	const joined = new Map<number, number>();
 	const stack = (pr: number): number => {
 		const lower = joined.get(pr);
@@ -213,7 +217,7 @@ export function changeResolver(pulls: CiPull[]): (run: CiRun) => string {
 	};
 	for (const pull of pulls) {
 		for (const base of pull.bases) {
-			const parent = byHead.get(`${pull.baseRepo}:${base}`)?.[0]?.number;
+			const parent = ownerAt(`${pull.baseRepo}:${base.ref}`, base.since);
 			if (parent === undefined) continue;
 			const [a, b] = [stack(pull.number), stack(parent)];
 			if (a !== b) joined.set(Math.max(a, b), Math.min(a, b));

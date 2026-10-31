@@ -42,7 +42,7 @@ const PULLS_QUERY = `query($owner: String!, $name: String!, $cursor: String) {
 				headRepository { nameWithOwner }
 				baseRepository { nameWithOwner }
 				timelineItems(itemTypes: [BASE_REF_CHANGED_EVENT], first: 20) {
-					nodes { ... on BaseRefChangedEvent { previousRefName } }
+					nodes { ... on BaseRefChangedEvent { createdAt previousRefName currentRefName } }
 				}
 			}
 		}
@@ -61,15 +61,23 @@ const ANNOTATIONS_QUERY = `query($ids: [ID!]!) {
 }`;
 const GRAPHQL_BATCH = 100;
 
+const TRANSIENT_GH_FAILURE = /HTTP 5\d\d|Server Error|timed out|connection reset/i;
+const GH_ATTEMPTS = 3;
+
 async function gh(args: string[]): Promise<string> {
-	const child = Bun.spawn(["gh", ...args], { stdout: "pipe", stderr: "pipe" });
-	const [stdout, stderr, code] = await Promise.all([
-		new Response(child.stdout).text(),
-		new Response(child.stderr).text(),
-		child.exited,
-	]);
-	if (code !== 0) throw new Error(`gh ${args.join(" ")} failed (${code}): ${stderr.trim()}`);
-	return stdout;
+	for (let attempt = 1; ; attempt++) {
+		const child = Bun.spawn(["gh", ...args], { stdout: "pipe", stderr: "pipe" });
+		const [stdout, stderr, code] = await Promise.all([
+			new Response(child.stdout).text(),
+			new Response(child.stderr).text(),
+			child.exited,
+		]);
+		if (code === 0) return stdout;
+		if (attempt >= GH_ATTEMPTS || !TRANSIENT_GH_FAILURE.test(stderr)) {
+			throw new Error(`gh ${args.join(" ")} failed (${code}): ${stderr.trim()}`);
+		}
+		await Bun.sleep(attempt * 2_000);
+	}
 }
 
 function jsonLines<T>(text: string): T[] {
@@ -128,7 +136,7 @@ async function pullsSince(): Promise<CiPull[]> {
 				`name=${name}`,
 				...(cursor ? ["-f", `cursor=${cursor}`] : []),
 				"--jq",
-				".data.repository.pullRequests | {next: (if .pageInfo.hasNextPage then .pageInfo.endCursor else null end), pulls: [.nodes[] | {number, head: .headRefName, headRepo: .headRepository.nameWithOwner, baseRepo: .baseRepository.nameWithOwner, bases: ([.baseRefName] + [.timelineItems.nodes[].previousRefName]), createdAt, updatedAt}]}",
+				".data.repository.pullRequests | {next: (if .pageInfo.hasNextPage then .pageInfo.endCursor else null end), pulls: [.nodes[] | {number, head: .headRefName, headRepo: .headRepository.nameWithOwner, baseRepo: .baseRepository.nameWithOwner, bases: (.createdAt as $opened | (.timelineItems.nodes | sort_by(.createdAt)) as $moves | [{ref: ($moves[0].previousRefName // .baseRefName), since: $opened}] + [$moves[] | {ref: .currentRefName, since: .createdAt}]), createdAt, updatedAt}]}",
 			]),
 		) as { next: string | null; pulls: (CiPull & { updatedAt: string })[] };
 		pulls.push(...page.pulls);

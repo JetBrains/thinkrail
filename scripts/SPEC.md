@@ -44,7 +44,8 @@ The extension boundary follows [[module-thinkrail-extensions]] and is registered
 These are static literal-import checks, not a runtime module resolver. Negative filesystem fixtures cover the same discovery and scan entrypoint as the real workspace gate.
 
 `ci:flakes` (`bun run ci:flakes [--days 14] [--repo …] [--workflow ci.yml] [--concurrency 8]`) prints a
-Markdown report of the CI workflow's test failures over a window, read through `gh api`. REST supplies the runs,
+Markdown report of the CI workflow's test failures over a window, read through `gh api`; a call failing with a
+GitHub 5xx or a timeout is retried twice with backoff, since one transient error would discard the whole run. REST supplies the runs,
 the per-attempt jobs of every run that failed, was re-run, or holds a failed job, and failed test jobs' logs;
 GraphQL, batched 100 nodes a query (about one rate-limit point per 100 check runs), supplies the PRs updated in
 the window and every run's check runs of all attempts with their annotations. A job a re-run carried over from an
@@ -58,7 +59,9 @@ A change is a PR or, without one, a branch. A run resolves to its PR by head rep
 opened by then, since GitHub links only open same-repo PRs to runs) or by its merge-queue `pr-<N>` branch, so a
 PR's runs and queue entries count once. PRs linked because one's base branch is, or was before a retarget,
 another's head branch form a stack that counts as one change: members carry each other's commits, so one
-deterministic failure would otherwise count once per member. A merge-queue entry whose
+deterministic failure would otherwise count once per member. A base resolves to the PR that owned that head
+branch when the base was set (the newest opened by then, or the branch's only PR), so a reused branch name
+never joins a later PR to an old stack. A merge-queue entry whose
 `gh-readonly-queue/…/pr-<N>-<sha>` base is another entry's head SHA contains that entry's commits, so a test or
 step both failed counts for the lower entry's change; a failure the lower entry lacked stays the entry's own. Per
 test it counts failures, Playwright flaky passes, distinct changes, merge-queue failures, and failures whose SHA
