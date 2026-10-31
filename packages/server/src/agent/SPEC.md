@@ -770,7 +770,8 @@ re-opened transcripts provider-valid.
     ignore floating-point noise) are missing, never as a negative correction. Forked children
     (header `parentSession`) are skipped because their copied history carries the parent's own spend.
     A host-injected `setSubagentConcurrencyResolver` supplies each service's per-chat
-    limit at creation, and `refreshSubagentConcurrency(workspaceId?)` re-resolves and live-resizes the
+    limit at creation (`null`, the default, leaves new services on the core limit), and
+    `refreshSubagentConcurrency(workspaceId?)` re-resolves and live-resizes the
     cached services (core `setMaxConcurrentPerParent`) after a global or workspace limit change; `subagentsFor(workspaceId, isEnabled, canDeliverCompletion)` creates one retained portable
     `Subagents` owner per parent; its extension is injected on every resource load. A host-injected
     `setSubagentsEnabledResolver` maps that
@@ -1159,7 +1160,10 @@ re-opened transcripts provider-valid.
   set; this module owns compose-time filtering and live activation timing);
   the `set_title` seam (`setTitleToolHost` + `TitleToolHost`/`SET_TITLE_TOOL_NAME`/`SetTitleParams`);
   the bundled-artifact seam (`registerBundledRuntime` +
-  `BundledExtensions`/`BundledExtensionFactory`).
+  `BundledExtensions`/`BundledExtensionFactory`). Host injections are scoped to the host server's
+  lifetime: its `stop()` returns each injected seam to the module default — no-op publishers, the
+  default resolver policy and, via `null`, no concurrency resolver and the unavailable
+  `request_review` / `resolve_comment` / `set_title` handlers.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
   fixtures + **pure catalog helpers value-imported from the package root** — today exactly
   `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*

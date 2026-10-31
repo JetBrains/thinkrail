@@ -7,7 +7,12 @@ import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { HostUpdateNotice, ServerWelcome } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
-import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
+import {
+	configurePiRuntime,
+	configurePiRuntimeFactory,
+	refreshSubagentConcurrency,
+} from "../agent";
+import { delegationServiceFor } from "../agent/delegation";
 import {
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
@@ -485,6 +490,23 @@ test("stop() releases the port", async () => {
 	expect(await isPortFree(b.port)).toBe(false);
 	b.server.stop();
 	expect(await isPortFree(b.port)).toBe(true);
+});
+
+test("stop() returns the resolvers createServer installed to their defaults", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	writeFileSync(join(dir, "config.json"), JSON.stringify({ subagentMaxConcurrent: 16 }));
+	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const workspaceId = "boot-stopped-limit";
+	const service = delegationServiceFor(workspaceId);
+	const resized: number[] = [];
+	service.setMaxConcurrentPerParent = (slots) => {
+		resized.push(slots);
+	};
+	refreshSubagentConcurrency(workspaceId);
+	b.server.stop();
+	refreshSubagentConcurrency(workspaceId);
+	expect(resized).toEqual([16]);
 });
 
 test("boot permits two hosts for the same data directory", async () => {
