@@ -222,7 +222,9 @@ test("runWithCleanup surfaces the original failure first when cleanup also fails
 	const aggregate = error as AggregateError;
 	expect(aggregate.errors).toEqual([failure, cleanupError]);
 	expect(aggregate.cause).toBe(failure);
-	expect(aggregate.message).toStartWith("installed desktop health failed: 503; cleanup also failed:");
+	expect(aggregate.message).toStartWith(
+		"installed desktop health failed: 503; cleanup also failed:",
+	);
 });
 
 test("runWithCleanup rethrows the original failure unchanged when cleanup succeeds", async () => {
@@ -242,12 +244,15 @@ test("runWithCleanup rethrows the original failure unchanged when cleanup succee
 test("runWithCleanup labels a cleanup-only failure as cleanup", async () => {
 	const cleanupError = busyError();
 	const error = await rejection(
-		runWithCleanup(async () => "ok", [
-			({ failed }) => {
-				expect(failed).toBe(false);
-				throw cleanupError;
-			},
-		]),
+		runWithCleanup(
+			async () => "ok",
+			[
+				({ failed }) => {
+					expect(failed).toBe(false);
+					throw cleanupError;
+				},
+			],
+		),
 	);
 	expect(error).toBeInstanceOf(Error);
 	expect((error as Error).message).toBe(`cleanup failed: ${cleanupError.message}`);
