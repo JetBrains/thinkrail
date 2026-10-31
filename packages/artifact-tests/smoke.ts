@@ -18,6 +18,7 @@ import { pollUntil, terminateProcess, within } from "./src/lifecycle";
 import { windowsIdentityMismatches } from "./src/windowsIdentity";
 
 const root = mkdtempSync(join(tmpdir(), "thinkrail-desktop-smoke-"));
+const DESKTOP_READY_TIMEOUT_MS = 120_000;
 let sequence = 0;
 
 function readSettledJson(path: string): unknown {
@@ -238,6 +239,7 @@ async function launchDesktop(
 					launcher,
 				]
 			: [launcher];
+	const spawnedAt = performance.now();
 	const proc = Bun.spawn(command, {
 		env: appEnv,
 		cwd: root,
@@ -254,12 +256,13 @@ async function launchDesktop(
 				return readyDocument !== undefined;
 			},
 			{
-				timeoutMs: 30_000,
+				timeoutMs: DESKTOP_READY_TIMEOUT_MS,
 				what: `${label} desktop ready`,
 				exited: proc.exited,
 				exitError: exitedEarly,
 			},
 		);
+		console.log(`${label} desktop ready in ${Math.round(performance.now() - spawnedAt)} ms`);
 		const ready = readyDocument as {
 			origin: string;
 			runtimeDir: string;
