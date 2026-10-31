@@ -1,7 +1,7 @@
 {
 	"$schema": "./typography.schema.json",
 	"metadata": {
-		"version": "3.2.0",
+		"version": "3.3.0",
 		"cssVarPrefix": "tr",
 		"classPrefix": "tr"
 	},
@@ -95,10 +95,15 @@
 		"$ref": "ui.default"
 	},
 	"codeSize": {
+		"fontSize": "s11"
+	},
+	"codeBlockSize": {
+		"fontSize": "s13"
+	},
+	"terminalSize": {
 		"fontSize": "s13"
 	},
 	"codeRow": {
-		"fontSize": "s11",
 		"lineHeight": "default"
 	},
 	"textStyles": {
@@ -265,7 +270,7 @@
 			},
 			"block": {
 				"fontFamily": "code",
-				"fontSize": "code",
+				"fontSize": "codeBlock",
 				"fontWeight": "regular",
 				"lineHeight": "relaxed",
 				"letterSpacing": "normal",
@@ -274,7 +279,7 @@
 			},
 			"editor": {
 				"fontFamily": "code",
-				"fontSize": "codeDense",
+				"fontSize": "code",
 				"fontWeight": "regular",
 				"lineHeight": "default",
 				"letterSpacing": "normal",
@@ -283,7 +288,7 @@
 			},
 			"document": {
 				"fontFamily": "code",
-				"fontSize": "code",
+				"fontSize": "codeBlock",
 				"fontWeight": "regular",
 				"lineHeight": "code",
 				"letterSpacing": "normal",
@@ -304,6 +309,15 @@
 				"fontSize": "s11",
 				"fontWeight": "regular",
 				"lineHeight": "code",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"terminal": {
+				"fontFamily": "code",
+				"fontSize": "terminal",
+				"fontWeight": "regular",
+				"lineHeight": "relaxed",
 				"letterSpacing": "normal",
 				"textTransform": "none",
 				"fontStyle": "normal"

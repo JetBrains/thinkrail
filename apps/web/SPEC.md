@@ -338,9 +338,9 @@ themselves.
   class a component names is one the generator actually emits (an unknown class is dropped silently by
   Tailwind, so the element renders unstyled while the class list claims otherwise).
 - **A primitive font family may only be named for a documented third-party integration.** Monaco
-  (`resource-renderers/support/monacoSetup.ts`) reads the code family, the dense code size, and the default line-height; Pierre receives the
+  (`resource-renderers/support/monacoSetup.ts`) reads the code family, the actual file code size, and the default line-height; Pierre receives the
   same tokens through the `.pierre-code-surface` custom-property bridge in `index.css`; xterm
-  (`panels/TerminalInstance.tsx`) reads the code family + the code size and owns its row height — both resolve the generated `.tr-code-editor` / `.tr-code-block` styles through `@thinkrail/ui/fonts`'s `resolveFont` and re-read them on `onFontsChange`; mermaid
+  (`panels/TerminalInstance.tsx`) reads the code family + the independent terminal size and owns its row height — both resolve the generated `.tr-code-editor` / `.tr-code-terminal` styles through `@thinkrail/ui/fonts`'s `resolveFont` and re-read them on `onFontsChange`; mermaid
   (`thinkrail-extensions/visualize/web/mermaid.ts`) reads the code family. These third-party integrations are the exhaustive
   allowlist in `styles/typographyUsage.test.ts`. Everywhere else a class is required, and
   `<pre>` / `<code>` must carry one even inside a container that has one: preflight targets those elements

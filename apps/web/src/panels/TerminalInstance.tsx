@@ -138,7 +138,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const focusedTab =
 			initialFocusTarget instanceof Element ? initialFocusTarget.closest('[role="tab"]') : null;
 		const initialFocusRequestsTerminal = focusedTab?.parentElement?.dataset.kind === "terminal";
-		const font = resolveFont("tr-code-block");
+		const font = resolveFont("tr-code-terminal");
 		const term = new XTerm({
 			allowProposedApi: true,
 			cursorBlink: true,
@@ -342,7 +342,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			() => webFonts.relayout(),
 			() => {
 				if (disposed) return;
-				const latest = resolveFont("tr-code-block");
+				const latest = resolveFont("tr-code-terminal");
 				const { fontFamily, fontSize, fontWeight } = term.options;
 				if (
 					fontFamily !== latest.family ||
@@ -366,7 +366,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			term.options.theme = readTheme();
 			term.options.minimumContrastRatio = contrastFloor();
 		});
-		const stopFontsWatch = watchFont("tr-code-block", ["family", "size", "weight"], (next) => {
+		const stopFontsWatch = watchFont("tr-code-terminal", ["family", "size", "weight"], (next) => {
 			if (disposed) return;
 			applyFont(next);
 			applyFit();

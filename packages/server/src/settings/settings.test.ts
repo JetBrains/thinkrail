@@ -936,7 +936,8 @@ test("font settings default to the bundled faces, round-trip, and normalize a ma
 	expect(getConfig()).toMatchObject({
 		interfaceFont: { family: null, fallbacks: [] },
 		codeFont: { family: null, fallbacks: [] },
-		codeFontSize: 13,
+		codeFontSize: 11,
+		terminalFontSize: 13,
 		codeLigatures: false,
 		fontWeightOffset: 0,
 	});
@@ -945,6 +946,7 @@ test("font settings default to the bundled faces, round-trip, and normalize a ma
 		interfaceFont: { family: { builtin: "code" }, fallbacks: [] },
 		codeFont,
 		codeFontSize: 15,
+		terminalFontSize: 20,
 		codeLigatures: true,
 		fontWeightOffset: 40,
 	});
@@ -954,6 +956,7 @@ test("font settings default to the bundled faces, round-trip, and normalize a ma
 		interfaceFont: { family: { builtin: "code" }, fallbacks: [] },
 		codeFont,
 		codeFontSize: 15,
+		terminalFontSize: 20,
 		codeLigatures: true,
 		fontWeightOffset: 40,
 	});
@@ -988,7 +991,8 @@ test("invalid font updates are rejected before persistence or broadcast", () => 
 			"codeFont must be a font family",
 		],
 		[{ interfaceFont: { family: null } }, "interfaceFont must be a font family"],
-		[{ codeFontSize: 9 }, "codeFontSize must be a whole number from 10 to 24"],
+		[{ codeFontSize: 7 }, "codeFontSize must be a whole number from 8 to 22"],
+		[{ terminalFontSize: 9 }, "terminalFontSize must be a whole number from 10 to 24"],
 		[{ fontWeightOffset: 25 }, "fontWeightOffset must be a multiple of 10 from -70 to 130"],
 		[{ codeLigatures: "on" }, "codeLigatures must be a boolean"],
 	] as const) {
@@ -997,4 +1001,26 @@ test("invalid font updates are rejected before persistence or broadcast", () => 
 	expect(getConfig()).toEqual(before);
 	expect(published).toEqual([]);
 	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});
+
+test("legacy font reads do not write and independent patches persist both sizes", () => {
+	const path = join(dataDir, "config.json");
+	const legacy = JSON.stringify({ codeFontSize: 15 });
+	writeFileSync(path, legacy);
+	expect(getConfig()).toMatchObject({ codeFontSize: 13, terminalFontSize: 15 });
+	expect(readFileSync(path, "utf8")).toBe(legacy);
+	expect(updateConfig({ codeFontSize: 16 })).toMatchObject({
+		codeFontSize: 16,
+		terminalFontSize: 15,
+	});
+	expect(updateConfig({ terminalFontSize: 20 })).toMatchObject({
+		codeFontSize: 16,
+		terminalFontSize: 20,
+	});
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({ codeFontSize: 16, terminalFontSize: 20 });
+	expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({
+		codeFontSize: 16,
+		terminalFontSize: 20,
+	});
 });

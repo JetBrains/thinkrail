@@ -16,6 +16,7 @@ import type {
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	isControlMessage,
+	SPLIT_FONT_SIZES_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -1334,8 +1335,19 @@ const handlers: WsHandlers = {
 		ctx.runHostUpdate();
 		return { ok: true } as const;
 	},
-	"settings.update": (params) => {
+	"settings.update": (params, ctx) => {
 		const config = params.config;
+		if (
+			ctx.protocolVersion !== undefined &&
+			ctx.protocolVersion < SPLIT_FONT_SIZES_PROTOCOL_VERSION &&
+			config &&
+			(Object.hasOwn(config, "codeFontSize") || Object.hasOwn(config, "terminalFontSize"))
+		) {
+			throw new CodedError(
+				"FONT_SIZES_CLIENT_OUTDATED",
+				"Update the UI before changing font sizes.",
+			);
+		}
 		return updateConfig(config);
 	},
 	"environment.get": () => hostEnvironmentStatus(),

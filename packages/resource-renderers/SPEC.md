@@ -527,7 +527,7 @@ scrolling drop from 12–34 to 2–3 dropped frames in WebKit, and the worst spl
 (~45 ms). Split scrolling over dense hunk toolbars still drops frames in WebKit; without the toolbars
 it is smooth, and `overflow: "wrap"` (which skips the pairing because both sides share grid rows) helps
 moderate scrolling but not flings. The virtualizer's `lineHeight` metric is the real row height:
-`.pierre-code-surface` sets `--diffs-line-height` from `--tr-code-row-height` (the dense code size ×
+`.pierre-code-surface` sets `--diffs-line-height` from `--tr-code-row-height` (the code size ×
 `default`, a whole pixel — 14 px by default, matching Monaco's rounding), and `codeLineHeight()` reads the
 same token. A font settings change can move that row height, so `usePierreVirtualizer` re-reads it on
 `onFontsChange` and `PierreVirtualizer.setMetrics` hands the new metric to every connected Pierre instance
@@ -599,8 +599,8 @@ content's own height.
   preference. Rendered Markdown and rendered Markdown diffs retain their separate ~78ch reading measure.
   The React Compiler memoizes `MonacoEditor`'s options on width, bounded, path and the resolved editor
   font, and the editor calls `updateOptions` only when that object changes. The font is the generated
-  `.tr-code-editor` style resolved through `@thinkrail/ui/fonts` (family, dense code size, weight,
-  ligatures — a computed read, because the token is an unresolved `calc()`), cached per `data-fonts`
+  `.tr-code-editor` style resolved through `@thinkrail/ui/fonts` (family, actual code size, weight,
+  ligatures — a computed read, to resolve the generated size token), cached per `data-fonts`
   revision and re-read on `onFontsChange`; a change then waits for that face and calls
   `remeasureFonts()`. Spacing tokens stay static generated CSS (themes set only colours).
 - **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the

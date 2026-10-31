@@ -1,7 +1,12 @@
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { type AppConfigUpdate, DEFAULT_CONFIG, normalizeFontSettings } from "@thinkrail/contracts";
+import {
+	type AppConfigUpdate,
+	DEFAULT_CONFIG,
+	normalizeFontSettings,
+	SPLIT_FONT_SIZES_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	expandDisclosure,
@@ -9,10 +14,14 @@ import {
 	openFixtureProject,
 	PHONE_VIEWPORT,
 	revealWorkbenchTool,
+	runInTerminal,
+	visibleTerminalScreen,
+	waitTerminalReady,
 } from "./fixtures/app";
 import { fixtureFont } from "./fixtures/fonts";
 import { E2E_DATA_DIR, E2E_INSTALLED_FONTS } from "./fixtures/paths";
 import { pierreLines, selectPierreLine } from "./fixtures/pierre";
+import { shot } from "./fixtures/screenshots";
 import { CODE_FACE } from "./fixtures/typography";
 import { E2eWire } from "./fixtures/wire";
 
@@ -28,6 +37,7 @@ const FONT_TOKENS = [
 	"--tr-font-family-interface",
 	"--tr-font-family-code",
 	"--tr-font-size-code",
+	"--tr-font-size-terminal",
 	"--tr-font-weight-offset",
 	"--tr-font-ligatures-code",
 ];
@@ -78,14 +88,21 @@ test("font settings write the typography tokens, reach every window, and survive
 	expect(await rootToken(page, "--tr-font-size-code")).toBe("");
 
 	const size = dialog.getByTestId("font-code-size-input");
-	await dialog.getByRole("button", { name: "Larger" }).click();
-	await expect(size).toHaveValue("14");
-	await dialog.getByRole("button", { name: "Larger" }).click();
-	await expect(size).toHaveValue("15");
-	await expect.poll(() => rootToken(page, "--tr-font-size-code")).toBe("15px");
+	await dialog.getByRole("button", { name: "Increase Code size" }).click();
+	await expect(size).toHaveValue("12");
+	await dialog.getByRole("button", { name: "Increase Code size" }).click();
+	await expect(size).toHaveValue("13");
+	await expect.poll(() => rootToken(page, "--tr-font-size-code")).toBe("13px");
 	await expect(preview.locator("pre").first()).toHaveCSS("font-size", "15px");
-	await expect.poll(() => rootToken(other, "--tr-font-size-code")).toBe("15px");
+	await expect.poll(() => rootToken(other, "--tr-font-size-code")).toBe("13px");
 
+	const terminalSize = dialog.getByTestId("font-terminal-size-input");
+	await terminalSize.fill("20");
+	await terminalSize.press("Enter");
+	await expect.poll(() => rootToken(other, "--tr-font-size-terminal")).toBe("20px");
+	await expect(preview.locator(".tr-code-editor")).toHaveCSS("font-size", "13px");
+	await expect(preview.locator(".tr-code-terminal")).toHaveCSS("font-size", "20px");
+	await expect(preview.locator("pre").first()).toHaveCSS("font-size", "15px");
 	await dialog.getByTestId("font-ligatures").click();
 	await expect.poll(() => rootToken(page, "--tr-font-ligatures-code")).toBe("normal");
 	await expect(preview.locator("pre").first()).toHaveCSS("font-variant-ligatures", "normal");
@@ -120,19 +137,20 @@ test("font settings write the typography tokens, reach every window, and survive
 
 	await other.close();
 	await page.reload();
-	await expect.poll(() => rootToken(page, "--tr-font-size-code")).toBe("15px");
+	await expect.poll(() => rootToken(page, "--tr-font-size-code")).toBe("13px");
 	await expect
 		.poll(() => rootToken(page, "--tr-font-family-code"))
 		.toBe(`"${ABSENT_FAMILY}", var(--tr-font-family-code-default)`);
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	const reopened = await openFonts(page);
-	await expect(reopened.getByTestId("font-code-size-input")).toHaveValue("15");
+	await expect(reopened.getByTestId("font-terminal-size-input")).toHaveValue("20");
+	await expect(reopened.getByTestId("font-code-size-input")).toHaveValue("13");
 	await expect(reopened.getByTestId("font-ligatures")).toHaveAttribute("data-active", "true");
 
 	const resets = reopened
 		.getByTestId("settings-fonts")
 		.getByRole("button", { name: /^Reset .+ to default$/ });
-	await expect(resets).toHaveCount(5);
+	await expect(resets).toHaveCount(6);
 	while ((await resets.count()) > 0) {
 		const before = await resets.count();
 		await resets.first().click();
@@ -262,7 +280,112 @@ test("a code size change re-measures an open Pierre file and keeps the comment b
 	await selectPierreLine(fileView, "plain-text-fixture");
 	const input = page.getByTestId("review-composer-input");
 	await input.fill("Kept across a font change.");
+	await updateHostSettings(baseURL, { terminalFontSize: 20 });
+	await expect.poll(() => rootToken(page, "--tr-font-size-terminal")).toBe("20px");
+	expect(await rowHeight()).toBe(before);
 	await updateHostSettings(baseURL, { codeFontSize: 18 });
 	await expect.poll(rowHeight).toBeGreaterThan(before);
 	await expect(input).toHaveValue("Kept across a font change.");
+});
+
+test("old hosts disable both size controls without font-size writes", async ({ page }) => {
+	const writes: unknown[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		browser.onMessage((message) => {
+			const frame = JSON.parse(message.toString());
+			if (frame.method === "settings.update") writes.push(frame.params.config);
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const frame = JSON.parse(message.toString());
+			if (frame.channel === "server.welcome") {
+				frame.data.protocolVersion = SPLIT_FONT_SIZES_PROTOCOL_VERSION - 1;
+				frame.data.config.codeFontSize = 15;
+				delete frame.data.config.terminalFontSize;
+				browser.send(JSON.stringify(frame));
+			} else browser.send(message);
+		});
+	});
+	await connect(page);
+	const dialog = await openFonts(page);
+	await expect(dialog.getByTestId("font-code-size-input")).toBeDisabled();
+	await expect(dialog.getByTestId("font-terminal-size-input")).toBeDisabled();
+	await expect(dialog.getByTestId("font-code-size-input")).toHaveValue("13");
+	await expect(dialog.getByTestId("font-terminal-size-input")).toHaveValue("15");
+	await expect(dialog.getByTestId("font-code-size")).toContainText("Update the host");
+	await expect(dialog.getByTestId("font-preview").locator(".tr-code-editor")).toHaveCSS(
+		"font-size",
+		"13px",
+	);
+	await expect(dialog.getByTestId("font-preview").locator(".tr-code-terminal")).toHaveCSS(
+		"font-size",
+		"15px",
+	);
+	expect(writes).toEqual([]);
+});
+
+test("file and terminal sizes change independently without restarting the shell", async ({
+	page,
+	baseURL,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	const terminal = visibleTerminalScreen(page);
+	await runInTerminal(page, "export FONT_SPLIT_MARKER=kept; echo FONT_SPLIT_BEFORE");
+	await expect(terminal).toContainText("FONT_SPLIT_BEFORE");
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
+	const fileLine = page.locator(".monaco-editor .view-lines").first();
+	await expect(fileLine).toHaveCSS("font-size", "11px");
+	await expect(terminal).toHaveCSS("font-size", "13px");
+	await shot(page, "split-fonts", "default-workbench");
+	await updateHostSettings(baseURL, { codeFontSize: 16 });
+	await expect(fileLine).toHaveCSS("font-size", "16px");
+	await expect(terminal).toHaveCSS("font-size", "13px");
+	await updateHostSettings(baseURL, { terminalFontSize: 20 });
+	await expect(terminal).toHaveCSS("font-size", "20px");
+	await expect(fileLine).toHaveCSS("font-size", "16px");
+	await expect(terminal).toContainText("FONT_SPLIT_BEFORE");
+	await runInTerminal(page, "echo FONT_SPLIT_AFTER_$FONT_SPLIT_MARKER");
+	await expect(terminal).toContainText("FONT_SPLIT_AFTER_kept");
+	await shot(page, "split-fonts", "changed-workbench");
+	const dialog = await openFonts(page);
+	await dialog.getByTestId("font-terminal-size-input").scrollIntoViewIfNeeded();
+	await shot(dialog, "split-fonts", "appearance");
+	await expect(dialog.getByTestId("font-preview").locator("pre").first()).toHaveCSS(
+		"font-size",
+		"18px",
+	);
+	await dialog.getByRole("button", { name: "Reset code size to default" }).click();
+	await expect(dialog.getByTestId("font-code-size-input")).toHaveValue("11");
+	await expect(dialog.getByTestId("font-terminal-size-input")).toHaveValue("20");
+	const code = dialog.getByTestId("font-code-size-input");
+	await code.fill("99");
+	await expect(dialog.getByTestId("font-code-size")).toContainText(
+		"Enter a whole number from 8 to 22",
+	);
+	await code.press("Escape");
+	await expect(code).toHaveValue("11");
+	await dialog.getByRole("button", { name: "Reset terminal size to default" }).click();
+	await expect(dialog.getByTestId("font-terminal-size-input")).toHaveValue("13");
+	await page.setViewportSize(PHONE_VIEWPORT);
+	await code.fill("22");
+	await code.press("Enter");
+	const terminalInput = dialog.getByTestId("font-terminal-size-input");
+	await terminalInput.fill("24");
+	await terminalInput.press("Enter");
+	await expect.poll(() => rootToken(page, "--tr-font-size-terminal")).toBe("24px");
+	await expect.poll(() => rootToken(page, "--tr-font-size-code")).toBe("22px");
+	for (const input of [code, terminalInput]) {
+		await input.scrollIntoViewIfNeeded();
+		const bounds = await input.boundingBox();
+		expect(bounds).not.toBeNull();
+		if (bounds) {
+			expect(bounds.x).toBeGreaterThanOrEqual(0);
+			expect(bounds.x + bounds.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
+		}
+	}
+	await shot(dialog, "split-fonts", "appearance-mobile");
 });

@@ -568,6 +568,7 @@ describe("font settings", () => {
 			interfaceFont: { family: { builtin: "code" as const }, fallbacks: [] },
 			codeFont: { family: { name: "Fira Code" }, fallbacks: [{ name: "MesloLGS NF" }] },
 			codeFontSize: 15,
+			terminalFontSize: 20,
 			codeLigatures: true,
 			fontWeightOffset: -30,
 		};
@@ -588,11 +589,44 @@ describe("font settings", () => {
 
 	test("code size and weight offset are bounded integers", () => {
 		expect(isCodeFontSize(CODE_FONT_SIZE.default)).toBe(true);
-		expect(isCodeFontSize(9)).toBe(false);
+		expect(isCodeFontSize(7)).toBe(false);
 		expect(isCodeFontSize(13.5)).toBe(false);
 		expect(isFontWeightOffset(-70)).toBe(true);
 		expect(isFontWeightOffset(130)).toBe(true);
 		expect(isFontWeightOffset(15)).toBe(false);
 		expect(isFontWeightOffset(140)).toBe(false);
 	});
+});
+
+test("font size migration preserves appearance and is idempotent", () => {
+	for (const [raw, codeFontSize, terminalFontSize] of [
+		[{}, 11, 13],
+		[{ codeFontSize: 13 }, 11, 13],
+		[{ codeFontSize: 15 }, 13, 15],
+		[{ codeFontSize: 10 }, 8, 10],
+		[{ codeFontSize: 24 }, 22, 24],
+		[{ codeFontSize: 15, terminalFontSize: 18 }, 15, 18],
+		[{ codeFontSize: 8, terminalFontSize: 10 }, 8, 10],
+		[{ codeFontSize: 22, terminalFontSize: 24 }, 22, 24],
+		[{ codeFontSize: 15, terminalFontSize: "bad" }, 15, 13],
+		[{ codeFontSize: "bad", terminalFontSize: 18 }, 11, 18],
+		[{ codeFontSize: 9 }, 11, 13],
+		[{ codeFontSize: 25 }, 11, 13],
+	] as const) {
+		const normalized = normalizeFontSettings(raw);
+		expect(normalized).toMatchObject({ codeFontSize, terminalFontSize });
+		expect(normalizeFontSettings(normalized)).toEqual(normalized);
+	}
+	for (const value of [7, 23, 13.5, "15", NaN, null]) {
+		expect(normalizeFontSettings({ codeFontSize: value, terminalFontSize: 20 })).toMatchObject({
+			codeFontSize: 11,
+			terminalFontSize: 20,
+		});
+	}
+	for (const value of [9, 25, 13.5, "15", NaN, null, undefined]) {
+		expect(normalizeFontSettings({ codeFontSize: 16, terminalFontSize: value })).toMatchObject({
+			codeFontSize: 16,
+			terminalFontSize: 13,
+		});
+	}
 });

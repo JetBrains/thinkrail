@@ -11,7 +11,7 @@ tags: [ui, typography]
 
 ## Responsibility
 
-Turns the host's font settings (`interfaceFont`, `codeFont`, `codeFontSize`, `codeLigatures`,
+Turns the host's font settings (`interfaceFont`, `codeFont`, `codeFontSize`, `terminalFontSize`, `codeLigatures`,
 `fontWeightOffset` — [[module-contracts]]) and the host's custom font files into the user-adjustable
 typography tokens on `:root`, and tells code surfaces when the result changed. It is the only writer of
 those tokens; the defaults themselves stay in `typography.json` ([[web-typography]]).
@@ -19,7 +19,7 @@ those tokens; the defaults themselves stay in `typography.json` ([[web-typograph
 ## Boundary
 
 - **Owns:** composing a role's stack from its choice; writing exactly the user tokens
-  (`--tr-font-family-{interface,code}`, `--tr-font-size-code`, `--tr-code-row-height`,
+  (`--tr-font-family-{interface,code}`, `--tr-font-size-code`, `--tr-font-size-terminal`, `--tr-code-row-height`,
   `--tr-font-weight-offset`, `--tr-font-ligatures-code`) on `document.documentElement`; the custom
   `FontFace` registry; per-device probes (renders here? monospaced?); the versioned first-paint hint; the
   weight preview used while the Settings slider drags.
@@ -49,7 +49,7 @@ Application is atomic from consumers' view: every token is written first and the
 `onFontsChange` is the subscription; xterm, Monaco, Pierre and Mermaid re-read the tokens on it. The
 revision also moves when the custom faces change, since a replaced file re-measures text without any token
 changing, and the face revision is published beside it as `data-font-faces`, so `watchFont` consumers
-(xterm, Mermaid) re-measure a family whose name did not change. `--tr-code-row-height` is recomputed in JS (the dense code size × the default line height,
+(xterm, Mermaid) re-measure a family whose name did not change. `--tr-code-row-height` is recomputed in JS (the code size × the default line height,
 rounded) because CSS `round()` is missing before Safari 15.4 and Pierre's virtualizer needs a whole pixel.
 
 Custom faces are registered as `FontFace`s from the host's versioned `/fonts/` URLs with `display: block`,
@@ -80,10 +80,11 @@ descriptor, both specified there. `sharesHostFonts()` is true in the
 desktop shell and on a loopback origin, where an installed family that does not render Latin is a symbol
 font rather than a missing one.
 
-The first-paint hint (`thinkrail-fonts`, version 1) holds the preference and only the custom files it
+The first-paint hint (`thinkrail-fonts`, version 2) holds the preference and only the custom files it
 names, in the stable preference adapter (localStorage in a browser); `initializeFonts` applies it before
-React, like the theme hint, and the shell rewrites it once the host's settings and custom-font snapshot
-are known. Below `FONTS_PROTOCOL_VERSION` the shell clears custom faces and applies the defaults.
+React, like the theme hint. Version 1 migrates through legacy font normalization; version 2 always
+normalizes as modern even if a size is absent. Unknown versions use defaults; the shell rewrites it once
+the host's settings and custom-font snapshot are known. Below `FONTS_PROTOCOL_VERSION` the shell clears custom faces and applies the defaults.
 
 The weight preview writes `--tr-font-weight-offset` directly while the slider drags; the committed value
 arrives through `settings.changed`, and a failed save re-applies the last applied preference.

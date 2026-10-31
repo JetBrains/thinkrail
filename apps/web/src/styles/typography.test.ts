@@ -2,12 +2,12 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CODE_FONT_SIZE, DEFAULT_CONFIG } from "@thinkrail/contracts";
+import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import { normalizeEol } from "../../scripts/generatedFiles";
 import type { Style, StyleRef, Typography } from "../../scripts/typography";
 import {
 	allStyles,
-	codeDenseDelta,
+	codeBlockDelta,
 	codeRowHeight,
 	fontSizePx,
 	GENERATED_PATH,
@@ -55,10 +55,10 @@ describe("typography source", () => {
 		}
 	});
 
-	it("holds 23 canonical definitions and 30 aliases (53 styles)", () => {
+	it("holds 24 canonical definitions and 30 aliases (54 styles)", () => {
 		const styles = allStyles(typography);
-		expect(styles).toHaveLength(53);
-		expect(styles.filter((s) => !s.ref)).toHaveLength(23);
+		expect(styles).toHaveLength(54);
+		expect(styles.filter((s) => !s.ref)).toHaveLength(24);
 		expect(styles.filter((s) => s.ref)).toHaveLength(30);
 		expect(styles.filter((s) => s.prose)).toHaveLength(28);
 	});
@@ -94,8 +94,8 @@ describe("typography source", () => {
 			button: 470,
 		});
 		expect(typography.fontWeightOffset).toEqual({ exclude: ["brand"] });
-		expect(typography.codeSize).toEqual({ fontSize: "s13" });
-		expect(typography.codeRow).toEqual({ fontSize: "s11", lineHeight: "default" });
+		expect(typography.codeSize).toEqual({ fontSize: "s11" });
+		expect(typography.codeRow).toEqual({ lineHeight: "default" });
 		for (const id of ["interface", "code", "brand"]) {
 			const family = resolveFamily(typography, id);
 			expect(family.selfHosted ?? [], `${id} self-hosted`).not.toEqual([]);
@@ -445,9 +445,9 @@ describe("generated CSS", () => {
 
 	it("exposes the code tokens Monaco, xterm and Pierre read, the editors through the generated code styles", () => {
 		expect(rootDeclaration("--tr-font-family-code")).toBe("var(--tr-font-family-code-default)");
-		expect(rootDeclaration("--tr-font-size-code")).toBe("var(--tr-font-size-s13)");
-		expect(rootDeclaration("--tr-font-size-code-dense")).toBe(
-			"calc(var(--tr-font-size-code) - 2px)",
+		expect(rootDeclaration("--tr-font-size-code")).toBe("var(--tr-font-size-s11)");
+		expect(rootDeclaration("--tr-font-size-code-block")).toBe(
+			"calc(var(--tr-font-size-code) + 2px)",
 		);
 		expect(rootDeclaration("--tr-line-height-default")).toBe("1.3");
 		expect(rootDeclaration("--tr-code-row-height")).toBe("14px");
@@ -458,9 +458,9 @@ describe("generated CSS", () => {
 		const pierre =
 			/^\.pierre-code-surface \{([^}]*)\}/m.exec(read(join(SRC, "index.css")))?.[1] ?? "";
 		expect(monaco).toContain('resolveFont("tr-code-editor")');
-		expect(xterm).toContain('resolveFont("tr-code-block")');
+		expect(xterm).toContain('resolveFont("tr-code-terminal")');
 		expect(monaco).toContain('cssVar("--tr-line-height-default")');
-		expect(pierre).toContain("--diffs-font-size: var(--tr-font-size-code-dense);");
+		expect(pierre).toContain("--diffs-font-size: var(--tr-font-size-code);");
 		expect(pierre).toContain("--diffs-line-height: var(--tr-code-row-height);");
 		expect(pierre).toContain("font-variant-ligatures: var(--tr-font-ligatures-code);");
 	});
@@ -493,27 +493,27 @@ describe("user-adjustable tokens", () => {
 			);
 	});
 
-	it("sizes code blocks from the code size and the editor sample from the dense size", () => {
+	it("sizes blocks above code and terminals independently", () => {
 		const size = (id: string) => resolveStyle(typography, id).fontSize;
-		expect(codeDenseDelta(typography)).toBe(2);
+		expect(codeBlockDelta(typography)).toBe(2);
 		expect(codeRowHeight(typography)).toBe(14);
 		for (const id of ["code.block", "code.document", "chat.codeBlock", "doc.codeBlock"]) {
-			expect(size(id), id).toBe("code");
+			expect(size(id), id).toBe("codeBlock");
 			expect(px(id), id).toBe(13);
 		}
-		expect(size("code.editor")).toBe("codeDense");
+		expect(size("code.editor")).toBe("code");
 		expect(px("code.editor")).toBe(11);
 		for (const id of ["code.text", "chat.inlineCode", "doc.inlineCode", "doc.tableInlineCode"])
 			expect(size(id), `${id} is inline code`).toBe("s13");
 		for (const id of ["code.textSmall", "chat.tableInlineCode"])
 			expect(size(id), `${id} is inline code`).toBe("s11");
 		expect(ruleBody(".tr-prose-chat :is(pre, pre code)")).toContain(
-			"font-size: var(--tr-font-size-code);",
+			"font-size: var(--tr-font-size-code-block);",
 		);
 		expect(ruleBody(".tr-prose-doc :is(pre, pre code)")).toContain(
-			"font-size: var(--tr-font-size-code);",
+			"font-size: var(--tr-font-size-code-block);",
 		);
-		expect(ruleBody(".tr-code-editor")).toContain("font-size: var(--tr-font-size-code-dense);");
+		expect(ruleBody(".tr-code-editor")).toContain("font-size: var(--tr-font-size-code);");
 	});
 
 	it("turns ligatures off by default on every code style, and touches no other style", () => {
@@ -538,9 +538,9 @@ describe("user-adjustable tokens", () => {
 		expect(DEFAULT_CONFIG.fontWeightOffset).toBe(
 			Number(rootDeclaration("--tr-font-weight-offset")),
 		);
-		expect<number>(CODE_FONT_SIZE.editorDelta).toBe(
-			(fontSizePx(typography, "code") as number) - (fontSizePx(typography, "codeDense") as number),
-		);
+		expect(DEFAULT_CONFIG.terminalFontSize).toBe(fontSizePx(typography, "terminal") as number);
+		expect(rootDeclaration("--tr-font-size-terminal")).toBe("var(--tr-font-size-s13)");
+		expect(ruleBody(".tr-code-terminal")).toContain("font-size: var(--tr-font-size-terminal);");
 	});
 });
 
@@ -550,8 +550,8 @@ describe("user-adjustable token validation", () => {
 	const code = resolveFamily(typography, "code");
 
 	it("rejects a primitive id that collides with a generated adjustable token", () => {
-		expect(withSource({ fontSizes: { ...typography.fontSizes, codeDense: 11 } })).toContain(
-			"fontSizes.codeDense: reserved for the code size tokens",
+		expect(withSource({ fontSizes: { ...typography.fontSizes, codeBlock: 11 } })).toContain(
+			"fontSizes.codeBlock: reserved for the code size tokens",
 		);
 		expect(withSource({ fontWeights: { ...typography.fontWeights, offset: 400 } })).toContain(
 			"fontWeights.offset: reserved for the weight offset token",
@@ -583,15 +583,15 @@ describe("user-adjustable token validation", () => {
 		);
 	});
 
-	it("keeps the code size blocks closed, known, and the dense row below the code size", () => {
+	it("keeps size blocks closed, known, and blocks above code", () => {
 		expect(withSource({ codeSize: { fontSize: "s99" } })).toContain(
 			"codeSize.fontSize: unknown font size 's99'",
 		);
 		expect(withSource({ codeSize: { fontSize: "s13", lineHeight: "code" } })).toContain(
 			"codeSize: unexpected property 'lineHeight'",
 		);
-		expect(withSource({ codeRow: { fontSize: "s14", lineHeight: "default" } })).toContain(
-			"codeRow.fontSize: the dense code row must be smaller than codeSize.fontSize (14px vs 13px)",
+		expect(withSource({ codeBlockSize: { fontSize: "s10" } })).toContain(
+			"codeBlockSize.fontSize: blocks must be larger than codeSize.fontSize",
 		);
 	});
 

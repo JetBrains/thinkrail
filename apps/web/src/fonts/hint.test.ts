@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { UserFontFile } from "@thinkrail/contracts";
+import type { UserFontFileOk } from "@thinkrail/contracts";
 import { readFontsHint, writeFontsHint } from "./hint";
 import { DEFAULT_FONT_PREFERENCE } from "./runtime";
 
@@ -19,7 +19,7 @@ afterEach(() => {
 	Reflect.set(globalThis, "localStorage", savedStorage);
 });
 
-function file(fileName: string, family: string): UserFontFile {
+function file(fileName: string, family: string): UserFontFileOk {
 	return {
 		fileName,
 		ok: true,
@@ -30,7 +30,7 @@ function file(fileName: string, family: string): UserFontFile {
 
 test("an empty or foreign hint reads as the default preference", () => {
 	expect(readFontsHint()).toEqual({ preference: DEFAULT_FONT_PREFERENCE, files: [] });
-	store.set("thinkrail-fonts", JSON.stringify({ version: 2, preference: {} }));
+	store.set("thinkrail-fonts", JSON.stringify({ version: 99, preference: {} }));
 	expect(readFontsHint()).toEqual({ preference: DEFAULT_FONT_PREFERENCE, files: [] });
 	store.set("thinkrail-fonts", "{");
 	expect(readFontsHint()).toEqual({ preference: DEFAULT_FONT_PREFERENCE, files: [] });
@@ -41,6 +41,7 @@ test("the hint keeps only the custom files the preference names", () => {
 		...DEFAULT_FONT_PREFERENCE,
 		codeFont: { family: { name: "Fira Code" }, fallbacks: [{ name: "Meslo" }] },
 		codeFontSize: 15,
+		terminalFontSize: 20,
 	};
 	writeFontsHint(preference, [
 		file("FiraCode.woff2", "Fira Code"),
@@ -65,4 +66,25 @@ test("a stored face missing its weight is dropped instead of reaching FontFace a
 		}),
 	);
 	expect(readFontsHint().files.map((entry) => entry.fileName)).toEqual(["FiraCode.woff2"]);
+});
+
+test("v1 migrates once and retains custom faces, v2 missing fields stay modern", () => {
+	const face = file("FiraCode.woff2", "Fira Code");
+	store.set(
+		"thinkrail-fonts",
+		JSON.stringify({
+			version: 1,
+			preference: { codeFontSize: 15, codeFont: { family: { name: "Fira Code" }, fallbacks: [] } },
+			files: [face],
+		}),
+	);
+	const migrated = readFontsHint();
+	expect(migrated.preference).toMatchObject({ codeFontSize: 13, terminalFontSize: 15 });
+	expect(migrated.files).toEqual([face]);
+	writeFontsHint(migrated.preference, migrated.files);
+	expect(readFontsHint()).toEqual(migrated);
+	for (const preference of [{ codeFontSize: 15 }, { codeFontSize: 15, terminalFontSize: "bad" }]) {
+		store.set("thinkrail-fonts", JSON.stringify({ version: 2, preference }));
+		expect(readFontsHint().preference).toMatchObject({ codeFontSize: 15, terminalFontSize: 13 });
+	}
 });
