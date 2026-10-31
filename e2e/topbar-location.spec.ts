@@ -28,6 +28,7 @@ test("the location segments name the active workspace and switch through their m
 	await expect(page.getByTestId("scope-branch")).toHaveText("workspace-1");
 	await expect(page.getByTestId("scope-base")).toHaveText("main");
 	await expect(page.getByTestId("scope-remote-segment")).toHaveCount(1);
+	await page.evaluate(() => window.dispatchEvent(new Event("focus")));
 	await expect(page.getByTestId("scope-review-value")).toHaveText("No PR");
 	for (const id of ["scope-project", "scope-workspace", "scope-branch-trigger"]) {
 		await expect(page.getByTestId(id)).toHaveCSS("-webkit-app-region", "no-drag");

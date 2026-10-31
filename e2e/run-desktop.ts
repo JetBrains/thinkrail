@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { locateDesktopLauncher } from "@thinkrail/artifact-tests";
 import { artifactHostEnvironment } from "./artifactPlaywright";
@@ -13,18 +15,21 @@ import {
 import globalSetup from "./global-setup";
 import globalTeardown from "./global-teardown";
 import { holdE2eIdleSleep } from "./idleSleep";
+import { laneShard, parseJobShard } from "./shardPlan";
+import { shardTestListArgs } from "./shardTestLists";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const desktopDir = fileURLToPath(new URL("../apps/desktop", import.meta.url));
 const launcher = locateDesktopLauncher(desktopDir, process.env.THINKRAIL_E2E_DESKTOP);
 
 function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	return Promise.race([
 		promise,
-		new Promise<never>((_, reject) =>
-			setTimeout(() => reject(new Error(`timed out after ${ms}ms: ${what}`)), ms),
-		),
-	]);
+		new Promise<never>((_, reject) => {
+			timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms: ${what}`)), ms);
+		}),
+	]).finally(() => clearTimeout(timer));
 }
 
 async function waitForReady(exited: Promise<number>): Promise<string> {
@@ -51,6 +56,15 @@ async function waitForReady(exited: Promise<number>): Promise<string> {
 }
 
 await holdE2eIdleSleep();
+const playwrightArgs = ["-c", "playwright.desktop.config.ts", ...process.argv.slice(2)];
+const listDir = mkdtempSync(join(tmpdir(), "thinkrail-e2e-test-lists-"));
+const testListArgs = shardTestListArgs(
+	playwrightArgs,
+	[laneShard(parseJobShard(process.env.THINKRAIL_E2E_JOB_SHARD), 1, 1)],
+	{ ...process.env, THINKRAIL_E2E_DESKTOP_ORIGIN: "http://localhost" },
+	listDir,
+);
+testListArgs.catch(() => {});
 globalSetup();
 const desktop = Bun.spawn([launcher], {
 	cwd: repoRoot,
@@ -69,16 +83,9 @@ const desktop = Bun.spawn([launcher], {
 
 try {
 	const origin = await waitForReady(desktop.exited);
+	const [laneArgs = []] = await testListArgs;
 	const playwright = Bun.spawn(
-		[
-			process.execPath,
-			"x",
-			"playwright",
-			"test",
-			"-c",
-			"playwright.desktop.config.ts",
-			...process.argv.slice(2),
-		],
+		[process.execPath, "x", "playwright", "test", ...playwrightArgs, ...laneArgs],
 		{
 			cwd: repoRoot,
 			env: { ...process.env, THINKRAIL_E2E_DESKTOP_ORIGIN: origin },
@@ -96,4 +103,6 @@ try {
 	throw error;
 } finally {
 	globalTeardown();
+	await testListArgs.catch(() => {});
+	rmSync(listDir, { recursive: true, force: true });
 }
