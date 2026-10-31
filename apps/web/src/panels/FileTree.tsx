@@ -5,10 +5,11 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
 import { firstClickOnly } from "../lib";
-import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
+import { selectFilesTreeView, selectWorkspaceById, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
+import { FileCopyMenu, fileTreeCopyRelativePath } from "./FileCopyMenu";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
@@ -30,6 +31,7 @@ export function FileTree({
 }: TreeFocus & { workspaceId: string; marks: ChangeMarks }) {
 	const t = useT();
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
+	const worktreePath = useAppStore((s) => selectWorkspaceById(s, workspaceId)?.worktreePath ?? "");
 	const expanded = useAppStore((s) => selectFilesTreeView(s, workspaceId).expanded);
 	const expandedPaths = useMemo(() => new Set(expanded), [expanded]);
 	const warm = useEditorWarm();
@@ -65,6 +67,7 @@ export function FileTree({
 					key={node.path}
 					node={node}
 					workspaceId={workspaceId}
+					worktreePath={worktreePath}
 					marks={marks}
 					focus={focus}
 					expandedPaths={expandedPaths}
@@ -79,6 +82,7 @@ export function FileTree({
 function FileNodeRow({
 	node,
 	workspaceId,
+	worktreePath,
 	marks,
 	focus,
 	expandedPaths,
@@ -87,6 +91,7 @@ function FileNodeRow({
 }: {
 	node: FileNode;
 	workspaceId: string;
+	worktreePath: string;
 	marks: ChangeMarks;
 	focus: TreeFocus;
 	expandedPaths: ReadonlySet<string>;
@@ -142,42 +147,47 @@ function FileNodeRow({
 
 	return (
 		<li>
-			<TreeRow
-				ref={revealRow}
-				testid="file-node"
-				kind={isDir ? "dir" : "file"}
-				active={!isDir && focus.activePath === node.path}
-				subtle={ignored}
-				dataStatus={ignored ? "ignored" : undefined}
-				expanded={expanded}
-				label={label}
-				labelClassName={
-					fileStatus ? statusMarkClass(fileStatus) : dirChanged ? statusMarkClass("modified") : ""
-				}
-				trailing={
-					fileStatus ? (
-						<span
-							data-testid="file-status"
-							className={`shrink-0 tr-text-metadata ${statusMarkClass(fileStatus)}`}
-						>
-							{statusLetter(fileStatus)}
-						</span>
-					) : dirChanged ? (
-						<span
-							data-testid="file-folder-dot"
-							className="mr-4 size-6 shrink-0 rounded-full bg-feedback-warning"
-						/>
-					) : undefined
-				}
-				onClick={isDir ? toggleDirectory : firstClickOnly(() => open("preview"))}
-				onDoubleClick={isDir ? undefined : () => open("keep")}
-				onWarm={
-					isDir || !warmFile
-						? undefined
-						: (trigger) =>
-								trigger === "focus" ? warmFile(node.path) : warmOnHover(() => warmFile(node.path))
-				}
-			/>
+			<FileCopyMenu
+				worktreePath={worktreePath}
+				relativePath={fileTreeCopyRelativePath(node, directory)}
+			>
+				<TreeRow
+					ref={revealRow}
+					testid="file-node"
+					kind={isDir ? "dir" : "file"}
+					active={!isDir && focus.activePath === node.path}
+					subtle={ignored}
+					dataStatus={ignored ? "ignored" : undefined}
+					expanded={expanded}
+					label={label}
+					labelClassName={
+						fileStatus ? statusMarkClass(fileStatus) : dirChanged ? statusMarkClass("modified") : ""
+					}
+					trailing={
+						fileStatus ? (
+							<span
+								data-testid="file-status"
+								className={`shrink-0 tr-text-metadata ${statusMarkClass(fileStatus)}`}
+							>
+								{statusLetter(fileStatus)}
+							</span>
+						) : dirChanged ? (
+							<span
+								data-testid="file-folder-dot"
+								className="mr-4 size-6 shrink-0 rounded-full bg-feedback-warning"
+							/>
+						) : undefined
+					}
+					onClick={isDir ? toggleDirectory : firstClickOnly(() => open("preview"))}
+					onDoubleClick={isDir ? undefined : () => open("keep")}
+					onWarm={
+						isDir || !warmFile
+							? undefined
+							: (trigger) =>
+									trigger === "focus" ? warmFile(node.path) : warmOnHover(() => warmFile(node.path))
+					}
+				/>
+			</FileCopyMenu>
 			{isDir && expanded && children && (
 				<ul className="flex flex-col pl-tree-indent">
 					{children.map((child) => (
@@ -185,6 +195,7 @@ function FileNodeRow({
 							key={child.path}
 							node={child}
 							workspaceId={workspaceId}
+							worktreePath={worktreePath}
 							marks={marks}
 							focus={focus}
 							expandedPaths={expandedPaths}
