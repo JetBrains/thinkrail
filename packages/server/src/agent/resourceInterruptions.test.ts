@@ -7,6 +7,7 @@ import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/prov
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { recordResource, resourceHistoryRoot } from "../resourceHistory";
 import {
+	abortSession,
 	clearQueueSession,
 	compactSession,
 	createSession,
@@ -49,23 +50,24 @@ const saved = {
 	offline: process.env.PI_OFFLINE,
 };
 let sequence = 0;
+let runtime: ModelRuntime;
 
 beforeAll(async () => {
 	process.env.PI_CODING_AGENT_DIR = join(root, "agent");
 	process.env.THINKRAIL_DATA_DIR = join(root, "data");
 	process.env.PI_OFFLINE = "1";
-	const runtime = await ModelRuntime.create({
+	runtime = await ModelRuntime.create({
 		credentials: new InMemoryCredentialStore(),
 		modelsPath: null,
 		allowModelNetwork: false,
 	});
 	runtime.registerProvider("interruptions", {
 		api: faux.api,
-		apiKey: "test",
 		baseUrl: "http://faux.local",
 		streamSimple: faux.streamSimple,
 		models: [{ ...model, api: faux.api }],
 	});
+	await runtime.setRuntimeApiKey("interruptions", "test");
 	configurePiRuntime(runtime);
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	setSkillAdmissionResolver(() => admissionContextFor({ piResourceTrust: "granted" }));
@@ -172,6 +174,132 @@ test("restart interruptions reach the next user request once, without waking an 
 	await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
 	faux.setResponses([fauxAssistantMessage("AGAIN")]);
 	await promptSession(p.sessionId, "Continue again.");
+	expect(await noticeMessages(p)).toHaveLength(1);
+	await removeSession(p.sessionId);
+});
+
+test("rejected authentication preflight leaves interruptions pending for a delivered user request", async () => {
+	const p = await parent();
+	command(p, "preflight-pending");
+	const before = faux.state.callCount;
+	await runtime.removeRuntimeApiKey("interruptions");
+	try {
+		await expect(promptSession(p.sessionId, "Rejected before delivery.")).rejects.toThrow(
+			"No API key found",
+		);
+	} finally {
+		await runtime.setRuntimeApiKey("interruptions", "test");
+	}
+	expect(faux.state.callCount).toBe(before);
+	expect(await noticeMessages(p)).toEqual([]);
+	let input = "";
+	faux.setResponses([
+		(context) => {
+			input = JSON.stringify(context.messages);
+			return fauxAssistantMessage("DELIVERED");
+		},
+	]);
+	await promptSession(p.sessionId, "Continue after configuring authentication.");
+	expect(input).toContain("bun run preflight-pending");
+	expect(await noticeMessages(p)).toHaveLength(1);
+	await removeSession(p.sessionId);
+});
+
+test("a provider error persists the delivered notice and a later request reuses it after reload", async () => {
+	const p = await parent();
+	command(p, "provider-error");
+	let failedInput = "";
+	faux.setResponses([
+		(context) => {
+			failedInput = JSON.stringify(context.messages);
+			return fauxAssistantMessage("", {
+				stopReason: "error",
+				errorMessage: "400 synthetic permanent failure",
+			});
+		},
+	]);
+	await promptSession(p.sessionId, "Continue despite provider failure.");
+	expect(failedInput).toContain("bun run provider-error");
+	expect(getSessionState(p.sessionId).completion?.outcome).toBe("failed");
+	expect(await noticeMessages(p)).toHaveLength(1);
+	await removeSession(p.sessionId);
+	await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
+	let retryInput = "";
+	faux.setResponses([
+		(context) => {
+			retryInput = JSON.stringify(context.messages);
+			return fauxAssistantMessage("RECOVERED");
+		},
+	]);
+	await promptSession(p.sessionId, "Try again.");
+	expect(retryInput.match(/bun run provider-error/g)).toHaveLength(1);
+	expect(await noticeMessages(p)).toHaveLength(1);
+	await removeSession(p.sessionId);
+});
+
+test("automatic provider retry retains interruption context without a duplicate receipt", async () => {
+	const p = await parent();
+	writeFileSync(
+		join(p.cwd, ".pi", "settings.json"),
+		JSON.stringify({
+			compaction: { enabled: false },
+			retry: { enabled: true, maxRetries: 1, baseDelayMs: 1 },
+		}),
+	);
+	await reloadSessionResources(p.sessionId);
+	command(p, "retry-interruption");
+	const inputs: string[] = [];
+	faux.setResponses([
+		(context) => {
+			inputs.push(JSON.stringify(context.messages));
+			return fauxAssistantMessage("", { stopReason: "error", errorMessage: "429 rate limit" });
+		},
+		(context) => {
+			inputs.push(JSON.stringify(context.messages));
+			return fauxAssistantMessage("RETRIED");
+		},
+	]);
+	await promptSession(p.sessionId, "Continue with automatic retry.");
+	expect(inputs).toHaveLength(2);
+	for (const input of inputs) expect(input.match(/bun run retry-interruption/g)).toHaveLength(1);
+	expect(getSessionState(p.sessionId).completion?.outcome).toBe("succeeded");
+	expect(await noticeMessages(p)).toHaveLength(1);
+	await removeSession(p.sessionId);
+});
+
+test("aborting an in-flight request keeps one receipt and the notice in subsequent context", async () => {
+	const p = await parent();
+	command(p, "aborted-interruption");
+	const entered = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	let input = "";
+	faux.setResponses([
+		async (context, options) => {
+			input = JSON.stringify(context.messages);
+			options?.signal?.addEventListener("abort", () => release.resolve(), { once: true });
+			entered.resolve();
+			await release.promise;
+			return fauxAssistantMessage("", { stopReason: "aborted", errorMessage: "Aborted" });
+		},
+	]);
+	const prompting = promptSession(p.sessionId, "Continue, then stop.");
+	await entered.promise;
+	try {
+		await abortSession(p.sessionId);
+	} finally {
+		release.resolve();
+		await prompting;
+	}
+	expect(input).toContain("bun run aborted-interruption");
+	expect(await noticeMessages(p)).toHaveLength(1);
+	faux.setResponses([
+		(context) => {
+			input = JSON.stringify(context.messages);
+			return fauxAssistantMessage("CONTINUED");
+		},
+	]);
+	await promptSession(p.sessionId, "Continue after stopping.");
+	expect(input.match(/bun run aborted-interruption/g)).toHaveLength(1);
 	expect(await noticeMessages(p)).toHaveLength(1);
 	await removeSession(p.sessionId);
 });
