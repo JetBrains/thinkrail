@@ -538,7 +538,7 @@ describe("user-adjustable tokens", () => {
 		expect(DEFAULT_CONFIG.fontWeightOffset).toBe(
 			Number(rootDeclaration("--tr-font-weight-offset")),
 		);
-		expect(CODE_FONT_SIZE.editorDelta).toBe(
+		expect<number>(CODE_FONT_SIZE.editorDelta).toBe(
 			(fontSizePx(typography, "code") as number) - (fontSizePx(typography, "codeDense") as number),
 		);
 	});
