@@ -5,6 +5,8 @@
 		"types": ["bun"]
 	},
 	"include": [
+		"*.test.ts",
+		"*.test.tsx",
 		"src/**/*.d.ts",
 		"src/**/*.test.ts",
 		"src/**/*.test.tsx",
