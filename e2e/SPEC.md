@@ -167,6 +167,9 @@ animates to.
 Entering a workspace auto-opens its latest chat, and a pending questionnaire there claims focus and reveal
 at once. Workbench shortcuts pressed afterwards are user input, and the card yields to them. Questionnaire
 attention coverage therefore closes and reopens the chat after arranging the workbench.
+Showing a side or the bottom focuses its selected tab (its edge-rail control when no tab renders) one
+animation frame after the region renders; a probe that then focuses inside the shown region first waits
+for that endpoint, or a late frame moves focus away from the probe's target.
 Monaco wheel probes reach the editor through an actionability-checked `hover()`, never a measured box:
 a box read before the editor's layout settles can be a stale one whose centre lies under the left panel's
 resize separator. Each CDP wheel event scrolls Monaco 50 px whatever its delta (one synthetic tick), so a
@@ -433,6 +436,11 @@ still valid.
 
 Cross-window placement probes wait for the peer's initial chat hydration before changing its layout;
 creating a terminal can legitimately supersede an in-flight passive restore, which is not placement leakage.
+
+A tab-drag probe that commits a drop releases only once its destination reports `data-drop-active="true"`:
+dnd-kit drops on the `over` target its renders committed after the last processed move, not at the release
+point, so a release that outruns the final move's render lands on the previous position's target — often
+none, a silent no-op.
 
 Different worktrees may run concurrently. Two complete E2E invocations in one worktree remain sequential;
 the lane ids are deliberately stable across runs so interrupted state is reclaimed rather than leaked.
