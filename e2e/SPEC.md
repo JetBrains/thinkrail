@@ -154,8 +154,16 @@ Pierre surfaces paint plain text first and replace their rows when the worker's 
 is late on slower hosts such as the compiled-binary and packaged-desktop artifacts; pointer probes wait
 for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows.
 A following probe that lets actionability scroll an off-screen transcript control into view first
-waits for `data-scroll-moving="false"`: that scroll is not reader input, so an active placement motion
-restores the latest edge, which on slow runners lands between mousedown and mouseup and drops the click.
+waits for the chat to settle (`waitForScrollStability`: `data-scroll-moving="false"` and unchanged scroll
+geometry across frames; `clickTranscriptControl` settles, then clicks). That scroll is not reader input,
+so an active placement motion restores the latest edge; on slow runners the restore lands between
+mousedown and mouseup, or puts a preview iframe under the pointer, and the click is lost while the action
+reports success. Settling cannot stop a motion that later growth starts, so the probe first waits for the
+control's own content (a preview's frames or notice), and a click after a dialog waits for it to hide.
+`visualize.spec.ts` and `tool-file-links.spec.ts` click every transcript control this way: a file card's
+fixed-height preview is taller than the transcript beside the default bottom terminal, so its toolbar
+sits above the fold at the latest edge, and each tool-step expansion moves the edge a following chat then
+animates to.
 Entering a workspace auto-opens its latest chat, and a pending questionnaire there claims focus and reveal
 at once. Workbench shortcuts pressed afterwards are user input, and the card yields to them. Questionnaire
 attention coverage therefore closes and reopens the chat after arranging the workbench.
