@@ -279,7 +279,12 @@ re-opened transcripts provider-valid.
     flight; needs-input is never held. The command change listener and the delegation lifecycle listener
     republish the parent's state on a coalesced `setImmediate`, after the same-tick completion delivery
     that wakes the parent has already flipped it to running — so the last finishing child never flashes
-    the dot before the woken turn. A completion that does not wake the parent (user stop) releases the hold
+    the dot before the woken turn. The portable packages own that same-tick wake, also while their
+    post-settle idle flush is pending ([[module-pi-subagents]] Result delivery). Queuing the republish
+    behind that flush's `setTimeout(0)` instead was rejected: it leans on cross-module timer order and
+    still flashes whenever the flush runs late. The one remaining flash is a wake pi defers: a result
+    landing during the `agent_settled` emission, after this listener published idle. Only a settle handler
+    could deliver one there; ThinkRail's are synchronous and command exits arrive as I/O callbacks. A completion that does not wake the parent (user stop) releases the hold
     on that republish; a delivery gated by a reload or trash hold also releases first, and its later wake
     clears the unread again. Disk-only sessions have no live work and never hold. The same fact is published as
     `backgroundWork`, so clients show the idle chat as working (contracts' `isSessionWorking`) instead of

@@ -21,6 +21,7 @@ import {
 import backgroundCommandsExtension, {
 	BACKGROUND_COMMAND_COMPLETION_MESSAGE,
 	type BackgroundCommandContext,
+	type BackgroundCommands,
 	createBackgroundCommands,
 	createBackgroundCommandsExtension,
 } from "../index";
@@ -754,6 +755,94 @@ test("commands released to an idle parent together wake exactly one run", async 
 		expect(JSON.stringify(session.messages)).not.toContain("SECOND_WAKE");
 	} finally {
 		await close();
+	}
+});
+
+function nextChange(service: BackgroundCommands): Promise<void> {
+	return new Promise((resolve) => {
+		const off = service.onChange(() => {
+			off();
+			resolve();
+		});
+	});
+}
+
+test("a command finishing before the post-settle flush wakes the idle parent in the same tick", async () => {
+	const { executor, service, session, close } = await injected();
+	const counter = countSettles(session);
+	let sawReport = false;
+	try {
+		faux.setResponses([
+			startCommand("work"),
+			fauxAssistantMessage("STARTED"),
+			(context) => {
+				sawReport = JSON.stringify(context.messages).includes("CMD_DONE");
+				return fauxAssistantMessage("WOKEN");
+			},
+		]);
+		await session.prompt("Start.");
+		const finished = nextChange(service);
+		executor.call(0).options.onData?.(Buffer.from("CMD_DONE"));
+		executor.call(0).resolve({ exitCode: 0 });
+		await finished;
+		expect(session.isStreaming).toBe(true);
+		await waitFor(() => !session.isStreaming && counter.settles === 2);
+		await macrotask();
+		expect(sawReport).toBe(true);
+		expect(counter.settles).toBe(2);
+		expect(commandDeliveries(session)).toEqual(["wake"]);
+	} finally {
+		await close();
+	}
+});
+
+test("commands finishing while Pi settles the idle parent wake it only once", async () => {
+	const executor = controlledOperations();
+	const sm = SessionManager.inMemory(cwd);
+	const service = createBackgroundCommands(
+		{ sessionId: sm.getSessionId(), getContext: () => ({ cwd }) },
+		executor,
+	);
+	let finishWhileSettling = true;
+	const session = await makeSession((pi) => {
+		pi.on("agent_settled", async () => {
+			if (!finishWhileSettling) return;
+			finishWhileSettling = false;
+			for (const [index, text] of ["FIRST_CMD", "SECOND_CMD"].entries()) {
+				const finished = nextChange(service);
+				executor.call(index).options.onData?.(Buffer.from(text));
+				executor.call(index).resolve({ exitCode: 0 });
+				await finished;
+			}
+		});
+		return createBackgroundCommandsExtension({ service })(pi);
+	}, sm);
+	const counter = countSettles(session);
+	let reports = 0;
+	try {
+		faux.setResponses([
+			fauxAssistantMessage([
+				fauxToolCall("background_command", { action: "start", command: "one" }),
+				fauxToolCall("background_command", { action: "start", command: "two" }),
+			]),
+			fauxAssistantMessage("STARTED"),
+			fauxAssistantMessage("WOKEN"),
+			(context) => {
+				const text = JSON.stringify(context.messages);
+				reports = ["FIRST_CMD", "SECOND_CMD"].filter((r) => text.includes(r)).length;
+				return fauxAssistantMessage("REACTED");
+			},
+		]);
+		await session.prompt("Start two.");
+		await waitFor(() => !session.isStreaming && commandDeliveries(session).length === 2);
+		await macrotask();
+		expect(counter.settles).toBe(2);
+		expect(commandDeliveries(session)).toEqual(["wake", "run"]);
+		expect(reports).toBe(2);
+	} finally {
+		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		await service.dispose();
+		session.dispose();
 	}
 });
 
