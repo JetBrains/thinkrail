@@ -422,6 +422,11 @@ still valid.
 Cross-window placement probes wait for the peer's initial chat hydration before changing its layout;
 creating a terminal can legitimately supersede an in-flight passive restore, which is not placement leakage.
 
+A tab-drag probe that commits a drop releases only once its destination reports `data-drop-active="true"`:
+dnd-kit drops on the `over` target its renders committed after the last processed move, not at the release
+point, so a release that outruns the final move's render lands on the previous position's target — often
+none, a silent no-op.
+
 Different worktrees may run concurrently. Two complete E2E invocations in one worktree remain sequential;
 the lane ids are deliberately stable across runs so interrupted state is reclaimed rather than leaked.
 No path may fall back to `~/.thinkrail`, the developer's HOME/config trees, or the real pi agent dir. The
