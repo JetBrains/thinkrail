@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { type Dirent, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
@@ -61,6 +61,18 @@ function resolveInWorktree(
 	return { root, abs };
 }
 
+function entryKind(root: string, dir: string, entry: Dirent): FileNode["kind"] {
+	if (entry.isDirectory()) return "dir";
+	if (!entry.isSymbolicLink()) return "file";
+	try {
+		const target = join(dir, entry.name);
+		if (!statSync(target).isDirectory()) return "file";
+		return isContained(realpathSync(root), realpathSync(target)) ? "dir" : "file";
+	} catch {
+		return "file";
+	}
+}
+
 export function readDir(workspaceId: string, path: string): FileNode[] {
 	const { root, abs } = resolveInWorktree(workspaceId, path, true);
 
@@ -70,7 +82,7 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 			(entry): FileNode => ({
 				path: posixRelative(root, join(abs, entry.name)),
 				name: entry.name,
-				kind: entry.isDirectory() ? "dir" : "file",
+				kind: entryKind(root, abs, entry),
 			}),
 		)
 		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
