@@ -399,6 +399,10 @@ keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the
 deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
 URL for the whole run, so a spec that sets its own repository settings names its own repository.
 
+Playwright starts the host (`webServer`) before `globalSetup`, so global setup clears the lane's data dir
+while a live host writes its logs there; it removes the dir with `removeTree`, which retries the resulting
+`ENOTEMPTY` instead of failing the lane.
+
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
 desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,
 picker/editor/provider control files, host/restart/binary/desktop ports, and Central fixture artifacts. The
