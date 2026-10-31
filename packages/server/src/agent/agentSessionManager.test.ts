@@ -323,6 +323,10 @@ beforeAll(async () => {
 afterAll(() => {
 	disposeAllSessions();
 	setSkillAdmissionResolver(() => admissionContextFor(undefined));
+	setSessionPublisher(() => {});
+	setSessionProjectResolver(() => null);
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	configurePiRuntime(null);
 	for (const dir of tmpDirs) rmSync(dir, { recursive: true, force: true });
 	if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
