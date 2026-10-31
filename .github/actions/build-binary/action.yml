@@ -217,6 +217,17 @@ runs:
         [ -f "$update_archive_path" ] || { echo "::error::desktop update archive not found at $update_archive_path"; exit 1; }
         path="apps/desktop/dist/$name"
         cp "$source" "$path"
+        if [ "$TARGET" = 'bun-linux-x64' ] || [ "$TARGET" = 'bun-linux-arm64' ]; then
+          # The bundler stamps the CI runner's UID/GID on the archive's `./`
+          # entry, so `tar -x` as root applies that ownership to the extraction
+          # directory itself (breaking $HOME permissions for SSH key login,
+          # #1002). Repack with root ownership so extracting is inert.
+          stage=$(mktemp -d)
+          tar -xzf "$path" -C "$stage"
+          tar -czf "$path".repack --owner=0 --group=0 --numeric-owner -C "$stage" .
+          mv "$path".repack "$path"
+          rm -rf "$stage"
+        fi
         {
           echo "name=$name"
           echo "path=$path"
