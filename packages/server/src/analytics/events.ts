@@ -49,6 +49,7 @@ export type SetupAction =
 	| "directory_pick"
 	| "project_open"
 	| "project_init"
+	| "project_create"
 	| "worktree_create"
 	| "worktree_attach";
 export type AnalyticsDurationBucket = "<10s" | "10–59s" | "1–4m" | "5–14m" | "15m+" | "unknown";

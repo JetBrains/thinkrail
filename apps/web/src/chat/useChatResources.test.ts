@@ -2,6 +2,7 @@ import { beforeEach, expect, test } from "bun:test";
 import {
 	type BackgroundCommandOutputResult,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
+	type ResourceHistoryPage,
 	type SessionResources,
 } from "@thinkrail/contracts";
 import { type ChatResourceScope, selectChatResourceProjection, useAppStore } from "@/store";
@@ -77,12 +78,36 @@ beforeEach(() => {
 	});
 });
 
-function syncFixture() {
+function manualScheduler() {
+	const timers = new Map<number, { run: () => void; delayMs: number }>();
+	let next = 0;
+	const scheduler: DetailPollScheduler = {
+		set: (run, delayMs) => {
+			timers.set(++next, { run, delayMs });
+			return next;
+		},
+		clear: (timer) => {
+			timers.delete(timer as number);
+		},
+	};
+	return {
+		scheduler,
+		delays: () => [...timers.values()].map((timer) => timer.delayMs),
+		fire: () => {
+			const pending = [...timers];
+			timers.clear();
+			for (const [, timer] of pending) timer.run();
+		},
+	};
+}
+
+function syncFixture(timers = manualScheduler()) {
 	const reads: ReturnType<typeof deferred<SessionResources>>[] = [];
 	let invalidate: (scope: ChatResourceScope) => void = () => {};
 	let unsubscribed = false;
 	const sync = startChatResourceSync(scope, {
 		state,
+		scheduler: timers.scheduler,
 		read: () => {
 			const read = deferred<SessionResources>();
 			reads.push(read);
@@ -98,6 +123,7 @@ function syncFixture() {
 	return {
 		reads,
 		sync,
+		timers,
 		invalidate: (changed = scope) => invalidate(changed),
 		unsubscribed: () => unsubscribed,
 	};
@@ -145,6 +171,62 @@ test("dirty invalidations survive a rejected in-flight read and failed refreshes
 	f.reads[3]?.resolve(snapshot);
 	await flush();
 	expect(projection()).toMatchObject({ fresh: true, error: null });
+	f.sync.dispose();
+});
+
+test("a failed read keeps its error visible and retries on capped backoff until a read succeeds", async () => {
+	const f = syncFixture();
+	f.reads[0]?.resolve(snapshot);
+	await flush();
+	f.invalidate();
+	for (const [attempt, delay] of [500, 1_500, 5_000, 5_000].entries()) {
+		f.reads[attempt + 1]?.reject(new Error("replay namespace is full"));
+		await flush();
+		expect(projection()).toMatchObject({
+			snapshot,
+			fresh: false,
+			error: "replay namespace is full",
+			retrying: true,
+		});
+		expect(f.timers.delays()).toEqual([delay]);
+		f.timers.fire();
+	}
+	f.reads[5]?.resolve({ ...snapshot, commands: [] });
+	await flush();
+	expect(projection()).toMatchObject({ fresh: true, error: null });
+	expect(f.timers.delays()).toEqual([]);
+
+	f.invalidate();
+	f.reads[6]?.reject(new Error("again"));
+	await flush();
+	expect(f.timers.delays()).toEqual([500]);
+	f.sync.refresh();
+	expect(f.timers.delays()).toEqual([]);
+	f.reads[7]?.reject(new Error("again"));
+	await flush();
+	expect(f.timers.delays()).toEqual([500]);
+	f.sync.dispose();
+	expect(f.timers.delays()).toEqual([]);
+	expect(f.reads).toHaveLength(8);
+});
+
+test("a permanent read failure stays visible without scheduling a retry", async () => {
+	const f = syncFixture();
+	f.reads[0]?.reject(new RequestError("RESOURCE_UNAVAILABLE", "worktree gone"));
+	await flush();
+	expect(projection()).toMatchObject({ fresh: false, error: "worktree gone", retrying: false });
+	expect(f.timers.delays()).toEqual([]);
+
+	f.invalidate();
+	f.reads[1]?.resolve({ ...snapshot, sessionId: "foreign" });
+	await flush();
+	expect(projection()).toMatchObject({
+		fresh: false,
+		error: "Resource snapshot belongs to another chat.",
+		retrying: false,
+	});
+	expect(f.timers.delays()).toEqual([]);
+	expect(f.reads).toHaveLength(2);
 	f.sync.dispose();
 });
 
@@ -234,6 +316,70 @@ test("MCP controls act only on servers the chat reports and keep one request per
 	expect(f.actions()["mcp:broken"]).toEqual({ pending: false, error: "Reconnect failed" });
 	expect(f.actions()["mcp:docs"]).toEqual({ pending: false, error: null });
 	f.controls.dispose();
+});
+
+test("loading older history asks from the oldest held record, appends once, and reports a failed page on its own key", async () => {
+	const finished = (id: string, finishedAt: number) => ({
+		id,
+		sessionId: scope.sessionId,
+		name: id,
+		command: "bun test",
+		status: "completed" as const,
+		exitCode: 0,
+		startedAt: 1,
+		finishedAt,
+	});
+	state().invalidateChatResources(scope);
+	state().installChatResources(
+		{
+			...scope,
+			connectionGeneration: state().connectionGeneration,
+			revision: projection()?.revision ?? -1,
+		},
+		{ ...snapshot, commands: [finished("newer", 20), finished("older", 10)] },
+	);
+	const pages: {
+		kind: string;
+		at: number;
+		id: string;
+		page: ReturnType<typeof deferred<ResourceHistoryPage>>;
+	}[] = [];
+	let actions: ResourceActionState = {};
+	const controls = createChatResourceControls(scope, {
+		state,
+		stopCommand: async () => {},
+		stopSubagent: async () => {},
+		stopAll: async () => {},
+		setMcpEnabled: async () => {},
+		reconnectMcp: async () => {},
+		readHistory: (kind, before) => {
+			const page = deferred<ResourceHistoryPage>();
+			pages.push({ kind, ...before, page });
+			return page.promise;
+		},
+		onChange: (next) => {
+			actions = next;
+		},
+	});
+	controls.loadOlder("command");
+	controls.loadOlder("command");
+	controls.loadOlder("subagent");
+	expect(pages.map(({ kind, at, id }) => ({ kind, at, id }))).toEqual([
+		{ kind: "command", at: 10, id: "older" },
+	]);
+	expect(actions["history:command"]).toEqual({ pending: true, error: null });
+	pages[0]?.page.resolve({ kind: "command", items: [finished("oldest", 5)], hasMore: false });
+	await flush();
+	expect(projection()?.older?.map((record) => record.summary)).toEqual([finished("oldest", 5)]);
+	expect(actions["history:command"]).toEqual({ pending: false, error: null });
+
+	controls.loadOlder("command");
+	expect(pages[1]).toMatchObject({ kind: "command", at: 5, id: "oldest" });
+	pages[1]?.page.reject(new Error("History read failed"));
+	await flush();
+	expect(actions["history:command"]).toEqual({ pending: false, error: "History read failed" });
+	expect(projection()?.older).toHaveLength(1);
+	controls.dispose();
 });
 
 test("individual controls prevent duplicates, expose row errors and never synthesize terminal state", async () => {

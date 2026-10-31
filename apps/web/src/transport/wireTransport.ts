@@ -16,11 +16,16 @@ import type {
 	Workspace,
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
+	WsParams,
+	WsResult,
 } from "@thinkrail/contracts";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	FEEDBACK_SURVEY_PROTOCOL_VERSION,
+	FONTS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
+	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
@@ -30,6 +35,7 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
+import { currentLocale } from "@thinkrail/locales/react";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
@@ -42,6 +48,14 @@ export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 
 export function supportsUserThemes(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= USER_THEMES_PROTOCOL_VERSION;
+}
+
+export function supportsPiPackages(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION;
+}
+
+export function supportsFonts(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= FONTS_PROTOCOL_VERSION;
 }
 
 export function supportsToolResponses(protocolVersion: number | null): boolean {
@@ -158,35 +172,57 @@ function hydrateSessionStates(connectionGeneration: number): void {
 	attempt();
 }
 
-function refreshLocalLocales(connectionGeneration: number): void {
+type FolderSnapshotMethod = "locales.list" | "themes.list" | "fonts.list";
+
+function refreshFolderSnapshot<M extends FolderSnapshotMethod>(
+	method: M,
+	params: WsParams<M>,
+	minProtocolVersion: number,
+	install: (store: ReturnType<typeof useAppStore.getState>, snapshot: WsResult<M> | null) => void,
+	connectionGeneration: number,
+): void {
 	const store = useAppStore.getState();
-	if (store.protocolVersion === null || store.protocolVersion < LOCALES_PROTOCOL_VERSION) {
-		store.installLocalLocales(null);
+	if (store.protocolVersion === null || store.protocolVersion < minProtocolVersion) {
+		install(store, null);
 		return;
 	}
 	void getTransport()
-		.request("locales.list", {})
+		.request(method, params)
 		.then((snapshot) => {
 			const current = useAppStore.getState();
-			if (isConnectedGeneration(current, connectionGeneration))
-				current.installLocalLocales(snapshot);
+			if (isConnectedGeneration(current, connectionGeneration)) install(current, snapshot);
 		})
 		.catch(() => {});
 }
 
+function refreshLocalLocales(connectionGeneration: number): void {
+	refreshFolderSnapshot(
+		"locales.list",
+		{},
+		LOCALES_PROTOCOL_VERSION,
+		(store, snapshot) => store.installLocalLocales(snapshot),
+		connectionGeneration,
+	);
+}
+
 function refreshUserThemes(connectionGeneration: number): void {
-	const store = useAppStore.getState();
-	if (!supportsUserThemes(store.protocolVersion)) {
-		store.installUserThemes(null);
-		return;
-	}
-	void getTransport()
-		.request("themes.list", {})
-		.then((snapshot) => {
-			const current = useAppStore.getState();
-			if (isConnectedGeneration(current, connectionGeneration)) current.installUserThemes(snapshot);
-		})
-		.catch(() => {});
+	refreshFolderSnapshot(
+		"themes.list",
+		{},
+		USER_THEMES_PROTOCOL_VERSION,
+		(store, snapshot) => store.installUserThemes(snapshot),
+		connectionGeneration,
+	);
+}
+
+function refreshUserFonts(connectionGeneration: number): void {
+	refreshFolderSnapshot(
+		"fonts.list",
+		{},
+		FONTS_PROTOCOL_VERSION,
+		(store, snapshot) => store.installUserFonts(snapshot),
+		connectionGeneration,
+	);
 }
 
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
@@ -229,7 +265,7 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
 		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
-		useAppStore.getState().hideInterviewPrompt();
+		useAppStore.getState().hideSurveyInvitation();
 		useAppStore
 			.getState()
 			.installWelcomeSnapshot(
@@ -249,12 +285,14 @@ export function initTransport(): WsTransport {
 		refreshLoadedWorkspaceLists(connectionGeneration);
 		refreshLocalLocales(connectionGeneration);
 		refreshUserThemes(connectionGeneration);
+		refreshUserFonts(connectionGeneration);
 		if (welcome.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION) {
 			hydrateSessionStates(connectionGeneration);
 		} else {
 			sessionStateHydration = null;
 			useAppStore.getState().installSessionStateSnapshot([]);
 		}
+		void loadInAppSurvey();
 	});
 
 	transport.subscribe(WS_CHANNELS.hostUpdateAvailable, (data) => {
@@ -340,8 +378,18 @@ export function initTransport(): WsTransport {
 		refreshUserThemes(useAppStore.getState().connectionGeneration);
 	});
 
+	transport.subscribe(WS_CHANNELS.packagesChanged, () => {
+		useAppStore.getState().bumpPackagesVersion();
+	});
+
+	transport.subscribe(WS_CHANNELS.fontsChanged, () => {
+		refreshUserFonts(useAppStore.getState().connectionGeneration);
+	});
+
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
-		useAppStore.getState().showInterviewPrompt();
+		const state = useAppStore.getState();
+		if ((state.protocolVersion ?? 0) < FEEDBACK_SURVEY_PROTOCOL_VERSION) return;
+		state.showSurveyInvitation();
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
@@ -396,4 +444,27 @@ export function initTransport(): WsTransport {
 export function getTransport(): WsTransport {
 	if (!transport) throw new Error("transport not initialized — call initTransport() first");
 	return transport;
+}
+
+let surveyLoadGeneration = 0;
+
+export function loadInAppSurvey(): Promise<void> {
+	const protocol = useAppStore.getState().protocolVersion;
+	if (protocol === null || protocol < FEEDBACK_SURVEY_PROTOCOL_VERSION) {
+		useAppStore.getState().setInAppSurvey(null);
+		return Promise.resolve();
+	}
+	const generation = ++surveyLoadGeneration;
+	return getTransport()
+		.request("feedback.survey", { language: currentLocale() })
+		.then((result) => {
+			if (generation !== surveyLoadGeneration) return;
+			useAppStore.getState().setInAppSurvey(result.survey);
+		})
+		.catch(() => {});
+}
+
+export function forgetInAppSurvey(): void {
+	surveyLoadGeneration += 1;
+	useAppStore.getState().setInAppSurvey(null);
 }

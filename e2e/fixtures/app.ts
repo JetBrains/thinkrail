@@ -51,6 +51,7 @@ function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
 	rmSync(join(E2E_DATA_DIR, "turns.json"), { force: true });
 	removeTree(join(E2E_DATA_DIR, "reviews"));
+	removeTree(join(E2E_DATA_DIR, "resource-history"));
 	removeTree(join(E2E_DATA_DIR, "worktrees"));
 	removeTree(join(E2E_PI_AGENT_DIR, "sessions"));
 	if (isRealCentralE2e()) {
@@ -170,9 +171,13 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	return created;
 }
 
-export async function openAppFresh(page: Page): Promise<void> {
+export async function resetApp(page: Page): Promise<void> {
 	await disposeLiveSessions(page);
 	resetState();
+}
+
+export async function openAppFresh(page: Page): Promise<void> {
+	await resetApp(page);
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 }

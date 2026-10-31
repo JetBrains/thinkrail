@@ -4,7 +4,7 @@ type: architecture-design
 status: draft
 title: Pi compatibility — host adaptations and upgrade removal gates
 parent: architecture
-references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands]
+references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands, module-pi-delegation]
 tags: [pi, compatibility]
 ---
 
@@ -134,6 +134,69 @@ registry-extension tools by mirroring Pi's private `_isActivatedOnRegistration` 
 re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way to keep host-withheld tools
 apart from the recorded selection. Run the manager's restart regressions on upgrades.
 
+- **Anthropic extra-usage warning parity** — [[submodule-server-agent]], `agent/anthropicExtraUsage.ts`.
+  Pi's warning exists only in interactive mode (`maybeWarnAboutAnthropicSubscriptionAuth`), and its
+  `sk-ant-oat` predicate and warning text are module-private. So the host mirrors the trigger: it uses
+  the public `ModelRuntime.checkAuth` / `getAuth`, gates on `SettingsManager.getWarnings()`, and copies
+  the prefix check. The re-check points are mirrored too: session start, every model change via pi's `model_select` event, and Anthropic login.
+  **Removal gate:** pi exports the predicate, or a host-consumable warning event; then drop the copy.
+  On upgrades, re-diff the interactive check and its call sites, and run
+  `agent/anthropicExtraUsage.test.ts`.
+- **pi package management** — [[submodule-server-agent-packages]], [[submodule-server-agent]]. The
+  Settings → Extensions package catalog and mutations build on pi's public `DefaultPackageManager`
+  (`resolve(onMissing)`, `install`, `remove`, `update`, `checkForAvailableUpdates`,
+  `listConfiguredPackages`, `addSourceToSettings` / `removeSourceFromSettings`) and `SettingsManager`
+  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Eight pi facts the host compensates
+  for, each with its gate:
+  - `resolve()` without `onMissing` installs a declared-but-missing package, and
+    `DefaultResourceLoader.reload()` always calls it that way; the catalog therefore reads with
+    `onMissing → skip`, and the one-off install probe loads through a loader built on
+    `SettingsManager.inMemory({})`.
+    **Gate:** a public no-install resolve or exact-path extension loader.
+  - `pi config`'s toggle writers are a TUI component, not SDK; `mutations.ts` replicates the format for
+    top-level resources only (`±relative` patterns, `±builtin:<name>`) and deliberately keeps a plain
+    explicit `extensions[]` entry beside its `-` override, which the TUI replaces, losing discovery.
+    In-package filters are not written at all (deferred until a public per-resource API: every port of
+    `applyPatterns` / `collectPackageResources` semantics changed what pi loads in some shape). Re-run
+    the round-trip tests through pi's resolver on every bump. **Gate:** a public
+    `setResourceEnabled`-style API.
+  - `getPackageIdentity` is private; `identity.ts` ports it for the host-wide `disabledPackages` key.
+    **Gate:** pi exporting its identity rule.
+  - `installAndPersist` persists before the caller can re-check project trust, and settings writes are
+    queued with swallowed errors; the host sequences `install → trust → addSourceToSettings → flush →
+    drainErrors`. **Gate:** a persist step that reports failure and accepts a trust predicate.
+  - A local *input* source is matched against the process cwd while a *declared* one is stored relative
+    to its settings file (`getSourceMatchKeyForInput` vs `…ForSettings`); mutations pass absolute paths,
+    normalised by a port of pi's private `resolvePath` (`~`, `file://`) in `resolveLocalSource`.
+    **Gate:** pi matching declared strings by settings scope, or exporting `resolvePath`.
+  - `isOfflineModeEnabled` (`PI_OFFLINE` ∈ `1|true|yes`) is private and pi's `install` / `update` turn
+    into silent no-ops offline; `identity.ts` ports the rule so the host can refuse with `PACKAGE_OFFLINE`.
+    **Gate:** pi exporting the predicate or throwing a typed error offline.
+  - `SettingsManager.save()` / `saveProjectSettings()` silently skip a scope whose file failed to parse
+    (private `*SettingsLoadError`); `drainErrors()` is the only signal, so mutations read it per scope
+    before writing. **Gate:** a save that reports the skip.
+  - pi's extension-factory cache is process-wide and is cleared only by a loaded loader's `reload()`;
+    `clearExtensionCache` is not exported. `advancePiExtensionCache` reloads an empty loader twice
+    before the boot runtime and before the install probe. **Gate:** an exported clearer or a per-loader
+    cache.
+  Also relied on: `SettingsManager.getGlobalSettings` / `getProjectSettings` are the only reads pi's
+  package manager makes of declarations, so patching them per instance hides a switched-off package —
+  or every package, for a loader that resolves none — from every install-capable resolve
+  (`createPiSettings`; **gate:** a loader option to exclude declarations); `PackageUpdate`
+  carries no target version; pi skips pinned npm versions in update checks; pi classifies `git@host:…`
+  and `github:…` sources as local paths.
+- **Anthropic SSE framing patch** — [[submodule-server-agent]] (Provider stream framing),
+  `patches/@earendil-works%2Fpi-ai@1.4.0.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
+  streams fail with the non-retryable "Could not parse Anthropic SSE event": a valid CRLF stream whose
+  `\r\n` is split across network chunks, and a stream cut off mid-event. Patched, the first succeeds and
+  the second ends with a retryable truncation error such as "stream ended before message_stop".
+  **Removal gate:** an installed pi-ai release that fixes both (track
+  [upstream #10390](https://github.com/earendil-works/pi/issues/10390)). Bun silently skips a patch whose
+  version doesn't match, so every pi bump runs `agent/anthropicStreamFraming.test.ts` against the
+  unpatched release. Its "defects the patch fixes" group decides: when it passes, delete the patch and its
+  `patchedDependencies` entry; when it fails, port the patch to the new version. If only the "behavior
+  the patch keeps" group fails, pi changed that behavior: decide whether to follow it before porting
+  anything.
 - **Registry tool precedence** — [[submodule-server-extensions]], `preferRegistryTools` in the session
   loader's `extensionsOverride`. It relies on three pi facts:
   - pi keeps every extension and gives a tool name to its first registration
@@ -147,6 +210,18 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   replace option. Re-verify the three facts in the installed dist, and run the collision tests in
   `agentSessionManager.test.ts` (same-name questionnaire before and after reload, and a chat created with
   ours off that re-enables it over the package) on every upgrade.
+- **Provider-registration provenance** — [[submodule-server-agent]], `recordProviderOwners` in the
+  session loader's `extensionsOverride` ([[module-pi-delegation]] decision #32). Pi keeps no
+  provider-to-extension provenance: `LoadExtensionsResult.runtime.pendingProviderRegistrations` /
+  `pendingNativeProviderRegistrations` carry `extensionPath` only until `bindCore` flushes them, and the
+  post-bind `registerProvider` it installs drops the path. The host reads the queues during every session
+  load; a provider registered only after binding stays unowned, so its children keep the narrow set.
+  Children use the same queues the other way: a child drops its owners' queued registrations before
+  bind, so the shared runtime keeps the parent's; a post-bind re-registration would still replace it.
+  **Removal gate:** a public surface naming the providers each extension registered. Re-verify that the
+  queues still carry `extensionPath` and are filled before `extensionsOverride` runs; run the provider-owner
+  regressions in `agent/extensions.test.ts`, `agent/delegation.test.ts` and `pi-delegation`'s
+  `service.test.ts` on every upgrade.
 - **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
   pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))
   and retains image content lost by the destructive queue API. Remove the corresponding workaround
@@ -206,6 +281,14 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   extension can withdraw, delivered at the next step rather than at run end — even then, keep the
   claim-on-pull rule. Run the `pi-subagents` and `pi-background-commands` suites and
   `agent/chatResources.test.ts`.
+- **Skill bodies across compaction** — [[submodule-server-agent]], `skillCarryover.ts`. Pi's compaction
+  summarizes loaded skill text away (a `read` result reaches the summarizer cut to 2000 characters) and
+  nothing re-supplies it, so a host `context` handler re-attaches compacted skill bodies to every
+  request after a compaction. Remove it when pi's compaction preserves or re-attaches loaded skills
+  natively; verify with `skillCarryover.test.ts` and `bun run e2e:full e2e/skill-after-compaction.live.spec.ts`.
+  It skips virtual selections by matching pi's unexported `"pi-virtual"` model API, since a `context`
+  handler sees only the selection, not the routed model; replace that check when pi exposes the
+  dispatched model (or `isVirtualModel`) to `context` handlers.
 
 ## Context-budget limitations
 

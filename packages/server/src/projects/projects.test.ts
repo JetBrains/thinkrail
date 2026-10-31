@@ -11,11 +11,12 @@ import {
 } from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { Project } from "@thinkrail/contracts";
 import {
 	approveProjectMcpServer,
 	closeProject,
+	createProject,
 	getProjects,
 	grantProjectMcpTool,
 	initProject,
@@ -245,6 +246,87 @@ test("initProject: an empty folder gets an empty initial commit (a HEAD), so wor
 	const wt = join(dataDir, "wt");
 	git(dir, "worktree", "add", wt, "-b", "feature");
 	expect(existsSync(wt)).toBe(true);
+});
+
+test("createProject: makes the folder and missing parents, bootstraps a repo, and opens it", () => {
+	const parent = join(dataDir, "nested", "parent");
+
+	const project = withoutUserGitConfig(() => createProject(parent, " my-app ", " My  App "));
+	const path = join(parent, "my-app");
+	expect(project.path).toBe(realpathSync(path));
+	expect(project.name).toBe("My App");
+	expect(gitOut(path, "rev-parse", "HEAD")).not.toBe("");
+	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
+});
+
+test("createProject: reuses an empty folder but rejects a non-empty one or a file", () => {
+	mkdirSync(join(dataDir, "empty"));
+	expect(withoutUserGitConfig(() => createProject(dataDir, "empty")).path).toBe(
+		realpathSync(join(dataDir, "empty")),
+	);
+
+	mkdirSync(join(dataDir, "full"));
+	writeFileSync(join(dataDir, "full", "a.txt"), "a\n");
+	expect(() => createProject(dataDir, "full")).toThrow("already exists and isn't empty");
+	expect(existsSync(join(dataDir, "full", ".git"))).toBe(false);
+
+	writeFileSync(join(dataDir, "file"), "x\n");
+	expect(() => createProject(dataDir, "file")).toThrow("Not a folder");
+});
+
+test("createProject: a folder inside an enclosing repo becomes its own project", () => {
+	const outer = join(dataDir, "outer");
+	makeRepo(outer);
+
+	const project = withoutUserGitConfig(() => createProject(outer, "inner"));
+	expect(project.path).toBe(realpathSync(join(outer, "inner")));
+	expect(resolve(gitOut(join(outer, "inner"), "rev-parse", "--show-toplevel"))).toBe(
+		realpathSync(join(outer, "inner")),
+	);
+});
+
+function withFailingCommitHook<T>(hookBody: string, run: () => T): T {
+	const hooks = join(dataDir, "hooks");
+	mkdirSync(hooks, { recursive: true });
+	writeFileSync(join(hooks, "pre-commit"), `#!/bin/sh\n${hookBody}\nexit 1\n`, { mode: 0o755 });
+	const config = join(dataDir, "gitconfig");
+	writeFileSync(config, `[core]\n\thooksPath = "${hooks.replaceAll("\\", "/")}"\n`);
+	const keys = ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"] as const;
+	const saved = keys.map((key) => process.env[key]);
+	process.env.GIT_CONFIG_GLOBAL = config;
+	delete process.env.GIT_CONFIG_COUNT;
+	delete process.env.GIT_CONFIG_PARAMETERS;
+	try {
+		return run();
+	} finally {
+		keys.forEach((key, index) => {
+			const value = saved[index];
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		});
+	}
+}
+
+test("createProject: a failed bootstrap removes the folder it made, but nothing written into it meanwhile", () => {
+	const parent = join(dataDir, "parent");
+	expect(() => withFailingCommitHook(":", () => createProject(parent, "clean"))).toThrow(
+		"git commit failed",
+	);
+	expect(existsSync(join(parent, "clean"))).toBe(false);
+
+	expect(() =>
+		withFailingCommitHook("echo kept > hook-output.txt", () => createProject(parent, "busy")),
+	).toThrow("git commit failed");
+	expect(existsSync(join(parent, "busy", ".git"))).toBe(false);
+	expect(readFileSync(join(parent, "busy", "hook-output.txt"), "utf8")).toBe("kept\n");
+	expect(listProjects()).toEqual([]);
+});
+
+test("createProject: rejects names that are not one plain folder name", () => {
+	for (const name of ["", "  ", ".", "..", "a/b", "a\\b"]) {
+		expect(() => createProject(dataDir, name)).toThrow("Invalid project folder name");
+	}
+	expect(() => createProject("relative", "app")).toThrow("must be absolute or start with ~/");
 });
 
 test("initProject: commits even with no configured git identity (the -c fallback)", () => {

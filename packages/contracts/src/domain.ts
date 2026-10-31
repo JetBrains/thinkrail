@@ -486,6 +486,8 @@ export interface BackgroundCommandSummary {
 	finishedAt?: number;
 	exitCode?: number | null;
 	errorMessage?: string;
+	/** The host or the chat's teardown ended this run; `status` is then terminal (see `interruptedResource`). */
+	interrupted?: true;
 }
 
 export interface BackgroundCommandCompletionDetails
@@ -508,6 +510,125 @@ export interface SubagentResourceSummary {
 	thinkingLevel?: ThinkingLevel;
 	abortReason?: string;
 	durationMs?: number;
+	finishedAt?: number;
+	/** The host or the chat's teardown ended this run; `status` is then terminal (see `interruptedResource`). */
+	interrupted?: true;
+}
+
+export type ResourceRecord =
+	| { kind: "command"; summary: BackgroundCommandSummary }
+	| { kind: "subagent"; summary: SubagentResourceSummary };
+
+export type ResourceKind = ResourceRecord["kind"];
+
+export type ResourceOutcome = "done" | "failed" | "stopped" | "interrupted";
+
+export type ResourceTally = Record<ResourceOutcome, number>;
+
+export interface SessionResourceHistory {
+	commands: ResourceTally;
+	subagents: ResourceTally;
+}
+
+export interface ResourceHistoryCursor {
+	at: number;
+	id: string;
+}
+
+export type ResourceHistoryPage =
+	| { kind: "command"; items: BackgroundCommandSummary[]; hasMore: boolean }
+	| { kind: "subagent"; items: SubagentResourceSummary[]; hasMore: boolean };
+
+export const RESOURCE_HISTORY_PAGE_LIMIT = 20;
+export const RESOURCE_HISTORY_MAX_PAGE_LIMIT = 100;
+
+export function resourceRecordId(record: ResourceRecord): string {
+	return record.kind === "command" ? record.summary.id : record.summary.childSessionId;
+}
+
+function hasLiveStatus(record: ResourceRecord): boolean {
+	const { status } = record.summary;
+	return record.kind === "command"
+		? status === "running" || status === "stopping"
+		: status === "queued" || status === "running";
+}
+
+export function isLiveResource(record: ResourceRecord): boolean {
+	return !record.summary.interrupted && hasLiveStatus(record);
+}
+
+export function interruptedResource(record: ResourceRecord): ResourceRecord {
+	return record.kind === "command"
+		? {
+				kind: "command",
+				summary: {
+					...record.summary,
+					status: hasLiveStatus(record) ? "stopped" : record.summary.status,
+					interrupted: true,
+				},
+			}
+		: {
+				kind: "subagent",
+				summary: {
+					...record.summary,
+					status: hasLiveStatus(record) ? "aborted" : record.summary.status,
+					interrupted: true,
+				},
+			};
+}
+
+export function resourceOutcome(record: ResourceRecord): ResourceOutcome | null {
+	if (record.summary.interrupted) return "interrupted";
+	if (record.kind === "command") {
+		switch (record.summary.status) {
+			case "completed":
+				return record.summary.exitCode === 0 ? "done" : "failed";
+			case "error":
+				return "failed";
+			case "stopped":
+				return "stopped";
+			default:
+				return null;
+		}
+	}
+	switch (record.summary.status) {
+		case "completed":
+			return "done";
+		case "error":
+			return "failed";
+		case "aborted":
+			return "stopped";
+		default:
+			return null;
+	}
+}
+
+function emptyResourceTally(): ResourceTally {
+	return { done: 0, failed: 0, stopped: 0, interrupted: 0 };
+}
+
+export function tallyResources(records: readonly ResourceRecord[]): ResourceTally {
+	const tally = emptyResourceTally();
+	for (const record of records) {
+		const outcome = resourceOutcome(record);
+		if (outcome) tally[outcome]++;
+	}
+	return tally;
+}
+
+export function resourceTallyTotal(tally: ResourceTally): number {
+	return tally.done + tally.failed + tally.stopped + tally.interrupted;
+}
+
+export function resourceHistoryCursor(record: ResourceRecord): ResourceHistoryCursor {
+	const at =
+		record.summary.finishedAt ??
+		(record.kind === "command" ? record.summary.startedAt : Date.parse(record.summary.createdAt));
+	return { at: Number.isFinite(at) ? at : 0, id: resourceRecordId(record) };
+}
+
+export function compareResourceHistory(a: ResourceHistoryCursor, b: ResourceHistoryCursor): number {
+	return b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
 }
 
 export interface SessionResources {
@@ -517,6 +638,8 @@ export interface SessionResources {
 	subagents: SubagentResourceSummary[];
 	/** Absent on hosts without MCP support (`MCP_PROTOCOL_VERSION`). */
 	mcpServers?: McpServerResourceSummary[];
+	/** Every finished record of this chat by outcome; absent before `RESOURCE_HISTORY_PROTOCOL_VERSION`. */
+	history?: SessionResourceHistory;
 }
 
 export type McpServerScope = "user" | "project";
@@ -664,6 +787,203 @@ export interface McpListResult {
 	handledElsewhere?: { by: string };
 }
 
+export type PiPackageScope = "user" | "project";
+
+export type PiPackageSourceKind = "npm" | "git" | "local";
+
+const NPM_NAME = String.raw`(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*`;
+const BARE_NPM_SPEC = new RegExp(`^(${NPM_NAME})(?:@([^/\\s@]+))?$`, "i");
+const EXTENSION_FILE = /\.(m|c)?(j|t)sx?$/i;
+const PI_INSTALL_COMMAND = /^pi\s+install\b/;
+const PI_INSTALL_LOCAL_FLAGS = new Set(["-l", "--local"]);
+
+export interface PiPackageInput {
+	/** The source string pi accepts, or "" when the input names nothing. */
+	source: string;
+	/** `true` when a pasted `pi install` line carried `-l` / `--local`. */
+	local: boolean;
+	/** The bare name `source` was inferred from (`bigpowers` → `npm:bigpowers`); absent otherwise. */
+	bareName?: string;
+}
+
+/**
+ * The install field's forgiving forms, reduced to what pi accepts: a pasted `pi install …` line (its
+ * `-l` is reported, not dropped), a pi.dev or npmjs.com package URL and a bare npm name become `npm:…`;
+ * everything else — `npm:` / `git:` sources, git URLs, paths — is returned trimmed. Never throws.
+ */
+export function parsePiPackageInput(raw: string): PiPackageInput {
+	let source = unwrapQuotes(raw.trim());
+	let local = false;
+	if (PI_INSTALL_COMMAND.test(source)) {
+		const words = shellWords(source).slice(2);
+		local = words.some((word) => PI_INSTALL_LOCAL_FLAGS.has(word));
+		const sources = words.filter((word) => !word.startsWith("-"));
+		source = sources.length === 1 ? (sources[0] ?? "") : "";
+	}
+	const fromUrl = packageUrlSource(source);
+	if (fromUrl !== null) return { source: fromUrl, local };
+	if (
+		BARE_NPM_SPEC.test(source) &&
+		!EXTENSION_FILE.test(source) &&
+		!/^(npm|git|builtin|file):/i.test(source)
+	) {
+		return { source: `npm:${source}`, local, bareName: source };
+	}
+	return { source, local };
+}
+
+/** Strips one balanced pair of surrounding quotes or backticks — a pasted `\`pi install …\`` or `"npm:x"`. */
+function unwrapQuotes(text: string): string {
+	const first = text[0];
+	if (first && "`'\"".includes(first) && text.length >= 2 && text.endsWith(first)) {
+		return text.slice(1, -1).trim();
+	}
+	return text;
+}
+
+/** Shell-style words: quotes group, a backslash escapes the next character (inside double quotes only `\"` / `\\`). */
+function shellWords(text: string): string[] {
+	const words: string[] = [];
+	let current = "";
+	let quote: string | null = null;
+	let inWord = false;
+	const chars = [...text];
+	for (let i = 0; i < chars.length; i += 1) {
+		const char = chars[i] ?? "";
+		if (quote === "'") {
+			if (char === "'") quote = null;
+			else current += char;
+			continue;
+		}
+		if (
+			char === "\\" &&
+			i + 1 < chars.length &&
+			(quote === null || /["\\]/.test(chars[i + 1] ?? ""))
+		) {
+			current += chars[i + 1];
+			inWord = true;
+			i += 1;
+			continue;
+		}
+		if (quote === '"') {
+			if (char === '"') quote = null;
+			else current += char;
+			continue;
+		}
+		if (char === '"' || char === "'") {
+			quote = char;
+			inWord = true;
+			continue;
+		}
+		if (/\s/.test(char)) {
+			if (inWord) words.push(current);
+			current = "";
+			inWord = false;
+			continue;
+		}
+		current += char;
+		inWord = true;
+	}
+	if (inWord) words.push(current);
+	return words;
+}
+
+function packageUrlSource(source: string): string | null {
+	if (!/^https?:\/\//i.test(source)) return null;
+	let url: URL;
+	try {
+		url = new URL(source);
+	} catch {
+		return source;
+	}
+	const host = url.hostname.replace(/^www\./, "");
+	if (host !== "pi.dev" && host !== "npmjs.com") return source;
+	let path: string;
+	try {
+		path = decodeURIComponent(url.pathname).replace(/\/+$/, "");
+	} catch {
+		return source;
+	}
+	const piDev = host === "pi.dev" ? path.match(/^\/packages\/(.+)$/) : null;
+	if (piDev?.[1]) return `npm:${piDev[1]}`;
+	const npmjs = host === "npmjs.com" ? path.match(/^\/package\/(.+?)(?:\/v\/([^/]+))?$/) : null;
+	if (npmjs?.[1]) return `npm:${npmjs[1]}${npmjs[2] ? `@${npmjs[2]}` : ""}`;
+	return source;
+}
+
+/** The pi resource kinds the Extensions page lists and toggles; themes are terminal-only and never shown. */
+export type PiPackageResourceType = "extensions" | "skills" | "prompts";
+
+/** One file a pi package contributes, in pi's resolved `enabled` state; `path` is the toggle target. */
+export interface PiPackageResource {
+	type: PiPackageResourceType;
+	path: string;
+	/** pi's `pi config` display rule: `parent/file.ts` for a nested extension, the folder for a skill, else the file name. */
+	displayName: string;
+	enabled: boolean;
+	/** Extensions only, when the host could load the file: the tool and command names it registered. */
+	tools?: string[];
+	commands?: string[];
+	/** Extensions only: pi's load error. */
+	error?: string;
+}
+
+/** One installed pi package as declared in a settings file; every summary is on disk. */
+export interface PiPackageSummary {
+	/** Host-wide identity the package switch keys on: npm by name, git by repo without ref, local by resolved path. */
+	identity: string;
+	/** The source string exactly as declared (`npm:@scope/pkg@1.2.0`, `git:host/owner/repo@ref`, a path). */
+	source: string;
+	kind: PiPackageSourceKind;
+	scope: PiPackageScope;
+	name: string;
+	version?: string;
+	description?: string;
+	/** Absent when the declaration has no install on disk: pi retries at a chat's next start; the row offers Remove only. */
+	installedPath?: string;
+	/** Every `disabledPackages` key that switches this package off: its own `identity` and those of pi-equivalent declarations. */
+	switchKeys: string[];
+	/** The host-wide switch, closed over pi's equivalence: `false` when any of `switchKeys` is in `disabledPackages`. */
+	enabled: boolean;
+	/** `true` for a user declaration pi leaves aside because the repository declares the same identity. */
+	shadowed?: boolean;
+	resources: PiPackageResource[];
+}
+
+/** An extension pi discovers outside any package: a file under `<agentDir>/extensions`, `.pi/extensions`, or an explicit `extensions[]` settings path. */
+export interface PiLooseExtension {
+	path: string;
+	displayName: string;
+	scope: PiPackageScope;
+	/** `true` for an `extensions[]` settings entry, `false` for an auto-discovered directory file. */
+	explicit: boolean;
+	enabled: boolean;
+	tools?: string[];
+	commands?: string[];
+	error?: string;
+}
+
+/** One of pi's built-in extensions the host runs (`mcp`, `tool-search`), toggled through `±builtin:<name>` in pi settings. */
+export interface PiBuiltinExtension {
+	name: string;
+	enabled: boolean;
+	/** `project` when a `.pi/settings.json` entry decides it, else `user`. */
+	scope: PiPackageScope;
+}
+
+export interface PiPackagesCatalog {
+	/** The effective pi folder; every path shown derives from it, never from a hardcoded `~/.pi/agent`. */
+	agentDir: string;
+	settingsPath: string;
+	/** Present when the catalog was read for a workspace. */
+	projectSettingsPath?: string;
+	/** pi-level trust of that workspace's project; repository packages are read only when `true`. */
+	projectTrusted: boolean;
+	packages: PiPackageSummary[];
+	loose: PiLooseExtension[];
+	builtins: PiBuiltinExtension[];
+}
+
 export type BackgroundCommandOutputResult =
 	| {
 			available: true;
@@ -757,6 +1077,20 @@ export interface ProviderStatus {
 	canLogout?: boolean;
 }
 
+export type DetectedAccountSource =
+	| "claude-code"
+	| "codex"
+	| "github-copilot"
+	| "copilot-cli"
+	| "kimi-cli"
+	| "grok-build";
+
+export interface DetectedAccount {
+	providerId: string;
+	source: DetectedAccountSource;
+	plan?: string;
+}
+
 export interface JbcentralInstall {
 	platform: string;
 	shell: "bash" | "powershell";
@@ -804,10 +1138,15 @@ export function isJbcentralConnected(status: JbcentralStatus): boolean {
 	return status.state === "configured" && !status.signedOut && !status.proxyStopped;
 }
 
+/** A pi `warnings.*` setting the host surfaces; `anthropicExtraUsage` warns that Claude subscription auth bills per token. */
+export type ProviderWarning = "anthropicExtraUsage";
+
 export interface ProviderStatusReport {
 	providers: ProviderStatus[];
 	jbcentral: JbcentralStatus;
 	jbcentralInstall: JbcentralInstall;
+	/** pi's global `warnings.*` switches (default on); absent from hosts older than v99. */
+	warnings?: Record<ProviderWarning, boolean>;
 }
 
 export type JbcentralActionResult =
@@ -915,6 +1254,92 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 		!Array.isArray(value) &&
 		typeof Reflect.get(value, "light") === "string" &&
 		typeof Reflect.get(value, "dark") === "string"
+	);
+}
+
+export const FONT_ROLES = ["interface", "code"] as const;
+export type FontRole = (typeof FONT_ROLES)[number];
+
+/** A bundled face named by the role it ships for, or a family name the client resolves. */
+export type FontFamilyRef = { builtin: FontRole } | { name: string };
+
+/** One role's font: `family: null` is the role's bundled default; fallbacks draw what it lacks. */
+export interface FontChoice {
+	family: FontFamilyRef | null;
+	fallbacks: FontFamilyRef[];
+}
+
+export const FONT_FAMILY_NAME_MAX_LENGTH = 128;
+export const FONT_FALLBACKS_MAX = 8;
+/** `editorDelta`: the editor and diffs render this many px below the code size. */
+export const CODE_FONT_SIZE = { min: 10, max: 24, default: 13, editorDelta: 2 } as const;
+export const FONT_WEIGHT_OFFSET = { min: -70, max: 130, step: 10, default: 0 } as const;
+
+const FONT_NAME_DELIMITERS = /["\\;{}]/;
+
+export function hasControlCharacter(text: string): boolean {
+	return [...text].some((char) => {
+		const code = char.codePointAt(0) ?? 0;
+		return code < 0x20 || code === 0x7f;
+	});
+}
+
+export function isFontFamilyName(value: unknown): value is string {
+	return (
+		typeof value === "string" &&
+		value.length > 0 &&
+		value.length <= FONT_FAMILY_NAME_MAX_LENGTH &&
+		value.trim() === value &&
+		!FONT_NAME_DELIMITERS.test(value) &&
+		!hasControlCharacter(value)
+	);
+}
+
+export function isFontRole(value: unknown): value is FontRole {
+	return FONT_ROLES.some((role) => role === value);
+}
+
+export function isFontFamilyRef(value: unknown): value is FontFamilyRef {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const keys = Object.keys(value);
+	if (keys.length !== 1) return false;
+	if (keys[0] === "builtin") return isFontRole(Reflect.get(value, "builtin"));
+	return keys[0] === "name" && isFontFamilyName(Reflect.get(value, "name"));
+}
+
+export function fontFamilyRefKey(ref: FontFamilyRef): string {
+	return "builtin" in ref ? `builtin:${ref.builtin}` : `name:${ref.name}`;
+}
+
+export function isFontChoice(value: unknown): value is FontChoice {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const family = Reflect.get(value, "family");
+	const fallbacks = Reflect.get(value, "fallbacks");
+	return (
+		(family === null || isFontFamilyRef(family)) &&
+		Array.isArray(fallbacks) &&
+		fallbacks.length <= FONT_FALLBACKS_MAX &&
+		fallbacks.every(isFontFamilyRef) &&
+		new Set(fallbacks.map(fontFamilyRefKey)).size === fallbacks.length
+	);
+}
+
+export function isCodeFontSize(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= CODE_FONT_SIZE.min &&
+		value <= CODE_FONT_SIZE.max
+	);
+}
+
+export function isFontWeightOffset(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= FONT_WEIGHT_OFFSET.min &&
+		value <= FONT_WEIGHT_OFFSET.max &&
+		value % FONT_WEIGHT_OFFSET.step === 0
 	);
 }
 
@@ -1026,8 +1451,22 @@ export interface AppConfig extends ThemePreference {
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
 	disabledExtensions: string[];
+	/** pi package identities (`PiPackageSummary.identity`) switched off host-wide; pi has no such setting. */
+	disabledPackages: string[];
 	/** UI language: `"system"` (follow the browser) or a BCP-47 tag; an unavailable tag renders English. */
 	locale: string;
+	/** The user finished or skipped the cold-start onboarding wizard. */
+	onboardingDismissed: boolean;
+	/** All UI, chat and documents; the brand face is not user-changeable. */
+	interfaceFont: FontChoice;
+	/** The editor, diffs, code blocks and the terminal. */
+	codeFont: FontChoice;
+	/** Terminal and code blocks, in px; the editor and diffs render 2 px smaller. */
+	codeFontSize: number;
+	/** Ligatures in the editor, diffs and code in chat and documents; the terminal never draws them. */
+	codeLigatures: boolean;
+	/** Shifts every text weight but the brand face's together. */
+	fontWeightOffset: number;
 }
 
 export interface ExtensionCatalogEntry {
@@ -1055,7 +1494,65 @@ export type AppConfigUpdate = Partial<
 	reviewEffort?: ThinkingLevel | null;
 };
 
-export type InterviewResponse = "book" | "postpone" | "never";
+export type SurveyInvitationResponse = "postpone" | "never";
+
+export const SURVEY_OPEN_TEXT_LIMIT = 2000;
+
+export type SurveyRatingScale = 3 | 5 | 7 | 10;
+
+export function surveyRatingValues(scale: SurveyRatingScale): number[] {
+	if (scale === 10) return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+	return Array.from({ length: scale }, (_, index) => index + 1);
+}
+
+interface SurveyQuestionBase {
+	id: string;
+	question: string;
+	description?: string;
+	optional?: true;
+}
+
+export interface SurveyOpenQuestion extends SurveyQuestionBase {
+	type: "open";
+}
+
+export interface SurveyChoiceQuestion extends SurveyQuestionBase {
+	type: "single_choice" | "multiple_choice";
+	choices: string[];
+	hasOpenChoice?: true;
+	shuffleOptions?: true;
+}
+
+export interface SurveyRatingQuestion extends SurveyQuestionBase {
+	type: "rating";
+	display: "number" | "emoji";
+	scale: SurveyRatingScale;
+	lowerBoundLabel: string;
+	upperBoundLabel: string;
+}
+
+export type SurveyQuestion = SurveyOpenQuestion | SurveyChoiceQuestion | SurveyRatingQuestion;
+
+export interface AppSurvey {
+	id: string;
+	iteration: number;
+	questions: SurveyQuestion[];
+	placeholder?: string;
+	thankYou?: string;
+	shuffleQuestions?: true;
+	language?: string;
+}
+
+export type SurveyAnswerValue = string | string[];
+
+export interface SurveySubmitParams {
+	submissionId: string;
+	surveyId: string;
+	iteration: number;
+	language?: string;
+	answers: Record<string, SurveyAnswerValue>;
+	others?: Record<string, string>;
+}
 
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
 
@@ -1148,6 +1645,99 @@ export interface UserThemesSnapshot {
 	files: UserThemeFile[];
 }
 
+const USER_FONT_FILE_ERROR_CODES = [
+	"too-large",
+	"too-many",
+	"unsupported-collection",
+	"invalid-font",
+	"unreadable",
+] as const;
+export type UserFontFileErrorCode = (typeof USER_FONT_FILE_ERROR_CODES)[number];
+
+/** What a user font file declares in its own tables. */
+export interface UserFontFace {
+	family: string;
+	style: "normal" | "italic";
+	/** One value for a static face; the `wght` axis range for a variable one. */
+	weight: { min: number; max: number };
+	monospace: boolean;
+}
+
+export interface UserFontFileOk {
+	fileName: string;
+	ok: true;
+	/** Same-origin path serving the file, versioned by its content signature. */
+	url: string;
+	face: UserFontFace;
+}
+
+export interface UserFontFileError {
+	fileName: string;
+	ok: false;
+	error: UserFontFileErrorCode;
+	/** Parser or OS detail for `invalid-font` / `unreadable`, untranslated. */
+	detail?: string;
+}
+
+export type UserFontFile = UserFontFileOk | UserFontFileError;
+
+/** The host's user font files (`<dataDir>/fonts/`), as `fonts.list` reports them. */
+export interface UserFontsSnapshot {
+	dir: string;
+	files: UserFontFile[];
+}
+
+function isUserFontFace(value: unknown): value is UserFontFace {
+	if (typeof value !== "object" || value === null) return false;
+	const weight = Reflect.get(value, "weight");
+	const style = Reflect.get(value, "style");
+	if (typeof weight !== "object" || weight === null) return false;
+	const min = Reflect.get(weight, "min");
+	const max = Reflect.get(weight, "max");
+	return (
+		isFontFamilyName(Reflect.get(value, "family")) &&
+		(style === "normal" || style === "italic") &&
+		typeof min === "number" &&
+		typeof max === "number" &&
+		min <= max &&
+		typeof Reflect.get(value, "monospace") === "boolean"
+	);
+}
+
+/** The shape `fonts.list` and a `/fonts/` upload report for one file. */
+export function isUserFontFile(value: unknown): value is UserFontFile {
+	if (typeof value !== "object" || value === null) return false;
+	if (typeof Reflect.get(value, "fileName") !== "string") return false;
+	const ok = Reflect.get(value, "ok");
+	if (ok === true) {
+		return (
+			typeof Reflect.get(value, "url") === "string" && isUserFontFace(Reflect.get(value, "face"))
+		);
+	}
+	const error = Reflect.get(value, "error");
+	return ok === false && USER_FONT_FILE_ERROR_CODES.some((code) => code === error);
+}
+
+/** A family the host operating system's font service reports. */
+export interface InstalledFontFamily {
+	name: string;
+	/** Advisory: clients confirm by measuring the face they actually render. */
+	monospaceHint: boolean;
+}
+
+export interface InstalledFontsResult {
+	families: InstalledFontFamily[];
+}
+
+/** Serves (`GET`) and accepts (`PUT`) user font files by base name. */
+export const USER_FONTS_ROUTE = "/fonts/";
+/** Required on `PUT` uploads: a non-simple header forces a CORS preflight the host never answers. */
+export const USER_FONT_UPLOAD_HEADER = {
+	name: "X-ThinkRail-Request",
+	value: "font-upload",
+} as const;
+export const USER_FONT_EXTENSIONS = [".ttf", ".otf", ".woff", ".woff2"] as const;
+
 export const SUBAGENT_MAX_CONCURRENT = { min: 1, max: 16, default: 4 } as const;
 
 export function isSubagentMaxConcurrent(value: unknown): value is number {
@@ -1194,8 +1784,40 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
 	disabledExtensions: [],
+	disabledPackages: [],
 	locale: SYSTEM_LOCALE_PREFERENCE,
+	onboardingDismissed: false,
+	interfaceFont: { family: null, fallbacks: [] },
+	codeFont: { family: null, fallbacks: [] },
+	codeFontSize: CODE_FONT_SIZE.default,
+	codeLigatures: false,
+	fontWeightOffset: FONT_WEIGHT_OFFSET.default,
 };
+
+export type FontSettings = Pick<
+	AppConfig,
+	"interfaceFont" | "codeFont" | "codeFontSize" | "codeLigatures" | "fontWeightOffset"
+>;
+
+/** Each font field independently: a malformed one falls back to its own default. */
+export function normalizeFontSettings(value: unknown): FontSettings {
+	const record = typeof value === "object" && value !== null ? value : {};
+	const interfaceFont = Reflect.get(record, "interfaceFont");
+	const codeFont = Reflect.get(record, "codeFont");
+	const codeFontSize = Reflect.get(record, "codeFontSize");
+	const codeLigatures = Reflect.get(record, "codeLigatures");
+	const fontWeightOffset = Reflect.get(record, "fontWeightOffset");
+	return {
+		interfaceFont: isFontChoice(interfaceFont) ? interfaceFont : DEFAULT_CONFIG.interfaceFont,
+		codeFont: isFontChoice(codeFont) ? codeFont : DEFAULT_CONFIG.codeFont,
+		codeFontSize: isCodeFontSize(codeFontSize) ? codeFontSize : DEFAULT_CONFIG.codeFontSize,
+		codeLigatures:
+			typeof codeLigatures === "boolean" ? codeLigatures : DEFAULT_CONFIG.codeLigatures,
+		fontWeightOffset: isFontWeightOffset(fontWeightOffset)
+			? fontWeightOffset
+			: DEFAULT_CONFIG.fontWeightOffset,
+	};
+}
 
 export function normalizeThemePreference(value: unknown): ThemePreference {
 	const record = typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};

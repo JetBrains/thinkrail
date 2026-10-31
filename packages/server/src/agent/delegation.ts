@@ -29,7 +29,7 @@ import {
 	recordSessionUsage,
 	scheduleSessionStatePublish,
 } from "./agentSessionManager";
-import { publishSessionResourcesChanged } from "./chatResources";
+import { archiveSubagentRun, publishSessionResourcesChanged } from "./chatResources";
 import { childBaseExtensionFactories, childExtensionFactories } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
 import { isHostResourceId, isPiSessionId } from "./resourceIdentity";
@@ -92,7 +92,7 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 	let service = services.get(workspaceId);
 	if (!service) {
 		const maxConcurrentPerParent = concurrencyResolver?.(workspaceId);
-		service = createDelegationService({
+		const created = createDelegationService({
 			...(maxConcurrentPerParent === undefined ? {} : { maxConcurrentPerParent }),
 			resolveParent: (sessionId) =>
 				canUseSessionResources(sessionId, workspaceId) ? liveParentContext(sessionId) : undefined,
@@ -103,13 +103,14 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			childExtensionFactories: childExtensionFactories(),
 			buildChildSettings: buildSessionSettings,
 		});
-		service.onLifecycle((event) => {
+		created.onLifecycle((event) => {
 			if (event.type === "run-progress") {
 				runUsage.progress(event.parentSessionId, event.sessionId, event.details);
 				return;
 			}
 			if (event.type === "run-terminal")
 				runUsage.terminal(event.parentSessionId, event.sessionId, event.outcome.details);
+			if (services.get(workspaceId) === created) archiveSubagentRun(workspaceId, created, event);
 			const parentSessionId =
 				event.type === "child-created" ? event.record.parentSessionId : event.parentSessionId;
 			if (canUseSessionResources(parentSessionId, workspaceId)) {
@@ -117,7 +118,8 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 				scheduleSessionStatePublish(parentSessionId);
 			}
 		});
-		services.set(workspaceId, service);
+		services.set(workspaceId, created);
+		service = created;
 	}
 	return service;
 }
@@ -162,11 +164,17 @@ export function stopSessionChildren(
 	return { stopped: children.length, settled };
 }
 
+export const INTERRUPTED_ABORT_REASON = "interrupted";
+
 export async function disposeSessionChildren(
 	workspaceId: string,
 	parentSessionId: string,
 ): Promise<void> {
-	await services.get(workspaceId)?.disposeChildrenOf(parentSessionId);
+	const service = services.get(workspaceId);
+	if (!service) return;
+	for (const child of service.childrenOf(parentSessionId))
+		void child.abort(INTERRUPTED_ABORT_REASON).catch(() => {});
+	await service.disposeChildrenOf(parentSessionId);
 }
 
 export function removeWorkspaceDelegation(workspaceId: string): void {

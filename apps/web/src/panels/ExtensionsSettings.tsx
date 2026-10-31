@@ -1,14 +1,20 @@
 import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { useEffect, useState } from "react";
-import { toast, useAppStore } from "@/store";
-import { getTransport } from "@/transport";
+import { selectActiveWorkspace, toast, useAppStore } from "@/store";
+import { getTransport, supportsPiPackages } from "@/transport";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { InstallPackageDialog } from "./InstallPackageDialog";
+import { PiBuiltinsGroup, PiPackagesGroup } from "./PiPackagesSettings";
+import { UPDATE_CHECK_KEY, usePiPackages } from "./usePiPackages";
 
 const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
 	visualize: "settings.extensions.visualize.description",
+	"web-access": "settings.extensions.web-access.description",
 };
 
 function bundledDescription(t: Translator, entry: ExtensionCatalogEntry): string {
@@ -86,14 +92,26 @@ export function ExtensionsCatalog({
 export function ExtensionsSettings() {
 	const t = useT();
 	const disabled = useAppStore((state) => state.disabledExtensions);
+	const disabledPackages = useAppStore((state) => state.disabledPackages);
+	const packagesVersion = useAppStore((state) => state.packagesVersion);
+	const protocolVersion = useAppStore((state) => state.protocolVersion);
+	const workspaceId = useAppStore((state) => selectActiveWorkspace(state)?.id);
+	const packagesSupported = supportsPiPackages(protocolVersion);
 	const [entries, setEntries] = useState<ExtensionCatalogEntry[] | "loading" | "failed">("loading");
+	const [installOpen, setInstallOpen] = useState(false);
+	const packages = usePiPackages({
+		enabled: packagesSupported,
+		workspaceId,
+		packagesVersion,
+		disabledPackages,
+	});
 
 	useEffect(() => {
 		let current = true;
 		getTransport()
 			.request("extension.list", {})
-			.then((catalog) => {
-				if (current) setEntries(catalog);
+			.then((result) => {
+				if (current) setEntries(result);
 			})
 			.catch(() => {
 				if (current) setEntries("failed");
@@ -112,13 +130,93 @@ export function ExtensionsSettings() {
 			.catch(() => toast.error(t("settings.extensions.changeFailed")));
 	};
 
+	const { catalog, removeTarget } = packages;
+	const loaded = catalog !== "loading" && catalog !== "failed" ? catalog : null;
+	const settingsPath = loaded?.settingsPath ?? "";
+	const projectSettingsPath = loaded?.projectSettingsPath;
+
 	return (
-		<section data-testid="settings-extensions" className="flex flex-col gap-16">
-			<div className="flex flex-col gap-4">
-				<h3 className="tr-title-section text-text-default">{t("settings.extensions.title")}</h3>
-				<p className="text-text-muted tr-text-metadata">{t("settings.extensions.description")}</p>
+		<section data-testid="settings-extensions" className="flex flex-col gap-24">
+			<div className="flex flex-wrap items-start justify-between gap-12">
+				<div className="flex min-w-0 flex-1 flex-col gap-4">
+					<h3 className="tr-title-section text-text-default">{t("settings.extensions.title")}</h3>
+					<p className="text-text-muted tr-text-metadata">
+						{t(
+							packagesSupported
+								? "settings.extensions.description"
+								: "settings.extensions.descriptionBundledOnly",
+						)}
+					</p>
+				</div>
+				{packagesSupported ? (
+					<Button
+						variant="primary"
+						size="m"
+						data-testid="packages-install"
+						onClick={() => setInstallOpen(true)}
+					>
+						{t("settings.extensions.install")}
+					</Button>
+				) : null}
 			</div>
-			<ExtensionsCatalog entries={entries} disabled={disabled} onToggle={toggle} />
+			<section data-testid="settings-bundled-extensions" className="flex flex-col">
+				<h4 className="pb-8 tr-text-label-pill text-text-subtle">
+					{t("settings.extensions.group.bundled")}
+				</h4>
+				<ExtensionsCatalog entries={entries} disabled={disabled} onToggle={toggle} />
+			</section>
+			{packagesSupported ? (
+				<>
+					<PiPackagesGroup
+						catalog={catalog}
+						updates={packages.updates}
+						checkingUpdates={packages.checkingUpdates}
+						checkError={packages.errors.get(UPDATE_CHECK_KEY)}
+						busy={packages.busy}
+						errors={packages.errors}
+						expanded={packages.expanded}
+						onToggleExpanded={packages.toggleExpanded}
+						onAction={packages.onAction}
+						onUpdateAll={packages.updateAll}
+						onCheckUpdates={packages.checkUpdates}
+						onInstall={() => setInstallOpen(true)}
+					/>
+					{loaded ? (
+						<PiBuiltinsGroup
+							builtins={loaded.builtins}
+							settingsPath={settingsPath}
+							projectSettingsPath={projectSettingsPath}
+							busy={packages.busy}
+							errors={packages.errors}
+							onToggle={packages.toggleBuiltin}
+						/>
+					) : null}
+					<ConfirmDialog
+						open={removeTarget !== null}
+						onOpenChange={(open) => {
+							if (!open) packages.cancelRemove();
+						}}
+						title={t("settings.packages.removeTitle", { name: removeTarget?.name ?? "" })}
+						description={t("settings.packages.removeDescription", {
+							path:
+								removeTarget?.scope === "project"
+									? (projectSettingsPath ?? settingsPath)
+									: settingsPath,
+						})}
+						confirmLabel={t("settings.packages.removeConfirm")}
+						destructive
+						confirmTestId="package-remove-confirm"
+						onConfirm={packages.removeNow}
+					/>
+					<InstallPackageDialog
+						open={installOpen}
+						onOpenChange={setInstallOpen}
+						catalog={loaded}
+						workspaceId={workspaceId ?? null}
+						install={packages.install}
+					/>
+				</>
+			) : null}
 		</section>
 	);
 }

@@ -352,6 +352,7 @@ export function NewWorkspaceDialog({
 
 	const {
 		branches,
+		failed: branchesFailed,
 		refreshing,
 		refresh: refreshBranches,
 	} = useBranchList(open ? selectedProjectId : null, (list) => {
@@ -524,6 +525,7 @@ export function NewWorkspaceDialog({
 					{isolated ? (
 						<BranchPicker
 							branches={branches}
+							failed={branchesFailed}
 							selected={baseRef}
 							label={t("panels.newWorkspace.baseLabel")}
 							testid="ws-branch-picker"

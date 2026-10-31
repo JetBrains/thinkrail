@@ -84,7 +84,9 @@ of this package.
 
 Normal artifact children set `CI=1` to mute every analytics tier without changing the production runtime mode; `THINKRAIL_NO_ANALYTICS`
 alone suppresses only additional events. `bun run smoke:desktop --analytics [launcher]` instead runs a
-controlled hidden-host probe against a loopback PostHog collector, never the vendor endpoint. It removes
+controlled hidden-host probe against a loopback PostHog collector, never the vendor endpoint. The collector
+also answers the host's in-app survey list read (`GET /api/surveys/?token=…`) with an empty list, so a keyed
+human launch neither fails the probe nor offers a survey; muted launches must make no request at all. It removes
 inherited CI/test/optional mutes and proxies for human-mode launches, checks first packaged initialization
 emits `app_installed` before `app_started`, checks restart emits only `app_started`, and pins standard
 desktop/release/platform provenance plus one UUID across both (including additional opt-out). Any

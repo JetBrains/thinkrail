@@ -8,8 +8,6 @@ import type { BundledExtensionFactory } from "@thinkrail/server";
 /** The bundled pi packages' default-export factories, value-imported, in load order (registry extensions arrive through `@thinkrail/server`'s own import graph). */
 export declare const bundledExtensionFactories: BundledExtensionFactory[];
 
-export declare const bundledWebAccessFactory: BundledExtensionFactory;
-
 export interface EmbeddedSkillFile {
 	/** Path relative to the staged skills root, posix-style — e.g. `spec-graph/SKILL.md`. */
 	route: string;

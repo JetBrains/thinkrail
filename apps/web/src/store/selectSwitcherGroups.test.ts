@@ -17,6 +17,7 @@ const workspace = (id: string, projectId: string, name: string): Workspace => ({
 	projectId,
 	name,
 	branch: "main",
+	worktreePath: `/path/${projectId}/${id}`,
 	baseBranch: "main",
 	kind: "default",
 });
@@ -26,11 +27,12 @@ const layoutWithChat = (sessionId: string, name: string): WorkspaceLayoutDocumen
 	center: {
 		kind: "group",
 		id: "center",
-		tabs: [{ kind: "chat", id: `chat-${sessionId}`, sessionId, name, workspaceId: "w1" }],
+		tabs: [{ kind: "chat", id: `chat-${sessionId}`, sessionId, name }],
 	},
-	left: { groups: [], visible: true, width: 200, alignment: "start" },
-	right: { groups: [], visible: true, width: 200, alignment: "end" },
-	bottom: { groups: [], visible: true, height: 200, alignment: "end" },
+	left: { groups: [], visible: true, width: 200 },
+	right: { groups: [], visible: true, width: 200 },
+	bottom: { groups: [], visible: true, height: 200, alignment: "center" },
+	toolRestoreTargets: {},
 });
 
 const stateRecord = (

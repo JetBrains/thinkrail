@@ -6,7 +6,7 @@ import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_704_000_000_000;
-const askArgs: AskUserQuestionArgs = {
+const askArgs = {
 	questions: [
 		{
 			question: "Which?",
@@ -17,7 +17,7 @@ const askArgs: AskUserQuestionArgs = {
 			],
 		},
 	],
-};
+} satisfies AskUserQuestionArgs;
 
 test("arrows move the highlight, and Enter/click/Esc/Mod+K all resolve to the right row", async ({
 	page,

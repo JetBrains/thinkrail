@@ -1,7 +1,9 @@
 import type {
 	AppConfig,
+	AppSurvey,
 	ComposerGrowthLimit,
 	ExtUiRequest,
+	FontChoice,
 	GitDiffScope,
 	HostPlatform,
 	HostUpdateNotice,
@@ -13,8 +15,12 @@ import type {
 	McpStatusSnapshot,
 	PiEvent,
 	Project,
+	ProviderStatusReport,
+	ProviderWarning,
 	RefreshedModels,
+	ResourceKind,
 	ResourceMeta,
+	ResourceRecord,
 	ReviewChangedPayload,
 	ReviewSnapshot,
 	SessionEventPayload,
@@ -33,6 +39,7 @@ import type {
 	ThemeMode,
 	ThinkingLevel,
 	TurnChangeSet,
+	UserFontsSnapshot,
 	UserMessage,
 	UserThemesSnapshot,
 	WireModel,
@@ -52,6 +59,7 @@ import {
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
+	normalizeFontSettings,
 	normalizeThemePreference,
 	readToolResponseMessage,
 	sameModel,
@@ -94,9 +102,11 @@ import type {
 } from "../shell/layout";
 import type { ConnectionStatus } from "../transport";
 import {
+	appendOlderResources,
 	type ChatResourceRead,
 	type ChatResourceScope,
 	type ChatResourceSnapshots,
+	carryOlderResources,
 	staleChatResources,
 } from "./chatResources";
 import {
@@ -109,6 +119,7 @@ import {
 } from "./mcp";
 import {
 	type HistoryTarget,
+	isChatResourceConnectionCurrent,
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
 	isConnectedGeneration,
@@ -479,6 +490,7 @@ export interface SessionRuntime {
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
 	extUiWidget: Record<string, string[]>;
+	notice: ProviderWarning | null;
 	hostState: SessionState | null;
 }
 
@@ -510,6 +522,7 @@ function newRuntime(
 		extUiQueue: [],
 		extUiStatus: {},
 		extUiWidget: {},
+		notice: null,
 		hostState: null,
 	};
 }
@@ -912,6 +925,8 @@ function reduceExtUi(
 				return { ...rt, extUiWidget: omitKey(rt.extUiWidget, request.key) };
 			return { ...rt, extUiWidget: { ...rt.extUiWidget, [request.key]: request.content } };
 		}
+		case "notice":
+			return rt.notice === request.notice ? rt : { ...rt, notice: request.notice };
 		default:
 			return rt;
 	}
@@ -936,13 +951,25 @@ function withHostState(runtime: SessionRuntime, hostState: SessionState | null):
 }
 
 export type ReviewFocusSurface = { kind: "inline" } | { kind: "diff"; scope: GitDiffScope };
+export type OnboardingWizardGate = "pending" | "shown" | "hidden";
+export interface ProviderStatusSnapshot {
+	version: number;
+	report: ProviderStatusReport | null;
+	failed: boolean;
+}
 
 interface AppState {
 	resourceSnapshots: ChatResourceSnapshots;
 	resourceRevision: number;
 	invalidateChatResources: (scope: ChatResourceScope) => void;
 	installChatResources: (read: ChatResourceRead, snapshot: SessionResources) => void;
-	failChatResources: (read: ChatResourceRead, error: string) => void;
+	failChatResources: (read: ChatResourceRead, error: string, retrying: boolean) => void;
+	appendChatResourceHistory: (
+		read: ChatResourceScope & { connectionGeneration: number },
+		kind: ResourceKind,
+		after: string,
+		page: readonly ResourceRecord[],
+	) => void;
 	clearChatResources: (scope: ChatResourceScope) => void;
 	mcpByWorkspace: Record<string, McpWorkspaceProjection>;
 	mcpRevision: number;
@@ -1000,7 +1027,11 @@ interface AppState {
 	models: WireModel[];
 	hiddenModels: ModelRef[];
 	providerVersion: number;
+	providerStatusVersion: number;
+	providerStatus: ProviderStatusSnapshot;
 	templatesVersion: number;
+	/** Bumped on `packages.changed`; the Extensions page re-lists installed pi packages when it moves. */
+	packagesVersion: number;
 	modelsRefreshing: boolean;
 	modelsFresh: boolean;
 	changesRequest: {
@@ -1028,9 +1059,12 @@ interface AppState {
 	skillsSyncedTickBySession: Record<string, number>;
 	activeLogin: LoginState | null;
 	loginStarting: boolean;
+	unheldLoginFrame: LoginPush | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
-	interviewPromptOpen: boolean;
+	surveyInvitationOpen: boolean;
+	surveyWindowOpen: boolean;
+	inAppSurvey: AppSurvey | null;
 	notificationPromptOpen: boolean;
 	sessionSwitcherOpen: boolean;
 	theme: ThemeId;
@@ -1062,14 +1096,25 @@ interface AppState {
 	reviewAutoFix: boolean;
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
+	disabledPackages: string[];
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
 	installLocalLocales: (snapshot: LocalLocalesSnapshot | null) => void;
 	userThemes: UserThemesSnapshot | null;
 	installUserThemes: (snapshot: UserThemesSnapshot | null) => void;
+	interfaceFont: FontChoice;
+	codeFont: FontChoice;
+	codeFontSize: number;
+	codeLigatures: boolean;
+	fontWeightOffset: number;
+	userFonts: UserFontsSnapshot | null;
+	installUserFonts: (snapshot: UserFontsSnapshot | null) => void;
+	onboardingDismissed: boolean;
+	onboardingWizard: OnboardingWizardGate;
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
+	setOnboardingWizard: (gate: OnboardingWizardGate) => void;
 	installWelcomeSnapshot: (
 		protocolVersion: number,
 		projects: Project[],
@@ -1324,7 +1369,10 @@ interface AppState {
 	setModelVisibility: (model: ModelRef, visible: boolean) => void;
 	toggleModelVisibility: (model: ModelRef) => void;
 	noteProviderChanged: () => void;
+	invalidateProviderStatus: () => void;
+	installProviderStatus: (version: number, report: ProviderStatusReport | null) => void;
 	bumpTemplatesVersion: () => void;
+	bumpPackagesVersion: () => void;
 	beginModelsRefresh: () => number;
 	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	dropModelsFreshness: () => void;
@@ -1333,19 +1381,30 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	dismissSessionNotice: (sessionId: string) => void;
+	silenceNotice: (notice: ProviderWarning) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	applyExtUi: (request: ExtUiRequest) => void;
 	reserveLogin: () => boolean;
 	finishLoginStart: () => void;
-	beginLogin: (loginId: string, providerId: string, target?: LoginPush["target"]) => void;
+	beginLogin: (
+		loginId: string,
+		providerId: string,
+		target?: LoginPush["target"],
+		method?: LoginState["method"],
+	) => void;
 	applyLoginFrame: (push: LoginPush) => void;
 	clearLoginInput: () => void;
-	clearLogin: () => void;
+	clearLogin: (loginId?: string) => void;
+	clearSettledLogin: (providerId: string) => void;
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
-	showInterviewPrompt: () => void;
-	hideInterviewPrompt: () => void;
+	showSurveyInvitation: () => void;
+	hideSurveyInvitation: () => void;
+	openSurveyWindow: () => void;
+	closeSurveyWindow: () => void;
+	setInAppSurvey: (survey: AppSurvey | null) => void;
 	openNotificationPrompt: () => void;
 	closeNotificationPrompt: () => void;
 	openSessionSwitcher: () => void;
@@ -1442,7 +1501,12 @@ function configPatch(config: AppConfig) {
 		disabledExtensions: Array.isArray(config.disabledExtensions)
 			? config.disabledExtensions
 			: DEFAULT_CONFIG.disabledExtensions,
+		disabledPackages: Array.isArray(config.disabledPackages)
+			? config.disabledPackages
+			: DEFAULT_CONFIG.disabledPackages,
 		locale: isLocalePreference(config.locale) ? config.locale : DEFAULT_CONFIG.locale,
+		onboardingDismissed: config.onboardingDismissed === true,
+		...normalizeFontSettings(config),
 	};
 }
 
@@ -2004,6 +2068,7 @@ const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
 	"setStatus",
 	"setWidget",
 	"setTitle",
+	"notice",
 ]);
 
 function isDialogRequest(
@@ -2264,7 +2329,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	models: [],
 	hiddenModels: [],
 	providerVersion: 0,
+	providerStatusVersion: 0,
+	providerStatus: { version: -1, report: null, failed: false },
 	templatesVersion: 0,
+	packagesVersion: 0,
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
@@ -2285,9 +2353,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	skillsSyncedTickBySession: {},
 	activeLogin: null,
 	loginStarting: false,
+	unheldLoginFrame: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
-	interviewPromptOpen: false,
+	surveyInvitationOpen: false,
+	surveyWindowOpen: false,
+	inAppSurvey: null,
 	notificationPromptOpen: false,
 	sessionSwitcherOpen: false,
 	theme: DEFAULT_CONFIG.theme,
@@ -2320,11 +2391,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
+	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,
 	installLocalLocales: (snapshot) => set({ localLocales: snapshot }),
 	userThemes: null,
 	installUserThemes: (snapshot) => set({ userThemes: snapshot }),
+	interfaceFont: DEFAULT_CONFIG.interfaceFont,
+	codeFont: DEFAULT_CONFIG.codeFont,
+	codeFontSize: DEFAULT_CONFIG.codeFontSize,
+	codeLigatures: DEFAULT_CONFIG.codeLigatures,
+	fontWeightOffset: DEFAULT_CONFIG.fontWeightOffset,
+	userFonts: null,
+	installUserFonts: (snapshot) => set({ userFonts: snapshot }),
+	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
+	onboardingWizard: "pending",
 	toasts: [],
 	resourceSnapshots: {},
 	resourceRevision: 0,
@@ -2399,6 +2480,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						...state.resourceSnapshots[scope.workspaceId],
 						[scope.sessionId]: {
 							snapshot: previous?.snapshot ?? null,
+							...(previous?.older ? { older: previous.older } : {}),
 							connectionGeneration: previous?.connectionGeneration ?? null,
 							revision,
 							fresh: false,
@@ -2416,6 +2498,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				snapshot.sessionId !== read.sessionId
 			)
 				return {};
+			const previous = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
+			const older =
+				previous?.connectionGeneration === read.connectionGeneration
+					? carryOlderResources(previous, snapshot)
+					: undefined;
 			return {
 				resourceSnapshots: {
 					...state.resourceSnapshots,
@@ -2423,6 +2510,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						...state.resourceSnapshots[read.workspaceId],
 						[read.sessionId]: {
 							snapshot,
+							...(older ? { older } : {}),
 							connectionGeneration: read.connectionGeneration,
 							revision: read.revision,
 							fresh: true,
@@ -2432,7 +2520,28 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	failChatResources: (read, error) =>
+	appendChatResourceHistory: (read, kind, after, page) =>
+		set((state) => {
+			const projection = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
+			if (
+				!projection ||
+				projection.connectionGeneration !== read.connectionGeneration ||
+				!isChatResourceConnectionCurrent(state, read)
+			)
+				return {};
+			const older = appendOlderResources(projection, kind, after, page);
+			if (!older) return {};
+			return {
+				resourceSnapshots: {
+					...state.resourceSnapshots,
+					[read.workspaceId]: {
+						...state.resourceSnapshots[read.workspaceId],
+						[read.sessionId]: { ...projection, older },
+					},
+				},
+			};
+		}),
+	failChatResources: (read, error, retrying) =>
 		set((state) => {
 			const previous = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
 			if (!previous || !isChatResourceReadCurrent(state, read)) return {};
@@ -2441,7 +2550,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...state.resourceSnapshots,
 					[read.workspaceId]: {
 						...state.resourceSnapshots[read.workspaceId],
-						[read.sessionId]: { ...previous, fresh: false, error },
+						[read.sessionId]: { ...previous, fresh: false, error, retrying },
 					},
 				},
 			};
@@ -2456,6 +2565,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				),
 			},
 		})),
+	setOnboardingWizard: (onboardingWizard) => set({ onboardingWizard }),
 	setStatus: (status) =>
 		set((state) => ({
 			status,
@@ -2492,6 +2602,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
 				welcomeGeneration: state.welcomeGeneration + 1,
+				providerStatusVersion: state.providerStatusVersion + 1,
 			};
 		}),
 	applyHostUpdate: (hostUpdate) => set({ hostUpdate }),
@@ -4192,8 +4303,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 			modelsFresh: false,
 			modelsRefreshing: false,
 			providerVersion: s.providerVersion + 1,
+			providerStatusVersion: s.providerStatusVersion + 1,
 		})),
+	invalidateProviderStatus: () =>
+		set((s) => ({ providerStatusVersion: s.providerStatusVersion + 1 })),
+	installProviderStatus: (version, report) =>
+		set((s) =>
+			s.providerStatusVersion === version
+				? {
+						providerStatus: {
+							version,
+							report: report ?? s.providerStatus.report,
+							failed: report === null,
+						},
+					}
+				: s,
+		),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
+	bumpPackagesVersion: () => set((s) => ({ packagesVersion: s.packagesVersion + 1 })),
 	beginModelsRefresh: () => {
 		const providerVersion = get().providerVersion;
 		set({ modelsRefreshing: true });
@@ -4219,6 +4346,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	dismissSessionNotice: (sessionId) =>
+		set((s) => withRuntime(s, sessionId, (rt) => (rt.notice ? { ...rt, notice: null } : rt))),
+	silenceNotice: (notice) =>
+		set((s) => {
+			const silenced = Object.entries(s.sessions).filter(([, rt]) => rt.notice === notice);
+			const orphans = s.extUiOrphans.filter(
+				(frame) => frame.kind !== "notice" || frame.notice !== notice,
+			);
+			const sessions = silenced.length > 0 ? { ...s.sessions } : s.sessions;
+			for (const [id, rt] of silenced) sessions[id] = { ...rt, notice: null };
+			return {
+				...(sessions !== s.sessions ? { sessions } : {}),
+				...(orphans.length !== s.extUiOrphans.length ? { extUiOrphans: orphans } : {}),
+			};
+		}),
 	clearPendingExtUi: (sessionId, id) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => {
@@ -4241,26 +4383,39 @@ export const useAppStore = create<AppState>((set, get) => ({
 		return true;
 	},
 	finishLoginStart: () => set({ loginStarting: false }),
-	beginLogin: (loginId, providerId, target) =>
+	beginLogin: (loginId, providerId, target, method) =>
 		set((s) => {
 			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
+			if (s.activeLogin?.loginId === loginId)
+				return method && !s.activeLogin.method ? { activeLogin: { ...s.activeLogin, method } } : {};
+			if (s.activeLogin?.status === "active") return {};
+			const early = s.unheldLoginFrame?.loginId === loginId ? s.unheldLoginFrame.frame : null;
+			const fresh = {
+				...newLoginState(loginId, providerId, target),
+				...(method ? { method } : {}),
+			};
 			return {
-				activeLogin:
-					s.activeLogin?.loginId === loginId || s.activeLogin?.status === "active"
-						? s.activeLogin
-						: newLoginState(loginId, providerId, target),
+				activeLogin: early ? foldLoginFrame(fresh, early) : fresh,
+				unheldLoginFrame: null,
 			};
 		}),
 	applyLoginFrame: (push) =>
 		set((s) => {
 			if (push.target && s.removedWorkspaceIds[push.target.workspaceId]) return {};
+			const statusChanged =
+				push.frame.kind === "success" && !push.target
+					? { providerStatusVersion: s.providerStatusVersion + 1 }
+					: {};
 			const cur = s.activeLogin;
-			if (cur && cur.loginId !== push.loginId && cur.status === "active") return {};
+			if (cur && cur.loginId !== push.loginId && cur.status === "active") return statusChanged;
+			const terminal = push.frame.kind === "success" || push.frame.kind === "error";
+			if (terminal && cur?.loginId !== push.loginId)
+				return { unheldLoginFrame: push, ...statusChanged };
 			const base =
 				cur && cur.loginId === push.loginId
 					? cur
 					: newLoginState(push.loginId, push.providerId, push.target);
-			return { activeLogin: foldLoginFrame(base, push.frame) };
+			return { activeLogin: foldLoginFrame(base, push.frame), ...statusChanged };
 		}),
 	clearLoginInput: () =>
 		set((s) => {
@@ -4268,7 +4423,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const { input: _drop, ...rest } = s.activeLogin;
 			return { activeLogin: rest };
 		}),
-	clearLogin: () => set({ activeLogin: null }),
+	clearLogin: (loginId) =>
+		set((s) =>
+			loginId === undefined || s.activeLogin?.loginId === loginId ? { activeLogin: null } : {},
+		),
+	clearSettledLogin: (providerId) =>
+		set((s) => {
+			const login = s.activeLogin;
+			if (!login || login.target || login.providerId !== providerId) return {};
+			return login.status === "active" ? {} : { activeLogin: null };
+		}),
 	openSettings: (section = SettingsSection.Providers) =>
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
@@ -4281,9 +4445,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSessionSwitcher: () => set({ sessionSwitcherOpen: false }),
 	toggleSessionSwitcher: () =>
 		set((state) => ({ sessionSwitcherOpen: !state.sessionSwitcherOpen })),
-	showInterviewPrompt: () =>
-		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
-	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),
+	showSurveyInvitation: () =>
+		set((state) => (state.surveyInvitationOpen ? state : { surveyInvitationOpen: true })),
+	hideSurveyInvitation: () => set({ surveyInvitationOpen: false }),
+	openSurveyWindow: () =>
+		set({ surveyWindowOpen: true, surveyInvitationOpen: false, settingsOpen: false }),
+	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
+	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
 	setStreamingResponseMovement: (streamingResponseMovement) => set({ streamingResponseMovement }),
 	setChatPreferences: (chatMessageOrder, streamingResponseMovement) =>

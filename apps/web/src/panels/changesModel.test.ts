@@ -95,9 +95,7 @@ test("sectionCollapsedByDefault folds large and generated files, never an ordina
 	expect(sectionCollapsedByDefault(change("dist/app.min.js"))).toBe(true);
 	expect(sectionCollapsedByDefault(change("src/__snapshots__/a.test.ts.snap"))).toBe(true);
 	expect(sectionCollapsedByDefault(change("src/lockfile.ts"))).toBe(false);
-	expect(
-		sectionCollapsedByDefault(change("docs/notes.md", { added: undefined, removed: undefined })),
-	).toBe(false);
+	expect(sectionCollapsedByDefault({ path: "docs/notes.md", status: "modified" })).toBe(false);
 });
 
 test("scopeLabel keeps a commit scope short (sha), with the subject in the tooltip", () => {

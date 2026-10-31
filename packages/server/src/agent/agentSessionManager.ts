@@ -9,6 +9,7 @@ import {
 	createAgentSession,
 	type ExtensionCommandContext,
 	type ExtensionError,
+	type ExtensionFactory,
 	type ExtensionUIContext,
 	getAgentDir,
 	type McpServerConfig,
@@ -17,7 +18,7 @@ import {
 	type SessionEntry,
 	type SessionInfo,
 	SessionManager,
-	SettingsManager,
+	type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
@@ -73,8 +74,14 @@ import {
 	saveSessionLifecycle,
 	saveSessionReceipts,
 } from "../persistence";
+import { removeWorkspaceResourceHistory } from "../resourceHistory";
 import { trashFile } from "../trash";
-import { publishSessionResourcesChanged } from "./chatResources";
+import {
+	anthropicExtraUsageWarningEnabledOnDisk,
+	type ExtraUsageSubject,
+	shouldWarnAnthropicExtraUsage,
+} from "./anthropicExtraUsage";
+import { archiveCommandHistory, publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
 	hasLiveSessionChildren,
@@ -83,7 +90,15 @@ import {
 	stopSessionChildren,
 	subagentsFor,
 } from "./delegation";
-import { buildResourceLoader, disabledExtensions, toSkillCommands } from "./extensions";
+import {
+	buildResourceLoader,
+	disabledExtensions,
+	isLoaderPackagePolicyStale,
+	loadsDisabledExtensionSkills,
+	packagePolicyKey,
+	providerExtensionPaths,
+	toSkillCommands,
+} from "./extensions";
 import {
 	createMcpSessionHost,
 	type McpProjectPolicy,
@@ -103,6 +118,7 @@ import {
 } from "./mcpSessions";
 import { refreshModelListings } from "./modelAvailability";
 import { preferredDefaultModel } from "./modelDefaults";
+import { createPiSettings } from "./packages";
 import {
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
@@ -131,6 +147,7 @@ import {
 	notifyExtensionError,
 	notifyExtUi,
 	pendingExtUiDialog,
+	publishSessionNotice,
 	selectForToolCall,
 	setExtUiStateChanged,
 } from "./webUiContext";
@@ -147,6 +164,7 @@ interface Entry {
 	subagents: Subagents;
 	commands: BackgroundCommands;
 	unsubscribeCommands: () => void;
+	commandHistory: ReturnType<typeof archiveCommandHistory>;
 	resourceCascade?: Promise<void>;
 	shutdown?: { runner: AgentSession["extensionRunner"]; settled: Promise<void> };
 	resourcesClosing: boolean;
@@ -162,6 +180,7 @@ interface Entry {
 	piCompactionInProgress: boolean;
 	reloadPending: boolean;
 	reloadRunning: Promise<void> | null;
+	reloadPolicyGeneration: number;
 	preflightReleases: Set<() => void>;
 	heldReservations: Set<() => void>;
 	disposed: boolean;
@@ -176,6 +195,7 @@ interface Entry {
 	firstPromptScanned: number;
 	toolResponseWaiters: ToolResponseWaiters;
 	mcpHost: McpSessionHost;
+	extraUsageWarned: boolean;
 }
 
 const sessions = new Map<string, Entry>();
@@ -747,7 +767,12 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	if (kept.length !== active.length || restored.length > 0) {
 		session.setActiveToolsByName([...kept, ...restored]);
 	}
-	if (allowReload && enabledExtensionMissing(session, disabled)) {
+	if (!allowReload || entry.reloadRunning) return;
+	if (
+		enabledExtensionMissing(session, disabled) ||
+		loadsDisabledExtensionSkills(session.resourceLoader.getSkills().skills) ||
+		isLoaderPackagePolicyStale(session.resourceLoader)
+	) {
 		void requestSessionReload(session.sessionId).catch((error) => {
 			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(session.sessionId)) {
 				log.warn(`extension reload failed for ${session.sessionId}`, error as Error);
@@ -791,7 +816,16 @@ function enabledExtensionMissing(session: AgentSession, disabled: ReadonlySet<st
 	);
 }
 
+let extensionPolicy = { key: "", generation: 0 };
+function noteExtensionPolicy(): void {
+	const key = `${[...disabledExtensions()].sort().join("\n")}\0${packagePolicyKey()}`;
+	if (key !== extensionPolicy.key) {
+		extensionPolicy = { key, generation: extensionPolicy.generation + 1 };
+	}
+}
+
 export function refreshExtensionTools(): void {
+	noteExtensionPolicy();
 	for (const entry of sessions.values()) {
 		if (entry.session.isStreaming) entry.extensionToolsRefreshPending = true;
 		else applyExtensionTools(entry);
@@ -895,6 +929,7 @@ function reconsiderPendingReload(entry: Entry): void {
 function runGatedReload(entry: Entry): Promise<void> {
 	if (entry.reloadRunning) return entry.reloadRunning;
 	entry.reloadPending = false;
+	entry.reloadPolicyGeneration = extensionPolicy.generation;
 	const runner = entry.session.extensionRunner;
 	const mcpWasLoaded = entry.mcpHost.loaded() !== null;
 	const beforeSessionStart = () => {
@@ -928,7 +963,9 @@ function runGatedReload(entry: Entry): Promise<void> {
 				entry.reloadRunning = null;
 				applySubagentTools(entry);
 				applyReviewTool(entry);
-				applyExtensionTools(entry, { allowReload: false });
+				applyExtensionTools(entry, {
+					allowReload: entry.reloadPolicyGeneration !== extensionPolicy.generation,
+				});
 				entry.commands.flushCompletions();
 				entry.subagents.flushCompletions();
 				publishEntryState(entry);
@@ -969,7 +1006,7 @@ function releasePreflights(entry: Entry): void {
 const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
 
 export function buildSessionSettings(cwd: string, projectTrusted: boolean): SettingsManager {
-	const settings = SettingsManager.create(cwd, undefined, { projectTrusted });
+	const settings = createPiSettings(cwd, undefined, { projectTrusted, packages: "enabled" });
 	const reload = settings.reload.bind(settings);
 	settings.reload = async () => {
 		await reload();
@@ -1098,6 +1135,7 @@ async function prepareSessionEntry(
 		subagents,
 		resourcesClosing: false,
 		unsubscribeCommands: () => {},
+		commandHistory: { finish: () => {} },
 		session,
 		generation,
 		unsubscribe: () => {},
@@ -1110,6 +1148,7 @@ async function prepareSessionEntry(
 		piCompactionInProgress: false,
 		reloadPending: false,
 		reloadRunning: null,
+		reloadPolicyGeneration: 0,
 		preflightReleases: new Set(),
 		heldReservations: new Set(),
 		disposed: false,
@@ -1124,7 +1163,14 @@ async function prepareSessionEntry(
 		firstPromptScanned: 0,
 		toolResponseWaiters,
 		mcpHost,
+		extraUsageWarned: false,
 	};
+	entry.commandHistory = archiveCommandHistory(
+		workspaceId,
+		sessionId,
+		commands,
+		() => entry.resourcesClosing,
+	);
 	entry.unsubscribeCommands = commands.onChange(() => {
 		if (canUseSessionResources(sessionId, workspaceId))
 			publishSessionResourcesChanged(workspaceId, sessionId);
@@ -1310,6 +1356,7 @@ async function registerSession(
 		publishCreated(summaryOf(session.sessionId, prepared.entry));
 	}
 	publishEntryState(prepared.entry);
+	void warnAnthropicExtraUsage(prepared.entry);
 	if (session.settingsManager.isProjectTrusted() !== piResourceTrustFor(workspaceId))
 		await requestSessionReload(session.sessionId);
 	return prepared.result;
@@ -1435,6 +1482,7 @@ async function createParentSessionInternal(
 					subagents.extension,
 					createBackgroundCommandsExtension({ service: commands }),
 					...mcpHost.extensions,
+					extraUsageModelSelectExtension(sessionId),
 				],
 				toolResponseSessionServices(toolResponseWaiters),
 			),
@@ -2453,6 +2501,48 @@ export async function setSessionModel(sessionId: string, model: WireModel): Prom
 	return sessionWireModel(resolved, entry.generation);
 }
 
+function extraUsageModelSelectExtension(sessionId: string): ExtensionFactory {
+	return (pi) => {
+		pi.on("model_select", () => {
+			const entry = sessions.get(sessionId);
+			if (entry) void warnAnthropicExtraUsage(entry);
+		});
+	};
+}
+
+function extraUsageSubject(entry: Entry): ExtraUsageSubject {
+	const { session } = entry;
+	const provider = session.model?.provider;
+	return {
+		model: provider && !entry.generation.opaqueProviderIds.has(provider) ? { provider } : undefined,
+		modelRuntime: session.modelRuntime,
+		settingsManager: session.settingsManager,
+	};
+}
+
+async function warnAnthropicExtraUsage(entry: Entry): Promise<void> {
+	if (entry.extraUsageWarned) return;
+	const subject = extraUsageSubject(entry);
+	if (!(await shouldWarnAnthropicExtraUsage(subject))) return;
+	if (entry.extraUsageWarned || entry.disposed || sessions.get(entry.session.sessionId) !== entry)
+		return;
+	if (entry.session.model?.provider !== subject.model?.provider) return;
+	const { sessionManager, settingsManager } = entry.session;
+	if (
+		!anthropicExtraUsageWarningEnabledOnDisk(
+			sessionManager.getCwd(),
+			settingsManager.isProjectTrusted(),
+		)
+	)
+		return;
+	entry.extraUsageWarned = true;
+	publishSessionNotice(entry.session.sessionId, "anthropicExtraUsage");
+}
+
+export function recheckAnthropicExtraUsage(): void {
+	for (const entry of sessions.values()) void warnAnthropicExtraUsage(entry);
+}
+
 export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel): void {
 	mustGet(sessionId).setThinkingLevel(level);
 }
@@ -2699,13 +2789,16 @@ export function liveParentContext(sessionId: string): ParentContext | undefined 
 	const entry = sessions.get(sessionId);
 	if (!entry || !canUseSessionResources(sessionId, entry.workspaceId)) return undefined;
 	const { session, workspaceId } = entry;
+	const isProjectTrusted = () =>
+		session.settingsManager.isProjectTrusted() && piResourceTrustFor(workspaceId);
 	return {
 		cwd: session.sessionManager.getCwd(),
 		model: session.model,
 		thinkingLevel: session.thinkingLevel,
 		modelRuntime: session.modelRuntime,
-		isProjectTrusted: () =>
-			session.settingsManager.isProjectTrusted() && piResourceTrustFor(workspaceId),
+		isProjectTrusted,
+		providerExtensionPaths: (provider) =>
+			providerExtensionPaths(session.resourceLoader, provider, isProjectTrusted()),
 	};
 }
 
@@ -2768,7 +2861,9 @@ function closeSessionResources(entry: Entry, timeoutMs?: number): Promise<void> 
 	if (entry.resourceCascade) return entry.resourceCascade;
 	entry.resourcesClosing = true;
 	entry.subagents.dispose();
-	const closing = entry.commands.dispose(timeoutMs === undefined ? undefined : { timeoutMs });
+	const closing = entry.commands
+		.dispose(timeoutMs === undefined ? undefined : { timeoutMs })
+		.finally(() => entry.commandHistory.finish());
 	const children = disposeSessionChildren(entry.workspaceId, entry.session.sessionId);
 	const shutdown = emitSessionShutdown(entry, timeoutMs);
 	entry.resourceCascade = trackCascade(
@@ -2918,6 +3013,7 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 		]);
 		await Promise.all([...(pendingCascades.get(workspaceId) ?? [])]);
 		removeWorkspaceDelegation(workspaceId);
+		removeWorkspaceResourceHistory(workspaceId);
 		if (cwd) await purgeDiskSessions(cwd);
 	} finally {
 		const remainingClosures = (closingWorkspaces.get(workspaceId) ?? 1) - 1;

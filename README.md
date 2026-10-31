@@ -61,7 +61,15 @@ create the tools it needs based on how you actually work.
   in the chat instead of guessing, and inline diagrams, option comparisons and file previews rendered right
   in the chat — when the agent proposes a UI change it shows a before/after mockup you can comment on like
   a diff. Settings → Extensions lists the ThinkRail extensions the agent gets and lets you switch each one
-  off.
+  off — and installs any `pi` package by source (npm, git or a local folder), for you or for a repository,
+  showing what each one adds and letting you switch packages, their individual extensions and skills, and
+  pi's built-ins on or off; open chats pick a change up when their turn ends. The questions and visualize
+  tools are also published as plain `pi` packages, one each —
+  `pi install npm:@thinkrail/pi-ask-user-question` for the questions
+  ([`@thinkrail/pi-ask-user-question`](https://www.npmjs.com/package/@thinkrail/pi-ask-user-question)) and
+  `pi install npm:@thinkrail/pi-visualize` for the diagrams and previews
+  ([`@thinkrail/pi-visualize`](https://www.npmjs.com/package/@thinkrail/pi-visualize)) — so a vanilla `pi`
+  in the terminal gets the same tools.
 - **MCP servers.** Connect the MCP servers in your `pi` `mcp.json` (or add them, and a few presets, from
   Settings): ThinkRail asks in the chat before calls the server does not mark read-only (or always allows
   the tools you trust in a project), keeps servers a repository
@@ -73,14 +81,22 @@ create the tools it needs based on how you actually work.
   — say a personal `~/.pi/agent-personal` — or to pass extra environment variables to the agent, terminals
   and MCP servers, set them in Settings → Environment; they apply on the next start. A variable you set
   when launching (`PI_CODING_AGENT_DIR=… thinkrail`) still wins.
+- **Your own model servers.** Settings → Providers → **Custom servers** connects a company LLM gateway or a
+  model running on your own machine — any OpenAI-compatible server, such as LiteLLM, sglang, vLLM, Ollama,
+  LM Studio or llama.cpp. **Find models** lists what the server serves, with the context and capabilities it
+  reports. The server is saved to `pi`'s `models.json`, so its models appear in the chat model picker and in
+  the `pi` CLI alike.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your
   browser. Both embed the same engine host; app state lives under `~/.thinkrail`.
 - **Your language.** Settings → Language follows your system language or a language you pick; English,
-  Japanese, Simplified Chinese, and Spanish are built in. Add a language ThinkRail doesn't ship yet by
+  Japanese, Russian, Simplified Chinese, and Spanish are built in. Add a language ThinkRail doesn't ship yet by
   dropping a translated `en.json` into `~/.thinkrail/locales` — it applies as you save. Agent replies and
   tool output stay as the agent wrote them.
 - **Your themes.** Settings → Appearance ships dark, light, minimal and high-contrast themes. Make your own
   by copying a bundled `*.theme.json`, changing its id and colors, and saving it to `~/.thinkrail/themes`.
+- **Your fonts.** Settings → Appearance picks the interface and code fonts from the bundled Geist and
+  JetBrains Mono, any font installed on your computer, or font files you drop in (kept in
+  `~/.thinkrail/fonts`), with fallback fonts for icon glyphs, a code size, ligatures and a text-weight slider.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/specs-dark.png">
@@ -139,7 +155,13 @@ thinkrail ~/code/my-repo
 ```
 
 `thinkrail` needs `git` on your PATH and a model provider — sign in with JetBrains AI from the app or use
-your own provider credentials. `thinkrail --help` lists the flags; `thinkrail --version` prints the build.
+your own provider credentials. The first launch walks you through connecting a provider and picking a
+project; **Start a new project** creates an empty git repository (under `~/thinkrail` by default), so you
+don't need one ready. **Add project → Clone repository…** clones a Git URL into a new folder on the
+computer running ThinkRail and opens it as a project. Choose the parent folder and folder name, optionally
+limit the history depth, or cancel an in-progress clone. GitHub and other Git hosts work with the host's
+existing Git credentials and SSH keys; existing destination folders are never overwritten.
+`thinkrail --help` lists the flags; `thinkrail --version` prints the build.
 
 <details>
 <summary><strong>Nightly builds, pinned versions, updates, and uninstall</strong></summary>
@@ -199,11 +221,17 @@ identity. Error reports are also always sent, tied to the same installation ID, 
 error type and code and where in ThinkRail's own code it happened. They never include error messages, file
 paths, names, URLs, or anything from your projects or extensions. Additional product
 usage and how you found ThinkRail are shared only while **Share additional usage
-data** is on; the switch is offered at first launch and lives in **Settings → Privacy**. When launching from
+data** is on; the switch is offered as a step of first-run setup (or right after you skip it) and lives in **Settings → Privacy**. When launching from
 the command line, `thinkrail --no-analytics` (or `THINKRAIL_NO_ANALYTICS=1`) turns additional sharing off for
 that run. With additional sharing on, a packaged build may open the ThinkRail blog in your browser once to
 link your installation to the website visit that brought you here — only where you accepted marketing cookies on the
 website or no consent is required — and that link expires after 30 days.
+
+Feedback surveys are separate from usage analytics. ThinkRail may invite you to a short survey, and you can
+also open it from **Settings → Feedback**. Your answers, including anything you type, are sent to the
+ThinkRail team only when you press **Send**, whatever your analytics settings, and are tied to the same
+random installation ID — not to your name or account. Please don't include secrets, code, or personal data;
+to have your answers deleted, email info@thinkrail.ai.
 
 The ThinkRail apps and the ThinkRail website ([thinkrail.ai](https://thinkrail.ai)) use PostHog Inc. services for
 analytics. The website also uses PostHog Surveys to collect feedback after a desktop download and, only if you

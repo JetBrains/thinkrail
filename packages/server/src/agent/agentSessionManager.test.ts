@@ -69,6 +69,7 @@ import {
 	removeSession,
 	removeWorkspaceSessions,
 	renameSession,
+	requestSessionReload,
 	respondToTool,
 	setAgentReviewEnabledResolver,
 	setSessionCreatedPublisher,
@@ -378,14 +379,12 @@ test("two sessions in two worktrees stream independently; disposing one leaves t
 	const a = await createSession({
 		cwd: tmpCwd("trpi-a-"),
 		workspaceId: "ws-a",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
-		model: fauxA.getModel() as any,
+		model: toWireModel(fauxA.getModel()),
 	});
 	const b = await createSession({
 		cwd: tmpCwd("trpi-b-"),
 		workspaceId: "ws-b",
-		// biome-ignore lint/suspicious/noExplicitAny: see above
-		model: fauxB.getModel() as any,
+		model: toWireModel(fauxB.getModel()),
 	});
 	expect(a.sessionId).not.toBe(b.sessionId);
 
@@ -1112,6 +1111,153 @@ test("a chat created with an extension off never loads it and reloads to adopt i
 	}
 });
 
+function webAccessState(context: TranscriptContext): string {
+	const toolActive = getCurrentTools(context.messages).some((tool) => tool.name === "web_search");
+	const skillListed = getCurrentSystemPrompt(context.messages).includes("<name>librarian</name>");
+	if (toolActive && skillListed) return "WEB_ON";
+	if (!toolActive && !skillListed) return "WEB_OFF";
+	return `WEB_INCONSISTENT(tool=${toolActive},skill=${skillListed})`;
+}
+
+test("switching an extension's skills off reloads the idle chat once; a skill-less extension never reloads", async () => {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	const originalReload = AgentSession.prototype.reload;
+	let reloads = 0;
+	let sessionId: string | undefined;
+	AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+		await originalReload.apply(this, args);
+		if (this.sessionId === sessionId) reloads++;
+	};
+	const settle = async (expected: number) => {
+		for (let waited = 0; reloads < expected && waited < 200; waited++) await Bun.sleep(10);
+		await Bun.sleep(30);
+	};
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-extension-skills-toggle-"),
+			workspaceId: "ws-extension-skills-toggle",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		const check = async (label: string) => {
+			fauxA.setResponses([
+				(context) => fauxAssistantMessage(`${label}_${webAccessState(context)}`),
+			]);
+			await promptSession(session.sessionId, `Check ${label}.`);
+		};
+		await check("START");
+		expect(seen(sessionId)).toContain("START_WEB_ON");
+		reloads = 0;
+
+		disabled = new Set(["visualize"]);
+		refreshExtensionTools();
+		await settle(0);
+		expect(reloads).toBe(0);
+
+		disabled = new Set(["visualize", "web-access"]);
+		refreshExtensionTools();
+		await settle(1);
+		expect(reloads).toBe(1);
+		await check("OFF");
+		expect(seen(sessionId)).toContain("OFF_WEB_OFF");
+
+		disabled = new Set();
+		refreshExtensionTools();
+		await settle(2);
+		expect(reloads).toBe(2);
+		await check("BACK");
+		expect(seen(sessionId)).toContain("BACK_WEB_ON");
+	} finally {
+		AgentSession.prototype.reload = originalReload;
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("an unchanged or skill-less policy refresh during a reload never buys a second reload", async () => {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	const originalReload = AgentSession.prototype.reload;
+	let reloads = 0;
+	let sessionId: string | undefined;
+	let duringReload: (() => void) | undefined;
+	AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+		const run = duringReload;
+		duringReload = undefined;
+		const reloading = originalReload.apply(this, args);
+		run?.();
+		await reloading;
+		if (this.sessionId === sessionId) reloads++;
+	};
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-extension-refresh-during-reload-"),
+			workspaceId: "ws-extension-refresh-during-reload",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		duringReload = () => {
+			refreshExtensionTools();
+			disabled = new Set(["visualize"]);
+			refreshExtensionTools();
+		};
+		await requestSessionReload(session.sessionId);
+		await Bun.sleep(300);
+		expect(reloads).toBe(1);
+		fauxA.setResponses([(context) => fauxAssistantMessage(`AFTER_${visualizeToolState(context)}`)]);
+		await promptSession(session.sessionId, "Check after the refreshes.");
+		expect(seen(sessionId)).toContain("AFTER_VISUALIZE_OFF");
+	} finally {
+		AgentSession.prototype.reload = originalReload;
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("re-enabling an extension while its disable reload runs reloads again to adopt it", async () => {
+	let disabled = new Set<string>();
+	let flipDuringReload = false;
+	setDisabledExtensionsResolver(() => {
+		const current = disabled;
+		if (flipDuringReload) {
+			flipDuringReload = false;
+			queueMicrotask(() => {
+				disabled = new Set();
+				refreshExtensionTools();
+			});
+		}
+		return current;
+	});
+	const originalReload = AgentSession.prototype.reload;
+	let reloads = 0;
+	let sessionId: string | undefined;
+	AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+		if (this.sessionId === sessionId && reloads === 0) flipDuringReload = true;
+		await originalReload.apply(this, args);
+		if (this.sessionId === sessionId) reloads++;
+	};
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-extension-mid-reload-"),
+			workspaceId: "ws-extension-mid-reload",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		disabled = new Set(["web-access"]);
+		refreshExtensionTools();
+		for (let waited = 0; reloads < 2 && waited < 300; waited++) await Bun.sleep(10);
+		expect(reloads).toBe(2);
+		fauxA.setResponses([(context) => fauxAssistantMessage(`AFTER_${webAccessState(context)}`)]);
+		await promptSession(session.sessionId, "Check after the racing toggle.");
+		expect(seen(sessionId)).toContain("AFTER_WEB_ON");
+	} finally {
+		AgentSession.prototype.reload = originalReload;
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
 test.each([
 	false,
 	true,
@@ -1564,8 +1710,7 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 	const s = await createSession({
 		cwd: tmpCwd("trpi-stats-"),
 		workspaceId: "ws-s",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
-		model: fauxA.getModel() as any,
+		model: toWireModel(fauxA.getModel()),
 	});
 	await promptSession(s.sessionId, "count me");
 
@@ -2963,8 +3108,7 @@ test("listSessions reports a workspace's live sessions; getSessionMessages retur
 	const s = await createSession({
 		cwd,
 		workspaceId: "ws-hyd",
-		// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
-		model: fauxA.getModel() as any,
+		model: toWireModel(fauxA.getModel()),
 	});
 	await promptSession(s.sessionId, "hello hydrate");
 
@@ -3257,8 +3401,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		const s = await createSession({
 			cwd,
 			workspaceId: "ws-disk",
-			// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
-			model: fauxA.getModel() as any,
+			model: toWireModel(fauxA.getModel()),
 		});
 		await promptSession(s.sessionId, "persist me");
 		await removeSession(s.sessionId);
@@ -4006,15 +4149,13 @@ test("removeWorkspaceSessions: archives a workspace's live sessions + purges the
 		const doomed = await createSession({
 			cwd: doomedCwd,
 			workspaceId: "ws-doomed",
-			// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
-			model: fauxA.getModel() as any,
+			model: toWireModel(fauxA.getModel()),
 		});
 		const keepCwd = tmpCwd("trpi-arch-keep-");
 		const survivor = await createSession({
 			cwd: keepCwd,
 			workspaceId: "ws-keep",
-			// biome-ignore lint/suspicious/noExplicitAny: see above
-			model: fauxB.getModel() as any,
+			model: toWireModel(fauxB.getModel()),
 		});
 		await Promise.all([
 			promptSession(doomed.sessionId, "persist doomed"),

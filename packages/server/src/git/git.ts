@@ -28,6 +28,7 @@ import {
 	resolveDiffRange,
 } from "./diffScope";
 import {
+	type GitResult,
 	git,
 	gitAsync,
 	gitAsyncBytes,
@@ -533,7 +534,7 @@ function strictBlobFrom<T>(shown: {
 	ok: boolean;
 	out: T;
 	err: string;
-	failure?: "timeout" | "launch";
+	failure?: GitResult["failure"];
 }): T | null {
 	if (shown.ok) return shown.out;
 	if (!shown.failure && blobIsMissing(shown.err)) return null;

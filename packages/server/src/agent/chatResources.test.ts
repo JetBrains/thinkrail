@@ -17,9 +17,16 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { SessionResources, SessionState } from "@thinkrail/contracts";
+import { resourceRecordId, type SessionResources, type SessionState } from "@thinkrail/contracts";
+import type { BackgroundCommandSnapshot, BackgroundCommands } from "pi-background-commands";
 import type { ChildHandle } from "pi-delegation";
 import { interactiveTools } from "../extensions";
+import {
+	archivedCommandOutput,
+	finishedResources,
+	recordResource,
+	resourceHistoryRoot,
+} from "../resourceHistory";
 import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
@@ -44,6 +51,8 @@ import {
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
 import {
+	archiveCommandHistory,
+	getResourceHistoryPage,
 	getSessionResources,
 	readBackgroundCommandOutput,
 	setSessionResourcesPublisher,
@@ -119,6 +128,9 @@ async function parent() {
 	return { workspaceId, cwd, sessionId };
 }
 async function launch(p: Awaited<ReturnType<typeof parent>>, command = "printf ready; sleep 30") {
+	const known = new Set(
+		(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands.map((c) => c.id),
+	);
 	faux.setResponses([
 		fauxAssistantMessage(
 			fauxToolCall("background_command", { action: "start", command, name: "managed" }),
@@ -127,7 +139,7 @@ async function launch(p: Awaited<ReturnType<typeof parent>>, command = "printf r
 	]);
 	await promptSession(p.sessionId, "Launch the managed command.");
 	const resources = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
-	const commandId = resources.commands.at(-1)?.id;
+	const commandId = resources.commands.find((c) => !known.has(c.id))?.id;
 	if (!commandId) throw new Error("missing command");
 	return commandId;
 }
@@ -353,6 +365,9 @@ test("confirmed trash and archive suppress command notices and retain no command
 	try {
 		await deleteSession(p.sessionId, p.workspaceId, p.cwd);
 		expect(trashed && existsSync(trashed)).toBe(false);
+		expect(existsSync(join(resourceHistoryRoot(), p.workspaceId, p.sessionId, "index.jsonl"))).toBe(
+			true,
+		);
 		await expect(
 			readBackgroundCommandOutput(p.workspaceId, p.sessionId, id, p.cwd),
 		).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
@@ -361,27 +376,300 @@ test("confirmed trash and archive suppress command notices and retain no command
 	}
 	const archived = await parent();
 	await launch(archived);
+	expect(existsSync(join(resourceHistoryRoot(), archived.workspaceId))).toBe(true);
 	await removeWorkspaceSessions(archived.workspaceId, archived.cwd);
+	expect(existsSync(join(resourceHistoryRoot(), archived.workspaceId))).toBe(false);
 	await expect(
 		getSessionResources(archived.workspaceId, archived.sessionId, archived.cwd),
 	).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
 });
 
-test("persisted parent attachment does not recover command handles from transcript history", async () => {
+test("a graceful shutdown archives a running command as interrupted with its final log tail", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	const p = await parent();
 	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
 	const id = await launch(p);
-	await removeSession(p.sessionId);
-	expect(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).toEqual({
-		workspaceId: p.workspaceId,
-		sessionId: p.sessionId,
-		commands: [],
-		subagents: [],
-		mcpServers: [],
+	await waitFor(async () => {
+		const read = await readBackgroundCommandOutput(p.workspaceId, p.sessionId, id, p.cwd);
+		return read.available && read.output.text === "ready";
 	});
-	expect(await readBackgroundCommandOutput(p.workspaceId, p.sessionId, id, p.cwd)).toEqual({
-		available: false,
+	await settleSessionsForShutdown(1000);
+	disposeAllSessions();
+	expect(hasSession(p.sessionId)).toBe(false);
+
+	let restarted: SessionResources | undefined;
+	await waitFor(async () => {
+		restarted = await getSessionResources(p.workspaceId, p.sessionId, p.cwd).catch(() => undefined);
+		return restarted !== undefined;
+	});
+	if (!restarted) throw new Error("parent did not reattach");
+	expect(restarted.commands).toMatchObject([{ id, interrupted: true }]);
+	expect(restarted.history?.commands.interrupted).toBe(1);
+	expect(await readBackgroundCommandOutput(p.workspaceId, p.sessionId, id, p.cwd)).toMatchObject({
+		available: true,
+		output: { text: "ready" },
+	});
+	await removeSession(p.sessionId);
+});
+
+test("work a dead host left in flight reads as interrupted and keeps no log", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const p = await parent();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
+	recordResource(p, {
+		kind: "command",
+		summary: {
+			id: "c0ffee00-0000-4000-8000-000000000001",
+			sessionId: p.sessionId,
+			name: "dev server",
+			command: "bun run dev",
+			status: "running",
+			startedAt: 1_000,
+		},
+	});
+	recordResource(p, {
+		kind: "subagent",
+		summary: {
+			childSessionId: "01a00000-0000-7000-8000-000000000001",
+			parentSessionId: p.sessionId,
+			task: "Explore",
+			status: "running",
+			createdAt: new Date(2_000).toISOString(),
+		},
+	});
+
+	const resources = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
+	expect(resources.commands).toMatchObject([{ status: "stopped", interrupted: true }]);
+	expect(resources.subagents).toMatchObject([{ status: "aborted", interrupted: true }]);
+	expect(
+		await readBackgroundCommandOutput(
+			p.workspaceId,
+			p.sessionId,
+			"c0ffee00-0000-4000-8000-000000000001",
+			p.cwd,
+		),
+	).toEqual({ available: false });
+	await removeSession(p.sessionId);
+});
+
+test("finished commands page newest first and the page size is clamped", async () => {
+	const p = await parent();
+	const first = await launch(p, "printf one");
+	const second = await launch(p, "printf two");
+	await waitFor(async () =>
+		(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands.every(
+			(command) => command.status === "completed",
+		),
+	);
+	const newest = await getResourceHistoryPage(p.workspaceId, p.sessionId, p.cwd, {
+		kind: "command",
+		limit: 1,
+	});
+	expect(newest).toMatchObject({ kind: "command", items: [{ id: second }], hasMore: true });
+	if (newest.kind !== "command") throw new Error("wrong page kind");
+	const cursor = newest.items[0];
+	if (!cursor?.finishedAt) throw new Error("missing cursor");
+	expect(
+		await getResourceHistoryPage(p.workspaceId, p.sessionId, p.cwd, {
+			kind: "command",
+			before: { at: cursor.finishedAt, id: cursor.id },
+			limit: 1_000,
+		}),
+	).toMatchObject({ kind: "command", items: [{ id: first }], hasMore: false });
+});
+
+test("the command archive marks only teardown's own cuts interrupted, keeps their logs, and stops at finish", () => {
+	const scope = { workspaceId: "archive-unit", sessionId: "chat-archive" };
+	const snapshots = new Map<string, BackgroundCommandSnapshot>();
+	const listeners = new Set<() => void>();
+	const commands: BackgroundCommands = {
+		sessionId: scope.sessionId,
+		start: () => {
+			throw new Error("unused");
+		},
+		list: () => [...snapshots.values()],
+		find: (id) => {
+			const snapshot = snapshots.get(id);
+			return (
+				snapshot && {
+					id,
+					snapshot,
+					output: { text: `log of ${id}`, truncated: false },
+					stop: () => snapshot,
+					claimCompletion: () => {},
+				}
+			);
+		},
+		onChange: (listener) => {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		},
+		bindCompletion: () => () => {},
+		flushCompletions: () => {},
+		dispose: async () => {},
+	};
+	const report = (id: string, patch: Partial<BackgroundCommandSnapshot>) => {
+		snapshots.set(id, {
+			id,
+			sessionId: scope.sessionId,
+			name: id,
+			command: `run ${id}`,
+			status: "running",
+			startedAt: 1,
+			...snapshots.get(id),
+			...patch,
+		});
+		for (const listener of listeners) listener();
+	};
+	let closing = false;
+	report("user", {});
+	const archive = archiveCommandHistory(
+		scope.workspaceId,
+		scope.sessionId,
+		commands,
+		() => closing,
+	);
+	report("cut", {});
+	report("hung", {});
+	report("user", { status: "stopping" });
+	closing = true;
+	report("cut", { status: "stopping" });
+	report("hung", { status: "stopping" });
+	report("user", { status: "stopped", finishedAt: 5 });
+	report("cut", { status: "stopped", finishedAt: 6 });
+	archive.finish();
+	report("hung", { status: "stopped", finishedAt: 7 });
+
+	const archived = new Map(
+		finishedResources(scope, "command", new Set()).map((record) => [
+			resourceRecordId(record),
+			record.summary,
+		]),
+	);
+	expect(archived.get("user")).toMatchObject({ status: "stopped" });
+	expect(archived.get("user")?.interrupted).toBeUndefined();
+	expect(archived.get("cut")).toMatchObject({ status: "stopped", interrupted: true });
+	expect(archived.get("hung")).toMatchObject({ status: "stopped", interrupted: true });
+	expect(archivedCommandOutput(scope, "cut")).toEqual({ text: "log of cut", truncated: false });
+	expect(archivedCommandOutput(scope, "hung")).toEqual({ text: "log of hung", truncated: false });
+});
+
+test("a user stop that settles during teardown stays stopped; teardown's own cut is interrupted", async () => {
+	const p = await parent();
+	const service = delegationServiceFor(p.workspaceId);
+	const gate = deferred();
+	faux.setResponses(
+		Array.from({ length: 2 }, () => async () => {
+			await gate.promise;
+			return fauxAssistantMessage("CHILD_DONE");
+		}),
+	);
+	const stoppedByUser = await service.createChild({
+		parent: p.sessionId,
+		visibility: "hidden",
+		info: { createdBy: "test" },
+		session: {},
+	});
+	const cut = await service.createChild({
+		parent: p.sessionId,
+		visibility: "hidden",
+		info: { createdBy: "test" },
+		session: {},
+	});
+	const runs = [stoppedByUser.runQueued("Stop me."), cut.runQueued("Outlive me.")];
+	await waitFor(
+		async () => stoppedByUser.snapshot?.status === "running" && cut.snapshot?.status === "running",
+	);
+	const stopping = stopSubagent(p.workspaceId, p.sessionId, stoppedByUser.sessionId, p.cwd);
+	const removing = removeSession(p.sessionId);
+	gate.resolve();
+	await Promise.allSettled([stopping, removing, ...runs]);
+
+	const archived = new Map(
+		finishedResources(p, "subagent", new Set()).map((record) => [
+			resourceRecordId(record),
+			record.summary,
+		]),
+	);
+	expect(archived.get(stoppedByUser.sessionId)).toMatchObject({
+		status: "aborted",
+		abortReason: "user",
+	});
+	expect(archived.get(stoppedByUser.sessionId)?.interrupted).toBeUndefined();
+	expect(archived.get(cut.sessionId)).toMatchObject({ status: "aborted", interrupted: true });
+});
+
+test("a foreground child the parent's own Stop cancelled stays stopped when teardown lands before it settles", async () => {
+	const p = await parent();
+	const service = delegationServiceFor(p.workspaceId);
+	const gate = deferred();
+	faux.setResponses([
+		async () => {
+			await gate.promise;
+			return fauxAssistantMessage("CHILD_DONE");
+		},
+	]);
+	const child = await service.createChild({
+		parent: p.sessionId,
+		visibility: "hidden",
+		info: { createdBy: "test" },
+		session: {},
+	});
+	const parentTurn = new AbortController();
+	const run = child.runQueued("Foreground work.", { signal: parentTurn.signal });
+	await waitFor(async () => child.snapshot?.status === "running");
+	parentTurn.abort();
+	const removing = removeSession(p.sessionId);
+	gate.resolve();
+	await Promise.allSettled([removing, run]);
+
+	const archived = finishedResources(p, "subagent", new Set()).find(
+		(record) => resourceRecordId(record) === child.sessionId,
+	);
+	expect(archived?.summary).toMatchObject({ status: "aborted" });
+	expect(archived?.summary.interrupted).toBeUndefined();
+});
+
+test("the live owner's finished record wins over an archived one it outlived", async () => {
+	const p = await parent();
+	const id = await launch(p, "printf done");
+	await waitFor(
+		async () =>
+			(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands[0]?.status ===
+			"completed",
+	);
+	const finished = (await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands[0];
+	if (!finished) throw new Error("missing command");
+	const { finishedAt: _finishedAt, exitCode: _exitCode, ...inFlight } = finished;
+	recordResource(p, { kind: "command", summary: { ...inFlight, status: "running" } });
+
+	const resources = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
+	expect(resources.commands).toMatchObject([{ id, status: "completed", exitCode: 0 }]);
+	expect(resources.commands[0]?.interrupted).toBeUndefined();
+	expect(resources.history?.commands).toEqual({ done: 1, failed: 0, stopped: 0, interrupted: 0 });
+	await removeSession(p.sessionId);
+});
+
+test("persisted parent attachment restores archived history, never command handles", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const p = await parent();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
+	const id = await launch(p);
+	await waitFor(async () => {
+		const read = await readBackgroundCommandOutput(p.workspaceId, p.sessionId, id, p.cwd);
+		return read.available && read.output.text === "ready";
+	});
+	await removeSession(p.sessionId);
+	const reattached = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
+	expect(reattached.commands).toMatchObject([{ id, status: "stopped", interrupted: true }]);
+	expect(reattached.history?.commands).toEqual({ done: 0, failed: 0, stopped: 0, interrupted: 1 });
+	expect(reattached.subagents).toEqual([]);
+	expect(await readBackgroundCommandOutput(p.workspaceId, p.sessionId, id, p.cwd)).toMatchObject({
+		available: true,
+		command: { id, interrupted: true },
+		output: { text: "ready", truncated: false },
 	});
 	await expect(stopBackgroundCommand(p.workspaceId, p.sessionId, id, p.cwd)).rejects.toMatchObject({
 		code: "RESOURCE_UNAVAILABLE",
@@ -419,13 +707,12 @@ test("resource reads fail closed while a prior parent generation tears down", as
 		gate.resolve();
 	}
 	await Promise.all([removing, run]);
-	expect(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).toEqual({
-		workspaceId: p.workspaceId,
-		sessionId: p.sessionId,
-		commands: [],
-		subagents: [],
-		mcpServers: [],
-	});
+	const reattached = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
+	expect(reattached.commands).toEqual([]);
+	expect(reattached.subagents).toMatchObject([
+		{ childSessionId: child.sessionId, status: "aborted", interrupted: true },
+	]);
+	expect(reattached.history?.subagents.interrupted).toBe(1);
 	await removeSession(p.sessionId);
 });
 
@@ -515,7 +802,7 @@ test("workspace archive fences an in-flight persisted-parent attachment", async 
 	}
 });
 
-test("direct child projection keeps every active and latest twenty terminal records without disposal", async () => {
+test("direct child projection keeps every active and the newest twenty finished records, pages the rest, and disposes nothing", async () => {
 	const p = await parent();
 	const service = delegationServiceFor(p.workspaceId);
 	const children: ChildHandle[] = [];
@@ -535,11 +822,26 @@ test("direct child projection keeps every active and latest twenty terminal reco
 			children.push(child);
 			faux.setResponses([fauxAssistantMessage(`CHILD_${i}`)]);
 			await child.runQueued("task".repeat(600));
+			await Bun.sleep(2);
 		}
+		const newestFirst = children.map((c) => c.sessionId).reverse();
 		const resources = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
-		expect(resources.subagents.map((s) => s.childSessionId)).toEqual(
-			children.slice(-20).map((c) => c.sessionId),
-		);
+		expect(resources.subagents.map((s) => s.childSessionId)).toEqual(newestFirst.slice(0, 20));
+		expect(resources.history?.subagents).toEqual({
+			done: 23,
+			failed: 0,
+			stopped: 0,
+			interrupted: 0,
+		});
+		const oldestInWindow = resources.subagents.at(-1);
+		if (!oldestInWindow?.finishedAt) throw new Error("missing finish time");
+		const older = await getResourceHistoryPage(p.workspaceId, p.sessionId, p.cwd, {
+			kind: "subagent",
+			before: { at: oldestInWindow.finishedAt, id: oldestInWindow.childSessionId },
+		});
+		if (older.kind !== "subagent") throw new Error("wrong page kind");
+		expect(older.items.map((s) => s.childSessionId)).toEqual(newestFirst.slice(20));
+		expect(older.hasMore).toBe(false);
 		expect(
 			resources.subagents.every((s) => s.task.length === 2000 && s.roleName?.length === 200),
 		).toBe(true);
@@ -1496,7 +1798,9 @@ test("stopped command completion cannot strand a live question across polite shu
 			).ok,
 		).toBe(true);
 		expect(SessionManager.open(path).buildSessionContext().messages.at(-1)).toEqual(ack[0]);
-		expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands).toEqual([]);
+		const reopenedResources = await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
+		expect(reopenedResources.commands).toMatchObject([{ id, status: "stopped" }]);
+		expect(reopenedResources.commands[0]?.interrupted).toBeUndefined();
 		faux.setResponses([fauxAssistantMessage("RESOURCE_QUESTION_RESTART_ANSWERED")]);
 		await respondToTool(p.sessionId, toolCallId, resourceAnswer);
 		const answered = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);

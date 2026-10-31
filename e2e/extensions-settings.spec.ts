@@ -28,6 +28,7 @@ async function closeSettings(page: Page): Promise<void> {
 const EXTENSIONS = [
 	{ name: "visualize", title: "Visualize", tool: "visualize" },
 	{ name: "ask-user-question", title: "Ask user question", tool: "ask_user_question" },
+	{ name: "web-access", title: "Web access", tool: "web_search" },
 ] as const;
 
 async function setExtension(page: Page, name: string, enabled: boolean): Promise<void> {
@@ -72,7 +73,7 @@ test("a historical questionnaire still renders its answers while the extension i
 }) => {
 	await openFixtureProject(page);
 	await setExtension(page, "ask-user-question", false);
-	const args: AskUserQuestionArgs = {
+	const args = {
 		questions: [
 			{
 				question: "Which runtime?",
@@ -83,7 +84,7 @@ test("a historical questionnaire still renders its answers while the extension i
 				],
 			},
 		],
-	};
+	} satisfies AskUserQuestionArgs;
 	const result: AskUserQuestionResult = {
 		cancelled: false,
 		answers: [{ questionIndex: 0, question: "Which runtime?", kind: "option", answer: "Bun" }],

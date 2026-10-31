@@ -24,15 +24,22 @@ ref off the workspace-create critical path.
   preserves stdout as `Uint8Array`, while stderr remains decoded diagnostics. They keep network-bound ops
   like `fetch` **and request-path historical reads** off the event loop: this module owns only the
   git-shaped 55s budget and stalled/stderr wording, never child-lifetime mechanics. `opts.env` lets a
-  caller run prompt-free with its own environment and pins blob diagnostics to English; `opts.network`
+  caller run prompt-free with its own environment and pins blob diagnostics to English; the captured runners'
+  optional `opts.redactStderr` transforms diagnostics before any truncation or timeout wording (clone uses
+  it for credential-bearing URL rewrites). `opts.network`
   marks fetch/push solely so a no-output timeout can name the remote. **A timeout keeps whatever git wrote
   before the kill**: the runner drains continuously, so on
   expiry its `err` already holds the real diagnosis — a publickey rejection, a proxy's refusal, `remote:`
   progress proving a large transfer was simply still running. When git wrote *nothing*, an explicitly
   networked operation gets the conditional ssh-key hint; a local `diff`/`log`/ref read gets only the
   observed fact that git did not exit — never a fabricated remote cause. Both async runners carry
-  `failure: "timeout" | "launch"` for those execution failures; a normal nonzero Git exit carries no
-  execution failure, so semantic probes can distinguish "ref absent" from "Git never answered". The
+  `failure: "timeout" | "launch" | "aborted"` for execution failures; a normal nonzero Git exit carries no
+  execution failure, so semantic probes can distinguish "ref absent" from "Git never answered".
+  Both accept `opts.signal` and delegate cancellation to `runBounded`: pre-cancellation launches nothing,
+  and in-flight cancellation returns only after the direct child has exited. Cancelled results preserve
+  captured stdout (with the usual text/raw or bytes handling), prefix bounded stderr with an explicit
+  `git operation cancelled` diagnosis, and never report a timeout or SSH hint. `gitAsyncStream` does not
+  accept this option; its consumers cancel the stdout stream. The
   reads take that same 55s default (`opts.timeoutMs` overrides it): a local read that has to be *bounded*
   at all is a wedged git, and every one of them was unbounded before it moved off the loop;
   **`remoteTrackingRef(ref, remotes)`** → `refs/remotes/<ref>` when the ref begins with one of the

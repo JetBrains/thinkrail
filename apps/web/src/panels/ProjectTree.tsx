@@ -60,6 +60,7 @@ import {
 	selectAutoSettledCounts,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
+	selectSupportsOnboarding,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspacePartition,
@@ -83,6 +84,7 @@ import {
 	SETTLED_NOTICE_QUIET_MS,
 	settledShelfNoticed,
 } from "./settledShelfNotice";
+import { startProjectSetupChat } from "./setupPrompt";
 import { useOpenProject } from "./useOpenProject";
 import {
 	canRenameProject,
@@ -114,6 +116,7 @@ export function ProjectTree() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const supportsCreate = useAppStore(selectSupportsOnboarding);
 	const supportsSettling = useAppStore((s) => s.workspaceSettlingSupported);
 	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
@@ -224,9 +227,11 @@ export function ProjectTree() {
 		if (willExpand) void loadWorkspaces(projectId);
 	};
 
-	const { openProject, pickAndOpen, enterHostPath, dialogs } = useOpenProject((project) =>
-		selectProject(project.id),
-	);
+	const { openProject, pickAndOpen, enterHostPath, startNewProject, cloneRepository, dialogs } =
+		useOpenProject(async (project, { setup }) => {
+			await selectProject(project.id).catch(() => {});
+			if (setup) await startProjectSetupChat(project.id);
+		});
 
 	const onExistingWorktreeOpened = async (workspace: Workspace) => {
 		const rows = await getTransport().request("workspace.list", {
@@ -271,7 +276,9 @@ export function ProjectTree() {
 					recentProjects={recentProjects}
 					onOpen={() => void pickAndOpen()}
 					onEnterHostPath={enterHostPath}
+					onClone={cloneRepository}
 					onOpenRecent={(p) => void openProject(p)}
+					{...(supportsCreate ? { onStartNew: startNewProject } : {})}
 				>
 					<IconButton
 						ref={addProjectButtonRef}

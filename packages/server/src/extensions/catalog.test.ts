@@ -29,6 +29,14 @@ describe("listExtensionCatalog", () => {
 				tools: ["ask_user_question"],
 				hasChildExtensions: false,
 			},
+			{
+				name: "web-access",
+				title: "Web access",
+				description: expect.any(String),
+				enabled: true,
+				tools: ["web_search", "fetch_content", "get_search_content"],
+				hasChildExtensions: true,
+			},
 		]);
 		const [visualize, ask] = await listExtensionCatalog(new Set(["visualize", "retired"]));
 		expect(visualize?.enabled).toBe(false);

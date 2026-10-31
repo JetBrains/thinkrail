@@ -92,7 +92,10 @@ existing tags makes a retry after a failed tag push safe.
 Trusted Publishing is configured per *existing* package, so each new package gets one manual bootstrap
 publish first: `bun run release:pack <dir>` packs it and prints the `npm publish … --provenance=false`
 command for an npm-org owner (the manifest's `publishConfig.provenance` would otherwise make a local
-publish fail; only CI can attest).
+publish fail; only CI can attest). The trusted-publisher configuration itself (`npm trust github …`) must
+allow `npm publish` (npm's post-2026-09 default is stage-only) and is validated only by a first OIDC
+publish within 48 hours of its creation — the manual bootstrap does not count — so it is created right
+before the package's next version PR merges, not at bootstrap. Operational detail: `pi-extensions/README.md`.
 
 Order: visualize → ask-user-question → delegation + subagents → background-commands → spec-graph →
 todos. Not published:

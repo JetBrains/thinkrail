@@ -3,6 +3,7 @@ import {
 	appendFileSync,
 	chmodSync,
 	existsSync,
+	mkdirSync,
 	mkdtempSync,
 	readFileSync,
 	renameSync,
@@ -11,7 +12,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import {
 	createFauxCore,
@@ -1240,6 +1241,77 @@ test("a child without extensions reads images raw and still gets the oversized-i
 	} finally {
 		await removeSession(sessionId);
 		baseRuntime.unregisterProvider("faux-claude");
+	}
+});
+
+test("a child on a provider an extension registered loads that extension from its parent", async () => {
+	const owner = join(process.env.PI_CODING_AGENT_DIR ?? "", "extensions", "provider-owner.ts");
+	const globals = globalThis as Record<symbol, unknown>;
+	const keys = ["seen", "faux", "registered"].map((name) => Symbol.for(`trdel:owner-${name}`));
+	const seen = new Set<string>();
+	globals[Symbol.for("trdel:owner-seen")] = seen;
+	globals[Symbol.for("trdel:owner-faux")] = faux;
+	mkdirSync(dirname(owner), { recursive: true });
+	writeFileSync(
+		owner,
+		`export default function providerOwner(pi) {
+	pi.on("before_agent_start", (_event, ctx) => {
+		globalThis[Symbol.for("trdel:owner-seen")].add(ctx.sessionManager.getSessionId());
+	});
+	if (globalThis[Symbol.for("trdel:owner-registered")]) return;
+	globalThis[Symbol.for("trdel:owner-registered")] = true;
+	const faux = globalThis[Symbol.for("trdel:owner-faux")];
+	pi.registerProvider("owned", {
+		api: faux.api,
+		baseUrl: "http://owned.local",
+		apiKey: "owned",
+		streamSimple: (model, context, options) => faux.streamSimple(model, context, options),
+		models: [{ id: "owned", name: "owned", api: faux.api, reasoning: false, input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 100000, maxTokens: 4096 }],
+	});
+}
+`,
+	);
+	const sessionIds: string[] = [];
+	try {
+		const first = await createSession({ cwd: tmpDir("trdel-owner-"), workspaceId: "ws-owner" });
+		const second = await createSession({ cwd: tmpDir("trdel-owner-"), workspaceId: "ws-owner" });
+		sessionIds.push(first.sessionId, second.sessionId);
+		const ownerPaths = liveParentContext(first.sessionId)?.providerExtensionPaths?.("owned");
+		expect(ownerPaths).toHaveLength(1);
+		expect(liveParentContext(second.sessionId)?.providerExtensionPaths?.("owned")).toEqual(
+			ownerPaths,
+		);
+		expect(liveParentContext(second.sessionId)?.providerExtensionPaths?.("faux")).toEqual([]);
+
+		for (const parent of sessionIds) {
+			faux.setResponses([
+				(_context, options) =>
+					seen.has(options?.sessionId ?? "")
+						? fauxAssistantMessage("SERVED")
+						: fauxAssistantMessage("", { stopReason: "error", errorMessage: "unobserved session" }),
+			]);
+			const child = await delegationServiceFor("ws-owner").createChild({
+				parent,
+				visibility: "hidden",
+				info: { createdBy: "tool:Agent", roleName: "worker", roleSource: "builtin" },
+				session: {
+					systemPrompt: "You are a test worker.",
+					model: { provider: "owned", id: "owned" },
+				},
+			});
+			expect((await child.runQueued("Go.")).finalText).toBe("SERVED");
+		}
+
+		rmSync(owner);
+		const unowned = await createSession({ cwd: tmpDir("trdel-owner-"), workspaceId: "ws-owner" });
+		sessionIds.push(unowned.sessionId);
+		expect(liveParentContext(unowned.sessionId)?.providerExtensionPaths?.("owned")).toEqual([]);
+	} finally {
+		for (const sessionId of sessionIds) await removeSession(sessionId);
+		rmSync(owner, { force: true });
+		baseRuntime.unregisterProvider("owned");
+		for (const key of keys) delete globals[key];
 	}
 });
 

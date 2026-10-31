@@ -21,7 +21,17 @@ one atomic store action. A monotonic invalidation revision and connection genera
 read installation and failure; tombstones and cleared entries reject late replies. Connection status
 changes mark retained snapshots stale, and an unsupported welcome clears them. `selectors.ts` is the
 canonical owner of Resources selectors and predicates, including active counts and active/finished
-grouping; the host already bounds recent records. Components do not derive these independently.
+grouping (through the contracts' `isLiveResource`, so an interrupted run is never live) and the finished
+totals: the host's per-kind `history` tallies, or tallies of the snapshot's own finished records from an
+older host. The host bounds the snapshot to a window of recent finished records; anything older the user
+pages in lives on the same projection as `older`, one contiguous run per kind right after that window
+(`chatResources.ts`): a new snapshot carries a kind's run only while its window still reaches into the old
+chain (else drops it, rather than show a list with a silent hole), a new connection generation drops it (a
+restart may surface interrupted runs inside it), and `appendChatResourceHistory` keeps a page only if the
+chain still ends where the page was asked from. `selectChatResourceGroups(snapshot, includeMcp, older)`
+hands back every held finished record per kind (window then run, newest first), the window alone as
+`recentFinished` (the only records that can be new), and what the host holds beyond them (`remaining`);
+`selectChatResourceOldest` names the next page's anchor. Components do not derive these independently.
 `chatResources.ts` is the store's private implementation file for resource projection/state/scope/read
 types and the `staleChatResources` state transform. A parent settling does not clear its still-running
 resources or change the Projects rail's existing activity contract. The optional `mcpServers` list is part
@@ -259,7 +269,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
   stats read) / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
-  promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
+  promise) + `extUiStatus` / `extUiWidget`), and **`notice`**: the host's closed `ProviderWarning` code
+  (ExtUi `notice`, replayed like `notify`). `dismissSessionNotice(sessionId)` clears one chat;
+  `silenceNotice(notice)` clears every chat once "Don't warn again" lands, and also drops
+  buffered orphan `notice` frames, so a chat opened later does not replay one. `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
   `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
@@ -413,7 +426,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   banner a session error gets — an extension crash must not read as chatter); every other level stays a
   `system` turn. Level is the *only* input, so the host's own error notifies ride the same road: the
   `Review send failed: …` that `host/handlers` publishes after a rolled-back send renders as that banner
-  too. That is deliberate — a send that silently rolled back is exactly what a user must not scroll past. A **fire-and-forget** ext-UI frame (`notify`/`setStatus`/`setWidget`/`setTitle`)
+  too. That is deliberate — a send that silently rolled back is exactly what a user must not scroll past. A **fire-and-forget** ext-UI frame (`notify`/`setStatus`/`setWidget`/`setTitle`/`notice`)
   that has **no runtime to land in** is held in **`extUiOrphans`** (bounded, newest 64) instead of being
   dropped, and **both** runtime-installing actions — `openChatSession` *and* `hydrateSession` — drain that
   session's frames through the shared `replayExtUiOrphans` the moment its runtime exists. The admission
@@ -459,10 +472,15 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   a flag an earlier consumer set can otherwise straddle the activation and let an inherited list pass as
   this opening's own truth before its own `model.list` reply lands. **`providerVersion`** is the monotonic,
   data-free `provider.changed` generation observed from the host; **`noteProviderChanged()`** atomically
-  increments it and clears `models`, freshness, and any old refresh spinner. Both `model.list` and
+  increments it and clears `models`, freshness, and any old refresh spinner. **`providerStatus`** is the one
+  `provider.status` snapshot (`{ version, report, failed }`); **`providerStatusVersion`** is its invalidation
+  generation, bumped by `noteProviderChanged`, every welcome, every successful untargeted login frame (also one
+  for another login that `applyLoginFrame` keeps out of this client's open dialog), and
+  `invalidateProviderStatus()`. **`installProviderStatus(version, report | null)`** installs only an answer to
+  the current version (`null` = failed read: keep the last report, set `failed`); the single-flight read lives in
+  `panels/useProviderStatus`. Both `model.list` and
   `model.refresh` replies install through version-guarded store actions, so no picker or older async reply can
-  offer a removed runtime generation. Transport owns the guarded re-read; the Providers settings pane observes
-  the version and re-reads status, while shell's quota controller treats it as an immediate closed-snapshot
+  offer a removed runtime generation. Transport owns the guarded re-read; shell's quota controller treats it as an immediate closed-snapshot
   invalidation. Other catalog transport work lives in `chat/useModelCatalog`, not here (the
   store→transport edge stays type-only). The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
@@ -479,7 +497,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   if the frame arrived first; ignoring frames for a different live login); both keep an MCP
   push's `target`, which is how Providers and MCP settings each open only their own logins,
   **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
-  and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
+  and **`clearLogin(loginId?)`** dismisses it — only that login when an id is given, so a stale surface
+  never drops a newer one; **`clearSettledLogin(providerId)`** is the post-connect handoff, clearing only that
+  provider's finished (success/error) target-less login. A terminal frame for a login this client does not
+  hold opens nothing (a superseded login's error reaches every client); it is kept as **`unheldLoginFrame`**
+  so `beginLogin` can replay it when it was this client's own fast failure beating the start response. The **settings surface** state — **`settingsOpen`** +
   **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`Chat`/`Layout`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`;
   the `LineWidth` and `Review` keys are retained so old deep links still type-check but are not navigation
   sections — `panels/settingsNav` resolves them to an available section, and their controls now live in
@@ -493,11 +515,13 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   ephemeral **`notificationPromptOpen`** plus **`openNotificationPrompt()`** / **`closeNotificationPrompt()`**
   is the client-local render flag for the attention-notification permission preface (cadence/snooze and the
   trigger live in [[submodule-web-notifications]], never the store). The
-  ephemeral **`interviewPromptOpen`** plus
-  **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
-  invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so
-  a host restart cannot leave a stale projection, and the panel hides it after `feedback.respond` is
-  acknowledged. Counts, postponement, dismissal, and client claims never live in the store. The **theme**
+  ephemeral **`surveyInvitationOpen`** plus
+  **`showSurveyInvitation()`** / **`hideSurveyInvitation()`** is the render projection of the host's addressed
+  survey invitation, cleared before each valid welcome. **`surveyWindowOpen`** is the one survey window both
+  the invitation and Settings → Feedback open; **`openSurveyWindow()`** opens it and closes the invitation and
+  Settings in the same update, **`closeSurveyWindow()`** closes it. **`inAppSurvey`** (written by
+  **`setInAppSurvey`**) is the narrowed launched survey the Feedback pane and the window draw. Counts,
+  dismissal and completion stay in host `feedback.json`. The **theme**
   preference state — **`theme: ThemeId`** (the retained opaque fixed choice), **`themeMode: ThemeMode`**,
   and optional **`systemThemePair: SystemThemePair`** — arrives through **`applyConfig(config)`** from
   `server.welcome` / the `settings.changed` broadcast. A welcome from a pre-feature host (or any malformed
@@ -517,14 +541,19 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`notificationsEnabled: boolean`** (the attention-notification master toggle),
   **`subagentsEnabled: boolean`**, **`subagentMaxConcurrent: number`**, **`disabledExtensions: string[]`**
   (defaulting to `[]` so a pre-v82 host reads as "all on"), **`jbcentralQuotaEnabled: boolean`**,
-  and **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, fieldwise
+  **`jbcentralQuotaRefreshSeconds: number`**, and **`onboardingDismissed: boolean`** (absent ⇒ `false`) ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
   the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
   `DEFAULT_CONFIG.terminalWindowsShell`; `TerminalSettings` consumes both terminal fields, while terminal
   spawning remains server-owned — the Terminal, Line width, Chat, shared Layout catalog, Privacy, provider
   controls, and shell quota read sides. Analytics preference and confirmation default independently to false;
   the store never upgrades a preference to confirmation. A selector combines host capability, hydrated
-  configuration, and absent confirmation to drive the one first-launch prompt. Persisted preference priming
+  configuration, and absent confirmation to drive the one first-launch prompt; `selectOnboardingActive`
+holds it (and the survey invitation) while the client-local **`onboardingWizard`** gate
+(`pending | shown | hidden`, set by Welcome through `setOnboardingWizard`) is shown — including its done
+screen, after `onboardingDismissed` is already persisted, until a project opens — or still pending on a
+cold-start-shaped store (capable host, not dismissed, no open or recent projects). Project Home reads the same
+selector to hide its Projects rail and pane, so onboarding has the whole window. Persisted preference priming
   and final choice updates converge through `applyConfig`; the dialog's visual draft remains component-local.
   **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
@@ -555,6 +584,12 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   the cap's eviction candidate rather than an Undo receipt.
   It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
   complementing `appendErrorTurn` (which handles the in-chat case).
+  **`packagesVersion`** + **`bumpPackagesVersion()`** is the same shape for installed pi packages: the
+  transport bumps it on `packages.changed`, and `panels/ExtensionsSettings.tsx` re-lists off it.
+  **`disabledPackages: string[]`** mirrors `disabledExtensions` from the settings broadcast; the
+  Extensions page uses it only to compute the next whole list for `settings.update` — what a package
+  row *shows* is the catalog's `enabled` (the host's effective state, which a `packages.changed` push
+  refreshes after every switch flip), never a client-side reading of this list.
   The host-wide **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare
   invalidation signal, the same shape as `fsChangesByWorkspace`'s `tick` below — **`panels/TemplatesSettings.tsx`**
   and **`chat/TemplateEditorDialog.tsx`** call it after a `template.save`/`delete`, and the Templates

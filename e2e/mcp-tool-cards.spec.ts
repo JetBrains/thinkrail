@@ -3,6 +3,7 @@ import { realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { ToolCall } from "@thinkrail/contracts";
 import {
 	enterDefaultWorkspace,
 	expandAllRoutineGroups,
@@ -21,7 +22,7 @@ const SIGN_IN_TEXT = 'MCP server "linear" requires sign-in. Run /mcp to sign in.
 interface SeededCall {
 	id: string;
 	name: string;
-	args: Record<string, unknown>;
+	args: ToolCall["arguments"];
 	content: Array<
 		{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
 	>;

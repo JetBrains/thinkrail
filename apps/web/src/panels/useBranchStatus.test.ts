@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import type { ReviewDetails } from "@thinkrail/contracts";
 import {
 	type BranchAnswer,
 	CI_DISCOVERY_POLLS,
@@ -50,7 +51,7 @@ test("the v78 snapshot owns review state while a matching lookup contributes liv
 		review: null,
 		detailsKnown: false,
 	});
-	const details = { draft: true, reviewers: [], mergeState: "draft" } as const;
+	const details: ReviewDetails = { draft: true, reviewers: [], mergeState: "draft" };
 	expect(resolveBranchReview({ ...snapshot, details }, snapshot, true).review?.details).toBe(
 		details,
 	);

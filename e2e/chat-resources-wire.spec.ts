@@ -34,12 +34,18 @@ test("resource reads require the current chat's workspace and never recover hand
 		await openPersistedChat(page, "Resource history");
 		await expect(page.getByTestId("chat-toolbar")).toBeVisible();
 		const scope = { workspaceId: workspace.id, sessionId: parent.id };
-		await expect(wire.request("session.resources", scope)).resolves.toEqual({
+		const none = { done: 0, failed: 0, stopped: 0, interrupted: 0 };
+		const empty = {
 			...scope,
 			commands: [],
 			subagents: [],
 			mcpServers: [],
-		});
+			history: { commands: none, subagents: none },
+		};
+		await expect(wire.request("session.resources", scope)).resolves.toEqual(empty);
+		await expect(
+			wire.request("session.resourceHistory", { ...scope, kind: "command" }),
+		).resolves.toEqual({ kind: "command", items: [], hasMore: false });
 		await expect(
 			wire.request("backgroundCommand.output", { ...scope, commandId: "old-command" }),
 		).resolves.toEqual({ available: false });
@@ -73,12 +79,14 @@ test("resource reads require the current chat's workspace and never recover hand
 		await expect(
 			wire.request("subagent.stopAll", { workspaceId: foreign.id, parentSessionId: parent.id }),
 		).rejects.toThrow();
-		await expect(wire.request("session.resources", scope)).resolves.toEqual({
-			...scope,
-			commands: [],
-			subagents: [],
-			mcpServers: [],
-		});
+		await expect(
+			wire.request("session.resourceHistory", {
+				...scope,
+				workspaceId: foreign.id,
+				kind: "subagent",
+			}),
+		).rejects.toThrow();
+		await expect(wire.request("session.resources", scope)).resolves.toEqual(empty);
 		await shot(page.getByTestId("chat-toolbar"), "chat-resources", "wire-chat-header");
 	} finally {
 		wire.close();

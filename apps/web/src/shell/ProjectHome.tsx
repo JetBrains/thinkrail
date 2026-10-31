@@ -3,6 +3,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ProjectTree } from "../panels/ProjectTree";
 import { WelcomePanel } from "../panels/WelcomePanel";
+import { selectOnboardingActive, useAppStore } from "../store";
 import {
 	AuxiliaryPaneHeader,
 	AuxiliaryPaneHideButton,
@@ -24,7 +25,6 @@ const PROJECTS_PANE_MIN_PERCENT = 12;
 const WELCOME_MIN_PERCENT = 40;
 
 export function ProjectHome({ projects }: { projects: CollapsibleRegion<HTMLDivElement> }) {
-	const t = useT();
 	const {
 		collapsed,
 		contentRef,
@@ -36,6 +36,8 @@ export function ProjectHome({ projects }: { projects: CollapsibleRegion<HTMLDivE
 		regionRef,
 		toggle,
 	} = projects;
+	const t = useT();
+	const onboarding = useAppStore(selectOnboardingActive);
 	const entry: AuxiliaryRailToolEntry = {
 		key: PROJECTS_RAIL_ENTRY_KEY,
 		region: "left",
@@ -50,78 +52,85 @@ export function ProjectHome({ projects }: { projects: CollapsibleRegion<HTMLDivE
 		<div
 			data-testid="welcome-shell-layout"
 			data-left-collapsed={collapsed}
+			data-onboarding={onboarding || undefined}
 			className="flex h-full min-h-0 min-w-0"
 		>
-			<AuxiliaryRail
-				region="left"
-				entries={[entry]}
-				renderEntry={(_, control) => (
-					<AuxiliaryRailToolButton
-						ref={railRef}
-						entry={entry}
-						controls={PROJECTS_PANE_ID}
-						control={control}
-						onActivate={toggle}
-					/>
-				)}
-			/>
+			{onboarding ? null : (
+				<AuxiliaryRail
+					region="left"
+					entries={[entry]}
+					renderEntry={(_, control) => (
+						<AuxiliaryRailToolButton
+							ref={railRef}
+							entry={entry}
+							controls={PROJECTS_PANE_ID}
+							control={control}
+							onActivate={toggle}
+						/>
+					)}
+				/>
+			)}
 			<ResizablePanelGroup
 				direction="horizontal"
 				autoSaveId={PROJECT_HOME_AUTOSAVE_ID}
 				className="min-h-0 min-w-0 flex-1"
 			>
-				<ResizablePanel
-					ref={panelRef}
-					id="left"
-					order={1}
-					defaultSize={PROJECTS_PANE_DEFAULT_PERCENT}
-					minSize={PROJECTS_PANE_MIN_PERCENT}
-					collapsedSize={0}
-					collapsible
-					onCollapse={onCollapse}
-					onExpand={onExpand}
-				>
-					<section
-						ref={regionRef}
-						id={PROJECTS_PANE_ID}
-						aria-label={t("shell.projectHome.projects")}
-						aria-hidden={collapsed || undefined}
-						inert={collapsed ? true : undefined}
-						className="flex h-full min-h-0 flex-col bg-container-sidebar-bg"
-					>
-						<AuxiliaryPaneHeader
-							title={t("shell.projectHome.projects")}
-							actions={
-								<AuxiliaryPaneHideButton
-									testId="side-group-fold"
-									controls={PROJECTS_PANE_ID}
-									onClick={toggle}
-								/>
-							}
-						/>
-						<div
-							ref={contentRef}
-							tabIndex={-1}
-							className="flex min-h-0 flex-1 flex-col outline-none"
+				{onboarding ? null : (
+					<>
+						<ResizablePanel
+							ref={panelRef}
+							id="left"
+							order={1}
+							defaultSize={PROJECTS_PANE_DEFAULT_PERCENT}
+							minSize={PROJECTS_PANE_MIN_PERCENT}
+							collapsedSize={0}
+							collapsible
+							onCollapse={onCollapse}
+							onExpand={onExpand}
 						>
-							<QuietScrollArea
-								data-testid="left-nav"
-								className="min-h-0 flex-1"
-								viewportClassName="p-panel-inset"
+							<section
+								ref={regionRef}
+								id={PROJECTS_PANE_ID}
+								aria-label={t("shell.projectHome.projects")}
+								aria-hidden={collapsed || undefined}
+								inert={collapsed ? true : undefined}
+								className="flex h-full min-h-0 flex-col bg-container-sidebar-bg"
 							>
-								<ProjectTree />
-							</QuietScrollArea>
-						</div>
-					</section>
-				</ResizablePanel>
-				<ResizableHandle
-					direction="horizontal"
-					data-testid="resize-left"
-					aria-hidden={collapsed}
-					tabIndex={collapsed ? -1 : 0}
-					onDragging={onDragging}
-					{...(collapsed ? { className: "hidden" } : {})}
-				/>
+								<AuxiliaryPaneHeader
+									title={t("shell.projectHome.projects")}
+									actions={
+										<AuxiliaryPaneHideButton
+											testId="side-group-fold"
+											controls={PROJECTS_PANE_ID}
+											onClick={toggle}
+										/>
+									}
+								/>
+								<div
+									ref={contentRef}
+									tabIndex={-1}
+									className="flex min-h-0 flex-1 flex-col outline-none"
+								>
+									<QuietScrollArea
+										data-testid="left-nav"
+										className="min-h-0 flex-1"
+										viewportClassName="p-panel-inset"
+									>
+										<ProjectTree />
+									</QuietScrollArea>
+								</div>
+							</section>
+						</ResizablePanel>
+						<ResizableHandle
+							direction="horizontal"
+							data-testid="resize-left"
+							aria-hidden={collapsed}
+							tabIndex={collapsed ? -1 : 0}
+							onDragging={onDragging}
+							{...(collapsed ? { className: "hidden" } : {})}
+						/>
+					</>
+				)}
 				<ResizablePanel
 					id="welcome"
 					order={2}

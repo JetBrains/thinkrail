@@ -378,6 +378,17 @@ test("agentReviewEnabled defaults off; an old config loads the default; toggling
 	expect(() => updateConfig(invalid)).toThrow("agentReviewEnabled must be a boolean");
 });
 
+test("onboardingDismissed defaults off; an old config loads the default; dismissing round-trips; non-boolean rejected", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
+	resetConfigCache();
+	expect(getConfig().onboardingDismissed).toBe(false);
+	expect(updateConfig({ onboardingDismissed: true }).onboardingDismissed).toBe(true);
+	resetConfigCache();
+	expect(getConfig().onboardingDismissed).toBe(true);
+	const invalid = { onboardingDismissed: "yes" } as unknown as AppConfigUpdate;
+	expect(() => updateConfig(invalid)).toThrow("onboardingDismissed must be a boolean");
+});
+
 test("subagents default on; an old config inherits that default; toggling off round-trips", () => {
 	expect(DEFAULT_CONFIG.subagentsEnabled).toBe(true);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
@@ -435,6 +446,29 @@ test("a malformed disabled-extensions update is rejected; a malformed stored lis
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ disabledExtensions: "visualize" }));
 	resetConfigCache();
 	expect(getConfig().disabledExtensions).toEqual([]);
+});
+
+test("disabled packages default empty, round-trip deduped, and reject a malformed list", () => {
+	expect(DEFAULT_CONFIG.disabledPackages).toEqual([]);
+	expect(getConfig().disabledPackages).toEqual([]);
+	const next = updateConfig({
+		disabledPackages: ["npm:@acme/pi-jira", "local:/x", "npm:@acme/pi-jira"],
+	});
+	expect(next.disabledPackages).toEqual(["npm:@acme/pi-jira", "local:/x"]);
+	resetConfigCache();
+	expect(getConfig().disabledPackages).toEqual(["npm:@acme/pi-jira", "local:/x"]);
+	for (const value of ["npm:x", [""], [1]]) {
+		const invalid = { disabledPackages: value } as unknown as AppConfigUpdate;
+		expect(() => updateConfig(invalid)).toThrow(
+			"disabledPackages must be a list of package identities",
+		);
+	}
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ disabledPackages: ["npm:x", 3, ""] }),
+	);
+	resetConfigCache();
+	expect(getConfig().disabledPackages).toEqual(["npm:x"]);
 });
 
 test("an out-of-range subagent limit is rejected before persistence or broadcast", () => {
@@ -767,6 +801,22 @@ test("custom preset updates validate the complete catalog and permit empty struc
 	);
 });
 
+test("a custom preset may place every layout tool, the TODO List included", () => {
+	const withTools: LayoutPreset = {
+		...preset(),
+		right: {
+			visible: true,
+			width: 0.28,
+			groups: [
+				{ id: "custom-right", weight: 1, folded: false, tools: ["specs", "plan", "review"] },
+			],
+		},
+	};
+	expect(updateConfig({ customLayoutPresets: [withTools] }).customLayoutPresets).toEqual([
+		withTools,
+	]);
+});
+
 test("stored custom presets keep only complete current-schema entries", () => {
 	const { bottom: _bottom, ...bottomless } = preset("bottomless");
 	writeFileSync(
@@ -880,4 +930,71 @@ test("locale defaults to system, keeps an unavailable tag, and rejects non-canon
 	resetConfigCache();
 	expect(getConfig().locale).toBe("pt-BR");
 	expect(updateConfig({ locale: "system" }).locale).toBe("system");
+});
+
+test("font settings default to the bundled faces, round-trip, and normalize a malformed stored value", () => {
+	expect(getConfig()).toMatchObject({
+		interfaceFont: { family: null, fallbacks: [] },
+		codeFont: { family: null, fallbacks: [] },
+		codeFontSize: 13,
+		codeLigatures: false,
+		fontWeightOffset: 0,
+	});
+	const codeFont = { family: { name: "Fira Code" }, fallbacks: [{ name: "MesloLGS NF" }] };
+	const next = updateConfig({
+		interfaceFont: { family: { builtin: "code" }, fallbacks: [] },
+		codeFont,
+		codeFontSize: 15,
+		codeLigatures: true,
+		fontWeightOffset: 40,
+	});
+	expect(next.codeFont).toEqual(codeFont);
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({
+		interfaceFont: { family: { builtin: "code" }, fallbacks: [] },
+		codeFont,
+		codeFontSize: 15,
+		codeLigatures: true,
+		fontWeightOffset: 40,
+	});
+
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			interfaceFont: { family: "Inter" },
+			codeFont: { family: { name: "Fira Code" }, fallbacks: "Meslo" },
+			codeFontSize: 40,
+			codeLigatures: "yes",
+			fontWeightOffset: 15,
+		}),
+	);
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({
+		interfaceFont: DEFAULT_CONFIG.interfaceFont,
+		codeFont: DEFAULT_CONFIG.codeFont,
+		codeFontSize: DEFAULT_CONFIG.codeFontSize,
+		codeLigatures: DEFAULT_CONFIG.codeLigatures,
+		fontWeightOffset: DEFAULT_CONFIG.fontWeightOffset,
+	});
+});
+
+test("invalid font updates are rejected before persistence or broadcast", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	for (const [update, message] of [
+		[
+			{ codeFont: { family: { name: 'Fira"; x' }, fallbacks: [] } },
+			"codeFont must be a font family",
+		],
+		[{ interfaceFont: { family: null } }, "interfaceFont must be a font family"],
+		[{ codeFontSize: 9 }, "codeFontSize must be a whole number from 10 to 24"],
+		[{ fontWeightOffset: 25 }, "fontWeightOffset must be a multiple of 10 from -70 to 130"],
+		[{ codeLigatures: "on" }, "codeLigatures must be a boolean"],
+	] as const) {
+		expect(() => updateConfig(update as unknown as AppConfigUpdate)).toThrow(message);
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
 });

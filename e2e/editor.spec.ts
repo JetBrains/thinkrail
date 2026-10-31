@@ -161,7 +161,7 @@ test("opens an uncompressed PDF in the PDF renderer and its change in the PDF di
 				if (!pixels) return 0;
 				let drawn = 0;
 				for (let index = 0; index < pixels.length; index += 4) {
-					if (pixels[index] < 240) drawn += 1;
+					if ((pixels[index] ?? 255) < 240) drawn += 1;
 				}
 				return drawn;
 			}),

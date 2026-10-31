@@ -1,8 +1,17 @@
+import { RiCloseLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { IconButton } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { SettingsSection, useAppStore } from "@/store";
+import { loadInAppSurvey } from "@/transport";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
 import { EnvironmentSettings } from "./EnvironmentSettings";
@@ -15,6 +24,7 @@ import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
+import { SettingsDialogContainer } from "./settingsDialogContainer";
 import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
@@ -34,6 +44,11 @@ export function SettingsDialog({
 	const filteredGroups = settingsNavGroups(protocolVersion, updateSettings !== undefined);
 	const selectedSection = resolveSettingsSection(section, filteredGroups);
 	const feedbackActive = selectedSection === SettingsSection.Feedback;
+	const [contentEl, setContentEl] = useState<HTMLElement | null>(null);
+
+	useEffect(() => {
+		if (open) void loadInAppSurvey();
+	}, [open]);
 
 	return (
 		<Dialog
@@ -43,7 +58,9 @@ export function SettingsDialog({
 			}}
 		>
 			<DialogContent
+				ref={setContentEl}
 				data-testid="settings-dialog"
+				hideClose
 				onEscapeKeyDown={(event) => {
 					if (
 						document.activeElement instanceof HTMLElement &&
@@ -54,8 +71,11 @@ export function SettingsDialog({
 				}}
 				className="flex h-[80vh] max-h-[85vh] w-full max-w-[52rem] flex-col gap-0 overflow-hidden p-0"
 			>
-				<DialogHeader className="border-border-default border-b px-16 py-12">
+				<DialogHeader className="flex-row items-center justify-between border-border-default border-b px-16 py-8">
 					<DialogTitle>{t("settings.dialog.title")}</DialogTitle>
+					<DialogClose asChild>
+						<IconButton icon={RiCloseLine} label={t("common.close")} />
+					</DialogClose>
 				</DialogHeader>
 
 				<div className="flex min-h-0 flex-1 flex-col md:flex-row">
@@ -104,48 +124,50 @@ export function SettingsDialog({
 								feedbackActive ? "bg-primary-subtle" : "bg-control-bg hover:bg-control-bg-hovered",
 							)}
 						>
-							<span className="tr-text-ui text-primary">{t("settings.dialog.interviewCta")}</span>
+							<span className="tr-text-ui text-primary">{t("settings.dialog.feedbackCta")}</span>
 						</button>
 					</nav>
 
 					<div className="min-h-0 flex-1 overflow-y-auto p-16">
-						{selectedSection === SettingsSection.Models ? (
-							<ModelsSettings />
-						) : selectedSection === SettingsSection.Providers ? (
-							<ProvidersSettings />
-						) : selectedSection === SettingsSection.Mcp ? (
-							<McpSettings />
-						) : selectedSection === SettingsSection.Templates ? (
-							<TemplatesSettings />
-						) : selectedSection === SettingsSection.Environment ? (
-							<EnvironmentSettings />
-						) : selectedSection === SettingsSection.Extensions ? (
-							<ExtensionsSettings />
-						) : selectedSection === SettingsSection.Chat ? (
-							<ChatSettings />
-						) : selectedSection === SettingsSection.Appearance ? (
-							<AppearanceSettings />
-						) : selectedSection === SettingsSection.Language ? (
-							<LanguageSettings />
-						) : selectedSection === SettingsSection.Layout ? (
-							layoutSettings
-						) : selectedSection === SettingsSection.Terminal ? (
-							<TerminalSettings />
-						) : selectedSection === SettingsSection.Workspaces ? (
-							<WorkspacesSettings />
-						) : selectedSection === SettingsSection.Github ? (
-							<GithubSettings />
-						) : selectedSection === SettingsSection.Notifications ? (
-							<NotificationsSettings />
-						) : selectedSection === SettingsSection.Privacy ? (
-							<PrivacySettings />
-						) : selectedSection === SettingsSection.Updates && updateSettings !== undefined ? (
-							updateSettings
-						) : selectedSection === SettingsSection.Feedback ? (
-							<FeedbackSettings />
-						) : (
-							<AppearanceSettings />
-						)}
+						<SettingsDialogContainer value={contentEl}>
+							{selectedSection === SettingsSection.Models ? (
+								<ModelsSettings />
+							) : selectedSection === SettingsSection.Providers ? (
+								<ProvidersSettings />
+							) : selectedSection === SettingsSection.Mcp ? (
+								<McpSettings />
+							) : selectedSection === SettingsSection.Templates ? (
+								<TemplatesSettings />
+							) : selectedSection === SettingsSection.Environment ? (
+								<EnvironmentSettings />
+							) : selectedSection === SettingsSection.Extensions ? (
+								<ExtensionsSettings />
+							) : selectedSection === SettingsSection.Chat ? (
+								<ChatSettings />
+							) : selectedSection === SettingsSection.Appearance ? (
+								<AppearanceSettings />
+							) : selectedSection === SettingsSection.Language ? (
+								<LanguageSettings />
+							) : selectedSection === SettingsSection.Layout ? (
+								layoutSettings
+							) : selectedSection === SettingsSection.Terminal ? (
+								<TerminalSettings />
+							) : selectedSection === SettingsSection.Workspaces ? (
+								<WorkspacesSettings />
+							) : selectedSection === SettingsSection.Github ? (
+								<GithubSettings />
+							) : selectedSection === SettingsSection.Notifications ? (
+								<NotificationsSettings />
+							) : selectedSection === SettingsSection.Privacy ? (
+								<PrivacySettings />
+							) : selectedSection === SettingsSection.Updates && updateSettings !== undefined ? (
+								updateSettings
+							) : selectedSection === SettingsSection.Feedback ? (
+								<FeedbackSettings />
+							) : (
+								<AppearanceSettings />
+							)}
+						</SettingsDialogContainer>
 					</div>
 				</div>
 			</DialogContent>

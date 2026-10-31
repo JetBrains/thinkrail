@@ -182,6 +182,64 @@ test("the async git runners distinguish a launch failure from git's own nonzero 
 	}
 });
 
+test("pre-cancellation skips Git mutations and classifies both async runners", async () => {
+	const target = join(dir, "never-created");
+	const opts = { signal: AbortSignal.abort(), network: true };
+	const text = await gitAsync(repo, ["init", target], opts);
+	const bytes = await gitAsyncBytes(repo, ["init", target], opts);
+	for (const result of [text, bytes]) {
+		expect(result).toMatchObject({ ok: false, failure: "aborted", err: "git operation cancelled" });
+	}
+	expect(text.out).toBe("");
+	expect(bytes.out).toEqual(new Uint8Array());
+	expect(existsSync(target)).toBe(false);
+});
+
+posix("in-flight cancellation keeps text and byte output with an explicit diagnosis", async () => {
+	for (const bytes of [false, true]) {
+		const ready = join(dir, `ready-${bytes}`);
+		const controller = new AbortController();
+		const args = [
+			"-c",
+			`alias.wait=!printf ' partial '; printf 'diagnosis' >&2; touch '${ready}'; sleep 30`,
+			"wait",
+		];
+		const opts = { signal: controller.signal, timeoutMs: 10_000, network: true };
+		const pending = bytes
+			? gitAsyncBytes(repo, args, opts)
+			: gitAsync(repo, args, { ...opts, raw: true });
+		try {
+			for (let attempt = 0; attempt < 300 && !existsSync(ready); attempt++) await Bun.sleep(10);
+			expect(existsSync(ready)).toBe(true);
+			controller.abort();
+			const result = await pending;
+			expect(result).toMatchObject({
+				ok: false,
+				failure: "aborted",
+				err: "git operation cancelled — diagnosis",
+			});
+			expect(result.out).toEqual(bytes ? new TextEncoder().encode(" partial ") : " partial ");
+		} finally {
+			controller.abort();
+			await pending;
+		}
+	}
+});
+
+test("a later abort does not change a completed Git result", async () => {
+	const controller = new AbortController();
+	const opts = { signal: controller.signal };
+	const results = await Promise.all([
+		gitAsync(repo, ["rev-parse", "--git-dir"], opts),
+		gitAsyncBytes(repo, ["rev-parse", "--git-dir"], opts),
+	]);
+	controller.abort();
+	for (const result of results) {
+		expect(result.ok).toBe(true);
+		expect(result).not.toHaveProperty("failure");
+	}
+});
+
 test("git reports git's own stderr, trimmed", () => {
 	const result = git(repo, ["rev-parse", "--verify", "refs/heads/nope"]);
 

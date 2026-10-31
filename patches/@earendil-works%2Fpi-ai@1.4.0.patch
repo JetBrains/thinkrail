@@ -1,0 +1,81 @@
+diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
+index 841da8964d2b403c45a18d4d1735c1fabc441a9a..556f206d5a0739673c5a0188ab05d5d41ecde9ac 100644
+--- a/dist/api/anthropic-messages.js
++++ b/dist/api/anthropic-messages.js
+@@ -277,11 +277,14 @@ function nextLineBreakIndex(text) {
+     }
+     return Math.min(carriageReturnIndex, newlineIndex);
+ }
+-function consumeLine(text) {
++function consumeLine(text, final) {
+     const lineBreakIndex = nextLineBreakIndex(text);
+     if (lineBreakIndex === -1) {
+         return null;
+     }
++    if (!final && text[lineBreakIndex] === "\r" && lineBreakIndex === text.length - 1) {
++        return null;
++    }
+     let nextIndex = lineBreakIndex + 1;
+     if (text[lineBreakIndex] === "\r" && text[nextIndex] === "\n") {
+         nextIndex += 1;
+@@ -306,25 +309,25 @@ async function* iterateSseMessages(body, signal) {
+                 break;
+             }
+             buffer += decoder.decode(value, { stream: true });
+-            let consumed = consumeLine(buffer);
++            let consumed = consumeLine(buffer, false);
+             while (consumed) {
+                 buffer = consumed.rest;
+                 const event = decodeSseLine(consumed.line, state);
+                 if (event) {
+                     yield event;
+                 }
+-                consumed = consumeLine(buffer);
++                consumed = consumeLine(buffer, false);
+             }
+         }
+         buffer += decoder.decode();
+-        let consumed = consumeLine(buffer);
++        let consumed = consumeLine(buffer, true);
+         while (consumed) {
+             buffer = consumed.rest;
+             const event = decodeSseLine(consumed.line, state);
+             if (event) {
+                 yield event;
+             }
+-            consumed = consumeLine(buffer);
++            consumed = consumeLine(buffer, true);
+         }
+         if (buffer.length > 0) {
+             const event = decodeSseLine(buffer, state);
+@@ -334,7 +337,7 @@ async function* iterateSseMessages(body, signal) {
+         }
+         const trailingEvent = flushSseEvent(state);
+         if (trailingEvent) {
+-            yield trailingEvent;
++            yield { ...trailingEvent, incomplete: true };
+         }
+     }
+     finally {
+@@ -354,8 +357,20 @@ async function* iterateAnthropicEvents(response, signal) {
+         if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
+             continue;
+         }
++        let trailingEvent;
++        if (sse.incomplete) {
++            try {
++                trailingEvent = JSON.parse(sse.data);
++            }
++            catch {
++                continue;
++            }
++            if (typeof trailingEvent !== "object" || trailingEvent === null) {
++                continue;
++            }
++        }
+         try {
+-            const event = parseJsonWithRepair(sse.data);
++            const event = trailingEvent ?? parseJsonWithRepair(sse.data);
+             if (event.type === "message_start") {
+                 sawMessageStart = true;
+             }

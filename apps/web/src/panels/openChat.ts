@@ -23,8 +23,11 @@ function sendPrompt(sessionId: string, text: string): void {
 
 export async function startChatInTab(
 	workspaceId: string,
-	preferredGroupId?: string,
-	prompt?: string,
+	{
+		preferredGroupId,
+		prompt,
+		draft,
+	}: { preferredGroupId?: string; prompt?: string; draft?: string } = {},
 ): Promise<void> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, preferredGroupId);
 	useAppStore.getState().beginChatStart(workspaceId);
@@ -43,6 +46,7 @@ export async function startChatInTab(
 			layoutOpenOptionsForNavigation(store, workspaceId, navigation),
 		);
 		if (prompt) sendPrompt(sessionId, prompt);
+		else if (draft) store.setChatDraft(sessionId, draft);
 	} catch {
 		const state = useAppStore.getState();
 		if (
@@ -151,7 +155,7 @@ export async function promptWorkspaceChat(
 	sessionId: string | null,
 	text: string,
 ): Promise<void> {
-	if (!sessionId) return startChatInTab(workspaceId, undefined, text);
+	if (!sessionId) return startChatInTab(workspaceId, { prompt: text });
 	await openChatInTab(workspaceId, sessionId);
 	const runtime = useAppStore.getState().sessions[sessionId];
 	if (!runtime) return;

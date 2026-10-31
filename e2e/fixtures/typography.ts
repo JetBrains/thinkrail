@@ -6,7 +6,8 @@ const GENERATED = readFileSync(
 );
 
 function bundledFace(id: string): string {
-	const match = GENERATED.match(new RegExp(`--tr-font-family-${id}:\\s*([^,;]+)`));
+	const stack = (token: string) => GENERATED.match(new RegExp(`${token}:\\s*([^,;]+)`));
+	const match = stack(`--tr-font-family-${id}-default`) ?? stack(`--tr-font-family-${id}`);
 	if (!match) throw new Error(`--tr-font-family-${id} is not in the generated typography CSS`);
 	return (match[1] as string).trim().replace(/^"|"$/g, "");
 }

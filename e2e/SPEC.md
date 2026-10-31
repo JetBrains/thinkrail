@@ -91,6 +91,15 @@ compaction to keep the request small and deterministic, restoring the settings b
 It neither changes the provider/effort selection nor proves removal of a fixed output cap; the focused
 SDK reserve-independence canary owns that assertion.
 
+## Repository cloning
+
+`clone-project.spec.ts` clones disposable local `file:` repositories through the Welcome and rail menus,
+checking shallow/full history, project-home adoption without an agent, destination collision protection,
+URL correction, the parent picker, preview gating and old-host hiding. Cancellation UI coverage holds a
+wire reply to prove that an ack does not unlock the form before cleanup completes; real process teardown
+and cleanup are exercised separately by the projects and subprocess unit tests. No production Git
+credentials or remote repositories are used.
+
 ## Chat resource controls
 
 Resource wire coverage opens persisted chat fixtures through the real UI and checks the authoritative
@@ -105,7 +114,13 @@ using real responses; the old-host probe changes only the advertised protocol ve
 retirement focus probe supplies a completed child and persisted-form transcript at the wire seam, selects
 it in the inspector, then downgrades the next welcome; the UI, reconnect, capability retirement and Radix
 focus teardown remain real. This terminal-only fixture is not evidence of
-agent resource execution. Tagged provider-backed probes launch real commands and
+agent resource execution. The history probe writes a chat's resource archive (finished commands with one
+log tail, subagents, and runs a dead host left in flight) to the lane's data dir at the wire seam, just
+before the host's first resource read of that chat, so the real host loads it the way it would after a
+restart; it proves the dock's finished total, the inspector's per-kind fold, a real `session.resourceHistory`
+page, the archived log and an interrupted run's missing log. An archived in-flight record carries no
+authority — the host reads it as interrupted — so this is not a seeded running resource. `resetApp` clears
+the archive with the rest of the lane's state. Tagged provider-backed probes launch real commands and
 children through agent tools, inspect bounded plain-text logs/transcripts in the inspector, verify chat
 isolation, reload and closed-inspector completion, and exercise individual Stop and confirmed Stop all. They never
 select a model or seed a running-resource catalog. SDK faux-provider unit tests are not evidence of
@@ -347,9 +362,16 @@ convergence with draft invalidation, sanitized read/write failures with Retry, m
 and pre-v76 hiding.
 
 General and private-restart fixtures seed additional analytics off with consent already confirmed, so
-unrelated scenarios stay unblocked. They also seed the automatic interview invitation as permanently
+unrelated scenarios stay unblocked. They also seed the automatic survey invitation as permanently
 dismissed: the serial agent lane intentionally accumulates accepted prompts across scenarios, while dedicated
-feedback coverage injects and asserts the addressed invitation channel directly. Before any fixture reset
+feedback coverage injects and asserts the addressed invitation channel directly. The cold-start onboarding
+wizard is likewise seeded dismissed (`onboardingDismissed: true`, in the config file and again over the
+settings wire, since the host may have loaded its config first), and only `onboarding.spec.ts` re-arms it
+over the settings wire, restoring it afterwards. The wizard gate decides once per page load, so that spec's
+cold starts settle the host before the first load: after the reset they wait out a provider-runtime
+replacement still in flight (`jbcentral` `configuring` keeps reporting the previous runtime's providers),
+sign out every stored credential, and fail unless at most ambient env providers remain (those skip). Its
+teardown attempts every cleanup step even when one fails. Before any fixture reset
 deletes transcript storage, it lists and disposes every live session through the public wire; disposal aborts
 and settles an unfinished provider turn first, so a test ending mid-turn cannot recreate a headerless JSONL
 behind the next scenario. Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,
@@ -407,7 +429,10 @@ explicit agent-mode setup is the narrow exception: it reads one known global Cen
 lane-owned copy, never runs from or writes to the source, and removes the copy on setup failure or teardown.
 A sandboxed home is handed to every host as **both `HOME` and `USERPROFILE`**: `homedir()` — pi's own home
 resolution — reads `USERPROFILE` on Windows and ignores `HOME`, so `HOME` alone would silently leak a
-Windows lane into the real profile (see `module-shared`).
+Windows lane into the real profile (see `module-shared`). Every spawner — the Playwright web server, the
+artifact and live-restart hosts, the workflow harness, and the artifact probes — takes that home through
+`@thinkrail/shared/toolHomes`' `toolHomeEnv`, so each agent tool's config home (what account detection reads)
+lands in the sandbox and a new detection source is pinned everywhere at once.
 
 ## Boundary
 
@@ -432,6 +457,10 @@ Windows lane into the real profile (see `module-shared`).
   the explicitly authorized Central artifact, or parallel workers sharing one mutable host.
 
 ## Verification policy
+
+`e2e/tsconfig.json` type-checks every `e2e/` TypeScript file as part of root `typecheck:root`. Its
+`exclude` list is a shrinking to-do of files with known type errors; fix a file and drop it from the list
+rather than adding new entries.
 
 During iteration, run the affected specs and use Playwright's last-failed mode. Flake repairs replace
 irrelevant expensive setup with equivalent fixture state and wait for observable readiness; blanket retries,

@@ -21,6 +21,7 @@ import {
 	type TerminalDeliveryResult,
 } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
+import { terminalPtyEnv } from "./ptyEnv";
 import { nudgePtyRedraw, type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
 import { terminalShell, terminalShellArgs, terminalShellStartFailure } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
@@ -82,16 +83,6 @@ function membershipChanged(workspaceId: string): void {
 const completions = createTerminalCompletionQueue((clientKey, channel, data) =>
 	pushToClient(clientKey, channel, data),
 );
-
-function ptyEnv(): Record<string, string> {
-	const env: Record<string, string> = {};
-	for (const [key, value] of Object.entries(process.env)) {
-		if (typeof value === "string") env[key] = value;
-	}
-	env.TERM = "xterm-256color";
-	env.COLORTERM = "truecolor";
-	return env;
-}
 
 const DEFAULT_PTY_SIZE = { cols: 80, rows: 24 } as const;
 
@@ -177,7 +168,7 @@ function spawnForTab(
 			name: "xterm-256color",
 			cwd: ws.worktreePath,
 			...grid,
-			env: ptyEnv(),
+			env: terminalPtyEnv(process.platform, process.env),
 		});
 	} catch (cause) {
 		throw new Error(terminalShellStartFailure(process.platform, process.env, preference), {

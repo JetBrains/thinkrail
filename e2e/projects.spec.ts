@@ -176,7 +176,7 @@ test("manual path from the rail supersedes a picker started from Welcome", async
 	const manualRepo = seedSecondRepo();
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 
-	await page.getByTestId("welcome-cta").click();
+	await page.getByTestId("welcome-action").filter({ hasText: "Open project" }).click();
 	await page.getByTestId("menu-open-project").click();
 	await pickerReply.held;
 

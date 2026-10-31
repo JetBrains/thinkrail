@@ -1,12 +1,22 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { InterviewResponse } from "@thinkrail/contracts";
+import type { SurveyInvitationResponse } from "@thinkrail/contracts";
 import { dataDir } from "../persistence";
+import {
+	currentInAppSurvey,
+	refreshInAppSurvey,
+	surveyNow,
+	surveyRefreshDue,
+	surveyWaitPeriodMs,
+} from "./survey";
 
 interface FeedbackState {
 	acceptedMessages: number;
 	nextInvitationAt: number;
 	dismissed: boolean;
+	submittedSurveyId: string | null;
+	submittedIteration: number | null;
+	lastInvitedAt: number | null;
 }
 
 type FeedbackPublisher = (clientKey: string) => boolean;
@@ -16,11 +26,14 @@ const DEFAULT_STATE: FeedbackState = {
 	acceptedMessages: 0,
 	nextInvitationAt: INVITATION_INTERVAL,
 	dismissed: false,
+	submittedSurveyId: null,
+	submittedIteration: null,
+	lastInvitedAt: null,
 };
 
 let cachedState: FeedbackState | null = null;
 let claimedClient: string | null = null;
-let publishInterview: FeedbackPublisher | null = null;
+let publishInvitation: FeedbackPublisher | null = null;
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
 	return Number.isSafeInteger(value) && (value as number) >= 0;
@@ -36,11 +49,43 @@ function parseState(value: unknown): FeedbackState | null {
 	) {
 		return null;
 	}
+	const submittedSurveyId = completionId(value);
+	const submittedIteration = completionIteration(value);
+	const lastInvitedAt = invitedAt(value);
+	if (submittedSurveyId === undefined || submittedIteration === undefined) return null;
+	if (lastInvitedAt === undefined) return null;
 	return {
 		acceptedMessages: candidate.acceptedMessages,
 		nextInvitationAt: candidate.nextInvitationAt,
 		dismissed: candidate.dismissed,
+		submittedSurveyId,
+		submittedIteration,
+		lastInvitedAt,
 	};
+}
+
+function invitedAt(record: object): number | null | undefined {
+	if (!Object.hasOwn(record, "lastInvitedAt")) return null;
+	const at: unknown = Reflect.get(record, "lastInvitedAt");
+	if (at === null) return null;
+	if (isNonNegativeSafeInteger(at)) return at;
+	return undefined;
+}
+
+function completionId(record: object): string | null | undefined {
+	if (!Object.hasOwn(record, "submittedSurveyId")) return null;
+	const id: unknown = Reflect.get(record, "submittedSurveyId");
+	if (id === null) return null;
+	if (typeof id === "string" && id.length > 0 && id.length <= 128) return id;
+	return undefined;
+}
+
+function completionIteration(record: object): number | null | undefined {
+	if (!Object.hasOwn(record, "submittedIteration")) return null;
+	const iteration: unknown = Reflect.get(record, "submittedIteration");
+	if (iteration === null) return null;
+	if (isNonNegativeSafeInteger(iteration)) return iteration;
+	return undefined;
 }
 
 function loadState(): FeedbackState {
@@ -83,13 +128,25 @@ function addWithinSafeRange(value: number, amount: number): number {
 }
 
 export function setFeedbackPublisher(publisher: FeedbackPublisher | null): void {
-	publishInterview = publisher;
+	publishInvitation = publisher;
 	if (publisher === null) claimedClient = null;
+}
+
+export function surveyIsCompleted(id: string, iteration: number): boolean {
+	const current = loadState();
+	return current.submittedSurveyId === id && current.submittedIteration === iteration;
+}
+
+export function completeSurvey(id: string, iteration: number): void {
+	if (!id || !isNonNegativeSafeInteger(iteration)) throw new Error("Invalid survey completion");
+	const next = { ...loadState(), submittedSurveyId: id, submittedIteration: iteration };
+	cachedState = next;
+	claimedClient = null;
+	writeState(next);
 }
 
 export function recordAcceptedMessage(clientKey: string): void {
 	const current = loadState();
-	if (current.dismissed) return;
 	const next = {
 		...current,
 		acceptedMessages: addWithinSafeRange(current.acceptedMessages, 1),
@@ -100,25 +157,53 @@ export function recordAcceptedMessage(clientKey: string): void {
 	} catch {
 		return;
 	}
-	if (next.acceptedMessages < next.nextInvitationAt || claimedClient !== null) return;
-
-	claimedClient = clientKey;
-	deliverInterview(clientKey);
+	if (surveyRefreshDue()) void refreshInAppSurvey().then(() => maybeOffer(clientKey));
+	else maybeOffer(clientKey);
 }
 
-function deliverInterview(clientKey: string): void {
-	try {
-		if (publishInterview?.(clientKey) !== true) claimedClient = null;
-	} catch {
-		claimedClient = null;
+function maybeOffer(clientKey: string): void {
+	const current = loadState();
+	if (
+		current.dismissed ||
+		!surveyOfferAvailable() ||
+		current.acceptedMessages < current.nextInvitationAt ||
+		claimedClient !== null
+	) {
+		return;
 	}
+	claimedClient = clientKey;
+	if (deliverInvitation(clientKey)) recordInvitation();
 }
 
-export function redeliverInterview(clientKey: string): void {
-	if (claimedClient === clientKey) deliverInterview(clientKey);
+function surveyOfferAvailable(): boolean {
+	const survey = currentInAppSurvey();
+	if (!survey || surveyIsCompleted(survey.id, survey.iteration)) return false;
+	const lastInvitedAt = loadState().lastInvitedAt;
+	const wait = surveyWaitPeriodMs(survey);
+	return lastInvitedAt === null || wait === 0 || surveyNow() - lastInvitedAt >= wait;
 }
 
-export function respondToInterview(action: InterviewResponse): void {
+function recordInvitation(): void {
+	const next = { ...loadState(), lastInvitedAt: surveyNow() };
+	cachedState = next;
+	try {
+		writeState(next);
+	} catch {}
+}
+
+function deliverInvitation(clientKey: string): boolean {
+	try {
+		if (publishInvitation?.(clientKey) === true) return true;
+	} catch {}
+	claimedClient = null;
+	return false;
+}
+
+export function redeliverInvitation(clientKey: string): void {
+	if (claimedClient === clientKey) deliverInvitation(clientKey);
+}
+
+export function respondToInvitation(action: SurveyInvitationResponse): void {
 	const current = loadState();
 	let next: FeedbackState;
 	switch (action) {
@@ -128,23 +213,22 @@ export function respondToInterview(action: InterviewResponse): void {
 				nextInvitationAt: addWithinSafeRange(current.acceptedMessages, INVITATION_INTERVAL),
 			};
 			break;
-		case "book":
 		case "never":
 			next = { ...current, dismissed: true };
 			break;
 		default:
-			throw new Error("Invalid interview response");
+			throw new Error("Invalid invitation response");
 	}
 	saveState(next);
 	claimedClient = null;
 }
 
-export function releaseInterview(clientKey: string): void {
+export function releaseInvitation(clientKey: string): void {
 	if (claimedClient === clientKey) claimedClient = null;
 }
 
 export function resetFeedbackForTests(): void {
 	cachedState = null;
 	claimedClient = null;
-	publishInterview = null;
+	publishInvitation = null;
 }

@@ -1,7 +1,27 @@
 import { describe, expect, test } from "bun:test";
-import { validateAnalyticsPages } from "./validateBuild";
+import { relativeLinkTargets, validateAnalyticsPages } from "./validateBuild";
 
 const analyticsRuntime = "data-posthog-project data-gtm-container content_viewed";
+
+describe("relativeLinkTargets", () => {
+	test("resolves a post's relative links against the post URL", () => {
+		expect(
+			relativeLinkTargets(
+				"blog/gui-overview/index.html",
+				'<a href="./images/a.png"><img src="/_astro/a.webp"></a><a href="images/a.png">',
+			),
+		).toEqual(["/blog/gui-overview/images/a.png"]);
+	});
+
+	test("ignores absolute, external, and fragment links", () => {
+		expect(
+			relativeLinkTargets(
+				"blog/gui-overview/index.html",
+				'<a href="/blog/"><a href="https://x.com/ThinkRailAI"><a href="mailto:a@b.c"><a href="#top">',
+			),
+		).toEqual([]);
+	});
+});
 
 describe("validateAnalyticsPages", () => {
 	test("rejects a newly emitted public page without analytics", () => {

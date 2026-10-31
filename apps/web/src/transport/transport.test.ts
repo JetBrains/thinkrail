@@ -97,7 +97,7 @@ describe("WsTransport channel replay", () => {
 			{},
 		],
 		[
-			"does not replay an addressed interview invitation to a late subscriber",
+			"does not replay an addressed survey invitation to a late subscriber",
 			WS_CHANNELS.feedbackInterview,
 			{},
 		],
@@ -277,5 +277,25 @@ describe("WsTransport response receipts", () => {
 		await tick(0);
 
 		expect(acksIn(socket?.sent ?? [])).toEqual([id ?? "", id ?? ""]);
+	});
+
+	test("a request that times out is released to the host and left out of the next reconciliation", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const first = TestWebSocket.instances[0];
+		first?.open();
+
+		const result = transport.request("project.list", {}, { timeoutMs: 10 });
+		const id = requestsIn(first?.sent ?? [])[0]?.id ?? "";
+		await expect(result).rejects.toThrow();
+		await tick(0);
+		expect(acksIn(first?.sent ?? [])).toEqual([id]);
+
+		first?.close();
+		await tick(520);
+		const replacement = TestWebSocket.instances[1];
+		replacement?.open();
+		expect(resumesIn(replacement?.sent ?? [])).toEqual([[]]);
+		expect(requestsIn(replacement?.sent ?? [])).toEqual([]);
 	});
 });

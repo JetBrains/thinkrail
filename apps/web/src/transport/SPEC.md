@@ -26,7 +26,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   while the host deduplicates `(clientKey, requestId)`, so an accepted mutation cannot become a false failure or
   execute twice —, the two frames that are this side's half of that bargain — **`{ ack: [id] }` receipts**
   (every response read is acknowledged, batched on a microtask; until one arrives the host must assume the reply
-  died with the socket and keep it replayable) and the **`{ resume: [ids] }` reconciliation** sent on every
+  died with the socket and keep it replayable; a request whose own deadline fires while connected is acknowledged
+  too, which tells the host to abandon it rather than hold its slot for a reply nobody awaits — offline, the next
+  `resume` already omits it, so nothing is queued during an outage) and the **`{ resume: [ids] }` reconciliation** sent on every
   (re)connect *before* the replays (the complete still-unresolved set, so the host releases everything else).
   Receipts are deliberately best-effort and never retransmitted — one can die in a socket buffer exactly like a
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
@@ -67,8 +69,14 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
   restore a removed generation's models; provider settings observes the same version and re-reads
   `provider.status`), each valid `server.welcome` first clearing any popup projection left by a host restart,
-  then `feedback.interview` via the idempotent `showInterviewPrompt()` (a surviving host claim re-delivers the
-  addressed event immediately after welcome),
+  then `feedback.interview` via the idempotent `showSurveyInvitation()`, only from a v97+ host (an older host
+  still sends the retired interview invitation on that channel) — the shell holds the invitation
+  behind onboarding and the consent dialog, and additional analytics may be off (a surviving host claim
+  re-delivers the addressed event immediately after welcome). `loadInAppSurvey()` installs `feedback.survey` (asked in `currentLocale()`, so PostHog's
+  translation for the UI language is shown when it has one; a language switch applies on the next load)
+  into the store after welcome, when Settings opens, when the survey window opens, and after a
+  `SURVEY_CHANGED` refusal; it never rejects, and a stale reply is dropped by generation, so
+  `forgetInAppSurvey()` after a successful Send cannot be undone by a load still in flight,
   `workspace.fsChanged` via `noteFsChanged(payload)`, **`mcp.status`** via the generation-guarded
   `applyMcpStatus(snapshot)`, and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
   welcome config lands in the atomic install above.
@@ -89,9 +97,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
   string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice);
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named
-  `WsResponse.errorCode`. A coded response rejects with a `RequestError`, everything else (timeout or an unnamed
-  host error) with a plain `Error`, so *having* a code is exactly how a caller tells "this
-  specific failure" from "the read failed"); `skillLoad.ts` (the one app-integration coordinator for session
+  `WsResponse.errorCode`. A coded response rejects with a `RequestError`, a request that outlives its
+  `timeoutMs` with a **`RequestTimeoutError`** (the host may still finish it — a long install dialog says
+  "check the list" rather than "nothing happened"), and an unnamed host error with a plain `Error`, so *having*
+  a code is exactly how a caller tells "this specific failure" from "the read failed"); `skillLoad.ts` (the one app-integration coordinator for session
   resource loads: single-flight `workspace.watchReady` per workspace; unless the watcher was already known
   ready, fold the conservative `skillChange: "unknown"` wildcard locally as a replay-safe fallback; capture
   the store tick only afterward. Its narrow `prewarmWorkspaceSkillLoad` entry lets a workspace navigator start
@@ -145,18 +154,22 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
 `main.tsx` installs the listeners and injects the forwarder into `components`' error-boundary seam.
 
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
-  skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `requestMcpList`,
+  skill-load-safe session request wrappers, `errorText`, `RequestError`, `RequestTimeoutError`, `wsErrorCode`, `requestMcpList`,
   `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
-  `supportsUserThemes`, `supportsToolResponses`, `respondToTool`,
+  `supportsUserThemes`, `supportsFonts`, `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
   `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `respondToTool(sessionId,
   toolCallId, response)` is the one place a tool response leaves the client (chat and plan page both use
   it): it sends `session.respondToTool` to a v93+ host and the retired `session.answerQuestion` below
   (`supportsToolResponses`), for one compatibility window — [[module-contracts]]. `runHostUpdate` is the typed empty host action
   and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsUserThemes` (v92) is
   exported because `Shell` must drop user themes (cached or from an earlier host) once a host that cannot
-  serve theme files has welcomed it; `supportsPlanReview` is exported
+  serve theme files has welcomed it; `supportsFonts` (v102) gates the same way for the font settings and the
+  custom-font snapshot (`fonts.list`, refreshed on every welcome and `fonts.changed`), and `uploadUserFont`
+  is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
+  header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
+  (custom face URLs) against the endpoint; `supportsPlanReview` is exported
   because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
   `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
   exported because `chat/useChatTodos` gates the auto-summary `todo.generateSummary` request on it — an older

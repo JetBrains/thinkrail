@@ -233,8 +233,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   unexplained box. Expanding shows the bounded excerpt (escaped plain text, wrapped, natural height, no
   inner scroll) or the report Markdown without pi-subagents' `Subagent "x" (id) status:` header. The open
   action comes from `ChatActions.resultOpener`: `ChatView` opens the Resources inspector at that row while
-  the snapshot holds it, a subagent that left the in-memory registry (host restart, older than the latest
-  twenty) falls back to the transcript dialog, and a command has no fallback (no action). A row whose
+  the client holds it (the snapshot's window or a page loaded past it), a subagent it does not hold falls
+  back to the transcript dialog, and a command has no fallback (no action). A row whose
   details carry a `delivery` marker leads with whether the agent received it ("Agent received") or will
   react with the user's next message (`appended`); expanding or opening it marks the result seen
   through `ChatActions.markResultSeen`. The rows never infer current resource authority. Never folded
@@ -909,7 +909,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   plus this catalog's untrusted aliases, so a worktree-only alias still shows — so in a chat it is the place
   to grant pi-level trust, and its `project.setTrust` carries `resources: true` exactly when it named the
   project's Pi resources), re-confirm-new, a per-group track/thumb **switch** + an **All-plugins** master, and per-skill
-  switches. Switch position plus semantic colour carries state without visible On/Off text; the switch target
+  switches. Each skill row reads as a name (card title) over its description clamped to two lines (full text
+  on hover), so a scan of similar "Use when…" lines still tells skills apart. Switch position plus semantic colour carries state without visible On/Off text; the switch target
   alone mutates, while unavailable controls keep the existing trust/parent explanation and acknowledgement
   behavior. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
@@ -953,6 +954,16 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `styles/COLOR.md`). **Compact mode**: below the chat column's `@md` container width (phones, narrow
   splits) labels and keycap hide and the send pill collapses to an icon, so the model pill keeps its room.
   Labels use `ui.action`.
+- **Anthropic extra-usage notice** (`ExtraUsageNotice.tsx`, props-driven). It warns that Claude Pro/Max
+  auth bills ThinkRail's usage per token as extra usage. Both variants link only claude.ai's usage page.
+  There is no "Details" link: no pi doc explains the billing (pi's providers.md has no Claude Pro/Max
+  section), and Anthropic's help pages cover usage limits, not the third-party rule. The notice's own
+  sentence is the explanation. The `chat` variant sits above
+  the composer while the runtime's `notice` is `anthropicExtraUsage`. It is non-blocking, ✕ dismisses it
+  for that chat, and **Don't warn again** (`ChatView`: `provider.disableWarning`, then
+  `silenceNotice`, toast on failure) turns off pi's own setting. The `signIn` variant is
+  informational, for the Connect dialog ([[submodule-web-panels]]). When the host warns, and how often,
+  is [[submodule-server-agent]]'s Billing warnings.
 - **Queued messages: the pending strip** (`QueueStrip.tsx`, props-driven: `queue` + `onEdit`/`onRemove`)
   — the web mirror of pi's interactive-mode pending-messages area. A **streaming send never renders an
   optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips
@@ -1502,14 +1513,16 @@ none — and there is no immediate per-server stop.
 
 **New results.** `useFreshResults` tells the user a background result exists before or regardless of
 when the agent receives it (user-settled, 2026-10: "Resources announces, the chat marks receipt").
-A finished command or background (`detached`) subagent is **new** until the user opens it — its dock
-row, the inspector selection once it has finished, or its chat result row
-(`ChatActions.markResultSeen`) — or sends the next message.
-`ChatView` passes the new ones to the dock (highlighted, with dismiss) and their count to the trigger.
+A finished command or background (`detached`) subagent is **new** until the user opens it — the
+inspector selection once it has finished, or its chat result row (`ChatActions.markResultSeen`) — or
+sends the next message. `ChatView` passes their count to the dock's finished line and the trigger, and
+lands that line's Open on the newest new result, else the newest finished one (`newestResourceId`).
 The seen set is client UI state under a host-qualified localStorage key per chat: a client's first
 visit baselines everything already finished as seen (an acknowledgement before that first
 authoritative snapshot keeps the baseline pending), later visits surface what finished while away,
-and every send resets the set to the current finished list, so it stays bounded by the snapshot.
+and every send resets the set to the current finished list, so it stays bounded by the snapshot. Only the
+snapshot's window of recent finished records (`groups.recentFinished`) can be new: history paged in later
+predates every visit that could have seen it, so it never lights up.
 
 The dependency edges are `ChatView`/`useChatResources` → `resources`, `store`, `transport`,
 `BackgroundResult` → `resources` (`ResultRow`, the run label as its `metaLead`), `tools/subagent`
@@ -1518,8 +1531,16 @@ child stays props-only and imports no sibling tool implementation; it receives t
 integration hook and passed into its read-only view; the module never loads xterm.
 
 The hook hydrates on mount/current welcome, subscribes to `session.resourcesChanged`, and coalesces
-invalidations behind one in-flight read. An invalidation during a read requires a fresh pass;
-[[submodule-web-store]] owns generation/revision-fenced snapshot installation and failure handling.
+invalidations behind one in-flight read. An invalidation during a read requires a fresh pass; a failed
+read reschedules itself on the `detailPolling` transient backoff (capped, unbounded attempts) while the
+view stays mounted on the same connection, and any success, push, manual Retry or unmount resets it;
+without it one refused read (#974: a full replay namespace) left the last snapshot claiming "Working" until a
+manual Retry. A permanent failure — `RESOURCE_UNAVAILABLE` (attach failed, worktree gone) or a snapshot for
+another chat — stays visible with Retry but schedules nothing, since re-reading it every 5 s would re-attach
+the session and spend the host's error-report budget for no recovery. [[submodule-web-store]] owns generation/revision-fenced snapshot installation and
+failure handling, and `selectChatResourcesStaleness` names why a snapshot is not authoritative
+(`disconnected` socket/old protocol, a retrying `refreshFailed`, a permanent `unavailable`, or an in-flight
+`refreshing`).
 Metadata remains current while the inspector is closed; the header count is numeric only for an
 authoritative snapshot and explicitly unknown otherwise. A welcome that proves the host predates the
 capability closes the inspector and its Stop-all confirmation, while an unknown protocol during
@@ -1528,7 +1549,13 @@ is the inspector's selection. The shared `detailPolling` loop handles command ou
 single-flight replacement snapshots, stopping on terminal/permanently unavailable results, and capped
 transient backoff with visibly retryable failures. Resource controls keep pending/error state scoped
 to their action and current connection; acknowledgement and detail-close focus semantics belong to
-[[submodule-web-chat-resources]]. No per-token subagent progress or tool-result rewriting is needed
+[[submodule-web-chat-resources]]. Older history is one more such control, `loadOlder(kind)` (keyed
+`history:<kind>`, offered only by a host at `RESOURCE_HISTORY_PROTOCOL_VERSION` whose snapshot carries
+`history`): it asks `session.resourceHistory` for the page before the oldest finished record the store
+holds and hands it to the store, which keeps it only if it still continues that chain. `ChatView` owns the
+inspector's per-kind expansion beside its selection and resets both on every open; it passes the current
+new results as the inspector's `newIds` and tells the command log whether its row was interrupted and
+whether the host keeps logs (`retained`). No per-token subagent progress or tool-result rewriting is needed
 for the header count.
 
 `backgroundCommandCompletion` is a fold-breaking historical row and a round opener, recognized by the

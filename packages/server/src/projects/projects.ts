@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { rmSync, statSync } from "node:fs";
+import { mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
@@ -25,7 +25,7 @@ function emit(project: Project): void {
 	publishProject?.(project);
 }
 
-function resolveProjectPath(path: string): string {
+export function resolveProjectPath(path: string): string {
 	const home =
 		(process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) || homedir();
 	const underHome =
@@ -86,7 +86,7 @@ export function getProjects(): Project[] {
 	return projects;
 }
 
-export function openProject(inputPath: string): Project {
+export function openProject(inputPath: string, displayName?: string): Project {
 	const path = resolveProjectPath(inputPath);
 	const root = gitToplevel(path);
 	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
@@ -109,9 +109,10 @@ export function openProject(inputPath: string): Project {
 		);
 
 	const taken = new Set(projects.map((p) => p.slug));
+	const label = displayName?.replace(/\s+/g, " ").trim();
 	const project: Project = {
 		id: randomUUID(),
-		name: basename(root),
+		name: label && label.length <= PROJECT_NAME_MAX_LENGTH ? label : basename(root),
 		path: root,
 		slug: uniqueSlug(slugify(basename(root)), taken),
 		lastOpened: Date.now(),
@@ -373,7 +374,43 @@ export function initProject(inputPath: string): Project {
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
 	if (status.kind === "repo") return openProject(path);
+	bootstrapRepository(path);
+	return openProject(path);
+}
 
+export function createProject(
+	parentPath: string,
+	requestedName: string,
+	displayName?: string,
+): Project {
+	const name = requestedName.trim();
+	if (!name || name === "." || name === ".." || /[/\\\0]/.test(name)) {
+		throw new Error(`Invalid project folder name: ${requestedName}`);
+	}
+	const parent = resolveProjectPath(parentPath);
+	mkdirSync(parent, { recursive: true });
+	const path = join(parent, name);
+	let created = false;
+	try {
+		if (!statSync(path).isDirectory()) throw new Error(`Not a folder: ${path}`);
+		if (readdirSync(path).length > 0)
+			throw new Error(`Folder already exists and isn't empty: ${path}`);
+	} catch (err) {
+		if (!(err instanceof Error && "code" in err && err.code === "ENOENT")) throw err;
+		mkdirSync(path);
+		created = true;
+	}
+	try {
+		bootstrapRepository(path);
+		return openProject(path, displayName);
+	} catch (err) {
+		rmSync(join(path, ".git"), { recursive: true, force: true });
+		if (created && readdirSync(path).length === 0) rmdirSync(path);
+		throw err;
+	}
+}
+
+function bootstrapRepository(path: string): void {
 	const init = git(path, ["init", "-b", "main"]);
 	if (!init.ok) throw new Error(`git init failed: ${path}`);
 	try {
@@ -390,6 +427,4 @@ export function initProject(inputPath: string): Project {
 		rmSync(join(path, ".git"), { recursive: true, force: true });
 		throw err;
 	}
-
-	return openProject(path);
 }

@@ -267,6 +267,55 @@ test("a child derives no more trust than its parent has loaded or the project re
 	expect(await applyPiResourceTrust([busy.workspaceId])).toEqual({ [busy.sessionId]: "reloaded" });
 });
 
+test("a revoke deferred on a busy parent keeps its project provider extension out of new children", async () => {
+	const hook = globalThis as typeof globalThis & {
+		__trustOwnerLoads?: number;
+		__trustOwnerFaux?: typeof faux;
+	};
+	hook.__trustOwnerFaux = faux;
+	const workspaceId = `trust-${++sequence}`;
+	const cwd = projectCwd();
+	mkdirSync(join(cwd, ".pi", "extensions"), { recursive: true });
+	writeFileSync(
+		join(cwd, ".pi", "extensions", "owner.ts"),
+		`export default function owner(pi) {
+	globalThis.__trustOwnerLoads = (globalThis.__trustOwnerLoads ?? 0) + 1;
+	const faux = globalThis.__trustOwnerFaux;
+	pi.registerProvider("trust-owned", { api: faux.api, apiKey: "test", baseUrl: "http://faux.local",
+		streamSimple: faux.streamSimple, models: [{ id: "trust-owned", name: "trust-owned", api: faux.api,
+		reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 100000, maxTokens: 4096 }] });
+}
+`,
+	);
+	trustedWorkspaces.add(workspaceId);
+	const { sessionId } = await createSession({ workspaceId, cwd });
+	const runtime = liveParentContext(sessionId)?.modelRuntime;
+	try {
+		expect(hook.__trustOwnerLoads).toBe(1);
+		expect(liveParentContext(sessionId)?.providerExtensionPaths?.("trust-owned")).toHaveLength(1);
+		faux.setResponses([fauxAssistantMessage("word ".repeat(60))]);
+		const turn = promptSession(sessionId, "Say many words.");
+		await waitFor(() => getSessionState(sessionId).execution === "running");
+		trustedWorkspaces.delete(workspaceId);
+		expect(await applyPiResourceTrust([workspaceId])).toEqual({ [sessionId]: "deferred" });
+		expect(liveParentContext(sessionId)?.providerExtensionPaths?.("trust-owned")).toEqual([]);
+		const child = await delegationServiceFor(workspaceId).createChild({
+			parent: sessionId,
+			visibility: "hidden",
+			info: { createdBy: "test" },
+			session: { model: { provider: "trust-owned", id: "trust-owned" } },
+		});
+		expect(hook.__trustOwnerLoads).toBe(1);
+		await child.dispose();
+		await turn;
+	} finally {
+		runtime?.unregisterProvider("trust-owned");
+		delete hook.__trustOwnerLoads;
+		delete hook.__trustOwnerFaux;
+	}
+});
+
 test("revoking trust stops the live subagents that were created under it before it reports", async () => {
 	const p = await projectSession();
 	trustedWorkspaces.add(p.workspaceId);

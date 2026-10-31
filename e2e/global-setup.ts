@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { FullConfig } from "@playwright/test";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { seedAgentDefinitionFixtures } from "./fixtures/agents";
-import { CONFIRMED_ANALYTICS_CONFIG, seedAnalyticsConsent } from "./fixtures/analyticsConsent";
+import { E2E_BASE_CONFIG, seedAnalyticsConsent } from "./fixtures/analyticsConsent";
 import {
 	CentralSetupError,
 	findGlobalCentralArtifact,
@@ -25,6 +25,7 @@ import {
 	E2E_GH_LOG,
 	E2E_GH_SCENARIO,
 	E2E_HOME_DIR,
+	E2E_INSTALLED_FONTS,
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
@@ -57,7 +58,7 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 		const globalCentralArtifact = centralMode ? findGlobalCentralArtifact() : undefined;
 		rmSync(E2E_DATA_DIR, { recursive: true, force: true });
 		mkdirSync(E2E_DATA_DIR, { recursive: true });
-		writeFileSync(join(E2E_DATA_DIR, "config.json"), JSON.stringify(CONFIRMED_ANALYTICS_CONFIG));
+		writeFileSync(join(E2E_DATA_DIR, "config.json"), JSON.stringify(E2E_BASE_CONFIG));
 		writeFileSync(
 			join(E2E_DATA_DIR, "feedback.json"),
 			JSON.stringify({ acceptedMessages: 0, nextInvitationAt: 10, dismissed: true }),
@@ -99,6 +100,7 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 		seedAgentDefinitionFixtures();
 		seedFixtureRepo();
 		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+		writeFileSync(E2E_INSTALLED_FONTS, "[]");
 	} catch (error) {
 		if (!centralMode) throw error;
 		removeTree(E2E_DATA_DIR);
@@ -112,6 +114,7 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 			.then(async (wire) => {
 				try {
 					await seedE2eDefaultModel(wire);
+					await wire.request("settings.update", { config: { onboardingDismissed: true } });
 				} finally {
 					wire.close();
 				}
@@ -122,7 +125,7 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 	return E2eWire.connect()
 		.then(async (wire) => {
 			try {
-				await wire.request("settings.update", { config: CONFIRMED_ANALYTICS_CONFIG });
+				await wire.request("settings.update", { config: E2E_BASE_CONFIG });
 				await waitForCentralTarget(wire);
 				removeCentralModeLocalSeeds();
 			} finally {

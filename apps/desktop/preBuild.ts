@@ -24,7 +24,6 @@ const bundledRuntimeKeys = {
 	factories: "factories",
 	skillsDir: "skillsDir",
 	trashHelpers: "trashHelpers",
-	webAccessFactory: "webAccessFactory",
 } as const satisfies { [Key in keyof BundledExtensions]-?: Key };
 
 function runBun(args: string[]): void {
@@ -116,8 +115,10 @@ mkdirSync(runtimeDir, { recursive: true });
 const sources = resolveRuntimeSources();
 const skillRoutes = new Set<string>();
 for (const skillRoot of sources.skillRoots) {
-	for (const source of listFiles(skillRoot).sort()) {
-		const route = relative(skillRoot, source).split(sep).join("/");
+	for (const source of listFiles(skillRoot.source).sort()) {
+		const route = [skillRoot.route, ...relative(skillRoot.source, source).split(sep)]
+			.filter(Boolean)
+			.join("/");
 		if (skillRoutes.has(route)) throw new Error(`duplicate staged skill route: ${route}`);
 		skillRoutes.add(route);
 		const destination = join(runtimeDir, "skills", route);
@@ -146,7 +147,6 @@ export async function startDesktopHost(options) {
       macos: options.runtimeDir + "/macos-trash",
       windows: options.runtimeDir + "/windows-trash.exe",
     },
-    ${bundledRuntimeKeys.webAccessFactory}: factory${sources.webAccessIndex},
   });
   const host = await bootHost({
     port: 0,

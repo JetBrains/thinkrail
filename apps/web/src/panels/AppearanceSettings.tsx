@@ -2,7 +2,6 @@ import {
 	RiArrowRightLine as ArrowRight,
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
-	RiArrowRightSLine as ChevronRight,
 	RiComputerLine as Device,
 	RiPaletteLine as Palette,
 } from "@remixicon/react";
@@ -23,8 +22,7 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useState, useSyncExternalStore } from "react";
-import { copyText } from "@/lib";
+import { useState, useSyncExternalStore } from "react";
 import {
 	type MarkdownOutlineSide,
 	markdownOutlineSideSnapshot,
@@ -44,10 +42,14 @@ import {
 	type ThemeDescriptor,
 	type ThemeResolution,
 } from "@/themes";
-import { errorText, getTransport } from "@/transport";
+import { errorText, getTransport, supportsFonts } from "@/transport";
+import { CustomFontsGroup } from "./CustomFontsSettings";
 import { CustomThemesGroup } from "./CustomThemesSettings";
+import { FontsGroup } from "./FontsSettings";
 import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
+import { SettingsDisclosure } from "./SettingsDisclosure";
+import { useFolderActions } from "./SettingsFolder";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
@@ -206,40 +208,6 @@ function ThemeList({
 	);
 }
 
-function Disclosure({
-	label,
-	summary,
-	expanded,
-	testId,
-	onToggle,
-	children,
-}: {
-	label: string;
-	summary: string;
-	expanded: boolean;
-	testId: string;
-	onToggle: () => void;
-	children: ReactNode;
-}) {
-	const Chevron = expanded ? ChevronDown : ChevronRight;
-	return (
-		<div className="flex flex-col border-border-muted border-b">
-			<button
-				type="button"
-				onClick={onToggle}
-				aria-expanded={expanded}
-				data-testid={testId}
-				className="flex w-full items-center gap-8 py-12 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				<span className="flex-1 tr-text-ui text-text-default">{label}</span>
-				<span className="truncate tr-text-metadata text-text-muted">{summary}</span>
-				<Chevron className="size-20 shrink-0 text-text-muted" aria-hidden="true" />
-			</button>
-			{expanded ? children : null}
-		</div>
-	);
-}
-
 export function AppearanceSettings() {
 	const t = useT();
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
@@ -255,6 +223,7 @@ export function AppearanceSettings() {
 	const appVersion = useAppStore((state) => state.hostAppVersion);
 
 	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
+	const fontsSupported = supportsFonts(protocolVersion);
 	const activeTheme = resolveTheme(theme);
 	const fixedResolution = resolveThemePreference({ theme, themeMode: "fixed" });
 	const pair = systemThemePair ?? deriveSystemThemePair(theme);
@@ -365,15 +334,7 @@ export function AppearanceSettings() {
 		if (next.light !== pair.light || next.dark !== pair.dark) update({ systemThemePair: next });
 	};
 
-	const copyThemesFolder = async (folder: string) => {
-		if (await copyText(folder)) toast.success(t("settings.language.folderCopied"));
-	};
-
-	const revealThemesFolder = () => {
-		getTransport()
-			.request("themes.reveal", {})
-			.catch((error) => toast.error(errorText(error, t("settings.language.openFolderFailed"))));
-	};
+	const themesFolderActions = useFolderActions("themes.reveal");
 
 	const fallbacks = systemMode
 		? [
@@ -442,7 +403,7 @@ export function AppearanceSettings() {
 					/>
 				) : null}
 				{systemMode ? (
-					<Disclosure
+					<SettingsDisclosure
 						label={t("settings.appearance.themePair")}
 						summary={`${themeLabel(t, lightResolution.theme)} / ${themeLabel(t, darkResolution.theme)}`}
 						expanded={expanded}
@@ -475,9 +436,9 @@ export function AppearanceSettings() {
 								}
 							/>
 						</div>
-					</Disclosure>
+					</SettingsDisclosure>
 				) : (
-					<Disclosure
+					<SettingsDisclosure
 						label={t("settings.appearance.theme")}
 						summary={themeLabel(t, activeTheme)}
 						expanded={expanded}
@@ -492,7 +453,7 @@ export function AppearanceSettings() {
 								onSelect={selectFixed}
 							/>
 						</div>
-					</Disclosure>
+					</SettingsDisclosure>
 				)}
 				<SettingsRow
 					label={t("settings.appearance.contrastLevel")}
@@ -509,12 +470,13 @@ export function AppearanceSettings() {
 					}
 				/>
 			</SettingsGroup>
+			{fontsSupported ? <FontsGroup /> : null}
+			{fontsSupported ? <CustomFontsGroup /> : null}
 			<CustomThemesGroup
 				snapshot={userThemes}
 				issues={userThemeIssues}
 				appVersion={appVersion}
-				onCopyFolder={(folder) => void copyThemesFolder(folder)}
-				onRevealFolder={revealThemesFolder}
+				{...themesFolderActions}
 			/>
 			<SettingsGroup title={t("settings.appearance.editorGroup")}>
 				<LineWidthControl kind="file" />

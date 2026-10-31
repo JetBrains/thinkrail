@@ -40,10 +40,15 @@ ourselves and never surface a credential value over the wire.
     attempt drop the shared cache because each can make the observation stale. An out-of-band change inside
     the TTL window is deliberately served stale until the next read past it. The probe never runs mid-action
     or while a rebuild is outstanding, so it cannot delay a Connect or a candidate cutover.
+    The report also carries `warnings`: pi's *global* `warnings.*` switches from `agent`'s
+    `globalProviderWarnings()`. Today the only one is `anthropicExtraUsage`, which gates the sign-in
+    dialog's notice.
     Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice, unit-tested with
     fixture data; the kind/detail mapping itself is `agent`'s `describeProviderAuth`, shared with the
     catalog's per-model `WireModel.auth` projection so a provider row and a picker row never disagree. Its runtime reads are restricted to the generation's provider-id allowlist captured before
-    the opaque Central extension loads (after invariant host registrations): providers Central *introduces*
+    the opaque Central extension loads (after invariant host registrations), plus any `custom-*` provider the
+    runtime knows now that is not opaque (`statusProviderIds`), so a custom server saved after the
+    generation started counts as connected without a host restart: providers Central *introduces*
     never become rows or cross the wire. A built-in Central *replaces* (`anthropic`, `openai`, `google-vertex`
     in the real artifact) stays a row — the user must be able to see which providers reach them through
     JetBrains AI — and is reported as `kind: "central"` with no `detail`, decided purely by the id's membership
@@ -65,6 +70,35 @@ ourselves and never surface a credential value over the wire.
       keyed auth report `false` (Sign-out would no-op, so the strip hides it). Central's own lifecycle is only
       the dedicated closed `jbcentral` status, never a row; the `central` kind on a replaced built-in is an
       identity fact, never inferred from model URLs or configuration.
+  - `detectAccounts` — `provider.detect`'s onboarding hint: which **other local tools** are already signed in
+    to a subscription a pi provider can sign in with, plus a plan label when the tool records one. Sources and
+    their signed-in predicates (each verified against the tool's own code; relocation env vars honoured):
+    Claude Code → `anthropic` (`CLAUDE_CODE_OAUTH_TOKEN`; else a `.credentials.json` `claudeAiOauth` with a
+    refresh token and the `user:inference` scope; else, for the macOS Keychain sign-in, `oauthAccount` in the
+    global config with a subscription `billingType` — a bare `oauthAccount` is also written by a Console
+    API-key login, and `/logout` removes it; a lapsed or revoked Keychain token that was never logged out
+    still reads as signed in, the one accepted false positive, since the Keychain itself is off limits); Codex → `openai`, falling back to legacy `openai-codex`
+    (resolved `auth_mode` `chatgpt` + a refresh token — Codex's own legacy-mode resolution when the field is
+    absent; keyring storage leaves no file and is not seen); Copilot editor plugins and the Copilot CLI →
+    `github-copilot` (`github-copilot/{apps,hosts}.json` under an absolute `XDG_CONFIG_HOME`, else
+    an absolute `LOCALAPPDATA` (else `~/AppData/Local`) on Windows, else `~/.config`; the CLI's commented `config.json` `loggedInUsers`); Kimi CLI
+    → `kimi-coding` (`credentials/kimi-code.json` with a refresh token); Grok Build → `xai` (an `auth.json`
+    scope other than the API-key one with a refresh token or an unexpired session). An expired access token
+    with a live refresh token still counts. Gemini CLI and Meta Muse are out because pi has no matching OAuth
+    provider or no verified file. Each signal names candidate providers; the first one the current runtime can
+    OAuth-sign-in to is reported, and a provider is reported once (first source wins). The plan label is
+    reported only when it is a known plan name (`plus`, `pro`, `max`, `team`, `business`, `enterprise`, `edu`,
+    lower-cased) — anything else, `free` included, drops the badge but not the sign-in. Files are read only
+    when regular and under 1 MiB (32 MiB for Claude Code's global config, which carries per-project history),
+    BOM-tolerant; each source gets 1.5 s, so a hung mount reads as not signed in instead of stalling first run.
+    The cap only stops waiting, so the I/O itself is bounded instead: the argument-less (host) call is
+    single-flight, and a read still pending for a path is reused until it settles, so repeated detection over
+    a hung mount never stacks file-system operations that would starve the host's shared fs thread pool;
+    anything unreadable counts as not signed in. Never pi's
+    `auth.json` (pi already reports that as configured) and never an OS keychain — a Keychain read raises a
+    system access prompt. Detection **suggests, never borrows**: the user still signs in through pi's own
+    flow, because reusing another tool's rotating refresh token would sign one of the two out. No credential
+    value leaves the function; an API-key-only setup is not a sign-in.
   - `providerLogin` — the in-app credential **writes**, session-less (a login runs on the Welcome screen
     before any session exists), so a `loginId`-keyed sibling of `agent/webUiContext`:
     - `startLogin(providerId, type = "oauth")` → `{ loginId }` **synchronously**; `runtime.login(id,
@@ -81,12 +115,22 @@ ourselves and never surface a credential value over the wire.
       `signal` abort (pi cancelling the loser of its browser-vs-paste race) settles
       the parked input — identity-guarded so a late abort can't clear a newer parked prompt. pi persists
       the credential **and refreshes availability inside `login()`**, so success just pushes `success`;
-      on throw, `error`.
+      on throw, `error`. A successful `anthropic` login then calls `agent`'s `recheckAnthropicExtraUsage`,
+      so live chats on Anthropic models get the extra-usage notice ([[submodule-server-agent]] Billing
+      warnings).
     - `resolveLogin({ loginId, value })` — the browser's reply resolves the parked interaction.
     - `cancelLogin(loginId)` — aborts the signal **and** settles the parked input with `undefined` (which
       makes the awaiting `prompt` throw), because the signal alone won't stop a provider's
       browser/callback-server wait; `cancelAllLogins()` sweeps them on host `stop()`.
-    - `logoutProvider(id)` — `runtime.logout` (refreshes internally). (The old `setProviderApiKey` — a
+    - **A new `startLogin` supersedes** any unfinished login for the same provider: pi runs one
+      credential operation per provider at a time, so a login abandoned at a prompt (tab closed or
+      reloaded, never cancelled) would otherwise park every later attempt behind it on "Working…" until
+      the host restarts. The superseded login is cancelled, reported through the optional
+      `onSuperseded(loginId)` callback (the host drops its analytics entry), and gets a terminal `error`
+      frame, so another client still showing it stops waiting; the web store never opens a dialog from a
+      terminal frame for a login it does not hold.
+    - `logoutProvider(id)` — `runtime.logout` (refreshes internally), then the `setLogoutPublisher` seam
+      (a no-op by default) so the host can broadcast the change. (The old `setProviderApiKey` — a
       canned interaction answering exactly one secret prompt — is gone with `provider.setApiKey`: the
       dialog flow subsumes it and also serves multi-prompt providers.)
     - `setLoginPublisher(fn)` — the push seam (defaults to a no-op). Successful completion also supplies
@@ -136,8 +180,9 @@ ourselves and never surface a credential value over the wire.
     action results use only the closed contracts taxonomy—never child output, extension contents, diagnostics,
     proxy data, raw models, or arbitrary thrown messages.
 - **Public surface (barrel):** `getProviderStatus`, `buildProviderReport` (+ `ProviderStatusSources`);
+  `detectAccounts`;
   `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `logoutProvider`,
-  `setLoginPublisher`; `initializeJbcentralRuntime`, `stopJbcentralRuntime`, `getJbcentralStatus`,
+  `setLoginPublisher`, `setLogoutPublisher`; `initializeJbcentralRuntime`, `stopJbcentralRuntime`, `getJbcentralStatus`,
   `getJbcentralQuota`, `connectJbcentral`, `disconnectJbcentral`, `startProxyJbcentral`,
   `updateJbcentral`, `jbcentralLogin`, the successful-action /
   runtime-changed publisher seams, and the explicit `resetJbcentralStateForTests` lifecycle seam used by

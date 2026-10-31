@@ -14,6 +14,7 @@ import {
 	logoutProvider,
 	resolveLogin,
 	setLoginPublisher,
+	setLogoutPublisher,
 	startLogin,
 } from "./providerLogin";
 
@@ -73,6 +74,7 @@ function install(loginImpl: LoginImpl): Harness {
 afterEach(() => {
 	cancelAllLogins();
 	setLoginPublisher(() => {});
+	setLogoutPublisher(() => {});
 	configurePiRuntime(null);
 });
 
@@ -332,6 +334,37 @@ describe("cancelLogin", () => {
 		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt"]);
 	});
 
+	test("a new login for the same provider supersedes an abandoned one with a terminal frame", async () => {
+		const signals: (AbortSignal | undefined)[] = [];
+		const h = install(async (_id, i) => {
+			signals.push(i.signal);
+			await i.prompt({ type: "select", message: "method", options: [{ id: "a", label: "A" }] });
+		});
+		const superseded: string[] = [];
+		const first = startLogin("anthropic");
+		const other = startLogin("openai-codex");
+		await tick();
+		const second = startLogin("anthropic", "oauth", (id) => superseded.push(id));
+		await tick();
+
+		expect(signals.map((s) => s?.aborted)).toEqual([true, false, false]);
+		expect(superseded).toEqual([first.loginId]);
+		expect(h.frames.map((f) => [f.loginId, f.frame.kind])).toEqual([
+			[first.loginId, "select"],
+			[other.loginId, "select"],
+			[first.loginId, "error"],
+			[second.loginId, "select"],
+		]);
+		resolveLogin({ loginId: first.loginId, value: "a" });
+		resolveLogin({ loginId: second.loginId, value: "a" });
+		await tick();
+		expect(h.frames.at(-1)).toEqual({
+			loginId: second.loginId,
+			providerId: "anthropic",
+			frame: { kind: "success" },
+		});
+	});
+
 	test("cancelAllLogins settles every in-flight login", async () => {
 		const signals: (AbortSignal | undefined)[] = [];
 		install(async (_id, i) => {
@@ -386,9 +419,12 @@ describe("api-key login / logoutProvider", () => {
 		expect(h.loginCalls()).toEqual([["anthropic", "oauth"]]);
 	});
 
-	test("logoutProvider removes the credential through the runtime", async () => {
+	test("logoutProvider removes the credential through the runtime, then announces the change", async () => {
 		const h = install(async () => {});
+		const announced: string[][] = [];
+		setLogoutPublisher(() => announced.push([...h.logoutCalls()]));
 		await logoutProvider("anthropic");
 		expect(h.logoutCalls()).toEqual(["anthropic"]);
+		expect(announced).toEqual([["anthropic"]]);
 	});
 });

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ExtensionsCatalog } from "./ExtensionsSettings";
+import { nextDisabledPackages } from "./usePiPackages";
 
 const VISUALIZE: ExtensionCatalogEntry = {
 	name: "visualize",
@@ -52,4 +53,21 @@ test("loading and failure render no rows", () => {
 	const failed = render("failed");
 	expect(failed).toContain('data-testid="extensions-failed"');
 	expect(failed).not.toContain('role="switch"');
+});
+
+test("switching a package on clears every key that covers it; off adds only its own", () => {
+	const tools = {
+		identity: "local:/repo/tools",
+		switchKeys: ["local:/repo/tools", "local:project:tools"],
+	};
+	expect(nextDisabledPackages(["local:project:tools", "npm:other"], tools, true)).toEqual([
+		"npm:other",
+	]);
+	expect(nextDisabledPackages(["npm:other"], tools, false)).toEqual([
+		"npm:other",
+		"local:/repo/tools",
+	]);
+	expect(nextDisabledPackages(["local:project:tools"], tools, false)).toEqual([
+		"local:/repo/tools",
+	]);
 });

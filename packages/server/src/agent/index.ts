@@ -1,5 +1,7 @@
 export * from "./agentSessionManager";
+export { disableAnthropicExtraUsageWarning, globalProviderWarnings } from "./anthropicExtraUsage";
 export {
+	getResourceHistoryPage,
 	getSessionResources,
 	readBackgroundCommandOutput,
 	setSessionResourcesPublisher,
@@ -7,6 +9,12 @@ export {
 	stopBackgroundCommand,
 	stopSubagent,
 } from "./chatResources";
+export {
+	listCustomEndpoints,
+	probeCustomEndpoint,
+	removeCustomEndpoint,
+	saveCustomEndpoint,
+} from "./customEndpoints";
 export {
 	type ReviewSubagentRun,
 	readChildTranscript,
@@ -17,11 +25,13 @@ export {
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
+	bumpPackageSwitchGeneration,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
 	registerBundledRuntime,
 	setDisabledExtensionsResolver,
+	setDisabledPackagesResolver,
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,
@@ -55,11 +65,28 @@ export {
 export { setModelListingPublisher } from "./modelAvailability";
 export {
 	listModelContextSettings,
-	setModelContextPublisher,
 	setModelContextWindow,
 } from "./modelContext";
 export { preferredDefaultModel } from "./modelDefaults";
+export { setModelsFilePublisher } from "./modelsFile";
 export * from "./oneshot";
+export {
+	handlePiSettingsFileChanged,
+	handleProjectPiSettingsChanged,
+	type PiPackagesTarget,
+	piPackagesCatalog,
+	piPackagesCheckUpdates,
+	piPackagesInstall,
+	piPackagesRemove,
+	piPackagesRevealTarget,
+	piPackagesSetResourceEnabled,
+	piPackagesUpdate,
+	primeProjectPiSettings,
+	primeUserPiSettings,
+	publishPiPackagesChanged,
+	refreshPiPackages,
+	setPiPackagesPublisher,
+} from "./piPackages";
 export {
 	activatePiRuntimeGeneration,
 	configurePiRuntime,
