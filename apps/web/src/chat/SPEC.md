@@ -771,6 +771,13 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   Newest-first header deltas preserve a detached historical anchor; viewport resize reevaluates the live
   percentages without moving a below-Trigger response. Initial/order placement is direct, and reduced motion
   makes every programmatic destination immediate while preserving identical state and final geometry.
+  A destination is also reached at the position the engine actually produced for it: WebKit (the macOS
+  desktop WKWebView) truncates fractional scroll writes where Chromium rounds, so a write can land almost a
+  pixel short of `GEOMETRY_EPSILON`. That evidence holds only while the requested destination, the achieved
+  position, and the scroll range are all unchanged. An instant follow step does not re-evaluate
+  synchronously; the next content change does. Judging convergence by distance alone once made a
+  reduced-motion follow re-enter itself until the stack overflowed (#1046) and kept an animated follow
+  easing forever.
 - **No hidden motion owners** — nothing but the controller and the reader may move the viewport. The
   transcript scroller opts out of browser scroll anchoring (`overflow-anchor: none`): Virtuoso excludes its
   items, but Chromium otherwise anchors to the header/footer and counter-scrolls a reader while the response
