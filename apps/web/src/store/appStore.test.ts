@@ -413,6 +413,19 @@ test("a host-fired USER message folds into the transcript; the composer's optimi
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
 });
 
+test("sending a message works where crypto.randomUUID is unavailable (plain-http origin)", () => {
+	const original = crypto.randomUUID;
+	Object.defineProperty(crypto, "randomUUID", { value: undefined, configurable: true });
+	try {
+		const store = useAppStore.getState();
+		store.openChatSession("ws1", "insecure", null, "medium");
+		store.appendUserMessage("insecure", "hello");
+		expect(rt("insecure").turns.filter((t) => t.kind === "user")).toHaveLength(1);
+	} finally {
+		Object.defineProperty(crypto, "randomUUID", { value: original, configurable: true });
+	}
+});
+
 test("a matching user echo adopts the host clock while retaining optimistic identity and attachment labels", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "clock", null, "medium");

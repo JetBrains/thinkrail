@@ -88,6 +88,7 @@ import {
 	matchesSkillInvocationCommand,
 	parseSkillInvocation,
 	randomId,
+	randomUuid,
 	readLayoutNavigationClock,
 	shallowEqualArrays,
 	tupleKey,
@@ -585,7 +586,7 @@ function settleCompactionTurn(
 ): ChatTurn[] {
 	const outcome = compactionOutcome(event);
 	const index = turns.findLastIndex((t) => t.kind === "compaction" && t.status === "running");
-	if (index < 0) return [...turns, { kind: "compaction", id: crypto.randomUUID(), ...outcome }];
+	if (index < 0) return [...turns, { kind: "compaction", id: randomUuid(), ...outcome }];
 	return turns.map((t, i) => (i === index ? { kind: "compaction", id: t.id, ...outcome } : t));
 }
 
@@ -630,7 +631,7 @@ function appendRetryTurn(
 			...rt.turns.filter((t) => !(t.kind === "retry" && t.source === source)),
 			{
 				kind: "retry",
-				id: crypto.randomUUID(),
+				id: randomUuid(),
 				source,
 				attempt: event.attempt,
 				maxAttempts: event.maxAttempts,
@@ -679,7 +680,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			if (event.message.role === "assistant")
 				return {
 					...rt,
-					currentAssistantId: crypto.randomUUID(),
+					currentAssistantId: randomUuid(),
 					attemptAssistantId: null,
 					turns: clearTurnStreaming(rt.turns),
 				};
@@ -703,7 +704,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				}
 				return {
 					...rt,
-					turns: [...rt.turns, { kind: "user", id: crypto.randomUUID(), message }],
+					turns: [...rt.turns, { kind: "user", id: randomUuid(), message }],
 				};
 			}
 			return rt;
@@ -719,7 +720,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 							? ame.error
 							: null;
 			if (!snapshot) return rt;
-			const id = rt.currentAssistantId ?? crypto.randomUUID();
+			const id = rt.currentAssistantId ?? randomUuid();
 			const streaming = !(ame.type === "done" || ame.type === "error");
 			const turn: ChatTurn = { kind: "assistant", id, message: snapshot, streaming };
 			return {
@@ -744,7 +745,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "backgroundCommandCompletion",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							timestamp: event.message.timestamp,
 						},
@@ -758,7 +759,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "subagentCompletion",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							text: customMessageText(event.message.content),
 							timestamp: event.message.timestamp,
@@ -773,7 +774,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "reviewFix",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							text: customMessageText(event.message.content),
 							timestamp: event.message.timestamp,
@@ -824,12 +825,12 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			const closer: ChatTurn = failure
 				? {
 						kind: "error",
-						id: crypto.randomUUID(),
+						id: randomUuid(),
 						text: failure.message,
 						failure: failure.failure,
 						recovery: "try-again",
 					}
-				: { kind: "system", id: crypto.randomUUID(), endedAt: Date.now() };
+				: { kind: "system", id: randomUuid(), endedAt: Date.now() };
 			return {
 				...rt,
 				turns: insertRoundCloser(
@@ -847,7 +848,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "compaction_start":
 			return {
 				...rt,
-				turns: [...rt.turns, { kind: "compaction", id: crypto.randomUUID(), status: "running" }],
+				turns: [...rt.turns, { kind: "compaction", id: randomUuid(), status: "running" }],
 			};
 		case "compaction_end": {
 			const settled = settleCompactionTurn(rt.turns, event);
@@ -912,7 +913,7 @@ function reduceExtUi(
 			const kind = request.level === "error" ? "error" : "system";
 			return {
 				...rt,
-				turns: [...rt.turns, { kind, id: crypto.randomUUID(), text: request.message }],
+				turns: [...rt.turns, { kind, id: randomUuid(), text: request.message }],
 			};
 		}
 		case "setStatus": {
@@ -4212,7 +4213,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...consumeFailureRecoveries(rt.turns),
 					{
 						kind: "user",
-						id: crypto.randomUUID(),
+						id: randomUuid(),
 						message: {
 							role: "user",
 							content:
@@ -4235,7 +4236,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => ({
 				...rt,
-				turns: [...rt.turns, { kind: "error", id: crypto.randomUUID(), text }],
+				turns: [...rt.turns, { kind: "error", id: randomUuid(), text }],
 			})),
 		),
 	appendCompactionFailureUnlessObserved: (sessionId, observedTurnIds, detail) =>
@@ -4250,7 +4251,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 							...rt,
 							turns: [
 								...rt.turns,
-								{ kind: "compaction", id: crypto.randomUUID(), status: "failed", detail },
+								{ kind: "compaction", id: randomUuid(), status: "failed", detail },
 							],
 						};
 			}),
@@ -4615,7 +4616,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				t.durationMs === toast.durationMs,
 		);
 		if (twin) return twin.id;
-		const id = crypto.randomUUID();
+		const id = randomUuid();
 		set((s) => {
 			const next = [...s.toasts, { ...toast, id }];
 			let actionlessToDrop = Math.max(0, next.length - MAX_TOASTS);
