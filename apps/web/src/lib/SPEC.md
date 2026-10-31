@@ -104,7 +104,8 @@ not this module; the theme-aware highlighter remains app-local.
   **`nullProto<T>(...sources)`** builds every prototype-free dictionary (id-keyed maps whose keys may be
   `__proto__` or `constructor`): it merges sources onto `Object.create(null)` and type-checks each source
   against `T`, so no call site casts an `any` result. TS widens a union-typed computed key (`{ [area]: v }`)
-  to a string index that skips the check, so such writes assign onto the returned copy instead.
+  to a string index that skips the check, so such writes assign onto the returned copy instead. The
+  `biome-plugins/nullProto.grit` lint rule rejects `Object.create(null)` anywhere else in `apps/web/src`.
 - **Public surface (barrel):** `cssColorToHex`, `isPhoneViewport`,
   `usePhoneViewport`, `normalizePath`, `isAbsolutePath`, `fileName`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
