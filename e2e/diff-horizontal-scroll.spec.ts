@@ -193,17 +193,18 @@ test("the viewport bottom scrollbar drags both diff panes and follows code scrol
 	await expect(bar).toBeHidden();
 });
 
-test("stacked review repositions the scrollbar when the preceding file expands", async ({ page }) => {
+test("stacked review repositions the scrollbar when the preceding file expands", async ({
+	page,
+}) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 	writeFileSync(join(worktree, "aaa-short.ts"), 'export const short = "changed";\n');
 	writeFileSync(
 		join(worktree, "bbb-tall.ts"),
-		Array.from(
-			{ length: 150 },
-			(_, i) => `export const row${i} = "${"long".repeat(100)}";`,
-		).join("\n"),
+		Array.from({ length: 150 }, (_, i) => `export const row${i} = "${"long".repeat(100)}";`).join(
+			"\n",
+		),
 	);
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
