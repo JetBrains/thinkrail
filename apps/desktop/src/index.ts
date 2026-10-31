@@ -514,7 +514,7 @@ async function start(): Promise<void> {
 	const navigationProbeOrigin = navigationProbePath
 		? process.env.THINKRAIL_DESKTOP_NAVIGATION_PROBE_ORIGIN
 		: undefined;
-	const navigationProbe = { opened: [] as string[] };
+	const navigationProbe = { opened: [] as string[], verdicts: [] as string[] };
 	const removeNavigationListeners = installExternalNavigation(
 		Electrobun.events,
 		mainWindow.webview.id,
@@ -529,6 +529,15 @@ async function start(): Promise<void> {
 		},
 	);
 	mainWindow.on("close", removeNavigationListeners);
+	if (navigationProbePath) {
+		const willNavigate = `will-navigate-${mainWindow.webview.id}`;
+		const recordVerdict = (event: { data: { detail: unknown } }) => {
+			navigationProbe.verdicts.push(String(event.data.detail).slice(0, 2_048));
+			writeReady(navigationProbePath, navigationProbe);
+		};
+		Electrobun.events.on(willNavigate, recordVerdict);
+		mainWindow.on("close", () => Electrobun.events.off(willNavigate, recordVerdict));
+	}
 	const releaseStartupSplash = startupSplash
 		? handOffStartupSplash(startupSplash, mainWindow)
 		: undefined;

@@ -144,8 +144,9 @@ async function verifyExternalNavigation(
 	exited: Promise<number>,
 	exitError: (code: number) => Error,
 ): Promise<void> {
-	const opened = () =>
-		(readSettledJson(probePath) as { opened?: string[] } | undefined)?.opened ?? [];
+	const probe = () =>
+		readSettledJson(probePath) as { opened?: string[]; verdicts?: string[] } | undefined;
+	const opened = () => probe()?.opened ?? [];
 	for (const command of EXTERNAL_NAVIGATION_PROBES) {
 		const url = `${server.origin}/${command}`;
 		writeFileSync(controlPath, command);
@@ -161,7 +162,10 @@ async function verifyExternalNavigation(
 			throw new Error(`native external navigation (${command}) opened ${url} ${count} times`);
 		}
 		if (server.requests.includes(`/${command}`)) {
-			throw new Error(`native window left its origin for ${command}`);
+			const verdicts = (probe()?.verdicts ?? []).filter((detail) => detail.includes(`/${command}`));
+			throw new Error(
+				`native window left its origin for ${command} (will-navigate: ${verdicts.join(", ") || "none"})`,
+			);
 		}
 	}
 	writeFileSync(controlPath, "navigate-srcdoc");
