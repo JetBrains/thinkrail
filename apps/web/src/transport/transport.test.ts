@@ -177,7 +177,7 @@ describe("WsTransport reconnect delivery", () => {
 		const replacement = TestWebSocket.instances[1];
 		expect(replacement).toBeDefined();
 		replacement?.open();
-		expect(replacement?.sent).toEqual([JSON.stringify({ resume: [id] }), originalFrame]);
+		expect(replacement?.sent).toEqual([JSON.stringify({ resume: [id] }), originalFrame ?? ""]);
 
 		replacement?.message(JSON.stringify({ id, ok: true, result: [] }));
 		expect(await result).toEqual([]);
@@ -254,7 +254,7 @@ describe("WsTransport response receipts", () => {
 		replacement?.open();
 		const queuedId = requestsIn(replacement?.sent ?? [])[1]?.id;
 
-		expect(resumesIn(replacement?.sent ?? [])).toEqual([[stillOpenId, queuedId ?? ""]]);
+		expect(resumesIn(replacement?.sent ?? [])).toEqual([[stillOpenId ?? "", queuedId ?? ""]]);
 		expect(resumesIn(replacement?.sent ?? [])[0]).not.toContain(resolvedId);
 
 		replacement?.message(JSON.stringify({ id: stillOpenId, ok: true, result: [] }));

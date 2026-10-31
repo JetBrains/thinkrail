@@ -42,7 +42,9 @@ test("a failed load is not retried by renders, only by the next preload", async 
 	const Preloaded = preloadedLazy(() => {
 		calls += 1;
 		return calls === 1
-			? Promise.reject(new Error("Failed to fetch dynamically imported module"))
+			? Promise.reject<{ default: typeof Greeting }>(
+					new Error("Failed to fetch dynamically imported module"),
+				)
 			: Promise.resolve({ default: Greeting });
 	});
 	await Preloaded.preload().catch(() => undefined);

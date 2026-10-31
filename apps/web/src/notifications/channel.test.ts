@@ -44,11 +44,12 @@ describe("desktop notification channel", () => {
 	test("omits subtitle when the spec has none (aggregate)", () => {
 		const { shown, channel } = harness();
 		channel.show(
-			singleSpec({
-				subtitle: undefined,
+			{
+				title: "ThinkRail",
 				body: "2 worktrees need your attention",
-				target: { kind: "app" },
-			}),
+				tag: "thinkrail-attention",
+				target: { kind: "switcher" },
+			},
 			() => {},
 		);
 		expect(shown[0]).toEqual({

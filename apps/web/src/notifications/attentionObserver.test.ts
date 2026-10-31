@@ -12,6 +12,7 @@ function state(overrides: Partial<SessionState> = {}): SessionState {
 		completion: null,
 		completionUnread: false,
 		queuedCount: 0,
+		backgroundWork: false,
 		...overrides,
 	};
 }
