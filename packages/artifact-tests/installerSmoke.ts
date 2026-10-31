@@ -1,13 +1,20 @@
 #!/usr/bin/env bun
 
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { locateWindowsSetupExecutable } from "./src/artifact";
 import { hostEnvironment } from "./src/artifactProbes";
+import { readSettledJson, waitForDocument } from "./src/documents";
 import { assertInstallerSmokeEnvironment } from "./src/installerEnvironment";
-import { pollUntil, terminateProcess, within } from "./src/lifecycle";
+import {
+	pollUntil,
+	reapProcess,
+	runWithCleanup,
+	windowsProcessesUnder,
+	within,
+} from "./src/lifecycle";
 
 assertInstallerSmokeEnvironment(process.platform, process.env);
 
@@ -46,8 +53,7 @@ const isolationEnv = hostEnvironment({
 	THINKRAIL_DESKTOP_HIDDEN: "1",
 });
 let installerProcess: ReturnType<typeof Bun.spawn> | undefined;
-let appPid: number | undefined;
-let launcherPid: number | undefined;
+let appStopped = false;
 
 function run(command: string[]): void {
 	const result = Bun.spawnSync(command, {
@@ -101,80 +107,142 @@ function processAlive(pid: number): boolean {
 	}
 }
 
-async function waitForReady(exited: Promise<number>): Promise<void> {
-	await pollUntil(() => existsSync(readyPath), {
-		timeoutMs: 60_000,
-		what: "installed desktop ready",
-		exited,
-		exitError: (code) =>
-			code === 0 ? undefined : new Error(`desktop installer launcher exited ${code}`),
-	});
-}
-
 function validPid(value: unknown): value is number {
 	return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
-try {
-	installerProcess = Bun.spawn([installerExecutable()], {
-		cwd: root,
-		env: isolationEnv,
-		stdout: "inherit",
-		stderr: "inherit",
-	});
-	await waitForReady(installerProcess.exited);
-	const ready = JSON.parse(readFileSync(readyPath, "utf8")) as {
-		origin?: unknown;
-		pid?: unknown;
-		launcherPid?: unknown;
-		mode?: unknown;
-	};
-	appPid = validPid(ready.pid) ? ready.pid : undefined;
-	launcherPid = validPid(ready.launcherPid) ? ready.launcherPid : undefined;
-	if (
-		typeof ready.origin !== "string" ||
-		appPid === undefined ||
-		launcherPid === undefined ||
-		ready.mode !== "host"
-	) {
-		throw new Error("installed desktop wrote an invalid ready document");
-	}
-	const pid = appPid;
-	const nativePid = launcherPid;
-	const launcher =
-		process.platform === "darwin"
-			? join(root, "ThinkRail.app", "Contents", "MacOS", "launcher")
-			: join(
-					root,
-					process.platform === "win32" ? "local" : "xdg-data",
-					"ai.thinkrail.app",
-					channel,
-					"app",
-					"bin",
-					process.platform === "win32" ? "launcher.exe" : "launcher",
-				);
-	if (!existsSync(launcher)) throw new Error(`installed desktop launcher not found at ${launcher}`);
-	const health = await within(fetch(`${ready.origin}/health`), 10_000, "installed desktop health");
-	if (!health.ok || (await health.text()) !== "ok")
-		throw new Error("installed desktop health failed");
-	writeFileSync(controlPath, "stop");
-	await pollUntil(() => !processAlive(pid) && !processAlive(nativePid), {
-		timeoutMs: 20_000,
-		what: "installed desktop shutdown",
-		exited: installerProcess.exited,
-		exitError: (code) =>
-			code === 0 ? undefined : new Error(`desktop installer launcher exited ${code}`),
-	});
-	appPid = undefined;
-	launcherPid = undefined;
-	const installerExit = await within(installerProcess.exited, 20_000, "installer exit");
-	if (installerExit !== 0) throw new Error(`desktop installer exited ${installerExit}`);
-	console.log(`installer smoke OK: ${artifact}`);
-} catch (error) {
-	if (installerProcess) {
-		await terminateProcess(installerProcess, error, { knownPids: [appPid, launcherPid] });
-	}
-	throw error;
-} finally {
-	removeTree(root);
+interface InstalledReady {
+	readonly origin: string;
+	readonly pid: number;
+	readonly launcherPid: number;
 }
+
+function acceptReady(document: unknown): InstalledReady | undefined {
+	if (typeof document !== "object" || document === null) return undefined;
+	const { origin, pid, launcherPid, mode } = document as Record<string, unknown>;
+	if (typeof origin !== "string" || !validPid(pid) || !validPid(launcherPid) || mode !== "host") {
+		return undefined;
+	}
+	return { origin, pid, launcherPid };
+}
+
+function readyDocumentPids(): number[] {
+	const document = readSettledJson(readyPath);
+	if (typeof document !== "object" || document === null) return [];
+	const { pid, launcherPid } = document as Record<string, unknown>;
+	return [pid, launcherPid].filter(validPid);
+}
+
+function message(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+async function step<T>(name: string, run: () => T | Promise<T>): Promise<T> {
+	try {
+		return await run();
+	} catch (error) {
+		throw new Error(`installer smoke step "${name}" failed: ${message(error)}`, { cause: error });
+	}
+}
+
+function installerExitError(code: number): Error | undefined {
+	return code === 0 ? undefined : new Error(`desktop installer launcher exited ${code}`);
+}
+
+function installedLauncherPath(): string {
+	return process.platform === "darwin"
+		? join(root, "ThinkRail.app", "Contents", "MacOS", "launcher")
+		: join(
+				root,
+				process.platform === "win32" ? "local" : "xdg-data",
+				"ai.thinkrail.app",
+				channel,
+				"app",
+				"bin",
+				process.platform === "win32" ? "launcher.exe" : "launcher",
+			);
+}
+
+async function smoke(): Promise<void> {
+	const setup = await step("prepare installer", installerExecutable);
+	const installer = await step("launch installer", () =>
+		Bun.spawn([setup], {
+			cwd: root,
+			env: isolationEnv,
+			stdout: "inherit",
+			stderr: "inherit",
+		}),
+	);
+	installerProcess = installer;
+	const ready = await step("installed desktop ready", () =>
+		waitForDocument(readyPath, acceptReady, {
+			timeoutMs: 60_000,
+			what: "installed desktop ready",
+			exited: installer.exited,
+			exitError: installerExitError,
+		}),
+	);
+	await step("installed launcher location", () => {
+		const launcher = installedLauncherPath();
+		if (!existsSync(launcher)) throw new Error(`launcher not found at ${launcher}`);
+	});
+	await step("installed desktop health", async () => {
+		const health = await within(
+			fetch(`${ready.origin}/health`),
+			10_000,
+			`GET ${ready.origin}/health`,
+		);
+		const body = await within(health.text(), 10_000, "health body");
+		if (!health.ok || body !== "ok") {
+			throw new Error(
+				`GET ${ready.origin}/health answered ${health.status} ${JSON.stringify(body)}`,
+			);
+		}
+	});
+	await step("installed desktop shutdown", async () => {
+		writeFileSync(controlPath, "stop");
+		await pollUntil(() => !processAlive(ready.pid) && !processAlive(ready.launcherPid), {
+			timeoutMs: 20_000,
+			what: `app ${ready.pid} and launcher ${ready.launcherPid} exit after stop`,
+			exited: installer.exited,
+			exitError: installerExitError,
+		});
+	});
+	appStopped = true;
+	await step("installer exit", async () => {
+		const installerExit = await within(installer.exited, 20_000, "installer exit");
+		if (installerExit !== 0) throw new Error(`desktop installer exited ${installerExit}`);
+	});
+	console.log(`installer smoke OK: ${artifact}`);
+}
+
+function installedProcessPids(): number[] {
+	if (process.platform !== "win32") return [];
+	const roots = [root];
+	try {
+		roots.push(realpathSync.native(root));
+	} catch {}
+	return windowsProcessesUnder(roots);
+}
+
+async function stopInstalledApp({ failed }: { failed: boolean }): Promise<void> {
+	if (!failed || !installerProcess) return;
+	const errors: unknown[] = [];
+	const knownPids = appStopped ? [] : readyDocumentPids();
+	try {
+		knownPids.push(...installedProcessPids());
+	} catch (error) {
+		errors.push(error);
+	}
+	try {
+		await reapProcess(installerProcess, { knownPids, timeoutMs: 15_000 });
+	} catch (error) {
+		errors.push(error);
+	}
+	if (errors.length === 1) throw errors[0];
+	if (errors.length > 1) throw new AggregateError(errors, "installed desktop cleanup failed");
+}
+
+await runWithCleanup(smoke, [stopInstalledApp, () => removeTree(root)], {
+	reportFailure: (error) => console.error("installer smoke failed:", error),
+});
