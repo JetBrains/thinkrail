@@ -9,6 +9,7 @@ import {
 	type TitleBarWindow,
 	titleBarDoubleClickAction,
 } from "./titleBarDoubleClick";
+import { desktopWindowChrome } from "./windowChrome";
 
 function target(nodeType: number): EventTarget {
 	return { nodeType } as unknown as EventTarget;
@@ -219,6 +220,20 @@ test("createTitleBarDoubleClickHandler does not read preference when disabled", 
 	await handler();
 	expect(reads).toBe(0);
 	expect(fake.calls).toEqual([]);
+});
+
+test("Linux header double-click maximizes and restores without a desktop preference", async () => {
+	const fake = createFakeWindow();
+	const handler = createTitleBarDoubleClickHandler({
+		enabled: desktopWindowChrome("linux").titleBarDoubleClick,
+		window: fake.window,
+		readPreference: async () => null,
+	});
+	await handler();
+	expect(fake.getState().maximized).toBe(true);
+	await handler();
+	expect(fake.getState().maximized).toBe(false);
+	expect(fake.calls).toEqual(["maximize", "unmaximize"]);
 });
 
 test("createTitleBarDoubleClickHandler drops overlapping calls and resets after settling", async () => {

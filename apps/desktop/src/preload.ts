@@ -8,6 +8,7 @@ import type {
 	NativeWindowState,
 } from "@thinkrail/contracts";
 import Electrobun, { Electroview } from "electrobun/view";
+import { installLinuxTitleBarDoubleClick } from "./linuxTitleBar";
 import { handlePageZoomShortcut, installPageZoomGestures } from "./pageZoom";
 import {
 	INITIAL_DESKTOP_PREFERENCES_GLOBAL,
@@ -67,7 +68,11 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 	},
 });
 const electroview = new Electrobun.Electroview({ rpc });
-installTitleBarDoubleClick(window, () => electroview.rpc?.send.titleBarDoubleClick());
+if (navigator.platform.startsWith("Linux")) {
+	installLinuxTitleBarDoubleClick(window, () => electroview.rpc?.send.titleBarDoubleClick());
+} else {
+	installTitleBarDoubleClick(window, () => electroview.rpc?.send.titleBarDoubleClick());
+}
 window.addEventListener("keydown", (event) =>
 	handlePageZoomShortcut(event, navigator.platform, (action) => {
 		electroview.rpc?.send.pageZoomRequested({ action });

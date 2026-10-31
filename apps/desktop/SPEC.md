@@ -249,7 +249,7 @@ removing the native strip and letting the web header occupy it. The policy is pl
 |---|---|---|---|---|
 | macOS | `hiddenInset` — transparent strip, hidden title, full-size content view | AppKit traffic lights stay; `trafficLightOffset { x: 0, y: 4 }` centres the 12px buttons in the 40px topbar (measured on a packaged build: the default position centres them at 16px, so +4 lands on 20) | left `64px` — the traffic-light zone (7 + 3×12 + 2×8 = 59px on the spacing grid) | yes |
 | Windows | `hiddenInset` — Electrobun creates `WS_CAPTION \| WS_THICKFRAME` and strips the caption in `WM_NCCALCSIZE`: resize borders and the DWM shadow survive, no native caption buttons | none native; the web renders minimize / maximize-or-restore / close ([[submodule-web-shell]]) and drives the window over RPC | right `138px` — three 46px caption buttons | yes |
-| Linux | `default` | GTK/WM decorations | none | no |
+| Linux | `hiddenInset` — no system title bar; Electrobun's native GTK backend supplies edge and corner resize handles | none native; the same web controls and RPC as Windows | right `138px` — the same three 46px caption buttons | yes |
 
 **Windows.** Electrobun 2.0.5 already enables WebView2's non-client-region support, so the header's
 `app-region: drag` is a real `HTCAPTION` hit: Aero Snap, drag-from-maximized, double-click-to-maximize and
@@ -272,9 +272,11 @@ hover over the HTML maximize button (that needs `HTMAXBUTTON`, which nothing sho
 window-controls overlay provides). PR #469 explored keeping DWM's own buttons through a runtime-compiled HWND
 subclass and WebView2 region masking; it was set aside as too heavy to verify.
 
-Linux is not planned: `hiddenInset` is a no-op under GTK and `hidden` removes decorations together with
-WM-provided resize handles. Fully custom macOS chrome (`titleBarStyle: "hidden"` with drawn traffic lights)
-was rejected because the platform provides real ones.
+**Linux.** The web controls use the same fixed right-side layout as Windows; desktop button-layout
+preferences are not read. Double-clicking the draggable header toggles maximize/restore outside
+fullscreen. GTK's native move consumes button releases, so `linuxTitleBar.ts` handles the native second
+primary `mousedown` (`detail === 2`) in capture phase, before Electrobun starts another move. Linux does
+not read macOS preferences or enable the Windows frame-style repair.
 
 **Geometry contract.** The desktop publishes three CSS custom properties on `<html>`: the two inset
 properties plus `--window-chrome-drag-region` (`drag` | `no-drag`), which tells the page whether its
@@ -283,7 +285,7 @@ geometry updates arrive as `windowChromeChanged { insetLeft, insetRight }`. The 
 with `0px` fallbacks, so a browser-hosted client and the neutral E2E-host window (`about:blank`, no
 preload) are unaffected and the *web client still has no desktop branch*. The preload validates geometry,
 keeps only the latest value while the document root is absent, and flushes it at `DOMContentLoaded`, so a
-pending startup write cannot overwrite a newer native state. The right inset is `138px` on Windows and `0px` elsewhere; the seed additionally carries the
+pending startup write cannot overwrite a newer native state. The right inset is `138px` on Windows/Linux and `0px` elsewhere; the seed additionally carries the
 per-policy `windowControls` flag, which the preload turns into the optional controls bridge.
 
 **Fullscreen.** macOS native fullscreen auto-hides the traffic lights with the menu bar, and a Windows
@@ -296,19 +298,19 @@ nothing.
 **Dragging.** The desktop's only contribution is the `drag` flag: the web header's `window-drag` utility
 resolves to `-webkit-app-region: drag` only when `--window-chrome-drag-region` says so, and Electrobun's
 own injected preload rewrites app-region declarations from same-origin stylesheets into a mirrored custom
-property it hit-tests against on `mousedown`. A decorated window (Linux, the neutral window)
+property it hit-tests against on `mousedown`. A decorated window (unsupported platforms, the neutral window)
 publishes `no-drag` and so never acquires a second, partial drag strip.
 
-**Title-bar double-click.** The webview covers the native strip, so `NSWindow` never sees a header
+**Title-bar double-click.** On macOS the webview covers the native strip, so `NSWindow` never sees a header
 double-click, and Electrobun 2.0.5 implements app-region dragging only. Its native move uses pass-through
 event monitors, so the page still receives `dblclick`. The desktop preload listens for primary-button
 `dblclick` events the page did not `preventDefault` and sends a payload-free `titleBarDoubleClick` message
 when the target is a drag region by Electrobun's own hit-test input: the computed, inherited
 `--electrobun-app-region` property its stylesheet rewrite produces. Exactly the area that drags the window
 therefore also zooms it; the `window-no-drag` action cluster does neither, and the web client still has no
-desktop branch. The main process acts only when the macOS policy's `titleBarDoubleClick` flag is set and outside native
+desktop branch. The main process acts only when the macOS or Linux policy's `titleBarDoubleClick` flag is set and outside native
 fullscreen; Windows leaves it off because its `HTCAPTION` drag region already maximizes natively, and handling
-it too would toggle twice. It
+it too would toggle twice. On macOS it
 reads `AppleActionOnDoubleClick` on every double-click (asynchronous `defaults read -g`, so a changed
 setting applies without restart) and maps it as Chromium does for custom draggable areas: unset, `Maximize`
 (Zoom) or `Fill` toggles zoom through `maximize()`/`unmaximize()` (`[NSWindow zoom:]`); `Minimize`

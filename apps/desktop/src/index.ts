@@ -444,6 +444,7 @@ async function start(): Promise<void> {
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
 			window: mainWindow,
+			...(process.platform === "linux" ? { readPreference: async () => null } : {}),
 			...(titleBarProbePath
 				? {
 						onHandled: (result) => {
