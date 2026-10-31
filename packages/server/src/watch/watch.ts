@@ -56,6 +56,18 @@ function isRepoMetaPath(relPath: string): boolean {
 	return relPath.split(/[\\/]/)[0] === ".git";
 }
 
+function isTransientGitMetaPath(relPath: string): boolean {
+	return relPath.toLowerCase().endsWith(".lock");
+}
+
+function isGitMetaDirectory(root: string, relPath: string): boolean {
+	try {
+		return statSync(resolve(root, relPath)).isDirectory();
+	} catch {
+		return false;
+	}
+}
+
 function resolveExternalGitDir(worktreePath: string): string | null {
 	const dotGit = resolve(worktreePath, ".git");
 	try {
@@ -77,8 +89,10 @@ function watchGitDir(
 	rootWatcher: FSWatcher,
 ): FSWatcher | null {
 	try {
-		const watcher = watch(gitDir, { recursive: false }, () => {
-			scheduleRepoMeta(workspaceId, rootWatcher);
+		const watcher = watch(gitDir, { recursive: false }, (_event, filename) => {
+			const rel = typeof filename === "string" ? filename.replaceAll("\\", "/") : null;
+			if (rel === null || (!isTransientGitMetaPath(rel) && !isGitMetaDirectory(gitDir, rel)))
+				scheduleRepoMeta(workspaceId, rootWatcher);
 		});
 		watcher.on("error", () => {
 			log.warn(`git metadata watcher failed for workspace ${workspaceId}`);
@@ -193,7 +207,13 @@ export function ensureWatch(
 	try {
 		const watcher = watch(ws.worktreePath, { recursive: true }, (_event, filename) => {
 			const rel = typeof filename === "string" ? filename.replaceAll("\\", "/") : null;
-			if (rel === null || isRepoMetaPath(rel)) scheduleRepoMeta(workspaceId, watcher);
+			if (
+				rel === null ||
+				(isRepoMetaPath(rel) &&
+					!isTransientGitMetaPath(rel) &&
+					!isGitMetaDirectory(ws.worktreePath, rel))
+			)
+				scheduleRepoMeta(workspaceId, watcher);
 			if (rel !== null && isIgnoredPath(rel)) return;
 			const skillChange: WorkspaceSkillChange =
 				rel === null
