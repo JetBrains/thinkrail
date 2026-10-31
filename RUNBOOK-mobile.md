@@ -44,11 +44,12 @@ PORT=24243 HOST=0.0.0.0 bun packages/relay/src/main.ts
 bun run apps/cli/src/index.ts --remote --relay ws://<LAN-IP>:24243
 #   installed build:  thinkrail --remote --relay ws://<LAN-IP>:24243
 ```
-Copy the printed `thinkrail://pair?…` link. On the same Wi‑Fi the WebRTC connection is direct — **coturn is
-not needed**. (coturn only matters on networks that block peer-to-peer, e.g. guest Wi‑Fi isolation.)
+The CLI prints both the `thinkrail://pair?…` link **and a scannable QR** in the terminal. On the same Wi‑Fi
+the WebRTC connection is direct — **coturn is not needed**. (coturn only matters on networks that block
+peer-to-peer, e.g. guest Wi‑Fi isolation.)
 
 ## 5. Pair on the phone
-In the app: paste the link → **Add host**. The host's sessions appear in the list; tap one to see its live
+In the app: **scan the terminal QR** with the iPhone camera (or paste the link) → **Add host**. The host's sessions appear in the list; tap one to see its live
 activity and send a message. Add your server the same way (run the relay+host there too, paste its link).
 The app remembers paired hosts and auto-reconnects (via `resume`) on reopen / network flaps.
 
