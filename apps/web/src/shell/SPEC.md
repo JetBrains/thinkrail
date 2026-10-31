@@ -54,7 +54,7 @@ The location strip ([[submodule-web-shell-location-bar]]) is the one deliberate 
 chips, and Remote / Pull request split buttons each carry `window-no-drag` while their captions and hairlines stay draggable, so a user can still
 grab the strip between controls. Plain text such as the connection label stays draggable. The one other button group is
 `NativeWindowControls`: when the host installs the optional `NativeWindowControlsBridge`
-(`__THINKRAIL_NATIVE_WINDOW_CONTROLS__`, [[module-contracts]]) — today only the Windows desktop — Shell
+(`__THINKRAIL_NATIVE_WINDOW_CONTROLS__`, [[module-contracts]]) — the Windows and Linux desktops — Shell
 mounts `useNativeWindowControls`, which mirrors `updates`' capability hook (read the global once, `getState`,
 subscribe, `null` in a browser; the state carries no revision, so the initial `getState` snapshot is dropped
 once any push has arrived), and renders three props-driven 46×40 caption buttons (minimize,
