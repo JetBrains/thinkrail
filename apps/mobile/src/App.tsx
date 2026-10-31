@@ -1,5 +1,5 @@
 import { App as CapApp } from "@capacitor/app";
-import type { SessionEventPayload } from "@thinkrail/contracts";
+import type { SessionEventPayload, TranscriptMessage } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import {
 	connectRemoteProject,
@@ -19,7 +19,11 @@ export function App() {
 	const [items, setItems] = useState<RemoteSessionItem[]>([]);
 	const [link, setLink] = useState("");
 	const [status, setStatus] = useState("");
-	const [open, setOpen] = useState<{ hostKey: string; sessionId: string } | null>(null);
+	const [open, setOpen] = useState<{
+		hostKey: string;
+		sessionId: string;
+		workspaceId: string;
+	} | null>(null);
 
 	useEffect(() => {
 		const unsubscribe = controller.subscribe(() => setItems(controller.items()));
@@ -61,6 +65,7 @@ export function App() {
 			<SessionScreen
 				hostKey={open.hostKey}
 				sessionId={open.sessionId}
+				workspaceId={open.workspaceId}
 				onBack={() => setOpen(null)}
 				controller={controller}
 			/>
@@ -93,7 +98,13 @@ export function App() {
 						>
 							<button
 								type="button"
-								onClick={() => setOpen({ hostKey: item.hostKey, sessionId: item.record.sessionId })}
+								onClick={() =>
+									setOpen({
+										hostKey: item.hostKey,
+										sessionId: item.record.sessionId,
+										workspaceId: item.record.workspaceId,
+									})
+								}
 								style={{
 									width: "100%",
 									textAlign: "left",
@@ -115,33 +126,81 @@ export function App() {
 	);
 }
 
+interface Line {
+	role: string;
+	text: string;
+}
+
+/** Best-effort text from a transcript message (string content, text blocks, or a summary). */
+function messageLine(message: TranscriptMessage): Line | null {
+	const m = message as { role?: unknown; content?: unknown; summary?: unknown };
+	const role = typeof m.role === "string" ? m.role : "message";
+	let text = "";
+	if (typeof m.content === "string") text = m.content;
+	else if (Array.isArray(m.content)) {
+		text = m.content
+			.map((block) =>
+				block && typeof block === "object" && typeof (block as { text?: unknown }).text === "string"
+					? (block as { text: string }).text
+					: "",
+			)
+			.join("");
+	} else if (typeof m.summary === "string") text = m.summary;
+	text = text.trim();
+	return text ? { role, text } : null;
+}
+
 function SessionScreen({
 	hostKey,
 	sessionId,
+	workspaceId,
 	onBack,
 	controller,
 }: {
 	hostKey: string;
 	sessionId: string;
+	workspaceId: string;
 	onBack: () => void;
 	controller: ReturnType<typeof createRemoteSessions>;
 }) {
 	const client = controller.clientFor(hostKey);
-	const [log, setLog] = useState<{ id: number; line: string }[]>([]);
+	const [lines, setLines] = useState<Line[]>([]);
 	const [text, setText] = useState("");
 
 	useEffect(() => {
 		if (!client) return;
-		let seq = 0;
-		return client.subscribe(WS_CHANNELS.piEvent, (data) => {
-			const payload = data as SessionEventPayload;
-			if (payload.sessionId === sessionId) {
-				seq += 1;
-				const entry = { id: seq, line: payload.event.type };
-				setLog((prev) => [...prev.slice(-200), entry]);
-			}
+		let cancelled = false;
+		let pending: ReturnType<typeof setTimeout> | undefined;
+
+		// Load the conversation so far — the phone picks up the ongoing session, not just new events.
+		const refresh = (): void => {
+			client
+				.request<{ messages: TranscriptMessage[] }>("session.getMessages", {
+					sessionId,
+					workspaceId,
+				})
+				.then((result) => {
+					if (!cancelled) setLines(result.messages.flatMap((m) => messageLine(m) ?? []));
+				})
+				.catch(() => {});
+		};
+		refresh();
+
+		// Keep it current as the session streams, coalescing bursts of events into one refetch.
+		const unsubscribe = client.subscribe(WS_CHANNELS.piEvent, (data) => {
+			if ((data as SessionEventPayload).sessionId !== sessionId) return;
+			if (pending) return;
+			pending = setTimeout(() => {
+				pending = undefined;
+				refresh();
+			}, 400);
 		});
-	}, [client, sessionId]);
+		return () => {
+			cancelled = true;
+			if (pending) clearTimeout(pending);
+			unsubscribe();
+		};
+	}, [client, sessionId, workspaceId]);
 
 	const send = async (): Promise<void> => {
 		const value = text.trim();
@@ -156,13 +215,21 @@ function SessionScreen({
 				← Back
 			</button>
 			<h2 style={{ fontSize: 16 }}>{sessionId}</h2>
-			<div
-				style={{ height: 300, overflow: "auto", background: "#f6f6f6", padding: 8, fontSize: 12 }}
+			<pre
+				style={{
+					height: 360,
+					overflow: "auto",
+					background: "#f6f6f6",
+					padding: 8,
+					fontSize: 13,
+					whiteSpace: "pre-wrap",
+					fontFamily: "system-ui",
+				}}
 			>
-				{log.map((entry) => (
-					<div key={entry.id}>{entry.line}</div>
-				))}
-			</div>
+				{lines.length === 0
+					? "Loading conversation…"
+					: lines.map((line) => `${line.role}: ${line.text}`).join("\n\n")}
+			</pre>
 			<div style={{ display: "flex", gap: 8, marginTop: 8 }}>
 				<input
 					value={text}
