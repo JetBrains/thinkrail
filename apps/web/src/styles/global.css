@@ -48,6 +48,14 @@ body {
 	--scrollbar-thumb: var(--border-default);
 	--scrollbar-thumb-inset: 0px;
 }
+.pierre-scroll-owner {
+	--pierre-scrollbar-thumb: var(--scrollbar-thumb);
+	--pierre-scrollbar-thumb-inset: var(--scrollbar-thumb-inset);
+}
+.pierre-scroll-owner .pierre-horizontal-scrollbar {
+	--scrollbar-thumb: var(--pierre-scrollbar-thumb);
+	--scrollbar-thumb-inset: var(--pierre-scrollbar-thumb-inset);
+}
 ::-webkit-scrollbar {
 	width: 6px;
 	height: 6px;

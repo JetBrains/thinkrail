@@ -2176,6 +2176,8 @@ own section. The kebab menu (`plan-menu`, a
   be scrolled to the top and become active, as on GitHub. The scroll-spy never auto-reveals the Review
   tool: `selectActiveReviewedPath` deliberately ignores the review tab, because a reveal fired by
   scrolling would replace the Changes navigator in its shared side group mid-read.
+  The stacked list owns a flex-bounded visible viewport above the non-overlapping triage footer.
+  Renderer clipping and horizontal controls use that real viewport boundary, never an overlay inset.
   **Hunk triage is an overlay on the same tab, not a second mutation model.** In a mutable scope every
   hunk toolbar gains **Keep** beside the existing Revert and Ask-agent actions; a kept hunk is recorded
   on the tab (`kept[path]`) under a **content key** — a hash of the hunk's removed + added text, with the

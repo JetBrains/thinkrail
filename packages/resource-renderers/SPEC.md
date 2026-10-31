@@ -556,6 +556,33 @@ against a stale offset. Natural-height stacked sections run the same structure w
 the viewport's height is read back from the scroller after the sizer is set, so it never feeds the
 content's own height.
 
+Diffs keep `overflow: "scroll"`. A native horizontal controller shares the vertical owner's scrollbar
+skin and stays at the visible block bottom, intersected with clipping ancestors and the browser viewport.
+The host must bound its real scroll viewport above any footer; renderers do not query host chrome.
+The sizer reserves the controller height so the last row clears it. Shadow native bars remain hidden.
+The controller disappears when code fits. It inherits the owner’s resolved thumb colour and high-contrast
+inset through dedicated CSS properties, so hovering anywhere in the diff or setting owner intent reveals
+both axes together; direct native thumb hover/active still uses the global muted colour. No pointer-drag
+implementation or second intent state machine is added. Natural-height stacked sections keep their
+natural height and the surrounding review retains native vertical ownership; ancestor scrolling and
+resizing update the controller's clipped bottom.
+
+Horizontal position has one imperative authority: an absolute pixel offset, clamped to the widest column.
+Native controller input and external column input update it immediately through Pierre's public
+`setCodeScrollLeft`, without smoothing or React state. Native controller input and expected column
+write echoes perform no dimension reads. Unexpected column input checks that column's current limit:
+if dimensions changed, it reconciles measurements before accepting input, retaining authority when the
+event equals the layout-clamped offset (including clamps delivered before ResizeObserver). Other
+external offsets are accepted immediately; no input is deferred. Capture listeners
+suppress Pierre's independent directional split synchronizer for all column events. An ignore-change
+write guard and cached per-column expected clamped offsets distinguish asynchronous write echoes from
+external input, including unequal columns and immediate reversals. Dimensions are measured separately
+on resize and post-render; listeners and observers survive post-render when the column identities match.
+This follows VS Code's [immediate thumb writes](https://github.com/microsoft/vscode/blob/97d01924531421f671b69342f629ba0f9f0f1e2e/src/vs/base/browser/ui/scrollbar/abstractScrollbar.ts#L240-L281)
+and [absolute-offset recursion guard](https://github.com/microsoft/vscode/blob/97d01924531421f671b69342f629ba0f9f0f1e2e/src/vs/editor/browser/widget/diffEditor/components/diffEditorViewZones/diffEditorViewZones.ts#L377-L391)
+without importing its custom scrollbar internals or claiming a measured performance cure. The native
+controller retains keyboard, wheel, momentum and platform accessibility behavior.
+
 - **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
   (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file in
   the **preview** tab through the shared **`openFileInTab`** (the same flow `FileTree` uses) — following a

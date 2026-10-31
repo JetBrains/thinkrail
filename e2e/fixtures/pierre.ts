@@ -71,3 +71,7 @@ export async function selectPierreLine(
 	const gutter = surface.locator(LINE_NUMBER(line, type));
 	await (which === "first" ? gutter.first() : gutter.last()).click({ modifiers });
 }
+
+export function pierreCodeColumns(surface: Locator): Locator {
+	return surface.locator("code[data-deletions], code[data-additions], code[data-unified]");
+}
