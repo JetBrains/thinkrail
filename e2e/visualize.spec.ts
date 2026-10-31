@@ -1,6 +1,7 @@
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { ToolCall } from "@thinkrail/contracts";
 import {
 	enterDefaultWorkspace,
 	expandDisclosure,
@@ -17,7 +18,7 @@ const MALFORMED_SOURCE = "flowchart TD; Start --> --> broken";
 async function openVisualization(
 	page: Page,
 	name: string,
-	args: Record<string, unknown>,
+	args: ToolCall["arguments"],
 	assistantText?: string,
 ): Promise<Locator> {
 	return (await openVisualizationSession(page, name, args, assistantText)).card;
@@ -26,7 +27,7 @@ async function openVisualization(
 async function openVisualizationSession(
 	page: Page,
 	name: string,
-	args: Record<string, unknown>,
+	args: ToolCall["arguments"],
 	assistantText?: string,
 ): Promise<{ card: Locator; sessionId: string }> {
 	await openFixtureProject(page);

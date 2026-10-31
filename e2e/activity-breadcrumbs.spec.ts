@@ -438,7 +438,7 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		});
 		await page.evaluate(() => new Promise(requestAnimationFrame));
 		expect((await readChatViewportIntersection(longOutputToggle)).intersects).toBe(false);
-		await longOutputToggle.evaluate((element) => element.click());
+		await longOutputToggle.evaluate((element: HTMLElement) => element.click());
 		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "false");
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		const collapsedOutputBoundary = await longOutputToggle.evaluate((element) => {
@@ -519,7 +519,7 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 			return element.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
 		});
 		expect(Math.abs(nestedHeaderOffset - parentBreadcrumbHeight)).toBeLessThanOrEqual(2);
-		await thinkingToggle.evaluate((element) => element.click());
+		await thinkingToggle.evaluate((element: HTMLElement) => element.click());
 		await expect(thinkingToggle).toHaveAttribute("aria-expanded", "true");
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		const activityContent = page.getByText("coalescer regression line 30", { exact: true });

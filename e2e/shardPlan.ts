@@ -53,8 +53,8 @@ export function automaticShardCount(availableCpuCount: number): number {
 }
 
 export function resolveShardCount(options: {
-	shardOverride?: number;
-	envValue?: string;
+	shardOverride?: number | undefined;
+	envValue?: string | undefined;
 	availableCpuCount: number;
 	hasPlaywrightArgs: boolean;
 }): number {
