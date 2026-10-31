@@ -98,7 +98,11 @@ probe needs a release-stamped (keyed) artifact; an unstamped build correctly emi
 
 Every host owns isolated home, data, agent and cache directories; environment overrides respect Windows'
 case-insensitive keys. The native UI launch pre-creates its home directory: on macOS the window never
-reaches DOM-ready when `XDG_CACHE_HOME` is set while `HOME` names a missing directory. Readiness polling owns a finite deadline and observes early root exit; because the launcher writes its ready, route and navigation-probe documents non-atomically, the smoke treats a missing or half-written JSON file as "not yet" and keeps polling rather than failing on a torn read. When a live
+reaches DOM-ready when `XDG_CACHE_HOME` is set while `HOME` names a missing directory. Readiness polling owns a finite deadline and observes early root exit. The desktop ready deadline is
+120 s: on the `win25-vs2026/20261030.294` Windows runner image a cold WebView2 profile reached its first
+DOM-ready in 8–30 s when it passed and missed a 30 s deadline in half the sampled runs, while later launches
+on the same runner start in under a second. Each launch logs its time to ready so the headroom stays
+visible in CI. Because the launcher writes its ready, route and navigation-probe documents non-atomically, the smoke treats a missing or half-written JSON file as "not yet" and keeps polling rather than failing on a torn read. When a live
 launched root or validated ready-document app/launcher PIDs need failure cleanup, teardown is bounded and
 awaited before shared retrying removal of the temporary installation root. A setup root may exit successfully
 before its app handoff is ready; after that exit, the harness does not infer or discover descendants from the
