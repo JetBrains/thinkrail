@@ -16,9 +16,11 @@ IDE. No file tree, diffs, terminals, layout, or settings. No cloud account: the 
 
 ## Boundary
 
-- **Owns:** a small React/Vite UI (`src/App.tsx` — host list, add-by-link, aggregated session list, a session
-  screen with a live activity log + send), the Capacitor config, and a `localStorage` `KeyValueStore`
-  (`src/store.ts`; the Capacitor WKWebView persists it on-device).
+- **Owns:** a small React/Vite UI (`src/App.tsx` — host list, add-by-link, aggregated session list, and a
+  session screen that **picks up an ongoing session**: it loads the conversation via `session.getMessages`,
+  refreshes it as the session streams, and sends via `session.followUp` — so a session started on the laptop
+  can be continued on the phone), the Capacitor config, and a `localStorage` `KeyValueStore` (`src/store.ts`;
+  the Capacitor WKWebView persists it on-device).
 - **Allowed deps:** `@thinkrail/remote-client` (the entire remote engine — connector, wire client, host
   registry, multi-host session controller), `@thinkrail/contracts` (protocol + session types), React, Vite,
   Capacitor, platform APIs. Never `server`, `pi`, or `web`.
@@ -33,6 +35,7 @@ sources here are workspace-typechecked; the native project (`ios/`) is generated
 
 ## Not yet here
 
-- Rich transcript rendering (today the session screen shows an event-type activity log; the full renderer
-  from `apps/web/chat` can be reused later), a proper tool-approval UI, and push notifications (a
-  content-less "wake" push would need a relay feature, since the relay is zero-knowledge).
+- Rich transcript rendering (today the session screen loads `session.getMessages` and renders a plain-text
+  transcript that refreshes as the session streams; the full renderer from `apps/web/chat` can be reused
+  later), a proper tool-approval UI, and push notifications (a content-less "wake" push would need a relay
+  feature, since the relay is zero-knowledge).

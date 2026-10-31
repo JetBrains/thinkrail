@@ -49,12 +49,15 @@ the WebRTC connection is direct — **coturn is not needed**. (coturn only matte
 peer-to-peer, e.g. guest Wi‑Fi isolation.)
 
 ## 5. Pair on the phone
-In the app: **scan the terminal QR** with the iPhone camera (or paste the link) → **Add host**. The host's sessions appear in the list; tap one to see its live
-activity and send a message. Add your server the same way (run the relay+host there too, paste its link).
+In the app: **scan the terminal QR** with the iPhone camera (or paste the link) → **Add host**. The host's
+sessions appear in the list; tap one to **pick up the ongoing conversation** — a session you started on the
+laptop loads on the phone and keeps streaming — and send a message to continue it. Add your server the same
+way (run the relay+host there too, paste its link).
 The app remembers paired hosts and auto-reconnects (via `resume`) on reopen / network flaps.
 
 ## Scope / caveats (lightweight by design)
 - Shows and drives **sessions** only — no file tree, diffs, terminals, or settings.
-- The session screen currently shows an activity log + send; richer transcript, a full tool-approval UI, and
-  push notifications are follow-ups (push needs a content-less "wake" from the relay — it is zero-knowledge).
+- The session screen loads the conversation (via `session.getMessages`) and refreshes as it streams, so the
+  phone picks up a laptop-started session; a richer transcript renderer, a full tool-approval UI, and push
+  notifications are follow-ups (push needs a content-less "wake" from the relay — it is zero-knowledge).
 - Nothing here has been run end-to-end yet; this runbook is the first real on-device test.
