@@ -51,6 +51,7 @@ const CTX = { clientKey: "test-client" };
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+const savedTestAgentDir = process.env.PI_CODING_AGENT_DIR;
 
 async function setupDefaultModelRuntime(): Promise<() => void> {
 	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -102,6 +103,7 @@ function gitText(cwd: string, ...args: string[]): string {
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-handlers-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
+	process.env.PI_CODING_AGENT_DIR = join(dataDir, "pi");
 	resetConfigCache();
 	resetFeedbackForTests();
 	resetSurveyForTests();
@@ -129,6 +131,8 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+	if (savedTestAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+	else process.env.PI_CODING_AGENT_DIR = savedTestAgentDir;
 });
 
 test("every contract method has a registered handler", () => {
