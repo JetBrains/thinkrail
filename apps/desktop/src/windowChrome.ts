@@ -44,15 +44,15 @@ export function desktopWindowChrome(platform: NodeJS.Platform): WindowChromePoli
 			restoreFrameControls: false,
 		};
 	}
-	if (platform === "win32") {
+	if (platform === "win32" || platform === "linux") {
 		return {
 			titleBarStyle: "hiddenInset",
 			trafficLightOffset: null,
 			geometry: { insetLeft: 0, insetRight: 138 },
 			dragRegion: true,
-			titleBarDoubleClick: false,
+			titleBarDoubleClick: platform === "linux",
 			windowControls: true,
-			restoreFrameControls: true,
+			restoreFrameControls: platform === "win32",
 		};
 	}
 	return {

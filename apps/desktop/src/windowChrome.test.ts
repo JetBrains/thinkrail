@@ -38,8 +38,20 @@ test("Windows uses frameless web controls and restores the frame style", () => {
 	});
 });
 
+test("Linux shares the Windows web chrome without the Win32 frame repair", () => {
+	expect(desktopWindowChrome("linux")).toEqual({
+		titleBarStyle: "hiddenInset",
+		trafficLightOffset: null,
+		geometry: { insetLeft: 0, insetRight: 138 },
+		dragRegion: true,
+		titleBarDoubleClick: true,
+		windowControls: true,
+		restoreFrameControls: false,
+	});
+});
+
 test("other platforms keep the default native chrome and do not drag", () => {
-	for (const platform of ["linux", "freebsd"] as const) {
+	for (const platform of ["freebsd", "openbsd"] as const) {
 		expect(desktopWindowChrome(platform)).toEqual({
 			titleBarStyle: "default",
 			trafficLightOffset: null,
@@ -53,9 +65,11 @@ test("other platforms keep the default native chrome and do not drag", () => {
 });
 
 test("native fullscreen collapses both insets and restores them afterwards", () => {
-	const policy = { ...desktopWindowChrome("darwin"), geometry: { insetLeft: 64, insetRight: 22 } };
-	expect(windowChromeGeometry(policy, true)).toEqual({ insetLeft: 0, insetRight: 0 });
-	expect(windowChromeGeometry(policy, false)).toEqual(policy.geometry);
+	for (const platform of ["darwin", "win32", "linux"] as const) {
+		const policy = desktopWindowChrome(platform);
+		expect(windowChromeGeometry(policy, true)).toEqual({ insetLeft: 0, insetRight: 0 });
+		expect(windowChromeGeometry(policy, false)).toEqual(policy.geometry);
+	}
 });
 
 test("geometry payloads accept only finite non-negative bounded insets", () => {
@@ -98,12 +112,14 @@ test("drag-region payloads accept only boolean fields", () => {
 });
 
 test("window chrome preload seeds include the web controls policy", () => {
-	expect(windowChromePreloadSeed(desktopWindowChrome("win32"))).toEqual({
-		insetLeft: 0,
-		insetRight: 138,
-		dragRegion: true,
-		windowControls: true,
-	});
+	for (const platform of ["win32", "linux"] as const) {
+		expect(windowChromePreloadSeed(desktopWindowChrome(platform))).toEqual({
+			insetLeft: 0,
+			insetRight: 138,
+			dragRegion: true,
+			windowControls: true,
+		});
+	}
 });
 
 test("the style writer keeps the latest geometry until the document root exists", () => {
