@@ -1,8 +1,13 @@
 import {
 	type AppConfig,
 	type AppConfigUpdate,
+	CODE_FONT_SIZE,
 	COMPOSER_GROWTH_LIMITS,
+	FONT_WEIGHT_OFFSET,
+	isCodeFontSize,
 	isComposerGrowthLimit,
+	isFontChoice,
+	isFontWeightOffset,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
@@ -54,8 +59,14 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
 	disabledExtensions: true,
+	disabledPackages: true,
 	locale: true,
 	onboardingDismissed: true,
+	interfaceFont: true,
+	codeFont: true,
+	codeFontSize: true,
+	codeLigatures: true,
+	fontWeightOffset: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -89,12 +100,12 @@ function validateFavoriteModels(value: unknown): WireModel[] {
 	return value.filter((model, index) => value.findIndex((m) => sameModel(m, model)) === index);
 }
 
-function validateDisabledExtensions(value: unknown): string[] {
+function validateNameList(value: unknown, setting: string, noun: string): string[] {
 	if (
 		!Array.isArray(value) ||
 		!value.every((name) => typeof name === "string" && name.trim().length > 0)
 	) {
-		throw new Error("disabledExtensions must be a list of extension names");
+		throw new Error(`${setting} must be a list of ${noun}`);
 	}
 	return [...new Set(value as string[])];
 }
@@ -142,10 +153,32 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		["reviewAutoFix", runtimeUpdate.reviewAutoFix],
 		["agentReviewEnabled", runtimeUpdate.agentReviewEnabled],
 		["onboardingDismissed", runtimeUpdate.onboardingDismissed],
+		["codeLigatures", runtimeUpdate.codeLigatures],
 	] as const) {
 		if (value !== undefined && typeof value !== "boolean") {
 			throw new Error(`${name} must be a boolean`);
 		}
+	}
+	for (const [name, value] of [
+		["interfaceFont", runtimeUpdate.interfaceFont],
+		["codeFont", runtimeUpdate.codeFont],
+	] as const) {
+		if (value !== undefined && !isFontChoice(value)) {
+			throw new Error(`${name} must be a font family or null plus up to 8 distinct fallbacks`);
+		}
+	}
+	if (runtimeUpdate.codeFontSize !== undefined && !isCodeFontSize(runtimeUpdate.codeFontSize)) {
+		throw new Error(
+			`codeFontSize must be a whole number from ${CODE_FONT_SIZE.min} to ${CODE_FONT_SIZE.max}`,
+		);
+	}
+	if (
+		runtimeUpdate.fontWeightOffset !== undefined &&
+		!isFontWeightOffset(runtimeUpdate.fontWeightOffset)
+	) {
+		throw new Error(
+			`fontWeightOffset must be a multiple of ${FONT_WEIGHT_OFFSET.step} from ${FONT_WEIGHT_OFFSET.min} to ${FONT_WEIGHT_OFFSET.max}`,
+		);
 	}
 	if (
 		runtimeUpdate.analyticsConsentConfirmed !== undefined &&
@@ -168,10 +201,17 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
 		disabledExtensions,
+		disabledPackages,
 		...rest
 	} = runtimeUpdate;
 	const nextDisabledExtensions =
-		disabledExtensions === undefined ? undefined : validateDisabledExtensions(disabledExtensions);
+		disabledExtensions === undefined
+			? undefined
+			: validateNameList(disabledExtensions, "disabledExtensions", "extension names");
+	const nextDisabledPackages =
+		disabledPackages === undefined
+			? undefined
+			: validateNameList(disabledPackages, "disabledPackages", "package identities");
 	for (const [name, value] of [
 		["defaultModel", defaultModel],
 		["reviewModel", reviewModel],
@@ -264,6 +304,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 			? {}
 			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
 		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
+		...(nextDisabledPackages === undefined ? {} : { disabledPackages: nextDisabledPackages }),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;

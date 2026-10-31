@@ -46,7 +46,7 @@ const inspectorProps: ComponentProps<typeof resources.ResourcesInspector> = {
 	now: NOW,
 	authoritative: true,
 	loading: false,
-	stale: false,
+	staleness: null,
 	error: null,
 	actions: {},
 	selectedId: null,
@@ -216,11 +216,24 @@ test("the dock lists live rows oldest-first with escaped text, one inspect contr
 	expect(many).toContain("5 active");
 	expect(many).toContain('aria-expanded="false"');
 
-	const stale = renderToStaticMarkup(
-		<resources.ResourcesDock {...dockProps} commands={[command]} authoritative={false} />,
-	);
-	expect(stale).toMatch(/data-testid="resource-stop"[^>]*disabled/);
-	expect(stale).toContain("reconnecting");
+	const dockFor = (staleness: "disconnected" | "refreshFailed" | "unavailable" | "refreshing") =>
+		renderToStaticMarkup(
+			<resources.ResourcesDock
+				{...dockProps}
+				commands={[1, 2, 3, 4, 5].map((n) => ({ ...command, id: `c${n}` }))}
+				authoritative={false}
+				staleness={staleness}
+			/>,
+		);
+	expect(
+		renderToStaticMarkup(
+			<resources.ResourcesDock {...dockProps} commands={[command]} authoritative={false} />,
+		),
+	).toMatch(/data-testid="resource-stop"[^>]*disabled/);
+	expect(dockFor("disconnected")).toContain("5 active · reconnecting");
+	expect(dockFor("refreshFailed")).toContain("5 active · out of date");
+	expect(dockFor("unavailable")).toContain("5 active · out of date");
+	expect(dockFor("refreshing")).toContain("5 active · updating");
 });
 
 test("the inspector renders a listbox of options whose accessible names carry the activity, selects the first live row, and keeps Stop beside the option", () => {
@@ -280,7 +293,7 @@ test("the inspector keeps the selected finished row, disables controls when stal
 			finishedCommands={[{ ...command, id: "done", status: "completed", exitCode: 0 }]}
 			selectedId="done"
 			authoritative={false}
-			stale
+			staleness="disconnected"
 			error="Read failed"
 			actions={{ "command:build": { pending: false, error: "Stop failed" } }}
 		/>,
@@ -288,6 +301,36 @@ test("the inspector keeps the selected finished row, disables controls when stal
 	expect(html).toMatch(/data-resource-id="done"[^>]*data-selected="true"/);
 	expect(html).toContain("Snapshot is stale");
 	expect(html).toContain("reconnecting");
+	expect(html).not.toContain("retrying");
+	const failed = renderInspector(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			commands={[command]}
+			authoritative={false}
+			staleness="refreshFailed"
+			error="Read failed"
+		/>,
+	);
+	expect(failed).toContain('data-staleness="refreshFailed"');
+	expect(failed).toContain("out of date");
+	expect(failed).not.toContain("reconnecting");
+	expect(failed).not.toContain("Snapshot is stale");
+	expect(failed).toContain("Couldn&#x27;t refresh resources — retrying.");
+	expect(failed).toContain("Read failed");
+	expect(failed).toContain('data-testid="resources-retry"');
+	expect(failed).toMatch(/data-testid="resource-stop"[^>]*disabled/);
+	const unavailable = renderInspector(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			authoritative={false}
+			staleness="unavailable"
+			error="worktree gone"
+		/>,
+	);
+	expect(unavailable).toContain("out of date");
+	expect(unavailable).toContain("Couldn&#x27;t refresh resources.");
+	expect(unavailable).not.toContain("retrying");
+	expect(unavailable).toContain('data-testid="resources-retry"');
 	expect(html).toMatch(/data-testid="resource-stop"[^>]*disabled/);
 	expect(html).not.toContain('data-testid="resource-detail-stop"');
 	expect(html).toContain("Stop failed");
@@ -345,7 +388,7 @@ test("expanded, the fold reveals the rest in order, offers the next page with wh
 		status: "completed" as const,
 		finishedAt: NOW - index * 60_000,
 	}));
-	const props = {
+	const withoutLoadMore = {
 		...inspectorProps,
 		finishedSubagents: finished,
 		history: { commands: noTally, subagents: { ...noTally, done: 30 } },
@@ -353,8 +396,8 @@ test("expanded, the fold reveals the rest in order, offers the next page with wh
 		newIds: new Set(["child-7"]),
 		expanded: { subagent: true },
 		selectedId: "child-6",
-		onLoadMore: () => {},
 	};
+	const props = { ...withoutLoadMore, onLoadMore: () => {} };
 	const html = renderInspector(<resources.ResourcesInspector {...props} />);
 	const shown = [...html.matchAll(/data-resource-id="([^"]+)"/g)].map((match) => match[1]);
 	expect(shown).toEqual(finished.map((item) => item.childSessionId));
@@ -381,7 +424,7 @@ test("expanded, the fold reveals the rest in order, offers the next page with wh
 	expect(failed).toMatch(/role="alert"[^>]*>History read failed/);
 
 	const older = renderInspector(
-		<resources.ResourcesInspector {...props} remaining={{}} onLoadMore={undefined} />,
+		<resources.ResourcesInspector {...withoutLoadMore} remaining={{}} />,
 	);
 	expect(older).not.toContain('data-testid="resources-show-more"');
 	expect(older).toContain('data-testid="resources-collapse"');

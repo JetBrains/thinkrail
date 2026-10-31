@@ -21,7 +21,7 @@ import {
 	selectChatResourceOldest,
 	selectChatResourceProjection,
 	selectChatResourcesLoading,
-	selectChatResourcesStale,
+	selectChatResourcesStaleness,
 	selectChatResourcesVisible,
 	selectSupportsMcp,
 	supportsChatResources,
@@ -29,9 +29,16 @@ import {
 	useAppStore,
 } from "@/store";
 import { errorText, getTransport, wsErrorCode } from "@/transport";
-import { type DetailPollScheduler, startDetailPolling } from "./detailPolling";
+import {
+	type DetailPollScheduler,
+	defaultDetailScheduler,
+	detailRetryDelay,
+	startDetailPolling,
+} from "./detailPolling";
 
 type ResourceStore = ReturnType<typeof useAppStore.getState>;
+
+const FOREIGN_SNAPSHOT = "Resource snapshot belongs to another chat.";
 
 export function startChatResourceSync(
 	scope: ChatResourceScope,
@@ -39,16 +46,25 @@ export function startChatResourceSync(
 		state: () => ResourceStore;
 		read: () => Promise<SessionResources>;
 		subscribe: (invalidate: (scope: ChatResourceScope) => void) => () => void;
+		scheduler?: DetailPollScheduler;
 	},
 ) {
+	const scheduler = deps.scheduler ?? defaultDetailScheduler;
 	const generation = deps.state().connectionGeneration;
 	let active = true;
 	let inFlight = false;
+	let failures = 0;
+	let retryTimer: unknown;
 	const current = () =>
 		active &&
 		isChatResourceConnectionCurrent(deps.state(), { ...scope, connectionGeneration: generation });
+	const cancelRetry = () => {
+		if (retryTimer !== undefined) scheduler.clear(retryTimer);
+		retryTimer = undefined;
+	};
 	const run = async () => {
 		if (inFlight || !current()) return;
+		cancelRetry();
 		const projection = selectChatResourceProjection(deps.state(), scope);
 		if (!projection) return;
 		const read = { ...scope, connectionGeneration: generation, revision: projection.revision };
@@ -56,11 +72,22 @@ export function startChatResourceSync(
 		try {
 			const snapshot = await deps.read();
 			if (snapshot.workspaceId !== scope.workspaceId || snapshot.sessionId !== scope.sessionId) {
-				throw new Error("Resource snapshot belongs to another chat.");
+				if (current()) deps.state().failChatResources(read, FOREIGN_SNAPSHOT, false);
+				return;
 			}
 			if (current()) deps.state().installChatResources(read, snapshot);
+			failures = 0;
 		} catch (error) {
-			if (current()) deps.state().failChatResources(read, errorText(error));
+			if (current()) {
+				const permanent = wsErrorCode(error) === "RESOURCE_UNAVAILABLE";
+				deps.state().failChatResources(read, errorText(error), !permanent);
+				if (permanent) return;
+				failures++;
+				retryTimer = scheduler.set(() => {
+					retryTimer = undefined;
+					void run();
+				}, detailRetryDelay(failures));
+			}
 		} finally {
 			inFlight = false;
 			const latest = selectChatResourceProjection(deps.state(), scope);
@@ -69,6 +96,8 @@ export function startChatResourceSync(
 	};
 	const refresh = () => {
 		if (!current()) return;
+		failures = 0;
+		cancelRetry();
 		deps.state().invalidateChatResources(scope);
 		void run();
 	};
@@ -81,6 +110,7 @@ export function startChatResourceSync(
 		refresh,
 		dispose: () => {
 			active = false;
+			cancelRetry();
 			unsubscribe();
 		},
 	};
@@ -196,7 +226,7 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 	const projection = useAppStore((state) => selectChatResourceProjection(state, scope));
 	const visible = useAppStore((state) => selectChatResourcesVisible(state, scope));
 	const loading = useAppStore((state) => selectChatResourcesLoading(state, scope));
-	const stale = useAppStore((state) => selectChatResourcesStale(state, scope));
+	const staleness = useAppStore((state) => selectChatResourcesStaleness(state, scope));
 	const authoritative = useAppStore((state) => selectChatResourceAuthority(state, scope));
 	const status = useAppStore((state) => state.status);
 	const generation = useAppStore((state) => state.connectionGeneration);
@@ -272,7 +302,7 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 	return {
 		visible,
 		loading,
-		stale,
+		staleness,
 		authoritative,
 		knownUnsupported,
 		projection,

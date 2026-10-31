@@ -421,7 +421,9 @@ settings appear here; the full `ProvidersSettings` stays the power-user surface.
 the shared **`useProviderAuth`** hook, which `ProvidersSettings` uses too: the store's provider status snapshot
 (above), re-read once whenever one of them opens — Central's install state and similar host-local facts change
 without a push — `startLogin` / `logout`, and the store-driven
-`LoginDialog` node. Exactly one surface mounts that node: Settings → Providers while Settings is open, otherwise the
+`LoginDialog` node. For an `anthropic` login started as `oauth` (`LoginState.method`), the node carries the sign-in
+`chat/ExtraUsageNotice` while the report's `warnings.anthropicExtraUsage` is not `false`
+(`warnsExtraUsageOnSignIn`; an older host's report has no `warnings`, so the notice shows). Exactly one surface mounts that node: Settings → Providers while Settings is open, otherwise the
 connect surface (`ownsLoginDialog`), so a login never renders two stacked dialogs. **Post-connect handoff:**
 when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key
 login or a Central connect alike; the surface's first report is that baseline, even one whose re-read is still
@@ -640,11 +642,19 @@ a project picker, the prompt hero, and the reused
   siblings); `SettingsGroup` is a titled block of `SettingsRow`s — label, optional description, one
   control, wrapping the control below the label at narrow widths; `SegmentedControl` is a native-radio
   group with `value: T | null` (`null` selects nothing, for a host value no option names) and per-option
-  disabled; `SettingsNotice` is the one inline neutral/info/success/warning/error notice. Free-text
-  settings share one **auto-save input pattern**: Enter or blur saves a valid, changed value once (no
-  Save/Apply button); an invalid draft stays visible with `aria-invalid` and a visible range message and is
-  never sent; Escape reverts to the authoritative value; the input carries `data-settings-draft-input`;
-  a rejected save toasts and the authoritative value stays in charge. **`McpSettings`** is the **MCP servers** section
+  disabled; `SettingsNotice` is the one inline neutral/info/success/warning/error notice;
+  `SettingsSubheading` titles a run of rows inside a group; `SETTINGS_TAG` is the bordered row tag;
+  `SettingsRange` is the range-slider skin and segmented track; `SettingsFolder` is a data folder's
+  Copy path / Open folder row (`useFolderActions` binds a `*.reveal` method) and its per-file issue notices,
+  shared by Language, Custom themes and Custom fonts; `saveSettings` is the one `settings.update` call that
+  toasts its failure. Popovers inside the dialog render into the dialog element
+  (`settingsDialogContainer`), because Radix's scroll lock cancels wheel and touch scrolling anywhere
+  outside it. Free-text settings and the font weight slider share one **auto-save input pattern**
+  (`settingsDraft.useSettingsDraft`): Enter, blur or a slider release saves a valid, changed value once
+  (no Save/Apply button); an invalid draft stays visible with `aria-invalid` and a range message linked by
+  `aria-describedby`, and is never sent; Escape reverts to the authoritative value; the input carries
+  `data-settings-draft-input`; a host echo never overwrites an edit in progress or rolls back to a value a
+  newer in-flight save replaces; a rejected save toasts and the field returns to the authoritative value. **`McpSettings`** is the **MCP servers** section
   (hidden below `MCP_PROTOCOL_VERSION`). It describes the active workspace's project
   (no active workspace → "Open a workspace to manage its MCP servers") and reads `mcp.list` through
   `transport`'s `watchMcpWorkspace` — on mount, every welcome, a project-trust change, and with bounded
@@ -779,7 +789,27 @@ a project picker, the prompt hero, and the reused
   `canApiKey` — **both routes start `provider.loginStart`**
   (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
   URL / paste a code / answer the provider's own key prompts, `provider.loginReply` — no inline key
-  field); a "configured outside the app" note for rows with neither flag; and
+  field); a "configured outside the app" note for rows with neither flag; **`CustomEndpointsSettings`**
+  (v101, hidden below `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; re-read on `providerVersion`) — the **Custom
+  servers** group listing every `customEndpoints.list` endpoint (name, address, model count; **Edit** and a
+  **Remove** icon behind a `ConfirmDialog`) plus **Add server**. The page's **Refresh** reloads the list together with
+  `provider.status`. Providers the group lists are filtered out of the
+  generic provider rows so each appears once (only listed ids: an unlisted `custom-*` provider, or any on
+  a host without the group, stays a generic row); hand-written `models.json` providers stay in Connected as
+  "Managed", not repeated here. The dialog is one form for a company gateway and a local server: name,
+  address with local preset chips (Ollama, LM Studio, vLLM, llama.cpp — they only fill the address and an
+  empty or preset name; there is no server-kind choice), a password key field (blank keeps a saved key on
+  edit; an edit that changes the address's origin shows a warning and disables Save, since a different
+  server is added as a new one; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
+  (`customEndpoints.probe`, run automatically when an edit opens), a per-model use switch, and a manual
+  model-id field for gateways that list nothing. **A model row has no editable parameters** (decision: they
+  describe the server rather than configure it — its real limits are set by whoever runs it). It shows only
+  the facts the server reported (context, thinking, images, tools; "No tools" in warning tone), and an
+  unreported fact is simply absent and left to pi's default. Re-detecting keeps selections and saved
+  facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
+  reported, and keeps models the server no longer lists; an unchanged saved address stays as written. The
+  pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and
+  host save errors render inline; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
   `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's
@@ -860,7 +890,40 @@ a project picker, the prompt hero, and the reused
   `USER_THEMES_PROTOCOL_VERSION`) gives the copy-a-bundled-file steps with a version-pinned link to
   `dark.theme.json`, the `<dataDir>/themes` folder with **Copy path** / **Open folder** (`themes.reveal`),
   and one warning notice per unusable file (`themes`' issue list). The page reads the catalog and issues
-  through `onThemesChange`, so a dropped file appears in the lists without reopening. An **Editor** group hosts the file
+  through `onThemesChange`, so a dropped file appears in the lists without reopening. From
+  `FONTS_PROTOCOL_VERSION` two groups sit between the theme group and Custom themes ([[submodule-web-fonts]]
+  applies what they save). **Fonts** (`FontsSettings.tsx`) opens with an inert preview on the chat canvas —
+  a chat message in the chat prose system, buttons, an editor sample in `.tr-code-editor` and a terminal
+  sample in `.tr-code-block` — then an **Interface** sub-heading (Font picker; **Text weight** slider, which
+  shifts code weights too, offset −70…+130 in steps of 10, previewed through the fonts runtime while it
+  drags and saved once on release; when a chosen named family
+  does not change between the range's ends on this device — a static face with only regular and bold — an
+  info notice under the slider says so and points at variable fonts, and one that changes only one way says
+  it moves in steps) and a **Code** sub-heading
+  (Font picker listing monospaced fonts only; **Size**, 10–24 on the auto-save input pattern with − / +;
+  **Ligatures**), and an **Advanced** disclosure with Interface and Code **fallback fonts** as chips added
+  through the same picker. A row whose value differs from its default carries a reset button named for its
+  setting. The props-driven picker (`FontPicker.tsx`) groups Built-in / Custom / Installed, draws each name
+  in its own face through `FamilyName` (typography's one token exception: picker rows, the trigger label,
+  fallback chips and the Custom fonts family list), badges Default / Mono / Not on this device, asks the
+  host for `fonts.installed` on every open — keeping the last list while it re-reads, and through a failed
+  re-read, and dropping a stale answer; a skeleton and a warning with Retry show only until a first list
+  arrives — and offers a
+  typed name that matches nothing as **Use “X”**; merging, shadowing and the monospace/renders filters are
+  the pure `fontCatalog.ts`. A named family that does not render on this device puts a warning icon on the
+  trigger and a notice under the row while the choice is kept. Choices go through `settings.update` and
+  converge on `settings.changed`; one role's choice saves at a time, its picker, chips and reset disabled
+  until it lands. **Custom fonts**
+  (`CustomFontsSettings.tsx`) holds the drop zone with **Choose files…** (each file a `PUT /fonts/<name>`
+  through `transport`'s `uploadUserFont`; outcomes land in one polite live region, and overlapping drops
+  add to the same list), the custom families with Mono / In use
+  badges, the `<dataDir>/fonts` folder row with Copy path / Open folder (`fonts.reveal`) and the rule that
+  fonts are removed in the folder, and one warning per unusable file. `SettingsDisclosure` is the shared
+  collapsible row both pages use. Fonts live on Appearance, one page with the theme, because a page of their
+  own added a nav item and in-page tabs a pattern Settings does not have; fallback fonts are picked through
+  the same list, never typed, after a free-text CSS stack proved unclear in review. Whether an OS file drop
+  reaches the page in WKWebView, WebKitGTK and WebView2 is unconfirmed; **Choose files…** is the path that
+  never depends on it. An **Editor** group hosts the file
   `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
   `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
   on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch
@@ -1076,17 +1139,81 @@ a project picker, the prompt hero, and the reused
 
   There is **no separate Review navigation section**; all review-related controls live in Models' REVIEW group.
   **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
-  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) fetches the host-registry catalog with
-  `extension.list` each time the section mounts — the catalog is static per host process, so it is
-  section-local state, not a store slice — and renders it through the props-driven `ExtensionsCatalog`:
-  per row the title, description, tool-name chips and a `@thinkrail/ui/switch` (`extension-toggle-<name>`).
-  The switch state comes from **`store.disabledExtensions`**, not the catalog's `enabled` snapshot, so it
-  follows `settings.changed` from any client; a toggle writes the whole list through
-  `settings.update { disabledExtensions }` and, like every settings switch, converges on that broadcast
-  rather than rendering optimistically (`submodule-server-settings` § Get right). Unknown names already in
-  the list are carried through untouched. An empty registry renders `extensions-empty`; a failed fetch
-  renders `extensions-failed`. Disabling never unregisters a tool renderer
-  ([[submodule-web-extensions]]), so past transcripts still render.
+  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in three groups. Its description
+  carries the page's only statement about chats — "Changes apply to open chats when their current turn
+  ends." — and a primary **Install package…** button; there is no dynamic notice about which chats are
+  pending. **Built into ThinkRail** is the host-registry catalog as before: `extension.list` each time the
+  section mounts (static per host process, so section-local state), rendered by the props-driven
+  `ExtensionsCatalog` — title, description, tool-name chips and a `@thinkrail/ui/switch`
+  (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
+  toggle writes the whole list through `settings.update { disabledExtensions }` and converges on the
+  broadcast. Unknown names already in the list are carried through. **Installed** and **pi built-in**
+  (`PiPackagesSettings.tsx`, props-driven; every `packages.*` request and the row state live in the
+  **`usePiPackages`** hook, `usePiPackages.ts`, so the page component only composes) exist only while
+  `supportsPiPackages(protocolVersion)` holds — against an older host the page is the bundled group
+  alone with its former description, no Install button and no package request — and list
+  `packages.list` for the active workspace (user scope alone without one) through **one** request path
+  (`listPackages`, generation-guarded so a slow older response never overwrites a newer one), re-run on
+  mount, on a workspace change and on the store's `packagesVersion` (the `packages.changed` push, which
+  the host also sends after a package switch so a re-enabled row regains its chips). The update check
+  is guarded the same way: a check started later (a workspace switch, a manual check, the re-check
+  after an update) wins, and only the latest clears "Checking…" or re-flags rows. A **package row** (`PackageRow`) is name ·
+  kind / scope tags (`npm` / `git` / `local`, Global / Repository) · an **Update available** tag when the
+  update check flagged it · one provenance line (declared source · "<version> installed" · description) ·
+  tool and `/command` chips of its extensions as a chat's loader last recorded them (a file no chat has
+  loaded since it changed has none — the host never runs extension code to list; the install dialog
+  probes its new package once, so a fresh install shows chips at once) · the **switch** · a ⋯ menu
+  (Update, Open folder, Remove…). The group's one-line description says the switch affects ThinkRail chats only (the pi CLI
+  still loads the package — `disabledPackages` is a ThinkRail setting). The switch is the only state
+  control; it renders the host's `enabled` (closed over pi's package equivalence) and writes
+  `settings.update { disabledPackages }` — on removes every key in the row's `switchKeys`, off adds its
+  `identity` (`nextDisabledPackages`); an off row dims
+  its text and chips; a user declaration the repository shadows says so under its provenance line. There is no status column and no "installing" row. A declaration with no install
+  on disk (`installedPath` absent) is a **Not installed** row: a warning tag, the source and one hint
+  line ("pi retries when a chat starts; remove it if that keeps failing"), no switch, no expand, a menu
+  with Remove only. The one row-level problem of an installed package is an extension that failed to
+  load — one attention line, `Failed to load: <pi's error>` → **Open folder**. Expanding a row lists its
+  extensions, skills and prompts **read-only** (a resource pi's settings switch off says "off in pi
+  settings"; the package switch is the only control — in-package toggles are deferred until pi exposes
+  an API, see [[submodule-server-agent-packages]]) plus Open folder and Remove…; themes are never shown. A **loose file** row (`LooseRow`:
+  `<agentDir>/extensions/*`, `.pi/extensions/*`, explicit `extensions[]` entries) is the file name with a
+  `local file` tag, its path, chips, a switch and Open folder — no Update or Remove, since ThinkRail did
+  not install it. **pi built-in** lists the two built-ins the host runs (MCP client, Tool search) with a
+  switch each, written as `±builtin:<name>` in the **scope the catalog reports** (a repository entry
+  overrides the user file in pi, so flipping a project-decided row writes `.pi/settings.json`); the
+  group's description names the settings file that decides. Every
+  row action — switch, resource toggle, Update, Open folder, Remove — carries `{ source, scope,
+  workspaceId? }` and a `rowKey` the page keys busy and error state on (an error renders inline on the
+  row, never a toast; the bundled group's switch keeps its older toast); Remove goes through
+  `ConfirmDialog`; Update and Remove run with a ten-minute `timeoutMs`. Updates are checked once on mount
+  (`packages.checkUpdates`, cached by the host) and on **Check for updates** (`force: true`); a failed
+  check renders under the group header; **Update all** sends the flagged rows as **one**
+  `packages.update` request and marks them busy together. The empty state offers
+  Install and the pi.dev gallery link; an untrusted project shows one info notice; a failed list renders
+  `packages-failed`. The **`InstallPackageDialog`** (`InstallPackageDialog.tsx`; its `InstallPackageBody` is
+  props-driven so each step renders without a portal, `installStepHeader` supplies the Radix title per
+  step) is source (an info icon beside the label opens a tooltip listing what can be pasted — gallery
+  or npm link, `pi install` line, npm name, git URL, local folder — in place of a permanent hint; there
+  is no trust warning in the dialog, the empty state's notice and pi's own trust prompt cover it) → scope
+  (**Global** / **This repository only**; there is no per-workspace choice, a
+  package is on wherever its declaration loads) → one confirm → **Installing…** (indeterminate, no
+  progress log, no Cancel — pi has none) → **Installed** (name · version · description, chips for every
+  tool / command / skill / prompt it added, and one line: "Installed globally — new chats have it now;
+  open chats pick it up when idle"; no switch here — the row in the list is the only state control) or
+  **Failed** (the host's message,
+  "Nothing was added to your settings" only for the codes the host raises before it writes
+  (`installFailureOutcome`), "It may have been added anyway — check the list" for any other error, Back /
+  Retry; a `RequestTimeoutError` instead says to check the list, since the install may still complete). A package that installs but contributes nothing loadable
+  is a success with an empty chip list — it has a row, so it can be removed. The field is forgiving: `parsePiPackageInput`
+  ([[module-contracts]]) turns a pi.dev or npmjs.com package link, a pasted `pi install …` line and a
+  bare `@scope/name[@version]` into the `npm:` source pi accepts for the echo and the display name; a
+  pasted `-l` selects the repository scope when it is available. The request carries the raw text and
+  the host applies the same function (plus its folder-first rule for a bare name), so what the echo
+  says is what installs.
+  `describeSource` is a light client-side echo only — the host validates; **This repository only** is
+  offered only with an active workspace whose project is pi-trusted,
+  with the reason shown otherwise, and the hints show the real settings paths from the catalog. Disabling
+  never unregisters a tool renderer ([[submodule-web-extensions]]), so past transcripts still render.
   **`EnvironmentSettings`** (the **Environment** section, nav `settings-nav-environment`, listed only at
   `protocolVersion >= HOST_ENVIRONMENT_PROTOCOL_VERSION`) edits the stored host environment
   ([[submodule-server-environment]]): the pi config folder, the folder in use (`effectiveAgentDir`), and
@@ -1501,7 +1628,8 @@ own section. The kebab menu (`plan-menu`, a
   reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
   `ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary (catalog keys)
   `ProvidersSettings` shares with the picker, and its `formatContext` plus `ProviderGlyph`, reused by
-  `VisibleModelsSettings`' rows; `TemplateEditorDialog`, reused by `TemplatesSettings`), `auth` (`LoginDialog`, mounted through
+  `VisibleModelsSettings`' rows; `TemplateEditorDialog`, reused by `TemplatesSettings`; `ExtraUsageNotice`, the
+  sign-in notice `useProviderAuth` passes to `LoginDialog`), `auth` (`LoginDialog`, mounted through
   `useProviderAuth` and by `McpSettings`), `@thinkrail/resource-renderers`, `lib`, `themes` (catalog + generic application contract),
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`shiki`,
   `@xterm/*`) loaded via `import()`.
@@ -1803,8 +1931,13 @@ own section. The kebab menu (`plan-menu`, a
   (workspace change, that workspace's `fsChangesByWorkspace` tick, a **`readKey`** change, or `reload()` for a manual Refresh) while
   the caller owns *what to do* with the outcome (`onResult` / `onFailure` / `onSwitch`). Centralized because
   each site was otherwise re-implementing the **stale-response guard**: an answer in flight when the caller
-  moves on must not land in the new workspace's view (reads are generation-stamped — latest wins, abandoned
-  ones stay silent). A `null` workspaceId reads nothing, which is also how a component expresses a
+  moves on must not land in the new workspace's view. Reads are **single-flight** (`createSingleFlight`,
+  unit-tested): one read in flight per mount, and ticks or `reload()` that arrive during it fold into one
+  follow-up with the latest inputs. Each tick otherwise started its own request, and a slow host (a stalled
+  `git`) let them pile up until the transport's per-client replay cap refused every request. A read whose
+  identity (workspace, `readKey`) is unchanged still delivers its result or failure even with a follow-up
+  queued; dropping it would starve the view whenever ticks arrive faster than the read. An identity change
+  or unmount silences it. A `null` workspaceId reads nothing, which is also how a component expresses a
   *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
   its compact single-directory run; descendants below the run's deepest directory mount and read only
   when that compact row is expanded. No tick has to be threaded down as a prop.
@@ -1864,7 +1997,15 @@ own section. The kebab menu (`plan-menu`, a
   older read lands last and overwrites the newer target's content while carrying its own honest — but now
   stale — stamp, so neither effect sees any drift and the pane keeps the old target's diff under the new
   target's label indefinitely. Dropping the superseded read costs nothing: the read that superseded it is
-  the one the user is waiting for. Panels are mounted only for the active workspace,
+  the one the user is waiting for. Tick reads are single-flight per tab: a tick that lands while the
+  same path is being read waits, the read applies at the tick it started for, and a newer tick re-reads once
+  after it settles. A read superseded before it applied (a remount, `reload()`, or a re-point) also
+  re-checks the tick, so the tab never stays below it with nothing in flight. `reload()` is a tracked
+  read too: it supersedes the tick read, makes later ticks wait, and applies at the workspace tick it
+  started at. Stamping the tick at settle time would mark content read before a waiting tick as current,
+  and the tab would stay stale. The read logic lives in `createTabReader`, unit-tested without React. Cancelling the slow read on every tick kept `loadedTick` from ever advancing, so each
+  tick refetched. The re-point read takes the tick from the tab when it settles, so a tick landing mid-read
+  does not cancel it. Panels are mounted only for the active workspace,
   so scoping is natural. A degraded host watcher pauses automatic invalidations until the next workspace
   read re-establishes it; editable-file conflict handling waits for `fs.writeFile` (the viewer is read-only today).
 - **`useWorkspaceSpecs` owns the `spec.graph` read** (one fetcher, one definition of "this file is a spec"):
@@ -2242,8 +2383,9 @@ own section. The kebab menu (`plan-menu`, a
   context, which our per-worktree terminal churn would hit). Addons are exactly `fit`, `clipboard`,
   `unicode11` and `web-fonts`; anything else pinned but unimported is dead weight and a trap for the next
   reader. `web-fonts` is load-bearing rather than cosmetic: our code font ships as per-alphabet woff2 subsets,
-  so the Cyrillic/CJK file lands *after* xterm has measured the character cell (which it does once, at
-  construction, and never again — unlike Monaco, which re-measures an untrusted early reading). Without the
+  so the Cyrillic/CJK file lands *after* xterm has measured the character cell (which it does at
+  construction and again only when a font option changes — unlike Monaco, which re-measures an untrusted
+  early reading). Without the
   re-measure, non-Latin glyphs render into cells sized for the fallback font and the PTY holds the wrong
   cols/rows. Initial attach therefore waits for `relayout()`, performs a final `fit()`, and only then captures
   the PTY grid. The wait is **bounded by a deadline**, because `relayout()` in the pinned addon awaits
@@ -2252,6 +2394,16 @@ own section. The kebab menu (`plan-menu`, a
   Relayout failure or deadline expiry falls back to the construction-time measurement rather than stranding
   the pane; on expiry the stale relayout is neutralized first (disposing the addon skips its re-measuring
   `fontFamily` toggle), so a font that finishes loading late cannot re-lay-out an already-attached terminal.
+  A **font settings change** is the one later re-measure: through `@thinkrail/ui/fonts`' `watchFont` the
+  terminal resolves the generated `.tr-code-block` style (family, code size, weight), waits for that face to
+  load, sets the three options and re-fits, which resyncs the PTY grid. Only the latest change applies; one
+  that leaves family, size and weight alone is skipped unless the custom face set changed (a replaced file
+  keeps its family name but not its metrics), and a ligatures-only change never re-measures. Each apply sets
+  `fontFamily` to `monospace` and back, because xterm re-measures its cell only when that option's value
+  changes. The relayout start callback applies the latest resolved font before its first fit, so a change
+  that lands while the initial relayout is pending is not lost. It never draws ligatures: the DOM renderer merges a run of
+  same-styled cells into one text node, so `index.css` pins `.xterm .xterm-rows` to
+  `font-variant-ligatures: none` whatever the Ligatures switch says.
   This ordering also prevents a fallback-width attach followed by a corrective resize from producing
   post-snapshot shell redraws that can erase replayed rows. Its pre-bind output buffer is a bounded waiting
   state: successful bind filters it to the adopted PTY, while creation failure clears it and stops accepting

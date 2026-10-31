@@ -15,7 +15,7 @@ export {
 	projectMcpConfigPath,
 	validateMcpServerConfig,
 } from "./config";
-export { createMcpEngine } from "./engine";
+export { createMcpEngine, HOST_BUILTIN_EXTENSION_NAMES } from "./engine";
 export { readMcpServerLog } from "./log";
 export {
 	effectiveMcpServerConfig,

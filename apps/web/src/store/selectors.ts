@@ -243,18 +243,22 @@ export function selectChatResourcesLoading(
 	);
 }
 
-export function selectChatResourcesStale(
+export type ChatResourcesStaleness =
+	| "disconnected"
+	| "refreshFailed"
+	| "unavailable"
+	| "refreshing";
+
+export function selectChatResourcesStaleness(
 	state: ChatResourceState,
 	scope: ChatResourceScope,
-): boolean {
+): ChatResourcesStaleness | null {
+	if (selectChatResourceAuthority(state, scope)) return null;
+	if (state.status !== "connected" || !supportsChatResources(state.protocolVersion))
+		return "disconnected";
 	const projection = selectChatResourceProjection(state, scope);
-	return (
-		!selectChatResourceAuthority(state, scope) &&
-		(!!projection?.snapshot ||
-			!!projection?.error ||
-			state.status !== "connected" ||
-			!supportsChatResources(state.protocolVersion))
-	);
+	if (projection?.error) return projection.retrying ? "refreshFailed" : "unavailable";
+	return projection?.snapshot ? "refreshing" : null;
 }
 
 export function isActiveBackgroundCommand(command: BackgroundCommandSummary): boolean {

@@ -14,7 +14,11 @@ afterEach(() => {
 function stubIdleCallback() {
 	const calls: { run: () => void; timeout: number | undefined }[] = [];
 	const cancelled: number[] = [];
-	globalThis.requestIdleCallback = (run, options) => calls.push({ run, timeout: options?.timeout });
+	globalThis.requestIdleCallback = (run, options) =>
+		calls.push({
+			run: () => run({ didTimeout: false, timeRemaining: () => 0 }),
+			timeout: options?.timeout,
+		});
 	globalThis.cancelIdleCallback = (handle) => cancelled.push(handle);
 	return { calls, cancelled };
 }

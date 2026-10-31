@@ -3,6 +3,7 @@ import type {
 	AppSurvey,
 	ComposerGrowthLimit,
 	ExtUiRequest,
+	FontChoice,
 	GitDiffScope,
 	HostPlatform,
 	HostUpdateNotice,
@@ -15,6 +16,7 @@ import type {
 	PiEvent,
 	Project,
 	ProviderStatusReport,
+	ProviderWarning,
 	RefreshedModels,
 	ResourceKind,
 	ResourceMeta,
@@ -37,6 +39,7 @@ import type {
 	ThemeMode,
 	ThinkingLevel,
 	TurnChangeSet,
+	UserFontsSnapshot,
 	UserMessage,
 	UserThemesSnapshot,
 	WireModel,
@@ -56,6 +59,7 @@ import {
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
+	normalizeFontSettings,
 	normalizeThemePreference,
 	readToolResponseMessage,
 	sameModel,
@@ -486,6 +490,7 @@ export interface SessionRuntime {
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
 	extUiWidget: Record<string, string[]>;
+	notice: ProviderWarning | null;
 	hostState: SessionState | null;
 }
 
@@ -517,6 +522,7 @@ function newRuntime(
 		extUiQueue: [],
 		extUiStatus: {},
 		extUiWidget: {},
+		notice: null,
 		hostState: null,
 	};
 }
@@ -919,6 +925,8 @@ function reduceExtUi(
 				return { ...rt, extUiWidget: omitKey(rt.extUiWidget, request.key) };
 			return { ...rt, extUiWidget: { ...rt.extUiWidget, [request.key]: request.content } };
 		}
+		case "notice":
+			return rt.notice === request.notice ? rt : { ...rt, notice: request.notice };
 		default:
 			return rt;
 	}
@@ -955,7 +963,7 @@ interface AppState {
 	resourceRevision: number;
 	invalidateChatResources: (scope: ChatResourceScope) => void;
 	installChatResources: (read: ChatResourceRead, snapshot: SessionResources) => void;
-	failChatResources: (read: ChatResourceRead, error: string) => void;
+	failChatResources: (read: ChatResourceRead, error: string, retrying: boolean) => void;
 	appendChatResourceHistory: (
 		read: ChatResourceScope & { connectionGeneration: number },
 		kind: ResourceKind,
@@ -1022,6 +1030,8 @@ interface AppState {
 	providerStatusVersion: number;
 	providerStatus: ProviderStatusSnapshot;
 	templatesVersion: number;
+	/** Bumped on `packages.changed`; the Extensions page re-lists installed pi packages when it moves. */
+	packagesVersion: number;
 	modelsRefreshing: boolean;
 	modelsFresh: boolean;
 	changesRequest: {
@@ -1086,11 +1096,19 @@ interface AppState {
 	reviewAutoFix: boolean;
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
+	disabledPackages: string[];
 	locale: string;
 	localLocales: LocalLocalesSnapshot | null;
 	installLocalLocales: (snapshot: LocalLocalesSnapshot | null) => void;
 	userThemes: UserThemesSnapshot | null;
 	installUserThemes: (snapshot: UserThemesSnapshot | null) => void;
+	interfaceFont: FontChoice;
+	codeFont: FontChoice;
+	codeFontSize: number;
+	codeLigatures: boolean;
+	fontWeightOffset: number;
+	userFonts: UserFontsSnapshot | null;
+	installUserFonts: (snapshot: UserFontsSnapshot | null) => void;
 	onboardingDismissed: boolean;
 	onboardingWizard: OnboardingWizardGate;
 	customLayoutPresets: LayoutPreset[];
@@ -1354,6 +1372,7 @@ interface AppState {
 	invalidateProviderStatus: () => void;
 	installProviderStatus: (version: number, report: ProviderStatusReport | null) => void;
 	bumpTemplatesVersion: () => void;
+	bumpPackagesVersion: () => void;
 	beginModelsRefresh: () => number;
 	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	dropModelsFreshness: () => void;
@@ -1362,11 +1381,18 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	dismissSessionNotice: (sessionId: string) => void;
+	silenceNotice: (notice: ProviderWarning) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	applyExtUi: (request: ExtUiRequest) => void;
 	reserveLogin: () => boolean;
 	finishLoginStart: () => void;
-	beginLogin: (loginId: string, providerId: string, target?: LoginPush["target"]) => void;
+	beginLogin: (
+		loginId: string,
+		providerId: string,
+		target?: LoginPush["target"],
+		method?: LoginState["method"],
+	) => void;
 	applyLoginFrame: (push: LoginPush) => void;
 	clearLoginInput: () => void;
 	clearLogin: (loginId?: string) => void;
@@ -1475,8 +1501,12 @@ function configPatch(config: AppConfig) {
 		disabledExtensions: Array.isArray(config.disabledExtensions)
 			? config.disabledExtensions
 			: DEFAULT_CONFIG.disabledExtensions,
+		disabledPackages: Array.isArray(config.disabledPackages)
+			? config.disabledPackages
+			: DEFAULT_CONFIG.disabledPackages,
 		locale: isLocalePreference(config.locale) ? config.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: config.onboardingDismissed === true,
+		...normalizeFontSettings(config),
 	};
 }
 
@@ -2038,6 +2068,7 @@ const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
 	"setStatus",
 	"setWidget",
 	"setTitle",
+	"notice",
 ]);
 
 function isDialogRequest(
@@ -2301,6 +2332,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	providerStatusVersion: 0,
 	providerStatus: { version: -1, report: null, failed: false },
 	templatesVersion: 0,
+	packagesVersion: 0,
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
@@ -2359,11 +2391,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
+	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
 	localLocales: null,
 	installLocalLocales: (snapshot) => set({ localLocales: snapshot }),
 	userThemes: null,
 	installUserThemes: (snapshot) => set({ userThemes: snapshot }),
+	interfaceFont: DEFAULT_CONFIG.interfaceFont,
+	codeFont: DEFAULT_CONFIG.codeFont,
+	codeFontSize: DEFAULT_CONFIG.codeFontSize,
+	codeLigatures: DEFAULT_CONFIG.codeLigatures,
+	fontWeightOffset: DEFAULT_CONFIG.fontWeightOffset,
+	userFonts: null,
+	installUserFonts: (snapshot) => set({ userFonts: snapshot }),
 	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
 	onboardingWizard: "pending",
 	toasts: [],
@@ -2501,7 +2541,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	failChatResources: (read, error) =>
+	failChatResources: (read, error, retrying) =>
 		set((state) => {
 			const previous = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
 			if (!previous || !isChatResourceReadCurrent(state, read)) return {};
@@ -2510,7 +2550,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...state.resourceSnapshots,
 					[read.workspaceId]: {
 						...state.resourceSnapshots[read.workspaceId],
-						[read.sessionId]: { ...previous, fresh: false, error },
+						[read.sessionId]: { ...previous, fresh: false, error, retrying },
 					},
 				},
 			};
@@ -4280,6 +4320,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				: s,
 		),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
+	bumpPackagesVersion: () => set((s) => ({ packagesVersion: s.packagesVersion + 1 })),
 	beginModelsRefresh: () => {
 		const providerVersion = get().providerVersion;
 		set({ modelsRefreshing: true });
@@ -4305,6 +4346,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	dismissSessionNotice: (sessionId) =>
+		set((s) => withRuntime(s, sessionId, (rt) => (rt.notice ? { ...rt, notice: null } : rt))),
+	silenceNotice: (notice) =>
+		set((s) => {
+			const silenced = Object.entries(s.sessions).filter(([, rt]) => rt.notice === notice);
+			const orphans = s.extUiOrphans.filter(
+				(frame) => frame.kind !== "notice" || frame.notice !== notice,
+			);
+			const sessions = silenced.length > 0 ? { ...s.sessions } : s.sessions;
+			for (const [id, rt] of silenced) sessions[id] = { ...rt, notice: null };
+			return {
+				...(sessions !== s.sessions ? { sessions } : {}),
+				...(orphans.length !== s.extUiOrphans.length ? { extUiOrphans: orphans } : {}),
+			};
+		}),
 	clearPendingExtUi: (sessionId, id) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => {
@@ -4327,12 +4383,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 		return true;
 	},
 	finishLoginStart: () => set({ loginStarting: false }),
-	beginLogin: (loginId, providerId, target) =>
+	beginLogin: (loginId, providerId, target, method) =>
 		set((s) => {
 			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
-			if (s.activeLogin?.loginId === loginId || s.activeLogin?.status === "active") return {};
+			if (s.activeLogin?.loginId === loginId)
+				return method && !s.activeLogin.method ? { activeLogin: { ...s.activeLogin, method } } : {};
+			if (s.activeLogin?.status === "active") return {};
 			const early = s.unheldLoginFrame?.loginId === loginId ? s.unheldLoginFrame.frame : null;
-			const fresh = newLoginState(loginId, providerId, target);
+			const fresh = {
+				...newLoginState(loginId, providerId, target),
+				...(method ? { method } : {}),
+			};
 			return {
 				activeLogin: early ? foldLoginFrame(fresh, early) : fresh,
 				unheldLoginFrame: null,

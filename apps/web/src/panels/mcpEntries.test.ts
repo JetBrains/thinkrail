@@ -454,9 +454,10 @@ test("dialogs show plain values hidden; an untouched marker keeps the written va
 		oauth: { clientId: "c", clientSecret: "s3cret" },
 	};
 	const shown = hideMcpLiterals(written);
+	const shownEnv = { API_KEY: MCP_HIDDEN_VALUE, REF: `\${REF}`, EMPTY: "" };
 	expect(shown).toEqual({
 		command: "node",
-		env: { API_KEY: MCP_HIDDEN_VALUE, REF: `\${REF}`, EMPTY: "" },
+		env: shownEnv,
 		headers: { Authorization: "!echo Bearer x" },
 		oauth: { clientId: "c", clientSecret: MCP_HIDDEN_VALUE },
 	});
@@ -474,13 +475,13 @@ test("dialogs show plain values hidden; an untouched marker keeps the written va
 		`env API_TOKEN and env REF still show ${MCP_HIDDEN_VALUE}, which keeps only a value the file already has under that name. ${HINT}`,
 	]);
 	expect(
-		mcpEditedEntry(currentTranslator(), { ...shown, env: { ...shown.env, MODE: "prod" } }, written)
+		mcpEditedEntry(currentTranslator(), { ...shown, env: { ...shownEnv, MODE: "prod" } }, written)
 			.issues,
 	).toEqual([`env MODE is not a reference. ${HINT}`]);
 	expect(
 		mcpEditedEntry(
 			currentTranslator(),
-			{ ...shown, env: { ...shown.env, API_KEY: `\${API_KEY}` } },
+			{ ...shown, env: { ...shownEnv, API_KEY: `\${API_KEY}` } },
 			written,
 		),
 	).toEqual({

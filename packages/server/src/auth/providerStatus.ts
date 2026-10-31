@@ -1,12 +1,15 @@
-import type {
-	JbcentralInstall,
-	JbcentralStatus,
-	ProviderStatus,
-	ProviderStatusReport,
+import {
+	isCustomEndpointId,
+	type JbcentralInstall,
+	type JbcentralStatus,
+	type ProviderStatus,
+	type ProviderStatusReport,
+	type ProviderWarning,
 } from "@thinkrail/contracts";
 import { jbcentralInstall } from "@thinkrail/shared/jbcentral";
 import {
 	describeProviderAuth,
+	globalProviderWarnings,
 	type ProviderAuthFacts,
 	settledAvailableModels,
 	usePiRuntime,
@@ -26,6 +29,7 @@ export interface ProviderStatusSources {
 	hasAuth: (id: string) => boolean;
 	jbcentral: JbcentralStatus;
 	jbcentralInstall: JbcentralInstall;
+	warnings: Record<ProviderWarning, boolean>;
 }
 
 export function buildProviderReport(sources: ProviderStatusSources): ProviderStatusReport {
@@ -71,14 +75,28 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 		providers,
 		jbcentral: sources.jbcentral,
 		jbcentralInstall: sources.jbcentralInstall,
+		warnings: sources.warnings,
 	};
+}
+
+export function statusProviderIds(
+	allowlist: ReadonlySet<string>,
+	opaque: ReadonlySet<string>,
+	current: readonly string[],
+): string[] {
+	const added = current.filter((id) => isCustomEndpointId(id) && !opaque.has(id));
+	return [...new Set([...allowlist, ...added])];
 }
 
 export async function getProviderStatus(): Promise<ProviderStatusReport> {
 	const jbcentral = await getJbcentralStatus();
 	const install = jbcentralInstall(process.platform);
 	return usePiRuntime(async (runtime, generation) => {
-		const providerStatusIds = [...generation.providerStatusIds];
+		const providerStatusIds = statusProviderIds(
+			generation.providerStatusIds,
+			generation.opaqueProviderIds,
+			(runtime.getProviders?.() ?? []).map((provider) => provider.id),
+		);
 		try {
 			await runtime.refresh({ providers: providerStatusIds });
 		} catch {
@@ -127,6 +145,7 @@ export async function getProviderStatus(): Promise<ProviderStatusReport> {
 			hasAuth: (id) => runtime.getProviderAuthStatus(id).configured,
 			jbcentral,
 			jbcentralInstall: install,
+			warnings: globalProviderWarnings(),
 		});
 	});
 }

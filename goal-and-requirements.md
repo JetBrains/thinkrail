@@ -106,8 +106,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   read-only Specs tool renders it as a tree ([[module-spec-graph]], [[submodule-server-spec]]).
 - **Workflows** — bundled workflow skills for project setup, design brainstorming, and shipping a PR
   ([[module-thinkrail-workflow]]).
-- **Providers** — in-app sign-in and API keys through pi's auth, and JetBrains AI through the user's
-  `central` CLI ([[submodule-server-auth]], [[central-integration]]).
+- **Providers** — in-app sign-in and API keys through pi's auth, JetBrains AI through the user's
+  `central` CLI, and the user's own OpenAI-compatible servers (a company gateway or a local model server)
+  added from Settings into pi's `models.json` ([[submodule-server-auth]], [[central-integration]],
+  [[submodule-server-agent]]).
 - **Pi configuration** — the user's own pi config folder, or another one (a personal vs a work setup), plus
   extra environment variables, chosen in Settings and applied to the whole host at the next start; one setup
   per host, not per project ([[submodule-server-environment]]).
@@ -115,6 +117,11 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   guessing, and inline diagrams, comparisons and file previews in chat; a proposed UI change is shown as
   a rendered before/after mockup through the same renderers and review comments as diff review
   ([[submodule-web-chat-tools-web]], [[module-ext-ask-user-question]], [[module-ext-visualize]]).
+- **Pi packages** — install a pi package by source (npm, git or a local folder) from Settings, for the
+  user or for a repository, and see everything pi loads: each package's extensions, skills and prompts
+  with their tools, hand-dropped extension files, and pi's built-ins — switching any of them off in pi's
+  own settings format, a whole package through a ThinkRail setting. Changes reach open chats when their
+  turn ends ([[submodule-server-agent-packages]], [[submodule-web-panels]]).
 - **MCP servers** — pi's built-in MCP, read from the user's `mcp.json`, managed from Settings and visible
   per chat next to background commands and subagents; a confirm in the chat, on the call, before calls
   that may change data, with a per-project "Always allow" for tools the user trusts
@@ -128,9 +135,14 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Themes** — light, dark, minimal and high-contrast themes ship built-in, following the system
   appearance or a fixed choice; a user adds a theme by saving a copy of a bundled theme file with new
   colours in `~/.thinkrail/themes`, live on save ([[submodule-web-themes]]).
+- **Fonts** — the interface and code fonts are the user's choice among the bundled faces, the fonts
+  installed on the host machine, and font files added in Settings (kept in `~/.thinkrail/fonts`), with
+  fallback fonts, a code size, code ligatures and one text-weight knob; one choice per host, applied at
+  once in every window, and a font missing on a device falls back to the bundled face with a warning
+  ([[submodule-web-fonts]], [[submodule-server-fonts]]).
 - **Brand** — ThinkRail green accent (bright on dark themes, deepened on light ones so it clears AA on
   both), a Darcula-family dark background, Orbitron for the brand display role, Geist and JetBrains Mono
-  for UI and code ([[submodule-web-themes]], [[web-typography]]).
+  as the default UI and code faces ([[submodule-web-themes]], [[web-typography]]).
 
 ## Non-goals
 

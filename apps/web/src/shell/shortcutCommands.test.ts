@@ -11,7 +11,7 @@ import {
 import { globalHotkeyCommand } from "./useGlobalHotkeys";
 
 const { holdMs, pollMs } = QUIT_CONFIRMATION;
-const TERMINAL = { terminal: true };
+const TERMINAL = new EventTarget();
 
 function chord(code: string, overrides: Partial<KeyboardEvent> = {}) {
 	return {
@@ -45,11 +45,15 @@ function harness(platform: ShortcutPlatform = "linux") {
 			};
 		},
 	});
-	function keydown(code: string, overrides: Partial<KeyboardEvent> = {}, target: unknown = null) {
+	function keydown(
+		code: string,
+		overrides: Partial<KeyboardEvent> = {},
+		target: EventTarget | null = null,
+	) {
 		const event = {
 			...chord(code, overrides),
 			repeat: overrides.repeat ?? false,
-			target: target as EventTarget | null,
+			target,
 			prevented: false,
 			preventDefault() {
 				event.prevented = true;
@@ -166,7 +170,13 @@ test("only windows and linux bind web chords", () => {
 });
 
 test("no table chord is also a global hotkey", () => {
-	const available = { projects: true, workspace: true, bottom: true, newWorkspace: true };
+	const available = {
+		projects: true,
+		workspace: true,
+		bottom: true,
+		newWorkspace: true,
+		sessionSwitcher: true,
+	};
 	for (const platform of ["Win32", "Linux x86_64"]) {
 		for (const command of SHORTCUT_COMMANDS) {
 			for (const { code } of Object.values(command.chords).flat()) {

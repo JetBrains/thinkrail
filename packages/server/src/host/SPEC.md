@@ -41,7 +41,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   send `X-Content-Type-Options: nosniff`; active same-origin types (`text/html`,
   `application/xhtml+xml`, `image/svg+xml`) additionally receive
   `Content-Security-Policy: sandbox; default-src 'none'`, so direct navigation cannot execute repository
-  script, static serving with
+  script, the **`/fonts/<file>`** route (`fontRoutes.ts`, ahead of the static fallback) over the
+  [[submodule-server-fonts]] folder — the host's one HTTP write route and the only route that checks its
+  method: `GET` serves a font by its extension's type (`font/ttf|otf|woff|woff2`) with
+  `Cache-Control: no-cache` (list URLs carry a content version) and 404s any name `fontFileKind` refuses,
+  a collection, or a missing file; `PUT` (behind the upload guard below) answers 400 for a refused name,
+  else stores the body through `saveUserFont` and answers that file's entry as JSON: 200, 413 `too-large`
+  (checked against `Content-Length` before reading and again while streaming), 409 `too-many`, 422
+  `unsupported-collection`/`invalid-font`, or 500 `unreadable`; any other method is 405 with
+  `Allow: GET, PUT`, the `fonts` poller's `fonts.changed` nudge reaching
+  only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`, static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
@@ -52,23 +61,50 @@ channel fan-out, and the process-boot wrapper both launchers share.
   and reaping the client clears its cache — but **only once nothing is in flight**: an unresolved request
   outlives the socket grace window, since the page holds that frame until its *own* deadline (30 minutes for
   the folder picker) and replays it on reconnect, so `clearClient` declines and the reap re-arms rather than
-  let the replay start a second execution of a handler that has not finished). **Nothing in that cache is ever evicted**, because a
+  let the replay start a second execution of a handler that has not finished. Abandoned work (below) still
+  holds the reap: the reap's owner cleanup (terminals, interview, MCP probes) must not run while one of the
+  client's handlers can still act for it — an `mcp.login` awaiting its ownership guard would otherwise start a
+  probe owned by an already-cleaned client.) **Nothing in that cache is ever evicted**, because a
   successful `send` says the bytes were queued, not that the page read them, and a socket that dies holding a
   reply is indistinguishable from one that flushed it — so any result dropped on the host's own initiative may
   be the one a replay is about to ask for. A result leaves only on the client's own word, via two frames handled
-  here and never routed to a handler: `{ ack: [id] }` names responses it has **read** (the steady state), and
-  `{ resume: [id] }` on each reconnect names everything it still considers **unresolved**, freeing all other
-  settled results. `resume` is what makes receipts safe to lose — an ack can die in a socket buffer exactly like
+  here and never routed to a handler: `{ ack: [id] }` names responses it has **read** (the steady state) and
+  requests whose own deadline fired, and `{ resume: [id] }` on each reconnect names everything it still
+  considers **unresolved**, freeing all other settled results. A still-running entry that an `ack` names, or a
+  `resume` omits, is **abandoned**: the page will never replay that id (ids only grow, and a timed-out id has left
+  its queue), so the entry stops counting toward the *live* limit and is dropped — never retained — the moment
+  its handler settles; a duplicate frame arriving while it runs still joins the same promise, so abandonment
+  cannot cost exactly-once. Before this (#974), a request the page had given up on kept its slot until its
+  handler settled, and a result settling after a reconnect went to the dead socket and sat until the next
+  `resume`, so enough slow requests filled the namespace and refused every later request from that window.
+  Abandoned work is still running work, so it stays bounded (the tracked ceiling below). Each `ack`/`resume`
+  that abandons running work logs one `warn` with the per-method counts; `RequestAbandonedError`
+  (`code: "REQUEST_ABANDONED"`, tagged with the method) is reported once per method per launch and for at most
+  10 methods, because it shares the `request` source's fixed per-launch report budget with genuine handler
+  failures and the overflow report, and a reload's new client key must not renew it. Requests that settle
+  inside the page deadline yet arrive faster than they settle can still fill the live limit; abandonment does
+  not address that. `resume` is what makes receipts safe to lose — an ack can die in a socket buffer exactly like
   a response can, and nothing would ever re-send it, so each reconnect restates the whole truth instead of
-  confirming the confirmations. Cost is bounded instead by **two hard limits, each enforced where its size becomes
-  known**: the entry count on the way *in* — a full namespace refuses new ids (`RequestReplayOverflowError` → a
-  normal `ok: false`) while still answering every id it holds — and the retained bytes on the way *out* of the
+  confirming the confirmations. Cost is bounded instead by **three hard limits, each enforced where its size
+  becomes known**: two entry counts on the way *in* — 512 live entries (pending or settled-but-unread, the
+  page's working set) and 2048 tracked entries (live plus abandoned, so a page that keeps timing out a hung read
+  cannot start handlers without bound; any finite ceiling eventually refuses a permanently hung workload, and
+  4× headroom only buys time to report it) — where a full namespace refuses new ids
+  (`RequestReplayOverflowError` → a normal `ok: false`) while still answering every id it holds, and the
+  retained bytes on the way *out* of the
   handler, since a response's size is unknowable at admission (`fs.readFile` returns a whole file) and in-flight
   work weighs nothing, so an admission-time byte check would bound the count and nothing else. A result that
   would breach the byte budget is not retained: the entry stays as proof the work ran, so its replay fails
   (`RequestReplayUnretainedError`) rather than re-executing, and the response the caller was already sent is
   unaffected. Neither limit can cost exactly-once — one refuses work that has not started, the other keeps the
-  record of work that finished and drops only its answer,
+  record of work that finished and drops only its answer. A refusal is `CodedError("REQUEST_REPLAY_OVERFLOW")`
+  in the reply's `errorCode`, its message free of the client key because it reaches the page's toast. The
+  first refusal of an episode logs a `warn` with what the namespace holds per method — pending, settled and
+  abandoned — and reports the error tagged with the method occupying the most entries (the
+  refused request is usually a bystander), so a full namespace points at what filled it — a lead, not proof of
+  the root cause — instead of vanishing into a debug line (#974). An episode ends only once the namespace is
+  below 90% of both counts, so a namespace hovering at a cap
+  does not log and report on every freed slot (the `request` report source has a fixed per-launch budget),
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`), the **`provider.changed`** invalidation broadcast after auth changes the Central status or
   current runtime generation, after every successful in-app provider login (not an MCP sign-in), and after
@@ -197,7 +233,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   recorded. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
   adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
   eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
-  invalidate catalogs across clients. Existing review chats and plan-review
+  invalidate catalogs across clients. The four `customEndpoints.*` methods delegate to agent's
+  `customEndpoints` adapter one-to-one; the host adds no state of its own. Existing review chats and plan-review
   subagents keep their own policies — and
   the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
   the admission context from `projects` (+ the
@@ -398,7 +435,20 @@ channel fan-out, and the process-boot wrapper both launchers share.
   workspace's service. Extension on/off is global only: `setDisabledExtensionsResolver` returns
   `AppConfig.disabledExtensions` as a set (unknown names are inert), and `extension.list` answers with the
   `extensions` catalog joined with that same setting — the switch itself writes through `settings.update`,
-  so there is no extension write method. The
+  so there is no extension write method. **Installed pi packages** follow the same pattern one level up:
+  `setDisabledPackagesResolver` returns `AppConfig.disabledPackages`, a change to either list calls
+  `refreshExtensionTools()`, and `host/packages.ts` answers the `packages.*` methods by mapping an
+  optional `workspaceId` onto the checkout plus a fresh project-trust thunk (`host/mcp.ts`'s shape) and
+  delegating to the `agent` façade; a confirmed `packages.install` also drops the new identity from
+  `disabledPackages` before returning the row, so a package the user re-installs is on. `packages.reveal`
+  opens the catalog-validated folder (a single-file package's directory, never the file) through
+  `revealInFileManager`. Boot primes the user settings file and every workspace record's
+  `.pi/settings.json` for the packages watch (`primeUserPiSettings`, `primeProjectPiSettings`) and
+  routes a `.pi/settings.json` workspace nudge to `handleProjectPiSettingsChanged` only for a project
+  whose pi-level trust is granted — an untrusted repository's file never affects resolution, so it must
+  not fan out a reload; a `disabledPackages` change also publishes `packages.changed` so a re-enabled
+  row regains its chips. The channel is subscribed from `PI_PACKAGES_PROTOCOL_VERSION` and published
+  through `setPiPackagesPublisher`. The
   two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
   runtime capability, not frontend state;
   **Review marks are memory-plus-disk, and only the disk half survives a restart.** The serial chain and
@@ -578,7 +628,7 @@ enabled/confirmed choice before entering analytics attribution.
   `boot.ts`; `codedError`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
-  routes); Bun/Node.
+  routes, `fonts`' `fontFileKind`/`saveUserFont` for `/fonts/`); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
 
 - **Settled-lifecycle wiring (`settledLifecycle.ts`).** The host is where the three activity sources meet the
@@ -656,6 +706,15 @@ enabled/confirmed choice before entering analytics attribution.
   buffered bytes stays latched, and a latch whose socket is already gone is left to `close`/`open`.
   Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
 - The host is the single place features are wired together — features never reach back into it.
+- **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
+  The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
+  needs a CORS preflight — by the `PUT` method, and by this non-simple header whatever the method — which
+  the route answers 405 with no `Access-Control-*` headers, so another website's write never leaves the
+  browser; the same-origin client needs no preflight. Never add CORS headers to `/fonts/`, and keep the
+  header check should the route ever accept a simple method such as `POST`. It is the host's only HTTP
+  write because the alternatives fail the feature: base64 over the WebSocket hits Bun's 16 MB frame cap
+  (CJK fonts run past 20 MB) and a pending frame is replayed on every reconnect, and the host's native
+  file dialog cannot take a drag-and-drop and opens on the host's screen, not a remote browser's.
 - **Login-shell environment import is opt-in at boot** (`resolveShellEnv: true`, passed by the dev,
   CLI and desktop launchers). Post-mortem: with it on by default, `boot.test.ts` copied the developer's
   login environment — provider API keys included — into the shared `bun test` process (`bun test`

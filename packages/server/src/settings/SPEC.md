@@ -40,7 +40,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
 - `settleIdleDays` — the Settled-shelf idle window: a positive integer number of days (clamped to 1…365) or
   `null` for never; default `7`. Validated like every other known field; a hand-edited non-number falls
   back to the default rather than disabling settling.
-- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject a non-object or unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
+- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject a non-object or unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); the font settings' shape (`interfaceFont` / `codeFont` through `isFontChoice`, `codeFontSize`, `codeLigatures`, `fontWeightOffset`), each normalized back to its own default on load — which family a choice names, and whether it renders, is the client's; line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
 - **Public surface (barrel):** `getConfig`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
   `isTerminalWindowsShell`).
@@ -63,6 +63,10 @@ interval (`1–3600`, default 30), because those values govern host process cade
   means, so a stale entry for a removed extension never breaks boot or a later update. A malformed stored
   list keeps its valid names. Settings owns only the list; `host` turns it into the agent's resolver and the
   live tool refresh ([[module-server]] § host-mediated policy).
+- `disabledPackages` is the same shape for installed pi packages, keyed by the package identity the
+  catalog reports (`PiPackageSummary.identity`); it exists because pi has no "whole package off" setting
+  and writing pi's per-resource filters would reset a user's own filters on re-enable. Validation,
+  dedupe and unknown-key tolerance are identical to `disabledExtensions`.
 - `locale` is `"system"` (default) or a canonical BCP-47 tag (`isLocalePreference`: `pt-BR`, not
   `pt-br`). Settings never checks that a language is available — bundled catalogs belong to the web build
   and local files to [[submodule-server-locales]] — so a tag whose file was deleted persists and returns

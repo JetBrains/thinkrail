@@ -16,6 +16,7 @@ import "monaco-editor/features/unicodeHighlighter/register.js";
 import "monaco-editor/features/wordHighlighter/register.js";
 import "monaco-editor/features/quickCommand/register.js";
 import "monaco-editor/features/gotoLine/register.js";
+import { fontsLoaded, fontsRevision, type ResolvedFont, resolveFont } from "@thinkrail/ui/fonts";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import type { Environment, editor } from "monaco-editor/editor/editor.api.js";
 import * as monaco from "monaco-editor/editor/editor.api.js";
@@ -82,13 +83,27 @@ function cssVar(name: string): string | undefined {
 	return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
 }
 
+let editorFontCache: { revision: string; font: ResolvedFont } | null = null;
+
+export function editorFont(): ResolvedFont {
+	const revision = fontsRevision();
+	if (editorFontCache?.revision !== revision) {
+		editorFontCache = { revision, font: resolveFont("tr-code-editor") };
+	}
+	return editorFontCache.font;
+}
+
+export function remeasureEditorFonts(font: ResolvedFont): void {
+	void fontsLoaded(font).then(() => monaco.editor.remeasureFonts());
+}
+
 export function fileEditorOptions(
 	t: Translator,
 	lineWidth: number,
 	bounded: boolean,
 	path: string,
+	font: ResolvedFont,
 ) {
-	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
 	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	const paddingTop = Number.parseFloat(cssVar("--space-8") ?? "");
 	const options: editor.IStandaloneEditorConstructionOptions = {
@@ -105,8 +120,10 @@ export function fileEditorOptions(
 		minimap: { enabled: false },
 		scrollBeyondLastLine: false,
 		automaticLayout: true,
-		fontSize,
-		fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
+		fontSize: font.size || 11,
+		fontFamily: font.family || "monospace",
+		fontWeight: String(font.weight || 400),
+		fontLigatures: font.ligatures,
 		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
 		scrollbar: {
 			vertical: "auto",

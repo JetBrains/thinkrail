@@ -38,6 +38,7 @@ function idle(): SessionState {
 		completion: null,
 		completionUnread: false,
 		queuedCount: 0,
+		backgroundWork: false,
 	};
 }
 const question: SessionState = {

@@ -16,7 +16,7 @@ interface StartDetailPollingOptions<T> {
 	scheduler?: DetailPollScheduler;
 }
 
-const defaultScheduler: DetailPollScheduler = {
+export const defaultDetailScheduler: DetailPollScheduler = {
 	set: (callback, delayMs) => setTimeout(callback, delayMs),
 	clear: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
 };
@@ -27,7 +27,7 @@ export function detailRetryDelay(failureCount: number): number {
 }
 
 export function startDetailPolling<T>(options: StartDetailPollingOptions<T>) {
-	const scheduler = options.scheduler ?? defaultScheduler;
+	const scheduler = options.scheduler ?? defaultDetailScheduler;
 	let active = true;
 	let inFlight = false;
 	let settled = false;

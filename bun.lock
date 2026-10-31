@@ -15,6 +15,7 @@
         "@thinkrail/pi-ask-user-question": "workspace:*",
         "@thinkrail/server": "workspace:*",
         "@thinkrail/shared": "workspace:*",
+        "@types/bun": "catalog:",
         "husky": "9.1.7",
         "mdast-util-from-markdown": "2.1.0",
         "pi-spec-graph": "workspace:*",

@@ -8,16 +8,24 @@ const payload = (sessionId: string, type: PiEvent["type"]): SessionEventPayload 
 	event: { type } as PiEvent,
 });
 
-test("batches consecutive Pi events in exact arrival order", () => {
-	const delivered: (readonly SessionEventPayload[])[] = [];
+function manualScheduler() {
 	let scheduled: (() => void) | null = null;
-	const batcher = createPiEventBatcher((events) => delivered.push(events), {
-		schedule: (flush) => {
+	return {
+		schedule: (flush: () => void) => {
 			scheduled = flush;
 			return () => {
 				if (scheduled === flush) scheduled = null;
 			};
 		},
+		pending: () => scheduled,
+	};
+}
+
+test("batches consecutive Pi events in exact arrival order", () => {
+	const delivered: (readonly SessionEventPayload[])[] = [];
+	const scheduler = manualScheduler();
+	const batcher = createPiEventBatcher((events) => delivered.push(events), {
+		schedule: scheduler.schedule,
 	});
 	const first = payload("a", "agent_start");
 	const second = payload("b", "turn_start");
@@ -25,24 +33,19 @@ test("batches consecutive Pi events in exact arrival order", () => {
 	batcher.enqueue(first);
 	batcher.enqueue(second);
 	expect(delivered).toEqual([]);
-	expect(scheduled).not.toBeNull();
-	scheduled?.();
+	expect(scheduler.pending()).not.toBeNull();
+	scheduler.pending()?.();
 
 	expect(delivered).toEqual([[first, second]]);
-	expect(scheduled).toBeNull();
+	expect(scheduler.pending()).toBeNull();
 });
 
 test("the queue ceiling forces a flush and disposal drops pending work", () => {
 	const delivered: (readonly SessionEventPayload[])[] = [];
-	let scheduled: (() => void) | null = null;
+	const scheduler = manualScheduler();
 	const batcher = createPiEventBatcher((events) => delivered.push(events), {
 		maxBatchSize: 2,
-		schedule: (flush) => {
-			scheduled = flush;
-			return () => {
-				if (scheduled === flush) scheduled = null;
-			};
-		},
+		schedule: scheduler.schedule,
 	});
 	const first = payload("a", "agent_start");
 	const second = payload("a", "turn_start");
@@ -51,12 +54,12 @@ test("the queue ceiling forces a flush and disposal drops pending work", () => {
 	batcher.enqueue(first);
 	batcher.enqueue(second);
 	expect(delivered).toEqual([[first, second]]);
-	expect(scheduled).toBeNull();
+	expect(scheduler.pending()).toBeNull();
 
 	batcher.enqueue(third);
-	expect(scheduled).not.toBeNull();
+	expect(scheduler.pending()).not.toBeNull();
 	batcher.dispose();
-	scheduled?.();
+	scheduler.pending()?.();
 	batcher.enqueue(first);
 	batcher.flush();
 

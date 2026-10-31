@@ -178,3 +178,18 @@ test("a terminal frame for a login this client does not hold opens nothing until
 	});
 	expect(state().unheldLoginFrame).toBeNull();
 });
+
+test("the login method survives frames that create the dialog before the start response", () => {
+	state().reserveLogin();
+	state().applyLoginFrame({
+		loginId: "provider-2",
+		providerId: "anthropic",
+		frame: { kind: "select", message: "Select Anthropic login method:", options: [] },
+	});
+	expect(state().activeLogin?.method).toBeUndefined();
+	state().beginLogin("provider-2", "anthropic", undefined, "oauth");
+	expect(state().activeLogin).toMatchObject({ providerId: "anthropic", method: "oauth" });
+	state().clearLogin();
+	state().beginLogin("provider-3", "anthropic", undefined, "api_key");
+	expect(state().activeLogin?.method).toBe("api_key");
+});

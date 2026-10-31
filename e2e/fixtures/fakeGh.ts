@@ -19,7 +19,7 @@ export interface FakePr {
 	createdAt?: string;
 	mergeError?: string;
 	queued?: boolean;
-	mergedWith?: string;
+	mergedWith?: string | undefined;
 	headOwner?: string;
 }
 

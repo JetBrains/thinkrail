@@ -13,6 +13,7 @@ import {
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
+	normalizeFontSettings,
 	normalizeThemePreference,
 	type Project,
 	type SessionCompletion,
@@ -324,7 +325,7 @@ function storedModels(value: unknown): WireModel[] {
 	);
 }
 
-function storedExtensionNames(value: unknown): string[] {
+function storedNameList(value: unknown): string[] {
 	if (!Array.isArray(value)) return [];
 	return [
 		...new Set(
@@ -406,9 +407,11 @@ export function loadConfig(): AppConfig {
 		settleIdleDays: isSettleIdleDays(value.settleIdleDays)
 			? value.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
-		disabledExtensions: storedExtensionNames(value.disabledExtensions),
+		disabledExtensions: storedNameList(value.disabledExtensions),
+		disabledPackages: storedNameList(value.disabledPackages),
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: value.onboardingDismissed === true,
+		...normalizeFontSettings(value),
 	};
 }
 

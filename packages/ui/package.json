@@ -16,6 +16,7 @@
 		"./skeleton": "./skeleton.tsx",
 		"./switch": "./switch.tsx",
 		"./textarea": "./textarea.tsx",
+		"./fonts": "./fonts.ts",
 		"./theme": "./theme.ts",
 		"./toast": "./toast.tsx",
 		"./toggle-segment": "./toggle-segment.tsx",

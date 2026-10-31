@@ -12,10 +12,14 @@ export interface StyleRef {
 	$ref: string;
 }
 
+export const FONT_LIGATURES = ["normal", "none"] as const;
+
 export interface FontFamily {
 	stack: string[];
 	kind: "proportional" | "monospace";
 	selfHosted?: string[];
+	userSelectable?: boolean;
+	ligatures?: (typeof FONT_LIGATURES)[number];
 }
 
 export interface Style {
@@ -33,10 +37,12 @@ export interface Typography {
 	metadata: { version: string; cssVarPrefix: string; classPrefix: string };
 	fontFamilies: Record<string, FontFamily | StyleRef>;
 	fontWeights: Record<string, number>;
+	fontWeightOffset: { exclude: string[] };
 	fontSizes: Record<string, number>;
 	lineHeights: Record<string, number>;
 	letterSpacings: Record<string, string>;
 	rootStyle: StyleRef;
+	codeSize: { fontSize: string };
 	codeRow: { fontSize: string; lineHeight: string };
 	textStyles: Record<string, Record<string, Style | StyleRef>>;
 	proseSystems: Record<string, Record<string, Style | StyleRef>>;
@@ -82,6 +88,26 @@ export function resolveFamily(t: Typography, id: string): FontFamily {
 			`fontFamilies.${id}: $ref to '${entry.$ref}', which is itself a reference (chains are invalid)`,
 		);
 	return target;
+}
+
+export function isUserSelectable(t: Typography, id: string): boolean {
+	const entry = t.fontFamilies?.[id];
+	return entry !== undefined && !isRef(entry) && entry.userSelectable === true;
+}
+
+export function familyLigatures(t: Typography, id: string): FontFamily["ligatures"] {
+	const entry = t.fontFamilies?.[id];
+	return entry && !isRef(entry) ? entry.ligatures : undefined;
+}
+
+export const CODE_SIZE = "code";
+export const CODE_SIZE_DENSE = "codeDense";
+export const WEIGHT_OFFSET = "offset";
+
+export function fontSizePx(t: Typography, id: string): number | undefined {
+	if (id === CODE_SIZE) return t.fontSizes?.[t.codeSize?.fontSize];
+	if (id === CODE_SIZE_DENSE) return t.fontSizes?.[t.codeRow?.fontSize];
+	return t.fontSizes?.[id];
 }
 
 export const packageRoot = (entry: string) => entry.split("/").slice(0, 2).join("/");
@@ -159,7 +185,14 @@ export const PROSE_SELECTORS: Record<string, string> = {
 
 export const PROSE_CODE_NAMES = new Set(["inlineCode", "codeBlock", "tableInlineCode"]);
 
-export const CODE_STYLE_IDS = new Set(["code.text", "code.document", "code.otp", "code.textSmall"]);
+export const CODE_STYLE_IDS = new Set([
+	"code.text",
+	"code.block",
+	"code.editor",
+	"code.document",
+	"code.otp",
+	"code.textSmall",
+]);
 
 export function isCodeStyleId(t: Typography, id: string): boolean {
 	const [group, name] = id.split(".");
@@ -231,6 +264,12 @@ export function validate(t: Typography): string[] {
 		}
 		if (!Array.isArray(f.stack) || f.stack.length === 0) fail(`fontFamilies.${id}: empty stack`);
 		if (f.kind !== "proportional" && f.kind !== "monospace") fail(`fontFamilies.${id}: bad kind`);
+		if (f.userSelectable !== undefined && typeof f.userSelectable !== "boolean")
+			fail(`fontFamilies.${id}.userSelectable: must be a boolean`);
+		if (f.userSelectable && `${id}Default` in (t.fontFamilies ?? {}))
+			fail(`fontFamilies.${id}Default: collides with the default token of '${id}'`);
+		if (f.ligatures !== undefined && !FONT_LIGATURES.includes(f.ligatures))
+			fail(`fontFamilies.${id}.ligatures: must be one of ${FONT_LIGATURES.join(", ")}`);
 		for (const entry of f.selfHosted ?? []) {
 			if (!declaredDependencies().has(packageRoot(entry))) {
 				fail(`fontFamilies.${id}.selfHosted: ${entry} is not a dependency of apps/web`);
@@ -257,8 +296,18 @@ export function validate(t: Typography): string[] {
 	if (errors.length > 0) return errors;
 	for (const [id, w] of Object.entries(t.fontWeights ?? {}))
 		if (!Number.isInteger(w) || w < 100 || w > 900) fail(`fontWeights.${id}: out of range`);
+	if (WEIGHT_OFFSET in (t.fontWeights ?? {}))
+		fail(`fontWeights.${WEIGHT_OFFSET}: reserved for the weight offset token`);
+	const exclude = t.fontWeightOffset?.exclude;
+	if (!Array.isArray(exclude)) fail("fontWeightOffset.exclude must be an array of font weight ids");
+	else
+		for (const id of exclude)
+			if (!(id in (t.fontWeights ?? {})))
+				fail(`fontWeightOffset.exclude: unknown font weight '${id}'`);
 	for (const [id, v] of Object.entries(t.fontSizes ?? {}))
 		if (!(v > 0)) fail(`fontSizes.${id}: must be > 0`);
+	for (const id of [CODE_SIZE, CODE_SIZE_DENSE])
+		if (id in (t.fontSizes ?? {})) fail(`fontSizes.${id}: reserved for the code size tokens`);
 	for (const [id, v] of Object.entries(t.lineHeights ?? {}))
 		if (!(v > 0)) fail(`lineHeights.${id}: must be > 0`);
 
@@ -300,8 +349,25 @@ export function validate(t: Typography): string[] {
 					`Reference ${target.$ref} directly.`,
 			);
 	}
+	for (const [block, keys] of [
+		["fontWeightOffset", ["exclude"]],
+		["codeSize", ["fontSize"]],
+		["codeRow", ["fontSize", "lineHeight"]],
+	] as const)
+		for (const key of Object.keys(t[block] ?? {}))
+			if (!(keys as readonly string[]).includes(key))
+				fail(`${block}: unexpected property '${key}'`);
+	const codePx = fontSizePx(t, CODE_SIZE);
+	const densePx = fontSizePx(t, CODE_SIZE_DENSE);
+	if (!(t.codeSize?.fontSize in (t.fontSizes ?? {})))
+		fail(`codeSize.fontSize: unknown font size '${t.codeSize?.fontSize}'`);
 	if (!(t.codeRow?.fontSize in (t.fontSizes ?? {})))
 		fail(`codeRow.fontSize: unknown font size '${t.codeRow?.fontSize}'`);
+	else if (codePx !== undefined && densePx !== undefined && !(densePx < codePx))
+		fail(
+			`codeRow.fontSize: the dense code row must be smaller than codeSize.fontSize ` +
+				`(${densePx}px vs ${codePx}px)`,
+		);
 	if (!(t.codeRow?.lineHeight in (t.lineHeights ?? {})))
 		fail(`codeRow.lineHeight: unknown line height '${t.codeRow?.lineHeight}'`);
 	const root = t.rootStyle;
@@ -351,7 +417,15 @@ export function validate(t: Typography): string[] {
 			if (style[prop] === undefined) fail(`${id}: does not fully resolve — missing ${prop}`);
 		for (const [prop, map, label] of [
 			["fontFamily", t.fontFamilies, "fontFamilies"],
-			["fontSize", t.fontSizes, "fontSizes"],
+			[
+				"fontSize",
+				{
+					...t.fontSizes,
+					[CODE_SIZE]: fontSizePx(t, CODE_SIZE),
+					[CODE_SIZE_DENSE]: fontSizePx(t, CODE_SIZE_DENSE),
+				},
+				"fontSizes",
+			],
 			["fontWeight", t.fontWeights, "fontWeights"],
 			["lineHeight", t.lineHeights, "lineHeights"],
 			["letterSpacing", t.letterSpacings, "letterSpacings"],
@@ -398,7 +472,7 @@ export function validate(t: Typography): string[] {
 
 	const docSystem = t.proseSystems?.doc;
 	if (docSystem) {
-		const px = (name: string) => t.fontSizes[resolveStyle(t, `doc.${name}`).fontSize] ?? 0;
+		const px = (name: string) => fontSizePx(t, resolveStyle(t, `doc.${name}`).fontSize) ?? 0;
 		const body = px("body");
 		for (const level of ["h1", "h2", "h3", "h4"])
 			if (!(px(level) > body))
@@ -422,6 +496,9 @@ const HEADER = (version: string) => `/*
  * Contains every typography value the UI is allowed to use: primitive custom properties, the \`<body>\`
  * base, one class per semantic text style, and one prose system per markdown surface.
  *
+ * The user-adjustable tokens (the selectable families, code size, weight offset, code ligatures) hold
+ * their DEFAULTS here; only the web \`fonts\` module overrides them, on \`:root\`.
+ *
  * Two cascade layers, both deliberate. The \`<body>\` base sits in \`@layer base\` (after Tailwind's
  * preflight, so it wins there) which means ANY semantic class outranks it. The classes sit in
  * \`@layer components\`: Tailwind v4 orders its layers \`theme, base, components, utilities\`, so a
@@ -440,32 +517,73 @@ function declarations(t: Typography, style: Style, indent = "\t"): string {
 		`text-transform: ${style.textTransform};`,
 		`font-style: ${style.fontStyle};`,
 	];
+	if (familyLigatures(t, style.fontFamily))
+		lines.push(
+			`font-variant-ligatures: var(${cssVarName(t, "font-ligatures", style.fontFamily)});`,
+		);
 	return lines.map((l) => indent + l).join("\n");
 }
 
+export function codeDenseDelta(t: Typography): number {
+	const code = t.fontSizes[t.codeSize.fontSize];
+	const dense = t.fontSizes[t.codeRow.fontSize];
+	if (code === undefined || dense === undefined)
+		throw new Error("codeSize / codeRow: unknown font size");
+	return code - dense;
+}
+
 export function codeRowHeight(t: Typography): number {
-	return Math.round(t.fontSizes[t.codeRow.fontSize] * t.lineHeights[t.codeRow.lineHeight]);
+	const fontSize = t.fontSizes[t.codeRow.fontSize];
+	const lineHeight = t.lineHeights[t.codeRow.lineHeight];
+	if (fontSize === undefined || lineHeight === undefined)
+		throw new Error("codeRow: unknown font size or line height");
+	return Math.round(fontSize * lineHeight);
 }
 
 export function renderCss(t: Typography): string {
 	const out: string[] = [HEADER(t.metadata.version)];
 
 	out.push(":root {");
-	out.push("\t/* Font families */");
-	for (const id of Object.keys(t.fontFamilies))
-		out.push(
-			`\t${cssVarName(t, "font-family", id)}: ${resolveFamily(t, id).stack.map(quote).join(", ")};`,
-		);
-	out.push("\n\t/* Font weights */");
+	out.push("\t/* Font families — a user-selectable family defaults to its `-default` stack */");
+	for (const id of Object.keys(t.fontFamilies)) {
+		const name = cssVarName(t, "font-family", id);
+		const stack = resolveFamily(t, id).stack.map(quote).join(", ");
+		if (!isUserSelectable(t, id)) {
+			out.push(`\t${name}: ${stack};`);
+			continue;
+		}
+		const bundled = cssVarName(t, "font-family", `${id}Default`);
+		out.push(`\t${bundled}: ${stack};`, `\t${name}: var(${bundled});`);
+	}
+	out.push("\n\t/* Font ligatures — set on every style of that family */");
+	for (const id of Object.keys(t.fontFamilies)) {
+		const ligatures = familyLigatures(t, id);
+		if (ligatures) out.push(`\t${cssVarName(t, "font-ligatures", id)}: ${ligatures};`);
+	}
+	const offset = cssVarName(t, "font-weight", WEIGHT_OFFSET);
+	out.push("\n\t/* Font weights — all but `fontWeightOffset.exclude` follow the weight offset */");
+	out.push(`\t${offset}: 0;`);
 	for (const [id, w] of Object.entries(t.fontWeights))
-		out.push(`\t${cssVarName(t, "font-weight", id)}: ${w};`);
+		out.push(
+			`\t${cssVarName(t, "font-weight", id)}: ${
+				t.fontWeightOffset.exclude.includes(id) ? w : `calc(${w} + var(${offset}))`
+			};`,
+		);
 	out.push("\n\t/* Font sizes (px) */");
 	for (const [id, v] of Object.entries(t.fontSizes))
 		out.push(`\t${cssVarName(t, "font-size", id)}: ${v}px;`);
+	const code = cssVarName(t, "font-size", CODE_SIZE);
+	out.push("\n\t/* Code size — the dense size (editor, diffs) keeps its distance below it */");
+	out.push(`\t${code}: var(${cssVarName(t, "font-size", t.codeSize.fontSize)});`);
+	out.push(
+		`\t${cssVarName(t, "font-size", CODE_SIZE_DENSE)}: calc(var(${code}) - ${codeDenseDelta(t)}px);`,
+	);
 	out.push("\n\t/* Line heights (unitless) */");
 	for (const [id, v] of Object.entries(t.lineHeights))
 		out.push(`\t${cssVarName(t, "line-height", id)}: ${v};`);
-	out.push("\n\t/* Code row height (px) — font size × line height, rounded to a whole pixel */");
+	out.push(
+		"\n\t/* Code row height (px) — dense code size × line height, rounded to a whole pixel */",
+	);
 	out.push(`\t--${t.metadata.cssVarPrefix}-code-row-height: ${codeRowHeight(t)}px;`);
 	out.push("\n\t/* Letter spacing */");
 	for (const [id, v] of Object.entries(t.letterSpacings))

@@ -1,6 +1,7 @@
 import { initDownloadThanks } from "./downloadThanks";
 import { deriveEditorTabs } from "./editorTabs";
 import { heroDownloadTarget } from "./heroDownload";
+import { initImageZoom } from "./imageZoom";
 import { installShareUrl, isMobileDevice, shareInstallLink } from "./installLinkShare";
 import {
 	type BrowserPlatformHints,
@@ -701,3 +702,4 @@ if (mockElements.length > 0) {
 }
 
 initDownloadThanks();
+initImageZoom();

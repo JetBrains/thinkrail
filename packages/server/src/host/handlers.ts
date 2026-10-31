@@ -30,6 +30,7 @@ import {
 	compactSession,
 	createSession,
 	deleteSession,
+	disableAnthropicExtraUsageWarning,
 	ensureSessionAttached,
 	followUpSession,
 	getResourceHistoryPage,
@@ -43,6 +44,7 @@ import {
 	isMcpLoginId,
 	isPiSessionId,
 	listAvailableModels,
+	listCustomEndpoints,
 	listModelContextSettings,
 	listProjectAliasSkillNames,
 	listSessionStates,
@@ -53,6 +55,7 @@ import {
 	markWorkspaceUnread,
 	notifyExtUi,
 	nudgeSession,
+	probeCustomEndpoint,
 	projectTrustSummary,
 	promptSession,
 	readBackgroundCommandOutput,
@@ -61,6 +64,7 @@ import {
 	refreshSubagentConcurrency,
 	refreshSubagentTools,
 	reloadSessionResources,
+	removeCustomEndpoint,
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
@@ -68,6 +72,7 @@ import {
 	replyMcpProbe,
 	resolveExtUi,
 	respondToTool,
+	saveCustomEndpoint,
 	sendReviewFixToSession,
 	setModelContextWindow,
 	setSessionModel,
@@ -80,6 +85,7 @@ import {
 import {
 	type AdditionalAnalyticsCapture,
 	captureSurveyResponse,
+	type ErrorReport,
 	reportClientError,
 	type SendMode,
 	track,
@@ -117,6 +123,7 @@ import {
 	surveyIsCompleted,
 	surveyResponse,
 } from "../feedback";
+import { fontsDir, listInstalledFonts, readUserFonts } from "../fonts";
 import { readDir, readFile } from "../fs";
 import {
 	commitsAheadOf,
@@ -262,6 +269,15 @@ import {
 	mcpUpdate,
 } from "./mcp";
 import { resolveNewChatModel } from "./newChatModel";
+import {
+	packagesCheckUpdates,
+	packagesInstall,
+	packagesList,
+	packagesRemove,
+	packagesReveal,
+	packagesSetResourceEnabled,
+	packagesUpdate,
+} from "./packages";
 import { planReviewRunning } from "./planReviewQueue";
 import {
 	additionalCapture,
@@ -334,6 +350,12 @@ async function sendUserMessage(
 		recordAcceptedMessage(clientKey);
 	}
 	return { ok: true };
+}
+
+function revealDataFolder(dir: string) {
+	mkdirSync(dir, { recursive: true });
+	revealInFileManager(dir);
+	return { ok: true } as const;
 }
 
 function resolveTemplateReadDirs(params: TemplateReadLocation) {
@@ -967,20 +989,20 @@ const handlers: WsHandlers = {
 		return listSkillCatalog(ws.worktreePath, admissionContextFor(project, ws.skillOverrides ?? {}));
 	},
 	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
+	"packages.list": (p) => packagesList(p),
+	"packages.install": (p) => packagesInstall(p),
+	"packages.remove": (p) => packagesRemove(p),
+	"packages.update": (p) => packagesUpdate(p),
+	"packages.checkUpdates": (p) => packagesCheckUpdates(p),
+	"packages.setResourceEnabled": (p) => packagesSetResourceEnabled(p),
+	"packages.reveal": (p) => packagesReveal(p),
 	"locales.list": () => readLocalLocales(),
-	"locales.reveal": () => {
-		const dir = localesDir();
-		mkdirSync(dir, { recursive: true });
-		revealInFileManager(dir);
-		return { ok: true } as const;
-	},
+	"locales.reveal": () => revealDataFolder(localesDir()),
 	"themes.list": () => readUserThemes(),
-	"themes.reveal": () => {
-		const dir = themesDir();
-		mkdirSync(dir, { recursive: true });
-		revealInFileManager(dir);
-		return { ok: true } as const;
-	},
+	"themes.reveal": () => revealDataFolder(themesDir()),
+	"fonts.list": () => readUserFonts(),
+	"fonts.installed": () => listInstalledFonts(),
+	"fonts.reveal": () => revealDataFolder(fontsDir()),
 	"project.acknowledgeSkills": (p) => {
 		return acknowledgeProjectSkills(p.id, p.names);
 	},
@@ -1249,6 +1271,10 @@ const handlers: WsHandlers = {
 	"model.setContextWindow": (p) => {
 		return setModelContextWindow(p.target, p.contextWindow);
 	},
+	"customEndpoints.list": () => listCustomEndpoints(),
+	"customEndpoints.probe": (p) => probeCustomEndpoint(p),
+	"customEndpoints.save": (p) => saveCustomEndpoint(p),
+	"customEndpoints.remove": (p) => removeCustomEndpoint(p.id),
 	"model.default": () =>
 		observeSetupRead(
 			() => resolveNewChatModel({}),
@@ -1283,6 +1309,10 @@ const handlers: WsHandlers = {
 	},
 	"provider.logout": async (params) => {
 		await logoutProvider(params.providerId);
+		return { ok: true } as const;
+	},
+	"provider.disableWarning": async () => {
+		await disableAnthropicExtraUsageWarning();
 		return { ok: true } as const;
 	},
 	"provider.jbcentralConnect": () =>
@@ -1473,6 +1503,14 @@ function dispatch<M extends WsMethodName>(method: M, params: WsParams<M>, ctx: R
 
 export function requestMethodDiagnostic(method: string): string {
 	return isWsMethod(method) ? method : "unknown method";
+}
+
+export function requestErrorReport(method: string): ErrorReport {
+	return {
+		source: "request",
+		handled: true,
+		...(isWsMethod(method) ? { requestMethod: method } : {}),
+	};
 }
 
 function supportsBranchStatus(protocolVersion: number | undefined): boolean {

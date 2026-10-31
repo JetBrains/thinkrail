@@ -79,6 +79,7 @@ function record(sessionId: string, completionId: string): SessionStateRecord {
 			completion: { completionId, outcome: "succeeded" },
 			completionUnread: true,
 			queuedCount: 0,
+			backgroundWork: false,
 		},
 	};
 }

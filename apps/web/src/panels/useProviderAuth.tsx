@@ -1,7 +1,8 @@
 import type { ProviderStatusReport } from "@thinkrail/contracts";
 import { t as translate } from "@thinkrail/locales/react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { LoginDialog } from "@/auth";
+import { LoginDialog, type LoginState } from "@/auth";
+import { ExtraUsageNotice } from "@/chat/ExtraUsageNotice";
 import { selectLoginBusy, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { reloadProviderStatus, useProviderStatus } from "./useProviderStatus";
@@ -34,13 +35,24 @@ export async function startReservedLogin(
 	try {
 		const { loginId } = await getTransport().request("provider.loginStart", { providerId, type });
 		if (owner.abandoned) cancelProviderLogin(loginId);
-		else useAppStore.getState().beginLogin(loginId, providerId);
+		else useAppStore.getState().beginLogin(loginId, providerId, undefined, type);
 	} catch (err) {
 		if (!owner.abandoned) toast.error(errorText(err), translate("settings.providers.startFailed"));
 	} finally {
 		if (pendingStart === owner) pendingStart = null;
 		useAppStore.getState().finishLoginStart();
 	}
+}
+
+export function warnsExtraUsageOnSignIn(
+	login: Pick<LoginState, "providerId" | "method">,
+	report: ProviderStatusReport | null,
+): boolean {
+	return (
+		login.providerId === "anthropic" &&
+		login.method === "oauth" &&
+		report?.warnings?.anthropicExtraUsage !== false
+	);
 }
 
 export interface ProviderAuth {
@@ -92,12 +104,15 @@ export function useProviderAuth({ ownsLoginDialog }: { ownsLoginDialog: boolean 
 		activeLogin?.providerId ??
 		"";
 
+	const warnExtraUsage = activeLogin ? warnsExtraUsageOnSignIn(activeLogin, report) : false;
+
 	const loginDialog =
 		activeLogin && ownsLoginDialog ? (
 			<LoginDialog
 				key={activeLogin.loginId}
 				state={activeLogin}
 				providerName={loginProviderName}
+				{...(warnExtraUsage ? { notice: <ExtraUsageNotice context="signIn" /> } : {})}
 				onReply={(value) => {
 					getTransport()
 						.request("provider.loginReply", { loginId: activeLogin.loginId, value })

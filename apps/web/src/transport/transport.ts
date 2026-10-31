@@ -2,7 +2,7 @@ import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkra
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { randomId } from "../lib";
-import { RequestError } from "./requestError";
+import { RequestError, RequestTimeoutError } from "./requestError";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 type PushHandler = (data: unknown) => void;
@@ -118,7 +118,8 @@ export class WsTransport {
 		return new Promise<WsResult<M>>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.pending.delete(id);
-				reject(new Error(t("app.transport.timedOut", { method })));
+				if (this.ws?.readyState === WebSocket.OPEN) this.queueAck(id);
+				reject(new RequestTimeoutError(t("app.transport.timedOut", { method })));
 			}, timeoutMs);
 			this.pending.set(id, {
 				frame,

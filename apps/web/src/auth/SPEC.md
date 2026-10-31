@@ -23,7 +23,9 @@ not here — `auth` stays presentational + types, so nothing here imports `store
   - `loginState` — the **types** `LoginState` (+ `LoginInput`/`LoginInputSelect`/`LoginInputPrompt`): the
     client-accumulated state of one login. Its doc pins the accumulation contract the store's reducer
     implements — frames **add**, they don't replace (`url` can be live alongside a paste `prompt`, the
-    browser-vs-paste race), `status` goes `active → success/error`. An optional `target` names the MCP
+    browser-vs-paste race), `status` goes `active → success/error`. An optional `method` (`oauth` /
+    `api_key`) is the route the caller started. `beginLogin` sets it, and also merges it into a
+    dialog that earlier frames already created. An optional `target` names the MCP
     server of an MCP sign-in or connection test (`LoginPush.target`). **Types only** (like `chat/types`).
   - `LoginDialog` — **props-driven, no store/transport** (like the chat renderers): renders a `LoginState`
     (an **Open sign-in page** link — a real anchor, so native copy/middle-click work — + **Copy link**;
@@ -40,7 +42,9 @@ not here — `auth` stays presentational + types, so nothing here imports `store
     live and no required prompt is pending, the spinner reads host copy ("Waiting for you to finish
     signing in…") instead of pi's terminal-oriented progress (loopback ports, callback URLs);
     terminal success/error) and calls back `onReply(value)` / `onCancel()` / `onClose()`. Copy says
-    **"Connect"**, not "Sign in" — one dialog serves OAuth and API-key entry alike. Themed with token
+    **"Connect"**, not "Sign in" — one dialog serves OAuth and API-key entry alike. An optional `notice`
+    slot, which the caller fills, renders under the header except on error. It is how the Anthropic
+    extra-usage warning reaches the dialog without `auth` knowing about providers. Themed with token
     utilities only; `@remixicon/react` icons; shadcn `Dialog`/`Button`.
   - `loginOptions` — `loginSelectMessage` / `loginOptionParts` / `loginPromptMessage`: the pure presentation split above;
     `loginOptionParts` takes the caller's translator for the notes it rewrites, while pi's own labels and messages pass

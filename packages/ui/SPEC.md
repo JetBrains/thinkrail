@@ -18,7 +18,14 @@ feature state, theme selection, and token generation stay with the app.
 Primitives expose per-file `@thinkrail/ui/<primitive>` subpaths, not a root component barrel; this keeps
 lazy chunks independent and preserves the shadcn convention. `./utils` exposes `cn`; `./theme` exposes
 only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
-explicit cleanup. It knows nothing about the theme catalog or preferences.
+explicit cleanup. It knows nothing about the theme catalog or preferences. `./fonts` is the same seam for
+the font settings: `onFontsChange` / `fontsRevision` over the `data-fonts` signal, `resolveFont(className)`
+(the computed family, size, weight and ligatures of a generated typography class, for surfaces that take
+fonts as JS options), `fontsLoaded` (resolves once the faces for that family, size and weight have
+loaded), and `watchFont(className, fields, onChange)` — how such a surface follows the class: the latest
+change wins once its faces load, a change to none of the listed fields is skipped, and a new face set (the
+`data-font-faces` signal) re-applies an unchanged font. It knows nothing about the settings or the runtime
+that publishes them.
 
 Workspace imports may reach `contracts` and `@thinkrail/locales/react` (the shared i18next instance, for
 primitive-owned strings such as the dialog's screen-reader Close and the toast's Dismiss label) only. External dependencies are React, Radix, cmdk,
@@ -110,7 +117,7 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
 `aria-pressed`), `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
 live in the web components spec), and `attention-line` (`AttentionLine`, the "Your input is needed · Agent is
 waiting" line; `announced` hides the visible line from assistive tech once the always-mounted polite
-region carries the announcement, `live={false}` drops the region), alongside `utils` and `theme`.
+region carries the announcement, `live={false}` drops the region), alongside `utils`, `theme` and `fonts`.
 `menu-styles` is shared by the menu primitives and custom app menu rows. `toggle-segment` and `skeleton`
 moved here from the app when the resource renderers became a package, because both the app and
 [[module-resource-renderers]] use them; `attention-line` moved for the same reason when the

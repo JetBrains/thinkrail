@@ -164,7 +164,9 @@ without bypassing approvals or treating an occupied name as absent.
   session manager; this child module never imports the status coordinator.
 - `engine.ts` — `createMcpEngine({ loadConfig, lockSignIns?, openUrl?, onCommandSettled? })` →
   `{ extensions, shutdown }`: pi's two built-in descriptors (`mcp` = `createMcpExtension`, `tool-search`),
-  `replaceable: true, builtin: true` exactly like pi's CLI. Optional host callbacks deliver Settings
+  `replaceable: true, builtin: true` exactly like pi's CLI; their names are `HOST_BUILTIN_EXTENSION_NAMES`,
+  which the pi packages catalog lists as the host's "pi built-in" rows (pi's `codemode` and `llama.cpp`
+  are not loaded by ThinkRail and never appear). Optional host callbacks deliver Settings
   authorization URLs through `openUrl` and invalidate status after mutating commands. Ordinary chats
   never open a browser on the host. The `mcp` factory first registers its own
   `session_start` / `mcp_servers_change` handlers that activate `tool_search` whenever
@@ -216,7 +218,7 @@ without bypassing approvals or treating an occupied name as absent.
   `globalMcpConfigPath`, `projectMcpConfigPath`, `addMcpServerConfig`, `updateMcpServerConfig`,
   `removeMcpServerConfig`, `assertProjectMcpConfigWritable`, `McpConfigPathUnsafeError`,
   `createMcpSessionHost` + `McpSessionHost` and the option labels `MCP_CONFIRM_DENY` / `MCP_CONFIRM_ONCE` /
-  `MCP_CONFIRM_CHAT` / `MCP_CONFIRM_ALWAYS`, `createMcpEngine` (`{ loadConfig, lockSignIns?, openUrl?, onCommandSettled? }`), `acquireMcpSignInLock`,
+  `MCP_CONFIRM_CHAT` / `MCP_CONFIRM_ALWAYS`, `createMcpEngine` (`{ loadConfig, lockSignIns?, openUrl?, onCommandSettled? }`), `HOST_BUILTIN_EXTENSION_NAMES`, `acquireMcpSignInLock`,
   `loadHostMcpConfig` + `McpProjectPolicy` + `mcpPolicyOf`, `summarizeMcpServers`, `maskMcpEndpoint` /
   `redactMcpText`, `readMcpServerLog`, `effectiveMcpServerConfig`, the `management.ts` mutations (`writeMcpServerEntry`,
   `removeMcpServerEntry`, `mcpEntryFingerprint`, `shareMcpOverrideWithRepo`),
