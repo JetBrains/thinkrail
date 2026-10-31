@@ -698,6 +698,7 @@ test("hiding a side or the bottom keeps focus outside it and recovers focus from
 
 		await pressPlatformShortcut(page, "b");
 		await expect(page.getByTestId("left-nav")).toBeVisible();
+		await expect(page.getByTestId("tool-rail-projects")).toBeFocused();
 		const insideLeft = page.getByTestId("left-nav").getByTestId("project-expand").first();
 		await insideLeft.focus();
 		await expect(insideLeft).toBeFocused();
