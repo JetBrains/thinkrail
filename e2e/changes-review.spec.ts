@@ -9,7 +9,7 @@ import {
 } from "./fixtures/app";
 import { commitFile, gitAs } from "./fixtures/git";
 import { E2E_DATA_DIR } from "./fixtures/paths";
-import { pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
+import { holdPierreWorkers, pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const reviewTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="changes"]');
@@ -535,6 +535,7 @@ test("the guide reveals a finding deep inside a bounded (virtualized) section", 
 		}),
 	);
 
+	const workers = await holdPierreWorkers(page);
 	await page.reload();
 	await revealWorkbenchTool(page, "changes");
 	await row(page, "script.ts").click();
@@ -546,6 +547,8 @@ test("the guide reveals a finding deep inside a bounded (virtualized) section", 
 		"data-active",
 		"true",
 	);
+	await workers.requested;
+	workers.release();
 	await expect(page.locator('[data-comment-id="finding-1"]')).toBeInViewport({ timeout: 8000 });
 	await expect(page.locator('[data-comment-id="finding-1"]')).toContainText(
 		"RISK deep in the file",

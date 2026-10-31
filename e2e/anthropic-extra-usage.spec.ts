@@ -12,6 +12,15 @@ import { shot } from "./fixtures/screenshots";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const SETTINGS = join(E2E_PI_AGENT_DIR, "settings.json");
+
+function settingsWarnings(): unknown {
+	try {
+		return JSON.parse(readFileSync(SETTINGS, "utf8")).warnings;
+	} catch (error) {
+		if (error instanceof SyntaxError) return undefined;
+		throw error;
+	}
+}
 const ANTHROPIC_SIGNIN = '[data-testid="provider-signin"][data-provider="anthropic"]';
 
 let savedSettings: string | null = null;
@@ -121,9 +130,7 @@ test("the chat banner dismisses per chat, and Don't warn again turns pi's warnin
 	await banner.getByTestId("extra-usage-disable").click();
 	await expect(banner).toHaveCount(0);
 	expect(wire.disableRequests()).toBe(1);
-	await expect
-		.poll(() => JSON.parse(readFileSync(SETTINGS, "utf8")).warnings)
-		.toEqual({ anthropicExtraUsage: false });
+	await expect.poll(settingsWarnings).toEqual({ anthropicExtraUsage: false });
 
 	const dialog = await openAnthropicSignIn(page);
 	await expect(dialog.getByTestId("extra-usage-notice")).toHaveCount(0);
