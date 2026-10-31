@@ -344,7 +344,9 @@ Electrobun's own preload path, which emits `new-window-open`. Clicks the page al
 links, same-origin URLs, and schemes outside the allowlist below stay with the page. An Electrobun
 upgrade must re-check both gaps. Once the constructor option reaches native code, the explicit call
 becomes redundant. Once every renderer reports and cancels new-window requests, the preload routing can
-go. Post-mortem: before the rules were applied explicitly, every navigation was allowed. A non-`_blank`
+go. On Windows a cancelled navigation may still send its GET request (WebView2's documented behaviour); the
+window stays on its page and never commits the URL. Post-mortem: before the rules were applied explicitly,
+every navigation was allowed. A non-`_blank`
 external navigation replaced the app with the external page, which then also received the desktop
 preload bridge, and macOS opened `_blank` links twice.
 
@@ -393,7 +395,8 @@ Abrupt death relies only on operating-system process cleanup.
 
 Artifact tests drive this same entrypoint through opt-in environment/ready/control seams: isolated user
 data, a hidden neutral window for browser-backed tests, host/launcher ids and origin on DOM-ready, and
-normal quit. Native UI smoke records every external open instead of launching the user's browser. It
+normal quit. Native UI smoke records every external open instead of launching the user's browser, plus
+each `will-navigate` verdict and main-frame commit, in the navigation probe file. It
 also requests navigation probes aimed at a test-supplied cross-origin loopback origin: a scripted
 navigation, a plain link, a `_blank` link, `window.open`, and an in-place `srcdoc` update. With a title-bar probe file, two control commands dispatch
 synthetic `dblclick`s in the live webview: `title-bar-double-click` on the header, and

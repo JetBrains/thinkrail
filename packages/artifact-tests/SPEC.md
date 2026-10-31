@@ -74,7 +74,10 @@ The resource-directory walk is local because `pe-library` refuses Bun's `.bun` s
 Native desktop smoke loads the real UI and verifies route/preload messaging plus the production external
 navigation path against a cross-origin loopback server that stands in for the internet. A scripted
 navigation, a plain link, a `_blank` link and `window.open` must each record exactly one external open and
-send no request to their URL, so the window never left its origin. A sandboxed `srcdoc` iframe that
+no main-frame commit (`did-commit-navigation`) to their URL, so the window never left its origin. A request
+reaching the probe server is not that evidence: WebView2 documents that a cancelled navigation may still send
+its GET, and Windows CI saw exactly that beside a native `allowed:false` verdict. A commit to the URL fails
+the smoke with the recorded `will-navigate` verdicts quoted. A sandboxed `srcdoc` iframe that
 updates in place must fetch both of its images, so previews still render under the navigation rules. The
 server is `unref`ed: a failed launch cannot keep the smoke alive. On macOS it also drives the title-bar double-click path end to end: a no-drag
 double-click must not act, and the header double-click's recorded action and resulting window state must

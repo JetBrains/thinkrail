@@ -514,7 +514,11 @@ async function start(): Promise<void> {
 	const navigationProbeOrigin = navigationProbePath
 		? process.env.THINKRAIL_DESKTOP_NAVIGATION_PROBE_ORIGIN
 		: undefined;
-	const navigationProbe = { opened: [] as string[], verdicts: [] as string[] };
+	const navigationProbe = {
+		opened: [] as string[],
+		verdicts: [] as string[],
+		commits: [] as string[],
+	};
 	const removeNavigationListeners = installExternalNavigation(
 		Electrobun.events,
 		mainWindow.webview.id,
@@ -530,13 +534,18 @@ async function start(): Promise<void> {
 	);
 	mainWindow.on("close", removeNavigationListeners);
 	if (navigationProbePath) {
-		const willNavigate = `will-navigate-${mainWindow.webview.id}`;
-		const recordVerdict = (event: { data: { detail: unknown } }) => {
-			navigationProbe.verdicts.push(String(event.data.detail).slice(0, 2_048));
+		const record = (into: string[]) => (event: { data: { detail: unknown } }) => {
+			into.push(String(event.data.detail).slice(0, 2_048));
 			writeReady(navigationProbePath, navigationProbe);
 		};
-		Electrobun.events.on(willNavigate, recordVerdict);
-		mainWindow.on("close", () => Electrobun.events.off(willNavigate, recordVerdict));
+		const probes = [
+			[`will-navigate-${mainWindow.webview.id}`, record(navigationProbe.verdicts)],
+			[`did-commit-navigation-${mainWindow.webview.id}`, record(navigationProbe.commits)],
+		] as const;
+		for (const [name, listener] of probes) Electrobun.events.on(name, listener);
+		mainWindow.on("close", () => {
+			for (const [name, listener] of probes) Electrobun.events.off(name, listener);
+		});
 	}
 	const releaseStartupSplash = startupSplash
 		? handOffStartupSplash(startupSplash, mainWindow)
