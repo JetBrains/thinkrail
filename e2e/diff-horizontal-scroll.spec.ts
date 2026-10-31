@@ -193,6 +193,64 @@ test("the viewport bottom scrollbar drags both diff panes and follows code scrol
 	await expect(bar).toBeHidden();
 });
 
+test("stacked review repositions the scrollbar when the preceding file expands", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(join(worktree, "aaa-short.ts"), 'export const short = "changed";\n');
+	writeFileSync(
+		join(worktree, "bbb-tall.ts"),
+		Array.from(
+			{ length: 150 },
+			(_, i) => `export const row${i} = "${"long".repeat(100)}";`,
+		).join("\n"),
+	);
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "aaa-short.ts" }).click();
+	const first = page.locator('[data-testid="changes-section"][data-path="aaa-short.ts"]');
+	const diff = page
+		.locator('[data-testid="changes-section"][data-path="bbb-tall.ts"]')
+		.getByTestId("diff-view");
+	await expect(pierreCodeColumns(diff).first()).toBeAttached({ timeout: 15_000 });
+	const bar = diff.getByTestId("diff-horizontal-scrollbar");
+	await expect(bar).toBeVisible();
+	const geometry = () =>
+		bar.evaluate((node) => {
+			let parent = node.parentElement;
+			while (
+				parent &&
+				!(
+					parent.scrollHeight > parent.clientHeight + 1 &&
+					/auto|scroll/.test(getComputedStyle(parent).overflowY)
+				)
+			)
+				parent = parent.parentElement;
+			if (!parent) throw new Error("Missing surrounding scroller");
+			return {
+				bottomGap: node.getBoundingClientRect().bottom - parent.getBoundingClientRect().bottom,
+				diffTop: node.closest('[data-testid="diff-view"]')?.getBoundingClientRect().top ?? 0,
+				scrollTop: parent.scrollTop,
+			};
+		});
+	await expect.poll(async () => Math.abs((await geometry()).bottomGap)).toBeLessThanOrEqual(7);
+	const before = await geometry();
+	await first.getByTestId("hunk-ask-agent").click();
+	await expect(first.getByTestId("review-composer-input")).toBeVisible();
+	await expect.poll(async () => (await geometry()).diffTop).toBeGreaterThan(before.diffTop + 50);
+	await expect.poll(async () => Math.abs((await geometry()).bottomGap)).toBeLessThanOrEqual(7);
+	expect((await geometry()).scrollTop).toBe(before.scrollTop);
+	const box = await bar.boundingBox();
+	if (!box) throw new Error("Missing scrollbar bounds");
+	const thumb = await bar.evaluate((node) => node.clientWidth ** 2 / node.scrollWidth);
+	await page.mouse.move(box.x + thumb / 2, box.y + box.height - 3);
+	await page.mouse.down();
+	await page.mouse.move(box.x + thumb / 2 + 80, box.y + box.height - 3, { steps: 8 });
+	await page.mouse.up();
+	await expect.poll(() => bar.evaluate((node) => node.scrollLeft)).toBeGreaterThan(50);
+});
+
 test("stacked review keeps a tall file's scrollbar at the visible block edge", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
