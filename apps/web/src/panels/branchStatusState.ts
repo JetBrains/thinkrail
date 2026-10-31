@@ -13,8 +13,13 @@ export const CI_DISCOVERY_POLLS = 3;
 
 export type BranchAnswer = { review: OpenBranchReview | null; status: BranchFacts | null };
 
+export type BranchRequest = { generation: number; sequence: number };
+
 type Entry = {
 	generation: number;
+	sequence: number;
+	answered: number;
+	landed: number;
 	snapshot: BranchStatusSnapshot | null;
 };
 
@@ -24,6 +29,29 @@ function sameReview(left: OpenBranchReview | null, right: OpenBranchReview | nul
 	return (
 		left !== null && right !== null && left.kind === right.kind && left.number === right.number
 	);
+}
+
+export function withDivergence(
+	review: OpenBranchReview,
+	facts: { ahead?: number | undefined; behind?: number | undefined },
+): OpenBranchReview {
+	const { unpushedCommits: _ahead, behindCommits: _behind, ...reference } = review;
+	const ahead = facts.ahead ?? 0;
+	const behind = facts.behind ?? 0;
+	return {
+		...reference,
+		...(ahead > 0 ? { unpushedCommits: ahead } : {}),
+		...(behind > 0 ? { behindCommits: behind } : {}),
+	};
+}
+
+function olderReview(review: OpenBranchReview | null, newer: BranchStatusSnapshot | null) {
+	if (!review) return null;
+	if (newer?.status) return withDivergence(review, newer.status);
+	return withDivergence(review, {
+		ahead: newer?.review?.unpushedCommits,
+		behind: newer?.review?.behindCommits,
+	});
 }
 
 function withoutDiscovery({ discovery: _spent, ...snapshot }: BranchStatusSnapshot) {
@@ -36,7 +64,7 @@ export function createBranchStatusState() {
 	const entry = (key: string): Entry => {
 		const existing = entries.get(key);
 		if (existing) return existing;
-		const created = { generation: 0, snapshot: null };
+		const created = { generation: 0, sequence: 0, answered: -1, landed: 0, snapshot: null };
 		entries.set(key, created);
 		return created;
 	};
@@ -64,21 +92,37 @@ export function createBranchStatusState() {
 				if (current.size === 0) listeners.delete(key);
 			};
 		},
-		beginRequest(key: string): number {
+		beginRequest(
+			key: string,
+			options: { supersede: boolean } = { supersede: true },
+		): BranchRequest {
 			const current = entry(key);
-			current.generation += 1;
-			return current.generation;
+			if (options.supersede) current.generation += 1;
+			current.sequence += 1;
+			return { generation: current.generation, sequence: current.sequence };
 		},
-		resolveRequest(key: string, generation: number, answer: BranchAnswer): boolean {
+		resolveRequest(key: string, request: BranchRequest, answer: BranchAnswer): boolean {
 			const current = entry(key);
-			if (current.generation !== generation) return false;
-			const { review, status } = answer;
+			if (current.generation !== request.generation) return false;
+			const older = request.sequence < current.landed;
+			const review = older ? olderReview(answer.review, current.snapshot) : answer.review;
+			const status = older ? (current.snapshot?.status ?? null) : answer.status;
 			const carried =
 				review !== null && sameReview(current.snapshot?.review ?? null, review)
 					? current.snapshot?.url
 					: undefined;
 			const url = review?.url ?? carried;
+			current.answered = request.generation;
+			current.landed = Math.max(current.landed, request.sequence);
 			publish(key, { review, ...(url ? { url } : {}), ...(status ? { status } : {}) });
+			return true;
+		},
+		failRequest(key: string, request: BranchRequest): boolean {
+			const current = entry(key);
+			if (current.generation !== request.generation || current.answered === request.generation) {
+				return false;
+			}
+			publish(key, { review: null });
 			return true;
 		},
 		startDiscovery(key: string): void {

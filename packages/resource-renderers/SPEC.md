@@ -113,9 +113,12 @@ sets `ResourceScopeProvider` (`{ workspaceId, sessionId? }`, read with `useResou
 its transcript list): `ResourcePreview` falls back to its workspace when no `workspaceId` prop is given and
 routes review sends to its session. The scope is its own context rather than a host field because a host
 spread per chat made every preview's reads and subscriptions restart whenever the chat's actions changed.
-`ResourcePreview` depends only on the host's stable `readFile` / `subscribeFileChanges` / `bytesUrl`; it
-applies reads in the order it issued them (a newer change event never discards the read in flight, so a
-burst of events cannot starve the first load), keeps the loaded file when a re-read returns the same hash —
+`ResourcePreview` depends only on the host's stable `readFile` / `subscribeFileChanges` / `bytesUrl`; its
+reads are **single-flight** per file: change events during a read fold into one follow-up read sent after
+it settles, like the web panels' live reads, because a stalled host otherwise collected one `fs.readFile`
+per event until the transport's replay cap refused every request. It applies reads in the order it issued
+them (a newer change event never discards the read in flight, so a burst of events cannot starve the first
+load), keeps the loaded file when a re-read returns the same hash —
 as the same state object, like a re-read that fails the same way, so React bails out instead of scheduling
 a render that would interrupt an unfinished mount below it, such as a large diff's — and keeps the last
 good content when a re-read fails, like a file tab, but marked stale: the failure is named above it

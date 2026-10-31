@@ -119,3 +119,45 @@ test("a v87 answer keeps its branch facts across a noted review", () => {
 		status,
 	});
 });
+
+test("a non-superseding request lands unless something newer began, and never voids what is in flight", () => {
+	const state = createBranchStatusState();
+	const fresh = state.beginRequest("w\0feature");
+	const cached = state.beginRequest("w\0feature", { supersede: false });
+
+	expect(state.resolveRequest("w\0feature", cached, answer(pullRequest(1)))).toBe(true);
+	expect(state.resolveRequest("w\0feature", fresh, answer(pullRequest(2)))).toBe(true);
+	const late = state.beginRequest("w\0feature", { supersede: false });
+	state.beginRequest("w\0feature");
+	expect(state.resolveRequest("w\0feature", late, answer(pullRequest(3)))).toBe(false);
+	expect(state.getSnapshot("w\0feature")?.review).toEqual(pullRequest(2));
+});
+
+test("a failed request clears the key only when nothing answered its generation", () => {
+	const state = createBranchStatusState();
+	const fresh = state.beginRequest("w\0feature");
+	const cached = state.beginRequest("w\0feature", { supersede: false });
+	expect(state.resolveRequest("w\0feature", cached, answer(pullRequest(1)))).toBe(true);
+	expect(state.failRequest("w\0feature", fresh)).toBe(false);
+	expect(state.getSnapshot("w\0feature")?.review).toEqual(pullRequest(1));
+
+	const next = state.beginRequest("w\0feature");
+	expect(state.failRequest("w\0feature", next)).toBe(true);
+	expect(state.getSnapshot("w\0feature")?.review).toBeNull();
+	expect(state.failRequest("w\0feature", fresh)).toBe(false);
+});
+
+test("an older answer landing after a newer one adds only its review, with the newer counts", () => {
+	const state = createBranchStatusState();
+	const fresh = state.beginRequest("w\0feature");
+	const cached = state.beginRequest("w\0feature", { supersede: false });
+	state.resolveRequest("w\0feature", cached, answer(pullRequest(1, 2)));
+	expect(state.resolveRequest("w\0feature", fresh, answer(pullRequest(1)))).toBe(true);
+	expect(state.getSnapshot("w\0feature")?.review).toEqual(pullRequest(1, 2));
+
+	const later = state.beginRequest("w\0feature");
+	const reload = state.beginRequest("w\0feature", { supersede: false });
+	state.resolveRequest("w\0feature", reload, answer(null));
+	state.resolveRequest("w\0feature", later, answer(pullRequest(3, 4)));
+	expect(state.getSnapshot("w\0feature")?.review).toEqual(pullRequest(3));
+});

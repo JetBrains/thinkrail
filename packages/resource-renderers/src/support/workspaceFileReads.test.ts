@@ -55,26 +55,32 @@ function text(file: LoadedFile | null): string | null {
 	return file?.status === "ready" && file.content.kind === "text" ? file.content.text : null;
 }
 
-test("a read that lands after a newer one never overwrites it", async () => {
+test("change events during a read fold into one follow-up read, never a pile of reads", async () => {
 	const file = harness();
-	file.change();
-	file.reads[1]?.resolve({ content: "new", meta: meta("b") });
-	await settle();
-	file.reads[0]?.resolve({ content: "old", meta: meta("a") });
-	await settle();
-	expect(text(file.state())).toBe("new");
-});
-
-test("a change event does not discard the read in flight, so bursts cannot starve the first load", async () => {
-	const file = harness();
-	file.change();
-	file.change();
+	for (let i = 0; i < 20; i += 1) file.change();
+	expect(file.reads.length).toBe(1);
 	file.reads[0]?.resolve({ content: "first", meta: meta("a") });
 	await settle();
 	expect(text(file.state())).toBe("first");
-	file.reads[2]?.resolve({ content: "latest", meta: meta("c") });
+	expect(file.reads.length).toBe(2);
+	file.reads[1]?.resolve({ content: "latest", meta: meta("c") });
 	await settle();
 	expect(text(file.state())).toBe("latest");
+	expect(file.reads.length).toBe(2);
+});
+
+test("a failed read still sends the folded follow-up; stopping drops it", async () => {
+	const file = harness();
+	file.change();
+	file.reads[0]?.reject(new Error("offline"));
+	await settle();
+	expect(file.reads.length).toBe(2);
+	file.change();
+	file.stop();
+	file.reads[1]?.resolve({ content: "late", meta: meta("a") });
+	await settle();
+	expect(file.reads.length).toBe(2);
+	expect(file.state()).toEqual({ status: "error", message: "offline" });
 });
 
 test("a re-read with the same hash keeps the loaded object and the preview state holding it", async () => {
