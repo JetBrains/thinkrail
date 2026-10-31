@@ -7,12 +7,14 @@ export function ChatHeader({
 	stats,
 	statusEntries,
 	resources,
+	actions,
 	onOpenSkills,
 	skillsStale,
 }: {
 	stats: SessionStats | null;
 	statusEntries: [string, string][];
 	resources?: ReactNode;
+	actions?: ReactNode;
 	onOpenSkills?: () => void;
 	skillsStale?: boolean;
 }) {
@@ -31,6 +33,7 @@ export function ChatHeader({
 				<SessionStatsBar stats={stats} />
 			</div>
 			{resources}
+			{actions}
 			{onOpenSkills ? (
 				<SkillsButton onOpen={onOpenSkills} testId="open-skills" stale={skillsStale ?? false} />
 			) : null}

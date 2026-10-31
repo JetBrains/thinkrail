@@ -19,6 +19,13 @@ host-runs-pi / typed-WS / React+shadcn model). Built so others can reuse/contrib
 a future `packages/chat-ui`). Built-in tool renderers live in the child
 [tools/SPEC.md](tools/SPEC.md); extracted extension renderers live in [[module-thinkrail-extensions]].
 
+An optional two-chat view places two independent session surfaces side by side above one full-width
+composer. The shell owns the pairing and creates the second ordinary chat session; `ChatView` exposes
+its submit integration to that composer without creating another agent runtime. Enter targets the left
+session and Ctrl/Cmd+Enter targets the right session. Streaming targets receive a steer. Outside this
+view, the composer's existing Ctrl/Cmd+Enter follow-up behavior remains in force. A split can be closed
+without deleting either session.
+
 ## Rendering model — rows and progressive disclosure
 
 The transcript is pi-canonical turns (`ChatTurn` in `types.ts`: user/assistant are pi messages; `system`,

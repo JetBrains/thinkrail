@@ -1,4 +1,8 @@
 import {
+	RiLayoutColumnFill as SplitActiveIcon,
+	RiLayoutColumnLine as SplitIcon,
+} from "@remixicon/react";
+import {
 	type PromptHit,
 	type QueueLane,
 	type ResourceKind,
@@ -9,7 +13,7 @@ import {
 	type ThinkingLevel,
 } from "@thinkrail/contracts";
 import { t as translate, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -18,6 +22,7 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
@@ -82,6 +87,12 @@ import { useHistorySearch } from "./useHistorySearch";
 const TRY_AGAIN_PROMPT = "Try again.";
 const NOTHING_EXPANDED: Partial<Record<ResourceKind, boolean>> = {};
 
+export type ChatSubmit = (
+	text: string,
+	attachments: ChatAttachment[],
+	behavior: SubmitBehavior,
+) => ComposerSubmitDisposition;
+
 function renderSubagentModel({ model, thinkingLevel }: SubagentResourceSummary) {
 	return <RunModelLabel model={model} thinkingLevel={thinkingLevel} />;
 }
@@ -90,10 +101,24 @@ export default function ChatView({
 	sessionId,
 	workspaceId,
 	onOpenFile,
+	composerTarget,
+	hideComposer = false,
+	onSubmitReady,
+	onRestoreDraft,
+	onSecondarySubmit,
+	onSplit,
+	onUnsplit,
 }: {
 	sessionId: string;
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
+	composerTarget?: HTMLElement | null;
+	hideComposer?: boolean;
+	onSubmitReady?: (submit: ChatSubmit) => void;
+	onRestoreDraft?: (text: string) => void;
+	onSecondarySubmit?: (text: string, attachments: ChatAttachment[]) => ComposerSubmitDisposition;
+	onSplit?: () => void;
+	onUnsplit?: () => void;
 }) {
 	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
@@ -529,6 +554,10 @@ export default function ChatView({
 
 	const restoreTextToDraft = (text: string) => {
 		if (!text.trim()) return;
+		if (onRestoreDraft) {
+			onRestoreDraft(text);
+			return;
+		}
 		const current = useAppStore.getState().sessions[sessionId]?.draft ?? "";
 		const combined = [text, current].filter((t) => t.trim()).join("\n\n");
 		useAppStore.getState().setChatDraft(sessionId, combined);
@@ -642,6 +671,9 @@ export default function ChatView({
 			});
 		return { accepted: true };
 	};
+	useInsertionEffect(() => {
+		onSubmitReady?.(onSubmit);
+	});
 
 	const removeQueued = (kind: QueueLane, index: number) =>
 		getTransport().request("session.removeQueued", { sessionId, kind, index });
@@ -753,16 +785,77 @@ export default function ChatView({
 	});
 	const onTryAgain = useCallback(() => performSendRef.current(TRY_AGAIN_PROMPT, [], "send"), []);
 
+	const composerSection = (
+		<div className="relative shrink-0">
+			<HistoryOverlay
+				state={historyState}
+				workspaceNames={workspaceNames}
+				onQueryChange={setQuery}
+				onSetScope={setScope}
+				onToggleStage={toggleStage}
+				onMoveSelection={moveSelection}
+				onClose={onDismissHistory}
+				onOutsidePress={onHistoryOutsidePress}
+				onInsert={onInsertHit}
+				onInsertAndSend={onInsertAndSendHit}
+				onOpenMessage={openMessage}
+				onSaveAsTemplate={onSaveAsTemplateHit}
+				onDeleteChat={(wsId, id) => void onDeleteHistoryChat(wsId, id)}
+			/>
+			<Composer
+				ref={composerRef}
+				value={draft}
+				onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+				isStreaming={isStreaming}
+				growthLimit={composerGrowthLimit}
+				commands={mergedCommands}
+				templatePending={templatePending}
+				mentionCandidates={mentionCandidates}
+				recentPrompts={recentPrompts}
+				models={models}
+				modelsRefreshing={modelsRefreshing}
+				onRefreshModels={onRefreshModels}
+				currentModel={currentModel}
+				thinkingLevel={thinkingLevel}
+				modelPreferences={modelPreferences}
+				onMentionQuery={onMentionQuery}
+				onSlashActive={setSlashActive}
+				onSelectModel={onSelectModel}
+				onSelectThinking={onSelectThinking}
+				onSubmit={onSubmit}
+				{...(onSecondarySubmit ? { onSecondarySubmit } : {})}
+				onAbort={onAbort}
+				onHistoryOpen={onHistoryOpen}
+				onPickTemplate={onPickTemplate}
+				onManageTemplates={onManageTemplates}
+				templatesEmpty={templatesEmpty}
+			/>
+		</div>
+	);
+
 	return (
 		<div
 			ref={chatViewRef}
 			data-testid="chat-view"
+			data-session-id={sessionId}
 			data-line-width-bounded={chatLineWidthBounded}
 			data-message-order={chatMessageOrder}
 			className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 		>
 			<div className="shrink-0">
 				<ChatHeader
+					actions={
+						onSplit || onUnsplit ? (
+							<IconButton
+								variant="ghost"
+								size="m"
+								icon={onUnsplit ? SplitActiveIcon : SplitIcon}
+								label={t(onUnsplit ? "chat.view.closeSplit" : "chat.view.splitChat")}
+								data-testid="split-chat"
+								onClick={onUnsplit ?? onSplit}
+							/>
+						) : undefined
+					}
 					resources={
 						resources.visible ? (
 							<span className="flex shrink-0 items-center gap-2">
@@ -897,50 +990,11 @@ export default function ChatView({
 					disabling={disablingNotice}
 				/>
 			) : null}
-			<div className="relative shrink-0">
-				<HistoryOverlay
-					state={historyState}
-					workspaceNames={workspaceNames}
-					onQueryChange={setQuery}
-					onSetScope={setScope}
-					onToggleStage={toggleStage}
-					onMoveSelection={moveSelection}
-					onClose={onDismissHistory}
-					onOutsidePress={onHistoryOutsidePress}
-					onInsert={onInsertHit}
-					onInsertAndSend={onInsertAndSendHit}
-					onOpenMessage={openMessage}
-					onSaveAsTemplate={onSaveAsTemplateHit}
-					onDeleteChat={(wsId, id) => void onDeleteHistoryChat(wsId, id)}
-				/>
-				<Composer
-					ref={composerRef}
-					value={draft}
-					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
-					isStreaming={isStreaming}
-					growthLimit={composerGrowthLimit}
-					commands={mergedCommands}
-					templatePending={templatePending}
-					mentionCandidates={mentionCandidates}
-					recentPrompts={recentPrompts}
-					models={models}
-					modelsRefreshing={modelsRefreshing}
-					onRefreshModels={onRefreshModels}
-					currentModel={currentModel}
-					thinkingLevel={thinkingLevel}
-					modelPreferences={modelPreferences}
-					onMentionQuery={onMentionQuery}
-					onSlashActive={setSlashActive}
-					onSelectModel={onSelectModel}
-					onSelectThinking={onSelectThinking}
-					onSubmit={onSubmit}
-					onAbort={onAbort}
-					onHistoryOpen={onHistoryOpen}
-					onPickTemplate={onPickTemplate}
-					onManageTemplates={onManageTemplates}
-					templatesEmpty={templatesEmpty}
-				/>
-			</div>
+			{!hideComposer
+				? composerTarget
+					? createPortal(composerSection, composerTarget)
+					: composerSection
+				: null}
 			<TemplateEditorDialog
 				open={saveAsTemplateHit != null}
 				onOpenChange={(open) => {

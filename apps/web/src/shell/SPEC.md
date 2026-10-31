@@ -133,6 +133,12 @@ Built-in presets remain web-owned. The Layout section presents built-ins plus th
 
 ## Long-operation feedback
 
+The optional paired-chat view is local workbench presentation state keyed by workspace and primary
+chat tab. Its right session is a normal background-opened chat tab, so either conversation remains
+available after closing the paired view. Switching tabs keeps the pair for this mounted workbench;
+closing either chat placement removes the view. The shell creates the right session without activating
+its tab and leaves the existing center layout topology untouched.
+
 Starting an agent session is seconds-long (watcher readiness + `session.create`), so it is never silent:
 every chat-start path — the New-chat buttons (empty center and tab bar) and Settings › MCP servers' *Open a
 chat*, which share `panels/openChat`'s `startChatInTab`, `NewWorkspaceDialog`'s create-and-kick-off flow,
