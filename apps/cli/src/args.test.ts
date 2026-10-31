@@ -104,6 +104,17 @@ describe("parseArgs", () => {
 		expect(() => parseArgs(["/a", "/b"], {})).toThrow("Unexpected argument: /b");
 	});
 
+	test("ignores a blank or out-of-range env port (falls back to default)", () => {
+		for (const THINKRAIL_PORT of ["", "  ", "70000", "-5"]) {
+			expect(parseArgs([], { THINKRAIL_PORT }).port).toBe(DEFAULT_PORT);
+		}
+	});
+
+	test("rejects an empty --port value", () => {
+		expect(() => parseArgs(["--port="], {})).toThrow("Invalid --port: ");
+		expect(() => parseArgs(["--port", ""], {})).toThrow("Invalid --port: ");
+	});
+
 	test("ignores a non-numeric env port (falls back to default)", () => {
 		expect(parseArgs([], { THINKRAIL_PORT: "notanumber" }).port).toBe(DEFAULT_PORT);
 	});
