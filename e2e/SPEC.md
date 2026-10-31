@@ -471,8 +471,10 @@ interleaving (held animation frames, a held reply) rather than sampling it in a 
 scales with runner speed and outgrows the test budget on CI. An assertion that something happens without a
 settle wait freezes the page clock (`page.clock.pauseAt`) before the gesture, so a regressed timer can never
 fire, instead of racing a wall-clock `timeout`; `page.clock.runFor` then plays a settle window out
-deterministically. Live-provider completion waits on
-the session's streaming state after response evidence appears; the optional rendered `Done` row is not a
+deterministically. A file the host rewrites in place (pi's `settings.json`) is read once, after the UI state
+that the host's reply settles: a read overlapping the rewrite returns the old bytes followed by the new
+file's tail, and `expect.poll` rethrows that parse error instead of polling again. Live-provider completion
+waits on the session's streaming state after response evidence appears; the optional rendered `Done` row is not a
 terminal-state contract. Scenarios whose subject is a client-side send transformation assert the exact
 outgoing `session.prompt` frame rather than treating a
 mounted optimistic transcript row as delivery evidence: a fast provider rejection can add a taller error,
