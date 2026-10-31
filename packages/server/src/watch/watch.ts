@@ -89,7 +89,7 @@ function watchGitDir(
 	rootWatcher: FSWatcher,
 ): FSWatcher | null {
 	try {
-		const watcher = watch(gitDir, { recursive: false }, (_event, filename) => {
+		const watcher = watch(gitDir, { recursive: true }, (_event, filename) => {
 			const rel = typeof filename === "string" ? filename.replaceAll("\\", "/") : null;
 			if (rel === null || (!isTransientGitMetaPath(rel) && !isGitMetaDirectory(gitDir, rel)))
 				scheduleRepoMeta(workspaceId, rootWatcher);
