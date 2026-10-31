@@ -51,7 +51,7 @@ import {
 	type ModelSelection,
 } from "./ModelEffortPicker";
 import { isModelCommand, parseModelCommand } from "./nativeCommands";
-import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
+import { PromptImageChips, usePromptImages, usePromptPasteDropHandlers } from "./promptImages";
 import type { ChatAttachment } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
 
@@ -483,7 +483,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 	};
 
-	const { onPaste, onDrop } = imagePasteDropHandlers(attachedImages);
+	const editDraft = (next: string, nextCaret: number) => {
+		setSubmitError(null);
+		const recalled = recallIdxRef.current;
+		if (recalled !== null && next !== recentPrompts[recalled]) recallIdxRef.current = null;
+		if (slotSession) setSlotSession(applyTemplateSlotEdit(value, next, nextCaret, slotSession));
+		onChange(next);
+		setCaret(nextCaret);
+	};
+	const { onPaste, onDrop } = usePromptPasteDropHandlers(attachedImages, (next, nextCaret) => {
+		editDraft(next, nextCaret);
+		focusSelection(nextCaret);
+	});
 
 	return (
 		<div
@@ -625,20 +636,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-testid="chat-input"
 							value={value}
 							onScroll={syncBackdropScroll}
-							onChange={(e) => {
-								const next = e.target.value;
-								const nextCaret = e.target.selectionStart;
-								setSubmitError(null);
-								const recalled = recallIdxRef.current;
-								if (recalled !== null && next !== recentPrompts[recalled]) {
-									recallIdxRef.current = null;
-								}
-								if (slotSession) {
-									setSlotSession(applyTemplateSlotEdit(value, next, nextCaret, slotSession));
-								}
-								onChange(next);
-								setCaret(nextCaret);
-							}}
+							onChange={(e) => editDraft(e.target.value, e.target.selectionStart)}
 							onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
 							onClick={(e) => setCaret(e.currentTarget.selectionStart)}
 							onKeyDown={onKeyDown}

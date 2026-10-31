@@ -20,6 +20,7 @@ import {
 	readMenuLabels,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
+import { readClipboardFiles } from "./clipboard";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation } from "./externalNavigation";
 import { createKeyStateReader } from "./keyState";
@@ -323,6 +324,14 @@ async function start(): Promise<void> {
 		maxRequestTime: 5000,
 		handlers: {
 			requests: {
+				readClipboardFiles: async () => {
+					try {
+						return await readClipboardFiles();
+					} catch (error) {
+						desktopError("clipboard", "could not read clipboard files", error);
+						throw error;
+					}
+				},
 				getUpdateState: () => updateController.getState(),
 				getWindowState: (): NativeWindowState => readNativeWindowState(mainWindow),
 				minimizeWindow: (): undefined => {

@@ -79,7 +79,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
   and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]).
 - **Chats** — concurrent `pi` sessions per workspace, each with its own model, pi-reported token/cost,
-  steering and follow-ups mid-run, skill and prompt-template autocomplete, and history search
+  steering and follow-ups mid-run, skill and prompt-template autocomplete, and history search.
+  Desktop file paste keeps images as attachments and passes other files and folders as original paths
+  for the agent to interpret; documents are not automatically uploaded or inlined
   ([[submodule-web-chat]], [[submodule-server-agent]]).
 - **Existing skills reused** — portable Agent Skills kept for other coding agents are read in place;
   `pi` stays the parser and runtime ([[submodule-server-agent]]).
