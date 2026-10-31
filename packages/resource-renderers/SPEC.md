@@ -565,7 +565,9 @@ inset through dedicated CSS properties, so hovering anywhere in the diff or sett
 both axes together; direct native thumb hover/active still uses the global muted colour. No pointer-drag
 implementation or second intent state machine is added. Natural-height stacked sections keep their
 natural height and the surrounding review retains native vertical ownership; ancestor scrolling and
-resizing update the controller's clipped bottom.
+resizing update the controller's clipped bottom. Size changes of non-clipping layout ancestors also
+recompute placement: expanding a preceding section moves a diff without resizing its own boxes or the
+list viewport. This placement-only observation does not resize the diff or require a scroll event.
 
 Horizontal position has one imperative authority: an absolute pixel offset, clamped to the widest column.
 Native controller input and external column input update it immediately through Pierre's public

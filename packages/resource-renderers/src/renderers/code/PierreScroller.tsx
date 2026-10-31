@@ -9,8 +9,10 @@ function mirrorScroll(
 	content: HTMLElement,
 	horizontalBar: HTMLElement | null,
 ): () => void {
+	const layoutAncestors: HTMLElement[] = [];
 	const ancestors: HTMLElement[] = [];
 	for (let parent = scroller.parentElement; parent; parent = parent.parentElement) {
+		layoutAncestors.push(parent);
 		if (/auto|scroll|hidden|clip/.test(getComputedStyle(parent).overflowY)) ancestors.push(parent);
 	}
 	const placeBar = () => {
@@ -59,11 +61,13 @@ function mirrorScroll(
 	const resize = new ResizeObserver(fit);
 	resize.observe(scroller);
 	resize.observe(content);
-	for (const parent of ancestors) resize.observe(parent);
+	const placementResize = horizontalBar ? new ResizeObserver(placeBar) : null;
+	for (const parent of layoutAncestors) placementResize?.observe(parent);
 	if (horizontalBar) resize.observe(horizontalBar);
 	fit();
 	return () => {
 		resize.disconnect();
+		placementResize?.disconnect();
 		for (const parent of ancestors) parent.removeEventListener("scroll", placeBar);
 		window.removeEventListener("resize", placeBar);
 		horizontalBar?.style.removeProperty("bottom");
