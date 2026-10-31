@@ -21,6 +21,8 @@ test("nullProto keeps prototype-named keys as own data", () => {
 		JSON.parse('{"__proto__":"x","constructor":"y"}'),
 	);
 	expect(Object.getPrototypeOf(value)).toBeNull();
-	expect(Object.hasOwn(value, "__proto__")).toBe(true);
-	expect(value.constructor).toBe("y");
+	expect(Object.entries(value)).toEqual([
+		["__proto__", "x"],
+		["constructor", "y"],
+	]);
 });
