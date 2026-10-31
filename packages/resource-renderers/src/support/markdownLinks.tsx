@@ -33,11 +33,19 @@ export function resolveRelativePath(fromFile: string, href: string): string | nu
 }
 
 export function slugify(text: string): string {
-	return text
+	const ascii = text
 		.trim()
 		.toLowerCase()
 		.replace(/[^\w\s-]/g, "")
 		.replace(/\s+/g, "-");
+	if (ascii) return ascii;
+	return text
+		.trim()
+		.toLowerCase()
+		.normalize("NFC")
+		.replace(/[^\p{L}\p{N}\p{M}_\s-]/gu, "")
+		.replace(/\s+/g, "-")
+		.replace(/^-+|-+$/g, "");
 }
 
 function relativePathname(href: string): string {
@@ -47,9 +55,18 @@ function relativePathname(href: string): string {
 
 interface MdNode {
 	type: string;
-	value?: string;
-	children?: MdNode[];
-	data?: { hProperties?: Record<string, unknown> };
+	depth?: number | undefined;
+	value?: string | undefined;
+	children?: MdNode[] | undefined;
+	data?: { hProperties?: Record<string, unknown> | undefined } | undefined;
+	position?: { start?: { line?: number | undefined } | undefined } | undefined;
+}
+
+export interface MarkdownHeading {
+	depth: number;
+	text: string;
+	id: string;
+	line: number;
 }
 
 function headingText(node: MdNode): string {
@@ -57,24 +74,94 @@ function headingText(node: MdNode): string {
 	return (node.children ?? []).map(headingText).join("");
 }
 
-export function remarkHeadingIds() {
-	return (tree: MdNode): void => {
-		const seen = new Map<string, number>();
-		walk(tree, (node) => {
-			if (node.type !== "heading") return;
-			const base = slugify(headingText(node));
-			if (!base) return;
-			const n = seen.get(base) ?? 0;
-			seen.set(base, n + 1);
-			const id = n === 0 ? base : `${base}-${n}`;
-			node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id } };
+function headingLine(node: MdNode): number {
+	const line = node.position?.start?.line;
+	return typeof line === "number" ? line : 0;
+}
+
+function headingId(text: string, seen: Map<string, number>): string {
+	const base = slugify(text) || "heading";
+	const n = seen.get(base) ?? 0;
+	seen.set(base, n + 1);
+	return n === 0 ? base : `${base}-${n}`;
+}
+
+/**
+ * Heading ids for one slice of a document, keyed by the slice-local source line of each heading.
+ * `reserved` holds every id the whole document uses, so a heading that only parses inside the slice
+ * cannot take an id that belongs to another heading.
+ */
+export interface HeadingIdAssignment {
+	byLine: ReadonlyMap<number, string>;
+	reserved: ReadonlySet<string>;
+}
+
+type HeadingIdOptions = readonly string[] | HeadingIdAssignment;
+
+function isHeadingIdAssignment(value: unknown): value is HeadingIdAssignment {
+	return typeof value === "object" && value !== null && Reflect.get(value, "byLine") instanceof Map;
+}
+
+function unreservedHeadingId(
+	text: string,
+	seen: Map<string, number>,
+	reserved: ReadonlySet<string>,
+): string {
+	for (;;) {
+		const id = headingId(text, seen);
+		if (!reserved.has(id)) return id;
+	}
+}
+
+export function collectMarkdownHeadings(tree: unknown, ids?: HeadingIdOptions): MarkdownHeading[] {
+	const seen = new Map<string, number>();
+	const headings: MarkdownHeading[] = [];
+	const assignment = isHeadingIdAssignment(ids) ? ids : undefined;
+	const ordinal = assignment ? undefined : (ids as readonly string[] | undefined);
+	let i = 0;
+	walk(tree, (node) => {
+		if (node.type !== "heading" || typeof node.depth !== "number") return;
+		const text = headingText(node);
+		const line = headingLine(node);
+		const id = assignment
+			? (assignment.byLine.get(line) ?? unreservedHeadingId(text, seen, assignment.reserved))
+			: (ordinal?.[i] ?? headingId(text, seen));
+		i += 1;
+		headings.push({
+			depth: node.depth,
+			text: text.replace(/\s+/g, " ").trim() || text,
+			id,
+			line,
 		});
+		node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id } };
+	});
+	return headings;
+}
+
+export function remarkHeadingIds(ids?: HeadingIdOptions) {
+	const assigned = Array.isArray(ids) || isHeadingIdAssignment(ids) ? ids : undefined;
+	return (tree: unknown): void => {
+		collectMarkdownHeadings(tree, assigned);
 	};
 }
 
-function walk(node: MdNode, visit: (n: MdNode) => void): void {
+export function headingIdPlugin(
+	ids: HeadingIdOptions,
+): [typeof remarkHeadingIds, HeadingIdOptions] {
+	return [remarkHeadingIds, ids];
+}
+
+function isMdNode(value: unknown): value is MdNode {
+	return (
+		typeof value === "object" && value !== null && typeof Reflect.get(value, "type") === "string"
+	);
+}
+
+function walk(node: unknown, visit: (n: MdNode) => void): void {
+	if (!isMdNode(node)) return;
 	visit(node);
-	for (const child of node.children ?? []) walk(child, visit);
+	const children = Reflect.get(node, "children");
+	if (Array.isArray(children)) for (const child of children) walk(child, visit);
 }
 
 function scrollToAnchor(id: string): void {
