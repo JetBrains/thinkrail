@@ -23,6 +23,7 @@ import {
 	setSessionManagerFactory,
 	usePiRuntime,
 } from "../agent";
+import { resetConfigCache } from "../settings";
 import {
 	connectJbcentral,
 	disconnectJbcentral,
@@ -199,6 +200,7 @@ beforeEach(async () => {
 		THINKRAIL_CENTRAL_TEST_LOG: process.env.THINKRAIL_CENTRAL_TEST_LOG,
 		THINKRAIL_CENTRAL_TEST_CONTROL: process.env.THINKRAIL_CENTRAL_TEST_CONTROL,
 		THINKRAIL_CENTRAL_TEST_EXTENSION_SOURCE: process.env.THINKRAIL_CENTRAL_TEST_EXTENSION_SOURCE,
+		THINKRAIL_DATA_DIR: process.env.THINKRAIL_DATA_DIR,
 	};
 	await resetJbcentralStateForTests();
 	configurePiRuntimeFactory();
@@ -228,6 +230,8 @@ beforeEach(async () => {
 	process.env.THINKRAIL_CENTRAL_TEST_LOG = logPath;
 	process.env.THINKRAIL_CENTRAL_TEST_CONTROL = controlDir;
 	process.env.THINKRAIL_CENTRAL_TEST_EXTENSION_SOURCE = extensionSource;
+	process.env.THINKRAIL_DATA_DIR = join(root, "data");
+	resetConfigCache();
 	setSessionManagerFactory(() => SessionManager.inMemory(root));
 	await initializeJbcentralRuntime();
 });
@@ -242,6 +246,7 @@ afterEach(async () => {
 		if (value === undefined) delete process.env[name];
 		else process.env[name] = value;
 	}
+	resetConfigCache();
 	rmSync(root, { recursive: true, force: true });
 });
 
