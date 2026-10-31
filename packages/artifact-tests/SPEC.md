@@ -34,7 +34,9 @@ The root smoke commands execute the CLI, desktop and installer entrypoints direc
 orchestration stays in [[module-browser-e2e]] and imports the pure locator through this package's barrel.
 Unit tests and strict typechecking use ordinary workspace Turbo tasks; there is no package build step,
 SDK preparation, declaration generation, or Playwright test discovery here. Product unit tests remain
-with their owning modules.
+with their owning modules. The process-tree lifecycle test reads a fixture pid file only once it parses as
+a positive integer, and its grandchild writes an empty file first so that path runs every time; it never
+signals a pid ≤ 0, which would reach the test runner's whole process group.
 
 ## Artifact verification
 
