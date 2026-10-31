@@ -6,6 +6,7 @@ type NavigationEvent = ReturnType<
 >;
 
 const MAX_NAVIGATION_DETAIL_LENGTH = 64 * 1024;
+const DUPLICATE_OPEN_WINDOW_MS = 1000;
 
 export function externalNavigationUrl(value: unknown, origin: string): string | null {
 	let detail = value;
@@ -46,9 +47,14 @@ export function installExternalNavigation(
 	openExternal: (url: string) => unknown,
 ): () => void {
 	const names = [`will-navigate-${webviewId}`, `new-window-open-${webviewId}`];
+	let last: { url: string; at: number } | undefined;
 	const onNavigation = (event: NavigationEvent) => {
 		const url = externalNavigationUrl(event.data.detail, origin);
-		if (url) openExternal(url);
+		if (!url) return;
+		const at = Date.now();
+		if (last?.url === url && at - last.at < DUPLICATE_OPEN_WINDOW_MS) return;
+		last = { url, at };
+		openExternal(url);
 	};
 	for (const name of names) events.on(name, onNavigation);
 	return () => {

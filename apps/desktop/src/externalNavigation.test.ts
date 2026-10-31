@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, setSystemTime, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import { externalNavigationUrl, installExternalNavigation } from "./externalNavigation";
 
@@ -92,4 +92,40 @@ test("subscribes only to this webview's SDK channels and removes its listeners o
 	expect(opened).toHaveLength(2);
 	expect(siblingCalls).toBe(1);
 	expect(events.listenerCount("will-navigate-7")).toBe(0);
+});
+
+afterEach(() => setSystemTime());
+
+test("opens a target=_blank click once when WebKit emits both navigation channels", () => {
+	const events = new EventEmitter();
+	const opened: string[] = [];
+	installExternalNavigation(events, 7, origin, (url) => opened.push(url));
+	const url = "https://example.com/blank";
+
+	events.emit("will-navigate-7", { data: { detail: JSON.stringify({ url, allowed: true }) } });
+	events.emit("new-window-open-7", { data: { detail: { url, isCmdClick: false } } });
+	expect(opened).toEqual([url]);
+});
+
+test("opens the same URL again once the duplicate window has passed", () => {
+	setSystemTime(new Date("2026-01-01T00:00:00Z"));
+	const events = new EventEmitter();
+	const opened: string[] = [];
+	installExternalNavigation(events, 7, origin, (url) => opened.push(url));
+	const click = { data: { detail: { url: "https://example.com/again" } } };
+
+	events.emit("will-navigate-7", click);
+	setSystemTime(new Date("2026-01-01T00:00:02Z"));
+	events.emit("will-navigate-7", click);
+	expect(opened).toHaveLength(2);
+});
+
+test("does not suppress different URLs inside the duplicate window", () => {
+	const events = new EventEmitter();
+	const opened: string[] = [];
+	installExternalNavigation(events, 7, origin, (url) => opened.push(url));
+
+	events.emit("will-navigate-7", { data: { detail: { url: "https://example.com/a" } } });
+	events.emit("new-window-open-7", { data: { detail: { url: "https://example.com/b" } } });
+	expect(opened).toEqual(["https://example.com/a", "https://example.com/b"]);
 });
