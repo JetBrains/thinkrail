@@ -59,6 +59,12 @@ function readFlagValue(arg: string, next: string | undefined): { value: string; 
 	return { value: next, consumed: 2 };
 }
 
+function parsePort(value: string): number | undefined {
+	if (!/^\d+$/.test(value)) return undefined;
+	const n = Number(value);
+	return n <= 65535 ? n : undefined;
+}
+
 export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptions {
 	let port: number | undefined;
 	let host: string | undefined;
@@ -83,14 +89,13 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 			version = true;
 		} else if (arg === "--port" || arg.startsWith("--port=")) {
 			const { value, consumed } = readFlagValue(arg, argv[i + 1]);
-			const parsed = Number(value);
-			if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
-				throw new Error(`Invalid --port: ${value}`);
-			}
+			const parsed = parsePort(value);
+			if (parsed === undefined) throw new Error(`Invalid --port: ${value}`);
 			port = parsed;
 			i += consumed - 1;
 		} else if (arg === "--host" || arg.startsWith("--host=")) {
 			const { value, consumed } = readFlagValue(arg, argv[i + 1]);
+			if (value.trim() === "") throw new Error("Invalid --host: value is empty");
 			host = value;
 			i += consumed - 1;
 		} else if (arg.startsWith("-")) {
@@ -102,13 +107,13 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 		}
 	}
 
-	const envPort = env.THINKRAIL_PORT !== undefined ? Number(env.THINKRAIL_PORT) : undefined;
-	const resolvedPort =
-		port ?? (envPort !== undefined && Number.isInteger(envPort) ? envPort : DEFAULT_PORT);
+	const envPort = env.THINKRAIL_PORT === undefined ? undefined : parsePort(env.THINKRAIL_PORT);
+	const resolvedPort = port ?? envPort ?? DEFAULT_PORT;
+	const envHost = env.THINKRAIL_HOST?.trim() ? env.THINKRAIL_HOST : undefined;
 
 	return {
 		port: resolvedPort,
-		host: host ?? env.THINKRAIL_HOST ?? DEFAULT_HOST,
+		host: host ?? envHost ?? DEFAULT_HOST,
 		open,
 		noAnalytics,
 		verbose,
