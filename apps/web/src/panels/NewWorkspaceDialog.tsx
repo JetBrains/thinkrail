@@ -15,6 +15,7 @@ import {
 	type TemplateReadLocation,
 	type ThinkingLevel,
 	type WireModel,
+	WORKSPACE_CREATE_REQUEST_TIMEOUT_MS,
 	type Workspace,
 } from "@thinkrail/contracts";
 import { i18n, T, useT } from "@thinkrail/locales/react";
@@ -377,10 +378,14 @@ export function NewWorkspaceDialog({
 		} else {
 			useAppStore.getState().beginWorktreeCreation(selectedProjectId);
 			const createWorktree = async () =>
-				getTransport().request("workspace.create", {
-					projectId: selectedProjectId,
-					...(baseRef ? { baseRef } : {}),
-				});
+				getTransport().request(
+					"workspace.create",
+					{
+						projectId: selectedProjectId,
+						...(baseRef ? { baseRef } : {}),
+					},
+					{ timeoutMs: WORKSPACE_CREATE_REQUEST_TIMEOUT_MS },
+				);
 			const created = await createWorktree()
 				.catch((err: unknown) => {
 					toast.error(errorText(err), t("panels.newWorkspace.createFailed"));

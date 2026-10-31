@@ -90,6 +90,10 @@ never what a particular child's output means.
   child — and is still captured as if it were the child's, which is a known wart, not a guarantee. The
   constant is pinned from the other side: a test asserts each path *waits it out* (and no longer) when a
   grandchild keeps the pipes from ever reaching EOF, which is the only case where it is observable at all.
+- **Expiry reaps the direct child before the bounded run resolves.** After sending the kill (the process
+  group on POSIX), the runner waits for `proc.exited` before returning; callers that must clean up resources
+  left by the child (for example, a timed-out `git worktree add`) therefore do not race a still-running
+  child. The bounded drain grace still follows, so output capture retains its existing timeout behavior.
 - **The timeout path drains too — cancelling the readers on the spot dropped the diagnosis.** The group
   kill is what closes the write ends, so the bytes still in the pipe at expiry are exactly the ones the
   caller's message is built from: git's `Permission denied (publickey)`, a proxy's refusal, a `remote:`

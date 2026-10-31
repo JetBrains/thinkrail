@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
+	chmodSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -13,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
+import { cleanupFailedWorktreeCreate } from "./timeoutCleanup";
 import {
 	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
@@ -39,6 +41,8 @@ import {
 	unsettleWorkspace,
 	type WorkspaceLifecycleEvent,
 } from "./workspaces";
+
+const posix = test.skipIf(process.platform === "win32");
 
 function gitOut(cwd: string, ...args: string[]): string {
 	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
@@ -75,6 +79,59 @@ function git(cwd: string, ...args: string[]): void {
 
 async function worktrees(projectId = "p1") {
 	return (await listWorkspaces(projectId)).filter((w) => w.kind !== "default");
+}
+
+function installSlowCheckoutHook(delayMs = 350): void {
+	const hooks = join(dataDir, "hooks");
+	mkdirSync(hooks);
+	const postCheckout = join(hooks, "post-checkout");
+	writeFileSync(postCheckout, `#!/bin/sh\nnode -e 'setTimeout(() => {}, ${delayMs})'\n`);
+	chmodSync(postCheckout, 0o755);
+	git(repo, "config", "core.hooksPath", hooks);
+}
+
+function installHeldHook(hookName: "post-checkout" | "reference-transaction"): {
+	marker: string;
+	release: string;
+} {
+	const hooks = join(dataDir, `${hookName}-hooks`);
+	mkdirSync(hooks);
+	const marker = join(dataDir, `${hookName}.started`);
+	const release = join(dataDir, `${hookName}.release`);
+	const nodeScript = [
+		'const fs = require("node:fs");',
+		`const marker = ${JSON.stringify(marker)};`,
+		`const release = ${JSON.stringify(release)};`,
+		'fs.appendFileSync(marker, "ready\\n");',
+		"const timer = setInterval(() => { if (fs.existsSync(release)) clearInterval(timer); }, 10);",
+	].join("");
+	const phaseGuard = hookName === "reference-transaction" ? 'if [ "$1" = "prepared" ]; then\n' : "";
+	const phaseClose = hookName === "reference-transaction" ? "fi\n" : "";
+	const hookPath = join(hooks, hookName);
+	writeFileSync(hookPath, `#!/bin/sh\n${phaseGuard}node -e '${nodeScript}'\n${phaseClose}`);
+	chmodSync(hookPath, 0o755);
+	git(repo, "config", "core.hooksPath", hooks);
+	return { marker, release };
+}
+
+async function waitForFile(path: string, timeoutMs = 5_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (!existsSync(path)) {
+		if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${path}`);
+		await Bun.sleep(10);
+	}
+}
+
+async function waitForFileLines(path: string, count: number, timeoutMs = 5_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (true) {
+		if (existsSync(path)) {
+			const lines = readFileSync(path, "utf8").trim().split(/\r?\n/).filter(Boolean);
+			if (lines.length >= count) return;
+		}
+		if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${count} lines in ${path}`);
+		await Bun.sleep(10);
+	}
 }
 
 beforeEach(() => {
@@ -117,6 +174,207 @@ test("createWorkspace cuts a fresh branch from baseRef and records it as the bas
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(baseSha);
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
 	expect(ws.branch).not.toBe("feature/base");
+});
+
+posix("createWorkspace keeps the event loop responsive during a slow checkout", async () => {
+	installSlowCheckoutHook();
+
+	let settled = false;
+	const creation = createWorkspace("p1");
+	void creation.then(
+		() => {
+			settled = true;
+		},
+		() => {
+			settled = true;
+		},
+	);
+	await new Promise((resolve) => setTimeout(resolve, 50));
+	expect(settled).toBe(false);
+	const workspace = await creation;
+	expect(existsSync(workspace.worktreePath)).toBe(true);
+});
+
+posix("a concurrent Default ensure survives the asynchronous worktree add", async () => {
+	installSlowCheckoutHook(700);
+	const creation = createWorkspace("p1");
+	const listed = await listWorkspaces("p1");
+	expect(listed.some((workspace) => workspace.kind === "default")).toBe(true);
+
+	const created = await creation;
+	const records = listWorkspaceRecords("p1");
+	expect(records.some((workspace) => workspace.kind === "default")).toBe(true);
+	expect(records.some((workspace) => workspace.id === created.id)).toBe(true);
+});
+
+test("concurrent creates reserve distinct branch names while their checkouts run", async () => {
+	const [first, second] = await Promise.all([
+		createWorkspace("p1", "Concurrent Feature"),
+		createWorkspace("p1", "Concurrent Feature"),
+	]);
+
+	expect(new Set([first.branch, second.branch]).size).toBe(2);
+	expect([first.branch, second.branch].sort()).toEqual([
+		"concurrent-feature",
+		"concurrent-feature-2",
+	]);
+	expect(await worktrees()).toHaveLength(2);
+});
+
+posix("an in-flight managed worktree is hidden and cannot be adopted", async () => {
+	const gate = installHeldHook("post-checkout");
+	const path = join(dataDir, "worktrees", "repo", "pending-feature");
+	const creation = createWorkspace("p1", "Pending Feature");
+	void creation.catch(() => {});
+	try {
+		await waitForFile(gate.marker);
+		expect(registeredWorktrees(repo)).toContain(resolve(path));
+		expect((await listExistingWorktrees("p1")).some((candidate) => candidate.path === path)).toBe(
+			false,
+		);
+		await expect(openExistingWorktree("p1", path)).rejects.toThrow(/still being created/);
+	} finally {
+		writeFileSync(gate.release, "release");
+	}
+
+	const workspace = await creation;
+	expect(workspace.worktreePath).toBe(path);
+	expect((await listExistingWorktrees("p1")).some((candidate) => candidate.path === path)).toBe(
+		false,
+	);
+	expect(listWorkspaceRecords("p1").some((candidate) => candidate.id === workspace.id)).toBe(true);
+});
+
+posix("createWorkspace revalidates path ownership after checkout before persisting", async () => {
+	const defaultWorkspace = (await listWorkspaces("p1"))[0];
+	if (!defaultWorkspace) throw new Error("expected the ensured Default workspace");
+	const gate = installHeldHook("post-checkout");
+	const path = join(dataDir, "worktrees", "repo", "claimed-feature");
+	const creation = createWorkspace("p1", "Claimed Feature");
+	void creation.catch(() => {});
+	try {
+		await waitForFile(gate.marker);
+		const owner = {
+			...defaultWorkspace,
+			id: "late-path-owner",
+			name: "Late path owner",
+			branch: "late-path-owner",
+			worktreePath: path,
+		};
+		delete owner.kind;
+		const records = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8"));
+		records.push(owner);
+		writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify(records));
+	} finally {
+		writeFileSync(gate.release, "release");
+	}
+
+	await expect(creation).rejects.toThrow(/already managed/);
+	expect(
+		listWorkspaceRecords("p1").filter((workspace) => workspace.worktreePath === path),
+	).toHaveLength(1);
+});
+
+posix("a base branch rename during checkout is persisted on the pending create", async () => {
+	const base = await createWorkspace("p1", "Base Feature");
+	const gate = installHeldHook("post-checkout");
+	const creation = createWorkspace("p1", "Dependent Feature", base.branch);
+	void creation.catch(() => {});
+	try {
+		await waitForFile(gate.marker);
+		const renamed = renameWorkspace(base.id, "Renamed Base", { branch: "renamed-base" });
+		expect(renamed.branch).toBe("renamed-base");
+	} finally {
+		writeFileSync(gate.release, "release");
+	}
+
+	const dependent = await creation;
+	expect(dependent.baseBranch).toBe("renamed-base");
+	expect(
+		listWorkspaceRecords("p1").find((workspace) => workspace.id === dependent.id)?.baseBranch,
+	).toBe("renamed-base");
+	expect(gitOut(dependent.worktreePath, "rev-parse", "HEAD")).toBe(
+		gitOut(repo, "rev-parse", "renamed-base"),
+	);
+});
+
+posix("linked project checkouts reserve names in their common Git directory", async () => {
+	const linkedPath = join(dataDir, "linked-project");
+	git(repo, "worktree", "add", linkedPath, "-b", "linked-project", "main");
+	const projectsPath = join(dataDir, "projects.json");
+	const projects = JSON.parse(readFileSync(projectsPath, "utf8"));
+	projects.push({
+		id: "p2",
+		name: "linked-project",
+		path: linkedPath,
+		slug: "linked-project",
+		lastOpened: 2,
+	});
+	writeFileSync(projectsPath, JSON.stringify(projects));
+
+	const gate = installHeldHook("reference-transaction");
+	const first = createWorkspace("p1", "Shared Feature");
+	void first.catch(() => {});
+	let second: Promise<Workspace> | undefined;
+	try {
+		await waitForFileLines(gate.marker, 1);
+		second = createWorkspace("p2", "Shared Feature");
+		void second.catch(() => {});
+		await waitForFileLines(gate.marker, 2);
+	} finally {
+		writeFileSync(gate.release, "release");
+	}
+
+	if (!second) throw new Error("the linked-checkout create did not start");
+	const [firstWorkspace, secondWorkspace] = await Promise.all([first, second]);
+	expect([firstWorkspace.branch, secondWorkspace.branch]).toEqual([
+		"shared-feature",
+		"shared-feature-2",
+	]);
+	expect(gitOut(repo, "show-ref", "--verify", "--hash", "refs/heads/shared-feature")).not.toBe("");
+	expect(gitOut(repo, "show-ref", "--verify", "--hash", "refs/heads/shared-feature-2")).not.toBe(
+		"",
+	);
+});
+
+test("timed-out checkout cleanup clears a locked registration and its new branch", async () => {
+	const path = join(dataDir, "worktrees", "repo", "interrupted-checkout");
+	mkdirSync(join(dataDir, "worktrees", "repo"), { recursive: true });
+	const baseOid = gitOut(repo, "rev-parse", "HEAD");
+	git(repo, "worktree", "add", path, "-b", "interrupted-checkout", baseOid);
+	git(repo, "worktree", "lock", "--reason", "initializing", path);
+
+	const oneForce = Bun.spawnSync(["git", "-C", repo, "worktree", "remove", "--force", path], {
+		stdout: "ignore",
+		stderr: "ignore",
+	});
+	expect(oneForce.success).toBe(false);
+	expect(registeredWorktrees(repo)).toContain(resolve(path));
+
+	await cleanupFailedWorktreeCreate(repo, path, "interrupted-checkout", baseOid);
+	expect(registeredWorktrees(repo)).not.toContain(resolve(path));
+	expect(existsSync(path)).toBe(false);
+	expect(gitOut(repo, "show-ref", "--verify", "--hash", "refs/heads/interrupted-checkout")).toBe(
+		"",
+	);
+});
+
+test("failed checkout cleanup preserves a moved branch", async () => {
+	const path = join(dataDir, "worktrees", "repo", "moved-branch-checkout");
+	mkdirSync(join(dataDir, "worktrees", "repo"), { recursive: true });
+	const baseOid = gitOut(repo, "rev-parse", "HEAD");
+	git(repo, "worktree", "add", path, "-b", "moved-after-create", baseOid);
+	git(repo, "worktree", "remove", "--force", "--force", path);
+
+	writeFileSync(join(repo, "moved.txt"), "advance the ref\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "advance base after branch creation");
+	const movedOid = gitOut(repo, "rev-parse", "HEAD");
+	git(repo, "update-ref", "refs/heads/moved-after-create", movedOid);
+
+	await cleanupFailedWorktreeCreate(repo, path, "moved-after-create", baseOid);
+
+	expect(gitOut(repo, "rev-parse", "refs/heads/moved-after-create")).toBe(movedOid);
 });
 
 test("a relative data dir still creates and records a managed worktree at one absolute path", async () => {
@@ -207,6 +465,22 @@ test("createWorkspace fails with git's own words when the base fetch fails", asy
 	await expect(create).rejects.toThrow(/Could not fetch origin\/main/);
 	await expect(create).rejects.toThrow(/does not appear to be a git repository/);
 	expect(existsSync(join(dataDir, "worktrees", "repo"))).toBe(false);
+	expect(await worktrees()).toHaveLength(0);
+});
+
+test("createWorkspace preserves checkout errors and leaves no failed worktree", async () => {
+	writeFileSync(join(repo, ".gitattributes"), "z-fail.txt filter=fail\n");
+	writeFileSync(join(repo, "a.txt"), "checkout starts\n");
+	writeFileSync(join(repo, "z-fail.txt"), "checkout fails\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "add required checkout filter");
+	git(repo, "config", "filter.fail.smudge", 'node -e "process.exit(1)"');
+	git(repo, "config", "filter.fail.required", "true");
+
+	await expect(createWorkspace("p1")).rejects.toThrow(/smudge filter fail failed/);
+	expect(existsSync(join(dataDir, "worktrees", "repo", "workspace-1"))).toBe(false);
+	expect(registeredWorktrees(repo)).toHaveLength(1);
+	expect(gitOut(repo, "show-ref", "--verify", "--hash", "refs/heads/workspace-1")).toBe("");
 	expect(await worktrees()).toHaveLength(0);
 });
 
