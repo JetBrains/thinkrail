@@ -108,10 +108,12 @@ assumption; re-verify on a pi bump.
   one rule), a path separator anywhere in the name (`/` or `\`), an embedded NUL byte, or a colon
   (rejected on every OS, specifically the NTFS alternate-data-stream case: NTFS reads `a:b.md`
   as an alternate data stream of a file named `a`, so a colon-named template could not survive a
-  Windows checkout) — and accepts everything else, including interior dots (`foo.bar`),
-  uppercase, spaces, and unicode. A hand-placed colon-named file on Linux/macOS therefore disappears
-  from `template.list` and is refused by get/save/delete; deliberate, since the name cannot survive a
-  Windows checkout, and list/get parity holds because `listTemplates` filters through the same gate.
+  Windows checkout). It also rejects reserved Win32 device names (`CON`, `PRN`, `AUX`, `NUL`,
+  `COM1`–`COM9`, `LPT1`–`LPT9`, including superscript ¹²³ variants and dotted suffixes), regardless
+  of host OS: a `NUL.md` template may silently discard writes on Windows. Other names, including
+  interior dots (`foo.bar`), uppercase, spaces, and unicode remain legal. A hand-placed unsafe file
+  on Linux/macOS disappears from `template.list` and is refused by get/save/delete; deliberate for
+  cross-platform checkouts, and list/get parity holds because `listTemplates` shares the same gate.
   This matters because pi's own loader performs **no sanitization at all** when deriving a name from a
   filename (see "pi facts" above), so a narrower rule breaks **list/get parity**: a name `listTemplates`
   can show but `getTemplate`/`saveTemplate`/`deleteTemplate` refuse is a user-visible bug, not a safety
@@ -217,11 +219,12 @@ assumption; re-verify on a pi bump.
   deliberate, not an oversight; don't add one without re-reading the freshness rationale it exists to
   satisfy.
 - **List/get parity, both directions — structural, not a convention.** `isValidTemplateName` excludes
-  only the shapes that are unsafe as a filename segment (empty, leading `.`, a separator, NUL)
-  plus `:` (the NTFS alternate-data-stream case above), never an ordinary pi-legal name like
-  `foo.bar` — so don't tighten it without checking it still admits everything pi's own loader would
-  list (a narrower "clean slug" regex looks safe in review but silently breaks this; it did, once — see
-  "Design" above). The reverse direction holds too, by construction: `listDir`
+  only the shapes that are unsafe as a filename segment (empty, leading `.`, a separator, NUL),
+  plus `:` (NTFS alternate data streams) and Windows reserved device names (see above), never an
+  ordinary pi-legal name like `foo.bar`. Windows-device names are intentionally excluded on every OS;
+  `listDir` uses the same gate so Linux files with those names cannot be listed and then fail on get.
+  Don't tighten to a "clean slug" regex: it previously broke legitimate interior-dot names. The reverse
+  direction holds too, by construction: `listDir`
   filters every directory entry through this *exact same* gate function, not a partial or hand-rolled
   re-check, so a dot-leading file like a hand-placed `.hidden.md` is ignored by the scan entirely and
   never surfaces in `listTemplates` in the first place. The gate and the scan can't drift apart because
