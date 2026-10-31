@@ -328,3 +328,6 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `SO_REUSEPORT`), so a bind-and-catch check is unreliable. A refused connection means free.
 - `findFreePort` scans upward from `preferred` (predictable: `24242 → 24243 → …`) and falls back to an
   OS-assigned ephemeral port if the whole scan range is taken.
+- Its answer is a snapshot: another process may bind the port before the caller does, and a later connect
+  probe of an ephemeral-range port can self-connect. Callers bind promptly; tests never re-probe the result
+  (that re-probe flaked under parallel package tests).

@@ -49,6 +49,7 @@ const TEST_KEY = "phc_test";
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
 interface SentEvent {
 	event: string;
 	properties: Record<string, unknown>;
@@ -58,6 +59,7 @@ let sent: SentEvent[];
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "thinkrail-host-observation-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
+	process.env.PI_CODING_AGENT_DIR = join(dataDir, "pi");
 	resetConfigCache();
 	setupObservation.clear();
 	taskObservation.clear();
@@ -82,6 +84,8 @@ afterEach(async () => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+	if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+	else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
 });
 
 async function captured(name: string) {

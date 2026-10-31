@@ -191,7 +191,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   Empty/newly-hydrated groups and completion by deletion do not count. These memory-only observations
   retain a grant's capture before asynchronous work and never replay across revocation.
   `stop()` → immediate agent-session cleanup, then `persistTerminalSessions()` **before**
-  `closeAllTerminals()`, then watcher/socket disposal; `shutdown()` memoizes one asynchronous graceful
+  `closeAllTerminals()`, then watcher/socket disposal and `restoreSeamDefaults()`: every resolver,
+  handler and publisher `createServer` installed is scoped to the server's lifetime and returns to its
+  module default, so a later server in the same process (the unit suite boots many) never inherits a
+  stopped one's policy or publish path; `shutdown()` memoizes one asynchronous graceful
   path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then
   `turnTracker.drain()` for the receipts those settlements started, then `stop()`). The
   bounded settle includes hidden delegation children even when their parent is
