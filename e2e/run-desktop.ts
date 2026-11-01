@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { locateDesktopLauncher } from "@thinkrail/artifact-tests";
+import { locateDesktopLauncher, waitForDocument } from "@thinkrail/artifact-tests";
 import { artifactHostEnvironment } from "./artifactPlaywright";
 import {
 	E2E_DESKTOP_CACHE,
@@ -27,27 +27,19 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 	]);
 }
 
-async function waitForReady(exited: Promise<number>): Promise<string> {
-	await within(
-		Promise.race([
-			(async () => {
-				while (!existsSync(E2E_DESKTOP_READY_FILE)) await Bun.sleep(50);
-			})(),
-			exited.then((code) => {
-				throw new Error(`desktop host exited before ready with ${code}`);
-			}),
-		]),
-		30_000,
-		"desktop host ready",
-	);
-	const ready = JSON.parse(readFileSync(E2E_DESKTOP_READY_FILE, "utf8")) as {
-		origin?: unknown;
-		mode?: unknown;
-	};
-	if (typeof ready.origin !== "string" || ready.mode !== "host") {
-		throw new Error("desktop host wrote an invalid ready document");
-	}
-	return ready.origin;
+function hostOrigin(document: unknown): string | undefined {
+	if (typeof document !== "object" || document === null) return undefined;
+	const { origin, mode } = document as { origin?: unknown; mode?: unknown };
+	return typeof origin === "string" && mode === "host" ? origin : undefined;
+}
+
+function waitForReady(exited: Promise<number>): Promise<string> {
+	return waitForDocument(E2E_DESKTOP_READY_FILE, hostOrigin, {
+		timeoutMs: 30_000,
+		what: "desktop host ready",
+		exited,
+		exitError: (code) => new Error(`desktop host exited before ready with ${code}`),
+	});
 }
 
 await holdE2eIdleSleep();

@@ -158,9 +158,9 @@ function taskkill(pid: number, deadline: number): void {
 	}
 }
 
-async function killAndReap(
+export async function reapProcess(
 	launched: LaunchedProcess,
-	options: TerminateProcessOptions,
+	options: TerminateProcessOptions = {},
 ): Promise<void> {
 	const timeoutMs = options.timeoutMs ?? DEFAULT_TERMINATION_TIMEOUT_MS;
 	if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
@@ -231,13 +231,104 @@ function failureMessage(failure: unknown): string {
 	return failure instanceof Error ? failure.message : String(failure);
 }
 
+export interface CleanupOutcome {
+	readonly failed: boolean;
+}
+
+export interface RunWithCleanupOptions {
+	readonly reportFailure?: (failure: unknown) => void;
+}
+
+export async function runWithCleanup<T>(
+	work: () => Promise<T>,
+	cleanups: readonly ((outcome: CleanupOutcome) => unknown)[],
+	options: RunWithCleanupOptions = {},
+): Promise<T> {
+	let settled: { ok: true; value: T } | { ok: false; error: unknown };
+	try {
+		settled = { ok: true, value: await work() };
+	} catch (error) {
+		settled = { ok: false, error };
+		(options.reportFailure ?? console.error)(error);
+	}
+	const cleanupErrors: unknown[] = [];
+	for (const cleanup of cleanups) {
+		try {
+			await cleanup({ failed: !settled.ok });
+		} catch (error) {
+			cleanupErrors.push(error);
+		}
+	}
+	if (cleanupErrors.length === 0) {
+		if (settled.ok) return settled.value;
+		throw settled.error;
+	}
+	const cleanupMessage = cleanupErrors.map(failureMessage).join("; ");
+	if (!settled.ok) {
+		throw new AggregateError(
+			[settled.error, ...cleanupErrors],
+			`${failureMessage(settled.error)}; cleanup also failed: ${cleanupMessage}`,
+			{ cause: settled.error },
+		);
+	}
+	if (cleanupErrors.length === 1) {
+		throw new Error(`cleanup failed: ${cleanupMessage}`, { cause: cleanupErrors[0] });
+	}
+	throw new AggregateError(cleanupErrors, `cleanup failed: ${cleanupMessage}`);
+}
+
+export function processesUnderRoots(listing: string, roots: readonly string[]): number[] {
+	const needles = [
+		...new Set(roots.map((root) => root.replaceAll("/", "\\").replace(/\\+$/, "").toLowerCase())),
+	].filter((root) => root.length > 0);
+	const pids: number[] = [];
+	for (const line of listing.split(/\r?\n/)) {
+		const match = line.match(/^\s*(\d+)\t(.*)$/);
+		if (!match) continue;
+		const pid = Number(match[1]);
+		const described = (match[2] ?? "").replaceAll("/", "\\").toLowerCase();
+		if (validPid(pid) && needles.some((root) => containsPathUnder(described, root))) pids.push(pid);
+	}
+	return pids;
+}
+
+function containsPathUnder(described: string, root: string): boolean {
+	for (let at = described.indexOf(root); at >= 0; at = described.indexOf(root, at + 1)) {
+		const next = described.charAt(at + root.length);
+		if (next === "" || /[\\\s"']/.test(next)) return true;
+	}
+	return false;
+}
+
+const WINDOWS_PROCESS_LISTING =
+	"Get-CimInstance Win32_Process | ForEach-Object { @($_.ProcessId, $_.ExecutablePath, $_.CommandLine) -join [char]9 }";
+
+export function windowsProcessesUnder(roots: readonly string[], timeoutMs = 15_000): number[] {
+	const result = Bun.spawnSync(
+		["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", WINDOWS_PROCESS_LISTING],
+		{
+			stdin: "ignore",
+			stdout: "pipe",
+			stderr: "pipe",
+			timeout: timeoutMs,
+			killSignal: "SIGKILL",
+		},
+	);
+	if (!result.success) {
+		throw new Error(
+			`could not list processes under ${roots.join(", ")}: powershell exited ${result.exitCode}: ${result.stderr.toString().trim()}`,
+		);
+	}
+	return processesUnderRoots(result.stdout.toString(), roots);
+}
+
 export async function terminateProcess(
 	launched: LaunchedProcess,
 	failure: unknown,
 	options: TerminateProcessOptions = {},
 ): Promise<never> {
 	try {
-		await killAndReap(launched, options);
+		await reapProcess(launched, options);
 	} catch (cleanupError) {
 		throw new AggregateError(
 			[failure, cleanupError],
