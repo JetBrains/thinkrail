@@ -88,7 +88,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
    reuse is enforced by boundaries and conformance rather than parallel implementations.
 3. **The wire is versioned.** `contracts` is types plus a small dependency-free runtime: wire constants,
    versions, the config default, and guards. Any other runtime is a named exception in its spec, today
-   the quit-confirmation rule and the search matcher; adding one updates this decision. `server.welcome` carries a
+   the quit-confirmation rule and the search matcher (the palette's ranking, kept in `contracts` so host-side
+   search can rank with the same copy); adding one updates this decision. `server.welcome` carries a
    protocol version so an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state

@@ -10,9 +10,9 @@ tags: [ui, commands, public-surface-checked]
 
 ## Responsibility
 
-The typed contract every invocable app action is described with, so the search palette (and later a
-keybinding editor or other surfaces) can list, gate and run the same actions the menus and chords run.
-It owns no handlers: a command's `run` is supplied by whoever composes the catalog, today `shell`.
+The typed contract an invocable app action is described with, so the search palette can list, gate and
+run the same actions the menus and chords run. It owns no handlers: a command's `run` is supplied by
+whoever composes the catalog, today `shell`.
 
 ## Boundary
 
@@ -39,34 +39,31 @@ It owns no handlers: a command's `run` is supplied by whoever composes the catal
 
 ## Coverage
 
-Every existing action, where it lives, and when the palette runs it. "Row UI" marks actions that keep
-their current surface because they need a selection, an inline editor, or a confirmation the palette
-does not reproduce yet.
+Every existing action, where it lives, and whether the palette runs it. "Row UI" marks actions that keep
+their own surface because they need a selection, an inline editor, or a confirmation the palette does
+not reproduce.
 
 | Command | Handler | Context / gate | Palette |
 | --- | --- | --- | --- |
-| `workspace.new` New workspace… (`Mod+N`) | shell `NewWorkspaceDialog` | context project | PR1 |
-| `workspace.openDefault` Work in project folder | `panels/defaultWorkspace.enterDefaultWorkspace` | context project | PR1 |
-| `chat.new` New chat | `panels/openChat.startChatInTab` | active workspace, online | PR1 |
-| `project.open` Open project… | `panels/useOpenProject.pickAndOpen` (dialogs mounted by shell) | online | PR1 |
-| `project.openPath` Open a path on the host… | `panels/useOpenProject.enterHostPath` | online | PR1 |
-| `project.create` Start a new project… | `panels/useOpenProject.startNewProject` (`CreateProjectDialog`; a setup intent starts the setup chat) | a host serving `project.create` (v94), online | PR1 |
+| `workspace.new` New workspace… (`Mod+N`; `Mod+Alt+N` shown in a browser) | shell `NewWorkspaceDialog` | context project | yes |
+| `workspace.openDefault` Work in project folder | `panels/defaultWorkspace.enterDefaultWorkspace` | context project | yes |
+| `chat.new` New chat | `panels/openChat.startChatInTab` | active workspace, online | yes |
+| `project.open` Open project… | `panels/useOpenProject.pickAndOpen` (dialogs mounted by shell) | online | yes |
+| `project.openPath` Open a path on the host… | `panels/useOpenProject.enterHostPath` | online | yes |
+| `project.create` Start a new project… | `panels/useOpenProject.startNewProject` (`CreateProjectDialog`; a setup intent starts the setup chat) | a host serving `project.create` (v94), online | yes |
 | Reopen a recent project | `AddProjectMenu` recents | a recent path | Row UI |
-| `chat.history` Search chat history (`Ctrl+R`) | `store.requestHistoryOpen` | a chat tab | PR1 |
-| `view.show.{specs,files,review,plan}` (every `LayoutToolId` but `projects`) | `store.requestToolView` | active workspace | PR1 |
-| `view.toggleLeft/Right/Bottom` (`Mod+B`/`Mod+J`/`Mod+Shift+J`) | layout intents; Project Home pane toggle | right/bottom need a workspace | PR1 |
-| `settings.open` and every Settings section (incl. Keyboard's double-Shift row, Extensions, MCP servers) | `store.openSettings(section)`; the native menu's `Mod+,` is shown where it exists | protocol-gated sections only | PR1 |
+| `chat.history` Search chat history (`Ctrl+R`) | `shell/chordActions.openChatHistory` | a chat tab | yes |
+| `view.show.{specs,files,review,plan}` (every `LayoutToolId` but `projects`) | `store.requestToolView` | active workspace | yes |
+| `view.toggleLeft/Right/Bottom` (`Mod+B`/`Mod+J`/`Mod+Shift+J`) | `shell/chordActions` (the functions the chords run) | right/bottom need a workspace | yes |
+| `settings.open` and every Settings section (incl. Keyboard's double-Shift row, Extensions, MCP servers) | `store.openSettings(section)`; the native menu's `Mod+,` is shown where it exists | protocol-gated sections only | yes |
 | Theme, extension and MCP server switches | their Settings sections — the palette opens them, never flips them in place | — | Settings |
-| `workspace.markRead` / `markUnread` | `panels/workspaceActions` | `supportsWorkspaceReadState` + `selectWorkspaceReadAction` | PR1 |
-| `workspace.settle` / `unsettle` | `panels/workspaceActions` | `canSettleWorkspace`; Settle disabled while an agent works or a chat needs you, as in the tree | PR1 |
-| `workspace.reveal`, `workspace.copyPath`, `workspace.openIn.<editor>` | `panels/workspaceActions`, `lib.copyText` | active workspace | PR1 |
-| `terminal.new` New terminal | `store.addTerminal` | active workspace, online (placement reserves on the host) | PR1 |
-| Start work from typed text (`⌘↵`, targets) | shared `startWork` | context project | PR3 |
-| Chat without a project | `chat.create` | — | PR4 |
-| Continue in workspace | `chat.continue` | a projectless chat | PR5 |
+| `workspace.markRead` / `markUnread` | `panels/workspaceActions` | `supportsWorkspaceReadState` + `selectWorkspaceReadAction` | yes |
+| `workspace.settle` / `unsettle` | `panels/workspaceActions` | `canSettleWorkspace`; Settle disabled while an agent works or a chat needs you (`selectWorkspaceSettleBlocked`), as in the tree | yes |
+| `workspace.reveal`, `workspace.copyPath`, `workspace.openIn.<editor>` | `panels/workspaceActions`, `lib.copyText` | active workspace | yes |
+| `terminal.new` New terminal | `store.addTerminal` | active workspace, online (placement reserves on the host) | yes |
 | Remove workspace, close project, stop trusting, layout apply/reset, clear review, MCP approve/remove, stop all subagents, delete template | their confirm dialogs | confirmation | Row UI |
 | Publish / push / open, mark ready, merge, reopen a pull request, delete the remote branch, hand checks or a diverged branch to the agent | `shell/locationBar` topbar review card | branch status + GitHub facts | Row UI |
-| Rename workspace/project/chat | inline editors | an argument page | Row UI |
+| Rename workspace/project/chat | inline editors | an inline editor | Row UI |
 | Split/move/fold tabs and groups, focus adjacent group | Workbench internals | a tab or group | Row UI |
 | `/compact`, `/model`, effort, Stop, resources inspector, PR flows, plan review, review fixes | lazy `ChatView`, `PlanPane`, `ChangesReviewPane` | a mounted surface | Row UI |
 | Open/revert a file or hunk, review comment actions | selection surfaces | a selection | Row UI |
