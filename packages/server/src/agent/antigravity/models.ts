@@ -103,8 +103,8 @@ export function getThinkingConfig(
 
 export function getMaxOutputTokens(modelId: string, runtimeModel?: string): number {
 	const target = runtimeModel || modelId;
-	const dynamic = dynamicMaxOutputTokens.get(target);
-	if (dynamic) return dynamic;
+	const dynamic = dynamicMaxOutputTokens.get(target) ?? dynamicMaxOutputTokens.get(modelId);
+	if (dynamic !== undefined) return dynamic;
 	if (target.startsWith("claude-")) return 64000;
 	if (target.startsWith("gpt-oss-")) return 32768;
 	if (target.startsWith("gemini-")) return 65536;
@@ -283,16 +283,19 @@ function toProviderModelConfig(group: GroupedModel): ProviderModelConfig {
 	const supportsImages =
 		group.rawList.some((r) => r.supportsImages) || (staticText?.input.includes("image") ?? false);
 
-	let contextWindow = staticText?.contextWindow ?? 1048576;
-	let maxTokens = staticText?.maxTokens ?? 65536;
+	let contextWindowFromMeta: number | undefined;
+	let maxTokensFromMeta: number | undefined;
 	for (const r of group.rawList) {
 		if (typeof r.maxTokens === "number" && r.maxTokens > 0) {
-			contextWindow = Math.max(contextWindow, r.maxTokens);
+			contextWindowFromMeta = Math.max(contextWindowFromMeta ?? 0, r.maxTokens);
 		}
 		if (typeof r.maxOutputTokens === "number" && r.maxOutputTokens > 0) {
-			maxTokens = Math.max(maxTokens, r.maxOutputTokens);
+			maxTokensFromMeta = Math.max(maxTokensFromMeta ?? 0, r.maxOutputTokens);
 		}
 	}
+
+	const contextWindow = contextWindowFromMeta ?? staticText?.contextWindow ?? 1048576;
+	const maxTokens = maxTokensFromMeta ?? staticText?.maxTokens ?? 65536;
 	dynamicMaxOutputTokens.set(baseId, maxTokens);
 
 	return {

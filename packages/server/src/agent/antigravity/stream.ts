@@ -5,9 +5,12 @@ import {
 	type Context,
 	calculateCost,
 	createAssistantMessageEventStream,
+	getCurrentSystemPrompt,
+	getCurrentTools,
 	type JsonObject,
 	type Model,
 	type SimpleStreamOptions,
+	type StopReason,
 	type TextContent,
 	type Tool,
 	type ToolCall,
@@ -179,6 +182,20 @@ function appendTurn(contents: GeminiContent[], role: "user" | "model", parts: Ge
 	}
 }
 
+const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/;
+function isValidThoughtSignature(signature?: string): boolean {
+	if (!signature) return false;
+	if (signature.length % 4 !== 0) return false;
+	return base64SignaturePattern.test(signature);
+}
+
+function resolveThoughtSignature(
+	isSameProviderAndModel: boolean,
+	signature?: string,
+): string | undefined {
+	return isSameProviderAndModel && isValidThoughtSignature(signature) ? signature : undefined;
+}
+
 export function convertAssistantMessage(
 	msg: AssistantMessage,
 	model: Model<Api>,
@@ -187,24 +204,49 @@ export function convertAssistantMessage(
 	if (msg.stopReason === "error" || msg.stopReason === "aborted") {
 		return [];
 	}
-	const isClaude = model.id.startsWith("claude-") || runtimeModel.startsWith("claude-");
+	const isSameProviderAndModel =
+		msg.provider === model.provider && (msg.model === model.id || msg.model === runtimeModel);
 	const parts: GeminiPart[] = [];
 	for (const block of msg.content) {
 		if (block.type === "text") {
-			if (!block.text || block.text.trim() === "") continue;
+			const thoughtSignature = resolveThoughtSignature(
+				isSameProviderAndModel,
+				(block as { textSignature?: string; thoughtSignature?: string }).textSignature ||
+					(block as { textSignature?: string; thoughtSignature?: string }).thoughtSignature,
+			);
+			if ((!block.text || block.text.trim() === "") && !thoughtSignature) {
+				continue;
+			}
 			parts.push({
-				text: block.text,
-				...(!isClaude && block.textSignature ? { thoughtSignature: block.textSignature } : {}),
+				text: block.text || "",
+				...(thoughtSignature ? { thoughtSignature } : {}),
 			});
-		} else if (block.type === "thinking" && String(block.thinking || "").trim()) {
-			if (!isClaude) {
+		} else if (block.type === "thinking") {
+			if (isSameProviderAndModel) {
+				const thoughtSignature = resolveThoughtSignature(
+					isSameProviderAndModel,
+					(block as { thinkingSignature?: string; thoughtSignature?: string }).thinkingSignature ||
+						(block as { thinkingSignature?: string; thoughtSignature?: string }).thoughtSignature,
+				);
+				if ((!block.thinking || block.thinking.trim() === "") && !thoughtSignature) {
+					continue;
+				}
 				parts.push({
 					thought: true,
+					text: block.thinking || "",
+					...(thoughtSignature ? { thoughtSignature } : {}),
+				});
+			} else if (!model.id.startsWith("claude-") && !runtimeModel.startsWith("claude-")) {
+				if (!block.thinking || block.thinking.trim() === "") continue;
+				parts.push({
 					text: block.thinking,
-					...(block.thinkingSignature ? { thoughtSignature: block.thinkingSignature } : {}),
 				});
 			}
 		} else if (block.type === "toolCall") {
+			const thoughtSignature = resolveThoughtSignature(
+				isSameProviderAndModel,
+				(block as { thoughtSignature?: string }).thoughtSignature,
+			);
 			parts.push({
 				functionCall: {
 					name: block.name,
@@ -213,9 +255,7 @@ export function convertAssistantMessage(
 						? { id: sanitizeToolCallId(block.id || "", block.name) }
 						: {}),
 				},
-				...(!isClaude && block.thoughtSignature
-					? { thoughtSignature: block.thoughtSignature }
-					: {}),
+				...(thoughtSignature ? { thoughtSignature } : {}),
 			});
 		}
 	}
@@ -351,7 +391,8 @@ export function buildRequest(
 	options: SimpleStreamOptions,
 	runtimeModel: string,
 ): Record<string, unknown> {
-	const systemPromptText = context.systemPrompt?.trim() || ANTIGRAVITY_SYSTEM_INSTRUCTION;
+	const effectivePrompt = getCurrentSystemPrompt(context.messages) || context.systemPrompt;
+	const systemPromptText = effectivePrompt?.trim() || ANTIGRAVITY_SYSTEM_INSTRUCTION;
 	const systemParts: GeminiPart[] = [{ text: systemPromptText }];
 
 	const contents = convertMessages(model, context, runtimeModel);
@@ -360,17 +401,20 @@ export function buildRequest(
 	const isNonGemini =
 		isClaude || model.id.startsWith("gpt-oss-") || runtimeModel.startsWith("gpt-oss-");
 
-	const tools = convertTools(context.tools, isNonGemini);
+	const toolMap = new Map<string, Tool>();
+	for (const t of (context.tools ?? []).concat(getCurrentTools(context.messages) ?? [])) {
+		if (t?.name) toolMap.set(t.name, t);
+	}
+	const combinedTools = Array.from(toolMap.values());
+	const tools = convertTools(combinedTools, isNonGemini);
 
 	const generationConfig: Record<string, unknown> = {};
 	if (options.temperature !== undefined) generationConfig.temperature = options.temperature;
 	const thinking = getThinkingConfig(runtimeModel, options.reasoning ?? "off");
 	if (thinking) generationConfig.thinkingConfig = thinking;
 	const maxAllowed = getMaxOutputTokens(model.id, runtimeModel);
-	generationConfig.maxOutputTokens = Math.min(
-		options.maxTokens ?? maxAllowed,
-		model.maxTokens || maxAllowed,
-	);
+	const modelCap = model.maxTokens ? Math.min(model.maxTokens, maxAllowed) : maxAllowed;
+	generationConfig.maxOutputTokens = Math.min(options.maxTokens ?? modelCap, modelCap);
 
 	const step = Math.max(1, contents.length);
 	const lastStepIndex = String(Math.max(0, contents.length - 1));
@@ -528,6 +572,24 @@ function applyUsageMetadata(
 	}
 }
 
+function mapStopReason(reason: string): StopReason {
+	switch (reason) {
+		case "STOP":
+			return "stop";
+		case "MAX_TOKENS":
+			return "length";
+		case "SAFETY":
+		case "RECITATION":
+		case "BLOCKLIST":
+		case "PROHIBITED_CONTENT":
+		case "SPII":
+		case "MALFORMED_FUNCTION_CALL":
+			return "error";
+		default:
+			return "stop";
+	}
+}
+
 function processSseChunk(
 	chunk: Record<string, unknown>,
 	ctx: StreamContext,
@@ -555,11 +617,13 @@ function processSseChunk(
 	}
 
 	if (typeof candidate?.finishReason === "string") {
-		ctx.output.stopReason = ctx.output.content.some((b) => b.type === "toolCall")
-			? "toolUse"
-			: candidate.finishReason === "MAX_TOKENS"
-				? "length"
-				: "stop";
+		ctx.output.rawStopReason = candidate.finishReason;
+		const mapped = mapStopReason(candidate.finishReason);
+		if (mapped === "stop" && ctx.output.content.some((b) => b.type === "toolCall")) {
+			ctx.output.stopReason = "toolUse";
+		} else {
+			ctx.output.stopReason = mapped;
+		}
 	}
 
 	if (responseData.usageMetadata && typeof responseData.usageMetadata === "object") {
@@ -623,8 +687,10 @@ export async function streamResponse(
 		let chunk: Record<string, unknown>;
 		try {
 			chunk = JSON.parse(json) as Record<string, unknown>;
-		} catch {
-			return;
+		} catch (err) {
+			throw new Error(
+				`Malformed SSE JSON frame: ${err instanceof Error ? err.message : String(err)}`,
+			);
 		}
 
 		processSseChunk(chunk, ctx, model);
@@ -654,6 +720,15 @@ export async function streamResponse(
 		buffer += decoder.decode();
 		if (buffer.length > 0) handleLine(buffer.replace(/\r$/, ""));
 		ctx.finishCurrent();
+		if (ctx.output.stopReason === "pending") {
+			throw new Error("Antigravity stream ended without a finish reason");
+		}
+		if (ctx.output.stopReason === "error") {
+			const message = ctx.output.rawStopReason
+				? `Provider stopped with: ${ctx.output.rawStopReason}`
+				: "An unknown error occurred";
+			throw new Error(message);
+		}
 		return ctx.hasContent;
 	} finally {
 		reader.releaseLock();
@@ -683,7 +758,7 @@ export function streamAntigravity(
 				totalTokens: 0,
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 			},
-			stopReason: "stop",
+			stopReason: "pending",
 			timestamp: Date.now(),
 		};
 
@@ -732,11 +807,18 @@ export function streamAntigravity(
 				throw new Error("Antigravity API returned an empty response");
 			}
 
-			if (output.stopReason === "error" || output.stopReason === "aborted") {
-				stream.push({ type: "error", reason: output.stopReason, error: output });
+			if (
+				output.stopReason === "error" ||
+				output.stopReason === "aborted" ||
+				output.stopReason === "pending"
+			) {
+				stream.push({
+					type: "error",
+					reason: output.stopReason === "pending" ? "error" : output.stopReason,
+					error: output,
+				});
 			} else {
-				const reason = output.stopReason === "pending" ? "stop" : output.stopReason;
-				stream.push({ type: "done", reason, message: output });
+				stream.push({ type: "done", reason: output.stopReason, message: output });
 			}
 			stream.end();
 		} catch (error) {

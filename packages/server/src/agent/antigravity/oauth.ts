@@ -28,10 +28,8 @@ const CLIENT_ID_PARTS = [
 
 const CLIENT_SECRET_PARTS = ["GOCSPX", "K58FWR486LdLJ1mLB8sXC4z6qDAf"] as const;
 
-export const CLIENT_ID =
-	process.env.ANTIGRAVITY_CLIENT_ID || CLIENT_ID_PARTS.join(".");
-export const CLIENT_SECRET =
-	process.env.ANTIGRAVITY_CLIENT_SECRET || CLIENT_SECRET_PARTS.join("-");
+export const CLIENT_ID = process.env.ANTIGRAVITY_CLIENT_ID || CLIENT_ID_PARTS.join(".");
+export const CLIENT_SECRET = process.env.ANTIGRAVITY_CLIENT_SECRET || CLIENT_SECRET_PARTS.join("-");
 
 function base64Url(buffer: Buffer): string {
 	return buffer.toString("base64url");

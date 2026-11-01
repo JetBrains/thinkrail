@@ -4,6 +4,7 @@ import {
 	type Context,
 	createAssistantMessageEventStream,
 	type Model,
+	normalizeContext,
 	type RefreshModelsContext,
 } from "@earendil-works/pi-ai";
 import {
@@ -782,5 +783,190 @@ describe("Request Building and Streaming Adapter", () => {
 		}
 		expect(output.stopReason).toBe("toolUse");
 		expect(output.usage.totalTokens).toBe(70);
+	});
+
+	test("buildRequest consumes instructions and tools from transcript system messages", () => {
+		const model = ANTIGRAVITY_MODELS[0] as unknown as Model<typeof ANTIGRAVITY_API>;
+		const transcriptContext = normalizeContext({
+			systemPrompt: "Follow custom coding guidelines.",
+			tools: [
+				{
+					name: "exec_cmd",
+					description: "Execute bash command",
+					parameters: { type: "object", properties: { cmd: { type: "string" } } },
+				},
+			],
+			messages: [
+				{
+					role: "user",
+					content: "Run test",
+					timestamp: Date.now(),
+				},
+			],
+		});
+
+		const req = buildRequest(model, transcriptContext, "my-proj", {}, "gemini-4-argon") as {
+			request: {
+				systemInstruction?: { parts: Array<{ text: string }> };
+				tools?: Array<{ functionDeclarations: Array<{ name: string }> }>;
+			};
+		};
+		expect(req.request.systemInstruction?.parts[0]?.text).toContain(
+			"Follow custom coding guidelines.",
+		);
+		expect(req.request.tools?.[0]?.functionDeclarations.some((f) => f.name === "exec_cmd")).toBe(
+			true,
+		);
+	});
+
+	test("MAX_TOKENS with tool call maps to length and never toolUse", async () => {
+		const ssePayload = [
+			'data: {"response":{"candidates":[{"content":{"parts":[{"functionCall":{"name":"write_file","args":{"path":"a.txt"}}}]},"finishReason":"MAX_TOKENS"}]}}\n\n',
+		].join("");
+
+		const stream = createAssistantMessageEventStream();
+		const model = ANTIGRAVITY_MODELS[0] as unknown as Model<typeof ANTIGRAVITY_API>;
+		const output: AssistantMessage = {
+			role: "assistant",
+			content: [],
+			api: ANTIGRAVITY_API,
+			provider: "antigravity",
+			model: model.id,
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "pending",
+			timestamp: Date.now(),
+		};
+
+		const mockResponse = new Response(ssePayload, {
+			headers: { "Content-Type": "text/event-stream" },
+		});
+		await streamResponse(mockResponse, stream, output, model);
+		expect(output.stopReason).toBe("length");
+	});
+
+	test("convertAssistantMessage preserves valid same-model empty signed parts and rejects foreign signatures", () => {
+		const geminiModel = {
+			id: "gemini-4-argon",
+			provider: "antigravity",
+			api: ANTIGRAVITY_API,
+			name: "Gemini 4 Argon",
+		} as unknown as Model<typeof ANTIGRAVITY_API>;
+
+		const sameModelMsg: AssistantMessage = {
+			role: "assistant",
+			content: [
+				{ type: "text", text: "", textSignature: "c2lnbmF0dXJlMTIz" },
+				{ type: "thinking", thinking: "valid thought", thinkingSignature: "c2lnbmF0dXJlNDU2" },
+			],
+			api: ANTIGRAVITY_API,
+			provider: "antigravity",
+			model: "gemini-4-argon",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+			timestamp: Date.now(),
+		};
+
+		const sameParts = convertAssistantMessage(sameModelMsg, geminiModel, "gemini-4-argon");
+		expect(sameParts).toHaveLength(2);
+		expect(sameParts[0]).toEqual({ text: "", thoughtSignature: "c2lnbmF0dXJlMTIz" });
+		expect(sameParts[1]).toEqual({
+			thought: true,
+			text: "valid thought",
+			thoughtSignature: "c2lnbmF0dXJlNDU2",
+		});
+
+		const foreignModelMsg: AssistantMessage = {
+			...sameModelMsg,
+			provider: "openai",
+			model: "gpt-4o",
+		};
+		const foreignParts = convertAssistantMessage(foreignModelMsg, geminiModel, "gemini-4-argon");
+		expect(foreignParts).toHaveLength(1);
+		expect(foreignParts[0]).toEqual({ text: "valid thought" });
+	});
+
+	test("buildAntigravityCatalog derives advertised limits without Math.max floor inflation", () => {
+		const payload = {
+			models: {
+				"gpt-oss-120b": {
+					displayName: "GPT OSS 120B",
+					model: "gpt-oss-120b",
+					maxTokens: 131072,
+					maxOutputTokens: 32768,
+				},
+			},
+			agentModelSorts: [
+				{
+					groups: [
+						{
+							modelIds: ["gpt-oss-120b"],
+						},
+					],
+				},
+			],
+		};
+
+		const catalog = buildAntigravityCatalog(payload);
+		const gptOss = catalog.find((m) => m.id === "gpt-oss-120b");
+		expect(gptOss).toBeDefined();
+		if (gptOss && "contextWindow" in gptOss && "maxTokens" in gptOss) {
+			expect(gptOss.contextWindow).toBe(131072);
+			expect(gptOss.maxTokens).toBe(32768);
+		} else {
+			throw new Error("Expected gpt-oss-120b to be a text model config");
+		}
+	});
+
+	test("streamResponse rejects premature EOF with pending stopReason and malformed JSON frames", async () => {
+		const prematurePayload =
+			'data: {"response":{"candidates":[{"content":{"parts":[{"text":"Partial..."}]}}]}}\n\n';
+		const stream = createAssistantMessageEventStream();
+		const model = ANTIGRAVITY_MODELS[0] as unknown as Model<typeof ANTIGRAVITY_API>;
+		const output: AssistantMessage = {
+			role: "assistant",
+			content: [],
+			api: ANTIGRAVITY_API,
+			provider: "antigravity",
+			model: model.id,
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "pending",
+			timestamp: Date.now(),
+		};
+
+		const mockResponse = new Response(prematurePayload, {
+			headers: { "Content-Type": "text/event-stream" },
+		});
+		expect(streamResponse(mockResponse, stream, output, model)).rejects.toThrow(
+			"Antigravity stream ended without a finish reason",
+		);
+
+		const malformedPayload = 'data: {"response": invalid json\n\n';
+		const malformedResponse = new Response(malformedPayload, {
+			headers: { "Content-Type": "text/event-stream" },
+		});
+		expect(streamResponse(malformedResponse, stream, output, model)).rejects.toThrow(
+			"Malformed SSE JSON frame",
+		);
 	});
 });
