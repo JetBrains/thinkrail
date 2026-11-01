@@ -7,6 +7,7 @@ import { createCoalescer } from "./coalesce";
 import {
 	ensureWatch,
 	isIgnoredPath,
+	setIgnoredPathsResolver,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,
@@ -183,6 +184,7 @@ afterEach(() => {
 	setRepoMetaPublisher(null);
 	setWatchStartedPublisher(null);
 	setSkillPathClassifier(null);
+	setIgnoredPathsResolver(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -325,6 +327,27 @@ test("ignored churn (node_modules) never publishes", async () => {
 	await sleep(600);
 	expect(payloads.filter((p) => p.paths.some((x) => x.includes("node_modules")))).toHaveLength(0);
 });
+
+test.if(process.platform === "linux")(
+	"on Linux a folder the ignore resolver reports gets no watcher",
+	async () => {
+		mkdirSync(join(worktree, "tmp", "run"), { recursive: true });
+		const asked: string[] = [];
+		setIgnoredPathsResolver(async (root, paths) => {
+			expect(root).toBe(worktree);
+			asked.push(...paths);
+			return new Set(paths.filter((path) => path === "tmp"));
+		});
+		expect(await ensureWatch("ws1")).toEqual({ startupNudge: true });
+		expect(asked).toContain("tmp");
+		payloads.length = 0;
+		writeFileSync(join(worktree, "tmp", "run", "out.txt"), "x\n");
+		writeFileSync(join(worktree, "kept.ts"), "x\n");
+		await waitFor(() => payloads.some((p) => p.paths.includes("kept.ts")));
+		await sleep(400);
+		expect(payloads.some((p) => p.paths.some((x) => x.startsWith("tmp/")))).toBe(false);
+	},
+);
 
 test("unknown workspace and stopWatch are safe no-ops; stopped watchers stay silent", async () => {
 	ensureWatch("nope");

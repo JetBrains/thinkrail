@@ -11,7 +11,8 @@ tags: [live-refresh, public-surface-checked]
 ## Responsibility
 
 The filesystem change notifier behind the UI's live refresh: one recursive watcher per watched
-workspace worktree (Bun's native `fs.watch(root, { recursive: true })` — no watcher dependency),
+workspace worktree (Bun's native `fs.watch(root, { recursive: true })` — no watcher dependency; on Linux
+one per directory, see below),
 coalescing events into a debounced **`workspace.fsChanged`** publish (`WorkspaceFsChangedPayload`:
 `{ workspaceId, paths, truncated, skillChange }`). The frame is an **invalidation nudge, not data** — clients
 re-read through the existing read methods (`fs.*` / `git.*` / `spec.graph`), so the reads stay the
@@ -60,6 +61,15 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   recency, and a prewarm can never demote a real watcher (including across an inode-change
   re-creation). Correctness under eviction rides the existing recovery paths: the next real call
   re-creates the watcher and its fresh conservative startup nudge covers the blind window.
+- **On Linux each directory gets its own watcher, and ignored folders get none.** Bun's recursive watch on
+  Linux adds an inotify watch per directory, also the ignored ones, so a large git-ignored folder used up
+  `fs.inotify.max_user_watches` and every start failed (#852). `tree.ts` watches each directory on its own
+  and skips `node_modules`, nested `.git`, the root `.git` below its top level and `refs/` (kept for the
+  repo-metadata nudge), and folders `git` ignores (`setIgnoredPathsResolver`, injected by `host`). Paths
+  inside a nested repo are never sent to that check: `check-ignore` fails the whole batch for them. A
+  `rename` always re-walks its directory and reports what is inside, since earlier writes have no event and
+  a folder recreated at the same path can get the old inode back. Readiness waits for the first walk.
+  Changes inside an ignored folder are not reported on Linux. macOS and Windows keep the recursive watcher.
 - **Repo-metadata nudge (second seam):** a git-metadata write is *metadata, not content*, so it never
   becomes an `fsChanged` path (the `.git` blackout stands — plumbing storms must not turn into frames). It
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This
@@ -89,9 +99,9 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   a fatal `uncaughtException` that takes down the host (an e2e reset deleting `workspaces.json` mid-nudge
   once did exactly that). Later events keep flowing. The watch-started nudge is the exception: it runs in
   the guarded registration region described below.
-- **Composition seams:** never imports `host` or `agent` — `host` injects both the publish callback and
-  `agent`'s pure project-skill path classifier at wiring time (the publisher-tee pattern). A missing
-  classifier degrades concrete events to `skillChange: "unknown"`, never false-clean.
+- **Composition seams:** never imports `host`, `agent` or `git`: `host` injects the publish callback,
+  `agent`'s pure project-skill path classifier and `git`'s ignore check at wiring time (the publisher-tee
+  pattern). A missing classifier degrades concrete events to `skillChange: "unknown"`, never false-clean.
 - **Self-healing per read (out-of-band worktree churn is normal — e2e resets, `rm -rf` in a terminal):**
   every `ensureWatch` re-stats the root and **re-creates the watcher when the inode changed** (a
   deleted+recreated path leaves the old stream silently following a dead inode), **reaps zombie
@@ -109,6 +119,6 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   region, and a throw there — from it or from anything after `entries.set` — tears the fresh entry down
   (`stopWatch`) rather than leaving a registered watcher whose readiness never settles.
 - **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
-  `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`.
+  `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`, `setIgnoredPathsResolver`.
 - **Allowed deps:** `persistence` (workspace lookup), `log`; `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.
