@@ -61,20 +61,20 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   recency, and a prewarm can never demote a real watcher (including across an inode-change
   re-creation). Correctness under eviction rides the existing recovery paths: the next real call
   re-creates the watcher and its fresh conservative startup nudge covers the blind window.
-- **On Linux each directory gets its own watcher, and ignored folders get none.** Bun's recursive watch on
-  Linux adds an inotify watch per directory, also the ignored ones, so a large git-ignored folder used up
-  `fs.inotify.max_user_watches` and every start failed (#852). `tree.ts` watches each directory on its own
-  and skips `node_modules`, nested `.git`, everything in the root `.git` except its top level, `refs/` and
-  `info/` (kept for the repo-metadata nudge), and folders `git` ignores (`setIgnoredPathsResolver`, injected
-  by `host`). Root `.git` paths and paths inside a nested repo are never sent to that check: an allowlist
-  `.gitignore` (`*` plus `!` rules) makes `check-ignore` report `.git` itself, and a submodule path fails the
-  whole batch. A `.gitignore` event or a repo-metadata nudge re-checks the folders skipped as ignored, since
-  `git add -f` or an `info/exclude` edit also changes the answer. A global excludes file or a linked
-  worktree's shared `info/exclude` sends no nudge, so such a change waits for the next one. The root is
-  followed when it is a symlink; links inside it are not. A `rename` on a directory re-walks it and reports
-  what is inside, with no inode compare: earlier writes have no event, and a folder recreated at the same
-  path can get the old inode back. Readiness waits for the first walk. Changes inside an ignored folder are
-  not reported on Linux. macOS and Windows keep the recursive watcher.
+- **On Linux each directory gets its own watcher, and ignored folders get none.** Bun's recursive watch
+  on Linux adds an inotify watch per directory, so a large git-ignored folder used up
+  `fs.inotify.max_user_watches` and every start failed (#852). `node_modules` and `.git` get no watcher
+  either, except the root `.git` top level, `refs/` and `info/`, which feed the repo-metadata nudge. Root
+  `.git` paths and paths inside a nested repo never go to the ignore check: an allowlist `.gitignore`
+  (`*` plus `!` rules) makes `check-ignore` report `.git` itself, and a submodule path fails the whole
+  batch. So ignored folders inside a nested repo are still watched. A `.gitignore` event or a
+  repo-metadata nudge re-checks the folders skipped as ignored, since `git add -f` or an `info/exclude`
+  edit also changes the answer. A global excludes file or a linked worktree's shared `info/exclude` sends
+  no nudge, so such a change waits for the next one. The root is followed when it is a symlink; links
+  inside it are not. A `rename` on a directory re-walks it and reports what is inside, with no inode
+  check: writes before the new watch have no event, and a recreated folder can get the old inode back.
+  The startup nudge, and so readiness, waits for the first walk. Changes inside an ignored folder are not
+  reported on Linux.
 - **Repo-metadata nudge (second seam):** a git-metadata write is *metadata, not content*, so it never
   becomes an `fsChanged` path (the `.git` blackout stands — plumbing storms must not turn into frames). It
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This
@@ -104,7 +104,7 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   a fatal `uncaughtException` that takes down the host (an e2e reset deleting `workspaces.json` mid-nudge
   once did exactly that). Later events keep flowing. The watch-started nudge is the exception: it runs in
   the guarded registration region described below.
-- **Composition seams:** never imports `host`, `agent` or `git`: `host` injects the publish callback,
+- **Composition seams:** never imports `host`, `agent` or `git` — `host` injects the publish callback,
   `agent`'s pure project-skill path classifier and `git`'s ignore check at wiring time (the publisher-tee
   pattern). A missing classifier degrades concrete events to `skillChange: "unknown"`, never false-clean.
 - **Self-healing per read (out-of-band worktree churn is normal — e2e resets, `rm -rf` in a terminal):**
