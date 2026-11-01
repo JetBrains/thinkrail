@@ -540,6 +540,16 @@ export function selectCompletionMarkedUnread(
 	);
 }
 
+export type SessionAttention = "needs-input" | "error" | "unread" | "running";
+
+export function getSessionAttention(state: SessionState): SessionAttention | null {
+	if (state.needsInput !== null) return "needs-input";
+	if (state.completionUnread && state.completion?.outcome === "failed") return "error";
+	if (state.completionUnread) return "unread";
+	if (isSessionWorking(state)) return "running";
+	return null;
+}
+
 export function selectWorkspaceIsRunning(
 	state: SessionStateProjection,
 	workspaceId: string,

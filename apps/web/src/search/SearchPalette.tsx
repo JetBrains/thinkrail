@@ -82,10 +82,7 @@ function PaletteContent({
 	const returnFocusRef = useRef<HTMLElement | null>(null);
 	const pickedRef = useRef(false);
 
-	const parsed = useMemo(() => {
-		const result = parseSearchQuery(query);
-		return scopes.includes(result.scope) ? result : parseSearchQuery(stripScopePrefix(query));
-	}, [query, scopes]);
+	const parsed = useMemo(() => parseSearchQuery(query, scopes), [query, scopes]);
 	const sections = useMemo(
 		() =>
 			buildSections({

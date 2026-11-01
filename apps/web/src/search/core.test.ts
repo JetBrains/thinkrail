@@ -42,12 +42,26 @@ describe("parseSearchQuery", () => {
 			scope: "all",
 			terms: [{ text: "@team", literal: true }],
 		});
-		expect(parseSearchQuery('"is:running filter" unread')).toMatchObject({
+		expect(parseSearchQuery('"fix auth" unread')).toMatchObject({
 			terms: [
-				{ text: "is:running filter", literal: true },
+				{ text: "fix auth", literal: true },
 				{ text: "unread", literal: false },
 			],
 		});
+	});
+
+	test("a prefix whose scope is not offered searches the rest of the query in All", () => {
+		const offered = ["all", "work", "commands"] as const;
+		expect(parseSearchQuery("/src/auth", offered)).toMatchObject({
+			scope: "all",
+			text: "src/auth",
+		});
+		expect(parseSearchQuery("##", offered)).toMatchObject({
+			scope: "all",
+			terms: [{ text: "#", literal: false }],
+		});
+		expect(parseSearchQuery("//src", offered)).toMatchObject({ scope: "all", text: "/src" });
+		expect(parseSearchQuery(">theme", offered)).toMatchObject({ scope: "commands", text: "theme" });
 	});
 
 	test("scope prefixes round-trip, so a chip can write its prefix back", () => {
@@ -185,6 +199,17 @@ describe("learning", () => {
 		expect(parseLearning(text, now).version).toBe(1);
 		expect(parseLearning("{not json", now)).toBe(EMPTY_LEARNING);
 		expect(parseLearning(JSON.stringify({ version: 2 }), now)).toBe(EMPTY_LEARNING);
+	});
+
+	test("a query or id spelled like an object property survives a reload", () => {
+		const now = 3 * DAY;
+		let snapshot = recordPick(EMPTY_LEARNING, "__proto__", "command:chat.new", now);
+		snapshot = recordPick(snapshot, "constructor", "__proto__", now);
+		const reloaded = parseLearning(serializeLearning(snapshot), now);
+		expect(adaptiveCounts(reloaded, "__proto__", now).get("command:chat.new")).toBeCloseTo(2, 5);
+		expect(adaptiveCounts(reloaded, "constructor", now).get("__proto__")).toBeCloseTo(2, 5);
+		expect(frecencyScore(reloaded, "__proto__", now)).toBeCloseTo(1, 5);
+		expect(adaptiveCounts(reloaded, "toString", now).size).toBe(0);
 	});
 });
 

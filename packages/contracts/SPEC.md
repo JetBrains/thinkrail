@@ -56,8 +56,10 @@ both rings rank with. The one package
   **`matchFields`** + `parseMatchTerms` + `MATCH_TIER` and the `Match*` types from
   `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
   bounded subsequence of at least three characters, every term required, a quoted `MatchTerm` (`literal`)
-  matched contiguously only, case and Latin diacritics folded without moving offsets, a secondary field
-  never above substring, path fields matched on the basename first, field-keyed highlight ranges — the
+  matched contiguously only, case and Latin diacritics folded — precomposed or decomposed, the ranges
+  still indexing the original text and spanning the marks they cover — combining marks part of their
+  word (never a word start), a secondary field never above substring and, at an equal tier, never chosen
+  over a primary one, path fields matched on the basename first, field-keyed highlight ranges — the
   browser's palette and the host's search providers rank with this one copy so their tiers cannot drift);
   the value
   re-exports

@@ -117,23 +117,72 @@ describe("buildWorkItems", () => {
 		});
 	});
 
-	test("the waiting section maps switcher sessions onto their chat rows, leaving running chats out", () => {
-		const running = record("s-running", { execution: "running", runId: "r1" });
-		const result = items([waiting, running], { "s-running": "Long build" });
-		const session = (sessionId: string, attention: "needs-input" | "running") => ({
-			sessionId,
-			workspaceId: "w1",
-			projectId: "p1",
-			workspaceName: "Auth refresh",
-			workspaceKind: undefined,
-			chatTitle: "",
-			attention,
-		});
-		const rows = waitingItems(
-			[session("s-waiting", "needs-input"), session("s-running", "running")],
-			result,
+	test("Waiting lists chats that need you by urgency, leaving running and quiet chats out", () => {
+		const result = items(
+			[
+				record("s-running", { execution: "running", runId: "r1" }),
+				record("s-idle"),
+				record("s-unread", {
+					completionUnread: true,
+					completion: { completionId: "c2", outcome: "succeeded" },
+				}),
+				record("s-error", {
+					completionUnread: true,
+					completion: { completionId: "c1", outcome: "failed", failure: "error" },
+				}),
+				waiting,
+			],
+			{ "s-running": "Long build", "s-idle": "Quiet" },
 		);
-		expect(rows.map((item) => item.id)).toEqual(["chat:s-waiting"]);
-		expect(result.some((item) => item.id === "chat:s-running")).toBe(true);
+		expect(waitingItems(result).map((item) => item.id)).toEqual([
+			"chat:s-waiting",
+			"chat:s-error",
+			"chat:s-unread",
+		]);
+	});
+
+	test("a chat that needs input in a later project is not hidden behind unread chats of an earlier one, and ties keep project order", () => {
+		const second: Project = { ...project, id: "p2", name: "Project Two", slug: "p2" };
+		const unread = (sessionId: string) =>
+			record(sessionId, {
+				completionUnread: true,
+				completion: { completionId: `c-${sessionId}`, outcome: "succeeded" },
+			});
+		const blocked: SessionStateRecord = { ...waiting, workspaceId: "w2", projectId: "p2" };
+		const laterUnread: SessionStateRecord = {
+			...unread("u-p2"),
+			workspaceId: "w2",
+			projectId: "p2",
+		};
+		const result = buildWorkItems({
+			t: currentTranslator(),
+			state: {
+				...state([unread("u1"), unread("u2"), unread("u3")]),
+				projects: [project, second],
+				workspaces: {
+					p1: [workspace],
+					p2: [{ ...workspace, id: "w2", projectId: "p2" }],
+				},
+				sessionStateByWorkspace: {
+					w2: { [blocked.sessionId]: blocked, [laterUnread.sessionId]: laterUnread },
+					w1: {
+						u1: unread("u1"),
+						u2: unread("u2"),
+						u3: unread("u3"),
+					},
+				},
+			},
+			contextProjectId: null,
+			firstPrompts: {},
+			navigateToProject: () => {},
+			navigateToWorkspace: () => {},
+		});
+		expect(waitingItems(result).map((item) => item.id)).toEqual([
+			"chat:s-waiting",
+			"chat:u1",
+			"chat:u2",
+			"chat:u3",
+			"chat:u-p2",
+		]);
 	});
 });

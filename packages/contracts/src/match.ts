@@ -43,7 +43,7 @@ interface TermHit {
 	ranges: MatchRange[];
 }
 
-const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+const LETTER_OR_DIGIT = /[\p{L}\p{M}\p{N}]/u;
 const UPPER = /\p{Lu}/u;
 const LOWER = /\p{Ll}/u;
 const DIGIT = /\p{N}/u;
@@ -91,6 +91,28 @@ function foldMatchCase(text: string): string {
 	return latin;
 }
 
+const LATIN_MARK = /[\u0300-\u036f]/;
+const ASCII_LETTER_END = /[a-z]$/;
+
+interface FoldedText {
+	readonly text: string;
+	readonly at: (index: number) => number;
+}
+
+function foldText(raw: string): FoldedText {
+	const cased = foldMatchCase(raw);
+	if (!LATIN_MARK.test(cased)) return { text: cased, at: (index) => index };
+	let text = "";
+	const rawIndex: number[] = [];
+	for (let index = 0; index < cased.length; index++) {
+		const char = cased[index] ?? "";
+		if (LATIN_MARK.test(char) && ASCII_LETTER_END.test(text)) continue;
+		text += char;
+		rawIndex.push(index);
+	}
+	return { text, at: (index) => rawIndex[index] ?? cased.length };
+}
+
 function isWordStart(text: string, index: number): boolean {
 	if (index === 0) return true;
 	const previous = text[index - 1] ?? "";
@@ -100,14 +122,15 @@ function isWordStart(text: string, index: number): boolean {
 	return DIGIT.test(current) && !DIGIT.test(previous);
 }
 
-function matchAcronym(term: string, text: string, lower: string): MatchRange[] | null {
+function matchAcronym(term: string, text: string, folded: FoldedText): MatchRange[] | null {
 	if (term.length < 2) return null;
+	const lower = folded.text;
 	const ranges: MatchRange[] = [];
 	let next = 0;
 	for (let index = 0; index < lower.length && next < term.length; index++) {
-		if (!isWordStart(text, index)) continue;
 		if (lower[index] !== term[next]) continue;
-		ranges.push([index, index + 1]);
+		if (!isWordStart(text, folded.at(index))) continue;
+		ranges.push([folded.at(index), folded.at(index + 1)]);
 		next += 1;
 	}
 	return next === term.length ? ranges : null;
@@ -126,8 +149,9 @@ function subsequenceFrom(term: string, lower: string, start: number): number[] |
 	return next === term.length ? positions : null;
 }
 
-function matchSubsequence(term: string, text: string, lower: string): TermHit | null {
+function matchSubsequence(term: string, text: string, folded: FoldedText): TermHit | null {
 	if (term.length < MIN_FUZZY_TERM_LENGTH) return null;
+	const lower = folded.text;
 	let positions: number[] | null = null;
 	let span = Number.POSITIVE_INFINITY;
 	let start = lower.indexOf(term[0] ?? "");
@@ -142,42 +166,43 @@ function matchSubsequence(term: string, text: string, lower: string): TermHit | 
 		start = lower.indexOf(term[0] ?? "", start + 1);
 	}
 	if (!positions || span > term.length * 3) return null;
-	const wordStarts = positions.filter((position) => isWordStart(text, position)).length;
-	const ranges: MatchRange[] = [];
+	const wordStarts = positions.filter((position) => isWordStart(text, folded.at(position))).length;
+	const runs: [number, number][] = [];
 	for (const position of positions) {
-		const previous = ranges[ranges.length - 1];
-		if (previous && previous[1] === position)
-			ranges[ranges.length - 1] = [previous[0], position + 1];
-		else ranges.push([position, position + 1]);
+		const previous = runs[runs.length - 1];
+		if (previous && previous[1] === position) previous[1] = position + 1;
+		else runs.push([position, position + 1]);
 	}
 	return {
 		tier: MATCH_TIER.fuzzy,
 		score: 0.7 * (term.length / span) + 0.3 * (wordStarts / term.length),
-		ranges,
+		ranges: runs.map(([from, to]) => [folded.at(from), folded.at(to)]),
 	};
 }
 
 function matchText(matchTerm: MatchTerm, rawText: string): TermHit | null {
-	const term = foldMatchCase(matchTerm.text);
+	const term = foldText(matchTerm.text).text;
 	const text = rawText.slice(0, MAX_MATCH_TEXT_LENGTH);
-	const lower = foldMatchCase(text);
+	const folded = foldText(text);
+	const lower = folded.text;
 	if (!term || !lower) return null;
+	const span = (from: number, to: number): MatchRange => [folded.at(from), folded.at(to)];
 	const lengthRatio = Math.min(1, term.length / lower.length);
 	if (lower === term) return { tier: MATCH_TIER.exact, score: 1, ranges: [[0, text.length]] };
 	if (lower.startsWith(term)) {
-		return { tier: MATCH_TIER.prefix, score: lengthRatio, ranges: [[0, term.length]] };
+		return { tier: MATCH_TIER.prefix, score: lengthRatio, ranges: [span(0, term.length)] };
 	}
 	const firstSubstring = lower.indexOf(term);
 	for (let index = firstSubstring; index >= 0; index = lower.indexOf(term, index + 1)) {
-		if (!isWordStart(text, index)) continue;
+		if (!isWordStart(text, folded.at(index))) continue;
 		return {
 			tier: MATCH_TIER.word,
 			score: 0.6 * lengthRatio + 0.4 * (1 - index / lower.length),
-			ranges: [[index, index + term.length]],
+			ranges: [span(index, index + term.length)],
 		};
 	}
 	if (!matchTerm.literal) {
-		const acronym = matchAcronym(term, text, lower);
+		const acronym = matchAcronym(term, text, folded);
 		if (acronym) {
 			return { tier: MATCH_TIER.word, score: 0.5 * lengthRatio, ranges: acronym };
 		}
@@ -186,10 +211,10 @@ function matchText(matchTerm: MatchTerm, rawText: string): TermHit | null {
 		return {
 			tier: MATCH_TIER.substring,
 			score: 0.5 * lengthRatio + 0.5 * (1 - firstSubstring / lower.length),
-			ranges: [[firstSubstring, firstSubstring + term.length]],
+			ranges: [span(firstSubstring, firstSubstring + term.length)],
 		};
 	}
-	return matchTerm.literal ? null : matchSubsequence(term, text, lower);
+	return matchTerm.literal ? null : matchSubsequence(term, text, folded);
 }
 
 function shifted(hit: TermHit, offset: number): TermHit {
@@ -236,16 +261,18 @@ export function matchFields(
 	let score = 0;
 	const rangesByKey = new Map<string, MatchRange[]>();
 	for (const term of terms) {
-		let best: { hit: TermHit; key: string } | null = null;
+		let best: { hit: TermHit; key: string; secondary: boolean } | null = null;
 		for (const field of fields) {
 			const hit = matchField(term, field);
 			if (!hit) continue;
+			const secondary = field.secondary === true;
 			if (
 				!best ||
 				hit.tier < best.hit.tier ||
-				(hit.tier === best.hit.tier && hit.score > best.hit.score)
+				(hit.tier === best.hit.tier &&
+					(secondary === best.secondary ? hit.score > best.hit.score : best.secondary))
 			) {
-				best = { hit, key: field.key };
+				best = { hit, key: field.key, secondary };
 			}
 		}
 		if (!best) return null;

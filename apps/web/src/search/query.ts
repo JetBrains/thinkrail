@@ -26,13 +26,17 @@ const PREFIX_SCOPE = new Map<string, Exclude<SearchScope, "all">>(
 
 const PULL_REQUEST_NUMBER = /^#\d+$/;
 
-export function parseSearchQuery(raw: string): ParsedQuery {
+export function parseSearchQuery(
+	raw: string,
+	offered: readonly SearchScope[] = SEARCH_SCOPES,
+): ParsedQuery {
 	const trimmed = raw.trimStart();
 	const prefixScope = PULL_REQUEST_NUMBER.test(trimmed.trim())
 		? undefined
 		: PREFIX_SCOPE.get(trimmed[0] ?? "");
 	const text = (prefixScope ? trimmed.slice(1) : trimmed).trim();
-	return { raw, scope: prefixScope ?? "all", text, terms: parseMatchTerms(text) };
+	const scope = prefixScope && offered.includes(prefixScope) ? prefixScope : "all";
+	return { raw, scope, text, terms: parseMatchTerms(text) };
 }
 
 export function withScopePrefix(text: string, scope: SearchScope): string {

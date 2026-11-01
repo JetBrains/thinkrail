@@ -13,7 +13,6 @@ import {
 	getSessionAttention,
 	isDefaultWorkspace,
 	type SessionAttention,
-	type SwitcherSession,
 	selectKnownChatTitle,
 	type useAppStore,
 	workspaceName,
@@ -110,7 +109,13 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 		}
 	}
 	const attentionByWorkspace = new Map<string, SessionAttention>();
-	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
+	const projectOrder = new Map(state.projects.map((project, index) => [project.id, index]));
+	const orderOf = (records: Readonly<Record<string, { projectId: string }>>) =>
+		projectOrder.get(Object.values(records)[0]?.projectId ?? "") ?? state.projects.length;
+	const byProject = Object.entries(state.sessionStateByWorkspace).sort(
+		([, a], [, b]) => orderOf(a) - orderOf(b),
+	);
+	for (const [workspaceId, records] of byProject) {
 		const workspace = workspaceById.get(workspaceId);
 		let attention: SessionAttention | undefined;
 		for (const record of Object.values(records)) {
@@ -215,12 +220,10 @@ export function attentionLabel(t: Translator, attention: SessionAttention): stri
 	return t(ATTENTION_LABELS[attention]);
 }
 
-export function waitingItems(
-	sessions: readonly SwitcherSession[],
-	items: readonly PaletteItem[],
-): PaletteItem[] {
-	const byId = new Map(items.map((item) => [item.id, item]));
-	return sessions.flatMap((session) =>
-		session.attention === "running" ? [] : (byId.get(`chat:${session.sessionId}`) ?? []),
-	);
+export function waitingItems(items: readonly PaletteItem[]): PaletteItem[] {
+	return items
+		.filter((item) => item.kind === "chat" && item.attention && item.attention !== "running")
+		.sort(
+			(a, b) => ATTENTION_RANK[a.attention ?? "running"] - ATTENTION_RANK[b.attention ?? "running"],
+		);
 }

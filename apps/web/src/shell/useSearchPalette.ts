@@ -31,7 +31,6 @@ import {
 	selectHistoryTarget,
 	selectRecordFirstPrompts,
 	selectSupportsOnboarding,
-	selectSwitcherGroups,
 	selectWorkspaceReadAction,
 	selectWorkspaceSettleBlocked,
 	selectWorkspaceSettledReason,
@@ -185,17 +184,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			...buildSettingsItems(deps),
 			...workItems,
 		];
-		const switcherGroups = selectSwitcherGroups({
-			projects,
-			workspaces,
-			sessionStateByWorkspace,
-			layoutDocumentsByWorkspace,
-			closedChatsByWorkspace,
-		});
-		const waiting = waitingItems(
-			switcherGroups.flatMap((group) => group.sessions),
-			workItems,
-		);
+		const waiting = waitingItems(workItems);
 		const byId = new Map(rootItems.map((item) => [item.id, item]));
 		const actions = emptyStateActionIds()
 			.map((id) => byId.get(id))

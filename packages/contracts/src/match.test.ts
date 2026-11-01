@@ -86,6 +86,31 @@ describe("matchFields tiers", () => {
 		expect(tierOf("か", title("が"))).toBeNull();
 	});
 
+	test("decomposed accents fold too, and a highlight spans the marks it covers", () => {
+		const nfd = "Configuración".normalize("NFD");
+		const exact = matchFields(parseMatchTerms("configuracion"), title(nfd));
+		expect(exact?.tier).toBe(MATCH_TIER.exact);
+		expect(exact?.fields[0]?.ranges).toEqual([[0, nfd.length]]);
+		const literal = matchFields(parseMatchTerms('"cion"'), title(nfd));
+		expect(literal?.tier).toBe(MATCH_TIER.substring);
+		expect(literal?.fields[0]?.ranges).toEqual([[9, nfd.length]]);
+		expect(tierOf("e\u0301cole", title("École"))).toBe(MATCH_TIER.exact);
+		expect(tierOf("ecole", title("E\u0301cole"))).toBe(MATCH_TIER.exact);
+	});
+
+	test("a combining mark is part of its word, never a word boundary", () => {
+		expect(tierOf("cole", title("E\u0301cole"))).toBe(MATCH_TIER.substring);
+		expect(tierOf("\u0e2a\u0e14\u0e35", title("\u0e2a\u0e27\u0e31\u0e2a\u0e14\u0e35"))).toBe(
+			MATCH_TIER.substring,
+		);
+		expect(
+			tierOf(
+				"\u091c\u0947\u0915\u094d\u091f",
+				title("\u092a\u094d\u0930\u094b\u091c\u0947\u0915\u094d\u091f"),
+			),
+		).toBe(MATCH_TIER.substring);
+	});
+
 	test("a quoted single word is a contiguous literal: no acronym or subsequence", () => {
 		expect(tierOf("nwd", title("NewWorkspaceDialog.tsx"))).toBe(MATCH_TIER.word);
 		expect(tierOf('"nwd"', title("NewWorkspaceDialog.tsx"))).toBeNull();
@@ -124,6 +149,21 @@ describe("matchFields fields", () => {
 		expect(base?.fields[0]?.ranges).toEqual([[25, 32]]);
 		expect(tierOf("server", fields)).toBe(MATCH_TIER.substring);
 		expect(tierOf("auth/ref", fields)).toBe(MATCH_TIER.word);
+	});
+
+	test("at the same tier the visible field wins over a longer secondary copy", () => {
+		const prompt = "Please refactor the authentication module so that tokens refresh quietly";
+		const fields: MatchField[] = [
+			{ key: "title", text: "Please refactor the authentication module so\u2026" },
+			{ key: "keywords", text: prompt, secondary: true },
+		];
+		for (const query of ["factor", "thentic", "odule"]) {
+			const result = matchFields(parseMatchTerms(query), fields);
+			expect(result?.tier).toBe(MATCH_TIER.substring);
+			expect(result?.fields.map((field) => field.key)).toEqual(["title"]);
+		}
+		const pastTheCut = matchFields(parseMatchTerms("quietly"), fields);
+		expect(pastTheCut?.fields.map((field) => field.key)).toEqual(["keywords"]);
 	});
 
 	test("merges overlapping ranges per field", () => {

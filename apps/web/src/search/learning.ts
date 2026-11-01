@@ -1,3 +1,5 @@
+import { nullProto } from "../lib";
+
 const DAY_MS = 86_400_000;
 const HALF_LIFE_DAYS = 14;
 const LAMBDA = Math.LN2 / HALF_LIFE_DAYS;
@@ -21,7 +23,13 @@ export interface LearningSnapshot {
 	readonly adaptive: Readonly<Record<string, Readonly<Record<string, AdaptiveEntry>>>>;
 }
 
-export const EMPTY_LEARNING: LearningSnapshot = { version: 1, frecency: {}, adaptive: {} };
+type Picks = Record<string, AdaptiveEntry>;
+
+export const EMPTY_LEARNING: LearningSnapshot = {
+	version: 1,
+	frecency: nullProto<Record<string, number>>(),
+	adaptive: nullProto<Record<string, Picks>>(),
+};
 
 function day(nowMs: number): number {
 	return nowMs / DAY_MS;
@@ -56,11 +64,19 @@ export function adaptiveCounts(
 	return counts;
 }
 
-function prune<T>(record: Record<string, T>, limit: number, score: (value: T) => number) {
+function prune<T>(
+	record: Readonly<Record<string, T>>,
+	limit: number,
+	score: (value: T) => number,
+): Record<string, T> {
 	const entries = Object.entries(record);
-	if (entries.length <= limit) return record;
-	entries.sort((a, b) => score(b[1]) - score(a[1]));
-	return Object.fromEntries(entries.slice(0, limit));
+	if (entries.length > limit) {
+		entries.sort((a, b) => score(b[1]) - score(a[1]));
+		entries.length = limit;
+	}
+	const pruned = nullProto<Record<string, T>>();
+	for (const [key, value] of entries) pruned[key] = value;
+	return pruned;
 }
 
 export function recordPick(
@@ -72,22 +88,21 @@ export function recordPick(
 	if (!id || id.length > MAX_ID_LENGTH) return snapshot;
 	const today = day(nowMs);
 	const current = frecencyScore(snapshot, id, nowMs);
-	const frecency = prune(
-		{ ...snapshot.frecency, [id]: today + Math.log(current + 1) / LAMBDA },
-		MAX_ITEMS,
-		(value) => value,
-	);
+	const touched = nullProto<Record<string, number>>(snapshot.frecency);
+	touched[id] = today + Math.log(current + 1) / LAMBDA;
+	const frecency = prune(touched, MAX_ITEMS, (value) => value);
 	const normalized = normalizeQuery(query);
 	let adaptive = snapshot.adaptive;
 	if (normalized) {
-		const picks = { ...(adaptive[normalized] ?? {}) };
+		const picks = nullProto<Picks>(adaptive[normalized]);
 		const previous = picks[id];
 		const decayed = previous
 			? previous.count * ADAPTIVE_DECAY_PER_DAY ** Math.max(0, today - previous.day)
 			: 0;
 		picks[id] = { count: decayed * 0.9 + 1, day: today };
-		const kept = prune(picks, MAX_PICKS_PER_QUERY, (entry) => entry.day);
-		adaptive = prune({ ...adaptive, [normalized]: kept }, MAX_QUERIES, (value) =>
+		const queries = nullProto<Record<string, Picks>>(adaptive);
+		queries[normalized] = prune(picks, MAX_PICKS_PER_QUERY, (entry) => entry.day);
+		adaptive = prune(queries, MAX_QUERIES, (value) =>
 			Math.max(...Object.values(value).map((entry) => entry.day)),
 		);
 	}
@@ -110,14 +125,14 @@ export function parseLearning(raw: string | null, nowMs: number): LearningSnapsh
 		if (typeof value !== "object" || value === null || Reflect.get(value, "version") !== 1) {
 			return EMPTY_LEARNING;
 		}
-		const frecency: Record<string, number> = {};
+		const frecency = nullProto<Record<string, number>>();
 		for (const [id, stored] of Object.entries(Reflect.get(value, "frecency") ?? {})) {
 			if (typeof stored === "number" && Number.isFinite(stored)) frecency[id] = stored;
 		}
-		const adaptive: Record<string, Record<string, AdaptiveEntry>> = {};
+		const adaptive = nullProto<Record<string, Picks>>();
 		const today = day(nowMs);
 		for (const [query, picks] of Object.entries(Reflect.get(value, "adaptive") ?? {})) {
-			const kept: Record<string, AdaptiveEntry> = {};
+			const kept = nullProto<Picks>();
 			for (const [id, entry] of Object.entries(picks ?? {})) {
 				if (!isAdaptiveEntry(entry)) continue;
 				const decayed = entry.count * ADAPTIVE_DECAY_PER_DAY ** Math.max(0, today - entry.day);
@@ -141,8 +156,8 @@ export function serializeLearning(snapshot: LearningSnapshot): string {
 		const queryLimit = Math.floor(Object.keys(current.adaptive).length / 2);
 		current = {
 			version: 1,
-			frecency: prune({ ...current.frecency }, itemLimit, (value) => value),
-			adaptive: prune({ ...current.adaptive }, queryLimit, (value) =>
+			frecency: prune(current.frecency, itemLimit, (value) => value),
+			adaptive: prune(current.adaptive, queryLimit, (value) =>
 				Math.max(...Object.values(value).map((entry) => entry.day)),
 			),
 		};

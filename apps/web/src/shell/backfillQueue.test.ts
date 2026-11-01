@@ -12,8 +12,7 @@ function deferredRuns() {
 	const finish = async (key: string) => {
 		resolvers.get(key)?.();
 		resolvers.delete(key);
-		await Promise.resolve();
-		await Promise.resolve();
+		await new Promise<void>((resolve) => setTimeout(resolve, 0));
 	};
 	return { started, run, finish, outstanding: () => resolvers.size };
 }

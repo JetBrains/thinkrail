@@ -38,23 +38,26 @@ is a pull-request number, never the specs scope — it matches the `#N` keyword 
 carries that review. Quoted text is one contiguous literal term — never matched as an acronym or a
 subsequence — and escapes a prefix; an unterminated quote runs to the end of the query, so a phrase
 matches while it is typed. Terms AND-combine through the shared matcher in [[module-contracts]], which
-folds case and Latin diacritics (`configuracion` finds `Configuración`) without moving highlight offsets.
-`/` and `#` fall back to All on a host without host search. There is no filter grammar: triage happens
+folds case and Latin diacritics, precomposed or decomposed (`configuracion` finds `Configuración` either
+way), and highlights the original text. A prefix whose scope the host does not offer searches the rest of
+the query in All, so a doubled prefix (`##`, `//src`) never lands in an empty scope.
+There is no filter grammar: triage happens
 through the empty state's grouping and the status dots every row carries.
 
 ## Ranking
 
-The matcher's tier decides first (exact > prefix > word start > substring > subsequence); within a tier
-the match score, a decay-free frecency (Firefox's stored form, 14-day half-life), the learned
+The matcher's tier decides first (exact > prefix > word start > substring > subsequence) — and at the
+same tier a visible field beats a secondary one, so a word an unnamed chat's title shows is highlighted
+there rather than in its hidden whole-prompt keyword; within a tier the match score, a decay-free frecency (Firefox's stored form, 14-day half-life), the learned
 query→selection count (Firefox adaptive history: `0.9·n + 1`, prefix-matched, ×0.975 per day, keyed on
 the query's text without its scope prefix and computed once per query, each query keeping its 32 most
 recent picks), the current workspace/project boost, and the attention boost reorder. A top hit shows only when the best row
 is prefix-or-better and clearly ahead, or the typed query has latched to it. Groups are ordered by their
 best row and capped at four in All (thirty in a scope) with an "N more" row: in All it switches to the
-group's scope, in a scope it expands the group in place. The empty query lists **Waiting for you** (the
-former session switcher's attention set without running chats — a chat that needs input, failed or
-finished unread — across every open project, eight rows before an in-place "Show N more"), **Recent** (by
-frecency), and **Actions**.
+group's scope, in a scope it expands the group in place. The empty query lists **Waiting for you** (every chat
+that needs the user across the open projects, most urgent first — needs input, then failed, then finished
+unread, project order breaking ties, running chats left out — so the cap of eight rows before an in-place
+"Show N more" never hides a blocked chat behind unread ones), **Recent** (by frecency), and **Actions**.
 
 A chat row is worded by `lib`'s `chatLabel` over the known title (`selectKnownChatTitle`: the title on the
 host's state record, which every rename republishes, so no palette request is needed to name a chat in a
