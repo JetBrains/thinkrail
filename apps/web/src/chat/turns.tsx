@@ -129,7 +129,7 @@ function ChatTurnViewImpl({
 						className={cn(
 							"tr-text-reading text-text-default",
 							isFinalAnswer &&
-								"w-full min-w-0 pl-24 [&>div>*:last-child]:mb-0 [&_ol]:list-inside [&_ul]:list-inside",
+								"w-full min-w-0 pl-24 [&>div>*:last-child]:mb-0 [&_ol]:list-inside [&_ul]:list-inside [&_li>p:first-child]:inline",
 						)}
 					>
 						<AssistantMarkdown

@@ -182,7 +182,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   The message content reserves one horizontal `size-24` band on the action's side (`pl-24` for the final
   assistant Markdown wrapper, `pr-24` for the user bubble) instead of a vertical band, so text and the
   large-message toggle cannot sit beneath the hit target. Final-answer list markers stay inside their
-  content box rather than painting back into the assistant's action band. The assistant wrapper removes
+  content box rather than painting back into the assistant's action band. A list item's first paragraph
+  is inline so loose-list text shares the marker's first line (#506); later paragraphs and nested lists
+  remain blocks. The assistant wrapper removes
   only its final Markdown block's trailing margin to align the action with the actual final line;
   inter-block and leading margins stay unchanged. `MessageWithCopy` also carries the
   `data-testid="chat-message"`/`data-role` hooks the jump/flash + tests rely on. `CopyButton` is a
