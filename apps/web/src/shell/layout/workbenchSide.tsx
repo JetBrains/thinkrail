@@ -346,6 +346,7 @@ export function AuxiliaryGroupHeader({
 				{...(shared.chatFirstPrompts ? { chatFirstPrompts: shared.chatFirstPrompts } : {})}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				worktreePath={shared.worktreePath}
 				trailing={actions}
 			/>
 		);
