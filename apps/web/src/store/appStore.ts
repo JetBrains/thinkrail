@@ -410,6 +410,7 @@ export const SettingsSection = {
 	LineWidth: "line-width",
 	Chat: "chat",
 	Layout: "layout",
+	Keyboard: "keyboard",
 	Updates: "updates",
 	Terminal: "terminal",
 	Workspaces: "workspaces",
@@ -1067,7 +1068,9 @@ interface AppState {
 	surveyWindowOpen: boolean;
 	inAppSurvey: AppSurvey | null;
 	notificationPromptOpen: boolean;
-	sessionSwitcherOpen: boolean;
+	searchOpen: boolean;
+	searchSession: number;
+	doubleShiftSearch: boolean;
 	theme: ThemeId;
 	themeMode: ThemeMode;
 	systemThemePair: SystemThemePair | undefined;
@@ -1408,9 +1411,9 @@ interface AppState {
 	setInAppSurvey: (survey: AppSurvey | null) => void;
 	openNotificationPrompt: () => void;
 	closeNotificationPrompt: () => void;
-	openSessionSwitcher: () => void;
-	closeSessionSwitcher: () => void;
-	toggleSessionSwitcher: () => void;
+	openSearch: () => void;
+	closeSearch: () => void;
+	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
 	setStreamingResponseMovement: (movement: StreamingResponseMovement) => void;
 	setChatPreferences: (order: ChatMessageOrder, movement: StreamingResponseMovement) => void;
@@ -2358,7 +2361,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	surveyWindowOpen: false,
 	inAppSurvey: null,
 	notificationPromptOpen: false,
-	sessionSwitcherOpen: false,
+	searchOpen: false,
+	searchSession: 0,
+	doubleShiftSearch: true,
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
@@ -4438,11 +4443,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	openNotificationPrompt: () =>
 		set((state) => (state.notificationPromptOpen ? state : { notificationPromptOpen: true })),
 	closeNotificationPrompt: () => set({ notificationPromptOpen: false }),
-	openSessionSwitcher: () =>
-		set((state) => (state.sessionSwitcherOpen ? state : { sessionSwitcherOpen: true })),
-	closeSessionSwitcher: () => set({ sessionSwitcherOpen: false }),
-	toggleSessionSwitcher: () =>
-		set((state) => ({ sessionSwitcherOpen: !state.sessionSwitcherOpen })),
+	openSearch: () => set((state) => ({ searchOpen: true, searchSession: state.searchSession + 1 })),
+	closeSearch: () => set((state) => (state.searchOpen ? { searchOpen: false } : state)),
+	setDoubleShiftSearch: (doubleShiftSearch) =>
+		set((state) => (state.doubleShiftSearch === doubleShiftSearch ? state : { doubleShiftSearch })),
 	showSurveyInvitation: () =>
 		set((state) => (state.surveyInvitationOpen ? state : { surveyInvitationOpen: true })),
 	hideSurveyInvitation: () => set({ surveyInvitationOpen: false }),
