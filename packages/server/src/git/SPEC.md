@@ -305,9 +305,10 @@ ref off the workspace-create critical path.
   **`ignoredPaths(worktreePath, paths)`** → the subset git ignores (`git -c core.quotePath=false
   check-ignore -- <paths>`, arguments chunked under 24k chars for Windows' command-line limit; tracked files
   never count, and a path inside an ignored folder does). The host uses it to mark `fs.readDir` nodes
-  `gitignored`, so the Files tree can dim them. It never throws: a non-repository, a failure or a timeout
-  reports nothing. Names git must C-quote (a `"`, `\` or control character) are never reported, because
-  `check-ignore -z` needs stdin, which the bounded runners do not offer.
+  `gitignored`, so the Files tree can dim them, and injects it into `watch`. It never throws: a
+  non-repository, a failure or a timeout reports nothing. Names git must C-quote (a `"`, `\` or control
+  character) are never reported, because `check-ignore -z` needs stdin, which the bounded runners do not
+  offer.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
   `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,

@@ -114,7 +114,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   cached read so the siblings never import each other—the
   **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch` and inject `agent`'s project-skill path classifier so
-  each capped batch carries independent `skillChange: none|detected|unknown` evidence; expose
+  each capped batch carries independent `skillChange: none|detected|unknown` evidence; inject `git`'s
+  `ignoredPaths` (`setIgnoredPathsResolver`) so the Linux watcher skips ignored folders; expose
   **`workspace.watchReady`** as the typed preflight that awaits a fresh watcher's conservative startup nudge
   before a web skill-loading flow
   captures its baseline and reports whether the watcher was already known ready (the client's replay-safe
