@@ -44,6 +44,8 @@ import { SettingsSwitch } from "./SettingsSwitch";
 const INPUT_CLASS =
 	"h-32 w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus:border-control-border-active disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
 
+const MODEL_PAGE = 50;
+
 type Status = { tone: "ok" | "error"; text: string } | null;
 
 function supported(protocolVersion: number | null): boolean {
@@ -106,11 +108,16 @@ function EndpointDialog({
 	const id = useId();
 	const [draft, setDraft] = useState(initial);
 	const [manualId, setManualId] = useState("");
+	const [filter, setFilter] = useState("");
+	const [shown, setShown] = useState(MODEL_PAGE);
 	const [probing, setProbing] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [status, setStatus] = useState<Status>(null);
 	const busy = probing || saving;
-	const autoDetected = useRef(false);
+	const needle = filter.trim().toLowerCase();
+	const visible = needle
+		? draft.models.filter((model) => model.id.toLowerCase().includes(needle))
+		: draft.models;
 
 	const detect = useCallback(
 		(current: EndpointDraft) => {
@@ -134,12 +141,6 @@ function EndpointDialog({
 		},
 		[t],
 	);
-
-	useEffect(() => {
-		if (autoDetected.current || !initial.id) return;
-		autoDetected.current = true;
-		void detect(initial);
-	}, [detect, initial]);
 
 	const save = () => {
 		if (!canSave(draft)) return;
@@ -276,9 +277,50 @@ function EndpointDialog({
 								{t("settings.customEndpoints.detect")}
 							</Button>
 						</div>
+						<div className="flex items-center gap-8">
+							<input
+								data-testid="custom-endpoints-manual"
+								aria-label={t("settings.customEndpoints.manualLabel")}
+								className={cn(INPUT_CLASS, "tr-code-text")}
+								value={manualId}
+								disabled={busy}
+								spellCheck={false}
+								placeholder={t("settings.customEndpoints.manualPlaceholder")}
+								onChange={(event) => setManualId(event.currentTarget.value)}
+								onKeyDown={(event) => {
+									if (event.key !== "Enter") return;
+									event.preventDefault();
+									addManual();
+								}}
+							/>
+							<Button
+								variant="outline"
+								size="m"
+								iconLeft={Plus}
+								data-testid="custom-endpoints-manual-add"
+								disabled={busy || !manualId.trim()}
+								onClick={addManual}
+							>
+								{t("common.add")}
+							</Button>
+						</div>
+						{draft.models.length > MODEL_PAGE ? (
+							<input
+								data-testid="custom-endpoints-filter"
+								aria-label={t("settings.customEndpoints.filterLabel")}
+								className={INPUT_CLASS}
+								value={filter}
+								spellCheck={false}
+								placeholder={t("settings.customEndpoints.filterPlaceholder")}
+								onChange={(event) => {
+									setFilter(event.currentTarget.value);
+									setShown(MODEL_PAGE);
+								}}
+							/>
+						) : null}
 						{draft.models.length > 0 ? (
 							<ul className="flex flex-col" data-testid="custom-endpoints-models">
-								{draft.models.map((model, index) => (
+								{visible.slice(0, shown).map((model, index) => (
 									<li
 										key={model.id}
 										data-testid="custom-endpoints-row"
@@ -318,33 +360,16 @@ function EndpointDialog({
 								))}
 							</ul>
 						) : null}
-						<div className="flex items-center gap-8">
-							<input
-								data-testid="custom-endpoints-manual"
-								aria-label={t("settings.customEndpoints.manualLabel")}
-								className={cn(INPUT_CLASS, "tr-code-text")}
-								value={manualId}
-								disabled={busy}
-								spellCheck={false}
-								placeholder={t("settings.customEndpoints.manualPlaceholder")}
-								onChange={(event) => setManualId(event.currentTarget.value)}
-								onKeyDown={(event) => {
-									if (event.key !== "Enter") return;
-									event.preventDefault();
-									addManual();
-								}}
-							/>
+						{visible.length > shown ? (
 							<Button
 								variant="outline"
 								size="m"
-								iconLeft={Plus}
-								data-testid="custom-endpoints-manual-add"
-								disabled={busy || !manualId.trim()}
-								onClick={addManual}
+								data-testid="custom-endpoints-show-more"
+								onClick={() => setShown((count) => count + MODEL_PAGE)}
 							>
-								{t("common.add")}
+								{t("settings.customEndpoints.showMore", { count: visible.length - shown })}
 							</Button>
-						</div>
+						) : null}
 					</div>
 					{status ? (
 						<p
