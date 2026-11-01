@@ -18,6 +18,7 @@ import {
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	REQUEST_IMAGE_BASE64_BUDGET,
 	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -229,6 +230,7 @@ interface SocketData {
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
 const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
+const WS_MAX_FRAME_BYTES = REQUEST_IMAGE_BASE64_BUDGET + 8 * 1024 * 1024;
 
 const log = logger("host");
 
@@ -377,6 +379,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return new Response("not found", { status: 404 });
 		},
 		websocket: {
+			maxPayloadLength: WS_MAX_FRAME_BYTES,
 			open(ws) {
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);
