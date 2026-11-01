@@ -26,9 +26,25 @@ export function createWeriftHostPeer(): HostPeer {
 	const pc = new RTCPeerConnection();
 	let emitSignal: (signal: HostPeerSignal) => void = () => {};
 	let emitChannel: (channel: RemoteChannel) => void = () => {};
+	let remoteSignals: Promise<void> = Promise.resolve();
+	const inOrder = (apply: () => Promise<unknown>): Promise<void> => {
+		const next = remoteSignals.then(async () => {
+			await apply();
+		});
+		remoteSignals = next.catch(() => {});
+		return next;
+	};
+
+	let heldCandidates: HostPeerSignal[] | null = [];
 
 	pc.onIceCandidate.subscribe((candidate) => {
-		if (candidate) emitSignal({ kind: "candidate", candidate: JSON.stringify(candidate.toJSON()) });
+		if (!candidate) return;
+		const signal: HostPeerSignal = {
+			kind: "candidate",
+			candidate: JSON.stringify(candidate.toJSON()),
+		};
+		if (heldCandidates) heldCandidates.push(signal);
+		else emitSignal(signal);
 	});
 
 	return {
@@ -40,12 +56,15 @@ export function createWeriftHostPeer(): HostPeer {
 			const offer = await pc.createOffer();
 			await pc.setLocalDescription(offer);
 			emitSignal({ kind: "offer", sdp: offer.sdp });
+			const held = heldCandidates ?? [];
+			heldCandidates = null;
+			for (const signal of held) emitSignal(signal);
 		},
-		async acceptAnswer(sdp) {
-			await pc.setRemoteDescription({ type: "answer", sdp });
+		acceptAnswer(sdp) {
+			return inOrder(() => pc.setRemoteDescription({ type: "answer", sdp }));
 		},
-		async addCandidate(candidate) {
-			await pc.addIceCandidate(JSON.parse(candidate));
+		addCandidate(candidate) {
+			return inOrder(() => pc.addIceCandidate(JSON.parse(candidate)));
 		},
 		onLocalSignal(handler) {
 			emitSignal = handler;

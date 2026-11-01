@@ -131,12 +131,16 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 			const pc = new RTCPeerConnection();
 			active = { ws, pc };
 			let settled = false;
+			let over = false;
+			let signals: Promise<void> = Promise.resolve();
 
 			const dropped = (reason: string): void => {
+				if (over) return;
+				over = true;
+				teardownActive();
 				if (settled) {
 					if (!closed) scheduleReconnect();
 				} else {
-					settled = true;
 					reject(new Error(reason));
 				}
 			};
@@ -149,7 +153,6 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 			});
 			pc.addEventListener("connectionstatechange", () => {
 				if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-					teardownActive();
 					dropped("peer connection lost");
 				}
 			});
@@ -198,7 +201,11 @@ async function openRemote(params: OpenParams): Promise<RemoteConnection> {
 				if (frame.t === "ready") return send(initiate);
 				if (frame.t === "frame") {
 					const host = parseHostMessage(frame.data);
-					if (host) void onHost(host).catch((error: unknown) => dropped(String(error)));
+					if (host) {
+						signals = signals
+							.then(() => onHost(host))
+							.catch((error: unknown) => dropped(String(error)));
+					}
 				}
 			});
 		});
