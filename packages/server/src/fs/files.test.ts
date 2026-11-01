@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { readDir, workspaceRelativePath } from "./files";
@@ -46,4 +46,26 @@ test("workspaceRelativePath names a contained path worktree-relative with / sepa
 test("workspaceRelativePath rejects a path outside the worktree", () => {
 	expect(workspaceRelativePath(root, "../worktree-sibling/a.ts")).toBeNull();
 	expect(workspaceRelativePath(root, join(dataDir, "elsewhere"))).toBeNull();
+});
+
+const symlinkTest = process.platform === "win32" ? test.skip : test;
+
+symlinkTest("readDir classifies symlinks by target and refuses escaping ones", () => {
+	mkdirSync(join(root, "real"));
+	writeFileSync(join(root, "real", "a.ts"), "");
+	mkdirSync(join(dataDir, "outside"));
+	symlinkSync(join(root, "real"), join(root, "dirlink"));
+	symlinkSync(join(root, "real", "a.ts"), join(root, "filelink"));
+	symlinkSync(join(root, "missing"), join(root, "dangling"));
+	symlinkSync(join(dataDir, "outside"), join(root, "escape"));
+	const kinds = Object.fromEntries(readDir("w1", ".").map((n) => [n.name, n.kind]));
+	expect(kinds).toMatchObject({
+		real: "dir",
+		dirlink: "dir",
+		filelink: "file",
+		dangling: "file",
+		escape: "file",
+	});
+	expect(readDir("w1", "dirlink").map((n) => n.path)).toEqual(["dirlink/a.ts"]);
+	expect(() => readDir("w1", "escape")).toThrow("escapes");
 });
