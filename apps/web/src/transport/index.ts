@@ -24,6 +24,7 @@ export {
 	supportsChangeMutations,
 	supportsExtensionSettings,
 	supportsFonts,
+	supportsHostSearch,
 	supportsHostUpdateRun,
 	supportsPiPackages,
 	supportsPlanReview,

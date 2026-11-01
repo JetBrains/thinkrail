@@ -23,7 +23,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
 
 - **Owns:** the watcher registry + its lifecycle: `ensureWatch(workspaceId)` (idempotent and
   **self-healing**; returns the live watcher's shared readiness promise; started lazily by `host` when a
-  workspace read or `workspace.watchReady` preflight lands — the read is the "a client is looking" signal;
+  workspace read, a `workspace.watchReady` preflight or a `search.query` naming the workspace as its
+  context lands — the read is the "a client is looking" signal;
   readiness reports whether the watcher was already known ready), `stopWatch(workspaceId)` (called
   in `workspace.remove`'s fast path),
   `stopAllWatches()` (called in `server.stop()`); the ignore filter (any path segment `.git` or

@@ -19,12 +19,91 @@ export function evictSpecIndex(workspaceId: string): void {
 
 const projectIndexes = new Map<string, SpecIndex>();
 
-export function projectHasSpecs(root: string): boolean {
+function rootIndexFor(root: string): SpecIndex {
 	let index = projectIndexes.get(root);
 	if (!index) {
 		index = new SpecIndex(root);
 		projectIndexes.set(root, index);
 	}
+	return index;
+}
+
+export interface SpecSnapshotEntry {
+	readonly path: string;
+	readonly id: string;
+	readonly title: string;
+	readonly type: string;
+	readonly content: string;
+}
+
+const SNAPSHOT_TTL_MS = 60_000;
+const SNAPSHOT_ROOTS = 8;
+const snapshots = new Map<string, { at: number; entries: readonly SpecSnapshotEntry[] }>();
+const rebuilding = new Set<string>();
+
+function buildSnapshot(root: string): SpecSnapshotEntry[] {
+	try {
+		return rootIndexFor(root)
+			.contentEntries()
+			.map((entry) => {
+				const id = scalar(entry.frontmatter, FIELDS.id) ?? "";
+				return {
+					path: entry.path,
+					id,
+					title: scalar(entry.frontmatter, FIELDS.title) ?? id,
+					type: scalar(entry.frontmatter, FIELDS.type) ?? "",
+					content: entry.content,
+				};
+			});
+	} catch {
+		return [];
+	}
+}
+
+export interface SpecSnapshot {
+	readonly entries: readonly SpecSnapshotEntry[];
+	readonly rebuilding: boolean;
+}
+
+export function specSnapshot(root: string, now = Date.now()): SpecSnapshot {
+	const cached = snapshots.get(root);
+	if (!cached) {
+		scheduleSnapshotRebuild(root);
+		return { entries: [], rebuilding: true };
+	}
+	snapshots.delete(root);
+	snapshots.set(root, cached);
+	if (now - cached.at >= SNAPSHOT_TTL_MS) scheduleSnapshotRebuild(root);
+	return { entries: cached.entries, rebuilding: rebuilding.has(root) };
+}
+
+function scheduleSnapshotRebuild(root: string): void {
+	if (rebuilding.has(root)) return;
+	rebuilding.add(root);
+	setImmediate(() => {
+		if (!rebuilding.delete(root)) return;
+		snapshots.delete(root);
+		snapshots.set(root, { at: Date.now(), entries: buildSnapshot(root) });
+		for (const oldest of snapshots.keys()) {
+			if (snapshots.size <= SNAPSHOT_ROOTS) break;
+			evictSpecRoot(oldest);
+		}
+	});
+}
+
+export function invalidateSpecSnapshot(root: string): void {
+	const cached = snapshots.get(root);
+	if (cached) snapshots.set(root, { at: Number.NEGATIVE_INFINITY, entries: cached.entries });
+}
+
+export function evictSpecRoot(root: string): void {
+	snapshots.delete(root);
+	rebuilding.delete(root);
+	projectIndexes.delete(root);
+}
+
+export function projectHasSpecs(root: string): boolean {
+	const index = rootIndexFor(root);
 	try {
 		for (const node of index.graph().nodes.values()) {
 			if (node.type !== "task-spec") return true;

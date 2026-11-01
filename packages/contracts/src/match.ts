@@ -4,6 +4,7 @@ export const MATCH_TIER = {
 	word: 2,
 	substring: 3,
 	fuzzy: 4,
+	content: 5,
 } as const;
 
 export type MatchTier = (typeof MATCH_TIER)[keyof typeof MATCH_TIER];
@@ -111,6 +112,10 @@ function foldText(raw: string): FoldedText {
 		rawIndex.push(index);
 	}
 	return { text, at: (index) => rawIndex[index] ?? cased.length };
+}
+
+export function foldMatchText(text: string): string {
+	return foldText(text).text;
 }
 
 function isWordStart(text: string, index: number): boolean {

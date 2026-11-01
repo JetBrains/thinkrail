@@ -2,7 +2,14 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { evictSpecIndex, projectHasSpecs, specGraph } from "./specs";
+import {
+	evictSpecIndex,
+	evictSpecRoot,
+	invalidateSpecSnapshot,
+	projectHasSpecs,
+	specGraph,
+	specSnapshot,
+} from "./specs";
 
 let dataDir: string;
 let worktree: string;
@@ -107,4 +114,36 @@ test("evictSpecIndex drops the cached index; a later read rebuilds cleanly", () 
 
 	evictSpecIndex("ws1");
 	expect(specGraph("ws1").nodes.map((n) => n.id)).toEqual(["root-spec"]);
+});
+
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+const snapshotIds = (root: string) => specSnapshot(root).entries.map((entry) => entry.id);
+
+test("a spec snapshot builds off the request, and a change is rebuilt only when it is read", async () => {
+	evictSpecRoot(worktree);
+	writeSpec("SPEC.md", "id: root\ntype: module-design\ntitle: Root");
+	expect(specSnapshot(worktree)).toEqual({ entries: [], rebuilding: true });
+	await settle();
+	expect(specSnapshot(worktree)).toMatchObject({ rebuilding: false });
+	expect(snapshotIds(worktree)).toEqual(["root"]);
+
+	writeSpec("auth/SPEC.md", "id: auth\ntype: module-design\ntitle: Auth");
+	invalidateSpecSnapshot(worktree);
+	await settle();
+	expect(specSnapshot(worktree)).toMatchObject({ rebuilding: true });
+	expect(snapshotIds(worktree)).toEqual(["root"]);
+	await settle();
+	expect(snapshotIds(worktree).sort()).toEqual(["auth", "root"]);
+});
+
+test("an evicted root is never brought back by a build still pending for it", async () => {
+	evictSpecRoot(worktree);
+	writeSpec("SPEC.md", "id: root\ntype: module-design\ntitle: Root");
+	specSnapshot(worktree);
+	evictSpecRoot(worktree);
+	await settle();
+	expect(specSnapshot(worktree)).toEqual({ entries: [], rebuilding: true });
+	await settle();
+	expect(snapshotIds(worktree)).toEqual(["root"]);
+	evictSpecRoot(worktree);
 });

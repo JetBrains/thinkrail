@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
-import { readDir, workspaceRelativePath } from "./files";
+import { readableFileSize, readDir, readFile, workspaceRelativePath } from "./files";
 
 let dataDir: string;
 let root: string;
@@ -69,3 +69,39 @@ symlinkTest("readDir classifies symlinks by target and refuses escaping ones", (
 	expect(readDir("w1", "dirlink").map((n) => n.path)).toEqual(["dirlink/a.ts"]);
 	expect(() => readDir("w1", "escape")).toThrow("escapes");
 });
+
+test("readableFileSize answers a regular file's size and missing for what readFile would not serve", () => {
+	mkdirSync(join(root, ".git"));
+	writeFileSync(join(root, ".git", "HEAD"), "ref: refs/heads/main\n");
+	writeFileSync(join(dataDir, "outside.txt"), "secret");
+	expect(readableFileSize(root, "src/auth/login.ts")).toBe(11);
+	expect(readableFileSize(root, "src/auth")).toBe("missing");
+	expect(readableFileSize(root, "src/auth/gone.ts")).toBe("missing");
+	expect(readableFileSize(root, "src/auth/login.ts/below")).toBe("missing");
+	expect(readableFileSize(root, ".git/HEAD")).toBe("missing");
+	expect(readableFileSize(root, "../outside.txt")).toBe("missing");
+});
+
+test.skipIf(process.platform === "win32")(
+	"readableFileSize follows a symlink only as far as readFile does: inside the worktree it is the target's size, out of it or into .git it is missing",
+	() => {
+		mkdirSync(join(root, ".git"));
+		writeFileSync(join(root, ".git", "config"), "[core]\n");
+		writeFileSync(join(dataDir, "outside.txt"), "secret");
+		symlinkSync(join(root, "src", "auth", "login.ts"), join(root, "inside-link.ts"));
+		symlinkSync(join(dataDir, "outside.txt"), join(root, "outside-link.txt"));
+		symlinkSync(join(root, ".git", "config"), join(root, "metadata-link"));
+		symlinkSync(join(root, "src"), join(root, "dir-link"));
+		symlinkSync(join(root, "nowhere.ts"), join(root, "dangling-link.ts"));
+		symlinkSync(join(root, "loop-b"), join(root, "loop-a"));
+		symlinkSync(join(root, "loop-a"), join(root, "loop-b"));
+
+		expect(readableFileSize(root, "inside-link.ts")).toBe(11);
+		expect(readFile("w1", "inside-link.ts").content).toBe("export {};\n");
+		for (const path of ["outside-link.txt", "metadata-link", "dangling-link.ts", "loop-a"]) {
+			expect(readableFileSize(root, path)).toBe("missing");
+			expect(() => readFile("w1", path)).toThrow();
+		}
+		expect(readableFileSize(root, "dir-link")).toBe("missing");
+	},
+);

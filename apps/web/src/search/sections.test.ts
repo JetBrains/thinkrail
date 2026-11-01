@@ -125,6 +125,37 @@ describe("buildSections", () => {
 		});
 	});
 
+	test("a newcomer that landed while a selection was held never takes or unseats the top hit", () => {
+		const best = chat("best", "Refresh");
+		const ids = (rootItems: PaletteItem[]) =>
+			flattenRows(sections("refresh", { rootItems })).map((row) => [row.item.id, row.top ?? false]);
+		expect(ids([best])).toEqual([["chat:best", true]]);
+		expect(ids([best, chat("late", "Refresh", { late: 1 })])).toEqual([
+			["chat:best", true],
+			["chat:late", false],
+		]);
+		expect(ids([chat("alone", "Refresh", { late: 1 })])).toEqual([["chat:alone", false]]);
+	});
+
+	test("a group's more row sits below the rows on screen when only newcomers overflow it, and stays with its rows otherwise", () => {
+		const shown = ["one", "two", "three", "four"].map((name) => chat(name, `Fix refresh ${name}`));
+		const selected = workspace("sel", "Old xrefreshx space");
+		const rows = (rootItems: PaletteItem[]) =>
+			flattenRows(sections("refresh", { rootItems, keep: selected.id })).map((row) => row.item.id);
+		const before = rows([...shown, selected]);
+		expect(before.at(-1)).toBe(selected.id);
+		expect(before).not.toContain("more:chats");
+		const late = [
+			chat("l1", "Fix refresh late", { late: 1 }),
+			chat("l2", "Fix refresh later", { late: 1 }),
+		];
+		const after = rows([...shown, selected, ...late]);
+		expect(after.slice(0, before.length)).toEqual(before);
+		expect(after.slice(before.length)).toEqual(["more:chats"]);
+		const crowded = rows([...shown, chat("five", "Fix refresh five"), selected, ...late]);
+		expect(crowded.indexOf("more:chats")).toBeLessThan(crowded.indexOf(selected.id));
+	});
+
 	test("a scope lifts the cap and never shows a top hit", () => {
 		const result = sections("@auth");
 		expect(
@@ -147,5 +178,74 @@ describe("buildSections", () => {
 		});
 		const expanded = sections("@", { rootItems: many, expanded: new Set(["chats"]) });
 		expect(expanded.find((section) => section.id === "chats")?.items).toHaveLength(35);
+	});
+
+	test("host hits beyond the returned page count into the more row in All and into the meta of a scope", () => {
+		const two = [chat("h1", "Auth one"), chat("h2", "Auth two")];
+		const hostTotals = { chats: { total: 20, ids: new Set(two.map((item) => item.id)) } };
+		const all = sections("auth", { rootItems: two, hostTotals });
+		const chats = all.find((section) => section.id === "chats");
+		expect(chats?.meta).toBe("20");
+		expect(chats?.items.at(-1)?.item).toMatchObject({
+			kind: "more",
+			title: "18 more in Chats",
+			more: { kind: "scope", scope: "work" },
+		});
+		const scoped = sections("@auth", { rootItems: two, hostTotals });
+		const scopedChats = scoped.find((section) => section.id === "chats");
+		expect(scopedChats?.meta).toBe("20 matches · showing 2, refine the query for the rest");
+		expect(scopedChats?.items.every((row) => row.item.kind !== "more")).toBe(true);
+	});
+
+	test("local rows the host page left out count among its overflow, so a chat shown twice is never counted twice", () => {
+		const local = Array.from({ length: 40 }, (_, index) => chat(`c${index}`, `Auth ${index}`));
+		const page = new Set(local.slice(0, 20).map((item) => item.id));
+		const all = sections("auth", {
+			rootItems: local,
+			hostTotals: { chats: { total: 40, ids: page } },
+		});
+		const chats = all.find((section) => section.id === "chats");
+		expect(chats?.meta).toBe("40");
+		expect(chats?.items.at(-1)?.item.title).toBe("36 more in Chats");
+	});
+
+	test("a local row that only its subtitle matches is not taken to be one of the host's hits", () => {
+		const page = Array.from({ length: 50 }, (_, index) => chat(`h${index}`, `Auth ${index}`));
+		const local = Array.from({ length: 5 }, (_, index) =>
+			chat(`l${index}`, `Notes ${index}`, { subtitle: "Auth project" }),
+		);
+		const scoped = sections("@auth", {
+			rootItems: [...page, ...local],
+			hostTotals: { chats: { total: 55, ids: new Set(page.map((item) => item.id)) } },
+		});
+		expect(scoped.find((section) => section.id === "chats")?.meta).toBe(
+			"60 matches · showing 55, refine the query for the rest",
+		);
+	});
+
+	test("the selected row is never hidden under a group's cap", () => {
+		const many = Array.from({ length: 8 }, (_, index) => chat(`k${index}`, `Keep ${index}`));
+		const rows = (keep: string | null) =>
+			flattenRows(sections("keep", { rootItems: many, keep })).map((row) => row.item.id);
+		expect(rows(null)).not.toContain("chat:k6");
+		expect(rows("chat:k6")).toContain("chat:k6");
+	});
+
+	test("a local workspace the host matches by its branch counts among the host's hits", () => {
+		const local = Array.from({ length: 60 }, (_, index) =>
+			workspace(`w${index}`, `Notes ${index}`, {
+				subtitle: `One · auth-${index}`,
+				hostFields: [
+					{ key: "title", text: `Notes ${index}` },
+					{ key: "subtitle", text: `auth-${index}`, secondary: true },
+				],
+			}),
+		);
+		const page = new Set(local.slice(0, 50).map((item) => item.id));
+		const scoped = sections("@auth", {
+			rootItems: local,
+			hostTotals: { workspaces: { total: 60, ids: page } },
+		});
+		expect(scoped.find((section) => section.id === "workspaces")?.meta).toBe("60");
 	});
 });

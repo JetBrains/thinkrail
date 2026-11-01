@@ -15,6 +15,13 @@ interface SessionRecord {
 	entries: HistoryEntry[];
 }
 
+export interface HistorySession {
+	readonly sessionId: string;
+	readonly cwd: string;
+	readonly title?: string;
+	readonly entries: readonly HistoryEntry[];
+}
+
 const REVALIDATE_MS = 2000;
 const COLD_BUILD_BUDGET_MS = 150;
 const SNIPPET_RADIUS = 60;
@@ -123,18 +130,27 @@ export class HistoryIndex {
 		}
 	}
 
+	private async freshen(): Promise<boolean> {
+		const wasCold = !this.built;
+		this.ensureFresh();
+		if (this.building && wasCold) {
+			await Promise.race([this.building, Bun.sleep(COLD_BUILD_BUDGET_MS)]);
+		}
+		return !this.built || this.building !== null;
+	}
+
+	async sessions(): Promise<{ sessions: readonly HistorySession[]; indexing: boolean }> {
+		const indexing = await this.freshen();
+		return { sessions: [...this.records.values()], indexing };
+	}
+
 	async search(input: {
 		query: string;
 		limit?: number;
 		filter: (cwd: string, sessionId: string) => boolean;
 		labels: (cwd: string) => { workspaceId?: string; projectId?: string };
 	}): Promise<HistorySearchResult> {
-		const wasCold = !this.built;
-		this.ensureFresh();
-		if (this.building && wasCold) {
-			await Promise.race([this.building, Bun.sleep(COLD_BUILD_BUDGET_MS)]);
-		}
-		const indexing = !this.built || this.building !== null;
+		const indexing = await this.freshen();
 
 		const limit = clampLimit(input.limit);
 		const query = input.query.slice(0, MAX_HISTORY_QUERY_LENGTH);

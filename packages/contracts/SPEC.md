@@ -56,16 +56,16 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
   labels), the optional shell-local desktop capabilities);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
-  **`matchFields`** + `parseMatchTerms` + `MATCH_TIER` and the `Match*` types from
+  **`matchFields`** + `parseMatchTerms` + `foldMatchText` + `MATCH_TIER` and the `Match*` types from
   `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
-  bounded subsequence of at least three characters, every term required, a quoted `MatchTerm` (`literal`)
-  matched contiguously only, case and Latin diacritics folded — precomposed or decomposed, the ranges
-  still indexing the original text and spanning the marks they cover — combining marks part of their
-  word (never a word start), a secondary field never above substring and, at an equal tier, never chosen
-  over a primary one, path fields matched on the basename first, field-keyed highlight ranges — the
-  browser's palette ranks with it, and it lives here so host-side search ranks with this one copy and
-  their tiers cannot drift);
-  the value
+  bounded subsequence of at least three characters > `content` for a body or message match, every term
+  required, a quoted `MatchTerm` (`literal`) matched contiguously only, case and Latin diacritics folded —
+  precomposed or decomposed, the ranges still indexing the original text and spanning the marks they
+  cover — combining marks part of their word (never a word start), a secondary field never above substring
+  and, at an equal tier, never chosen over a primary one, path fields matched on the basename first,
+  field-keyed highlight ranges — the browser's palette and the host's search providers rank with this one
+  copy so their tiers cannot drift; `foldMatchText` is the matcher's own fold as plain text, for a
+  prefilter that must never drop what the matcher would accept); the value
   re-exports
   `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
   word it in their language until it is renamed), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical
@@ -556,6 +556,21 @@ the palette ranks with — kept here so host-side search can rank with the same 
   so the jump affordance lives there instead; `messageIndex` anchors jump-to-message into
   `session.getMessages` order, `anchorText` makes the anchor drift-tolerant), and
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
+  the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v106): **`SearchKind`** (`chat` / `transcript` /
+  `workspace` / `file` / `spec` / `plan`), **`SearchContext`** (the active workspace + context project the
+  host turns into its one file/spec root), **`SearchHit`** (a stable `kind:id[:locator]` id, title / subtitle / `snippet`,
+  the shared matcher's `tier` + `score` and highlight `ranges` so the browser merges host hits with its
+  local ones by the same rule, and the navigation target — `projectId` / `workspaceId` / `sessionId` /
+  `messageIndex` + `anchorText` / root-relative `path` / `specId` — and a file or spec hit's byte `size`, so
+  the client declines to preview a large one), **`SearchGroup`** (one per kind:
+  capped `hits`, the true `total`, and a `state` of `ready` / `truncated` / `indexing` / `failed` — a
+  client re-asks only on `indexing`), **`SearchQueryResult`** (`seq` echoed; `superseded` when a newer
+  `seq` from the same client overtook it), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (the
+  `chat` target only, with the hit's `anchorText` so the host can re-find a message compaction moved: a
+  bounded transcript window or `unavailable` — files and specs render client-side over `fs.readFile`), and the limits `MAX_SEARCH_QUERY_LENGTH`,
+  `MAX_SEARCH_GROUP_LIMIT`, `DEFAULT_SEARCH_GROUP_LIMIT`, `MAX_SEARCH_PREVIEW_BYTES` (the preview pane's
+  read cap); the matcher gains the `content` tier for
+  body/transcript matches, always below every field tier;
   the **review DTOs** — **`Review`** (one open review per workspace; `baseSha` — the reviewed diff's
   ORIGINAL side (the branch range's fork point, what that diff actually displays — never the target's
   tip, which can carry upstream commits the review never showed) pinned to a **full commit oid at
@@ -646,7 +661,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   includeDiffStats? }`**, where omitted/true preserves the existing full rows with computed aggregates and
   `false` returns the same authoritative membership/order without the synchronous per-workspace diff-stat
   fan-out used nowhere by navigation restoration / `fs.*` (**`fs.readFile`** answers
-  `{ content, meta: ResourceMeta }`) / `git.*` / **`spec.graph`**
+  `{ content, meta: ResourceMeta }`; with `maxBytes` (v106, the search palette's preview) a larger file is
+  refused with `FILE_TOO_LARGE` before it is read) / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
   item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha
@@ -837,7 +853,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
-  newer client never sends it to an older host) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
+  newer client never sends it to an older host) / **`search.query`** + **`search.preview`** (the palette's host
+  providers from `SEARCH_PROTOCOL_VERSION`, v106: `{ seq, query, kinds?, context, limit? }` → per-kind
+  groups with the shared matcher's tiers, or `superseded` for an overtaken `seq`; a preview is a bounded
+  transcript read that never attaches a session) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
   `PromptHit` instead, never a separate `MessageHit`) / the **`review.*` set** — **`get`** (the open
   review + comments, lazily created; re-anchored on read) / **`commentAdd`**/**`commentUpdate`**/
