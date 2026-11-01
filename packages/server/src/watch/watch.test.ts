@@ -483,3 +483,70 @@ test("a watcher whose workspace record is gone is reaped on the next ensureWatch
 	await sleep(1000);
 	expect(payloads.filter((p) => p.workspaceId === "ws1")).toHaveLength(0);
 });
+
+test("a linked worktree push refreshes remote metadata", async () => {
+	const git = (cwd: string, ...args: string[]): void => {
+		const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "pipe" });
+		if (!result.success) {
+			throw new Error(`git ${args.join(" ")} failed: ${new TextDecoder().decode(result.stderr)}`);
+		}
+	};
+
+	const repo = join(dataDir, "source-repo");
+	const remote = join(dataDir, "remote.git");
+
+	mkdirSync(repo);
+	git(repo, "init", "-b", "main");
+	git(repo, "config", "user.name", "ThinkRail E2E");
+	git(repo, "config", "user.email", "e2e@thinkrail.test");
+
+	writeFileSync(join(repo, "README.md"), "initial\n");
+	git(repo, "add", ".");
+	git(repo, "commit", "-m", "initial");
+
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+
+	rmSync(worktree, { recursive: true, force: true });
+	git(repo, "worktree", "add", "-b", "feature/issue1009", worktree);
+
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+
+	await ensureWatch("ws1");
+
+	// Initial push updates shared Git config and remote references.
+	git(worktree, "push", "-u", "origin", "HEAD");
+	await waitFor(() => nudges.includes("ws1"), 4000);
+
+	// A later push updates the remote ref without touching worktree metadata.
+	writeFileSync(join(worktree, "next.txt"), "next\n");
+	git(worktree, "add", ".");
+	git(worktree, "commit", "-m", "next");
+
+	await sleep(550);
+	nudges.length = 0;
+
+	git(worktree, "push");
+	await waitFor(() => nudges.includes("ws1"), 4000);
+
+	expect(nudges).toContain("ws1");
+
+	// Updating an unrelated remote-tracking branch must not
+	// invalidate this workspace's Remote status.
+	nudges.length = 0;
+	git(repo, "branch", "feature/unrelated");
+	git(repo, "push", "origin", "feature/unrelated");
+	await sleep(700);
+	expect(nudges).toHaveLength(0);
+
+	// Closing the workspace watcher must release its Git watchers.
+	stopWatch("ws1");
+	writeFileSync(join(worktree, "third.txt"), "third\n");
+	git(worktree, "add", ".");
+	git(worktree, "commit", "-m", "third");
+	git(worktree, "push");
+	await sleep(700);
+	expect(nudges).toHaveLength(0);
+}, 15000);
