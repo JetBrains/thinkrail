@@ -189,7 +189,7 @@ describe("markdown prose systems", () => {
 			h5: { fontSize: "s12", fontWeight: "medium" },
 			h6: { fontSize: "s10", fontWeight: "medium", textTransform: "uppercase" },
 			inlineCode: { fontFamily: "code", fontSize: "s13" },
-			codeBlock: { fontFamily: "code", fontSize: "code" },
+			codeBlock: { fontFamily: "code", fontSize: "codeBlock" },
 			tableBody: { fontSize: "s12", fontWeight: "light" },
 			tableHeader: { fontSize: "s12", fontWeight: "semibold" },
 		};

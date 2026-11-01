@@ -43,7 +43,9 @@ export interface Typography {
 	letterSpacings: Record<string, string>;
 	rootStyle: StyleRef;
 	codeSize: { fontSize: string };
-	codeRow: { fontSize: string; lineHeight: string };
+	codeBlockSize: { fontSize: string };
+	terminalSize: { fontSize: string };
+	codeRow: { lineHeight: string };
 	textStyles: Record<string, Record<string, Style | StyleRef>>;
 	proseSystems: Record<string, Record<string, Style | StyleRef>>;
 }
@@ -101,12 +103,14 @@ export function familyLigatures(t: Typography, id: string): FontFamily["ligature
 }
 
 export const CODE_SIZE = "code";
-export const CODE_SIZE_DENSE = "codeDense";
+export const CODE_BLOCK_SIZE = "codeBlock";
+export const TERMINAL_SIZE = "terminal";
 export const WEIGHT_OFFSET = "offset";
 
 export function fontSizePx(t: Typography, id: string): number | undefined {
 	if (id === CODE_SIZE) return t.fontSizes?.[t.codeSize?.fontSize];
-	if (id === CODE_SIZE_DENSE) return t.fontSizes?.[t.codeRow?.fontSize];
+	if (id === CODE_BLOCK_SIZE) return t.fontSizes?.[t.codeBlockSize?.fontSize];
+	if (id === TERMINAL_SIZE) return t.fontSizes?.[t.terminalSize?.fontSize];
 	return t.fontSizes?.[id];
 }
 
@@ -189,6 +193,7 @@ export const CODE_STYLE_IDS = new Set([
 	"code.text",
 	"code.block",
 	"code.editor",
+	"code.terminal",
 	"code.document",
 	"code.otp",
 	"code.textSmall",
@@ -306,7 +311,7 @@ export function validate(t: Typography): string[] {
 				fail(`fontWeightOffset.exclude: unknown font weight '${id}'`);
 	for (const [id, v] of Object.entries(t.fontSizes ?? {}))
 		if (!(v > 0)) fail(`fontSizes.${id}: must be > 0`);
-	for (const id of [CODE_SIZE, CODE_SIZE_DENSE])
+	for (const id of [CODE_SIZE, CODE_BLOCK_SIZE, TERMINAL_SIZE])
 		if (id in (t.fontSizes ?? {})) fail(`fontSizes.${id}: reserved for the code size tokens`);
 	for (const [id, v] of Object.entries(t.lineHeights ?? {}))
 		if (!(v > 0)) fail(`lineHeights.${id}: must be > 0`);
@@ -352,22 +357,21 @@ export function validate(t: Typography): string[] {
 	for (const [block, keys] of [
 		["fontWeightOffset", ["exclude"]],
 		["codeSize", ["fontSize"]],
-		["codeRow", ["fontSize", "lineHeight"]],
+		["codeBlockSize", ["fontSize"]],
+		["terminalSize", ["fontSize"]],
+		["codeRow", ["lineHeight"]],
 	] as const)
 		for (const key of Object.keys(t[block] ?? {}))
 			if (!(keys as readonly string[]).includes(key))
 				fail(`${block}: unexpected property '${key}'`);
+	for (const block of ["codeSize", "codeBlockSize", "terminalSize"] as const) {
+		if (!(t[block]?.fontSize in (t.fontSizes ?? {})))
+			fail(`${block}.fontSize: unknown font size '${t[block]?.fontSize}'`);
+	}
 	const codePx = fontSizePx(t, CODE_SIZE);
-	const densePx = fontSizePx(t, CODE_SIZE_DENSE);
-	if (!(t.codeSize?.fontSize in (t.fontSizes ?? {})))
-		fail(`codeSize.fontSize: unknown font size '${t.codeSize?.fontSize}'`);
-	if (!(t.codeRow?.fontSize in (t.fontSizes ?? {})))
-		fail(`codeRow.fontSize: unknown font size '${t.codeRow?.fontSize}'`);
-	else if (codePx !== undefined && densePx !== undefined && !(densePx < codePx))
-		fail(
-			`codeRow.fontSize: the dense code row must be smaller than codeSize.fontSize ` +
-				`(${densePx}px vs ${codePx}px)`,
-		);
+	const blockPx = fontSizePx(t, CODE_BLOCK_SIZE);
+	if (codePx !== undefined && blockPx !== undefined && blockPx <= codePx)
+		fail("codeBlockSize.fontSize: blocks must be larger than codeSize.fontSize");
 	if (!(t.codeRow?.lineHeight in (t.lineHeights ?? {})))
 		fail(`codeRow.lineHeight: unknown line height '${t.codeRow?.lineHeight}'`);
 	const root = t.rootStyle;
@@ -422,7 +426,8 @@ export function validate(t: Typography): string[] {
 				{
 					...t.fontSizes,
 					[CODE_SIZE]: fontSizePx(t, CODE_SIZE),
-					[CODE_SIZE_DENSE]: fontSizePx(t, CODE_SIZE_DENSE),
+					[CODE_BLOCK_SIZE]: fontSizePx(t, CODE_BLOCK_SIZE),
+					[TERMINAL_SIZE]: fontSizePx(t, TERMINAL_SIZE),
 				},
 				"fontSizes",
 			],
@@ -524,16 +529,16 @@ function declarations(t: Typography, style: Style, indent = "\t"): string {
 	return lines.map((l) => indent + l).join("\n");
 }
 
-export function codeDenseDelta(t: Typography): number {
+export function codeBlockDelta(t: Typography): number {
 	const code = t.fontSizes[t.codeSize.fontSize];
-	const dense = t.fontSizes[t.codeRow.fontSize];
-	if (code === undefined || dense === undefined)
-		throw new Error("codeSize / codeRow: unknown font size");
-	return code - dense;
+	const block = t.fontSizes[t.codeBlockSize.fontSize];
+	if (code === undefined || block === undefined)
+		throw new Error("codeSize / codeBlockSize: unknown font size");
+	return block - code;
 }
 
 export function codeRowHeight(t: Typography): number {
-	const fontSize = t.fontSizes[t.codeRow.fontSize];
+	const fontSize = t.fontSizes[t.codeSize.fontSize];
 	const lineHeight = t.lineHeights[t.codeRow.lineHeight];
 	if (fontSize === undefined || lineHeight === undefined)
 		throw new Error("codeRow: unknown font size or line height");
@@ -573,17 +578,18 @@ export function renderCss(t: Typography): string {
 	for (const [id, v] of Object.entries(t.fontSizes))
 		out.push(`\t${cssVarName(t, "font-size", id)}: ${v}px;`);
 	const code = cssVarName(t, "font-size", CODE_SIZE);
-	out.push("\n\t/* Code size — the dense size (editor, diffs) keeps its distance below it */");
+	out.push("\n\t/* Independent file and terminal sizes; blocks follow the file size */");
 	out.push(`\t${code}: var(${cssVarName(t, "font-size", t.codeSize.fontSize)});`);
 	out.push(
-		`\t${cssVarName(t, "font-size", CODE_SIZE_DENSE)}: calc(var(${code}) - ${codeDenseDelta(t)}px);`,
+		`\t${cssVarName(t, "font-size", CODE_BLOCK_SIZE)}: calc(var(${code}) + ${codeBlockDelta(t)}px);`,
+	);
+	out.push(
+		`\t${cssVarName(t, "font-size", TERMINAL_SIZE)}: var(${cssVarName(t, "font-size", t.terminalSize.fontSize)});`,
 	);
 	out.push("\n\t/* Line heights (unitless) */");
 	for (const [id, v] of Object.entries(t.lineHeights))
 		out.push(`\t${cssVarName(t, "line-height", id)}: ${v};`);
-	out.push(
-		"\n\t/* Code row height (px) — dense code size × line height, rounded to a whole pixel */",
-	);
+	out.push("\n\t/* Code row height (px) — code size × line height, rounded to a whole pixel */");
 	out.push(`\t--${t.metadata.cssVarPrefix}-code-row-height: ${codeRowHeight(t)}px;`);
 	out.push("\n\t/* Letter spacing */");
 	for (const [id, v] of Object.entries(t.letterSpacings))

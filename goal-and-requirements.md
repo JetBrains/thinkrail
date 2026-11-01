@@ -137,7 +137,7 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   colours in `~/.thinkrail/themes`, live on save ([[submodule-web-themes]]).
 - **Fonts** — the interface and code fonts are the user's choice among the bundled faces, the fonts
   installed on the host machine, and font files added in Settings (kept in `~/.thinkrail/fonts`), with
-  fallback fonts, a code size, code ligatures and one text-weight knob; one choice per host, applied at
+  fallback fonts, independent code and terminal sizes (blocks follow code at +2 px), code ligatures and one text-weight knob; one choice per host, applied at
   once in every window, and a font missing on a device falls back to the bundled face with a warning
   ([[submodule-web-fonts]], [[submodule-server-fonts]]).
 - **Brand** — ThinkRail green accent (bright on dark themes, deepened on light ones so it clears AA on

@@ -133,6 +133,7 @@ export function Shell() {
 	const interfaceFont = useAppStore((s) => s.interfaceFont);
 	const codeFont = useAppStore((s) => s.codeFont);
 	const codeFontSize = useAppStore((s) => s.codeFontSize);
+	const terminalFontSize = useAppStore((s) => s.terminalFontSize);
 	const codeLigatures = useAppStore((s) => s.codeLigatures);
 	const fontWeightOffset = useAppStore((s) => s.fontWeightOffset);
 	const userFonts = useAppStore((s) => s.userFonts);
@@ -145,7 +146,14 @@ export function Shell() {
 			writeFontsHint(DEFAULT_FONT_PREFERENCE, []);
 			return;
 		}
-		const preference = { interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset };
+		const preference = {
+			interfaceFont,
+			codeFont,
+			codeFontSize,
+			terminalFontSize,
+			codeLigatures,
+			fontWeightOffset,
+		};
 		if (userFonts) installUserFonts(userFonts.files, hostUrl);
 		applyFontPreference(preference);
 		if (userFonts) writeFontsHint(preference, userFonts.files);
@@ -155,6 +163,7 @@ export function Shell() {
 		interfaceFont,
 		codeFont,
 		codeFontSize,
+		terminalFontSize,
 		codeLigatures,
 		fontWeightOffset,
 		userFonts,

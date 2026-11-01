@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE — DO NOT EDIT.
  *
- * Source:    src/styles/typography.json (v3.2.0)
+ * Source:    src/styles/typography.json (v3.3.0)
  * Generator: scripts/generate-typography.ts  ·  regenerate: bun run typography:generate
  * Drift gate: bun run typography:check (fails when this file is stale)
  *
@@ -51,9 +51,10 @@
 	--tr-font-size-s24: 24px;
 	--tr-font-size-s44: 44px;
 
-	/* Code size — the dense size (editor, diffs) keeps its distance below it */
-	--tr-font-size-code: var(--tr-font-size-s13);
-	--tr-font-size-code-dense: calc(var(--tr-font-size-code) - 2px);
+	/* Independent file and terminal sizes; blocks follow the file size */
+	--tr-font-size-code: var(--tr-font-size-s11);
+	--tr-font-size-code-block: calc(var(--tr-font-size-code) + 2px);
+	--tr-font-size-terminal: var(--tr-font-size-s13);
 
 	/* Line heights (unitless) */
 	--tr-line-height-compact: 1.25;
@@ -64,7 +65,7 @@
 	--tr-line-height-default: 1.3;
 	--tr-line-height-reading: 1.45;
 
-	/* Code row height (px) — dense code size × line height, rounded to a whole pixel */
+	/* Code row height (px) — code size × line height, rounded to a whole pixel */
 	--tr-code-row-height: 14px;
 
 	/* Letter spacing */
@@ -273,7 +274,7 @@
 }
 .tr-code-block {
 	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-code);
+	font-size: var(--tr-font-size-code-block);
 	font-weight: var(--tr-font-weight-regular);
 	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-normal);
@@ -283,7 +284,7 @@
 }
 .tr-code-editor {
 	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-code-dense);
+	font-size: var(--tr-font-size-code);
 	font-weight: var(--tr-font-weight-regular);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);
@@ -293,7 +294,7 @@
 }
 .tr-code-document {
 	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-code);
+	font-size: var(--tr-font-size-code-block);
 	font-weight: var(--tr-font-weight-regular);
 	line-height: var(--tr-line-height-code);
 	letter-spacing: var(--tr-letter-spacing-normal);
@@ -316,6 +317,16 @@
 	font-size: var(--tr-font-size-s11);
 	font-weight: var(--tr-font-weight-regular);
 	line-height: var(--tr-line-height-code);
+	letter-spacing: var(--tr-letter-spacing-normal);
+	text-transform: none;
+	font-style: normal;
+	font-variant-ligatures: var(--tr-font-ligatures-code);
+}
+.tr-code-terminal {
+	font-family: var(--tr-font-family-code);
+	font-size: var(--tr-font-size-terminal);
+	font-weight: var(--tr-font-weight-regular);
+	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -398,7 +409,7 @@
 }
 .tr-prose-chat :is(pre, pre code) {
 	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-code);
+	font-size: var(--tr-font-size-code-block);
 	font-weight: var(--tr-font-weight-regular);
 	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-normal);
@@ -533,7 +544,7 @@
 }
 .tr-prose-doc :is(pre, pre code) {
 	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-code);
+	font-size: var(--tr-font-size-code-block);
 	font-weight: var(--tr-font-weight-regular);
 	line-height: var(--tr-line-height-code);
 	letter-spacing: var(--tr-letter-spacing-normal);

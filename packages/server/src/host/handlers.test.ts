@@ -16,6 +16,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
+	SPLIT_FONT_SIZES_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_METHODS,
 } from "@thinkrail/contracts";
@@ -36,7 +37,7 @@ import {
 } from "../feedback";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { addComment, getReviewSnapshot } from "../reviews";
-import { resetConfigCache } from "../settings";
+import { getConfig, resetConfigCache, setSettingsPublisher } from "../settings";
 import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
 import {
@@ -1174,5 +1175,43 @@ test("resource handlers scope every read/control to a registered workspace and a
 		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
 		if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 		else process.env.PI_OFFLINE = priorOffline;
+	}
+});
+
+test("old clients cannot mutate font sizes; modern patches remain independent", async () => {
+	const before = getConfig();
+	const published: unknown[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	try {
+		for (const config of [{ codeFontSize: 16 }, { terminalFontSize: 20 }]) {
+			await expect(
+				handleRequest(
+					"settings.update",
+					{ config },
+					{ ...CTX, protocolVersion: SPLIT_FONT_SIZES_PROTOCOL_VERSION - 1 },
+				),
+			).rejects.toThrow("Update the UI");
+		}
+		expect(getConfig()).toEqual(before);
+		expect(published).toEqual([]);
+		expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+		await handleRequest(
+			"settings.update",
+			{ config: { codeFontSize: 16 } },
+			{ ...CTX, protocolVersion: SPLIT_FONT_SIZES_PROTOCOL_VERSION },
+		);
+		expect(getConfig()).toMatchObject({ codeFontSize: 16, terminalFontSize: 13 });
+		await handleRequest(
+			"settings.update",
+			{ config: { codeLigatures: true } },
+			{ ...CTX, protocolVersion: SPLIT_FONT_SIZES_PROTOCOL_VERSION - 1 },
+		);
+		expect(getConfig().codeLigatures).toBe(true);
+		await expect(
+			handleRequest("settings.update", { config: { terminalFontSize: 100 } }, CTX),
+		).rejects.toThrow("terminalFontSize");
+		expect(getConfig().terminalFontSize).toBe(13);
+	} finally {
+		setSettingsPublisher(null);
 	}
 });

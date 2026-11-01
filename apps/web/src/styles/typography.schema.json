@@ -16,6 +16,8 @@
 		"letterSpacings",
 		"rootStyle",
 		"codeSize",
+		"codeBlockSize",
+		"terminalSize",
 		"codeRow",
 		"textStyles",
 		"proseSystems"
@@ -129,17 +131,42 @@
 			"additionalProperties": false,
 			"required": ["fontSize"],
 			"properties": {
-				"fontSize": { "type": "string" }
+				"fontSize": {
+					"type": "string"
+				}
+			}
+		},
+		"codeBlockSize": {
+			"description": "Default block size, a fontSizes id. Its distance above codeSize is preserved when the code size changes.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["fontSize"],
+			"properties": {
+				"fontSize": {
+					"type": "string"
+				}
+			}
+		},
+		"terminalSize": {
+			"description": "Independent default terminal size, a fontSizes id.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["fontSize"],
+			"properties": {
+				"fontSize": {
+					"type": "string"
+				}
 			}
 		},
 		"codeRow": {
-			"description": "The dense code row (Monaco, Pierre). Its `fontSize` is the default dense code size, emitted as `--tr-font-size-code-dense` at a fixed distance below the code size (a style names it as `\"fontSize\": \"codeDense\"`). Generated as one whole-pixel height so CSS and a JS virtualizer read the same row without CSS `round()`.",
+			"description": "Whole-pixel file/diff row height: codeSize times lineHeight, rounded.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["fontSize", "lineHeight"],
+			"required": ["lineHeight"],
 			"properties": {
-				"fontSize": { "type": "string" },
-				"lineHeight": { "type": "string" }
+				"lineHeight": {
+					"type": "string"
+				}
 			}
 		},
 		"textStyles": {
@@ -219,7 +246,7 @@
 					"$ref": "#/definitions/tokenId"
 				},
 				"fontSize": {
-					"description": "A `fontSizes` id, or `code` / `codeDense` — the user-adjustable code sizes (`codeSize`, `codeRow`).",
+					"description": "A `fontSizes` id, or `code` / `codeBlock` / `terminal` — file size, derived block size and independent terminal size.",
 					"$ref": "#/definitions/tokenId"
 				},
 				"fontWeight": {
@@ -270,7 +297,9 @@
 				"selfHosted": {
 					"type": "array",
 					"minItems": 1,
-					"items": { "type": "string" },
+					"items": {
+						"type": "string"
+					},
 					"description": "The npm entry points shipping this family's faces. `generate-typography.ts` turns these into `styles/generated/fonts.css`, and fails when one is not a dependency of apps/web \u2014 or when an installed font package is claimed by no family. Omit for families we do not self-host."
 				},
 				"userSelectable": {

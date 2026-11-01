@@ -5062,3 +5062,17 @@ test("authority can be given up without replacing the list (a consumer activatin
 	expect(s().modelsFresh).toBe(false);
 	expect(s().models).toBe(refreshed);
 });
+
+test("welcome and settings broadcasts install independent font sizes atomically", () => {
+	useAppStore.getState().installWelcomeSnapshot(103, [], [], {
+		...DEFAULT_CONFIG,
+		codeFontSize: 16,
+		terminalFontSize: 20,
+	});
+	expect(useAppStore.getState()).toMatchObject({ codeFontSize: 16, terminalFontSize: 20 });
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, codeFontSize: 12, terminalFontSize: 18 });
+	expect(useAppStore.getState()).toMatchObject({ codeFontSize: 12, terminalFontSize: 18 });
+	const { terminalFontSize: _terminal, ...legacy } = DEFAULT_CONFIG;
+	useAppStore.getState().applyConfig({ ...legacy, codeFontSize: 15 } as typeof DEFAULT_CONFIG);
+	expect(useAppStore.getState()).toMatchObject({ codeFontSize: 13, terminalFontSize: 15 });
+});

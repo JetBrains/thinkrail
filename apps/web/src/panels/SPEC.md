@@ -2396,7 +2396,7 @@ own section. The kebab menu (`plan-menu`, a
   the pane; on expiry the stale relayout is neutralized first (disposing the addon skips its re-measuring
   `fontFamily` toggle), so a font that finishes loading late cannot re-lay-out an already-attached terminal.
   A **font settings change** is the one later re-measure: through `@thinkrail/ui/fonts`' `watchFont` the
-  terminal resolves the generated `.tr-code-block` style (family, code size, weight), waits for that face to
+  terminal resolves the generated `.tr-code-terminal` style (family, terminal size, weight), waits for that face to
   load, sets the three options and re-fits, which resyncs the PTY grid. Only the latest change applies; one
   that leaves family, size and weight alone is skipped unless the custom face set changed (a replaced file
   keeps its family name but not its metrics), and a ligatures-only change never re-measures. Each apply sets
@@ -2452,3 +2452,5 @@ own section. The kebab menu (`plan-menu`, a
   app; panels themselves don't own the boundary.
 - Streaming invariant (when chat lands): `text_delta`/`thinking_delta` **APPEND**;
   `tool_execution_update.partialResult` **REPLACE**.
+
+Appearance exposes independent code and terminal size rows with individual bounds, reset, draft validation and preview. Code shows the actual file/diff size; fenced blocks remain 2 px larger. Both size controls are disabled below `SPLIT_FONT_SIZES_PROTOCOL_VERSION`, with an update-host explanation. Family, weight and ligatures remain shared.

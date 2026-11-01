@@ -1106,6 +1106,7 @@ interface AppState {
 	interfaceFont: FontChoice;
 	codeFont: FontChoice;
 	codeFontSize: number;
+	terminalFontSize: number;
 	codeLigatures: boolean;
 	fontWeightOffset: number;
 	userFonts: UserFontsSnapshot | null;
@@ -2398,6 +2399,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	interfaceFont: DEFAULT_CONFIG.interfaceFont,
 	codeFont: DEFAULT_CONFIG.codeFont,
 	codeFontSize: DEFAULT_CONFIG.codeFontSize,
+	terminalFontSize: DEFAULT_CONFIG.terminalFontSize,
 	codeLigatures: DEFAULT_CONFIG.codeLigatures,
 	fontWeightOffset: DEFAULT_CONFIG.fontWeightOffset,
 	userFonts: null,

@@ -19,6 +19,7 @@ const FAMILY_TOKEN: Record<FontRole, string> = {
 	code: "--tr-font-family-code",
 };
 const CODE_SIZE_TOKEN = "--tr-font-size-code";
+const TERMINAL_SIZE_TOKEN = "--tr-font-size-terminal";
 const CODE_ROW_TOKEN = "--tr-code-row-height";
 const WEIGHT_OFFSET_TOKEN = "--tr-font-weight-offset";
 const LIGATURES_TOKEN = "--tr-font-ligatures-code";
@@ -46,9 +47,9 @@ function write(root: HTMLElement, token: string, value: string | null): void {
 	else root.style.setProperty(token, value);
 }
 
-function denseCodeRowHeight(root: HTMLElement): number {
+function codeRowHeight(root: HTMLElement): number {
 	const probe = document.createElement("span");
-	probe.style.setProperty("font-size", "var(--tr-font-size-code-dense)");
+	probe.style.setProperty("font-size", "var(--tr-font-size-code)");
 	probe.style.setProperty("position", "absolute");
 	probe.style.setProperty("visibility", "hidden");
 	root.append(probe);
@@ -64,6 +65,7 @@ function revisionOf(root: HTMLElement): string {
 	const tokens = [
 		...FONT_ROLES.map((role) => FAMILY_TOKEN[role]),
 		CODE_SIZE_TOKEN,
+		TERMINAL_SIZE_TOKEN,
 		WEIGHT_OFFSET_TOKEN,
 		LIGATURES_TOKEN,
 	].map((token) => root.style.getPropertyValue(token));
@@ -92,7 +94,14 @@ export function applyFontPreference(preference: FontPreference): void {
 	}
 	const sized = preference.codeFontSize !== DEFAULT_FONT_PREFERENCE.codeFontSize;
 	write(root, CODE_SIZE_TOKEN, sized ? `${preference.codeFontSize}px` : null);
-	write(root, CODE_ROW_TOKEN, sized ? `${denseCodeRowHeight(root)}px` : null);
+	write(
+		root,
+		TERMINAL_SIZE_TOKEN,
+		preference.terminalFontSize === DEFAULT_FONT_PREFERENCE.terminalFontSize
+			? null
+			: `${preference.terminalFontSize}px`,
+	);
+	write(root, CODE_ROW_TOKEN, sized ? `${codeRowHeight(root)}px` : null);
 	write(
 		root,
 		WEIGHT_OFFSET_TOKEN,

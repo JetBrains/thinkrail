@@ -109,7 +109,7 @@ test("Monaco and xterm render the generated code family and size", async ({ page
 	}
 });
 
-test("Pierre diffs take the dense code size, the code row and the code ligatures token", async ({
+test("Pierre diffs take the file code size, the code row and the code ligatures token", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -295,14 +295,14 @@ test("the user-adjustable tokens on :root reach exactly the surfaces they govern
 		expect(changed.brand, "brand ignores every override").toEqual(defaults.brand);
 		expect(changed.chatBlock).toEqual({
 			family: "serif",
-			size: "16px",
+			size: "18px",
 			weight: "430",
 			ligatures: "normal",
 		});
 		expect(
 			[changed.docBlock, changed.document, changed.editor].map((s) => s.size),
-			"blocks follow the code size, the editor sample stays 2px below it",
-		).toEqual(["16px", "16px", "14px"]);
+			"files use code size; blocks remain 2px larger",
+		).toEqual(["18px", "18px", "16px"]);
 		expect(
 			[changed.inline, changed.chatInline, changed.small].map((s) => s.size),
 			"inline code keeps its fixed size",

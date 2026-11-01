@@ -52,3 +52,5 @@ JetBrains quota boolean + whole `1–3600` second cadence over their defaults; i
 `customLayoutPresets` catalog as synchronized layout data. Current/default preset ids, group limits, and
 chat message order are not config fields; retired config shapes are stripped rather than upgraded or
 preserved as extensions. Historical `layouts/` files remain untouched and inert.
+
+Font settings normalize from the raw full config before defaults merge. Absence of `terminalFontSize` migrates the old shared size to code minus 2 and terminal unchanged, preserving appearance. Reading does not save; the next ordinary save stores both fields.
