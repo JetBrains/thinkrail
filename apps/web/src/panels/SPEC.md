@@ -848,7 +848,11 @@ a project picker, the prompt hero, and the reused
   range inline, and waits for `settings.changed` rather than installing optimistic authority. Older hosts get
   neither control. **`GithubSettings`** (the Integrations section's "Local GitHub" group —
   `github.authStatus()` shown as `settings-gh-status[data-connected]`: Connected + login, or a Not connected
-  notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states);
+  notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states. Only an answered
+  probe is a status, and only the latest request's: reopening the section shows the last answer while it
+  re-probes, and a failed request never reads as signed out — it keeps the answer, or with none shows a
+  could-not-check notice. Before any answer the block is a skeleton; `data-connected` exists only once
+  gh has answered);
   **`LanguageSettings`** (gated by `LOCALES_PROTOCOL_VERSION`; a store-integrating container over the
   props-driven `LanguagePage`, whose derivations come from [[submodule-web-i18n]]): one radio list — **System**
   (default; names the language System resolves to) then every available language by its own-language name
