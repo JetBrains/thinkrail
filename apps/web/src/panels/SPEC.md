@@ -799,13 +799,13 @@ a project picker, the prompt hero, and the reused
   empty or preset name; there is no server-kind choice), a password key field (blank keeps a saved key on
   edit; an edit that changes the address's origin shows a warning and disables Save, since a different
   server is added as a new one; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
-  (`customEndpoints.probe`, run automatically when an edit opens), a per-model use switch, and a manual
-  model-id field for gateways that list nothing. **A model row has no editable parameters** (decision: they
+  (`customEndpoints.probe`, only on click — never on open, since gateways can list thousands), a manual
+  model-id field above the list, a filter field and 50-row paging once the list exceeds a page, and a per-model use switch. **A model row has no editable parameters** (decision: they
   describe the server rather than configure it — its real limits are set by whoever runs it). It shows only
   the facts the server reported (context, thinking, images, tools; "No tools" in warning tone), and an
   unreported fact is simply absent and left to pi's default. Re-detecting keeps selections and saved
   facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
-  reported, and keeps models the server no longer lists; an unchanged saved address stays as written. The
+  reported, keeps models the server no longer lists, and keeps existing rows first with newly found ones appended; an unchanged saved address stays as written. The
   pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and
   host save errors render inline; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while

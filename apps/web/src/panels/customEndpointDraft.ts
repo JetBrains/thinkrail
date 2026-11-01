@@ -86,22 +86,25 @@ export function mergeProbe(
 ): EndpointDraft {
 	const known = new Map(draft.models.map((model) => [model.id, model]));
 	const firstDetect = draft.models.length === 0;
-	const found: EndpointModelRow[] = probe.models.map((model) => {
-		const previous = known.get(model.id);
-		if (!previous) return { ...model, selected: firstDetect };
-		return {
-			...model,
-			contextWindow: model.contextWindow ?? previous.contextWindow,
-			maxTokens:
-				model.contextWindow === null ? (model.maxTokens ?? previous.maxTokens) : model.maxTokens,
-			reasoning: model.reasoning ?? previous.reasoning,
-			vision: model.vision ?? previous.vision,
-			selected: previous.selected,
-		};
+	const reported = new Map(probe.models.map((model) => [model.id, model]));
+	const merged = (model: CustomEndpointModel, previous: EndpointModelRow): EndpointModelRow => ({
+		...model,
+		contextWindow: model.contextWindow ?? previous.contextWindow,
+		maxTokens:
+			model.contextWindow === null ? (model.maxTokens ?? previous.maxTokens) : model.maxTokens,
+		reasoning: model.reasoning ?? previous.reasoning,
+		vision: model.vision ?? previous.vision,
+		selected: previous.selected,
 	});
-	const kept = draft.models.filter((model) => !probe.models.some((found) => found.id === model.id));
+	const existing = draft.models.map((row) => {
+		const model = reported.get(row.id);
+		return model ? merged(model, row) : row;
+	});
+	const added: EndpointModelRow[] = probe.models
+		.filter((model) => !known.has(model.id))
+		.map((model) => ({ ...model, selected: firstDetect }));
 	const baseUrl = draft.baseUrl === draft.savedBaseUrl ? draft.baseUrl : probe.baseUrl;
-	return { ...draft, baseUrl, models: [...found, ...kept] };
+	return { ...draft, baseUrl, models: [...existing, ...added] };
 }
 
 export function probeTarget(draft: EndpointDraft): { apiKey?: string; endpointId?: string } {
