@@ -353,6 +353,7 @@ test.if(process.platform === "linux")(
 	"on Linux the root .git stays watched when the resolver would ignore it",
 	async () => {
 		mkdirSync(join(worktree, ".git", "refs", "heads"), { recursive: true });
+		mkdirSync(join(worktree, ".git", "reftable"));
 		const asked: string[] = [];
 		setIgnoredPathsResolver(async (_root, paths) => {
 			asked.push(...paths);
@@ -366,6 +367,9 @@ test.if(process.platform === "linux")(
 		await waitFor(() => nudges.length > 0);
 		nudges.length = 0;
 		writeFileSync(join(worktree, ".git", "refs", "heads", "next"), "0\n");
+		await waitFor(() => nudges.length > 0);
+		nudges.length = 0;
+		writeFileSync(join(worktree, ".git", "reftable", "tables.list"), "0\n");
 		await waitFor(() => nudges.length > 0);
 	},
 );

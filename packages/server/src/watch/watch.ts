@@ -24,7 +24,7 @@ const REPO_META_DEBOUNCE_MS = 300;
 const WATCH_EACH_DIRECTORY = process.platform === "linux";
 const STARTED = Promise.resolve();
 const NOTHING_IGNORED: ReadonlySet<string> = new Set();
-const WATCHED_GIT_DIRS = new Set(["refs", "info"]);
+const WATCHED_GIT_DIRS = new Set(["refs", "reftable", "info"]);
 
 type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
 type SkillPathClassifier = (relativePath: string) => boolean;
