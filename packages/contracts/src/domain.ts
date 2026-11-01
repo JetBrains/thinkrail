@@ -1083,7 +1083,8 @@ export type DetectedAccountSource =
 	| "github-copilot"
 	| "copilot-cli"
 	| "kimi-cli"
-	| "grok-build";
+	| "grok-build"
+	| "antigravity";
 
 export interface DetectedAccount {
 	providerId: string;

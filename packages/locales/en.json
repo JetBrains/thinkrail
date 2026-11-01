@@ -834,6 +834,8 @@
 	"panels.connectProvider.agentCanRun": "The agent can run now.",
 	"panels.connectProvider.centralSetUp": "Set up",
 	"panels.connectProvider.description": "Sign in with a subscription you already have, or add an API key.",
+	"panels.connectProvider.detected.antigravityDetail": "Antigravity is signed in on this machine — sign in with Google to use it here",
+	"panels.connectProvider.detected.antigravityTitle": "Antigravity",
 	"panels.connectProvider.detected.claudeCodeDetail": "Claude Code is signed in here. Use the same Claude subscription.",
 	"panels.connectProvider.detected.claudeCodeTitle": "Sign in with Claude",
 	"panels.connectProvider.detected.codexDetail": "Codex is signed in with ChatGPT here. Use the same plan.",
