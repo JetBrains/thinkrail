@@ -1,0 +1,29 @@
+@import "tailwindcss";
+@import "@thinkrail/design-tokens/styles.css";
+
+@source "../../../packages/ui";
+
+@custom-variant button-disabled (&:is([data-disabled="true"], :disabled:not([data-loading])));
+
+@theme inline {
+	--font-sans: var(--tr-font-family-interface);
+	--font-mono: var(--tr-font-family-code);
+	--spacing-touch: 44px;
+	--spacing-safe-top: env(safe-area-inset-top);
+	--spacing-safe-bottom: env(safe-area-inset-bottom);
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	background: var(--container-workspace-bg);
+	color: var(--text-default);
+	-webkit-font-smoothing: antialiased;
+	-webkit-tap-highlight-color: transparent;
+	overscroll-behavior: none;
+}

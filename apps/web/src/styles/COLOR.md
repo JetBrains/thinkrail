@@ -13,14 +13,17 @@ references: [web-typography]
 Colour arrives in **two layers**, and a component may only ever name the second one.
 
 ```
-themes/bundled/*.theme.json    the PALETTE — one file per theme, the only place a hex lives
-styles/colors.json             the SEMANTIC layer — what each palette entry is FOR (one file)
-styles/colors.schema.json      the editor-facing contract for it
-scripts/colors.ts              load / validate / render — the only place a derivation is written
-scripts/generate-colors.ts     writes the output; `--check` fails when it is stale
-styles/generated/colors.css    GENERATED: the roles, the `@theme inline` map, the effect blocks
-themes/runtime.ts              writes the active manifest onto the document root
-styles/colorUsage.test.ts      the adoption guard
+packages/design-tokens/
+  themes/*.theme.json            the PALETTE — one file per theme, the only place a hex lives
+  styles/colors.json             the SEMANTIC layer — what each palette entry is FOR (one file)
+  styles/colors.schema.json      the editor-facing contract for it
+  scripts/colors.ts              load / validate / render — the only place a derivation is written
+  scripts/generate-colors.ts     writes the output; `--check` fails when it is stale
+  styles/generated/colors.css    GENERATED: the roles, the `@theme inline` map, the effect blocks
+  src/palette.ts                 `applyPalette` writes a manifest onto the document root
+apps/web/src/
+  themes/runtime.ts              resolves the active theme and applies it
+  styles/colorUsage.test.ts      the adoption guard
 ```
 
 **No colour is written twice.** A role's derivation lives in `colors.json` and nowhere else — not in
@@ -126,7 +129,7 @@ fix is to add that specific key — not to adopt the whole surface.
 
 Every case is a JSON edit followed by `bun run colors:generate`.
 
-1. **A theme should look different** → edit `themes/bundled/<theme>.theme.json`. Nothing else changes,
+1. **A theme should look different** → edit `packages/design-tokens/themes/<theme>.theme.json`. Nothing else changes,
    and no regeneration is needed: manifests are read at runtime.
 2. **A role should point somewhere else** → change its `from` in `colors.json`.
 3. **A new role** → add it to `roles` with `from`, an optional `alpha` step, and `publish`

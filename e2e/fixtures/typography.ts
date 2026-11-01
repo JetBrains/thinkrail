@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 const GENERATED = readFileSync(
-	new URL("../../apps/web/src/styles/generated/typography.css", import.meta.url),
+	new URL("../../packages/design-tokens/styles/generated/typography.css", import.meta.url),
 	"utf8",
 );
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
+import { normalizeEol } from "@thinkrail/design-tokens/scripts/generatedFiles";
 import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
-import { normalizeEol } from "../../scripts/generatedFiles";
 
 const code = (path: string) =>
 	normalizeEol(readFileSync(path, "utf8"))

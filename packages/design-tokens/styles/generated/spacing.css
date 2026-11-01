@@ -1,7 +1,7 @@
 /*
- * GENERATED — do not edit. Source: `src/styles/spacing.json` (v1.1.0).
+ * GENERATED — do not edit. Source: `packages/design-tokens/styles/spacing.json` (v1.1.0).
  * Regenerate with `bun run spacing:generate`; `spacing:check` fails when this file is stale.
- * See src/styles/SPACING.md (web-spacing).
+ * See apps/web/src/styles/SPACING.md (web-spacing).
  */
 
 :root {

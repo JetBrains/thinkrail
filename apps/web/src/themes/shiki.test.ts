@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
+import { SYNTAX_VARIABLES } from "@thinkrail/design-tokens";
 import { createHighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { cssColorToHex } from "@/lib";
-import { SYNTAX_VARIABLES } from "./runtime";
 import {
 	resolveThinkrailShikiTheme,
 	THINKRAIL_MONACO_COLOR_VARIABLES,

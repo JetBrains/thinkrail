@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const STYLES_DIR = join(import.meta.dir, "..", "src", "styles");
+export const STYLES_DIR = join(import.meta.dir, "..", "styles");
 export const SOURCE_PATH = join(STYLES_DIR, "typography.json");
 export const SCHEMA_PATH = join(STYLES_DIR, "typography.schema.json");
 export const GENERATED_PATH = join(STYLES_DIR, "generated", "typography.css");
@@ -131,7 +131,7 @@ export function renderFontsCss(t: Typography): string {
 }
 
 const FONTS_HEADER = (version: string) => `/*
- * GENERATED — do not edit. Source: \`src/styles/typography.json\` (v${version}), the \`selfHosted\`
+ * GENERATED — do not edit. Source: \`packages/design-tokens/styles/typography.json\` (v${version}), the \`selfHosted\`
  * entries of each font family. Regenerate with \`bun run typography:generate\`.
  *
  * The app's faces are self-hosted — no runtime call to a font CDN. ThinkRail runs locally (often
@@ -272,7 +272,9 @@ export function validate(t: Typography): string[] {
 			fail(`fontFamilies.${id}.ligatures: must be one of ${FONT_LIGATURES.join(", ")}`);
 		for (const entry of f.selfHosted ?? []) {
 			if (!declaredDependencies().has(packageRoot(entry))) {
-				fail(`fontFamilies.${id}.selfHosted: ${entry} is not a dependency of apps/web`);
+				fail(
+					`fontFamilies.${id}.selfHosted: ${entry} is not a dependency of @thinkrail/design-tokens`,
+				);
 			}
 		}
 	}
@@ -489,7 +491,7 @@ export function validate(t: Typography): string[] {
 const HEADER = (version: string) => `/*
  * GENERATED FILE — DO NOT EDIT.
  *
- * Source:    src/styles/typography.json (v${version})
+ * Source:    packages/design-tokens/styles/typography.json (v${version})
  * Generator: scripts/generate-typography.ts  ·  regenerate: bun run typography:generate
  * Drift gate: bun run typography:check (fails when this file is stale)
  *

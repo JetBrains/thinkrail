@@ -32,7 +32,7 @@ Workspace imports may reach `contracts` and `@thinkrail/locales/react` (the shar
 primitive-owned strings such as the dialog's screen-reader Close and the toast's Dismiss label) only. External dependencies are React, Radix, cmdk,
 react-resizable-panels, Remix Icon, class-variance-authority, clsx and tailwind-merge. Host internals,
 pi, app stores, transport and theme runtime are forbidden. Tokens remain global CSS variables generated
-under `apps/web/src/styles`; utilities follow [[web-color]], [[web-spacing]] and [[web-typography]].
+by `@thinkrail/design-tokens`, imported by each host stylesheet; utilities follow [[web-color]], [[web-spacing]] and [[web-typography]].
 The app's Tailwind sources and adoption guards include this package and extension web halves.
 
 ## Button system

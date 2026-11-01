@@ -2,7 +2,7 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://thinkrail.dev/schemas/colors.json",
 	"title": "ThinkRail semantic colour layer",
-	"description": "What each theme-manifest colour is FOR. Palettes themselves live in themes/bundled/*.theme.json; this file is the only place a colour derivation is written. See COLOR.md.",
+	"description": "What each theme-manifest colour is FOR. Palettes themselves live in packages/design-tokens/themes/*.theme.json; this file is the only place a colour derivation is written. See COLOR.md.",
 	"type": "object",
 	"additionalProperties": false,
 	"required": ["metadata", "scale", "roles", "effects"],

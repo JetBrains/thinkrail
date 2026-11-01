@@ -2,8 +2,9 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizeEol } from "@thinkrail/design-tokens/scripts/generatedFiles";
+import { SOURCE_PATH as SPACING_JSON, STYLES_DIR } from "@thinkrail/design-tokens/scripts/spacing";
 import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
-import { normalizeEol } from "../../scripts/generatedFiles";
 
 const SRC = fileURLToPath(new URL("..", import.meta.url));
 const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
@@ -17,7 +18,7 @@ const FILES = designSourceFiles();
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const TOKENS = join(SRC, "styles/tokens.css");
 const INDEX_CSS = join(SRC, "index.css");
-const SPACING_JSON = join(SRC, "styles/spacing.json");
+const SHAPE = join(STYLES_DIR, "shape.css");
 
 const STEPS = new Set(
 	Object.keys((JSON.parse(read(SPACING_JSON)) as { steps: Record<string, string> }).steps),
@@ -98,7 +99,7 @@ function cssRhythmHits(): string[] {
 const RADIUS_UTILITY =
 	/(?<![\w-])rounded(?:-(?:t|r|b|l|s|e|tl|tr|br|bl|ss|se|es|ee))?-([a-z0-9]+)(?![\w-])/g;
 const DECLARED_RADIUS = new Set(
-	[...read(TOKENS).matchAll(/^\s*--radius-([a-z0-9]+)\s*:/gm)].map((m) => m[1] as string),
+	[...read(SHAPE).matchAll(/^\s*--radius-([a-z0-9]+)\s*:/gm)].map((m) => m[1] as string),
 );
 
 describe("radius at a call site", () => {
@@ -115,12 +116,12 @@ describe("radius at a call site", () => {
 	});
 
 	it("replaces Tailwind's default radius scale with the token family", () => {
-		expect(read(TOKENS)).toMatch(/@theme static \{\s*--radius-\*:\s*initial;/);
+		expect(read(SHAPE)).toMatch(/@theme static \{\s*--radius-\*:\s*initial;/);
 	});
 
 	it("keeps exactly the xs/sm/md/lg primitive family capped at 8px", () => {
 		const declared = Object.fromEntries(
-			[...read(TOKENS).matchAll(/^\s*--radius-([a-z0-9]+)\s*:\s*([\d.]+)px;/gm)].map(
+			[...read(SHAPE).matchAll(/^\s*--radius-([a-z0-9]+)\s*:\s*([\d.]+)px;/gm)].map(
 				([, step, value]) => [step, Number(value)],
 			),
 		);
@@ -129,14 +130,14 @@ describe("radius at a call site", () => {
 
 	it("declares no radius step nothing consumes", () => {
 		const used = new Set([
-			...FILES.filter((f) => f !== TOKENS).flatMap((f) =>
+			...FILES.flatMap((f) =>
 				[...sourceWithoutComments(f).matchAll(/--radius-([a-z0-9]+)/g)].map((m) => m[1] as string),
 			),
 			...TS_FILES.flatMap((f) =>
 				[...sourceWithoutComments(f).matchAll(RADIUS_UTILITY)].map((m) => m[1] as string),
 			),
 		]);
-		const orphans = [...read(TOKENS).matchAll(/^\s*--radius-([a-z0-9]+)\s*:/gm)]
+		const orphans = [...read(SHAPE).matchAll(/^\s*--radius-([a-z0-9]+)\s*:/gm)]
 			.map((m) => m[1] as string)
 			.filter((step) => !used.has(step));
 		expect(orphans).toEqual([]);

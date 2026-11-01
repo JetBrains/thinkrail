@@ -1,3 +1,4 @@
+export type { ThemeManifest } from "@thinkrail/design-tokens";
 export { initializeThemes } from "./bundled";
 export {
 	applyTheme,
@@ -19,7 +20,6 @@ export {
 	type UserThemeIssue,
 	writeThemeHint,
 } from "./runtime";
-export type { ThemeManifest } from "./schema";
 export {
 	resolveThinkrailShikiTheme,
 	THINKRAIL_SHIKI_THEME,

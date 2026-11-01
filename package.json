@@ -57,6 +57,7 @@
 		"posthog-cli": "bun apps/web/posthogCli.ts",
 		"build:binary": "bun run build:web && bun apps/cli/scripts/build-binary.ts",
 		"smoke:binary": "bun packages/artifact-tests/smoke-binary.ts",
+		"mobile:ios": "bun run --cwd apps/mobile ios:sync && bun run --cwd apps/mobile ios:open",
 		"desktop:build": "bun run --cwd apps/desktop package:dev",
 		"desktop:dev": "bun run --cwd apps/desktop dev",
 		"desktop:package:canary": "bun run --cwd apps/desktop package:canary",

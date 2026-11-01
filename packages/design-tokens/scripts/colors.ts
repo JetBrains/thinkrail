@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const STYLES_DIR = join(import.meta.dir, "..", "src", "styles");
+export const STYLES_DIR = join(import.meta.dir, "..", "styles");
 export const SOURCE_PATH = join(STYLES_DIR, "colors.json");
 export const GENERATED_CSS_PATH = join(STYLES_DIR, "generated", "colors.css");
-export const THEMES_DIR = join(import.meta.dir, "..", "src", "themes");
-export const THEME_SCHEMA_PATH = join(THEMES_DIR, "schema.ts");
+export const SRC_DIR = join(import.meta.dir, "..", "src");
+export const THEME_SCHEMA_PATH = join(SRC_DIR, "schema.ts");
 
 export const paletteVar = (key: string) =>
 	`--${key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()}`;
@@ -98,7 +98,7 @@ export function validate(colors: Colors): string[] {
 }
 
 const HEADER = (version: string, kind: string) => `/*
- * GENERATED — do not edit. Source: \`src/styles/colors.json\` (v${version}).
+ * GENERATED — do not edit. Source: \`packages/design-tokens/styles/colors.json\` (v${version}).
  * Regenerate with \`bun run colors:generate\`; \`colors:check\` fails when this file is stale.
  *
  * ${kind}
@@ -136,7 +136,7 @@ export function renderCss(colors: Colors): string {
 	return [
 		HEADER(
 			colors.metadata.version,
-			"The semantic roles, then the Tailwind utility map. The palette they read is written to the\n * document root by `themes/runtime.ts` before React mounts.",
+			"The semantic roles, then the Tailwind utility map. The palette they read is written to the\n * document root by `applyPalette` (`src/palette.ts`) before the UI mounts.",
 		),
 		":root {",
 		...rootLines,

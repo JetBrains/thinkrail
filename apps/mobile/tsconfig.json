@@ -3,7 +3,8 @@
 	"compilerOptions": {
 		"lib": ["ESNext", "DOM", "DOM.Iterable"],
 		"jsx": "react-jsx",
-		"noEmit": true
+		"noEmit": true,
+		"types": ["bun", "vite/client"]
 	},
-	"include": ["src", "vite.config.ts", "capacitor.config.ts"]
+	"include": ["src", "scripts", "vite.config.ts", "capacitor.config.ts"]
 }

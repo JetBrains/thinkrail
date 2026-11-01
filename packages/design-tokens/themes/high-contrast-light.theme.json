@@ -1,5 +1,5 @@
 {
-	"$schema": "../theme.schema.json",
+	"$schema": "./theme.schema.json",
 	"schemaVersion": 2,
 	"id": "high-contrast-light",
 	"label": "High Contrast Light",

@@ -11,7 +11,7 @@
 			"**",
 			"!designs",
 			"!**/.claude",
-			"!apps/web/src/styles/generated",
+			"!packages/design-tokens/styles/generated",
 			"!apps/web/src/chat/generated"
 		]
 	},

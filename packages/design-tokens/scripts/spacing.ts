@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const STYLES_DIR = join(import.meta.dir, "..", "src", "styles");
+export const STYLES_DIR = join(import.meta.dir, "..", "styles");
 export const SOURCE_PATH = join(STYLES_DIR, "spacing.json");
 export const GENERATED_PATH = join(STYLES_DIR, "generated", "spacing.css");
 
@@ -79,9 +79,9 @@ export function validate(spacing: unknown): string[] {
 }
 
 const HEADER = (version: string) => `/*
- * GENERATED — do not edit. Source: \`src/styles/spacing.json\` (v${version}).
+ * GENERATED — do not edit. Source: \`packages/design-tokens/styles/spacing.json\` (v${version}).
  * Regenerate with \`bun run spacing:generate\`; \`spacing:check\` fails when this file is stale.
- * See src/styles/SPACING.md (web-spacing).
+ * See apps/web/src/styles/SPACING.md (web-spacing).
  */
 `;
 

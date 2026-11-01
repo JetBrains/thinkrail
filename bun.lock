@@ -63,16 +63,24 @@
       "dependencies": {
         "@capacitor/app": "8.1.2",
         "@capacitor/core": "8.6.0",
+        "@capacitor/ios": "8.6.0",
+        "@remixicon/react": "catalog:",
         "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/design-tokens": "workspace:*",
+        "@thinkrail/locales": "workspace:*",
         "@thinkrail/remote-client": "workspace:*",
+        "@thinkrail/ui": "workspace:*",
         "react": "catalog:",
         "react-dom": "catalog:",
       },
       "devDependencies": {
         "@capacitor/cli": "8.6.0",
+        "@tailwindcss/vite": "catalog:",
+        "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
         "@vitejs/plugin-react": "6.1.2",
+        "tailwindcss": "catalog:",
         "typescript": "catalog:",
         "vite": "8.1.6",
       },
@@ -82,12 +90,10 @@
       "version": "0.0.0",
       "dependencies": {
         "@dnd-kit/core": "6.3.1",
-        "@fontsource-variable/geist": "catalog:",
-        "@fontsource-variable/jetbrains-mono": "catalog:",
-        "@fontsource-variable/orbitron": "catalog:",
         "@remixicon/react": "catalog:",
         "@shikijs/langs": "4.5.0",
         "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/design-tokens": "workspace:*",
         "@thinkrail/ext-ask-user-question": "workspace:*",
         "@thinkrail/ext-visualize": "workspace:*",
         "@thinkrail/extension-api": "workspace:*",
@@ -177,6 +183,21 @@
         "@earendil-works/pi-ai": "catalog:",
         "@types/bun": "catalog:",
         "typescript": "catalog:",
+      },
+    },
+    "packages/design-tokens": {
+      "name": "@thinkrail/design-tokens",
+      "version": "0.0.0",
+      "dependencies": {
+        "@fontsource-variable/geist": "catalog:",
+        "@fontsource-variable/jetbrains-mono": "catalog:",
+        "@fontsource-variable/orbitron": "catalog:",
+        "@thinkrail/contracts": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+        "vite": "8.1.6",
       },
     },
     "packages/extension-api": {
@@ -780,6 +801,8 @@
 
     "@capacitor/core": ["@capacitor/core@8.6.0", "", { "dependencies": { "tslib": "^2.1.0" } }, "sha512-9F2zzuGYTJu+wqmQSEmqnFBfGrhC/njjMCfmxbvg9mq8xJT4wNh5pxbMFZxvW/yDhYJWPEBFQxeqzfo1gKrvxg=="],
 
+    "@capacitor/ios": ["@capacitor/ios@8.6.0", "", { "peerDependencies": { "@capacitor/core": "^8.6.0" } }, "sha512-Y2PE4zoBqMrSTWoVMJmX2byBznjn6egmATzoEUJiGVbVubkNpAvkF/tl0SBKDyP67ngyedTx1tQq5IGYIhby1A=="],
+
     "@capsizecss/unpack": ["@capsizecss/unpack@4.0.1", "", { "dependencies": { "fontkitten": "^1.0.3" } }, "sha512-CuNiSqg7+e1cO/GjffyMOm5Tt2jUF9CWHHnvQ/UkqvtkGfHdgwEC0wpmq7fkN3gxwpRnrAN0WzO3vREKmNolMQ=="],
 
     "@changesets/apply-release-plan": ["@changesets/apply-release-plan@8.1.1", "", { "dependencies": { "@changesets/config": "^4.0.1", "@changesets/format": "^0.1.2", "@changesets/git": "^4.0.1", "@changesets/should-skip-package": "^1.0.0", "@changesets/types": "^7.0.0", "import-meta-resolve": "^4.2.0", "jsonc-parser": "^3.3.1", "semver": "^7.8.1" } }, "sha512-nk2Hbq3M9NeHMdaIRBDvawKrQJzXB9sGyBUE5yWnIKtvdcNCPj75zBekJYr0gTT2ecJH3eFeTrc8eisPImcv0Q=="],
@@ -1359,6 +1382,8 @@
     "@thinkrail/cli": ["@thinkrail/cli@workspace:apps/cli"],
 
     "@thinkrail/contracts": ["@thinkrail/contracts@workspace:packages/contracts"],
+
+    "@thinkrail/design-tokens": ["@thinkrail/design-tokens@workspace:packages/design-tokens"],
 
     "@thinkrail/desktop": ["@thinkrail/desktop@workspace:apps/desktop"],
 

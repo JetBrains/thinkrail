@@ -12,7 +12,7 @@ import {
 } from "./schema";
 
 function bundledCandidates(): { file: string; value: unknown }[] {
-	const dir = join(import.meta.dir, "bundled");
+	const dir = join(import.meta.dir, "..", "themes");
 	return readdirSync(dir)
 		.filter((file) => file.endsWith(".theme.json"))
 		.sort()
@@ -49,7 +49,9 @@ test("every bundled theme is complete, unique, and includes the configured defau
 });
 
 test("runtime palette keys stay aligned with the authoring JSON schema", () => {
-	const schema = JSON.parse(readFileSync(join(import.meta.dir, "theme.schema.json"), "utf8")) as {
+	const schema = JSON.parse(
+		readFileSync(join(import.meta.dir, "..", "themes", "theme.schema.json"), "utf8"),
+	) as {
 		$defs: Record<string, { required: string[]; properties: Record<string, unknown> }>;
 	};
 	const derived: readonly string[] = DERIVED_THEME_COLOR_KEYS;

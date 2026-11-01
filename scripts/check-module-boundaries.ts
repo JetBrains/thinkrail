@@ -49,6 +49,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		root: "apps/web",
 		allowed: [
 			"packages/contracts",
+			"packages/design-tokens",
 			"packages/locales",
 			"packages/ui",
 			"packages/extension-api",
@@ -57,7 +58,17 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		],
 	},
 	{ root: "apps/cli", allowed: ["packages/server", "packages/shared"] },
-	{ root: "apps/mobile", allowed: ["packages/contracts", "packages/remote-client"] },
+	{ root: "packages/design-tokens", allowed: ["packages/contracts"] },
+	{
+		root: "apps/mobile",
+		allowed: [
+			"packages/contracts",
+			"packages/design-tokens",
+			"packages/locales",
+			"packages/remote-client",
+			"packages/ui",
+		],
+	},
 	{
 		root: "apps/desktop",
 		allowed: ["packages/server", "packages/shared", "packages/contracts", "packages/locales"],

@@ -42,7 +42,7 @@ describe("validate spacing source shape", () => {
 
 	it("keeps the editor schema aligned with the canonical step shape", () => {
 		const schema = JSON.parse(
-			readFileSync(new URL("../src/styles/spacing.schema.json", import.meta.url), "utf8"),
+			readFileSync(new URL("../styles/spacing.schema.json", import.meta.url), "utf8"),
 		) as {
 			properties?: { steps?: { minProperties?: number; propertyNames?: { pattern?: string } } };
 		};

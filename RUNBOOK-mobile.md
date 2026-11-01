@@ -7,34 +7,31 @@ The app (`apps/mobile`) is a thin "sessions" client over the shared `@thinkrail/
 iOS project is generated on your Mac (not committed); everything else is in the repo.
 
 ## Prerequisites (on the Mac)
-- Bun, Xcode (+ Command Line Tools), CocoaPods (`sudo gem install cocoapods` or `brew install cocoapods`).
+- Bun and the full Xcode app (not just Command Line Tools): install it, open it once, then
+  `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`. CocoaPods is not needed — Capacitor 8
+  wires plugins through Swift Package Manager.
 - A free Apple ID is enough for a personal on-device install.
-- iPhone connected by cable (trust the Mac) **and on the same Wi‑Fi as the laptop host**.
+- iPhone connected by cable (trust the Mac) **and on the same Wi‑Fi as the laptop host**. Enable
+  Settings → Privacy & Security → **Developer Mode** (the toggle appears after Xcode has seen the phone once).
 
-## 1. Build the web bundle
+## 1. Build + sync the iOS project (one command)
 ```bash
 bun install
-bun run --filter @thinkrail/mobile build      # → apps/mobile/dist
+bun run mobile:ios          # build dist/ → create ios/ if missing → patch Info.plist → cap sync → open Xcode
 ```
+`ios/` is generated and git-ignored. `apps/mobile/scripts/ios-setup.ts` creates it on first run and
+idempotently registers the `thinkrail://` URL scheme (so a scanned QR opens the app) and the Local Network
+usage description (without it the phone cannot reach the laptop). After a UI change, re-run
+`bun run mobile:ios` (or `bun run --cwd apps/mobile ios:sync` and press ▶ in Xcode again).
 
-## 2. Generate + sync the iOS project
-```bash
-cd apps/mobile
-bunx cap add ios          # creates apps/mobile/ios (one time)
-bunx cap sync ios         # copies dist/ into the native shell
-```
-Register the URL scheme so scanned/opened links reach the app: in `ios/App/App/Info.plist` add a URL type
-with scheme `thinkrail` (or just paste the link into the app's field — step 5).
-
-## 3. Open in Xcode and run on the iPhone
-```bash
-bunx cap open ios
-```
+## 2. Run on the iPhone from Xcode
 In Xcode: select the `App` target → **Signing & Capabilities** → pick your Apple ID team → select your
 iPhone as the run destination → **Run** (▶). The app installs on the phone. (First run: on the iPhone,
-Settings → General → VPN & Device Management → trust your developer certificate.)
+Settings → General → VPN & Device Management → trust your developer certificate.) If the bundle id
+`ai.thinkrail.mobile` is taken for your team, change it to a unique one in the target settings. A free Apple
+ID signature expires after 7 days — just Run from Xcode again. 
 
-## 4. Start the relay + host on the laptop
+## 3. Start the relay + host on the laptop
 Find the laptop's LAN IP (`ipconfig getifaddr en0`), then:
 ```bash
 # signaling relay (bind to LAN)
@@ -48,9 +45,10 @@ The CLI prints both the `thinkrail://pair?…` link **and a scannable QR** in th
 the WebRTC connection is direct — **coturn is not needed**. (coturn only matters on networks that block
 peer-to-peer, e.g. guest Wi‑Fi isolation.)
 
-## 5. Pair on the phone
-In the app: **scan the terminal QR** with the iPhone camera (or paste the link) → **Add host**. The host's
-sessions appear in the list; tap one to **pick up the ongoing conversation** — a session you started on the
+## 4. Pair on the phone
+First launch shows the **welcome screen**. **Scan the terminal QR** with the iPhone Camera — the
+`thinkrail://` link opens the app and pairs automatically — or paste the link and tap **Connect**. The host's
+sessions appear in the list (**Add computer** pairs another one); tap one to **pick up the ongoing conversation** — a session you started on the
 laptop loads on the phone and keeps streaming — and send a message to continue it. Add your server the same
 way (run the relay+host there too, paste its link).
 The app remembers paired hosts and auto-reconnects (via `resume`) on reopen / network flaps.

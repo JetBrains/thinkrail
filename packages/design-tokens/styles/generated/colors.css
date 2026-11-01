@@ -1,9 +1,9 @@
 /*
- * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.1.0).
+ * GENERATED — do not edit. Source: `packages/design-tokens/styles/colors.json` (v1.1.0).
  * Regenerate with `bun run colors:generate`; `colors:check` fails when this file is stale.
  *
  * The semantic roles, then the Tailwind utility map. The palette they read is written to the
- * document root by `themes/runtime.ts` before React mounts.
+ * document root by `applyPalette` (`src/palette.ts`) before the UI mounts.
  */
 
 :root {

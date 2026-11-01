@@ -2,7 +2,7 @@
 	"$schema": "./colors.schema.json",
 	"metadata": {
 		"version": "1.1.0",
-		"note": "The semantic colour layer. Palettes live in themes/bundled/*.theme.json; this file says what each palette entry is FOR, and is the only place a derivation is written. A role's `from` names a theme manifest key; the CSS variable that key writes to is derived (kebab-case), not tabulated. See COLOR.md."
+		"note": "The semantic colour layer. Palettes live in packages/design-tokens/themes/*.theme.json; this file says what each palette entry is FOR, and is the only place a derivation is written. A role's `from` names a theme manifest key; the CSS variable that key writes to is derived (kebab-case), not tabulated. See COLOR.md."
 	},
 	"scale": {
 		"subtle": 10,

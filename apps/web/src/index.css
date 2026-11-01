@@ -1,8 +1,5 @@
 @import "tailwindcss";
-@import "./styles/generated/fonts.css";
-@import "./styles/generated/typography.css";
-@import "./styles/generated/colors.css";
-@import "./styles/generated/spacing.css";
+@import "@thinkrail/design-tokens/styles.css";
 @import "./styles/tokens.css";
 @import "./styles/global.css";
 
@@ -15,7 +12,7 @@
 /*
  * Map the ThinkRail design tokens (tokens.css) onto Tailwind's theme namespaces. `inline` makes the
  * utilities resolve to the live `var(--token)` (not a baked value), so the theme engine's atomic
- * custom-property swap re-themes everything. Radius is not mapped here: `tokens.css`
+ * custom-property swap re-themes everything. Radius is not mapped here: `@thinkrail/design-tokens` `shape.css`
  * declares the `--radius-*` family as Tailwind's radius namespace itself (`@theme static`), so
  * `rounded-md` is the one spelling.
  *

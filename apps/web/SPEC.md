@@ -58,14 +58,17 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
 `BRAND_MARK_SEGMENTS` monogram regions, joined into the `BRAND_MARK_PATH` the shell logo fills and clipped to by the components' working badge), `clientPreferences.ts` (feature-neutral
 access to the optional native stable string adapter, and `firstPaintPreferenceStorage` — that adapter, else
-`localStorage` — which the theme and font first-paint hints share), and `styles/` — which holds the three
-design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
-structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
+`localStorage` — which the theme and font first-paint hints share), and `styles/` — the structural token contract
+(`tokens.css`), the global base, the adoption guards and the design-system docs. The three design-system
+SOURCES (`typography.json`, `colors.json`, `spacing.json`), the bundled theme palettes, their generators and
+the generated CSS live in [`@thinkrail/design-tokens`](../../packages/design-tokens/SPEC.md), shared with
+`apps/mobile`; `index.css` imports its `styles.css`. Each system's usage rules are specced here:
 [TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md);
 the in-app notice and toast look built on them is [NOTIFICATIONS.md](src/styles/NOTIFICATIONS.md).
-Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator module — it runs under Bun,
-never ships, and turns those three JSON sources into `styles/generated/` (plus the vendored provider
-marks into `chat/generated/`).
+Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time tooling module — it runs under Bun,
+never ships, and generates the vendored provider marks into `chat/generated/`, runs the React Compiler
+census, and owns the adoption-guard source scan; the web `*:generate` / `*:check` scripts delegate the
+token generators to `@thinkrail/design-tokens`.
 `index.html` names the product and links the local, symbol-only SVG favicon derived from the same
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, resolves and
@@ -245,7 +248,7 @@ themselves.
   standalone elevated surfaces (dialogs, user-message bubbles)). Spacing is **one canonical numeric
   scale** — `0 / 2 / 4 / 6 / 8 / 12 / 16 / 24 / 32 / 40 / 64` — where the step name *is* its pixel value, so
   `p-8` / `gap-12` / `py-4` resolve to exactly that many pixels; it is generated from a single JSON source
-  (`src/styles/spacing.json` → `src/styles/generated/spacing.css`), so each canonical length is written
+  (`@thinkrail/design-tokens` `styles/spacing.json` → `styles/generated/spacing.css`), so each canonical length is written
   once in the JSON rather than re-declared at call sites. A value several surfaces must move together is a
   named **layout role** aliasing a step (`p-panel-inset`, `h-panel-row`), never a repeated literal.
   `src/styles/SPACING.md` (`web-spacing`) is the authoritative system; `src/styles/spacingUsage.test.ts`
@@ -279,7 +282,8 @@ themselves.
   + `mt-2`) so the glyph hangs on its title, while a single-line row stays vertically centred
   (`items-center`, no nudge). Menu-item icons are centralized once in `packages/ui/menu-styles.ts` (`menuItemClass`
   `[&_svg]:size-14` + `gap-4`).
-- **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
+- **`src/themes` is the theme catalog; the manifest contract and palettes live in
+  `@thinkrail/design-tokens`; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the
   only nullable color slots (`null` retains the consumer default). A build-time glob validates the set at
@@ -315,15 +319,15 @@ themselves.
   strict consumers still pass through `lib.cssColorToHex`. Data-driven tests enforce the existing
   contrast floor (body/muted ≥ 4.5:1 and hint ≥ 3:1 on the primary declared surfaces) for every discovered
   manifest.
-- Radius tokens **are** Tailwind's radius namespace: `tokens.css` declares `--radius-xs/sm/md/lg` in an
+- Radius tokens **are** Tailwind's radius namespace: `@thinkrail/design-tokens` `styles/shape.css` declares `--radius-xs/sm/md/lg` in an
   `@theme static` block that first resets Tailwind's default scale (`--radius-*: initial`). So
   `rounded-<step>` and its side variants resolve to the live tokens, an undeclared step such as
   `rounded-xl` is never generated, and `static` keeps every variable emitted for hand-written CSS. This
   replaces the earlier rule of spelling the colliding tokens as arbitrary values
   (`rounded-[var(--radius-md)]`): the collision is removed at its source instead of worked around at ~300
   call sites, and the guard rejects any arbitrary radius value.
-- **Typography comes from `styles/typography.json` via generated semantic classes — nothing else.**
-  `styles/generated/typography.css` (committed, regenerated by `bun run typography:generate`, drift-gated
+- **Typography comes from `typography.json` (`@thinkrail/design-tokens`) via generated semantic classes — nothing else.**
+  Its `styles/generated/typography.css` (committed, regenerated by `bun run typography:generate`, drift-gated
   by `typography:check`) emits the primitive `--tr-*` custom properties, the `<body>` base, and one class
   per semantic style: `tr-brand-*`, `tr-heading-*`, `tr-title-*`, `tr-text-*`, `tr-code-*` plus one
   `tr-prose-<surface>` system per markdown surface (`tr-prose-chat`, `tr-prose-doc` — same element set,
@@ -352,7 +356,7 @@ themselves.
   `font-[var(--font-mono)]` is ambiguous — Tailwind compiles it to an invalid `font-weight`, so it
   silently does nothing; the working form is `font-(family-name:--font-mono)`
   (`styles/fontClasses.test.ts` fails on the bare form).
-- **Fonts ship inside the artifact.** `styles/generated/fonts.css` imports self-hosted variable faces
+- **Fonts ship inside the artifact.** `@thinkrail/design-tokens` `styles/generated/fonts.css` imports self-hosted variable faces
   (fontsource; Geist Variable + JetBrains Mono Variable, both with real italics — shared with
   `apps/website`, so their versions live in the root `workspaces.catalog`). Which packages those are is
   declared per family as `selfHosted` in `styles/typography.json`, so the stack and the bundled faces

@@ -5,22 +5,34 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"build": "vite build",
-		"typecheck": "tsc --noEmit"
+		"build": "tsc --noEmit && vite build",
+		"typecheck": "tsc --noEmit",
+		"ios:setup": "bun scripts/ios-setup.ts",
+		"ios:sync": "bun run build && bun scripts/ios-setup.ts && cap sync ios",
+		"ios:open": "cap open ios",
+		"ios:run": "bun run ios:sync && cap run ios"
 	},
 	"dependencies": {
 		"@capacitor/app": "8.1.2",
 		"@capacitor/core": "8.6.0",
+		"@capacitor/ios": "8.6.0",
+		"@remixicon/react": "catalog:",
 		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/design-tokens": "workspace:*",
+		"@thinkrail/locales": "workspace:*",
 		"@thinkrail/remote-client": "workspace:*",
+		"@thinkrail/ui": "workspace:*",
 		"react": "catalog:",
 		"react-dom": "catalog:"
 	},
 	"devDependencies": {
 		"@capacitor/cli": "8.6.0",
+		"@tailwindcss/vite": "catalog:",
+		"@types/bun": "catalog:",
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",
 		"@vitejs/plugin-react": "6.1.2",
+		"tailwindcss": "catalog:",
 		"typescript": "catalog:",
 		"vite": "8.1.6"
 	}
