@@ -67,9 +67,12 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   either, except the root `.git` top level, `refs/`, `reftable/` and `info/`, which feed the repo-metadata
   nudge. Root `.git` paths and paths inside a nested repo never go to the ignore check: an allowlist
   `.gitignore` (`*` plus `!` rules) makes `check-ignore` report `.git` itself, and a path inside a
-  submodule fails the whole batch. So ignored folders inside a nested repo are still watched. A
+  submodule fails the whole batch. So ignored folders inside a nested repo are still watched. A nested
+  repo is also noted when its `.git` appears after the walk, like a `git clone` into a new folder. A
   `.gitignore` event or a repo-metadata nudge re-checks the folders skipped as ignored, since `git add -f`
-  or an `info/exclude` edit also changes the answer. A global excludes file or a linked worktree's shared
+  or an `info/exclude` edit also changes the answer. New folders and these re-checks wait in one queue
+  and share one ignore check at a time: a checkout that adds a thousand folders must not spawn a
+  thousand `git check-ignore` runs at once. A global excludes file or a linked worktree's shared
   `info/exclude` sends no nudge, so such a change waits for the next nudge. Only the root is followed when
   it is a symlink. A `rename` on a directory re-walks it and reports what is inside, with no inode check:
   writes before the new watch have no event, and a recreated folder can get the old inode back. The

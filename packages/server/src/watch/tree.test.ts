@@ -19,6 +19,9 @@ let events: (string | null)[];
 let queried: string[];
 let ignored: Set<string>;
 let errors: number;
+let checks: number;
+let running: number;
+let peakChecks: number;
 let watcher: TreeWatcher | null;
 
 beforeEach(() => {
@@ -27,6 +30,9 @@ beforeEach(() => {
 	queried = [];
 	ignored = new Set();
 	errors = 0;
+	checks = 0;
+	running = 0;
+	peakChecks = 0;
 	watcher = null;
 });
 
@@ -52,6 +58,11 @@ async function start(
 		skipDir,
 		ignoredDirs: async (paths) => {
 			queried.push(...paths);
+			checks += 1;
+			running += 1;
+			peakChecks = Math.max(peakChecks, running);
+			await sleep(10);
+			running -= 1;
 			return new Set(paths.filter((path) => ignored.has(path)));
 		},
 	});
@@ -104,6 +115,23 @@ test("a new folder the ignore check reports stays unwatched", async () => {
 	expect(seenUnder("build")).toBe(false);
 });
 
+test.if(process.platform === "linux")(
+	"a burst of new folders runs one ignore check at a time",
+	async () => {
+		await start();
+		checks = 0;
+		peakChecks = 0;
+		for (let index = 0; index < 200; index++) put(`d${index}/src/a.ts`);
+		await waitFor(() => seen("d199/src/a.ts"));
+		await sleep(300);
+		expect(peakChecks).toBe(1);
+		expect(checks).toBeLessThan(50);
+		events.length = 0;
+		put("d100/src/a.ts", "y");
+		await waitFor(() => seen("d100/src/a.ts"));
+	},
+);
+
 test("a folder deleted and recreated under the same path is watched again", async () => {
 	put("src/old.ts");
 	await start();
@@ -126,6 +154,21 @@ test("folders below a nested repository are never sent to the ignore check", asy
 	expect(queried.some((path) => path.startsWith("sub/"))).toBe(false);
 	put("sub/out/x.txt", "y");
 	await waitFor(() => seen("sub/out/x.txt"));
+});
+
+test("a repository created after the walk keeps its folders out of the ignore check", async () => {
+	put("sub/out/x.txt");
+	ignored.add("sub/out");
+	await start((path) => path.split("/").includes(".git"));
+	expect(queried).toContain("sub/out");
+	queried.length = 0;
+	put("sub/.git/HEAD", "ref: refs/heads/main\n");
+	await sleep(100);
+	watcher?.recheck();
+	await waitFor(() => seen("sub/out/x.txt"));
+	put("sub/new/y.txt");
+	await waitFor(() => seen("sub/new/y.txt"));
+	expect(queried.some((path) => path.startsWith("sub/"))).toBe(false);
 });
 
 test("a .gitignore edit re-checks folders skipped as ignored", async () => {
@@ -151,6 +194,7 @@ test("a deleted ignored folder is not re-checked", async () => {
 	await sleep(100);
 	queried.length = 0;
 	watcher?.recheck();
+	await sleep(100);
 	expect(queried).toEqual([]);
 });
 

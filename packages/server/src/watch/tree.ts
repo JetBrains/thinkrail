@@ -27,12 +27,20 @@ async function isDirectory(path: string, followLink: boolean): Promise<boolean> 
 	}
 }
 
+function underAny(paths: ReadonlySet<string>, rel: string): boolean {
+	for (let end = rel.lastIndexOf("/"); end > 0; end = rel.lastIndexOf("/", end - 1)) {
+		if (paths.has(rel.slice(0, end))) return true;
+	}
+	return false;
+}
+
 export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher {
 	const dirs = new Map<string, FSWatcher>();
 	const nestedRepos = new Set<string>();
 	const pruned = new Set<string>();
-	const settling = new Set<string>();
-	const resettle = new Set<string>();
+	const changed = new Set<string>();
+	let recheckQueued = false;
+	let flushing = false;
 	let closed = false;
 
 	const abs = (rel: string) => (rel === "" ? root : join(root, rel));
@@ -51,13 +59,7 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 	}
 
 	const guard = (work: Promise<void>): Promise<void> => work.catch(fail);
-
-	function insideNestedRepo(rel: string): boolean {
-		for (let end = rel.lastIndexOf("/"); end > 0; end = rel.lastIndexOf("/", end - 1)) {
-			if (nestedRepos.has(rel.slice(0, end))) return true;
-		}
-		return false;
-	}
+	const insideNestedRepo = (rel: string) => underAny(nestedRepos, rel);
 
 	function drop(rel: string): void {
 		pruned.delete(rel);
@@ -84,8 +86,11 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 			}
 			const path = childPath(rel, filename);
 			options.onEvent(path);
-			if (filename === ".gitignore") void guard(recheck());
-			else if (event === "rename") void guard(settle(path));
+			if (filename === ".git" && rel !== "") nestedRepos.add(rel);
+			if (filename === ".gitignore") recheckQueued = true;
+			else if (event === "rename" && (dirs.has(path) || !options.skipDir(path))) changed.add(path);
+			else return;
+			schedule();
 		});
 		watcher.on("error", fail);
 		dirs.set(rel, watcher);
@@ -146,37 +151,39 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 		}
 	}
 
-	async function settle(rel: string): Promise<void> {
-		if (!dirs.has(rel) && options.skipDir(rel)) return;
-		if (settling.has(rel)) {
-			resettle.add(rel);
-			return;
-		}
-		settling.add(rel);
-		try {
-			const exists = await isDirectory(abs(rel), false);
-			if (closed) return;
-			drop(rel);
-			if (!exists) return;
-			if (!insideNestedRepo(rel) && (await options.ignoredDirs([rel])).has(rel)) {
+	async function flush(): Promise<void> {
+		const paths = [...changed];
+		changed.clear();
+		const rechecking = recheckQueued;
+		recheckQueued = false;
+		const present = await Promise.all(paths.map((rel) => isDirectory(abs(rel), false)));
+		if (closed) return;
+		for (const rel of paths) drop(rel);
+		const created = paths.filter((_, index) => present[index]);
+		const candidates = rechecking ? [...created, ...pruned] : created;
+		const checked = candidates.filter((rel) => !insideNestedRepo(rel));
+		const ignored = checked.length === 0 ? NOTHING_IGNORED : await options.ignoredDirs(checked);
+		if (closed) return;
+		const start = new Set<string>();
+		for (const rel of candidates) {
+			if (ignored.has(rel)) {
 				pruned.add(rel);
-				return;
+			} else {
+				pruned.delete(rel);
+				start.add(rel);
 			}
-			await walk([rel], true);
-		} finally {
-			settling.delete(rel);
-			if (resettle.delete(rel)) void guard(settle(rel));
 		}
+		const tops = [...start].filter((rel) => !underAny(start, rel));
+		await walk(tops, true);
 	}
 
-	async function recheck(): Promise<void> {
-		const candidates = [...pruned];
-		if (candidates.length === 0) return;
-		const ignored = await options.ignoredDirs(candidates);
-		if (closed) return;
-		const freed = candidates.filter((path) => !ignored.has(path));
-		for (const path of freed) pruned.delete(path);
-		await walk(freed, true);
+	function schedule(): void {
+		if (flushing || closed) return;
+		flushing = true;
+		void guard(flush()).then(() => {
+			flushing = false;
+			if (changed.size > 0 || recheckQueued) schedule();
+		});
 	}
 
 	watchDir("");
@@ -184,7 +191,8 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 		ready: guard(walk([""], false)),
 		close,
 		recheck: () => {
-			void guard(recheck());
+			recheckQueued = true;
+			schedule();
 		},
 	};
 }
