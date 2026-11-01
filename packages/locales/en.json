@@ -1747,6 +1747,8 @@
 	"settings.feedback.surveyDescription": "Help us improve! Answer a few questions about your experience with ThinkRail. It'll take ~5 minutes.",
 	"settings.feedback.takeSurvey": "Take the survey",
 	"settings.feedback.title": "Feedback",
+	"settings.github.checkFailed": "Couldn't check the GitHub CLI. Refresh to try again.",
+	"settings.github.checking": "Checking the GitHub CLI…",
 	"settings.github.connected": "Connected",
 	"settings.github.description": "Authenticate the GitHub CLI to create workspaces from remote branches.",
 	"settings.github.notConnected": "Not connected. Run <0>gh auth login</0> in a terminal, then Refresh.",
