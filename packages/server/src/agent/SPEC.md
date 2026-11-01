@@ -1331,8 +1331,30 @@ keeps a run's first cancellation reason, only a run that teardown cancelled firs
 A run already cancelled when teardown lands keeps its own provenance and reads Stopped — a user stop
 (`"user"`) as well as a foreground child the parent's own Stop cancelled through its tool signal, which
 carries no reason (an AIR review finding on PR #1004: inferring teardown from a missing reason mislabelled
-exactly that run). A user or tool stop that merely settles during teardown stays Stopped. Interrupted work is shown to the user only: it never wakes the parent and nothing tells the
-agent its acknowledged run is gone (user-settled, 2026-10). Work a dead host left in flight is the archive's own derivation. Workspace archive removes the
+exactly that run). A user or tool stop that merely settles during teardown stays Stopped.
+Interrupted commands and detached subagents are reported to the parent on its next ordinary user
+prompt by a parent-only `resourceInterruptions` extension. It supplies a hidden
+`thinkrail/resource-interruptions` custom message; it never starts a turn, restores a handle, or restarts
+work. Custom-message turns and TODO control prompts leave the notice pending. Handled slash commands
+and rejected preflight never consume it. The notice reads the complete merged history, not the UI's
+twenty-row window, preserving the live owner's terminal outcome over an inferred interruption.
+Idle prompts and ordinary user messages delivered from steering or follow-up queues use the same path:
+`message_start` observes delivery, `context` adds the notice to that request, and `turn_end` returns its
+custom-message entry through Pi's boundary API without requesting continuation. Only that uncommitted message is held
+in memory until the boundary; settlement discards it if no boundary committed it. Queue admission alone
+does not acknowledge work, and an automatic turn cannot consume a notice merely because old user
+messages remain in its context.
+The message's versioned details record only the `kind:id` identities actually reported. Deduplication
+reads the raw active branch's custom-message entries, surviving resource reload, host restart and
+compaction without a second acknowledgment store or an eager marker before run preparation succeeds.
+Each notice contains at most twenty records and twelve thousand characters; excess records remain
+pending for later user prompts. Task/command text is bounded and JSON-encoded as data; a malformed
+optional archived role name is omitted rather than blocking other records. Command times are start
+times; a child's archived creation time is labelled as such, not as a per-run start time.
+The notice describes host or chat teardown without claiming every interruption was a crash. It identifies
+host-reported status even when earlier start acknowledgements are absent from the visible context;
+JSON names and command/tasks identify the runs, while their field values remain data rather than instructions.
+Work a dead host left in flight is the archive's own derivation. Workspace archive removes the
 workspace's history after its delegation store; late lifecycle events of a retired delegation service are not
 archived, so they cannot recreate it. Chat deletion leaves the history in place.
 

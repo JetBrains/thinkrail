@@ -102,6 +102,16 @@ credentials or remote repositories are used.
 
 ## Chat resource controls
 
+`resource-interruptions.live` seeds only archived in-flight command/detached-child records before a
+restored chat's first resource read. Opening the chat starts no agent; the next user prompt receives
+one hidden interruption message, the real provider repeats names present only in the archive, and a
+later prompt after page hydration does not append another notice or an extra user bubble. Deterministic
+faux-provider integration tests additionally cover disk reattachment, compaction, batching, handled
+inputs, and delivered versus removed steering/follow-up messages. The local restart test launches real
+background-command and detached-child owners in an isolated host process, kills it without teardown,
+then checks lazy notification and durable deduplication through two independent cold starts. Its model
+requests use only a faux provider; this browser fixture does not claim to kill and restart the host process.
+
 Resource wire coverage opens persisted chat fixtures through the real UI and checks the authoritative
 catalog's session/workspace scope, missing-output result, unavailable controls and empty stop-all.
 Its wire connection uses the launched page's port, not the source host's fixed port: binary and
