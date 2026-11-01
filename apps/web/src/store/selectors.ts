@@ -549,6 +549,16 @@ export function selectWorkspaceIsRunning(
 	);
 }
 
+export function selectWorkspaceSettleBlocked(
+	state: SessionStateProjection,
+	workspaceId: string,
+): boolean {
+	return (
+		selectWorkspaceIsRunning(state, workspaceId) ||
+		selectWorkspaceNeedsAttention(state, workspaceId)
+	);
+}
+
 export function selectProjectNeedsAttention(
 	state: SessionStateProjection,
 	projectId: string,

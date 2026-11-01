@@ -1,13 +1,6 @@
-import {
-	RiExternalLinkLine,
-	RiFileCopyLine,
-	RiHome4Line,
-	RiTerminalBoxLine,
-} from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import type { Command, CommandContext } from "../commands";
 import { copyText } from "../lib";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
@@ -32,26 +25,32 @@ import {
 	waitingItems,
 } from "../search";
 import {
+	type SettingsSection,
 	selectActiveWorkspace,
 	selectContextProject,
 	selectHistoryTarget,
 	selectRecordFirstPrompts,
 	selectSupportsOnboarding,
 	selectSwitcherGroups,
-	selectWorkspaceIsRunning,
-	selectWorkspaceNeedsAttention,
 	selectWorkspaceReadAction,
+	selectWorkspaceSettleBlocked,
 	selectWorkspaceSettledReason,
 	supportsWorkspaceReadState,
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
+import {
+	openChatHistory,
+	toggleBottomPanel,
+	toggleLeftSide,
+	toggleRightSide,
+} from "./chordActions";
 import { createPaletteBackfill, mergeProjectWorkspaces } from "./paletteBackfill";
 import {
 	buildCommands,
 	buildSettingsItems,
 	emptyStateActionIds,
-	type PaletteTool,
+	type PaletteCatalogDeps,
 } from "./paletteCatalog";
 import { createPaletteNavigator } from "./paletteNavigation";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
@@ -104,15 +103,13 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			? selectWorkspaceReadAction(s, activeWorkspaceId)
 			: null,
 	);
+	const [now] = useState(Date.now);
 	const settled = useAppStore((s) => {
 		const workspace = selectActiveWorkspace(s);
-		return workspace ? selectWorkspaceSettledReason(s, workspace, Date.now()) !== null : false;
+		return workspace ? selectWorkspaceSettledReason(s, workspace, now) !== null : false;
 	});
 	const settleBlocked = useAppStore(
-		(s) =>
-			s.activeWorkspaceId !== null &&
-			(selectWorkspaceIsRunning(s, s.activeWorkspaceId) ||
-				selectWorkspaceNeedsAttention(s, s.activeWorkspaceId)),
+		(s) => s.activeWorkspaceId !== null && selectWorkspaceSettleBlocked(s, s.activeWorkspaceId),
 	);
 	useWorkspaceBackfill();
 	const firstPrompts = useAppStore(useShallow(selectRecordFirstPrompts));
@@ -124,22 +121,14 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const [nativeShortcuts] = useState(() => readSettingsShortcutLabel() !== null);
 
 	const online = status === "connected" && welcomeGeneration > 0 && protocolVersion !== null;
-	const context: CommandContext = useMemo(
-		() => ({
-			online,
-			projectId: contextProject?.id ?? null,
-			workspaceId: activeWorkspaceId,
-			protocolVersion,
-		}),
-		[online, contextProject, activeWorkspaceId, protocolVersion],
-	);
 
 	const binding = useMemo(() => {
 		const store = () => useAppStore.getState();
-		const deps = {
+		const deps: PaletteCatalogDeps = {
 			t,
-			context,
+			contextProjectId: contextProject?.id ?? null,
 			activeWorkspace,
+			editors,
 			historyAvailable: historySessionId !== null,
 			canCreateProject: selectSupportsOnboarding({ protocolVersion }),
 			nativeShortcuts,
@@ -150,82 +139,28 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			settingsGroups,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
+				openDefaultWorkspace: (projectId) =>
+					void enterDefaultWorkspace(projectId, paletteNavigator.beginPick()),
 				openProject: () => void options.pickAndOpenProject(),
 				openProjectPath: options.enterHostPath,
 				createProject: options.startNewProject,
-				newChat: (workspaceId: string) => void startChatInTab(workspaceId),
-				toggleLeft: () => {
-					const workspaceId = store().activeWorkspaceId;
-					if (workspaceId)
-						store().enqueueLayoutIntent({ kind: "toggle-side", workspaceId, side: "left" });
-					else options.toggleProjectsHome();
-				},
-				toggleRight: (workspaceId: string) =>
-					store().enqueueLayoutIntent({ kind: "toggle-side", workspaceId, side: "right" }),
-				toggleBottom: (workspaceId: string) =>
-					store().enqueueLayoutIntent({ kind: "toggle-bottom", workspaceId }),
-				showTool: (workspaceId: string, tool: PaletteTool) =>
-					store().requestToolView(workspaceId, tool),
-				openHistory: () => {
-					const target = selectHistoryTarget(store());
-					if (target) store().requestHistoryOpen(target);
-				},
+				newChat: (workspaceId) => void startChatInTab(workspaceId),
+				newTerminal: (workspaceId) => store().addTerminal(workspaceId),
+				toggleLeft: () => toggleLeftSide(options.toggleProjectsHome),
+				toggleRight: toggleRightSide,
+				toggleBottom: toggleBottomPanel,
+				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
+				openHistory: openChatHistory,
 				markRead: markWorkspaceRead,
 				markUnread: markWorkspaceUnread,
 				settle: settleWorkspace,
 				unsettle: unsettleWorkspace,
 				reveal: revealWorkspace,
-				openSettings: (section?: Parameters<ReturnType<typeof store>["openSettings"]>[0]) =>
-					store().openSettings(section),
+				copyPath: (workspace) => void copyText(workspace.worktreePath),
+				openIn: openWorkspaceIn,
+				openSettings: (section?: SettingsSection) => store().openSettings(section),
 			},
 		};
-		const commands: Command[] = [
-			...buildCommands(deps),
-			...(contextProject
-				? [
-						{
-							id: "workspace.openDefault",
-							title: t("commands.workspace.openDefault"),
-							group: "work" as const,
-							icon: RiHome4Line,
-							keywords: ["default", "project folder", "no worktree"],
-							mutates: true,
-							run: () =>
-								void enterDefaultWorkspace(contextProject.id, paletteNavigator.beginPick()),
-						},
-					]
-				: []),
-			...(activeWorkspace
-				? [
-						{
-							id: "terminal.new",
-							title: t("commands.terminal.new"),
-							group: "work" as const,
-							icon: RiTerminalBoxLine,
-							keywords: ["shell", "console"],
-							mutates: true,
-							run: () => store().addTerminal(activeWorkspace.id),
-						},
-						{
-							id: "workspace.copyPath",
-							title: t("commands.workspace.copyPath"),
-							group: "workspace" as const,
-							icon: RiFileCopyLine,
-							keywords: ["folder", "directory", "worktree"],
-							run: () => void copyText(activeWorkspace.worktreePath),
-						},
-						...editors.map((editor) => ({
-							id: `workspace.openIn.${editor.id}`,
-							title: t("commands.workspace.openIn", { editor: editor.label }),
-							group: "workspace" as const,
-							icon: RiExternalLinkLine,
-							keywords: ["editor", "ide", editor.label],
-							mutates: true,
-							run: () => openWorkspaceIn(activeWorkspace, editor),
-						})),
-					]
-				: []),
-		];
 		const workItems = buildWorkItems({
 			t,
 			state: {
@@ -246,7 +181,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				void paletteNavigator.navigateToWorkspace(workspace, sessionId),
 		});
 		const rootItems: PaletteItem[] = [
-			...commandItems(t, commands, context),
+			...commandItems(t, buildCommands(deps), online),
 			...buildSettingsItems(deps),
 			...workItems,
 		];
@@ -268,7 +203,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		return { rootItems, waiting, actions };
 	}, [
 		t,
-		context,
+		online,
 		settingsGroups,
 		activeWorkspace,
 		historySessionId,

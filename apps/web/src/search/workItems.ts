@@ -92,7 +92,6 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			group: "projects",
 			scope: "work",
 			icon: RiFolderLine,
-			projectId: project.id,
 			contextBoost: project.id === input.contextProjectId ? CONTEXT_PROJECT_BOOST : 0,
 			run: () => input.navigateToProject(project.id),
 			preview: () => ({
@@ -142,9 +141,6 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 				icon: recordAttention === "running" ? RiLoader4Line : RiChat2Line,
 				running: recordAttention === "running",
 				...(recordAttention ? { attention: recordAttention } : {}),
-				projectId: record.projectId,
-				workspaceId,
-				sessionId: record.sessionId,
 				contextBoost: contextBoost(record.projectId, workspaceId, input),
 				run: () =>
 					input.navigateToWorkspace(
@@ -182,8 +178,6 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			icon: isDefault ? RiHome4Line : RiGitBranchLine,
 			...(attention ? { attention } : {}),
 			...(reviewRef ? { badge: reviewRef } : {}),
-			projectId: workspace.projectId,
-			workspaceId: workspace.id,
 			contextBoost: contextBoost(workspace.projectId, workspace.id, input),
 			run: () => input.navigateToWorkspace(workspace),
 			preview: () => ({

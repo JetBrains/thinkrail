@@ -8,13 +8,13 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
-import { shortcutLabel } from "../commands";
 import {
 	applyFontPreference,
 	DEFAULT_FONT_PREFERENCE,
 	installUserFonts,
 	writeFontsHint,
 } from "../fonts";
+import { platformShortcutLabel } from "../lib";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
@@ -51,6 +51,7 @@ import {
 import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
+import { toggleBottomPanel, toggleLeftSide, toggleRightSide } from "./chordActions";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
@@ -103,7 +104,7 @@ export function Shell() {
 	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
-	const [searchShortcut] = useState(() => shortcutLabel({ key: "K", mod: true }));
+	const [searchShortcut] = useState(() => platformShortcutLabel("K"));
 
 	const [themeHint] = useState(readThemeHint);
 	const [settingsShortcut] = useState(readSettingsShortcutLabel);
@@ -163,35 +164,8 @@ export function Shell() {
 		userFonts,
 	]);
 	useGlobalHotkeys({
-		onProjects: hasActiveWorkspace
-			? () => {
-					if (!activeWorkspaceId) return;
-					useAppStore.getState().enqueueLayoutIntent({
-						kind: "toggle-side",
-						workspaceId: activeWorkspaceId,
-						side: "left",
-					});
-				}
-			: homeProjects.toggle,
-		...(hasActiveWorkspace
-			? {
-					onWorkspace: () => {
-						if (!activeWorkspaceId) return;
-						useAppStore.getState().enqueueLayoutIntent({
-							kind: "toggle-side",
-							workspaceId: activeWorkspaceId,
-							side: "right",
-						});
-					},
-					onBottom: () => {
-						if (!activeWorkspaceId) return;
-						useAppStore.getState().enqueueLayoutIntent({
-							kind: "toggle-bottom",
-							workspaceId: activeWorkspaceId,
-						});
-					},
-				}
-			: {}),
+		onProjects: () => toggleLeftSide(homeProjects.toggle),
+		...(hasActiveWorkspace ? { onWorkspace: toggleRightSide, onBottom: toggleBottomPanel } : {}),
 		...(contextProject
 			? { onNewWorkspace: () => setNewWorkspaceProjectId(contextProject.id) }
 			: {}),

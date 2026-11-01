@@ -1,7 +1,8 @@
 import { useEffect, useInsertionEffect, useRef } from "react";
 import { hasPlatformModifier } from "../lib";
 import { createDoubleShiftDetector } from "../search";
-import { selectHistoryTarget, useAppStore } from "../store";
+import { useAppStore } from "../store";
+import { openChatHistory } from "./chordActions";
 import { hasLayer, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
 
 type GlobalHotkeyActions = {
@@ -103,10 +104,7 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 			if (isInTerminal(event.target)) return;
 			event.preventDefault();
 			event.stopPropagation();
-			const state = useAppStore.getState();
-			if (state.searchOpen) return;
-			const target = selectHistoryTarget(state);
-			if (target) state.requestHistoryOpen(target);
+			if (!useAppStore.getState().searchOpen) openChatHistory();
 		};
 		const detector = createDoubleShiftDetector();
 		const onDoubleShiftKeyDown = (event: KeyboardEvent) => detector.keydown(event);

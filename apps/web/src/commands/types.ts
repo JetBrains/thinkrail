@@ -1,15 +1,6 @@
 import type { RemixiconComponentType } from "@remixicon/react";
 
-export const COMMAND_GROUPS = [
-	"work",
-	"navigation",
-	"workspace",
-	"chat",
-	"view",
-	"settings",
-] as const;
-
-export type CommandGroup = (typeof COMMAND_GROUPS)[number];
+export type CommandGroup = "work" | "navigation" | "workspace" | "view" | "settings";
 
 export interface CommandShortcut {
 	readonly key: string;
@@ -17,13 +8,6 @@ export interface CommandShortcut {
 	readonly alt?: boolean;
 	readonly shift?: boolean;
 	readonly ctrl?: boolean;
-}
-
-export interface CommandContext {
-	readonly online: boolean;
-	readonly projectId: string | null;
-	readonly workspaceId: string | null;
-	readonly protocolVersion: number | null;
 }
 
 export interface Command {
@@ -35,6 +19,5 @@ export interface Command {
 	readonly shortcut?: CommandShortcut;
 	readonly mutates?: boolean;
 	readonly disabledReason?: string;
-	readonly when?: (context: CommandContext) => boolean;
-	readonly run: (context: CommandContext) => void;
+	readonly run: () => void;
 }

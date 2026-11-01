@@ -31,9 +31,6 @@ export interface PaletteItem {
 	readonly attention?: SessionAttention;
 	readonly badge?: string;
 	readonly shortcut?: CommandShortcut;
-	readonly projectId?: string;
-	readonly workspaceId?: string;
-	readonly sessionId?: string;
 	readonly contextBoost?: number;
 	readonly disabledReason?: string;
 	readonly more?: PaletteMore;

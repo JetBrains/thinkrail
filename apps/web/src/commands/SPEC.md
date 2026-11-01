@@ -16,9 +16,8 @@ It owns no handlers: a command's `run` is supplied by whoever composes the catal
 
 ## Boundary
 
-- **Public surface:** `Command`, `CommandContext`, `CommandGroup`, `CommandShortcut`,
-  `COMMAND_GROUP_LABELS`, `isCommandVisible`, `isCommandEnabled`, `visibleCommands`, `shortcutKeys`,
-  `shortcutLabel`.
+- **Public surface:** `Command`, `CommandGroup`, `CommandShortcut`, `COMMAND_GROUP_LABELS`,
+  `isCommandEnabled`, `shortcutKeys`.
 - **Allowed deps:** `lib` (platform family), `@thinkrail/locales` (the group-label `MessageKey`s), `@remixicon/react` types.
 - **Forbidden:** importing `store`, `transport`, `panels`, `chat`, `shell` or `search`; binding keys. A
   command's `shortcut` is display-only — the chord keeps its single owner (`useGlobalHotkeys`,
@@ -27,11 +26,12 @@ It owns no handlers: a command's `run` is supplied by whoever composes the catal
 
 ## Contract
 
-- `when(context)` decides visibility (a command that cannot apply is not listed); `mutates` marks a host
-  mutation, which `isCommandEnabled` refuses while `context.online` is false — the transport replays
-  pending requests on reconnect, so a mutation is never issued blind. `disabledReason` (already
-  translated) lists a command that applies but cannot run right now, with the reason its owning surface
-  shows; the offline reason wins over it.
+- A command exists only where it applies: the composer builds the catalog for the current context (no
+  active workspace, no workspace commands), so `run` takes no arguments and re-checks nothing. `mutates`
+  marks a host mutation, which `isCommandEnabled` refuses while offline — the transport replays pending
+  requests on reconnect, so a mutation is never issued blind. `disabledReason` (already translated) lists
+  a command that applies but cannot run right now, with the reason its owning surface shows; the offline
+  reason wins over it.
 - `title` is already in the user's language: the composer builds the catalog with `useT()`'s translator
   (so the palette matches what the user reads), and `COMMAND_GROUP_LABELS` carries the group keys it
   translates the same way.

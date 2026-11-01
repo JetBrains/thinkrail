@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compareMatches, MATCH_TIER, type MatchField, matchFields, parseMatchTerms } from "./match";
+import { MATCH_TIER, type MatchField, matchFields, parseMatchTerms } from "./match";
 
 const title = (text: string): MatchField[] => [{ key: "title", text }];
 
@@ -140,13 +140,16 @@ describe("matchFields fields", () => {
 	});
 });
 
-describe("compareMatches", () => {
-	test("prefers the lower tier, then the higher score", () => {
+describe("match ordering", () => {
+	test("a lower tier ranks first, and within a tier a tighter match scores higher", () => {
 		const auth = parseMatchTerms("auth");
 		const shortName = matchFields(auth, title("auth.ts"));
 		const longName = matchFields(auth, title("authentication-helpers.ts"));
 		const word = matchFields(auth, title("fix auth"));
 		if (!shortName || !longName || !word) throw new Error("expected matches");
-		expect([word, longName, shortName].sort(compareMatches)).toEqual([shortName, longName, word]);
+		expect(shortName.tier).toBe(MATCH_TIER.prefix);
+		expect(longName.tier).toBe(MATCH_TIER.prefix);
+		expect(shortName.score).toBeGreaterThan(longName.score);
+		expect(word.tier).toBe(MATCH_TIER.word);
 	});
 });

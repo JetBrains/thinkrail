@@ -4,10 +4,13 @@ import {
 	RiChatNewLine,
 	RiCheckDoubleLine,
 	RiEdit2Line,
+	RiExternalLinkLine,
+	RiFileCopyLine,
 	RiFileList3Line,
 	RiFolderLine,
 	RiFolderOpenLine,
 	RiHistoryLine,
+	RiHome4Line,
 	RiInboxArchiveLine,
 	RiInboxUnarchiveLine,
 	RiKeyboardLine,
@@ -20,11 +23,12 @@ import {
 	RiSearchEyeLine,
 	RiSettings3Line,
 	RiSparkling2Line,
+	RiTerminalBoxLine,
 } from "@remixicon/react";
-import type { Workspace } from "@thinkrail/contracts";
+import type { EditorInfo, Workspace } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
-import type { Command, CommandContext } from "../commands";
+import type { Command } from "../commands";
 import type { SettingsNavGroup } from "../panels/settingsNav";
 import type { PaletteItem } from "../search";
 import type { SettingsSection } from "../store";
@@ -48,8 +52,9 @@ const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
 
 export interface PaletteCatalogDeps {
 	readonly t: Translator;
-	readonly context: CommandContext;
+	readonly contextProjectId: string | null;
 	readonly activeWorkspace: Workspace | null;
+	readonly editors: readonly EditorInfo[];
 	readonly historyAvailable: boolean;
 	readonly canCreateProject: boolean;
 	readonly nativeShortcuts: boolean;
@@ -63,13 +68,15 @@ export interface PaletteCatalogDeps {
 
 export interface PaletteCatalogActions {
 	readonly newWorkspace: (projectId: string) => void;
+	readonly openDefaultWorkspace: (projectId: string) => void;
 	readonly openProject: () => void;
 	readonly openProjectPath: () => void;
 	readonly createProject: () => void;
 	readonly newChat: (workspaceId: string) => void;
+	readonly newTerminal: (workspaceId: string) => void;
 	readonly toggleLeft: () => void;
-	readonly toggleRight: (workspaceId: string) => void;
-	readonly toggleBottom: (workspaceId: string) => void;
+	readonly toggleRight: () => void;
+	readonly toggleBottom: () => void;
 	readonly showTool: (workspaceId: string, tool: PaletteTool) => void;
 	readonly openHistory: () => void;
 	readonly markRead: (workspaceId: string) => void;
@@ -77,39 +84,37 @@ export interface PaletteCatalogActions {
 	readonly settle: (workspaceId: string) => void;
 	readonly unsettle: (workspaceId: string) => void;
 	readonly reveal: (workspace: Workspace) => void;
+	readonly copyPath: (workspace: Workspace) => void;
+	readonly openIn: (workspace: Workspace, editor: EditorInfo) => void;
 	readonly openSettings: (section?: SettingsSection) => void;
 }
 
-const hasWorkspace = (context: CommandContext) => context.workspaceId !== null;
-
-export function buildCommands(deps: PaletteCatalogDeps): Command[] {
-	const { t, actions, activeWorkspace } = deps;
-	const workspaceId = activeWorkspace?.id ?? null;
-	const commands: Command[] = [
-		{
+function workCommands(deps: PaletteCatalogDeps): Command[] {
+	const { t, actions, activeWorkspace, contextProjectId } = deps;
+	const commands: Command[] = [];
+	if (contextProjectId !== null) {
+		commands.push({
 			id: "workspace.new",
 			title: t("commands.workspace.new"),
 			group: "work",
 			icon: RiAddLine,
 			keywords: ["create", "start", "task", "worktree"],
 			shortcut: deps.nativeShortcuts ? { key: "N", mod: true } : { key: "N", mod: true, alt: true },
-			when: (context) => context.projectId !== null,
-			run: (context) => {
-				if (context.projectId) actions.newWorkspace(context.projectId);
-			},
-		},
-		{
+			run: () => actions.newWorkspace(contextProjectId),
+		});
+	}
+	if (activeWorkspace) {
+		commands.push({
 			id: "chat.new",
 			title: t("commands.chat.new"),
 			group: "work",
 			icon: RiChatNewLine,
 			keywords: ["session", "agent"],
 			mutates: true,
-			when: hasWorkspace,
-			run: (context) => {
-				if (context.workspaceId) actions.newChat(context.workspaceId);
-			},
-		},
+			run: () => actions.newChat(activeWorkspace.id),
+		});
+	}
+	commands.push(
 		{
 			id: "project.open",
 			title: t("commands.project.open"),
@@ -117,7 +122,7 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			icon: RiFolderOpenLine,
 			keywords: ["add", "repository", "folder"],
 			mutates: true,
-			run: () => actions.openProject(),
+			run: actions.openProject,
 		},
 		{
 			id: "project.openPath",
@@ -126,88 +131,120 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			icon: RiEdit2Line,
 			keywords: ["add", "path", "folder", "remote", "host"],
 			mutates: true,
-			run: () => actions.openProjectPath(),
+			run: actions.openProjectPath,
 		},
-		...(deps.canCreateProject
-			? [
-					{
-						id: "project.create",
-						title: t("commands.project.create"),
-						group: "work" as const,
-						icon: RiSparkling2Line,
-						keywords: ["new", "create", "repository", "init"],
-						mutates: true,
-						run: () => actions.createProject(),
-					},
-				]
-			: []),
-		{
+	);
+	if (deps.canCreateProject) {
+		commands.push({
+			id: "project.create",
+			title: t("commands.project.create"),
+			group: "work",
+			icon: RiSparkling2Line,
+			keywords: ["new", "create", "repository", "init"],
+			mutates: true,
+			run: actions.createProject,
+		});
+	}
+	if (contextProjectId !== null) {
+		commands.push({
+			id: "workspace.openDefault",
+			title: t("commands.workspace.openDefault"),
+			group: "work",
+			icon: RiHome4Line,
+			keywords: ["default", "project folder", "no worktree"],
+			mutates: true,
+			run: () => actions.openDefaultWorkspace(contextProjectId),
+		});
+	}
+	if (activeWorkspace) {
+		commands.push({
+			id: "terminal.new",
+			title: t("commands.terminal.new"),
+			group: "work",
+			icon: RiTerminalBoxLine,
+			keywords: ["shell", "console"],
+			mutates: true,
+			run: () => actions.newTerminal(activeWorkspace.id),
+		});
+	}
+	return commands;
+}
+
+function viewCommands(deps: PaletteCatalogDeps): Command[] {
+	const { t, actions, activeWorkspace } = deps;
+	const commands: Command[] = [];
+	if (deps.historyAvailable) {
+		commands.push({
 			id: "chat.history",
 			title: t("commands.chat.history"),
 			group: "navigation",
 			icon: RiHistoryLine,
 			keywords: ["recall", "prompt", "transcript"],
 			shortcut: { key: "R", ctrl: true },
-			when: () => deps.historyAvailable,
-			run: () => actions.openHistory(),
-		},
-		...(Object.keys(TOOL_LABELS) as PaletteTool[]).map(
-			(tool): Command => ({
+			run: actions.openHistory,
+		});
+	}
+	if (activeWorkspace) {
+		for (const tool of Object.keys(TOOL_LABELS) as PaletteTool[]) {
+			commands.push({
 				id: `view.show.${tool}`,
 				title: t("commands.view.showTool", { tool: t(TOOL_LABELS[tool]) }),
 				group: "view",
 				icon: TOOL_ICONS[tool],
 				keywords: ["panel", "tool", tool],
-				when: hasWorkspace,
-				run: (context) => {
-					if (context.workspaceId) actions.showTool(context.workspaceId, tool);
-				},
-			}),
-		),
-		{
-			id: "view.toggleLeft",
-			title: t("commands.view.toggleLeft"),
-			group: "view",
-			icon: RiLayoutLeftLine,
-			keywords: ["sidebar", "left", "hide", "show"],
-			shortcut: { key: "B", mod: true },
-			run: () => actions.toggleLeft(),
-		},
-		{
-			id: "view.toggleRight",
-			title: t("commands.view.toggleRight"),
-			group: "view",
-			icon: RiLayoutRightLine,
-			keywords: ["sidebar", "right", "hide", "show"],
-			shortcut: { key: "J", mod: true },
-			when: hasWorkspace,
-			run: (context) => {
-				if (context.workspaceId) actions.toggleRight(context.workspaceId);
+				run: () => actions.showTool(activeWorkspace.id, tool),
+			});
+		}
+	}
+	commands.push({
+		id: "view.toggleLeft",
+		title: t("commands.view.toggleLeft"),
+		group: "view",
+		icon: RiLayoutLeftLine,
+		keywords: ["sidebar", "left", "hide", "show"],
+		shortcut: { key: "B", mod: true },
+		run: actions.toggleLeft,
+	});
+	if (activeWorkspace) {
+		commands.push(
+			{
+				id: "view.toggleRight",
+				title: t("commands.view.toggleRight"),
+				group: "view",
+				icon: RiLayoutRightLine,
+				keywords: ["sidebar", "right", "hide", "show"],
+				shortcut: { key: "J", mod: true },
+				run: actions.toggleRight,
 			},
-		},
-		{
-			id: "view.toggleBottom",
-			title: t("commands.view.toggleBottom"),
-			group: "view",
-			icon: RiLayoutBottomLine,
-			keywords: ["terminal", "bottom", "hide", "show"],
-			shortcut: { key: "J", mod: true, shift: true },
-			when: hasWorkspace,
-			run: (context) => {
-				if (context.workspaceId) actions.toggleBottom(context.workspaceId);
+			{
+				id: "view.toggleBottom",
+				title: t("commands.view.toggleBottom"),
+				group: "view",
+				icon: RiLayoutBottomLine,
+				keywords: ["terminal", "bottom", "hide", "show"],
+				shortcut: { key: "J", mod: true, shift: true },
+				run: actions.toggleBottom,
 			},
-		},
-		{
-			id: "settings.open",
-			title: t("commands.settings.open"),
-			group: "settings",
-			icon: RiSettings3Line,
-			keywords: ["preferences", "options"],
-			...(deps.nativeShortcuts ? { shortcut: { key: ",", mod: true } } : {}),
-			run: () => actions.openSettings(),
-		},
-	];
-	if (workspaceId && deps.readAction === "markRead") {
+		);
+	}
+	commands.push({
+		id: "settings.open",
+		title: t("commands.settings.open"),
+		group: "settings",
+		icon: RiSettings3Line,
+		keywords: ["preferences", "options"],
+		...(deps.nativeShortcuts ? { shortcut: { key: ",", mod: true } } : {}),
+		run: () => actions.openSettings(),
+	});
+	return commands;
+}
+
+function workspaceCommands(deps: PaletteCatalogDeps): Command[] {
+	const { t, actions, activeWorkspace } = deps;
+	if (!activeWorkspace) return [];
+	const workspaceId = activeWorkspace.id;
+	const commands: Command[] = [];
+	if (deps.readAction === "markRead") {
 		commands.push({
 			id: "workspace.markRead",
 			title: t("commands.workspace.markRead"),
@@ -217,7 +254,7 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			run: () => actions.markRead(workspaceId),
 		});
 	}
-	if (workspaceId && deps.readAction === "markUnread") {
+	if (deps.readAction === "markUnread") {
 		commands.push({
 			id: "workspace.markUnread",
 			title: t("commands.workspace.markUnread"),
@@ -227,7 +264,7 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			run: () => actions.markUnread(workspaceId),
 		});
 	}
-	if (workspaceId && deps.canSettle) {
+	if (deps.canSettle) {
 		commands.push(
 			deps.settled
 				? {
@@ -253,8 +290,8 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 					},
 		);
 	}
-	if (activeWorkspace) {
-		commands.push({
+	commands.push(
+		{
 			id: "workspace.reveal",
 			title: t("commands.workspace.reveal"),
 			group: "workspace",
@@ -262,9 +299,32 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			keywords: ["finder", "explorer", "files", "folder"],
 			mutates: true,
 			run: () => actions.reveal(activeWorkspace),
-		});
-	}
+		},
+		{
+			id: "workspace.copyPath",
+			title: t("commands.workspace.copyPath"),
+			group: "workspace",
+			icon: RiFileCopyLine,
+			keywords: ["folder", "directory", "worktree"],
+			run: () => actions.copyPath(activeWorkspace),
+		},
+		...deps.editors.map(
+			(editor): Command => ({
+				id: `workspace.openIn.${editor.id}`,
+				title: t("commands.workspace.openIn", { editor: editor.label }),
+				group: "workspace",
+				icon: RiExternalLinkLine,
+				keywords: ["editor", "ide", editor.label],
+				mutates: true,
+				run: () => actions.openIn(activeWorkspace, editor),
+			}),
+		),
+	);
 	return commands;
+}
+
+export function buildCommands(deps: PaletteCatalogDeps): Command[] {
+	return [...workCommands(deps), ...viewCommands(deps), ...workspaceCommands(deps)];
 }
 
 function settingsSectionItems(group: SettingsNavGroup, deps: PaletteCatalogDeps): PaletteItem[] {

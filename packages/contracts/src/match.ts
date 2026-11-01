@@ -261,7 +261,3 @@ export function matchFields(
 		fields: [...rangesByKey].map(([key, ranges]) => ({ key, ranges: mergeRanges(ranges) })),
 	};
 }
-
-export function compareMatches(a: MatchResult, b: MatchResult): number {
-	return a.tier - b.tier || b.score - a.score;
-}

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
-import type { CommandContext } from "../commands";
 import { commandItems } from "../search";
 import { buildCommands, type PaletteCatalogDeps } from "./paletteCatalog";
 
@@ -14,20 +13,14 @@ const workspace: Workspace = {
 	worktreePath: "/tmp/w1",
 };
 
-const online: CommandContext = {
-	online: true,
-	projectId: "p1",
-	workspaceId: "w1",
-	protocolVersion: 200,
-};
-
 const noop = () => {};
 
 function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 	return {
 		t: currentTranslator(),
-		context: online,
+		contextProjectId: "p1",
 		activeWorkspace: workspace,
+		editors: [],
 		historyAvailable: false,
 		canCreateProject: true,
 		nativeShortcuts: false,
@@ -38,10 +31,12 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		settingsGroups: [],
 		actions: {
 			newWorkspace: noop,
+			openDefaultWorkspace: noop,
 			openProject: noop,
 			openProjectPath: noop,
 			createProject: noop,
 			newChat: noop,
+			newTerminal: noop,
 			toggleLeft: noop,
 			toggleRight: noop,
 			toggleBottom: noop,
@@ -52,14 +47,16 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			settle: noop,
 			unsettle: noop,
 			reveal: noop,
+			copyPath: noop,
+			openIn: noop,
 			openSettings: noop,
 		},
 		...overrides,
 	};
 }
 
-function row(id: string, catalog: PaletteCatalogDeps, context = online) {
-	return commandItems(catalog.t, buildCommands(catalog), context).find(
+function row(id: string, catalog: PaletteCatalogDeps, online = true) {
+	return commandItems(catalog.t, buildCommands(catalog), online).find(
 		(item) => item.id === `command:${id}`,
 	);
 }
@@ -102,8 +99,7 @@ describe("palette Settle availability", () => {
 	});
 
 	test("the offline reason wins over a blocked Settle, and no Settle row exists where it cannot apply", () => {
-		const offline = { ...online, online: false };
-		expect(row("workspace.settle", deps({ settleBlocked: true }), offline)?.disabledReason).toBe(
+		expect(row("workspace.settle", deps({ settleBlocked: true }), false)?.disabledReason).toBe(
 			currentTranslator()("search.palette.offlineReason"),
 		);
 		expect(row("workspace.settle", deps({ canSettle: false }))).toBeUndefined();

@@ -53,7 +53,7 @@ both rings rank with. The one package
   `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
   labels), the optional shell-local desktop capabilities);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
-  **`matchFields`** + `parseMatchTerms` + `compareMatches` + `MATCH_TIER` and the `Match*` types from
+  **`matchFields`** + `parseMatchTerms` + `MATCH_TIER` and the `Match*` types from
   `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
   bounded subsequence of at least three characters, every term required, a quoted `MatchTerm` (`literal`)
   matched contiguously only, case and Latin diacritics folded without moving offsets, a secondary field

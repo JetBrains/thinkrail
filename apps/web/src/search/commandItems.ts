@@ -1,19 +1,13 @@
 import type { Translator } from "@thinkrail/locales/react";
-import {
-	COMMAND_GROUP_LABELS,
-	type Command,
-	type CommandContext,
-	isCommandEnabled,
-	visibleCommands,
-} from "../commands";
+import { COMMAND_GROUP_LABELS, type Command, isCommandEnabled } from "../commands";
 import type { PaletteItem } from "./model";
 
 export function commandItems(
 	t: Translator,
 	commands: readonly Command[],
-	context: CommandContext,
+	online: boolean,
 ): PaletteItem[] {
-	return visibleCommands(commands, context).map((command) => ({
+	return commands.map((command) => ({
 		id: `command:${command.id}`,
 		kind: "command",
 		title: command.title,
@@ -23,11 +17,11 @@ export function commandItems(
 		icon: command.icon,
 		...(command.keywords ? { keywords: command.keywords } : {}),
 		...(command.shortcut ? { shortcut: command.shortcut } : {}),
-		...(!isCommandEnabled(command, context)
+		...(!isCommandEnabled(command, online)
 			? { disabledReason: t("search.palette.offlineReason") }
 			: command.disabledReason
 				? { disabledReason: command.disabledReason }
 				: {}),
-		run: () => command.run(context),
+		run: command.run,
 	}));
 }

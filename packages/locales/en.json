@@ -441,7 +441,6 @@
 	"chat.view.stopAllTitle": "Stop all subagents?",
 	"commands.chat.history": "Search chat history",
 	"commands.chat.new": "New chat",
-	"commands.group.chat": "Chat",
 	"commands.group.navigation": "Navigation",
 	"commands.group.settings": "Settings",
 	"commands.group.view": "View",

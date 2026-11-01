@@ -1,9 +1,2 @@
-export {
-	COMMAND_GROUP_LABELS,
-	isCommandEnabled,
-	isCommandVisible,
-	shortcutKeys,
-	shortcutLabel,
-	visibleCommands,
-} from "./commands";
-export type { Command, CommandContext, CommandGroup, CommandShortcut } from "./types";
+export { COMMAND_GROUP_LABELS, isCommandEnabled, shortcutKeys } from "./commands";
+export type { Command, CommandGroup, CommandShortcut } from "./types";

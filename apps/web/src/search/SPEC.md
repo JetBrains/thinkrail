@@ -21,8 +21,8 @@ listed as.
 ## Boundary
 
 - **Public surface:** `SearchPalette`, `SearchPaletteProps`, `SearchSettings`, `initSearchPreferences`,
-  `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`, `WorkItemsState`, `commandItems`,
-  `SearchScope`, `PaletteItem`, `PaletteItemKind`, `PalettePreview`.
+  `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`, `commandItems`, `SearchScope`,
+  `PaletteItem`.
 - **Allowed deps:** `contracts` (the shared matcher and domain types), `commands`, `store`, `transport`
   (the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`,
   `lib`, `@thinkrail/locales` (UI strings), `@thinkrail/ui/*`, `@remixicon/react`.
