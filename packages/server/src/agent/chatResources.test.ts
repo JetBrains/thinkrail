@@ -864,6 +864,7 @@ test("direct child projection keeps every active and the newest twenty finished 
 test("stop-all acknowledges after signalling every sibling without awaiting settlement", async () => {
 	const p = await parent();
 	const service = delegationServiceFor(p.workspaceId);
+	service.setMaxConcurrentPerParent(4);
 	const gate = deferred();
 	faux.setResponses(
 		Array.from({ length: 4 }, () => async () => {
@@ -873,24 +874,27 @@ test("stop-all acknowledges after signalling every sibling without awaiting sett
 	);
 	const children: ChildHandle[] = [];
 	const runs = [];
-	for (let i = 0; i < 6; i++) {
-		const child = await service.createChild({
-			parent: p.sessionId,
-			visibility: "hidden",
-			info: { createdBy: "test" },
-			session: {},
-		});
-		children.push(child);
-		runs.push(child.runQueued(`task ${i}`));
-	}
-	await waitFor(async () => children.filter((c) => c.snapshot?.status === "running").length === 4);
-	expect(children.filter((c) => c.snapshot?.status === "queued")).toHaveLength(2);
-	const stopped = stopAllSubagents(p.workspaceId, p.sessionId, p.cwd);
+	let stopped: Promise<number> | undefined;
 	let acknowledged: number | undefined;
-	void stopped.then((count) => {
-		acknowledged = count;
-	});
 	try {
+		for (let i = 0; i < 6; i++) {
+			const child = await service.createChild({
+				parent: p.sessionId,
+				visibility: "hidden",
+				info: { createdBy: "test" },
+				session: {},
+			});
+			children.push(child);
+			runs.push(child.runQueued(`task ${i}`));
+		}
+		await waitFor(
+			async () => children.filter((c) => c.snapshot?.status === "running").length === 4,
+		);
+		expect(children.filter((c) => c.snapshot?.status === "queued")).toHaveLength(2);
+		stopped = stopAllSubagents(p.workspaceId, p.sessionId, p.cwd);
+		void stopped.then((count) => {
+			acknowledged = count;
+		});
 		await Bun.sleep(0);
 		expect(acknowledged).toBe(6);
 		await waitFor(async () => children.slice(4).every((c) => c.snapshot?.status === "aborted"));
@@ -1204,7 +1208,9 @@ test("shutdown and disposal signal commands and every child before waiting for a
 	const marker = join(p.cwd, "running");
 	await launch(p, `while :; do printf x >> '${marker}'; sleep 0.02; done`);
 	const service = delegationServiceFor(p.workspaceId);
+	service.setMaxConcurrentPerParent(4);
 	const childGate = deferred();
+	const parentGate = deferred();
 	let childrenEntered = 0;
 	faux.setResponses(
 		Array.from({ length: 4 }, () => async () => {
@@ -1215,30 +1221,30 @@ test("shutdown and disposal signal commands and every child before waiting for a
 	);
 	const children: ChildHandle[] = [];
 	const runs = [];
-	for (let i = 0; i < 5; i++) {
-		const child = await service.createChild({
-			parent: p.sessionId,
-			visibility: "hidden",
-			info: { createdBy: "test" },
-			session: {},
-		});
-		children.push(child);
-		runs.push(child.runQueued("background"));
-	}
-	await waitFor(async () => childrenEntered === 4 && existsSync(marker));
-	const parentGate = deferred();
-	const parentEntered = deferred();
-	faux.setResponses([
-		async () => {
-			parentEntered.resolve();
-			await parentGate.promise;
-			return fauxAssistantMessage("PARENT");
-		},
-	]);
-	const runningParent = promptSession(p.sessionId, "Long turn.");
-	await parentEntered.promise;
-	const shuttingDown = settleSessionsForShutdown(50);
+	let runningParent: Promise<void> | undefined;
 	try {
+		for (let i = 0; i < 5; i++) {
+			const child = await service.createChild({
+				parent: p.sessionId,
+				visibility: "hidden",
+				info: { createdBy: "test" },
+				session: {},
+			});
+			children.push(child);
+			runs.push(child.runQueued("background"));
+		}
+		await waitFor(async () => childrenEntered === 4 && existsSync(marker));
+		const parentEntered = deferred();
+		faux.setResponses([
+			async () => {
+				parentEntered.resolve();
+				await parentGate.promise;
+				return fauxAssistantMessage("PARENT");
+			},
+		]);
+		runningParent = promptSession(p.sessionId, "Long turn.");
+		await parentEntered.promise;
+		const shuttingDown = settleSessionsForShutdown(50);
 		await waitFor(async () => children[4]?.snapshot?.status === "aborted");
 		await shuttingDown;
 		const length = readFileSync(marker).length;

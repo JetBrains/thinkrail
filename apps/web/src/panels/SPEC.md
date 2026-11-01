@@ -2158,6 +2158,9 @@ own section. The kebab menu (`plan-menu`, a
   viewed files carry a check glyph, and clicking a row reveals that section (and expands it if it was
   collapsed) — the reveal remains anchored by path while asynchronous sections determine their heights,
   until a view-mode change or user wheel, touch, pointer, or keyboard input takes over. A timeout cannot bound remote reads.
+  Virtuoso re-issues a `scrollToIndex` for as long as item sizes keep changing, so the list's scroller
+  applies `scrollTo` only while a reveal is settling; otherwise a late-loading section would scroll a wheel
+  or a focused composer straight back to the revealed file.
   Finding navigation hands scrolling to the thread only after the section reveal, and disables further
   header corrections so the thread cannot be scrolled back out of view. The pane brings the **section**
   into view; the within-section reveal of a **comment** is a `reviewFocusRequest` that

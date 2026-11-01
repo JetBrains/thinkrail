@@ -20,6 +20,11 @@ import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport
 
 const PREWARM_WORKSPACE_LIMIT = 8;
 
+export function goToProjectHome(projectId: string): void {
+	useAppStore.getState().selectProject(projectId, { reveal: true });
+	void loadProjectWorkspaces(projectId).catch(() => {});
+}
+
 export async function loadProjectWorkspaces(projectId: string): Promise<Workspace[]> {
 	const rows = await getTransport().request("workspace.list", { projectId });
 	const store = useAppStore.getState();

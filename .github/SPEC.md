@@ -84,6 +84,12 @@ the one binary headless tests launch, and start it in the background right after
 step joins it, failing with its status, just before the browser tests, so the download overlaps the build
 instead of preceding it.
 
+Jobs that typecheck or build the desktop app first download Electrobun's Hutch toolchain (Hutch, Cottontail,
+the Electrobun core and its Bun toolchain, all GitHub release assets) through
+`.github/scripts/prepare-electrobun.sh`, which retries `electrobun prepare` a bounded number of times;
+`electrobun build` and the typecheck's own `prepare` then find it in `~/.hutch`. Before that step, a dropped
+release download (`ReleaseDownloadFailed`, a timed-out Hutch index) failed whole desktop jobs, 6 in two weeks.
+
 Native artifact smokes run only in shard 1: repeating an identical probe per shard adds no coverage and
 multiplies exposure to runner-environment faults.
 

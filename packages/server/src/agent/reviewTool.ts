@@ -22,15 +22,20 @@ export interface ResolveCommentOutcome {
 	resolvedBody: string;
 }
 
-let handler: (sessionId: string, commentId: string, note?: string) => ResolveCommentOutcome =
-	() => {
-		throw new Error("Review comments are not available on this host.");
-	};
+type ResolveCommentHandler = (
+	sessionId: string,
+	commentId: string,
+	note?: string,
+) => ResolveCommentOutcome;
 
-export function setReviewCommentHandler(
-	fn: (sessionId: string, commentId: string, note?: string) => ResolveCommentOutcome,
-): void {
-	handler = fn;
+const unavailableHandler: ResolveCommentHandler = () => {
+	throw new Error("Review comments are not available on this host.");
+};
+
+let handler = unavailableHandler;
+
+export function setReviewCommentHandler(fn: ResolveCommentHandler | null): void {
+	handler = fn ?? unavailableHandler;
 }
 
 export function createResolveCommentTool(): ToolDefinition<typeof ResolveCommentSchema> {

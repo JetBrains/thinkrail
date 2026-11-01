@@ -51,6 +51,7 @@ describe("settingsNavGroups", () => {
 					SettingsSection.Chat,
 					SettingsSection.Appearance,
 					SettingsSection.Layout,
+					SettingsSection.Keyboard,
 					SettingsSection.Terminal,
 				],
 			],

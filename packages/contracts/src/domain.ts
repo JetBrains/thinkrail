@@ -5,6 +5,7 @@ export interface SessionStateRecord {
 	workspaceId: string;
 	projectId: string;
 	state: SessionState;
+	title?: string;
 	firstPrompt?: string;
 }
 

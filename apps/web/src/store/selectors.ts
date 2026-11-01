@@ -540,12 +540,32 @@ export function selectCompletionMarkedUnread(
 	);
 }
 
+export type SessionAttention = "needs-input" | "error" | "unread" | "running";
+
+export function getSessionAttention(state: SessionState): SessionAttention | null {
+	if (state.needsInput !== null) return "needs-input";
+	if (state.completionUnread && state.completion?.outcome === "failed") return "error";
+	if (state.completionUnread) return "unread";
+	if (isSessionWorking(state)) return "running";
+	return null;
+}
+
 export function selectWorkspaceIsRunning(
 	state: SessionStateProjection,
 	workspaceId: string,
 ): boolean {
 	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some((record) =>
 		isSessionWorking(record.state),
+	);
+}
+
+export function selectWorkspaceSettleBlocked(
+	state: SessionStateProjection,
+	workspaceId: string,
+): boolean {
+	return (
+		selectWorkspaceIsRunning(state, workspaceId) ||
+		selectWorkspaceNeedsAttention(state, workspaceId)
 	);
 }
 
@@ -1031,6 +1051,35 @@ function* userTurnTexts(turns: SessionRuntime["turns"]): Generator<string> {
 	for (const turn of turns) if (turn.kind === "user") yield userText(turn.message.content);
 }
 
+export function selectKnownChatTitle(
+	state: {
+		sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
+		layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	},
+	workspaceId: string,
+	sessionId: string,
+): string | null {
+	const reported = state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.title;
+	if (reported !== undefined) return reported || null;
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	if (document) {
+		const visit = (node: WorkspaceLayoutDocument["center"]): string | null => {
+			if (node.kind === "split") {
+				return visit(node.children[0]) ?? visit(node.children[1]);
+			}
+			for (const tab of node.tabs) {
+				if (tab.kind === "chat" && tab.sessionId === sessionId) return tab.name;
+			}
+			return null;
+		};
+		const fromLayout = visit(document.center);
+		if (fromLayout) return fromLayout;
+	}
+	const closed = state.closedChatsByWorkspace[workspaceId] ?? [];
+	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
+}
+
 export function selectChatFirstPrompt(
 	state: ChatFirstPromptState,
 	workspaceId: string,
@@ -1043,6 +1092,17 @@ export function selectChatFirstPrompt(
 	if (reported) return reported;
 	const runtime = state.sessions[sessionId];
 	return runtime ? firstPromptOfTexts(userTurnTexts(runtime.turns)) : undefined;
+}
+
+export function selectRecordFirstPrompts(state: ChatFirstPromptState): Record<string, string> {
+	const prompts: Record<string, string> = {};
+	for (const [workspaceId, records] of Object.entries(state.sessionStateByWorkspace)) {
+		for (const sessionId of Object.keys(records)) {
+			const prompt = selectChatFirstPrompt(state, workspaceId, sessionId);
+			if (prompt) prompts[sessionId] = prompt;
+		}
+	}
+	return prompts;
 }
 
 export function selectUnnamedChatFirstPrompts(

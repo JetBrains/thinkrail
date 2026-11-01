@@ -1339,7 +1339,7 @@ test("the host concurrency resolver binds new services and live-resizes only the
 		expect(applied).toContainEqual(["ws-limit-a", 9]);
 		expect(applied).toContainEqual(["ws-limit-b", 1]);
 	} finally {
-		setSubagentConcurrencyResolver(() => 4);
+		setSubagentConcurrencyResolver(null);
 	}
 });
 
