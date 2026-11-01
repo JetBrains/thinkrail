@@ -1,27 +1,32 @@
 import type { Workspace } from "@thinkrail/contracts";
 import { createLatestOperation } from "../panels/latestOperation";
-import { selectWorkspaceById, selectWorkspaceNavTick, useAppStore } from "../store";
+import { selectWorkspaceById, useAppStore } from "../store";
 
 type WorkspaceTarget = Pick<Workspace, "id" | "projectId">;
-
-function navigationMarker(state: ReturnType<typeof useAppStore.getState>): string {
-	const active = state.activeWorkspaceId;
-	return [
-		active,
-		state.selectedProjectId,
-		active ? selectWorkspaceNavTick(state, active) : null,
-	].join("\u0000");
-}
 
 export function createPaletteNavigator(
 	loadProjectWorkspaces: (projectId: string) => Promise<unknown>,
 ) {
 	const picks = createLatestOperation();
+	let stopWatching = () => {};
 
 	const beginPick = (): (() => boolean) => {
+		stopWatching();
 		const isLatest = picks.begin();
-		const marker = navigationMarker(useAppStore.getState());
-		return () => isLatest() && navigationMarker(useAppStore.getState()) === marker;
+		let overtaken = false;
+		const unsubscribe = useAppStore.subscribe((state, previous) => {
+			if (
+				state.activeWorkspaceId === previous.activeWorkspaceId &&
+				state.selectedProjectId === previous.selectedProjectId &&
+				state.navTickByWorkspace === previous.navTickByWorkspace
+			) {
+				return;
+			}
+			overtaken = true;
+			unsubscribe();
+		});
+		stopWatching = unsubscribe;
+		return () => isLatest() && !overtaken;
 	};
 
 	const loadWorkspaceRow = async (workspace: WorkspaceTarget): Promise<boolean> => {

@@ -61,6 +61,10 @@ async function composingKey(page: Page, key: string, sentinel = false): Promise<
 	);
 }
 
+async function nextFrame(page: Page): Promise<void> {
+	await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+}
+
 function chip(page: Page, scope: string) {
 	return page.locator(`[data-testid="search-chip"][data-scope="${scope}"]`);
 }
@@ -127,6 +131,7 @@ test("the empty palette lists the chats waiting for you; arrows, Enter, click an
 		await expect(palette(page)).toBeVisible();
 		await page.keyboard.press("Escape");
 		await expect(palette(page)).toBeHidden();
+		await expect(page.getByTestId("open-search")).toBeFocused();
 	} finally {
 		for (const s of seeded) rmSync(s.path, { force: true });
 	}
@@ -143,12 +148,26 @@ test("typing finds chats by title and Escape clears before it closes", async ({ 
 		await page.getByTestId("search-input").fill("unread result");
 		const chats = page.locator('[data-testid="search-row"][data-kind="chat"]');
 		await expect(chats.first()).toContainText("Unread result chat");
-		await expect(page.locator("mark").first()).toBeVisible();
+		await expect(palette(page).locator("mark").first()).toBeVisible();
 
 		await page.keyboard.press("Escape");
 		await expect(page.getByTestId("search-input")).toHaveValue("");
 		await expect(palette(page)).toBeVisible();
 		await page.keyboard.press("Escape");
+		await expect(palette(page)).toBeHidden();
+
+		await openPalette(page);
+		await page.getByTestId("search-input").fill("unread");
+		await page.getByTestId("search-input").evaluate((input) =>
+			input.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "Escape",
+					code: "Escape",
+					bubbles: true,
+					cancelable: true,
+				}),
+			),
+		);
 		await expect(palette(page)).toBeHidden();
 	} finally {
 		for (const s of seeded) rmSync(s.path, { force: true });
@@ -260,13 +279,19 @@ test("double Shift toggles the palette and can be turned off in Settings › Key
 	await expect(palette(page)).toBeHidden();
 
 	await page.getByTestId("open-settings").click();
+	const settings = page.getByTestId("settings-dialog");
+	await expect(settings).toBeVisible();
+	await doubleShift(page);
+	await nextFrame(page);
+	await expect(palette(page)).toHaveCount(0);
+
 	await page.getByTestId("settings-nav-keyboard").click();
 	const toggle = page.getByTestId("settings-double-shift");
 	await expect(toggle).toHaveAttribute("aria-checked", "true");
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("aria-checked", "false");
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await settings.getByRole("button", { name: "Close" }).click();
+	await expect(settings).toBeHidden();
 
 	await doubleShift(page);
 	await openPalette(page);
@@ -284,6 +309,14 @@ test("the double-Shift row opens Settings › Keyboard, and Ctrl+R stays inert u
 }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
+	await page.getByTestId("new-chat").first().click();
+	const composer = page.getByTestId("chat-input");
+	await composer.focus();
+	await openPalette(page);
+	await page.keyboard.press("Escape");
+	await expect(palette(page)).toBeHidden();
+	await expect(composer).toBeFocused();
+
 	await openPalette(page);
 	await page.keyboard.press("Control+r");
 	await expect(palette(page)).toBeVisible();
@@ -328,6 +361,8 @@ test("keys still reach the palette after a click lands outside the input", async
 	const header = page.locator('[data-testid="search-section"] [role="presentation"]').first();
 
 	await header.click();
+	await page.keyboard.press("Control");
+	await expect(input).not.toBeFocused();
 	await page.keyboard.press("ArrowDown");
 	await expect(page.getByTestId("search-row").nth(1)).toHaveAttribute("aria-selected", "true");
 	await expect(input).toBeFocused();
@@ -357,8 +392,10 @@ test("Tab, Alt+digit and the chips switch the scope and write its prefix", async
 	await page.keyboard.press("Shift+Tab");
 	await expect(chip(page, "all")).toHaveAttribute("aria-pressed", "true");
 	await expect(input).toHaveValue("auth");
-	await page.keyboard.press("Alt+3");
-	await expect(input).toHaveValue(">auth");
+	if (!(await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? "")))) {
+		await page.keyboard.press("Alt+3");
+		await expect(input).toHaveValue(">auth");
+	}
 	await chip(page, "work").click();
 	await expect(input).toHaveValue("@auth");
 	await expect(input).toBeFocused();

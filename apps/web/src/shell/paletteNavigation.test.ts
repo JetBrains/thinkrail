@@ -68,6 +68,30 @@ describe("palette navigation", () => {
 		expect(current()).toBe(false);
 	});
 
+	test("a round trip away and back while a pick loads still drops the pick", async () => {
+		useAppStore.setState({
+			projects: [project("p1"), project("p2"), project("p3")],
+			workspaces: { p2: [workspace("w2", "p2"), workspace("w3", "p2")] },
+		});
+		useAppStore.getState().activateWorkspace({ id: "w2", projectId: "p2" });
+		const loader = deferredLoader();
+		const navigator = createPaletteNavigator(loader.load);
+		const workspaceTrip = navigator.navigateToWorkspace({ id: "p1-w", projectId: "p1" });
+		useAppStore.getState().activateWorkspace({ id: "w3", projectId: "p2" });
+		useAppStore.getState().activateWorkspace({ id: "w2", projectId: "p2" });
+		loader.finish("p1");
+		expect(await workspaceTrip).toBe(false);
+		expect(useAppStore.getState().activeWorkspaceId).toBe("w2");
+
+		useAppStore.setState({ activeWorkspaceId: null, selectedProjectId: "p2" });
+		const homeTrip = navigator.navigateToWorkspace({ id: "p3-w", projectId: "p3" });
+		useAppStore.getState().selectProject("p1");
+		useAppStore.getState().selectProject("p2");
+		loader.finish("p3");
+		expect(await homeTrip).toBe(false);
+		expect(useAppStore.getState().activeWorkspaceId).toBeNull();
+	});
+
 	test("a workspace the store already holds opens at once", async () => {
 		useAppStore.setState({
 			projects: [project("p1")],

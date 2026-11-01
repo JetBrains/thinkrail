@@ -121,7 +121,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		[protocolVersion, options.hasUpdateSettings],
 	);
 	const editors = useEditors();
-	const [settingsShortcut] = useState(() => readSettingsShortcutLabel() !== null);
+	const [nativeShortcuts] = useState(() => readSettingsShortcutLabel() !== null);
 
 	const online = status === "connected" && welcomeGeneration > 0 && protocolVersion !== null;
 	const context: CommandContext = useMemo(
@@ -142,7 +142,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			activeWorkspace,
 			historyAvailable: historySessionId !== null,
 			canCreateProject: selectSupportsOnboarding({ protocolVersion }),
-			settingsShortcut,
+			nativeShortcuts,
 			readAction,
 			canSettle: activeWorkspace !== null && canSettleWorkspace(protocolVersion, activeWorkspace),
 			settled,
@@ -276,7 +276,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		protocolVersion,
 		settled,
 		settleBlocked,
-		settingsShortcut,
+		nativeShortcuts,
 		options,
 		contextProject,
 		editors,

@@ -52,7 +52,7 @@ export interface PaletteCatalogDeps {
 	readonly activeWorkspace: Workspace | null;
 	readonly historyAvailable: boolean;
 	readonly canCreateProject: boolean;
-	readonly settingsShortcut: boolean;
+	readonly nativeShortcuts: boolean;
 	readonly readAction: "markRead" | "markUnread" | null;
 	readonly canSettle: boolean;
 	readonly settled: boolean;
@@ -92,7 +92,7 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			group: "work",
 			icon: RiAddLine,
 			keywords: ["create", "start", "task", "worktree"],
-			shortcut: { key: "N", mod: true },
+			shortcut: deps.nativeShortcuts ? { key: "N", mod: true } : { key: "N", mod: true, alt: true },
 			when: (context) => context.projectId !== null,
 			run: (context) => {
 				if (context.projectId) actions.newWorkspace(context.projectId);
@@ -203,7 +203,7 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			group: "settings",
 			icon: RiSettings3Line,
 			keywords: ["preferences", "options"],
-			...(deps.settingsShortcut ? { shortcut: { key: ",", mod: true } } : {}),
+			...(deps.nativeShortcuts ? { shortcut: { key: ",", mod: true } } : {}),
 			run: () => actions.openSettings(),
 		},
 	];

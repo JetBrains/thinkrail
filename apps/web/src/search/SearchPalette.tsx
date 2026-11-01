@@ -29,6 +29,7 @@ import {
 	stripScopePrefix,
 	withScopePrefix,
 } from "./query";
+import { scopeChordIndex } from "./scopeChord";
 import { buildSections, flattenRows } from "./sections";
 
 const SCOPE_LABELS: Record<SearchScope, MessageKey> = {
@@ -78,6 +79,8 @@ function PaletteContent({
 	const [nowMs] = useState(Date.now);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const listRef = useRef<HTMLDivElement>(null);
+	const returnFocusRef = useRef<HTMLElement | null>(null);
+	const pickedRef = useRef(false);
 
 	const parsed = useMemo(() => {
 		const result = parseSearchQuery(query);
@@ -150,6 +153,7 @@ function PaletteContent({
 			return;
 		}
 		if (item.run) {
+			pickedRef.current = true;
 			remember(item);
 			onClose();
 			item.run();
@@ -181,12 +185,16 @@ function PaletteContent({
 
 	const onKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
 		if (event.defaultPrevented || event.key === "Escape") return;
-		if (event.target !== inputRef.current && event.target !== event.currentTarget) return;
+		const fromFrame = event.target === event.currentTarget;
+		if (event.target !== inputRef.current && !fromFrame) return;
 		if (isImeComposing(event.nativeEvent)) {
 			if (event.key === "Tab") event.preventDefault();
 			return;
 		}
-		if (event.target !== inputRef.current) inputRef.current?.focus();
+		const claim = () => {
+			event.preventDefault();
+			if (fromFrame) inputRef.current?.focus();
+		};
 		const mod = hasPlatformModifier(event.nativeEvent);
 		if (mod && event.code === "KeyK" && !event.shiftKey && !event.altKey) {
 			event.preventDefault();
@@ -194,48 +202,41 @@ function PaletteContent({
 			onClose();
 			return;
 		}
-		if (
-			event.ctrlKey &&
-			!event.shiftKey &&
-			!event.altKey &&
-			!event.metaKey &&
-			event.code === "KeyR"
-		) {
-			event.preventDefault();
-			event.stopPropagation();
-			return;
-		}
 		if (event.key === "Tab") {
-			event.preventDefault();
+			claim();
 			cycleScope(event.shiftKey ? -1 : 1);
 			return;
 		}
 		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
-			event.preventDefault();
+			claim();
 			togglePreview();
 			return;
 		}
-		if (event.altKey && /^Digit[1-9]$/.test(event.code)) {
-			const scope = scopes[Number(event.code.slice(5)) - 1];
+		const chord = scopeChordIndex(event.nativeEvent);
+		if (chord !== null) {
+			const scope = scopes[chord];
 			if (scope) {
-				event.preventDefault();
+				claim();
 				changeScope(scope);
 			}
 			return;
 		}
 		switch (event.key) {
 			case "ArrowDown":
-				event.preventDefault();
+				claim();
 				select(selectedIndexRef.current + 1);
 				return;
 			case "ArrowUp":
-				event.preventDefault();
+				claim();
 				select(selectedIndexRef.current - 1);
 				return;
 			case "Enter":
-				event.preventDefault();
+				claim();
 				activate(selected);
 				return;
+		}
+		if (fromFrame && !event.ctrlKey && !event.metaKey && !MODIFIER_KEYS.has(event.key)) {
+			inputRef.current?.focus();
 		}
 	};
 
@@ -250,7 +251,14 @@ function PaletteContent({
 			className="top-[12vh] w-auto max-w-none translate-y-0 gap-0 overflow-visible p-0"
 			onOpenAutoFocus={(event) => {
 				event.preventDefault();
+				const previous = document.activeElement;
+				returnFocusRef.current = previous instanceof HTMLElement ? previous : null;
 				inputRef.current?.focus();
+			}}
+			onCloseAutoFocus={(event) => {
+				event.preventDefault();
+				const target = returnFocusRef.current;
+				if (!pickedRef.current && target?.isConnected) target.focus({ preventScroll: true });
 			}}
 			onEscapeKeyDown={onEscapeKeyDown}
 			onKeyDown={onKeyDown}
@@ -353,6 +361,17 @@ function PaletteContent({
 }
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
+
+const MODIFIER_KEYS: ReadonlySet<string> = new Set([
+	"Alt",
+	"AltGraph",
+	"CapsLock",
+	"Control",
+	"Fn",
+	"Meta",
+	"OS",
+	"Shift",
+]);
 
 function keepInputFocus(event: ReactMouseEvent): void {
 	event.preventDefault();

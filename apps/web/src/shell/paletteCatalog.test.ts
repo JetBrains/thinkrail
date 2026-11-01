@@ -30,7 +30,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		activeWorkspace: workspace,
 		historyAvailable: false,
 		canCreateProject: true,
-		settingsShortcut: false,
+		nativeShortcuts: false,
 		readAction: null,
 		canSettle: true,
 		settled: false,
@@ -73,8 +73,16 @@ describe("palette project and Settings commands", () => {
 
 	test("Settings shows the native shortcut only where the native menu owns one", () => {
 		expect(row("settings.open", deps())?.shortcut).toBeUndefined();
-		expect(row("settings.open", deps({ settingsShortcut: true }))?.shortcut).toEqual({
+		expect(row("settings.open", deps({ nativeShortcuts: true }))?.shortcut).toEqual({
 			key: ",",
+			mod: true,
+		});
+	});
+
+	test("New workspace shows the chord the browser lets through, Mod+N only on desktop", () => {
+		expect(row("workspace.new", deps())?.shortcut).toEqual({ key: "N", mod: true, alt: true });
+		expect(row("workspace.new", deps({ nativeShortcuts: true }))?.shortcut).toEqual({
+			key: "N",
 			mod: true,
 		});
 	});

@@ -70,18 +70,21 @@ neither a prompt nor attention is not listed.
 DOM focus stays in the input (WAI-ARIA combobox + listbox with `aria-activedescendant`, one named group
 per section and a polite result count; chips and footer buttons are not tabbable, and Tab is always
 consumed). The chord layer is the dialog frame, not the input: a click on a non-interactive part of the
-palette moves focus to the frame, and the next key still runs and returns focus to the input; a key from
-an interactive control inside the palette (a preview's own buttons) stays that control's, except Escape.
-↑/↓ select, ↵ opens or runs the row and closes the palette, Tab/Shift+Tab and `Alt+1…n` change scope (a
-chip writes its prefix into the query, so the prefix is the one source of scope), `Mod+I` toggles the
-preview pane, `Mod+K` closes the palette (the chord that opened it). Escape clears the query, then
-closes; an untrusted (synthetic) Escape — the desktop close-item command — closes outright. An active
-IME owns every key (`isComposing` or the `keyCode` 229 sentinel): composing Escape, arrows, Enter and
-`Alt+n` do nothing to the palette, and Tab only stays in the input. Plain `Ctrl+R` is swallowed while
-the palette is open; `Ctrl+Shift+R` still reloads. Mutating rows are disabled while offline or before
-the current welcome, and a command may carry its own disabled reason (Settle while an agent works or a
-chat needs you). The palette has one level: no pages, no per-row action panel — a row is a destination
-or a command.
+palette moves focus to the frame, and the next key the palette handles — or a character typed — returns
+focus to the input, while a bare modifier or a Ctrl/⌘ chord leaves it, so text selected in the preview
+can be copied. ↑/↓ select, ↵ opens or runs the row and closes the palette, Tab/Shift+Tab change scope,
+and so does `Alt+1…n` on Windows and Linux when Alt types no character there — a character a layout types
+with AltGr or Option on a digit key (`#`, `@`, `|`) stays the input's, and macOS has no digit chord at all,
+since Option always types one (a chip writes its prefix into the query, so the prefix is the one source
+of scope). `Mod+I` toggles the preview pane, `Mod+K` closes the palette (the chord that opened it).
+Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command —
+closes outright. Closing without a pick returns focus to the element that held it when the palette
+opened (the composer an accidental double Shift interrupted, the topbar button); a pick leaves focus to
+its destination. An active IME owns every key (`isComposing` or the `keyCode` 229 sentinel): composing
+Escape, arrows, Enter and `Alt+n` do nothing to the palette, and Tab only stays in the input. Mutating rows
+are disabled while offline or before the current welcome, and a command may carry its own disabled reason
+(Settle while an agent works or a chat needs you). The palette has one level: no pages, no per-row action
+panel — a row is a destination or a command.
 
 ## Preferences
 
