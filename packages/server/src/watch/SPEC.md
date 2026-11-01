@@ -64,13 +64,16 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
 - **On Linux each directory gets its own watcher, and ignored folders get none.** Bun's recursive watch on
   Linux adds an inotify watch per directory, also the ignored ones, so a large git-ignored folder used up
   `fs.inotify.max_user_watches` and every start failed (#852). `tree.ts` watches each directory on its own
-  and skips `node_modules`, nested `.git`, the root `.git` below its top level and `refs/` (kept for the
-  repo-metadata nudge), and folders `git` ignores (`setIgnoredPathsResolver`, injected by `host`). Root
+  and skips `node_modules`, nested `.git`, the root `.git` below its top level, `refs/` and `info/` (kept for
+  the repo-metadata nudge), and folders `git` ignores (`setIgnoredPathsResolver`, injected by `host`). Root
   `.git` paths and paths inside a nested repo are never sent to that check: an allowlist `.gitignore` (`*`
-  plus `!` rules) makes `check-ignore` report `.git` itself, and a submodule path fails the whole batch. A
-  `rename` always re-walks its directory and reports what is inside, since earlier writes have no event and
-  a folder recreated at the same path can get the old inode back. Readiness waits for the first walk.
-  Changes inside an ignored folder are not reported on Linux. macOS and Windows keep the recursive watcher.
+  plus `!` rules) makes `check-ignore` report `.git` itself, and a submodule path fails the whole batch.
+  Every repo-metadata nudge re-checks the folders skipped as ignored, because `git add -f` or an
+  `info/exclude` edit changes the answer without touching a `.gitignore`. The root is followed when it is a
+  symlink; links inside it are not. A `rename` always re-walks its directory and reports what is inside,
+  since earlier writes have no event and a folder recreated at the same path can get the old inode back.
+  Readiness waits for the first walk. Changes inside an ignored folder are not reported on Linux. macOS and
+  Windows keep the recursive watcher.
 - **Repo-metadata nudge (second seam):** a git-metadata write is *metadata, not content*, so it never
   becomes an `fsChanged` path (the `.git` blackout stands — plumbing storms must not turn into frames). It
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This

@@ -1,8 +1,8 @@
 import { type Dirent, type FSWatcher, watch } from "node:fs";
-import { lstat, readdir } from "node:fs/promises";
+import { lstat, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-export type TreeWatcher = { ready: Promise<void>; close: () => void };
+export type TreeWatcher = { ready: Promise<void>; close: () => void; recheck: () => void };
 
 export type TreeWatchOptions = {
 	onEvent: (relPath: string | null) => void;
@@ -19,9 +19,9 @@ function isVanished(error: unknown): boolean {
 	return VANISHED_CODES.has((error as NodeJS.ErrnoException).code ?? "");
 }
 
-async function isDirectory(path: string): Promise<boolean> {
+async function isDirectory(path: string, followLink: boolean): Promise<boolean> {
 	try {
-		return (await lstat(path)).isDirectory();
+		return (await (followLink ? stat(path) : lstat(path))).isDirectory();
 	} catch {
 		return false;
 	}
@@ -30,6 +30,7 @@ async function isDirectory(path: string): Promise<boolean> {
 export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher {
 	const dirs = new Map<string, FSWatcher>();
 	const nestedRepos = new Set<string>();
+	const pruned = new Set<string>();
 	const settling = new Set<string>();
 	const resettle = new Set<string>();
 	let closed = false;
@@ -66,8 +67,10 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 			watcher.close();
 			dirs.delete(path);
 		}
-		for (const path of nestedRepos) {
-			if (path === rel || path.startsWith(prefix)) nestedRepos.delete(path);
+		for (const known of [nestedRepos, pruned]) {
+			for (const path of known) {
+				if (path === rel || path.startsWith(prefix)) known.delete(path);
+			}
 		}
 	}
 
@@ -85,10 +88,11 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 		});
 		watcher.on("error", fail);
 		dirs.set(rel, watcher);
+		pruned.delete(rel);
 	}
 
 	async function track(rel: string): Promise<boolean> {
-		const exists = await isDirectory(abs(rel));
+		const exists = await isDirectory(abs(rel), rel === "");
 		if (closed) return false;
 		if (!exists) {
 			drop(rel);
@@ -134,6 +138,9 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 				}
 			}
 			const ignored = checked.length === 0 ? NOTHING_IGNORED : await options.ignoredDirs(checked);
+			for (const path of checked) {
+				if (ignored.has(path)) pruned.add(path);
+			}
 			level = [...unchecked, ...checked.filter((path) => !ignored.has(path))];
 		}
 	}
@@ -146,11 +153,14 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 		}
 		settling.add(rel);
 		try {
-			const exists = await isDirectory(abs(rel));
+			const exists = await isDirectory(abs(rel), false);
 			if (closed) return;
 			drop(rel);
 			if (!exists) return;
-			if (!insideNestedRepo(rel) && (await options.ignoredDirs([rel])).has(rel)) return;
+			if (!insideNestedRepo(rel) && (await options.ignoredDirs([rel])).has(rel)) {
+				pruned.add(rel);
+				return;
+			}
 			await walk([rel], true);
 		} finally {
 			settling.delete(rel);
@@ -158,6 +168,22 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 		}
 	}
 
+	async function recheck(): Promise<void> {
+		const candidates = [...pruned];
+		if (candidates.length === 0) return;
+		const ignored = await options.ignoredDirs(candidates);
+		if (closed) return;
+		const freed = candidates.filter((path) => !ignored.has(path));
+		for (const path of freed) pruned.delete(path);
+		await walk(freed, true);
+	}
+
 	watchDir("");
-	return { ready: guard(walk([""], false)), close };
+	return {
+		ready: guard(walk([""], false)),
+		close,
+		recheck: () => {
+			void guard(recheck());
+		},
+	};
 }

@@ -24,6 +24,7 @@ const REPO_META_DEBOUNCE_MS = 300;
 const WATCH_EACH_DIRECTORY = process.platform === "linux";
 const STARTED = Promise.resolve();
 const NOTHING_IGNORED: ReadonlySet<string> = new Set();
+const WATCHED_GIT_DIRS = new Set(["refs", "info"]);
 
 type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
 type SkillPathClassifier = (relativePath: string) => boolean;
@@ -122,6 +123,7 @@ function scheduleRepoMeta(workspaceId: string, watcher: TreeWatcher): void {
 		const live = entries.get(workspaceId);
 		if (!live || live.watcher !== watcher) return;
 		live.metaTimer = null;
+		live.watcher.recheck();
 		deliver("repo-meta", workspaceId, () => publishRepoMeta?.(workspaceId));
 	}, REPO_META_DEBOUNCE_MS);
 	if (entry) entry.metaTimer = timer;
@@ -138,7 +140,7 @@ function isSkippedDir(relPath: string): boolean {
 	const segments = relPath.split("/");
 	if (segments.includes("node_modules")) return true;
 	const git = segments.indexOf(".git");
-	return git > 0 || (git === 0 && segments.length > 1 && segments[1] !== "refs");
+	return git > 0 || (git === 0 && segments.length > 1 && !WATCHED_GIT_DIRS.has(segments[1] ?? ""));
 }
 
 function ignoredWorktreeDirs(worktreePath: string, paths: string[]): Promise<ReadonlySet<string>> {
@@ -156,7 +158,7 @@ function watchRecursive(
 		onEvent(typeof filename === "string" ? filename.replaceAll("\\", "/") : null);
 	});
 	watcher.on("error", onError);
-	return { ready: STARTED, close: () => watcher.close() };
+	return { ready: STARTED, close: () => watcher.close(), recheck: () => {} };
 }
 
 interface WatchEntry {

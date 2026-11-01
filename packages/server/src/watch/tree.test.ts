@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type TreeWatcher, watchTree } from "./tree";
@@ -40,8 +40,11 @@ function put(relPath: string, text = "x"): void {
 	writeFileSync(join(root, relPath), text);
 }
 
-async function start(skipDir: (relPath: string) => boolean = () => false): Promise<void> {
-	watcher = watchTree(root, {
+async function start(
+	skipDir: (relPath: string) => boolean = () => false,
+	at: string = root,
+): Promise<void> {
+	watcher = watchTree(at, {
 		onEvent: (path) => events.push(path),
 		onError: () => {
 			errors += 1;
@@ -136,6 +139,29 @@ test("a .gitignore edit re-walks its folder, so a folder that stops being ignore
 	await sleep(100);
 	put("tmp/run/out.txt", "y");
 	await waitFor(() => seen("tmp/run/out.txt"));
+});
+
+test("a folder that stops being ignored is watched after a recheck", async () => {
+	put("dist/index.js");
+	ignored.add("dist");
+	await start();
+	ignored.clear();
+	queried.length = 0;
+	watcher?.recheck();
+	await waitFor(() => seen("dist/index.js"));
+	expect(queried).toEqual(["dist"]);
+	await sleep(100);
+	events.length = 0;
+	put("dist/index.js", "y");
+	await waitFor(() => seen("dist/index.js"));
+});
+
+test("a symlinked root is followed", async () => {
+	put("real/src/a.ts");
+	symlinkSync(join(root, "real"), join(root, "link"));
+	await start(undefined, join(root, "link"));
+	put("real/src/a.ts", "y");
+	await waitFor(() => seen("src/a.ts"));
 });
 
 test("a closed tree stays silent, and an unwatchable root throws", async () => {

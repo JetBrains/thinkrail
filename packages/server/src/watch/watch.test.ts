@@ -370,6 +370,28 @@ test.if(process.platform === "linux")(
 	},
 );
 
+test.if(process.platform === "linux")(
+	"on Linux a git metadata change re-checks folders skipped as ignored",
+	async () => {
+		mkdirSync(join(worktree, ".git", "info"), { recursive: true });
+		mkdirSync(join(worktree, "dist"));
+		writeFileSync(join(worktree, "dist", "index.js"), "x\n");
+		const ignored = new Set(["dist"]);
+		setIgnoredPathsResolver(async (_root, paths) => new Set(paths.filter((p) => ignored.has(p))));
+		const nudges: string[] = [];
+		setRepoMetaPublisher((id) => nudges.push(id));
+		await ensureWatch("ws1");
+		ignored.clear();
+		writeFileSync(join(worktree, ".git", "info", "exclude"), "\n");
+		await waitFor(() => nudges.length > 0);
+		await waitFor(() => payloads.some((p) => p.paths.includes("dist/index.js")));
+		await sleep(100);
+		payloads.length = 0;
+		writeFileSync(join(worktree, "dist", "index.js"), "y\n");
+		await waitFor(() => payloads.some((p) => p.paths.includes("dist/index.js")));
+	},
+);
+
 test("unknown workspace and stopWatch are safe no-ops; stopped watchers stay silent", async () => {
 	ensureWatch("nope");
 	ensureWatch("ws1");
