@@ -484,3 +484,15 @@ test("login options supply pi's per-installation device id from the global setti
 		rmSync(agentDir, { recursive: true, force: true });
 	}
 });
+
+test("the built-in antigravity provider is registered on every runtime generation and included in provider status allowlist", async () => {
+	const initial = await preparePiRuntimeGeneration([]);
+	expect(initial.outcome).toBe("prepared");
+	if (initial.outcome !== "prepared") return;
+	expect(initial.generation.runtime.getRegisteredProviderIds()).toContain("antigravity");
+	expect(initial.generation.providerStatusIds.has("antigravity")).toBe(true);
+	expect(initial.generation.providerStatusNames.get("antigravity")).toBe("Antigravity");
+	const provider = initial.generation.runtime.getProvider("antigravity");
+	expect(provider).toBeDefined();
+	expect(provider?.name).toBe("Antigravity");
+});

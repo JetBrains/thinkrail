@@ -194,6 +194,23 @@ describe("buildProviderReport", () => {
 		]);
 	});
 
+	test("Antigravity OAuth provider reports canOAuth", () => {
+		const report = buildProviderReport(
+			sources({
+				oauthProviders: [{ id: "antigravity", name: "Antigravity" }],
+				apiKeyLogin: () => false,
+			}),
+		);
+		expect(report.providers).toEqual([
+			{
+				id: "antigravity",
+				name: "Antigravity",
+				configured: false,
+				canOAuth: true,
+			},
+		]);
+	});
+
 	test("pi-owned API-key capability supports multi-prompt providers", () => {
 		const report = buildProviderReport(
 			sources({

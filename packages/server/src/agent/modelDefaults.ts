@@ -44,10 +44,18 @@ export const PI_DEFAULT_MODEL_PER_PROVIDER: Readonly<Record<string, string>> = {
 	"xiaomi-token-plan-sgp": "mimo-v2.6-pro",
 };
 
+export const HOST_DEFAULT_MODEL_PER_PROVIDER: Readonly<Record<string, string>> = {
+	antigravity: "gemini-4-argon",
+};
+
 export function preferredDefaultModel<T extends Pick<WireModel, "provider" | "id">>(
 	available: readonly T[],
 ): T | undefined {
 	for (const [provider, id] of Object.entries(PI_DEFAULT_MODEL_PER_PROVIDER)) {
+		const match = available.find((model) => model.provider === provider && model.id === id);
+		if (match) return match;
+	}
+	for (const [provider, id] of Object.entries(HOST_DEFAULT_MODEL_PER_PROVIDER)) {
 		const match = available.find((model) => model.provider === provider && model.id === id);
 		if (match) return match;
 	}
