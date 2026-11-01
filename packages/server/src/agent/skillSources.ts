@@ -10,6 +10,10 @@ export function isProjectSkillPath(relativePath: string): boolean {
 	return PROJECT_SKILL_PATH.test(relativePath.replaceAll("\\", "/"));
 }
 
+export function mayHoldProjectSkills(relativePath: string): boolean {
+	return isProjectSkillPath(relativePath) || isProjectSkillPath(`${relativePath}/skills`);
+}
+
 export interface CompatibilitySkillSource {
 	path: string;
 	scope: "project" | "user";

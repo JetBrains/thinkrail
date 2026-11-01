@@ -1,10 +1,14 @@
 import { afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import type { HostUpdateNotice, ServerWelcome } from "@thinkrail/contracts";
+import type {
+	HostUpdateNotice,
+	ServerWelcome,
+	WorkspaceFsChangedPayload,
+} from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import {
@@ -553,6 +557,49 @@ test("welcome omits closed projects whose folders are gone", async () => {
 	expect(welcome.projects.map((project) => project.id)).toEqual(["open"]);
 	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
 });
+
+test.if(process.platform === "linux")(
+	"on Linux a project skill under a git-ignored folder still reports a skill change",
+	async () => {
+		const dir = process.env.THINKRAIL_DATA_DIR;
+		if (!dir) throw new Error("missing fixture data directory");
+		const worktree = join(dir, "repo");
+		const skill = join(worktree, ".claude", "skills", "demo", "SKILL.md");
+		mkdirSync(join(worktree, ".claude", "skills", "demo"), { recursive: true });
+		expect(Bun.spawnSync(["git", "init", "-q", worktree]).success).toBe(true);
+		writeFileSync(join(worktree, ".gitignore"), ".claude/\n");
+		writeFileSync(skill, "v1\n");
+		writeFileSync(
+			join(dir, "workspaces.json"),
+			JSON.stringify([
+				{
+					id: "skills",
+					projectId: "p",
+					name: "skills",
+					branch: "main",
+					worktreePath: worktree,
+					baseBranch: "main",
+				},
+			]),
+		);
+		const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+		const collector = await collectSocket(b.port, "skills");
+		collector.socket.send(
+			JSON.stringify({
+				id: "ready",
+				method: "workspace.watchReady",
+				params: { workspaceId: "skills" },
+			}),
+		);
+		expect((await collector.waitForFrame((frame) => frame.id === "ready")).ok).toBe(true);
+		writeFileSync(skill, "v2\n");
+		await collector.waitForFrame(
+			(frame) =>
+				frame.channel === WS_CHANNELS.workspaceFsChanged &&
+				(frame.data as WorkspaceFsChangedPayload).skillChange === "detected",
+		);
+	},
+);
 
 test("shutdown is idempotent and releases the port", async () => {
 	const options = { port: grabFreePort(), host: "localhost", portMode: "exact" as const };

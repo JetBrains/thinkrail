@@ -35,6 +35,7 @@ import {
 	initializeSessionStates,
 	isProjectSkillPath,
 	liveSessionIdsOf,
+	mayHoldProjectSkills,
 	mcpPolicyOf,
 	piTrustsProjectPath,
 	primeProjectPiSettings,
@@ -770,7 +771,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const stopFontsWatch = watchUserFonts({ onChange: nudge(WS_CHANNELS.fontsChanged) });
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
-	setIgnoredPathsResolver(ignoredPaths);
+	setIgnoredPathsResolver((worktreePath, paths) =>
+		ignoredPaths(
+			worktreePath,
+			paths.filter((path) => !mayHoldProjectSkills(path)),
+		),
+	);
 	setFsNudgePublisher(publishFsChanged);
 
 	setWatchStartedPublisher(seedWorkspaceHead);
