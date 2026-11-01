@@ -22,6 +22,7 @@ import {
 	getAntigravityApiKey,
 	getAntigravityRequestModelId,
 	getMaxOutputTokens,
+	getModelFamily,
 	getThinkingConfig,
 	handleCallbackRequest,
 	loginAntigravity,
@@ -335,6 +336,17 @@ describe("Model Catalog & Routing", () => {
 	test("ANTIGRAVITY_MODELS exposes seed gemini-4-argon model", () => {
 		const ids = ANTIGRAVITY_MODELS.map((m) => m.id);
 		expect(ids).toEqual(["gemini-4-argon"]);
+	});
+
+	test("getModelFamily classifies models accurately by family", () => {
+		expect(getModelFamily("gemini-4-argon")).toBe("gemini");
+		expect(getModelFamily("gemini-3.8-flash-high")).toBe("gemini");
+		expect(getModelFamily("argon-experimental")).toBe("gemini");
+		expect(getModelFamily("claude-opus-5-5-high")).toBe("claude");
+		expect(getModelFamily("claude-sonnet-4-5")).toBe("claude");
+		expect(getModelFamily("gpt-oss-120b")).toBe("other");
+		expect(getModelFamily("deepseek-r1")).toBe("other");
+		expect(getModelFamily("llama-3.3-70b")).toBe("other");
 	});
 
 	test("getAntigravityRequestModelId routes models according to thinking effort", () => {
@@ -700,7 +712,7 @@ describe("Request Building and Streaming Adapter", () => {
 		expect(argonHighInnerReq.labels?.model_enum).toBe("MODEL_PLACEHOLDER_M417");
 	});
 
-	test("convertAssistantMessage strips non-Claude thinking and thoughtSignature when targeting Claude", () => {
+	test("convertAssistantMessage strips non-Claude thinking when targeting Claude, but preserves Claude thinking signatures", () => {
 		const claudeModel: Model<typeof ANTIGRAVITY_API> = {
 			...model,
 			id: "claude-sonnet-5-5",
@@ -729,6 +741,40 @@ describe("Request Building and Streaming Adapter", () => {
 		const parts = convertAssistantMessage(assistantMsg, claudeModel, "claude-sonnet-5-5-medium");
 		expect(parts).toHaveLength(1);
 		expect(parts[0]).toEqual({ text: "Hello" });
+
+		// Same-model Claude message with thinkingSignature
+		const sameClaudeMsg: AssistantMessage = {
+			role: "assistant",
+			content: [
+				{
+					type: "thinking",
+					thinking: "Claude reasoning",
+					thinkingSignature: "Q0FRUzZ6RUtFZ2dURUFJWUFqZ0JRZ2==",
+				},
+				{ type: "text", text: "Answer" },
+			],
+			api: ANTIGRAVITY_API,
+			provider: "antigravity",
+			model: "claude-sonnet-5-5",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+			timestamp: Date.now(),
+		};
+		const claudeParts = convertAssistantMessage(sameClaudeMsg, claudeModel, "claude-sonnet-5-5");
+		expect(claudeParts).toHaveLength(2);
+		expect(claudeParts[0]).toEqual({
+			thought: true,
+			text: "Claude reasoning",
+			thoughtSignature: "Q0FRUzZ6RUtFZ2dURUFJWUFqZ0JRZ2==",
+		});
+		expect(claudeParts[1]).toEqual({ text: "Answer" });
 	});
 
 	test("streamResponse parses SSE thinking, text, and functionCall chunks", async () => {
@@ -1074,5 +1120,111 @@ describe("Request Building and Streaming Adapter", () => {
 		const call2 = output.content[1] as ToolCall;
 		expect(call1.thoughtSignature).toBe("c2lnbmF0dXJlMTIz");
 		expect(call2.thoughtSignature).toBe("c2lnbmF0dXJlMTIz");
+	});
+
+	test("convertAssistantMessage and convertMessages fall back to text representation for unsigned or Claude tool calls when targeting Gemini", () => {
+		const geminiModel = {
+			id: "gemini-4-argon",
+			provider: "antigravity",
+			api: ANTIGRAVITY_API,
+			name: "Gemini 4 Argon",
+		} as unknown as Model<typeof ANTIGRAVITY_API>;
+
+		const legacyMsg: AssistantMessage = {
+			role: "assistant",
+			content: [
+				{
+					type: "toolCall",
+					id: "call_legacy",
+					name: "ask_user_question",
+					arguments: { q: "test" },
+				},
+			],
+			api: ANTIGRAVITY_API,
+			provider: "antigravity",
+			model: "gemini-4-argon",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+			timestamp: Date.now(),
+		};
+
+		const nativeIds = new Set<string>();
+		const parts = convertAssistantMessage(legacyMsg, geminiModel, "gemini-4-argon", nativeIds);
+		expect(parts).toHaveLength(1);
+		expect(parts[0]).toEqual({
+			text: '[Called tool ask_user_question with arguments: {"q":"test"}]',
+		});
+		expect(nativeIds.has("call_legacy")).toBe(false);
+
+		// Claude tool call with Claude signature targeting Gemini
+		const claudeMsg: AssistantMessage = {
+			role: "assistant",
+			content: [
+				{
+					type: "toolCall",
+					id: "call_claude",
+					name: "read",
+					arguments: { path: "spec.md" },
+					thoughtSignature: "Q0FRUzZ6RUtFZ2dURUFJWUFqZ0JRZ2==",
+				},
+			],
+			api: ANTIGRAVITY_API,
+			provider: "antigravity",
+			model: "claude-opus-5-5",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+			timestamp: Date.now(),
+		};
+
+		const claudeParts = convertAssistantMessage(
+			claudeMsg,
+			geminiModel,
+			"gemini-4-argon",
+			nativeIds,
+		);
+		expect(claudeParts).toHaveLength(1);
+		expect(claudeParts[0]).toEqual({
+			text: '[Called tool read with arguments: {"path":"spec.md"}]',
+		});
+		expect(nativeIds.has("call_claude")).toBe(false);
+
+		// Check full transcript conversion through convertMessages
+		const context = {
+			messages: [
+				{ role: "user", content: "read spec" },
+				claudeMsg,
+				{
+					role: "toolResult",
+					toolCallId: "call_claude",
+					toolName: "read",
+					content: [{ type: "text", text: "# Spec Content" }],
+					isError: false,
+				},
+			],
+		} as unknown as Context;
+
+		const contents = convertMessages(geminiModel, context, "gemini-4-argon");
+		// Verify there are no functionCall or functionResponse parts from the Claude interaction
+		const hasFunctionCall = contents.some((t) =>
+			t.parts.some((p) => "functionCall" in p || "functionResponse" in p),
+		);
+		expect(hasFunctionCall).toBe(false);
+		expect(
+			contents.some((t) => t.parts.some((p) => "text" in p && p.text?.includes("Spec Content"))),
+		).toBe(true);
 	});
 });

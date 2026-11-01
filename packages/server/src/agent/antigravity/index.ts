@@ -18,8 +18,10 @@ export {
 } from "./client";
 export {
 	ANTIGRAVITY_MODELS,
+	type AntigravityModelFamily,
 	getAntigravityRequestModelId,
 	getMaxOutputTokens,
+	getModelFamily,
 	getThinkingConfig,
 	refreshAntigravityModels,
 } from "./models";

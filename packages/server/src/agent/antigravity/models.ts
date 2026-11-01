@@ -1,7 +1,8 @@
 import type { RefreshModelsContext, ThinkingLevelMap } from "@earendil-works/pi-ai";
+import type { OAuthCredentials } from "@earendil-works/pi-ai/oauth";
 import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import { antigravityHeaders, endpointCandidates, parseAntigravityApiKey } from "./client";
-import { getAntigravityApiKey } from "./oauth";
+import { getAntigravityApiKey, refreshAntigravityToken } from "./oauth";
 
 const geminiFlashCost = { input: 0.1, output: 0.4, cacheRead: 0.025, cacheWrite: 0.1 };
 const geminiProCost = { input: 1.25, output: 5.0, cacheRead: 0.3125, cacheWrite: 1.25 };
@@ -36,6 +37,15 @@ export interface ModelVariants {
 	low?: string | undefined;
 	medium?: string | undefined;
 	high?: string | undefined;
+}
+
+export type AntigravityModelFamily = "gemini" | "claude" | "other";
+
+export function getModelFamily(modelId: string): AntigravityModelFamily {
+	const lower = modelId.toLowerCase();
+	if (lower.includes("gemini") || lower.includes("argon")) return "gemini";
+	if (lower.includes("claude")) return "claude";
+	return "other";
 }
 
 const SEED_VARIANTS: Readonly<Record<string, ModelVariants>> = {
@@ -84,31 +94,33 @@ export function getThinkingConfig(
 	modelId: string,
 	effort: string | undefined,
 ): ThinkingWire | undefined {
-	if (modelId.startsWith("claude-")) {
-		if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
+	const family = getModelFamily(modelId);
+	if (!effort || effort === "off") {
+		if (family === "claude" || family === "other") {
+			return { includeThoughts: false, thinkingBudget: 0 };
+		}
+		return undefined;
+	}
+
+	if (family === "claude") {
 		return { includeThoughts: true, thinkingBudget: 1024 };
 	}
-	if (modelId.startsWith("gpt-oss-")) {
-		if (!effort || effort === "off") return { includeThoughts: false, thinkingBudget: 0 };
-		return { includeThoughts: true, thinkingBudget: 8192 };
-	}
-	if (modelId.startsWith("gemini-") || modelId.includes("argon")) {
-		if (!effort || effort === "off") return undefined;
+	if (family === "gemini") {
 		const thinkingBudget =
 			effort === "high" || effort === "xhigh" ? -1 : effort === "medium" ? 4_000 : 1_000;
 		return { includeThoughts: true, thinkingBudget };
 	}
-	return undefined;
+	return { includeThoughts: true, thinkingBudget: 8192 };
 }
 
 export function getMaxOutputTokens(modelId: string, runtimeModel?: string): number {
 	const target = runtimeModel || modelId;
 	const dynamic = dynamicMaxOutputTokens.get(target) ?? dynamicMaxOutputTokens.get(modelId);
 	if (dynamic !== undefined) return dynamic;
-	if (target.startsWith("claude-")) return 64000;
-	if (target.startsWith("gpt-oss-")) return 32768;
-	if (target.startsWith("gemini-")) return 65536;
-	return 8192;
+	const family = getModelFamily(target);
+	if (family === "claude") return 64000;
+	if (family === "gemini") return 65536;
+	return 32768;
 }
 
 export interface RawAntigravityModel {
@@ -149,11 +161,15 @@ function formatModelName(baseId: string, rawName?: string): string {
 }
 
 function inferModelCost(baseId: string) {
-	if (baseId.includes("opus")) return claudeOpusCost;
-	if (baseId.includes("sonnet")) return claudeSonnetCost;
-	if (baseId.includes("gpt-oss")) return gptOssCost;
-	if (baseId.includes("pro") || baseId.includes("argon")) return geminiProCost;
-	return geminiFlashCost;
+	const lower = baseId.toLowerCase();
+	if (lower.includes("opus")) return claudeOpusCost;
+	if (lower.includes("sonnet")) return claudeSonnetCost;
+	if (lower.includes("pro") || lower.includes("argon")) return geminiProCost;
+	if (lower.includes("flash")) return geminiFlashCost;
+	const family = getModelFamily(baseId);
+	if (family === "claude") return claudeSonnetCost;
+	if (family === "gemini") return geminiProCost;
+	return gptOssCost;
 }
 
 interface TextModelConfig {
@@ -342,6 +358,20 @@ export async function refreshAntigravityModels(
 	}
 
 	let apiKey: string | undefined;
+	const oauthCreds =
+		context.credential.type === "oauth" ? (context.credential as OAuthCredentials) : undefined;
+	if (
+		oauthCreds &&
+		typeof oauthCreds.refresh === "string" &&
+		(!oauthCreds.expires || oauthCreds.expires <= Date.now() + 60_000)
+	) {
+		try {
+			const refreshed = await refreshAntigravityToken(oauthCreds);
+			oauthCreds.access = refreshed.access;
+			oauthCreds.expires = refreshed.expires;
+		} catch {}
+	}
+
 	if (context.credential.type === "api_key") {
 		apiKey = typeof context.credential.key === "string" ? context.credential.key : undefined;
 	} else if (context.credential.type === "oauth") {
@@ -358,15 +388,29 @@ export async function refreshAntigravityModels(
 	}
 
 	try {
-		const creds = parseAntigravityApiKey(apiKey);
+		let creds = parseAntigravityApiKey(apiKey);
 		for (const endpoint of endpointCandidates()) {
 			try {
-				const res = await fetch(`${endpoint}/v1internal:fetchAvailableModels`, {
+				let res = await fetch(`${endpoint}/v1internal:fetchAvailableModels`, {
 					method: "POST",
 					headers: antigravityHeaders(creds.token),
 					body: JSON.stringify({ project: creds.projectId }),
 					signal: context.signal,
 				});
+				if (res.status === 401 && oauthCreds && typeof oauthCreds.refresh === "string") {
+					try {
+						const refreshed = await refreshAntigravityToken(oauthCreds);
+						oauthCreds.access = refreshed.access;
+						oauthCreds.expires = refreshed.expires;
+						creds = parseAntigravityApiKey(getAntigravityApiKey(oauthCreds));
+						res = await fetch(`${endpoint}/v1internal:fetchAvailableModels`, {
+							method: "POST",
+							headers: antigravityHeaders(creds.token),
+							body: JSON.stringify({ project: creds.projectId }),
+							signal: context.signal,
+						});
+					} catch {}
+				}
 				if (!res.ok) continue;
 				const data = (await res.json()) as RawAntigravityModelsResponse;
 				if (data && typeof data === "object" && data.models && typeof data.models === "object") {

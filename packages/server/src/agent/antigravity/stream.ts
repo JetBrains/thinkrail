@@ -27,6 +27,7 @@ import {
 	getAntigravityModelEnum,
 	getAntigravityRequestModelId,
 	getMaxOutputTokens,
+	getModelFamily,
 	getThinkingConfig,
 } from "./models";
 
@@ -98,12 +99,7 @@ function sanitizeToolCallId(id: string, fallbackName?: string): string {
 }
 
 function toolCallIdNeeded(modelId: string, runtimeModel: string): boolean {
-	return (
-		modelId.startsWith("claude-") ||
-		modelId.startsWith("gpt-oss-") ||
-		runtimeModel.startsWith("claude-") ||
-		runtimeModel.startsWith("gpt-oss-")
-	);
+	return getModelFamily(modelId) !== "gemini" || getModelFamily(runtimeModel) !== "gemini";
 }
 
 function toJsonObject(value: unknown): JsonObject {
@@ -176,58 +172,78 @@ function appendTurn(contents: GeminiContent[], role: "user" | "model", parts: Ge
 	if (!parts.length) return;
 	const last = contents[contents.length - 1];
 	if (last && last.role === role) {
-		last.parts.push(...parts);
-	} else {
-		contents.push({ role, parts });
+		const lastHasFunctionResponse = last.parts.some((p) => "functionResponse" in p);
+		const newHasFunctionResponse = parts.some((p) => "functionResponse" in p);
+		if (lastHasFunctionResponse === newHasFunctionResponse) {
+			last.parts.push(...parts);
+			return;
+		}
 	}
+	contents.push({ role, parts });
 }
 
 const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/;
 function isValidThoughtSignature(signature?: string): boolean {
 	if (!signature) return false;
+	if (signature === "skip_thought_signature_validator") return false;
 	if (signature.length % 4 !== 0) return false;
 	return base64SignaturePattern.test(signature);
+}
+
+function isGeminiThoughtSignature(signature?: string): boolean {
+	if (!isValidThoughtSignature(signature)) return false;
+	if (signature?.startsWith("Q0FR")) return false;
+	return true;
 }
 
 function resolveThoughtSignature(
 	isSameProviderAndModel: boolean,
 	signature?: string,
+	isClaude = false,
 ): string | undefined {
-	return isSameProviderAndModel && isValidThoughtSignature(signature) ? signature : undefined;
+	if (!isSameProviderAndModel || !signature) return undefined;
+	if (isClaude) {
+		return isValidThoughtSignature(signature) ? signature : undefined;
+	}
+	return isGeminiThoughtSignature(signature) ? signature : undefined;
 }
 
 export function convertAssistantMessage(
 	msg: AssistantMessage,
 	model: Model<Api>,
 	runtimeModel: string,
+	nativeToolCallIds?: Set<string>,
 ): GeminiPart[] {
 	if (msg.stopReason === "error" || msg.stopReason === "aborted") {
 		return [];
 	}
 	const isSameProviderAndModel =
 		msg.provider === model.provider && (msg.model === model.id || msg.model === runtimeModel);
-	const isClaude = model.id.startsWith("claude-") || runtimeModel.startsWith("claude-");
+	const isClaude =
+		getModelFamily(model.id) === "claude" || getModelFamily(runtimeModel) === "claude";
+	const isMsgFromClaude = msg.model ? getModelFamily(msg.model) === "claude" : false;
 
 	let turnSignature: string | undefined;
-	for (const block of msg.content) {
-		const candidate =
-			(block as { thoughtSignature?: string }).thoughtSignature ||
-			(block as { thinkingSignature?: string }).thinkingSignature ||
-			(block as { textSignature?: string }).textSignature;
-		if (isValidThoughtSignature(candidate)) {
-			turnSignature = candidate;
-			break;
+	if (!isMsgFromClaude) {
+		for (const block of msg.content) {
+			const candidate =
+				(block as { thoughtSignature?: string }).thoughtSignature ||
+				(block as { thinkingSignature?: string }).thinkingSignature ||
+				(block as { textSignature?: string }).textSignature;
+			if (isGeminiThoughtSignature(candidate)) {
+				turnSignature = candidate;
+				break;
+			}
 		}
 	}
 
 	const parts: GeminiPart[] = [];
 	for (const block of msg.content) {
 		if (block.type === "text") {
-			const thoughtSignature = resolveThoughtSignature(
-				isSameProviderAndModel,
+			const candidate =
 				(block as { textSignature?: string; thoughtSignature?: string }).textSignature ||
-					(block as { textSignature?: string; thoughtSignature?: string }).thoughtSignature,
-			);
+				(block as { textSignature?: string; thoughtSignature?: string }).thoughtSignature;
+			const thoughtSignature = resolveThoughtSignature(isSameProviderAndModel, candidate, isClaude);
 			if ((!block.text || block.text.trim() === "") && !thoughtSignature) {
 				continue;
 			}
@@ -237,11 +253,17 @@ export function convertAssistantMessage(
 			});
 		} else if (block.type === "thinking") {
 			if (isSameProviderAndModel) {
+				const candidate =
+					(block as { thinkingSignature?: string; thoughtSignature?: string }).thinkingSignature ||
+					(block as { thinkingSignature?: string; thoughtSignature?: string }).thoughtSignature;
 				const thoughtSignature = resolveThoughtSignature(
 					isSameProviderAndModel,
-					(block as { thinkingSignature?: string; thoughtSignature?: string }).thinkingSignature ||
-						(block as { thinkingSignature?: string; thoughtSignature?: string }).thoughtSignature,
+					candidate,
+					isClaude,
 				);
+				if (isClaude && !thoughtSignature) {
+					continue;
+				}
 				if ((!block.thinking || block.thinking.trim() === "") && !thoughtSignature) {
 					continue;
 				}
@@ -257,21 +279,47 @@ export function convertAssistantMessage(
 				});
 			}
 		} else if (block.type === "toolCall") {
-			const rawSig = (block as { thoughtSignature?: string }).thoughtSignature || turnSignature;
-			const isToolSigCompatible =
-				isSameProviderAndModel || (!isClaude && msg.provider === model.provider);
-			const thoughtSignature =
-				isToolSigCompatible && isValidThoughtSignature(rawSig) ? rawSig : undefined;
-			parts.push({
-				functionCall: {
-					name: block.name,
-					args: (block.arguments as Record<string, unknown>) ?? {},
-					...(toolCallIdNeeded(model.id, runtimeModel)
-						? { id: sanitizeToolCallId(block.id || "", block.name) }
-						: {}),
-				},
-				...(thoughtSignature ? { thoughtSignature } : {}),
-			});
+			if (isClaude) {
+				parts.push({
+					functionCall: {
+						name: block.name,
+						args: (block.arguments as Record<string, unknown>) ?? {},
+						...(toolCallIdNeeded(model.id, runtimeModel)
+							? { id: sanitizeToolCallId(block.id || "", block.name) }
+							: {}),
+					},
+				});
+				if (nativeToolCallIds && block.id) {
+					nativeToolCallIds.add(block.id);
+				}
+			} else {
+				const candidateSig =
+					(block as { thoughtSignature?: string }).thoughtSignature || turnSignature;
+				const hasValidSig = !isMsgFromClaude && isGeminiThoughtSignature(candidateSig);
+
+				if (hasValidSig && candidateSig) {
+					parts.push({
+						functionCall: {
+							name: block.name,
+							args: (block.arguments as Record<string, unknown>) ?? {},
+							...(toolCallIdNeeded(model.id, runtimeModel)
+								? { id: sanitizeToolCallId(block.id || "", block.name) }
+								: {}),
+						},
+						thoughtSignature: candidateSig,
+					});
+					if (nativeToolCallIds && block.id) {
+						nativeToolCallIds.add(block.id);
+					}
+				} else {
+					const argsObj = block.arguments as Record<string, unknown> | undefined;
+					const argsText =
+						argsObj && Object.keys(argsObj).length > 0 ? JSON.stringify(argsObj) : "{}";
+					parts.push({
+						text: `[Called tool ${block.name} with arguments: ${argsText}]`,
+					});
+				}
+			}
 		}
 	}
 	return parts;
@@ -281,21 +329,33 @@ export function convertToolResultMessage(
 	msg: ToolResultMessage,
 	model: Model<Api>,
 	runtimeModel: string,
+	nativeToolCallIds?: Set<string>,
 ): GeminiPart[] {
+	const isClaude =
+		getModelFamily(model.id) === "claude" || getModelFamily(runtimeModel) === "claude";
+	const isNative = isClaude || !nativeToolCallIds || nativeToolCallIds.has(msg.toolCallId);
 	const text = msg.content
 		.filter((c): c is TextContent => c.type === "text")
 		.map((c) => c.text)
 		.join("\n");
 	const responseText = text || (msg.isError ? "Tool failed" : "");
 	const imageParts = asImageParts(msg.content);
-	const part: GeminiFunctionResponsePart = {
-		functionResponse: {
-			name: msg.toolName,
-			response: msg.isError ? { error: responseText } : { output: responseText },
-			...(toolCallIdNeeded(model.id, runtimeModel)
-				? { id: sanitizeToolCallId(msg.toolCallId || "", msg.toolName) }
-				: {}),
-		},
+
+	if (isNative) {
+		const part: GeminiFunctionResponsePart = {
+			functionResponse: {
+				name: msg.toolName,
+				response: msg.isError ? { error: responseText } : { output: responseText },
+				...(toolCallIdNeeded(model.id, runtimeModel)
+					? { id: sanitizeToolCallId(msg.toolCallId || "", msg.toolName) }
+					: {}),
+			},
+		};
+		return [part, ...imageParts];
+	}
+
+	const part: GeminiPart = {
+		text: `[Tool result for ${msg.toolName}]:\n${responseText}`,
 	};
 	return [part, ...imageParts];
 }
@@ -306,15 +366,24 @@ export function convertMessages(
 	runtimeModel: string,
 ): GeminiContent[] {
 	const contents: GeminiContent[] = [];
+	const nativeToolCallIds = new Set<string>();
 
 	for (const msg of context.messages) {
 		if ((msg.role as string) === "system") continue;
 		if (msg.role === "user") {
 			appendTurn(contents, "user", asTextParts(msg.content));
 		} else if (msg.role === "assistant") {
-			appendTurn(contents, "model", convertAssistantMessage(msg, model, runtimeModel));
+			appendTurn(
+				contents,
+				"model",
+				convertAssistantMessage(msg, model, runtimeModel, nativeToolCallIds),
+			);
 		} else if (msg.role === "toolResult") {
-			appendTurn(contents, "user", convertToolResultMessage(msg, model, runtimeModel));
+			appendTurn(
+				contents,
+				"user",
+				convertToolResultMessage(msg, model, runtimeModel, nativeToolCallIds),
+			);
 		}
 	}
 
@@ -412,9 +481,10 @@ export function buildRequest(
 
 	const contents = convertMessages(model, context, runtimeModel);
 
-	const isClaude = model.id.startsWith("claude-") || runtimeModel.startsWith("claude-");
+	const isClaude =
+		getModelFamily(model.id) === "claude" || getModelFamily(runtimeModel) === "claude";
 	const isNonGemini =
-		isClaude || model.id.startsWith("gpt-oss-") || runtimeModel.startsWith("gpt-oss-");
+		getModelFamily(model.id) !== "gemini" || getModelFamily(runtimeModel) !== "gemini";
 
 	const toolMap = new Map<string, Tool>();
 	for (const t of (context.tools ?? []).concat(getCurrentTools(context.messages) ?? [])) {
