@@ -34,6 +34,7 @@ import {
 	selectFileChangeSince,
 	selectHistoryTarget,
 	selectKnownChatLocation,
+	selectKnownChatTitle,
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
@@ -807,6 +808,75 @@ test("the host-named default workspace shows in the interface language until it 
 	} finally {
 		applyLocale("en", {});
 	}
+});
+
+describe("the known title of a chat", () => {
+	const quiet: SessionState = {
+		execution: "idle",
+		runId: null,
+		needsInput: null,
+		completion: null,
+		completionUnread: false,
+		queuedCount: 0,
+		backgroundWork: false,
+	};
+	const record = (sessionId: string, title?: string): SessionStateRecord => ({
+		sessionId,
+		projectId: "p1",
+		workspaceId: "w1",
+		state: quiet,
+		...(title === undefined ? {} : { title }),
+	});
+	const layout = (sessionId: string, name: string): WorkspaceLayoutDocument =>
+		({
+			center: { kind: "group", id: "g1", tabs: [{ kind: "chat", id: "t1", sessionId, name }] },
+		}) as never;
+	const state = (
+		records: SessionStateRecord[],
+		options: { tab?: [string, string]; closed?: [string, string] } = {},
+	) => ({
+		sessionStateByWorkspace: {
+			w1: Object.fromEntries(records.map((entry) => [entry.sessionId, entry])),
+		},
+		layoutDocumentsByWorkspace: options.tab ? { w1: layout(...options.tab) } : {},
+		closedChatsByWorkspace: options.closed
+			? { w1: [{ sessionId: options.closed[0], title: options.closed[1], closedAt: 0 }] }
+			: {},
+	});
+
+	test("the host's record wins over a stale tab or history copy", () => {
+		expect(
+			selectKnownChatTitle(
+				state([record("s1", "After")], { tab: ["s1", "Before"], closed: ["s1", "Before"] }),
+				"w1",
+				"s1",
+			),
+		).toBe("After");
+	});
+
+	test("an empty title on the record means unnamed, so no stale copy comes back", () => {
+		expect(
+			selectKnownChatTitle(
+				state([record("s1", "")], { tab: ["s1", "Old"], closed: ["s1", "Old"] }),
+				"w1",
+				"s1",
+			),
+		).toBeNull();
+	});
+
+	test("a record from a host that sends no title falls back to the tab, then the history row", () => {
+		expect(
+			selectKnownChatTitle(state([record("s1")], { tab: ["s1", "From the tab"] }), "w1", "s1"),
+		).toBe("From the tab");
+		expect(
+			selectKnownChatTitle(
+				state([record("s1")], { tab: ["s1", ""], closed: ["s1", "Durable name"] }),
+				"w1",
+				"s1",
+			),
+		).toBe("Durable name");
+		expect(selectKnownChatTitle(state([record("s1")]), "w1", "s1")).toBeNull();
+	});
 });
 
 describe("the first prompt of an unnamed chat", () => {

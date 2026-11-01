@@ -2359,8 +2359,6 @@
 	"shell.quitHint.hold": "Удерживайте {{shortcut}} или нажмите дважды, чтобы выйти",
 	"shell.quitHint.quitting": "Выход…",
 	"shell.quitHint.release": "Отпустите, чтобы выйти",
-	"shell.sessionSwitcher.empty": "Нет активных сеансов",
-	"shell.sessionSwitcher.title": "Переключить сеанс",
 	"shell.topbar.settings": "Настройки",
 	"shell.topbar.settingsWithShortcut": "Настройки ({{shortcut}})",
 	"shell.windowControls.maximize": "Развернуть",

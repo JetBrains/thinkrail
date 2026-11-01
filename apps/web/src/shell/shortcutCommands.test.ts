@@ -175,7 +175,7 @@ test("no table chord is also a global hotkey", () => {
 		workspace: true,
 		bottom: true,
 		newWorkspace: true,
-		sessionSwitcher: true,
+		search: true,
 	};
 	for (const platform of ["Win32", "Linux x86_64"]) {
 		for (const command of SHORTCUT_COMMANDS) {
