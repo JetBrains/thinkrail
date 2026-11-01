@@ -40,6 +40,7 @@ const COMPAT = {
 const OUTPUT_LIMITS = { min: 256, max: 16_384 } as const;
 const CHAT_MODES = new Set(["chat", "completion", "responses"]);
 const MANAGED_MODEL_FIELDS = ["contextWindow", "maxTokens", "reasoning", "input"] as const;
+const CHAT_TEMPLATE_THINKING = "qwen-chat-template";
 
 type Json = Record<string, unknown>;
 
@@ -155,6 +156,7 @@ export function parseModelList(payload: unknown): CustomEndpointModel[] | null {
 			reasoning: null,
 			vision: input.length > 0 ? input.includes("image") : null,
 			tools: null,
+			chatTemplateThinking: null,
 		});
 	}
 	return models;
@@ -164,12 +166,12 @@ async function enrichLlamaCpp(root: string, key: string | undefined) {
 	const props = await detail(`${root}/props`, key);
 	if (!isObject(props) || !isObject(props.default_generation_settings)) return undefined;
 	const caps = isObject(props.chat_template_caps) ? props.chat_template_caps : {};
+	const templateThinking =
+		typeof props.chat_template === "string" && props.chat_template.includes("enable_thinking");
 	return {
 		contextWindow: positiveInt(props.default_generation_settings.n_ctx),
-		reasoning:
-			typeof props.chat_template === "string" && props.chat_template.includes("enable_thinking")
-				? true
-				: null,
+		reasoning: templateThinking ? true : null,
+		chatTemplateThinking: templateThinking ? true : null,
 		tools: typeof caps.supports_tools === "boolean" ? caps.supports_tools : null,
 	};
 }
@@ -232,6 +234,7 @@ async function enrich(
 			...model,
 			contextWindow: llama.contextWindow ?? model.contextWindow,
 			reasoning: model.reasoning ?? llama.reasoning,
+			chatTemplateThinking: model.chatTemplateThinking ?? llama.chatTemplateThinking,
 			tools: model.tools ?? llama.tools,
 		}));
 	if (lmStudio)
@@ -297,6 +300,7 @@ function readModel(raw: unknown, overrides: Json): CustomEndpointModel | undefin
 	if (!isObject(raw) || typeof raw.id !== "string" || raw.id === "") return undefined;
 	const override = overrides[raw.id];
 	const model = isObject(override) ? { ...raw, ...override } : raw;
+	const compat = isObject(override) && isObject(override.compat) ? override.compat : raw.compat;
 	return {
 		id: raw.id,
 		contextWindow: positiveInt(model.contextWindow),
@@ -304,6 +308,8 @@ function readModel(raw: unknown, overrides: Json): CustomEndpointModel | undefin
 		reasoning: typeof model.reasoning === "boolean" ? model.reasoning : null,
 		vision: Array.isArray(model.input) ? strings(model.input).includes("image") : null,
 		tools: null,
+		chatTemplateThinking:
+			isObject(compat) && compat.thinkingFormat === CHAT_TEMPLATE_THINKING ? true : null,
 	};
 }
 
@@ -383,7 +389,11 @@ function validateDraft(draft: CustomEndpointDraft): void {
 		ids.add(model.id);
 		if (!isCount(model.contextWindow) || !isCount(model.maxTokens))
 			throw new Error("Model limits must be whole numbers.");
-		if (!isFlag(model.reasoning) || !isFlag(model.vision))
+		if (
+			!isFlag(model.reasoning) ||
+			!isFlag(model.vision) ||
+			!isFlag(model.chatTemplateThinking ?? null)
+		)
 			throw new Error("Model capabilities must be on or off.");
 	}
 }
@@ -411,10 +421,20 @@ function modelConfig(model: CustomEndpointModel, previous: Json | undefined): Js
 	else next.contextWindow = model.contextWindow;
 	if (maxTokens === null) delete next.maxTokens;
 	else next.maxTokens = maxTokens;
+	const compat = isObject(next.compat) ? { ...next.compat } : {};
+	if (model.chatTemplateThinking === true) compat.thinkingFormat = CHAT_TEMPLATE_THINKING;
+	else if (model.chatTemplateThinking === false && compat.thinkingFormat === CHAT_TEMPLATE_THINKING)
+		delete compat.thinkingFormat;
+	if (Object.keys(compat).length > 0) next.compat = compat;
+	else delete next.compat;
 	return next;
 }
 
-function withoutManagedOverrides(overrides: unknown, ids: Set<string>): Json | undefined {
+function withoutManagedOverrides(
+	overrides: unknown,
+	ids: Set<string>,
+	thinkingIds: Set<string>,
+): Json | undefined {
 	if (!isObject(overrides)) return undefined;
 	const next: Json = {};
 	for (const [id, override] of Object.entries(overrides)) {
@@ -424,6 +444,11 @@ function withoutManagedOverrides(overrides: unknown, ids: Set<string>): Json | u
 		}
 		const kept: Json = { ...override };
 		for (const field of MANAGED_MODEL_FIELDS) delete kept[field];
+		if (thinkingIds.has(id) && isObject(kept.compat)) {
+			const { thinkingFormat: _managed, ...compat } = kept.compat;
+			if (Object.keys(compat).length > 0) kept.compat = compat;
+			else delete kept.compat;
+		}
 		if (Object.keys(kept).length > 0) next[id] = kept;
 	}
 	return Object.keys(next).length > 0 ? next : undefined;
@@ -477,6 +502,11 @@ function providerConfig(draft: CustomEndpointDraft, previous: Json | undefined):
 	const overrides = withoutManagedOverrides(
 		previous?.modelOverrides,
 		new Set(draft.models.map((model) => model.id)),
+		new Set(
+			draft.models
+				.filter((model) => typeof model.chatTemplateThinking === "boolean")
+				.map((m) => m.id),
+		),
 	);
 	if (overrides) next.modelOverrides = overrides;
 	else delete next.modelOverrides;

@@ -169,7 +169,7 @@ re-opened transcripts provider-valid.
       listing is the model ids, so limits come from what servers add to it — `max_model_len` (vLLM, sglang),
       `max_input_tokens` / `max_output_tokens` (LiteLLM), `context_length`, llama.cpp `meta.n_ctx` — and from
       same-origin best-effort extras run in parallel (3s each): llama.cpp `/props` (per-slot `n_ctx`, an
-      `enable_thinking` template, `supports_tools`), Ollama `/api/version` then `/api/show` per model
+      `enable_thinking` template, which sets both `reasoning` and `chatTemplateThinking`, `supports_tools`), Ollama `/api/version` then `/api/show` per model
       (`num_ctx`, capabilities; non-`completion` models dropped) and LM Studio `/api/v0/models` (loaded
       context, `vlm`, `tool_use`; embeddings dropped). An extra that fails or 404s only leaves facts
       unknown, so a gateway costs a few harmless 404s. Training lengths are ignored. Failures return a
@@ -186,7 +186,13 @@ re-opened transcripts provider-valid.
       "max_tokens"`) because pi detects compat from the URL and would send OpenAI-only fields to an unknown
       host; every OpenAI-compatible server accepts these. An edit keeps the provider's `compat` and every
       field the form doesn't manage, and removes the managed fields from that model's `modelOverrides`,
-      which pi would otherwise apply over the saved values.
+      which pi would otherwise apply over the saved values. A model whose chat template takes
+      `enable_thinking` (`chatTemplateThinking: true`) gets `compat.thinkingFormat: "qwen-chat-template"`:
+      without it pi sends OpenAI's `reasoning_effort`, which Qwen-style templates on llama.cpp and vLLM
+      ignore, so thinking could never be turned off and every turn (compaction included) would pay for it.
+      `false` removes that format, `null` (unreported, or a client that predates the field) leaves the
+      model's `compat` as written; a known value also clears `thinkingFormat` from that model's
+      `modelOverrides`.
     - **Keys.** The key never crosses the wire (`hasApiKey`). A typed probe key resolves a whole `$VAR` /
       `${VAR}` reference and is otherwise used literally; a `!command` is never run by a probe (a narrow
       subset of pi's resolver, enough for Detect, not a mirror of it). A probe naming `endpointId` reuses

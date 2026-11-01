@@ -637,6 +637,8 @@ export interface CustomEndpointModel {
 	vision: boolean | null;
 	/** Whether the server says the model takes tool calls; never saved, so a listed endpoint reports null. */
 	tools: boolean | null;
+	/** The chat template turns thinking on and off through `enable_thinking` (llama.cpp reports it). */
+	chatTemplateThinking: boolean | null;
 }
 
 /** An OpenAI-compatible `custom-*` provider in pi's `models.json`. The key itself never crosses the wire. */
