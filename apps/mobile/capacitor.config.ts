@@ -1,12 +1,5 @@
-import { readFileSync } from "node:fs";
 import type { CapacitorConfig } from "@capacitor/cli";
-
-const darkTheme = JSON.parse(
-	readFileSync(
-		new URL("../../packages/design-tokens/themes/dark.theme.json", import.meta.url),
-		"utf8",
-	),
-) as { colors: { background: string } };
+import darkTheme from "@thinkrail/design-tokens/themes/dark.theme.json";
 
 const config: CapacitorConfig = {
 	appId: "ai.thinkrail.mobile",

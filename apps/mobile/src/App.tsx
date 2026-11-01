@@ -10,11 +10,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PairForm } from "./PairForm";
 import { SessionList } from "./SessionList";
 import { type OpenSession, SessionScreen } from "./SessionScreen";
+import { isPairLink } from "./scanPairLink";
 import { localStore } from "./store";
 import { Welcome } from "./Welcome";
 
 const DEVICE_LABEL = "Mobile";
-const PAIR_LINK = /^thinkrail:\/\/pair\b/;
 
 export type PairState = { kind: "idle" } | { kind: "pairing" } | { kind: "failed"; reason: string };
 
@@ -75,7 +75,7 @@ export function App() {
 				.catch(() => markReachable(host.label, false));
 		}
 		const onLink = (url: string | undefined): void => {
-			if (url && PAIR_LINK.test(url)) void pairWith(url);
+			if (isPairLink(url)) void pairWith(url.trim());
 		};
 		void CapApp.getLaunchUrl()
 			.then((launch) => onLink(launch?.url))
@@ -101,9 +101,7 @@ export function App() {
 			onOpen={setOpen}
 			adding={adding}
 			onAdd={() => setAdding(true)}
-			pairForm={
-				<PairForm pair={pair} onPair={pairWith} onCancel={() => setAdding(false)} autoFocus />
-			}
+			pairForm={<PairForm pair={pair} onPair={pairWith} onCancel={() => setAdding(false)} />}
 		/>
 	);
 }

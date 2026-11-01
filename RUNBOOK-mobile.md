@@ -21,7 +21,8 @@ bun run mobile:ios          # build dist/ → create ios/ if missing → patch I
 ```
 `ios/` is generated and git-ignored. `apps/mobile/scripts/ios-setup.ts` creates it on first run and
 idempotently registers the `thinkrail://` URL scheme (so a scanned QR opens the app) and the Local Network
-usage description (without it the phone cannot reach the laptop). After a UI change, re-run
+usage description (without it the phone cannot reach the laptop) and the Camera usage description (for the
+in-app QR scan). After a UI change, re-run
 `bun run mobile:ios` (or `bun run --cwd apps/mobile ios:sync` and press ▶ in Xcode again).
 
 ## 2. Run on the iPhone from Xcode
@@ -46,8 +47,9 @@ the WebRTC connection is direct — **coturn is not needed**. (coturn only matte
 peer-to-peer, e.g. guest Wi‑Fi isolation.)
 
 ## 4. Pair on the phone
-First launch shows the **welcome screen**. **Scan the terminal QR** with the iPhone Camera — the
-`thinkrail://` link opens the app and pairs automatically — or paste the link and tap **Connect**. The host's
+First launch shows the **welcome screen**. Tap **Scan QR code** and point the phone at the terminal QR (or scan it with the
+iPhone Camera — the `thinkrail://` link opens the app and pairs automatically), or paste the link and tap
+**Connect**. The host's
 sessions appear in the list (**Add computer** pairs another one); tap one to **pick up the ongoing conversation** — a session you started on the
 laptop loads on the phone and keeps streaming — and send a message to continue it. Add your server the same
 way (run the relay+host there too, paste its link).

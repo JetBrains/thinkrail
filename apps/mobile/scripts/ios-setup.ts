@@ -8,6 +8,7 @@ const PLIST = join(APP_ROOT, "ios/App/App/Info.plist");
 const PLIST_BUDDY = "/usr/libexec/PlistBuddy";
 const URL_SCHEME = "thinkrail";
 const LOCAL_NETWORK_REASON = "Connect to ThinkRail running on your computer";
+const CAMERA_REASON = "Scan the pairing QR code ThinkRail prints on your computer";
 
 if (!existsSync(join(APP_ROOT, "ios"))) {
 	if (!existsSync(join(APP_ROOT, "dist"))) await $`bun run build`.cwd(APP_ROOT);
@@ -24,5 +25,9 @@ if (!(await has("CFBundleURLTypes"))) {
 if (!(await has("NSLocalNetworkUsageDescription"))) {
 	await $`${PLIST_BUDDY} -c ${`Add :NSLocalNetworkUsageDescription string ${LOCAL_NETWORK_REASON}`} ${PLIST}`;
 	console.log("ios-setup: added the Local Network usage description");
+}
+if (!(await has("NSCameraUsageDescription"))) {
+	await $`${PLIST_BUDDY} -c ${`Add :NSCameraUsageDescription string ${CAMERA_REASON}`} ${PLIST}`;
+	console.log("ios-setup: added the Camera usage description");
 }
 console.log("ios-setup: ios/ is ready");

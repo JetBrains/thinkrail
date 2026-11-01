@@ -19,13 +19,14 @@ IDE. No file tree, diffs, terminals, layout, or settings. No cloud account: the 
 - **Owns:** a small React/Vite UI — `App.tsx` (pairing, host reconnect, screen routing, deep links via
   `@capacitor/app` `appUrlOpen` + `getLaunchUrl`, which pair automatically), `Welcome.tsx` (first run, no
   paired host), `SessionList.tsx` (aggregated sessions + per-host "unreachable" notice + add-computer form),
-  `SessionScreen.tsx` (picks up an ongoing session: loads `session.getMessages`, refreshes it as the session
+  `scanPairLink.ts` (the in-app QR scan via `@capacitor/barcode-scanner`; cancel is silent, a non-pairing QR
+  or denied camera is reported), `SessionScreen.tsx` (picks up an ongoing session: loads `session.getMessages`, refreshes it as the session
   streams, sends via `session.followUp`), `PairForm.tsx`, `transcript.ts` (best-effort plain-text lines),
   `theme.ts`, the Capacitor config, `scripts/ios-setup.ts`, and a `localStorage` `KeyValueStore`
   (`store.ts`; the Capacitor WKWebView persists it on-device).
 - **Allowed deps:** `@thinkrail/remote-client` (the entire remote engine), `@thinkrail/contracts`,
   `@thinkrail/design-tokens` (palettes, semantic CSS, `applyPalette`), `@thinkrail/locales/react`,
-  `@thinkrail/ui` primitives, Remix Icon, React, Vite, Tailwind v4, Capacitor, platform APIs. Never
+  `@thinkrail/ui` primitives, Remix Icon, `@capacitor/barcode-scanner`, React, Vite, Tailwind v4, Capacitor, platform APIs. Never
   `server`, `pi`, `web`, or `shared`.
 - **Forbidden:** importing `apps/web`, `server`, or `pi`; reimplementing the remote protocol (it lives in
   `remote-client`); a second colour, type, spacing or radius source.
@@ -49,7 +50,7 @@ setting. The native shell's background is the Dark palette's `background`, read 
 
 `bun run mobile:ios` (root) builds `dist/`, runs `scripts/ios-setup.ts` (creates `ios/` with
 `cap add ios` when missing, then idempotently registers the `thinkrail` URL scheme and the Local Network
-usage description in `Info.plist`), syncs, and opens Xcode. `ios/` is generated per machine and
+and Camera usage descriptions in `Info.plist`), syncs, and opens Xcode. `ios/` is generated per machine and
 git-ignored, so the setup script is the only place native configuration is written. See
 `RUNBOOK-mobile.md` for signing and on-device steps.
 
