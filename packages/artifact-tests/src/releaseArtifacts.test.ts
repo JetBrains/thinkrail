@@ -105,14 +105,37 @@ const targets = [
 	},
 ] as const;
 
+function writeSetupArtifact(path: string, sentinel: string) {
+	if (!path.endsWith(".tar.gz")) {
+		writeFileSync(path, sentinel);
+		return;
+	}
+	const stage = mkdtempSync(join(tmpdir(), "thinkrail-release-payload-"));
+	roots.push(stage);
+	// The Linux setup fixtures must be real tarballs: the collector repacks them.
+	writeFileSync(join(stage, "payload.txt"), sentinel);
+	const built = Bun.spawnSync(["tar", "-czf", path, "-C", stage, "payload.txt"]);
+	if (built.exitCode !== 0) throw new Error(`setup tarball fixture failed: ${built.stderr}`);
+}
+
+function readSetupArtifact(path: string): string {
+	if (!path.endsWith(".tar.gz")) return readFileSync(path, "utf8");
+	const stage = mkdtempSync(join(tmpdir(), "thinkrail-release-extract-"));
+	roots.push(stage);
+	const extracted = Bun.spawnSync(["tar", "-xzf", path, "-C", stage]);
+	if (extracted.exitCode !== 0)
+		throw new Error(`setup tarball extraction failed: ${extracted.stderr}`);
+	return readFileSync(join(stage, "payload.txt"), "utf8");
+}
+
 function fixture(): string {
 	const root = mkdtempSync(join(tmpdir(), "thinkrail-release-collector-"));
 	roots.push(root);
 	const artifacts = join(root, "apps/desktop/artifacts");
 	mkdirSync(artifacts, { recursive: true });
 	for (const target of targets) {
-		writeFileSync(join(artifacts, target.nightly), `nightly:${target.target}`);
-		writeFileSync(join(artifacts, target.stable), `stable:${target.target}`);
+		writeSetupArtifact(join(artifacts, target.nightly), `nightly:${target.target}`);
+		writeSetupArtifact(join(artifacts, target.stable), `stable:${target.target}`);
 		for (const channel of ["stable", "nightly"] as const) {
 			const update = target.updates[channel];
 			writeFileSync(join(artifacts, update.manifest), `${channel}:${target.target}:manifest`);
@@ -298,7 +321,7 @@ for (const target of targets) {
 			const root = fixture();
 			const result = collect(root, target.target, channel);
 			expect(result.exitCode).toBe(0);
-			expect(readFileSync(join(root, "apps/desktop/dist", target.published), "utf8")).toBe(
+			expect(readSetupArtifact(join(root, "apps/desktop/dist", target.published))).toBe(
 				`${channel}:${target.target}`,
 			);
 			const update = target.updates[channel];
