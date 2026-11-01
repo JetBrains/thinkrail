@@ -143,6 +143,7 @@ export function createBackgroundCommandsExtension(
 		let boundary: { runContinues: boolean; wake: boolean } | undefined;
 		let owedWake = false;
 		let flushScheduled = false;
+		let wakeDeferred = false;
 
 		const parentIdle = () => {
 			try {
@@ -153,7 +154,7 @@ export function createBackgroundCommandsExtension(
 		};
 		const modeFor = (flush: BackgroundCommandFlush): DeliveryMode | undefined => {
 			if (boundary) return { idle: false, runContinues: boundary.runContinues, viaHost: false };
-			if (parentIdle()) return flushScheduled ? undefined : { idle: true };
+			if (parentIdle()) return wakeDeferred ? undefined : { idle: true };
 			if (flush.atTurnEnd && turnEnd) return { idle: false, ...turnEnd, viaHost: true };
 			return undefined;
 		};
@@ -173,6 +174,7 @@ export function createBackgroundCommandsExtension(
 			flushScheduled = true;
 			setTimeout(() => {
 				flushScheduled = false;
+				wakeDeferred = false;
 				service?.flushCompletions();
 			}, 0);
 		};
@@ -185,6 +187,7 @@ export function createBackgroundCommandsExtension(
 		pi.on("turn_start", () => {
 			turnEnd = undefined;
 			owedWake = false;
+			wakeDeferred = false;
 		});
 		pi.on("agent_end", () => {
 			turnEnd = undefined;
@@ -337,6 +340,10 @@ export function createBackgroundCommandsExtension(
 							break;
 						}
 						accepted.push(completion);
+						if (completion === carrier && parentIdle()) {
+							wakeDeferred = true;
+							scheduleFlush();
+						}
 					}
 					if (!mode.idle && accepted.some(wakes)) {
 						if (mode.viaHost) owedWake = true;

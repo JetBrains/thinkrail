@@ -8,6 +8,7 @@ import {
 	openFixtureProject,
 	openPersistedChat,
 } from "./fixtures/app";
+import { clickTranscriptControl, waitForScrollStability } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { pierreLines } from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -131,7 +132,7 @@ test("completed visualize diagrams expand by default and support fullscreen zoom
 	await expect(diagram.getByTestId("mermaid-svg").locator("svg")).toBeVisible({
 		timeout: 20_000,
 	});
-	await diagram.getByTestId("mermaid-fullscreen").click();
+	await clickTranscriptControl(diagram.getByTestId("mermaid-fullscreen"));
 	const dialog = page.getByTestId("mermaid-fullscreen-dialog");
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByRole("heading", { name: "Request path" })).toBeVisible();
@@ -333,7 +334,7 @@ test("a file visualization renders the workspace file with the diff-review rende
 		);
 		await expect(preview.frameLocator("iframe").getByText("Save settings")).toBeVisible();
 
-		await preview.getByTestId("view-toggle-code").click();
+		await clickTranscriptControl(preview.getByTestId("view-toggle-code"));
 		await expect(preview.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
 		await expect(preview).toContainText("Save settings");
 	} finally {
@@ -400,6 +401,7 @@ test("review comments on a visualized file are sent into the chat that shows it"
 		});
 		const surface = card.getByTestId("svg-region-surface");
 		await expect(surface).toBeVisible();
+		await waitForScrollStability(page.getByTestId("chat-scroll"));
 		await surface.scrollIntoViewIfNeeded();
 		const box = await surface.boundingBox();
 		const view = await card.getByTestId("resource-preview").boundingBox();
@@ -410,14 +412,14 @@ test("review comments on a visualized file are sent into the chat that shows it"
 		await page.mouse.down();
 		await page.mouse.move(box.x + box.width * 0.75, top + 80, { steps: 6 });
 		await page.mouse.up();
-		await page.locator('[data-testid="review-add-icon"]:visible').click();
+		await clickTranscriptControl(page.locator('[data-testid="review-add-icon"]:visible'));
 		await page.getByTestId("review-composer-input").fill("Make this square smaller.");
-		await page.getByTestId("review-composer-save").click();
+		await clickTranscriptControl(page.getByTestId("review-composer-save"));
 		await expect(card.getByTestId("review-thread-card")).toHaveCount(1);
 
 		const send = card.getByTestId("send-review-button");
 		await expect(send).toHaveText(/Send review \(1\)/);
-		await send.click();
+		await clickTranscriptControl(send);
 		await expect.poll(() => sends).toEqual([{ method: "review.sendBatch", sessionId }]);
 	} finally {
 		cleanup();
@@ -437,12 +439,12 @@ test("a file preview fits HTML to a design width and opens full screen and in a 
 		const frame = preview.getByTestId("html-frame-box");
 		await expect(frame).toHaveAttribute("data-viewport", "desktop");
 		expect(Number(await frame.getAttribute("data-scale"))).toBeLessThan(1);
-		await preview.getByTestId("html-viewport-phone").click();
+		await clickTranscriptControl(preview.getByTestId("html-viewport-phone"));
 		await expect(frame).toHaveAttribute("data-viewport", "phone");
 		await expect(frame).toHaveAttribute("data-scale", "1.000");
 		await page.screenshot({ path: test.info().outputPath("card.png") });
 
-		await preview.getByTestId("tool-visualize-fullscreen").click();
+		await clickTranscriptControl(preview.getByTestId("tool-visualize-fullscreen"));
 		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
 		await expect(dialog).toBeVisible();
 		await expect(dialog.getByTestId("resource-preview")).toBeVisible();
@@ -451,7 +453,7 @@ test("a file preview fits HTML to a design width and opens full screen and in a 
 		await page.keyboard.press("Escape");
 		await expect(dialog).toBeHidden();
 
-		await preview.getByTestId("tool-visualize-open-tab").click();
+		await clickTranscriptControl(preview.getByTestId("tool-visualize-open-tab"));
 		await expect(
 			page.locator('[data-testid="editor-tab"][data-kind="file"]').filter({ hasText: "wide.html" }),
 		).toBeVisible();
@@ -473,7 +475,7 @@ test("closing a full-screen code preview keeps the card's editor showing the fil
 		const lines = card.getByTestId("resource-preview").locator(".monaco-editor .view-lines");
 		await expect(lines).toContainText("cardGreeting");
 
-		await card.getByTestId("tool-visualize-fullscreen").click();
+		await clickTranscriptControl(card.getByTestId("tool-visualize-fullscreen"));
 		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
 		await expect(dialog.locator(".monaco-editor .view-lines")).toContainText("cardGreeting");
 		await page.keyboard.press("Escape");
@@ -499,13 +501,15 @@ test("a before/after preview opens as a diff tab over the two files that survive
 			before: `${MOCKUP_DIR}/before.html`,
 		});
 		const diff = card.getByTestId("resource-preview-diff");
-		await diff.getByTestId("tool-visualize-fullscreen").click();
+		await expect(diff.locator("iframe")).toHaveCount(2);
+		await clickTranscriptControl(diff.getByTestId("tool-visualize-fullscreen"));
 		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
 		await expect(dialog.getByTestId("resource-preview-diff").locator("iframe")).toHaveCount(2);
 		await page.screenshot({ path: test.info().outputPath("diff-fullscreen.png") });
 		await page.keyboard.press("Escape");
+		await expect(dialog).toBeHidden();
 
-		await diff.getByTestId("tool-visualize-open-tab").click();
+		await clickTranscriptControl(diff.getByTestId("tool-visualize-open-tab"));
 		const tab = page
 			.locator('[data-testid="editor-tab"][data-kind="diff"]')
 			.filter({ hasText: "before.html → after.html" });
@@ -542,8 +546,13 @@ test("an HTML preview width is shared by the card and its full screen and surviv
 			before: `${MOCKUP_DIR}/before.html`,
 		});
 		const diff = card.getByTestId("resource-preview-diff");
-		await diff.getByTestId("html-viewport-phone").click();
-		await diff.getByTestId("tool-visualize-fullscreen").click();
+		await expect(diff.locator("iframe")).toHaveCount(2);
+		await clickTranscriptControl(diff.getByTestId("html-viewport-phone"));
+		await expect(diff.getByTestId("html-frame-box").first()).toHaveAttribute(
+			"data-viewport",
+			"phone",
+		);
+		await clickTranscriptControl(diff.getByTestId("tool-visualize-fullscreen"));
 		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
 		await expect(dialog.getByTestId("html-frame-box").first()).toHaveAttribute(
 			"data-viewport",
@@ -557,7 +566,7 @@ test("an HTML preview width is shared by the card and its full screen and surviv
 			"tablet",
 		);
 
-		await diff.getByTestId("tool-visualize-open-tab").click();
+		await clickTranscriptControl(diff.getByTestId("tool-visualize-open-tab"));
 		const pane = page.locator('[data-testid="diff-pane"][data-compare]');
 		await pane.getByTestId("html-viewport-tablet").click();
 		await expect(pane.getByTestId("html-frame-box").first()).toHaveAttribute(
@@ -601,7 +610,7 @@ test("a huge before/after comparison waits behind the expensive-diff notice and 
 		editUnrelated();
 		const unrelatedEdits = setInterval(editUnrelated, 400);
 		try {
-			await diff.getByTestId("diff-show-anyway").click();
+			await clickTranscriptControl(diff.getByTestId("diff-show-anyway"));
 			await expect(diff.getByTestId("diff-too-large")).toHaveCount(0);
 		} finally {
 			clearInterval(unrelatedEdits);

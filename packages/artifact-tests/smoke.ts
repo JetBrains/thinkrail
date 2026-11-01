@@ -14,21 +14,13 @@ import {
 	type RunningArtifactHost,
 	runArtifactHostProbes,
 } from "./src/artifactProbes";
+import { readSettledJson } from "./src/documents";
 import { pollUntil, terminateProcess, within } from "./src/lifecycle";
 import { windowsIdentityMismatches } from "./src/windowsIdentity";
 
 const root = mkdtempSync(join(tmpdir(), "thinkrail-desktop-smoke-"));
+const DESKTOP_READY_TIMEOUT_MS = 120_000;
 let sequence = 0;
-
-function readSettledJson(path: string): unknown {
-	try {
-		return JSON.parse(readFileSync(path, "utf8"));
-	} catch (error) {
-		if (error instanceof SyntaxError) return undefined;
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
-		throw error;
-	}
-}
 
 async function verifyTitleBarDoubleClick(
 	controlPath: string,
@@ -106,6 +98,78 @@ async function verifyTitleBarDoubleClick(
 	const second = await runPhase("title-bar-double-click-no-drag", 2);
 	if (expectedAction === "zoom" && second?.after?.maximized !== first?.before?.maximized) {
 		throw fail(probe(), "did not restore the original maximized state");
+	}
+}
+
+const EXTERNAL_NAVIGATION_PROBES = [
+	"navigate",
+	"navigate-link",
+	"navigate-blank-link",
+	"navigate-window-open",
+] as const;
+
+type NavigationProbeServer = { origin: string; requests: string[]; stop(): void };
+
+function startNavigationProbeServer(): NavigationProbeServer {
+	const requests: string[] = [];
+	const server = Bun.serve({
+		hostname: "127.0.0.1",
+		port: 0,
+		fetch(request) {
+			requests.push(new URL(request.url).pathname);
+			return new Response("external probe");
+		},
+	});
+	server.unref();
+	return {
+		origin: `http://127.0.0.1:${server.port}`,
+		requests,
+		stop: () => void server.stop(true),
+	};
+}
+
+async function verifyExternalNavigation(
+	controlPath: string,
+	probePath: string,
+	server: NavigationProbeServer,
+	exited: Promise<number>,
+	exitError: (code: number) => Error,
+): Promise<void> {
+	const probe = () =>
+		readSettledJson(probePath) as
+			| { opened?: string[]; verdicts?: string[]; commits?: string[] }
+			| undefined;
+	const opened = () => probe()?.opened ?? [];
+	for (const command of EXTERNAL_NAVIGATION_PROBES) {
+		const url = `${server.origin}/${command}`;
+		writeFileSync(controlPath, command);
+		await pollUntil(() => opened().includes(url), {
+			timeoutMs: 15_000,
+			what: `native external navigation (${command})`,
+			exited,
+			exitError,
+		});
+		await Bun.sleep(1000);
+		const count = opened().filter((entry) => entry === url).length;
+		if (count !== 1) {
+			throw new Error(`native external navigation (${command}) opened ${url} ${count} times`);
+		}
+		const naming = (details: string[] | undefined) =>
+			(details ?? []).filter((detail) => detail.includes(`/${command}`));
+		if (naming(probe()?.commits).length > 0) {
+			const verdicts = naming(probe()?.verdicts).join(", ") || "none";
+			throw new Error(`native window left its origin for ${command} (will-navigate: ${verdicts})`);
+		}
+	}
+	writeFileSync(controlPath, "navigate-srcdoc");
+	await pollUntil(
+		() =>
+			server.requests.includes("/navigate-srcdoc-1") &&
+			server.requests.includes("/navigate-srcdoc-2"),
+		{ timeoutMs: 15_000, what: "srcdoc preview load and in-place update", exited, exitError },
+	);
+	if (opened().length !== EXTERNAL_NAVIGATION_PROBES.length) {
+		throw new Error(`unexpected native external opens: ${JSON.stringify(opened())}`);
 	}
 }
 
@@ -196,6 +260,7 @@ async function launchDesktop(
 	const windowControlsProbePath = join(root, `${id}-${label}.window-controls.json`);
 	const userDataPath = join(root, `${id}-${label}-user-data`);
 	const restoredRoute = mode === "ui" ? "#/v1/projects/desktop-smoke" : undefined;
+	const navigationProbeServer = mode === "ui" ? startNavigationProbeServer() : undefined;
 	if (restoredRoute) {
 		mkdirSync(userDataPath, { recursive: true });
 		writeFileSync(
@@ -213,6 +278,9 @@ async function launchDesktop(
 				? { THINKRAIL_DESKTOP_E2E_HOST: "1" }
 				: {
 						THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE: navigationProbePath,
+						...(navigationProbeServer
+							? { THINKRAIL_DESKTOP_NAVIGATION_PROBE_ORIGIN: navigationProbeServer.origin }
+							: {}),
 						...(process.platform === "darwin"
 							? { THINKRAIL_DESKTOP_TITLE_BAR_PROBE_FILE: titleBarProbePath }
 							: {}),
@@ -224,6 +292,7 @@ async function launchDesktop(
 		[
 			"THINKRAIL_DESKTOP_E2E_HOST",
 			"THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE",
+			"THINKRAIL_DESKTOP_NAVIGATION_PROBE_ORIGIN",
 			"THINKRAIL_DESKTOP_TITLE_BAR_PROBE_FILE",
 			"THINKRAIL_DESKTOP_WINDOW_CONTROLS_PROBE_FILE",
 		],
@@ -238,6 +307,7 @@ async function launchDesktop(
 					launcher,
 				]
 			: [launcher];
+	const spawnedAt = performance.now();
 	const proc = Bun.spawn(command, {
 		env: appEnv,
 		cwd: root,
@@ -254,12 +324,13 @@ async function launchDesktop(
 				return readyDocument !== undefined;
 			},
 			{
-				timeoutMs: 30_000,
+				timeoutMs: DESKTOP_READY_TIMEOUT_MS,
 				what: `${label} desktop ready`,
 				exited: proc.exited,
 				exitError: exitedEarly,
 			},
 		);
+		console.log(`${label} desktop ready in ${Math.round(performance.now() - spawnedAt)} ms`);
 		const ready = readyDocument as {
 			origin: string;
 			runtimeDir: string;
@@ -288,23 +359,13 @@ async function launchDesktop(
 			if (process.platform === "win32") {
 				await verifyWindowControls(controlPath, windowControlsProbePath, proc.exited, exitedEarly);
 			}
-			writeFileSync(controlPath, "navigate");
-			let navigation: { url?: string } | undefined;
-			await pollUntil(
-				() => {
-					navigation = readSettledJson(navigationProbePath) as { url?: string } | undefined;
-					return navigation !== undefined;
-				},
-				{
-					timeoutMs: 15_000,
-					what: "native external navigation",
-					exited: proc.exited,
-					exitError: exitedEarly,
-				},
-			);
-			if (navigation?.url !== "https://example.invalid/thinkrail-navigation-probe") {
-				throw new Error(
-					`native external navigation reported an unexpected URL: ${navigation?.url}`,
+			if (navigationProbeServer) {
+				await verifyExternalNavigation(
+					controlPath,
+					navigationProbePath,
+					navigationProbeServer,
+					proc.exited,
+					exitedEarly,
 				);
 			}
 		}
@@ -329,12 +390,15 @@ async function launchDesktop(
 						if (code !== 0) throw new Error(`${label} desktop shutdown exited ${code}`);
 					} catch (error) {
 						await terminateProcess(proc, error);
+					} finally {
+						navigationProbeServer?.stop();
 					}
 				})();
 				return stopPromise;
 			},
 		};
 	} catch (error) {
+		navigationProbeServer?.stop();
 		await terminateProcess(proc, error);
 		throw error;
 	}

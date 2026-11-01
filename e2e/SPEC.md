@@ -154,11 +154,22 @@ Pierre surfaces paint plain text first and replace their rows when the worker's 
 is late on slower hosts such as the compiled-binary and packaged-desktop artifacts; pointer probes wait
 for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows.
 A following probe that lets actionability scroll an off-screen transcript control into view first
-waits for `data-scroll-moving="false"`: that scroll is not reader input, so an active placement motion
-restores the latest edge, which on slow runners lands between mousedown and mouseup and drops the click.
+waits for the chat to settle (`waitForScrollStability`: `data-scroll-moving="false"` and unchanged scroll
+geometry across frames; `clickTranscriptControl` settles, then clicks). That scroll is not reader input,
+so an active placement motion restores the latest edge; on slow runners the restore lands between
+mousedown and mouseup, or puts a preview iframe under the pointer, and the click is lost while the action
+reports success. Settling cannot stop a motion that later growth starts, so the probe first waits for the
+control's own content (a preview's frames or notice), and a click after a dialog waits for it to hide.
+`visualize.spec.ts` and `tool-file-links.spec.ts` click every transcript control this way: a file card's
+fixed-height preview is taller than the transcript beside the default bottom terminal, so its toolbar
+sits above the fold at the latest edge, and each tool-step expansion moves the edge a following chat then
+animates to.
 Entering a workspace auto-opens its latest chat, and a pending questionnaire there claims focus and reveal
 at once. Workbench shortcuts pressed afterwards are user input, and the card yields to them. Questionnaire
 attention coverage therefore closes and reopens the chat after arranging the workbench.
+Showing a side or the bottom focuses its selected tab (its edge-rail control when no tab renders) one
+animation frame after the region renders; a probe that then focuses inside the shown region first waits
+for that endpoint, or a late frame moves focus away from the probe's target.
 Monaco wheel probes reach the editor through an actionability-checked `hover()`, never a measured box:
 a box read before the editor's layout settles can be a stale one whose centre lies under the left panel's
 resize separator. Each CDP wheel event scrolls Monaco 50 px whatever its delta (one synthetic tick), so a
@@ -399,6 +410,10 @@ keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the
 deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
 URL for the whole run, so a spec that sets its own repository settings names its own repository.
 
+Playwright starts the host (`webServer`) before `globalSetup`, so global setup clears the lane's data dir
+while a live host writes its logs there; it removes the dir with `removeTree`, which retries the resulting
+`ENOTEMPTY` instead of failing the lane.
+
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
 desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,
 picker/editor/provider control files, host/restart/binary/desktop ports, and Central fixture artifacts. The
@@ -422,6 +437,11 @@ still valid.
 Cross-window placement probes wait for the peer's initial chat hydration before changing its layout;
 creating a terminal can legitimately supersede an in-flight passive restore, which is not placement leakage.
 
+A tab-drag probe that commits a drop releases only once its destination reports `data-drop-active="true"`:
+dnd-kit drops on the `over` target its renders committed after the last processed move, not at the release
+point, so a release that outruns the final move's render lands on the previous position's target — often
+none, a silent no-op.
+
 Different worktrees may run concurrently. Two complete E2E invocations in one worktree remain sequential;
 the lane ids are deliberately stable across runs so interrupted state is reclaimed rather than leaked.
 No path may fall back to `~/.thinkrail`, the developer's HOME/config trees, or the real pi agent dir. The
@@ -441,17 +461,19 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   `e2e/fixtures/git.ts` is the one place specs shell out to `git` (`git`, `gitQuiet`, `gitText`, `gitAs`,
   `commitFile`); `gitAs`/`commitFile` pin a throwaway e2e identity so a seeded commit's authorship never
   depends on the developer machine's real git config. `e2e/fixtures/pierre.ts` is the one place specs
-  touch `@pierre/diffs`' DOM (`pierreLines`, `pierreLineNumber`, `selectPierreLine`,
-  `pierreCollapsedContext`, `pierreDeletionsSide`): a Pierre release that renames `data-line`,
-  `data-column-number`, `data-unmodified-lines` or `data-deletions` is a one-file repair, and no spec
-  encodes how a line is selected. `e2e/phone-review.spec.ts` is the phone-class gate for the review
+  touch `@pierre/diffs`' DOM and worker (`pierreLines`, `pierreLineNumber`, `selectPierreLine`,
+  `pierreCollapsedContext`, `pierreDeletionsSide`, `holdPierreWorkers`): a Pierre release that renames
+  `data-line`, `data-column-number`, `data-unmodified-lines` or `data-deletions` is a one-file repair, and no spec
+  encodes how a line is selected. A probe that reveals a line inside a Pierre surface holds the worker script
+  (`holdPierreWorkers`) until the reveal is requested: a loaded runner lays the rows out only after the
+  reveal, so the line must still come into view then. `e2e/phone-review.spec.ts` is the phone-class gate for the review
   surface — Pierre file rendering, unified-only diffs, tap-to-comment and inline placement at
   `PHONE_VIEWPORT` — reached the way the desktop shell reaches a phone today: open at desktop width, then
   resize and hide the auxiliary stacks.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
-  exports, CLI binary, the locator from [[module-artifact-tests]], shared retrying teardown helper, git,
-  Chromium, and Playwright. Standalone native/installer smoke and shared artifact probes are owned by
-  that test workspace, outside Playwright discovery.
+  exports, CLI binary, the locator and ready-document poller from [[module-artifact-tests]], shared
+  retrying teardown helper, git, Chromium, and Playwright. Standalone native/installer smoke and shared
+  artifact probes are owned by that test workspace, outside Playwright discovery.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
   product modules, default/no-agent tests depending on developer state, agent tests reading anything beyond
   the explicitly authorized Central artifact, or parallel workers sharing one mutable host.
@@ -469,7 +491,10 @@ interleaving (held animation frames, a held reply) rather than sampling it in a 
 scales with runner speed and outgrows the test budget on CI. An assertion that something happens without a
 settle wait freezes the page clock (`page.clock.pauseAt`) before the gesture, so a regressed timer can never
 fire, instead of racing a wall-clock `timeout`; `page.clock.runFor` then plays a settle window out
-deterministically. Live-provider completion waits on
+deterministically. Managed-tree signal coverage judges graceful cleanup only after the runner exits — exit
+follows the force phase, so a cleanup marker present then was written before the SIGKILL — and its fixtures
+publish markers by atomic rename. The grace runs from forwarding, after the descendant `ps` snapshot; a window
+timed from the test's own signal would charge the snapshot's latency to the grace. Live-provider completion waits on
 the session's streaming state after response evidence appears; the optional rendered `Done` row is not a
 terminal-state contract. Scenarios whose subject is a client-side send transformation assert the exact
 outgoing `session.prompt` frame rather than treating a
@@ -482,10 +507,12 @@ geometry cannot clamp before the row mounts. Chat-title coverage uses persisted 
 native `/name` path, open-tab and closed-history inline rename paths, keyboard focus recovery, bounded
 long-history scrolling, and reload durability without involving a provider. First-prompt label coverage
 (`chat-title-fallback.spec.ts`) seeds unnamed transcripts to pin the host-projected label on the tab strip,
-Recently closed and the session switcher (`data-title-source="prompt"`, full line as tooltip, word-boundary
-cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
+Recently closed and the search palette's chat rows (`data-title-source="prompt"`, full line as tooltip,
+word-boundary cut, found by words past the cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
 from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
-durability is the server unit test's. Visualize coverage
+durability is the server unit test's. Palette name coverage (`search-palette.spec.ts`) seeds a named chat in
+a workspace the page never opened, finds it by a word only its title holds, renames it from a second wire
+client while the palette stays open, and pins that the page sent no `session.list` for either. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
 sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
 fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons
@@ -529,3 +556,8 @@ no `pi` executable on `PATH` for default and custom `PI_CODING_AGENT_DIR`; deskt
 staged `.ts` PI runtime and physical resources. Real Central acceptance remains explicitly authorized and
 isolated: the dedicated `@agent` suite stages the opaque artifact, validates the exact model, and proves a
 real turn rather than accepting another provider or a fake agent.
+
+A file the host rewrites in place (pi's `settings.json`) is read once, after the UI state that the host's
+reply settles: a read overlapping the rewrite returns the old bytes followed by the new file's tail, and
+`expect.poll` rethrows that parse error instead of polling again. When no UI state marks the write, the poll
+parses through a helper that treats a torn read as "not yet".

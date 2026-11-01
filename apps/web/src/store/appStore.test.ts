@@ -17,7 +17,7 @@ import {
 } from "@thinkrail/contracts";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
-import { userText } from "../lib";
+import { nullProto, userText } from "../lib";
 import {
 	BUILTIN_LAYOUT_PRESETS,
 	emptyWorkspaceView,
@@ -3345,7 +3345,7 @@ test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", ()
 test("files tree state keeps per-workspace folders and scroll, and drops a removed workspace", () => {
 	useAppStore.setState({
 		filesTreeByWorkspace: {},
-		removedWorkspaceIds: Object.create(null),
+		removedWorkspaceIds: nullProto<Record<string, true>>(),
 		workspaces: { p1: [pushedWorkspace()] },
 	});
 	const view = () => selectFilesTreeView(useAppStore.getState(), "w1");
@@ -3375,7 +3375,10 @@ test("files tree state keeps per-workspace folders and scroll, and drops a remov
 });
 
 test("revealInFiles expands every ancestor folder and records the revealed file", () => {
-	useAppStore.setState({ filesTreeByWorkspace: {}, removedWorkspaceIds: Object.create(null) });
+	useAppStore.setState({
+		filesTreeByWorkspace: {},
+		removedWorkspaceIds: nullProto<Record<string, true>>(),
+	});
 	useAppStore.getState().setFilesTreeExpanded("w1", ["docs"], true);
 	useAppStore.getState().revealInFiles("w1", "src/auth/login.ts");
 	const view = selectFilesTreeView(useAppStore.getState(), "w1");
@@ -5058,4 +5061,15 @@ test("authority can be given up without replacing the list (a consumer activatin
 	s().dropModelsFreshness();
 	expect(s().modelsFresh).toBe(false);
 	expect(s().models).toBe(refreshed);
+});
+
+test("openSearch starts a fresh palette session even when the palette is already open", () => {
+	useAppStore.setState({ searchOpen: false, searchSession: 0 });
+	useAppStore.getState().openSearch();
+	expect(useAppStore.getState()).toMatchObject({ searchOpen: true, searchSession: 1 });
+	useAppStore.getState().openSearch();
+	expect(useAppStore.getState()).toMatchObject({ searchOpen: true, searchSession: 2 });
+	useAppStore.getState().closeSearch();
+	useAppStore.getState().closeSearch();
+	expect(useAppStore.getState()).toMatchObject({ searchOpen: false, searchSession: 2 });
 });

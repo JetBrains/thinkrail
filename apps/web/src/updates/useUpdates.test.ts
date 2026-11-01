@@ -72,6 +72,7 @@ describe("native update shell subscription", () => {
 			checkForUpdates: async () => {},
 			downloadUpdate: async () => {},
 			restartToUpdate: async () => {},
+			dismissInstallResult: async () => {},
 			subscribe: (listener) => {
 				order.push("subscribe");
 				push = listener;

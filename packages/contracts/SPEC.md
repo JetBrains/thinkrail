@@ -13,7 +13,8 @@ tags: [wire]
 
 The browser↔host wire spine: the single source of truth for the protocol. Types plus a small
 dependency-free runtime: the WS method/channel constants, protocol/feature versions, the small config
-default, narrow cross-ring guards, and the quit-confirmation rule both clients drive. The one package
+default, narrow cross-ring guards, the quit-confirmation rule both clients drive, and the search matcher
+the palette ranks with — kept here so host-side search can rank with the same copy. The one package
 `apps/web` may depend on—which is what lets the UI ship independently of the host.
 
 ## Boundary
@@ -51,7 +52,17 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
   `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
   labels), the optional shell-local desktop capabilities);
-  `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`; the value
+  `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
+  **`matchFields`** + `parseMatchTerms` + `MATCH_TIER` and the `Match*` types from
+  `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
+  bounded subsequence of at least three characters, every term required, a quoted `MatchTerm` (`literal`)
+  matched contiguously only, case and Latin diacritics folded — precomposed or decomposed, the ranges
+  still indexing the original text and spanning the marks they cover — combining marks part of their
+  word (never a word start), a secondary field never above substring and, at an equal tier, never chosen
+  over a primary one, path fields matched on the basename first, field-keyed highlight ranges — the
+  browser's palette ranks with it, and it lives here so host-side search ranks with this one copy and
+  their tiers cannot drift);
+  the value
   re-exports
   `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
   word it in their language until it is renamed), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical
@@ -209,9 +220,14 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     `{ workspaceId, sessionId, title }`, rejects a title whose trimmed single-line form is blank or exceeds
     `SESSION_TITLE_MAX_LENGTH` (80), and returns an ack; `SESSION_RENAME_PROTOCOL_VERSION` pins the
     mutation and controls to v66 so a newer client hides them against older hosts. The existing Pi event
-    `session_info_changed { name?: string }` is the one live domain update for manual and automatic changes,
-    and `session.list`/`session.getMessages` repair a missed event. No title source/provenance, uniqueness,
-    workspace coupling, or new push channel crosses the wire; session ids remain canonical.
+    `session_info_changed { name?: string }` is the live event for manual and automatic changes, and
+    `session.list`/`session.getMessages` repair a missed event. **`SessionStateRecord.title`** (optional,
+    additive, no version gate) carries the same durable name on every normalized-state record — the
+    `session.stateList` snapshot and each `session.state` push, including the full record a host publishes
+    after renaming a chat that is not live — so a client knows every chat's name, and catches up on a rename
+    it missed, from the state it already installs. A host that sends the field always sends it: `""` is
+    authoritatively unnamed, absent means an older host. No title source/provenance, uniqueness, workspace
+    coupling, or new push channel crosses the wire; session ids remain canonical.
     **`SessionSummary.firstPrompt`** and **`SessionStateRecord.firstPrompt`** (optional, additive, no
     version gate) carry `firstPromptHead` of the transcript's first user prompt beside the title: the
     display fallback for a chat that has no name, never a name — no mutation accepts it, nothing writes
@@ -1162,7 +1178,8 @@ pending dialog its exact replayable request), nullable latest `completion` (stab
 owner-global `completionUnread` receipt projection (held false while an idle session has background work).
 `isSessionWorking` is the one *working* test: `execution` running or `backgroundWork`; an older host omits
 the flag, which reads as false. `SessionStateRecord` adds session/workspace/project
-attribution; `SessionSummary.state` carries the exact attached session's state.
+attribution plus the chat's `title` and `firstPrompt`; `SessionSummary.state` carries the exact attached
+session's state.
 
 `session.stateList` is an authoritative all-workspace snapshot of every top-level live or disk session and
 fails rather than returning an incomplete scan. `session.state` pushes a full record after the causative Pi

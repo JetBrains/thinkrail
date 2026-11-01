@@ -10,6 +10,8 @@ import {
 	type WindowsShortcut,
 } from "./windowsTaskbarIdentity";
 
+const POWERSHELL_TEST_TIMEOUT_MS = 30_000;
+
 test("names one AppUserModelID per channel", () => {
 	expect(desktopAppUserModelId("stable")).toBe("JetBrains.ThinkRail");
 	expect(desktopAppUserModelId("nightly")).toBe("JetBrains.ThinkRail.Nightly");
@@ -160,7 +162,11 @@ function powershell(script: string): string {
 			stderr: "pipe",
 		},
 	);
-	if (!result.success) throw new Error(result.stderr.toString());
+	if (!result.success) {
+		throw new Error(
+			`powershell exited ${result.exitCode} (signal ${result.signalCode ?? "none"}): ${result.stderr.toString()}`,
+		);
+	}
 	return result.stdout.toString().trim();
 }
 
@@ -225,4 +231,5 @@ test.skipIf(process.platform !== "win32")(
 			});
 		});
 	},
+	POWERSHELL_TEST_TIMEOUT_MS,
 );

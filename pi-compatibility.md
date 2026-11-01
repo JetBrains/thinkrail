@@ -279,8 +279,10 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   pushed result duplicated one the agent had already pulled. The owners hold outcomes and send them
   only at step boundaries or to an idle parent. **Removal gate:** a per-message queue handle an
   extension can withdraw, delivered at the next step rather than at run end — even then, keep the
-  claim-on-pull rule. Run the `pi-subagents` and `pi-background-commands` suites and
-  `agent/chatResources.test.ts`.
+  claim-on-pull rule. The owners also hold later idle deliveries behind a wake pi defers inside
+  `agent_settled` (the parent still reads idle, and each deferred request starts its own run); drop
+  that hold once pi coalesces deferred wakes or reports the pending run. Run the `pi-subagents` and
+  `pi-background-commands` suites and `agent/chatResources.test.ts`.
 - **Skill bodies across compaction** — [[submodule-server-agent]], `skillCarryover.ts`. Pi's compaction
   summarizes loaded skill text away (a `read` result reaches the summarizer cut to 2000 characters) and
   nothing re-supplies it, so a host `context` handler re-attaches compacted skill bodies to every

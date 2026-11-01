@@ -495,8 +495,10 @@ above the viewport and jumps to its end once the height lands. The scroller opts
 anchoring (`overflow-anchor: none`, as Pierre's own `CodeView` does) because Pierre corrects scroll
 itself. Annotation children stay in the light DOM but lay out only inside the render window, so the
 focus reveal first asks the virtualizer to center the thread's end line (`revealLine`, through the
-connected instance's `getLinePosition`) and then centers the card once it renders. A freshly opened
-diff composer gets the same treatment — Ask agent anchors it at the hunk's end line, which for a tall
+connected instance's `getLinePosition`) and then centers the card once it renders. `revealLine` reports
+success only when the line lands in the viewport: before the worker's first answer lays the rows out, the
+scroll is clamped short, and the reveal retries when the content grows instead of latching a miss. A
+freshly opened diff composer gets the same treatment — Ask agent anchors it at the hunk's end line, which for a tall
 hunk lies outside the window — and `ReviewComposer` defers its initial focus until its textarea has a
 box, since focusing an unrendered element is a silent no-op. Restored composers keep the restored
 scroll position instead.

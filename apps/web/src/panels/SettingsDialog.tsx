@@ -32,9 +32,11 @@ import { WorkspacesSettings } from "./WorkspacesSettings";
 
 export function SettingsDialog({
 	layoutSettings,
+	keyboardSettings,
 	updateSettings,
 }: {
 	layoutSettings: ReactNode;
+	keyboardSettings: ReactNode;
 	updateSettings?: ReactNode;
 }) {
 	const t = useT();
@@ -150,6 +152,8 @@ export function SettingsDialog({
 								<LanguageSettings />
 							) : selectedSection === SettingsSection.Layout ? (
 								layoutSettings
+							) : selectedSection === SettingsSection.Keyboard ? (
+								keyboardSettings
 							) : selectedSection === SettingsSection.Terminal ? (
 								<TerminalSettings />
 							) : selectedSection === SettingsSection.Workspaces ? (

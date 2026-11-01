@@ -455,13 +455,18 @@ function entryFirstPrompt(entry: Entry): { firstPrompt?: string } {
 	return entry.firstPrompt === null ? {} : { firstPrompt: entry.firstPrompt };
 }
 
+function entryTitle(entry: Entry): string {
+	return entry.session.sessionName ?? "";
+}
+
 function publishEntryState(entry: Entry): void {
 	if (sessions.get(entry.session.sessionId) !== entry) return;
 	const projectId = resolveProjectId(entry.workspaceId);
 	if (!projectId) return;
 	const state = stateFromEntry(entry);
+	const title = entryTitle(entry);
 	const firstPrompt = entryFirstPrompt(entry);
-	const serialized = JSON.stringify({ state, ...firstPrompt });
+	const serialized = JSON.stringify({ state, title, ...firstPrompt });
 	if (entry.lastPublishedState === serialized) return;
 	entry.lastPublishedState = serialized;
 	publishState({
@@ -469,6 +474,7 @@ function publishEntryState(entry: Entry): void {
 		workspaceId: entry.workspaceId,
 		projectId,
 		state,
+		title,
 		...firstPrompt,
 	});
 }
@@ -487,6 +493,22 @@ function scheduleEntryStatePublish(entry: Entry): void {
 export function scheduleSessionStatePublish(sessionId: string): void {
 	const entry = sessions.get(sessionId);
 	if (entry) scheduleEntryStatePublish(entry);
+}
+
+function diskStateRecord(
+	sessionId: string,
+	workspace: { id: string; projectId: string },
+	manager: SessionManager,
+	legacy = false,
+): SessionStateRecord {
+	return {
+		sessionId,
+		workspaceId: workspace.id,
+		projectId: workspace.projectId,
+		state: stateFromDisk(sessionId, manager, legacy),
+		title: manager.getSessionName() ?? "",
+		...firstPromptOf(manager.getEntries()),
+	};
 }
 
 function stateFromDisk(sessionId: string, manager: SessionManager, legacy = false): SessionState {
@@ -518,6 +540,7 @@ function stateRecordForEntry(entry: Entry): SessionStateRecord {
 		workspaceId: entry.workspaceId,
 		projectId,
 		state: stateFromEntry(entry),
+		title: entryTitle(entry),
 		...entryFirstPrompt(entry),
 	};
 }
@@ -637,7 +660,7 @@ export function setSessionManagerFactory(factory: (cwd: string) => SessionManage
 	sessionManagerFactory = factory;
 }
 
-let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = () => ({
+const defaultSkillAdmission = (): SkillAdmissionContext => ({
 	trusted: false,
 	piResourceTrusted: false,
 	acknowledged: [],
@@ -645,15 +668,19 @@ let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = () 
 	disabledGroups: [],
 	overrides: {},
 });
+let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = defaultSkillAdmission;
 export function setSkillAdmissionResolver(
-	resolver: (workspaceId: string) => SkillAdmissionContext,
+	resolver: ((workspaceId: string) => SkillAdmissionContext) | null,
 ): void {
-	skillAdmissionResolver = resolver;
+	skillAdmissionResolver = resolver ?? defaultSkillAdmission;
 }
 
-let mcpPolicyResolver: (workspaceId: string) => McpProjectPolicy = () => mcpPolicyOf(undefined);
-export function setMcpPolicyResolver(resolver: (workspaceId: string) => McpProjectPolicy): void {
-	mcpPolicyResolver = resolver;
+const defaultMcpPolicy = (): McpProjectPolicy => mcpPolicyOf(undefined);
+let mcpPolicyResolver: (workspaceId: string) => McpProjectPolicy = defaultMcpPolicy;
+export function setMcpPolicyResolver(
+	resolver: ((workspaceId: string) => McpProjectPolicy) | null,
+): void {
+	mcpPolicyResolver = resolver ?? defaultMcpPolicy;
 }
 
 type McpToolGrantWriter = (
@@ -671,9 +698,12 @@ function piResourceTrustFor(workspaceId: string): boolean {
 	return skillAdmissionResolver(workspaceId).piResourceTrusted;
 }
 
-let subagentsEnabledResolver: (workspaceId: string) => boolean = () => true;
-export function setSubagentsEnabledResolver(resolver: (workspaceId: string) => boolean): void {
-	subagentsEnabledResolver = resolver;
+const enabledByDefault = (): boolean => true;
+let subagentsEnabledResolver: (workspaceId: string) => boolean = enabledByDefault;
+export function setSubagentsEnabledResolver(
+	resolver: ((workspaceId: string) => boolean) | null,
+): void {
+	subagentsEnabledResolver = resolver ?? enabledByDefault;
 }
 
 function subagentsEnabled(workspaceId: string): boolean {
@@ -712,9 +742,11 @@ export function refreshSubagentTools(workspaceId?: string): void {
 // worker's in-session request_review tool live: `setActiveToolsByName` rebuilds the system prompt from
 // only the active tools' guidelines, so toggling the tool off also drops its guidance. The Review button
 // path (startPlanReview) is separate and unaffected.
-let agentReviewEnabledResolver: (workspaceId: string) => boolean = () => true;
-export function setAgentReviewEnabledResolver(resolver: (workspaceId: string) => boolean): void {
-	agentReviewEnabledResolver = resolver;
+let agentReviewEnabledResolver: (workspaceId: string) => boolean = enabledByDefault;
+export function setAgentReviewEnabledResolver(
+	resolver: ((workspaceId: string) => boolean) | null,
+): void {
+	agentReviewEnabledResolver = resolver ?? enabledByDefault;
 }
 
 function agentReviewEnabled(workspaceId: string): boolean {
@@ -1764,6 +1796,7 @@ async function collectSessionStateSources(
 				workspaceId: entry.workspaceId,
 				projectId: workspace.projectId,
 				state: stateFromEntry(entry),
+				title: entryTitle(entry),
 				...entryFirstPrompt(entry),
 			},
 			branch: () => entry.session.sessionManager.getBranch(),
@@ -1783,18 +1816,16 @@ async function collectSessionStateSources(
 				continue;
 			}
 			const manager = SessionManager.open(info.path);
-			const record: SessionStateRecord = {
-				sessionId: info.id,
-				workspaceId: workspace.id,
-				projectId: workspace.projectId,
-				state: stateFromDisk(info.id, manager, baseline),
-				...firstPromptOf(manager.getEntries()),
-			};
+			const record = diskStateRecord(info.id, workspace, manager, baseline);
 			records.push({
 				record,
 				branch: () => manager.getBranch(),
 				publish: () => {
-					const current = { ...record, state: stateFromDisk(info.id, manager) };
+					const current = {
+						...record,
+						state: stateFromDisk(info.id, manager),
+						title: manager.getSessionName() ?? "",
+					};
 					publishState(current);
 					return current;
 				},
@@ -1955,6 +1986,9 @@ export function renameSession(
 		if ((options.onlyIfUnnamed && current !== undefined) || current === normalized) return false;
 		manager.appendSessionInfo(normalized);
 		publish({ sessionId, event: { type: "session_info_changed", name: normalized } });
+		const projectId = resolveProjectId(workspaceId);
+		if (projectId)
+			publishState(diskStateRecord(sessionId, { id: workspaceId, projectId }, manager));
 		return true;
 	});
 }

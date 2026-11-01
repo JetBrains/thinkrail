@@ -35,7 +35,7 @@ function classText(tag: string, src: string): string {
 	const literals = [...expr.matchAll(/["'`]([^"'`]*)["'`]/g)].map((m) => m[1]);
 	const consts = [...expr.matchAll(/\b([A-Z][A-Z0-9_]+)\b/g)].map((m) => {
 		const def = src.match(new RegExp(`const ${m[1]}\\s*=\\s*([\\s\\S]*?);\\n`));
-		return def ? [...def[1].matchAll(/["'`]([^"'`]*)["'`]/g)].map((x) => x[1]).join(" ") : "";
+		return def?.[1] ? [...def[1].matchAll(/["'`]([^"'`]*)["'`]/g)].map((x) => x[1]).join(" ") : "";
 	});
 	return [...literals, ...consts].join(" ");
 }
