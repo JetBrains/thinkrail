@@ -51,12 +51,13 @@ describe("isProjectSkillPath", () => {
 });
 
 describe("mayHoldProjectSkills", () => {
-	it("matches a project skill directory and the folder above it", () => {
+	it("matches a project skill directory and the folder above it, but not dot-folders inside it", () => {
 		for (const path of [
 			".claude",
 			".pi",
 			".agents/skills",
 			".github/skills/review",
+			".github/skills/review/scripts",
 			".gemini\\skills",
 		]) {
 			expect(mayHoldProjectSkills(path)).toBe(true);
@@ -68,6 +69,9 @@ describe("mayHoldProjectSkills", () => {
 			"skills",
 			"nested/.pi",
 			"nested/.pi/skills",
+			".claude/skills/.cache",
+			".claude/skills/review/.venv",
+			".pi\\skills\\review\\.venv\\lib",
 		]) {
 			expect(mayHoldProjectSkills(path)).toBe(false);
 		}

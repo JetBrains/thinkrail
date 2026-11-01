@@ -565,7 +565,8 @@ test.if(process.platform === "linux")(
 		if (!dir) throw new Error("missing fixture data directory");
 		const worktree = join(dir, "repo");
 		const skill = join(worktree, ".claude", "skills", "demo", "SKILL.md");
-		mkdirSync(join(worktree, ".claude", "skills", "demo"), { recursive: true });
+		const venv = join(worktree, ".claude", "skills", "demo", ".venv");
+		mkdirSync(venv, { recursive: true });
 		expect(Bun.spawnSync(["git", "init", "-q", worktree]).success).toBe(true);
 		writeFileSync(join(worktree, ".gitignore"), ".claude/\ntmp/\n");
 		mkdirSync(join(worktree, "tmp"));
@@ -594,6 +595,7 @@ test.if(process.platform === "linux")(
 		);
 		expect((await collector.waitForFrame((frame) => frame.id === "ready")).ok).toBe(true);
 		writeFileSync(join(worktree, "tmp", "out.txt"), "x\n");
+		writeFileSync(join(venv, "out.txt"), "x\n");
 		writeFileSync(skill, "v2\n");
 		await collector.waitForFrame(
 			(frame) =>
@@ -605,7 +607,7 @@ test.if(process.platform === "linux")(
 				? (frame.data as WorkspaceFsChangedPayload).paths
 				: [],
 		);
-		expect(paths.filter((path) => path.startsWith("tmp/"))).toEqual([]);
+		expect(paths.filter((path) => path.startsWith("tmp/") || path.includes("/.venv/"))).toEqual([]);
 	},
 );
 
