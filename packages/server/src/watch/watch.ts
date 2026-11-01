@@ -141,6 +141,12 @@ function isSkippedDir(relPath: string): boolean {
 	return git > 0 || (git === 0 && segments.length > 1 && segments[1] !== "refs");
 }
 
+function ignoredWorktreeDirs(worktreePath: string, paths: string[]): Promise<ReadonlySet<string>> {
+	const checked = paths.filter((path) => !isRepoMetaPath(path));
+	if (!resolveIgnoredPaths || checked.length === 0) return Promise.resolve(NOTHING_IGNORED);
+	return resolveIgnoredPaths(worktreePath, checked);
+}
+
 function watchRecursive(
 	root: string,
 	onEvent: (relPath: string | null) => void,
@@ -245,8 +251,7 @@ export function ensureWatch(
 					onEvent,
 					onError,
 					skipDir: isSkippedDir,
-					ignoredDirs: (paths) =>
-						resolveIgnoredPaths?.(ws.worktreePath, paths) ?? Promise.resolve(NOTHING_IGNORED),
+					ignoredDirs: (paths) => ignoredWorktreeDirs(ws.worktreePath, paths),
 				})
 			: watchRecursive(ws.worktreePath, onEvent, onError);
 		let resolveReady: (result: WorkspaceWatchReadyResult) => void = () => {};

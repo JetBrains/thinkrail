@@ -349,6 +349,27 @@ test.if(process.platform === "linux")(
 	},
 );
 
+test.if(process.platform === "linux")(
+	"on Linux the root .git stays watched when the resolver would ignore it",
+	async () => {
+		mkdirSync(join(worktree, ".git", "refs", "heads"), { recursive: true });
+		const asked: string[] = [];
+		setIgnoredPathsResolver(async (_root, paths) => {
+			asked.push(...paths);
+			return new Set(paths);
+		});
+		const nudges: string[] = [];
+		setRepoMetaPublisher((id) => nudges.push(id));
+		await ensureWatch("ws1");
+		expect(asked.filter((path) => path.split("/")[0] === ".git")).toEqual([]);
+		writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/next\n");
+		await waitFor(() => nudges.length > 0);
+		nudges.length = 0;
+		writeFileSync(join(worktree, ".git", "refs", "heads", "next"), "0\n");
+		await waitFor(() => nudges.length > 0);
+	},
+);
+
 test("unknown workspace and stopWatch are safe no-ops; stopped watchers stay silent", async () => {
 	ensureWatch("nope");
 	ensureWatch("ws1");
