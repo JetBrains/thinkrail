@@ -104,6 +104,12 @@ test("the empty palette lists the chats waiting for you; arrows, Enter, click an
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 		await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-attention", "true");
 
+		await page.getByTestId("open-search").click();
+		await expect(palette(page)).toBeVisible();
+		await page.keyboard.press("Escape");
+		await expect(palette(page)).toBeHidden();
+		await expect(page.getByTestId("open-search")).toBeFocused();
+
 		await openPalette(page);
 		const waiting = page.locator('[data-testid="search-section"][data-section="waiting"]');
 		const rows = waiting.getByTestId("search-row");
@@ -131,7 +137,6 @@ test("the empty palette lists the chats waiting for you; arrows, Enter, click an
 		await expect(palette(page)).toBeVisible();
 		await page.keyboard.press("Escape");
 		await expect(palette(page)).toBeHidden();
-		await expect(page.getByTestId("open-search")).toBeFocused();
 	} finally {
 		for (const s of seeded) rmSync(s.path, { force: true });
 	}
