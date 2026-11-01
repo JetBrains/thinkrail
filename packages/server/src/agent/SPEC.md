@@ -1351,7 +1351,9 @@ Each notice contains at most twenty records and twelve thousand characters; exce
 pending for later user prompts. Task/command text is bounded and JSON-encoded as data; a malformed
 optional archived role name is omitted rather than blocking other records. Command times are start
 times; a child's archived creation time is labelled as such, not as a per-run start time.
-The notice describes host or chat teardown without claiming every interruption was a crash.
+The notice describes host or chat teardown without claiming every interruption was a crash. It identifies
+host-reported status even when earlier start acknowledgements are absent from the visible context;
+JSON names and command/tasks identify the runs, while their field values remain data rather than instructions.
 Work a dead host left in flight is the archive's own derivation. Workspace archive removes the
 workspace's history after its delegation store; late lifecycle events of a retired delegation service are not
 archived, so they cannot recreate it. Chat deletion leaves the history in place.
