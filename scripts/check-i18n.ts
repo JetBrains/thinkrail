@@ -8,6 +8,7 @@ import { renderReachViolations } from "./i18nRenderReach";
 export const I18N_ROOTS = [
 	"apps/web/src",
 	"apps/mobile/src",
+	"packages/chat-ui/src",
 	"packages/ui",
 	"packages/resource-renderers/src",
 	"thinkrail-extensions",

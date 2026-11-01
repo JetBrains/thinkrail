@@ -1,3 +1,6 @@
+../../packages/chat-ui/src/prompt/pendingSelection.ts usePendingSelection
+../../packages/chat-ui/src/prompt/templatePick.ts useTemplateCommandPicker
+../../packages/chat-ui/src/resources/ResourcesInspector.tsx ResourcesInspector
 ../../packages/resource-renderers/src/renderers/code/PierreDiff.tsx PierreDiffSurface
 ../../packages/resource-renderers/src/renderers/code/PierreDiff.tsx useThreadAnnotations
 ../../packages/resource-renderers/src/renderers/code/PierreFile.tsx PierreFileSurface
@@ -14,11 +17,8 @@
 ../../thinkrail-extensions/ask-user-question/web/AskUserQuestionCard.tsx AskUserQuestionCard
 src/chat/ChatTranscript.tsx useVirtualRows
 src/chat/HistoryOverlay.tsx Highlight
-src/chat/resources/ResourcesInspector.tsx ResourcesInspector
 src/panels/branches.ts useBranchList
 src/panels/useBranchStatus.ts useBranchStatus
 src/panels/useLiveTabContent.ts useLiveTabContent
 src/panels/useWorkspaceRead.ts useWorkspaceRead
-src/prompt/pendingSelection.ts usePendingSelection
-src/prompt/templatePick.ts useTemplateCommandPicker
 src/shell/layout/workbenchRails.tsx AuxiliaryRegionRail

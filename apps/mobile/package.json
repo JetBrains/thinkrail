@@ -18,6 +18,7 @@
 		"@capacitor/core": "8.6.0",
 		"@capacitor/ios": "8.6.0",
 		"@remixicon/react": "catalog:",
+		"@thinkrail/chat-ui": "workspace:*",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/design-tokens": "workspace:*",
 		"@thinkrail/locales": "workspace:*",

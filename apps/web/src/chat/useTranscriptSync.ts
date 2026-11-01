@@ -1,3 +1,4 @@
+import { messagesToRuntime } from "@thinkrail/chat-ui/hydrate";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useRef, useState } from "react";
 import { type SessionRuntime, toast, useAppStore } from "../store";
@@ -6,7 +7,6 @@ import {
 	errorText,
 	getSessionMessagesWithSkillBaseline,
 } from "../transport";
-import { messagesToRuntime } from "./hydrate";
 
 export interface TranscriptSyncNeed {
 	connectionGeneration: number | null;

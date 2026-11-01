@@ -35,6 +35,13 @@ pi, app stores, transport and theme runtime are forbidden. Tokens remain global 
 by `@thinkrail/design-tokens`, imported by each host stylesheet; utilities follow [[web-color]], [[web-spacing]] and [[web-typography]].
 The app's Tailwind sources and adoption guards include this package and extension web halves.
 
+## Custom glyphs
+
+`custom-icon` (`CustomIcon`, `CustomIconName`) renders a project glyph Remix lacks from `icons/*.svg` as a
+`currentColor` CSS `mask-image` span, so it sizes with `size-*` and colours with `text-*` exactly like a Remix
+icon; its classes live in `custom-icon.css`, which every host stylesheet imports (the SVGs resolve relative to
+it, so the bundler ships them). Today: `file-diff-line` / `file-diff-fill` (the Changes review glyph).
+
 ## Status marks
 
 The two store-free session status marks the web app and `apps/mobile` share. `./brand-mark` exports the

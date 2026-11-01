@@ -5,6 +5,7 @@ import {
 	RiAddLine as Plus,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
+import { assembleTemplate } from "@thinkrail/chat-ui/prompt";
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
 import { T, t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -13,7 +14,6 @@ import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useState } from "react";
 import { TemplateEditorDialog } from "@/chat/TemplateEditorDialog";
-import { assembleTemplate } from "@/prompt";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmPopover } from "./ConfirmPopover";

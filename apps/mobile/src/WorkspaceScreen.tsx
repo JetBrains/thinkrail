@@ -29,6 +29,8 @@ const compactAge = (t: Translator, ms: number, now: number): string => {
 export interface OpenChat {
 	sessionId: string;
 	title: string;
+	model: SessionSummary["model"];
+	thinkingLevel: SessionSummary["thinkingLevel"];
 }
 
 export function WorkspaceScreen({
@@ -79,7 +81,14 @@ export function WorkspaceScreen({
 								tooltip={title?.tooltip}
 								status={statusOf(live.get(summary.sessionId)?.state ?? summary.state)}
 								trailing={compactAge(t, summary.updatedAt, now)}
-								onOpen={() => onOpen({ sessionId: summary.sessionId, title: text })}
+								onOpen={() =>
+									onOpen({
+										sessionId: summary.sessionId,
+										title: text,
+										model: summary.model,
+										thinkingLevel: summary.thinkingLevel,
+									})
+								}
 							/>
 						);
 					})

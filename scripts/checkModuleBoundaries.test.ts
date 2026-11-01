@@ -9,6 +9,7 @@ const roots: string[] = [];
 const modules = {
 	"packages/artifact-tests": "@thinkrail/artifact-tests",
 	"packages/contracts": "@thinkrail/contracts",
+	"packages/chat-ui": "@thinkrail/chat-ui",
 	"packages/design-tokens": "@thinkrail/design-tokens",
 	"packages/relay": "@thinkrail/relay",
 	"packages/remote-client": "@thinkrail/remote-client",

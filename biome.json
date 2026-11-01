@@ -12,7 +12,7 @@
 			"!designs",
 			"!**/.claude",
 			"!packages/design-tokens/styles/generated",
-			"!apps/web/src/chat/generated"
+			"!packages/chat-ui/src/generated"
 		]
 	},
 	"formatter": {

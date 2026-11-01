@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { ThinkingGroup } from "@thinkrail/chat-ui/ActivityGroup";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ThinkingGroup } from "./ActivityGroup";
 
 const tool = (id: string, toolName: string) => ({
 	kind: "tool" as const,

@@ -48,6 +48,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 	{
 		root: "apps/web",
 		allowed: [
+			"packages/chat-ui",
 			"packages/contracts",
 			"packages/design-tokens",
 			"packages/locales",
@@ -60,8 +61,19 @@ const MODULE_RULES: readonly ModuleRule[] = [
 	{ root: "apps/cli", allowed: ["packages/server", "packages/shared"] },
 	{ root: "packages/design-tokens", allowed: ["packages/contracts"] },
 	{
+		root: "packages/chat-ui",
+		allowed: [
+			"packages/contracts",
+			"packages/extension-api",
+			"packages/locales",
+			"packages/ui",
+			"thinkrail-extensions/visualize",
+		],
+	},
+	{
 		root: "apps/mobile",
 		allowed: [
+			"packages/chat-ui",
 			"packages/contracts",
 			"packages/design-tokens",
 			"packages/locales",

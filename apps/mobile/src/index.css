@@ -1,7 +1,9 @@
 @import "tailwindcss";
 @import "@thinkrail/design-tokens/styles.css";
+@import "@thinkrail/ui/custom-icon.css";
 
 @source "../../../packages/ui";
+@source "../../../packages/chat-ui/src";
 
 @custom-variant button-disabled (&:is([data-disabled="true"], :disabled:not([data-loading])));
 
@@ -11,6 +13,7 @@
 	--spacing-touch: 44px;
 	--spacing-safe-top: env(safe-area-inset-top);
 	--spacing-safe-bottom: env(safe-area-inset-bottom);
+	--spacing-chat-gutter: var(--space-16);
 }
 
 html,

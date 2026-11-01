@@ -107,12 +107,11 @@ export function App() {
 		const { hostKey, workspace, chat } = route;
 		return (
 			<SessionScreen
-				session={{
-					hostKey,
-					sessionId: chat.sessionId,
-					workspaceId: workspace.id,
-					title: chat.title,
-				}}
+				session={{ hostKey, workspaceId: workspace.id, ...chat }}
+				state={
+					items.find((item) => item.hostKey === hostKey && item.record.sessionId === chat.sessionId)
+						?.record.state
+				}
 				controller={controller}
 				backLabel={workspaceName(t, workspace)}
 				onBack={() => setRoute({ ...route, kind: "workspace" })}

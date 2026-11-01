@@ -1,9 +1,9 @@
+import type { ChatMessageOrder } from "@thinkrail/chat-ui/chatMessageOrder";
 import type { ComposerGrowthLimit, SubagentOverride } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { T, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import {
-	type ChatMessageOrder,
 	moveStreamingResponseHandle,
 	STREAMING_RESPONSE_MOVEMENT_LIMITS,
 	type StreamingResponseMovement,

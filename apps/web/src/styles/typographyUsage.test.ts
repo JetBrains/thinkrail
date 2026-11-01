@@ -158,7 +158,7 @@ describe("component usage", () => {
 });
 
 describe("markdown prose systems", () => {
-	const chat = code(join(SRC, "chat/Markdown.tsx"));
+	const chat = code(join(SRC, "../../../packages/chat-ui/src/Markdown.tsx"));
 	const preview = code(join(RENDERERS, "support/MarkdownPreview.tsx"));
 
 	it("gives each markdown surface exactly one generated prose system", () => {

@@ -28,10 +28,6 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
     reporter installed via `setErrorBoundaryReporter` (wired by
     `main.tsx` to the transport's error reports; reporter failures are swallowed). The seam keeps this
     module store/transport-free.
-- **`CustomIcon.tsx`** — renders an SVG from `public/custom-icons/` as a themeable `currentColor` glyph
-  via a CSS `mask-image` span (`.custom-icon*` classes in `index.css`), so a custom glyph sizes with
-  `size-*` and colours with `text-*` exactly like a Remix icon. Names are a typed union
-  (`CustomIconName`); today: `file-diff-line`/`file-diff-fill` (the Changes review tab glyph).
 - **`QuietScrollArea.tsx`** — the store-free overflow observer and two presentation surfaces:
   `QuietScrollArea` owns an ordinary native scroll viewport (an optional `viewportRef` callback hands that
   element to a caller that saves/restores its scroll, e.g. `panels/RememberedScrollArea`), while `QuietScrollFrame` observes a
@@ -67,8 +63,7 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   next `preload()` does. Known limit: on a slow link, or when the revealing data is already in the store
   at mount, the first mount still takes the `lazy` path.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
-  `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `CustomIcon`,
-  `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
+  `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `QuietScrollArea`, `QuietScrollFrame`, and the
   `QuietScrollEdges` type via `@/components/QuietScrollArea`; `preloadedLazy` via
   `@/components/preloadedLazy`; `useNow()` via `@/components/useNow` (the
   wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a render never calls `Date.now`

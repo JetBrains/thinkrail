@@ -423,7 +423,7 @@ the shared **`useProviderAuth`** hook, which `ProvidersSettings` uses too: the s
 (above), re-read once whenever one of them opens — Central's install state and similar host-local facts change
 without a push — `startLogin` / `logout`, and the store-driven
 `LoginDialog` node. For an `anthropic` login started as `oauth` (`LoginState.method`), the node carries the sign-in
-`chat/ExtraUsageNotice` while the report's `warnings.anthropicExtraUsage` is not `false`
+`@thinkrail/chat-ui/ExtraUsageNotice` while the report's `warnings.anthropicExtraUsage` is not `false`
 (`warnsExtraUsageOnSignIn`; an older host's report has no `warnings`, so the notice shows). Exactly one surface mounts that node: Settings → Providers while Settings is open, otherwise the
 connect surface (`ownsLoginDialog`), so a login never renders two stacked dialogs. **Post-connect handoff:**
 when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key

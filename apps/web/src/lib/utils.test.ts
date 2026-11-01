@@ -1,4 +1,11 @@
 import { expect, test } from "bun:test";
+import {
+	fileName,
+	firstNonBlankLine,
+	isAbsolutePath,
+	normalizePath,
+	projectRelativePath,
+} from "@thinkrail/chat-ui/lib";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	ancestorPaths,
@@ -6,19 +13,14 @@ import {
 	cssColorToHex,
 	DOUBLE_CLICK_SETTLE_MS,
 	doubleClickPendingMs,
-	fileName,
 	firstClickOnly,
-	firstNonBlankLine,
 	hasPlatformModifier,
-	isAbsolutePath,
 	isRecord,
 	isShellInert,
 	layoutResourceIdentity,
-	normalizePath,
 	parseTupleKey,
 	platformFamily,
 	platformShortcutLabel,
-	projectRelativePath,
 	randomUuid,
 	relativeTime,
 	shallowEqualArrays,

@@ -1,9 +1,11 @@
 import { RiCornerDownLeftLine, RiSearchLine, RiSideBarLine, RiWifiOffLine } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
+import { AttentionDot } from "@thinkrail/ui/attention-dot";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type KeyboardEvent as ReactKeyboardEvent,
@@ -16,8 +18,6 @@ import {
 	useState,
 } from "react";
 import { shortcutKeys } from "../commands";
-import { AttentionDot } from "../components/AttentionDot";
-import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier } from "../lib";
 import { recordPick } from "./learning";
 import type { PaletteItem, PaletteRow, PaletteSection } from "./model";

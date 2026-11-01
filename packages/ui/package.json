@@ -10,6 +10,8 @@
 		"./button": "./button.tsx",
 		"./command": "./command.tsx",
 		"./context-menu": "./context-menu.tsx",
+		"./custom-icon": "./custom-icon.tsx",
+		"./custom-icon.css": "./custom-icon.css",
 		"./dialog": "./dialog.tsx",
 		"./dropdown-menu": "./dropdown-menu.tsx",
 		"./keyboard": "./keyboard.ts",

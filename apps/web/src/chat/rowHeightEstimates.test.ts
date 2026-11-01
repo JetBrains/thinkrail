@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { registerWebExtensions } from "@/extensions";
-import "./tools/register";
+import "@thinkrail/chat-ui/tools/register";
+import { type ChatRow, projectRows } from "@thinkrail/chat-ui/rows";
 import {
 	estimateChatRowHeight,
 	estimateChatRowHeights,
 	estimateMarkdownHeight,
 } from "./rowHeightEstimates";
-import { type ChatRow, projectRows } from "./rows";
 
 registerWebExtensions();
 

@@ -29,8 +29,8 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 
 ```
 apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
-apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/design-tokens, packages/locales, packages/ui, packages/extension-api/web, packages/resource-renderers, thinkrail-extensions/*/web
-apps/mobile     Capacitor sessions client over remote access        ── depends on ─▶ packages/contracts, packages/remote-client, packages/design-tokens, packages/locales, packages/ui
+apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/chat-ui, packages/contracts, packages/design-tokens, packages/locales, packages/ui, packages/extension-api/web, packages/resource-renderers, thinkrail-extensions/*/web
+apps/mobile     Capacitor sessions client over remote access        ── depends on ─▶ packages/chat-ui, packages/contracts, packages/remote-client, packages/design-tokens, packages/locales, packages/ui
 apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared, packages/locales
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
@@ -62,6 +62,9 @@ packages/design-tokens  theme palettes + manifest contract, colour/spacing/typog
 packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap ── may depend on ─▶ packages/contracts, packages/locales
 packages/resource-renderers  file/diff renderers, registry + review surfaces behind a host seam ── may depend on ─▶
                     packages/contracts, packages/locales, packages/ui
+packages/chat-ui    the store-free chat: transcript model, turn + tool renderers, registry, Markdown, Composer,
+                    Resources dock, prompt behaviour — shared by web and mobile ── may depend on ─▶
+                    packages/contracts, packages/locales, packages/ui, packages/extension-api/web, ext-visualize/web
 ```
 
 Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on

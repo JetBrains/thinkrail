@@ -183,13 +183,13 @@ const SPECIALIZED: Exception[] = [
 
 const OVERRIDES: Exception[] = [
 	{
-		file: "chat/ExtUiPrompt.tsx",
+		file: "packages/chat-ui/src/ExtUiPrompt.tsx",
 		contains: 'data-testid="ext-ui-option"',
 		reason:
 			"extension select options must wrap long labels (chat/SPEC.md); the only multi-line button",
 	},
 	{
-		file: "chat/Composer.tsx",
+		file: "packages/chat-ui/src/Composer.tsx",
 		contains: 'data-testid="chat-abort"',
 		reason:
 			"container-query collapse: below @md its label hides and Stop becomes the 24px icon-only square beside the history IconButton",

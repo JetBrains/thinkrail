@@ -2,8 +2,10 @@
 @import "@thinkrail/design-tokens/styles.css";
 @import "./styles/tokens.css";
 @import "./styles/global.css";
+@import "@thinkrail/ui/custom-icon.css";
 
 @source "../../../packages/ui";
+@source "../../../packages/chat-ui/src";
 @source "../../../packages/resource-renderers/src";
 @source "../../../thinkrail-extensions/*/web/**/*.{ts,tsx}";
 
@@ -54,19 +56,6 @@
 	--spacing-chat-gutter: var(--chat-gutter);
 	--spacing-window-chrome-inset-left: var(--window-chrome-inset-left, 0px);
 	--spacing-window-chrome-inset-right: var(--window-chrome-inset-right, 0px);
-
-	/* A block appearing in place (e.g. the ask-question card's atomic reveal once its args are final). */
-	--animate-reveal: reveal 150ms ease-out;
-	@keyframes reveal {
-		from {
-			opacity: 0;
-			transform: translateY(4px);
-		}
-		to {
-			opacity: 1;
-			transform: none;
-		}
-	}
 
 	/* The loading placeholder stays invisible through a short grace so fast reads never flash it. */
 	--animate-loading-in: loading-in 150ms ease-out 300ms both;
@@ -371,23 +360,4 @@
 	box-shadow: inset 2px 0 0 var(--text-subtle);
 	padding-left: 10px;
 	margin-left: -10px;
-}
-
-.custom-icon {
-	display: inline-block;
-	background-color: currentColor;
-	-webkit-mask-repeat: no-repeat;
-	mask-repeat: no-repeat;
-	-webkit-mask-position: center;
-	mask-position: center;
-	-webkit-mask-size: contain;
-	mask-size: contain;
-}
-.custom-icon-file-diff-line {
-	-webkit-mask-image: url("/custom-icons/file-diff-line.svg");
-	mask-image: url("/custom-icons/file-diff-line.svg");
-}
-.custom-icon-file-diff-fill {
-	-webkit-mask-image: url("/custom-icons/file-diff-fill.svg");
-	mask-image: url("/custom-icons/file-diff-fill.svg");
 }

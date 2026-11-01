@@ -1,4 +1,17 @@
 @theme {
+	/* A block appearing in place (e.g. the ask-question card's atomic reveal once its args are final, `@thinkrail/chat-ui`). */
+	--animate-reveal: reveal 150ms ease-out;
+	@keyframes reveal {
+		from {
+			opacity: 0;
+			transform: translateY(4px);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
+
 	/* The "agent working" brand badge (`@thinkrail/ui/running-icon`): the split frame and the six monogram strokes draw and erase on one 3.263s cycle. */
 	--animate-loader-frame: loader-frame 3.263s infinite;
 	@keyframes loader-frame {

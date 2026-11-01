@@ -1,6 +1,6 @@
+import { fileName } from "@thinkrail/chat-ui/lib";
 import { chatTitle, type GitDiffScope } from "@thinkrail/contracts";
 import { localeOf, type Translator } from "@thinkrail/locales/react";
-import { fileName } from "./utils";
 
 const DEFAULT_TERMINAL_TITLE = /^Terminal (\d+)$/;
 

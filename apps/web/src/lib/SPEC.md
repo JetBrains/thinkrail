@@ -13,6 +13,11 @@ not this module; the theme-aware highlighter remains app-local.
 
 ## Boundary
 
+- **Shared half:** the path primitives (`normalizePath`, `isAbsolutePath`, `fileName`,
+  `projectRelativePath`), `userText`, `firstNonBlankLine`, `copyText`, `skillInvocation.ts` and `mcpState.ts`
+  are implemented in [[module-chat-ui]]'s `lib` (the shared chat renderers need them, and a package cannot
+  import this module); the barrel re-exports `@thinkrail/chat-ui/lib` unchanged, so app code keeps one `@/lib`
+  import and the descriptions below still define them.
 - **Owns:** `utils.ts` → `cssColorToHex()` (canonicalize
   a CSS color to hex — minified CSS serves `#fff`/`gray`-style equivalents, which strict consumers like
   Monaco and xterm reject; `""` when unparseable). Plus the primitives that more than one module needs and

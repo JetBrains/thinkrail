@@ -1,10 +1,10 @@
 import { RiArrowDownSLine, RiArrowRightSLine, RiSearchLine } from "@remixicon/react";
+import { formatContext } from "@thinkrail/chat-ui/modelPicker";
+import { ProviderGlyph } from "@thinkrail/chat-ui/ProviderGlyph";
 import { sameModel, type WireModel } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useId, useMemo, useState } from "react";
-import { formatContext } from "@/chat/modelPicker";
-import { ProviderGlyph } from "@/chat/ProviderGlyph";
 import { useAppStore } from "@/store";
 import { SettingsSwitch } from "./SettingsSwitch";
 

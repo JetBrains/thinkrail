@@ -1,3 +1,14 @@
+import { assistantFailure } from "@thinkrail/chat-ui/assistantFailure";
+import type { ChatMessageOrder } from "@thinkrail/chat-ui/chatMessageOrder";
+import type { HydratedRuntime } from "@thinkrail/chat-ui/hydrate";
+import { insertRoundCloser } from "@thinkrail/chat-ui/roundCloser";
+import type {
+	ChatAttachment,
+	ChatTurn,
+	CompactionState,
+	ExtUiDialogRequest,
+	ToolResultState,
+} from "@thinkrail/chat-ui/types";
 import type {
 	AppConfig,
 	AppSurvey,
@@ -67,17 +78,6 @@ import {
 import { t } from "@thinkrail/locales/react";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
-import { assistantFailure } from "../chat/assistantFailure";
-import type { ChatMessageOrder } from "../chat/chatPreferences";
-import type { HydratedRuntime } from "../chat/hydrate";
-import { insertRoundCloser } from "../chat/roundCloser";
-import type {
-	ChatAttachment,
-	ChatTurn,
-	CompactionState,
-	ExtUiDialogRequest,
-	ToolResultState,
-} from "../chat/types";
 import {
 	ancestorPaths,
 	defaultTerminalIndex,

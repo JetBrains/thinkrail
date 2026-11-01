@@ -55,8 +55,9 @@ text where `sm` would read as a chip; `md` (6px) is the outer corner of a surfac
 
 ## Motion
 
-`styles/motion.css` holds the shared `@theme` animations of components in [[module-ui]]: the `loader-*`
-keyframes of `@thinkrail/ui/running-icon` (one 3.263s cycle). App-local animations stay in the app's
+`styles/motion.css` holds the shared `@theme` animations of components in [[module-ui]] and [[module-chat-ui]]: the
+`loader-*` keyframes of `@thinkrail/ui/running-icon` (one 3.263s cycle) and `reveal` (a block appearing in
+place). App-local animations stay in the app's
 stylesheet.
 
 ## Generators

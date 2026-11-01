@@ -3,7 +3,7 @@ id: app-mobile
 type: app-design
 status: active
 parent: architecture
-depends-on: [module-contracts, module-remote-client, module-design-tokens, module-locales, module-ui]
+depends-on: [module-chat-ui, module-contracts, module-remote-client, module-design-tokens, module-locales, module-ui]
 title: Mobile app (lightweight remote sessions)
 ---
 
@@ -22,18 +22,25 @@ IDE. No file tree, diffs, terminals, layout, or settings. No cloud account: the 
   (each host's open projects from `project.list`, per-host "unreachable" notice, add-computer form) →
   `ProjectScreen.tsx` (the project's workspaces from `workspace.list`, default / worktree / external glyphs,
   branch as the second line) → `WorkspaceScreen.tsx` (its chats from `session.list`, newest first, titled by
-  contracts' `chatTitle`, aged by `compactAgeOf`) — and `SessionScreen.tsx` (picks up an ongoing session:
-  loads `session.getMessages`, refreshes it as the session streams, sends via `session.followUp`);
+  contracts' `chatTitle`, aged by `compactAgeOf`) — and `SessionScreen.tsx`, the IDE's chat on a phone: it renders the
+  [[module-chat-ui]] components unchanged (`messagesToRuntime` → `deriveRows` → `ChatTurnView` for the
+  transcript, the shared `Composer` with its slash commands from `session.getCommands`, the model/effort
+  picker over `model.list` → `session.setModel` / `session.setThinkingLevel`, send / steer / follow-up /
+  interrupt through the same `session.*` methods as the IDE, tool-card answers through
+  `session.respondToTool`). It re-reads `session.getMessages` (coalesced 400ms) on the session's pi events
+  rather than reducing the event stream; `main.tsx` registers the built-in tool cards and mounts the
+  `TooltipProvider` the composer needs;
   `layout.tsx` (`Screen` frame, `ListRow`, loading/failed/empty states), `status.ts` (row marks from
   contracts' `sessionAttention`: the shared `RunningIcon` replaces the row glyph while a session in scope
   runs, the shared `AttentionDot` shows while one needs input or has an unread result — the IDE tree's
   vocabulary), `useHostRequest.ts` (one wire read per screen), `scanPairLink.ts` (the in-app QR scan via
   `@capacitor/barcode-scanner`; cancel is silent, a non-pairing QR or denied camera is reported),
-  `PairForm.tsx`, `transcript.ts` (best-effort plain-text lines), `theme.ts`, the Capacitor config,
+  `PairForm.tsx`, `theme.ts`, the Capacitor config,
   `scripts/ios-setup.ts`, and a `localStorage` `KeyValueStore` (`store.ts`; the Capacitor WKWebView persists
   it on-device). Live status comes from the controller's `session.state` stream; lists are read on screen
   entry, and a workspace's chats re-read when a session appears or leaves in it.
-- **Allowed deps:** `@thinkrail/remote-client` (the entire remote engine), `@thinkrail/contracts`,
+- **Allowed deps:** `@thinkrail/remote-client` (the entire remote engine), `@thinkrail/chat-ui` (the chat
+  renderers and composer — never a copy of them), `@thinkrail/contracts`,
   `@thinkrail/design-tokens` (palettes, semantic CSS, `applyPalette`), `@thinkrail/locales/react`,
   `@thinkrail/ui` primitives, Remix Icon, `@capacitor/barcode-scanner`, React, Vite, Tailwind v4, Capacitor, platform APIs. Never
   `server`, `pi`, `web`, or `shared`.
@@ -46,8 +53,9 @@ The app speaks the same visual language as the IDE: `src/index.css` imports
 `@thinkrail/design-tokens/styles.css`, so components name only semantic utilities (`bg-container-header-bg`,
 `text-text-muted`, `tr-title-card`, `p-16`, `rounded-md`), never raw colours or Tailwind's stock palette.
 The rules in `apps/web/src/styles/COLOR.md`, `SPACING.md` and `TYPOGRAPHY.md` apply. The app adds only
-three mobile layout roles: `touch` (44px, the minimum tap target, `h-touch` / `min-h-touch`) and
-`safe-top` / `safe-bottom` (the iOS safe-area insets). Text comes from `mobile.*` keys in
+four mobile layout roles: `touch` (44px, the minimum tap target, `h-touch` / `min-h-touch`),
+`safe-top` / `safe-bottom` (the iOS safe-area insets), and `chat-gutter` (16px, the role
+[[module-chat-ui]] asks every host to define). Text comes from `mobile.*` keys in
 `packages/locales/en.json` (the i18n gate scans `apps/mobile/src`).
 
 The theme follows the operating system: `theme.ts` applies the bundled **Dark** or **Light** manifest with
@@ -65,7 +73,10 @@ git-ignored, so the setup script is the only place native configuration is writt
 
 ## Not yet here
 
-- Rich transcript rendering (today: plain-text lines — user bubbles, assistant text, other roles muted;
-  the full renderer from `apps/web/chat` can be reused later), a proper tool-approval UI, removing a paired
-  host, and push notifications (a content-less "wake" push would need a relay feature, since the relay is
-  zero-knowledge). The session screen does not re-attach if its host connects after the screen opened.
+- Live token streaming: the transcript refreshes from `session.getMessages` on pi events instead of running
+  the IDE's pi-event reducer (it lives in the web store; moving it into [[module-chat-ui]] is the next step).
+- Code highlighting (no `CodeHighlighterProvider` yet — code renders plain), extension tool cards beyond the
+  built-ins (e.g. ask-user-question, registered by the IDE's `extensions` module), extension UI dialogs
+  (`ExtUiPrompt` over `piExtensionUi`), templates and `@` mentions in the composer, picker favorites, the
+  Resources dock, removing a paired host, and push notifications (a content-less "wake" push would need a
+  relay feature, since the relay is zero-knowledge).

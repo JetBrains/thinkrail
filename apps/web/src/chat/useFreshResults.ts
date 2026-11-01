@@ -1,8 +1,8 @@
+import type { ResultTarget } from "@thinkrail/chat-ui/ChatActions";
 import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
 import { useCallback, useEffect, useState } from "react";
 import { STORAGE_PREFIX } from "@/constants/branding";
 import { getTransport } from "@/transport";
-import type { ResultTarget } from "./ChatActions";
 
 export interface FinishedResources {
 	finishedCommands: readonly BackgroundCommandSummary[];

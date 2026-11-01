@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, useSyncExternalStore } from "react";
+import type { CodeHighlighter } from "@thinkrail/chat-ui/highlight";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { chatShikiLanguageId, createChatHighlighter } from "./highlighter";
 import type { HighlightReply, HighlightRequest } from "./highlighter.worker";
@@ -217,53 +217,8 @@ export function cachedHighlight(code: string, lang: string) {
 	return client.cachedHighlight(code, lang);
 }
 
-const PRE_END = "</code></pre>";
-
-export interface ShownHighlight {
-	seq: number;
-	code: string;
-	lang: string;
-	html: string;
-}
-
-export function newerHighlight(shown: ShownHighlight | null, next: ShownHighlight) {
-	return shown && shown.seq > next.seq ? shown : next;
-}
-
-export function staleHighlight(code: string, lang: string, latest: ShownHighlight | null) {
-	if (!latest || latest.lang !== lang || !code.startsWith(latest.code)) return null;
-	const tail = code.slice(latest.code.length);
-	if (!tail) return latest.html;
-	if (!latest.html.endsWith(PRE_END)) return null;
-	const escaped = tail.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-	return latest.html.slice(0, -PRE_END.length) + escaped + PRE_END;
-}
-
-let highlightSeq = 0;
-function nextHighlightSeq() {
-	highlightSeq += 1;
-	return highlightSeq;
-}
-
-function subscribeNever() {
-	return () => {};
-}
-
-export function useHighlightedCode(code: string, lang: string) {
-	const key = useId();
-	const cached = useSyncExternalStore(
-		subscribeNever,
-		() => cachedHighlight(code, lang),
-		() => null,
-	);
-	const [latest, setLatest] = useState<ShownHighlight | null>(null);
-
-	useEffect(() => {
-		const seq = nextHighlightSeq();
-		void highlightCode(code, lang, key).then((html) => {
-			if (html !== null) setLatest((shown) => newerHighlight(shown, { seq, code, lang, html }));
-		});
-	}, [code, lang, key]);
-
-	return cached ?? staleHighlight(code, lang, latest);
-}
+/** The worker-backed highlighter the chat renderers use through `@thinkrail/chat-ui/highlight`. */
+export const webCodeHighlighter: CodeHighlighter = {
+	cached: cachedHighlight,
+	highlight: highlightCode,
+};

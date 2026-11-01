@@ -16,8 +16,13 @@ message / content-block model**, a **tool-renderer registry** (the extension poi
 `@earendil-works/pi-web-ui` (MIT, **Lit**, runs the agent in-browser / "Direct Mode") is the canonical
 event→render *reference* we learn from but do **not** adopt (architecture + framework mismatch with our
 host-runs-pi / typed-WS / React+shadcn model). Built so others can reuse/contribute (extraction-ready as
-a future `packages/chat-ui`). Built-in tool renderers live in the child
-[tools/SPEC.md](tools/SPEC.md); extracted extension renderers live in [[module-thinkrail-extensions]].
+[[module-chat-ui]]). **Split:** the presentational renderers, the registry, the built-in tool cards, the
+composer and the Resources dock live in `packages/chat-ui` (so `apps/mobile` renders the same chat); this
+directory keeps the app-integration layer — `ChatView`, `ChatTranscript`, the store/transport hooks and
+dialogs, preference persistence, virtualization and scroll control. This spec remains the design record for
+both halves. Built-in tool renderers live in the child
+[tools/SPEC.md](../../../../packages/chat-ui/src/tools/SPEC.md); extracted extension renderers live in
+[[module-thinkrail-extensions]].
 
 ## Rendering model — rows and progressive disclosure
 
@@ -969,7 +974,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `styles/COLOR.md`). **Compact mode**: below the chat column's `@md` container width (phones, narrow
   splits) labels and keycap hide and the send pill collapses to an icon, so the model pill keeps its room.
   Labels use `ui.action`.
-- **Anthropic extra-usage notice** (`ExtraUsageNotice.tsx`, props-driven). It warns that Claude Pro/Max
+- **Anthropic extra-usage notice** (`@thinkrail/chat-ui/ExtraUsageNotice`, props-driven). It warns that Claude Pro/Max
   auth bills ThinkRail's usage per token as extra usage. Both variants link only claude.ai's usage page.
   There is no "Details" link: no pi doc explains the billing (pi's providers.md has no Claude Pro/Max
   section), and Anthropic's help pages cover usage limits, not the third-party rule. The notice's own
@@ -1597,7 +1602,9 @@ Unknown custom messages retain their existing behavior.
   per-session and store-derived, so it survives the tab-switch remount; a successful reload calls
   `markSkillsSynced` to clear only this chat).
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
-  **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
+  **per-file** (`@thinkrail/chat-ui/<file>` for the shared half); the registry is importable from
+  `@thinkrail/chat-ui/toolRegistry` **without** pulling shiki. Every file named in this spec that is not an
+  app-integration file below lives in [[module-chat-ui]].
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); the lifecycle-neutral
   `prompt` module; `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
@@ -1628,8 +1635,9 @@ Unknown custom messages retain their existing behavior.
   pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
   from *any* consumer. `model.list` answers from *before* the
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
-  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter` / `lib/highlightCode`; a streaming fence
-  shows its last highlight plus the newer text as plain until the worker catches up); `marked` (block lexer
+  `react-markdown` / `remark-gfm` / `shiki` (the app's `lib/highlighter` / `lib/highlightCode` worker client,
+  injected into the shared renderers through `@thinkrail/chat-ui/highlight`; a streaming fence shows its last
+  highlight plus the newer text as plain until the worker catches up); `marked` (block lexer
   for `markdownBlocks` splitting only, never for rendering); `@thinkrail/ext-visualize/web`
   (`Markdown` consumes `MermaidView`; `mermaid` stays lazy inside the extension);
   `@thinkrail/extension-api/web`; `react-virtuoso`; `@remixicon/react`; `@thinkrail/ui/*`;

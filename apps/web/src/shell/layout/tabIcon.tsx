@@ -19,8 +19,8 @@ import {
 	RiTerminalBoxFill,
 	RiTerminalBoxLine,
 } from "@remixicon/react";
+import { CustomIcon } from "@thinkrail/ui/custom-icon";
 import type { ReactNode } from "react";
-import { CustomIcon } from "../../components/CustomIcon";
 import type { LayoutTab } from "./types";
 
 export function tabIcon(tab: LayoutTab, active = false, cls = "size-14 shrink-0"): ReactNode {
