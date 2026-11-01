@@ -83,7 +83,7 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 			}
 			const path = childPath(rel, filename);
 			options.onEvent(path);
-			if (filename === ".gitignore") void guard(walk([rel], false));
+			if (filename === ".gitignore") void guard(recheck());
 			else if (event === "rename") void guard(settle(path));
 		});
 		watcher.on("error", fail);

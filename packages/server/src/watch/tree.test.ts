@@ -128,7 +128,7 @@ test("folders below a nested repository are never sent to the ignore check", asy
 	await waitFor(() => seen("sub/out/x.txt"));
 });
 
-test("a .gitignore edit re-walks its folder, so a folder that stops being ignored is watched", async () => {
+test("a .gitignore edit re-checks folders skipped as ignored", async () => {
 	put("tmp/run/out.txt");
 	ignored.add("tmp");
 	await start();
@@ -137,6 +137,7 @@ test("a .gitignore edit re-walks its folder, so a folder that stops being ignore
 	put(".gitignore", "dist/\n");
 	await waitFor(() => queried.includes("tmp"));
 	await sleep(100);
+	events.length = 0;
 	put("tmp/run/out.txt", "y");
 	await waitFor(() => seen("tmp/run/out.txt"));
 });
