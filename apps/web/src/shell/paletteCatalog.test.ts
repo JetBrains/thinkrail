@@ -5,16 +5,14 @@ import type { CommandContext } from "../commands";
 import { commandItems } from "../search";
 import { buildCommands, type PaletteCatalogDeps } from "./paletteCatalog";
 
-const workspace = {
+const workspace: Workspace = {
 	id: "w1",
 	projectId: "p1",
 	name: "auth",
 	branch: "auth",
 	baseBranch: "main",
 	worktreePath: "/tmp/w1",
-	kind: "worktree",
-	createdAt: 0,
-} as Workspace;
+};
 
 const online: CommandContext = {
 	online: true,

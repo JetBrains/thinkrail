@@ -89,7 +89,7 @@ describe("global hotkey routing", () => {
 					workspace: false,
 					bottom: false,
 					newWorkspace: false,
-					sessionSwitcher: false,
+					search: false,
 				},
 				false,
 				"Linux",

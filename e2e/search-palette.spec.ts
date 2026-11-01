@@ -11,7 +11,7 @@ import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_704_000_000_000;
-const askArgs: AskUserQuestionArgs = {
+const askArgs = {
 	questions: [
 		{
 			question: "Which?",
@@ -22,7 +22,7 @@ const askArgs: AskUserQuestionArgs = {
 			],
 		},
 	],
-};
+} satisfies AskUserQuestionArgs;
 
 function palette(page: Page) {
 	return page.getByTestId("search-palette");
