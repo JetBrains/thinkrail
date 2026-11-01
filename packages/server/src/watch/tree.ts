@@ -60,6 +60,7 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 	}
 
 	function drop(rel: string): void {
+		pruned.delete(rel);
 		if (!dirs.has(rel)) return;
 		const prefix = `${rel}/`;
 		for (const [path, watcher] of dirs) {

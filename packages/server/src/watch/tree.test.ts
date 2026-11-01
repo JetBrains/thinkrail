@@ -157,6 +157,18 @@ test("a folder that stops being ignored is watched after a recheck", async () =>
 	await waitFor(() => seen("dist/index.js"));
 });
 
+test("a deleted ignored folder is not re-checked", async () => {
+	put("run-1/out.txt");
+	ignored.add("run-1");
+	await start();
+	rmSync(join(root, "run-1"), { recursive: true });
+	await waitFor(() => seen("run-1"));
+	await sleep(100);
+	queried.length = 0;
+	watcher?.recheck();
+	expect(queried).toEqual([]);
+});
+
 test("a symlinked root is followed", async () => {
 	put("real/src/a.ts");
 	symlinkSync(join(root, "real"), join(root, "link"));
