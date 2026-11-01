@@ -1031,6 +1031,35 @@ function* userTurnTexts(turns: SessionRuntime["turns"]): Generator<string> {
 	for (const turn of turns) if (turn.kind === "user") yield userText(turn.message.content);
 }
 
+export function selectKnownChatTitle(
+	state: {
+		sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
+		layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	},
+	workspaceId: string,
+	sessionId: string,
+): string | null {
+	const reported = state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.title;
+	if (reported !== undefined) return reported || null;
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	if (document) {
+		const visit = (node: WorkspaceLayoutDocument["center"]): string | null => {
+			if (node.kind === "split") {
+				return visit(node.children[0]) ?? visit(node.children[1]);
+			}
+			for (const tab of node.tabs) {
+				if (tab.kind === "chat" && tab.sessionId === sessionId) return tab.name;
+			}
+			return null;
+		};
+		const fromLayout = visit(document.center);
+		if (fromLayout) return fromLayout;
+	}
+	const closed = state.closedChatsByWorkspace[workspaceId] ?? [];
+	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
+}
+
 export function selectChatFirstPrompt(
 	state: ChatFirstPromptState,
 	workspaceId: string,

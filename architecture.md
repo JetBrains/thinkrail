@@ -135,7 +135,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
    explicit reopen. This one auto-open attempt fires once per surface-workspace connection, not on every
    catalog re-read, and a surface resolving an exact-chat route target defers it entirely to that target.
    `session.created` supplies that history-only live delta when another frontend starts a session; reconnect
-   repairs a missed delta through `session.list`. The client is a **stateless
+   repairs a missed delta through `session.list`, and the normalized state snapshot carries every chat's
+   name, so a chat this client never listed is named without a `session.list`. The client is a **stateless
    projection of domain state**, never a second domain source of truth; it separately owns frontend-local
    navigation and workbench view state. An automatic agent run
    remains active through retries, compaction, and queued continuations: pi's `agent_end` is only an

@@ -6,6 +6,7 @@ import {
 } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
 import type { ClosedChat } from "./appStore";
+import { selectKnownChatTitle } from "./selectors";
 
 export type SessionAttention = "needs-input" | "error" | "unread" | "running";
 
@@ -51,29 +52,6 @@ const ATTENTION_PRIORITY: Record<SessionAttention, number> = {
 
 function compareSessionsByAttention(a: SwitcherSession, b: SwitcherSession): number {
 	return ATTENTION_PRIORITY[a.attention] - ATTENTION_PRIORITY[b.attention];
-}
-
-export function selectKnownChatTitle(
-	state: Pick<SwitcherGroupsState, "layoutDocumentsByWorkspace" | "closedChatsByWorkspace">,
-	workspaceId: string,
-	sessionId: string,
-): string | null {
-	const document = state.layoutDocumentsByWorkspace[workspaceId];
-	if (document) {
-		const visit = (node: WorkspaceLayoutDocument["center"]): string | null => {
-			if (node.kind === "split") {
-				return visit(node.children[0]) ?? visit(node.children[1]);
-			}
-			for (const tab of node.tabs) {
-				if (tab.kind === "chat" && tab.sessionId === sessionId) return tab.name;
-			}
-			return null;
-		};
-		const fromLayout = visit(document.center);
-		if (fromLayout) return fromLayout;
-	}
-	const closed = state.closedChatsByWorkspace[workspaceId] ?? [];
-	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
 }
 
 function resolveWorkspace(

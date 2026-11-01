@@ -45,7 +45,7 @@ import {
 	supportsWorkspaceReadState,
 	useAppStore,
 } from "../store";
-import { getTransport, wsErrorCode } from "../transport";
+import { getTransport } from "../transport";
 import { createPaletteBackfill, mergeProjectWorkspaces } from "./paletteBackfill";
 import {
 	buildCommands,
@@ -60,10 +60,8 @@ const SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const BACKFILL_CONCURRENCY = 4;
 
 const paletteBackfill = createPaletteBackfill({
-	listSessions: (workspaceId) => getTransport().request("session.list", { workspaceId }),
 	listWorkspaces: (projectId) =>
 		getTransport().request("workspace.list", { projectId, includeDiffStats: false }),
-	isRefusal: (error) => wsErrorCode(error) !== undefined,
 	concurrency: BACKFILL_CONCURRENCY,
 });
 
@@ -74,7 +72,7 @@ const paletteNavigator = createPaletteNavigator(async (projectId) =>
 	),
 );
 
-function useChatTitleBackfill(): void {
+function useWorkspaceBackfill(): void {
 	useEffect(() => paletteBackfill.watch(), []);
 }
 
@@ -116,7 +114,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			(selectWorkspaceIsRunning(s, s.activeWorkspaceId) ||
 				selectWorkspaceNeedsAttention(s, s.activeWorkspaceId)),
 	);
-	useChatTitleBackfill();
+	useWorkspaceBackfill();
 	const firstPrompts = useAppStore(useShallow(selectRecordFirstPrompts));
 	const settingsGroups = useMemo(
 		() => settingsNavGroups(protocolVersion, options.hasUpdateSettings),

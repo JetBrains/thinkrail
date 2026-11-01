@@ -328,7 +328,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
     after a compaction); `selectChatTitle` folds it through `chatDisplayName`,
     `selectUnnamedChatFirstPrompts` collects it for the workspace's unnamed chat *and plan* tabs by session
     id, and `selectRecordFirstPrompts` for every reported session — the search palette's chat rows, read
-    through `useShallow` so a streamed delta does not rebuild the palette.
+    through `useShallow` so a streamed delta does not rebuild the palette. The record's `title` likewise
+    leads **`selectKnownChatTitle`** (the palette's chat name): when the host sends it, it wins — `""` reads
+    as unnamed, so a stale tab name or history row cannot outlive a rename or clear that happened while
+    this client was away — and only a record from an older host without the field falls back to the named
+    layout tab, then the history row.
     `SessionRuntime.hostState` is installed with transcript hydration and by state pushes delivered after Pi
     events. A result is **read when it is seen**, not on a gesture: `selectReadyCompletionAck` returns the
     exact unread completion id only while the connection is current, the runtime is synced to this
@@ -363,9 +367,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   intent. No peer can restore placement remotely. **`reopenChat(workspaceId, …)`** restores runtime/history
   membership in its captured workspace even after another workspace becomes active; shell adds placement to
   that workspace's locally chosen center group through the one transition path. **`noteClosedChats`** records
-  disk-only sessions (from `session.list` — the active workspace's reconciliation, or the search palette's
-  title backfill for a workspace this client never opened) and peer-created sessions (from the
-  `session.created` summary) there too—idempotently, skipping live/open sessions while refreshing an existing history row from a newer
+  disk-only sessions (from the active workspace's `session.list` reconciliation) and peer-created sessions
+  (from the `session.created` summary) there too—idempotently, skipping live/open sessions while refreshing an existing history row from a newer
   summary—so a chat that survived a host restart or was created in another frontend is reopenable without
   gaining local placement. A `ClosedChat` keeps the summary's `firstPrompt` beside its `title`, and the
   close transition copies the open chat's (`selectChatFirstPrompt`); history rows still read through
@@ -516,9 +519,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   flag for the search palette ([[submodule-web-search]]), kept here so the global chord, the topbar button
   and an aggregate attention notification ([[submodule-web-notifications]]) open the same instance;
   **`searchSession`** advances on every `openSearch()`, so a notification click on an already-open palette
-  remounts it on the empty query (its Waiting view). **`sessionTitleRevision`** advances on every
-  `session_info_changed` (routed to a tab or history row or not), so the palette's title backfill can drop a
-  `session.list` reply that a rename overtook. The palette's query, scope and selection are its own
+  remounts it on the empty query (its Waiting view). The palette's query, scope and selection are its own
   component state, never store state. The
   client-local **`doubleShiftSearch`** + **`setDoubleShiftSearch()`** mirror the double-Shift preference
   `search` persists through the stable preference adapter (not host config: Sticky Keys and single-Shift

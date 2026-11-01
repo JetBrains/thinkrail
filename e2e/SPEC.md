@@ -510,7 +510,9 @@ long-history scrolling, and reload durability without involving a provider. Firs
 Recently closed and the search palette's chat rows (`data-title-source="prompt"`, full line as tooltip,
 word-boundary cut, found by words past the cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
 from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
-durability is the server unit test's. Visualize coverage
+durability is the server unit test's. Palette name coverage (`search-palette.spec.ts`) seeds a named chat in
+a workspace the page never opened, finds it by a word only its title holds, renames it from a second wire
+client while the palette stays open, and pins that the page sent no `session.list` for either. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
 sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
 fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons

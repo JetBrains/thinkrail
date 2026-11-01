@@ -1276,6 +1276,15 @@ session opens its exact transcript with `SessionManager.open(...).appendSessionI
 agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
 `SessionSummary.title` remains the hydration projection.
 
+**The name rides the state record.** Every `SessionStateRecord` the manager builds carries `title`: a live
+entry reads `AgentSession.sessionName`, and it is part of `publishEntryState`'s dedupe key, so the publish
+that follows every registered-session event — a rename's `session_info_changed` included — pushes the new
+name; a disk row reads the manager the collector has just opened (not the listing's `SessionInfo.name`,
+which an awaited discovery can leave older than the transcript read beside it), and a disk-only rename
+publishes that chat's complete record (`diskStateRecord`, state + title + first prompt) after its event.
+`""` means unnamed. It costs no transcript read — the collector and the rename already hold the manager —
+and the name is read as pi stores it, never re-validated by the write rule.
+
 The guarded write remains authoritative across the async race. `onlyIfUnnamed` performs the check immediately
 beside the append and is the compare-and-set the `set_title` handler uses (its `false` return is how the
 handler learns the chat was already named); the manual wire mutation is unconditional. So an agent title can

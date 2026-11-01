@@ -9,6 +9,7 @@ import {
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import { E2eWire } from "./fixtures/wire";
 
 const BASE_TS = 1_704_000_000_000;
 const askArgs = {
@@ -151,6 +152,62 @@ test("typing finds chats by title and Escape clears before it closes", async ({ 
 		await expect(palette(page)).toBeHidden();
 	} finally {
 		for (const s of seeded) rmSync(s.path, { force: true });
+	}
+});
+
+test("a chat in a workspace this window never opened is found by its title, renamed by a peer, with no chat listing", async ({
+	page,
+}) => {
+	const repo = realpathSync(E2E_FIXTURE_REPO);
+	const sent: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		browser.onMessage((message) => {
+			sent.push(message.toString());
+			server.send(message);
+		});
+	});
+	await openFixtureProject(page);
+	const seeded = seedWorkspaceSession(repo, {
+		name: "Zebra migration plan",
+		messages: [
+			{ role: "user", text: "move the tables", timestamp: BASE_TS + 20 },
+			{ role: "assistant", text: "moved", timestamp: BASE_TS + 21 },
+		],
+	});
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-attention", "true");
+		sent.length = 0;
+
+		await openPalette(page);
+		const input = page.getByTestId("search-input");
+		const row = palette(page).locator(
+			`[data-testid="search-row"][data-item-id="chat:${seeded.id}"]`,
+		);
+		await input.fill("zebra");
+		await expect(row).toContainText("Zebra migration plan");
+		await expect(row.locator("mark")).toHaveText("Zebra");
+
+		const project = (await wire.request("project.list", {}))[0];
+		if (!project) throw new Error("fixture project missing");
+		const workspace = (await wire.request("workspace.list", { projectId: project.id })).find(
+			(candidate) => candidate.kind === "default",
+		);
+		if (!workspace) throw new Error("default workspace missing");
+		await wire.request("session.rename", {
+			sessionId: seeded.id,
+			workspaceId: workspace.id,
+			title: "Yak shaving notes",
+		});
+		await input.fill("yak");
+		await expect(row).toContainText("Yak shaving notes");
+		expect(sent.filter((frame) => frame.includes('"method":"session.list"'))).toEqual([]);
+	} finally {
+		wire.close();
+		rmSync(seeded.path, { force: true });
 	}
 });
 
