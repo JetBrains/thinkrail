@@ -113,14 +113,12 @@ not this module; the theme-aware highlighter remains app-local.
   `shallowEqualArrays`, `userText`, `firstNonBlankLine` (first trimmed non-empty line, `undefined` when
   the text is blank — shared by chat's thinking-heading extraction and history prompt rows), `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
-  `relativeTime`, `compactAge`, the render-time default names `chatName` / `terminalName` (+ the
+  `relativeTime`, `compactAge` (words contracts' `compactAgeOf` buckets), the render-time default names `chatName` / `terminalName` (+ the
   language-neutral `defaultTerminalTitle` / `defaultTerminalIndex`) / `changesTabName` / `diffTabName` /
   `turnTimeLabel` / `planDocumentName` (stored tab names carry no translated text; these word them for the
   caller's translator), **`chatLabel(t, name, firstPrompt)`** → `{ text, source, tooltip? }` with its
-  projections **`chatDisplayName`** (the text) and **`fallbackChatTitle`** (the one derivation of an unnamed
-  chat's label: a trimmed real name wins as `source: "name"`; else contracts' first-prompt head cut at a word
-  boundary at 48 UTF-16 units with `…` — never inside a surrogate pair — as `source: "prompt"` with the full
-  head as `tooltip`; else `chatName`'s generic label as `source: "default"`; every surface that shows a chat
+  projection **`chatDisplayName`** (the text): contracts' `chatTitle` (name, else the cut first-prompt head
+  with its tooltip), else `chatName`'s generic label as `source: "default"`; every surface that shows a chat
   title renders one `chatLabel`, so trimming, the `data-title-source` marker and the tooltip agree and the
   agent's or user's title replaces the label everywhere at once), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`, `randomUuid`,
   `MCP_STATE_KEY`, `mcpStateLabel`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,

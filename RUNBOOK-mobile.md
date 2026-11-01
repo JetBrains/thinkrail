@@ -50,7 +50,7 @@ peer-to-peer, e.g. guest Wi‑Fi isolation.)
 First launch shows the **welcome screen**. Tap **Scan QR code** and point the phone at the terminal QR (or scan it with the
 iPhone Camera — the `thinkrail://` link opens the app and pairs automatically), or paste the link and tap
 **Connect**. The host's
-sessions appear in the list (**Add computer** pairs another one); tap one to **pick up the ongoing conversation** — a session you started on the
+projects appear (**Add computer** pairs another one); tap a project, then a workspace, then a chat to **pick up the ongoing conversation** — a session you started on the
 laptop loads on the phone and keeps streaming — and send a message to continue it. Add your server the same
 way (run the relay+host there too, paste its link).
 The app remembers paired hosts and auto-reconnects (via `resume`) on reopen / network flaps.

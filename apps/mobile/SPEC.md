@@ -16,14 +16,23 @@ IDE. No file tree, diffs, terminals, layout, or settings. No cloud account: the 
 
 ## Boundary
 
-- **Owns:** a small React/Vite UI — `App.tsx` (pairing, host reconnect, screen routing, deep links via
+- **Owns:** a small React/Vite UI — `App.tsx` (pairing, host reconnect, the drill-down route, deep links via
   `@capacitor/app` `appUrlOpen` + `getLaunchUrl`, which pair automatically), `Welcome.tsx` (first run, no
-  paired host), `SessionList.tsx` (aggregated sessions + per-host "unreachable" notice + add-computer form),
-  `scanPairLink.ts` (the in-app QR scan via `@capacitor/barcode-scanner`; cancel is silent, a non-pairing QR
-  or denied camera is reported), `SessionScreen.tsx` (picks up an ongoing session: loads `session.getMessages`, refreshes it as the session
-  streams, sends via `session.followUp`), `PairForm.tsx`, `transcript.ts` (best-effort plain-text lines),
-  `theme.ts`, the Capacitor config, `scripts/ios-setup.ts`, and a `localStorage` `KeyValueStore`
-  (`store.ts`; the Capacitor WKWebView persists it on-device).
+  paired host), the three list screens that read the IDE project tree as screens — `ProjectsScreen.tsx`
+  (each host's open projects from `project.list`, per-host "unreachable" notice, add-computer form) →
+  `ProjectScreen.tsx` (the project's workspaces from `workspace.list`, default / worktree / external glyphs,
+  branch as the second line) → `WorkspaceScreen.tsx` (its chats from `session.list`, newest first, titled by
+  contracts' `chatTitle`, aged by `compactAgeOf`) — and `SessionScreen.tsx` (picks up an ongoing session:
+  loads `session.getMessages`, refreshes it as the session streams, sends via `session.followUp`);
+  `layout.tsx` (`Screen` frame, `ListRow`, loading/failed/empty states), `status.ts` (row marks from
+  contracts' `sessionAttention`: the shared `RunningIcon` replaces the row glyph while a session in scope
+  runs, the shared `AttentionDot` shows while one needs input or has an unread result — the IDE tree's
+  vocabulary), `useHostRequest.ts` (one wire read per screen), `scanPairLink.ts` (the in-app QR scan via
+  `@capacitor/barcode-scanner`; cancel is silent, a non-pairing QR or denied camera is reported),
+  `PairForm.tsx`, `transcript.ts` (best-effort plain-text lines), `theme.ts`, the Capacitor config,
+  `scripts/ios-setup.ts`, and a `localStorage` `KeyValueStore` (`store.ts`; the Capacitor WKWebView persists
+  it on-device). Live status comes from the controller's `session.state` stream; lists are read on screen
+  entry, and a workspace's chats re-read when a session appears or leaves in it.
 - **Allowed deps:** `@thinkrail/remote-client` (the entire remote engine), `@thinkrail/contracts`,
   `@thinkrail/design-tokens` (palettes, semantic CSS, `applyPalette`), `@thinkrail/locales/react`,
   `@thinkrail/ui` primitives, Remix Icon, `@capacitor/barcode-scanner`, React, Vite, Tailwind v4, Capacitor, platform APIs. Never

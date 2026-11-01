@@ -23,7 +23,7 @@ It knows nothing about catalogs, preferences, user themes, or any app's layout â
   `isThemeIdSlug`, the key lists and types), `bundledThemeSources()` (the Vite build-time glob over
   `themes/*.theme.json`; call it only from bundled code), and `applyPalette(root, manifest)` with the
   `paletteVariable` / `ANSI_VARIABLES` / `SYNTAX_VARIABLES` naming it applies.
-- `./styles.css`: imports fonts, typography, colours and spacing in that order. A host imports it right
+- `./styles.css`: imports fonts, typography, colours, spacing, shape and motion in that order. A host imports it right
   after `@import "tailwindcss"`; the generated files carry their own `@theme inline` maps, so a host gets
   the semantic utilities (`bg-container-workspace-bg`, `tr-text-ui`, `p-8`) and nothing of Tailwind's stock
   palette.
@@ -52,6 +52,12 @@ It knows nothing about catalogs, preferences, user themes, or any app's layout â
 text where `sm` would read as a chip; `md` (6px) is the outer corner of a surface nesting `sm` children;
 `lg` (8px) is reserved for large independent elevated surfaces (dialogs, message bubbles). Nothing above
 8px; `rounded-full` is a pill/circle, not a step.
+
+## Motion
+
+`styles/motion.css` holds the shared `@theme` animations of components in [[module-ui]]: the `loader-*`
+keyframes of `@thinkrail/ui/running-icon` (one 3.263s cycle). App-local animations stay in the app's
+stylesheet.
 
 ## Generators
 

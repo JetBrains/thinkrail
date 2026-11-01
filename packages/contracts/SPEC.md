@@ -96,7 +96,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `/skill:<name>`; a first line that is one lowercase tag alone (a package header such as `<review …>`) or
   no text has no head and the next user text is tried — a prompt that merely starts with `<Button>` keeps
   its head; only the first 800 units of a line are normalized —
-  host and client call the same functions over their user texts so the label never jumps),
+  host and client call the same functions over their user texts so the label never jumps), **`unnamedChatTitle(firstPrompt)`** + **`chatTitle(name, firstPrompt)`** (the one
+  chat-title derivation every UI host renders: a trimmed real name wins as `source: "name"`; else the head cut at
+  a word boundary at 48 UTF-16 units with `…`, never inside a surrogate pair, as `source: "prompt"` with the
+  full head as `tooltip`; else `null` for the host's translated default name), **`compactAgeOf(ms, now)`**
+  (the dense-row age buckets `underHour` / `hours` / `days` (<14) / `weeks` (<10) / `months`; the host words
+  them),
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
   chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
@@ -106,7 +111,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   hides their turns, the host's history indexer skips their text; both consume the index slot so jump
   anchors stay aligned) from `domain`; **`isTranscriptMessageRole(role)`**
   and **`isSessionWorking(state)`** (running or idle on background work — the one working test every
-  badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
+  badge and glance uses), **`sessionAttention(state)`** (`SessionAttention`: needs-input, then a failed
+  unread completion as `error`, then `unread`, then `running`, else `null` — the one attention reading the web
+  switcher and the mobile lists share) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).

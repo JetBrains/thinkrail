@@ -4,7 +4,9 @@
 	"private": true,
 	"type": "module",
 	"exports": {
+		"./attention-dot": "./attention-dot.tsx",
 		"./attention-line": "./attention-line.tsx",
+		"./brand-mark": "./brand-mark.ts",
 		"./button": "./button.tsx",
 		"./command": "./command.tsx",
 		"./context-menu": "./context-menu.tsx",
@@ -14,6 +16,7 @@
 		"./menu-styles": "./menu-styles.ts",
 		"./popover": "./popover.tsx",
 		"./resizable": "./resizable.tsx",
+		"./running-icon": "./running-icon.tsx",
 		"./skeleton": "./skeleton.tsx",
 		"./switch": "./switch.tsx",
 		"./textarea": "./textarea.tsx",

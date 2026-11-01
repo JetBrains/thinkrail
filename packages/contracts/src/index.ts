@@ -5,7 +5,9 @@ export {
 	base64EncodedLength,
 	CODE_FONT_SIZE,
 	COMPOSER_GROWTH_LIMITS,
+	chatTitle,
 	clampToCodePoints,
+	compactAgeOf,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
 	DEFAULT_WORKSPACE_NAME,
@@ -72,6 +74,7 @@ export {
 	USER_FONT_EXTENSIONS,
 	USER_FONT_UPLOAD_HEADER,
 	USER_FONTS_ROUTE,
+	unnamedChatTitle,
 } from "./domain";
 export type {
 	FieldMatch,
@@ -91,6 +94,7 @@ export {
 	isSessionWorking,
 	isTranscriptMessageRole,
 	sameModel,
+	sessionAttention,
 } from "./piProtocol";
 export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";

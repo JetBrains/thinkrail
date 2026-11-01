@@ -1,5 +1,5 @@
 import { useT } from "@thinkrail/locales/react";
-import { cn } from "@thinkrail/ui/utils";
+import { cn } from "./utils";
 
 export function AttentionDot({ className }: { className?: string }) {
 	const t = useT();

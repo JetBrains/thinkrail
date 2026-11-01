@@ -1,5 +1,5 @@
 import { type Translator, useT } from "@thinkrail/locales/react";
-import { RunningIcon } from "@/components/RunningIcon";
+import { RunningIcon } from "@thinkrail/ui/running-icon";
 import type { ChatTurn } from "./types";
 
 export const CHAT_STATUS_SLOT_HEIGHT = 40;

@@ -1,4 +1,4 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import { type CompactAgeUnit, compactAgeOf, type UserMessage } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
@@ -324,15 +324,17 @@ export function relativeTime(t: Translator, ms: number, now: number): string {
 
 /** Compact elapsed label for dense rows: `3h`, `12d`, `3w`, `4mo`. */
 export function compactAge(t: Translator, ms: number, now: number): string {
-	const hours = Math.max(0, Math.floor((now - ms) / 3_600_000));
-	if (hours < 1) return t("lib.compactAge.underHour");
-	if (hours < 24) return t("lib.compactAge.hours", { count: hours });
-	const days = Math.floor(hours / 24);
-	if (days < 14) return t("lib.compactAge.days", { count: days });
-	const weeks = Math.floor(days / 7);
-	if (weeks < 10) return t("lib.compactAge.weeks", { count: weeks });
-	return t("lib.compactAge.months", { count: Math.floor(days / 30) });
+	const { unit, count } = compactAgeOf(ms, now);
+	return t(COMPACT_AGE_KEYS[unit], { count });
 }
+
+const COMPACT_AGE_KEYS = {
+	underHour: "lib.compactAge.underHour",
+	hours: "lib.compactAge.hours",
+	days: "lib.compactAge.days",
+	weeks: "lib.compactAge.weeks",
+	months: "lib.compactAge.months",
+} as const satisfies Record<CompactAgeUnit, string>;
 
 export function isShellInert(value: string): boolean {
 	return /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value);

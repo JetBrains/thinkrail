@@ -1,4 +1,4 @@
-import { RiArrowLeftSLine, RiSendPlane2Line } from "@remixicon/react";
+import { RiSendPlane2Line } from "@remixicon/react";
 import type { SessionEventPayload, TranscriptMessage } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
@@ -6,6 +6,7 @@ import type { RemoteSessionsController } from "@thinkrail/remote-client";
 import { Button } from "@thinkrail/ui/button";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { useEffect, useRef, useState } from "react";
+import { Screen } from "./layout";
 import { type TranscriptLine, transcriptLine } from "./transcript";
 
 export interface OpenSession {
@@ -20,10 +21,12 @@ const REFRESH_COALESCE_MS = 400;
 export function SessionScreen({
 	session,
 	controller,
+	backLabel,
 	onBack,
 }: {
 	session: OpenSession;
 	controller: RemoteSessionsController;
+	backLabel: string;
 	onBack: () => void;
 }) {
 	const t = useT();
@@ -84,22 +87,44 @@ export function SessionScreen({
 	};
 
 	return (
-		<main className="flex h-full flex-col pt-safe-top">
-			<header className="flex items-center gap-4 border-b border-border-default bg-container-header-bg px-8 py-4">
-				<Button
-					variant="ghost"
-					className="h-touch shrink-0 rounded-md px-8"
-					iconLeft={RiArrowLeftSLine}
-					onClick={onBack}
-				>
-					{t("mobile.session.back")}
-				</Button>
-				<h1 className="m-0 min-w-0 flex-1 truncate pr-8 text-text-default tr-title-card">
-					{session.title || t("mobile.sessions.untitled")}
-				</h1>
-			</header>
-
-			<div className="flex flex-1 flex-col gap-16 overflow-y-auto px-16 py-16">
+		<Screen
+			title={session.title}
+			back={{ label: backLabel, onBack }}
+			footer={
+				<footer className="border-t border-border-default bg-container-header-bg px-12 pt-8 pb-[max(var(--spacing-safe-bottom),8px)]">
+					{sendError ? (
+						<p role="alert" className="mt-0 mb-8 text-feedback-error tr-text-metadata">
+							{t("mobile.session.sendFailed", { reason: sendError })}
+						</p>
+					) : null}
+					<form
+						className="flex items-end gap-8"
+						onSubmit={(event) => {
+							event.preventDefault();
+							void send();
+						}}
+					>
+						<Textarea
+							value={text}
+							onChange={(event) => setText(event.target.value)}
+							placeholder={t("mobile.session.composerPlaceholder")}
+							aria-label={t("mobile.session.composerPlaceholder")}
+							rows={1}
+							className="max-h-[120px] min-h-touch rounded-md py-12 [field-sizing:content]"
+						/>
+						<Button
+							type="submit"
+							className="h-touch shrink-0 rounded-md px-12"
+							iconLeft={RiSendPlane2Line}
+							disabled={!text.trim() || !client}
+						>
+							{t("mobile.session.send")}
+						</Button>
+					</form>
+				</footer>
+			}
+		>
+			<div className="flex flex-col gap-16 px-16 py-16">
 				{lines === null ? (
 					<p className="m-0 py-40 text-center text-text-muted tr-text-ui">
 						{t("mobile.session.loading")}
@@ -113,39 +138,7 @@ export function SessionScreen({
 				)}
 				<div ref={bottom} />
 			</div>
-
-			<footer className="border-t border-border-default bg-container-header-bg px-12 pt-8 pb-[max(var(--spacing-safe-bottom),8px)]">
-				{sendError ? (
-					<p role="alert" className="mt-0 mb-8 text-feedback-error tr-text-metadata">
-						{t("mobile.session.sendFailed", { reason: sendError })}
-					</p>
-				) : null}
-				<form
-					className="flex items-end gap-8"
-					onSubmit={(event) => {
-						event.preventDefault();
-						void send();
-					}}
-				>
-					<Textarea
-						value={text}
-						onChange={(event) => setText(event.target.value)}
-						placeholder={t("mobile.session.composerPlaceholder")}
-						aria-label={t("mobile.session.composerPlaceholder")}
-						rows={1}
-						className="max-h-[120px] min-h-touch rounded-md py-12 [field-sizing:content]"
-					/>
-					<Button
-						type="submit"
-						className="h-touch shrink-0 rounded-md px-12"
-						iconLeft={RiSendPlane2Line}
-						disabled={!text.trim() || !client}
-					>
-						{t("mobile.session.send")}
-					</Button>
-				</form>
-			</footer>
-		</main>
+		</Screen>
 	);
 }
 

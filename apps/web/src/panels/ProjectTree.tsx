@@ -25,6 +25,7 @@ import {
 } from "@remixicon/react";
 import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { AttentionDot } from "@thinkrail/ui/attention-dot";
 import { IconButton } from "@thinkrail/ui/button";
 import {
 	ContextMenu,
@@ -43,11 +44,10 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { AttentionDot } from "@/components/AttentionDot";
-import { RunningIcon } from "@/components/RunningIcon";
 import { copyText, platformShortcutLabel } from "@/lib";
 import { useNow } from "../components/useNow";
 import {

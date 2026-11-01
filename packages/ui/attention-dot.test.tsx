@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AttentionDot } from "./AttentionDot";
+import { AttentionDot } from "./attention-dot";
 
 test("attention dot has one accessible meaning and one semantic accent", () => {
 	const markup = renderToStaticMarkup(<AttentionDot />);

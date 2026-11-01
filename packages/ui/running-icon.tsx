@@ -1,7 +1,7 @@
 import { useT } from "@thinkrail/locales/react";
-import { cn } from "@thinkrail/ui/utils";
 import { useId } from "react";
-import { BRAND_MARK_SEGMENTS } from "../constants/branding";
+import { BRAND_MARK_SEGMENTS } from "./brand-mark";
+import { cn } from "./utils";
 
 const FRAME_HALVES = [
 	"M20 195 V110 A90 90 0 0 1 110 20 H650 A90 90 0 0 1 740 110 V552",

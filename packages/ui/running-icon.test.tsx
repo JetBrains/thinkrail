@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BRAND_MARK_SEGMENTS } from "../constants/branding";
-import { RunningIcon } from "./RunningIcon";
+import { BRAND_MARK_SEGMENTS } from "./brand-mark";
+import { RunningIcon } from "./running-icon";
 
 test("running icon is the store-free, labeled, theme-coloured stroke-drawn monogram with split frame", () => {
 	const markup = renderToStaticMarkup(<RunningIcon className="size-14 text-primary" />);
