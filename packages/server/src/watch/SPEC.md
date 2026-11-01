@@ -70,14 +70,20 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   reliable. A wildcard event (null filename) nudges it too. Two sources feed the one nudge:
   - `.git`-prefixed events seen by the recursive **root** watcher — covers a **repo root** workspace, whose
     `.git` directory lives inside the watched tree;
-  - a second, **non-recursive** watcher on the worktree's git dir **when that dir lies outside the root**
+  - a second, **recursive** watcher on the worktree's git dir **when that dir lies outside the root**
     (a repo root's in-tree `.git` directory is already covered above, so it is never watched twice): for a
     *linked worktree* (every workspace this app creates) `.git` is a *file* (`gitdir: <path>`) pointing at
     `<repo>/.git/worktrees/<name>`, i.e. **outside the watched root**, so a commit made in that worktree's
     terminal would otherwise produce no signal at all. Resolved with plain fs (stat + parse the gitfile
-    line), never by shelling out — this module has no `git` sibling edge. Non-recursive because only the
-    dir's top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) while `objects/`/`logs/` are
-    pure storms; a missing/unreadable git dir (non-git folder) or a failed start degrades silently.
+    line), never by shelling out — this module has no `git` sibling edge. Recursive because an attached-
+    branch `git update-ref HEAD …` can update only the nested per-worktree `logs/HEAD`, leaving the top-
+    level `HEAD` untouched, while the common branch ref is outside this directory. The git dir here is
+    only the small per-worktree directory, so its `objects/` are not in scope. A missing/unreadable git
+    dir (non-git folder) or a failed start degrades silently. Transient `*.lock` files are excluded from
+    both sources. Git commands routinely create and remove `index.lock` while reading status; treating
+    that as a metadata change would make the client's `git.status`/branch read produce the next metadata
+    nudge, feeding a self-sustaining refresh loop. Directory-only notifications are ignored because the
+    concrete file event accompanies them. A wildcard event still nudges conservatively.
 
   `host` fans the nudge out to two convergences: `refreshUserOwnedWorkspace` (a user-owned workspace's
   folder-truth branch labels) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
