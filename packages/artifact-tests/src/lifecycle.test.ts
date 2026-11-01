@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pollUntil, terminateProcess, within } from "./lifecycle";
 
+function readPid(path: string): number | undefined {
+	const pid = existsSync(path) ? Number(readFileSync(path, "utf8")) : Number.NaN;
+	return Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
+}
+
 function processAlive(pid: number): boolean {
+	if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error(`refusing to probe pid ${pid}`);
 	try {
 		process.kill(pid, 0);
 		return true;
@@ -87,6 +93,8 @@ test("terminateProcess kills and reaps a live root with its child and grandchild
 	const grandchildPidPath = join(root, "grandchild.pid");
 	const grandchildSource = `
 			const { writeFileSync } = require("node:fs");
+			writeFileSync(${JSON.stringify(grandchildPidPath)}, "");
+			await Bun.sleep(50);
 			writeFileSync(${JSON.stringify(grandchildPidPath)}, String(process.pid));
 			await new Promise(() => {});
 		`;
@@ -119,14 +127,21 @@ test("terminateProcess kills and reaps a live root with its child and grandchild
 	let childPid: number | undefined;
 	let grandchildPid: number | undefined;
 	try {
-		await pollUntil(() => existsSync(childPidPath) && existsSync(grandchildPidPath), {
-			timeoutMs: 2_000,
-			what: "process tree fixture",
-			exited: parent.exited,
-			exitError: (code) => new Error(`fixture parent exited early with ${code}`),
-		});
-		childPid = Number(readFileSync(childPidPath, "utf8"));
-		grandchildPid = Number(readFileSync(grandchildPidPath, "utf8"));
+		await pollUntil(
+			() => {
+				childPid = readPid(childPidPath);
+				grandchildPid = readPid(grandchildPidPath);
+				return childPid !== undefined && grandchildPid !== undefined;
+			},
+			{
+				timeoutMs: 2_000,
+				what: "process tree fixture",
+				exited: parent.exited,
+				exitError: (code) => new Error(`fixture parent exited early with ${code}`),
+			},
+		);
+		if (childPid === undefined || grandchildPid === undefined)
+			throw new Error("process tree fixture pids unread");
 		expect(processAlive(parent.pid)).toBe(true);
 		expect(processAlive(childPid)).toBe(true);
 		expect(processAlive(grandchildPid)).toBe(true);

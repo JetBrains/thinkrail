@@ -264,13 +264,9 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 				runner.once("exit", (code) => resolve(code ?? 1));
 			});
 			runner.kill(signal);
-			await expect
-				.poll(() => existsSync(cleanupPath), { intervals: [10], timeout: 400 })
-				.toBe(true);
-			expect(readFileSync(cleanupPath, "utf8")).toBe("cleaned\n");
-			expect(processExists(runningState.grandchild)).toBe(true);
 			expect(await exited).toBe(signalExitCode(signal));
 			expect(Date.now() - startedAt).toBeLessThan(3_000);
+			expect(JSON.parse(readFileSync(cleanupPath, "utf8"))).toEqual({ grandchildAlive: true });
 			await expect
 				.poll(
 					() =>

@@ -637,7 +637,7 @@ export function setSessionManagerFactory(factory: (cwd: string) => SessionManage
 	sessionManagerFactory = factory;
 }
 
-let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = () => ({
+const defaultSkillAdmission = (): SkillAdmissionContext => ({
 	trusted: false,
 	piResourceTrusted: false,
 	acknowledged: [],
@@ -645,15 +645,19 @@ let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = () 
 	disabledGroups: [],
 	overrides: {},
 });
+let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = defaultSkillAdmission;
 export function setSkillAdmissionResolver(
-	resolver: (workspaceId: string) => SkillAdmissionContext,
+	resolver: ((workspaceId: string) => SkillAdmissionContext) | null,
 ): void {
-	skillAdmissionResolver = resolver;
+	skillAdmissionResolver = resolver ?? defaultSkillAdmission;
 }
 
-let mcpPolicyResolver: (workspaceId: string) => McpProjectPolicy = () => mcpPolicyOf(undefined);
-export function setMcpPolicyResolver(resolver: (workspaceId: string) => McpProjectPolicy): void {
-	mcpPolicyResolver = resolver;
+const defaultMcpPolicy = (): McpProjectPolicy => mcpPolicyOf(undefined);
+let mcpPolicyResolver: (workspaceId: string) => McpProjectPolicy = defaultMcpPolicy;
+export function setMcpPolicyResolver(
+	resolver: ((workspaceId: string) => McpProjectPolicy) | null,
+): void {
+	mcpPolicyResolver = resolver ?? defaultMcpPolicy;
 }
 
 type McpToolGrantWriter = (
@@ -671,9 +675,12 @@ function piResourceTrustFor(workspaceId: string): boolean {
 	return skillAdmissionResolver(workspaceId).piResourceTrusted;
 }
 
-let subagentsEnabledResolver: (workspaceId: string) => boolean = () => true;
-export function setSubagentsEnabledResolver(resolver: (workspaceId: string) => boolean): void {
-	subagentsEnabledResolver = resolver;
+const enabledByDefault = (): boolean => true;
+let subagentsEnabledResolver: (workspaceId: string) => boolean = enabledByDefault;
+export function setSubagentsEnabledResolver(
+	resolver: ((workspaceId: string) => boolean) | null,
+): void {
+	subagentsEnabledResolver = resolver ?? enabledByDefault;
 }
 
 function subagentsEnabled(workspaceId: string): boolean {
@@ -712,9 +719,11 @@ export function refreshSubagentTools(workspaceId?: string): void {
 // worker's in-session request_review tool live: `setActiveToolsByName` rebuilds the system prompt from
 // only the active tools' guidelines, so toggling the tool off also drops its guidance. The Review button
 // path (startPlanReview) is separate and unaffected.
-let agentReviewEnabledResolver: (workspaceId: string) => boolean = () => true;
-export function setAgentReviewEnabledResolver(resolver: (workspaceId: string) => boolean): void {
-	agentReviewEnabledResolver = resolver;
+let agentReviewEnabledResolver: (workspaceId: string) => boolean = enabledByDefault;
+export function setAgentReviewEnabledResolver(
+	resolver: ((workspaceId: string) => boolean) | null,
+): void {
+	agentReviewEnabledResolver = resolver ?? enabledByDefault;
 }
 
 function agentReviewEnabled(workspaceId: string): boolean {

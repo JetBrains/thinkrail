@@ -68,6 +68,8 @@ jobs:
       - run: bun run check:i18n
       - run: bun run check:compiler
       - run: bun run lint
+      - name: Download the Electrobun toolchain
+        run: .github/scripts/prepare-electrobun.sh
       - run: bun run typecheck
 
   test:
@@ -234,6 +236,9 @@ jobs:
           bun-version-file: package.json
           no-cache: true
       - run: bun install --frozen-lockfile
+      - name: Download the Electrobun toolchain
+        shell: bash
+        run: bash .github/scripts/prepare-electrobun.sh
       - run: bun run desktop:build
       - run: bun run smoke:desktop
 
@@ -283,6 +288,8 @@ jobs:
           done
           cat "$RUNNER_TEMP/xvfb.log"
           exit 1
+      - name: Download the Electrobun toolchain
+        run: .github/scripts/prepare-electrobun.sh
       - run: bun run desktop:build
       - name: Smoke native desktop window and packaged runtime
         if: ${{ matrix.shard == 1 }}

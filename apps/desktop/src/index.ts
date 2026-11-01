@@ -21,7 +21,7 @@ import {
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
-import { installExternalNavigation } from "./externalNavigation";
+import { installExternalNavigation, windowNavigationRules } from "./externalNavigation";
 import { createKeyStateReader } from "./keyState";
 import {
 	type DesktopDialogLabels,
@@ -112,6 +112,33 @@ function titleBarProbeScript(testIds: string[]): string {
 	poll();
 })();`;
 }
+function linkProbeScript(url: string, target: string): string {
+	return `(() => {
+	const link = document.createElement("a");
+	link.href = ${JSON.stringify(url)};
+	link.target = ${JSON.stringify(target)};
+	link.rel = "noopener noreferrer";
+	document.body.append(link);
+	link.click();
+	link.remove();
+})();`;
+}
+const NAVIGATION_PROBE_SCRIPTS: Record<string, (url: string) => string> = {
+	navigate: (url) => `window.location.assign(${JSON.stringify(url)});`,
+	"navigate-link": (url) => linkProbeScript(url, ""),
+	"navigate-blank-link": (url) => linkProbeScript(url, "_blank"),
+	"navigate-window-open": (url) =>
+		`window.open(${JSON.stringify(url)}, "_blank", "noopener,noreferrer");`,
+	"navigate-srcdoc": (url) => `(() => {
+	const frame = document.createElement("iframe");
+	frame.setAttribute("sandbox", "");
+	frame.addEventListener("load", () => {
+		frame.srcdoc = ${JSON.stringify(`<img src="${url}-2">`)};
+	}, { once: true });
+	frame.srcdoc = ${JSON.stringify(`<img src="${url}-1">`)};
+	document.body.append(frame);
+})();`,
+};
 const WINDOW_CONTROLS_PROBE_TARGETS: Record<string, { testId: string; label: string }> = {
 	"window-controls-maximize": { testId: "window-maximize", label: "Maximize" },
 	"window-controls-restore": { testId: "window-maximize", label: "Restore" },
@@ -428,7 +455,6 @@ async function start(): Promise<void> {
 		hidden:
 			process.env.THINKRAIL_DESKTOP_HIDDEN === "1" ||
 			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
-		navigationRules: neutral ? null : JSON.stringify(["^*", `${origin}/*`]),
 		frame: { x: 80, y: 60, width: 1440, height: 920 },
 		...(neutral
 			? {}
@@ -441,6 +467,7 @@ async function start(): Promise<void> {
 	});
 	setWindowsWindowIcon(mainWindow);
 	if (!neutral) {
+		mainWindow.webview.setNavigationRules(windowNavigationRules(origin));
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
 			window: mainWindow,
@@ -484,16 +511,42 @@ async function start(): Promise<void> {
 	const navigationProbePath = neutral
 		? undefined
 		: process.env.THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE;
+	const navigationProbeOrigin = navigationProbePath
+		? process.env.THINKRAIL_DESKTOP_NAVIGATION_PROBE_ORIGIN
+		: undefined;
+	const navigationProbe = {
+		opened: [] as string[],
+		verdicts: [] as string[],
+		commits: [] as string[],
+	};
 	const removeNavigationListeners = installExternalNavigation(
 		Electrobun.events,
 		mainWindow.webview.id,
 		origin,
 		(url) => {
-			if (navigationProbePath) writeReady(navigationProbePath, { url });
-			else Utils.openExternal(url);
+			if (!navigationProbePath) {
+				Utils.openExternal(url);
+				return;
+			}
+			navigationProbe.opened.push(url);
+			writeReady(navigationProbePath, navigationProbe);
 		},
 	);
 	mainWindow.on("close", removeNavigationListeners);
+	if (navigationProbePath) {
+		const record = (into: string[]) => (event: { data: { detail: unknown } }) => {
+			into.push(String(event.data.detail).slice(0, 2_048));
+			writeReady(navigationProbePath, navigationProbe);
+		};
+		const probes = [
+			[`will-navigate-${mainWindow.webview.id}`, record(navigationProbe.verdicts)],
+			[`did-commit-navigation-${mainWindow.webview.id}`, record(navigationProbe.commits)],
+		] as const;
+		for (const [name, listener] of probes) Electrobun.events.on(name, listener);
+		mainWindow.on("close", () => {
+			for (const [name, listener] of probes) Electrobun.events.off(name, listener);
+		});
+	}
 	const releaseStartupSplash = startupSplash
 		? handOffStartupSplash(startupSplash, mainWindow)
 		: undefined;
@@ -534,17 +587,21 @@ async function start(): Promise<void> {
 
 	const controlPath = process.env.THINKRAIL_DESKTOP_CONTROL_FILE;
 	if (controlPath) {
-		let navigationProbeStarted = false;
+		const navigationProbeCommands = new Set<string>();
 		const titleBarProbeCommands = new Set<string>();
 		const windowControlsProbeCommands = new Set<string>();
 		const poll = setInterval(() => {
 			if (!existsSync(controlPath)) return;
 			if (navigationProbePath || titleBarProbePath || windowControlsProbePath) {
 				const command = readFileSync(controlPath, "utf8");
-				if (command === "navigate" && navigationProbePath && !navigationProbeStarted) {
-					navigationProbeStarted = true;
+				const navigationProbeScript =
+					navigationProbeOrigin && Object.hasOwn(NAVIGATION_PROBE_SCRIPTS, command)
+						? NAVIGATION_PROBE_SCRIPTS[command]
+						: undefined;
+				if (navigationProbeScript && !navigationProbeCommands.has(command)) {
+					navigationProbeCommands.add(command);
 					mainWindow.webview.executeJavascript(
-						'window.location.assign("https://example.invalid/thinkrail-navigation-probe");',
+						navigationProbeScript(`${navigationProbeOrigin}/${command}`),
 					);
 				}
 				const titleBarTargets =

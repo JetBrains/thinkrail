@@ -32,12 +32,14 @@ export type RequestReviewHandler = (
 	signal: AbortSignal | undefined,
 ) => Promise<RequestReviewOutcome>;
 
-let handler: RequestReviewHandler = () => {
+const unavailableHandler: RequestReviewHandler = () => {
 	throw new Error("Plan-step review is not available on this host.");
 };
 
-export function setRequestReviewHandler(fn: RequestReviewHandler): void {
-	handler = fn;
+let handler = unavailableHandler;
+
+export function setRequestReviewHandler(fn: RequestReviewHandler | null): void {
+	handler = fn ?? unavailableHandler;
 }
 
 export function createRequestReviewTool(): ToolDefinition<

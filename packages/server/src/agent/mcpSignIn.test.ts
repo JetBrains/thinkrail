@@ -41,7 +41,11 @@ const faux = createFauxCore({
 		},
 	],
 });
-const saved = { agent: process.env.PI_CODING_AGENT_DIR, offline: process.env.PI_OFFLINE };
+const saved = {
+	agent: process.env.PI_CODING_AGENT_DIR,
+	data: process.env.THINKRAIL_DATA_DIR,
+	offline: process.env.PI_OFFLINE,
+};
 const root = mkdtempSync(join(tmpdir(), "mcp-signin-"));
 const agentDir = join(root, "agent");
 const cwd = join(root, "project");
@@ -52,6 +56,7 @@ let statuses: McpStatusSnapshot[] = [];
 
 beforeAll(async () => {
 	process.env.PI_CODING_AGENT_DIR = agentDir;
+	process.env.THINKRAIL_DATA_DIR = join(root, "data");
 	process.env.PI_OFFLINE = "1";
 	mkdirSync(agentDir, { recursive: true });
 	mkdirSync(cwd, { recursive: true });
@@ -97,6 +102,8 @@ afterAll(async () => {
 	setSessionManagerFactory((dir) => SessionManager.create(dir));
 	if (saved.agent === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = saved.agent;
+	if (saved.data === undefined) delete process.env.THINKRAIL_DATA_DIR;
+	else process.env.THINKRAIL_DATA_DIR = saved.data;
 	if (saved.offline === undefined) delete process.env.PI_OFFLINE;
 	else process.env.PI_OFFLINE = saved.offline;
 	rmSync(root, { recursive: true, force: true });

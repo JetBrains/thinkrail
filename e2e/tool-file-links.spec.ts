@@ -2,6 +2,7 @@ import { appendFileSync, realpathSync, utimesSync } from "node:fs";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { clickTranscriptControl } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -151,7 +152,7 @@ function appendToolResults(path: string, sessionId: string): void {
 async function toolStep(page: Page, toolName: string, index = 0): Promise<Locator> {
 	const activity = page.getByTestId("activity-group").first();
 	if ((await activity.getAttribute("data-expanded")) !== "true") {
-		await activity.getByTestId("activity-group-toggle").click();
+		await clickTranscriptControl(activity.getByTestId("activity-group-toggle"));
 		await expect(activity).toHaveAttribute("data-expanded", "true");
 	}
 	const step = activity
@@ -159,7 +160,7 @@ async function toolStep(page: Page, toolName: string, index = 0): Promise<Locato
 		.nth(index);
 	await expect(step).toBeVisible();
 	if ((await step.getAttribute("data-expanded")) !== "true") {
-		await step.getByTestId("activity-step-toggle").click();
+		await clickTranscriptControl(step.getByTestId("activity-step-toggle"));
 		await expect(step).toHaveAttribute("data-expanded", "true");
 	}
 	return step;
@@ -209,7 +210,7 @@ test("assistant Markdown opens safe relative files without navigating the browse
 		"_blank",
 	);
 
-	await local.click();
+	await clickTranscriptControl(local);
 	const fileTab = page.locator('[data-testid="editor-tab"][data-kind="file"]');
 	await expect(fileTab).toHaveCount(1);
 	await expect(fileTab).toContainText("README.md");
@@ -231,7 +232,7 @@ test("structured tool paths reuse the preview tab while rich tool results stay i
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const localRead = await toolStep(page, "read");
-	await localRead.getByTestId("tool-file-link").click();
+	await clickTranscriptControl(localRead.getByTestId("tool-file-link"));
 	const fileTabs = page.locator('[data-testid="editor-tab"][data-kind="file"]');
 	await expect(fileTabs).toHaveCount(1);
 	await expect(fileTabs.first()).toContainText("README.md");
@@ -240,7 +241,9 @@ test("structured tool paths reuse the preview tab while rich tool results stay i
 	await returnToChat(page);
 	const specGet = await toolStep(page, "spec_get");
 	await expect(specGet).not.toContainText('"id"');
-	await specGet.getByTestId("tool-file-link").filter({ hasText: "module-a/SPEC.md" }).click();
+	await clickTranscriptControl(
+		specGet.getByTestId("tool-file-link").filter({ hasText: "module-a/SPEC.md" }),
+	);
 	await expect(fileTabs).toHaveCount(1);
 	await expect(fileTabs.first()).toContainText("SPEC.md");
 	await expect(fileTabs.first()).toHaveAttribute("data-preview", "true");

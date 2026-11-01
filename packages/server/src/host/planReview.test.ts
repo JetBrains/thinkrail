@@ -16,6 +16,7 @@ import {
 	configurePiRuntime,
 	createSession,
 	disposeAllSessions,
+	setRequestReviewHandler,
 	setSessionManagerFactory,
 	setSessionPublisher,
 	toWireModel,
@@ -95,6 +96,10 @@ beforeAll(async () => {
 
 afterAll(() => {
 	disposeAllSessions();
+	setRequestReviewHandler(null);
+	setSessionPublisher(() => {});
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	configurePiRuntime(null);
 	if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
 	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
