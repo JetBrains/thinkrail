@@ -50,7 +50,7 @@ it too),
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
 git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
 `THINKRAIL_STATIC_DIR` (flag > env > default). `THINKRAIL_NO_ANALYTICS` is documented in `--help` but
-deliberately **not** parsed here — the host's analytics module is its single reader (see below).
+$1 Ports must be plain decimals 0-65535: an empty or non-decimal `--port`, or an empty `--host`, throws; an empty or invalid `THINKRAIL_PORT` / `THINKRAIL_HOST` is ignored and the default is used.
 
 ## Update advisory
 
