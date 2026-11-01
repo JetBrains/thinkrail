@@ -6,6 +6,7 @@ import {
 	type Model,
 	normalizeContext,
 	type RefreshModelsContext,
+	type ToolCall,
 } from "@earendil-works/pi-ai";
 import {
 	ANTIGRAVITY_API,
@@ -968,5 +969,110 @@ describe("Request Building and Streaming Adapter", () => {
 		expect(streamResponse(malformedResponse, stream, output, model)).rejects.toThrow(
 			"Malformed SSE JSON frame",
 		);
+	});
+
+	test("convertAssistantMessage propagates turnSignature to sibling toolCalls and preserves across antigravity models", () => {
+		const flashModel = {
+			id: "gemini-3.8-flash",
+			provider: "antigravity",
+			api: ANTIGRAVITY_API,
+			name: "Gemini 3.8 Flash",
+		} as unknown as Model<typeof ANTIGRAVITY_API>;
+
+		const claudeModel = {
+			id: "claude-opus-5-5",
+			provider: "antigravity",
+			api: ANTIGRAVITY_API,
+			name: "Claude Opus 5.5",
+		} as unknown as Model<typeof ANTIGRAVITY_API>;
+
+		const parallelCallsMsg: AssistantMessage = {
+			role: "assistant",
+			content: [
+				{
+					type: "toolCall",
+					id: "call_1",
+					name: "read",
+					arguments: { path: "a.txt" },
+					thoughtSignature: "c2lnbmF0dXJlMTIz",
+				},
+				{
+					type: "toolCall",
+					id: "call_2",
+					name: "read",
+					arguments: { path: "b.txt" },
+				},
+			],
+			api: ANTIGRAVITY_API,
+			provider: "antigravity",
+			model: "gemini-4-argon",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+			timestamp: Date.now(),
+		};
+
+		// When switching from gemini-4-argon to gemini-3.8-flash, both parallel tool calls retain thoughtSignature
+		const flashParts = convertAssistantMessage(parallelCallsMsg, flashModel, "gemini-3.8-flash");
+		expect(flashParts).toHaveLength(2);
+		expect(flashParts[0]).toMatchObject({
+			functionCall: { name: "read", args: { path: "a.txt" } },
+			thoughtSignature: "c2lnbmF0dXJlMTIz",
+		});
+		expect(flashParts[1]).toMatchObject({
+			functionCall: { name: "read", args: { path: "b.txt" } },
+			thoughtSignature: "c2lnbmF0dXJlMTIz",
+		});
+
+		// When targeting Claude, signatures must still be stripped
+		const claudeParts = convertAssistantMessage(parallelCallsMsg, claudeModel, "claude-opus-5-5");
+		expect(claudeParts).toHaveLength(2);
+		expect(claudeParts[0]).not.toHaveProperty("thoughtSignature");
+		expect(claudeParts[1]).not.toHaveProperty("thoughtSignature");
+	});
+
+	test("streamResponse propagates turn thoughtSignature to parallel toolCalls in the same turn", async () => {
+		const ssePayload = [
+			'data: {"response":{"candidates":[{"content":{"parts":[' +
+				'{"functionCall":{"name":"read","args":{"path":"a.txt"}},"thoughtSignature":"c2lnbmF0dXJlMTIz"},' +
+				'{"functionCall":{"name":"read","args":{"path":"b.txt"}}}' +
+				']},"finishReason":"STOP"}]}}\n\n',
+		].join("");
+
+		const stream = createAssistantMessageEventStream();
+		const model = ANTIGRAVITY_MODELS[0] as unknown as Model<typeof ANTIGRAVITY_API>;
+		const output: AssistantMessage = {
+			role: "assistant",
+			content: [],
+			api: ANTIGRAVITY_API,
+			provider: "antigravity",
+			model: model.id,
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "pending",
+			timestamp: Date.now(),
+		};
+
+		const mockResponse = new Response(ssePayload, {
+			headers: { "Content-Type": "text/event-stream" },
+		});
+		await streamResponse(mockResponse, stream, output, model);
+		expect(output.content).toHaveLength(2);
+		const call1 = output.content[0] as ToolCall;
+		const call2 = output.content[1] as ToolCall;
+		expect(call1.thoughtSignature).toBe("c2lnbmF0dXJlMTIz");
+		expect(call2.thoughtSignature).toBe("c2lnbmF0dXJlMTIz");
 	});
 });

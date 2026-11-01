@@ -206,6 +206,20 @@ export function convertAssistantMessage(
 	}
 	const isSameProviderAndModel =
 		msg.provider === model.provider && (msg.model === model.id || msg.model === runtimeModel);
+	const isClaude = model.id.startsWith("claude-") || runtimeModel.startsWith("claude-");
+
+	let turnSignature: string | undefined;
+	for (const block of msg.content) {
+		const candidate =
+			(block as { thoughtSignature?: string }).thoughtSignature ||
+			(block as { thinkingSignature?: string }).thinkingSignature ||
+			(block as { textSignature?: string }).textSignature;
+		if (isValidThoughtSignature(candidate)) {
+			turnSignature = candidate;
+			break;
+		}
+	}
+
 	const parts: GeminiPart[] = [];
 	for (const block of msg.content) {
 		if (block.type === "text") {
@@ -236,17 +250,18 @@ export function convertAssistantMessage(
 					text: block.thinking || "",
 					...(thoughtSignature ? { thoughtSignature } : {}),
 				});
-			} else if (!model.id.startsWith("claude-") && !runtimeModel.startsWith("claude-")) {
+			} else if (!isClaude) {
 				if (!block.thinking || block.thinking.trim() === "") continue;
 				parts.push({
 					text: block.thinking,
 				});
 			}
 		} else if (block.type === "toolCall") {
-			const thoughtSignature = resolveThoughtSignature(
-				isSameProviderAndModel,
-				(block as { thoughtSignature?: string }).thoughtSignature,
-			);
+			const rawSig = (block as { thoughtSignature?: string }).thoughtSignature || turnSignature;
+			const isToolSigCompatible =
+				isSameProviderAndModel || (!isClaude && msg.provider === model.provider);
+			const thoughtSignature =
+				isToolSigCompatible && isValidThoughtSignature(rawSig) ? rawSig : undefined;
 			parts.push({
 				functionCall: {
 					name: block.name,
@@ -462,6 +477,7 @@ interface StreamContext {
 	stream: AssistantMessageEventStream;
 	output: AssistantMessage;
 	currentBlock: ActiveBlock | null;
+	lastThoughtSignature?: string;
 	started: boolean;
 	hasContent: boolean;
 	ensureStarted: () => void;
@@ -469,12 +485,26 @@ interface StreamContext {
 	blockIndex: () => number;
 }
 
+function extractThoughtSignature(part: unknown): string | undefined {
+	if (!part || typeof part !== "object") return undefined;
+	const p = part as { thoughtSignature?: unknown; thought_signature?: unknown };
+	if (typeof p.thoughtSignature === "string" && p.thoughtSignature.length > 0) {
+		return p.thoughtSignature;
+	}
+	if (typeof p.thought_signature === "string" && p.thought_signature.length > 0) {
+		return p.thought_signature;
+	}
+	return undefined;
+}
+
 function handleTextPart(
-	part: { text?: string; thought?: boolean; thoughtSignature?: string },
+	part: { text?: string; thought?: boolean; thoughtSignature?: string; thought_signature?: string },
 	ctx: StreamContext,
 ): void {
 	if (typeof part.text !== "string") return;
 	ctx.hasContent = true;
+	const sig = extractThoughtSignature(part);
+	if (sig) ctx.lastThoughtSignature = sig;
 	const isThinking = part.thought === true;
 	const type = isThinking ? "thinking" : "text";
 
@@ -494,8 +524,8 @@ function handleTextPart(
 
 	if (block.type === "thinking") {
 		block.thinking += part.text;
-		if (typeof part.thoughtSignature === "string") {
-			block.thinkingSignature = part.thoughtSignature;
+		if (sig) {
+			block.thinkingSignature = sig;
 		}
 		ctx.stream.push({
 			type: "thinking_delta",
@@ -505,8 +535,8 @@ function handleTextPart(
 		});
 	} else {
 		block.text += part.text;
-		if (typeof part.thoughtSignature === "string") {
-			block.textSignature = part.thoughtSignature;
+		if (sig) {
+			block.textSignature = sig;
 		}
 		ctx.stream.push({
 			type: "text_delta",
@@ -521,6 +551,7 @@ function handleFunctionCallPart(
 	part: {
 		functionCall?: { name?: string; args?: unknown; id?: string };
 		thoughtSignature?: string;
+		thought_signature?: string;
 	},
 	ctx: StreamContext,
 ): void {
@@ -528,14 +559,14 @@ function handleFunctionCallPart(
 	if (!fc || typeof fc !== "object") return;
 	ctx.hasContent = true;
 	ctx.finishCurrent();
+	const sig = extractThoughtSignature(part) || ctx.lastThoughtSignature;
+	if (sig) ctx.lastThoughtSignature = sig;
 	const toolCall: ToolCall = {
 		type: "toolCall",
 		id: sanitizeToolCallId(fc.id || "", fc.name),
 		name: fc.name || "",
 		arguments: toJsonObject(fc.args),
-		...(typeof part.thoughtSignature === "string"
-			? { thoughtSignature: part.thoughtSignature }
-			: {}),
+		...(sig ? { thoughtSignature: sig } : {}),
 	};
 	ctx.output.content.push(toolCall);
 	ctx.ensureStarted();
