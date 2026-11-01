@@ -48,7 +48,7 @@ describe("desktop notification channel", () => {
 				title: "ThinkRail",
 				body: "2 worktrees need your attention",
 				tag: "thinkrail-attention",
-				target: { kind: "switcher" },
+				target: { kind: "search" },
 			},
 			() => {},
 		);

@@ -587,7 +587,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   this is a catalog invalidation, never an output broadcast. Resource ownership and teardown stay in agent.
 - **Session-state composition:** before serving, the host supplies every workspace `{id,cwd}`, initializes
   lifecycle/receipt metadata, and installs the workspace→project resolver. `session.stateList` returns the
-  complete all-workspace snapshot; `session.state` broadcasts full records; completion acknowledgement and
+  complete all-workspace snapshot; `session.state` broadcasts full records (each carries the chat's `title`,
+  so a rename while a client was away reaches it through the next snapshot); completion acknowledgement and
   nudge handlers validate workspace/session identity through the same registry. The WS open handler
   subscribes every client after welcome. `session.activityList` remains an inert `[]` compatibility method
   for one window and has no push channel.
@@ -619,8 +620,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Chat titles:** `session.rename` resolves `workspaceId` to its cwd and delegates title validation plus the
   unconditional durable write to `agent`; it never patches one client directly. Automatic titles come only
   from the agent's `set_title` (above); sends carry no naming work. Both manual and automatic
-  writes converge every client through the existing `pi.event`/`session_info_changed` channel and
-  `session.list` repair; no new push channel exists.
+  writes converge every client through the existing `pi.event`/`session_info_changed` channel and the
+  titled `session.state` record (see Session-state composition), with `session.list` repair; no new push
+  channel exists.
 
 `RunningServer.startAttributionClaim()` is the explicit launcher-readiness signal and rechecks the saved
 enabled/confirmed choice before entering analytics attribution.

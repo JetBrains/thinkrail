@@ -1,0 +1,106 @@
+---
+id: submodule-web-search
+type: submodule-design
+status: active
+title: search — the global search palette
+parent: module-web
+depends-on: [module-contracts]
+references: [submodule-web-commands, submodule-web-shell, submodule-web-store]
+tags: [ui, search, public-surface-checked]
+---
+
+## Responsibility
+
+The one finder: a palette that finds chats, workspaces and projects, runs commands and opens Settings
+sections, opened with `Mod+K`, double Shift, or the topbar search button. It owns the presentation,
+the query grammar, ranking and learning, and the store-derived work items; the command catalog and its
+handlers are composed and injected by `shell`. It finds and jumps — it never mutates a setting in
+place (every setting row opens its Settings section), and every verb runs through the command it was
+listed as.
+
+## Boundary
+
+- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `SearchSettings`, `initSearchPreferences`,
+  `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`, `commandItems`, `SearchScope`,
+  `PaletteItem`.
+- **Allowed deps:** `contracts` (the shared matcher and domain types), `commands`, `store`, `transport`
+  (the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`,
+  `lib`, `@thinkrail/locales` (UI strings), `@thinkrail/ui/*`, `@remixicon/react`.
+- **Forbidden:** importing `panels`, `chat` or `shell` (shell injects the commands and their handlers);
+  owning a chord another module binds; sending host mutations itself outside the injected handlers and
+  the store's navigation actions.
+
+## Query grammar
+
+A leading prefix selects a scope and its chip, and a chip writes the prefix back: `@` work (projects,
+workspaces, chats), `>` commands and settings; `/` files and `#` specs join with host search. `#<digits>`
+is a pull-request number, never the specs scope — it matches the `#N` keyword of the workspace that
+carries that review. Quoted text is one contiguous literal term — never matched as an acronym or a
+subsequence — and escapes a prefix; an unterminated quote runs to the end of the query, so a phrase
+matches while it is typed. Terms AND-combine through the shared matcher in [[module-contracts]], which
+folds case and Latin diacritics, precomposed or decomposed (`configuracion` finds `Configuración` either
+way), and highlights the original text. A prefix whose scope the host does not offer searches the rest of
+the query in All, so a doubled prefix (`##`, `//src`) never lands in an empty scope.
+There is no filter grammar: triage happens
+through the empty state's grouping and the status dots every row carries.
+
+## Ranking
+
+The matcher's tier decides first (exact > prefix > word start > substring > subsequence) — and at the
+same tier a visible field beats a secondary one, so a word an unnamed chat's title shows is highlighted
+there rather than in its hidden whole-prompt keyword; within a tier the match score, a decay-free frecency (Firefox's stored form, 14-day half-life), the learned
+query→selection count (Firefox adaptive history: `0.9·n + 1`, prefix-matched, ×0.975 per day, keyed on
+the query's text without its scope prefix and computed once per query, each query keeping its 32 most
+recent picks), the current workspace/project boost, and the attention boost reorder. A top hit shows only when the best row
+is prefix-or-better and clearly ahead, or the typed query has latched to it. Groups are ordered by their
+best row and capped at four in All (thirty in a scope) with an "N more" row: in All it switches to the
+group's scope, in a scope it expands the group in place. The empty query lists **Waiting for you** (every chat
+that needs the user across the open projects, most urgent first — needs input, then failed, then finished
+unread, project order breaking ties, running chats left out — so the cap of eight rows before an in-place
+"Show N more" never hides a blocked chat behind unread ones), **Recent** (by frecency), and **Actions**.
+
+A chat row is worded by `lib`'s `chatLabel` over the known title (`selectKnownChatTitle`: the title on the
+host's state record, which every rename republishes, so no palette request is needed to name a chat in a
+workspace this client never opened; against an older host that omits it, a named layout tab, else a history
+row — and an unvisited chat then reads as its first prompt, so a word only its title holds does not find it)
+and the host-reported first prompt (`selectRecordFirstPrompts`): an unnamed chat reads as
+its first prompt, carries `data-title-source` and the full first line as its tooltip, and is matchable by
+the whole prompt (a keyword), so words past the 48-character cut still find it; an unnamed chat with
+neither a prompt nor attention is not listed.
+
+## Interaction
+
+DOM focus stays in the input (WAI-ARIA combobox + listbox with `aria-activedescendant`, one named group
+per section and a polite result count; chips and footer buttons are not tabbable, and Tab is always
+consumed). The chord layer is the dialog frame, not the input: a click on a non-interactive part of the
+palette moves focus to the frame, and the next key the palette handles — or a character typed — returns
+focus to the input, while a bare modifier or a Ctrl/⌘ chord leaves it, so text selected in the preview
+can be copied. ↑/↓ select, ↵ opens or runs the row and closes the palette, Tab/Shift+Tab change scope,
+and so does `Alt+1…n` on Windows and Linux when Alt types no character there — a character a layout types
+with AltGr or Option on a digit key (`#`, `@`, `|`) stays the input's, and macOS has no digit chord at all,
+since Option always types one (a chip writes its prefix into the query, so the prefix is the one source
+of scope). `Mod+I` toggles the preview pane, `Mod+K` closes the palette (the chord that opened it).
+Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command —
+closes outright. Closing without a pick returns focus to the element that held it when the palette
+opened (the composer an accidental double Shift interrupted, the topbar button); a pick leaves focus to
+its destination. An active IME owns every key (`isComposing` or the `keyCode` 229 sentinel): composing
+Escape, arrows, Enter and `Alt+n` do nothing to the palette, and Tab only stays in the input. Mutating rows
+are disabled while offline or before the current welcome, and a command may carry its own disabled reason
+(Settle while an agent works or a chat needs you). The palette has one level: no pages, no per-row action
+panel — a row is a destination or a command.
+
+## Preferences
+
+The learning snapshot (≤ 500 items, ≤ 500 queries of ≤ 32 picks, < 200 KB), the preview choice and the
+double-Shift choice are client-local: the stable native preference adapter when present (per backend
+profile and window), otherwise browser storage qualified by the backend endpoint, where concurrent
+windows keep their own snapshot and the last writer wins. Only ids and query prefixes are stored, never
+row text.
+
+## Double Shift
+
+`createDoubleShiftDetector` is IntelliJ's gesture: press → release → press → release of a bare Shift,
+each step within 300 ms, ignored when another key went down less than 100 ms before the first press,
+reset by any other key, key repeat, IME composition (`isComposing`/229), another held modifier, pointer
+down, blur or a hidden document, and firing on the second release. The sandboxed HTML preview iframe never
+delivers keys to the parent window, so the gesture does not fire from inside it.
