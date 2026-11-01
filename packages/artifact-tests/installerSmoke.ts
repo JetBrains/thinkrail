@@ -228,11 +228,16 @@ function installedProcessPids(): number[] {
 async function stopInstalledApp({ failed }: { failed: boolean }): Promise<void> {
 	if (!failed || !installerProcess) return;
 	const errors: unknown[] = [];
-	const knownPids = appStopped ? [] : readyDocumentPids();
-	try {
-		knownPids.push(...installedProcessPids());
-	} catch (error) {
-		errors.push(error);
+	const knownPids: number[] = [];
+	const pidSources = appStopped
+		? [installedProcessPids]
+		: [readyDocumentPids, installedProcessPids];
+	for (const pidsOf of pidSources) {
+		try {
+			knownPids.push(...pidsOf());
+		} catch (error) {
+			errors.push(error);
+		}
 	}
 	try {
 		await reapProcess(installerProcess, { knownPids, timeoutMs: 15_000 });
