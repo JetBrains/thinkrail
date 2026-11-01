@@ -789,6 +789,19 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   passive one lets Chromium apply the scroll before the wheel event reaches the hook, so the movement arrives
   without reader intent and neither detach nor exact-edge rearm fires. Scrolling stays responsive because a
   streaming delta re-renders only the rows whose content changed, keeping the main thread free.
+- **File paste** — Composer and NewWorkspaceDialog share the same clipboard transaction. An optional
+  `NativeClipboardBridge` is detected by capability, never by launcher name. Native file paths win over
+  browser representations (Finder can publish the file icon as an image). Actual image bytes use the
+  existing decoding and request budget; non-images, directories and rejected images insert their original
+  absolute paths, one per line, separated from adjacent text. The agent decides how to read those paths;
+  the composer does not inline documents or upload/copy files. No path is invented from a filename.
+  Without a native path, unsupported files show the existing dismissible error chip. Ordinary text
+  is inserted immediately even while native lookup is pending; an empty file result never reapplies it.
+  A native file result may replace that provisional text only while the draft and selection remain
+  unchanged. Drag/drop never reads the clipboard. Pending native reads/decodes hold sends;
+  input, selection or focus changes invalidate a pending file insertion, and completion after a reset
+  or unmount cannot attach to another chat. Native paths refer to the client filesystem; remote
+  translation is not provided.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions (`mentionLookup` splits the typed
   query into the folder `fs.readDir` lists and the name prefix, reading a typed `\` as a separator), `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet

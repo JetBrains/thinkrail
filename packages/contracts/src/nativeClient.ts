@@ -1,3 +1,12 @@
+export interface NativeClipboardFile {
+	path: string;
+	image?: { data: string; mimeType: string };
+}
+
+export interface NativeClipboardBridge {
+	readFiles(): Promise<NativeClipboardFile[]>;
+}
+
 export type NativeUpdateFailedPhase = "check" | "download" | "install" | null;
 
 export type NativeUpdateInstallStep = "stopping" | "handoff" | "restarting";
