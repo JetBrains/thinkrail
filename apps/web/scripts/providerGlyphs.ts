@@ -23,6 +23,7 @@ export const PROVIDER_GLYPH_SLUGS: Readonly<Record<string, string>> = {
 	"openai-codex": "openai",
 	azure: "azure",
 	google: "gemini",
+	antigravity: "gemini",
 	"google-vertex": "vertexai",
 	"amazon-bedrock": "bedrock",
 	"github-copilot": "githubcopilot",
