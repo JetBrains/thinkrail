@@ -396,6 +396,21 @@ test.if(process.platform === "linux")(
 	},
 );
 
+test.if(process.platform === "linux")(
+	"on Linux readiness waits until every folder is watched",
+	async () => {
+		mkdirSync(join(worktree, "a", "b", "c"), { recursive: true });
+		setIgnoredPathsResolver(async () => {
+			await sleep(400);
+			return new Set();
+		});
+		await ensureWatch("ws1");
+		payloads.length = 0;
+		writeFileSync(join(worktree, "a", "b", "c", "x.ts"), "x\n");
+		await waitFor(() => payloads.some((p) => p.paths.includes("a/b/c/x.ts")));
+	},
+);
+
 test("unknown workspace and stopWatch are safe no-ops; stopped watchers stay silent", async () => {
 	ensureWatch("nope");
 	ensureWatch("ws1");

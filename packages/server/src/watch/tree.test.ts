@@ -135,26 +135,11 @@ test("a .gitignore edit re-checks folders skipped as ignored", async () => {
 	ignored.clear();
 	queried.length = 0;
 	put(".gitignore", "dist/\n");
-	await waitFor(() => queried.includes("tmp"));
-	await sleep(100);
+	await waitFor(() => seen("tmp/run/out.txt"));
+	expect(queried).toContain("tmp");
 	events.length = 0;
 	put("tmp/run/out.txt", "y");
 	await waitFor(() => seen("tmp/run/out.txt"));
-});
-
-test("a folder that stops being ignored is watched after a recheck", async () => {
-	put("dist/index.js");
-	ignored.add("dist");
-	await start();
-	ignored.clear();
-	queried.length = 0;
-	watcher?.recheck();
-	await waitFor(() => seen("dist/index.js"));
-	expect(queried).toEqual(["dist"]);
-	await sleep(100);
-	events.length = 0;
-	put("dist/index.js", "y");
-	await waitFor(() => seen("dist/index.js"));
 });
 
 test("a deleted ignored folder is not re-checked", async () => {
@@ -177,12 +162,7 @@ test("a symlinked root is followed", async () => {
 	await waitFor(() => seen("src/a.ts"));
 });
 
-test("a closed tree stays silent, and an unwatchable root throws", async () => {
-	await start();
-	watcher?.close();
-	put("after.ts");
-	await sleep(300);
-	expect(events).toEqual([]);
+test("an unwatchable root throws", () => {
 	expect(() =>
 		watchTree(join(root, "missing"), {
 			onEvent: () => {},

@@ -567,7 +567,8 @@ test.if(process.platform === "linux")(
 		const skill = join(worktree, ".claude", "skills", "demo", "SKILL.md");
 		mkdirSync(join(worktree, ".claude", "skills", "demo"), { recursive: true });
 		expect(Bun.spawnSync(["git", "init", "-q", worktree]).success).toBe(true);
-		writeFileSync(join(worktree, ".gitignore"), ".claude/\n");
+		writeFileSync(join(worktree, ".gitignore"), ".claude/\ntmp/\n");
+		mkdirSync(join(worktree, "tmp"));
 		writeFileSync(skill, "v1\n");
 		writeFileSync(
 			join(dir, "workspaces.json"),
@@ -592,12 +593,19 @@ test.if(process.platform === "linux")(
 			}),
 		);
 		expect((await collector.waitForFrame((frame) => frame.id === "ready")).ok).toBe(true);
+		writeFileSync(join(worktree, "tmp", "out.txt"), "x\n");
 		writeFileSync(skill, "v2\n");
 		await collector.waitForFrame(
 			(frame) =>
 				frame.channel === WS_CHANNELS.workspaceFsChanged &&
 				(frame.data as WorkspaceFsChangedPayload).skillChange === "detected",
 		);
+		const paths = collector.frames.flatMap((frame) =>
+			frame.channel === WS_CHANNELS.workspaceFsChanged
+				? (frame.data as WorkspaceFsChangedPayload).paths
+				: [],
+		);
+		expect(paths.filter((path) => path.startsWith("tmp/"))).toEqual([]);
 	},
 );
 
