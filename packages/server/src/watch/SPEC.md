@@ -11,7 +11,8 @@ tags: [live-refresh, public-surface-checked]
 ## Responsibility
 
 The filesystem change notifier behind the UI's live refresh: one recursive watcher per watched
-workspace worktree (Bun's native `fs.watch(root, { recursive: true })` — no watcher dependency),
+workspace worktree (Bun's native `fs.watch(root, { recursive: true })` — no watcher dependency; on Linux
+one per directory, see below),
 coalescing events into a debounced **`workspace.fsChanged`** publish (`WorkspaceFsChangedPayload`:
 `{ workspaceId, paths, truncated, skillChange }`). The frame is an **invalidation nudge, not data** — clients
 re-read through the existing read methods (`fs.*` / `git.*` / `spec.graph`), so the reads stay the
@@ -60,6 +61,24 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   recency, and a prewarm can never demote a real watcher (including across an inode-change
   re-creation). Correctness under eviction rides the existing recovery paths: the next real call
   re-creates the watcher and its fresh conservative startup nudge covers the blind window.
+- **On Linux each directory gets its own watcher, and ignored folders get none.** Bun's recursive watch
+  on Linux adds an inotify watch per directory, so a large git-ignored folder used up
+  `fs.inotify.max_user_watches` and every start failed (#852). `node_modules` and `.git` get no watcher
+  either, except the root `.git` top level, `refs/`, `reftable/` and `info/`, which feed the repo-metadata
+  nudge. Root `.git` paths and paths inside a nested repo never go to the ignore check: an allowlist
+  `.gitignore` (`*` plus `!` rules) makes `check-ignore` report `.git` itself, and a path inside a
+  submodule fails the whole batch. So ignored folders inside a nested repo are still watched. A nested
+  repo is also noted when its `.git` appears after the walk, like a `git clone` into a new folder. A
+  `.gitignore` event or a repo-metadata nudge re-checks the folders skipped as ignored, since `git add -f`
+  or an `info/exclude` edit also changes the answer. New folders and these re-checks wait in one queue
+  and share one ignore check at a time: a checkout that adds a thousand folders must not spawn a
+  thousand `git check-ignore` runs at once. A global excludes file or a linked worktree's shared
+  `info/exclude` sends no nudge, so such a change waits for the next nudge. Only the root is followed when
+  it is a symlink. A `rename` on a directory re-walks it and reports what is inside, with no inode check:
+  writes before the new watch have no event, and a recreated folder can get the old inode back. The
+  startup nudge, and so readiness, waits for the first walk. On Linux, changes inside an ignored folder
+  are not reported, and a commit inside a submodule sends no nudge, because git writes it only under
+  `.git/modules/`.
 - **Repo-metadata nudge (second seam):** a git-metadata write is *metadata, not content*, so it never
   becomes an `fsChanged` path (the `.git` blackout stands — plumbing storms must not turn into frames). It
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This
@@ -68,7 +87,7 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   It is deliberately **not** matched on specific paths (`.git/HEAD`, `.git/logs/HEAD`, …): the platform
   streams coalesce and report *a* representative path per burst, so which git-internal path surfaces is not
   reliable. A wildcard event (null filename) nudges it too. Two sources feed the one nudge:
-  - `.git`-prefixed events seen by the recursive **root** watcher — covers a **repo root** workspace, whose
+  - `.git`-prefixed events seen by the **root** watcher — covers a **repo root** workspace, whose
     `.git` directory lives inside the watched tree;
   - a second, **non-recursive** watcher on the worktree's git dir **when that dir lies outside the root**
     (a repo root's in-tree `.git` directory is already covered above, so it is never watched twice): for a
@@ -89,9 +108,9 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   a fatal `uncaughtException` that takes down the host (an e2e reset deleting `workspaces.json` mid-nudge
   once did exactly that). Later events keep flowing. The watch-started nudge is the exception: it runs in
   the guarded registration region described below.
-- **Composition seams:** never imports `host` or `agent` — `host` injects both the publish callback and
-  `agent`'s pure project-skill path classifier at wiring time (the publisher-tee pattern). A missing
-  classifier degrades concrete events to `skillChange: "unknown"`, never false-clean.
+- **Composition seams:** never imports `host`, `agent` or `git` — `host` injects the publish callback,
+  `agent`'s pure project-skill path classifier and `git`'s ignore check at wiring time (the publisher-tee
+  pattern). A missing classifier degrades concrete events to `skillChange: "unknown"`, never false-clean.
 - **Self-healing per read (out-of-band worktree churn is normal — e2e resets, `rm -rf` in a terminal):**
   every `ensureWatch` re-stats the root and **re-creates the watcher when the inode changed** (a
   deleted+recreated path leaves the old stream silently following a dead inode), **reaps zombie
@@ -109,6 +128,6 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   region, and a throw there — from it or from anything after `entries.set` — tears the fresh entry down
   (`stopWatch`) rather than leaving a registered watcher whose readiness never settles.
 - **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
-  `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`.
+  `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`, `setIgnoredPathsResolver`.
 - **Allowed deps:** `persistence` (workspace lookup), `log`; `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.

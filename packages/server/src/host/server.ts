@@ -35,6 +35,7 @@ import {
 	initializeSessionStates,
 	isProjectSkillPath,
 	liveSessionIdsOf,
+	mayHoldProjectSkills,
 	mcpPolicyOf,
 	piTrustsProjectPath,
 	primeProjectPiSettings,
@@ -98,6 +99,7 @@ import {
 	setFeedbackPublisher,
 } from "../feedback";
 import { watchUserFonts } from "../fonts";
+import { ignoredPaths } from "../git";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -126,6 +128,7 @@ import { watchUserThemes } from "../themes";
 import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
 import { setTurnPublisher, TurnTracker } from "../turns";
 import {
+	setIgnoredPathsResolver,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,
@@ -768,6 +771,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const stopFontsWatch = watchUserFonts({ onChange: nudge(WS_CHANNELS.fontsChanged) });
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
+	setIgnoredPathsResolver((worktreePath, paths) =>
+		ignoredPaths(
+			worktreePath,
+			paths.filter((path) => !mayHoldProjectSkills(path)),
+		),
+	);
 	setFsNudgePublisher(publishFsChanged);
 
 	setWatchStartedPublisher(seedWorkspaceHead);
@@ -1061,6 +1070,7 @@ function restoreSeamDefaults(): void {
 	setPiPackagesPublisher(null);
 	setWatchPublisher(null);
 	setSkillPathClassifier(null);
+	setIgnoredPathsResolver(null);
 	setFsNudgePublisher(null);
 	setWatchStartedPublisher(null);
 	setRepoMetaPublisher(null);

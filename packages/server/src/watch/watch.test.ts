@@ -7,6 +7,7 @@ import { createCoalescer } from "./coalesce";
 import {
 	ensureWatch,
 	isIgnoredPath,
+	setIgnoredPathsResolver,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,
@@ -183,6 +184,7 @@ afterEach(() => {
 	setRepoMetaPublisher(null);
 	setWatchStartedPublisher(null);
 	setSkillPathClassifier(null);
+	setIgnoredPathsResolver(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -325,6 +327,89 @@ test("ignored churn (node_modules) never publishes", async () => {
 	await sleep(600);
 	expect(payloads.filter((p) => p.paths.some((x) => x.includes("node_modules")))).toHaveLength(0);
 });
+
+test.if(process.platform === "linux")(
+	"on Linux a folder the ignore resolver reports gets no watcher",
+	async () => {
+		mkdirSync(join(worktree, "tmp", "run"), { recursive: true });
+		const asked: string[] = [];
+		setIgnoredPathsResolver(async (root, paths) => {
+			expect(root).toBe(worktree);
+			asked.push(...paths);
+			return new Set(paths.filter((path) => path === "tmp"));
+		});
+		expect(await ensureWatch("ws1")).toEqual({ startupNudge: true });
+		expect(asked).toContain("tmp");
+		payloads.length = 0;
+		writeFileSync(join(worktree, "tmp", "run", "out.txt"), "x\n");
+		writeFileSync(join(worktree, "kept.ts"), "x\n");
+		await waitFor(() => payloads.some((p) => p.paths.includes("kept.ts")));
+		await sleep(400);
+		expect(payloads.some((p) => p.paths.some((x) => x.startsWith("tmp/")))).toBe(false);
+	},
+);
+
+test.if(process.platform === "linux")(
+	"on Linux the root .git stays watched when the resolver would ignore it",
+	async () => {
+		mkdirSync(join(worktree, ".git", "refs", "heads"), { recursive: true });
+		mkdirSync(join(worktree, ".git", "reftable"));
+		const asked: string[] = [];
+		setIgnoredPathsResolver(async (_root, paths) => {
+			asked.push(...paths);
+			return new Set(paths);
+		});
+		const nudges: string[] = [];
+		setRepoMetaPublisher((id) => nudges.push(id));
+		await ensureWatch("ws1");
+		expect(asked.filter((path) => path.split("/")[0] === ".git")).toEqual([]);
+		writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/next\n");
+		await waitFor(() => nudges.length > 0);
+		nudges.length = 0;
+		writeFileSync(join(worktree, ".git", "refs", "heads", "next"), "0\n");
+		await waitFor(() => nudges.length > 0);
+		nudges.length = 0;
+		writeFileSync(join(worktree, ".git", "reftable", "tables.list"), "0\n");
+		await waitFor(() => nudges.length > 0);
+	},
+);
+
+test.if(process.platform === "linux")(
+	"on Linux a git metadata change re-checks folders skipped as ignored",
+	async () => {
+		mkdirSync(join(worktree, ".git", "info"), { recursive: true });
+		mkdirSync(join(worktree, "dist"));
+		writeFileSync(join(worktree, "dist", "index.js"), "x\n");
+		const ignored = new Set(["dist"]);
+		setIgnoredPathsResolver(async (_root, paths) => new Set(paths.filter((p) => ignored.has(p))));
+		const nudges: string[] = [];
+		setRepoMetaPublisher((id) => nudges.push(id));
+		await ensureWatch("ws1");
+		ignored.clear();
+		writeFileSync(join(worktree, ".git", "info", "exclude"), "\n");
+		await waitFor(() => nudges.length > 0);
+		await waitFor(() => payloads.some((p) => p.paths.includes("dist/index.js")));
+		await sleep(100);
+		payloads.length = 0;
+		writeFileSync(join(worktree, "dist", "index.js"), "y\n");
+		await waitFor(() => payloads.some((p) => p.paths.includes("dist/index.js")));
+	},
+);
+
+test.if(process.platform === "linux")(
+	"on Linux readiness waits until every folder is watched",
+	async () => {
+		mkdirSync(join(worktree, "a", "b", "c"), { recursive: true });
+		setIgnoredPathsResolver(async () => {
+			await sleep(400);
+			return new Set();
+		});
+		await ensureWatch("ws1");
+		payloads.length = 0;
+		writeFileSync(join(worktree, "a", "b", "c", "x.ts"), "x\n");
+		await waitFor(() => payloads.some((p) => p.paths.includes("a/b/c/x.ts")));
+	},
+);
 
 test("unknown workspace and stopWatch are safe no-ops; stopped watchers stay silent", async () => {
 	ensureWatch("nope");

@@ -1128,7 +1128,9 @@ re-opened transcripts provider-valid.
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
-  `isProjectSkillPath(relativePath)` (watch-classification predicate);
+  `isProjectSkillPath(relativePath)` (watch-classification predicate) / `mayHoldProjectSkills(relativePath)`
+  (also true for the folder above a skill directory, false below a dot-folder inside it, because pi never
+  looks for skills there);
   `reloadSessionResources(sessionId)` (active-chat reload; throws while the reload gate is blocked) +
   `requestSessionReload(sessionId)` (the deferring variant: `"reloaded"` now or `"deferred"` until the gate
   opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host
