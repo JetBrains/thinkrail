@@ -53,9 +53,10 @@ const SUBSCRIPTION_LIMITS: (SubscriptionLimit & { pattern: RegExp })[] = [
 	},
 ];
 
-export function subscriptionLimit(
-	turn: { text: string; failure?: AssistantFailure | undefined },
-): SubscriptionLimit | null {
+export function subscriptionLimit(turn: {
+	text: string;
+	failure?: AssistantFailure | undefined;
+}): SubscriptionLimit | null {
 	if (turn.failure !== "error") return null;
 	const match = SUBSCRIPTION_LIMITS.find(({ pattern }) => pattern.test(turn.text));
 	return match ? { url: match.url, label: match.label } : null;

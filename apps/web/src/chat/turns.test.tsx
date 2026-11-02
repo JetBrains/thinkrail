@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { applyLocale } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
+import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatRow } from "./rows";
 import { ChatTurnView } from "./turns";
 
@@ -59,5 +60,38 @@ describe("system and failure notices", () => {
 		} finally {
 			applyLocale("en", {});
 		}
+	});
+
+	test("a subscription-limit failure swaps Try again for the usage page and provider settings", () => {
+		const text =
+			"The ChatGPT user has reached their Subscription Sharing usage limit. Ask the user to try again after their usage limit resets or use an API key instead.";
+		const row: ChatRow = { kind: "error", id: "e", text, failure: "error", recovery: "try-again" };
+		const render = (actions: ChatActions | null) =>
+			renderToStaticMarkup(
+				<ChatActionsContext.Provider value={actions}>
+					<TooltipProvider>
+						<ChatTurnView row={row} agentResponded isFinalAnswer={false} onTryAgain={() => {}} />
+					</TooltipProvider>
+				</ChatActionsContext.Provider>,
+			);
+		const html = render({ openProviderSettings: () => {} } as unknown as ChatActions);
+		expect(html).toContain(text);
+		expect(html).toContain('href="https://chatgpt.com/settings/usage"');
+		expect(html).toContain("Check ChatGPT usage");
+		expect(html).toContain('data-testid="agent-open-provider-settings"');
+		expect(html).not.toContain('data-testid="agent-try-again"');
+		expect(render(null)).not.toContain("agent-open-provider-settings");
+		expect(
+			renderToStaticMarkup(
+				<TooltipProvider>
+					<ChatTurnView
+						row={{ ...row, text: "429 rate limited" }}
+						agentResponded
+						isFinalAnswer={false}
+						onTryAgain={() => {}}
+					/>
+				</TooltipProvider>,
+			),
+		).toContain('data-testid="agent-try-again"');
 	});
 });

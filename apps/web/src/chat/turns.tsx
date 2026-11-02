@@ -33,10 +33,12 @@ import {
 import { CustomIcon } from "@/components/CustomIcon";
 import { parseSkillInvocation, projectRelativePath, type SkillInvocation, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
-import { type AssistantFailure, errorTurnText } from "./assistantFailure";
+import { type AssistantFailure, errorTurnText, subscriptionLimit } from "./assistantFailure";
 import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
+import { useChatActions } from "./ChatActions";
 import { CopyButton } from "./CopyButton";
+import { NoticeLink } from "./ExtraUsageNotice";
 import { ToolPromptSlot } from "./ExtUiPrompt";
 import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
@@ -604,6 +606,8 @@ function ErrorTurn({
 	onTryAgain?: (() => void) | undefined;
 }) {
 	const t = useT();
+	const openProviderSettings = useChatActions()?.openProviderSettings;
+	const limit = subscriptionLimit({ text, failure });
 	return (
 		<div
 			data-testid="chat-message"
@@ -616,7 +620,21 @@ function ErrorTurn({
 					{errorTurnText(t, { text, failure })}
 				</span>
 			</div>
-			{onTryAgain ? (
+			{limit ? (
+				<div className="flex flex-wrap items-center justify-end gap-x-16 gap-y-4">
+					<NoticeLink href={limit.url}>{t(limit.label)}</NoticeLink>
+					{openProviderSettings ? (
+						<Button
+							variant="outline"
+							size="m"
+							data-testid="agent-open-provider-settings"
+							onClick={openProviderSettings}
+						>
+							{t("chat.failure.openProviderSettings")}
+						</Button>
+					) : null}
+				</div>
+			) : onTryAgain ? (
 				<div className="flex justify-end">
 					<Button
 						variant="outline"
