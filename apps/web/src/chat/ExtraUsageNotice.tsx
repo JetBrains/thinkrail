@@ -7,13 +7,12 @@ import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
-
-export const CLAUDE_USAGE_URL = "https://claude.ai/settings/usage";
+import { CLAUDE_USAGE_URL } from "./assistantFailure";
 
 const LINK =
 	"inline-flex items-center gap-2 rounded-sm text-primary underline underline-offset-2 outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary";
 
-function NoticeLink({ href, children }: { href: string; children: ReactNode }) {
+export function NoticeLink({ href, children }: { href: string; children: ReactNode }) {
 	return (
 		<a href={href} target="_blank" rel="noopener noreferrer" className={LINK}>
 			{children}
