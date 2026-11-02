@@ -14,7 +14,8 @@ pi install npm:@thinkrail/pi-ask-user-question
   `(Recommended)`), and `multiSelect` when several answers are valid. One call carries every question the
   agent can ask now. The run pauses until you answer.
 - **A questionnaire in the terminal.**
-  - One page per question, then **Review & submit**.
+  - One page per question; confirming the last one submits. **Submit answers** on the last page sends
+    what you have answered so far.
   - ↑↓ to move (in single-select this also selects), Space to toggle in multi-select, Enter to confirm.
   - **Other** for your own answer: type on its row.
   - `n` attaches a note to an option.

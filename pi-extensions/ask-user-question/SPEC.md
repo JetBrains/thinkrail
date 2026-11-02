@@ -75,8 +75,13 @@ answer mailbox.
   - The "Recommended" badge and the `Why:` line.
   - The selected option's markdown preview: beside the list from 100 columns, below it otherwise, capped
     at 24 lines.
-  - A review page listing unanswered questions, Esc to skip, and a "Chat about this" row.
+  - One page per question, no review page (matching the card): confirming the last one submits, and its
+    "Submit answers" row (the card's Submit button) sends whatever is answered, the rest as not answered.
+    Esc to skip, and a "Chat about this" row.
   - Known limit: no viewport for a questionnaire taller than the terminal.
+  - Known limit: on a single-select last page, ↓ selects each option it crosses, so reaching "Submit
+    answers" that way answers that question with its last option; ↑ from the first option reaches it
+    without selecting.
 - **The dialog walker trades richness for reach.**
   - One `select` per question, with "Other…" and "Chat about this".
   - Multi-select is a single `input` of "1,3; own text".

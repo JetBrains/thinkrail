@@ -245,19 +245,39 @@ describe("QuestionnaireComponent — multi-select", () => {
 });
 
 describe("QuestionnaireComponent — several questions", () => {
-	test("tabs page through the questions to Review & submit", () => {
+	test("tabs page through the questions; confirming the last one submits", () => {
 		const { press, screen, outcomes } = open(library, runtime);
-		expect(screen()).toContain(" Lib │ Runtime │ Review & submit");
+		expect(screen()).toContain(" Lib │ Runtime");
+		expect(screen()).not.toContain("Review & submit");
 		press(KEY.down, KEY.enter);
 		expect(screen()).toContain("Lib ✓");
 		expect(screen()).toContain("Which runtime?");
 		press(KEY.tab);
-		const review = screen();
-		expect(review).toContain("Review your answers");
-		expect(review).toContain("✓ luxon");
-		expect(review).toContain("Not answered");
-		expect(review).toContain("⚠ Unanswered: Runtime");
-		expect(review).toContain("›   Submit answers");
+		expect(screen()).toContain("Which runtime?");
+		press(KEY.down, KEY.enter);
+		const outcome = outcomes[0];
+		expect(outcome?.kind === "answered" && outcome.result.answers.map((a) => a.answer)).toEqual([
+			"luxon",
+			"node",
+		]);
+	});
+
+	test("the last question submits even with an earlier one unanswered", () => {
+		const { press, outcomes } = open(library, runtime);
+		press(KEY.tab, KEY.enter);
+		const outcome = outcomes[0];
+		expect(
+			outcome?.kind === "answered" && outcome.result.answers.map((a) => a.questionIndex),
+		).toEqual([1]);
+	});
+
+	test("the last page's Submit answers row sends what is answered, leaving the rest unanswered", () => {
+		const { press, screen, outcomes } = open(library, runtime);
+		expect(screen()).not.toContain("Submit answers");
+		press(KEY.down, KEY.enter);
+		expect(screen()).toContain("Submit answers");
+		press(KEY.up, KEY.up);
+		expect(screen()).toContain("›   Submit answers");
 		press(KEY.enter);
 		const outcome = outcomes[0];
 		expect(outcome?.kind === "answered" && outcome.result.answers.map((a) => a.answer)).toEqual([
@@ -265,16 +285,16 @@ describe("QuestionnaireComponent — several questions", () => {
 		]);
 	});
 
-	test("Submit with nothing answered asks for an answer first", () => {
+	test("Submit answers with nothing answered asks for an answer first", () => {
 		const { press, screen, outcomes } = open(library, runtime);
-		press(KEY.left, KEY.right, KEY.right, KEY.enter);
+		press(KEY.tab, KEY.up, KEY.up, KEY.enter);
 		expect(screen()).toContain("Answer at least one question first, or press Esc to skip");
 		expect(outcomes).toEqual([]);
 	});
 
-	test("a question row on the review page opens that question", () => {
+	test("Shift+Tab returns to an earlier question", () => {
 		const { press, screen } = open(library, runtime);
-		press(KEY.tab, KEY.tab, KEY.up, KEY.enter);
+		press(KEY.tab);
 		expect(screen()).toContain("Which runtime?");
 		press(KEY.shiftTab);
 		expect(screen()).toContain("Which library should we use for dates?");
