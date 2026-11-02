@@ -29,6 +29,7 @@ import {
 	readNativeLabels,
 	writeNativeLabels,
 } from "./nativeLabels";
+import { applyProxySettings, readSystemProxy } from "./network";
 import { createPageZoomGestureHandler, nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
@@ -323,6 +324,13 @@ async function start(): Promise<void> {
 	const preferences = new PreferenceStore(join(userData, "preferences.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
+	const applyProxyPreference = (values: Record<string, string>) => {
+		applyProxySettings(values["proxy.mode"], values["proxy.manual"], {
+			readSystemProxy: () => readSystemProxy(),
+			env: process.env,
+		});
+	};
+	applyProxyPreference(initialPreferences);
 	const titleBarProbePath = neutral
 		? undefined
 		: process.env.THINKRAIL_DESKTOP_TITLE_BAR_PROBE_FILE;
@@ -429,12 +437,18 @@ async function start(): Promise<void> {
 					) {
 						console.error("[desktop] could not save a local preference");
 					}
+					if (preference?.key.startsWith("proxy.")) {
+						applyProxyPreference(preferences.read(BACKEND_PROFILE_ID, WINDOW_ID));
+					}
 				},
 				preferenceRemove: (payload) => {
 					if (neutral) return;
 					const preference = readDesktopPreferenceRemove(payload);
 					if (preference && !preferences.remove(BACKEND_PROFILE_ID, WINDOW_ID, preference.key)) {
 						console.error("[desktop] could not remove a local preference");
+					}
+					if (preference?.key.startsWith("proxy.")) {
+						applyProxyPreference(preferences.read(BACKEND_PROFILE_ID, WINDOW_ID));
 					}
 				},
 			},
