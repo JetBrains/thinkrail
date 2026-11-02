@@ -52,3 +52,7 @@ export default createAskUserQuestionExtension({
 
 `@thinkrail/pi-ask-user-question/core` exports the schema-independent pieces such a host needs outside the
 tool: the result types, the model-facing envelope builder, the acknowledgement text and the validation.
+
+## License
+
+Apache-2.0 — part of [ThinkRail](https://thinkrail.ai).
