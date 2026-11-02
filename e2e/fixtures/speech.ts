@@ -6,6 +6,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBunExecutable } from "./executables";
 import { E2E_SPEECH_FIXTURE_DIR, E2E_SPEECH_MANIFEST, E2E_SPEECH_PORT } from "./paths";
 
+/** Opt-in: the host downloads NVIDIA's real runtime and model (~750 MB) instead of the fixture. */
+export const REAL_SPEECH_E2E_ENV = "THINKRAIL_E2E_REAL_SPEECH";
+
+/** A 5 s, 16 kHz mono recording Chromium loops as its fake microphone in the real-engine run. */
+export const DICTATION_WAV = fileURLToPath(
+	new URL("./speech-audio/dictation.wav", import.meta.url),
+);
+
 /** The English model is served over HTTP by the spec itself, slowly, so an install can be caught. */
 export const SLOW_MODEL_PATH = "/english.gguf";
 
