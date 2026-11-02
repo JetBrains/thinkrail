@@ -3,17 +3,13 @@ import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
-import { assertCentralPlaywrightRunner } from "./e2e/agentRunPlan";
+import { assertCentralPlaywrightRunner } from "./agentRunPlan";
 import {
 	CENTRAL_STUB_READ_ONLY_ENV,
 	isRealCentralE2e,
 	REAL_CENTRAL_E2E_ENV,
-} from "./e2e/fixtures/centralAgent";
-import {
-	hermeticE2ePath,
-	hermeticE2eShell,
-	resolveBunExecutable,
-} from "./e2e/fixtures/executables";
+} from "./fixtures/centralAgent";
+import { hermeticE2ePath, hermeticE2eShell, resolveBunExecutable } from "./fixtures/executables";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -27,10 +23,10 @@ import {
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
 	E2E_PORT,
-} from "./e2e/fixtures/paths";
+} from "./fixtures/paths";
 
-const rootDir = fileURLToPath(new URL(".", import.meta.url));
-const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
+const rootDir = fileURLToPath(new URL("..", import.meta.url));
+const staticDir = fileURLToPath(new URL("../apps/web/dist", import.meta.url));
 // Per-worktree derived port (e2e/fixtures/paths.ts) — parallel worktrees (this product's own working
 // model) run their suites concurrently without fighting over one port, zero config; the dev host
 // (24242) stays clear. Slot clashes are auto-arbitrated by an atomic claim registry
@@ -50,8 +46,8 @@ const hostCommand =
 		? `${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`
 		: `${JSON.stringify(bunExecutable)} run build:web && ${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`;
 export default defineConfig({
-	testDir: "./e2e",
-	// The headless workflow-test suite has its own config (playwright.workflows.config.ts) — no browser,
+	testDir: ".",
+	// The headless workflow-test suite has its own config (e2e/playwright.workflows.config.ts) — no browser,
 	// no webServer; `bun run test:workflows`. Never picked up by the browser suites.
 	testIgnore: "workflows/**",
 	...(centralMode ? { grep: /@agent/ } : { grepInvert: /@agent/ }),
@@ -62,9 +58,12 @@ export default defineConfig({
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 1 : 0,
 	timeout: 30_000,
-	reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
-	globalSetup: "./e2e/global-setup.ts",
-	globalTeardown: "./e2e/global-teardown.ts",
+	reporter: process.env.CI
+		? [["github"], ["html", { open: "never", outputFolder: "../playwright-report" }]]
+		: "list",
+	outputDir: "../test-results",
+	globalSetup: "./global-setup.ts",
+	globalTeardown: "./global-teardown.ts",
 	use: {
 		baseURL: `http://localhost:${PORT}`,
 		trace: "on-first-retry",
