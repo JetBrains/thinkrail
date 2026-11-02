@@ -496,8 +496,15 @@ const subagentSpend = (input: number, note: string) => ({
 	},
 });
 
+const totalTokens = (usage: {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+}) => usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
+
 test.skipIf(!writesCanBeDenied)(
-	"a usage write pi kept only in memory never cuts the reopened history",
+	"a failed usage write leaves pi's memory and leaf untouched and never cuts the reopened history",
 	async () => {
 		const { sessionId, manager, file } = await persistedParent("ws-memonly");
 		const { release } = gatedChildResponse();
@@ -515,7 +522,8 @@ test.skipIf(!writesCanBeDenied)(
 			const outcome = await run;
 			chmodSync(file, 0o644);
 			expect(outcome.status).toBe("completed");
-			expect(getSessionStats(sessionId).tokens.input).toBe(outcome.details.usage.input);
+			expect(totalTokens(outcome.details.usage)).toBeGreaterThan(0);
+			expect(getSessionStats(sessionId).tokens.total).toBe(0);
 			expect(manager.getLeafEntry()?.type).not.toBe("usage");
 
 			manager.appendMessage({ role: "user", content: "AFTER", timestamp: Date.now() });
@@ -531,7 +539,7 @@ test.skipIf(!writesCanBeDenied)(
 );
 
 test.skipIf(!writesCanBeDenied)(
-	"reopening a chat restores subagent spend that was recorded only in memory",
+	"reopening a chat restores subagent spend whose write failed",
 	async () => {
 		const { cwd, sessionId, file } = await persistedParent("ws-reopen");
 		faux.setResponses([fauxAssistantMessage("CHILD_DONE")]);
@@ -557,7 +565,7 @@ test.skipIf(!writesCanBeDenied)(
 		});
 		try {
 			expect(reopened.sessionId).toBe(sessionId);
-			await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+			await waitFor(() => getSessionStats(sessionId).tokens.total === totalTokens(usage));
 			expect(getSessionStats(sessionId).tokens).toMatchObject({
 				input: usage.input,
 				output: usage.output,
@@ -574,15 +582,14 @@ test("a torn usage append is cut back so the next entry stays readable", async (
 	const { sessionId, manager, file } = await persistedParent("ws-torn");
 	const appendUsage = manager.appendUsage.bind(manager);
 	try {
-		manager.appendUsage = (...args) => {
-			appendUsage(...args);
+		manager.appendUsage = () => {
 			appendFileSync(file, '{"type":"message","id":"torn');
 			throw Object.assign(new Error("EIO: i/o error, write"), { code: "EIO" });
 		};
 		const sizeBefore = statSync(file).size;
-		expect(recordSessionUsage(sessionId, subagentSpend(40, "child-torn"))).toBe(true);
+		expect(recordSessionUsage(sessionId, subagentSpend(40, "child-torn"))).toBe(false);
 		expect(statSync(file).size).toBe(sizeBefore);
-		expect(getSessionStats(sessionId).tokens.input).toBe(40);
+		expect(getSessionStats(sessionId).tokens.total).toBe(0);
 
 		manager.appendUsage = appendUsage;
 		manager.appendMessage({ role: "user", content: "AFTER", timestamp: Date.now() });
@@ -616,16 +623,16 @@ test("usage accounting survives a throwing publisher and an unreadable transcrip
 	}
 });
 
-test.skipIf(!writesCanBeDenied)("a rollback that cannot truncate never throws", async () => {
+test.skipIf(!writesCanBeDenied)("a cut-back that cannot truncate never throws", async () => {
 	const { sessionId, manager, file } = await persistedParent("ws-notrunc");
 	const appendUsage = manager.appendUsage.bind(manager);
 	try {
-		manager.appendUsage = (...args) => {
-			appendUsage(...args);
+		manager.appendUsage = () => {
+			appendFileSync(file, '{"type":"message","id":"torn');
 			chmodSync(file, 0o444);
 			throw Object.assign(new Error("EIO: i/o error, close"), { code: "EIO" });
 		};
-		expect(recordSessionUsage(sessionId, subagentSpend(30, "child-c"))).toBe(true);
+		expect(recordSessionUsage(sessionId, subagentSpend(30, "child-c"))).toBe(false);
 		expect(manager.getLeafEntry()?.type).not.toBe("usage");
 	} finally {
 		chmodSync(file, 0o644);
@@ -795,32 +802,40 @@ test("a live-recorded run stays exact after its chat is reopened", async () => {
 });
 
 test.skipIf(!writesCanBeDenied)(
-	"a progress write kept only in memory is neither recounted nor lost after reopening",
+	"a failed progress write is carried by the terminal write and not recounted after reopening",
 	async () => {
-		const { cwd, sessionId, file } = await persistedParent("ws-progressfail");
+		const { cwd, sessionId, manager, file } = await persistedParent("ws-progressfail");
+		const appendUsage = manager.appendUsage.bind(manager);
+		let attempts = 0;
+		manager.appendUsage = (...args) => {
+			attempts += 1;
+			return appendUsage(...args);
+		};
 		const { release } = twoStepChildResponses();
 		try {
 			const child = await scoutChild("ws-progressfail", sessionId);
 			chmodSync(file, 0o444);
 			const run = child.runQueued("Two steps.");
-			await waitFor(() => getSessionStats(sessionId).tokens.total > 0);
+			await waitFor(() => attempts > 0);
+			expect(getSessionStats(sessionId).tokens.total).toBe(0);
 			chmodSync(file, 0o644);
 			release();
 			const { usage } = (await run).details;
 			expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
 			await removeSession(sessionId);
 			const onDisk = SessionManager.open(file).getEntries();
-			expect(onDisk.filter((entry) => entry.type === "usage").length).toBeGreaterThan(0);
+			expect(onDisk.filter((entry) => entry.type === "usage")).toHaveLength(1);
 
 			await createSessionWith(() => SessionManager.open(file), {
 				cwd,
 				workspaceId: "ws-progressfail",
 			});
-			await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+			await waitFor(() => getSessionStats(sessionId).tokens.total === totalTokens(usage));
 			expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
 		} finally {
 			release();
 			chmodSync(file, 0o644);
+			manager.appendUsage = appendUsage;
 			await removeSession(sessionId);
 		}
 	},
@@ -918,7 +933,7 @@ test("a failed deletion after partial progress records only the missing remainde
 
 		failTrash();
 		await expect(deleting).rejects.toThrow("recycle bin unavailable");
-		await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+		await waitFor(() => getSessionStats(sessionId).tokens.total === totalTokens(usage));
 		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(usage));
 	} finally {
 		failTrash();
@@ -944,7 +959,7 @@ test("emergency disposal never lets a late subagent record recreate a trashed tr
 		await waitFor(() => !existsSync(file) && liveParentContext(sessionId) === undefined);
 		disposeAllSessions();
 		release();
-		expect((await run).details.usage.input).toBeGreaterThan(0);
+		expect(totalTokens((await run).details.usage)).toBeGreaterThan(0);
 		await deleting;
 		expect(existsSync(file)).toBe(false);
 	} finally {
@@ -966,7 +981,7 @@ test("spend dropped by emergency disposal during a close is recovered when the c
 		release();
 		const { usage } = (await run).details;
 		await closed;
-		expect(usage.input).toBeGreaterThan(0);
+		expect(totalTokens(usage)).toBeGreaterThan(0);
 		expect(
 			SessionManager.open(file)
 				.getEntries()
@@ -977,7 +992,7 @@ test("spend dropped by emergency disposal during a close is recovered when the c
 			cwd,
 			workspaceId: "ws-closeemergency",
 		});
-		await waitFor(() => getSessionStats(sessionId).tokens.input === usage.input);
+		await waitFor(() => getSessionStats(sessionId).tokens.total === totalTokens(usage));
 	} finally {
 		release();
 		await removeSession(sessionId);

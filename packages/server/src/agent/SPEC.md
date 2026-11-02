@@ -748,13 +748,12 @@ re-opened transcripts provider-valid.
     readout; crash recovery still comes from child transcripts and reconciliation. This is
     delegated spend's only accounting channel: delegation tools must never return `AgentToolResult.usage`,
     which pi would sum a second time. The write is best-effort, like pi's cache warmer: a failed append is
-    logged and never fails the child run. `recordSessionUsage` reports only whether pi took the usage into
-    its session; persistence stays uncertain. pi moves the leaf to a new entry before persisting it, so a
-    failed append restores the previous leaf (later entries must never chain to an unpersisted id, or a
-    reopened chat loses its history before it) and truncates an existing transcript back to its pre-append
-    size (a torn partial line would swallow the next entry); pi's initial file creation is outside this
-    repair. A usage entry pi kept only in memory counts in this process and is restored on disk by
-    reconciliation after the chat is reopened. Closing
+    logged and never fails the child run. `recordSessionUsage` reports whether pi took the usage into its
+    session: since pi 1.5 a failed append leaves pi's memory and leaf as they were (later entries never
+    chain to an unpersisted id), so the host reports `false`, the recorder keeps its watermark and the
+    increment rides the next write or reconciliation. The host still truncates an existing transcript back
+    to its pre-append size (pi appends with one `appendFileSync`, so a failed write can leave a torn partial
+    line that would swallow the next entry); pi's initial file creation is outside this repair. Closing
     a chat keeps its entry writable until its teardown cascade settles, so runs that cascade stops are
     still recorded; attach is refused during teardown, so the transcript keeps one writer. A deletion
     tombstone suppresses the write, because pi's append would recreate the trashed file. Graceful host
