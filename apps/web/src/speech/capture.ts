@@ -44,28 +44,32 @@ export async function startCapture(sink: CaptureSink): Promise<Capture> {
 	} catch (err) {
 		throw new CaptureFailure(failureReason(err));
 	}
-	const context = new AudioContext();
-	const release = () => {
+	const release = (context: AudioContext | null) => {
 		for (const track of stream.getTracks()) track.stop();
-		void context.close().catch(() => {});
+		void context?.close().catch(() => {});
 	};
+	let context: AudioContext | null = null;
+	let source: MediaStreamAudioSourceNode;
+	let node: AudioWorkletNode;
 	try {
+		context = new AudioContext();
 		await context.audioWorklet.addModule(workletUrl);
+		source = context.createMediaStreamSource(stream);
+		node = new AudioWorkletNode(context, "thinkrail-pcm16", {
+			numberOfOutputs: 0,
+			processorOptions: { targetRate: SPEECH_SAMPLE_RATE, frameSamples: FRAME_SAMPLES },
+		});
 	} catch {
-		release();
+		release(context);
 		throw new CaptureFailure("failed");
 	}
-	const source = context.createMediaStreamSource(stream);
-	const node = new AudioWorkletNode(context, "thinkrail-pcm16", {
-		numberOfOutputs: 0,
-		processorOptions: { targetRate: SPEECH_SAMPLE_RATE, frameSamples: FRAME_SAMPLES },
-	});
+	const audio = context;
 	node.port.onmessage = (event: MessageEvent<{ pcm: ArrayBuffer; level: number }>) => {
 		sink.frame(event.data.pcm);
 		sink.level(event.data.level);
 	};
 	source.connect(node);
-	if (context.state === "suspended") await context.resume().catch(() => {});
+	if (audio.state === "suspended") await audio.resume().catch(() => {});
 	let stopped = false;
 	return {
 		stop: () => {
@@ -73,7 +77,7 @@ export async function startCapture(sink: CaptureSink): Promise<Capture> {
 			stopped = true;
 			node.port.onmessage = null;
 			source.disconnect();
-			release();
+			release(audio);
 		},
 	};
 }
