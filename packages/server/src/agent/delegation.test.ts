@@ -893,11 +893,18 @@ test("a dropped terminal write is recovered by reconciliation, never by the chil
 		const first = (await child.runQueued("One.")).details.usage;
 		failing = false;
 		const second = (await child.runQueued("Two.")).details.usage;
-		expect(getSessionStats(sessionId).tokens.input).toBe(second.input);
+		expect(totalTokens(first)).toBeGreaterThan(0);
+		expect(totalTokens(second)).toBeGreaterThan(0);
+		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual(tokenCounts(second));
 
 		await child.dispose();
 		await reconcileSessionSubagentUsage("ws-dropterminal", sessionId, () => manager.getEntries());
-		expect(getSessionStats(sessionId).tokens.input).toBe(first.input + second.input);
+		expect(tokenCounts(getSessionStats(sessionId).tokens)).toEqual({
+			input: first.input + second.input,
+			output: first.output + second.output,
+			cacheRead: first.cacheRead + second.cacheRead,
+			cacheWrite: first.cacheWrite + second.cacheWrite,
+		});
 	} finally {
 		manager.appendUsage = appendUsage;
 		await removeSession(sessionId);
