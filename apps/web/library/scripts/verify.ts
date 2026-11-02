@@ -10,6 +10,12 @@ const check = (ok: boolean, message: string) => {
 
 async function open(page: Page, route: string) {
 	await page.goto(`${BASE}#/${route}`);
+	await page.waitForFunction(
+		(target) =>
+			window.location.hash === `#/${target}` &&
+			document.getElementById("library-main")?.querySelector("h1") !== null,
+		route,
+	);
 	await page.locator("#library-main h1").first().waitFor();
 }
 
@@ -98,13 +104,13 @@ for (const doc of components) {
 	await open(page, doc.slug);
 	await page.waitForTimeout(300);
 	const cards = await page.locator(`[data-testid^="example-${doc.slug}-"]`).count();
-	const sideways = await page.evaluate(() => {
+	const { sideways, top } = await page.evaluate(() => {
 		const main = document.getElementById("library-main") as HTMLElement;
-		return main.scrollWidth - main.clientWidth;
+		return { sideways: main.scrollWidth - main.clientWidth, top: main.scrollTop };
 	});
 	check(
-		cards === doc.examples.length && sideways <= 0 && errors.length === before,
-		`${doc.slug}: ${cards}/${doc.examples.length} examples render, no sideways scroll, no errors`,
+		cards === doc.examples.length && sideways <= 0 && top === 0 && errors.length === before,
+		`${doc.slug}: ${cards}/${doc.examples.length} examples render, opens at its heading, no sideways scroll, no errors (top ${top})`,
 	);
 }
 
@@ -256,7 +262,13 @@ const overflow = await page.evaluate(() => {
 	);
 });
 check(overflow <= 0, `narrow layout does not scroll the page sideways (${overflow}px)`);
-for (const route of ["button", "color", "typography", "themes", "vocabulary"]) {
+for (const route of [
+	...components.map((doc) => doc.slug),
+	"color",
+	"typography",
+	"themes",
+	"vocabulary",
+]) {
 	await open(page, route);
 	const sideways = await page.evaluate(() => {
 		const main = document.getElementById("library-main") as HTMLElement;

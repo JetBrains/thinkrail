@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import { type ComponentType, type ReactNode, useEffect } from "react";
 import { contentFile } from "../content/files";
 import type { ComponentDoc } from "../content/types";
 import { CopyText } from "../parts/CodeBlock";
@@ -26,7 +26,7 @@ function sectionId(doc: ComponentDoc, id: string) {
 function WhenToUse({ doc }: { doc: ComponentDoc }) {
 	return (
 		<Section id={sectionId(doc, "when")} title={sectionTitles.when}>
-			<ul className="flex list-disc flex-col gap-8 pl-24 tr-text-reading text-text-default">
+			<ul className="flex list-disc flex-col gap-8 pl-24 tr-text-reading text-text-default [overflow-wrap:anywhere]">
 				{doc.whenToUse.map((line) => (
 					<li key={line}>
 						<InlineMarkdown source={line} />
@@ -34,7 +34,7 @@ function WhenToUse({ doc }: { doc: ComponentDoc }) {
 				))}
 			</ul>
 			<h3 className="tr-title-section text-text-default">Choose something else when</h3>
-			<ul className="flex list-disc flex-col gap-8 pl-24 tr-text-reading text-text-default">
+			<ul className="flex list-disc flex-col gap-8 pl-24 tr-text-reading text-text-default [overflow-wrap:anywhere]">
 				{doc.alternatives.map((alt) => (
 					<li key={alt.name}>
 						<span className="tr-text-emphasis">{alt.name}</span>
@@ -197,7 +197,7 @@ function Guidance({ doc }: { doc: ComponentDoc }) {
 				) : null}
 			</Section>
 			<Section id={sectionId(doc, "accessibility")} title={sectionTitles.accessibility}>
-				<ul className="flex list-disc flex-col gap-4 pl-16 tr-text-ui">
+				<ul className="flex list-disc flex-col gap-4 pl-16 tr-text-ui [overflow-wrap:anywhere]">
 					{doc.accessibility.map((line) => (
 						<li key={line}>
 							<InlineMarkdown source={line} />
@@ -222,7 +222,7 @@ function Guidance({ doc }: { doc: ComponentDoc }) {
 							className="flex gap-12 rounded-sm border border-border-default bg-container-elevated-bg p-12"
 						>
 							<code className="shrink-0 tr-code-text text-primary">{rule.id}</code>
-							<span className="tr-text-ui">
+							<span className="min-w-0 tr-text-ui [overflow-wrap:anywhere]">
 								<InlineMarkdown source={rule.text} />
 							</span>
 						</li>
@@ -262,6 +262,13 @@ function Guidance({ doc }: { doc: ComponentDoc }) {
 }
 
 export function ComponentPage({ doc }: { doc: ComponentDoc }) {
+	useEffect(() => {
+		const main = document.getElementById("library-main");
+		if (!main) return;
+		main.scrollTo({ top: 0 });
+		const frame = requestAnimationFrame(() => main.scrollTo({ top: 0 }));
+		return () => cancelAnimationFrame(frame);
+	}, []);
 	const toc: TocEntry[] = [
 		{ id: sectionId(doc, "when"), title: sectionTitles.when },
 		{
