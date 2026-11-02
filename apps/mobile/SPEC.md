@@ -41,7 +41,7 @@ IDE. No file tree, diffs, terminals, layout, or settings. No cloud account: the 
   vocabulary), `useHostRequest.ts` (one wire read per screen), `scanPairLink.ts` (the in-app QR scan via
   `@capacitor/barcode-scanner`; cancel is silent, a non-pairing QR or denied camera is reported),
   `PairForm.tsx`, `theme.ts`, the Capacitor config,
-  `scripts/ios-setup.ts`, and a `localStorage` `KeyValueStore` (`store.ts`; the Capacitor WKWebView persists
+  `scripts/ios-setup.ts`, `scripts/android-setup.ts`, and a `localStorage` `KeyValueStore` (`store.ts`; the Capacitor WKWebView persists
   it on-device). Live status comes from the controller's `session.state` stream; lists are read on screen
   entry, and a workspace's chats re-read when a session appears or leaves in it.
 - **Allowed deps:** `@thinkrail/remote-client` (the entire remote engine), `@thinkrail/chat-ui` (the chat
@@ -74,7 +74,17 @@ setting. The native shell's background is the Dark palette's `background`, read 
 `cap add ios` when missing, then idempotently registers the `thinkrail` URL scheme and the Local Network
 and Camera usage descriptions in `Info.plist`, and installs the app icon — `packages/shared/assets/icon-ios.png`,
 the full-bleed iOS render of the one ThinkRail icon source, so the phone and desktop icons cannot drift), syncs, and opens Xcode. `ios/` is generated per machine and
-git-ignored, so the setup script is the only place native configuration is written. See
+git-ignored, so the setup script is the only place native configuration is written.
+
+`bun run mobile:android` is the same for Android: `scripts/android-setup.ts` creates `android/` with
+`cap add android`, then idempotently adds the `thinkrail` deep-link intent filter, `usesCleartextTraffic`
+(the LAN relay is plain `ws://`; Android 9+ blocks cleartext by default) and the camera permission to
+`AndroidManifest.xml`, copies the launcher icons from `packages/shared/assets/android`, syncs, and opens
+Android Studio. The WebView is served from `http://localhost` (`server.androidScheme`), not the default
+`https`, because an https page may not open a `ws://` relay (mixed content); localhost stays a secure
+context, so SubtleCrypto still works. The hardware back button walks the app's own routes (chat →
+workspace or tree → tree, closing the pair form) and only backgrounds the app from the tree. `android/` is
+git-ignored like `ios/`. See
 `RUNBOOK-mobile.md` for signing and on-device steps.
 
 ## Not yet here

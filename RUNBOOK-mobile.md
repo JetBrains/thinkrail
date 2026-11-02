@@ -1,10 +1,11 @@
-# RUNBOOK — build the ThinkRail mobile app on your iPhone (local, by link)
+# RUNBOOK — build the ThinkRail mobile app on your iPhone or Android phone (local, by link)
 
-Goal: install the lightweight ThinkRail app on your iPhone from your Mac, and connect to the live sessions
+Goal: install the lightweight ThinkRail app on your phone from your Mac, and connect to the live sessions
 running on your laptop — over your local Wi‑Fi, no cloud account.
 
 The app (`apps/mobile`) is a thin "sessions" client over the shared `@thinkrail/remote-client`. The native
-iOS project is generated on your Mac (not committed); everything else is in the repo.
+iOS and Android projects are generated on your Mac (not committed); everything else is in the repo.
+Sections 1–2 are iPhone, 2a is Android; 3–4 are the same for both.
 
 ## Prerequisites (on the Mac)
 - Bun and the full Xcode app (not just Command Line Tools): install it, open it once, then
@@ -32,6 +33,20 @@ Settings → General → VPN & Device Management → trust your developer certif
 `ai.thinkrail.mobile` is taken for your team, change it to a unique one in the target settings. A free Apple
 ID signature expires after 7 days — just Run from Xcode again. 
 
+## 2a. Android instead: build and run from Android Studio
+Install Android Studio (`brew install --cask android-studio`), open it once and finish the setup wizard (it
+brings the JDK and the Android SDK). On the phone: Settings → About phone → tap **Build number** seven
+times, then Developer options → **USB debugging**; connect it by cable and allow the Mac.
+```bash
+bun install
+bun run mobile:android      # build dist/ → create android/ if missing → patch the manifest → cap sync → open Android Studio
+```
+`android/` is generated and git-ignored. `apps/mobile/scripts/android-setup.ts` creates it on first run and
+idempotently registers the `thinkrail://` link, allows cleartext traffic (the LAN relay is plain `ws://`,
+which Android blocks by default), adds the camera permission and installs the launcher icons. In Android
+Studio wait for the Gradle sync, pick your phone and press **Run** (▶). No developer account is needed and the
+install does not expire. After a UI change: `bun run --cwd apps/mobile android:sync`, then ▶ again.
+
 ## 3. Start the relay + host on the laptop
 Find the laptop's LAN IP (`ipconfig getifaddr en0`), then:
 ```bash
@@ -49,9 +64,10 @@ peer-to-peer, e.g. guest Wi‑Fi isolation.)
 
 ## 4. Pair on the phone
 First launch shows the **welcome screen**. Tap **Scan QR code** and point the phone at the terminal QR (or scan it with the
-iPhone Camera — the `thinkrail://` link opens the app and pairs automatically), or paste the link and tap
+phone camera — the `thinkrail://` link opens the app and pairs automatically), or paste the link and tap
 **Connect**. The host's
-projects appear (**Add computer** pairs another one); tap a project, then a workspace, then a chat to **pick up the ongoing conversation** — a session you started on the
+projects appear (**Add computer** pairs another one); tap a project to expand its workspaces, then a workspace
+to **pick up the ongoing conversation** — a session you started on the
 laptop loads on the phone and keeps streaming — and send a message to continue it. Add your server the same
 way (run the relay+host there too, paste its link).
 The app remembers paired hosts and auto-reconnects (via `resume`) on reopen / network flaps.

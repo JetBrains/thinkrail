@@ -130,7 +130,10 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   (`@resvg/resvg-js` rasterizes straight from the vector, `resedit` packs the ICO). The outputs are the
   macOS iconset, the Linux 512 px PNG, the Windows ICO, whose path `windowsIconPath` exports, and
   `icon-ios.png` — a 1024 px full-bleed square (the tile's corner radius dropped, since iOS masks its own
-  corners) that `apps/mobile`'s `ios-setup` installs as the iPhone app icon.
+  corners) that `apps/mobile`'s `ios-setup` installs as the iPhone app icon, and `android/` — the Android launcher set
+  `android-setup` copies into `res/` (`ic_launcher` and a circular `ic_launcher_round` per density, plus the
+  adaptive icon: the glyph alone as `ic_launcher_foreground`, inset to the 66 dp safe zone, over the tile's
+  fill as `ic_launcher_background`).
   - **Artwork.** The mark keeps its rounded-square silhouette: the ThinkRail glyph in the dark-family
     brand green (`#8dff4f`) on a solid black tile. Translucent glass, highlights, and decorative edging
     are excluded so small taskbar frames stay crisp.

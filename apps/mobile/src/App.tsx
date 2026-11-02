@@ -114,6 +114,31 @@ export function App() {
 		};
 	}, [controller, registry, pairWith, markReachable]);
 
+	const back = useCallback((): boolean => {
+		if (route.kind === "chat") {
+			setRoute(route.direct ? { kind: "projects" } : { ...route, kind: "workspace" });
+			return true;
+		}
+		if (route.kind === "workspace") {
+			setRoute({ kind: "projects" });
+			return true;
+		}
+		if (adding) {
+			setAdding(false);
+			return true;
+		}
+		return false;
+	}, [route, adding]);
+
+	useEffect(() => {
+		const listener = CapApp.addListener("backButton", () => {
+			if (!back()) void CapApp.minimizeApp();
+		});
+		return () => {
+			void listener.then((handle) => handle.remove());
+		};
+	}, [back]);
+
 	if (hosts.length === 0) {
 		return <Welcome pair={pair} onPair={pairWith} />;
 	}
@@ -128,9 +153,7 @@ export function App() {
 				}
 				controller={controller}
 				backLabel={route.direct ? t("mobile.projects.title") : workspaceName(t, workspace)}
-				onBack={() =>
-					setRoute(route.direct ? { kind: "projects" } : { ...route, kind: "workspace" })
-				}
+				onBack={back}
 			/>
 		);
 	}
@@ -141,7 +164,7 @@ export function App() {
 				client={controller.clientFor(route.hostKey)}
 				items={hostItems(items, route.hostKey)}
 				backLabel={t("mobile.projects.title")}
-				onBack={() => setRoute({ kind: "projects" })}
+				onBack={back}
 				onOpen={(chat, direct) => setRoute({ ...route, kind: "chat", chat, direct })}
 			/>
 		);

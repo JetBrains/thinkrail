@@ -7,6 +7,7 @@ const config: CapacitorConfig = {
 	webDir: "dist",
 	backgroundColor: darkTheme.colors.background,
 	ios: { contentInset: "never" },
+	server: { androidScheme: "http" },
 };
 
 export default config;
