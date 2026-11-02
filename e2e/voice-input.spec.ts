@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
+import { createServer } from "node:http";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { openWorkspaceChat } from "./fixtures/app";
-import { E2E_DATA_DIR } from "./fixtures/paths";
-import { FAKE_SPEECH_TEXT } from "./fixtures/speech";
+import { E2E_DATA_DIR, E2E_SPEECH_PORT } from "./fixtures/paths";
+import { FAKE_SPEECH_TEXT, SLOW_MODEL_PATH, slowModelBytes } from "./fixtures/speech";
 import { E2eWire } from "./fixtures/wire";
 
 test.skip(process.platform === "win32", "the fake speech runtime is a POSIX shell wrapper");
@@ -16,14 +17,47 @@ test.use({
 
 const SPEECH_DIR = join(E2E_DATA_DIR, "speech");
 
-async function removeVoiceInput(baseURL: string | undefined): Promise<void> {
+async function hostWire(baseURL: string | undefined): Promise<E2eWire> {
 	if (!baseURL) throw new Error("voice input fixtures need the isolated host URL");
-	const wire = await E2eWire.connect(Number(new URL(baseURL).port));
+	return E2eWire.connect(Number(new URL(baseURL).port));
+}
+
+async function removeVoiceInput(baseURL: string | undefined): Promise<void> {
+	const wire = await hostWire(baseURL);
 	try {
 		await wire.request("speech.remove", {});
 	} finally {
 		wire.close();
 	}
+}
+
+/** Serves the English model a few bytes at a time, so its install stays in progress for a while. */
+async function serveSlowModel(): Promise<() => Promise<void>> {
+	const body = slowModelBytes();
+	const server = createServer((request, response) => {
+		if (request.url !== SLOW_MODEL_PATH) {
+			response.writeHead(404).end();
+			return;
+		}
+		response.writeHead(200, { "Content-Length": body.byteLength });
+		let offset = 0;
+		const timer = setInterval(() => {
+			if (offset >= body.byteLength) {
+				clearInterval(timer);
+				response.end();
+				return;
+			}
+			response.write(body.subarray(offset, offset + 16));
+			offset += 16;
+		}, 200);
+		response.on("close", () => clearInterval(timer));
+	});
+	await new Promise<void>((resolve) => server.listen(E2E_SPEECH_PORT, "127.0.0.1", resolve));
+	return () =>
+		new Promise<void>((resolve) => {
+			server.closeAllConnections();
+			server.close(() => resolve());
+		});
 }
 
 const mic = (page: Page) => page.getByTestId("chat-composer").getByTestId("speech-mic");
@@ -89,6 +123,26 @@ test("the keyboard chord toggles dictation and Esc stops it, keeping the text", 
 	await page.keyboard.press("Escape");
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await expect(input).toHaveValue(/^Hello/);
+});
+
+test("clicking the mic while a model downloads cancels the download", async ({ page, baseURL }) => {
+	await openWorkspaceChat(page);
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	const stopServer = await serveSlowModel();
+	const wire = await hostWire(baseURL);
+	try {
+		await wire.request("speech.install", { model: "english" });
+		await expect(mic(page)).toHaveAttribute("data-mic-state", "installing");
+		await expect(mic(page)).toBeEnabled();
+		await expect(mic(page)).toHaveAttribute("aria-busy", "true");
+		await mic(page).click();
+		await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+		expect(existsSync(join(SPEECH_DIR, "models", "english.gguf"))).toBe(false);
+		expect(existsSync(join(SPEECH_DIR, "models", "english.gguf.partial"))).toBe(false);
+	} finally {
+		wire.close();
+		await stopServer();
+	}
 });
 
 test("the chord never reaches the composer behind an open dialog", async ({ page }) => {

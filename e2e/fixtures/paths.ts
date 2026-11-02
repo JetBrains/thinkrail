@@ -53,6 +53,9 @@ export const E2E_BINARY_PORT = PORT_BASE + 2;
 
 export const E2E_RESTART_PORT = PORT_BASE + 4;
 
+/** A slow HTTP source the voice-input spec serves the English model from, to catch an install mid-way. */
+export const E2E_SPEECH_PORT = PORT_BASE + 6;
+
 export const E2E_DATA_DIR = join(tmpdir(), `thinkrail-e2e-${E2E_STATE_KEY}`);
 
 export const E2E_HOME_DIR = join(E2E_DATA_DIR, "home");

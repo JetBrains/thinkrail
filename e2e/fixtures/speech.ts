@@ -4,7 +4,10 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBunExecutable } from "./executables";
-import { E2E_SPEECH_FIXTURE_DIR, E2E_SPEECH_MANIFEST } from "./paths";
+import { E2E_SPEECH_FIXTURE_DIR, E2E_SPEECH_MANIFEST, E2E_SPEECH_PORT } from "./paths";
+
+/** The English model is served over HTTP by the spec itself, slowly, so an install can be caught. */
+export const SLOW_MODEL_PATH = "/english.gguf";
 
 /** What the fake engine "hears" in every dictation; one word per 160 ms of audio. */
 export const FAKE_SPEECH_TEXT = "Hello from the fake engine";
@@ -30,6 +33,10 @@ function artifact(path: string) {
  * Writes a manifest whose runtime archive holds a `nemo-speech` wrapper around the repo's fake engine
  * and whose models are a few KB, so the e2e host installs voice input in milliseconds and offline.
  */
+export function slowModelBytes(): Buffer {
+	return readFileSync(join(E2E_SPEECH_FIXTURE_DIR, "english.gguf"));
+}
+
 export function seedSpeechFixture(): void {
 	const bin = join(E2E_SPEECH_FIXTURE_DIR, "src", ROOT, "bin");
 	mkdirSync(bin, { recursive: true });
@@ -65,7 +72,10 @@ export function seedSpeechFixture(): void {
 			},
 			models: {
 				multilingual: model(models.multilingual, "auto"),
-				english: model(models.english, "en-US"),
+				english: {
+					...model(models.english, "en-US"),
+					url: `http://127.0.0.1:${E2E_SPEECH_PORT}${SLOW_MODEL_PATH}`,
+				},
 			},
 		}),
 	);

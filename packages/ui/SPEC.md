@@ -85,7 +85,7 @@ test's documented specialized list names it.
   (never opacity, never hidden) through the `button-disabled` variant the app stylesheet defines — a
   `data-disabled` element, or a natively `:disabled` one that is not loading, so a button inside a disabled
   `<fieldset>` takes the skin too; `loading` swaps the icon (with `spinIcon`, it instead rotates the button's own icon in place — the refresh idiom of `apps/web/src/components` *Loading vocabulary* — and under reduced motion shows the static spinner glyph instead, so the state stays visible) (or, with no icon, overlays the label it keeps
-  transparent for width and the accessible name) for a spinner at the size's icon size, sets `aria-busy`, and natively disables the
+  transparent for width and the accessible name) for a spinner at the size's icon size, sets `aria-busy` (a caller's own `aria-busy` survives on a button that is not loading — the busy-but-clickable mic), and natively disables the
   element so the action cannot run twice; `selected` — or an open Radix trigger (`data-state="open"`) — is
   the persistent toggle/open fill (`control-bg-selected`) for `outline` and `ghost`, distinct from pressed;
   `soft-primary` shows selected as its hover look (`primary-muted` border on the hover tint), the one
