@@ -8,7 +8,6 @@ export type MicUnavailableReason =
 	| "denied"
 	| "no-device";
 
-/** What a field's mic button can do right now, from the host's status and the browser's microphone. */
 export type MicState =
 	| { kind: "hidden" }
 	| { kind: "unavailable"; reason: MicUnavailableReason }

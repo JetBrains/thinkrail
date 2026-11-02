@@ -2,9 +2,7 @@ import { createHash } from "node:crypto";
 
 export interface ServedFile {
 	body: Uint8Array;
-	/** Serve 200 for every request, ignoring Range. */
 	ignoreRange?: boolean;
-	/** End the body early, as a dropped connection would. */
 	truncateAt?: number;
 }
 
@@ -12,7 +10,6 @@ export function sha256(body: Uint8Array): string {
 	return createHash("sha256").update(body).digest("hex");
 }
 
-/** A loopback HTTP server for speech download tests: Range-aware, scriptable truncation. */
 export function serveFiles(files: Map<string, ServedFile>) {
 	const requests: { path: string; range: string | null }[] = [];
 	const server = Bun.serve({

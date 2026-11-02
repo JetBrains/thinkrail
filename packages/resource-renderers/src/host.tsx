@@ -57,7 +57,6 @@ export interface ResourceFileReviewProps {
 	children: (review: SurfaceReview) => ReactNode;
 }
 
-/** The host's voice-input mic for a renderer's text field; the field keeps its value and submit. */
 export interface ResourceMicProps {
 	fieldRef: RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
 	/** Writes the field's text and caret on every partial and final; it must never move focus. */
@@ -85,7 +84,6 @@ export interface ResourceHost {
 	): () => void;
 	FileReview: ComponentType<ResourceFileReviewProps>;
 	ReviewSend: ComponentType<ResourceReviewSendProps>;
-	/** Absent when the host has no voice input; fields then render no mic. */
 	Mic?: ComponentType<ResourceMicProps>;
 }
 

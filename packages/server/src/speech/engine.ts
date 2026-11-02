@@ -14,7 +14,6 @@ const READY_TIMEOUT_MS = 120_000;
 const READY_POLL_MS = 150;
 
 export interface EngineEndpoint {
-	/** The realtime transcription socket, without credentials. */
 	realtimeUrl: string;
 	apiKey: string;
 }
@@ -49,10 +48,6 @@ async function waitReady(
 	throw engineFailed("the speech engine did not become ready");
 }
 
-/**
- * One engine launch, from the moment it is claimed: the child stays reachable while it loads, so a
- * stop or a replacing launch can kill it instead of waiting out the readiness budget.
- */
 class EngineRun {
 	readonly controller = new AbortController();
 	child: Supervised | null = null;
@@ -136,10 +131,6 @@ function armIdle(): void {
 	idleTimer.unref?.();
 }
 
-/**
- * Starts (or reuses) the engine for these inputs. The launch is claimed before any await, so
- * concurrent callers share one engine and a different model replaces it.
- */
 export async function ensureEngine(inputs: EngineInputs): Promise<EngineEndpoint> {
 	const key = `${inputs.bin}\0${inputs.modelPath}`;
 	if (current?.key !== key) {
@@ -164,7 +155,6 @@ export async function ensureEngine(inputs: EngineInputs): Promise<EngineEndpoint
 	});
 }
 
-/** One live dictation keeps the engine from idling out; call the release when it ends. */
 export function holdEngine(): () => void {
 	holds += 1;
 	clearIdle();
@@ -177,7 +167,6 @@ export function holdEngine(): () => void {
 	};
 }
 
-/** Stops the running or starting `nemo-speech serve`, if any, and waits for it to exit. */
 export async function stopEngine(): Promise<void> {
 	clearIdle();
 	const run = current;

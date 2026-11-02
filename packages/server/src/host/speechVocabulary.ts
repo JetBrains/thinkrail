@@ -14,7 +14,6 @@ function tryOr<T>(read: () => T, fallback: T): T {
 	}
 }
 
-/** Gathers a dictation's project words; the `speech` module ranks and caps them. */
 export async function speechVocabulary(scope: SpeechScope): Promise<VocabularySource> {
 	const commands = scope.sessionId
 		? tryOr(() => getSessionCommands(scope.sessionId ?? "").map((command) => command.name), [])

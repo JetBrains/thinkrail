@@ -21,11 +21,6 @@ function failed(message: string): CodedError {
 	return new CodedError("SPEECH_DOWNLOAD_FAILED", message);
 }
 
-/**
- * Downloads one pinned artifact to `dest`, resuming `${dest}.partial` with an HTTP range when the
- * server honours it. The file appears at `dest` only once its size and SHA-256 match the pin; a
- * mismatch deletes the partial, a network failure keeps it for the next attempt.
- */
 export async function downloadVerified(
 	artifact: SpeechArtifact,
 	dest: string,

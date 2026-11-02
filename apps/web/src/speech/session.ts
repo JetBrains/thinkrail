@@ -8,7 +8,7 @@ import {
 	CaptureFailure,
 	type CaptureFailureReason,
 	type CaptureSink,
-} from "./captureTypes";
+} from "./capture";
 import { type DictationAnchor, dictationText, spokenText } from "./text";
 
 export type DictationPhase = "idle" | "connecting" | "listening" | "stopping";
@@ -17,9 +17,7 @@ export type DictationError = SpeechErrorCode | CaptureFailureReason;
 export interface DictationSnapshot {
 	ownerId: string | null;
 	phase: DictationPhase;
-	/** The input's RMS level, 0–1, for the listening meter. */
 	level: number;
-	/** The last dictation's failure and the field it belonged to, until the next start. */
 	error: { ownerId: string; code: DictationError } | null;
 }
 
@@ -28,7 +26,6 @@ export interface DictationScope {
 	sessionId?: string;
 }
 
-/** The field a dictation writes into, read at start and written on every partial and final. */
 export interface DictationTarget {
 	ownerId: string;
 	anchor: () => DictationAnchor;
@@ -36,7 +33,6 @@ export interface DictationTarget {
 	scope?: DictationScope;
 }
 
-/** The browser half of a `/speech` socket, narrowed for tests. */
 export interface SpeechSocketLike {
 	readonly readyState: number;
 	binaryType: BinaryType;
@@ -60,10 +56,6 @@ const MAX_EARLY_FRAMES = 250;
 
 const IDLE: DictationSnapshot = { ownerId: null, phase: "idle", level: 0, error: null };
 
-/**
- * The one dictation a page runs at a time: microphone → `/speech` socket → the target field.
- * Starting another one ends the current one first; recognized text is always kept.
- */
 export function createDictationController(deps: DictationDeps) {
 	let snapshot: DictationSnapshot = IDLE;
 	const listeners = new Set<() => void>();
@@ -187,7 +179,6 @@ export function createDictationController(deps: DictationDeps) {
 
 	return {
 		start,
-		/** Ends `ownerId`'s dictation (or any) after the engine commits what it heard. */
 		stop(ownerId?: string): void {
 			if (current && (ownerId === undefined || current.ownerId === ownerId)) current.stop();
 		},

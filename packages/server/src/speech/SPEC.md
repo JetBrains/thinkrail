@@ -5,7 +5,7 @@ status: active
 title: speech — on-demand local voice input (NVIDIA nemo-speech + Nemotron ASR)
 parent: module-server
 depends-on: [module-contracts, submodule-server-subprocess]
-references: [submodule-server-persistence]
+references: [submodule-server-persistence, architecture, submodule-web-speech]
 tags: [speech, voice, public-surface-checked]
 ---
 

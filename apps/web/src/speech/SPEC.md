@@ -5,7 +5,7 @@ status: active
 title: speech — local voice dictation in the browser
 parent: module-web
 depends-on: [module-contracts, submodule-web-transport, submodule-web-store]
-references: [submodule-server-speech]
+references: [submodule-server-speech, architecture, module-resource-renderers]
 tags: [speech, voice, public-surface-checked]
 ---
 
@@ -33,10 +33,8 @@ sends it.
   - **The mic-state derivation** (`micState.ts`).
   - **`MicButton`**, the one mic every voice field renders, and the chord registry (`hotkey.ts`).
 - **Public surface (barrel):** `MicButton`, `MicButtonProps`, `speechErrorKey`, `dictationShortcutLabel`,
-  `useFieldApply`, `micAvailability`, `MicAvailability`, `dictation`, `useDictationSnapshot`,
-  `micState`, `MicState`, `MicUnavailableReason`, `DEFAULT_SPEECH_MODEL`, `DictationError`,
-  `DictationPhase`, `DictationScope`, `DictationSnapshot`, `DictationTarget`, `dictationText`,
-  `spokenText`, `DictationAnchor`.
+  `useFieldApply`, `DictationScope`.
+- **Internal:** capture, the controller, the text rule, the mic-state derivation, and the chord registry.
 - **Forbidden:**
   - Submitting, steering, or touching the agent.
   - Persisting or reporting transcripts.

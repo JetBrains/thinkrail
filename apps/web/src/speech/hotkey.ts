@@ -6,7 +6,6 @@ import {
 	platformFamily,
 } from "@/lib";
 
-/** Holding the chord past this is push-to-talk; a quicker tap toggles. */
 export const HOLD_MS = 300;
 
 export function isDictationChord(
@@ -25,13 +24,10 @@ export function dictationShortcutLabel(platform?: string): string {
 	return platformFamily(platform) === "apple" ? "⌘⇧Space" : "Ctrl+Shift+Space";
 }
 
-/** A field the chord can dictate into. */
 export interface ChordTarget {
 	element: () => HTMLElement | null;
-	/** Starts when idle, stops when listening; returns whether this press started a dictation. */
 	press: () => boolean;
 	release: () => void;
-	/** The chat composer: the chord reaches it when no other voice field is focused. */
 	fallback: boolean;
 }
 
@@ -49,7 +45,6 @@ function focusedTarget(): [string, ChordTarget] | null {
 	return null;
 }
 
-/** The composer is a fallback only when nothing else owns the keyboard: no modal, no other editor. */
 function fallbackTarget(): [string, ChordTarget] | null {
 	if (hasLayer(document, MODAL_LAYER_SELECTOR) || isTextEntryTarget(document.activeElement)) {
 		return null;
@@ -90,7 +85,6 @@ function onKeyUp(event: KeyboardEvent): void {
 	if (performance.now() - at >= HOLD_MS) targets.get(id)?.release();
 }
 
-/** Registers a field for the chord; the window listeners exist only while a field is registered. */
 export function registerChordTarget(id: string, target: ChordTarget): () => void {
 	targets.set(id, target);
 	if (!installed) {
@@ -110,7 +104,6 @@ export function registerChordTarget(id: string, target: ChordTarget): () => void
 	};
 }
 
-/** The composer most recently focused is the chord's fallback target. */
 export function noteFallbackFocus(id: string): void {
 	if (targets.get(id)?.fallback) lastFallback = id;
 }

@@ -1,4 +1,3 @@
-/** Where a dictation writes: the field's text and selection when it started. */
 export interface DictationAnchor {
 	base: string;
 	start: number;
@@ -13,15 +12,10 @@ export interface DictationText {
 const NO_SPACE_AFTER = /[\s([{"'`/@#-]$/;
 const NO_SPACE_BEFORE = /^[\s.,;:!?)\]}"'`]/;
 
-/** Joins recognized segments: each final is one utterance, the partial is the one in progress. */
 export function spokenText(finals: readonly string[], partial: string): string {
 	return [...finals, partial.trim()].filter((segment) => segment.length > 0).join(" ");
 }
 
-/**
- * The field's text with the dictation replacing the selection it started from, separated from its
- * neighbours by a space where a typist would put one. The caret sits right after the spoken text.
- */
 export function dictationText(anchor: DictationAnchor, spoken: string): DictationText {
 	const before = anchor.base.slice(0, anchor.start);
 	const after = anchor.base.slice(anchor.end);

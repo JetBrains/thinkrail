@@ -22,19 +22,14 @@ import { dictationShortcutLabel, noteFallbackFocus, registerChordTarget } from "
 import { type MicState, micState } from "./micState";
 import type { DictationError, DictationScope } from "./session";
 
-/** A field's mic: the field owner keeps its value, caret and submit path. */
 export interface MicButtonProps {
 	fieldRef: RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
 	/** Writes the field's text and caret on every partial and final; it must never move focus. */
 	apply: (text: string, caret: number) => void;
-	/** The field is read-only while listening; its owner should also hold its submit. */
 	onListeningChange?: (listening: boolean) => void;
 	scope?: DictationScope;
-	/** The chat composer: ⌘⇧Space reaches it when no other voice field is focused. */
 	fallback?: boolean;
-	/** The field cannot take text right now (e.g. it is disabled); a running dictation stops. */
 	disabled?: boolean;
-	/** `s` fits the corner gutter of a dialog field. */
 	size?: "s" | "m";
 	className?: string;
 }
@@ -147,10 +142,6 @@ function engineErrorToast(code: DictationError, message: string): void {
 	else toast.error(message);
 }
 
-/**
- * A field's mic: offers the one-time download, toggles dictation into the field, and owns the
- * field's ⌘⇧Space chord (tap toggles, hold is push-to-talk), Esc, blur and read-only lock.
- */
 export function MicButton({
 	fieldRef,
 	apply,

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { type Capture, CaptureFailure, type CaptureSink } from "./captureTypes";
+import { type Capture, CaptureFailure, type CaptureSink } from "./capture";
 import { createDictationController, type SpeechSocketLike } from "./session";
 
 class FakeSocket implements SpeechSocketLike {

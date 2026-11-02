@@ -1,11 +1,5 @@
 #!/usr/bin/env bun
-/**
- * A stand-in for NVIDIA's `nemo-speech` CLI for unit and e2e tests. It answers `--version`,
- * `doctor --json` and `serve`. The realtime socket turns every 160 ms of received PCM16 into the next
- * word of `FAKE_SPEECH_TEXT` as a delta, and a commit into the completed transcript. Each
- * `session.update` is appended to `FAKE_SPEECH_LOG` when that is set; `FAKE_SPEECH_START_DELAY_MS`
- * simulates a slow model load.
- */
+/** Test stand-in for the `nemo-speech` CLI; its behavior is specified in the speech SPEC (Engine). */
 import { appendFileSync } from "node:fs";
 
 const args = process.argv.slice(2);

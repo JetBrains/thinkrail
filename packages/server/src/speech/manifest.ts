@@ -15,14 +15,12 @@ export interface SpeechArtifact {
 }
 
 export interface RuntimePin extends SpeechArtifact {
-	/** The archive's single top-level directory, holding `bin/nemo-speech[.exe]`. */
 	root: string;
 	backend: string;
 }
 
 export interface ModelPin extends SpeechArtifact {
 	fileName: string;
-	/** The realtime session language: auto-detect for the multilingual model. */
 	language: string;
 }
 

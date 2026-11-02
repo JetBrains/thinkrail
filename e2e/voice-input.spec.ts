@@ -40,7 +40,6 @@ async function removeVoiceInput(baseURL: string | undefined): Promise<void> {
 	}
 }
 
-/** Serves the English model a few bytes at a time, so its install stays in progress for a while. */
 async function serveSlowModel(): Promise<() => Promise<void>> {
 	const body = slowModelBytes();
 	const server = createServer((request, response) => {

@@ -10,7 +10,6 @@ const VERSION_TIMEOUT_MS = 10_000;
 /** `doctor` initializes every compute device; Metal took 13 s on an idle M-series Mac. */
 const DOCTOR_TIMEOUT_MS = 30_000;
 
-/** A PATH install is compatible when it shares the pinned runtime's major.minor (0.x minors break). */
 export function compatibleVersion(reported: string, pinned: string): string | null {
 	const found = /(\d+)\.(\d+)\.(\d+)/.exec(reported);
 	const want = /^(\d+)\.(\d+)\./.exec(pinned);
@@ -32,7 +31,6 @@ export function backendFromDoctor(out: string): string {
 	return "cpu";
 }
 
-/** The user's own `nemo-speech` on PATH, if it speaks the pinned runtime's protocol. */
 export async function probePathRuntime(pinnedVersion: string): Promise<PathRuntime | null> {
 	const bin = Bun.which("nemo-speech", { PATH: process.env.PATH ?? "" });
 	if (!bin) return null;

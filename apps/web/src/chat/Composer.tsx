@@ -177,7 +177,6 @@ interface ComposerProps {
 	onPickTemplate?: (name: string) => void;
 	onManageTemplates?: () => void;
 	templatesEmpty?: boolean;
-	/** The app-integration mic; the composer hands it its field and holds submit while it listens. */
 	Mic?: ComponentType<MicButtonProps>;
 	micScope?: DictationScope;
 }

@@ -46,7 +46,6 @@ function StatusText({ status }: { status: SpeechStatus }) {
 	return <>{t("settings.voice.status.notInstalled")}</>;
 }
 
-/** Settings → Voice: what is installed, which model, the shortcut, and removal. */
 export function VoiceSettings() {
 	const t = useT();
 	const status = useAppStore((s) => s.speech);

@@ -18,7 +18,6 @@ export function setSpeechPublisher(fn: SpeechPublisher | null): void {
 	publish = fn;
 }
 
-/** The one copy every reader gets: the welcome seed, the push, and the handlers. */
 export function speechStatus(): SpeechStatus {
 	return current;
 }

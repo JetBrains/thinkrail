@@ -13,7 +13,6 @@ import { PHRASE_BOOST, speechPhrases, type VocabularySource } from "./vocabulary
 
 const log = logger("speech");
 
-/** Audio buffered while the engine starts: enough for a long first sentence, then dropped. */
 const MAX_PENDING_BYTES = SPEECH_SAMPLE_RATE * 2 * 30;
 const MAX_FRAME_BYTES = 64 * 1024;
 const MAX_UPSTREAM_BUFFER_BYTES = 4 * 1024 * 1024;
@@ -21,7 +20,6 @@ const COMMIT_TIMEOUT_MS = 8_000;
 const VOCABULARY_TIMEOUT_MS = 1_500;
 const LANGUAGE_TAG = /\s*<[a-z]{2,3}-[A-Z]{2}>\s*$/;
 
-/** What a dictation is scoped to; the host resolves it into project words. */
 export interface SpeechScope {
 	workspaceId?: string;
 	sessionId?: string;
@@ -35,7 +33,6 @@ export function setSpeechVocabularyResolver(fn: VocabularyResolver | null): void
 	resolveVocabulary = fn;
 }
 
-/** The slice of a host socket the relay writes to. */
 export interface SpeechClientSocket {
 	send(message: string): unknown;
 	close(): void;
@@ -63,7 +60,6 @@ function clean(text: string): string {
 	return text.replace(LANGUAGE_TAG, "");
 }
 
-/** One dictation: a client start → the engine's realtime socket → a client `ended`. */
 class Dictation {
 	private upstream: WebSocket | null = null;
 	private pending: Uint8Array<ArrayBuffer>[] = [];
@@ -149,7 +145,6 @@ class Dictation {
 		if (this.upstream?.readyState === WebSocket.OPEN) this.commit();
 	}
 
-	/** The fallback runs from the commit, never from the stop: a cold engine may still be loading. */
 	private commit(): void {
 		this.upstream?.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
 		this.commitTimer ??= setTimeout(() => this.finish(), COMMIT_TIMEOUT_MS);
@@ -190,7 +185,6 @@ class Dictation {
 		this.finish();
 	}
 
-	/** Ends the dictation exactly once; any partial the engine never completed becomes a final. */
 	finish(): void {
 		if (this.finished) return;
 		this.finished = true;
@@ -208,7 +202,6 @@ class Dictation {
 	}
 }
 
-/** One client's `/speech` socket: at most one dictation at a time. */
 export interface SpeechRelay {
 	message(raw: string | Uint8Array): void;
 	close(): void;

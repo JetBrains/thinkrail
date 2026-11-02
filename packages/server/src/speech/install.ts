@@ -141,10 +141,6 @@ async function refresh(install: SpeechInstallState = installedState()): Promise<
 	});
 }
 
-/**
- * Reports what is already installed before its first await, so the welcome seed is never blank; the
- * PATH probe and disk usage follow on `speech.changed`.
- */
 export async function initSpeech(): Promise<void> {
 	manifest = null;
 	pathRuntime = null;
@@ -275,7 +271,6 @@ async function discardPartials(): Promise<void> {
 	for (const model of SPEECH_MODELS) await rm(`${modelPath(model)}.partial`, { force: true });
 }
 
-/** Starts installing (or switching to) `model`; progress and the outcome arrive on `speech.changed`. */
 export function installSpeech(model: SpeechModel): void {
 	if (!runtimePin()) {
 		throw new CodedError("SPEECH_UNSUPPORTED_PLATFORM", "voice input is unavailable here");
@@ -317,12 +312,10 @@ export function cancelSpeechInstall(): void {
 	active?.abort();
 }
 
-/** Resolves once no install is running; tests and removal wait on it. */
 export async function speechInstallSettled(): Promise<void> {
 	await lastInstall;
 }
 
-/** Deletes ThinkRail's own speech files; a user's PATH install is never touched. */
 export async function removeSpeech(): Promise<void> {
 	cancelSpeechInstall();
 	await speechInstallSettled();

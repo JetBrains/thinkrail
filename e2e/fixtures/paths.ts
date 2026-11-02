@@ -53,7 +53,6 @@ export const E2E_BINARY_PORT = PORT_BASE + 2;
 
 export const E2E_RESTART_PORT = PORT_BASE + 4;
 
-/** A slow HTTP source the voice-input spec serves the English model from, to catch an install mid-way. */
 export const E2E_SPEECH_PORT = PORT_BASE + 6;
 
 export const E2E_DATA_DIR = join(tmpdir(), `thinkrail-e2e-${E2E_STATE_KEY}`);
@@ -97,7 +96,6 @@ export const E2E_PICK_DIR_POINTER = join(E2E_DATA_DIR, "pick-dir");
 
 export const E2E_INSTALLED_FONTS = join(E2E_DATA_DIR, "installed-fonts.json");
 
-/** The voice-input manifest the host downloads from: a fake `nemo-speech` and a tiny model, as file URLs. */
 export const E2E_SPEECH_FIXTURE_DIR = join(E2E_DATA_DIR, "speech-fixture");
 
 export const E2E_SPEECH_MANIFEST = join(E2E_SPEECH_FIXTURE_DIR, "manifest.json");

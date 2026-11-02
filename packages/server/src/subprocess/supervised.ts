@@ -9,11 +9,8 @@ export type SupervisedOptions = {
 
 export type Supervised = {
 	pid: number;
-	/** The child's exit code, or `null` when it was stopped, signalled, or could not launch. */
 	exited: Promise<number | null>;
-	/** Kills the whole tree and resolves once the direct child has exited. */
 	stop: () => Promise<void>;
-	/** The last few KB the child wrote to stderr, for a launch or crash diagnosis. */
 	stderrTail: () => string;
 };
 
@@ -24,11 +21,6 @@ function drainTail(stream: ReadableStream<Uint8Array>, keep: (text: string) => v
 	})().catch(() => {});
 }
 
-/**
- * A long-lived host-owned child with the same spawn shape and tree kill as `runBounded`, but no
- * deadline: its lifetime belongs to the caller. Both pipes are drained from spawn so a chatty child
- * never blocks; stdout is discarded.
- */
 export function spawnSupervised(argv: string[], opts: SupervisedOptions = {}): Supervised {
 	let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
 	try {

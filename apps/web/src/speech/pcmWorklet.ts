@@ -1,8 +1,4 @@
-/**
- * Runs on the audio rendering thread: mixes the input to mono, decimates it to the target rate by
- * averaging each output period's input samples (a box filter, enough anti-aliasing for speech), and
- * posts little-endian PCM16 frames of `frameSamples` with their RMS level.
- */
+/** Audio-thread code: never import it; `capture.ts` loads it by URL. */
 
 declare const sampleRate: number;
 declare function registerProcessor(name: string, processor: unknown): void;

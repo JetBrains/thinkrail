@@ -905,7 +905,6 @@ function QuestionBody({
 	onOpenNote: (label: string, cursor: number) => void;
 	onCloseNote: () => void;
 	onNote: (label: string, text: string) => void;
-	/** A mic on this card is listening: Enter and the card's submit wait for the dictation. */
 	dictating: boolean;
 	onDictatingChange: (listening: boolean) => void;
 }) {
@@ -1199,7 +1198,6 @@ function OptionRow({
 	);
 }
 
-/** Dictation writes a field's text; the caret follows only while the field keeps focus. */
 function restoreCaret(element: HTMLInputElement | HTMLTextAreaElement | null, caret: number): void {
 	requestAnimationFrame(() => {
 		if (element && element === document.activeElement) element.setSelectionRange(caret, caret);
