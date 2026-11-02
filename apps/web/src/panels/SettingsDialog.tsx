@@ -71,7 +71,7 @@ export function SettingsDialog({
 						event.preventDefault();
 					}
 				}}
-				className="flex h-[80vh] max-h-[85vh] w-full max-w-[52rem] flex-col gap-0 overflow-hidden p-0"
+				className="h-[80vh] max-w-[52rem] gap-0 overflow-hidden p-0"
 			>
 				<DialogHeader className="flex-row items-center justify-between border-border-default border-b px-16 py-8">
 					<DialogTitle>{t("settings.dialog.title")}</DialogTitle>
@@ -83,7 +83,7 @@ export function SettingsDialog({
 				<div className="flex min-h-0 flex-1 flex-col md:flex-row">
 					<nav
 						aria-label={t("settings.dialog.sectionsLabel")}
-						className="flex shrink-0 gap-4 overflow-x-auto border-border-default border-b p-8 md:w-192 md:flex-col md:gap-12 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-12"
+						className="flex shrink-0 gap-4 overflow-x-auto border-border-default border-b p-8 md:w-216 md:flex-col md:gap-12 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-12"
 					>
 						{filteredGroups.map((group) => (
 							<div key={group.label} className="flex shrink-0 md:flex-col">
@@ -101,14 +101,14 @@ export function SettingsDialog({
 												data-active={active}
 												onClick={() => useAppStore.getState().setSettingsSection(id)}
 												className={cn(
-													"flex shrink-0 items-center gap-4 rounded-sm px-4 py-4 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:h-28 md:w-full md:px-8 md:py-0",
+													"flex shrink-0 items-center gap-4 rounded-sm px-4 py-4 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:min-h-28 md:w-full md:px-8 md:py-0",
 													active
 														? "bg-primary-subtle text-primary"
 														: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
 												)}
 											>
 												<Icon className="size-14 shrink-0" />
-												{t(label)}
+												<span className="min-w-0 wrap-anywhere">{t(label)}</span>
 											</button>
 										);
 									})}
