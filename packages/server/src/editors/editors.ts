@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { delimiter, win32 } from "node:path";
+import { delimiter, dirname, win32 } from "node:path";
 import type { EditorInfo } from "@thinkrail/contracts";
 import { spawnDetached } from "@thinkrail/shared/spawn";
 
@@ -146,13 +146,34 @@ export function revealInFileManager(
 	spawn: SpawnFn = defaultSpawn,
 	platform: NodeJS.Platform = process.platform,
 ): void {
-	if (!existsSync(worktreePath)) throw new Error(`Folder not found: ${worktreePath}`);
-	const cmd =
-		platform === "darwin"
-			? ["open", worktreePath]
-			: platform === "win32"
-				? ["explorer", win32.normalize(worktreePath)]
-				: ["xdg-open", worktreePath];
+	launchFileManager(worktreePath, false, spawn, platform);
+}
+
+export function revealItemInFileManager(
+	path: string,
+	spawn: SpawnFn = defaultSpawn,
+	platform: NodeJS.Platform = process.platform,
+): void {
+	launchFileManager(path, true, spawn, platform);
+}
+
+function launchFileManager(
+	path: string,
+	selectItem: boolean,
+	spawn: SpawnFn,
+	platform: NodeJS.Platform,
+): void {
+	if (!existsSync(path)) throw new Error(`${selectItem ? "Item" : "Folder"} not found: ${path}`);
+	let cmd: string[];
+	if (platform === "darwin") {
+		cmd = selectItem ? ["open", "-R", path] : ["open", path];
+	} else if (platform === "win32") {
+		cmd = selectItem
+			? ["explorer", "/select,", win32.normalize(path)]
+			: ["explorer", win32.normalize(path)];
+	} else {
+		cmd = ["xdg-open", selectItem ? dirname(path) : path];
+	}
 	try {
 		spawn(cmd, { windowsHide: false });
 	} catch {

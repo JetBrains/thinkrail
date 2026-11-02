@@ -129,6 +129,14 @@ function gitText(cwd: string, ...args: string[]): string {
 	return new TextDecoder().decode(result.stdout).trim();
 }
 
+test("workspace.reveal rejects malformed selected-item paths with a classified error", async () => {
+	for (const path of ["", null, false, 42]) {
+		await expect(handleRequest("workspace.reveal", { id: "w1", path }, CTX)).rejects.toMatchObject({
+			code: "FILE_REVEAL_FAILED",
+		});
+	}
+});
+
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-handlers-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;

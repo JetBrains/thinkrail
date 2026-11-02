@@ -6,6 +6,7 @@ import {
 	type SessionState,
 	type SessionStateRecord,
 	type WireModel,
+	WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
 import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
@@ -27,6 +28,7 @@ import {
 	selectAttentionCenterResourceReady,
 	selectAttentionCenterTab,
 	selectCanRenameChat,
+	selectCanRevealWorkspaceItem,
 	selectCatalogModel,
 	selectChatAttended,
 	selectChatFirstPrompt,
@@ -102,6 +104,19 @@ test("chat rename capability follows the host protocol snapshot", () => {
 	expect(selectCanRenameChat({ protocolVersion: 66 })).toBe(true);
 	expect(selectCanRenameChat({ protocolVersion: 65 })).toBe(false);
 	expect(selectCanRenameChat({ protocolVersion: null })).toBe(false);
+});
+
+test("selected-item reveal requires a connected host that understands the path", () => {
+	for (const [status, protocolVersion, expected] of [
+		["connecting", WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION, false],
+		["disconnected", WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION, false],
+		["connected", null, false],
+		["connected", WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION - 1, false],
+		["connected", WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION, true],
+		["connected", WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION + 1, true],
+	] as const) {
+		expect(selectCanRevealWorkspaceItem({ status, protocolVersion })).toBe(expected);
+	}
 });
 
 test("normalized rail flags keep attention binary and working orthogonal", () => {

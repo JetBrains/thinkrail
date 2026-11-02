@@ -98,6 +98,7 @@ export interface TabStripProps {
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderFileTabActions?: WorkbenchProps["renderFileTabActions"];
 	splitGeometry?: CenterSplitGeometry;
 	trailing?: ReactNode;
 	worktreePath: string;
@@ -132,6 +133,7 @@ export const TabStrip = memo(function TabStrip({
 	chatFirstPrompts,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	renderFileTabActions,
 	splitGeometry,
 	trailing,
 	worktreePath,
@@ -242,6 +244,7 @@ export const TabStrip = memo(function TabStrip({
 							{...(chatFirstPrompts ? { chatFirstPrompts } : {})}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
+							renderFileTabActions={renderFileTabActions}
 							worktreePath={worktreePath}
 							draggingTab={draggingTab}
 							panelId={panelId}
@@ -399,6 +402,7 @@ export interface WorkbenchTabProps {
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderFileTabActions?: WorkbenchProps["renderFileTabActions"];
 	worktreePath: string;
 	draggingTab: LayoutTab | null;
 	panelId: string;
@@ -431,6 +435,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	chatFirstPrompts,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	renderFileTabActions,
 	worktreePath,
 	draggingTab,
 	panelId,
@@ -724,6 +729,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 				}}
 			>
 				<TabMenuItems
+					renderFileTabActions={renderFileTabActions}
 					context={{
 						document,
 						tab,
@@ -760,9 +766,11 @@ WorkbenchTab.displayName = "WorkbenchTab";
 function TabMenuItems({
 	context,
 	handlers,
+	renderFileTabActions,
 }: {
 	context: TabActionContext;
 	handlers: TabActionHandlers;
+	renderFileTabActions?: WorkbenchProps["renderFileTabActions"];
 }) {
 	const t = useT();
 	const actions = tabActions(t, context).filter((action) => action.surface !== "palette");
@@ -780,6 +788,10 @@ function TabMenuItems({
 			>
 				{action.unavailable?.label ?? action.label}
 			</ContextMenuItem>
+			{action.id === "tab.copyRelativePath" &&
+			(context.tab.kind === "file" || context.tab.kind === "diff")
+				? renderFileTabActions?.(context.tab.path)
+				: null}
 		</Fragment>
 	));
 }
