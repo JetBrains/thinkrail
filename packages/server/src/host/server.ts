@@ -18,6 +18,7 @@ import {
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	SPEECH_PROTOCOL_VERSION,
 	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -113,6 +114,13 @@ import {
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
+import {
+	cancelSpeechInstall,
+	initSpeech,
+	setSpeechPublisher,
+	speechStatus,
+	stopEngine,
+} from "../speech";
 import {
 	clearTerminalClient,
 	closeAllTerminals,
@@ -415,6 +423,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.packagesChanged);
 				if (ws.data.protocolVersion >= FONTS_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.fontsChanged);
+				const speech = ws.data.protocolVersion >= SPEECH_PROTOCOL_VERSION;
+				if (speech) ws.subscribe(WS_CHANNELS.speechChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -426,6 +436,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					projects: listProjects(),
 					recentProjects: listRecentProjects(),
 					config: getConfig(),
+					...(speech ? { speech: speechStatus() } : {}),
 					...(appVersion ? { appVersion } : {}),
 					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
 				};
@@ -766,6 +777,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const stopLocalesWatch = watchLocalLocales({ onChange: nudge(WS_CHANNELS.localesChanged) });
 	const stopThemesWatch = watchUserThemes({ onChange: nudge(WS_CHANNELS.themesChanged) });
 	const stopFontsWatch = watchUserFonts({ onChange: nudge(WS_CHANNELS.fontsChanged) });
+	setSpeechPublisher((status) =>
+		server.publish(
+			WS_CHANNELS.speechChanged,
+			JSON.stringify({ channel: WS_CHANNELS.speechChanged, data: status }),
+		),
+	);
+	void initSpeech().catch((err) => log.warn("voice input state could not be read", err));
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);
@@ -999,6 +1017,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopLocalesWatch();
 		stopThemesWatch();
 		stopFontsWatch();
+		cancelSpeechInstall();
+		void stopEngine();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();
@@ -1059,6 +1079,7 @@ function restoreSeamDefaults(): void {
 	setTerminalTabsPublisher(() => {});
 	setWorkspacePublisher(null);
 	setPiPackagesPublisher(null);
+	setSpeechPublisher(null);
 	setWatchPublisher(null);
 	setSkillPathClassifier(null);
 	setFsNudgePublisher(null);
