@@ -6,6 +6,7 @@ import {
 	RiDownloadCloud2Line,
 	RiFolderSettingsLine,
 	RiGitRepositoryLine,
+	RiGlobalLine,
 	RiKeyboardLine,
 	RiKeyLine,
 	RiLayoutGridLine,
@@ -94,6 +95,7 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				requiresProtocolVersion: WORKSPACE_SETTLE_PROTOCOL_VERSION,
 			},
 			{ id: SettingsSection.Github, label: "settings.nav.github", icon: RiApps2Line },
+			{ id: SettingsSection.Proxy, label: "settings.nav.proxy", icon: RiGlobalLine },
 			{
 				id: SettingsSection.Extensions,
 				label: "settings.nav.extensions",

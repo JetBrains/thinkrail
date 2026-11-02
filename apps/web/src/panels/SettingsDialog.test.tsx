@@ -60,6 +60,7 @@ describe("settingsNavGroups", () => {
 				[
 					SettingsSection.Workspaces,
 					SettingsSection.Github,
+					SettingsSection.Proxy,
 					SettingsSection.Extensions,
 					SettingsSection.Notifications,
 					SettingsSection.Privacy,
