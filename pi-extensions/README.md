@@ -14,6 +14,10 @@ checklist.
      `publishConfig: { access: "public", provenance: true }`.
    - `keywords` include `"pi-package"` and a `pi` manifest (`extensions`, `skills` …) **only** for an
      installable extension. A portable library (no factory) gets neither.
+   - `pi.video`: a short MP4 demo for the pi.dev gallery, kept outside `files` at
+     `.github/readme-assets/pi-packages/<name>.mp4` and linked by its raw GitHub URL on `main`. Record it
+     in vanilla `pi` from the local source (`pi -e ./pi-extensions/<name>/index.ts`), e.g. with a VHS
+     tape: 1920×1080, H.264, no audio, ≈20 s, ending on the result.
    - `files`: everything the entrypoints and `exports` transitively import, tests excluded. The parity
      gate installs from the tarball, so an omission fails there.
    - Pi SDK packages (`@earendil-works/pi-ai`, `pi-coding-agent`, `pi-tui`, `pi-agent-core`, `typebox`) are
