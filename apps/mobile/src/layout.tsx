@@ -1,7 +1,7 @@
 import { type RemixiconComponentType, RiArrowLeftSLine, RiArrowRightSLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { AttentionDot } from "@thinkrail/ui/attention-dot";
-import { Button } from "@thinkrail/ui/button";
+import { IconButton } from "@thinkrail/ui/button";
 import { RunningIcon } from "@thinkrail/ui/running-icon";
 import type { ReactNode } from "react";
 import type { ScopeStatus } from "./status";
@@ -24,25 +24,24 @@ export function Screen({
 		<main className="flex h-full flex-col pt-safe-top">
 			<header className="flex min-h-touch items-center gap-4 border-b border-border-default bg-container-header-bg px-8 py-4">
 				{back ? (
-					<Button
-						variant="ghost"
-						className="h-touch max-w-[40%] shrink-0 rounded-md px-8"
-						iconLeft={RiArrowLeftSLine}
+					<IconButton
+						size="l"
+						className="size-touch shrink-0"
+						icon={RiArrowLeftSLine}
+						label={back.label}
 						onClick={back.onBack}
-					>
-						<span className="truncate">{back.label}</span>
-					</Button>
+					/>
 				) : null}
 				<h1
 					className={
 						back
-							? "m-0 min-w-0 flex-1 truncate pr-8 text-text-default tr-title-card"
+							? "m-0 min-w-0 flex-1 truncate text-center text-text-default tr-heading-sm"
 							: "m-0 min-w-0 flex-1 truncate px-8 text-text-default tr-heading-lg"
 					}
 				>
 					{title}
 				</h1>
-				{action}
+				{action ?? (back ? <span aria-hidden className="size-touch shrink-0" /> : null)}
 			</header>
 			<div className={footer ? "flex-1 overflow-y-auto" : "flex-1 overflow-y-auto pb-safe-bottom"}>
 				{children}

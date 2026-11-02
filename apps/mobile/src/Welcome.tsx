@@ -3,7 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import type { PairState } from "./App";
 import { PairForm } from "./PairForm";
 
-const BRAND = "ThinkRail";
+export const BRAND = "ThinkRail";
 const REMOTE_COMMAND = "thinkrail --remote";
 
 export function Welcome({

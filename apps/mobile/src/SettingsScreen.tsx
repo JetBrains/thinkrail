@@ -1,5 +1,7 @@
+import { RiComputerLine } from "@remixicon/react";
 import { BUNDLED_LOCALES, languageName, resolveLocale, SYSTEM_LOCALE } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import type { SavedHost } from "@thinkrail/remote-client";
 import {
 	SegmentedControl,
 	type SegmentedControlOption,
@@ -9,16 +11,25 @@ import {
 	type SettingsRadioChoice,
 	SettingsRow,
 } from "@thinkrail/ui/settings";
+import type { PairState } from "./App";
 import { Screen } from "./layout";
+import { PairActions } from "./PairForm";
 import type { ContrastChoice, DevicePreferences, ThemeChoice } from "./preferences";
+import { BRAND } from "./Welcome";
 
-/** The phone's own settings — the IDE Settings rows that make sense on a device (theme, language), kept on the device. */
+/** The phone's settings: its paired computers and pairing another, then the IDE Settings rows that make sense on a device (theme, language), kept on the device. */
 export function SettingsScreen({
+	hosts,
+	pair,
+	onPair,
 	preferences,
 	onChange,
 	backLabel,
 	onBack,
 }: {
+	hosts: SavedHost[];
+	pair: PairState;
+	onPair: (link: string) => Promise<boolean>;
 	preferences: DevicePreferences;
 	onChange: (preferences: DevicePreferences) => void;
 	backLabel: string;
@@ -59,7 +70,30 @@ export function SettingsScreen({
 	return (
 		<Screen title={t("settings.dialog.title")} back={{ label: backLabel, onBack }}>
 			<div className="p-16">
+				<section className="mb-24 flex flex-col items-center gap-8 rounded-lg border border-border-default bg-container-elevated-bg px-16 py-40 text-center">
+					<span className="text-primary tr-brand-hero">{BRAND}</span>
+					<span className="text-text-muted tr-text-ui">{t("mobile.welcome.tagline")}</span>
+				</section>
 				<SettingsPageContainer testId="mobile-settings">
+					<SettingsGroup
+						title={t("mobile.settings.computers")}
+						description={t("mobile.projects.addHint")}
+					>
+						{hosts.map((host) => (
+							<div
+								key={host.hostKey}
+								className="flex min-h-touch items-center gap-12 border-b border-border-muted py-8"
+							>
+								<RiComputerLine aria-hidden className="size-20 shrink-0 text-text-muted" />
+								<span className="min-w-0 flex-1 truncate text-text-default tr-text-ui">
+									{host.label}
+								</span>
+							</div>
+						))}
+						<div className="pt-12">
+							<PairActions pair={pair} onPair={onPair} />
+						</div>
+					</SettingsGroup>
 					<SettingsGroup title={t("settings.appearance.themeGroup")}>
 						<SettingsRow
 							label={t("settings.appearance.themeMode")}

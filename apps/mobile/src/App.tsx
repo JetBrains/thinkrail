@@ -9,7 +9,6 @@ import {
 	type SavedHost,
 } from "@thinkrail/remote-client";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { PairForm } from "./PairForm";
 import { ProjectsScreen, workspaceName } from "./ProjectsScreen";
 import { type DevicePreferences, readPreferences, writePreferences } from "./preferences";
 import { SessionScreen } from "./SessionScreen";
@@ -48,7 +47,6 @@ export function App() {
 	const [hosts, setHosts] = useState<SavedHost[]>(() => registry.list());
 	const [items, setItems] = useState<RemoteSessionItem[]>([]);
 	const [pair, setPair] = useState<PairState>({ kind: "idle" });
-	const [adding, setAdding] = useState(false);
 	const [route, setRoute] = useState<Route>({ kind: "projects" });
 	const [preferences, setPreferences] = useState<DevicePreferences>(() =>
 		readPreferences(localStore),
@@ -94,7 +92,6 @@ export function App() {
 				await controller.connect(host);
 				markReachable(host.label, null);
 				setPair({ kind: "idle" });
-				setAdding(false);
 				return true;
 			} catch (error) {
 				setPair({ kind: "failed", reason: reasonOf(error) });
@@ -135,12 +132,8 @@ export function App() {
 			setRoute({ kind: "projects" });
 			return true;
 		}
-		if (adding) {
-			setAdding(false);
-			return true;
-		}
 		return false;
-	}, [route, adding]);
+	}, [route]);
 
 	useEffect(() => {
 		const listener = CapApp.addListener("backButton", () => {
@@ -157,6 +150,9 @@ export function App() {
 	if (route.kind === "settings") {
 		return (
 			<SettingsScreen
+				hosts={hosts}
+				pair={pair}
+				onPair={pairWith}
 				preferences={preferences}
 				onChange={changePreferences}
 				backLabel={t("mobile.projects.title")}
@@ -199,10 +195,7 @@ export function App() {
 			unreachable={[...unreachable]}
 			expanded={expanded}
 			onToggle={toggleProject}
-			adding={adding}
-			onAdd={() => setAdding(true)}
 			onSettings={() => setRoute({ kind: "settings" })}
-			pairForm={<PairForm pair={pair} onPair={pairWith} onCancel={() => setAdding(false)} />}
 			onOpen={(hostKey, project, workspace) =>
 				setRoute({ kind: "workspace", hostKey, project, workspace })
 			}

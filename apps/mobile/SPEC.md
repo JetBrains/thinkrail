@@ -23,8 +23,8 @@ IDE. No file tree, diffs, terminals, layout, or settings. No cloud account: the 
   into their **live** workspaces (`workspace.list`, split by contracts' `partitionWorkspaces` with the host's
   `settleIdleDays` from its welcome — the Settled shelf is not shown on the phone), Default first, branch as
   the second line; the expanded set lives in `App` so returning from a chat keeps the tree; per-host
-  "unreachable" notice with its reason; the header carries icon buttons for the add-computer form (+) and the
-  settings screen (gear); a tapped workspace opens `WorkspaceScreen.tsx`
+  "unreachable" notice with its reason; the header's gear opens the settings screen, where computers are
+  added; a tapped workspace opens `WorkspaceScreen.tsx`
   (its **active** chats — `session.list` entries the host holds `live`, i.e. open in ThinkRail since it
   started, not the closed history — newest first, titled by contracts' `chatTitle`, aged by `compactAgeOf`; a
   workspace normally has one, which opens directly and whose back returns to the tree, so the list shows only
@@ -64,7 +64,12 @@ four mobile layout roles: `touch` (44px, the minimum tap target, `h-touch` / `mi
 [[module-chat-ui]] asks every host to define). Text comes from `mobile.*` keys in
 `packages/locales/en.json` (the i18n gate scans `apps/mobile/src`).
 
-`SettingsScreen.tsx` is the phone's own settings: the IDE Settings rows that apply to a device, rendered
+Screen headers follow iOS: a sub-screen shows an icon-only back arrow (its destination is the arrow's
+accessible label, not visible text) with the title centered; the top level shows the large left title.
+
+`SettingsScreen.tsx` opens with the brand card, then **Computers**: the paired hosts and `PairForm.tsx`'s
+`PairActions` — grouped **Scan QR code** / **Enter link manually** rows (the latter opens the paste field),
+the same `usePairing` flow `Welcome`'s first-run `PairForm` uses. Then the phone's own settings: the IDE Settings rows that apply to a device, rendered
 with the shared `@thinkrail/ui/settings` primitives and the IDE's strings — **Theme mode**
 (System / Light / Dark), **Contrast level** (Default / High) and **Language** (System or a bundled locale,
 named by `languageName`). They are device preferences (`preferences.ts`, one JSON entry in the

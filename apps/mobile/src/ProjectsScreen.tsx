@@ -1,4 +1,4 @@
-import { RiAddLine, RiArrowDownSLine, RiArrowRightSLine, RiSettings3Line } from "@remixicon/react";
+import { RiArrowDownSLine, RiArrowRightSLine, RiSettings3Line } from "@remixicon/react";
 import {
 	DEFAULT_CONFIG,
 	DEFAULT_WORKSPACE_NAME,
@@ -16,7 +16,6 @@ import { AttentionDot } from "@thinkrail/ui/attention-dot";
 import { IconButton } from "@thinkrail/ui/button";
 import { ProjectGlyph, WorkspaceGlyph, WorkspaceLabel } from "@thinkrail/ui/project-tree";
 import { RunningIcon } from "@thinkrail/ui/running-icon";
-import type { ReactNode } from "react";
 import { LoadedList, Loader, Screen } from "./layout";
 import { scopeStatus } from "./status";
 import { useHostRequest } from "./useHostRequest";
@@ -36,10 +35,7 @@ export function ProjectsScreen({
 	unreachable,
 	expanded,
 	onToggle,
-	adding,
-	onAdd,
 	onSettings,
-	pairForm,
 	onOpen,
 }: {
 	hosts: SavedHost[];
@@ -49,10 +45,7 @@ export function ProjectsScreen({
 	/** Expanded projects, keyed `hostKey:projectId`, kept by the app so returning from a chat keeps the tree. */
 	expanded: ReadonlySet<string>;
 	onToggle: (key: string) => void;
-	adding: boolean;
-	onAdd: () => void;
 	onSettings: () => void;
-	pairForm: ReactNode;
 	onOpen: (hostKey: string, project: Project, workspace: Workspace) => void;
 }) {
 	const t = useT();
@@ -60,24 +53,13 @@ export function ProjectsScreen({
 		<Screen
 			title={t("mobile.projects.title")}
 			action={
-				<div className="flex shrink-0 items-center">
-					{adding ? null : (
-						<IconButton
-							size="l"
-							className="size-touch"
-							icon={RiAddLine}
-							label={t("mobile.projects.addHost")}
-							onClick={onAdd}
-						/>
-					)}
-					<IconButton
-						size="l"
-						className="size-touch"
-						icon={RiSettings3Line}
-						label={t("shell.topbar.settings")}
-						onClick={onSettings}
-					/>
-				</div>
+				<IconButton
+					size="l"
+					className="size-touch shrink-0"
+					icon={RiSettings3Line}
+					label={t("shell.topbar.settings")}
+					onClick={onSettings}
+				/>
 			}
 		>
 			{unreachable.map(([host, reason]) => (
@@ -89,12 +71,6 @@ export function ProjectsScreen({
 					{t("mobile.projects.unreachable", { host, reason })}
 				</p>
 			))}
-			{adding ? (
-				<section className="border-b border-border-default bg-container-elevated-bg px-16 py-16">
-					<p className="mt-0 mb-12 text-text-muted tr-text-ui">{t("mobile.projects.addHint")}</p>
-					{pairForm}
-				</section>
-			) : null}
 			{hosts
 				.filter((host) => !unreachable.some(([label]) => label === host.label))
 				.map((host) => (
