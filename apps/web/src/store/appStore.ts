@@ -422,6 +422,7 @@ export const SettingsSection = {
 	Feedback: "feedback",
 	Extensions: "extensions",
 	Environment: "environment",
+	Voice: "voice",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 

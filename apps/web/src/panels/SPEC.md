@@ -979,6 +979,19 @@ a project picker, the prompt hero, and the reused
   tidying). The copy names the three things
   that count as activity and the three things that never settle, because the setting is only legible
   together with those rules;
+  **`VoiceSettings`** (from `SPEECH_PROTOCOL_VERSION`, in the Interface group after Keyboard) shows the
+  store's `speech` status ([[submodule-web-speech]]). An unsupported platform gets a warning notice and
+  nothing else. Otherwise it has these rows:
+  - **Status:** not set up, downloading with a percentage, ready with the engine state, or the failure in
+    error colour. Its action is Download (with the size), Try again, or Cancel download.
+  - **Model:** a Multilingual / English only segmented control. Selecting the other model sends
+    `speech.install {model}`, which downloads it and deletes the current one. Disabled while installing.
+  - **Speech engine:** ThinkRail's managed copy or the user's own `nemo-speech` on PATH, with version
+    and backend.
+  - **Shortcut:** the platform chord.
+  - **Disk space:** the bytes ThinkRail's speech files use, and **Remove** (`speech.remove`), which
+    never touches a PATH install.
+  The mic itself is not here: every voice field carries its own;
   **`TerminalSettings`** — a **Scrollback** segmented control (`store.terminalReplayKb`, five presets from
   Off to 1 MB; a valid non-preset host value selects none rather than a wrong preset;
   `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on

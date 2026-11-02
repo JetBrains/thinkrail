@@ -156,13 +156,24 @@ test("the chord never reaches the composer behind an open dialog", async ({ page
 	await page.keyboard.press("Escape");
 });
 
-test("removing voice input deletes its files and brings the offer back", async ({
+test("Settings shows the install and Remove deletes its files and brings the offer back", async ({
 	page,
-	baseURL,
 }) => {
 	await openWorkspaceChat(page);
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
-	await removeVoiceInput(baseURL);
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "offer");
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-voice").click();
+	const voice = page.getByTestId("settings-voice");
+	await expect(voice.getByTestId("settings-voice-status")).toContainText("Ready");
+	await expect(voice.getByTestId("settings-voice-runtime")).toContainText("nemo-speech 0.3.0");
+	await expect(voice.getByTestId("settings-voice-model-multilingual")).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	await voice.getByTestId("settings-voice-remove").click();
+	await expect(voice.getByTestId("settings-voice-install")).toBeVisible();
+	await expect(voice.getByTestId("settings-voice-remove")).toBeDisabled();
 	expect(existsSync(SPEECH_DIR)).toBe(false);
+	await page.keyboard.press("Escape");
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "offer");
 });
