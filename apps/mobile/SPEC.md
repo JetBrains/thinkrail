@@ -79,6 +79,13 @@ four mobile layout roles: `touch` (44px, the minimum tap target, `h-touch` / `mi
 Screen headers follow iOS: a sub-screen shows an icon-only back arrow (its destination is the arrow's
 accessible label, not visible text) with the title centered; the top level shows the large left title.
 
+Navigation is a stack, as on iOS/Android: `App` keeps the screens under the top one mounted, hidden and
+`inert` (the tree under a chat, the chat under its history), so back shows them exactly as left — scroll,
+expanded projects, transcript — with no reload. `useHostRequest` starts a reopened screen from the read's
+last value for that host and refreshes in place; the tree re-reads `project.list` on `project.updated` and a
+project's `workspace.list` on `workspace.created/updated/removed`, keeping the rows on screen, so rows keyed
+by id stay put and only a new one appears. A loader shows only the first time a read has no value.
+
 `SettingsScreen.tsx` opens with the brand card, then **Computers**: the paired hosts and `PairForm.tsx`'s
 `PairActions` — grouped **Scan QR code** / **Enter link manually** rows (the latter opens the paste field),
 the same `usePairing` flow `Welcome`'s first-run `PairForm` uses. Then the phone's own settings: the IDE Settings rows that apply to a device, rendered

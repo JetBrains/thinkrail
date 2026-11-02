@@ -10,7 +10,7 @@ import {
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type { DeviceWireClient, RemoteSessionItem } from "@thinkrail/remote-client";
 import { IconButton } from "@thinkrail/ui/button";
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ListRow, LoadedList, Loader, Notice, Screen } from "./layout";
 import { workspaceName } from "./ProjectsScreen";
 import { statusOf } from "./status";
@@ -105,7 +105,7 @@ export function WorkspaceOpener({
 	const [failure, setFailure] = useState<string | null>(null);
 	const started = useRef(false);
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (started.current || chats.kind !== "ready" || !client) return;
 		started.current = true;
 		const main = ordered(chats.value)[0];

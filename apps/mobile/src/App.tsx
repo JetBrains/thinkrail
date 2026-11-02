@@ -8,7 +8,7 @@ import {
 	type RemoteSessionItem,
 	type SavedHost,
 } from "@thinkrail/remote-client";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { failureOf, failureText, type HostFailure, type HostStatus } from "./hostStatus";
 import { ProjectsScreen } from "./ProjectsScreen";
 import { type DevicePreferences, readPreferences, writePreferences } from "./preferences";
@@ -163,83 +163,104 @@ export function App() {
 	if (hosts.length === 0) {
 		return <Welcome pair={pair} onPair={pairWith} />;
 	}
-	if (route.kind === "settings") {
-		return (
-			<SettingsScreen
-				hosts={hosts}
-				statusOf={statusOf}
-				onReconnect={(host) => void connectHost(host)}
-				onForget={forgetHost}
-				pair={pair}
-				onPair={pairWith}
-				preferences={preferences}
-				onChange={changePreferences}
-				backLabel={t("mobile.projects.title")}
-				onBack={back}
-			/>
-		);
-	}
-	if (route.kind === "chat") {
-		const { hostKey, workspace, chat } = route;
-		return (
-			<SessionScreen
-				key={chat.sessionId}
-				session={{ hostKey, workspaceId: workspace.id, ...chat }}
-				state={
-					items.find((item) => item.hostKey === hostKey && item.record.sessionId === chat.sessionId)
-						?.record.state
-				}
-				controller={controller}
-				items={hostItems(items, hostKey)}
-				backLabel={t("mobile.projects.title")}
-				onBack={back}
-				onHistory={() => setRoute({ ...route, kind: "history" })}
-			/>
-		);
-	}
-	if (route.kind === "history") {
-		return (
-			<ChatHistoryScreen
-				workspace={route.workspace}
-				client={controller.clientFor(route.hostKey)}
-				items={hostItems(items, route.hostKey)}
-				current={route.chat.sessionId}
-				backLabel={route.chat.title}
-				onBack={back}
-				onOpen={(chat) => setRoute({ ...route, kind: "chat", chat })}
-			/>
-		);
-	}
-	if (route.kind === "workspace") {
-		return (
-			<WorkspaceOpener
-				workspace={route.workspace}
-				client={controller.clientFor(route.hostKey)}
-				items={hostItems(items, route.hostKey)}
-				backLabel={t("mobile.projects.title")}
-				onBack={back}
-				onOpen={(chat) => setRoute({ ...route, kind: "chat", chat })}
-			/>
-		);
-	}
+	const top = route.kind === "projects" ? null : route;
 	return (
-		<ProjectsScreen
-			hosts={hosts}
-			controller={controller}
-			items={items}
-			unreachable={
-				new Map(
-					[...failures].map(([hostKey, failure]) => [hostKey, failureText(t, failure)] as const),
-				)
-			}
-			expanded={expanded}
-			onToggle={toggleProject}
-			onSettings={() => setRoute({ kind: "settings" })}
-			onReconnect={(host) => void connectHost(host)}
-			onOpen={(hostKey, project, workspace) =>
-				setRoute({ kind: "workspace", hostKey, project, workspace })
-			}
-		/>
+		<div className="relative h-full">
+			<Layer covered={top !== null}>
+				<ProjectsScreen
+					hosts={hosts}
+					controller={controller}
+					items={items}
+					unreachable={
+						new Map(
+							[...failures].map(
+								([hostKey, failure]) => [hostKey, failureText(t, failure)] as const,
+							),
+						)
+					}
+					expanded={expanded}
+					onToggle={toggleProject}
+					onSettings={() => setRoute({ kind: "settings" })}
+					onReconnect={(host) => void connectHost(host)}
+					onOpen={(hostKey, project, workspace) =>
+						setRoute({ kind: "workspace", hostKey, project, workspace })
+					}
+				/>
+			</Layer>
+			{top?.kind === "settings" ? (
+				<Layer covered={false}>
+					<SettingsScreen
+						hosts={hosts}
+						statusOf={statusOf}
+						onReconnect={(host) => void connectHost(host)}
+						onForget={forgetHost}
+						pair={pair}
+						onPair={pairWith}
+						preferences={preferences}
+						onChange={changePreferences}
+						backLabel={t("mobile.projects.title")}
+						onBack={back}
+					/>
+				</Layer>
+			) : null}
+			{top?.kind === "workspace" ? (
+				<Layer covered={false}>
+					<WorkspaceOpener
+						workspace={top.workspace}
+						client={controller.clientFor(top.hostKey)}
+						items={hostItems(items, top.hostKey)}
+						backLabel={t("mobile.projects.title")}
+						onBack={back}
+						onOpen={(chat) => setRoute({ ...top, kind: "chat", chat })}
+					/>
+				</Layer>
+			) : null}
+			{top?.kind === "chat" || top?.kind === "history" ? (
+				<Layer covered={top.kind === "history"}>
+					<SessionScreen
+						key={top.chat.sessionId}
+						session={{ hostKey: top.hostKey, workspaceId: top.workspace.id, ...top.chat }}
+						state={
+							items.find(
+								(item) =>
+									item.hostKey === top.hostKey && item.record.sessionId === top.chat.sessionId,
+							)?.record.state
+						}
+						controller={controller}
+						items={hostItems(items, top.hostKey)}
+						backLabel={t("mobile.projects.title")}
+						onBack={back}
+						onHistory={() => setRoute({ ...top, kind: "history" })}
+					/>
+				</Layer>
+			) : null}
+			{top?.kind === "history" ? (
+				<Layer covered={false}>
+					<ChatHistoryScreen
+						workspace={top.workspace}
+						client={controller.clientFor(top.hostKey)}
+						items={hostItems(items, top.hostKey)}
+						current={top.chat.sessionId}
+						backLabel={top.chat.title}
+						onBack={back}
+						onOpen={(chat) => setRoute({ ...top, kind: "chat", chat })}
+					/>
+				</Layer>
+			) : null}
+		</div>
+	);
+}
+
+/** One screen of the stack: the screens under the top stay mounted (scroll, loaded lists, transcript) but hidden and inert, so going back shows them as they were. */
+function Layer({ covered, children }: { covered: boolean; children: ReactNode }) {
+	return (
+		<div
+			className={covered ? "invisible absolute inset-0" : "absolute inset-0"}
+			aria-hidden={covered || undefined}
+			inert={covered}
+		>
+			{children}
+		</div>
 	);
 }
 

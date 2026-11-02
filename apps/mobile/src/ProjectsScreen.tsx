@@ -5,6 +5,7 @@ import {
 	type Project,
 	partitionWorkspaces,
 	type Workspace,
+	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type {
@@ -19,6 +20,13 @@ import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { LoadedList, Loader, Screen } from "./layout";
 import { scopeStatus } from "./status";
 import { useHostRequest } from "./useHostRequest";
+
+const PROJECT_PUSHES = [WS_CHANNELS.projectUpdated];
+const WORKSPACE_PUSHES = [
+	WS_CHANNELS.workspaceCreated,
+	WS_CHANNELS.workspaceUpdated,
+	WS_CHANNELS.workspaceRemoved,
+];
 
 export function workspaceName(t: Translator, workspace: Workspace): string {
 	return workspace.kind === "default" && workspace.name === DEFAULT_WORKSPACE_NAME
@@ -126,7 +134,7 @@ function HostProjects({
 }) {
 	const t = useT();
 	const client = controller.clientFor(host.hostKey);
-	const loaded = useHostRequest<Project[]>(client, "project.list", {});
+	const loaded = useHostRequest<Project[]>(client, "project.list", {}, "", PROJECT_PUSHES);
 	const open =
 		loaded.kind === "ready" ? { ...loaded, value: loaded.value.filter((p) => !p.closed) } : loaded;
 
@@ -198,10 +206,16 @@ function ProjectWorkspaces({
 	onOpen: (workspace: Workspace) => void;
 }) {
 	const t = useT();
-	const loaded = useHostRequest<Workspace[]>(controller.clientFor(host.hostKey), "workspace.list", {
-		projectId: project.id,
-		includeDiffStats: false,
-	});
+	const loaded = useHostRequest<Workspace[]>(
+		controller.clientFor(host.hostKey),
+		"workspace.list",
+		{
+			projectId: project.id,
+			includeDiffStats: false,
+		},
+		"",
+		WORKSPACE_PUSHES,
+	);
 	const settleIdleDays =
 		controller.welcomeFor(host.hostKey)?.config.settleIdleDays ?? DEFAULT_CONFIG.settleIdleDays;
 	const statusOf = (workspace: Workspace) =>
