@@ -1210,7 +1210,7 @@ context-budget limitations and their upgrade checks live in [[pi-compatibility]]
 
 Pi owns provider retry; the host never adds one. Pi retries only errors that match its retryable
 patterns: "Anthropic stream ended before message_stop" does, "Could not parse Anthropic SSE event" does
-not. `patches/@earendil-works%2Fpi-ai@1.4.0.patch` (root `patchedDependencies`, upstream
+not. `patches/@earendil-works%2Fpi-ai@1.5.0.patch` (root `patchedDependencies`, upstream
 earendil-works/pi#10390, #564) fixes two defects in pi-ai's `anthropic-messages` SSE parser that end a
 turn with that parse error. The two fixes have different outcomes:
 
