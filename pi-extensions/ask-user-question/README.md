@@ -55,4 +55,4 @@ tool: the result types, the model-facing envelope builder, the acknowledgement t
 
 ## License
 
-Apache-2.0 — part of [ThinkRail](https://thinkrail.ai).
+Apache-2.0 — part of [ThinkRail](https://thinkrail.ai/?utm_source=pi-package&utm_medium=referral&utm_campaign=pi-ask-user-question&utm_content=readme).

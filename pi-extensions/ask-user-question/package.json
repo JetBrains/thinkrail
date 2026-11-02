@@ -12,7 +12,7 @@
 		"ask-user-question",
 		"questionnaire"
 	],
-	"homepage": "https://thinkrail.ai",
+	"homepage": "https://thinkrail.ai/?utm_source=pi-package&utm_medium=referral&utm_campaign=pi-ask-user-question&utm_content=homepage",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/JetBrains/thinkrail.git",
