@@ -48,8 +48,9 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   caller reading binary child output the UTF-8 decoder would replace — stderr stays decoded text, since a
   diagnostic is only ever read as text) and
   `spawnDetached()` (fire-and-forget `unref`) over `Bun.spawnSync` / `Bun.spawn`, always
-  `windowsHide: true`. Bun 1.4.0 maps that option to libuv `UV_PROCESS_WINDOWS_HIDE`; the seam prevents
-  background console spawns from omitting it. The two bespoke bounded runners (`server/subprocess`
+  `windowsHide: true` except where a `spawnDetached` caller passes `windowsHide: false` to launch a GUI
+  app whose own window is the point (the file-manager reveal). Bun 1.4.0 maps that option to libuv
+  `UV_PROCESS_WINDOWS_HIDE`; the seam prevents background console spawns from omitting it. The two bespoke bounded runners (`server/subprocess`
   `runBounded`, `jbcentral`'s version/quota runner) set it directly.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
   returns — kept in the wire so the server can carry it to the card verbatim); the icon generator's

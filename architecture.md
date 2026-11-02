@@ -470,5 +470,6 @@ dependency. This keeps test process drivers outside both launchers and the serve
   This includes PR revalidation on window focus; terminal-busy checks are close actions and Central quota
   resumes on visibility changes, not ordinary focus. Sync and fire-and-forget cases use
   `@thinkrail/shared/spawn`; bespoke bounded runners set the option directly. Exempt: spawns that inherit
-  an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script) and shell
-  probes that are no-ops on win32 (`shellEnv`).
+  an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script), shell
+  probes that are no-ops on win32 (`shellEnv`), and the file-manager reveal (`explorer.exe` honors the
+  hide flag by opening its folder window invisibly).
