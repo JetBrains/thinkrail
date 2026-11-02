@@ -3,6 +3,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type KeyboardEvent as ReactKeyboardEvent,
@@ -18,7 +19,6 @@ import { shortcutKeys } from "../commands";
 import { AttentionDot } from "../components/AttentionDot";
 import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier } from "../lib";
-import { isImeComposing } from "./ime";
 import { recordPick } from "./learning";
 import type { PaletteItem, PaletteRow, PaletteSection } from "./model";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
