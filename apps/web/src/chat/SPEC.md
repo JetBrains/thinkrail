@@ -470,10 +470,13 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
 
 ## Interaction seams
 
-- **GitHub star ask** — `githubStarPrompt.ts` counts accepted prompt, steer, and follow-up sends in one
-  integer key, stored through the native-stable adapter or, without one, `localStorage`. The fifth send raises
-  one info toast with a link to the repo; the count then stops at 5, so the ask never repeats. The count is
-  per browser origin or native profile, never reaches the host or analytics, and a storage failure means no ask.
+- **GitHub star ask** — `githubStarPrompt.ts` counts accepted sends the user wrote, from the chat composer,
+  the New Workspace dialog, and the plan page, in one integer key. App-written prompts through `panels/openChat`
+  do not count. The key is stored through the native-stable adapter or, without one, `localStorage`. The fifth
+  send raises one info toast with a link to the repo; the count then stops at 5, so the ask normally never
+  repeats. The count is per browser origin or native profile and never reaches the host or analytics. A
+  storage error the web app can see means no ask. The native adapter's write is fire-and-forget, so a failed
+  desktop write can repeat the ask once per restart; a confirmed write is not worth a new RPC for this toast.
 - **Transcript/shell split** — `ChatView` (the exported integration component) splits into a churn-isolated
   `ChatTranscript` child that owns the per-delta transcript rendering — subscribing (via `useShallow`) to the
   streaming runtime fields it renders from (turns, toolResults, currentAssistantId, toolResponses,

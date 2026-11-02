@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat } from "./fixtures/app";
+import { openFixtureProject, openWorkspaceChat } from "./fixtures/app";
 
 interface ClientFrame {
 	id?: string;
@@ -60,4 +60,19 @@ test("the fifth prompt asks for a GitHub star once and the action opens the repo
 
 	await sendPrompt(page, "prompt 6");
 	await expect(ask).toHaveCount(0);
+});
+
+test("a first prompt from the New Workspace dialog counts toward the ask", async ({ page }) => {
+	await acceptPromptsWithoutAgent(page);
+	await openFixtureProject(page);
+	await page.evaluate(() => localStorage.setItem("thinkrail-github-star-prompt-count", "4"));
+
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await page.getByTestId("add-workspace").first().click();
+	await expect(dialog).toBeVisible();
+	await page.getByTestId("ws-prompt").fill("first prompt");
+	await page.getByTestId("create-workspace").click();
+	await expect(dialog).toBeHidden();
+
+	await expect(page.getByTestId("toast").filter({ hasText: "Enjoying ThinkRail?" })).toBeVisible();
 });

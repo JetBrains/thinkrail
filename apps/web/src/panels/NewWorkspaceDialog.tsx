@@ -39,6 +39,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { askForGithubStarOnFifthPrompt } from "@/chat/githubStarPrompt";
 import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import {
 	deriveProjectTrustNotice,
@@ -424,6 +425,7 @@ export function NewWorkspaceDialog({
 					text,
 					...(attachments.length > 0 ? { images: attachments.map((a) => a.content) } : {}),
 				})
+				.then(askForGithubStarOnFifthPrompt)
 				.catch((err) => store.appendErrorTurn(session.sessionId, errorText(err)));
 		};
 		await startChat()
