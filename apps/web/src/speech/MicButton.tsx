@@ -1,8 +1,8 @@
-import { RiMicFill, RiMicLine, RiMicOffLine } from "@remixicon/react";
+import { RiLoader4Line, RiMicFill, RiMicLine, RiMicOffLine } from "@remixicon/react";
 import type { SpeechModel } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { Button, IconButton } from "@thinkrail/ui/button";
+import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import {
@@ -14,19 +14,18 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { platformFamily } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { micAvailability } from "./capture";
 import { dictation, useDictationSnapshot } from "./dictation";
-import { noteFallbackFocus, registerChordTarget } from "./hotkey";
+import { dictationShortcutLabel, noteFallbackFocus, registerChordTarget } from "./hotkey";
 import { type MicState, micState } from "./micState";
 import type { DictationError, DictationScope } from "./session";
 
 /** A field's mic: the field owner keeps its value, caret and submit path. */
 export interface MicButtonProps {
 	fieldRef: RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
-	/** Writes the field's text and caret; called on every partial and final. */
+	/** Writes the field's text and caret on every partial and final; it must never move focus. */
 	apply: (text: string, caret: number) => void;
 	/** The field is read-only while listening; its owner should also hold its submit. */
 	onListeningChange?: (listening: boolean) => void;
@@ -37,6 +36,9 @@ export interface MicButtonProps {
 }
 
 const LEVEL_BARS = ["h-4", "h-6", "h-8", "h-12"] as const;
+
+/** A spinner that stays clickable: `IconButton`'s `loading` disables the button, and a click cancels. */
+const Busy = withIconClass(RiLoader4Line, "motion-safe:animate-spin");
 
 const UNAVAILABLE_LABEL = {
 	"insecure-origin": "speech.mic.unavailable.insecureOrigin",
@@ -63,10 +65,6 @@ const ERROR_MESSAGE = {
 
 export function speechErrorKey(code: DictationError): MessageKey {
 	return ERROR_MESSAGE[code];
-}
-
-function shortcutLabel(): string {
-	return platformFamily() === "apple" ? "⌘⇧Space" : "Ctrl+Shift+Space";
 }
 
 function blockedMicrophone(code: DictationError | undefined): "denied" | "no-device" | null {
@@ -163,6 +161,7 @@ export function MicButton({
 	const snapshot = useDictationSnapshot();
 	const [availability] = useState(micAvailability);
 	const [offerOpen, setOfferOpen] = useState(false);
+	const buttonRef = useRef<HTMLButtonElement>(null);
 	const state = micState(status, availability, blockedMicrophone(snapshot.error?.code));
 	const mine = snapshot.ownerId === id;
 	const active = mine && snapshot.phase !== "idle";
@@ -174,6 +173,7 @@ export function MicButton({
 	const begin = useCallback(() => {
 		const element = fieldRef.current;
 		if (!element) return;
+		element.focus();
 		dictation.start({
 			ownerId: id,
 			anchor: () => ({
@@ -212,6 +212,8 @@ export function MicButton({
 			}),
 		[id, press, fallback, fieldRef],
 	);
+
+	useEffect(() => () => dictation.stop(id), [id]);
 
 	useEffect(() => {
 		const element = fieldRef.current;
@@ -255,7 +257,7 @@ export function MicButton({
 
 	if (state.kind === "hidden") return null;
 
-	const shortcut = shortcutLabel();
+	const shortcut = dictationShortcutLabel();
 	const starting = active && snapshot.phase === "connecting";
 	const label =
 		state.kind === "unavailable"
@@ -274,22 +276,34 @@ export function MicButton({
 							? t("speech.mic.stop", { shortcut })
 							: t("speech.mic.start", { shortcut });
 
+	const busy = state.kind === "installing" || starting;
 	return (
 		<Popover open={offerOpen} onOpenChange={setOfferOpen}>
 			<PopoverAnchor asChild>
 				<span className={cn("inline-flex shrink-0 items-center gap-4", className)}>
 					{active && !starting ? <LevelMeter level={snapshot.level} /> : null}
 					<IconButton
-						icon={state.kind === "unavailable" ? RiMicOffLine : active ? RiMicFill : RiMicLine}
+						ref={buttonRef}
+						icon={
+							busy
+								? Busy
+								: state.kind === "unavailable"
+									? RiMicOffLine
+									: active
+										? RiMicFill
+										: RiMicLine
+						}
 						data-testid="speech-mic"
 						data-mic-state={active ? "listening" : state.kind}
 						label={label}
 						tone={active ? "danger" : undefined}
 						selected={active}
-						loading={state.kind === "installing" || starting}
-						spinIcon
 						disabled={state.kind === "unavailable"}
+						aria-busy={busy}
 						aria-pressed={active}
+						{...(state.kind === "offer"
+							? { "aria-haspopup": "dialog" as const, "aria-expanded": offerOpen }
+							: {})}
 						onMouseDown={(event) => event.preventDefault()}
 						onClick={() => {
 							press();
@@ -298,7 +312,15 @@ export function MicButton({
 				</span>
 			</PopoverAnchor>
 			{state.kind === "offer" ? (
-				<PopoverContent side="top" align="end" className="w-[320px] p-12">
+				<PopoverContent
+					side="top"
+					align="end"
+					className="w-[320px] p-12"
+					onCloseAutoFocus={(event) => {
+						event.preventDefault();
+						buttonRef.current?.focus();
+					}}
+				>
 					<OfferCard
 						state={state}
 						onDownload={() => {

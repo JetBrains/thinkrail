@@ -309,6 +309,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	);
 
 	const [dictating, setDictating] = useState(false);
+	const applyDictation = useCallback(
+		(text: string, caret: number) => {
+			recallIdxRef.current = null;
+			setSlotSession(null);
+			setSubmitError(null);
+			onChange(text);
+			if (ref.current && ref.current === document.activeElement) focusSelection(caret);
+		},
+		[onChange, focusSelection],
+	);
 
 	const canSubmit = (raw: string) =>
 		!dictating && !templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
@@ -671,7 +681,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						{Mic ? (
 							<Mic
 								fieldRef={ref}
-								apply={replaceDraft}
+								apply={applyDictation}
 								onListeningChange={setDictating}
 								{...(micScope ? { scope: micScope } : {})}
 								fallback

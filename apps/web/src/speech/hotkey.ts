@@ -1,4 +1,10 @@
-import { hasPlatformModifier } from "@/lib";
+import {
+	hasLayer,
+	hasPlatformModifier,
+	isTextEntryTarget,
+	MODAL_LAYER_SELECTOR,
+	platformFamily,
+} from "@/lib";
 
 /** Holding the chord past this is push-to-talk; a quicker tap toggles. */
 export const HOLD_MS = 300;
@@ -13,6 +19,10 @@ export function isDictationChord(
 		!event.altKey &&
 		hasPlatformModifier(event, platform)
 	);
+}
+
+export function dictationShortcutLabel(platform?: string): string {
+	return platformFamily(platform) === "apple" ? "⌘⇧Space" : "Ctrl+Shift+Space";
 }
 
 /** A field the chord can dictate into. */
@@ -39,7 +49,11 @@ function focusedTarget(): [string, ChordTarget] | null {
 	return null;
 }
 
+/** The composer is a fallback only when nothing else owns the keyboard: no modal, no other editor. */
 function fallbackTarget(): [string, ChordTarget] | null {
+	if (hasLayer(document, MODAL_LAYER_SELECTOR) || isTextEntryTarget(document.activeElement)) {
+		return null;
+	}
 	const remembered = lastFallback ? targets.get(lastFallback) : undefined;
 	if (lastFallback && remembered?.fallback && remembered.element()?.isConnected) {
 		return [lastFallback, remembered];

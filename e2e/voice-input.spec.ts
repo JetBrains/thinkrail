@@ -91,6 +91,17 @@ test("the keyboard chord toggles dictation and Esc stops it, keeping the text", 
 	await expect(input).toHaveValue(/^Hello/);
 });
 
+test("the chord never reaches the composer behind an open dialog", async ({ page }) => {
+	await openWorkspaceChat(page);
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await page.getByTestId("open-settings").click();
+	await expect(page.getByTestId("settings-dialog")).toBeVisible();
+	await page.keyboard.press("ControlOrMeta+Shift+Space");
+	await page.waitForTimeout(300);
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await page.keyboard.press("Escape");
+});
+
 test("removing voice input deletes its files and brings the offer back", async ({
 	page,
 	baseURL,
