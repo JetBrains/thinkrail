@@ -5,7 +5,6 @@ import {
 	type CaptureFailureReason,
 	type CaptureSink,
 } from "./captureTypes";
-import workletUrl from "./pcmWorklet.ts?worker&url";
 
 /** 20 ms frames: small enough for low latency, large enough to keep the socket quiet. */
 const FRAME_SAMPLES = SPEECH_SAMPLE_RATE / 50;
@@ -53,6 +52,7 @@ export async function startCapture(sink: CaptureSink): Promise<Capture> {
 	let node: AudioWorkletNode;
 	try {
 		context = new AudioContext();
+		const { default: workletUrl } = await import("./pcmWorklet.ts?worker&url");
 		await context.audioWorklet.addModule(workletUrl);
 		source = context.createMediaStreamSource(stream);
 		node = new AudioWorkletNode(context, "thinkrail-pcm16", {

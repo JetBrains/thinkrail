@@ -75,6 +75,7 @@ import {
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
 } from "@/prompt";
+import { MicButton } from "@/speech";
 import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
@@ -153,6 +154,16 @@ export function NewWorkspaceDialog({
 	);
 
 	const focusPromptSelection = usePendingSelection(promptRef);
+	const [dictating, setDictating] = useState(false);
+	const applyDictation = useCallback(
+		(text: string, caret: number) => {
+			updatePromptDraft(text, null);
+			if (promptRef.current && promptRef.current === document.activeElement) {
+				focusPromptSelection(caret);
+			}
+		},
+		[updatePromptDraft, focusPromptSelection],
+	);
 
 	const supportsProjectTemplatePreview =
 		protocolVersion !== null && protocolVersion >= PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION;
@@ -359,7 +370,7 @@ export function NewWorkspaceDialog({
 		setBaseRef(list.defaultBranch);
 		prefetchBase(list.defaultBranch);
 	});
-	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
+	const submitEnabled = !creating && !dictating && !templatePending && attachedImages.pending === 0;
 
 	const create = async () => {
 		if (!submitEnabled) return;
@@ -604,7 +615,7 @@ export function NewWorkspaceDialog({
 						placeholder={t("panels.newWorkspace.promptPlaceholder")}
 						spellCheck={false}
 						rows={6}
-						className="min-h-[160px]"
+						className="min-h-[160px] pr-24"
 						onKeyDown={(e) => {
 							if (isPromptKeyEventComposing(e.nativeEvent)) return;
 							if (slotSession && !slashCompletion.open) {
@@ -627,6 +638,12 @@ export function NewWorkspaceDialog({
 								if (submitEnabled) void create();
 							}
 						}}
+					/>
+					<MicButton
+						fieldRef={promptRef}
+						apply={applyDictation}
+						onListeningChange={setDictating}
+						className="absolute right-4 bottom-4"
 					/>
 					{slashCompletion.open ? (
 						<SlashCommandMenu

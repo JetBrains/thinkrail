@@ -145,6 +145,29 @@ test("clicking the mic while a model downloads cancels the download", async ({ p
 	}
 });
 
+test("the New-workspace prompt takes dictation and holds Create while listening", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await page.getByTestId("add-workspace").first().click();
+	await expect(dialog).toBeVisible();
+	const prompt = dialog.getByTestId("ws-prompt");
+	await prompt.fill("");
+	const dialogMic = dialog.getByTestId("speech-mic");
+	await dialogMic.click();
+	await expect(dialogMic).toHaveAttribute("data-mic-state", "listening");
+	await expect(dialog.getByTestId("create-workspace")).toBeDisabled();
+	await expect(prompt).toHaveValue(FAKE_SPEECH_TEXT, { timeout: 15_000 });
+	await dialogMic.click();
+	await expect(dialogMic).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await expect(prompt).toHaveValue(FAKE_SPEECH_TEXT);
+	await expect(dialog.getByTestId("create-workspace")).toBeEnabled();
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+});
+
 test("the chord never reaches the composer behind an open dialog", async ({ page }) => {
 	await openWorkspaceChat(page);
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");

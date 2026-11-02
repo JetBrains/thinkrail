@@ -525,6 +525,14 @@ resources stop loading, running subagents stop and open chats reload only when `
 pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
 (with Reload).
 
+**Voice input in panel fields.** `NewWorkspaceDialog`'s prompt and `PrComposeDialog`'s title and body
+each carry a [[submodule-web-speech]] `MicButton` in their bottom-right corner. The field reserves a
+24 px right gutter for it.
+- The prompt's `apply` drops the template slot session and restores the caret only while focused. The
+  PR fields use `useFieldApply`.
+- While a mic listens, Create / Open PR is held, like the composer's send.
+- These fields are not chord fallbacks: ⌘⇧Space reaches them only when they have focus.
+
 **`NewWorkspaceDialog`** is the start-working surface: **a target control** (a two-option segment — a
 native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so assistive tech
 hears one mutually-exclusive choice — both always visible: the two-mode model in one glance) chooses **where** the work runs, and the header is

@@ -24,7 +24,8 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { MicButton, useFieldApply } from "@/speech";
 
 export interface PrSourcing {
 	source: PrBodySource;
@@ -117,6 +118,11 @@ function ComposeForm({
 	const [source, setSource] = useState(sourcing?.source);
 	const [template, setTemplate] = useState(sourcing?.templates[0]);
 	const [working, setWorking] = useState<"source" | "generate" | null>(null);
+	const [dictating, setDictating] = useState(false);
+	const titleRef = useRef<HTMLInputElement>(null);
+	const bodyRef = useRef<HTMLTextAreaElement>(null);
+	const applyTitle = useFieldApply(titleRef, setTitle);
+	const applyBody = useFieldApply(bodyRef, setBody);
 	const action = state.draft ? t("panels.prCompose.openDraft") : t("panels.prCompose.open");
 	const templates = sourcing?.templates ?? [];
 	const options: PrBodySource[] = [
@@ -151,13 +157,22 @@ function ComposeForm({
 			</DialogHeader>
 			<label className="flex flex-col gap-4">
 				<span className="tr-text-eyebrow text-text-subtle">{t("panels.prCompose.titleLabel")}</span>
-				<input
-					type="text"
-					data-testid="open-pr-compose-title"
-					value={title}
-					onChange={(e) => setTitle(e.target.value)}
-					className="w-full rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
-				/>
+				<span className="relative flex">
+					<input
+						ref={titleRef}
+						type="text"
+						data-testid="open-pr-compose-title"
+						value={title}
+						onChange={(e) => setTitle(e.target.value)}
+						className="w-full rounded-sm border border-control-border-default bg-control-bg py-8 pr-24 pl-12 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
+					/>
+					<MicButton
+						fieldRef={titleRef}
+						apply={applyTitle}
+						onListeningChange={setDictating}
+						className="absolute top-4 right-4"
+					/>
+				</span>
 			</label>
 			{source ? (
 				<div className="flex flex-col gap-4">
@@ -202,15 +217,24 @@ function ComposeForm({
 				<label htmlFor="open-pr-compose-body" className="tr-text-eyebrow text-text-subtle">
 					{t("panels.prCompose.bodyLabel")}
 				</label>
-				<Textarea
-					id="open-pr-compose-body"
-					data-testid="open-pr-compose-body"
-					value={body}
-					onChange={(e) => setBody(e.target.value)}
-					disabled={working !== null}
-					rows={14}
-					className="min-h-160 flex-1 resize-y tr-code-text"
-				/>
+				<div className="relative flex min-h-0 flex-1 flex-col">
+					<Textarea
+						ref={bodyRef}
+						id="open-pr-compose-body"
+						data-testid="open-pr-compose-body"
+						value={body}
+						onChange={(e) => setBody(e.target.value)}
+						disabled={working !== null}
+						rows={14}
+						className="min-h-160 flex-1 resize-y tr-code-text"
+					/>
+					<MicButton
+						fieldRef={bodyRef}
+						apply={applyBody}
+						onListeningChange={setDictating}
+						className="absolute right-4 bottom-4"
+					/>
+				</div>
 			</div>
 			{source ? (
 				<div className="flex flex-wrap items-center gap-8">
@@ -240,7 +264,7 @@ function ComposeForm({
 				<Button
 					data-testid="open-pr-compose-submit"
 					iconLeft={GitPullRequestArrow}
-					disabled={locked || title.trim().length === 0}
+					disabled={locked || dictating || title.trim().length === 0}
 					loading={busy}
 					onClick={() =>
 						onSubmit({

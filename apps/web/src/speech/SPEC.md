@@ -23,14 +23,17 @@ sends it.
   - **Capture** (`capture.ts` + `pcmWorklet.ts`):
     - `getUserMedia` with echo cancellation, noise suppression and auto gain.
     - An AudioWorklet (bundled through Vite's `?worker&url`) that mixes to mono, box-filter decimates
-      to 16 kHz, and posts 20 ms PCM16 frames with their RMS level.
+      to 16 kHz, and posts 20 ms PCM16 frames with their RMS level. Its URL is imported dynamically at
+      the first capture, so every module that reaches the barrel stays importable under `bun test`,
+      which cannot resolve `?worker&url`.
   - **`micAvailability()`**: `insecure-origin` outside a secure context (HTTPS or localhost), or
     `unsupported` without `getUserMedia` / `AudioWorkletNode`.
   - **The page's one dictation controller** (`session.ts`, the `dictation` singleton).
   - **The text rule** (`text.ts`).
   - **The mic-state derivation** (`micState.ts`).
   - **`MicButton`**, the one mic every voice field renders, and the chord registry (`hotkey.ts`).
-- **Public surface (barrel):** `MicButton`, `MicButtonProps`, `speechErrorKey`, `dictationShortcutLabel`, `micAvailability`, `MicAvailability`, `dictation`, `useDictationSnapshot`,
+- **Public surface (barrel):** `MicButton`, `MicButtonProps`, `speechErrorKey`, `dictationShortcutLabel`,
+  `useFieldApply`, `micAvailability`, `MicAvailability`, `dictation`, `useDictationSnapshot`,
   `micState`, `MicState`, `MicUnavailableReason`, `DEFAULT_SPEECH_MODEL`, `DictationError`,
   `DictationPhase`, `DictationScope`, `DictationSnapshot`, `DictationTarget`, `dictationText`,
   `spokenText`, `DictationAnchor`.
@@ -66,7 +69,8 @@ sends it.
 
 ## Mic button
 
-`MicButton {fieldRef, apply, onListeningChange?, scope?, fallback?}` is the only mic UI. The field owner
+`MicButton {fieldRef, apply, onListeningChange?, scope?, fallback?}` is the only mic UI; `useFieldApply(ref,
+setValue)` is the `apply` for a plain controlled field. The field owner
 keeps its value, caret and submit path. `apply` must never move focus: late finals arrive after a blur
 has stopped the dictation, and focusing the field then would steal the user's next input. The composer
 restores the caret only while the field is still focused. It follows the mockup states in the task

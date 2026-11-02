@@ -1,5 +1,6 @@
 export { type MicAvailability, micAvailability } from "./capture";
 export { dictation, useDictationSnapshot } from "./dictation";
+export { useFieldApply } from "./fieldApply";
 export { dictationShortcutLabel } from "./hotkey";
 export { MicButton, type MicButtonProps, speechErrorKey } from "./MicButton";
 export {
