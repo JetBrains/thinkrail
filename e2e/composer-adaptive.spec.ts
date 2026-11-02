@@ -178,3 +178,17 @@ test("compact phone controls remain inside the chat viewport", async ({ page }) 
 		inputBox.y + inputBox.height,
 	);
 });
+
+test("send control matches its neighbours and sits evenly in the composer corner", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	const shellBox = await box(page.getByTestId("chat-composer-shell"));
+	const pillBox = await box(page.getByTestId("chat-send-pill"));
+	const historyBox = await box(page.getByTestId("history-open"));
+	const rightGap = shellBox.x + shellBox.width - (pillBox.x + pillBox.width);
+	const bottomGap = shellBox.y + shellBox.height - (pillBox.y + pillBox.height);
+	expect(pillBox.height).toBe(historyBox.height);
+	expect(rightGap).toBeCloseTo(bottomGap, 0);
+	await expect(page.getByTestId("chat-send-pill")).toHaveCSS("border-radius", "4px");
+});

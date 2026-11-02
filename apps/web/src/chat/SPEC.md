@@ -949,9 +949,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   keep their existing separate chrome. The slot-highlight backdrop must follow every dynamic textarea box
   change with the exact box-model and scroll-sync invariants under Template slots below.
 - **Composer trailing controls** (`Composer`) — the footer's right-hand cluster is **one solid object and
-  ghosts**, no borders: History is `IconButton ghost m` (its `label` supplies the tooltip), Stop is
+  ghosts**, no borders, centered on the footer row with equal space to the right and below: History is `IconButton ghost m` (its `label` supplies the tooltip), Stop is
   `Button ghost m` (`■ Stop`, muted text lifting on a hover wash), and the send a single
-  `rounded-full` accent pill (`chat-send-pill`, `data-armed`) whose main segment (`chat-send`) carries the
+  `rounded-sm` accent control sized like `Button m` (`chat-send-pill`, `data-armed`) whose main segment (`chat-send`) carries the
   verb plus an `↩` keycap and whose chevron segment (`send-menu`, streaming only) is a second hit area
   with its own hover — spacing, not a divider, separates them. The earlier cluster was four equal bordered
   32px squares, which gave a utility (history) the same weight as the primary action and read as

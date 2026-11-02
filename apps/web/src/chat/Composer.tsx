@@ -72,14 +72,11 @@ const COMPACT_ONLY = "@md:hidden";
 const SEGMENT =
 	"flex items-center gap-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none";
 
-const SEND_PILL = "flex h-28 shrink-0 items-stretch rounded-full transition-colors";
+const SEND_PILL = "flex h-24 shrink-0 items-stretch rounded-sm transition-colors";
 const SEND_PILL_ARMED = "bg-control-primary-bg text-control-primary-text";
 const SEND_PILL_INERT = "bg-control-bg-selected text-control-disabled-text";
-const SEND_MAIN = cn(
-	SEGMENT,
-	"rounded-full pl-12 @max-md:w-28 @max-md:justify-center @max-md:px-0",
-);
-const SEND_MORE = cn(SEGMENT, "rounded-r-full pr-8 pl-2");
+const SEND_MAIN = cn(SEGMENT, "rounded-sm pl-8 @max-md:w-24 @max-md:justify-center @max-md:px-0");
+const SEND_MORE = cn(SEGMENT, "rounded-r-sm pr-4 pl-2");
 const KEYCAP = "flex h-16 min-w-16 items-center justify-center rounded-xs bg-on-primary-soft px-2";
 
 const STREAMING_SEND_MODES = [
@@ -658,7 +655,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							)}
 						/>
 					</div>
-					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
+					<div className="col-start-3 row-start-2 mr-4 flex shrink-0 items-center gap-4 self-center">
 						<IconButton
 							icon={History}
 							data-testid="history-open"
@@ -693,8 +690,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								disabled={!canSend}
 								className={cn(
 									SEND_MAIN,
-									"tr-text-action hover:bg-control-primary-bg-hovered",
-									isStreaming ? "rounded-r-none pr-4" : "pr-12",
+									"pr-4 tr-text-button hover:bg-control-primary-bg-hovered",
+									isStreaming && "rounded-r-none",
 								)}
 							>
 								<ArrowUp className={cn("size-16", COMPACT_ONLY)} />
