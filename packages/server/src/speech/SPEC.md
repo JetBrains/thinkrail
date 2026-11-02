@@ -136,7 +136,9 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
    `ready`.
 4. **Events.** The engine's `delta` events are appends; the relay accumulates them and sends each as a
    replacing `partial`. `completed` becomes a `final` and resets the partial.
-5. **Stop.** `stop` sends `input_audio_buffer.commit`. `committed` (or an 8 s timeout) ends the dictation.
+5. **Stop.** `stop` sends `input_audio_buffer.commit`, or defers it until upstream opens. `committed`, or
+   an 8 s timeout counted from the commit, never from the stop, ends the dictation. A cold engine may
+   still be loading the model when the user stops.
    Ending flushes any uncompleted partial as a `final`, then sends `ended`, closes upstream and
    releases the hold, exactly once. An engine error or a lost upstream sends `SPEECH_ENGINE_FAILED` first.
 6. **Language tags.** A trailing auto-detect language tag (`<en-US>`) is stripped from all text.

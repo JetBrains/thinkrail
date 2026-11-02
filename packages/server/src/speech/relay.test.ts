@@ -142,20 +142,24 @@ test.skipIf(!posix)("a dictation streams partials, a final and an end", async ()
 	expect(session.speech_contexts[0].boost).toBe(3);
 });
 
-test.skipIf(!posix)("a dictation stopped before a cold engine is ready still transcribes", async () => {
-	installFixture();
-	await initSpeech();
-	process.env.FAKE_SPEECH_START_DELAY_MS = "9000";
-	const client = clientSocket();
-	const relay = createSpeechRelay(client.socket);
-	relay.message(JSON.stringify({ type: "start" }));
-	for (let i = 0; i < 4; i += 1) relay.message(word());
-	relay.message(JSON.stringify({ type: "stop" }));
-	await client.until("ended", 20_000);
-	expect(client.messages.filter((message) => message.type === "final")).toEqual([
-		{ type: "final", text: "open useAppStore.tsx please" },
-	]);
-}, 30_000);
+test.skipIf(!posix)(
+	"a dictation stopped before a cold engine is ready still transcribes",
+	async () => {
+		installFixture();
+		await initSpeech();
+		process.env.FAKE_SPEECH_START_DELAY_MS = "9000";
+		const client = clientSocket();
+		const relay = createSpeechRelay(client.socket);
+		relay.message(JSON.stringify({ type: "start" }));
+		for (let i = 0; i < 4; i += 1) relay.message(word());
+		relay.message(JSON.stringify({ type: "stop" }));
+		await client.until("ended", 20_000);
+		expect(client.messages.filter((message) => message.type === "final")).toEqual([
+			{ type: "final", text: "open useAppStore.tsx please" },
+		]);
+	},
+	30_000,
+);
 
 test.skipIf(!posix)("a second start while dictating is refused", async () => {
 	installFixture();
