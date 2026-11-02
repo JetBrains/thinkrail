@@ -261,13 +261,13 @@ async function runInstall(model: SpeechModel, signal: AbortSignal): Promise<void
 			onProgress: reporter("model", modelPin.bytes),
 		});
 	}
+	await writeFile(markerPath(), JSON.stringify({ model } satisfies Marker));
 	await stopEngine();
 	for (const other of SPEECH_MODELS) {
 		if (other === model) continue;
 		await rm(modelPath(other), { force: true });
 		await rm(`${modelPath(other)}.partial`, { force: true });
 	}
-	await writeFile(markerPath(), JSON.stringify({ model } satisfies Marker));
 }
 
 async function discardPartials(): Promise<void> {

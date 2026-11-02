@@ -23,7 +23,7 @@ export function stagingDir(): string {
 	return join(speechDir(), ".staging");
 }
 
-/** Written last, after every file it names verified; its absence means nothing is installed. */
+/** Written once every file it names is verified; its absence means nothing is installed. */
 export function markerPath(): string {
 	return join(speechDir(), "installed.json");
 }

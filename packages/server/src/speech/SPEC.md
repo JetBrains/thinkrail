@@ -63,7 +63,9 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
       `%SystemRoot%\System32\tar.exe`, never a Git-for-Windows tar from PATH, which can't read zip)
       into a fresh staging dir. The archive's root is renamed into place only if it holds the binary.
     - **Model.** Streamed into `models/<file>.partial`.
-  - Then it stops the engine, deletes the other model, and writes the marker.
+  - Then it writes the marker naming the new model, stops the engine, and only after that deletes the
+    other model and its partial. Any engine started after the marker loads the new model, so nothing
+    opens a file that is about to be deleted. Deleting it would fail on Windows while the file is open.
 - **`downloadVerified(artifact, dest)`**
   - Resumes `${dest}.partial` with `Range: bytes=<n>-` and re-hashes the kept prefix. A `200` reply
     restarts from zero.
@@ -88,5 +90,5 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
 
 - Size is checked at every boot, but the SHA-256 only once, at download. Re-hashing 740 MB on each start
   would delay the welcome seed.
-- The marker is the last write. A crash mid-install leaves no marker, so the host reports `not-installed`
-  and the retry resumes the partials.
+- The marker is written only after every file it names is verified. A crash before that leaves no marker
+  for the new model, so the host reports what was installed before and the retry resumes the partials.

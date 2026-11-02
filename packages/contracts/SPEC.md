@@ -1177,7 +1177,7 @@ and what it loaded, never pi's own types.
   sends it):
   - `supported` — whether the host platform has a pinned runtime;
   - `install` — `not-installed` | `installing` with phase, byte progress and model | `ready` | `failed`
-    with a `SpeechErrorCode`;
+    with a `SpeechErrorCode` and the still-`usable` model after a failed switch;
   - `runtime` — `managed` or a user's own `path` install, with version and backend;
   - `engine` — `stopped` | `starting` | `ready` | `failed`;
   - `diskBytes`, and per-model `downloadBytes`.
