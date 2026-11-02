@@ -110,8 +110,10 @@ decision updates the relevant `SPEC.md` first, then the code and the tests that 
 it. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 
 For team review, the [project-native spec-driven development proposal](docs/proposals/spec-driven-development.md)
-explores adapting ThinkRail to existing spec practices and frameworks. It is a draft, not implemented
-behavior, and does not replace the current workflow above.
+explores adapting ThinkRail to existing spec practices and frameworks, and its
+[architecture doc](docs/proposals/spec-driven-development-architecture.md) records the decisions taken
+and the questions still open. Both are drafts, not implemented behavior, and do not replace the
+current workflow above.
 
 ## Translations
 

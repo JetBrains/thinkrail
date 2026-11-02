@@ -9,6 +9,10 @@ and final UI come later. The current [product goals](../../goal-and-requirements
 **Quick review:** [proposal](#1-proposal) → [scenarios](#3-user-scenarios) →
 [design](#4-design) → [open questions](#9-team-review-questions).
 
+The follow-up architecture discussion — build-system framing, decisions taken, and open questions —
+is recorded in [spec-driven-development-architecture.md](spec-driven-development-architecture.md).
+This proposal has not yet been reconciled with it.
+
 ## 1. Proposal
 
 **Use the project's existing specs and instructions instead of requiring ThinkRail's format.**
