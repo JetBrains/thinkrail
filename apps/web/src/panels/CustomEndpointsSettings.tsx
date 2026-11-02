@@ -163,10 +163,7 @@ function EndpointDialog({
 
 	return (
 		<Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
-			<DialogContent
-				data-testid="custom-endpoints-dialog"
-				className="flex max-h-[85vh] max-w-[36rem] flex-col"
-			>
+			<DialogContent data-testid="custom-endpoints-dialog" className="max-w-[36rem]">
 				<DialogHeader>
 					<DialogTitle>
 						{draft.id

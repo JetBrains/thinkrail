@@ -94,7 +94,7 @@ function FilePreview({ path, before }: { path: string; before: string | undefine
 			<Dialog open={fullscreen} onOpenChange={setFullscreen}>
 				<DialogContent
 					data-testid="tool-visualize-fullscreen-dialog"
-					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-8"
+					className="h-[90vh] w-[95vw] max-w-[95vw] gap-8"
 				>
 					<DialogHeader>
 						<DialogTitle>

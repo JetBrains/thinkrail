@@ -68,7 +68,7 @@ export function ExtensionsCatalog({
 										<code
 											key={tool}
 											data-testid={`extension-tool-${tool}`}
-											className="rounded-full bg-control-bg-selected px-8 text-text-muted tr-text-metadata"
+											className="max-w-full wrap-anywhere rounded-full bg-control-bg-selected px-8 text-text-muted tr-text-metadata"
 										>
 											{tool}
 										</code>
