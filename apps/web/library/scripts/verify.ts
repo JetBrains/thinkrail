@@ -1,4 +1,5 @@
 import { chromium, type Page } from "@playwright/test";
+import { components } from "../content";
 
 const BASE = process.argv[2] ?? "http://localhost:24391/";
 const failures: string[] = [];
@@ -9,6 +10,12 @@ const check = (ok: boolean, message: string) => {
 
 async function open(page: Page, route: string) {
 	await page.goto(`${BASE}#/${route}`);
+	await page.waitForFunction(
+		(target) =>
+			window.location.hash === `#/${target}` &&
+			document.getElementById("library-main")?.querySelector("h1") !== null,
+		route,
+	);
 	await page.locator("#library-main h1").first().waitFor();
 }
 
@@ -31,8 +38,11 @@ check(
 	"the site opens on the components overview",
 );
 const cards = page.locator('[data-testid^="overview-card-"]');
-check((await cards.count()) === 2, "overview shows a card per component");
-await page.getByTestId("overview-search").fill("icon");
+check(
+	(await cards.count()) === components.length,
+	`overview shows a card per component (${components.length})`,
+);
+await page.getByTestId("overview-search").fill("tooltip");
 check((await cards.count()) === 1, "overview search filters the cards");
 await page.getByTestId("overview-search").fill("");
 await page.getByTestId("overview-card-button").click();
@@ -88,6 +98,21 @@ const radius = await page
 	.locator("span[aria-hidden]")
 	.evaluate((element) => getComputedStyle(element).borderTopLeftRadius);
 check(radius === "2px", `radius specimens use the live token (${radius})`);
+
+for (const doc of components) {
+	const before = errors.length;
+	await open(page, doc.slug);
+	await page.waitForTimeout(300);
+	const cards = await page.locator(`[data-testid^="example-${doc.slug}-"]`).count();
+	const { sideways, top } = await page.evaluate(() => {
+		const main = document.getElementById("library-main") as HTMLElement;
+		return { sideways: main.scrollWidth - main.clientWidth, top: main.scrollTop };
+	});
+	check(
+		cards === doc.examples.length && sideways <= 0 && top === 0 && errors.length === before,
+		`${doc.slug}: ${cards}/${doc.examples.length} examples render, opens at its heading, no sideways scroll, no errors (top ${top})`,
+	);
+}
 
 await open(page, "button");
 const themeIds: string[] = [];
@@ -220,7 +245,10 @@ await open(page, "button");
 check(!(await page.locator("aside").first().isVisible()), "narrow layout hides the sidebar");
 await page.getByRole("button", { name: "Open navigation" }).click();
 await page.locator("#library-nav-drawer").waitFor();
-await page.locator("#library-nav-drawer").getByRole("link", { name: "IconButton" }).click();
+await page
+	.locator("#library-nav-drawer")
+	.getByRole("link", { name: "IconButton", exact: true })
+	.click();
 await page.locator("h1", { hasText: "IconButton" }).waitFor();
 check(
 	!(await page.locator("#library-nav-drawer").isVisible()),
@@ -234,7 +262,13 @@ const overflow = await page.evaluate(() => {
 	);
 });
 check(overflow <= 0, `narrow layout does not scroll the page sideways (${overflow}px)`);
-for (const route of ["button", "color", "typography", "themes", "vocabulary"]) {
+for (const route of [
+	...components.map((doc) => doc.slug),
+	"color",
+	"typography",
+	"themes",
+	"vocabulary",
+]) {
 	await open(page, route);
 	const sideways = await page.evaluate(() => {
 		const main = document.getElementById("library-main") as HTMLElement;

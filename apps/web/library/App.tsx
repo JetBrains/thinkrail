@@ -2,6 +2,7 @@ import { RiCloseLine, RiMenuLine } from "@remixicon/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useState } from "react";
+import { Toaster } from "@/panels/Toaster";
 import { BrandLogo } from "@/shell/BrandLogo";
 import { type AreaId, areas, components, docs } from "./content";
 import { ComponentPage } from "./pages/ComponentPage";
@@ -209,6 +210,7 @@ export function App() {
 					)}
 				</main>
 			</div>
+			<Toaster />
 		</div>
 	);
 }

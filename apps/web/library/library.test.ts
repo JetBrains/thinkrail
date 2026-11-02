@@ -15,18 +15,23 @@ import { content, renderOutputs, unknownLinks } from "./scripts/generate-md";
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const EXAMPLES = fileURLToPath(new URL("./examples", import.meta.url));
 const CONTENT = fileURLToPath(new URL("./content", import.meta.url));
+const SHOWCASE = fileURLToPath(new URL("./showcase", import.meta.url));
 
-describe("generated docs", () => {
-	for (const [path, markdown] of renderOutputs())
-		test(`${path} is regenerated from the library content`, () => {
-			expect(existsSync(join(ROOT, path)) ? readFileSync(join(ROOT, path), "utf8") : "").toBe(
-				markdown,
-			);
-		});
+test("every generated doc is regenerated from the library content", () => {
+	const stale = [...renderOutputs()]
+		.filter(([path, markdown]) => {
+			const target = join(ROOT, path);
+			return (existsSync(target) ? readFileSync(target, "utf8") : "") !== markdown;
+		})
+		.map(([path]) => path);
+	expect(stale).toEqual([]);
 });
 
 describe("content", () => {
-	const files = [...docs.map((page) => page.file), ...components.map((doc) => doc.contract)];
+	const files = [
+		...docs.map((page) => page.file),
+		...components.flatMap((doc) => (doc.contract ? [doc.contract] : [])),
+	];
 
 	test("every authored Markdown file is registered and every registered file exists", () => {
 		const authored = readdirSync(CONTENT, { recursive: true, encoding: "utf8" })
@@ -77,6 +82,30 @@ describe("examples", () => {
 		});
 });
 
+function showcaseFile(slug: string): string | null {
+	const registry = readFileSync(join(SHOWCASE, "index.ts"), "utf8");
+	const entry = new RegExp(`^\\s*"?${slug}"?: (\\w+)`, "m").exec(registry)?.[1];
+	const module = entry
+		? new RegExp(`import \\{[^}]*\\b${entry}\\b[^}]*\\} from "\\./([a-z-]+)"`).exec(registry)?.[1]
+		: undefined;
+	const path = module ? join(SHOWCASE, `${module}.tsx`) : "";
+	return module && existsSync(path) ? path : null;
+}
+
+describe("showcases", () => {
+	for (const doc of components)
+		test(`${doc.name}: every showcase section has its words in the doc`, () => {
+			const documented = (doc.sections ?? []).map((section) => section.id);
+			const file = showcaseFile(doc.slug);
+			expect(file).not.toBeNull();
+			const source = readFileSync(file ?? "", "utf8");
+			const rendered = [...source.matchAll(/\{\s*id:\s*"([a-z-]+)",\s*Render:/g)].map(
+				(match) => match[1],
+			);
+			expect(rendered.filter((id) => !documented.includes(id))).toEqual([]);
+		});
+});
+
 describe("production usages", () => {
 	for (const doc of components)
 		for (const usage of doc.usages)
@@ -100,12 +129,12 @@ test("Button defaults match the documented defaults", () => {
 	const rendered = attrs(render(createElement(Button, null, "x")));
 	expect(rendered.variant).toBe(unquote(button.props.variant.default));
 	expect(rendered.size).toBe(unquote(button.props.size.default));
-	expect(rendered.type).toBe(unquote(button.nativeProps.type.default));
+	expect(rendered.type).toBe(unquote(button.nativeProps.props.type.default));
 });
 
 test("IconButton defaults match the documented defaults", () => {
 	const rendered = attrs(render(createElement(IconButton, { icon: () => null, label: "x" })));
 	expect(rendered.variant).toBe(unquote(iconButton.props.variant.default));
 	expect(rendered.size).toBe(unquote(iconButton.props.size.default));
-	expect(rendered.type).toBe(unquote(iconButton.nativeProps.type.default));
+	expect(rendered.type).toBe(unquote(iconButton.nativeProps.props.type.default));
 });

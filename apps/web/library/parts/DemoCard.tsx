@@ -41,7 +41,7 @@ export function DemoCard({
 			</div>
 			<div className="flex flex-col gap-8 border-border-default border-t px-24 pt-16 pb-12">
 				<h3 className="tr-title-section text-text-default">{title}</h3>
-				<p className="tr-text-ui text-text-muted">
+				<p className="tr-text-ui text-text-muted [overflow-wrap:anywhere]">
 					<InlineMarkdown source={description} />
 				</p>
 			</div>

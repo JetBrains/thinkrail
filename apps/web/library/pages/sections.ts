@@ -1,9 +1,7 @@
 export const sectionTitles = {
 	when: "When to use",
 	examples: "Examples",
-	variants: "Variants and sizes",
 	states: "States",
-	tone: "Tone",
 	playground: "Playground",
 	api: "API",
 	accessibility: "Accessibility",

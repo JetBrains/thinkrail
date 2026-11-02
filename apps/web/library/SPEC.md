@@ -11,8 +11,10 @@ references: [module-ui, submodule-web-themes]
 
 The single home of ThinkRail's design system. Designers, developers and agents read every design rule
 here, see the foundations (colour, typography, spacing, radius, icons, themes) rendered live from the
-files the app is built from, inspect real components and copy working examples. It covers `Button` and
-`IconButton` today; every shared component gets a page here when it is added or reworked. The design
+files the app is built from, inspect real components and copy working examples. It has a page for every
+reusable building block — each shared primitive and each app component rendered from two or more files
+— grouped as General, Navigation, Data entry, Data display, Feedback, Overlay and Layout; a family that
+exists only as inline JSX gets its page once one implementation becomes a component. The design
 specs `web-color`, `web-typography`, `web-spacing` and `web-notices`, `apps/web/UI-TERMINOLOGY.md`,
 `packages/ui/COMPONENTS.md` and the root `DESIGN.md` are generated from this module.
 
@@ -24,8 +26,15 @@ specs `web-color`, `web-typography`, `web-spacing` and `web-notices`, `apps/web/
   `src/index.css` and adds only its own directory as a Tailwind source, so components render with the
   exact production stylesheet and tokens. `src/index.css` roots Tailwind's detection at `src/`, so the
   library's chrome classes stay out of the app's CSS.
-- **Production source only.** Pages render components imported from `@thinkrail/ui/*` and themes from
-  `@/themes` (`getThemes` / `applyTheme`, every bundled theme). No specimen is redrawn with
+- **Production source only.** Pages render components imported from where they live — `@thinkrail/ui/*`,
+  app components under `@/…` and resource-renderer components from `packages/resource-renderers/src` —
+  and themes from `@/themes` (`getThemes` / `applyTheme`, every bundled theme). A page may import a
+  component from its own module even when the owning module does not export it through its barrel
+  (`@/shell/layout/workbenchTabs`, `StaleComposerNotice`): the library documents components where
+  they are, and these are read-only documentation edges — nothing imports the library, and a page
+  never re-exports, wraps or restyles what it imports. The shell mounts the app's own `Toaster` once, as
+  `Shell` does, so toast examples raise real toasts through `pushToast` / `toast.*` from `@/store`; the
+  store is used for nothing else. No specimen is redrawn with
   handwritten markup, no screenshot stands in for a component, and states are real interactions or
   real props — never forced pseudo-classes or overriding classes.
 - **One authored source for words; values stay in their files.** Values live where the app reads them —
@@ -33,7 +42,15 @@ specs `web-color`, `web-typography`, `web-spacing` and `web-notices`, `apps/web/
   are edited only there. Every word lives in `content/`: `guides/`, `foundations/`, `patterns/` and
   `vocabulary/` are Markdown pages registered in `content/index.ts`; `components/<name>.ts` are typed
   component docs with `examples/<component>/<id>.tsx` as runnable files shown verbatim, and
-  `components/button-system.md` is the Button system's implementation contract. Prose never restates a
+  `components/button-system.md` is the Button system's implementation contract. A component doc is generic
+  (variants, sizes, tones, native props and a contract are optional); anything specific to one
+  component — a variant × size matrix, a live state matrix, a playground — renders from its
+  `showcase/<slug>.tsx`, registered in `showcase/index.ts`, while its words stay in the doc: `sections`
+  (id, title, description, an optional static guidance table) are rendered in order, each followed by
+  the showcase `Render` with the same id; a section with id `states` gets the doc's state table
+  appended, otherwise a plain States section is added. The showcase also holds an optional declarative
+  playground (choice and flag controls, a live preview, generated code). The generated Markdown carries
+  every section's words, so nothing a reader needs lives only in rendering code. Prose never restates a
   value: a `:::live <block>` line renders one of the `live/` blocks, which import the JSON, `tokens.css`
   (raw), the bundled manifests and `public/custom-icons/` at build time, reusing the generators' own
   pure models (`scripts/typographyModel.ts`, `scripts/colorsModel.ts`). Variant, size and tone tables
@@ -78,10 +95,12 @@ specs `web-color`, `web-typography`, `web-spacing` and `web-notices`, `apps/web/
   authored Markdown file is registered and exists, every live block is known and used, page and
   repository links resolve, each page's value sources exist, examples and
   their documentation match one-to-one, each overview `preview` names one of them, every listed
-  production usage still uses the component, and the documented defaults equal the rendered ones.
+  production usage still uses the component, every showcase section has its words in the doc, and the
+  Button and IconButton defaults equal the rendered ones.
 - `tsc -p library` (part of `apps/web` `typecheck`).
-- `library:verify` drives a running library in Chromium: the overview, its search and cards, sidebar
-  and header navigation, every theme, keyboard focus,
+- `library:verify` drives a running library in Chromium: every component page (all of its examples
+  render, no sideways scroll, no runtime errors), the overview, its search and cards, sidebar and header
+  navigation, the foundation live blocks, every theme, keyboard focus,
   tooltips (including on a disabled button), loading blocking a second click, menu-open selected state,
   collapsed and revealed example code, copy-to-clipboard, the page outline, the narrow-screen drawer and
   the absence of runtime errors.
