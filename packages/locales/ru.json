@@ -2161,6 +2161,7 @@
 	"settings.providers.submitFailed": "Не удалось отправить",
 	"settings.providers.subscriptionsDescription": "Используйте существующую подписку Claude, ChatGPT или Copilot — API-ключ не нужен.",
 	"settings.providers.subscriptionsGroup": "Подписки",
+	"settings.proxy.changeFailed": "Не удалось изменить настройку прокси",
 	"settings.proxy.description": "Выберите, как ThinkRail подключается к сети для обновлений и запросов к моделям.",
 	"settings.proxy.host": "Хост",
 	"settings.proxy.hostPlaceholder": "127.0.0.1",

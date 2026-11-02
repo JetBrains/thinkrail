@@ -1,10 +1,17 @@
 import { expect, test } from "bun:test";
+import type { ProxyMode } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { type ManualProxy, type ProxyMode, ProxyPage } from "./ProxySettings";
+import { type ManualProxy, ProxyPage } from "./ProxySettings";
 
 const render = (mode: ProxyMode, manual: ManualProxy = { host: "", port: "" }) =>
 	renderToStaticMarkup(
-		<ProxyPage mode={mode} manual={manual} onSelectMode={() => {}} onManualChange={() => {}} />,
+		<ProxyPage
+			mode={mode}
+			manual={manual}
+			onSelectMode={() => {}}
+			onManualDraft={() => {}}
+			onManualCommit={() => {}}
+		/>,
 	);
 
 test("renders all three modes with the active one highlighted", () => {

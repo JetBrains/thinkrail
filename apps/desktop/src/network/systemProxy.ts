@@ -1,4 +1,5 @@
 import { dlopen, FFIType, ptr } from "bun:ffi";
+import type { SystemProxyInfo } from "@thinkrail/contracts";
 
 const HKEY_CURRENT_USER = 0x80000001n;
 const INTERNET_SETTINGS_SUBKEY = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
@@ -6,9 +7,13 @@ const RRF_RT_REG_SZ = 0x00000002;
 const RRF_RT_REG_DWORD = 0x00000010;
 const ERROR_SUCCESS = 0;
 
+/** Windows excludes the loopback interface from the proxy by default. */
+const DEFAULT_LOOPBACK = ["localhost", "127.0.0.1"];
+
 export interface WindowsInternetSettings {
 	proxyEnable: number;
 	proxyServer: string;
+	proxyOverride: string;
 }
 
 function wide(text: string): Buffer {
@@ -64,38 +69,83 @@ function regGetValue(valueName: string, flags: number, byteSize: number): Buffer
 	return data;
 }
 
+function readRegistryDword(valueName: string): number | null {
+	const data = regGetValue(valueName, RRF_RT_REG_DWORD, 4);
+	return data ? data.readUInt32LE(0) : null;
+}
+
+function readRegistryString(valueName: string): string | null {
+	const data = regGetValue(valueName, RRF_RT_REG_SZ, 8192);
+	return data ? data.toString("utf16le").replace(/\0+$/, "") : null;
+}
+
 function readInternetSettings(): WindowsInternetSettings | null {
 	try {
-		const proxyEnable = regGetValue("ProxyEnable", RRF_RT_REG_DWORD, 4);
-		if (!proxyEnable) return null;
-		const proxyServer = regGetValue("ProxyServer", RRF_RT_REG_SZ, 4096);
-		if (!proxyServer) return null;
+		const proxyEnable = readRegistryDword("ProxyEnable");
+		if (proxyEnable === null) return null;
 		return {
-			proxyEnable: proxyEnable.readUInt32LE(0),
-			proxyServer: proxyServer.toString("utf16le").replace(/\0+$/, ""),
+			proxyEnable,
+			proxyServer: readRegistryString("ProxyServer") ?? "",
+			proxyOverride: readRegistryString("ProxyOverride") ?? "",
 		};
 	} catch {
 		return null;
 	}
 }
 
-/** Turn raw `ProxyEnable`/`ProxyServer` registry values into a single `http://` proxy URL. */
-export function proxyUrlFromSettings(settings: WindowsInternetSettings): string | null {
-	if (settings.proxyEnable === 0) return null;
-	const server = settings.proxyServer.trim();
-	if (!server) return null;
-	const segments = server.split(";");
-	const httpSegment = segments.find((segment) => /^http=/i.test(segment.trim()));
-	const candidate = (httpSegment ?? segments[0]).replace(/^http=/i, "").trim();
-	if (!candidate || candidate.startsWith("socks=")) return null;
-	const hostPort = candidate.replace(/^https?:\/\//i, "");
-	if (!/^[^\s:]+:\d+$/.test(hostPort)) return null;
-	return `http://${hostPort}`;
+function normalizeProxyTarget(raw: string): string | null {
+	const candidate = raw.trim();
+	if (!candidate || candidate.toLowerCase().startsWith("socks")) return null;
+	const hostPort = candidate.replace(/^https?:\/\//i, "").replace(/^https?=/i, "");
+	const match = /^([^:/\s]+):(\d{1,5})$/.exec(hostPort);
+	if (!match) return null;
+	const port = Number(match[2]);
+	if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+	return `http://${match[1]}:${port}`;
+}
+
+function parseBypass(proxyOverride: string): string[] {
+	const result: string[] = [];
+	for (const entry of proxyOverride.split(";")) {
+		const cleaned = entry.trim().replace(/^https?:\/\//i, "");
+		if (!cleaned || cleaned === "<local>") continue;
+		result.push(cleaned);
+	}
+	return result;
+}
+
+/**
+ * Resolve raw `ProxyEnable`/`ProxyServer`/`ProxyOverride` registry values into separate HTTP
+ * and HTTPS targets plus the bypass list. A bare `host:port` serves both protocols.
+ */
+export function proxyInfoFromSettings(settings: WindowsInternetSettings): SystemProxyInfo {
+	if (settings.proxyEnable === 0) {
+		return { httpProxy: null, httpsProxy: null, noProxy: [] };
+	}
+	let httpProxy: string | null = null;
+	let httpsProxy: string | null = null;
+	for (const segment of settings.proxyServer.split(";")) {
+		const selector = /^(https?)=(.+)$/i.exec(segment.trim());
+		if (selector) {
+			const target = normalizeProxyTarget(selector[2]);
+			if (!target) continue;
+			if (selector[1].toLowerCase() === "https") httpsProxy = target;
+			else httpProxy = target;
+		} else {
+			httpProxy ??= normalizeProxyTarget(segment);
+		}
+	}
+	httpsProxy ??= httpProxy;
+	return {
+		httpProxy,
+		httpsProxy,
+		noProxy: [...DEFAULT_LOOPBACK, ...parseBypass(settings.proxyOverride)],
+	};
 }
 
 /** Read the operating system proxy. Windows-only in this change; other platforms report none. */
-export function readSystemProxy(platform: string = process.platform): string | null {
+export function readSystemProxy(platform: string = process.platform): SystemProxyInfo | null {
 	if (platform !== "win32") return null;
 	const settings = readInternetSettings();
-	return settings ? proxyUrlFromSettings(settings) : null;
+	return settings ? proxyInfoFromSettings(settings) : null;
 }

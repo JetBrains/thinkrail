@@ -12,6 +12,7 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
+	isProxyConfig,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isSystemThemePair,
@@ -69,6 +70,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	codeFontSize: true,
 	codeLigatures: true,
 	fontWeightOffset: true,
+	proxy: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -237,6 +239,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		disabledExtensions,
 		extensionSettings,
 		disabledPackages,
+		proxy,
 		...rest
 	} = runtimeUpdate;
 	const extensionSettingsUpdate =
@@ -308,6 +311,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	if (systemThemePair !== undefined && !isSystemThemePair(systemThemePair)) {
 		throw new Error("systemThemePair must contain light and dark theme ids");
 	}
+	if (proxy !== undefined && proxy !== null && !isProxyConfig(proxy)) {
+		throw new Error("proxy must be a valid proxy config or null");
+	}
 	const current = getConfig();
 	if (
 		runtimeUpdate.analyticsEnabled === true &&
@@ -366,6 +372,10 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	if (reviewEffort !== undefined) {
 		if (reviewEffort === null) delete next.reviewEffort;
 		else next.reviewEffort = reviewEffort;
+	}
+	if (proxy !== undefined) {
+		if (proxy === null) delete next.proxy;
+		else next.proxy = proxy;
 	}
 	saveConfig(next);
 	cached = next;

@@ -1753,6 +1753,7 @@
 	"settings.providers.submitFailed": "无法提交",
 	"settings.providers.subscriptionsDescription": "使用您现有的 Claude、ChatGPT 或 Copilot 套餐，无需 API 密钥。",
 	"settings.providers.subscriptionsGroup": "订阅",
+	"settings.proxy.changeFailed": "无法更改代理设置",
 	"settings.proxy.description": "选择 ThinkRail 访问网络以进行更新和模型请求的方式。",
 	"settings.proxy.host": "主机",
 	"settings.proxy.hostPlaceholder": "127.0.0.1",

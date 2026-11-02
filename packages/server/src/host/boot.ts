@@ -4,6 +4,8 @@ import { reportError } from "../analytics";
 import { initializeJbcentralRuntime } from "../auth";
 import { applyHostEnvironment } from "../environment";
 import { initLogging, logger } from "../log";
+import { applyProxyConfig, type SystemProxyResolver } from "../proxy";
+import { getConfig } from "../settings";
 import { installCrashLog } from "./crashLog";
 import { type CreateServerOptions, createServer, type RunningServer } from "./server";
 
@@ -18,6 +20,7 @@ export interface BootHostOptions {
 	hostUpdate?: CreateServerOptions["hostUpdate"];
 	verbose?: boolean;
 	resolveShellEnv?: boolean;
+	systemProxyResolver?: SystemProxyResolver;
 }
 
 const log = logger("host");
@@ -73,6 +76,7 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	const requested = options.port;
 	const port =
 		options.portMode === "free" ? await findFreePort(requested, options.host) : requested;
+	applyProxyConfig(getConfig(), options.systemProxyResolver ?? (() => null));
 	const running = await createServer({
 		port,
 		host: options.host,
@@ -81,6 +85,7 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 		...(options.appVersion ? { appVersion: options.appVersion } : {}),
 		...(options.analytics ? { analytics: options.analytics } : {}),
 		...(options.hostUpdate ? { hostUpdate: options.hostUpdate } : {}),
+		...(options.systemProxyResolver ? { systemProxyResolver: options.systemProxyResolver } : {}),
 	});
 	const server = attachProcessSignals(running);
 	log.info(`listening on port ${server.port}`);

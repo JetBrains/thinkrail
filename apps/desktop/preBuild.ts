@@ -161,6 +161,7 @@ export async function startDesktopHost(options) {
       build: "desktop",
       appRoot: options.runtimeDir + "/..",
       ...(options.openExternal ? { openExternal: options.openExternal } : {}),
+      ...(options.systemProxyResolver ? { systemProxyResolver: options.systemProxyResolver } : {}),
     },
   });
   return { ...host, reportError: reportDesktopError };
