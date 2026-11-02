@@ -83,9 +83,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `server.welcome` snapshot lands. Every connection-status transition clears `protocolVersion`, so UI
   capabilities remain unavailable between sockets and until the current socket's welcome is installed.
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
-  config?, hostPlatform?, hostUpdate?)`** installs protocol + both sorted project views + optional config,
-  host platform, optional host-update lifecycle snapshot + navigation repair and then advances that readiness
+  config?, hostPlatform?, hostUpdate?, hostAppVersion?, speech?)`** installs protocol + both sorted project views + optional config,
+  host platform, optional host-update lifecycle snapshot, the voice-input **`speech`** status (`null` from a
+  pre-v103 host) + navigation repair and then advances that readiness
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
+  `installSpeechStatus` replaces `speech` whole on each `speech.changed` push.
   `installProjectSnapshot` remains the project-only primitive for focused
   callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
   known open + closed project; the server omits closed records whose folder no longer exists.

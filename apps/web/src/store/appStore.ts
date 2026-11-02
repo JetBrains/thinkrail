@@ -32,6 +32,7 @@ import type {
 	SessionSummary,
 	SlashCommandInfo,
 	SpecGraphNode,
+	SpeechStatus,
 	SystemThemePair,
 	TerminalTabInfo,
 	TerminalWindowsShell,
@@ -1113,6 +1114,9 @@ interface AppState {
 	fontWeightOffset: number;
 	userFonts: UserFontsSnapshot | null;
 	installUserFonts: (snapshot: UserFontsSnapshot | null) => void;
+	/** Voice input as the host reports it; `null` before a v103 welcome or from an older host. */
+	speech: SpeechStatus | null;
+	installSpeechStatus: (status: SpeechStatus | null) => void;
 	onboardingDismissed: boolean;
 	onboardingWizard: OnboardingWizardGate;
 	customLayoutPresets: LayoutPreset[];
@@ -1127,6 +1131,7 @@ interface AppState {
 		hostPlatform?: HostPlatform,
 		hostUpdate?: HostUpdateNotice,
 		hostAppVersion?: string,
+		speech?: SpeechStatus,
 	) => void;
 	applyHostUpdate: (hostUpdate: HostUpdateNotice) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
@@ -2407,6 +2412,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fontWeightOffset: DEFAULT_CONFIG.fontWeightOffset,
 	userFonts: null,
 	installUserFonts: (snapshot) => set({ userFonts: snapshot }),
+	speech: null,
+	installSpeechStatus: (speech) => set({ speech }),
 	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
 	onboardingWizard: "pending",
 	toasts: [],
@@ -2586,6 +2593,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		hostPlatform,
 		hostUpdate,
 		hostAppVersion,
+		speech,
 	) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
@@ -2601,6 +2609,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				hostPlatform: hostPlatform ?? null,
 				hostUpdate: hostUpdate ?? null,
 				hostAppVersion: hostAppVersion ?? null,
+				speech: speech ?? null,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),

@@ -12,6 +12,7 @@ import type {
 	SessionDeletedPayload,
 	SessionEventPayload,
 	SessionStateRecord,
+	SpeechStatus,
 	TurnChangeSet,
 	Workspace,
 	WorkspaceFsChangedPayload,
@@ -30,6 +31,7 @@ import {
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
+	SPEECH_PROTOCOL_VERSION,
 	TOOL_RESPONSE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
@@ -56,6 +58,10 @@ export function supportsPiPackages(protocolVersion: number | null): boolean {
 
 export function supportsFonts(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= FONTS_PROTOCOL_VERSION;
+}
+
+export function supportsSpeech(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= SPEECH_PROTOCOL_VERSION;
 }
 
 export function supportsToolResponses(protocolVersion: number | null): boolean {
@@ -280,6 +286,7 @@ export function initTransport(): WsTransport {
 					: undefined,
 				welcome.hostUpdate,
 				typeof welcome.appVersion === "string" ? welcome.appVersion : undefined,
+				welcome.speech,
 			);
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);
@@ -384,6 +391,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.fontsChanged, () => {
 		refreshUserFonts(useAppStore.getState().connectionGeneration);
+	});
+
+	transport.subscribe(WS_CHANNELS.speechChanged, (data) => {
+		useAppStore.getState().installSpeechStatus(data as SpeechStatus);
 	});
 
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
