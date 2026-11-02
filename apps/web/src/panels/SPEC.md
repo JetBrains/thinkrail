@@ -647,7 +647,15 @@ a project picker, the prompt hero, and the reused
   shared by Language, Custom themes and Custom fonts; `saveSettings` is the one `settings.update` call that
   toasts its failure. Popovers inside the dialog render into the dialog element
   (`settingsDialogContainer`), because Radix's scroll lock cancels wheel and touch scrolling anywhere
-  outside it. Free-text settings and the font weight slider share one **auto-save input pattern**
+  outside it (the Models pickers missed this, so their lists ignored the wheel: #607). The dialog clips
+  overflow, so these popovers also take it as their collision boundary and cap their height at Radix's
+  available height; the model popover caps its width too (without that cap, arrow keys scrolled a
+  narrow dialog sideways). Under the dialog's focus scope, a popover whose trigger can't take focus back
+  on close leaves focus on the dialog element, so the Models pickers use `aria-disabled`, not
+  `disabled`, while busy; `FontPicker` doesn't yet. A modal `DropdownMenu` holds its own scroll lock and
+  may stay on `body`; the Layout "Add new layout" and Templates delete popovers still render there (only
+  a long layout name can't be swiped sideways in its field).
+  Free-text settings and the font weight slider share one **auto-save input pattern**
   (`settingsDraft.useSettingsDraft`): Enter, blur or a slider release saves a valid, changed value once
   (no Save/Apply button); an invalid draft stays visible with `aria-invalid` and a range message linked by
   `aria-describedby`, and is never sent; Escape reverts to the authoritative value; the input carries
