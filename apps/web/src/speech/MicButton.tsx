@@ -32,6 +32,10 @@ export interface MicButtonProps {
 	scope?: DictationScope;
 	/** The chat composer: ⌘⇧Space reaches it when no other voice field is focused. */
 	fallback?: boolean;
+	/** The field cannot take text right now (e.g. it is disabled); a running dictation stops. */
+	disabled?: boolean;
+	/** `s` fits the corner gutter of a dialog field. */
+	size?: "s" | "m";
 	className?: string;
 }
 
@@ -153,6 +157,8 @@ export function MicButton({
 	onListeningChange,
 	scope,
 	fallback = false,
+	disabled = false,
+	size = "m",
 	className,
 }: MicButtonProps) {
 	const t = useT();
@@ -165,9 +171,9 @@ export function MicButton({
 	const state = micState(status, availability, blockedMicrophone(snapshot.error?.code));
 	const mine = snapshot.ownerId === id;
 	const active = mine && snapshot.phase !== "idle";
-	const latest = useRef({ apply, onListeningChange, scope, state });
+	const latest = useRef({ apply, onListeningChange, scope, state, disabled });
 	useInsertionEffect(() => {
-		latest.current = { apply, onListeningChange, scope, state };
+		latest.current = { apply, onListeningChange, scope, state, disabled };
 	});
 
 	const begin = useCallback(() => {
@@ -193,6 +199,7 @@ export function MicButton({
 			return false;
 		}
 		const current = latest.current.state;
+		if (latest.current.disabled) return false;
 		if (current.kind === "ready") {
 			begin();
 			return true;
@@ -214,6 +221,10 @@ export function MicButton({
 	);
 
 	useEffect(() => () => dictation.stop(id), [id]);
+
+	useEffect(() => {
+		if (disabled) dictation.stop(id);
+	}, [disabled, id]);
 
 	useEffect(() => {
 		const element = fieldRef.current;
@@ -298,7 +309,8 @@ export function MicButton({
 						label={label}
 						tone={active ? "danger" : undefined}
 						selected={active}
-						disabled={state.kind === "unavailable"}
+						size={size}
+						disabled={state.kind === "unavailable" || disabled}
 						aria-busy={busy}
 						aria-pressed={active}
 						{...(state.kind === "offer"

@@ -599,52 +599,56 @@ export function NewWorkspaceDialog({
 						testId="ws-prompt-images"
 						className={PROMPT_IMAGE_CHIPS_PADDING.dialog}
 					/>
-					<Textarea
-						ref={promptRef}
-						data-testid="ws-prompt"
-						value={prompt}
-						disabled={creating}
-						{...imagePasteDropHandlers(attachedImages)}
-						onChange={(e) => {
-							const next = e.target.value;
-							const nextSlotSession = slotSession
-								? applyTemplateSlotEdit(prompt, next, e.target.selectionStart, slotSession)
-								: null;
-							updatePromptDraft(next, nextSlotSession);
-						}}
-						placeholder={t("panels.newWorkspace.promptPlaceholder")}
-						spellCheck={false}
-						rows={6}
-						className="min-h-[160px] pr-24"
-						onKeyDown={(e) => {
-							if (isPromptKeyEventComposing(e.nativeEvent)) return;
-							if (slotSession && !slashCompletion.open) {
-								if (e.key === "Tab") {
-									e.preventDefault();
-									e.stopPropagation();
-									stepPromptSlot(e.shiftKey ? -1 : 1);
-									return;
+					<div className="relative">
+						<Textarea
+							ref={promptRef}
+							data-testid="ws-prompt"
+							value={prompt}
+							disabled={creating}
+							{...imagePasteDropHandlers(attachedImages)}
+							onChange={(e) => {
+								const next = e.target.value;
+								const nextSlotSession = slotSession
+									? applyTemplateSlotEdit(prompt, next, e.target.selectionStart, slotSession)
+									: null;
+								updatePromptDraft(next, nextSlotSession);
+							}}
+							placeholder={t("panels.newWorkspace.promptPlaceholder")}
+							spellCheck={false}
+							rows={6}
+							className="min-h-[160px] pr-24"
+							onKeyDown={(e) => {
+								if (isPromptKeyEventComposing(e.nativeEvent)) return;
+								if (slotSession && !slashCompletion.open) {
+									if (e.key === "Tab") {
+										e.preventDefault();
+										e.stopPropagation();
+										stepPromptSlot(e.shiftKey ? -1 : 1);
+										return;
+									}
+									if (e.key === "Escape") {
+										e.preventDefault();
+										e.stopPropagation();
+										updatePromptDraft(prompt, null);
+										return;
+									}
 								}
-								if (e.key === "Escape") {
+								if (slashCompletion.handleKeyDown(e)) return;
+								if (e.key === "Enter" && !e.shiftKey) {
 									e.preventDefault();
-									e.stopPropagation();
-									updatePromptDraft(prompt, null);
-									return;
+									if (submitEnabled) void create();
 								}
-							}
-							if (slashCompletion.handleKeyDown(e)) return;
-							if (e.key === "Enter" && !e.shiftKey) {
-								e.preventDefault();
-								if (submitEnabled) void create();
-							}
-						}}
-					/>
-					<MicButton
-						fieldRef={promptRef}
-						apply={applyDictation}
-						onListeningChange={setDictating}
-						className="absolute right-4 bottom-4"
-					/>
+							}}
+						/>
+						<MicButton
+							fieldRef={promptRef}
+							apply={applyDictation}
+							onListeningChange={setDictating}
+							disabled={creating}
+							size="s"
+							className="absolute right-2 bottom-2"
+						/>
+					</div>
 					{slashCompletion.open ? (
 						<SlashCommandMenu
 							commands={slashCompletion.matches}

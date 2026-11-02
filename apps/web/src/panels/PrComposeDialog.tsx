@@ -118,7 +118,8 @@ function ComposeForm({
 	const [source, setSource] = useState(sourcing?.source);
 	const [template, setTemplate] = useState(sourcing?.templates[0]);
 	const [working, setWorking] = useState<"source" | "generate" | null>(null);
-	const [dictating, setDictating] = useState(false);
+	const [titleDictating, setTitleDictating] = useState(false);
+	const [bodyDictating, setBodyDictating] = useState(false);
 	const titleRef = useRef<HTMLInputElement>(null);
 	const bodyRef = useRef<HTMLTextAreaElement>(null);
 	const applyTitle = useFieldApply(titleRef, setTitle);
@@ -169,8 +170,9 @@ function ComposeForm({
 					<MicButton
 						fieldRef={titleRef}
 						apply={applyTitle}
-						onListeningChange={setDictating}
-						className="absolute top-4 right-4"
+						onListeningChange={setTitleDictating}
+						size="s"
+						className="absolute top-8 right-2"
 					/>
 				</span>
 			</label>
@@ -231,8 +233,10 @@ function ComposeForm({
 					<MicButton
 						fieldRef={bodyRef}
 						apply={applyBody}
-						onListeningChange={setDictating}
-						className="absolute right-4 bottom-4"
+						onListeningChange={setBodyDictating}
+						disabled={working !== null}
+						size="s"
+						className="absolute right-2 bottom-2"
 					/>
 				</div>
 			</div>
@@ -264,7 +268,7 @@ function ComposeForm({
 				<Button
 					data-testid="open-pr-compose-submit"
 					iconLeft={GitPullRequestArrow}
-					disabled={locked || dictating || title.trim().length === 0}
+					disabled={locked || titleDictating || bodyDictating || title.trim().length === 0}
 					loading={busy}
 					onClick={() =>
 						onSubmit({
