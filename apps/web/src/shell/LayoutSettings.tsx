@@ -16,6 +16,7 @@ import { LAYOUT_PLAN_PRESET_PROTOCOL_VERSION, type LayoutPreset } from "@thinkra
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import { useMemo, useRef, useState } from "react";
@@ -249,6 +250,7 @@ export function LayoutSettings() {
 										value={renaming.name}
 										onChange={(event) => setRenaming({ id: preset.id, name: event.target.value })}
 										onKeyDown={(event) => {
+											if (isImeComposing(event.nativeEvent)) return;
 											if (event.key === "Enter") commitRename(preset.id);
 											if (event.key === "Escape") setRenaming(null);
 										}}

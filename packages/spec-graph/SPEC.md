@@ -31,8 +31,8 @@ used), and leaves every byte of the body untouched.
   and thinkrail (`additionalExtensionPaths` / `additionalSkillPaths`) load it — plus the **`pi-spec-graph/core`
   export** (the pi-free read model), consumable by hosts (thinkrail's server) without going through the
   agent. `tools/` stays internal.
-- **Allowed deps:** `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `typebox` (peer); `yaml`
-  (frontmatter parse/serialize); Node built-ins.
+- **Allowed deps:** `@earendil-works/pi-coding-agent`, `typebox` (peer); `yaml` (frontmatter
+  parse/serialize); Node built-ins.
 - **Forbidden:** any `@thinkrail/*` package — the dependency edge is one-way (thinkrail → this
   package), which is what keeps it portable.
 

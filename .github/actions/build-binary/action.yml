@@ -115,6 +115,10 @@ runs:
       shell: bash
       run: bun run smoke:binary "${{ steps.resolve-cli.outputs.path }}"
 
+    - name: Download the Electrobun toolchain
+      shell: bash
+      run: bash .github/scripts/prepare-electrobun.sh
+
     - name: Build and smoke desktop app
       shell: bash
       env:

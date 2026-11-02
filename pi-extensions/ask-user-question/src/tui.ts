@@ -44,9 +44,8 @@ import {
 type Row =
 	| { kind: "option"; index: number }
 	| { kind: "other" }
-	| { kind: "chat" }
-	| { kind: "question"; index: number }
-	| { kind: "submit" };
+	| { kind: "submit" }
+	| { kind: "chat" };
 
 type Mode = { kind: "browse" } | { kind: "other" } | { kind: "note"; label: string };
 
@@ -55,6 +54,7 @@ const MAX_PREVIEW_LINES = 24;
 const ROW_INDENT = 5;
 const NEEDS_CHOICE = "Choose an option first";
 const NEEDS_ANSWER = "Answer at least one question first, or press Esc to skip";
+const SUBMIT_LABEL = "Submit answers";
 
 function editorTheme(theme: Theme): EditorTheme {
 	return {
@@ -107,7 +107,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 		private readonly finish: (outcome: AskOutcome) => void,
 	) {
 		this.states = args.questions.map(() => emptyQuestionState());
-		this.cursors = [...args.questions.map(() => 0), args.questions.length];
+		this.cursors = args.questions.map(() => 0);
 		this.editor = new Editor(tui, editorTheme(theme));
 		this.editor.onSubmit = (text) => this.saveEditor(text, true);
 	}
@@ -126,12 +126,8 @@ export class QuestionnaireComponent implements Component, Focusable {
 		return this.args.questions.length > 1;
 	}
 
-	private get onReview(): boolean {
-		return this.multiple && this.page === this.args.questions.length;
-	}
-
 	private get lastPage(): number {
-		return this.multiple ? this.args.questions.length : 0;
+		return this.args.questions.length - 1;
 	}
 
 	private get cursor(): number {
@@ -155,16 +151,10 @@ export class QuestionnaireComponent implements Component, Focusable {
 	}
 
 	private rows(): Row[] {
-		if (this.onReview) {
-			return [
-				...this.args.questions.map((_, index): Row => ({ kind: "question", index })),
-				{ kind: "submit" },
-				{ kind: "chat" },
-			];
-		}
 		return [
 			...this.question().options.map((_, index): Row => ({ kind: "option", index })),
 			{ kind: "other" },
+			...(this.multiple && this.page === this.lastPage ? [{ kind: "submit" } as const] : []),
 			{ kind: "chat" },
 		];
 	}
@@ -232,7 +222,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 	private moveTo(cursor: number): void {
 		this.cursor = cursor;
 		const row = this.rows()[cursor];
-		if (row?.kind === "option" && !this.onReview && !this.question().multiSelect) {
+		if (row?.kind === "option" && !this.question().multiSelect) {
 			this.select(row.index);
 		}
 	}
@@ -250,7 +240,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 	}
 
 	private toggle(row: Row): void {
-		if (this.onReview || (row.kind !== "option" && row.kind !== "other")) {
+		if (row.kind === "chat" || row.kind === "submit") {
 			this.activate(row);
 			return;
 		}
@@ -284,9 +274,6 @@ export class QuestionnaireComponent implements Component, Focusable {
 			case "chat":
 				this.settle({ kind: "deferred", reason: "chat" });
 				return;
-			case "question":
-				this.goToPage(row.index);
-				return;
 			case "submit":
 				this.submit();
 				return;
@@ -305,14 +292,14 @@ export class QuestionnaireComponent implements Component, Focusable {
 			this.nudge = NEEDS_CHOICE;
 			return;
 		}
-		if (this.multiple) this.goToPage(this.page + 1);
+		if (this.page < this.lastPage) this.goToPage(this.page + 1);
 		else this.submit();
 	}
 
 	private submit(): void {
 		const answers = deriveAnswers(this.args.questions, this.states);
 		if (answers.length === 0) {
-			this.nudge = this.multiple ? NEEDS_ANSWER : NEEDS_CHOICE;
+			this.nudge = NEEDS_ANSWER;
 			return;
 		}
 		this.settle({ kind: "answered", result: { answers, cancelled: false } });
@@ -356,7 +343,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 		const rule = theme.fg("accent", "─".repeat(Math.max(1, width)));
 		const lines = [rule];
 		if (this.multiple) lines.push(...this.renderTabs(width), "");
-		lines.push(...(this.onReview ? this.renderReview(width) : this.renderQuestion(width)));
+		lines.push(...this.renderQuestion(width));
 		if (this.nudge)
 			lines.push("", ...wrapIndented(theme.fg("warning", `⚠ ${this.nudge}`), width, 1));
 		lines.push("", ...wrapIndented(theme.fg("dim", this.hint()), width, 1), rule);
@@ -373,10 +360,6 @@ export class QuestionnaireComponent implements Component, Focusable {
 			if (index === this.page) return theme.bg("selectedBg", theme.fg("text", label));
 			return theme.fg(answered ? "success" : "muted", label);
 		});
-		const review = " Review & submit ";
-		tabs.push(
-			this.onReview ? theme.bg("selectedBg", theme.fg("text", review)) : theme.fg("muted", review),
-		);
 		return wrapIndented(tabs.join(theme.fg("dim", "│")), width, 1);
 	}
 
@@ -488,6 +471,19 @@ export class QuestionnaireComponent implements Component, Focusable {
 				if (this.mode.kind === "other") lines.push(...this.renderEditor(width));
 				continue;
 			}
+			if (row.kind === "submit") {
+				const label = theme.bold(SUBMIT_LABEL);
+				lines.push(
+					"",
+					...wrapIndented(
+						focused ? theme.fg("accent", label) : label,
+						width,
+						ROW_INDENT,
+						` ${this.pointer(index)}   `,
+					),
+				);
+				continue;
+			}
 			lines.push(
 				...wrapIndented(
 					theme.fg(focused ? "accent" : "muted", CHAT_LABEL),
@@ -500,63 +496,10 @@ export class QuestionnaireComponent implements Component, Focusable {
 		return lines;
 	}
 
-	private renderReview(width: number): string[] {
-		const theme = this.theme;
-		const lines = [...wrapIndented(theme.bold("Review your answers"), width, 1), ""];
-		const unanswered: string[] = [];
-		for (const [index, question] of this.args.questions.entries()) {
-			const answer = deriveAnswer(question, index, this.states[index] ?? emptyQuestionState());
-			const header = headerOf(question, index);
-			lines.push(
-				...wrapIndented(
-					`${theme.fg("muted", header)}  ${theme.fg(index === this.cursor ? "accent" : "text", question.question)}`,
-					width,
-					ROW_INDENT,
-					` ${this.pointer(index)}   `,
-				),
-			);
-			if (!answer) {
-				unanswered.push(header);
-				lines.push(...wrapIndented(theme.fg("dim", "Not answered"), width, ROW_INDENT));
-				continue;
-			}
-			lines.push(
-				...wrapIndented(`${theme.fg("success", "✓")} ${answerSummary(answer)}`, width, ROW_INDENT),
-			);
-			for (const note of answer.notes?.split("\n") ?? []) {
-				lines.push(...wrapIndented(theme.fg("muted", `Note: ${note}`), width, ROW_INDENT));
-			}
-		}
-		const submitIndex = this.args.questions.length;
-		const submitLabel = theme.bold("Submit answers");
-		lines.push(
-			"",
-			...wrapIndented(
-				submitIndex === this.cursor ? theme.fg("accent", submitLabel) : submitLabel,
-				width,
-				ROW_INDENT,
-				` ${this.pointer(submitIndex)}   `,
-			),
-			...wrapIndented(
-				theme.fg(submitIndex + 1 === this.cursor ? "accent" : "muted", CHAT_LABEL),
-				width,
-				ROW_INDENT,
-				` ${this.pointer(submitIndex + 1)}   `,
-			),
-		);
-		if (unanswered.length > 0)
-			lines.push(
-				"",
-				...wrapIndented(theme.fg("warning", `⚠ Unanswered: ${unanswered.join(", ")}`), width, 1),
-			);
-		return lines;
-	}
-
 	private hint(): string {
 		if (this.mode.kind === "note") return "Enter save note · Shift+Enter new line · Esc back";
 		if (this.mode.kind === "other") return "Enter save · Shift+Enter new line · Esc back";
 		const pages = this.multiple ? " · ←→/Tab questions" : "";
-		if (this.onReview) return `↑↓ move · Enter open or submit${pages} · Esc skip`;
 		const choose = this.question().multiSelect
 			? "↑↓ move · Space toggle"
 			: "↑↓ move & select · Space select";

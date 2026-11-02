@@ -17,7 +17,7 @@ test("the default-model preference mirrors pi's provider defaults, in pi's order
 test("the preferred default follows pi's provider order before falling back to the first model", () => {
 	const available = [
 		{ provider: "openai", id: "gpt-4" },
-		{ provider: "openai", id: "gpt-5.5" },
+		{ provider: "openai", id: "gpt-6.1-sol" },
 		{ provider: "anthropic", id: "claude-opus-4-8" },
 	];
 	expect(preferredDefaultModel(available)).toEqual({
@@ -26,7 +26,7 @@ test("the preferred default follows pi's provider order before falling back to t
 	});
 	expect(preferredDefaultModel(available.slice(0, 2))).toEqual({
 		provider: "openai",
-		id: "gpt-5.5",
+		id: "gpt-6.1-sol",
 	});
 	expect(preferredDefaultModel([{ provider: "custom", id: "local" }])).toEqual({
 		provider: "custom",
