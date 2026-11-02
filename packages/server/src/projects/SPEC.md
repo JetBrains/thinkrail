@@ -50,7 +50,11 @@ bootstrap it into one so it can be opened.
   `notDirectory` — so the UI picks between opening, an init offer, or an error) and **`initProject`**
   (bootstrap a plain directory: `git init` + `git add -A` + an **allow-empty** initial commit — committing
   the folder's contents, or an empty commit when it is empty, so the repo gets a HEAD and `git worktree
-  add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir path throws).
+  add` works. The whole bootstrap runs through `gitAsync`, off the host event loop with a 30-minute
+  timeout on the bulk `add`/`commit`, so initialising a huge folder can never freeze the app. The
+  commit passes `-c maintenance.auto=false -c gc.auto=0`, so the first commit cannot trigger a
+  background `gc --auto`/repack that outlasts it. An already-a-repo path short-circuits to
+  `openProject`; a missing / non-dir path rejects).
   **`createProject(parentPath, name)`** is the start-from-nothing path: `name` must be one plain folder
   name (no separators, not `.`/`..`), the resolved parent is created when missing, the target folder is
   made — an existing **empty** folder is reused, a non-empty one or a file rejects — and then gets the same
