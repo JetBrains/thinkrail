@@ -263,13 +263,14 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   helper over entries or a file. Until then `delegation.test.ts` ("the subagent totals mirror matches pi's
   own totals for every spend source") pins parity with pi's `getSessionStats` on one transcript that
   carries every spend source, including off-branch spend; rerun it on every pi bump.
-- **Rollback of a failed usage append** — [[submodule-server-agent]], `recordSessionUsage`.
-  `SessionManager._appendEntry` adds the entry to memory and moves the leaf before `_persist`, and a
-  failed `appendFileSync` can leave a torn partial line. The host therefore restores the previous leaf
-  and truncates an existing transcript back to its pre-append size; `delegation.test.ts` pins both
-  ("a usage write pi kept only in memory never cuts the reopened history", "a torn usage append is cut
-  back…"). Remove the leaf restore when a failed persist leaves pi's memory and leaf unchanged; remove the
-  truncation only when pi also guarantees that a failed append leaves no torn bytes.
+- **Cut-back of a failed usage append** — [[submodule-server-agent]], `recordSessionUsage`. Since pi 1.5
+  (`#11460`) a failed `_persist` removes the entry from memory and restores the leaf, so the host's leaf
+  restore is gone and a failed append reports `false`. Pi still appends with one `appendFileSync`, which
+  can leave a torn partial line, so the host truncates an existing transcript back to its pre-append size;
+  `delegation.test.ts` pins both ("a failed usage write leaves pi's memory and leaf untouched…" against a
+  real read-only file, "a torn usage append is cut back…"). **Removal gate:** pi guarantees that a failed
+  append leaves no torn bytes. If pi ever stops rolling back memory, the first test fails: that is a
+  reason to reinstate the restore, not to weaken the test.
 
 - **Detached result hold** — [[module-pi-subagents]] (Result delivery) and
   [[module-pi-background-commands]], applied by [[submodule-server-agent]]'s `turn_end` and
