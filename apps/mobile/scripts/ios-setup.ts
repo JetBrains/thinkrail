@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync } from "node:fs";
+import { copyFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
 
@@ -9,6 +9,11 @@ const PLIST_BUDDY = "/usr/libexec/PlistBuddy";
 const URL_SCHEME = "thinkrail";
 const LOCAL_NETWORK_REASON = "Connect to ThinkRail running on your computer";
 const CAMERA_REASON = "Scan the pairing QR code ThinkRail prints on your computer";
+const APP_ICON_SOURCE = join(APP_ROOT, "../../packages/shared/assets/icon-ios.png");
+const APP_ICON_TARGET = join(
+	APP_ROOT,
+	"ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png",
+);
 
 if (!existsSync(join(APP_ROOT, "ios"))) {
 	if (!existsSync(join(APP_ROOT, "dist"))) await $`bun run build`.cwd(APP_ROOT);
@@ -31,3 +36,6 @@ if (!(await has("NSCameraUsageDescription"))) {
 	console.log("ios-setup: added the Camera usage description");
 }
 console.log("ios-setup: ios/ is ready");
+
+copyFileSync(APP_ICON_SOURCE, APP_ICON_TARGET);
+console.log("ios-setup: installed the ThinkRail app icon");

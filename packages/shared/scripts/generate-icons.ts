@@ -49,6 +49,15 @@ writeFileSync(join(assetsDir, "icon.ico"), Buffer.from(iconFile.generate()));
 const LINUX_ICON_SIZE = 512;
 writeFileSync(join(assetsDir, "icon.png"), pngAt(LINUX_ICON_SIZE));
 
+const IOS_ICON_SIZE = 1024;
+const fullBleedSvg = svg.toString("utf8").replace(/<rect([^>]*?) rx="\d+"/, "<rect$1");
+if (fullBleedSvg === svg.toString("utf8"))
+	throw new Error("icon.svg tile rect lost its rx; update the iOS render");
+writeFileSync(
+	join(assetsDir, "icon-ios.png"),
+	new Resvg(fullBleedSvg, { fitTo: { mode: "width", value: IOS_ICON_SIZE } }).render().asPng(),
+);
+
 console.log(
-	`generated ${MACOS_ICONSET_FILES.length} iconset frames, a ${WINDOWS_ICO_SIZES.length}-frame icon.ico, and icon.png from icon.svg`,
+	`generated ${MACOS_ICONSET_FILES.length} iconset frames, a ${WINDOWS_ICO_SIZES.length}-frame icon.ico, icon.png and icon-ios.png from icon.svg`,
 );

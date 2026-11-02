@@ -128,7 +128,9 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 - **/assets** — the native icon set: the hand-authored `icon.svg` and the rasters generated from it.
   Never hand-edit a raster; regenerate them with `bun run --cwd packages/shared generate-icons`
   (`@resvg/resvg-js` rasterizes straight from the vector, `resedit` packs the ICO). The outputs are the
-  macOS iconset, the Linux 512 px PNG, and the Windows ICO, whose path `windowsIconPath` exports.
+  macOS iconset, the Linux 512 px PNG, the Windows ICO, whose path `windowsIconPath` exports, and
+  `icon-ios.png` — a 1024 px full-bleed square (the tile's corner radius dropped, since iOS masks its own
+  corners) that `apps/mobile`'s `ios-setup` installs as the iPhone app icon.
   - **Artwork.** The mark keeps its rounded-square silhouette: the ThinkRail glyph in the dark-family
     brand green (`#8dff4f`) on a solid black tile. Translucent glass, highlights, and decorative edging
     are excluded so small taskbar frames stay crisp.

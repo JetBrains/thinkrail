@@ -67,7 +67,8 @@ setting. The native shell's background is the Dark palette's `background`, read 
 
 `bun run mobile:ios` (root) builds `dist/`, runs `scripts/ios-setup.ts` (creates `ios/` with
 `cap add ios` when missing, then idempotently registers the `thinkrail` URL scheme and the Local Network
-and Camera usage descriptions in `Info.plist`), syncs, and opens Xcode. `ios/` is generated per machine and
+and Camera usage descriptions in `Info.plist`, and installs the app icon — `packages/shared/assets/icon-ios.png`,
+the full-bleed iOS render of the one ThinkRail icon source, so the phone and desktop icons cannot drift), syncs, and opens Xcode. `ios/` is generated per machine and
 git-ignored, so the setup script is the only place native configuration is written. See
 `RUNBOOK-mobile.md` for signing and on-device steps.
 
