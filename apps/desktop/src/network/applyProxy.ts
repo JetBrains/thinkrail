@@ -7,9 +7,13 @@ export interface ApplyProxyDependencies {
 	env: Record<string, string | undefined>;
 }
 
-/** A missing or unknown preference value falls back to the system proxy, matching JetBrains IDEs. */
-export function resolveProxyMode(raw: unknown): ProxyMode {
-	return raw === "manual" || raw === "none" ? raw : "system";
+/**
+ * An absent or unknown preference resolves to `null`: the host must leave any proxy
+ * variables established by the launch environment or Settings → Environment untouched.
+ * Only an explicitly stored mode overrides them.
+ */
+export function resolveProxyMode(raw: unknown): ProxyMode | null {
+	return raw === "system" || raw === "manual" || raw === "none" ? raw : null;
 }
 
 /** Normalize a user-supplied `host:port` or `http(s)://host:port` into an `http://` proxy URL. */
@@ -47,7 +51,9 @@ export function applyProxySettings(
 	manual: unknown,
 	dependencies: ApplyProxyDependencies,
 ): string | null {
-	const effective = effectiveProxyUrl(resolveProxyMode(mode), manual, dependencies.readSystemProxy);
+	const resolved = resolveProxyMode(mode);
+	if (resolved === null) return null;
+	const effective = effectiveProxyUrl(resolved, manual, dependencies.readSystemProxy);
 	for (const name of PROXY_VARIABLE_NAMES) {
 		if (effective) dependencies.env[name] = effective;
 		else delete dependencies.env[name];

@@ -132,8 +132,7 @@ export function ProxySettings() {
 	const select = (next: ProxyMode) => {
 		setMode(next);
 		if (!storage) return;
-		if (next === "system") storage.removeItem(PROXY_MODE_KEY);
-		else storage.setItem(PROXY_MODE_KEY, next);
+		storage.setItem(PROXY_MODE_KEY, next);
 	};
 
 	const updateManual = (next: ManualProxy) => {
