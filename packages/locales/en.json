@@ -814,6 +814,7 @@
 	"mobile.project.empty": "This project has no workspaces yet.",
 	"mobile.projects.addHint": "Run thinkrail --remote on the computer, then scan the QR code it prints.",
 	"mobile.projects.addHost": "Add computer",
+	"mobile.projects.connecting": "Connecting to {{host}}…",
 	"mobile.projects.empty": "No projects yet. Open one in ThinkRail on your computer and it appears here.",
 	"mobile.projects.title": "Projects",
 	"mobile.projects.unreachable": "Can't reach {{host}} ({{reason}}). Check that thinkrail --remote is running and this phone is on the same Wi‑Fi.",

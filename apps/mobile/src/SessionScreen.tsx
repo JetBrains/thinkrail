@@ -28,7 +28,7 @@ import {
 import { useT } from "@thinkrail/locales/react";
 import type { RemoteSessionsController } from "@thinkrail/remote-client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Notice, Screen } from "./layout";
+import { Loader, Notice, Screen } from "./layout";
 import { useHostRequest } from "./useHostRequest";
 
 export interface OpenSession {
@@ -269,7 +269,7 @@ export function SessionScreen({
 						{loadError ? (
 							<Notice text={t("mobile.list.failed", { reason: loadError })} alert />
 						) : messages === null ? (
-							<Notice text={t("mobile.session.loading")} />
+							<Loader text={t("mobile.session.loading")} />
 						) : rows.length === 0 ? (
 							<Notice text={t("mobile.session.empty")} />
 						) : (

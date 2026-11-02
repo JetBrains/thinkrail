@@ -15,8 +15,9 @@ import type {
 import { AttentionDot } from "@thinkrail/ui/attention-dot";
 import { IconButton } from "@thinkrail/ui/button";
 import { ProjectGlyph, WorkspaceGlyph, WorkspaceLabel } from "@thinkrail/ui/project-tree";
+import { RunningIcon } from "@thinkrail/ui/running-icon";
 import type { ReactNode } from "react";
-import { LoadedList, Screen } from "./layout";
+import { LoadedList, Loader, Screen } from "./layout";
 import { scopeStatus } from "./status";
 import { useHostRequest } from "./useHostRequest";
 
@@ -130,7 +131,8 @@ function HostProjects({
 	onOpen: (project: Project, workspace: Workspace) => void;
 }) {
 	const t = useT();
-	const loaded = useHostRequest<Project[]>(controller.clientFor(host.hostKey), "project.list", {});
+	const client = controller.clientFor(host.hostKey);
+	const loaded = useHostRequest<Project[]>(client, "project.list", {});
 	const open =
 		loaded.kind === "ready" ? { ...loaded, value: loaded.value.filter((p) => !p.closed) } : loaded;
 
@@ -139,7 +141,15 @@ function HostProjects({
 			{heading ? (
 				<h2 className="m-0 px-16 pt-12 pb-4 text-text-subtle tr-text-eyebrow">{host.label}</h2>
 			) : null}
-			<LoadedList loaded={open} empty={t("mobile.projects.empty")}>
+			<LoadedList
+				loaded={open}
+				empty={t("mobile.projects.empty")}
+				loading={
+					client ? undefined : (
+						<Loader text={t("mobile.projects.connecting", { host: host.label })} />
+					)
+				}
+			>
 				{(projects) =>
 					projects.map((project) => {
 						const key = expansionKey(host.hostKey, project.id);
@@ -218,7 +228,19 @@ function ProjectWorkspaces({
 			: loaded;
 
 	return (
-		<LoadedList loaded={live} empty={t("mobile.project.empty")}>
+		<LoadedList
+			loaded={live}
+			empty={t("mobile.project.empty")}
+			loading={
+				<div
+					role="status"
+					className="flex min-h-touch items-center gap-8 pr-12 pl-40 text-text-muted tr-text-ui"
+				>
+					<RunningIcon className="size-14 text-primary" />
+					{t("mobile.list.loading")}
+				</div>
+			}
+		>
 			{(workspaces) =>
 				workspaces.map((workspace) => {
 					const status = statusOf(workspace);

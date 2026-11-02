@@ -103,18 +103,31 @@ export function ListRow({
 export function LoadedList<T>({
 	loaded,
 	empty,
+	loading,
 	children,
 }: {
 	loaded: Loaded<T[]>;
 	empty: string;
+	/** Replaces the full-screen loader, e.g. with a row inside the tree. */
+	loading?: ReactNode;
 	children: (rows: T[]) => ReactNode;
 }) {
 	const t = useT();
-	if (loaded.kind === "loading") return <Notice text={t("mobile.list.loading")} />;
+	if (loaded.kind === "loading") return loading ?? <Loader text={t("mobile.list.loading")} />;
 	if (loaded.kind === "failed")
 		return <Notice text={t("mobile.list.failed", { reason: loaded.reason })} alert />;
 	if (loaded.value.length === 0) return <Notice text={empty} />;
 	return <ul className="m-0 list-none p-0">{children(loaded.value)}</ul>;
+}
+
+/** The full-screen wait: the IDE's animated R mark, large, over a caption. */
+export function Loader({ text }: { text: string }) {
+	return (
+		<div role="status" className="flex flex-col items-center gap-16 px-24 pt-64 pb-40 text-center">
+			<RunningIcon className="size-56 text-primary" />
+			<span className="text-text-muted tr-text-reading">{text}</span>
+		</div>
+	);
 }
 
 export function Notice({ text, alert = false }: { text: string; alert?: boolean }) {

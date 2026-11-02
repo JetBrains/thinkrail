@@ -36,7 +36,7 @@ IDE. No file tree, diffs, terminals, layout, or settings. No cloud account: the 
   `session.respondToTool`). It re-reads `session.getMessages` (coalesced 400ms) on the session's pi events
   rather than reducing the event stream; `main.tsx` registers the built-in tool cards and mounts the
   `TooltipProvider` the composer needs;
-  `layout.tsx` (`Screen` frame, `ListRow`, loading/failed/empty states), `status.ts` (row marks from
+  `layout.tsx` (`Screen` frame, `ListRow`, loading/failed/empty states — a screen waits on `Loader`, the shared `RunningIcon` R mark at 56px over a caption: "Connecting to …" until a host's channel is up, then "Loading…"; a project expanding in the tree waits on an inline 14px one), `status.ts` (row marks from
   contracts' `sessionAttention`: the shared `RunningIcon` replaces the row glyph while a session in scope
   runs, the shared `AttentionDot` shows while one needs input or has an unread result — the IDE tree's
   vocabulary), `useHostRequest.ts` (one wire read per screen), `scanPairLink.ts` (the in-app QR scan via
