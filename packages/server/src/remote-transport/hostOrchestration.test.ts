@@ -38,7 +38,7 @@ test("host orchestration pairs a device over the handshake and opens a working W
 			resolveDevice = r;
 		});
 
-		const peer = createWeriftHostPeer();
+		const peer = createWeriftHostPeer([]);
 		const session = createHostSession({
 			handshake: createHostHandshake({
 				newChallenge,

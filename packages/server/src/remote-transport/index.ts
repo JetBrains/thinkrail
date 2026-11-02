@@ -8,6 +8,7 @@ export {
 } from "./hostBrokerClient";
 export { createWeriftHostPeer, type HostPeer, type HostPeerSignal } from "./hostPeer";
 export { createHostSession, type HostSession, type HostSessionDeps } from "./hostSession";
+export { type LocalRelay, type RelayAddress, type RelayRoute, startLocalRelay } from "./localRelay";
 export { type RemoteAccess, type RemoteAccessOptions, startRemoteAccess } from "./remoteAccess";
 export {
 	bridgeRemoteWire,

@@ -95,11 +95,23 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	const remote = server.remote;
 	if (remote) {
 		const projectRef = options.projectDir ? resolve(process.cwd(), options.projectDir) : "default";
+		const route = { lan: "Wi-Fi/LAN", tailscale: "Tailscale", relay: "relay" } as const;
+		if (remote.addresses.length === 0) {
+			console.warn(
+				"thinkrail remote: no Wi-Fi/LAN or Tailscale address on this computer, so a phone can't reach it." +
+					" Connect to a network (or start Tailscale) and restart with --remote.",
+			);
+			return;
+		}
+		console.log(
+			`thinkrail remote: reachable at\n${remote.addresses
+				.map((address) => `  ${address.url}  (${route[address.route]})`)
+				.join("\n")}`,
+		);
 		const printPairing = async (): Promise<void> => {
 			const link = remote.issueLink(projectRef);
 			console.log(
-				`thinkrail remote: relay ${options.relayUrl}\n` +
-					`thinkrail remote: scan this QR (or paste the link) on another device:\n  ${link}`,
+				`thinkrail remote: scan this QR (or paste the link) on another device:\n  ${link}`,
 			);
 			console.log(await renderQr(link));
 			console.log(

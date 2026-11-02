@@ -29,7 +29,9 @@ See the home-directory plan and [[submodule-server-remote-transport]] (the host 
     so one host serves many concurrent devices. Lifecycle: device/host disconnect closes the affected
     sessions and notifies the peer. Socket I/O is abstracted (`BrokerSocket`) so the core is unit-tested
     without a network.
-  - `server.ts` — `startBroker`, the thin Bun WebSocket wrapper over the core; `main.ts` the process entry.
+  - `server.ts` — `startBroker`, the thin Bun WebSocket wrapper over the core; `main.ts` the process entry
+    for a standalone relay. The host also embeds `startBroker` for `--remote` with no `--relay` (the local
+    relay in [[submodule-server-remote-transport]]); this package still knows nothing about the host.
 - **Public surface:** the `index.ts` barrel.
 - **Allowed deps:** `contracts` (the shared broker-frame protocol — `ClientToBroker` / `BrokerToClient`,
   `parseClientMessage`, `encodeBrokerFrame`; shared so the host can speak the same wire without importing this

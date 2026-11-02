@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_HOST, DEFAULT_PORT, DEFAULT_RELAY_URL, parseArgs, parseSubcommand } from "./args";
+import { DEFAULT_HOST, DEFAULT_PORT, parseArgs, parseSubcommand } from "./args";
 
 describe("parseSubcommand", () => {
 	test("only a leading, exact subcommand counts", () => {
@@ -28,7 +28,7 @@ describe("parseArgs", () => {
 			staticDir: undefined,
 			projectDir: undefined,
 			remote: false,
-			relayUrl: DEFAULT_RELAY_URL,
+			relayUrl: undefined,
 			help: false,
 			version: false,
 		});
@@ -37,7 +37,7 @@ describe("parseArgs", () => {
 	test("--remote enables remote access; --relay sets the URL and implies --remote", () => {
 		expect(parseArgs(["--remote"], {})).toMatchObject({
 			remote: true,
-			relayUrl: DEFAULT_RELAY_URL,
+			relayUrl: undefined,
 		});
 		expect(parseArgs(["--relay", "ws://r:9"], {})).toMatchObject({
 			remote: true,

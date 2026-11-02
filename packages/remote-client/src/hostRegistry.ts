@@ -1,6 +1,9 @@
 export interface SavedHost {
 	hostKey: string;
+	/** The address that last answered; kept for hosts paired before links carried several. */
 	relayUrl: string;
+	/** Every relay address from the pairing link (Wi‑Fi/LAN, Tailscale); a reconnect races them. */
+	relayUrls?: readonly string[];
 	label: string;
 	pairedAt: number;
 }

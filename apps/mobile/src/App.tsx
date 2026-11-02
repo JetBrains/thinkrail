@@ -9,6 +9,7 @@ import {
 	type SavedHost,
 } from "@thinkrail/remote-client";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { failureOf, failureText, type HostFailure, type HostStatus } from "./hostStatus";
 import { ProjectsScreen, workspaceName } from "./ProjectsScreen";
 import { type DevicePreferences, readPreferences, writePreferences } from "./preferences";
 import { SessionScreen } from "./SessionScreen";
@@ -38,9 +39,6 @@ type Route =
 			direct: boolean;
 	  };
 
-const reasonOf = (error: unknown): string =>
-	error instanceof Error ? error.message : String(error);
-
 export function App() {
 	const registry = useMemo(() => createHostRegistry(localStore), []);
 	const controller = useMemo(() => createRemoteSessions(), []);
@@ -65,16 +63,39 @@ export function App() {
 		});
 	}, []);
 	const t = useT();
-	const [unreachable, setUnreachable] = useState<ReadonlyMap<string, string>>(() => new Map());
-	const markReachable = useCallback((label: string, failure: string | null) => {
-		setUnreachable((current) => {
-			if (current.get(label) === (failure ?? undefined)) return current;
+	const [failures, setFailures] = useState<ReadonlyMap<string, HostFailure>>(() => new Map());
+	const markFailure = useCallback((hostKey: string, failure: HostFailure | null) => {
+		setFailures((current) => {
+			if (failure === null && !current.has(hostKey)) return current;
 			const next = new Map(current);
-			if (failure === null) next.delete(label);
-			else next.set(label, failure);
+			if (failure === null) next.delete(hostKey);
+			else next.set(hostKey, failure);
 			return next;
 		});
 	}, []);
+	const connectHost = useCallback(
+		(host: SavedHost): Promise<void> => {
+			markFailure(host.hostKey, null);
+			return controller
+				.connect(host)
+				.then(() => markFailure(host.hostKey, null))
+				.catch((error: unknown) => markFailure(host.hostKey, failureOf(error)));
+		},
+		[controller, markFailure],
+	);
+	const statusOf = (hostKey: string): HostStatus => {
+		const failure = failures.get(hostKey);
+		if (failure) return { kind: "unreachable", failure };
+		return controller.clientFor(hostKey) ? { kind: "connected" } : { kind: "connecting" };
+	};
+	const forgetHost = useCallback(
+		(hostKey: string) => {
+			controller.disconnect(hostKey);
+			markFailure(hostKey, null);
+			setHosts(registry.remove(hostKey));
+		},
+		[controller, registry, markFailure],
+	);
 
 	const pairWith = useCallback(
 		async (link: string): Promise<boolean> => {
@@ -84,31 +105,27 @@ export function App() {
 				const host: SavedHost = {
 					hostKey: connection.hostKey,
 					relayUrl: connection.relayUrl,
-					label: new URL(connection.relayUrl).host,
+					relayUrls: connection.relayUrls,
+					label: connection.hostName ?? new URL(connection.relayUrl).host,
 					pairedAt: Date.now(),
 				};
 				connection.close();
+				controller.disconnect(host.hostKey);
 				setHosts(registry.add(host));
-				await controller.connect(host);
-				markReachable(host.label, null);
+				await connectHost(host);
 				setPair({ kind: "idle" });
 				return true;
 			} catch (error) {
-				setPair({ kind: "failed", reason: reasonOf(error) });
+				setPair({ kind: "failed", reason: failureText(t, failureOf(error)) });
 				return false;
 			}
 		},
-		[controller, registry, markReachable],
+		[controller, registry, connectHost, t],
 	);
 
 	useEffect(() => {
 		const unsubscribe = controller.subscribe(() => setItems(controller.items()));
-		for (const host of registry.list()) {
-			void controller
-				.connect(host)
-				.then(() => markReachable(host.label, null))
-				.catch((error: unknown) => markReachable(host.label, reasonOf(error)));
-		}
+		for (const host of registry.list()) void connectHost(host);
 		const onLink = (url: string | undefined): void => {
 			if (isPairLink(url)) void pairWith(url.trim());
 		};
@@ -121,7 +138,7 @@ export function App() {
 			void deepLink.then((handle) => handle.remove());
 			controller.stop();
 		};
-	}, [controller, registry, pairWith, markReachable]);
+	}, [controller, registry, pairWith, connectHost]);
 
 	const back = useCallback((): boolean => {
 		if (route.kind === "chat") {
@@ -151,6 +168,9 @@ export function App() {
 		return (
 			<SettingsScreen
 				hosts={hosts}
+				statusOf={statusOf}
+				onReconnect={(host) => void connectHost(host)}
+				onForget={forgetHost}
 				pair={pair}
 				onPair={pairWith}
 				preferences={preferences}
@@ -192,10 +212,15 @@ export function App() {
 			hosts={hosts}
 			controller={controller}
 			items={items}
-			unreachable={[...unreachable]}
+			unreachable={
+				new Map(
+					[...failures].map(([hostKey, failure]) => [hostKey, failureText(t, failure)] as const),
+				)
+			}
 			expanded={expanded}
 			onToggle={toggleProject}
 			onSettings={() => setRoute({ kind: "settings" })}
+			onReconnect={(host) => void connectHost(host)}
 			onOpen={(hostKey, project, workspace) =>
 				setRoute({ kind: "workspace", hostKey, project, workspace })
 			}

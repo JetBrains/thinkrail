@@ -13,18 +13,25 @@ import type { RemoteChannel } from "./channel";
 import { connectHostBroker, type HostBrokerClient, type HostBrokerDeps } from "./hostBrokerClient";
 import { createWeriftHostPeer } from "./hostPeer";
 import { createHostSession } from "./hostSession";
+import type { RelayAddress } from "./localRelay";
 import { createHostHandshake } from "./signalingSession";
 
 export interface RemoteAccess {
 	readonly identity: HostIdentity;
+	/** The relay addresses every pairing link carries, in the order the device should prefer them. */
+	readonly addresses: readonly RelayAddress[];
 	/** Mints a one-time pairing link (the `thinkrail://pair` URI) for a project. */
 	issueLink(projectRef: string): string;
 	stop(): void;
 }
 
 export interface RemoteAccessOptions {
-	/** The signaling broker (relay) URL the host connects to and the link points at. */
+	/** The signaling broker (relay) URL the host connects to. */
 	relayUrl: string;
+	/** The addresses a device reaches that relay at, put in the link; defaults to `relayUrl` itself. */
+	advertised?: readonly RelayAddress[];
+	/** The computer's name, shown on the paired device. */
+	hostName?: string;
 	identity?: HostIdentity;
 	onPaired?: (device: PairedDevice, channel: RemoteChannel) => void;
 	/** Broker connector; defaults to a real WebSocket. Injected in tests. */
@@ -41,6 +48,9 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 	const identity = options.identity ?? loadOrCreateIdentity();
 	const tokens = createPairingTokens();
 	const connect = options.connect ?? connectHostBroker;
+	const addresses: readonly RelayAddress[] = options.advertised ?? [
+		{ url: options.relayUrl, route: "relay" },
+	];
 
 	const client = connect(options.relayUrl, {
 		hostKey: identity.publicKey,
@@ -61,13 +71,15 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 
 	return {
 		identity,
+		addresses,
 		issueLink(projectRef) {
 			const { token } = tokens.issue(projectRef);
 			return buildPairingUri({
-				signalingUrl: options.relayUrl,
+				signalingUrls: addresses.map((address) => address.url),
 				token,
 				hostPublicKey: identity.publicKey,
 				projectRef,
+				...(options.hostName ? { hostName: options.hostName } : {}),
 			});
 		},
 		stop: () => client.stop(),

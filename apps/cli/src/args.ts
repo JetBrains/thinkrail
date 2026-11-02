@@ -1,6 +1,5 @@
 export const DEFAULT_PORT = 24242;
 export const DEFAULT_HOST = "localhost";
-export const DEFAULT_RELAY_URL = "ws://localhost:24243";
 
 export interface CliOptions {
 	port: number;
@@ -11,7 +10,8 @@ export interface CliOptions {
 	staticDir: string | undefined;
 	projectDir: string | undefined;
 	remote: boolean;
-	relayUrl: string;
+	/** An external relay; unset runs the relay inside the host, reachable over Wi‑Fi/LAN and Tailscale. */
+	relayUrl: string | undefined;
 	help: boolean;
 	version: boolean;
 }
@@ -43,9 +43,11 @@ Options:
                  The saved sharing preference lives in Settings → Privacy.
   --verbose      Debug-level logging (terminal + the rotated log files under
                  ~/.thinkrail/logs).
-  --remote       Also connect out to a signaling relay and print a pairing link
-                 so another machine can open this host's project remotely.
-  --relay <url>  Relay URL for --remote (default ${DEFAULT_RELAY_URL}); implies --remote.
+  --remote       Let a phone or another machine drive this host: prints a pairing
+                 QR and link. Runs its own relay, reachable on the same Wi-Fi and
+                 over Tailscale.
+  --relay <url>  Use this signaling relay instead of the built-in one; implies
+                 --remote.
   -v, --version  Print the version and exit.
   -h, --help     Show this help.
 
@@ -130,7 +132,7 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 		staticDir: env.THINKRAIL_STATIC_DIR,
 		projectDir,
 		remote,
-		relayUrl: relayUrl ?? env.THINKRAIL_RELAY_URL ?? DEFAULT_RELAY_URL,
+		relayUrl: relayUrl ?? env.THINKRAIL_RELAY_URL,
 		help,
 		version,
 	};

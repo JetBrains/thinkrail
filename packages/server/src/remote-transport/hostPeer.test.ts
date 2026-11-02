@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { createWeriftHostPeer, type HostPeerSignal } from "./hostPeer";
 
 test("the offer is signalled before any ICE candidate gathered while setting it", async () => {
-	const peer = createWeriftHostPeer();
+	const peer = createWeriftHostPeer([]);
 	const signals: HostPeerSignal["kind"][] = [];
 	peer.onLocalSignal((signal) => signals.push(signal.kind));
 

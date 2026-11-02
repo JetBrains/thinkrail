@@ -35,6 +35,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: [
 			"packages/contracts",
 			"packages/locales",
+			"packages/relay",
 			"packages/shared",
 			"packages/spec-graph",
 			"packages/pi-delegation",

@@ -1,3 +1,4 @@
+import { PUBLIC_STUN_URLS } from "@thinkrail/contracts";
 import { RTCPeerConnection } from "werift";
 import type { RemoteChannel } from "./channel";
 import { toRemoteChannel } from "./weriftRemoteChannel";
@@ -22,8 +23,8 @@ export interface HostPeer {
 	close(): void;
 }
 
-export function createWeriftHostPeer(): HostPeer {
-	const pc = new RTCPeerConnection();
+export function createWeriftHostPeer(stunUrls: readonly string[] = PUBLIC_STUN_URLS): HostPeer {
+	const pc = new RTCPeerConnection({ iceServers: stunUrls.map((urls) => ({ urls })) });
 	let emitSignal: (signal: HostPeerSignal) => void = () => {};
 	let emitChannel: (channel: RemoteChannel) => void = () => {};
 	let remoteSignals: Promise<void> = Promise.resolve();

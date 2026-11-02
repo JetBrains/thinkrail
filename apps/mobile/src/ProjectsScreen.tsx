@@ -13,7 +13,7 @@ import type {
 	SavedHost,
 } from "@thinkrail/remote-client";
 import { AttentionDot } from "@thinkrail/ui/attention-dot";
-import { IconButton } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { ProjectGlyph, WorkspaceGlyph, WorkspaceLabel } from "@thinkrail/ui/project-tree";
 import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { LoadedList, Loader, Screen } from "./layout";
@@ -36,16 +36,19 @@ export function ProjectsScreen({
 	expanded,
 	onToggle,
 	onSettings,
+	onReconnect,
 	onOpen,
 }: {
 	hosts: SavedHost[];
 	controller: RemoteSessionsController;
 	items: RemoteSessionItem[];
-	unreachable: [host: string, reason: string][];
+	/** Hosts that failed to connect, keyed by host key, with the reason to show. */
+	unreachable: ReadonlyMap<string, string>;
 	/** Expanded projects, keyed `hostKey:projectId`, kept by the app so returning from a chat keeps the tree. */
 	expanded: ReadonlySet<string>;
 	onToggle: (key: string) => void;
 	onSettings: () => void;
+	onReconnect: (host: SavedHost) => void;
 	onOpen: (hostKey: string, project: Project, workspace: Workspace) => void;
 }) {
 	const t = useT();
@@ -62,17 +65,32 @@ export function ProjectsScreen({
 				/>
 			}
 		>
-			{unreachable.map(([host, reason]) => (
-				<p
-					key={host}
-					role="status"
-					className="m-0 border-b border-feedback-warning-muted bg-feedback-warning-subtle px-16 py-12 text-feedback-warning tr-text-metadata"
-				>
-					{t("mobile.projects.unreachable", { host, reason })}
-				</p>
-			))}
+			{hosts.flatMap((host) => {
+				const reason = unreachable.get(host.hostKey);
+				return reason === undefined
+					? []
+					: [
+							<div
+								key={host.hostKey}
+								role="status"
+								className="flex items-center gap-12 border-b border-feedback-warning-muted bg-feedback-warning-subtle px-16 py-12"
+							>
+								<p className="m-0 min-w-0 flex-1 text-feedback-warning tr-text-metadata">
+									{t("mobile.projects.unreachable", { host: host.label, reason })}
+								</p>
+								<Button
+									variant="outline"
+									tone="warning"
+									className="h-touch shrink-0 rounded-md"
+									onClick={() => onReconnect(host)}
+								>
+									{t("mobile.hosts.reconnect")}
+								</Button>
+							</div>,
+						];
+			})}
 			{hosts
-				.filter((host) => !unreachable.some(([label]) => label === host.label))
+				.filter((host) => !unreachable.has(host.hostKey))
 				.map((host) => (
 					<HostProjects
 						key={host.hostKey}

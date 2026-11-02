@@ -26,8 +26,9 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for the produc
     checking a device's key.
   - `pairingToken.ts` — an **in-memory**, single-use, short-TTL store of pending QR pairings
     (`createPairingTokens`). A leaked QR cannot be replayed and nothing survives a restart.
-  - `pairingUri.ts` — build/parse the `thinkrail://pair?v=1&s=…&t=…&k=…&p=…` URI (signaling URL,
-    one-time token, host public key, project ref).
+  - `pairingUri.ts` — build/parse the `thinkrail://pair?v=1&s=…&t=…&k=…&p=…[&n=…]` URI: one `s` per relay
+    address the host is reachable at (Wi‑Fi/LAN, Tailscale — the device races them), the one-time token, host
+    public key, project ref, and optionally the computer's name. A link with a single `s` stays valid.
   - `pairing.ts` — `newChallenge()` and `verifyPairingProof()` (a device signs the host challenge to prove
     it holds its key); the challenge/signature travel over the transport the later phase provides.
   - `deviceRegistry.ts` — the persisted list of paired devices (`remote-devices.json`, `0600`): add

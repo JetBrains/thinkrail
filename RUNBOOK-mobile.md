@@ -47,26 +47,29 @@ which Android blocks by default), adds the camera permission and installs the la
 Studio wait for the Gradle sync, pick your phone and press **Run** (▶). No developer account is needed and the
 install does not expire. After a UI change: `bun run --cwd apps/mobile android:sync`, then ▶ again.
 
-## 3. Start the relay + host on the laptop
-Find the laptop's LAN IP (`ipconfig getifaddr en0`), then:
+## 3. Start the host with remote access on the laptop
 ```bash
-# signaling relay (bind to LAN)
-PORT=24243 HOST=0.0.0.0 bun packages/relay/src/main.ts
-
-# the host with remote access (prints a pairing link)
-bun run apps/cli/src/index.ts --remote --relay ws://<LAN-IP>:24243
-#   installed build:  thinkrail --remote --relay ws://<LAN-IP>:24243
+bun run apps/cli/src/index.ts --remote
+#   installed build:  thinkrail --remote
 ```
-The CLI prints both the `thinkrail://pair?…` link **and a scannable QR** in the terminal. The code is single-use and expires
-after a few minutes — press **Enter** in that terminal for a fresh one (no restart needed). On the same Wi‑Fi
-the WebRTC connection is direct — **coturn is not needed**. (coturn only matters on networks that block
-peer-to-peer, e.g. guest Wi‑Fi isolation.)
+`--remote` runs its own signaling relay (port 24243) — nothing else to start, nothing deployed. It prints the
+addresses a phone can reach it at — this computer's **Wi‑Fi/LAN** IP and, when Tailscale is running, its
+**Tailscale** IP — then a `thinkrail://pair?…` link and a scannable QR carrying all of them plus the computer's
+name. The code is single-use and expires after a few minutes — press **Enter** in that terminal for a fresh one.
+
+- **Same Wi‑Fi:** the phone uses the LAN address; the WebRTC connection is direct.
+- **Away from home:** install [Tailscale](https://tailscale.com) on the laptop and the phone, sign both into the
+  same tailnet and keep it on; the phone reaches the Tailscale address from any network.
+- An external relay still works: `--relay ws://<host>:<port>` (or `THINKRAIL_RELAY_URL`) skips the built-in one.
+- If 24243 is taken (e.g. an old standalone relay still running), the built-in relay picks a free port; stop
+  the other one so the port — and the addresses a paired phone saved — stay the same across restarts.
 
 ## 4. Pair on the phone
 First launch shows the **welcome screen**. Tap **Scan QR code** and point the phone at the terminal QR (or scan it with the
 phone camera — the `thinkrail://` link opens the app and pairs automatically), or paste the link and tap
 **Connect**. The host's
-projects appear (Settings → **Computers** pairs another one); tap a project to expand its workspaces, then a workspace
+projects appear (Settings → **Computers** pairs another one, and shows whether each computer is reachable, with
+**Reconnect** and **Forget**); tap a project to expand its workspaces, then a workspace
 to **pick up the ongoing conversation** — a session you started on the
 laptop loads on the phone and keeps streaming — and send a message to continue it. Add your server the same
 way (run the relay+host there too, paste its link).
@@ -77,4 +80,3 @@ The app remembers paired hosts and auto-reconnects (via `resume`) on reopen / ne
 - The session screen loads the conversation (via `session.getMessages`) and refreshes as it streams, so the
   phone picks up a laptop-started session; a richer transcript renderer, a full tool-approval UI, and push
   notifications are follow-ups (push needs a content-less "wake" from the relay — it is zero-knowledge).
-- Nothing here has been run end-to-end yet; this runbook is the first real on-device test.

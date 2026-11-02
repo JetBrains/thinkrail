@@ -15,6 +15,7 @@ export {
 	type KeyValueStore,
 	type SavedHost,
 } from "./hostRegistry";
+export { RelayUnreachableError } from "./relayPicker";
 export {
 	createRemoteSessions,
 	type RemoteSessionItem,

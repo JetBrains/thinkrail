@@ -61,6 +61,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   platform caps one DataChannel message (WebKit: 64 KiB) while a wire result such as a transcript is
   megabytes. A message above 16 KiB travels as `[0x00, more]`-prefixed binary chunks (a wire message is JSON,
   so it never starts with `0x00`); the ordered, reliable channel and back-to-back sends need no chunk ids.
+- **STUN (`iceServers.ts`):** `PUBLIC_STUN_URLS`, the public STUN servers both remote peers gather through,
+  so a phone off the host's network can connect peer-to-peer without a ThinkRail server (no TURN yet).
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and

@@ -14,6 +14,16 @@ laptop, a server) onto a phone and lets you drive them — a thin viewer/control
 IDE. No file tree, diffs, terminals, layout, or settings. No cloud account: the device pairs each host by its
 `thinkrail://pair` link and remembers it locally.
 
+**Reaching a computer (no server deployed).** `thinkrail --remote` runs its own relay and its link lists the
+computer's Wi‑Fi/LAN and Tailscale addresses plus its name, so the phone connects on the same Wi‑Fi, or from
+anywhere when Tailscale is on for both; the connector races the addresses on every (re)connect. Pairing stays
+host-authorized: the QR's one-time token, then the device key. `hostStatus.ts` turns a failed connect into
+`network` (no address answered — `RelayUnreachableError` — shown as "use the same Wi‑Fi or turn on
+Tailscale") or the host's own error. The tree shows an unreachable computer as a banner with **Reconnect**;
+Settings → Computers lists each paired computer by name with Connected / Connecting… / the failure, plus
+**Reconnect** and **Forget** (confirmed; it disconnects and drops the computer, so reconnecting needs a new
+QR). Welcome's first step says which network to use.
+
 ## Boundary
 
 - **Owns:** a small React/Vite UI — `App.tsx` (pairing, host reconnect, the drill-down route, deep links via
@@ -115,5 +125,5 @@ git-ignored like `ios/`. See
 - Code highlighting (no `CodeHighlighterProvider` yet — code renders plain), extension tool cards beyond the
   built-ins (e.g. ask-user-question, registered by the IDE's `extensions` module), extension UI dialogs
   (`ExtUiPrompt` over `piExtensionUi`), templates and `@` mentions in the composer, picker favorites, the
-  Resources dock, removing a paired host, and push notifications (a content-less "wake" push would need a
+  Resources dock, and push notifications (a content-less "wake" push would need a
   relay feature, since the relay is zero-knowledge).

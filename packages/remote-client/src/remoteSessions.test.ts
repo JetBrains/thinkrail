@@ -41,6 +41,7 @@ function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 		client,
 		hostKey: host.hostKey,
 		relayUrl: host.relayUrl,
+		relayUrls: [host.relayUrl],
 		projectRef: "",
 		close: () => {
 			closed = true;
@@ -108,4 +109,26 @@ test("connecting the same host twice is a no-op; stop closes every connection", 
 	controller.stop();
 	expect(fake.isClosed()).toBe(true);
 	expect(controller.items()).toEqual([]);
+});
+
+test("disconnect closes one host, drops its sessions and lets it connect again", async () => {
+	const laptopFake = fakeConnection(laptop, [rec("s1")]);
+	const serverFake = fakeConnection(server, [rec("s2")]);
+	const controller = createRemoteSessions(async (host) =>
+		host.hostKey === laptop.hostKey ? laptopFake.connection : serverFake.connection,
+	);
+	await controller.connect(laptop);
+	await controller.connect(server);
+	let notified = 0;
+	controller.subscribe(() => notified++);
+
+	controller.disconnect(laptop.hostKey);
+	expect(laptopFake.isClosed()).toBe(true);
+	expect(serverFake.isClosed()).toBe(false);
+	expect(controller.clientFor(laptop.hostKey)).toBeNull();
+	expect(controller.items().map((item) => item.record.sessionId)).toEqual(["s2"]);
+	expect(notified).toBe(1);
+
+	await controller.connect(laptop);
+	expect(controller.clientFor(laptop.hostKey)).not.toBeNull();
 });

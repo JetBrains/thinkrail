@@ -42,7 +42,7 @@ test("issueLink mints a parseable one-time pairing link for the project", () => 
 
 	const parsed = parsePairingUri(access.issueLink("proj-42"));
 	expect(parsed).toMatchObject({
-		signalingUrl: "ws://relay:1",
+		signalingUrls: ["ws://relay:1"],
 		hostPublicKey: "HOSTPUBKEY",
 		projectRef: "proj-42",
 	});
@@ -51,6 +51,25 @@ test("issueLink mints a parseable one-time pairing link for the project", () => 
 
 	// One-time: two links carry distinct tokens.
 	expect(parsePairingUri(access.issueLink("proj-42"))?.token).not.toBe(parsed?.token);
+});
+
+test("the link carries the advertised relay addresses and the host name instead of the connect URL", () => {
+	const { connect } = fakeConnect();
+	const access = startRemoteAccess({
+		relayUrl: "ws://127.0.0.1:24243",
+		advertised: [
+			{ url: "ws://192.168.0.20:24243", route: "lan" },
+			{ url: "ws://100.101.102.103:24243", route: "tailscale" },
+		],
+		hostName: "Studio Mac",
+		identity,
+		connect,
+	});
+	expect(parsePairingUri(access.issueLink("p"))).toMatchObject({
+		signalingUrls: ["ws://192.168.0.20:24243", "ws://100.101.102.103:24243"],
+		hostName: "Studio Mac",
+	});
+	expect(access.addresses.map((address) => address.route)).toEqual(["lan", "tailscale"]);
 });
 
 test("stop tears down the broker client", () => {

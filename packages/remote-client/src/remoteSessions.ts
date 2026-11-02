@@ -19,6 +19,8 @@ export interface RemoteSessionsController {
 	/** The host's `server.welcome` (protocol version, config), once it has arrived. */
 	welcomeFor(hostKey: string): ServerWelcome | null;
 	subscribe(listener: () => void): () => void;
+	/** Closes one host's connection and drops its sessions (the phone forgot that computer). */
+	disconnect(hostKey: string): void;
 	stop(): void;
 }
 
@@ -86,6 +88,13 @@ export function createRemoteSessions(
 		subscribe(listener) {
 			listeners.add(listener);
 			return () => void listeners.delete(listener);
+		},
+		disconnect(hostKey) {
+			const entry = hosts.get(hostKey);
+			if (!entry) return;
+			entry.connection.close();
+			hosts.delete(hostKey);
+			notify();
 		},
 		stop() {
 			for (const entry of hosts.values()) entry.connection.close();

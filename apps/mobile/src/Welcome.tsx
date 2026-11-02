@@ -1,4 +1,4 @@
-import { RiQrScan2Line, RiTerminalBoxLine } from "@remixicon/react";
+import { RiQrScan2Line, RiTerminalBoxLine, RiWifiLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import type { PairState } from "./App";
 import { PairForm } from "./PairForm";
@@ -15,6 +15,7 @@ export function Welcome({
 }) {
 	const t = useT();
 	const steps = [
+		{ icon: RiWifiLine, text: t("mobile.welcome.stepNetwork") },
 		{ icon: RiTerminalBoxLine, text: t("mobile.welcome.stepRun"), code: REMOTE_COMMAND },
 		{ icon: RiQrScan2Line, text: t("mobile.welcome.stepScan") },
 	];
