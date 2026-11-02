@@ -3,7 +3,8 @@
  * A stand-in for NVIDIA's `nemo-speech` CLI for unit and e2e tests. It answers `--version`,
  * `doctor --json` and `serve`. The realtime socket turns every 160 ms of received PCM16 into the next
  * word of `FAKE_SPEECH_TEXT` as a delta, and a commit into the completed transcript. Each
- * `session.update` is appended to `FAKE_SPEECH_LOG` when that is set.
+ * `session.update` is appended to `FAKE_SPEECH_LOG` when that is set; `FAKE_SPEECH_START_DELAY_MS`
+ * simulates a slow model load.
  */
 import { appendFileSync } from "node:fs";
 
@@ -30,6 +31,10 @@ if (args[0] !== "serve") {
 if (process.env.FAKE_SPEECH_FAIL_START) {
 	console.error("fake nemo-speech: failing on purpose");
 	process.exit(3);
+}
+
+if (process.env.FAKE_SPEECH_START_DELAY_MS) {
+	await Bun.sleep(Number(process.env.FAKE_SPEECH_START_DELAY_MS));
 }
 
 const port = Number(flag("--port"));

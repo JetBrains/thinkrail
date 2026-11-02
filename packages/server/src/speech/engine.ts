@@ -19,83 +19,116 @@ export interface EngineEndpoint {
 	apiKey: string;
 }
 
-interface Running {
-	child: Supervised;
-	key: string;
-	endpoint: EngineEndpoint;
+function engineFailed(message: string): CodedError {
+	return new CodedError("SPEECH_ENGINE_FAILED", message);
 }
 
-let running: Running | null = null;
-let starting: { key: string; promise: Promise<Running> } | null = null;
-let holds = 0;
-let idleTimer: ReturnType<typeof setTimeout> | null = null;
-let idleMs = ENGINE_IDLE_MS;
-
-function inputsKey(inputs: EngineInputs): string {
-	return `${inputs.bin}\0${inputs.modelPath}`;
-}
-
-async function waitReady(child: Supervised, port: number, apiKey: string): Promise<void> {
+async function waitReady(
+	child: Supervised,
+	port: number,
+	apiKey: string,
+	signal: AbortSignal,
+): Promise<void> {
 	let exited = false;
 	void child.exited.then(() => {
 		exited = true;
 	});
 	const deadline = Date.now() + READY_TIMEOUT_MS;
-	while (Date.now() < deadline) {
-		if (exited) break;
+	while (Date.now() < deadline && !exited && !signal.aborted) {
 		try {
 			const response = await fetch(`http://${HOST}:${port}/v1/models`, {
 				headers: { Authorization: `Bearer ${apiKey}` },
-				signal: AbortSignal.timeout(2_000),
+				signal: AbortSignal.any([signal, AbortSignal.timeout(2_000)]),
 			});
 			if (response.ok) return;
 		} catch {}
 		await Bun.sleep(READY_POLL_MS);
 	}
-	await child.stop();
-	throw new CodedError("SPEECH_ENGINE_FAILED", "the speech engine did not become ready");
+	if (signal.aborted) throw engineFailed("the speech engine start was cancelled");
+	log.warn(`speech engine failed to start: ${child.stderrTail().slice(-500)}`);
+	throw engineFailed("the speech engine did not become ready");
 }
 
-async function launch(inputs: EngineInputs, key: string): Promise<Running> {
-	const port = await findFreePort(0, HOST, 0);
-	const apiKey = randomUUID();
-	const child = spawnSupervised([
-		inputs.bin,
-		"serve",
-		"--host",
-		HOST,
-		"--port",
-		String(port),
-		"--api-key",
-		apiKey,
-		"--no-ui",
-		"--asr-model",
-		inputs.modelPath,
-	]);
-	try {
-		await waitReady(child, port, apiKey);
-	} catch (err) {
-		log.warn(`speech engine failed to start: ${child.stderrTail().slice(-500)}`);
-		throw err;
+/**
+ * One engine launch, from the moment it is claimed: the child stays reachable while it loads, so a
+ * stop or a replacing launch can kill it instead of waiting out the readiness budget.
+ */
+class EngineRun {
+	readonly controller = new AbortController();
+	child: Supervised | null = null;
+	endpoint: EngineEndpoint | null = null;
+	readonly ready: Promise<EngineEndpoint>;
+
+	constructor(
+		readonly key: string,
+		inputs: EngineInputs,
+		previous: EngineRun | null,
+	) {
+		this.ready = this.start(inputs, previous);
 	}
-	const started: Running = {
-		child,
-		key,
-		endpoint: { realtimeUrl: `ws://${HOST}:${port}/v1/audio/transcriptions/realtime`, apiKey },
-	};
-	void child.exited.then((code) => {
-		if (running !== started) return;
-		running = null;
-		log.warn(`speech engine exited unexpectedly (code ${code ?? "signal"})`);
-		setEngineState("stopped");
-	});
-	return started;
+
+	private async start(inputs: EngineInputs, previous: EngineRun | null): Promise<EngineEndpoint> {
+		if (previous) await previous.shutdown();
+		const signal = this.controller.signal;
+		if (signal.aborted) throw engineFailed("the speech engine start was cancelled");
+		setEngineState("starting");
+		const port = await findFreePort(0, HOST, 0);
+		if (signal.aborted) throw engineFailed("the speech engine start was cancelled");
+		const apiKey = randomUUID();
+		const child = spawnSupervised([
+			inputs.bin,
+			"serve",
+			"--host",
+			HOST,
+			"--port",
+			String(port),
+			"--api-key",
+			apiKey,
+			"--no-ui",
+			"--asr-model",
+			inputs.modelPath,
+		]);
+		this.child = child;
+		try {
+			await waitReady(child, port, apiKey, signal);
+		} catch (err) {
+			await child.stop();
+			throw err;
+		}
+		this.endpoint = {
+			realtimeUrl: `ws://${HOST}:${port}/v1/audio/transcriptions/realtime`,
+			apiKey,
+		};
+		void child.exited.then((code) => {
+			if (current !== this) return;
+			current = null;
+			log.warn(`speech engine exited unexpectedly (code ${code ?? "signal"})`);
+			setEngineState("stopped");
+		});
+		return this.endpoint;
+	}
+
+	/** Kills synchronously on POSIX (the group signal precedes the first await), then waits for exit. */
+	async shutdown(): Promise<void> {
+		this.controller.abort();
+		await this.child?.stop();
+		await this.ready.catch(() => {});
+	}
+}
+
+let current: EngineRun | null = null;
+let holds = 0;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+let idleMs = ENGINE_IDLE_MS;
+
+function clearIdle(): void {
+	if (idleTimer) clearTimeout(idleTimer);
+	idleTimer = null;
 }
 
 function armIdle(): void {
-	if (idleTimer) clearTimeout(idleTimer);
-	idleTimer = null;
-	if (holds > 0 || !running) return;
+	clearIdle();
+	if (holds > 0 || !current?.endpoint) return;
 	idleTimer = setTimeout(() => {
 		idleTimer = null;
 		if (holds === 0) void stopEngine();
@@ -103,34 +136,38 @@ function armIdle(): void {
 	idleTimer.unref?.();
 }
 
-/** Starts (or reuses) the engine for these inputs; a different model replaces the running one. */
+/**
+ * Starts (or reuses) the engine for these inputs. The launch is claimed before any await, so
+ * concurrent callers share one engine and a different model replaces it.
+ */
 export async function ensureEngine(inputs: EngineInputs): Promise<EngineEndpoint> {
-	const key = inputsKey(inputs);
-	if (running?.key === key) return running.endpoint;
-	if (starting?.key === key) return (await starting.promise).endpoint;
-	await stopEngine();
-	setEngineState("starting");
-	const promise = launch(inputs, key);
-	starting = { key, promise };
-	try {
-		running = await promise;
-		setEngineState("ready");
-		armIdle();
-		return running.endpoint;
-	} catch (err) {
-		setEngineState("failed");
-		throw err instanceof CodedError
-			? err
-			: new CodedError("SPEECH_ENGINE_FAILED", "the speech engine could not start");
-	} finally {
-		if (starting?.promise === promise) starting = null;
+	const key = `${inputs.bin}\0${inputs.modelPath}`;
+	if (current?.key !== key) {
+		clearIdle();
+		const run = new EngineRun(key, inputs, current);
+		current = run;
+		run.ready.then(
+			() => {
+				if (current !== run) return;
+				setEngineState("ready");
+				armIdle();
+			},
+			() => {
+				if (current !== run) return;
+				current = null;
+				setEngineState(run.controller.signal.aborted ? "stopped" : "failed");
+			},
+		);
 	}
+	return current.ready.catch((err: unknown) => {
+		throw err instanceof CodedError ? err : engineFailed("the speech engine could not start");
+	});
 }
 
 /** One live dictation keeps the engine from idling out; call the release when it ends. */
 export function holdEngine(): () => void {
 	holds += 1;
-	armIdle();
+	clearIdle();
 	let released = false;
 	return () => {
 		if (released) return;
@@ -140,16 +177,13 @@ export function holdEngine(): () => void {
 	};
 }
 
-/** Stops the running `nemo-speech serve`, if any, and waits for it to exit. */
+/** Stops the running or starting `nemo-speech serve`, if any, and waits for it to exit. */
 export async function stopEngine(): Promise<void> {
-	if (idleTimer) clearTimeout(idleTimer);
-	idleTimer = null;
-	const pending = starting;
-	if (pending) await pending.promise.catch(() => {});
-	const current = running;
-	running = null;
-	if (!current) return;
-	await current.child.stop();
+	clearIdle();
+	const run = current;
+	current = null;
+	if (!run) return;
+	await run.shutdown();
 	setEngineState("stopped");
 }
 

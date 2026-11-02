@@ -30,6 +30,7 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 afterEach(async () => {
 	await stopEngine();
 	delete process.env.FAKE_SPEECH_FAIL_START;
+	delete process.env.FAKE_SPEECH_START_DELAY_MS;
 	resetEngineForTests();
 	resetSpeechStatusForTests();
 });
@@ -92,4 +93,21 @@ test.skipIf(!posix)("stopping waits for the engine to exit", async () => {
 	await stopEngine();
 	expect(speechStatus().engine).toBe("stopped");
 	await expect(fetch(`${httpBase(endpoint.realtimeUrl)}/health`)).rejects.toThrow();
+});
+
+test.skipIf(!posix)("concurrent starts share one engine", async () => {
+	const [a, b] = await Promise.all([ensureEngine(inputs()), ensureEngine(inputs())]);
+	expect(a).toEqual(b);
+});
+
+test.skipIf(!posix)("stopping during start-up kills the loading engine at once", async () => {
+	process.env.FAKE_SPEECH_START_DELAY_MS = "30000";
+	const start = ensureEngine(inputs());
+	await Bun.sleep(300);
+	expect(speechStatus().engine).toBe("starting");
+	const began = Date.now();
+	await stopEngine();
+	expect(Date.now() - began).toBeLessThan(5_000);
+	await expect(start).rejects.toMatchObject({ code: "SPEECH_ENGINE_FAILED" });
+	expect(speechStatus().engine).toBe("stopped");
 });
