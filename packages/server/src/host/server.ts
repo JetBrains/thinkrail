@@ -19,6 +19,7 @@ import {
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
+	SPEECH_SOCKET_ROUTE,
 	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -116,8 +117,11 @@ import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
 	cancelSpeechInstall,
+	createSpeechRelay,
 	initSpeech,
+	type SpeechRelay,
 	setSpeechPublisher,
+	setSpeechVocabularyResolver,
 	speechStatus,
 	stopEngine,
 } from "../speech";
@@ -181,6 +185,7 @@ import {
 	refreshOpenProjectReviews,
 	stampSessionActivity,
 } from "./settledLifecycle";
+import { speechVocabulary } from "./speechVocabulary";
 import { resolveSubagentMaxConcurrent, resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -233,6 +238,9 @@ export interface RunningServer {
 interface SocketData {
 	clientKey: string;
 	protocolVersion: number;
+	/** Present only on a `/speech` socket, which bypasses the JSON request wire entirely. */
+	speech?: SpeechRelay;
+	speechSocket?: true;
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
@@ -367,6 +375,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					? undefined
 					: new Response("ws upgrade failed", { status: 400 });
 			}
+			if (url.pathname === SPEECH_SOCKET_ROUTE) {
+				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
+				if (protocolVersion < SPEECH_PROTOCOL_VERSION) {
+					return new Response("speech needs a newer client", { status: 400 });
+				}
+				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
+				return srv.upgrade(req, { data: { clientKey, protocolVersion, speechSocket: true } })
+					? undefined
+					: new Response("ws upgrade failed", { status: 400 });
+			}
 			if (url.pathname === "/health") {
 				return new Response("ok");
 			}
@@ -386,6 +404,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		},
 		websocket: {
 			open(ws) {
+				if (ws.data.speechSocket) {
+					ws.data.speech = createSpeechRelay(ws);
+					return;
+				}
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);
 				if (replaced && replaced !== ws) replaced.close();
@@ -458,6 +480,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				redeliverInvitation(ws.data.clientKey);
 			},
 			async message(ws, message) {
+				if (ws.data.speechSocket) {
+					ws.data.speech?.message(message);
+					return;
+				}
 				const raw = typeof message === "string" ? message : message.toString();
 				let req: unknown;
 				try {
@@ -539,11 +565,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 			},
 			drain(ws) {
+				if (ws.data.speechSocket) return;
 				if (sockets.get(ws.data.clientKey) !== ws) return;
 				terminalBackpressured.delete(ws.data.clientKey);
 				resumeClientTerminals(ws.data.clientKey);
 			},
 			close(ws) {
+				if (ws.data.speechSocket) {
+					ws.data.speech?.close();
+					return;
+				}
 				const { clientKey } = ws.data;
 				if (stopping) return;
 				if (sockets.get(clientKey) === ws) {
@@ -783,6 +814,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.speechChanged, data: status }),
 		),
 	);
+	setSpeechVocabularyResolver(speechVocabulary);
 	void initSpeech().catch((err) => log.warn("voice input state could not be read", err));
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
@@ -1080,6 +1112,7 @@ function restoreSeamDefaults(): void {
 	setWorkspacePublisher(null);
 	setPiPackagesPublisher(null);
 	setSpeechPublisher(null);
+	setSpeechVocabularyResolver(null);
 	setWatchPublisher(null);
 	setSkillPathClassifier(null);
 	setFsNudgePublisher(null);

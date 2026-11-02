@@ -34,7 +34,8 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
   - The install state machine.
   - The status store and its publisher.
 - **Public surface (barrel):** `initSpeech`, `installSpeech`, `cancelSpeechInstall`, `removeSpeech`,
-  `speechStatus`, `setSpeechPublisher`, `stopEngine`.
+  `speechStatus`, `setSpeechPublisher`, `stopEngine`, `createSpeechRelay`, `setSpeechVocabularyResolver`,
+  `SpeechRelay`, `SpeechClientSocket`, `SpeechScope`, `VocabularyResolver`, `VocabularySource`.
 - **Allowed deps:** `persistence` (`dataDir`), `subprocess` (the PATH probe and archive unpacking run
   bounded; the engine is supervised), `log`, `@thinkrail/contracts`, `@thinkrail/shared/codedError` and
   `/freePort`.
@@ -49,7 +50,10 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
   - Publishes what the disk already holds before its first await, so a welcome seed is never blank.
   - Then probes PATH and publishes again with disk usage.
 - **PATH probe**
-  - `Bun.which("nemo-speech")`, then `--version` and `doctor --json`, each under a 10 s budget.
+  - `Bun.which("nemo-speech")`, then `--version` (10 s) and `doctor --json` (30 s: it initializes every
+    compute device, and Metal took 13 s on an idle Mac).
+  - It runs once at boot. An install re-probes only when no PATH runtime was found, so a probe never
+    delays the download.
   - It is compatible when it shares the pinned major.minor (0.x minors are breaking).
   - The backend is the first of cuda/metal/vulkan the doctor reports, else cpu.
   - A compatible PATH runtime wins over the managed copy.
@@ -57,7 +61,7 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
   - Throws `SPEECH_UNSUPPORTED_PLATFORM` or `SPEECH_INSTALL_BUSY`. It is a no-op when that model is
     already ready. Otherwise it returns at once; progress and the outcome arrive on `speech.changed`,
     throttled to 200 ms.
-  - It re-probes PATH, then checks free space (`statfs`). The runtime counts ×4 for unpacking, the
+  - It re-probes PATH if nothing was found at boot, then checks free space (`statfs`). The runtime counts ×4 for unpacking, the
     model counts minus its partial, plus 64 MiB of headroom. `SPEECH_DISK_SPACE` when short.
   - It downloads only what is missing:
     - **Runtime.** Verified first, then unpacked with the system `tar` (Windows uses
@@ -92,22 +96,61 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
 - **Start.** `ensureEngine(inputs)` starts `nemo-speech serve` lazily, on a dictation's start, through
   `subprocess`'s `spawnSupervised` (the same process-group and hidden-console rules as every host child):
   - `--host 127.0.0.1`, a free port chosen by the host (the CLI rejects `--port 0`), and a random
-    per-launch `--api-key`, so other local pages and processes can't use the loopback port (WebSockets
-    skip CORS);
+    per-launch `--api-key`, so a browser page can't use the loopback port (WebSockets skip CORS). The
+    key is on the command line, so it doesn't hide the port from a local process that can read `ps`;
+    that process already runs as a user on the host;
   - `--no-ui --asr-model <gguf>`.
   - It is ready once `GET /v1/models` answers with the key, within 120 s, which covers model load. An
     exit or timeout first becomes `engine: failed` / `SPEECH_ENGINE_FAILED`, with the last 500 bytes of
     stderr logged. The next dictation retries.
-- **Reuse.** The same runtime and model reuse the running engine. Different inputs (a model switch)
-  stop it first.
+- **Reuse.** A launch is claimed synchronously, before any await, so concurrent dictations share one
+  engine. The same runtime and model reuse it; different inputs (a model switch) shut the previous
+  launch down first.
+- **Stopping mid-start.** A loading child stays reachable. A stop or a replacing launch aborts the
+  readiness wait and kills it at once: on POSIX the group signal precedes the first await, so the host's
+  `void stopEngine()` just before `process.exit` still reaps it.
 - **Idle stop.** `holdEngine()` counts live dictations. The engine stops 10 minutes after the last
   release, never while one is held.
 - **Crash.** An unexpected exit reads as `stopped`, and the next dictation starts it again.
-- **Shutdown.** `stopEngine()` (host `stop()`, install, removal) waits for a pending start and then for
-  the child's exit.
+- **Shutdown.** `stopEngine()` (host `stop()`, install, removal) kills a running or starting engine and
+  waits for the child's exit.
 - **Fixture.** `fakeNemoSpeech.ts` stands in for the CLI in unit and e2e tests. It answers `--version`,
   `doctor` and `serve`, the realtime protocol emits one scripted word per 160 ms of audio, and an
   optional log file records each `session.update`.
+
+## Relay
+
+`createSpeechRelay(socket)` serves one `/speech` socket, with at most one dictation at a time (a second
+`start` answers `SPEECH_BUSY`, and a malformed control message answers `SPEECH_PROTOCOL`).
+
+1. **Start.**
+   - `start {workspaceId?, sessionId?}` reads the installed inputs (`SPEECH_NOT_INSTALLED` without
+     them) and holds the engine.
+   - In parallel it resolves the project words through the host's `setSpeechVocabularyResolver`, under
+     a 1.5 s budget (on timeout the words are empty).
+   - Then it opens the engine's realtime socket with `?api_key=`.
+2. **While the engine starts**, up to 30 s of audio is buffered. Frames over 64 KiB, and frames past a
+   4 MiB upstream buffer, are dropped.
+3. **On upstream open** it sends `session.update` (`sample_rate 16000`, the model's language, and
+   `speech_contexts [{phrases, boost 3}]` when there are words), flushes the buffer, and answers
+   `ready`.
+4. **Events.** The engine's `delta` events are appends; the relay accumulates them and sends each as a
+   replacing `partial`. `completed` becomes a `final` and resets the partial.
+5. **Stop.** `stop` sends `input_audio_buffer.commit`. `committed` (or an 8 s timeout) ends the dictation.
+   Ending flushes any uncompleted partial as a `final`, then sends `ended`, closes upstream and
+   releases the hold, exactly once. An engine error or a lost upstream sends `SPEECH_ENGINE_FAILED` first.
+6. **Language tags.** A trailing auto-detect language tag (`<en-US>`) is stripped from all text.
+
+**Vocabulary** (`speechPhrases`) — at most 300 phrases of 3–48 characters, each with a letter and no
+whitespace, in this order:
+
+1. commands and skill names (minus `skill:`);
+2. identifier-like file names and stems (camel, Pascal, snake or kebab case, or digits);
+3. other file names;
+4. folder names.
+
+Checked against the real engine and model: with boosting, a spoken "use app store dot t s x" became
+`useAppStore.tsx`. Without it, the same audio came out as "use app storets".
 
 ## Get right
 

@@ -236,7 +236,7 @@ async function runInstall(model: SpeechModel, signal: AbortSignal): Promise<void
 	if (!pin) throw new CodedError("SPEECH_UNSUPPORTED_PLATFORM", "no runtime for this platform");
 	await mkdir(stagingDir(), { recursive: true });
 	await mkdir(modelsDir(), { recursive: true });
-	pathRuntime = await probePathRuntime(pins().runtimeVersion);
+	pathRuntime ??= await probePathRuntime(pins().runtimeVersion);
 	const modelPin = pins().models[model];
 	const needRuntime = !pathRuntime && !managedBinary();
 	const needModel = !modelPresent(model);

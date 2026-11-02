@@ -6,7 +6,9 @@ export interface PathRuntime {
 	backend: string;
 }
 
-const PROBE_TIMEOUT_MS = 10_000;
+const VERSION_TIMEOUT_MS = 10_000;
+/** `doctor` initializes every compute device; Metal took 13 s on an idle M-series Mac. */
+const DOCTOR_TIMEOUT_MS = 30_000;
 
 /** A PATH install is compatible when it shares the pinned runtime's major.minor (0.x minors break). */
 export function compatibleVersion(reported: string, pinned: string): string | null {
@@ -34,10 +36,10 @@ export function backendFromDoctor(out: string): string {
 export async function probePathRuntime(pinnedVersion: string): Promise<PathRuntime | null> {
 	const bin = Bun.which("nemo-speech", { PATH: process.env.PATH ?? "" });
 	if (!bin) return null;
-	const versionRun = await runBounded([bin, "--version"], { timeoutMs: PROBE_TIMEOUT_MS });
+	const versionRun = await runBounded([bin, "--version"], { timeoutMs: VERSION_TIMEOUT_MS });
 	if (!versionRun.ok) return null;
 	const version = compatibleVersion(versionRun.out, pinnedVersion);
 	if (!version) return null;
-	const doctor = await runBounded([bin, "doctor", "--json"], { timeoutMs: PROBE_TIMEOUT_MS });
+	const doctor = await runBounded([bin, "doctor", "--json"], { timeoutMs: DOCTOR_TIMEOUT_MS });
 	return { bin, version, backend: doctor.ok ? backendFromDoctor(doctor.out) : "cpu" };
 }

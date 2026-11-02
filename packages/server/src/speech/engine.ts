@@ -184,7 +184,7 @@ export async function stopEngine(): Promise<void> {
 	current = null;
 	if (!run) return;
 	await run.shutdown();
-	setEngineState("stopped");
+	if (current === null) setEngineState("stopped");
 }
 
 export function setEngineIdleMsForTests(ms: number): void {
