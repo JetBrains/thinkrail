@@ -27,7 +27,15 @@ type Route =
 	| { kind: "projects" }
 	| { kind: "project"; hostKey: string; project: Project }
 	| { kind: "workspace"; hostKey: string; project: Project; workspace: Workspace }
-	| { kind: "chat"; hostKey: string; project: Project; workspace: Workspace; chat: OpenChat };
+	| {
+			kind: "chat";
+			hostKey: string;
+			project: Project;
+			workspace: Workspace;
+			chat: OpenChat;
+			/** Opened straight from the project because it is the workspace's only active chat. */
+			direct: boolean;
+	  };
 
 const reasonOf = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
@@ -113,8 +121,14 @@ export function App() {
 						?.record.state
 				}
 				controller={controller}
-				backLabel={workspaceName(t, workspace)}
-				onBack={() => setRoute({ ...route, kind: "workspace" })}
+				backLabel={route.direct ? route.project.name : workspaceName(t, workspace)}
+				onBack={() =>
+					setRoute(
+						route.direct
+							? { kind: "project", hostKey, project: route.project }
+							: { ...route, kind: "workspace" },
+					)
+				}
 			/>
 		);
 	}
@@ -126,7 +140,7 @@ export function App() {
 				items={hostItems(items, route.hostKey)}
 				backLabel={route.project.name}
 				onBack={() => setRoute({ kind: "project", hostKey: route.hostKey, project: route.project })}
-				onOpen={(chat) => setRoute({ ...route, kind: "chat", chat })}
+				onOpen={(chat, direct) => setRoute({ ...route, kind: "chat", chat, direct })}
 			/>
 		);
 	}

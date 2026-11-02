@@ -8,6 +8,7 @@ import {
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type { DeviceWireClient, RemoteSessionItem } from "@thinkrail/remote-client";
+import { useEffect } from "react";
 import { ListRow, LoadedList, Screen } from "./layout";
 import { workspaceName } from "./ProjectScreen";
 import { statusOf } from "./status";
@@ -46,7 +47,8 @@ export function WorkspaceScreen({
 	items: RemoteSessionItem[];
 	backLabel: string;
 	onBack: () => void;
-	onOpen: (chat: OpenChat) => void;
+	/** `direct` when the workspace's only active chat opened without the list being shown. */
+	onOpen: (chat: OpenChat, direct: boolean) => void;
 }) {
 	const t = useT();
 	const live = new Map(
@@ -60,15 +62,31 @@ export function WorkspaceScreen({
 		{ workspaceId: workspace.id },
 		[...live.keys()].sort().join(),
 	);
-	const sorted =
+	const active =
 		loaded.kind === "ready"
-			? { ...loaded, value: [...loaded.value].sort((a, b) => b.updatedAt - a.updatedAt) }
+			? {
+					...loaded,
+					value: loaded.value
+						.filter((summary) => summary.live)
+						.sort((a, b) => b.updatedAt - a.updatedAt),
+				}
 			: loaded;
 	const now = Date.now();
+	const chatOf = (summary: SessionSummary): OpenChat => ({
+		sessionId: summary.sessionId,
+		title: chatTitle(summary.title, summary.firstPrompt)?.text ?? t("store.chatTab.defaultName"),
+		model: summary.model,
+		thinkingLevel: summary.thinkingLevel,
+	});
+	const only = active.kind === "ready" && active.value.length === 1 ? active.value[0] : undefined;
+
+	useEffect(() => {
+		if (only) onOpen(chatOf(only), true);
+	});
 
 	return (
 		<Screen title={workspaceName(t, workspace)} back={{ label: backLabel, onBack }}>
-			<LoadedList loaded={sorted} empty={t("mobile.workspace.empty")}>
+			<LoadedList loaded={only ? { kind: "loading" } : active} empty={t("mobile.workspace.empty")}>
 				{(summaries) =>
 					summaries.map((summary) => {
 						const title = chatTitle(summary.title, summary.firstPrompt);
@@ -81,14 +99,7 @@ export function WorkspaceScreen({
 								tooltip={title?.tooltip}
 								status={statusOf(live.get(summary.sessionId)?.state ?? summary.state)}
 								trailing={compactAge(t, summary.updatedAt, now)}
-								onOpen={() =>
-									onOpen({
-										sessionId: summary.sessionId,
-										title: text,
-										model: summary.model,
-										thinkingLevel: summary.thinkingLevel,
-									})
-								}
+								onOpen={() => onOpen(chatOf(summary), false)}
 							/>
 						);
 					})

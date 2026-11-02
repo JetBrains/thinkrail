@@ -18,7 +18,8 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
 ## Boundary
 
 - **Owns:**
-  - `deviceChannel.ts` — `DeviceChannel` + `toDeviceChannel` (native `RTCDataChannel` adapter).
+  - `deviceChannel.ts` — `DeviceChannel` + `toDeviceChannel` (native `RTCDataChannel` adapter; contracts'
+    channel framing both ways, binary frames read as `ArrayBuffer` so chunks keep their order).
   - `deviceWireClient.ts` — the reconnect-safe wire client (request/response + pushes, replay on `attach`).
   - `deviceConnector.ts` — `connectRemoteProject` (first pairing, link + token) and `connectSavedHost`
     (token-less `resume`), sharing one WebRTC + auto-reconnect machinery; persistent device key.

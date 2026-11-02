@@ -33,7 +33,8 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for rationale 
     SDP/ICE exchange. A **`resume`** frame re-authorizes an already-paired device by its registered key
     (`findDevice`) with no token — the path a reconnect takes, since the QR token is one-time.
   - `channel.ts` — `RemoteChannel`, the byte-channel interface the wire protocol runs over.
-  - `weriftRemoteChannel.ts` — `toRemoteChannel`, adapting a werift `RTCDataChannel` to `RemoteChannel`.
+  - `weriftRemoteChannel.ts` — `toRemoteChannel`, adapting a werift `RTCDataChannel` to `RemoteChannel`;
+    every send and receive goes through contracts' channel framing, so a large result is chunked.
     werift (pure TS) is **validated under Bun** (offer/answer, ICE, DataChannel, byte transfer via a
     loopback test), so the host needs no native WebRTC binding.
   - `hostPeer.ts` — `createWeriftHostPeer`, the host as WebRTC **offerer** (creates the DataChannel + offer,

@@ -50,6 +50,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   code, so it needs no protocol bump.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
+- **Remote channel framing (`channelFraming.ts`):** `CHANNEL_CHUNK_BYTES`, `chunkFrames(message)` and
+  `createChannelAssembler()` — the one chunking both ends of the remote WebRTC data channel use, because a
+  platform caps one DataChannel message (WebKit: 64 KiB) while a wire result such as a transcript is
+  megabytes. A message above 16 KiB travels as `[0x00, more]`-prefixed binary chunks (a wire message is JSON,
+  so it never starts with `0x00`); the ordered, reliable channel and back-to-back sends need no chunk ids.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and

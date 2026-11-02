@@ -37,6 +37,11 @@ test("adapts a werift DataChannel to RemoteChannel and round-trips bytes in both
 	deviceCh.send(new TextEncoder().encode("to-host"));
 	expect(await atHost).toBe("to-host");
 
+	const transcript = JSON.stringify({ result: "строка ".repeat(200_000) });
+	const atDeviceLarge = new Promise<string>((r) => deviceCh.onMessage((d) => r(decode(d))));
+	hostCh.send(new TextEncoder().encode(transcript));
+	expect(await atDeviceLarge).toBe(transcript);
+
 	expect(hostCh.open).toBe(true);
 	hostCh.close();
 	deviceCh.close();

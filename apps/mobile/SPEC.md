@@ -21,8 +21,10 @@ IDE. No file tree, diffs, terminals, layout, or settings. No cloud account: the 
   paired host), the three list screens that read the IDE project tree as screens — `ProjectsScreen.tsx`
   (each host's open projects from `project.list`, per-host "unreachable" notice, add-computer form) →
   `ProjectScreen.tsx` (the project's workspaces from `workspace.list`, default / worktree / external glyphs,
-  branch as the second line) → `WorkspaceScreen.tsx` (its chats from `session.list`, newest first, titled by
-  contracts' `chatTitle`, aged by `compactAgeOf`) — and `SessionScreen.tsx`, the IDE's chat on a phone: it renders the
+  branch as the second line) → `WorkspaceScreen.tsx` (its **active** chats — `session.list` entries the host holds `live`,
+  i.e. open in ThinkRail since it started, not the closed history — newest first, titled by contracts'
+  `chatTitle`, aged by `compactAgeOf`; a workspace normally has one, which opens directly and whose back
+  returns to the project, so the list shows only when there are several) — and `SessionScreen.tsx`, the IDE's chat on a phone: it renders the
   [[module-chat-ui]] components unchanged (`messagesToRuntime` → `deriveRows` → `ChatTurnView` for the
   transcript, the shared `Composer` with its slash commands from `session.getCommands`, the model/effort
   picker over `model.list` → `session.setModel` / `session.setThinkingLevel`, send / steer / follow-up /

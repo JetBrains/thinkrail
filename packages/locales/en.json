@@ -826,7 +826,7 @@
 	"mobile.welcome.stepRun": "On your computer, start ThinkRail with remote access:",
 	"mobile.welcome.stepScan": "Tap Scan QR code below and point the phone at the QR code it prints.",
 	"mobile.welcome.tagline": "Your agent sessions, in your pocket.",
-	"mobile.workspace.empty": "No chats in this workspace yet.",
+	"mobile.workspace.empty": "No open chat here. Open one in ThinkRail on your computer and it appears here.",
 	"notifications.aggregate.body_one": "{{count}} worktree needs your attention",
 	"notifications.aggregate.body_other": "{{count}} worktrees need your attention",
 	"notifications.permission.deniedHint": "Notifications are blocked for this site. Re-enable them in your browser's site settings, then turn notifications on again.",

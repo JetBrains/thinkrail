@@ -1,4 +1,5 @@
 export * from "./brokerProtocol";
+export * from "./channelFraming";
 export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,
