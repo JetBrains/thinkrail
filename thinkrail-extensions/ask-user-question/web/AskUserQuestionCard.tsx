@@ -351,6 +351,7 @@ export function AskUserQuestionCard({
 	const revealElement = interaction?.revealElement;
 	const cancelAutomaticReveal = interaction?.cancelAutomaticReveal;
 	const cardRef = useRef<HTMLElement>(null);
+	const [dictating, setDictating] = useState(false);
 	const questions = useMemo(() => parseQuestions(args), [args]);
 	const resolvedResult =
 		readAskUserQuestionResult(interaction?.state.response) ?? readAskUserQuestionResult(result);
@@ -527,7 +528,9 @@ export function AskUserQuestionCard({
 
 	const showContinue = multipleQuestions && !onReview;
 	const canSubmit =
-		canRespond && (onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
+		canRespond &&
+		!dictating &&
+		(onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
 	const nudgeVisible = nudgeShowsOnPage(nudge, idx, onReview, answeredIndices.has(idx));
 
 	const confirmQuestion = (nextState: QState) => {
@@ -657,6 +660,8 @@ export function AskUserQuestionCard({
 							}
 							onCloseNote={() => patch(idx, { noteFor: null })}
 							onNote={(label, text) => patch(idx, { notes: { ...state.notes, [label]: text } })}
+							dictating={dictating}
+							onDictatingChange={setDictating}
 						/>
 					)}
 
@@ -697,6 +702,7 @@ export function AskUserQuestionCard({
 									variant="primary"
 									size="l"
 									data-testid="ask-continue"
+									disabled={dictating}
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
 									className="shrink-0"
 								>
@@ -883,6 +889,8 @@ function QuestionBody({
 	onOpenNote,
 	onCloseNote,
 	onNote,
+	dictating,
+	onDictatingChange,
 }: {
 	question: AskUserQuestionItem;
 	state: QState;
@@ -897,8 +905,13 @@ function QuestionBody({
 	onOpenNote: (label: string, cursor: number) => void;
 	onCloseNote: () => void;
 	onNote: (label: string, text: string) => void;
+	/** A mic on this card is listening: Enter and the card's submit wait for the dictation. */
+	dictating: boolean;
+	onDictatingChange: (listening: boolean) => void;
 }) {
 	const t = useT();
+	const Mic = useOptionalResourceHost()?.Mic;
+	const micScope = useMicScope();
 	const choiceRefs = useRef<Array<HTMLElement | null>>([]);
 	const noteRef = useRef<HTMLTextAreaElement>(null);
 	const focusNoteAfterRender = useRef(false);
@@ -1007,29 +1020,44 @@ function QuestionBody({
 									{selected ? (
 										<div className="pl-[calc(1.125rem+var(--space-8))]">
 											{state.noteFor === option.label ? (
-												<textarea
-													ref={noteRef}
-													data-testid="ask-note"
-													aria-label={t("tools.ask.noteLabel", { option: optionText })}
-													aria-keyshortcuts="Enter Shift+Enter Escape"
-													rows={2}
-													value={state.notes[option.label] ?? ""}
-													placeholder={t("tools.ask.notePlaceholder")}
-													onChange={(event) => onNote(option.label, event.target.value)}
-													onKeyDown={(event) => {
-														const action = noteKeyAction(
-															event.key,
-															event.shiftKey,
-															event.nativeEvent.isComposing,
-														);
-														if (action === "none") return;
-														event.stopPropagation();
-														if (action === "consume") return;
-														event.preventDefault();
-														finishNote(index);
-													}}
-													className="w-full resize-none rounded-sm border border-control-border-default bg-control-bg px-8 py-4 text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active"
-												/>
+												<div className="relative">
+													<textarea
+														ref={noteRef}
+														data-testid="ask-note"
+														aria-label={t("tools.ask.noteLabel", { option: optionText })}
+														aria-keyshortcuts="Enter Shift+Enter Escape"
+														rows={2}
+														value={state.notes[option.label] ?? ""}
+														placeholder={t("tools.ask.notePlaceholder")}
+														onChange={(event) => onNote(option.label, event.target.value)}
+														onKeyDown={(event) => {
+															const action = noteKeyAction(
+																event.key,
+																event.shiftKey,
+																event.nativeEvent.isComposing,
+															);
+															if (action === "none") return;
+															event.stopPropagation();
+															if (action === "consume" || dictating) return;
+															event.preventDefault();
+															finishNote(index);
+														}}
+														className="w-full resize-none rounded-sm border border-control-border-default bg-control-bg px-8 py-4 pr-24 text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active"
+													/>
+													{Mic ? (
+														<Mic
+															fieldRef={noteRef}
+															apply={(text, caret) => {
+																onNote(option.label, text);
+																restoreCaret(noteRef.current, caret);
+															}}
+															onListeningChange={onDictatingChange}
+															size="s"
+															className="absolute right-2 bottom-2"
+															{...(micScope ? { scope: micScope } : {})}
+														/>
+													) : null}
+												</div>
 											) : (
 												<Button
 													variant="ghost"
@@ -1068,6 +1096,8 @@ function QuestionBody({
 							if (action.type === "move") moveCursor(action.index);
 						}}
 						onConfirm={onConfirmCustom}
+						dictating={dictating}
+						onDictatingChange={onDictatingChange}
 					/>
 				</div>
 
@@ -1169,6 +1199,22 @@ function OptionRow({
 	);
 }
 
+/** Dictation writes a field's text; the caret follows only while the field keeps focus. */
+function restoreCaret(element: HTMLInputElement | HTMLTextAreaElement | null, caret: number): void {
+	requestAnimationFrame(() => {
+		if (element && element === document.activeElement) element.setSelectionRange(caret, caret);
+	});
+}
+
+function useMicScope(): { workspaceId: string; sessionId?: string } | null {
+	const scope = useResourceScope();
+	if (!scope) return null;
+	return {
+		workspaceId: scope.workspaceId,
+		...(scope.sessionId ? { sessionId: scope.sessionId } : {}),
+	};
+}
+
 function OtherOptionRow({
 	inputRef,
 	multi,
@@ -1179,6 +1225,8 @@ function OtherOptionRow({
 	onText,
 	onMove,
 	onConfirm,
+	dictating,
+	onDictatingChange,
 }: {
 	inputRef: (node: HTMLInputElement | null) => void;
 	multi: boolean;
@@ -1189,20 +1237,18 @@ function OtherOptionRow({
 	onText: (text: string) => void;
 	onMove: (key: "ArrowUp" | "ArrowDown") => void;
 	onConfirm: () => void;
+	dictating: boolean;
+	onDictatingChange: (listening: boolean) => void;
 }) {
 	const t = useT();
 	const inputId = useId();
 	const Mic = useOptionalResourceHost()?.Mic;
-	const scope = useResourceScope();
+	const micScope = useMicScope();
 	const fieldRef = useRef<HTMLInputElement | null>(null);
-	const [dictating, setDictating] = useState(false);
 	const applyDictation = useCallback(
 		(next: string, caret: number) => {
 			onText(next);
-			requestAnimationFrame(() => {
-				const element = fieldRef.current;
-				if (element && element === document.activeElement) element.setSelectionRange(caret, caret);
-			});
+			restoreCaret(fieldRef.current, caret);
 		},
 		[onText],
 	);
@@ -1271,16 +1317,9 @@ function OtherOptionRow({
 				<Mic
 					fieldRef={fieldRef}
 					apply={applyDictation}
-					onListeningChange={setDictating}
+					onListeningChange={onDictatingChange}
 					size="s"
-					{...(scope
-						? {
-								scope: {
-									workspaceId: scope.workspaceId,
-									...(scope.sessionId ? { sessionId: scope.sessionId } : {}),
-								},
-							}
-						: {})}
+					{...(micScope ? { scope: micScope } : {})}
 				/>
 			) : null}
 		</label>
