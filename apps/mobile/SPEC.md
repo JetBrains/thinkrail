@@ -73,7 +73,15 @@ choice belongs to the IDE. `theme.ts`'s `applyDevicePreferences` applies them be
 effect in `App`) — the bundled `dark` / `light` / `high-contrast-*` manifest via `applyPalette`, following
 `prefers-color-scheme` while System, and the locale via `resolveLocale` + `applyLocale`, following
 `languagechange` while System. Custom themes, theme pairs and local locale files are host-folder features
-and stay in the IDE. The native shell's background is the Dark palette's `background`, read from the manifest by
+and stay in the IDE.
+
+**Type scale.** `index.css` re-points the shared primitive font sizes (`--tr-font-size-s10`…`s24`) to a touch
+scale — the IDE's 14px UI text becomes 17px (iOS body), its 12px metadata 15px, every other step up in
+proportion — so every semantic `tr-*` style, including the shared chat, tree and settings components,
+grows together without forking a class; the tree's glyphs take 18px to match. The IDE's desktop density
+stays as is.
+
+The native shell's background is the Dark palette's `background`, read from the manifest by
 `capacitor.config.ts`, so first paint matches.
 
 ## Build & run

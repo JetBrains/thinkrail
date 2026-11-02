@@ -16,6 +16,18 @@
 	--spacing-chat-gutter: var(--space-16);
 }
 
+:root {
+	--tr-font-size-s10: 12px;
+	--tr-font-size-s11: 13px;
+	--tr-font-size-s12: 15px;
+	--tr-font-size-s13: 16px;
+	--tr-font-size-s14: 17px;
+	--tr-font-size-s16: 19px;
+	--tr-font-size-s18: 20px;
+	--tr-font-size-s20: 24px;
+	--tr-font-size-s24: 28px;
+}
+
 html,
 body,
 #root {

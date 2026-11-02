@@ -164,8 +164,8 @@ function HostProjects({
 									onClick={() => onToggle(key)}
 									className="flex min-h-touch w-full items-center gap-4 border-0 bg-transparent px-12 text-left active:bg-control-bg-hovered"
 								>
-									<Chevron aria-hidden className="size-16 shrink-0 text-text-muted" />
-									<ProjectGlyph selected={false} running={status.running} />
+									<Chevron aria-hidden className="size-20 shrink-0 text-text-muted" />
+									<ProjectGlyph selected={false} running={status.running} className="size-18" />
 									<span className="min-w-0 flex-1 truncate text-text-default tr-text-ui">
 										{project.name}
 									</span>
@@ -257,6 +257,7 @@ function ProjectWorkspaces({
 									active={false}
 									running={status.running}
 									twoLine={twoLine}
+									className="size-18"
 								/>
 								<WorkspaceLabel
 									name={workspaceName(t, workspace)}
