@@ -1,4 +1,4 @@
-import { isImeComposing } from "./ime";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 
 export const DOUBLE_SHIFT = { stepMs: 300, otherKeyGuardMs: 100 } as const;
 

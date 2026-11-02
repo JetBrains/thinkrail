@@ -83,7 +83,7 @@ of scope). `Mod+I` toggles the preview pane, `Mod+K` closes the palette (the cho
 Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command —
 closes outright. Closing without a pick returns focus to the element that held it when the palette
 opened (the composer an accidental double Shift interrupted, the topbar button); a pick leaves focus to
-its destination. An active IME owns every key (`isComposing` or the `keyCode` 229 sentinel): composing
+its destination. An active IME owns every key ([[module-ui]]'s `isImeComposing`): composing
 Escape, arrows, Enter and `Alt+n` do nothing to the palette, and Tab only stays in the input. Mutating rows
 are disabled while offline or before the current welcome, and a command may carry its own disabled reason
 (Settle while an agent works or a chat needs you). The palette has one level: no pages, no per-row action
