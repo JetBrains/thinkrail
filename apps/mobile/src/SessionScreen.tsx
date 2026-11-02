@@ -1,3 +1,4 @@
+import { RiHistoryLine } from "@remixicon/react";
 import { type ChatActions, ChatActionsContext } from "@thinkrail/chat-ui/ChatActions";
 import {
 	Composer,
@@ -26,10 +27,12 @@ import {
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import type { RemoteSessionsController } from "@thinkrail/remote-client";
+import type { RemoteSessionItem, RemoteSessionsController } from "@thinkrail/remote-client";
+import { IconButton } from "@thinkrail/ui/button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader, Notice, Screen } from "./layout";
 import { useHostRequest } from "./useHostRequest";
+import { useWorkspaceChats } from "./WorkspaceScreen";
 
 export interface OpenSession {
 	hostKey: string;
@@ -62,14 +65,18 @@ export function SessionScreen({
 	session,
 	state,
 	controller,
+	items,
 	backLabel,
 	onBack,
+	onHistory,
 }: {
 	session: OpenSession;
 	state: SessionState | undefined;
 	controller: RemoteSessionsController;
+	items: RemoteSessionItem[];
 	backLabel: string;
 	onBack: () => void;
+	onHistory: () => void;
 }) {
 	const t = useT();
 	const { hostKey, sessionId, workspaceId } = session;
@@ -85,6 +92,7 @@ export function SessionScreen({
 
 	const models = useHostRequest<WireModel[]>(client, "model.list", {});
 	const commands = useHostRequest<SlashCommandInfo[]>(client, "session.getCommands", { sessionId });
+	const chats = useWorkspaceChats(client, workspaceId, items);
 
 	useEffect(() => {
 		if (!client) return;
@@ -224,6 +232,17 @@ export function SessionScreen({
 		<Screen
 			title={session.title}
 			back={{ label: backLabel, onBack }}
+			action={
+				chats.kind === "ready" && chats.value.length > 1 ? (
+					<IconButton
+						size="l"
+						className="size-touch shrink-0"
+						icon={RiHistoryLine}
+						label={t("mobile.workspace.history")}
+						onClick={onHistory}
+					/>
+				) : undefined
+			}
 			footer={
 				<footer className="@container bg-container-workspace-bg pb-safe-bottom">
 					{sendError ? (

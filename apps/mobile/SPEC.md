@@ -34,12 +34,13 @@ QR). Welcome's first step says which network to use.
   `settleIdleDays` from its welcome — the Settled shelf is not shown on the phone), Default first, branch as
   the second line; the expanded set lives in `App` so returning from a chat keeps the tree; per-host
   "unreachable" notice with its reason; the header's gear opens the settings screen, where computers are
-  added; a tapped workspace opens `WorkspaceScreen.tsx`
-  (its chats from `session.list`, titled by contracts' `chatTitle`, aged by `compactAgeOf`: **Open** — the
-  ones the host holds `live` — then **Recent**, the closed history, each newest first; tapping a closed one
-  reopens it, because `session.getMessages` attaches a disk session the same way the IDE reopens a chat; the
-  header's **+** starts one with `session.create`. A workspace whose only chat is live opens it directly, and
-  a chat that is or becomes the workspace's only one backs out to the tree, since the list would reopen it); and `SessionScreen.tsx`, the IDE's chat on a phone: it renders the
+  added; a tapped workspace always lands in a chat, as the IDE does (`WorkspaceScreen.tsx`'s `WorkspaceOpener`):
+  the newest chat the host holds `live`, else the newest from history (`session.getMessages` attaches a disk
+  session, the same reopen the IDE does), else a new one via `session.create`; back returns to the tree. When
+  the workspace has more than one chat the chat header shows a history button opening `ChatHistoryScreen`:
+  **Open** chats, then **Recent** (closed) ones, each newest first, the current one marked, **+** to start a
+  chat; picking one switches to it and back returns to the chat. Titles come from contracts' `chatTitle`,
+  ages from `compactAgeOf`; and `SessionScreen.tsx`, the IDE's chat on a phone: it renders the
   [[module-chat-ui]] components unchanged (`messagesToRuntime` → `deriveRows` → `ChatTurnView` for the
   transcript, the shared `Composer` with its slash commands from `session.getCommands`, the model/effort
   picker over `model.list` → `session.setModel` / `session.setThinkingLevel`, send / steer / follow-up /
@@ -114,8 +115,8 @@ git-ignored, so the setup script is the only place native configuration is writt
 `AndroidManifest.xml`, copies the launcher icons from `packages/shared/assets/android`, syncs, and opens
 Android Studio. The WebView is served from `http://localhost` (`server.androidScheme`), not the default
 `https`, because an https page may not open a `ws://` relay (mixed content); localhost stays a secure
-context, so SubtleCrypto still works. The hardware back button walks the app's own routes (chat →
-workspace or tree → tree, closing the pair form) and only backgrounds the app from the tree. `android/` is
+context, so SubtleCrypto still works. The hardware back button walks the app's own routes (chat history →
+chat → tree, settings → tree) and only backgrounds the app from the tree. `android/` is
 git-ignored like `ios/`. See
 `RUNBOOK-mobile.md` for signing and on-device steps.
 

@@ -10,11 +10,11 @@ import {
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type { DeviceWireClient, RemoteSessionItem } from "@thinkrail/remote-client";
 import { IconButton } from "@thinkrail/ui/button";
-import { useEffect, useState } from "react";
-import { ListRow, LoadedList, Notice, Screen } from "./layout";
+import { useEffect, useRef, useState } from "react";
+import { ListRow, LoadedList, Loader, Notice, Screen } from "./layout";
 import { workspaceName } from "./ProjectsScreen";
 import { statusOf } from "./status";
-import { useHostRequest } from "./useHostRequest";
+import { type Loaded, useHostRequest } from "./useHostRequest";
 
 const COMPACT_AGE_KEYS = {
 	underHour: "lib.compactAge.underHour",
@@ -36,7 +36,56 @@ export interface OpenChat {
 	thinkingLevel: SessionSummary["thinkingLevel"];
 }
 
-export function WorkspaceScreen({
+const byRecent = (a: SessionSummary, b: SessionSummary) => b.updatedAt - a.updatedAt;
+
+/** Open chats newest first, then the closed history newest first. */
+const ordered = (summaries: SessionSummary[]): SessionSummary[] => [
+	...summaries.filter((summary) => summary.live).sort(byRecent),
+	...summaries.filter((summary) => !summary.live).sort(byRecent),
+];
+
+const chatOf = (t: Translator, summary: SessionSummary): OpenChat => ({
+	sessionId: summary.sessionId,
+	title: chatTitle(summary.title, summary.firstPrompt)?.text ?? t("store.chatTab.defaultName"),
+	model: summary.model,
+	thinkingLevel: summary.thinkingLevel,
+});
+
+const createChat = async (
+	t: Translator,
+	client: DeviceWireClient,
+	workspaceId: string,
+): Promise<OpenChat> => {
+	const created = await client.request<WsResult<"session.create">>("session.create", {
+		workspaceId,
+	});
+	return {
+		sessionId: created.sessionId,
+		title: t("store.chatTab.defaultName"),
+		model: created.model,
+		thinkingLevel: created.thinkingLevel,
+	};
+};
+
+const reasonOf = (error: unknown): string =>
+	error instanceof Error ? error.message : String(error);
+
+/** The workspace's chats from `session.list`, re-read when a session appears or leaves in it. */
+export function useWorkspaceChats(
+	client: DeviceWireClient | null,
+	workspaceId: string,
+	items: RemoteSessionItem[],
+): Loaded<SessionSummary[]> {
+	const reload = items
+		.filter((item) => item.record.workspaceId === workspaceId)
+		.map((item) => item.record.sessionId)
+		.sort()
+		.join();
+	return useHostRequest<SessionSummary[]>(client, "session.list", { workspaceId }, reload);
+}
+
+/** Tapping a workspace lands in its main chat, as the IDE does: the newest open one, else the newest from history, else a new one. */
+export function WorkspaceOpener({
 	workspace,
 	client,
 	items,
@@ -49,8 +98,53 @@ export function WorkspaceScreen({
 	items: RemoteSessionItem[];
 	backLabel: string;
 	onBack: () => void;
-	/** `direct` when the chat is (or becomes) the workspace's only one, so back skips the list that would reopen it. */
-	onOpen: (chat: OpenChat, direct: boolean) => void;
+	onOpen: (chat: OpenChat) => void;
+}) {
+	const t = useT();
+	const chats = useWorkspaceChats(client, workspace.id, items);
+	const [failure, setFailure] = useState<string | null>(null);
+	const started = useRef(false);
+
+	useEffect(() => {
+		if (started.current || chats.kind !== "ready" || !client) return;
+		started.current = true;
+		const main = ordered(chats.value)[0];
+		if (main) onOpen(chatOf(t, main));
+		else
+			createChat(t, client, workspace.id).then(onOpen, (error: unknown) =>
+				setFailure(reasonOf(error)),
+			);
+	}, [chats, client, workspace.id, onOpen, t]);
+
+	const reason = failure ?? (chats.kind === "failed" ? chats.reason : null);
+	return (
+		<Screen title={workspaceName(t, workspace)} back={{ label: backLabel, onBack }}>
+			{reason ? (
+				<Notice text={t("mobile.list.failed", { reason })} alert />
+			) : (
+				<Loader text={t("mobile.list.loading")} />
+			)}
+		</Screen>
+	);
+}
+
+/** The chat's history button: switch between a workspace's chats or start one; Open first, then Recent. */
+export function ChatHistoryScreen({
+	workspace,
+	client,
+	items,
+	current,
+	backLabel,
+	onBack,
+	onOpen,
+}: {
+	workspace: Workspace;
+	client: DeviceWireClient | null;
+	items: RemoteSessionItem[];
+	current: string;
+	backLabel: string;
+	onBack: () => void;
+	onOpen: (chat: OpenChat) => void;
 }) {
 	const t = useT();
 	const live = new Map(
@@ -58,66 +152,23 @@ export function WorkspaceScreen({
 			.filter((item) => item.record.workspaceId === workspace.id)
 			.map((item) => [item.record.sessionId, item.record]),
 	);
-	const loaded = useHostRequest<SessionSummary[]>(
-		client,
-		"session.list",
-		{ workspaceId: workspace.id },
-		[...live.keys()].sort().join(),
-	);
-	const byRecent = (a: SessionSummary, b: SessionSummary) => b.updatedAt - a.updatedAt;
-	const sorted =
-		loaded.kind === "ready"
-			? {
-					...loaded,
-					value: [
-						...loaded.value.filter((summary) => summary.live).sort(byRecent),
-						...loaded.value.filter((summary) => !summary.live).sort(byRecent),
-					],
-				}
-			: loaded;
+	const loaded = useWorkspaceChats(client, workspace.id, items);
+	const sorted = loaded.kind === "ready" ? { ...loaded, value: ordered(loaded.value) } : loaded;
 	const now = Date.now();
-	const chatOf = (summary: SessionSummary): OpenChat => ({
-		sessionId: summary.sessionId,
-		title: chatTitle(summary.title, summary.firstPrompt)?.text ?? t("store.chatTab.defaultName"),
-		model: summary.model,
-		thinkingLevel: summary.thinkingLevel,
-	});
-	const only =
-		sorted.kind === "ready" && sorted.value.length === 1 && sorted.value[0]?.live
-			? sorted.value[0]
-			: undefined;
 	const [creating, setCreating] = useState(false);
 	const [createFailure, setCreateFailure] = useState<string | null>(null);
-	const createChat = (): void => {
+	const startChat = (): void => {
 		if (!client) return;
 		setCreating(true);
 		setCreateFailure(null);
-		client
-			.request<WsResult<"session.create">>("session.create", { workspaceId: workspace.id })
-			.then((created) =>
-				onOpen(
-					{
-						sessionId: created.sessionId,
-						title: t("store.chatTab.defaultName"),
-						model: created.model,
-						thinkingLevel: created.thinkingLevel,
-					},
-					sorted.kind === "ready" && sorted.value.length === 0,
-				),
-			)
-			.catch((error: unknown) =>
-				setCreateFailure(error instanceof Error ? error.message : String(error)),
-			)
+		createChat(t, client, workspace.id)
+			.then(onOpen, (error: unknown) => setCreateFailure(reasonOf(error)))
 			.finally(() => setCreating(false));
 	};
 
-	useEffect(() => {
-		if (only) onOpen(chatOf(only), true);
-	});
-
 	return (
 		<Screen
-			title={workspaceName(t, workspace)}
+			title={t("mobile.workspace.history")}
 			back={{ label: backLabel, onBack }}
 			action={
 				<IconButton
@@ -127,14 +178,14 @@ export function WorkspaceScreen({
 					label={t("mobile.workspace.newChat")}
 					loading={creating}
 					disabled={!client || creating}
-					onClick={createChat}
+					onClick={startChat}
 				/>
 			}
 		>
 			{createFailure ? (
 				<Notice text={t("mobile.workspace.newChatFailed", { reason: createFailure })} alert />
 			) : null}
-			<LoadedList loaded={only ? { kind: "loading" } : sorted} empty={t("mobile.workspace.empty")}>
+			<LoadedList loaded={sorted} empty={t("mobile.workspace.empty")}>
 				{(summaries) =>
 					summaries.map((summary, index) => {
 						const title = chatTitle(summary.title, summary.firstPrompt);
@@ -154,9 +205,10 @@ export function WorkspaceScreen({
 								icon={summary.live ? RiChat2Line : RiHistoryLine}
 								title={text}
 								tooltip={title?.tooltip}
+								detail={summary.sessionId === current ? t("mobile.workspace.current") : undefined}
 								status={statusOf(live.get(summary.sessionId)?.state ?? summary.state)}
 								trailing={compactAge(t, summary.updatedAt, now)}
-								onOpen={() => onOpen(chatOf(summary), summaries.length === 1)}
+								onOpen={() => onOpen(chatOf(t, summary))}
 							/>,
 						];
 					})

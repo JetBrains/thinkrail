@@ -10,7 +10,7 @@ import {
 } from "@thinkrail/remote-client";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { failureOf, failureText, type HostFailure, type HostStatus } from "./hostStatus";
-import { ProjectsScreen, workspaceName } from "./ProjectsScreen";
+import { ProjectsScreen } from "./ProjectsScreen";
 import { type DevicePreferences, readPreferences, writePreferences } from "./preferences";
 import { SessionScreen } from "./SessionScreen";
 import { SettingsScreen } from "./SettingsScreen";
@@ -18,26 +18,25 @@ import { isPairLink } from "./scanPairLink";
 import { localStore } from "./store";
 import { applyDevicePreferences } from "./theme";
 import { Welcome } from "./Welcome";
-import { type OpenChat, WorkspaceScreen } from "./WorkspaceScreen";
+import { ChatHistoryScreen, type OpenChat, WorkspaceOpener } from "./WorkspaceScreen";
 
 const DEVICE_LABEL = "Mobile";
 
 export type PairState = { kind: "idle" } | { kind: "pairing" } | { kind: "failed"; reason: string };
 
-/** The project tree (projects expand into their live workspaces) → a workspace's active chats → a chat. */
+interface InWorkspace {
+	hostKey: string;
+	project: Project;
+	workspace: Workspace;
+}
+
+/** The project tree → a workspace's main chat (opened while `workspace` resolves it) ⇄ its chat history. */
 type Route =
 	| { kind: "projects" }
 	| { kind: "settings" }
-	| { kind: "workspace"; hostKey: string; project: Project; workspace: Workspace }
-	| {
-			kind: "chat";
-			hostKey: string;
-			project: Project;
-			workspace: Workspace;
-			chat: OpenChat;
-			/** Opened straight from the tree because it is the workspace's only active chat. */
-			direct: boolean;
-	  };
+	| ({ kind: "workspace" } & InWorkspace)
+	| ({ kind: "chat"; chat: OpenChat } & InWorkspace)
+	| ({ kind: "history"; chat: OpenChat } & InWorkspace);
 
 export function App() {
 	const registry = useMemo(() => createHostRegistry(localStore), []);
@@ -141,11 +140,11 @@ export function App() {
 	}, [controller, registry, pairWith, connectHost]);
 
 	const back = useCallback((): boolean => {
-		if (route.kind === "chat") {
-			setRoute(route.direct ? { kind: "projects" } : { ...route, kind: "workspace" });
+		if (route.kind === "history") {
+			setRoute({ ...route, kind: "chat" });
 			return true;
 		}
-		if (route.kind === "workspace" || route.kind === "settings") {
+		if (route.kind !== "projects") {
 			setRoute({ kind: "projects" });
 			return true;
 		}
@@ -184,26 +183,42 @@ export function App() {
 		const { hostKey, workspace, chat } = route;
 		return (
 			<SessionScreen
+				key={chat.sessionId}
 				session={{ hostKey, workspaceId: workspace.id, ...chat }}
 				state={
 					items.find((item) => item.hostKey === hostKey && item.record.sessionId === chat.sessionId)
 						?.record.state
 				}
 				controller={controller}
-				backLabel={route.direct ? t("mobile.projects.title") : workspaceName(t, workspace)}
+				items={hostItems(items, hostKey)}
+				backLabel={t("mobile.projects.title")}
 				onBack={back}
+				onHistory={() => setRoute({ ...route, kind: "history" })}
+			/>
+		);
+	}
+	if (route.kind === "history") {
+		return (
+			<ChatHistoryScreen
+				workspace={route.workspace}
+				client={controller.clientFor(route.hostKey)}
+				items={hostItems(items, route.hostKey)}
+				current={route.chat.sessionId}
+				backLabel={route.chat.title}
+				onBack={back}
+				onOpen={(chat) => setRoute({ ...route, kind: "chat", chat })}
 			/>
 		);
 	}
 	if (route.kind === "workspace") {
 		return (
-			<WorkspaceScreen
+			<WorkspaceOpener
 				workspace={route.workspace}
 				client={controller.clientFor(route.hostKey)}
 				items={hostItems(items, route.hostKey)}
 				backLabel={t("mobile.projects.title")}
 				onBack={back}
-				onOpen={(chat, direct) => setRoute({ ...route, kind: "chat", chat, direct })}
+				onOpen={(chat) => setRoute({ ...route, kind: "chat", chat })}
 			/>
 		);
 	}
