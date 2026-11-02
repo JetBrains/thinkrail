@@ -1,7 +1,8 @@
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "react";
+import { useOptionalResourceHost, useResourceScope } from "../host";
 import type { AnchorDraft, SurfaceReview } from "../registry";
 import {
 	type ReviewTextBinding,
@@ -45,6 +46,23 @@ export function ReviewComposer({
 	const { text, busy } = state;
 	const setInput = input?.onChange ?? setLocal;
 	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const Mic = useOptionalResourceHost()?.Mic;
+	const scope = useResourceScope();
+	const [dictating, setDictating] = useState(false);
+	const latest = useRef({ state, setInput });
+	useInsertionEffect(() => {
+		latest.current = { state, setInput };
+	});
+	const applyDictation = useCallback((next: string, caret: number) => {
+		const { state: current, setInput: write } = latest.current;
+		write({ ...current, text: next, start: caret, end: caret, direction: "none" });
+		requestAnimationFrame(() => {
+			const element = inputRef.current;
+			if (!element) return;
+			grow(element);
+			if (element === document.activeElement) element.setSelectionRange(caret, caret);
+		});
+	}, []);
 
 	useEffect(() => {
 		const element = inputRef.current;
@@ -71,7 +89,7 @@ export function ReviewComposer({
 
 	const submit = (action: SurfaceReview["commenting"]["onSave"]) => {
 		const body = text.trim();
-		if (busy || !body) return;
+		if (busy || dictating || !body) return;
 		setInput({ ...state, busy: true });
 		action(draft, body).then(onClose, () => setInput({ ...state, busy: false }));
 	};
@@ -105,11 +123,28 @@ export function ReviewComposer({
 				}}
 			/>
 			<div className="review-composer-row">
+				{Mic ? (
+					<Mic
+						fieldRef={inputRef}
+						apply={applyDictation}
+						onListeningChange={setDictating}
+						disabled={busy}
+						size="s"
+						{...(scope
+							? {
+									scope: {
+										workspaceId: scope.workspaceId,
+										...(scope.sessionId ? { sessionId: scope.sessionId } : {}),
+									},
+								}
+							: {})}
+					/>
+				) : null}
 				<Button
 					variant="outline"
 					size="s"
 					data-testid="review-composer-save"
-					disabled={busy || !text.trim()}
+					disabled={busy || dictating || !text.trim()}
 					onClick={() => submit(commenting.onSave)}
 				>
 					{t("review.composer.saveDraft")}
@@ -118,7 +153,7 @@ export function ReviewComposer({
 					variant="primary"
 					size="s"
 					data-testid="review-composer-send"
-					disabled={busy || !text.trim()}
+					disabled={busy || dictating || !text.trim()}
 					onClick={() => submit(commenting.onSend)}
 				>
 					{t("review.composer.sendNow")}

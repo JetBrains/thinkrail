@@ -17,6 +17,7 @@ import { openFileComparisonInTab, openFileInTab } from "../panels/openTabs";
 import { resourceBytesUrl } from "../panels/resourcePane";
 import { SendReviewButton } from "../panels/SendReviewButton";
 import { useFileReview } from "../panels/useReviewCommenting";
+import { MicButton } from "../speech";
 import { selectFileChangeSince, useAppStore } from "../store";
 import { resolveThinkrailShikiTheme } from "../themes";
 import { getTransport } from "../transport";
@@ -53,6 +54,7 @@ const HOST: ResourceHost = {
 		}),
 	FileReview,
 	ReviewSend,
+	Mic: MicButton,
 };
 
 export function AppResourceHost({ children }: { children: ReactNode }) {

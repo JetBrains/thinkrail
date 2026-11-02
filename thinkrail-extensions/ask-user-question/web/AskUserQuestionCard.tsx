@@ -14,13 +14,14 @@ import type {
 	AskUserQuestionItem,
 	AskUserQuestionResult,
 } from "@thinkrail/pi-ask-user-question/core";
-import { useOptionalResourceHost } from "@thinkrail/resource-renderers";
+import { useOptionalResourceHost, useResourceScope } from "@thinkrail/resource-renderers";
 import { AttentionLine } from "@thinkrail/ui/attention-line";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	Fragment,
 	type KeyboardEvent,
+	useCallback,
 	useEffect,
 	useId,
 	useLayoutEffect,
@@ -1191,6 +1192,20 @@ function OtherOptionRow({
 }) {
 	const t = useT();
 	const inputId = useId();
+	const Mic = useOptionalResourceHost()?.Mic;
+	const scope = useResourceScope();
+	const fieldRef = useRef<HTMLInputElement | null>(null);
+	const [dictating, setDictating] = useState(false);
+	const applyDictation = useCallback(
+		(next: string, caret: number) => {
+			onText(next);
+			requestAnimationFrame(() => {
+				const element = fieldRef.current;
+				if (element && element === document.activeElement) element.setSelectionRange(caret, caret);
+			});
+		},
+		[onText],
+	);
 	return (
 		<label
 			htmlFor={inputId}
@@ -1221,7 +1236,10 @@ function OtherOptionRow({
 			)}
 			<span className="tr-text-ui text-text-default">{t("tools.ask.other")}</span>
 			<input
-				ref={inputRef}
+				ref={(node) => {
+					fieldRef.current = node;
+					inputRef(node);
+				}}
 				id={inputId}
 				data-testid="ask-custom"
 				data-ask-page-focus={pageFocus || undefined}
@@ -1244,11 +1262,27 @@ function OtherOptionRow({
 					}
 					if (event.key === "Enter" && !event.nativeEvent.isComposing) {
 						event.preventDefault();
-						onConfirm();
+						if (!dictating) onConfirm();
 					}
 				}}
 				className="min-w-0 flex-1 border-none bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
+			{Mic ? (
+				<Mic
+					fieldRef={fieldRef}
+					apply={applyDictation}
+					onListeningChange={setDictating}
+					size="s"
+					{...(scope
+						? {
+								scope: {
+									workspaceId: scope.workspaceId,
+									...(scope.sessionId ? { sessionId: scope.sessionId } : {}),
+								},
+							}
+						: {})}
+				/>
+			) : null}
 		</label>
 	);
 }

@@ -1,8 +1,8 @@
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { openWorkspaceChat } from "./fixtures/app";
+import { openWorkspaceChat, revealWorkbenchTool } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_SPEECH_PORT } from "./fixtures/paths";
 import { FAKE_SPEECH_TEXT, SLOW_MODEL_PATH, slowModelBytes } from "./fixtures/speech";
 import { E2eWire } from "./fixtures/wire";
@@ -166,6 +166,31 @@ test("the New-workspace prompt takes dictation and holds Create while listening"
 	await expect(dialog.getByTestId("create-workspace")).toBeEnabled();
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
+});
+
+test("a review comment takes dictation and holds Save and Send while listening", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(join(worktree, "voice-review.ts"), "export const spoken = true;\n");
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "voice-review.ts" }).click();
+	const section = page.locator('[data-testid="changes-section"][data-path="voice-review.ts"]');
+	await section.getByTestId("hunk-ask-agent").click();
+	const composer = section.getByTestId("review-composer");
+	const input = composer.getByTestId("review-composer-input");
+	await expect(input).toBeFocused();
+	const seeded = await input.inputValue();
+	const reviewMic = composer.getByTestId("speech-mic");
+	await reviewMic.click();
+	await expect(reviewMic).toHaveAttribute("data-mic-state", "listening");
+	await expect(input).toHaveValue(`${seeded}${FAKE_SPEECH_TEXT}`, { timeout: 15_000 });
+	await expect(composer.getByTestId("review-composer-send")).toBeDisabled();
+	await reviewMic.click();
+	await expect(reviewMic).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await expect(input).toHaveValue(`${seeded}${FAKE_SPEECH_TEXT}`);
+	await expect(composer.getByTestId("review-composer-send")).toBeEnabled();
 });
 
 test("the chord never reaches the composer behind an open dialog", async ({ page }) => {
