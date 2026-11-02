@@ -786,7 +786,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   A destination is also reached at the position the engine actually produced for it: WebKit (the macOS
   desktop WKWebView) truncates fractional scroll writes where Chromium rounds, so a write can land almost a
   pixel short of `GEOMETRY_EPSILON`. That evidence holds only while the requested destination, the achieved
-  position, and the scroll range are all unchanged. An instant follow step does not re-evaluate
+  position, and the scroll range are all unchanged. The streaming pin uses the same evidence, so it does not
+  rewrite a position the engine already truncated. An instant return to the pin does not re-evaluate
   synchronously; the next content change does. Judging convergence by distance alone once made a
   reduced-motion follow re-enter itself until the stack overflowed (#1046) and kept an animated follow
   easing forever.

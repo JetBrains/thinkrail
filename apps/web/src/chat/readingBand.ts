@@ -576,6 +576,8 @@ export function createReadingBandController(
 	const pinEdge = (geometry: ReadingBandGeometry) => {
 		const target = pinTarget(geometry);
 		if (target === null || target - geometry.scrollTop <= GEOMETRY_EPSILON) return false;
+		const bounds = environment.readScrollBounds();
+		if (bounds && scrollReached(target, bounds)) return true;
 		writeRunwayHeight(Math.max(0, target - naturalMaxScrollTop(geometry)));
 		writeScrollTop(target);
 		return true;

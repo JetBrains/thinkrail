@@ -1057,7 +1057,7 @@ describe("reading-band derived room", () => {
 		expect(harness.readGeometry()).toMatchObject({ scrollTop: 121, edgeBottom: 600 });
 		expect(harness.readRunwayHeight()).toBe(1);
 		expect(
-			harness.writes.every((write, index) => index === 0 || write >= harness.writes[index - 1]),
+			harness.writes.every((write, index, writes) => write >= (writes[index - 1] ?? write)),
 		).toBe(true);
 	});
 
@@ -1451,7 +1451,7 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 		}
 		expect(harness.readGeometry().scrollTop).toBeCloseTo(previousEdgeDoc - 60, 8);
 		expect(
-			harness.writes.every((write, index) => index === 0 || write >= harness.writes[index - 1]),
+			harness.writes.every((write, index, writes) => write >= (writes[index - 1] ?? write)),
 		).toBe(true);
 	});
 
@@ -1976,14 +1976,14 @@ describe("reading-band quantized scroll writes", () => {
 		}
 	});
 
-	it("completes a large fractional step at either quantum", () => {
+	it("completes a large fractional pin at either quantum", () => {
 		for (const reducedMotion of [false, true]) {
 			for (const snap of [webkitTruncation, coarseTruncation]) {
 				const harness = createHarness({ reducedMotion, snap });
 				harness.setGeometry({ edgeBottom: 900.7, maxScrollTop: 900 });
 				harness.controller.contentChanged();
 				advanceUntilIdle(harness);
-				expect(harness.readGeometry().scrollTop).toBe(snap(550.7));
+				expect(harness.readGeometry().scrollTop).toBe(snap(400.7));
 				expect(harness.controller.getSnapshot().moving).toBe(false);
 			}
 		}
@@ -2004,11 +2004,25 @@ describe("reading-band quantized scroll writes", () => {
 	it("holds a fractional streaming mount with one write while geometry is unchanged", () => {
 		const harness = createHarness({ mountPending: true, snap: webkitTruncation });
 		harness.setReferenceRow({ id: "r1", top: 0 });
-		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600.6 });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 750.6 });
 		harness.controller.contentChanged();
 		advanceUntilIdle(harness);
 		expect(harness.writes).toEqual([350.6]);
 		expect(harness.readGeometry().scrollTop).toBe(350);
+	});
+
+	it("does not rewrite a truncated pin while geometry is unchanged", () => {
+		const harness = createHarness({ snap: webkitTruncation });
+		harness.setGeometry({ edgeBottom: 700.6, maxScrollTop: 900 });
+		harness.controller.contentChanged();
+		harness.controller.contentChanged();
+		expect(harness.writes).toHaveLength(1);
+		expect(harness.readGeometry().scrollTop).toBe(200);
+
+		harness.setGeometry({ edgeBottom: 601.2 });
+		harness.controller.contentChanged();
+		expect(harness.writes).toHaveLength(2);
+		expect(harness.readGeometry().scrollTop).toBe(201);
 	});
 
 	it("does not reuse a truncated write once its evidence no longer applies", () => {
