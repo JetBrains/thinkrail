@@ -19,6 +19,7 @@ import { cn } from "@thinkrail/ui/utils";
 import {
 	forwardRef,
 	type KeyboardEvent,
+	type MouseEvent,
 	useCallback,
 	useEffect,
 	useImperativeHandle,
@@ -81,6 +82,18 @@ const SEND_MAIN = cn(
 );
 const SEND_MORE = cn(SEGMENT, "rounded-r-full pr-8 pl-2");
 const KEYCAP = "flex h-16 min-w-16 items-center justify-center rounded-xs bg-on-primary-soft px-2";
+
+const COMPOSER_CONTROLS =
+	"a,button,input,label,select,textarea,[role='button'],[role='menuitem'],[role='option']";
+
+function isComposerDeadZone({ button, currentTarget, target }: MouseEvent<HTMLElement>) {
+	return (
+		button === 0 &&
+		target instanceof Element &&
+		currentTarget.contains(target) &&
+		!target.closest(COMPOSER_CONTROLS)
+	);
+}
 
 const STREAMING_SEND_MODES = [
 	{
@@ -486,11 +499,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const { onPaste, onDrop } = imagePasteDropHandlers(attachedImages);
 
 	return (
-		<div
+		<fieldset
 			data-testid="chat-composer"
 			data-expanded={expanded}
 			data-streaming={isStreaming}
-			className="relative flex shrink-0 flex-col border-border-muted border-t bg-container-workspace-bg"
+			onMouseDown={(e) => {
+				if (isComposerDeadZone(e)) {
+					e.preventDefault();
+					ref.current?.focus();
+				}
+			}}
+			className="relative m-0 flex min-w-0 shrink-0 flex-col border-0 border-border-muted border-t bg-container-workspace-bg p-0"
 		>
 			{mentionOpen ? (
 				<div
@@ -759,6 +778,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					</div>
 				</div>
 			</div>
-		</div>
+		</fieldset>
 	);
 });
