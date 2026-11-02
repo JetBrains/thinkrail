@@ -111,6 +111,7 @@ import {
 	setPiTrustSeed,
 	setProjectPublisher,
 } from "../projects";
+import { applyProxyConfig, type SystemProxyResolver } from "../proxy";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
@@ -213,6 +214,7 @@ export interface CreateServerOptions {
 		check(): Promise<HostUpdateNotice | null>;
 		run(): Promise<void>;
 	};
+	systemProxyResolver?: SystemProxyResolver;
 }
 
 export interface RunningServer {
@@ -281,6 +283,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		appVersion,
 		analytics,
 		hostUpdate,
+		systemProxyResolver,
 	} = options;
 
 	setSessionProjectResolver((workspaceId) => {
@@ -833,6 +836,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			refreshExtensionTools();
 		}
 		if (appliedUpdate.disabledPackages !== undefined) publishPiPackagesChanged();
+		if (appliedUpdate.proxy !== undefined) {
+			applyProxyConfig(config, systemProxyResolver ?? (() => null));
+		}
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {

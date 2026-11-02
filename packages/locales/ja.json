@@ -1649,6 +1649,7 @@
 	"settings.providers.submitFailed": "送信できませんでした",
 	"settings.providers.subscriptionsDescription": "お持ちの Claude、ChatGPT、Copilot のプランを利用できます。API キーは不要です。",
 	"settings.providers.subscriptionsGroup": "サブスクリプション",
+	"settings.proxy.changeFailed": "プロキシ設定を変更できませんでした",
 	"settings.proxy.description": "更新とモデルリクエストのために ThinkRail がネットワークに接続する方法を選択します。",
 	"settings.proxy.host": "ホスト",
 	"settings.proxy.hostPlaceholder": "127.0.0.1",

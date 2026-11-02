@@ -1414,6 +1414,36 @@ export function isLineWidth(value: unknown): value is number {
 	);
 }
 
+export const PROXY_MODES = ["system", "manual", "none"] as const;
+export type ProxyMode = (typeof PROXY_MODES)[number];
+
+/** A stored HTTP proxy override. Absent = leave launch/Environment proxy variables untouched. */
+export interface ProxyConfig {
+	mode: ProxyMode;
+	/** `host:port` for `manual` mode; ignored otherwise. */
+	manualTarget?: string;
+}
+
+export function isProxyMode(value: unknown): value is ProxyMode {
+	return PROXY_MODES.some((mode) => mode === value);
+}
+
+export function isProxyConfig(value: unknown): value is ProxyConfig {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	if (!isProxyMode(Reflect.get(value, "mode"))) return false;
+	const manualTarget = Reflect.get(value, "manualTarget");
+	return (
+		manualTarget === undefined || (typeof manualTarget === "string" && manualTarget.length <= 1024)
+	);
+}
+
+/** A resolved system proxy with separate HTTP/HTTPS targets and a bypass list. */
+export interface SystemProxyInfo {
+	httpProxy: string | null;
+	httpsProxy: string | null;
+	noProxy: string[];
+}
+
 export interface AppConfig extends ThemePreference {
 	analyticsEnabled: boolean;
 	analyticsConsentConfirmed: boolean;
@@ -1468,6 +1498,8 @@ export interface AppConfig extends ThemePreference {
 	codeLigatures: boolean;
 	/** Shifts every text weight but the brand face's together. */
 	fontWeightOffset: number;
+	/** A stored HTTP proxy override; absent means the host leaves launch/Environment proxy variables untouched. */
+	proxy?: ProxyConfig;
 }
 
 export interface ExtensionCatalogEntry {
@@ -1486,13 +1518,14 @@ export const RECENT_MODELS_LIMIT = 5;
 export type AppConfigUpdate = Partial<
 	Omit<
 		AppConfig,
-		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels"
+		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels" | "proxy"
 	>
 > & {
 	defaultModel?: WireModel | null;
 	defaultEffort?: ThinkingLevel | null;
 	reviewModel?: WireModel | null;
 	reviewEffort?: ThinkingLevel | null;
+	proxy?: ProxyConfig | null;
 };
 
 export type SurveyInvitationResponse = "postpone" | "never";

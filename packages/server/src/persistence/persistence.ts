@@ -10,6 +10,7 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isLocalePreference,
+	isProxyConfig,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
@@ -343,6 +344,7 @@ export function loadConfig(): AppConfig {
 	delete extensions.layout;
 	delete extensions.themeMode;
 	delete extensions.systemThemePair;
+	delete extensions.proxy;
 	return {
 		...extensions,
 		...normalizeThemePreference(value),
@@ -412,6 +414,7 @@ export function loadConfig(): AppConfig {
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: value.onboardingDismissed === true,
 		...normalizeFontSettings(value),
+		...(isProxyConfig(value.proxy) ? { proxy: value.proxy } : {}),
 	};
 }
 

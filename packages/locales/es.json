@@ -1774,6 +1774,7 @@
 	"settings.providers.submitFailed": "No se pudo enviar",
 	"settings.providers.subscriptionsDescription": "Usa tu plan actual de Claude, ChatGPT o Copilot: no necesitas ninguna clave de API.",
 	"settings.providers.subscriptionsGroup": "Suscripciones",
+	"settings.proxy.changeFailed": "No se pudo cambiar la configuración del proxy",
 	"settings.proxy.description": "Elige cómo ThinkRail se conecta a la red para las actualizaciones y las solicitudes de modelos.",
 	"settings.proxy.host": "Servidor",
 	"settings.proxy.hostPlaceholder": "127.0.0.1",

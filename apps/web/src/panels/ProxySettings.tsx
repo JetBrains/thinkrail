@@ -1,32 +1,19 @@
+import type { ProxyConfig, ProxyMode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { useState } from "react";
-import {
-	firstPaintPreferenceStorage,
-	getStablePreferenceAdapter,
-	type StablePreferenceAdapter,
-} from "../clientPreferences";
+import { toast, useAppStore } from "@/store";
+import { errorText, getTransport } from "@/transport";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
 import { SettingsRow } from "./SettingsRow";
-
-const PROXY_MODE_KEY = "proxy.mode";
-const PROXY_MANUAL_KEY = "proxy.manual";
-
-export type ProxyMode = "system" | "manual" | "none";
 
 export interface ManualProxy {
 	host: string;
 	port: string;
 }
 
-function readMode(storage: StablePreferenceAdapter): ProxyMode {
-	const raw = storage.getItem(PROXY_MODE_KEY);
-	return raw === "manual" || raw === "none" ? raw : "system";
-}
-
-function readManual(storage: StablePreferenceAdapter): ManualProxy {
-	const raw = storage.getItem(PROXY_MANUAL_KEY) ?? "";
-	const match = /^([^:]+):(\d+)$/.exec(raw.trim());
+function splitManual(target: string | undefined): ManualProxy {
+	const match = target ? /^([^:]+):(\d+)$/.exec(target.trim()) : null;
 	const [, host = "", port = ""] = match ?? [];
 	return { host, port };
 }
@@ -38,12 +25,14 @@ export function ProxyPage({
 	mode,
 	manual,
 	onSelectMode,
-	onManualChange,
+	onManualDraft,
+	onManualCommit,
 }: {
 	mode: ProxyMode;
 	manual: ManualProxy;
 	onSelectMode: (mode: ProxyMode) => void;
-	onManualChange: (manual: ManualProxy) => void;
+	onManualDraft: (manual: ManualProxy) => void;
+	onManualCommit: () => void;
 }) {
 	const t = useT();
 
@@ -97,8 +86,9 @@ export function ProxyPage({
 									aria-label={t("settings.proxy.host")}
 									data-testid="proxy-host-input"
 									onChange={(event) =>
-										onManualChange({ host: event.currentTarget.value, port: manual.port })
+										onManualDraft({ host: event.currentTarget.value, port: manual.port })
 									}
+									onBlur={onManualCommit}
 									className={`${INPUT_CLASS} w-160`}
 								/>
 								<input
@@ -109,8 +99,9 @@ export function ProxyPage({
 									aria-label={t("settings.proxy.port")}
 									data-testid="proxy-port-input"
 									onChange={(event) =>
-										onManualChange({ host: manual.host, port: event.currentTarget.value })
+										onManualDraft({ host: manual.host, port: event.currentTarget.value })
 									}
+									onBlur={onManualCommit}
 									className={`${INPUT_CLASS} w-80`}
 								/>
 							</div>
@@ -123,28 +114,40 @@ export function ProxyPage({
 }
 
 export function ProxySettings() {
-	const storage = getStablePreferenceAdapter() ?? firstPaintPreferenceStorage();
-	const [mode, setMode] = useState<ProxyMode>(() => (storage ? readMode(storage) : "system"));
-	const [manual, setManual] = useState<ManualProxy>(() =>
-		storage ? readManual(storage) : { host: "", port: "" },
-	);
+	const t = useT();
+	const stored = useAppStore((s) => s.proxy);
+	const mode: ProxyMode = stored?.mode ?? "system";
+	const [manual, setManual] = useState<ManualProxy>(() => splitManual(stored?.manualTarget));
 
-	const select = (next: ProxyMode) => {
-		setMode(next);
-		if (!storage) return;
-		storage.setItem(PROXY_MODE_KEY, next);
+	const commit = (next: ProxyConfig | null) => {
+		getTransport()
+			.request("settings.update", { config: { proxy: next } })
+			.catch((error) => toast.error(errorText(error, t("settings.proxy.changeFailed"))));
 	};
 
-	const updateManual = (next: ManualProxy) => {
-		setManual(next);
-		if (!storage) return;
-		const host = next.host.trim();
-		const port = next.port.trim();
-		if (host && port) storage.setItem(PROXY_MANUAL_KEY, `${host}:${port}`);
-		else storage.removeItem(PROXY_MANUAL_KEY);
+	const selectMode = (next: ProxyMode) => {
+		if (next !== "manual") {
+			commit({ mode: next });
+			return;
+		}
+		const host = manual.host.trim();
+		const port = manual.port.trim();
+		commit(host && port ? { mode: "manual", manualTarget: `${host}:${port}` } : { mode: "manual" });
+	};
+
+	const commitManual = () => {
+		const host = manual.host.trim();
+		const port = manual.port.trim();
+		if (host && port) commit({ mode: "manual", manualTarget: `${host}:${port}` });
 	};
 
 	return (
-		<ProxyPage mode={mode} manual={manual} onSelectMode={select} onManualChange={updateManual} />
+		<ProxyPage
+			mode={mode}
+			manual={manual}
+			onSelectMode={selectMode}
+			onManualDraft={setManual}
+			onManualCommit={commitManual}
+		/>
 	);
 }

@@ -2,41 +2,29 @@
 id: submodule-desktop-network
 type: submodule-design
 status: active
-title: Desktop HTTP proxy
+title: Desktop system proxy resolver
 parent: module-desktop
 tags: [desktop, network, proxy]
 ---
 
 ## Responsibility
 
-Own the desktop host's HTTP proxy preference end to end on the host side: read the bounded client
-preference (mode plus an optional manual target), resolve the effective proxy (the manual target or the
-operating system's proxy), and apply it to the process HTTP(S) proxy environment variables before the
-update controller and the embedded server issue network requests. The web client only renders the
-preference and forwards writes through the existing preference RPC; the host remains the single owner of
-how a preference value becomes process environment.
+Own the desktop-only system-proxy resolver that the host injects into the server: read the operating
+system's proxy configuration and return separate HTTP/HTTPS targets plus a bypass list. Windows reads
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings`
+(`ProxyEnable`/`ProxyServer`/`ProxyOverride`) through `bun:ffi`; other platforms report none until a
+later change.
 
 ## Boundary
 
-- **Public surface:** `applyProxySettings` plus the pure resolver/validation helpers its tests need,
-  exported only through `index.ts`.
-- **Allowed deps:** Bun/Node; the platform system-proxy source (Windows registry through `bun:ffi`).
-- **Forbidden:** web or server imports; renderer-selected update feed URLs; spawning processes;
-  ownership of the preference store itself (desktop startup owns that).
+- **Public surface:** `readSystemProxy` and `proxyInfoFromSettings`, exported only through `index.ts`.
+- **Allowed deps:** Bun/Node; `@thinkrail/contracts` for the `SystemProxyInfo` shape.
+- **Forbidden:** proxy application (owned by the server proxy module); web or server imports; spawning
+  processes.
 
 ## Decisions
 
-- Modes are `system`, `manual`, and `none`. An absent preference leaves the process proxy variables
-  untouched, preserving any proxy established by the launch environment or Settings → Environment.
-  Only an explicitly stored mode overrides them; the web client stores `system` too, so "not set" and
-  "system" stay distinguishable.
-- Precedence: an explicit proxy preference overrides a launch or Environment proxy variable; without
-  an explicit preference, those variables are preserved verbatim.
-- `system` reads the operating system proxy; when the OS reports none, the effective proxy is empty
-  (same as `none`). `manual` uses the stored `host:port` verbatim. `none` clears the proxy variables.
-- The effective proxy is applied through `process.env.HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` so both
-  the Electrobun updater's Bun `fetch` and the in-process server observe it. This is process-wide by
-  design, not per-request.
-- System-proxy reading is Windows-only in this change
-  (`HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings`); macOS and Linux resolve to
-  empty until a later change.
+- A bare `host:port` in `ProxyServer` serves both protocols; `http=`/`https=` selectors resolve
+  independently; `socks=` is ignored (Bun's HTTP proxy variables do not carry a SOCKS transport).
+- The loopback interface (`localhost`, `127.0.0.1`) is always bypassed, and `ProxyOverride` entries are
+  carried through as `NO_PROXY`; `<local>` is covered by the loopback default.
