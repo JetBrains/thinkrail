@@ -7,13 +7,14 @@ import {
 } from "./applyProxy";
 
 describe("resolveProxyMode", () => {
-	it("defaults to system for missing or unknown values", () => {
-		expect(resolveProxyMode(undefined)).toBe("system");
-		expect(resolveProxyMode("")).toBe("system");
-		expect(resolveProxyMode("bogus")).toBe("system");
+	it("returns null for a missing or unknown value", () => {
+		expect(resolveProxyMode(undefined)).toBeNull();
+		expect(resolveProxyMode("")).toBeNull();
+		expect(resolveProxyMode("bogus")).toBeNull();
 	});
 
-	it("accepts manual and none", () => {
+	it("accepts the explicit modes", () => {
+		expect(resolveProxyMode("system")).toBe("system");
 		expect(resolveProxyMode("manual")).toBe("manual");
 		expect(resolveProxyMode("none")).toBe("none");
 	});
@@ -57,6 +58,16 @@ describe("effectiveProxyUrl", () => {
 });
 
 describe("applyProxySettings", () => {
+	it("leaves the environment untouched when no mode is set", () => {
+		const env: Record<string, string | undefined> = {
+			HTTPS_PROXY: "http://launch.example:3128",
+		};
+		expect(
+			applyProxySettings(undefined, undefined, { readSystemProxy: () => null, env }),
+		).toBeNull();
+		expect(env.HTTPS_PROXY).toBe("http://launch.example:3128");
+	});
+
 	it("sets all three variables", () => {
 		const env: Record<string, string | undefined> = {};
 		applyProxySettings("manual", "127.0.0.1:7897", { readSystemProxy: () => null, env });

@@ -26,8 +26,12 @@ how a preference value becomes process environment.
 
 ## Decisions
 
-- Modes are `system`, `manual`, and `none`. A missing preference resolves to `system`, matching the
-  JetBrains IDE HTTP Proxy default.
+- Modes are `system`, `manual`, and `none`. An absent preference leaves the process proxy variables
+  untouched, preserving any proxy established by the launch environment or Settings → Environment.
+  Only an explicitly stored mode overrides them; the web client stores `system` too, so "not set" and
+  "system" stay distinguishable.
+- Precedence: an explicit proxy preference overrides a launch or Environment proxy variable; without
+  an explicit preference, those variables are preserved verbatim.
 - `system` reads the operating system proxy; when the OS reports none, the effective proxy is empty
   (same as `none`). `manual` uses the stored `host:port` verbatim. `none` clears the proxy variables.
 - The effective proxy is applied through `process.env.HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` so both
