@@ -84,6 +84,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   **Session state hydrates on every supported welcome.** `session.stateList` is tokenized by connection
   generation and buffers `session.state` pushes until the complete snapshot returns, folds those full-record
   replacements over their snapshot rows in arrival order, then installs the resulting authoritative map once.
+  A record is installed whole — its `title` and `firstPrompt` travel with it — so a chat's name needs no
+  parallel title sync: a rename republishes the record, and a missed one is repaired by the next snapshot.
   Current-generation failures retain the previous map while retrying with capped backoff; overflowing the
   bounded push buffer restarts the complete read instead of growing without limit, while stale-generation
   outcomes discard their buffers. Pending dialog records replay their exact request, and adding/opening a

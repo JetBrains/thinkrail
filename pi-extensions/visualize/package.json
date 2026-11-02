@@ -1,7 +1,7 @@
 {
 	"name": "@thinkrail/pi-visualize",
 	"version": "0.2.0",
-	"description": "A pi extension adding a `visualize` tool: mermaid diagrams and option comparisons, rendered as box-drawing in the terminal and as rich cards in hosts that have a renderer.",
+	"description": "A pi extension adding a `visualize` tool: mermaid diagrams and option comparisons, drawn with box characters in the terminal and as rich cards in hosts such as ThinkRail, the agentic IDE built on pi.",
 	"license": "Apache-2.0",
 	"type": "module",
 	"keywords": [
@@ -13,7 +13,7 @@
 		"diagram",
 		"visualize"
 	],
-	"homepage": "https://thinkrail.ai",
+	"homepage": "https://thinkrail.ai/?utm_source=pi-package&utm_medium=referral&utm_campaign=pi-visualize&utm_content=homepage",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/JetBrains/thinkrail.git",
@@ -40,7 +40,8 @@
 	"pi": {
 		"extensions": [
 			"./index.ts"
-		]
+		],
+		"video": "https://github.com/JetBrains/thinkrail/raw/refs/heads/main/.github/readme-assets/pi-packages/visualize.mp4"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
@@ -50,13 +51,11 @@
 		"lovely-mermaid": "0.3.3"
 	},
 	"peerDependencies": {
-		"@earendil-works/pi-ai": "*",
 		"@earendil-works/pi-coding-agent": "*",
 		"@earendil-works/pi-tui": "*",
 		"typebox": "*"
 	},
 	"devDependencies": {
-		"@earendil-works/pi-ai": "catalog:",
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@earendil-works/pi-tui": "catalog:",
 		"@types/bun": "catalog:",

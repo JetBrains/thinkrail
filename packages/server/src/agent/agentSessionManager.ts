@@ -455,13 +455,18 @@ function entryFirstPrompt(entry: Entry): { firstPrompt?: string } {
 	return entry.firstPrompt === null ? {} : { firstPrompt: entry.firstPrompt };
 }
 
+function entryTitle(entry: Entry): string {
+	return entry.session.sessionName ?? "";
+}
+
 function publishEntryState(entry: Entry): void {
 	if (sessions.get(entry.session.sessionId) !== entry) return;
 	const projectId = resolveProjectId(entry.workspaceId);
 	if (!projectId) return;
 	const state = stateFromEntry(entry);
+	const title = entryTitle(entry);
 	const firstPrompt = entryFirstPrompt(entry);
-	const serialized = JSON.stringify({ state, ...firstPrompt });
+	const serialized = JSON.stringify({ state, title, ...firstPrompt });
 	if (entry.lastPublishedState === serialized) return;
 	entry.lastPublishedState = serialized;
 	publishState({
@@ -469,6 +474,7 @@ function publishEntryState(entry: Entry): void {
 		workspaceId: entry.workspaceId,
 		projectId,
 		state,
+		title,
 		...firstPrompt,
 	});
 }
@@ -487,6 +493,22 @@ function scheduleEntryStatePublish(entry: Entry): void {
 export function scheduleSessionStatePublish(sessionId: string): void {
 	const entry = sessions.get(sessionId);
 	if (entry) scheduleEntryStatePublish(entry);
+}
+
+function diskStateRecord(
+	sessionId: string,
+	workspace: { id: string; projectId: string },
+	manager: SessionManager,
+	legacy = false,
+): SessionStateRecord {
+	return {
+		sessionId,
+		workspaceId: workspace.id,
+		projectId: workspace.projectId,
+		state: stateFromDisk(sessionId, manager, legacy),
+		title: manager.getSessionName() ?? "",
+		...firstPromptOf(manager.getEntries()),
+	};
 }
 
 function stateFromDisk(sessionId: string, manager: SessionManager, legacy = false): SessionState {
@@ -518,6 +540,7 @@ function stateRecordForEntry(entry: Entry): SessionStateRecord {
 		workspaceId: entry.workspaceId,
 		projectId,
 		state: stateFromEntry(entry),
+		title: entryTitle(entry),
 		...entryFirstPrompt(entry),
 	};
 }
@@ -1773,6 +1796,7 @@ async function collectSessionStateSources(
 				workspaceId: entry.workspaceId,
 				projectId: workspace.projectId,
 				state: stateFromEntry(entry),
+				title: entryTitle(entry),
 				...entryFirstPrompt(entry),
 			},
 			branch: () => entry.session.sessionManager.getBranch(),
@@ -1792,18 +1816,16 @@ async function collectSessionStateSources(
 				continue;
 			}
 			const manager = SessionManager.open(info.path);
-			const record: SessionStateRecord = {
-				sessionId: info.id,
-				workspaceId: workspace.id,
-				projectId: workspace.projectId,
-				state: stateFromDisk(info.id, manager, baseline),
-				...firstPromptOf(manager.getEntries()),
-			};
+			const record = diskStateRecord(info.id, workspace, manager, baseline);
 			records.push({
 				record,
 				branch: () => manager.getBranch(),
 				publish: () => {
-					const current = { ...record, state: stateFromDisk(info.id, manager) };
+					const current = {
+						...record,
+						state: stateFromDisk(info.id, manager),
+						title: manager.getSessionName() ?? "",
+					};
 					publishState(current);
 					return current;
 				},
@@ -1964,6 +1986,9 @@ export function renameSession(
 		if ((options.onlyIfUnnamed && current !== undefined) || current === normalized) return false;
 		manager.appendSessionInfo(normalized);
 		publish({ sessionId, event: { type: "session_info_changed", name: normalized } });
+		const projectId = resolveProjectId(workspaceId);
+		if (projectId)
+			publishState(diskStateRecord(sessionId, { id: workspaceId, projectId }, manager));
 		return true;
 	});
 }
@@ -2597,22 +2622,16 @@ function sessionFileSize(file: string | undefined): number | undefined {
 	}
 }
 
-function rollBackUsageAppend(
+function cutTornUsageAppend(
 	sessionId: string,
-	sessionManager: SessionManager,
-	leaf: string | null,
 	file: string | undefined,
 	size: number | undefined,
-): boolean {
-	const incorporated = sessionManager.getLeafId() !== leaf;
+): void {
 	try {
-		if (incorporated && leaf) sessionManager.branch(leaf);
-		else if (incorporated) sessionManager.resetLeaf();
 		if (file && size !== undefined && statSync(file).size > size) truncateSync(file, size);
 	} catch (error) {
-		log.warn(`a failed usage append was not rolled back for ${sessionId}`, error as Error);
+		log.warn(`a failed usage append was not cut back for ${sessionId}`, error as Error);
 	}
-	return incorporated;
 }
 
 /** Returns whether pi took the usage into its session totals; persisting it is best-effort. */
@@ -2624,17 +2643,15 @@ export function recordSessionUsage(
 	if (!entry) return false;
 	const { sessionManager } = entry.session;
 	const { kind, provider, model, usage, note } = record;
-	const leaf = sessionManager.getLeafId();
 	const file = sessionManager.getSessionFile();
 	const size = sessionFileSize(file);
-	let incorporated = true;
 	try {
 		sessionManager.appendUsage(kind, provider, model, usage, note);
 	} catch (error) {
-		incorporated = rollBackUsageAppend(sessionId, sessionManager, leaf, file, size);
+		cutTornUsageAppend(sessionId, file, size);
 		log.warn(`${kind} usage was not persisted for ${sessionId}`, error as Error);
+		return false;
 	}
-	if (!incorporated) return false;
 	try {
 		publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
 	} catch (error) {

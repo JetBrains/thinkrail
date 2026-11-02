@@ -533,11 +533,14 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 	await promptSession(session.sessionId, "again");
 	const completionId = getSessionState(session.sessionId).completion?.completionId;
 	if (!completionId) throw new Error("settled run has no completion id");
-	expect(acknowledgeCompletion(session.sessionId, "stale").acknowledged).toBe(false);
+	expect(acknowledgeCompletion(session.sessionId, "stale")).toMatchObject({
+		acknowledged: false,
+		record: { title: "" },
+	});
 	expect(getSessionState(session.sessionId).completionUnread).toBe(true);
 	expect(acknowledgeCompletion(session.sessionId, completionId)).toMatchObject({
 		acknowledged: true,
-		record: { state: { completionUnread: false } },
+		record: { title: "", state: { completionUnread: false } },
 	});
 	expect(acknowledgeCompletion(session.sessionId, completionId).acknowledged).toBe(false);
 	await abortSession(session.sessionId);
@@ -638,7 +641,12 @@ test("marking a workspace unread relights its most recent result and read clears
 
 			const relit = await markWorkspaceUnread(workspace);
 			if (!relit) throw new Error("nothing was relit");
-			expect(relit).toMatchObject({ sessionId: newer, state: { completionUnread: true } });
+			expect(relit).toMatchObject({
+				sessionId: newer,
+				title: "",
+				firstPrompt: "hi",
+				state: { completionUnread: true },
+			});
 			expect(published).toEqual([relit]);
 			expect(await unreadOf()).toEqual({ [older]: false, [newer]: true });
 
@@ -646,6 +654,8 @@ test("marking a workspace unread relights its most recent result and read clears
 			expect(cleared).toEqual([
 				expect.objectContaining({
 					sessionId: newer,
+					title: "",
+					firstPrompt: "hi",
 					state: expect.objectContaining({ completionUnread: false }),
 				}),
 			]);
@@ -3137,10 +3147,15 @@ test("renameSession persists a normalized live title and emits one durable title
 		model: toWireModel(fauxA.getModel()),
 	});
 	events.set(session.sessionId, []);
+	const published: SessionStateRecord[] = [];
+	setSessionStatePublisher((record) => published.push(record));
 
 	expect(
 		await renameSession(session.sessionId, "ws-rename-live", cwd, "  Fix auth\r\nredirect  "),
 	).toBe(true);
+	expect(published).toEqual([
+		expect.objectContaining({ sessionId: session.sessionId, title: "Fix auth redirect" }),
+	]);
 	expect(
 		(await listSessions("ws-rename-live", cwd)).find(
 			(candidate) => candidate.sessionId === session.sessionId,
@@ -3156,6 +3171,8 @@ test("renameSession persists a normalized live title and emits one durable title
 		false,
 	);
 	expect(events.get(session.sessionId)).toHaveLength(eventCount ?? 0);
+	expect(published).toHaveLength(1);
+	setSessionStatePublisher(() => {});
 	removeSession(session.sessionId);
 });
 
@@ -3200,15 +3217,71 @@ test("renameSession updates a disk-only transcript without attaching an agent", 
 		},
 	);
 	events.set(id, []);
+	const published: SessionStateRecord[] = [];
+	setSessionStatePublisher((record) => published.push(record));
 
-	expect(await renameSession(id, "ws-rename-disk", cwd, "New disk title")).toBe(true);
-	expect(hasSession(id)).toBe(false);
-	expect(SessionManager.open(path).getSessionName()).toBe("New disk title");
-	expect(
-		(await listSessions("ws-rename-disk", cwd)).find((row) => row.sessionId === id)?.title,
-	).toBe("New disk title");
-	expect(events.get(id)).toEqual([{ type: "session_info_changed", name: "New disk title" }]);
+	try {
+		expect(await renameSession(id, "ws-rename-disk", cwd, "New disk title")).toBe(true);
+		expect(hasSession(id)).toBe(false);
+		expect(SessionManager.open(path).getSessionName()).toBe("New disk title");
+		expect(
+			(await listSessions("ws-rename-disk", cwd)).find((row) => row.sessionId === id)?.title,
+		).toBe("New disk title");
+		expect(events.get(id)).toEqual([{ type: "session_info_changed", name: "New disk title" }]);
+		expect(published).toEqual([
+			{
+				sessionId: id,
+				workspaceId: "ws-rename-disk",
+				projectId: "project-ws-rename-disk",
+				state: expect.objectContaining({ execution: "idle" }),
+				title: "New disk title",
+				firstPrompt: "persisted prompt",
+			},
+		]);
+
+		expect(await renameSession(id, "ws-rename-disk", cwd, "New disk title")).toBe(false);
+		expect(
+			await renameSession(id, "ws-rename-disk", cwd, "Generated", { onlyIfUnnamed: true }),
+		).toBe(false);
+		expect(published).toHaveLength(1);
+	} finally {
+		setSessionStatePublisher(() => {});
+	}
 });
+
+test("state records carry pi's session name as read: long names, explicit clears and attached chats", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-record-title-");
+		const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+		const long = "x".repeat(100);
+		const at = Date.now();
+		const { id: longId } = writeFixtureSession(dir, {
+			cwd,
+			name: long,
+			messages: [{ role: "user", text: "long", timestamp: at - 3 }],
+		});
+		const { id: cleared } = writeFixtureSession(dir, {
+			cwd,
+			name: "",
+			messages: [{ role: "user", text: "cleared", timestamp: at - 2 }],
+		});
+		const { id: attached } = writeFixtureSession(dir, {
+			cwd,
+			name: "Attached title",
+			messages: [{ role: "user", text: "attached", timestamp: at - 1 }],
+		});
+		const workspace = { id: "ws-record-title", projectId: "p-record-title", cwd };
+		await initializeSessionStates([workspace]);
+		expect(await ensureSessionAttached(attached, workspace.id, cwd)).toBe(true);
+		try {
+			const titles = Object.fromEntries(
+				(await listSessionStates([workspace])).map((record) => [record.sessionId, record.title]),
+			);
+			expect(titles).toEqual({ [longId]: long, [cleared]: "", [attached]: "Attached title" });
+		} finally {
+			removeSession(attached);
+		}
+	}));
 
 test("summaries and state records carry the first prompt's head as a display fallback, beside the real title", async () => {
 	const cwd = tmpCwd("trpi-first-prompt-");
@@ -3251,6 +3324,13 @@ test("summaries and state records carry the first prompt's head as a display fal
 	const records = await listSessionStates([
 		{ id: "ws-first-prompt", projectId: "p-first-prompt", cwd },
 	]);
+	const recordFor = (id: string) => records.find((record) => record.sessionId === id);
+	expect(recordFor(named)).toMatchObject({
+		title: "Named by the agent",
+		firstPrompt: "Please refactor the auth module",
+	});
+	expect(recordFor(unnamed)?.title).toBe("");
+	expect(recordFor(live.sessionId)?.title).toBe("");
 	expect(records.find((record) => record.sessionId === unnamed)?.firstPrompt).toBe(
 		"Please refactor the auth module",
 	);

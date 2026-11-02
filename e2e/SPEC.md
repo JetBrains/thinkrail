@@ -180,7 +180,7 @@ large delta.
 
 `bun run perf:render [--runs N] [--out file] [--cpu N] [--scenario a,b] [playwright args]` is an opt-in
 measurement run, never a gate. It builds `apps/web/dist-profile` (see [[module-web]]), boots the ordinary
-isolated host on it through `playwright.perf.config.ts`, and runs `e2e/perf/*.perf.ts` — a pattern the
+isolated host on it through `e2e/playwright.perf.config.ts`, and runs `e2e/perf/*.perf.ts` — a pattern the
 default config does not match. It uses the worktree's serial lane (port block and state dir), so do not
 run it alongside another serial E2E run in the same worktree. Defaults: 5 runs, output
 `$TMPDIR/thinkrail-render-profile.json`. Unknown `--scenario` names fail before the build. A failed
@@ -471,9 +471,9 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   `PHONE_VIEWPORT` — reached the way the desktop shell reaches a phone today: open at desktop width, then
   resize and hide the auxiliary stacks.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
-  exports, CLI binary, the locator from [[module-artifact-tests]], shared retrying teardown helper, git,
-  Chromium, and Playwright. Standalone native/installer smoke and shared artifact probes are owned by
-  that test workspace, outside Playwright discovery.
+  exports, CLI binary, the locator and ready-document poller from [[module-artifact-tests]], shared
+  retrying teardown helper, git, Chromium, and Playwright. Standalone native/installer smoke and shared
+  artifact probes are owned by that test workspace, outside Playwright discovery.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
   product modules, default/no-agent tests depending on developer state, agent tests reading anything beyond
   the explicitly authorized Central artifact, or parallel workers sharing one mutable host.
@@ -507,10 +507,12 @@ geometry cannot clamp before the row mounts. Chat-title coverage uses persisted 
 native `/name` path, open-tab and closed-history inline rename paths, keyboard focus recovery, bounded
 long-history scrolling, and reload durability without involving a provider. First-prompt label coverage
 (`chat-title-fallback.spec.ts`) seeds unnamed transcripts to pin the host-projected label on the tab strip,
-Recently closed and the session switcher (`data-title-source="prompt"`, full line as tooltip, word-boundary
-cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
+Recently closed and the search palette's chat rows (`data-title-source="prompt"`, full line as tooltip,
+word-boundary cut, found by words past the cut), an inline rename that starts from the empty real title and replaces the label, and the instant label
 from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
-durability is the server unit test's. Visualize coverage
+durability is the server unit test's. Palette name coverage (`search-palette.spec.ts`) seeds a named chat in
+a workspace the page never opened, finds it by a word only its title holds, renames it from a second wire
+client while the palette stays open, and pins that the page sent no `session.list` for either. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
 sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
 fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons
