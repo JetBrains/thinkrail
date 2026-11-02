@@ -1173,7 +1173,8 @@ and what it loaded, never pi's own types.
 
 `speech.ts` (re-exported from `index.ts`) is the wire for local dictation, from **`SPEECH_PROTOCOL_VERSION`**, v103:
 
-- **Control on the main wire.** `speech.status` returns a **`SpeechStatus`**:
+- **Control on the main wire.** `ServerWelcome.speech` seeds a **`SpeechStatus`** (a v103 host always
+  sends it):
   - `supported` — whether the host platform has a pinned runtime;
   - `install` — `not-installed` | `installing` with phase, byte progress and model | `ready` | `failed`
     with a `SpeechErrorCode`;
@@ -1181,7 +1182,7 @@ and what it loaded, never pi's own types.
   - `engine` — `stopped` | `starting` | `ready` | `failed`;
   - `diskBytes`, and per-model `downloadBytes`.
 
-  Every change is pushed whole on `speech.changed`. `speech.install {model}` starts or switches a model
+  Every change is pushed whole on `speech.changed`, so there is no status read method. `speech.install {model}` starts or switches a model
   (progress arrives on the channel, and the result acks the start). `speech.cancelInstall` and
   `speech.remove` delete only ThinkRail's own files. The model choice is install state, not an
   `AppConfig` key.

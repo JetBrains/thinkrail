@@ -50,7 +50,7 @@ export interface SpeechRuntimeInfo {
 
 export type SpeechEngineState = "stopped" | "starting" | "ready" | "failed";
 
-/** Voice input as the host reports it through `speech.status` and `speech.changed`. */
+/** Voice input as the host reports it in `ServerWelcome.speech` and on `speech.changed`. */
 export interface SpeechStatus {
 	supported: boolean;
 	install: SpeechInstallState;

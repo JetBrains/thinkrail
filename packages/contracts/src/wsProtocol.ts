@@ -212,6 +212,8 @@ export interface ServerWelcome {
 	projects: Project[];
 	recentProjects: Project[];
 	config: AppConfig;
+	/** Voice input state, from `SPEECH_PROTOCOL_VERSION`; later changes arrive on `speech.changed`. */
+	speech?: SpeechStatus;
 }
 
 export interface WorkspaceRemoved {
@@ -320,7 +322,6 @@ export const WS_METHODS = {
 	fontsList: "fonts.list",
 	fontsInstalled: "fonts.installed",
 	fontsReveal: "fonts.reveal",
-	speechStatus: "speech.status",
 	speechInstall: "speech.install",
 	speechCancelInstall: "speech.cancelInstall",
 	speechRemove: "speech.remove",
@@ -976,7 +977,6 @@ export interface WsMethodMap {
 	"fonts.list": { params: Record<string, never>; result: UserFontsSnapshot };
 	"fonts.installed": { params: Record<string, never>; result: InstalledFontsResult };
 	"fonts.reveal": { params: Record<string, never>; result: Ack };
-	"speech.status": { params: Record<string, never>; result: SpeechStatus };
 	"speech.install": { params: { model: SpeechModel }; result: Ack };
 	"speech.cancelInstall": { params: Record<string, never>; result: Ack };
 	"speech.remove": { params: Record<string, never>; result: Ack };

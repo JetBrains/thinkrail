@@ -244,7 +244,6 @@ test("tool responses replace the ask-only answer method at v93", () => {
 test("voice input is pinned to v103", () => {
 	expect(SPEECH_PROTOCOL_VERSION).toBe(103);
 	expect(PROTOCOL_VERSION).toBe(103);
-	expect(WS_METHODS.speechStatus).toBe("speech.status");
 	expect(WS_METHODS.speechInstall).toBe("speech.install");
 	expect(WS_METHODS.speechCancelInstall).toBe("speech.cancelInstall");
 	expect(WS_METHODS.speechRemove).toBe("speech.remove");
