@@ -31,7 +31,7 @@ async function sendPrompt(page: Page, text: string): Promise<void> {
 	);
 }
 
-test("the fifth prompt asks for a GitHub star once and the action opens the repo", async ({
+test("the tenth prompt asks for a GitHub star once and the action opens the repo", async ({
 	page,
 	context,
 }) => {
@@ -39,16 +39,25 @@ test("the fifth prompt asks for a GitHub star once and the action opens the repo
 	await context.route("https://github.com/**", (route) =>
 		route.fulfill({ status: 200, contentType: "text/html", body: "" }),
 	);
+	await context.route("https://api.github.com/**", (route) =>
+		route.fulfill({
+			json: { stargazers_count: 1234 },
+			headers: { "access-control-allow-origin": "*" },
+		}),
+	);
 	await openWorkspaceChat(page);
 
-	const ask = page.getByTestId("toast").filter({ hasText: "Enjoying ThinkRail?" });
-	for (const n of [1, 2, 3, 4]) {
+	const ask = page
+		.getByTestId("toast")
+		.filter({ hasText: "Find ThinkRail useful or have feedback?" });
+	for (let n = 1; n < 10; n += 1) {
 		await sendPrompt(page, `prompt ${n}`);
 		await expect(ask).toHaveCount(0);
 	}
 
-	await sendPrompt(page, "prompt 5");
+	await sendPrompt(page, "prompt 10");
 	await expect(ask).toBeVisible();
+	await expect(ask.getByTestId("toast-action")).toHaveText("View on GitHub | ☆ 1.2k");
 
 	const [popup] = await Promise.all([
 		context.waitForEvent("page"),
@@ -58,14 +67,17 @@ test("the fifth prompt asks for a GitHub star once and the action opens the repo
 	await popup.close();
 	await expect(ask).toHaveCount(0);
 
-	await sendPrompt(page, "prompt 6");
+	await sendPrompt(page, "prompt 11");
 	await expect(ask).toHaveCount(0);
 });
 
-test("a first prompt from the New Workspace dialog counts toward the ask", async ({ page }) => {
+test("a New Workspace first prompt counts, and the button works without a star count", async ({
+	page,
+}) => {
 	await acceptPromptsWithoutAgent(page);
+	await page.route("https://api.github.com/**", (route) => route.abort());
 	await openFixtureProject(page);
-	await page.evaluate(() => localStorage.setItem("thinkrail-github-star-prompt-count", "4"));
+	await page.evaluate(() => localStorage.setItem("thinkrail-github-star-prompt-count", "9"));
 
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await page.getByTestId("add-workspace").first().click();
@@ -74,5 +86,8 @@ test("a first prompt from the New Workspace dialog counts toward the ask", async
 	await page.getByTestId("create-workspace").click();
 	await expect(dialog).toBeHidden();
 
-	await expect(page.getByTestId("toast").filter({ hasText: "Enjoying ThinkRail?" })).toBeVisible();
+	const ask = page
+		.getByTestId("toast")
+		.filter({ hasText: "Find ThinkRail useful or have feedback?" });
+	await expect(ask.getByTestId("toast-action")).toHaveText("View on GitHub");
 });

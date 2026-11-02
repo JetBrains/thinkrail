@@ -32,7 +32,7 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
-import { askForGithubStarOnFifthPrompt } from "../chat/githubStarPrompt";
+import { askForGithubStarOnTenthPrompt } from "../chat/githubStarPrompt";
 import {
 	awaitingToolCallIdOf,
 	deriveInteractionStates,
@@ -1386,12 +1386,12 @@ export default function PlanPane({
 							if (!runtime) throw new Error(t("plan.session.chatLoadFailed"));
 							if (runtime.isStreaming) {
 								await getTransport().request("session.steer", { sessionId, text });
-								askForGithubStarOnFifthPrompt();
+								askForGithubStarOnTenthPrompt();
 							} else {
 								store.appendUserMessage(sessionId, text);
 								void getTransport()
 									.request("session.prompt", { sessionId, text })
-									.then(askForGithubStarOnFifthPrompt)
+									.then(askForGithubStarOnTenthPrompt)
 									.catch((err) =>
 										useAppStore.getState().appendErrorTurn(sessionId, errorText(err)),
 									);
