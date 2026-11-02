@@ -68,6 +68,7 @@ export interface WorkbenchProps {
 	registerTabCommands?: (commands: WorkbenchTabCommands) => () => void;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
+	renderFileTabActions?: (path: string) => ReactNode;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
 	renderEmptyCenter: (groupId: string) => ReactNode;
 	renderCenterActions: (groupId: string) => ReactNode;
@@ -609,6 +610,7 @@ export interface SharedGroupProps {
 	draggingTab: LayoutTab | null;
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderFileTabActions: WorkbenchProps["renderFileTabActions"];
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	onNewTerminal: WorkbenchProps["onNewTerminal"];
 	onUserNavigation: WorkbenchProps["onUserNavigation"];

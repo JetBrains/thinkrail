@@ -13,6 +13,10 @@ The single Zustand store: connection status, projects/workspaces, one frontend-l
 per-workspace views/attention, terminal catalogs, and one **per-session chat runtime** for every live
 `AgentSession` (so several chats stream concurrently).
 
+`selectCanRevealWorkspaceItem` gates selected-item OS reveal on an active connection and
+`WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION`; its consumers recheck it before sending so an offline menu
+cannot queue a reveal for reconnect.
+
 ## Chat Resources
 
 The Resources view keeps host snapshots separately from the Pi conversation runtime, keyed by chat

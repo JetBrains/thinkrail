@@ -27,6 +27,7 @@ import { chatDisplayName, type LayoutAttention, layoutResourceIdentity } from ".
 import { ArtifactsPanel } from "../panels/ArtifactsPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
+import { FileRevealMenuItem } from "../panels/FileRevealMenuItem";
 import { FilesPanel } from "../panels/FilesPanel";
 import { startChatInTab } from "../panels/openChat";
 import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
@@ -929,6 +930,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				registerTabCommands={registerTabCommands}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={renderTabAdornment}
+				renderFileTabActions={(path) => (
+					<FileRevealMenuItem workspaceId={workspaceId} path={path} />
+				)}
 				renderToolBody={renderToolBody}
 				renderEmptyCenter={renderEmptyCenter}
 				renderCenterActions={renderCenterActions}

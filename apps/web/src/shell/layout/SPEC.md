@@ -259,6 +259,9 @@ preview, the four splits) and auxiliary terminals carry no splits. File and diff
 and **Copy relative path** in a separate group; other kinds omit them. Copying identifies the clicked
 tab and does not select or keep it. The shell injects the workspace worktree path so the layout can join
 it with the tab's file path without importing store or transport.
+The shell injects `renderFileTabActions` to offer native reveal in the same group. Reveal uses the clicked
+file or diff tab's current worktree `path`. The host request and availability logic live in the shared
+panel action. Context Menu / Shift+F10 opens the focused tab's menu through `openContextMenuFromKeyboard`.
 
 ## Tab actions
 

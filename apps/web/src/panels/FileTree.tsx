@@ -33,6 +33,7 @@ import { getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
+import { FileRevealMenuItem } from "./FileRevealMenuItem";
 import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from "./fileTreeActions";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
@@ -378,6 +379,7 @@ function FileTreeMenu({
 					<Copy />
 					{t("panels.fileTree.copyRelativePath")}
 				</ContextMenuItem>
+				<FileRevealMenuItem workspaceId={workspaceId} path={path} showIcon />
 				{mutations ? (
 					<>
 						<ContextMenuSeparator />
