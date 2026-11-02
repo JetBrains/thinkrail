@@ -7,6 +7,7 @@ import {
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { SettingsGroup } from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
 import { useRef, useState } from "react";
 import { namedFamilies } from "@/fonts";
@@ -22,7 +23,6 @@ import {
 	SettingsFolderRow,
 	useFolderActions,
 } from "./SettingsFolder";
-import { SettingsGroup } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 
 type UploadOutcome = UserFontFile | { fileName: string; ok: false; error: "upload-failed" };

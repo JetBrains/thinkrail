@@ -20,6 +20,7 @@
 		"./project-tree": "./project-tree.tsx",
 		"./resizable": "./resizable.tsx",
 		"./running-icon": "./running-icon.tsx",
+		"./settings": "./settings.tsx",
 		"./skeleton": "./skeleton.tsx",
 		"./switch": "./switch.tsx",
 		"./textarea": "./textarea.tsx",

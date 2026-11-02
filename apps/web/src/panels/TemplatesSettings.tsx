@@ -10,6 +10,7 @@ import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
 import { T, t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { SettingsPageContainer } from "@thinkrail/ui/settings";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useState } from "react";
@@ -18,7 +19,6 @@ import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { openFileInTab } from "./openTabs";
-import { SettingsPageContainer } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 
 interface StarterTemplate {

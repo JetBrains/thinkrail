@@ -2,29 +2,46 @@ import {
 	applyPalette,
 	assertThemeManifest,
 	bundledThemeSources,
-	type ThemeAppearance,
 	type ThemeManifest,
 } from "@thinkrail/design-tokens";
+import { BUNDLED_LOCALES, resolveLocale } from "@thinkrail/locales";
+import { applyLocale } from "@thinkrail/locales/react";
+import type { DevicePreferences } from "./preferences";
 
-const SYSTEM_PAIR: Record<ThemeAppearance, string> = { dark: "dark", light: "light" };
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
-export function followSystemTheme(): () => void {
-	const manifests = new Map<string, ThemeManifest>();
-	for (const source of Object.values(bundledThemeSources())) {
+const manifests = new Map<string, ThemeManifest>(
+	Object.values(bundledThemeSources()).map((source) => {
 		const manifest = assertThemeManifest(source);
-		manifests.set(manifest.id, manifest);
-	}
+		return [manifest.id, manifest];
+	}),
+);
+
+/** Applies the phone's own theme and language, following the OS while either is set to System; returns the unsubscribe. */
+export function applyDevicePreferences(preferences: DevicePreferences): () => void {
 	const media = window.matchMedia(DARK_QUERY);
-	const apply = (): void => {
-		const manifest = manifests.get(SYSTEM_PAIR[media.matches ? "dark" : "light"]);
+	const applyTheme = (): void => {
+		const appearance =
+			preferences.theme === "system" ? (media.matches ? "dark" : "light") : preferences.theme;
+		const id = preferences.contrast === "high" ? `high-contrast-${appearance}` : appearance;
+		const manifest = manifests.get(id);
 		if (!manifest) return;
 		const root = document.documentElement;
 		applyPalette(root, manifest);
 		root.dataset.themeContrast = manifest.contrast;
 		root.dataset.theme = manifest.id;
 	};
-	apply();
-	media.addEventListener("change", apply);
-	return () => media.removeEventListener("change", apply);
+	const applyLanguage = (): void => {
+		const tag = resolveLocale(preferences.locale, BUNDLED_LOCALES, navigator.languages);
+		applyLocale(tag, {});
+		document.documentElement.lang = tag;
+	};
+	applyTheme();
+	applyLanguage();
+	media.addEventListener("change", applyTheme);
+	window.addEventListener("languagechange", applyLanguage);
+	return () => {
+		media.removeEventListener("change", applyTheme);
+		window.removeEventListener("languagechange", applyLanguage);
+	};
 }

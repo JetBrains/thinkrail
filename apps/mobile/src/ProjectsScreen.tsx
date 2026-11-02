@@ -1,4 +1,4 @@
-import { RiAddLine, RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
+import { RiAddLine, RiArrowDownSLine, RiArrowRightSLine, RiSettings3Line } from "@remixicon/react";
 import {
 	DEFAULT_CONFIG,
 	DEFAULT_WORKSPACE_NAME,
@@ -13,7 +13,7 @@ import type {
 	SavedHost,
 } from "@thinkrail/remote-client";
 import { AttentionDot } from "@thinkrail/ui/attention-dot";
-import { Button } from "@thinkrail/ui/button";
+import { IconButton } from "@thinkrail/ui/button";
 import { ProjectGlyph, WorkspaceGlyph, WorkspaceLabel } from "@thinkrail/ui/project-tree";
 import type { ReactNode } from "react";
 import { LoadedList, Screen } from "./layout";
@@ -37,6 +37,7 @@ export function ProjectsScreen({
 	onToggle,
 	adding,
 	onAdd,
+	onSettings,
 	pairForm,
 	onOpen,
 }: {
@@ -49,6 +50,7 @@ export function ProjectsScreen({
 	onToggle: (key: string) => void;
 	adding: boolean;
 	onAdd: () => void;
+	onSettings: () => void;
 	pairForm: ReactNode;
 	onOpen: (hostKey: string, project: Project, workspace: Workspace) => void;
 }) {
@@ -57,16 +59,24 @@ export function ProjectsScreen({
 		<Screen
 			title={t("mobile.projects.title")}
 			action={
-				adding ? null : (
-					<Button
-						variant="soft-primary"
-						className="h-touch shrink-0 rounded-md"
-						iconLeft={RiAddLine}
-						onClick={onAdd}
-					>
-						{t("mobile.projects.addHost")}
-					</Button>
-				)
+				<div className="flex shrink-0 items-center">
+					{adding ? null : (
+						<IconButton
+							size="l"
+							className="size-touch"
+							icon={RiAddLine}
+							label={t("mobile.projects.addHost")}
+							onClick={onAdd}
+						/>
+					)}
+					<IconButton
+						size="l"
+						className="size-touch"
+						icon={RiSettings3Line}
+						label={t("shell.topbar.settings")}
+						onClick={onSettings}
+					/>
+				</div>
 			}
 		>
 			{unreachable.map(([host, reason]) => (

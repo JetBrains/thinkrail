@@ -8,12 +8,15 @@ import {
 	type RemoteSessionItem,
 	type SavedHost,
 } from "@thinkrail/remote-client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { PairForm } from "./PairForm";
 import { ProjectsScreen, workspaceName } from "./ProjectsScreen";
+import { type DevicePreferences, readPreferences, writePreferences } from "./preferences";
 import { SessionScreen } from "./SessionScreen";
+import { SettingsScreen } from "./SettingsScreen";
 import { isPairLink } from "./scanPairLink";
 import { localStore } from "./store";
+import { applyDevicePreferences } from "./theme";
 import { Welcome } from "./Welcome";
 import { type OpenChat, WorkspaceScreen } from "./WorkspaceScreen";
 
@@ -24,6 +27,7 @@ export type PairState = { kind: "idle" } | { kind: "pairing" } | { kind: "failed
 /** The project tree (projects expand into their live workspaces) → a workspace's active chats → a chat. */
 type Route =
 	| { kind: "projects" }
+	| { kind: "settings" }
 	| { kind: "workspace"; hostKey: string; project: Project; workspace: Workspace }
 	| {
 			kind: "chat";
@@ -46,6 +50,14 @@ export function App() {
 	const [pair, setPair] = useState<PairState>({ kind: "idle" });
 	const [adding, setAdding] = useState(false);
 	const [route, setRoute] = useState<Route>({ kind: "projects" });
+	const [preferences, setPreferences] = useState<DevicePreferences>(() =>
+		readPreferences(localStore),
+	);
+	useLayoutEffect(() => applyDevicePreferences(preferences), [preferences]);
+	const changePreferences = useCallback((next: DevicePreferences) => {
+		writePreferences(localStore, next);
+		setPreferences(next);
+	}, []);
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
 	const toggleProject = useCallback((key: string) => {
 		setExpanded((current) => {
@@ -119,7 +131,7 @@ export function App() {
 			setRoute(route.direct ? { kind: "projects" } : { ...route, kind: "workspace" });
 			return true;
 		}
-		if (route.kind === "workspace") {
+		if (route.kind === "workspace" || route.kind === "settings") {
 			setRoute({ kind: "projects" });
 			return true;
 		}
@@ -141,6 +153,16 @@ export function App() {
 
 	if (hosts.length === 0) {
 		return <Welcome pair={pair} onPair={pairWith} />;
+	}
+	if (route.kind === "settings") {
+		return (
+			<SettingsScreen
+				preferences={preferences}
+				onChange={changePreferences}
+				backLabel={t("mobile.projects.title")}
+				onBack={back}
+			/>
+		);
 	}
 	if (route.kind === "chat") {
 		const { hostKey, workspace, chat } = route;
@@ -179,6 +201,7 @@ export function App() {
 			onToggle={toggleProject}
 			adding={adding}
 			onAdd={() => setAdding(true)}
+			onSettings={() => setRoute({ kind: "settings" })}
 			pairForm={<PairForm pair={pair} onPair={pairWith} onCancel={() => setAdding(false)} />}
 			onOpen={(hostKey, project, workspace) =>
 				setRoute({ kind: "workspace", hostKey, project, workspace })

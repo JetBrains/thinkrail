@@ -635,7 +635,8 @@ a project picker, the prompt hero, and the reused
   so the dialog only renders it. `settingsOpen`/`settingsSection` live in the store so the gear AND the
   Welcome banner can open it deep-linked to a section. Escape closes the dialog except while focus is in an
   input carrying `data-settings-draft-input`, where Escape reverts that draft instead.
-  **Shared Settings primitives** keep every page one shape (shell's injected Layout section reuses them):
+  **Shared Settings primitives** keep every page one shape (shell's injected Layout section and the phone's
+  settings screen reuse them; they live in `@thinkrail/ui/settings`):
   `SettingsPageContainer` stacks a page's groups with spacing and a divider drawn only between children
   that actually render (each child keeps its element key, so a conditional group never remounts its
   siblings); `SettingsGroup` is a titled block of `SettingsRow`s — label, optional description, one

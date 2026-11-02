@@ -2,11 +2,15 @@ import type { HostPlatform, TerminalWindowsShell } from "@thinkrail/contracts";
 import { WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import {
+	SETTINGS_ROWS_CONTAINER,
+	SegmentedControl,
+	type SegmentedControlOption,
+	SettingsRadioCards,
+	type SettingsRadioChoice,
+} from "@thinkrail/ui/settings";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
-import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
-import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
-import { SETTINGS_ROWS_CONTAINER } from "./SettingsRow";
 
 type ScrollbackOption = "0" | "16" | "64" | "256" | "1024";
 

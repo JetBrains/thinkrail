@@ -2,9 +2,9 @@ import { RiCheckLine as Check, RiRefreshLine as RefreshCw } from "@remixicon/rea
 import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { SettingsGroup } from "@thinkrail/ui/settings";
 import { useEffect, useState } from "react";
 import { getTransport } from "@/transport";
-import { SettingsGroup } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 
 export function GithubSettings() {

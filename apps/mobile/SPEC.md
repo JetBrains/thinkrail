@@ -23,7 +23,8 @@ IDE. No file tree, diffs, terminals, layout, or settings. No cloud account: the 
   into their **live** workspaces (`workspace.list`, split by contracts' `partitionWorkspaces` with the host's
   `settleIdleDays` from its welcome — the Settled shelf is not shown on the phone), Default first, branch as
   the second line; the expanded set lives in `App` so returning from a chat keeps the tree; per-host
-  "unreachable" notice with its reason, add-computer form; a tapped workspace opens `WorkspaceScreen.tsx`
+  "unreachable" notice with its reason; the header carries icon buttons for the add-computer form (+) and the
+  settings screen (gear); a tapped workspace opens `WorkspaceScreen.tsx`
   (its **active** chats — `session.list` entries the host holds `live`, i.e. open in ThinkRail since it
   started, not the closed history — newest first, titled by contracts' `chatTitle`, aged by `compactAgeOf`; a
   workspace normally has one, which opens directly and whose back returns to the tree, so the list shows only
@@ -63,9 +64,16 @@ four mobile layout roles: `touch` (44px, the minimum tap target, `h-touch` / `mi
 [[module-chat-ui]] asks every host to define). Text comes from `mobile.*` keys in
 `packages/locales/en.json` (the i18n gate scans `apps/mobile/src`).
 
-The theme follows the operating system: `theme.ts` applies the bundled **Dark** or **Light** manifest with
-`applyPalette` and swaps on `prefers-color-scheme` changes. There is no theme picker — that is an IDE
-setting. The native shell's background is the Dark palette's `background`, read from the manifest by
+`SettingsScreen.tsx` is the phone's own settings: the IDE Settings rows that apply to a device, rendered
+with the shared `@thinkrail/ui/settings` primitives and the IDE's strings — **Theme mode**
+(System / Light / Dark), **Contrast level** (Default / High) and **Language** (System or a bundled locale,
+named by `languageName`). They are device preferences (`preferences.ts`, one JSON entry in the
+`localStorage` store), never written to a host: a phone can pair several computers, and the IDE's own
+choice belongs to the IDE. `theme.ts`'s `applyDevicePreferences` applies them before paint (a layout
+effect in `App`) — the bundled `dark` / `light` / `high-contrast-*` manifest via `applyPalette`, following
+`prefers-color-scheme` while System, and the locale via `resolveLocale` + `applyLocale`, following
+`languagechange` while System. Custom themes, theme pairs and local locale files are host-folder features
+and stay in the IDE. The native shell's background is the Dark palette's `background`, read from the manifest by
 `capacitor.config.ts`, so first paint matches.
 
 ## Build & run

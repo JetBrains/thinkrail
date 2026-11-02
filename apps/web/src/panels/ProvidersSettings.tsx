@@ -11,6 +11,7 @@ import {
 } from "@thinkrail/contracts";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { SettingsGroup, SettingsPageContainer } from "@thinkrail/ui/settings";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { useCallback, useState } from "react";
 import { toast, useAppStore } from "@/store";
@@ -18,7 +19,6 @@ import { errorText, getTransport } from "@/transport";
 import { CustomEndpointsSettings, useCustomEndpoints } from "./CustomEndpointsSettings";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
 import { ProviderRow } from "./ProviderRow";
-import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { useProviderAuth } from "./useProviderAuth";
 
 const API_KEY_VISIBLE = 8;

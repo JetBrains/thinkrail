@@ -51,6 +51,13 @@ while working), `WorkspaceLabel` (name, with `WorkspaceBranch` as the second lin
 keeping the `workspace-name` / `workspace-branch` test ids. Row geometry, menus, rename and actions stay
 with the host: the IDE's 22px panel rows, the phone's 44px touch rows.
 
+## Settings rows
+
+`settings` holds the props-only Settings primitives the IDE's Settings dialog (and its injected Layout
+section) and `apps/mobile`'s settings screen share: `SettingsPageContainer`, `SettingsGroup`, `SettingsRow`
+(`SETTINGS_ROWS_CONTAINER`), `SettingsSubheading`, `SETTINGS_TAG`, `SegmentedControl` and `SettingsRadioCards`. Their behavior contract is in
+`apps/web/src/panels/SPEC.md` (Shared Settings primitives); what a row reads or writes stays with its host.
+
 ## Status marks
 
 The two store-free session status marks the web app and `apps/mobile` share. `./brand-mark` exports the

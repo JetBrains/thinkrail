@@ -20,6 +20,7 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { SettingsGroup } from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast, useAppStore } from "@/store";
@@ -39,7 +40,6 @@ import {
 	probeFailureText,
 	probeTarget,
 } from "./customEndpointDraft";
-import { SettingsGroup } from "./SettingsGroup";
 import { SettingsSwitch } from "./SettingsSwitch";
 
 const INPUT_CLASS =
