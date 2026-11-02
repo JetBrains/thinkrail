@@ -75,7 +75,8 @@ answer mailbox.
   - The "Recommended" badge and the `Why:` line.
   - The selected option's markdown preview: beside the list from 100 columns, below it otherwise, capped
     at 24 lines.
-  - A review page listing unanswered questions, Esc to skip, and a "Chat about this" row.
+  - One page per question; confirming the last one submits, with earlier unanswered questions sent as
+    not answered (no review page, matching the card). Esc to skip, and a "Chat about this" row.
   - Known limit: no viewport for a questionnaire taller than the terminal.
 - **The dialog walker trades richness for reach.**
   - One `select` per question, with "Other…" and "Chat about this".
