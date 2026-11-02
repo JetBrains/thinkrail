@@ -13528,7 +13528,7 @@ export default function CollapsiblePane() {
 				<ResizablePanelGroup direction="horizontal">
 					<ResizablePanel
 						ref={panelRef}
-						id="left"
+						id="collapsible-left"
 						order={1}
 						defaultSize={30}
 						minSize={15}
@@ -13552,7 +13552,7 @@ export default function CollapsiblePane() {
 						tabIndex={collapsed ? -1 : 0}
 						{...(collapsed ? { className: "hidden" } : {})}
 					/>
-					<ResizablePanel id="welcome" order={2} defaultSize={70} minSize={40}>
+					<ResizablePanel id="collapsible-welcome" order={2} defaultSize={70} minSize={40}>
 						<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
 							{t("workbench.center.group")}
 						</div>
@@ -13608,7 +13608,7 @@ export default function ThreeColumns() {
 		<div className="h-160 w-full">
 			<ResizablePanelGroup direction="horizontal">
 				<ResizablePanel
-					id="layout-left"
+					id="columns-left"
 					order={1}
 					defaultSize={25}
 					minSize={15}
@@ -13620,14 +13620,14 @@ export default function ThreeColumns() {
 					</div>
 				</ResizablePanel>
 				<ResizableHandle />
-				<ResizablePanel id="layout-center" order={2} defaultSize={50} minSize={30}>
+				<ResizablePanel id="columns-center" order={2} defaultSize={50} minSize={30}>
 					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
 						{t("workbench.center.group")}
 					</div>
 				</ResizablePanel>
 				<ResizableHandle />
 				<ResizablePanel
-					id="layout-right"
+					id="columns-right"
 					order={3}
 					defaultSize={25}
 					minSize={15}
@@ -13657,15 +13657,15 @@ export default function Nested() {
 	return (
 		<div className="h-240 w-full">
 			<ResizablePanelGroup direction="vertical">
-				<ResizablePanel id="main-row" order={1} defaultSize={65} minSize={40}>
+				<ResizablePanel id="nested-main-row" order={1} defaultSize={65} minSize={40}>
 					<ResizablePanelGroup direction="horizontal">
-						<ResizablePanel id="main-left" order={1} defaultSize={30} minSize={15}>
+						<ResizablePanel id="nested-main-left" order={1} defaultSize={30} minSize={15}>
 							<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
 								{t("workbench.tool.projects")}
 							</div>
 						</ResizablePanel>
 						<ResizableHandle />
-						<ResizablePanel id="main-center" order={2} defaultSize={70} minSize={40}>
+						<ResizablePanel id="nested-main-center" order={2} defaultSize={70} minSize={40}>
 							<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
 								{t("workbench.center.group")}
 							</div>
@@ -13673,7 +13673,7 @@ export default function Nested() {
 					</ResizablePanelGroup>
 				</ResizablePanel>
 				<ResizableHandle direction="vertical" />
-				<ResizablePanel id="bottom" order={2} defaultSize={35} minSize={20} maxSize={60}>
+				<ResizablePanel id="nested-bottom" order={2} defaultSize={35} minSize={20} maxSize={60}>
 					<div className="flex h-full items-center justify-center bg-container-terminal-bg tr-text-ui text-text-muted">
 						{t("workbench.rail.terminal")}
 					</div>
@@ -13712,7 +13712,7 @@ export default function ConditionalPanel() {
 			<div className="h-240 w-full">
 				<ResizablePanelGroup direction="vertical">
 					<ResizablePanel
-						id="layout-main-row"
+						id="conditional-main-row"
 						order={1}
 						defaultSize={bottomVisible ? 65 : 100}
 						minSize={40}
@@ -13725,7 +13725,7 @@ export default function ConditionalPanel() {
 						<>
 							<ResizableHandle direction="vertical" />
 							<ResizablePanel
-								id="layout-bottom"
+								id="conditional-bottom"
 								order={2}
 								defaultSize={35}
 								minSize={20}
@@ -13757,13 +13757,13 @@ export default function DisabledHandle() {
 	return (
 		<div className="h-160 w-full">
 			<ResizablePanelGroup direction="horizontal">
-				<ResizablePanel id="center-split-0" order={1} defaultSize={50} minSize={4}>
+				<ResizablePanel id="disabled-split-0" order={1} defaultSize={50} minSize={4}>
 					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
 						{t("store.chatTab.defaultName")}
 					</div>
 				</ResizablePanel>
 				<ResizableHandle disabled />
-				<ResizablePanel id="center-split-1" order={2} defaultSize={50} minSize={4}>
+				<ResizablePanel id="disabled-split-1" order={2} defaultSize={50} minSize={4}>
 					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
 						{t("store.chatTab.defaultName")}
 					</div>
@@ -13887,13 +13887,13 @@ export default function RememberLayout() {
 	return (
 		<div className="h-160 w-full">
 			<ResizablePanelGroup direction="horizontal" autoSaveId="library-resizable-remember">
-				<ResizablePanel id="left" order={1} defaultSize={30} minSize={15}>
+				<ResizablePanel id="remember-left" order={1} defaultSize={30} minSize={15}>
 					<div className="flex h-full items-center justify-center bg-container-sidebar-bg tr-text-ui text-text-muted">
 						{t("shell.projectHome.projects")}
 					</div>
 				</ResizablePanel>
 				<ResizableHandle />
-				<ResizablePanel id="welcome" order={2} defaultSize={70} minSize={40}>
+				<ResizablePanel id="remember-welcome" order={2} defaultSize={70} minSize={40}>
 					<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
 						{t("workbench.center.group")}
 					</div>

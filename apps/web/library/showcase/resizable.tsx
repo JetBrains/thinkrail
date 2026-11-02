@@ -1,7 +1,7 @@
 import { useT } from "@thinkrail/locales/react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { cn } from "@thinkrail/ui/utils";
-import { Fragment } from "react";
+import { Fragment, useId } from "react";
 import { Table } from "../parts/Section";
 import type { PlaygroundValues, Showcase } from "./types";
 
@@ -22,6 +22,7 @@ const LABELS = [
 
 function Specimen({ direction, panels, collapsible, disabled }: SpecimenConfig) {
 	const t = useT();
+	const scope = useId();
 	const size = 100 / panels;
 	const labels = panels === 2 ? LABELS.slice(0, 2) : LABELS;
 	return (
@@ -33,7 +34,7 @@ function Specimen({ direction, panels, collapsible, disabled }: SpecimenConfig) 
 						<Fragment key={label}>
 							{index > 0 ? <ResizableHandle direction={direction} disabled={disabled} /> : null}
 							<ResizablePanel
-								id={label}
+								id={`${scope}-${label}`}
 								order={index + 1}
 								defaultSize={size}
 								minSize={15}

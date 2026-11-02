@@ -21,7 +21,7 @@ export default function ConditionalPanel() {
 			<div className="h-240 w-full">
 				<ResizablePanelGroup direction="vertical">
 					<ResizablePanel
-						id="layout-main-row"
+						id="conditional-main-row"
 						order={1}
 						defaultSize={bottomVisible ? 65 : 100}
 						minSize={40}
@@ -34,7 +34,7 @@ export default function ConditionalPanel() {
 						<>
 							<ResizableHandle direction="vertical" />
 							<ResizablePanel
-								id="layout-bottom"
+								id="conditional-bottom"
 								order={2}
 								defaultSize={35}
 								minSize={20}

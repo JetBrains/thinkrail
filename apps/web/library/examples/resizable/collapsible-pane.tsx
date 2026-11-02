@@ -33,7 +33,7 @@ export default function CollapsiblePane() {
 				<ResizablePanelGroup direction="horizontal">
 					<ResizablePanel
 						ref={panelRef}
-						id="left"
+						id="collapsible-left"
 						order={1}
 						defaultSize={30}
 						minSize={15}
@@ -57,7 +57,7 @@ export default function CollapsiblePane() {
 						tabIndex={collapsed ? -1 : 0}
 						{...(collapsed ? { className: "hidden" } : {})}
 					/>
-					<ResizablePanel id="welcome" order={2} defaultSize={70} minSize={40}>
+					<ResizablePanel id="collapsible-welcome" order={2} defaultSize={70} minSize={40}>
 						<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
 							{t("workbench.center.group")}
 						</div>
