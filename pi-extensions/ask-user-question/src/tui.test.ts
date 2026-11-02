@@ -271,6 +271,27 @@ describe("QuestionnaireComponent — several questions", () => {
 		).toEqual([1]);
 	});
 
+	test("the last page's Submit answers row sends what is answered, leaving the rest unanswered", () => {
+		const { press, screen, outcomes } = open(library, runtime);
+		expect(screen()).not.toContain("Submit answers");
+		press(KEY.down, KEY.enter);
+		expect(screen()).toContain("Submit answers");
+		press(KEY.up, KEY.up);
+		expect(screen()).toContain("›   Submit answers");
+		press(KEY.enter);
+		const outcome = outcomes[0];
+		expect(outcome?.kind === "answered" && outcome.result.answers.map((a) => a.answer)).toEqual([
+			"luxon",
+		]);
+	});
+
+	test("Submit answers with nothing answered asks for an answer first", () => {
+		const { press, screen, outcomes } = open(library, runtime);
+		press(KEY.tab, KEY.up, KEY.up, KEY.enter);
+		expect(screen()).toContain("Answer at least one question first, or press Esc to skip");
+		expect(outcomes).toEqual([]);
+	});
+
 	test("Shift+Tab returns to an earlier question", () => {
 		const { press, screen } = open(library, runtime);
 		press(KEY.tab);

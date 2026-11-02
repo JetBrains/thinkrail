@@ -41,7 +41,11 @@ import {
 	splitRecommended,
 } from "./questionnaire.ts";
 
-type Row = { kind: "option"; index: number } | { kind: "other" } | { kind: "chat" };
+type Row =
+	| { kind: "option"; index: number }
+	| { kind: "other" }
+	| { kind: "submit" }
+	| { kind: "chat" };
 
 type Mode = { kind: "browse" } | { kind: "other" } | { kind: "note"; label: string };
 
@@ -49,6 +53,8 @@ const WIDE_PREVIEW_MIN_WIDTH = 100;
 const MAX_PREVIEW_LINES = 24;
 const ROW_INDENT = 5;
 const NEEDS_CHOICE = "Choose an option first";
+const NEEDS_ANSWER = "Answer at least one question first, or press Esc to skip";
+const SUBMIT_LABEL = "Submit answers";
 
 function editorTheme(theme: Theme): EditorTheme {
 	return {
@@ -148,6 +154,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 		return [
 			...this.question().options.map((_, index): Row => ({ kind: "option", index })),
 			{ kind: "other" },
+			...(this.multiple && this.page === this.lastPage ? [{ kind: "submit" } as const] : []),
 			{ kind: "chat" },
 		];
 	}
@@ -233,7 +240,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 	}
 
 	private toggle(row: Row): void {
-		if (row.kind === "chat") {
+		if (row.kind === "chat" || row.kind === "submit") {
 			this.activate(row);
 			return;
 		}
@@ -267,6 +274,9 @@ export class QuestionnaireComponent implements Component, Focusable {
 			case "chat":
 				this.settle({ kind: "deferred", reason: "chat" });
 				return;
+			case "submit":
+				this.submit();
+				return;
 			case "other":
 				this.openOther();
 				return;
@@ -282,11 +292,16 @@ export class QuestionnaireComponent implements Component, Focusable {
 			this.nudge = NEEDS_CHOICE;
 			return;
 		}
-		if (this.page < this.lastPage) {
-			this.goToPage(this.page + 1);
+		if (this.page < this.lastPage) this.goToPage(this.page + 1);
+		else this.submit();
+	}
+
+	private submit(): void {
+		const answers = deriveAnswers(this.args.questions, this.states);
+		if (answers.length === 0) {
+			this.nudge = NEEDS_ANSWER;
 			return;
 		}
-		const answers = deriveAnswers(this.args.questions, this.states);
 		this.settle({ kind: "answered", result: { answers, cancelled: false } });
 	}
 
@@ -454,6 +469,19 @@ export class QuestionnaireComponent implements Component, Focusable {
 					...wrapIndented(label, width, ROW_INDENT, ` ${this.pointer(index)} ${mark(on)} `),
 				);
 				if (this.mode.kind === "other") lines.push(...this.renderEditor(width));
+				continue;
+			}
+			if (row.kind === "submit") {
+				const label = theme.bold(SUBMIT_LABEL);
+				lines.push(
+					"",
+					...wrapIndented(
+						focused ? theme.fg("accent", label) : label,
+						width,
+						ROW_INDENT,
+						` ${this.pointer(index)}   `,
+					),
+				);
 				continue;
 			}
 			lines.push(
