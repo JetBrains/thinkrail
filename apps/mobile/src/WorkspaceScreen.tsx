@@ -10,7 +10,7 @@ import { type Translator, useT } from "@thinkrail/locales/react";
 import type { DeviceWireClient, RemoteSessionItem } from "@thinkrail/remote-client";
 import { useEffect } from "react";
 import { ListRow, LoadedList, Screen } from "./layout";
-import { workspaceName } from "./ProjectScreen";
+import { workspaceName } from "./ProjectsScreen";
 import { statusOf } from "./status";
 import { useHostRequest } from "./useHostRequest";
 

@@ -1,4 +1,4 @@
-import { type SessionStateRecord, WS_CHANNELS } from "@thinkrail/contracts";
+import { type ServerWelcome, type SessionStateRecord, WS_CHANNELS } from "@thinkrail/contracts";
 import { connectSavedHost, type RemoteConnection } from "./deviceConnector";
 import type { DeviceWireClient } from "./deviceWireClient";
 import type { SavedHost } from "./hostRegistry";
@@ -16,6 +16,8 @@ export interface RemoteSessionsController {
 	items(): RemoteSessionItem[];
 	/** The wire client for a connected host — a session screen uses it to stream, send, and approve. */
 	clientFor(hostKey: string): DeviceWireClient | null;
+	/** The host's `server.welcome` (protocol version, config), once it has arrived. */
+	welcomeFor(hostKey: string): ServerWelcome | null;
 	subscribe(listener: () => void): () => void;
 	stop(): void;
 }
@@ -24,6 +26,7 @@ interface HostEntry {
 	label: string;
 	connection: RemoteConnection;
 	sessions: Map<string, SessionStateRecord>;
+	welcome: ServerWelcome | null;
 }
 
 type Connector = (host: SavedHost) => Promise<RemoteConnection>;
@@ -47,9 +50,13 @@ export function createRemoteSessions(
 			if (hosts.has(host.hostKey)) return;
 			const connection = await connector(host);
 			const sessions = new Map<string, SessionStateRecord>();
-			const entry: HostEntry = { label: host.label, connection, sessions };
+			const entry: HostEntry = { label: host.label, connection, sessions, welcome: null };
 			hosts.set(host.hostKey, entry);
 
+			connection.client.subscribe(WS_CHANNELS.serverWelcome, (data) => {
+				entry.welcome = data as ServerWelcome;
+				notify();
+			});
 			connection.client.subscribe(WS_CHANNELS.sessionState, (data) => {
 				const record = data as SessionStateRecord;
 				sessions.set(record.sessionId, record);
@@ -72,6 +79,9 @@ export function createRemoteSessions(
 		},
 		clientFor(hostKey) {
 			return hosts.get(hostKey)?.connection.client ?? null;
+		},
+		welcomeFor(hostKey) {
+			return hosts.get(hostKey)?.welcome ?? null;
 		},
 		subscribe(listener) {
 			listeners.add(listener);

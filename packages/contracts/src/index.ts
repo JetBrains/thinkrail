@@ -100,4 +100,5 @@ export {
 export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
 export * from "./signalingProtocol";
+export * from "./workspaceSettling";
 export * from "./wsProtocol";

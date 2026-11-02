@@ -28,7 +28,7 @@ change wins once its faces load, a change to none of the listed fields is skippe
 `data-font-faces` signal) re-applies an unchanged font. It knows nothing about the settings or the runtime
 that publishes them.
 
-Workspace imports may reach `contracts` and `@thinkrail/locales/react` (the shared i18next instance, for
+Workspace imports may reach `contracts` (types — `project-tree` reads `Workspace["kind"]`) and `@thinkrail/locales/react` (the shared i18next instance, for
 primitive-owned strings such as the dialog's screen-reader Close and the toast's Dismiss label) only. External dependencies are React, Radix, cmdk,
 react-resizable-panels, Remix Icon, class-variance-authority, clsx and tailwind-merge. Host internals,
 pi, app stores, transport and theme runtime are forbidden. Tokens remain global CSS variables generated
@@ -41,6 +41,15 @@ The app's Tailwind sources and adoption guards include this package and extensio
 `currentColor` CSS `mask-image` span, so it sizes with `size-*` and colours with `text-*` exactly like a Remix
 icon; its classes live in `custom-icon.css`, which every host stylesheet imports (the SVGs resolve relative to
 it, so the bundler ships them). Today: `file-diff-line` / `file-diff-fill` (the Changes review glyph).
+
+## Project tree
+
+`project-tree` is the visual identity of the project tree's rows, shared by the IDE's `panels/ProjectTree`
+and `apps/mobile`: `ProjectGlyph` (folder, Fill when selected, or the running badge), `WorkspaceGlyph` (home
+for Default, open folder for an external folder, branch for a worktree; Fill when active; the running badge
+while working), `WorkspaceLabel` (name, with `WorkspaceBranch` as the second line when the branch differs)
+keeping the `workspace-name` / `workspace-branch` test ids. Row geometry, menus, rename and actions stay
+with the host: the IDE's 22px panel rows, the phone's 44px touch rows.
 
 ## Status marks
 

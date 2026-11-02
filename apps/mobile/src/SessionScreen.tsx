@@ -225,9 +225,12 @@ export function SessionScreen({
 			title={session.title}
 			back={{ label: backLabel, onBack }}
 			footer={
-				<footer className="border-t border-border-default bg-container-workspace-bg px-chat-gutter pt-8 pb-[max(var(--spacing-safe-bottom),8px)]">
+				<footer className="@container bg-container-workspace-bg pb-safe-bottom">
 					{sendError ? (
-						<p role="alert" className="mt-0 mb-8 text-feedback-error tr-text-metadata">
+						<p
+							role="alert"
+							className="m-0 px-chat-gutter py-8 text-feedback-error tr-text-metadata"
+						>
 							{t("mobile.session.sendFailed", { reason: sendError })}
 						</p>
 					) : null}
@@ -262,7 +265,7 @@ export function SessionScreen({
 		>
 			<ChatActionsContext.Provider value={chatActions}>
 				<InteractionStatesContext.Provider value={interactionContext}>
-					<div className="flex flex-col gap-8 px-chat-gutter py-16">
+					<div className="@container flex flex-col gap-8 px-chat-gutter py-16">
 						{loadError ? (
 							<Notice text={t("mobile.list.failed", { reason: loadError })} alert />
 						) : messages === null ? (

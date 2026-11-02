@@ -497,6 +497,7 @@
         "@radix-ui/react-toast": "1.2.19",
         "@radix-ui/react-tooltip": "1.2.10",
         "@remixicon/react": "catalog:",
+        "@thinkrail/contracts": "workspace:*",
         "@thinkrail/locales": "workspace:*",
         "class-variance-authority": "0.7.1",
         "clsx": "2.1.1",

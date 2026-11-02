@@ -1,4 +1,8 @@
+import { WS_CHANNELS } from "@thinkrail/contracts";
 import type { DeviceChannel } from "./deviceChannel";
+
+/** Snapshot pushes: the host sends them once when a channel opens, so a later subscriber gets the last one. */
+const STICKY_CHANNELS: ReadonlySet<string> = new Set([WS_CHANNELS.serverWelcome]);
 
 export class RemoteRequestError extends Error {
 	readonly code: string | undefined;
@@ -14,7 +18,7 @@ export interface DeviceWireClient {
 	attach(channel: DeviceChannel): void;
 	/** Issues a wire request; resolves with the host's result (or rejects on error). Survives a reconnect. */
 	request<T = unknown>(method: string, params?: unknown): Promise<T>;
-	/** Subscribes to a host push channel; returns an unsubscribe function. Persists across reconnects. */
+	/** Subscribes to a host push channel; returns an unsubscribe function. Persists across reconnects; a snapshot channel (`server.welcome`) replays its last value at once. */
 	subscribe(channel: string, handler: (data: unknown) => void): () => void;
 	close(): void;
 }
@@ -29,7 +33,8 @@ interface Pending {
  * The device side of the wire protocol, mirroring the host's `remoteWireBridge`. It is channel-agnostic and
  * reconnect-safe: a dropped WebRTC channel does not fail in-flight requests — when `attach` installs a fresh
  * channel (after re-pairing), every pending request is replayed onto it, and subscriptions persist. Only
- * `close` rejects outstanding work. Responses are matched by id; `{ channel, data }` pushes fan to subscribers.
+ * `close` rejects outstanding work. Responses are matched by id; `{ channel, data }` pushes fan to subscribers;
+ * a snapshot push (`server.welcome`) is also kept and replayed to a subscriber that arrives after it.
  */
 export function createDeviceWireClient(): DeviceWireClient {
 	let channel: DeviceChannel | null = null;
@@ -37,6 +42,7 @@ export function createDeviceWireClient(): DeviceWireClient {
 	let closed = false;
 	const pending = new Map<string, Pending>();
 	const subscribers = new Map<string, Set<(data: unknown) => void>>();
+	const sticky = new Map<string, unknown>();
 
 	const onMessage = (raw: string): void => {
 		let message: unknown;
@@ -62,6 +68,7 @@ export function createDeviceWireClient(): DeviceWireClient {
 				);
 			}
 		} else if (typeof frame.channel === "string") {
+			if (STICKY_CHANNELS.has(frame.channel)) sticky.set(frame.channel, frame.data);
 			for (const handler of subscribers.get(frame.channel) ?? []) handler(frame.data);
 		}
 	};
@@ -95,6 +102,7 @@ export function createDeviceWireClient(): DeviceWireClient {
 				subscribers.set(channelName, set);
 			}
 			set.add(handler);
+			if (sticky.has(channelName)) handler(sticky.get(channelName));
 			return () => void set?.delete(handler);
 		},
 		close() {

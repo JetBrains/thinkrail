@@ -34,6 +34,20 @@ function fakeChannel() {
 }
 
 describe("createDeviceWireClient", () => {
+	test("a welcome that arrived before anyone subscribed reaches a later subscriber; event pushes do not", () => {
+		const io = fakeChannel();
+		const client = createDeviceWireClient();
+		client.attach(io.channel);
+		io.deliver({ channel: "server.welcome", data: { protocolVersion: 99 } });
+		io.deliver({ channel: "pi.event", data: { sessionId: "s" } });
+		const welcomes: unknown[] = [];
+		const events: unknown[] = [];
+		client.subscribe("server.welcome", (data) => welcomes.push(data));
+		client.subscribe("pi.event", (data) => events.push(data));
+		expect(welcomes).toEqual([{ protocolVersion: 99 }]);
+		expect(events).toEqual([]);
+	});
+
 	test("sends a request and resolves with the matching result", async () => {
 		const io = fakeChannel();
 		const client = createDeviceWireClient();

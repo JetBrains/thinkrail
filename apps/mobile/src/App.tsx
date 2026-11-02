@@ -10,8 +10,7 @@ import {
 } from "@thinkrail/remote-client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PairForm } from "./PairForm";
-import { ProjectScreen, workspaceName } from "./ProjectScreen";
-import { ProjectsScreen } from "./ProjectsScreen";
+import { ProjectsScreen, workspaceName } from "./ProjectsScreen";
 import { SessionScreen } from "./SessionScreen";
 import { isPairLink } from "./scanPairLink";
 import { localStore } from "./store";
@@ -22,10 +21,9 @@ const DEVICE_LABEL = "Mobile";
 
 export type PairState = { kind: "idle" } | { kind: "pairing" } | { kind: "failed"; reason: string };
 
-/** The drill-down the IDE project tree reads as one tree: projects → a project's workspaces → a workspace's chats → a chat. */
+/** The project tree (projects expand into their live workspaces) → a workspace's active chats → a chat. */
 type Route =
 	| { kind: "projects" }
-	| { kind: "project"; hostKey: string; project: Project }
 	| { kind: "workspace"; hostKey: string; project: Project; workspace: Workspace }
 	| {
 			kind: "chat";
@@ -33,7 +31,7 @@ type Route =
 			project: Project;
 			workspace: Workspace;
 			chat: OpenChat;
-			/** Opened straight from the project because it is the workspace's only active chat. */
+			/** Opened straight from the tree because it is the workspace's only active chat. */
 			direct: boolean;
 	  };
 
@@ -48,6 +46,14 @@ export function App() {
 	const [pair, setPair] = useState<PairState>({ kind: "idle" });
 	const [adding, setAdding] = useState(false);
 	const [route, setRoute] = useState<Route>({ kind: "projects" });
+	const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+	const toggleProject = useCallback((key: string) => {
+		setExpanded((current) => {
+			const next = new Set(current);
+			if (!next.delete(key)) next.add(key);
+			return next;
+		});
+	}, []);
 	const t = useT();
 	const [unreachable, setUnreachable] = useState<ReadonlyMap<string, string>>(() => new Map());
 	const markReachable = useCallback((label: string, failure: string | null) => {
@@ -121,13 +127,9 @@ export function App() {
 						?.record.state
 				}
 				controller={controller}
-				backLabel={route.direct ? route.project.name : workspaceName(t, workspace)}
+				backLabel={route.direct ? t("mobile.projects.title") : workspaceName(t, workspace)}
 				onBack={() =>
-					setRoute(
-						route.direct
-							? { kind: "project", hostKey, project: route.project }
-							: { ...route, kind: "workspace" },
-					)
+					setRoute(route.direct ? { kind: "projects" } : { ...route, kind: "workspace" })
 				}
 			/>
 		);
@@ -138,20 +140,9 @@ export function App() {
 				workspace={route.workspace}
 				client={controller.clientFor(route.hostKey)}
 				items={hostItems(items, route.hostKey)}
-				backLabel={route.project.name}
-				onBack={() => setRoute({ kind: "project", hostKey: route.hostKey, project: route.project })}
-				onOpen={(chat, direct) => setRoute({ ...route, kind: "chat", chat, direct })}
-			/>
-		);
-	}
-	if (route.kind === "project") {
-		return (
-			<ProjectScreen
-				project={route.project}
-				client={controller.clientFor(route.hostKey)}
-				items={hostItems(items, route.hostKey)}
+				backLabel={t("mobile.projects.title")}
 				onBack={() => setRoute({ kind: "projects" })}
-				onOpen={(workspace) => setRoute({ ...route, kind: "workspace", workspace })}
+				onOpen={(chat, direct) => setRoute({ ...route, kind: "chat", chat, direct })}
 			/>
 		);
 	}
@@ -161,10 +152,14 @@ export function App() {
 			controller={controller}
 			items={items}
 			unreachable={[...unreachable]}
+			expanded={expanded}
+			onToggle={toggleProject}
 			adding={adding}
 			onAdd={() => setAdding(true)}
 			pairForm={<PairForm pair={pair} onPair={pairWith} onCancel={() => setAdding(false)} />}
-			onOpen={(hostKey, project) => setRoute({ kind: "project", hostKey, project })}
+			onOpen={(hostKey, project, workspace) =>
+				setRoute({ kind: "workspace", hostKey, project, workspace })
+			}
 		/>
 	);
 }

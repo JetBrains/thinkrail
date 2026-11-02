@@ -20,11 +20,14 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
 - **Owns:**
   - `deviceChannel.ts` — `DeviceChannel` + `toDeviceChannel` (native `RTCDataChannel` adapter; contracts'
     channel framing both ways, binary frames read as `ArrayBuffer` so chunks keep their order).
-  - `deviceWireClient.ts` — the reconnect-safe wire client (request/response + pushes, replay on `attach`).
+  - `deviceWireClient.ts` — the reconnect-safe wire client (request/response + pushes, replay on `attach`;
+    the snapshot push `server.welcome` is kept and replayed to a later subscriber, because the host sends it
+    once as the channel opens — before any screen subscribes).
   - `deviceConnector.ts` — `connectRemoteProject` (first pairing, link + token) and `connectSavedHost`
     (token-less `resume`), sharing one WebRTC + auto-reconnect machinery; persistent device key.
   - `hostRegistry.ts` — the locally-stored set of paired hosts over an injected `KeyValueStore`.
-  - `remoteSessions.ts` — one wire client per host, aggregating live sessions into one list.
+  - `remoteSessions.ts` — one wire client per host, aggregating live sessions into one list, plus each host's
+    welcome (`welcomeFor`: protocol version and config).
 - **Public surface:** the `index.ts` barrel.
 - **Allowed deps:** `contracts` (broker + signaling + pairing + session types), platform browser APIs. Never
   `server`, `pi`, `web`, or any UI package.

@@ -116,7 +116,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **Settled shelf.** `selectors.ts` owns **`selectWorkspacePartition(state, projectId, now)`** — the one
   derivation of a project's rows into `live` and `settled` (each settled row carrying its reason:
   `override`, `review merged|closed`, or `idle since`), consumed by the rail, the topbar's *Switch to*
-  menu, and the shelf alike so the three can never disagree; **`selectAutoSettledCounts(state, now)`**
+  menu, and the shelf alike so the three can never disagree — it feeds the store's state (support flag,
+  `settleIdleDays`, running/attention, the live latch) into contracts' `partitionWorkspaces`, the rule the phone
+  shares; **`selectAutoSettledCounts(state, now)`**
   reuses its per-row rule to count, per loaded project, only the rows the shelf took on its own (never an
   `override`), which is what the rail's one-time first-move notice announces. Below
   `WORKSPACE_SETTLE_PROTOCOL_VERSION` it returns the host's raw list as `live`, unsorted, and ignores even

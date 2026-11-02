@@ -18,13 +18,16 @@ IDE. No file tree, diffs, terminals, layout, or settings. No cloud account: the 
 
 - **Owns:** a small React/Vite UI — `App.tsx` (pairing, host reconnect, the drill-down route, deep links via
   `@capacitor/app` `appUrlOpen` + `getLaunchUrl`, which pair automatically), `Welcome.tsx` (first run, no
-  paired host), the three list screens that read the IDE project tree as screens — `ProjectsScreen.tsx`
-  (each host's open projects from `project.list`, per-host "unreachable" notice, add-computer form) →
-  `ProjectScreen.tsx` (the project's workspaces from `workspace.list`, default / worktree / external glyphs,
-  branch as the second line) → `WorkspaceScreen.tsx` (its **active** chats — `session.list` entries the host holds `live`,
-  i.e. open in ThinkRail since it started, not the closed history — newest first, titled by contracts'
-  `chatTitle`, aged by `compactAgeOf`; a workspace normally has one, which opens directly and whose back
-  returns to the project, so the list shows only when there are several) — and `SessionScreen.tsx`, the IDE's chat on a phone: it renders the
+  paired host), `ProjectsScreen.tsx` — the IDE project tree on a phone, drawn with the shared
+  `@thinkrail/ui/project-tree` glyphs and labels: each host's open projects (`project.list`) expand in place
+  into their **live** workspaces (`workspace.list`, split by contracts' `partitionWorkspaces` with the host's
+  `settleIdleDays` from its welcome — the Settled shelf is not shown on the phone), Default first, branch as
+  the second line; the expanded set lives in `App` so returning from a chat keeps the tree; per-host
+  "unreachable" notice with its reason, add-computer form; a tapped workspace opens `WorkspaceScreen.tsx`
+  (its **active** chats — `session.list` entries the host holds `live`, i.e. open in ThinkRail since it
+  started, not the closed history — newest first, titled by contracts' `chatTitle`, aged by `compactAgeOf`; a
+  workspace normally has one, which opens directly and whose back returns to the tree, so the list shows only
+  when there are several); and `SessionScreen.tsx`, the IDE's chat on a phone: it renders the
   [[module-chat-ui]] components unchanged (`messagesToRuntime` → `deriveRows` → `ChatTurnView` for the
   transcript, the shared `Composer` with its slash commands from `session.getCommands`, the model/effort
   picker over `model.list` → `session.setModel` / `session.setThinkingLevel`, send / steer / follow-up /

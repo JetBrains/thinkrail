@@ -1,22 +1,40 @@
-import { RiAddLine, RiFolderLine } from "@remixicon/react";
-import type { Project } from "@thinkrail/contracts";
-import { useT } from "@thinkrail/locales/react";
+import { RiAddLine, RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
+import {
+	DEFAULT_CONFIG,
+	DEFAULT_WORKSPACE_NAME,
+	type Project,
+	partitionWorkspaces,
+	type Workspace,
+} from "@thinkrail/contracts";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import type {
 	RemoteSessionItem,
 	RemoteSessionsController,
 	SavedHost,
 } from "@thinkrail/remote-client";
+import { AttentionDot } from "@thinkrail/ui/attention-dot";
 import { Button } from "@thinkrail/ui/button";
+import { ProjectGlyph, WorkspaceGlyph, WorkspaceLabel } from "@thinkrail/ui/project-tree";
 import type { ReactNode } from "react";
-import { ListRow, LoadedList, Screen } from "./layout";
+import { LoadedList, Screen } from "./layout";
 import { scopeStatus } from "./status";
 import { useHostRequest } from "./useHostRequest";
+
+export function workspaceName(t: Translator, workspace: Workspace): string {
+	return workspace.kind === "default" && workspace.name === DEFAULT_WORKSPACE_NAME
+		? t("store.workspace.defaultName")
+		: workspace.name;
+}
+
+const expansionKey = (hostKey: string, projectId: string) => `${hostKey}:${projectId}`;
 
 export function ProjectsScreen({
 	hosts,
 	controller,
 	items,
 	unreachable,
+	expanded,
+	onToggle,
 	adding,
 	onAdd,
 	pairForm,
@@ -26,10 +44,13 @@ export function ProjectsScreen({
 	controller: RemoteSessionsController;
 	items: RemoteSessionItem[];
 	unreachable: [host: string, reason: string][];
+	/** Expanded projects, keyed `hostKey:projectId`, kept by the app so returning from a chat keeps the tree. */
+	expanded: ReadonlySet<string>;
+	onToggle: (key: string) => void;
 	adding: boolean;
 	onAdd: () => void;
 	pairForm: ReactNode;
-	onOpen: (hostKey: string, project: Project) => void;
+	onOpen: (hostKey: string, project: Project, workspace: Workspace) => void;
 }) {
 	const t = useT();
 	return (
@@ -71,8 +92,10 @@ export function ProjectsScreen({
 						host={host}
 						heading={hosts.length > 1}
 						controller={controller}
-						items={items}
-						onOpen={(project) => onOpen(host.hostKey, project)}
+						items={items.filter((item) => item.hostKey === host.hostKey)}
+						expanded={expanded}
+						onToggle={onToggle}
+						onOpen={(project, workspace) => onOpen(host.hostKey, project, workspace)}
 					/>
 				))}
 		</Screen>
@@ -84,13 +107,17 @@ function HostProjects({
 	heading,
 	controller,
 	items,
+	expanded,
+	onToggle,
 	onOpen,
 }: {
 	host: SavedHost;
 	heading: boolean;
 	controller: RemoteSessionsController;
 	items: RemoteSessionItem[];
-	onOpen: (project: Project) => void;
+	expanded: ReadonlySet<string>;
+	onToggle: (key: string) => void;
+	onOpen: (project: Project, workspace: Workspace) => void;
 }) {
 	const t = useT();
 	const loaded = useHostRequest<Project[]>(controller.clientFor(host.hostKey), "project.list", {});
@@ -98,28 +125,118 @@ function HostProjects({
 		loaded.kind === "ready" ? { ...loaded, value: loaded.value.filter((p) => !p.closed) } : loaded;
 
 	return (
-		<section>
+		<section className="py-4">
 			{heading ? (
-				<h2 className="m-0 border-b border-border-muted px-16 pt-16 pb-8 text-text-subtle tr-text-eyebrow">
-					{host.label}
-				</h2>
+				<h2 className="m-0 px-16 pt-12 pb-4 text-text-subtle tr-text-eyebrow">{host.label}</h2>
 			) : null}
 			<LoadedList loaded={open} empty={t("mobile.projects.empty")}>
 				{(projects) =>
-					projects.map((project) => (
-						<ListRow
-							key={project.id}
-							icon={RiFolderLine}
-							title={project.name}
-							status={scopeStatus(
-								items,
-								(item) => item.hostKey === host.hostKey && item.record.projectId === project.id,
-							)}
-							onOpen={() => onOpen(project)}
-						/>
-					))
+					projects.map((project) => {
+						const key = expansionKey(host.hostKey, project.id);
+						const status = scopeStatus(items, (item) => item.record.projectId === project.id);
+						const isExpanded = expanded.has(key);
+						const Chevron = isExpanded ? RiArrowDownSLine : RiArrowRightSLine;
+						return (
+							<li key={project.id}>
+								<button
+									type="button"
+									aria-expanded={isExpanded}
+									onClick={() => onToggle(key)}
+									className="flex min-h-touch w-full items-center gap-4 border-0 bg-transparent px-12 text-left active:bg-control-bg-hovered"
+								>
+									<Chevron aria-hidden className="size-16 shrink-0 text-text-muted" />
+									<ProjectGlyph selected={false} running={status.running} />
+									<span className="min-w-0 flex-1 truncate text-text-default tr-text-ui">
+										{project.name}
+									</span>
+									{status.attention ? <AttentionDot /> : null}
+								</button>
+								{isExpanded ? (
+									<ProjectWorkspaces
+										host={host}
+										project={project}
+										controller={controller}
+										items={items}
+										onOpen={(workspace) => onOpen(project, workspace)}
+									/>
+								) : null}
+							</li>
+						);
+					})
 				}
 			</LoadedList>
 		</section>
+	);
+}
+
+/** A project's live workspaces, Default first — the settled shelf stays on the computer. */
+function ProjectWorkspaces({
+	host,
+	project,
+	controller,
+	items,
+	onOpen,
+}: {
+	host: SavedHost;
+	project: Project;
+	controller: RemoteSessionsController;
+	items: RemoteSessionItem[];
+	onOpen: (workspace: Workspace) => void;
+}) {
+	const t = useT();
+	const loaded = useHostRequest<Workspace[]>(controller.clientFor(host.hostKey), "workspace.list", {
+		projectId: project.id,
+		includeDiffStats: false,
+	});
+	const settleIdleDays =
+		controller.welcomeFor(host.hostKey)?.config.settleIdleDays ?? DEFAULT_CONFIG.settleIdleDays;
+	const statusOf = (workspace: Workspace) =>
+		scopeStatus(items, (item) => item.record.workspaceId === workspace.id);
+	const live =
+		loaded.kind === "ready"
+			? {
+					...loaded,
+					value: partitionWorkspaces(loaded.value, {
+						now: Date.now(),
+						settleIdleDays,
+						busy: (workspace) => {
+							const status = statusOf(workspace);
+							return status.running || status.attention;
+						},
+					}).live,
+				}
+			: loaded;
+
+	return (
+		<LoadedList loaded={live} empty={t("mobile.project.empty")}>
+			{(workspaces) =>
+				workspaces.map((workspace) => {
+					const status = statusOf(workspace);
+					const twoLine = workspace.branch !== workspace.name;
+					return (
+						<li key={workspace.id}>
+							<button
+								type="button"
+								onClick={() => onOpen(workspace)}
+								className={`flex min-h-touch w-full gap-8 border-0 bg-transparent py-4 pr-12 pl-40 text-left active:bg-control-bg-hovered ${twoLine ? "items-start pt-8" : "items-center"}`}
+							>
+								<WorkspaceGlyph
+									kind={workspace.kind}
+									active={false}
+									running={status.running}
+									twoLine={twoLine}
+								/>
+								<WorkspaceLabel
+									name={workspaceName(t, workspace)}
+									branch={twoLine ? workspace.branch : undefined}
+									active={false}
+								/>
+								{status.attention ? <AttentionDot /> : null}
+							</button>
+						</li>
+					);
+				})
+			}
+		</LoadedList>
 	);
 }
