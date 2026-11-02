@@ -53,6 +53,7 @@ import {
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
+	SPEECH_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
@@ -240,9 +241,19 @@ test("tool responses replace the ask-only answer method at v93", () => {
 	expect(WS_METHODS.sessionAnswerQuestion).toBe("session.answerQuestion");
 });
 
+test("voice input is pinned to v103", () => {
+	expect(SPEECH_PROTOCOL_VERSION).toBe(103);
+	expect(PROTOCOL_VERSION).toBe(103);
+	expect(WS_METHODS.speechStatus).toBe("speech.status");
+	expect(WS_METHODS.speechInstall).toBe("speech.install");
+	expect(WS_METHODS.speechCancelInstall).toBe("speech.cancelInstall");
+	expect(WS_METHODS.speechRemove).toBe("speech.remove");
+	expect(WS_CHANNELS.speechChanged).toBe("speech.changed");
+});
+
 test("user-selectable fonts are pinned to v102", () => {
 	expect(FONTS_PROTOCOL_VERSION).toBe(102);
-	expect(PROTOCOL_VERSION).toBe(102);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FONTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.fontsList).toBe("fonts.list");
 	expect(WS_METHODS.fontsInstalled).toBe("fonts.installed");
 	expect(WS_METHODS.fontsReveal).toBe("fonts.reveal");

@@ -41,7 +41,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   the four `feedback.survey.submit` refusals `SURVEY_INVALID`, `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` and
   `SURVEY_NOT_SENT`, and `fonts.installed`'s `INSTALLED_FONTS_UNAVAILABLE`: the host's OS font service could
   not be read, a failure analytics tells apart from a lost connection while the font picker offers Retry for
-  either), so a client can react to one specific failure
+  either; and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming a voice state the UI words
+  differently), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it or Error Tracking must tell it apart (it never sees `message`): **`REQUEST_REPLAY_OVERFLOW`** is the
   latter — the host's replay namespace for this page is full ([[submodule-server-host]]), and the page treats
@@ -1167,6 +1168,34 @@ and what it loaded, never pi's own types.
   the host could not produce the row; of the install codes only `PACKAGE_SOURCE_INVALID`,
   `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_INSTALL_FAILED` and `PACKAGE_SETTINGS_WRITE_FAILED`
   are raised before anything is written, and a client may claim "nothing was added" only for those.
+
+## Voice input
+
+`speech.ts` (re-exported from `index.ts`) is the wire for local dictation, from **`SPEECH_PROTOCOL_VERSION`**, v103:
+
+- **Control on the main wire.** `speech.status` returns a **`SpeechStatus`**:
+  - `supported` — whether the host platform has a pinned runtime;
+  - `install` — `not-installed` | `installing` with phase, byte progress and model | `ready` | `failed`
+    with a `SpeechErrorCode`;
+  - `runtime` — `managed` or a user's own `path` install, with version and backend;
+  - `engine` — `stopped` | `starting` | `ready` | `failed`;
+  - `diskBytes`, and per-model `downloadBytes`.
+
+  Every change is pushed whole on `speech.changed`. `speech.install {model}` starts or switches a model
+  (progress arrives on the channel, and the result acks the start). `speech.cancelInstall` and
+  `speech.remove` delete only ThinkRail's own files. The model choice is install state, not an
+  `AppConfig` key.
+- **Audio on a side socket.** **`SPEECH_SOCKET_ROUTE`** (`/speech?client=&protocol=`) carries one
+  dictation at a time, outside the JSON request wire. Its replay cache hashes and retains every
+  request, which cannot absorb 20 ms audio frames.
+  - Client to host: `SpeechClientMessage` JSON (`start {workspaceId?, sessionId?}` scopes the
+    recognition vocabulary; `stop` commits), with mono little-endian PCM16 binary frames at
+    **`SPEECH_SAMPLE_RATE`** (16 kHz) in between.
+  - Host to client: `SpeechServerMessage` JSON (`ready`, `partial` replacing the previous partial,
+    `final` committing it, `error {code}`, `ended`).
+  - `parseSpeechClientMessage` / `parseSpeechServerMessage` are the only readers. Both reject anything
+    outside these closed shapes.
+- Transcripts never enter the main wire, persistence, or error reports.
 
 ## Normalized session state
 

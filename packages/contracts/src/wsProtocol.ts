@@ -101,6 +101,7 @@ import type {
 	WireCustomMessage,
 	WireModel,
 } from "./piProtocol";
+import type { SpeechErrorCode, SpeechModel, SpeechStatus } from "./speech";
 
 export interface TerminalDataPush {
 	id: string;
@@ -135,7 +136,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 102;
+export const PROTOCOL_VERSION = 103;
+export const SPEECH_PROTOCOL_VERSION = 103;
 export const FONTS_PROTOCOL_VERSION = 102;
 export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;
 export const PI_PACKAGES_PROTOCOL_VERSION = 100;
@@ -318,6 +320,10 @@ export const WS_METHODS = {
 	fontsList: "fonts.list",
 	fontsInstalled: "fonts.installed",
 	fontsReveal: "fonts.reveal",
+	speechStatus: "speech.status",
+	speechInstall: "speech.install",
+	speechCancelInstall: "speech.cancelInstall",
+	speechRemove: "speech.remove",
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
@@ -441,6 +447,7 @@ export const WS_CHANNELS = {
 	themesChanged: "themes.changed",
 	packagesChanged: "packages.changed",
 	fontsChanged: "fonts.changed",
+	speechChanged: "speech.changed",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -969,6 +976,10 @@ export interface WsMethodMap {
 	"fonts.list": { params: Record<string, never>; result: UserFontsSnapshot };
 	"fonts.installed": { params: Record<string, never>; result: InstalledFontsResult };
 	"fonts.reveal": { params: Record<string, never>; result: Ack };
+	"speech.status": { params: Record<string, never>; result: SpeechStatus };
+	"speech.install": { params: { model: SpeechModel }; result: Ack };
+	"speech.cancelInstall": { params: Record<string, never>; result: Ack };
+	"speech.remove": { params: Record<string, never>; result: Ack };
 	"session.create": {
 		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
@@ -1293,7 +1304,8 @@ export type WsErrorCode =
 	| "PACKAGE_UPDATE_FAILED"
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
 	| "REQUEST_REPLAY_OVERFLOW"
-	| "INSTALLED_FONTS_UNAVAILABLE";
+	| "INSTALLED_FONTS_UNAVAILABLE"
+	| SpeechErrorCode;
 
 export interface WsResponse {
 	id: string;
