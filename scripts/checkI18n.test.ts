@@ -34,6 +34,17 @@ test("ignores symbols, the bare brand, and translated calls", () => {
 	expect(texts('const A = () => <span title="⌘K">{t("a.b")} · ThinkRail</span>;')).toEqual([]);
 });
 
+test("穿透 satisfies 和非空断言检查硬编码文字", () => {
+	for (const expression of ['"Close panel" satisfies string', '"Close panel"!']) {
+		expect(texts(`const A = () => <button title={${expression}} />;`)).toEqual(["Close panel"]);
+		expect(texts(`const A = () => <span>{${expression}}</span>;`)).toEqual(["Close panel"]);
+		expect(texts(`toast.error(${expression});`, "a.ts")).toEqual(["Close panel"]);
+	}
+	expect(texts('toast.error(<string>"Close panel");', "a.ts")).toEqual(["Close panel"]);
+	expect(texts('const A = () => <span>{t("a.b") satisfies string}</span>;')).toEqual([]);
+	expect(texts("const A = () => <span>{count!}</span>;")).toEqual([]);
+});
+
 test("the catalog must be sorted, non-empty, and referenced", () => {
 	const catalog = JSON.stringify({ "a.b": "A", "c.d_one": "one", "c.d_other": "many", "z.y": "" });
 	expect(catalogProblems(catalog, ['t("a.b"); t("c.d", { count })'])).toEqual([
