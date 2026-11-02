@@ -173,9 +173,11 @@ export function VoiceSettings() {
 			/>
 			<SettingsRow
 				label={t("settings.voice.storage")}
-				description={t("settings.voice.storageDescription", {
-					size: megabytes(status.diskBytes),
-				})}
+				description={
+					status.diskBytes === 0
+						? t("settings.voice.storageEmpty")
+						: t("settings.voice.storageDescription", { size: megabytes(status.diskBytes) })
+				}
 				testId="settings-voice-storage"
 				control={
 					<Button

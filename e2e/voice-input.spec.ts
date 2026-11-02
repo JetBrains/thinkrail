@@ -173,6 +173,7 @@ test("Settings shows the install and Remove deletes its files and brings the off
 	await voice.getByTestId("settings-voice-remove").click();
 	await expect(voice.getByTestId("settings-voice-install")).toBeVisible();
 	await expect(voice.getByTestId("settings-voice-remove")).toBeDisabled();
+	await expect(voice.getByTestId("settings-voice-storage")).toContainText("Nothing stored");
 	expect(existsSync(SPEECH_DIR)).toBe(false);
 	await page.keyboard.press("Escape");
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "offer");

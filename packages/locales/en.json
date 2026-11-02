@@ -2188,6 +2188,7 @@
 	"settings.voice.status.ready": "Ready · {{engine}}",
 	"settings.voice.storage": "Disk space",
 	"settings.voice.storageDescription": "Uses {{size}} MB in ThinkRail's data folder. A nemo-speech on PATH is never removed.",
+	"settings.voice.storageEmpty": "Nothing stored. A nemo-speech on PATH is never removed.",
 	"settings.workspaces.changeFailed": "Couldn't change the settle window",
 	"settings.workspaces.description": "A quiet workspace moves to its project's Settled shelf after this long without a chat, a terminal command, or a commit. Open pull requests, running agents, and unread results never settle; Keep active or any real work brings a workspace back.",
 	"settings.workspaces.idle.days_one": "{{count}} day",

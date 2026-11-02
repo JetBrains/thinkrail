@@ -2246,6 +2246,7 @@
 	"settings.voice.status.ready": "Готов · {{engine}}",
 	"settings.voice.storage": "Место на диске",
 	"settings.voice.storageDescription": "Занимает {{size}} МБ в папке данных ThinkRail. nemo-speech из PATH никогда не удаляется.",
+	"settings.voice.storageEmpty": "Ничего не хранится. nemo-speech из PATH никогда не удаляется.",
 	"settings.workspaces.changeFailed": "Не удалось изменить период покоя",
 	"settings.workspaces.description": "Неактивная рабочая область перемещается на полку «Завершённые» проекта после указанного времени без чатов, команд терминала или коммитов. Открытые запросы на слияние, работающие агенты и непрочитанные результаты не дают ей перейти туда; действие «Оставить активной» или любая реальная работа возвращает её.",
 	"settings.workspaces.idle.days_few": "{{count}} дня",
