@@ -54,6 +54,7 @@ export interface DictationDeps {
 }
 
 const OPEN = 1;
+/** Counted from the host's `ready`: a cold engine may spend far longer loading the model. */
 const STOP_TIMEOUT_MS = 12_000;
 const MAX_EARLY_FRAMES = 250;
 
@@ -82,6 +83,7 @@ export function createDictationController(deps: DictationDeps) {
 		let capture: Capture | null = null;
 		let ended = false;
 		let stopTimer: ReturnType<typeof setTimeout> | null = null;
+		let ready = false;
 		const early: ArrayBuffer[] = [];
 		const socket = deps.openSocket();
 		socket.binaryType = "arraybuffer";
@@ -126,7 +128,10 @@ export function createDictationController(deps: DictationDeps) {
 				return;
 			}
 			send({ type: "stop" });
-			stopTimer = setTimeout(() => end(), STOP_TIMEOUT_MS);
+			if (ready) armStopFallback();
+		};
+		const armStopFallback = () => {
+			stopTimer ??= setTimeout(() => end(), STOP_TIMEOUT_MS);
 		};
 		current = { end, stop, ownerId: target.ownerId };
 		publish({ ownerId: target.ownerId, phase: "connecting", level: 0, error: null });
@@ -141,7 +146,9 @@ export function createDictationController(deps: DictationDeps) {
 			const message = parseSpeechServerMessage(event.data);
 			if (!message || ended) return;
 			if (message.type === "ready") {
+				ready = true;
 				if (snapshot.phase === "connecting") publish({ phase: "listening" });
+				else if (snapshot.phase === "stopping") armStopFallback();
 			} else if (message.type === "partial") {
 				partial = message.text;
 				render();

@@ -148,3 +148,28 @@ test("stopping another field's dictation is a no-op", () => {
 	controller.stop("review");
 	expect(controller.snapshot().phase).toBe("connecting");
 });
+
+test("a stop before a cold engine is ready waits for it instead of timing out", () => {
+	const timers: (() => void)[] = [];
+	const realSetTimeout = globalThis.setTimeout;
+	globalThis.setTimeout = ((fn: () => void) => {
+		timers.push(fn);
+		return 0;
+	}) as unknown as typeof setTimeout;
+	try {
+		const { controller, sockets, field, target } = harness();
+		controller.start(target());
+		const socket = sockets[0];
+		socket?.open();
+		controller.stop();
+		expect(timers).toHaveLength(0);
+		socket?.server({ type: "ready" });
+		expect(timers).toHaveLength(1);
+		socket?.server({ type: "final", text: "cold start works" });
+		socket?.server({ type: "ended" });
+		expect(field.value).toBe("Refactor cold start works");
+		expect(controller.snapshot().error).toBeNull();
+	} finally {
+		globalThis.setTimeout = realSetTimeout;
+	}
+});

@@ -66,3 +66,5 @@ class Pcm16Processor extends AudioWorkletProcessor {
 }
 
 registerProcessor("thinkrail-pcm16", Pcm16Processor);
+
+export {};
