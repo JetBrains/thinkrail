@@ -92,14 +92,27 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	console.log(`thinkrail → ${url}`);
 	openUiThenStartAttribution(options.open, url, openBrowser, server.startAttributionClaim);
 
-	if (server.remote) {
+	const remote = server.remote;
+	if (remote) {
 		const projectRef = options.projectDir ? resolve(process.cwd(), options.projectDir) : "default";
-		const link = server.remote.issueLink(projectRef);
-		console.log(
-			`thinkrail remote: relay ${options.relayUrl}\n` +
-				`thinkrail remote: scan this QR (or paste the link) on another device:\n  ${link}`,
-		);
-		console.log(await renderQr(link));
+		const printPairing = async (): Promise<void> => {
+			const link = remote.issueLink(projectRef);
+			console.log(
+				`thinkrail remote: relay ${options.relayUrl}\n` +
+					`thinkrail remote: scan this QR (or paste the link) on another device:\n  ${link}`,
+			);
+			console.log(await renderQr(link));
+			console.log(
+				"thinkrail remote: the code works once and expires in a few minutes" +
+					(process.stdin.isTTY ? "; press Enter for a new one." : "."),
+			);
+		};
+		await printPairing();
+		if (process.stdin.isTTY) {
+			process.stdin.on("data", (chunk) => {
+				if (String(chunk).includes("\n")) void printPairing();
+			});
+		}
 	}
 }
 

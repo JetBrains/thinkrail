@@ -41,13 +41,13 @@ export function App() {
 	const [adding, setAdding] = useState(false);
 	const [route, setRoute] = useState<Route>({ kind: "projects" });
 	const t = useT();
-	const [unreachable, setUnreachable] = useState<ReadonlySet<string>>(() => new Set());
-	const markReachable = useCallback((label: string, reachable: boolean) => {
+	const [unreachable, setUnreachable] = useState<ReadonlyMap<string, string>>(() => new Map());
+	const markReachable = useCallback((label: string, failure: string | null) => {
 		setUnreachable((current) => {
-			if (current.has(label) !== reachable) return current;
-			const next = new Set(current);
-			if (reachable) next.delete(label);
-			else next.add(label);
+			if (current.get(label) === (failure ?? undefined)) return current;
+			const next = new Map(current);
+			if (failure === null) next.delete(label);
+			else next.set(label, failure);
 			return next;
 		});
 	}, []);
@@ -66,7 +66,7 @@ export function App() {
 				connection.close();
 				setHosts(registry.add(host));
 				await controller.connect(host);
-				markReachable(host.label, true);
+				markReachable(host.label, null);
 				setPair({ kind: "idle" });
 				setAdding(false);
 				return true;
@@ -83,8 +83,8 @@ export function App() {
 		for (const host of registry.list()) {
 			void controller
 				.connect(host)
-				.then(() => markReachable(host.label, true))
-				.catch(() => markReachable(host.label, false));
+				.then(() => markReachable(host.label, null))
+				.catch((error: unknown) => markReachable(host.label, reasonOf(error)));
 		}
 		const onLink = (url: string | undefined): void => {
 			if (isPairLink(url)) void pairWith(url.trim());

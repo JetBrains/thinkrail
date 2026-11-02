@@ -816,7 +816,7 @@
 	"mobile.projects.addHost": "Add computer",
 	"mobile.projects.empty": "No projects yet. Open one in ThinkRail on your computer and it appears here.",
 	"mobile.projects.title": "Projects",
-	"mobile.projects.unreachable": "Can't reach {{host}}. Check that thinkrail --remote is running and this phone is on the same Wi‑Fi.",
+	"mobile.projects.unreachable": "Can't reach {{host}} ({{reason}}). Check that thinkrail --remote is running and this phone is on the same Wi‑Fi.",
 	"mobile.session.empty": "No messages yet.",
 	"mobile.session.loading": "Loading conversation…",
 	"mobile.session.offline": "This computer isn't connected right now.",

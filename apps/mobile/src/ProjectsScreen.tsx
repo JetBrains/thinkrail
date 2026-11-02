@@ -25,7 +25,7 @@ export function ProjectsScreen({
 	hosts: SavedHost[];
 	controller: RemoteSessionsController;
 	items: RemoteSessionItem[];
-	unreachable: string[];
+	unreachable: [host: string, reason: string][];
 	adding: boolean;
 	onAdd: () => void;
 	pairForm: ReactNode;
@@ -48,13 +48,13 @@ export function ProjectsScreen({
 				)
 			}
 		>
-			{unreachable.map((host) => (
+			{unreachable.map(([host, reason]) => (
 				<p
 					key={host}
 					role="status"
 					className="m-0 border-b border-feedback-warning-muted bg-feedback-warning-subtle px-16 py-12 text-feedback-warning tr-text-metadata"
 				>
-					{t("mobile.projects.unreachable", { host })}
+					{t("mobile.projects.unreachable", { host, reason })}
 				</p>
 			))}
 			{adding ? (
@@ -63,16 +63,18 @@ export function ProjectsScreen({
 					{pairForm}
 				</section>
 			) : null}
-			{hosts.map((host) => (
-				<HostProjects
-					key={host.hostKey}
-					host={host}
-					heading={hosts.length > 1}
-					controller={controller}
-					items={items}
-					onOpen={(project) => onOpen(host.hostKey, project)}
-				/>
-			))}
+			{hosts
+				.filter((host) => !unreachable.some(([label]) => label === host.label))
+				.map((host) => (
+					<HostProjects
+						key={host.hostKey}
+						host={host}
+						heading={hosts.length > 1}
+						controller={controller}
+						items={items}
+						onOpen={(project) => onOpen(host.hostKey, project)}
+					/>
+				))}
 		</Screen>
 	);
 }

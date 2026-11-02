@@ -42,7 +42,8 @@ PORT=24243 HOST=0.0.0.0 bun packages/relay/src/main.ts
 bun run apps/cli/src/index.ts --remote --relay ws://<LAN-IP>:24243
 #   installed build:  thinkrail --remote --relay ws://<LAN-IP>:24243
 ```
-The CLI prints both the `thinkrail://pair?…` link **and a scannable QR** in the terminal. On the same Wi‑Fi
+The CLI prints both the `thinkrail://pair?…` link **and a scannable QR** in the terminal. The code is single-use and expires
+after a few minutes — press **Enter** in that terminal for a fresh one (no restart needed). On the same Wi‑Fi
 the WebRTC connection is direct — **coturn is not needed**. (coturn only matters on networks that block
 peer-to-peer, e.g. guest Wi‑Fi isolation.)
 
