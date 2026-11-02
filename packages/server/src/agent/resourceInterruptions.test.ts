@@ -178,6 +178,71 @@ test("restart interruptions reach the next user request once, without waking an 
 	await removeSession(p.sessionId);
 });
 
+test("interruption receipts preserve other extensions' boundary state and context edits", async () => {
+	const p = await parent();
+	const extensions = join(p.cwd, ".pi", "extensions");
+	mkdirSync(extensions, { recursive: true });
+	writeFileSync(
+		join(extensions, "boundary-writes.ts"),
+		`export default function(pi) {
+			pi.on("turn_end", (event) => ({ entries: [
+				...event.entries,
+				{ type: "custom", customType: "test/boundary-state", data: { targetId: event.messageEntryId } },
+				{ type: "context_edit", targetId: event.messageEntryId, replacement: { content: [{ type: "text", text: "Saved by the project extension" }] } },
+			] }));
+		}`,
+	);
+	await reloadSessionResources(p.sessionId);
+	const readBranch = async () => {
+		const info = (await SessionManager.list(p.cwd)).find((row) => row.id === p.sessionId);
+		if (!info) throw new Error("missing persisted parent");
+		return SessionManager.open(info.path).getBranch();
+	};
+	const writes = (entries: Awaited<ReturnType<typeof readBranch>>) =>
+		entries.filter(
+			(entry) =>
+				(entry.type === "custom" && entry.customType === "test/boundary-state") ||
+				entry.type === "context_edit",
+		);
+	const requests = faux.state.callCount;
+	faux.setResponses([fauxAssistantMessage("NORMAL")]);
+	await promptSession(p.sessionId, "Save extension state without an interruption.");
+	const normal = writes(await readBranch());
+	expect(normal).toMatchObject([
+		{ type: "custom", data: { targetId: expect.any(String) } },
+		{
+			type: "context_edit",
+			targetId: expect.any(String),
+			replacement: { content: [{ type: "text", text: "Saved by the project extension" }] },
+		},
+	]);
+	expect(await noticeMessages(p)).toHaveLength(0);
+	command(p, "extension-coexistence");
+	faux.setResponses([fauxAssistantMessage("NOTIFIED")]);
+	await promptSession(p.sessionId, "Save extension state while reporting interrupted work.");
+	const branch = await readBranch();
+	const savedWrites = writes(branch);
+	expect(savedWrites.map((entry) => entry.type)).toEqual([
+		"custom",
+		"context_edit",
+		"custom",
+		"context_edit",
+	]);
+	expect(savedWrites.slice(0, 2)).toEqual(normal);
+	expect(branch.at(-1)).toMatchObject({
+		type: "custom_message",
+		customType: noticeType,
+		details: { version: 1, resourceIds: ["command:extension-coexistence"] },
+	});
+	expect(faux.state.callCount - requests).toBe(2);
+	await removeSession(p.sessionId);
+	await getSessionResources(p.workspaceId, p.sessionId, p.cwd);
+	expect(writes(await readBranch())).toEqual(savedWrites);
+	expect(await noticeMessages(p)).toHaveLength(1);
+	expect(faux.state.callCount - requests).toBe(2);
+	await removeSession(p.sessionId);
+});
+
 test("host status identifies interrupted work without requiring an earlier start acknowledgement", async () => {
 	const p = await parent();
 	command(p, "unacknowledged-command");

@@ -1348,7 +1348,8 @@ and rejected preflight never consume it. The notice reads the complete merged hi
 twenty-row window, preserving the live owner's terminal outcome over an inferred interruption.
 Idle prompts and ordinary user messages delivered from steering or follow-up queues use the same path:
 `message_start` observes delivery, `context` adds the notice to that request, and `turn_end` returns its
-custom-message entry through Pi's boundary API without requesting continuation. Only that uncommitted message is held
+custom-message entry appended to the accumulated boundary entries, preserving other extensions' state
+and context edits without requesting continuation. Only that uncommitted message is held
 in memory until the boundary; settlement discards it if no boundary committed it. Queue admission alone
 does not acknowledge work, and an automatic turn cannot consume a notice merely because old user
 messages remain in its context.

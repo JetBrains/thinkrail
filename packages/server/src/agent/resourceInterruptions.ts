@@ -116,11 +116,11 @@ export function resourceInterruptionExtension(
 				],
 			};
 		});
-		pi.on("turn_end", () => {
+		pi.on("turn_end", (event) => {
 			if (!queuedNotice) return;
 			const message = queuedNotice;
 			queuedNotice = undefined;
-			return { entries: [{ type: "custom_message" as const, ...message }] };
+			return { entries: [...event.entries, { type: "custom_message" as const, ...message }] };
 		});
 		pi.on("agent_settled", () => {
 			deliveredUser = false;
