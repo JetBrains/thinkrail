@@ -287,14 +287,12 @@
       "name": "pi-todos",
       "version": "0.0.0",
       "devDependencies": {
-        "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@types/bun": "catalog:",
         "typebox": "catalog:",
         "typescript": "catalog:",
       },
       "peerDependencies": {
-        "@earendil-works/pi-ai": "*",
         "@earendil-works/pi-coding-agent": "*",
         "typebox": "*",
       },
@@ -385,14 +383,12 @@
         "yaml": "2.9.1",
       },
       "devDependencies": {
-        "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@types/bun": "catalog:",
         "typebox": "catalog:",
         "typescript": "catalog:",
       },
       "peerDependencies": {
-        "@earendil-works/pi-ai": "*",
         "@earendil-works/pi-coding-agent": "*",
         "typebox": "*",
       },
@@ -456,7 +452,6 @@
         "lovely-mermaid": "0.3.3",
       },
       "devDependencies": {
-        "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@earendil-works/pi-tui": "catalog:",
         "@types/bun": "catalog:",
@@ -464,7 +459,6 @@
         "typescript": "catalog:",
       },
       "peerDependencies": {
-        "@earendil-works/pi-ai": "*",
         "@earendil-works/pi-coding-agent": "*",
         "@earendil-works/pi-tui": "*",
         "typebox": "*",
