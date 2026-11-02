@@ -35,10 +35,11 @@ QR). Welcome's first step says which network to use.
   the second line; the expanded set lives in `App` so returning from a chat keeps the tree; per-host
   "unreachable" notice with its reason; the header's gear opens the settings screen, where computers are
   added; a tapped workspace opens `WorkspaceScreen.tsx`
-  (its **active** chats — `session.list` entries the host holds `live`, i.e. open in ThinkRail since it
-  started, not the closed history — newest first, titled by contracts' `chatTitle`, aged by `compactAgeOf`; a
-  workspace normally has one, which opens directly and whose back returns to the tree, so the list shows only
-  when there are several); and `SessionScreen.tsx`, the IDE's chat on a phone: it renders the
+  (its chats from `session.list`, titled by contracts' `chatTitle`, aged by `compactAgeOf`: **Open** — the
+  ones the host holds `live` — then **Recent**, the closed history, each newest first; tapping a closed one
+  reopens it, because `session.getMessages` attaches a disk session the same way the IDE reopens a chat; the
+  header's **+** starts one with `session.create`. A workspace whose only chat is live opens it directly, and
+  a chat that is or becomes the workspace's only one backs out to the tree, since the list would reopen it); and `SessionScreen.tsx`, the IDE's chat on a phone: it renders the
   [[module-chat-ui]] components unchanged (`messagesToRuntime` → `deriveRows` → `ChatTurnView` for the
   transcript, the shared `Composer` with its slash commands from `session.getCommands`, the model/effort
   picker over `model.list` → `session.setModel` / `session.setThinkingLevel`, send / steer / follow-up /
