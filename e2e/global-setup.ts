@@ -32,6 +32,7 @@ import {
 } from "./fixtures/paths";
 import { seedFixtureRepo } from "./fixtures/repo";
 import { seedExternalCwdSessions } from "./fixtures/sessions";
+import { seedSpeechFixture } from "./fixtures/speech";
 import { seedTemplateFixtures } from "./fixtures/templates";
 import { E2eWire } from "./fixtures/wire";
 
@@ -101,6 +102,7 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 		seedFixtureRepo();
 		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 		writeFileSync(E2E_INSTALLED_FONTS, "[]");
+		seedSpeechFixture();
 	} catch (error) {
 		if (!centralMode) throw error;
 		removeTree(E2E_DATA_DIR);

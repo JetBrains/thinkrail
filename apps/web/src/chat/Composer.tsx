@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
+	type ComponentType,
 	forwardRef,
 	type KeyboardEvent,
 	useCallback,
@@ -44,6 +45,7 @@ import {
 	usePendingSelection,
 	useSlashCommandCompletion,
 } from "@/prompt";
+import type { DictationScope, MicButtonProps } from "@/speech";
 import { FileChip } from "./FileChip";
 import {
 	ModelEffortPicker,
@@ -175,6 +177,9 @@ interface ComposerProps {
 	onPickTemplate?: (name: string) => void;
 	onManageTemplates?: () => void;
 	templatesEmpty?: boolean;
+	/** The app-integration mic; the composer hands it its field and holds submit while it listens. */
+	Mic?: ComponentType<MicButtonProps>;
+	micScope?: DictationScope;
 }
 
 export interface ComposerHandle {
@@ -212,6 +217,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onPickTemplate,
 		onManageTemplates,
 		templatesEmpty,
+		Mic,
+		micScope,
 	},
 	handleRef,
 ) {
@@ -301,8 +308,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		[onChange, focusSelection],
 	);
 
+	const [dictating, setDictating] = useState(false);
+
 	const canSubmit = (raw: string) =>
-		!templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
+		!dictating && !templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
 	const canSend = canSubmit(value);
 
 	const openModelPicker = (query: string) => {
@@ -659,6 +668,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						/>
 					</div>
 					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
+						{Mic ? (
+							<Mic
+								fieldRef={ref}
+								apply={replaceDraft}
+								onListeningChange={setDictating}
+								{...(micScope ? { scope: micScope } : {})}
+								fallback
+							/>
+						) : null}
 						<IconButton
 							icon={History}
 							data-testid="history-open"

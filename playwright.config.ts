@@ -27,6 +27,7 @@ import {
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
 	E2E_PORT,
+	E2E_SPEECH_MANIFEST,
 } from "./e2e/fixtures/paths";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -90,6 +91,8 @@ export default defineConfig({
 			THINKRAIL_PICK_DIR: E2E_PICK_DIR_POINTER,
 			// The host's installed-font list, read from this file per request instead of the OS font service.
 			THINKRAIL_INSTALLED_FONTS: E2E_INSTALLED_FONTS,
+			// Voice input installs from a local fake engine and tiny model, never NVIDIA's servers.
+			THINKRAIL_SPEECH_MANIFEST: E2E_SPEECH_MANIFEST,
 			// Force the New-Workspace dialog's `gh` probe to "Not connected" so the suite is deterministic
 			// regardless of the dev machine's real `gh` auth — and exercises the offline/local-branch degrade path.
 			THINKRAIL_GH_OFFLINE: "1",

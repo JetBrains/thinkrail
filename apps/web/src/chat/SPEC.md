@@ -948,6 +948,16 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   overflow then scrolls inside the textarea. Attachment chips, completion menus, slot hints, and QueueStrip
   keep their existing separate chrome. The slot-highlight backdrop must follow every dynamic textarea box
   change with the exact box-model and scroll-sync invariants under Template slots below.
+- **Composer voice input** (`Composer`): the optional `Mic` component prop (`ChatView` passes
+  [[submodule-web-speech]]'s `MicButton` with `micScope = {workspaceId, sessionId}`) renders first in the
+  trailing cluster, as a ghost icon button. The composer stays store-free.
+  - It hands the mic its textarea as `fieldRef`, `replaceDraft` as `apply` (so each partial goes through
+    the same caret restore as a mention pick), and `fallback`, which makes the composer the target of
+    ⌘⇧Space / Ctrl+Shift+Space when no other voice field is focused.
+  - While the mic reports listening, `canSubmit` is false: Enter and the send pill are inert, and the
+    textarea is read-only.
+  - A component prop rather than a render prop: handing the textarea ref to a render function during
+    render made `Composer` bail out of the React Compiler.
 - **Composer trailing controls** (`Composer`) — the footer's right-hand cluster is **one solid object and
   ghosts**, no borders: History is `IconButton ghost m` (its `label` supplies the tooltip), Stop is
   `Button ghost m` (`■ Stop`, muted text lifting on a hover wash), and the send a single

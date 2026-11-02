@@ -1,5 +1,6 @@
 export { type MicAvailability, micAvailability } from "./capture";
 export { dictation, useDictationSnapshot } from "./dictation";
+export { MicButton, type MicButtonProps, speechErrorKey } from "./MicButton";
 export {
 	DEFAULT_SPEECH_MODEL,
 	type MicState,
