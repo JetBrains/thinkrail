@@ -36,7 +36,8 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
 - **Public surface (barrel):** `initSpeech`, `installSpeech`, `cancelSpeechInstall`, `removeSpeech`,
   `speechStatus`, `setSpeechPublisher`, `stopEngine`.
 - **Allowed deps:** `persistence` (`dataDir`), `subprocess` (the PATH probe and archive unpacking run
-  bounded), `log`, `@thinkrail/contracts`, `@thinkrail/shared/codedError`.
+  bounded; the engine is supervised), `log`, `@thinkrail/contracts`, `@thinkrail/shared/codedError` and
+  `/freePort`.
 - **Forbidden:**
   - Deleting anything outside `<dataDir>/speech/`, which includes a PATH install.
   - Logging, persisting or reporting transcripts or audio.
@@ -85,6 +86,28 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
 - **Test seam.** `THINKRAIL_SPEECH_MANIFEST` names a JSON file that replaces the pinned manifest,
   validated strictly (closed targets and models, safe file names, 64-hex SHA-256), so e2e can serve tiny
   fixtures.
+
+## Engine
+
+- **Start.** `ensureEngine(inputs)` starts `nemo-speech serve` lazily, on a dictation's start, through
+  `subprocess`'s `spawnSupervised` (the same process-group and hidden-console rules as every host child):
+  - `--host 127.0.0.1`, a free port chosen by the host (the CLI rejects `--port 0`), and a random
+    per-launch `--api-key`, so other local pages and processes can't use the loopback port (WebSockets
+    skip CORS);
+  - `--no-ui --asr-model <gguf>`.
+  - It is ready once `GET /v1/models` answers with the key, within 120 s, which covers model load. An
+    exit or timeout first becomes `engine: failed` / `SPEECH_ENGINE_FAILED`, with the last 500 bytes of
+    stderr logged. The next dictation retries.
+- **Reuse.** The same runtime and model reuse the running engine. Different inputs (a model switch)
+  stop it first.
+- **Idle stop.** `holdEngine()` counts live dictations. The engine stops 10 minutes after the last
+  release, never while one is held.
+- **Crash.** An unexpected exit reads as `stopped`, and the next dictation starts it again.
+- **Shutdown.** `stopEngine()` (host `stop()`, install, removal) waits for a pending start and then for
+  the child's exit.
+- **Fixture.** `fakeNemoSpeech.ts` stands in for the CLI in unit and e2e tests. It answers `--version`,
+  `doctor` and `serve`, the realtime protocol emits one scripted word per 160 ms of audio, and an
+  optional log file records each `session.update`.
 
 ## Get right
 

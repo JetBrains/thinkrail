@@ -10,7 +10,8 @@ tags: [host, public-surface-checked]
 
 ## Responsibility
 
-Run one child process to completion under a wall-clock budget, and return what it wrote. The single
+Run one child process to completion under a wall-clock budget, and return what it wrote — or, for a
+long-lived host-owned child, own the same spawn and tree-kill mechanics without a deadline. The single
 answer to "how does this host spawn something that might never come back" — the lifetime mechanics only,
 never what a particular child's output means.
 
@@ -42,8 +43,17 @@ never what a particular child's output means.
   truncated relay for a complete one; cancelling the stream kills the child. `exited` resolves to the
   same shape `runBounded` returns, minus `out`. Streaming does not accept an abort signal; consumers
   cancel its stdout stream instead.
-- **Public surface:** `runBounded`, `streamBounded`, `BoundedRun`, `BoundedBytesRun`, `BoundedRunOptions`,
-  `BoundedBytesRunOptions`, `BoundedStream`, `BoundedStreamOptions`.
+- **Also owns:** `spawnSupervised(argv, { cwd?, env? })` → `{ pid, exited, stop, stderrTail }` for
+  the one long-lived host-owned child (the `speech` engine).
+  - It uses the same spawn shape: POSIX group leader, Windows hidden but not detached, stdin ignored,
+    and both pipes drained from spawn. Stdout is discarded, and the last 4 KB of stderr is kept for
+    diagnosis.
+  - It has no deadline; the caller owns the lifetime. `stop()` runs the same tree kill as expiry and
+    resolves on the direct child's exit.
+  - `exited` is the exit code, or `null` after a signal or a failed launch, and is never a throw.
+- **Public surface:** `runBounded`, `streamBounded`, `spawnSupervised`, `BoundedRun`, `BoundedBytesRun`,
+  `BoundedRunOptions`, `BoundedBytesRunOptions`, `BoundedStream`, `BoundedStreamOptions`, `Supervised`,
+  `SupervisedOptions`.
 - **Allowed deps:** Bun/Node process APIs. Nothing else — it knows no feature, no wire type, no
   persistence.
 - **Forbidden:** message wording, retry, truncation, or any policy about a specific program. `git`'s

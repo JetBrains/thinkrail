@@ -100,7 +100,7 @@ function delay(ms: number): { promise: Promise<void>; cancel: () => void } {
 	return { promise, cancel: () => clearTimeout(timer) };
 }
 
-async function killTree(proc: Bun.Subprocess): Promise<void> {
+export async function killTree(proc: Bun.Subprocess): Promise<void> {
 	if (process.platform !== "win32") {
 		try {
 			process.kill(-proc.pid, "SIGKILL");
@@ -123,7 +123,7 @@ async function killTree(proc: Bun.Subprocess): Promise<void> {
 	proc.kill("SIGKILL");
 }
 
-function spawnOptions(opts: { cwd?: string; env?: Record<string, string | undefined> }) {
+export function spawnOptions(opts: { cwd?: string; env?: Record<string, string | undefined> }) {
 	return {
 		cwd: opts.cwd ?? process.cwd(),
 		env: opts.env ?? process.env,
