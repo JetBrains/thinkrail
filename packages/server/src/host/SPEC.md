@@ -529,15 +529,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `reviews.resolveCommentFromAgent` (the worker tool seam) and `reanchorWorkspace` (the fs-watch tee):
   both re-read the snapshot from disk before writing, and neither removes a comment nor closes the
   review, so landing in a send's gap can't invalidate the package's ids.
-- **A review send lands in the conversation already on screen, else the key's chat.** Both send
+- **A review send lands in its explicit chat context, else the key's chat.** Both send
   handlers route through `sendToFileChat`: comments are grouped by `reviews.reviewSessionKey` (the
   anchor's path, or the review-level bucket for anchorless remarks — pinned like a file so a second
   overall remark continues one discussion), and each group lands, in order of preference, in the
-  client's **last open chat** (the optional `sessionId` the send carries — the conversation the user
-  is already in), else the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
+  client's explicit chat context (the optional `sessionId` the send carries from a chat card), else
+  the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
   received the package becomes the key's pin (`markCommentsSent`), so the sidebar's "open the
   discussion" always follows the comments. **A send that names its chat is one package**: when the client
-  passes `sessionId` (a chat card's own chat, or the last open chat) every comment goes into that chat in one
+  passes `sessionId` (a chat card's own chat) every comment goes into that chat in one
   structured message, because grouping exists to route each key to its own chat, and per-key packages into
   the same chat made the agent take one review — a before/after mockup's two files — in separate turns.
   **`review.sendBatch` answers with every session it touched**, in group
