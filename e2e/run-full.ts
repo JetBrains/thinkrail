@@ -5,6 +5,7 @@ import {
 	WEB_BUILD_READY_ENV,
 } from "./agentRunPlan";
 import { REAL_CENTRAL_E2E_ENV } from "./fixtures/centralAgent";
+import { REAL_SPEECH_E2E_ENV } from "./fixtures/speech";
 import {
 	countSelectedPlaywrightTests,
 	type FullRunPhase,
@@ -26,6 +27,7 @@ function noAgentEnv(): NodeJS.ProcessEnv {
 	delete env.PLAYWRIGHT_BLOB_OUTPUT_FILE;
 	delete env[REAL_CENTRAL_E2E_ENV];
 	delete env[CENTRAL_PLAYWRIGHT_RUNNER_AUTH_ENV];
+	delete env[REAL_SPEECH_E2E_ENV];
 	return env;
 }
 

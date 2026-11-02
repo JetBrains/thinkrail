@@ -431,6 +431,8 @@ URL for the whole run, so a spec that sets its own repository settings names its
   - Chromium loops `fixtures/speech-audio/dictation.wav` (a 5 s, 16 kHz synthesized sentence) as the
     microphone, and the test asserts that the real transcript reaches the draft.
   - It is never part of `e2e` or `e2e:full`: a run spends a 750 MB download and about 5 minutes.
+    `e2e:full`'s no-agent phase clears the variable. With it set, the fake-engine `voice-input.spec.ts`
+    skips itself, because its host would have no fixture manifest.
 
 Playwright starts the host (`webServer`) before `globalSetup`, so global setup clears the lane's data dir
 while a live host writes its logs there; it removes the dir with `removeTree`, which retries the resulting

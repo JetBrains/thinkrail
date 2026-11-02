@@ -4,10 +4,19 @@ import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { openWorkspaceChat, revealWorkbenchTool } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_SPEECH_PORT } from "./fixtures/paths";
-import { FAKE_SPEECH_TEXT, SLOW_MODEL_PATH, slowModelBytes } from "./fixtures/speech";
+import {
+	FAKE_SPEECH_TEXT,
+	REAL_SPEECH_E2E_ENV,
+	SLOW_MODEL_PATH,
+	slowModelBytes,
+} from "./fixtures/speech";
 import { E2eWire } from "./fixtures/wire";
 
 test.skip(process.platform === "win32", "the fake speech runtime is a POSIX shell wrapper");
+test.skip(
+	process.env[REAL_SPEECH_E2E_ENV] === "1",
+	"the real-engine run keeps the fixture manifest off the host",
+);
 test.describe.configure({ mode: "serial" });
 test.use({
 	launchOptions: {
