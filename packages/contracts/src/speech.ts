@@ -39,7 +39,13 @@ export type SpeechInstallState =
 			totalBytes: number;
 	  }
 	| { status: "ready"; model: SpeechModel }
-	| { status: "failed"; model: SpeechModel; code: SpeechErrorCode };
+	| {
+			status: "failed";
+			model: SpeechModel;
+			code: SpeechErrorCode;
+			/** A previously installed model that still works after a failed switch. */
+			usable: SpeechModel | null;
+	  };
 
 /** `path` is a user-installed `nemo-speech`; ThinkRail never deletes it. */
 export interface SpeechRuntimeInfo {

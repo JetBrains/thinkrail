@@ -158,16 +158,17 @@ export async function initSpeech(): Promise<void> {
 	await refresh();
 }
 
+/** Reads the disk, not the status: a failed or running switch leaves the installed model usable. */
 export function engineInputs(): EngineInputs | null {
-	const install = speechStatus().install;
-	if (install.status !== "ready") return null;
+	const installed = installedState();
+	if (installed.status !== "ready") return null;
 	const bin = pathRuntime?.bin ?? managedBinary();
 	if (!bin) return null;
 	return {
 		bin,
-		modelPath: modelPath(install.model),
-		language: pins().models[install.model].language,
-		model: install.model,
+		modelPath: modelPath(installed.model),
+		language: pins().models[installed.model].language,
+		model: installed.model,
 	};
 }
 
@@ -262,9 +263,10 @@ async function runInstall(model: SpeechModel, signal: AbortSignal): Promise<void
 	}
 	await stopEngine();
 	for (const other of SPEECH_MODELS) {
-		if (other !== model) await rm(modelPath(other), { force: true });
+		if (other === model) continue;
+		await rm(modelPath(other), { force: true });
+		await rm(`${modelPath(other)}.partial`, { force: true });
 	}
-	await rm(`${modelFile}.partial`, { force: true });
 	await writeFile(markerPath(), JSON.stringify({ model } satisfies Marker));
 }
 
@@ -295,7 +297,13 @@ export function installSpeech(model: SpeechModel): void {
 				const raw = errorCodeOf(err);
 				const code: SpeechErrorCode = isSpeechErrorCode(raw) ? raw : "SPEECH_DOWNLOAD_FAILED";
 				log.warn(`voice install failed (${code})`, err);
-				outcome = { status: "failed", model, code };
+				const installed = installedState();
+				outcome = {
+					status: "failed",
+					model,
+					code,
+					usable: installed.status === "ready" ? installed.model : null,
+				};
 			}
 		}
 		if (active === controller) active = null;

@@ -70,9 +70,13 @@ never quarantined. Where MDM or Defender blocks them anyway, the engine reports 
   - The file reaches `dest` only when size and SHA-256 match.
   - A network failure keeps the partial for the next attempt (`SPEECH_DOWNLOAD_FAILED`). A mismatch, or a
     body longer than pinned, deletes it (`SPEECH_CHECKSUM_MISMATCH`).
-- **Outcomes.** Cancelling discards staging and partials and returns to what the disk holds. A failure
-  becomes `install: failed {model, code}` (any uncoded error reads as `SPEECH_DOWNLOAD_FAILED`), and a
-  retry resumes.
+- **Outcomes.**
+  - Cancelling discards staging and partials and returns to what the disk holds.
+  - A failure becomes `install: failed {model, code, usable}`; any uncoded error reads as
+    `SPEECH_DOWNLOAD_FAILED`. `usable` names a previously installed model that still works, so a failed
+    switch never disables dictation. The engine's inputs are read from the disk, not the status. A
+    retry resumes.
+  - A successful install deletes the other model and that model's stale partial.
 - **Ready** means the marker's model file has its pinned size and a runtime (PATH or managed) exists.
 - **`removeSpeech()`** cancels, waits for the install task, stops the engine, and deletes
   `<dataDir>/speech/`.

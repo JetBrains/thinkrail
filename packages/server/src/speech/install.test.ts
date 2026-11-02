@@ -188,12 +188,39 @@ test.skipIf(!target)("a checksum mismatch fails with its code, and a retry succe
 		status: "failed",
 		model: "multilingual",
 		code: "SPEECH_CHECKSUM_MISMATCH",
+		usable: null,
 	});
 	writeManifest();
 	await initSpeech();
 	installSpeech("multilingual");
 	await speechInstallSettled();
 	expect(speechStatus().install).toEqual({ status: "ready", model: "multilingual" });
+});
+
+test.skipIf(!target)("a failed switch keeps the installed model usable", async () => {
+	await initSpeech();
+	installSpeech("english");
+	await speechInstallSettled();
+	writeManifest({ multilingualSha: "0".repeat(64) });
+	await initSpeech();
+	installSpeech("multilingual");
+	await speechInstallSettled();
+	expect(speechStatus().install).toEqual({
+		status: "failed",
+		model: "multilingual",
+		code: "SPEECH_CHECKSUM_MISMATCH",
+		usable: "english",
+	});
+	expect(engineInputs()?.model).toBe("english");
+});
+
+test.skipIf(!target)("an installed model clears the other model's stale partial", async () => {
+	await initSpeech();
+	mkdirSync(modelsDir(), { recursive: true });
+	writeFileSync(join(modelsDir(), "multi.gguf.partial"), multilingual.slice(0, 100));
+	installSpeech("english");
+	await speechInstallSettled();
+	expect(existsSync(join(modelsDir(), "multi.gguf.partial"))).toBe(false);
 });
 
 test.skipIf(!target)("a second install while one runs is refused", async () => {
