@@ -178,3 +178,19 @@ test("compact phone controls remain inside the chat viewport", async ({ page }) 
 		inputBox.y + inputBox.height,
 	);
 });
+
+test("composer is one flat surface across the chat panel", async ({ page }) => {
+	await openWorkspaceChat(page);
+	const composer = page.getByTestId("chat-composer");
+	const shell = page.getByTestId("chat-composer-shell");
+	const composerBox = await box(composer);
+	const shellBox = await box(shell);
+	expect(shellBox.x).toBe(composerBox.x);
+	expect(shellBox.width).toBe(composerBox.width);
+	await expect(shell).toHaveCSS("border-radius", "0px");
+	await expect(shell).toHaveCSS("border-top-width", "0px");
+
+	const restingBorder = await composer.evaluate((el) => getComputedStyle(el).borderTopColor);
+	await page.getByTestId("chat-input").focus();
+	await expect(composer).not.toHaveCSS("border-top-color", restingBorder);
+});
