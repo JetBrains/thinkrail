@@ -147,11 +147,12 @@ class Dictation {
 		if (this.finished || this.stopping) return;
 		this.stopping = true;
 		if (this.upstream?.readyState === WebSocket.OPEN) this.commit();
-		this.commitTimer = setTimeout(() => this.finish(), COMMIT_TIMEOUT_MS);
 	}
 
+	/** The fallback runs from the commit, never from the stop: a cold engine may still be loading. */
 	private commit(): void {
 		this.upstream?.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+		this.commitTimer ??= setTimeout(() => this.finish(), COMMIT_TIMEOUT_MS);
 	}
 
 	private upstreamEvent(data: unknown): void {
