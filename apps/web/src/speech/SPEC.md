@@ -55,7 +55,8 @@ sends it.
   - the caret sits after the spoken text.
 - **Stop and end.**
   - `stop(ownerId?)` stops the microphone and sends `stop`. The host's last `final` and `ended` close
-    it, with a 12 s fallback.
+    it. A 12 s fallback counts from the host's `ready`, never from the stop: a cold engine may spend far
+    longer loading the model, and the host buffers the audio meanwhile.
   - Every ending keeps what was recognized: a lost partial becomes a final.
   - A host `error`, a microphone failure (`denied`, `no-device`, `failed`), or a socket lost while not
     stopping ends the dictation. The snapshot keeps `{ownerId, code}` until the next start.
