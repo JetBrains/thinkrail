@@ -6,6 +6,7 @@ import { holdE2eIdleSleep } from "./idleSleep";
 import {
 	E2E_ROOT_DIR,
 	PARENT_SIGNAL_OWNER_ENV,
+	PLAYWRIGHT_CONFIG,
 	processRunnerInterruption,
 	runE2eProcess,
 	signalExitCode,
@@ -30,7 +31,7 @@ async function run(command: string[], env: NodeJS.ProcessEnv = process.env): Pro
 }
 
 function playwrightCommand(args: string[]): string[] {
-	return [bun, "x", "playwright", "test", ...args];
+	return [bun, "x", "playwright", "test", "-c", PLAYWRIGHT_CONFIG, ...args];
 }
 
 function childEnv(): NodeJS.ProcessEnv {

@@ -5,5 +5,5 @@
 		"allowImportingTsExtensions": true,
 		"types": ["bun"]
 	},
-	"include": ["scripts/**/*.ts", "playwright.*.ts"]
+	"include": ["scripts/**/*.ts"]
 }
