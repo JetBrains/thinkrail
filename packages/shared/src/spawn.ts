@@ -46,7 +46,7 @@ const GROUP_SUPERVISOR = [
 	'if command -v setsid >/dev/null; then setsid "$@" </dev/null 2>&3 3>&- & else set -m; "$@" </dev/null 2>&3 3>&- & fi',
 	"c=$!",
 	"t=",
-	"trap 'kill -TERM -$c' INT",
+	"trap 'kill -TERM -$c' INT HUP QUIT",
 	"trap 'kill -TERM $c; kill -CONT $c; t=1' TERM",
 	"wait $c; s=$?",
 	"while kill -0 $c; do wait $c; s=$?; done",

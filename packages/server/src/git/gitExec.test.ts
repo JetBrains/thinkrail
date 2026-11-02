@@ -185,8 +185,8 @@ posix("the sync runners kill a hanging git at the deadline instead of holding th
 	const [text, bytes] = (() => {
 		try {
 			return [
-				git(repo, ["rev-parse", "HEAD"], { timeoutMs: 300, onTimeout: "return" }),
-				gitBytes(repo, ["cat-file", "blob", "HEAD:x"], { timeoutMs: 300, onTimeout: "return" }),
+				git(repo, ["rev-parse", "HEAD"], { timeoutMs: 1_000, onTimeout: "return" }),
+				gitBytes(repo, ["cat-file", "blob", "HEAD:x"], { timeoutMs: 1_000, onTimeout: "return" }),
 			];
 		} finally {
 			if (path === undefined) delete process.env.PATH;

@@ -51,8 +51,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `timedOut`, so a caller can name a hang rather than read it as an ordinary nonzero exit. A child in its
   own group misses the terminal's Ctrl-C, and the blocked host cannot run its `SIGINT` handler until the
   child exits, so when the host has a controlling terminal a small `/bin/sh` supervisor stays in the
-  host's group, starts the command in a new group (`setsid`, else `set -m`) and turns Ctrl-C into a
-  group `SIGTERM`. Without a terminal the child is spawned detached directly, so the desktop host pays
+  host's group, starts the command in a new group (`setsid`, else `set -m`) and turns Ctrl-C, a terminal
+  hang-up or a quit into a group `SIGTERM`, so closing the terminal never orphans a hung command. Without a terminal the child is spawned detached directly, so the desktop host pays
   no extra fork),
   `spawnSyncCapturedBytes()` (the same launch and exit semantics with **`stdout` left as bytes**, for a
   caller reading binary child output the UTF-8 decoder would replace — stderr stays decoded text, since a

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -125,6 +125,47 @@ setTimeout(() => {}, 1_000);`,
 		if (code === "stuck") process.kill(-host.pid, "SIGKILL");
 		expect(code).toBe(42);
 		expect(performance.now() - started).toBeLessThan(3_000);
+	},
+	10_000,
+);
+
+posix(
+	"under a terminal, a hang-up that kills the host also stops its sync child",
+	async () => {
+		const spawnModule = join(import.meta.dir, "spawn.ts");
+		const dir = mkdtempSync(join(tmpdir(), "tr-spawn-hup-"));
+		const pidFile = join(dir, "pid");
+		const host = Bun.spawn(
+			[
+				process.execPath,
+				"-e",
+				`const { setInterruptForwardingForTests, spawnSyncCaptured } = await import(${JSON.stringify(spawnModule)});
+setInterruptForwardingForTests(true);
+spawnSyncCaptured(["sh", "-c", 'echo $$ > "$0"; exec sleep 20', ${JSON.stringify(pidFile)}], { timeoutMs: 30_000 });`,
+			],
+			{ detached: true, stdout: "ignore", stderr: "inherit" },
+		);
+		let child = 0;
+		for (let i = 0; i < 50 && !child; i++) {
+			await Bun.sleep(100);
+			child = existsSync(pidFile) ? Number(readFileSync(pidFile, "utf8")) : 0;
+		}
+		expect(child).toBeGreaterThan(0);
+		process.kill(-host.pid, "SIGHUP");
+		await host.exited;
+		const alive = () => {
+			try {
+				process.kill(child, 0);
+				return true;
+			} catch {
+				return false;
+			}
+		};
+		for (let i = 0; i < 30 && alive(); i++) await Bun.sleep(100);
+		const survived = alive();
+		if (survived) process.kill(child, "SIGKILL");
+		rmSync(dir, { recursive: true, force: true });
+		expect(survived).toBe(false);
 	},
 	10_000,
 );
