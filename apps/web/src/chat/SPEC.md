@@ -470,6 +470,10 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
 
 ## Interaction seams
 
+- **GitHub star ask** — `githubStarPrompt.ts` counts accepted prompt, steer, and follow-up sends in one
+  integer key, stored through the native-stable adapter or, without one, `localStorage`. The fifth send raises
+  one info toast with a link to the repo; the count then stops at 5, so the ask never repeats. The count is
+  per browser origin or native profile, never reaches the host or analytics, and a storage failure means no ask.
 - **Transcript/shell split** — `ChatView` (the exported integration component) splits into a churn-isolated
   `ChatTranscript` child that owns the per-delta transcript rendering — subscribing (via `useShallow`) to the
   streaming runtime fields it renders from (turns, toolResults, currentAssistantId, toolResponses,
@@ -1604,7 +1608,7 @@ Unknown custom messages retain their existing behavior.
   is `ChatView.tsx`, **`ChatTranscript.tsx`** (the churn-isolated transcript child — the Virtuoso list, scroll
   control, transcript sync, completion-ack, the extension-dialog reply, and the
   `ChatActions`/`InteractionStatesContext`/`PendingExtUiContext` providers),
-  `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
+  `chatPreferences.ts` (the client-local persistence adapter), `githubStarPrompt.ts` (see below), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
   `useModelCatalog.ts`, **`useChatResources.ts`** (the Resources hydration/control/log-read seam),
   **`useFreshResults.ts`** (the per-chat "new result" seen set),
