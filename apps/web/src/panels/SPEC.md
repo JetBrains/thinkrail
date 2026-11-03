@@ -991,7 +991,8 @@ a project picker, the prompt hero, and the reused
   - **Shortcut:** the platform chord.
   - **Disk space:** the bytes ThinkRail's speech files use, and **Remove** (`speech.remove`), which
     never touches a PATH install.
-  The mic itself is not here: every voice field carries its own;
+  The mic itself is not here: the page-level dictation layer ([[submodule-web-speech]]) shows it on
+  whichever text field has focus;
   **`TerminalSettings`** — a **Scrollback** segmented control (`store.terminalReplayKb`, five presets from
   Off to 1 MB; a valid non-preset host value selects none rather than a wrong preset;
   `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on

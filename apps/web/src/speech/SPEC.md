@@ -113,7 +113,9 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
     its field leaves the page. Radix focus scopes move focus to their container whenever a node inside
     them is removed while focus is on `body`. Removing the mic mid-focus-change closed a model-picker
     popover on a click inside it, and broke a field's own focus restore after it disabled itself.
-    For the same reason, the blur that ends a dictation acts a task later, once focus has landed.
+    For the same reason, the blur that ends a dictation acts a task later, once focus has landed. A
+    window blur (app switch) leaves `activeElement` on the field, so that check also stops when the
+    document has no focus.
   - It is a plain element, not a Radix popover: an always-open dismissable layer swallowed Escape for
     dialogs underneath.
 - **States** follow Mic state.

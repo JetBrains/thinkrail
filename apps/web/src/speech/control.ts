@@ -51,7 +51,7 @@ export function startDictation(element: HTMLElement): void {
 	};
 	const onBlur = () =>
 		setTimeout(() => {
-			if (!element.contains(document.activeElement)) dictation.stop(owner);
+			if (!document.hasFocus() || !element.contains(document.activeElement)) dictation.stop(owner);
 		});
 	element.addEventListener("keydown", onKeyDown, true);
 	element.addEventListener("blur", onBlur);

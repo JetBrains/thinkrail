@@ -140,6 +140,18 @@ test("the keyboard chord toggles dictation and Esc stops it, keeping the text", 
 	await page.keyboard.press("Escape");
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await expect(input).toHaveValue(/^Hello/);
+
+	// Switching apps blurs the field but leaves it as document.activeElement.
+	await page.keyboard.press("ControlOrMeta+Shift+Space");
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
+	await input.evaluate((field) => {
+		document.hasFocus = () => false;
+		field.dispatchEvent(new FocusEvent("blur"));
+	});
+	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await input.evaluate(() => {
+		Reflect.deleteProperty(document, "hasFocus");
+	});
 });
 
 test("clicking the mic while a model downloads cancels the download", async ({ page, baseURL }) => {
