@@ -42,7 +42,7 @@ function advapi32() {
 	return cachedAdvapi32;
 }
 
-function regGetValue(valueName: string, flags: number, byteSize: number): Buffer | null {
+function regGetValue(valueName: string, flags: number): Buffer | null {
 	const size = new Uint32Array(1);
 	const result = advapi32().symbols.RegGetValueW(
 		HKEY_CURRENT_USER,
@@ -53,9 +53,8 @@ function regGetValue(valueName: string, flags: number, byteSize: number): Buffer
 		null,
 		ptr(size),
 	);
-	if (result !== ERROR_SUCCESS) return null;
-	size[0] = byteSize;
-	const data = Buffer.alloc(byteSize);
+	if (result !== ERROR_SUCCESS || size[0] === 0) return null;
+	const data = Buffer.alloc(size[0]);
 	const readResult = advapi32().symbols.RegGetValueW(
 		HKEY_CURRENT_USER,
 		ptr(wide(INTERNET_SETTINGS_SUBKEY)),
@@ -70,12 +69,12 @@ function regGetValue(valueName: string, flags: number, byteSize: number): Buffer
 }
 
 function readRegistryDword(valueName: string): number | null {
-	const data = regGetValue(valueName, RRF_RT_REG_DWORD, 4);
+	const data = regGetValue(valueName, RRF_RT_REG_DWORD);
 	return data ? data.readUInt32LE(0) : null;
 }
 
 function readRegistryString(valueName: string): string | null {
-	const data = regGetValue(valueName, RRF_RT_REG_SZ, 8192);
+	const data = regGetValue(valueName, RRF_RT_REG_SZ);
 	return data ? data.toString("utf16le").replace(/\0+$/, "") : null;
 }
 

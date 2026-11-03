@@ -32,3 +32,5 @@ launch/Environment variables survive.
   lowercase-first lookup.
 - `manual` targets are validated as `host:port` directly (not through `URL.port`, which drops default
   ports); `system` is resolved by the injected resolver; `none` clears everything.
+- A `system` selection whose resolver reports none (unimplemented platform, or no system proxy) leaves
+  the environment untouched, matching the absent-config behavior.
