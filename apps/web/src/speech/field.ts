@@ -99,50 +99,52 @@ function textControlWriter(element: HTMLInputElement | HTMLTextAreaElement): Fie
 	};
 }
 
+/** One character beside the selection, as the browser reads it (a line or block break reads as "\n"). */
+function neighbour(selection: Selection, direction: "backward" | "forward"): string {
+	const saved = selection.getRangeAt(0).cloneRange();
+	if (direction === "backward") selection.collapseToStart();
+	else selection.collapseToEnd();
+	selection.modify("extend", direction, "character");
+	const text = selection.toString();
+	selection.removeAllRanges();
+	selection.addRange(saved);
+	return text;
+}
+
 /**
- * Contenteditable regions take each update as one `insertText` over the previous one, so the editor's
- * own input handling and undo run. Without focus there is no selection to write through, so a final
- * arriving after a blur leaves the last partial in place.
+ * Contenteditable regions take each update as one `insertText` over the span the previous one left,
+ * so the editor's own input handling and undo run. The span is re-measured from the caret after every
+ * insert, because the browser may rewrite neighbouring spaces (`&nbsp;`) and shift fixed offsets.
+ * Without focus there is no selection to write through, so a final after a blur keeps the last partial.
  */
 function editableWriter(host: HTMLElement): FieldWriter {
 	const selection = window.getSelection();
-	const initial = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-	const start = document.createRange();
-	if (initial && host.contains(initial.startContainer)) {
-		start.setStart(initial.startContainer, initial.startOffset);
-	} else {
-		start.selectNodeContents(host);
-		start.collapse(false);
+	let span: Range | null = null;
+	if (
+		selection &&
+		selection.rangeCount > 0 &&
+		host.contains(selection.getRangeAt(0).startContainer)
+	) {
+		span = selection.getRangeAt(0).cloneRange();
 	}
-	start.collapse(true);
-	const before = start.cloneRange();
-	before.setStart(host, 0);
-	const after = (initial && host.contains(initial.endContainer) ? initial : start).cloneRange();
-	after.collapse(false);
-	after.setEnd(host, host.childNodes.length);
-	const { lead, trail } = separators(before.toString(), after.toString());
-	let replaceSelection = initial && !initial.collapsed && host.contains(initial.endContainer);
-	let insertedLength = 0;
+	const { lead, trail } =
+		selection && span
+			? separators(neighbour(selection, "backward"), neighbour(selection, "forward"))
+			: { lead: "", trail: "" };
 	let writing = false;
 	return {
 		replace(spoken) {
-			if (!host.contains(document.activeElement) || !selection) return;
+			if (!selection || !span || !host.contains(document.activeElement)) return;
 			const next = spoken ? `${lead}${spoken}${trail}` : "";
-			if (replaceSelection && initial) {
-				selection.removeAllRanges();
-				selection.addRange(initial);
-				replaceSelection = false;
-			} else {
-				selection.removeAllRanges();
-				selection.addRange(start.cloneRange());
-				for (let i = 0; i < insertedLength; i += 1)
-					selection.modify("extend", "forward", "character");
-			}
+			selection.removeAllRanges();
+			selection.addRange(span);
 			writing = true;
 			if (next) document.execCommand("insertText", false, next);
 			else if (!selection.isCollapsed) document.execCommand("delete");
 			writing = false;
-			insertedLength = next.length;
+			for (let i = 0; i < next.length; i += 1) selection.modify("extend", "backward", "character");
+			span = selection.getRangeAt(0).cloneRange();
+			selection.collapseToEnd();
 		},
 		lock() {
 			const onBeforeInput = (event: Event) => {

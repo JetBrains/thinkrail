@@ -45,16 +45,12 @@ sends it.
 - **Start.**
   - `start(target)` ends any running dictation first. One per page, so a second field never interleaves
     with the first.
-  - It reads the target's anchor (its text and selection) once.
-  - It opens the socket, sends `start` on open, and opens the microphone
-    in parallel. Up to 5 s of early frames are held until the socket opens.
+  - It opens the socket, sends `start` on open, and opens the microphone in parallel. Up to 5 s of early
+    frames are held until the socket opens.
   - Phases go `connecting` → `listening` (on the host's `ready`) → `stopping` → `idle`.
-- **Writing.** Each `partial` replaces the in-progress segment, and each `final` commits it. The field is
-  rewritten as `dictationText(anchor, spokenText(finals, partial))`:
-  - the dictation replaces the original selection;
-  - a separating space goes where a typist would put one (none after whitespace, an opening bracket,
-    `@`, `#`, `/` or `-`; none before closing punctuation);
-  - the caret sits after the spoken text.
+- **Writing.** A target is `{ownerId, replace(spoken)}`. Each `partial` replaces the in-progress
+  segment, each `final` commits it, and every change calls `replace(spokenText(finals, partial))`. The
+  target owns where the text goes (see Fields).
 - **Stop and end.**
   - `stop(ownerId?)` stops the microphone and sends `stop`. The host's last `final` and `ended` close
     it. A 12 s fallback counts from the stop, or from the host's `ready` when the stop came first: a cold
@@ -64,6 +60,34 @@ sends it.
     stopping ends the dictation. The snapshot keeps `{ownerId, code}` until the next start.
 - **Snapshot.** `{ownerId, phase, level, error}` through `useDictationSnapshot` (`useSyncExternalStore`).
   `level` is the RMS ×4, clamped to 1, for the meter.
+
+## Fields
+
+`field.ts` lets dictation write into any text field without the field's owner doing anything.
+
+- **Eligible** (`isDictationField` / `dictationFieldOf`):
+  - `<input>` of type text, search, url, email, tel (or untyped), `<textarea>`, and a contenteditable
+    host;
+  - not read-only or disabled;
+  - not inside `.monaco-editor` or `.xterm`. The code editor and the terminal are excluded by product
+    decision: a misheard word there is code or a shell command.
+- **Writing** (`fieldWriter(element)`): the dictation replaces the selection it started from, with
+  `separators(before, after)` from `text.ts` putting spaces where a typist would, for every field kind.
+  - **Inputs and textareas** are rewritten through the native `value` setter plus a bubbling `input`
+    event, so a React-controlled field, the app's or an extension's, sees an ordinary `onChange`. The
+    caret moves only while the field still has focus.
+  - **Contenteditable** takes each update as one `execCommand("insertText")` over the span the previous
+    one left, so the editor's own input handling and undo run.
+    - The span is re-measured backwards from the caret after every insert. A fixed start plus an offset
+      drifted once Chrome rewrote a neighbouring `&nbsp;` ("hello fix" came out as "hellofix thex").
+    - The neighbouring characters for `separators` are read with `Selection.modify`, so a line or block
+      break reads as a break and a new line gets no leading space.
+    - Without focus there is no selection to write through, so a final arriving after a blur leaves the
+      last partial in place.
+- **Lock.** `lock()` makes the field read-only (a contenteditable cancels every `beforeinput` but
+  ours) and swallows Enter in capture phase, so no field submits mid-dictation.
+- **`thinkrail:dictation`** (`DICTATION_EVENT`, `{listening}`) bubbles from the field when its dictation
+  starts and ends, so an owner can hold its own submit button.
 
 ## Mic button
 

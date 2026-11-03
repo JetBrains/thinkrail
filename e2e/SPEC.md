@@ -424,6 +424,11 @@ URL for the whole run, so a spec that sets its own repository settings names its
 - The host boots before the manifest exists (see below) and logs one unreadable-manifest warning. The
   spec's `beforeAll` runs `speech.remove`, which re-reads it.
 - The spec is serial and skipped on Windows, where the wrapper is a POSIX shell script.
+- `voice-field-writers.spec.ts` bundles `apps/web/src/speech/field.ts` through
+  `fixtures/speechFieldsEntry.ts` (with `bun build --format=iife`) into a bare page, and drives the
+  writers directly in Chromium.
+  - It pins contenteditable spacing after a typed trailing space, at a new line and between words.
+  - It pins the textarea's input event and Enter hold, and the eligibility exclusions.
 - `voice-input-blocked.spec.ts` stubs `getUserMedia` with a `NotAllowedError` in an init script. It
   pins the blocked state (enabled, tooltip naming where to allow access) and a retry once access
   returns. Headless Chromium without the fake-UI flag does not deny reliably.
