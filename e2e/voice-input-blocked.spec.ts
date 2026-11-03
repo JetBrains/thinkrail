@@ -34,7 +34,8 @@ test("a blocked microphone says how to allow it and retries on the next click", 
 				: original(constraints);
 	});
 	await openWorkspaceChat(page);
-	const mic = page.getByTestId("chat-composer").getByTestId("speech-mic");
+	await page.getByTestId("chat-input").focus();
+	const mic = page.getByTestId("speech-mic");
 	await expect(mic).toHaveAttribute("data-mic-state", "ready", { timeout: 20_000 });
 	await mic.click();
 	await expect(mic).toHaveAttribute("data-mic-state", "blocked");

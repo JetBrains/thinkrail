@@ -5,6 +5,7 @@ import {
 	MODAL_LAYER_SELECTOR,
 	platformFamily,
 } from "@/lib";
+import { dictationFieldOf } from "./field";
 
 export const HOLD_MS = 300;
 
@@ -24,86 +25,62 @@ export function dictationShortcutLabel(platform?: string): string {
 	return platformFamily(platform) === "apple" ? "⌘⇧Space" : "Ctrl+Shift+Space";
 }
 
-export interface ChordTarget {
-	element: () => HTMLElement | null;
-	press: () => boolean;
-	release: () => void;
-	fallback: boolean;
-}
-
-const targets = new Map<string, ChordTarget>();
-let lastFallback: string | null = null;
-let held: { id: string; at: number } | null = null;
-let installed = false;
-
-function focusedTarget(): [string, ChordTarget] | null {
-	const active = document.activeElement;
-	for (const entry of targets) {
-		const element = entry[1].element();
-		if (element && active && element.contains(active)) return entry;
-	}
-	return null;
-}
-
-function fallbackTarget(): [string, ChordTarget] | null {
+/**
+ * The field the chord dictates into: the focused text field, else, when nothing else owns the
+ * keyboard (no modal, no other editor focused), the most recently focused chat composer.
+ */
+export function chordTarget(lastFallback: HTMLElement | null): HTMLElement | null {
+	const focused = dictationFieldOf(document.activeElement);
+	if (focused) return focused;
 	if (hasLayer(document, MODAL_LAYER_SELECTOR) || isTextEntryTarget(document.activeElement)) {
 		return null;
 	}
-	const remembered = lastFallback ? targets.get(lastFallback) : undefined;
-	if (lastFallback && remembered?.fallback && remembered.element()?.isConnected) {
-		return [lastFallback, remembered];
-	}
-	let found: [string, ChordTarget] | null = null;
-	for (const entry of targets)
-		if (entry[1].fallback && entry[1].element()?.isConnected) found = entry;
-	return found;
+	if (lastFallback?.isConnected) return lastFallback;
+	return document.querySelector<HTMLElement>("[data-dictation-fallback]");
 }
 
-function onKeyDown(event: KeyboardEvent): void {
-	if (!isDictationChord(event)) return;
-	const entry = focusedTarget() ?? fallbackTarget();
-	if (!entry) return;
-	event.preventDefault();
-	event.stopPropagation();
-	if (event.repeat) return;
-	const [id, target] = entry;
-	target.element()?.focus();
-	held = target.press() ? { id, at: performance.now() } : null;
+export interface ChordHandlers {
+	/** Starts or stops on `target`; returns whether this press started a dictation. */
+	press: (target: HTMLElement) => boolean;
+	release: () => void;
+	lastFallback: () => HTMLElement | null;
 }
 
-function onKeyUp(event: KeyboardEvent): void {
-	if (!held) return;
-	if (
-		event.code !== "Space" &&
-		event.key !== "Shift" &&
-		event.key !== "Meta" &&
-		event.key !== "Control"
-	)
-		return;
-	const { id, at } = held;
-	held = null;
-	if (performance.now() - at >= HOLD_MS) targets.get(id)?.release();
-}
-
-export function registerChordTarget(id: string, target: ChordTarget): () => void {
-	targets.set(id, target);
-	if (!installed) {
-		window.addEventListener("keydown", onKeyDown, true);
-		window.addEventListener("keyup", onKeyUp, true);
-		installed = true;
-	}
-	return () => {
-		targets.delete(id);
-		if (lastFallback === id) lastFallback = null;
-		if (held?.id === id) held = null;
-		if (targets.size === 0 && installed) {
-			window.removeEventListener("keydown", onKeyDown, true);
-			window.removeEventListener("keyup", onKeyUp, true);
-			installed = false;
-		}
+/** ⌘⇧Space / Ctrl+Shift+Space: a tap toggles, holding past `HOLD_MS` is push-to-talk. */
+export function installDictationChord(handlers: ChordHandlers): () => void {
+	let held: number | null = null;
+	const onKeyDown = (event: KeyboardEvent) => {
+		if (!isDictationChord(event)) return;
+		const target = chordTarget(handlers.lastFallback());
+		if (!target) return;
+		event.preventDefault();
+		event.stopPropagation();
+		if (event.repeat) return;
+		target.focus();
+		held = handlers.press(target) ? performance.now() : null;
 	};
-}
-
-export function noteFallbackFocus(id: string): void {
-	if (targets.get(id)?.fallback) lastFallback = id;
+	const onKeyUp = (event: KeyboardEvent) => {
+		if (held === null) return;
+		if (
+			![
+				"Space",
+				"ShiftLeft",
+				"ShiftRight",
+				"MetaLeft",
+				"MetaRight",
+				"ControlLeft",
+				"ControlRight",
+			].includes(event.code)
+		)
+			return;
+		const at = held;
+		held = null;
+		if (performance.now() - at >= HOLD_MS) handlers.release();
+	};
+	window.addEventListener("keydown", onKeyDown, true);
+	window.addEventListener("keyup", onKeyUp, true);
+	return () => {
+		window.removeEventListener("keydown", onKeyDown, true);
+		window.removeEventListener("keyup", onKeyUp, true);
+	};
 }

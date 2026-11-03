@@ -30,7 +30,8 @@ test("the real engine installs from NVIDIA's pinned sources and transcribes a re
 		wire.close();
 	}
 	await openWorkspaceChat(page);
-	const mic = page.getByTestId("chat-composer").getByTestId("speech-mic");
+	await page.getByTestId("chat-input").focus();
+	const mic = page.getByTestId("speech-mic");
 	const input = page.getByTestId("chat-input");
 	await expect(mic).toHaveAttribute("data-mic-state", "offer");
 	await mic.click();

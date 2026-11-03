@@ -31,10 +31,11 @@ sends it.
   - **The page's one dictation controller** (`session.ts`, the `dictation` singleton).
   - **The text rule** (`text.ts`).
   - **The mic-state derivation** (`micState.ts`).
-  - **`MicButton`**, the one mic every voice field renders, and the chord registry (`hotkey.ts`).
-- **Public surface (barrel):** `MicButton`, `MicButtonProps`, `speechErrorKey`, `dictationShortcutLabel`,
-  `DICTATION_EVENT`.
-- **Internal:** capture, the controller, the text rule, the mic-state derivation, and the chord registry.
+  - **The dictation layer** (`DictationLayer.tsx` + `control.ts`), mounted once in `main.tsx`: it is the
+    only mic UI and the owner of the dictation chord (`hotkey.ts`).
+- **Public surface (barrel):** `DictationLayer`, `DICTATION_EVENT`, `speechErrorKey`, `dictationShortcutLabel`.
+- **Internal:** capture, the controller, the field writers, the text rule, the mic-state derivation, and
+  the chord.
 - **Forbidden:**
   - Submitting, steering, or touching the agent.
   - Persisting or reporting transcripts.
@@ -92,49 +93,47 @@ sends it.
 - **`thinkrail:dictation`** (`DICTATION_EVENT`, `{listening}`) bubbles from the field when its dictation
   starts and ends, so an owner can hold its own submit button.
 
-## Mic button
+## Dictation layer
 
-`MicButton {fieldRef, apply, onListeningChange?, fallback?, disabled?, size?}` is the only mic UI; `useFieldApply(ref,
-setValue)` is the `apply` for a plain controlled field. The field owner
-keeps its value, caret and submit path. `apply` must never move focus: late finals arrive after a blur
-has stopped the dictation, and focusing the field then would steal the user's next input. The composer
-restores the caret only while the field is still focused. It follows the mockup states in the task
-design:
+Voice input reaches every text field, the app's and any extension's, without the field doing anything.
+An earlier version gave each field its own hand-placed mic component, which every field and every
+extension had to adopt and wire up. It was replaced so voice is a property of the page, not of fields.
 
-- **States.**
-  - `offer`: click opens the setup card (`aria-haspopup="dialog"`, `aria-expanded`; closing it
-    returns focus to the mic). It shows the download size in MB and, after a failure, the
-    failure with **Try again**. **Download** sends `speech.install {model}`; nothing downloads without
-    that click.
-  - `installing`: a spinner icon, a tooltip with the percentage, and a click cancels. It deliberately
-    avoids `IconButton`'s `loading`, which disables the button and would swallow both the click and the
-    tooltip; `aria-busy` is set instead.
-  - `ready`: click toggles dictation.
-  - While starting, a spinner and "Starting voice input…".
-  - While listening, a danger-toned selected icon with a 4-bar level meter.
-  - `unavailable`: disabled, with the reason as the tooltip.
-  - `hidden`: nothing is rendered.
-- **Field lock.** Starting focuses the field. While its dictation runs, the mic sets the field
-  `readOnly`, reports `onListeningChange`, and stops on Esc (captured before the field's own handlers),
-  on blur, or when the mic unmounts (a tab switch or a closed dialog). Pressing the mic itself never
-  blurs: `onMouseDown` prevents default.
-- **Errors.** A dictation failure of its own is a toast: a warning for microphone access, an error
-  otherwise.
-  - A `denied` / `no-device` failure turns every installed mic `blocked`: the mic-off icon, still
-    clickable, with a tooltip naming where to allow access (System Settings → Privacy & Security →
-    Microphone, or the browser).
-  - The next click retries, so granting access needs no reload.
-  - An earlier version disabled the mic until reload. That left a user who had fixed the permission
-    with no way back.
-- **Chord.** ⌘⇧Space on Apple, Ctrl+Shift+Space elsewhere.
-  - Window capture-phase listeners exist only while a mic is mounted.
-  - The target is the focused registered field. Otherwise, when no modal layer is open and focus is in
-    no other text entry (an input, Monaco, xterm), it is the most recently focused `fallback` field (the
-    chat composer), else the last mounted one. The chord focuses it. In every other case the chord passes
-    through untouched.
-  - A press starts or stops. If that press started a dictation and the key is held ≥ 300 ms, releasing
-    Space or a modifier stops it (push-to-talk); a quicker tap leaves it running (toggle).
-  - Repeats are swallowed.
+- **Focus following.** Document `focusin` / `focusout` track the eligible field that has focus (see
+  Fields). Focus moving into the layer's own DOM (`[data-dictation-layer]`) does not count as leaving.
+  While a dictation runs, its field stays the target even without focus.
+- **The mic** is rendered through a portal and repositioned every animation frame against the field's
+  rect: inside the right edge, at the bottom corner of a field 40 px or taller, centred vertically on a
+  single line. A field narrower than 96 px gets no mic, though the chord still works there.
+  - It portals into the field's nearest `[role="dialog"]` or Radix popper wrapper, absolutely
+    positioned against it, so it sits inside that layer's focus trap and outside-click guard. Elsewhere
+    it is fixed to the viewport.
+  - It is a plain element, not a Radix popover: an always-open dismissable layer swallowed Escape for
+    dialogs underneath.
+- **States** follow Mic state.
+  - `offer`: the setup card, a Radix popover anchored to the mic. It does not take focus; its buttons
+    keep the field focused.
+  - `installing`: a spinner and a percentage; a click cancels. It avoids `IconButton`'s `loading`, which
+    disables the button.
+  - Listening shows a danger-toned mic with a 4-bar level meter. `blocked` and `unavailable` show the
+    mic-off icon with the reason.
+  - Pressing the mic never moves focus (`onMouseDown` prevents default). Dictation failures are toasts.
+- **Lifecycle** (`control.ts`).
+  - `startDictation(field)` focuses the field, takes its writer, locks it, announces
+    `thinkrail:dictation`, and starts the page's one dictation. Esc (captured), blur, or a newer start
+    ends it.
+  - When the controller goes idle or changes owner, the field is unlocked and the end is announced.
+  - Owners are per element (`WeakMap`), so starting another field ends the first.
+- **Chord.** ⌘⇧Space on Apple, Ctrl+Shift+Space elsewhere, through one pair of window capture listeners.
+  - The target is the focused eligible field. If none is focused, and no modal layer is open and focus
+    is in no other text entry (Monaco, xterm, a password), it falls back to the most recently focused
+    `[data-dictation-fallback]` field, the chat composer, else the first one on the page. The chord
+    focuses it. Otherwise the chord passes through untouched.
+  - A tap toggles. A press that started a dictation and is held ≥ 300 ms stops on release
+    (push-to-talk). Repeats are swallowed.
+- **Submit holding** is generic: the lock swallows Enter, ⌘↩ included. A field whose owner has its own
+  submit button can hold it on `thinkrail:dictation`, as the composer does with Send. Buttons elsewhere
+  are not disabled.
 
 ## Mic state
 
