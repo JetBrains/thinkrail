@@ -1,4 +1,10 @@
-import type { SearchGroup, SearchGroupState, SearchHit, SearchKind } from "@thinkrail/contracts";
+import type {
+	MatchRange,
+	SearchGroup,
+	SearchGroupState,
+	SearchHit,
+	SearchKind,
+} from "@thinkrail/contracts";
 
 export interface Deadline {
 	readonly expired: () => boolean;
@@ -26,38 +32,32 @@ export function emptyGroup(kind: SearchKind, state: SearchGroupState = "ready"):
 	return { kind, hits: [], total: 0, state };
 }
 
-export function termRanges(text: string, terms: readonly string[]): [number, number][] {
-	const lower = text.toLowerCase();
-	const ranges: [number, number][] = [];
-	for (const term of terms) {
-		const needle = term.toLowerCase();
-		if (!needle) continue;
-		const index = lower.indexOf(needle);
-		if (index !== -1) ranges.push([index, index + needle.length]);
-	}
-	ranges.sort((a, b) => a[0] - b[0]);
-	const merged: [number, number][] = [];
-	for (const [start, end] of ranges) {
-		const last = merged[merged.length - 1];
-		if (last && start <= last[1]) last[1] = Math.max(last[1], end);
-		else merged.push([start, end]);
-	}
-	return merged;
+const SNIPPET_RADIUS = 70;
+
+function ellipsized(text: string, start: number, end: number): string {
+	return `${start > 0 ? "…" : ""}${text.slice(start, end)}${end < text.length ? "…" : ""}`;
 }
 
-export function lineSnippet(content: string, terms: readonly string[], radius = 70): string | null {
-	const lower = content.toLowerCase();
-	const first = terms.map((term) => lower.indexOf(term.toLowerCase())).filter((at) => at !== -1);
-	if (first.length === 0) return null;
-	const at = Math.min(...first);
-	const lineStart = content.lastIndexOf("\n", at) + 1;
-	const lineEnd = content.indexOf("\n", at);
-	const line = content.slice(lineStart, lineEnd === -1 ? content.length : lineEnd).trim();
-	if (line.length <= radius * 2) return line;
-	const local = at - lineStart;
-	const start = Math.max(0, local - radius);
-	const end = Math.min(line.length, local + radius);
-	return `${start > 0 ? "…" : ""}${line.slice(start, end)}${end < line.length ? "…" : ""}`;
+export function snippetAround(text: string, [from, to]: MatchRange): string {
+	return ellipsized(
+		text,
+		Math.max(0, from - SNIPPET_RADIUS),
+		Math.min(text.length, to + SNIPPET_RADIUS),
+	);
+}
+
+export function lineAround(content: string, [from]: MatchRange): string {
+	const lineStart = content.lastIndexOf("\n", from) + 1;
+	const lineEnd = content.indexOf("\n", from);
+	const raw = content.slice(lineStart, lineEnd === -1 ? content.length : lineEnd);
+	const line = raw.trim();
+	if (line.length <= SNIPPET_RADIUS * 2) return line;
+	const local = from - lineStart - (raw.length - raw.trimStart().length);
+	return ellipsized(
+		line,
+		Math.max(0, local - SNIPPET_RADIUS),
+		Math.min(line.length, local + SNIPPET_RADIUS),
+	);
 }
 
 export function compactWhitespace(text: string): string {

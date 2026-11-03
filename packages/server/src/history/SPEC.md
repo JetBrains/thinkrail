@@ -117,10 +117,9 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
 ## Boundary
 - **Narrow read for the search palette:** `HistoryIndex.sessions()` answers every indexed session's
   identity, `title` and entries (read-only) with the same freshness, cold-build budget and `indexing`
-  flag as `search()`; the `search` module ranks titles with the shared matcher and scans entries with
-  `matchesTerms`, so no second parse of the corpus exists.
-- **Public surface (`index.ts`):** `HistoryIndex` (+ `HistorySession`), `getHistoryIndex()`, `matchesTerms`, `makeSnippet`,
-  `clampLimit`, `extractSession`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`
+  flag as `search()`; the `search` module matches entries with the shared content matcher, so no second
+  parse of the corpus exists (prompt recall keeps its own `matchesTerms` / `makeSnippet`).
+- **Public surface (`index.ts`):** `HistoryIndex` (+ `HistorySession`), `getHistoryIndex()`, `clampLimit`, `extractSession`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`
   are disk-writing test-only builders and must not enter the runtime module graph; they're reachable only
   through the server package's dedicated **`@thinkrail/server/history-test-fixtures`** subpath export
   (package.json), the sanctioned test boundary — same pattern as `@thinkrail/server/agent`. In-package

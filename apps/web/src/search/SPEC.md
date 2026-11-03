@@ -43,9 +43,9 @@ also shows a notice), so a doubled prefix (`##`, `//src`) never lands in an empt
 pull-request number, never the specs scope — it matches the `#N` keyword of the workspace that carries
 that review. Quoted text is one contiguous literal term — never matched as an acronym or a subsequence —
 and escapes a prefix; an unterminated quote runs to the end of the query, so a phrase matches while it is
-typed. Terms AND-combine through the shared matcher in [[module-contracts]], which folds case and Latin
-diacritics, precomposed or decomposed (`configuracion` finds `Configuración` either way), and highlights
-the original text. Typing and pasting stop at `MAX_SEARCH_QUERY_LENGTH` characters (the input's
+typed. Terms AND-combine through the shared matcher in [[module-contracts]], which folds case and the
+accents of every script, in either Unicode spelling (`configuracion` finds `Configuración`, `еще` finds
+`ещё`), and highlights the original text. Typing and pasting stop at `MAX_SEARCH_QUERY_LENGTH` characters (the input's
 `maxLength`; a chip may add its prefix beyond it) and `parseSearchQuery` cuts the text after the prefix to
 the same length, so the palette's terms and the host's are parsed from the same characters — a host row
 can never answer terms the palette does not show. There is no filter grammar: triage happens through the
@@ -93,11 +93,11 @@ the groups it answers but keeps every hit the previous page showed that the new 
 (`mergeHostGroups`), so a refreshed corpus or a better page never pulls a row from under the
 selection; the rows go when the query changes. While a new input is pending the previous host rows stay
 on screen — replaced, never blanked — but they answered another query (`stale`): `rematchHit` matches
-each again against the current terms on the fields the host matches it on (a file's path, a spec's
-title / id / path, a plan's title), so it takes the tier the
-host's answer will give it, and a body or message hit stays in the `content` tier and must still
-contain every term in its snippet as a case-folded substring — the content providers' rule, so never an
-acronym; a row that no longer matches leaves at once, and Enter can only open a row
+each again against the current terms on the fields the host matches it on (`searchHitFields`), so it takes
+the tier the host's answer will give it, and a body or message hit stays in the `content` tier and must
+still contain every term in its snippet (`matchContent`, the content providers' rule, so never an acronym
+— a multi-term row whose later term lies outside its snippet leaves while stale and returns with the
+reply); a row that no longer matches leaves at once, and Enter can only open a row
 the typed text matches; their counts are ignored.
 A fresh reply's rows carry the host's matcher result as `PaletteItem.match`, ranked with the local rows
 by the same tiers instead of re-matching the title. The host is asked only for what the palette cannot

@@ -59,13 +59,22 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`matchFields`** + `parseMatchTerms` + `foldMatchText` + `MATCH_TIER` and the `Match*` types from
   `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
   bounded subsequence of at least three characters > `content` for a body or message match, every term
-  required, a quoted `MatchTerm` (`literal`) matched contiguously only, case and Latin diacritics folded —
-  precomposed or decomposed, the ranges still indexing the original text and spanning the marks they
-  cover — combining marks part of their word (never a word start), a secondary field never above substring
-  and, at an equal tier, never chosen over a primary one, path fields matched on the basename first,
-  field-keyed highlight ranges — the browser's palette and the host's search providers rank with this one
-  copy so their tiers cannot drift; `foldMatchText` is the matcher's own fold as plain text, for a
-  prefilter that must never drop what the matcher would accept); the value
+  required, a quoted `MatchTerm` (`literal`) matched contiguously only, the ranges always indexing the
+  original text, a secondary field never above substring and, at an equal tier, never chosen over a primary
+  one, path fields matched on the basename first, field-keyed highlight ranges — the browser's palette and
+  the host's search providers rank with this one copy so their tiers cannot drift). **One fold for every
+  script:** case folded, and marks U+0300–U+036F ignored after any letter (é = e, ё = е, ά = α; й = и is
+  accepted), every other mark significant (が ≠ か); a text and a query fold alike in either Unicode spelling
+  — a letter and its following marks fold together as `NFC(strip(NFD(cluster)))`, so a decomposed が, a
+  reordered mark run or a Hangul jamo sequence meets its precomposed twin — and no match starts or ends
+  inside such a cluster; a word start looks past marks to its base letter. The fold is linear in the text
+  (memoized per code point and cluster). `foldMatchText` is that fold as plain text, for a prefilter that
+  must never drop what the matcher would accept; **`prepareContent`** + **`matchContent`** (every folded term
+  a substring of the whole text → raw ranges and the first) + **`contentRanges`** (the terms present, for a
+  highlight) are the `content` tier's rule, shared by the host's body and message providers and the
+  browser's re-match of a stale content row; **`searchHitFields`** (`SearchFieldSource`) names the fields
+  each hit kind is matched on — a file's path, a spec's title / id / path, a plan's or transcript's title — for
+  the providers and the browser alike); the value
   re-exports
   `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
   word it in their language until it is renamed), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical

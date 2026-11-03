@@ -4,6 +4,4 @@ export {
 	getHistoryIndex,
 	HistoryIndex,
 	type HistorySession,
-	makeSnippet,
-	matchesTerms,
 } from "./historyIndex";

@@ -1,13 +1,16 @@
-import type { SearchGroup, SearchHit, Workspace } from "@thinkrail/contracts";
+import type { PreparedContent, SearchGroup, SearchHit, Workspace } from "@thinkrail/contracts";
 import {
+	contentRanges,
 	foldMatchText,
 	MATCH_TIER,
-	type MatchField,
+	type MatchRange,
 	type MatchTerm,
+	matchContent,
 	matchFields,
+	prepareContent,
+	searchHitFields,
 } from "@thinkrail/contracts";
 import type { HistorySession } from "../history";
-import { makeSnippet, matchesTerms } from "../history";
 import type { SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import type { FileListCache } from "./files";
@@ -16,8 +19,8 @@ import {
 	compactWhitespace,
 	compareHits,
 	type Deadline,
-	lineSnippet,
-	termRanges,
+	lineAround,
+	snippetAround,
 } from "./hits";
 
 export interface SearchRoot {
@@ -36,6 +39,21 @@ const SCAN_CHECK_EVERY = 1_000;
 const MIN_BODY_TERM_LENGTH = 3;
 const TRANSCRIPT_TEXT_PREVIEW = 160;
 
+const preparedContent = new WeakMap<object, PreparedContent>();
+
+function preparedOf(owner: object, text: string): PreparedContent {
+	let prepared = preparedContent.get(owner);
+	if (!prepared) {
+		prepared = prepareContent(text);
+		preparedContent.set(owner, prepared);
+	}
+	return prepared;
+}
+
+function foldedTermsOf(input: ProviderInput): string[] {
+	return input.terms.map((term) => foldMatchText(term.text)).filter(Boolean);
+}
+
 function isSubsequence(text: string, term: string): boolean {
 	let at = 0;
 	for (const char of term) {
@@ -46,11 +64,13 @@ function isSubsequence(text: string, term: string): boolean {
 	return true;
 }
 
-function rangesOf(match: {
-	fields: readonly { key: string; ranges: readonly (readonly [number, number])[] }[];
-}) {
+function wireRanges(ranges: readonly MatchRange[]): [number, number][] {
+	return ranges.map(([start, end]) => [start, end]);
+}
+
+function rangesOf(match: { fields: readonly { key: string; ranges: readonly MatchRange[] }[] }) {
 	const ranges: Record<string, [number, number][]> = {};
-	for (const field of match.fields) ranges[field.key] = field.ranges.map(([a, b]) => [a, b]);
+	for (const field of match.fields) ranges[field.key] = wireRanges(field.ranges);
 	return ranges;
 }
 
@@ -111,13 +131,13 @@ export function searchFiles(
 			continue;
 		}
 		const path = list.paths[index] ?? "";
-		const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
+		const match = matchFields(input.terms, searchHitFields({ kind: "file", path }));
 		if (match) pushHit(path, match);
 	}
 	for (const index of rest) {
 		if (truncated || expired()) break;
 		const path = list.paths[index] ?? "";
-		const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
+		const match = matchFields(input.terms, searchHitFields({ kind: "file", path }));
 		if (match) pushHit(path, match);
 	}
 	hits.sort(compareHits);
@@ -156,19 +176,17 @@ export function searchSpecs(
 	input: ProviderInput,
 ): SearchGroup {
 	const hits: SpecHit[] = [];
-	const texts = input.terms.map((term) => term.text);
-	const bodyTerms = texts.some((text) => text.length >= MIN_BODY_TERM_LENGTH);
+	const folded = foldedTermsOf(input);
+	const bodyTerms = folded.some((text) => text.length >= MIN_BODY_TERM_LENGTH);
 	const { entries, rebuilding } = snapshot(root.root);
 	for (const entry of entries) {
 		if (input.deadline.expired()) {
 			return buildGroup("spec", hits, input.limit, "truncated");
 		}
-		const fields: MatchField[] = [
-			{ key: "title", text: entry.title },
-			{ key: "id", text: entry.id, secondary: true },
-			{ key: "path", text: entry.path, path: true, secondary: true },
-		];
-		const match = matchFields(input.terms, fields);
+		const match = matchFields(
+			input.terms,
+			searchHitFields({ kind: "spec", title: entry.title, specId: entry.id, path: entry.path }),
+		);
 		const base = {
 			id: `spec:${root.workspaceId}:${entry.path}`,
 			kind: "spec" as const,
@@ -184,15 +202,17 @@ export function searchSpecs(
 			hits.push({ ...base, tier: match.tier, score: match.score, ranges: rangesOf(match) });
 			continue;
 		}
-		if (!bodyTerms || !matchesTerms(entry.content, texts)) continue;
-		const snippet = lineSnippet(entry.content, texts);
-		if (snippet === null) continue;
+		if (!bodyTerms) continue;
+		const body = matchContent(folded, preparedOf(entry, entry.content));
+		const first = body?.ranges[0];
+		if (!first) continue;
+		const snippet = lineAround(entry.content, first);
 		hits.push({
 			...base,
 			snippet,
 			tier: MATCH_TIER.content,
 			score: 0,
-			ranges: { snippet: termRanges(snippet, texts) },
+			ranges: { snippet: wireRanges(contentRanges(folded, prepareContent(snippet))) },
 		});
 	}
 	return buildGroup("spec", hits, input.limit, rebuilding ? "indexing" : "ready");
@@ -217,8 +237,7 @@ export function searchTranscripts(
 	label: (cwd: string) => ChatLabel | null,
 	input: ProviderInput,
 ): SearchGroup {
-	const terms = input.terms.map((term) => term.text);
-	const primary = terms[0] ?? "";
+	const folded = foldedTermsOf(input);
 	const ordered = sessions
 		.map((session) => ({ session, where: label(session.cwd), last: lastActivity(session) }))
 		.filter((entry): entry is typeof entry & { where: ChatLabel } => entry.where !== null)
@@ -232,8 +251,9 @@ export function searchTranscripts(
 				break scan;
 			}
 			const entry = session.entries[index];
-			if (!entry || !matchesTerms(entry.text, terms)) continue;
-			const title = compactWhitespace(makeSnippet(entry.text, primary)).slice(
+			const first = entry ? matchContent(folded, preparedOf(entry, entry.text))?.ranges[0] : null;
+			if (!entry || !first) continue;
+			const title = compactWhitespace(snippetAround(entry.text, first)).slice(
 				0,
 				TRANSCRIPT_TEXT_PREVIEW,
 			);
@@ -245,7 +265,7 @@ export function searchTranscripts(
 					...(session.title ? { subtitle: session.title } : {}),
 					tier: MATCH_TIER.content,
 					score: 0,
-					ranges: { title: termRanges(title, terms) },
+					ranges: { title: wireRanges(contentRanges(folded, prepareContent(title))) },
 					projectId: where.projectId,
 					workspaceId: where.workspaceId,
 					sessionId: session.sessionId,
@@ -283,7 +303,7 @@ export function searchPlans(
 			}
 			const plan = file.read();
 			const push = (itemId: string, title: string, subtitle: string | undefined) => {
-				const match = matchFields(input.terms, [{ key: "title", text: title }]);
+				const match = matchFields(input.terms, searchHitFields({ kind: "plan", title }));
 				if (!match) return;
 				hits.push({
 					id: `plan:${workspace.id}:${file.sessionId}:${itemId}`,

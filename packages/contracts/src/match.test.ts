@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { MATCH_TIER, type MatchField, matchFields, parseMatchTerms } from "./match";
+import {
+	contentRanges,
+	foldMatchText,
+	MATCH_TIER,
+	type MatchField,
+	matchContent,
+	matchFields,
+	parseMatchTerms,
+	prepareContent,
+} from "./match";
 
 const title = (text: string): MatchField[] => [{ key: "title", text }];
 
@@ -76,14 +85,58 @@ describe("matchFields tiers", () => {
 		expect(tierOf("\u03bf\u03c3", title("\u039f\u03a3"))).toBe(MATCH_TIER.exact);
 	});
 
-	test("Latin accents fold to their base letter; other scripts keep their marks", () => {
+	test("accents U+0300–U+036F fold away after any letter; other marks stay significant", () => {
 		expect(tierOf("configuracion", title("Configuración"))).toBe(MATCH_TIER.exact);
 		expect(tierOf("configuración", title("Configuracion avanzada"))).toBe(MATCH_TIER.prefix);
 		const accented = matchFields(parseMatchTerms("cion"), title("Configuración"));
 		expect(accented?.fields[0]?.ranges).toEqual([[9, 13]]);
 		expect(tierOf("uber", title("Über uns"))).toBe(MATCH_TIER.prefix);
-		expect(tierOf("и", title("й"))).toBeNull();
+		expect(tierOf("еще", title("ещё"))).toBe(MATCH_TIER.exact);
+		expect(tierOf("ещё", title("Еще раз"))).toBe(MATCH_TIER.prefix);
+		expect(tierOf("αλφα", title("άλφα"))).toBe(MATCH_TIER.exact);
+		expect(tierOf("и", title("й"))).toBe(MATCH_TIER.exact);
 		expect(tierOf("か", title("が"))).toBeNull();
+		expect(tierOf("が", title("か"))).toBeNull();
+		expect(tierOf("1", title("1\u0301"))).toBeNull();
+	});
+
+	test("a precomposed and a decomposed spelling match alike, and no match splits a letter from its mark", () => {
+		const both = (text: string) => [text.normalize("NFC"), text.normalize("NFD")];
+		for (const text of both("がイド")) {
+			expect(tierOf("がいど", title(text))).toBeNull();
+			expect(tierOf("が", title(text))).toBe(MATCH_TIER.prefix);
+			expect(tierOf("か", title(text))).toBeNull();
+		}
+		for (const query of both("が"))
+			expect(tierOf(query, title("ガが".normalize("NFD")))).not.toBeNull();
+		for (const text of both("한국어")) {
+			expect(tierOf("한국", title(text))).toBe(MATCH_TIER.prefix);
+			expect(tierOf("하", title(text))).toBeNull();
+		}
+		expect(tierOf("\u0915", title("\u0958"))).toBeNull();
+		expect(tierOf("\u0958", title("\u0915\u093c"))).toBe(MATCH_TIER.exact);
+		expect(tierOf('"a"', title("a\u1ab0"))).toBeNull();
+		expect(tierOf("x\u1ab0\u1ab5", title("x\u1ab5\u1ab0"))).toBe(MATCH_TIER.exact);
+		for (const text of both("fóBar")) expect(tierOf("fb", title(text))).toBe(MATCH_TIER.word);
+		for (const text of both("CaféBar")) {
+			const bar = matchFields(parseMatchTerms("bar"), title(text));
+			expect(bar?.tier).toBe(MATCH_TIER.word);
+			expect(bar?.fields[0]?.ranges).toEqual([[text.length - 3, text.length]]);
+		}
+	});
+
+	test("folding a decomposed text grows linearly with its length", () => {
+		const nfd = (reps: number) => "Configuración déjà vu naïve café ".repeat(reps).normalize("NFD");
+		const time = (text: string) => {
+			const started = performance.now();
+			foldMatchText(text);
+			return performance.now() - started;
+		};
+		expect(foldMatchText(nfd(2))).toBe(foldMatchText(nfd(2).normalize("NFC")));
+		const once = nfd(10_000);
+		const twice = nfd(20_000);
+		time(once);
+		expect(time(twice)).toBeLessThan(3 * time(once) + 20);
 	});
 
 	test("decomposed accents fold too, and a highlight spans the marks it covers", () => {
@@ -191,5 +244,30 @@ describe("match ordering", () => {
 		expect(longName.tier).toBe(MATCH_TIER.prefix);
 		expect(shortName.score).toBeGreaterThan(longName.score);
 		expect(word.tier).toBe(MATCH_TIER.word);
+	});
+});
+
+describe("content matching", () => {
+	const fold = (query: string) => parseMatchTerms(query).map((term) => foldMatchText(term.text));
+
+	test("every term must occur, folded like the matcher, with ranges on the raw text", () => {
+		const text = "Die Konfiguration: Configuración del caf\u0065\u0301 y más";
+		const content = prepareContent(text);
+		const match = matchContent(fold("configuracion cafe"), content);
+		expect(match?.first).toBe(text.indexOf("Configuración"));
+		expect(match?.ranges).toEqual([
+			[text.indexOf("Configuración"), text.indexOf("Configuración") + 13],
+			[text.indexOf("caf"), text.indexOf("caf") + 5],
+		]);
+		expect(matchContent(fold("configuracion banana"), content)).toBeNull();
+		expect(matchContent(fold('"del cafe"'), content)).not.toBeNull();
+		expect(contentRanges(fold("banana cafe"), content)).toEqual([
+			[text.indexOf("caf"), text.indexOf("caf") + 5],
+		]);
+	});
+
+	test("a term never ends inside a letter its mark makes another one", () => {
+		expect(matchContent(fold("か"), prepareContent("がっこう"))).toBeNull();
+		expect(matchContent(fold("が"), prepareContent("か\u3099っこう"))).not.toBeNull();
 	});
 });

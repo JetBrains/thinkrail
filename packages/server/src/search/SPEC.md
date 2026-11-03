@@ -24,10 +24,9 @@ reader's own containment rule), the same shape as `host/historyScope.ts`.
 - **Public surface (barrel):** `createSearchService`, `SearchService`, `SearchReaders`.
 - **Internals:** the file-list cache, root resolution and the providers are composed by the service and
   reached by tests per file, never through the barrel.
-- **Allowed deps:** `contracts` (DTOs + the matcher), `history` (`HistoryIndex.sessions()` — the
-  narrow read of titles and entries), `spec` (`specSnapshot` / `invalidateSpecSnapshot`), `todos`
-  (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`), `log` (a failed load or provider,
-  error type only), Node `fs` (`readdir` for a walk). A file hit's size and readability come from the
+- **Allowed deps:** `contracts` (DTOs, the matcher, the content matcher and `searchHitFields`), `git`
+  (`gitAsyncStream` for `ls-files`), `log` (a failed load or provider, error type only), Node `fs`
+  (`readdir` for a walk); `history`, `spec` and `todos` for types only — their readers are injected. A file hit's size and readability come from the
   injected `stat`, never a second containment rule here.
 - **Forbidden:** `host`, `workspaces`, `projects`, `persistence`, `agent` (projects and records are
   injected; a preview never attaches a pi session); writing anything; a second matcher.
@@ -65,8 +64,7 @@ plan files whose session has no transcript on disk (orphans).
   listed once. A failure that may pass — a timeout, descriptor or memory pressure, in git or in the
   walk — rejects the load instead of answering a partial or empty list; a folder the walk may not read
   is skipped. Lists are cached per root with a
-  twin folded by the matcher's own fold (`foldMatchText` — case and Latin diacritics, precomposed or
-  decomposed), and each term is folded the same way, so the prefilter never drops a path the matcher
+  twin folded by the matcher's own fold (`foldMatchText`), and each term is folded the same way, so the prefilter never drops a path the matcher
   would accept (at most `maxRoots` roots, least recently asked first out, so switching workspaces
   keeps the recent ones warm; a list cut at its cap is still searched and its group reported
   `truncated`) and revalidated
@@ -92,10 +90,13 @@ plan files whose session has no transcript on disk (orphans).
   included (a root's first read answers `indexing` with no hits), and only on a read after its TTL lapsed
   or the worktree changed, the previous snapshot answering meanwhile (title / id / path through the
   matcher; a body match from three characters becomes a `content`-tier hit with the matching line as
-  `snippet`). Body matching folds case only, unlike the matcher's diacritic folding: folding every
-  body per keystroke costs too much.
-- **Transcripts:** hits are substring-AND over entries (the history index's rule; case folded only), one
-  per message, `content` tier with an equal score so the timestamp alone orders them newest first (a
+  `snippet`).
+- **Content folding:** spec bodies and messages match through `matchContent`, so a body folds exactly
+  like a title. Each entry's prepared fold is cached against the entry object (`WeakMap`): history
+  entries survive revalidation, so the cost is about one more copy of the indexed message text, released
+  with the index's records; a spec body is prepared again once per snapshot rebuild. A snippet is cut
+  from the raw text around the first match and highlighted with `contentRanges` on the snippet itself.
+- **Transcripts:** hits are substring-AND over entries, one per message, `content` tier with an equal score so the timestamp alone orders them newest first (a
   user message never outranks a newer assistant one), carrying `messageIndex` / `anchorText` for the
   client's drift-tolerant jump. The scan visits the newest chat first and each chat's newest message
   first, checking the budget before every message, so a budget that runs out (`truncated`) leaves only

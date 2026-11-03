@@ -647,6 +647,50 @@ describe("search.query", () => {
 		expect(await ids('"module token"')).toEqual([]);
 	});
 
+	test("message text and spec bodies fold accents like titles do, in either spelling", async () => {
+		const accented: HistorySession = {
+			sessionId: "s-acc",
+			cwd: "/repos/one-auth",
+			title: "Accents",
+			entries: [
+				{
+					role: "user",
+					text: "la configuracio\u0301n del café",
+					timestamp: 40,
+					messageIndex: 0,
+					entryId: "x0",
+				},
+			],
+		};
+		const service = createSearchService(
+			readers({
+				files: new FileListCache(async () => ({ paths: [], truncated: false })),
+				sessions: async () => ({ sessions: [accented], indexing: false }),
+				specs: () => ({
+					entries: [
+						{
+							path: "SPEC.md",
+							id: "root",
+							title: "Root",
+							type: "x",
+							content: "# Root\n\nЕщё одна ёлка.\n",
+						},
+					],
+					rebuilding: false,
+				}),
+			}),
+		);
+		const ids = async (query: string) =>
+			(await service.query({ query, kinds: ["transcript", "spec"], context })).groups.flatMap(
+				(group) => group.hits.map((hit) => hit.id),
+			);
+		expect(await ids("configuracion cafe")).toEqual(["transcript:s-acc:x0"]);
+		expect(await ids("еще елка")).toEqual(["spec:w-feature:SPEC.md"]);
+		const hit = (await service.query({ query: "configuración", kinds: ["transcript"], context }))
+			.groups[0]?.hits[0];
+		expect(hit?.ranges?.title).toEqual([[3, 17]]);
+	});
+
 	test("a plan whose session the history has not reached yet answers indexing, so it is asked again", async () => {
 		const building = createSearchService(
 			readers({

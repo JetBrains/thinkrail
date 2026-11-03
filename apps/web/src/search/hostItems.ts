@@ -1,13 +1,16 @@
 import { RiChatHistoryLine, RiFileTextLine, RiListCheck3, RiNodeTree } from "@remixicon/react";
 import {
+	foldMatchText,
 	MATCH_TIER,
-	type MatchField,
 	type MatchRange,
 	type MatchTerm,
+	matchContent,
 	matchFields,
+	prepareContent,
 	type SearchGroup,
 	type SearchHit,
 	type SearchKind,
+	searchHitFields,
 } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import type { PaletteItem, PaletteMatch } from "./model";
@@ -36,54 +39,20 @@ export interface HostItemContext {
 	readonly staleTerms: readonly MatchTerm[] | null;
 }
 
-function hostFields(hit: SearchHit): MatchField[] {
-	switch (hit.kind) {
-		case "file":
-			return [{ key: "path", text: hit.path, path: true }];
-		case "spec":
-			return [
-				{ key: "title", text: hit.title },
-				{ key: "id", text: hit.specId, secondary: true },
-				{ key: "path", text: hit.path, path: true, secondary: true },
-			];
-		case "plan":
-		case "transcript":
-			return [{ key: "title", text: hit.title }];
-	}
-}
-
 function rangesOf(fields: readonly { key: string; ranges: readonly MatchRange[] }[]) {
 	const ranges: Record<string, [number, number][]> = {};
 	for (const field of fields) ranges[field.key] = field.ranges.map(([a, b]) => [a, b]);
 	return ranges;
 }
 
-function contentRanges(text: string, terms: readonly MatchTerm[]): [number, number][] | null {
-	const lower = text.toLowerCase();
-	const found: [number, number][] = [];
-	for (const term of terms) {
-		const needle = term.text.toLowerCase();
-		const at = lower.indexOf(needle);
-		if (at === -1) return null;
-		found.push([at, at + needle.length]);
-	}
-	found.sort((a, b) => a[0] - b[0]);
-	const ranges: [number, number][] = [];
-	for (const [start, end] of found) {
-		const last = ranges.at(-1);
-		if (last && start <= last[1]) last[1] = Math.max(last[1], end);
-		else ranges.push([start, end]);
-	}
-	return ranges;
-}
-
 export function rematchHit(hit: SearchHit, terms: readonly MatchTerm[]): SearchHit | null {
 	if (hit.tier === MATCH_TIER.content) {
 		const [key, text] = hit.kind === "spec" ? ["snippet", hit.snippet ?? ""] : ["title", hit.title];
-		const ranges = contentRanges(text, terms);
-		return ranges ? { ...hit, score: 0, ranges: { [key]: ranges } } : null;
+		const folded = terms.map((term) => foldMatchText(term.text)).filter(Boolean);
+		const match = matchContent(folded, prepareContent(text));
+		return match ? { ...hit, score: 0, ranges: rangesOf([{ key, ranges: match.ranges }]) } : null;
 	}
-	const match = matchFields(terms, hostFields(hit));
+	const match = matchFields(terms, searchHitFields(hit));
 	if (!match) return null;
 	return { ...hit, tier: match.tier, score: match.score, ranges: rangesOf(match.fields) };
 }

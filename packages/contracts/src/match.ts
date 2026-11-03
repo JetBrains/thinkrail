@@ -62,69 +62,173 @@ export function parseMatchTerms(query: string): MatchTerm[] {
 const DOTTED_CAPITAL_I = /\u0130/g;
 const FINAL_SIGMA = /\u03c2/g;
 const NON_ASCII = /[\u0080-\uffff]/;
-const ASCII_LETTER = /^[a-z]$/;
-const COMBINING_MARKS = /^[\u0300-\u036f]+$/;
-const latinBase = new Map<string, string>();
+const MARK = /\p{M}/u;
+const LETTER = /\p{L}/u;
+const STRIPPED_MARK = /[\u0300-\u036f]/;
+const FOLD_MEMO_LIMIT = 4_096;
+const continuationUnits = new Uint8Array(0x10000);
+const stableUnits = new Uint8Array(0x10000);
+const continuationPoints = new Map<number, boolean>();
+const foldMemo = new Map<string, string>();
 
-function latinBaseOf(char: string): string {
-	let base = latinBase.get(char);
-	if (base === undefined) {
-		const decomposed = char.normalize("NFD");
-		const letter = decomposed[0] ?? "";
-		base =
-			decomposed.length > 1 &&
-			ASCII_LETTER.test(letter) &&
-			COMBINING_MARKS.test(decomposed.slice(1))
-				? letter
-				: char;
-		latinBase.set(char, base);
+function lowerCase(text: string): string {
+	let lower = text.toLowerCase();
+	if (lower.length !== text.length) lower = text.replace(DOTTED_CAPITAL_I, "i").toLowerCase();
+	return lower.includes("\u03c2") ? lower.replace(FINAL_SIGMA, "\u03c3") : lower;
+}
+
+function isContinuationPoint(point: number): boolean {
+	if (point < 0x300) return false;
+	if (point <= 0xffff) {
+		let known = continuationUnits[point] ?? 0;
+		if (known === 0) {
+			const continues =
+				(point >= 0x1160 && point <= 0x11ff) ||
+				(point >= 0xd7b0 && point <= 0xd7ff) ||
+				MARK.test(String.fromCharCode(point));
+			known = continues ? 2 : 1;
+			continuationUnits[point] = known;
+		}
+		return known === 2;
 	}
-	return base;
+	let known = continuationPoints.get(point);
+	if (known === undefined) {
+		known = MARK.test(String.fromCodePoint(point));
+		continuationPoints.set(point, known);
+	}
+	return known;
 }
 
-function foldMatchCase(text: string): string {
-	let folded = text.toLowerCase();
-	if (!NON_ASCII.test(folded)) return folded;
-	if (folded.length !== text.length) folded = text.replace(DOTTED_CAPITAL_I, "i").toLowerCase();
-	if (folded.includes("\u03c2")) folded = folded.replace(FINAL_SIGMA, "\u03c3");
-	let latin = "";
-	for (const char of folded) latin += latinBaseOf(char);
-	return latin;
+function pointAt(text: string, index: number): number {
+	return text.codePointAt(index) ?? 0;
 }
 
-const LATIN_MARK = /[\u0300-\u036f]/;
-const ASCII_LETTER_END = /[a-z]$/;
+function isContinuationAt(text: string, index: number): boolean {
+	return index < text.length && isContinuationPoint(pointAt(text, index));
+}
+
+function stripMarks(decomposed: string): string {
+	let kept = "";
+	let afterLetter = false;
+	for (const char of decomposed) {
+		if (isContinuationPoint(char.codePointAt(0) ?? 0)) {
+			if (!(afterLetter && STRIPPED_MARK.test(char))) kept += char;
+			continue;
+		}
+		kept += char;
+		afterLetter = LETTER.test(char);
+	}
+	return kept;
+}
+
+function foldCluster(cluster: string): string {
+	let folded = foldMemo.get(cluster);
+	if (folded === undefined) {
+		folded = stripMarks(cluster.normalize("NFD")).normalize("NFC");
+		if (folded === cluster) folded = cluster;
+		if (foldMemo.size >= FOLD_MEMO_LIMIT) foldMemo.clear();
+		foldMemo.set(cluster, folded);
+	}
+	return folded;
+}
 
 interface FoldedText {
 	readonly text: string;
 	readonly at: (index: number) => number;
+	readonly boundary: (index: number) => boolean;
+}
+
+function identityFold(text: string): FoldedText {
+	return { text, at: (index) => index, boundary: () => true };
 }
 
 function foldText(raw: string): FoldedText {
-	const cased = foldMatchCase(raw);
-	if (!LATIN_MARK.test(cased)) return { text: cased, at: (index) => index };
-	let text = "";
-	const rawIndex: number[] = [];
-	for (let index = 0; index < cased.length; index++) {
-		const char = cased[index] ?? "";
-		if (LATIN_MARK.test(char) && ASCII_LETTER_END.test(text)) continue;
-		text += char;
-		rawIndex.push(index);
+	const cased = lowerCase(raw);
+	if (!NON_ASCII.test(cased)) return identityFold(cased);
+	const parts: string[] = [];
+	const foldedStarts: number[] = [];
+	const rawStarts: number[] = [];
+	const flat: boolean[] = [];
+	let copyFrom = 0;
+	let length = 0;
+	let index = 0;
+	while (index < cased.length) {
+		const start = index;
+		const point = pointAt(cased, index);
+		index += point > 0xffff ? 2 : 1;
+		while (isContinuationAt(cased, index)) index += pointAt(cased, index) > 0xffff ? 2 : 1;
+		const single = index - start === 1;
+		if (point < 0x80 && single) continue;
+		if (single && stableUnits[point] === 1) continue;
+		const cluster = cased.slice(start, index);
+		const folded = foldCluster(cluster);
+		if (single) stableUnits[point] = folded === cluster ? 1 : 2;
+		if (folded === cluster) continue;
+		parts.push(cased.slice(copyFrom, start), folded);
+		length += start - copyFrom;
+		copyFrom = index;
+		if (folded.length !== cluster.length) {
+			foldedStarts.push(length, length + folded.length);
+			rawStarts.push(start, index);
+			flat.push(true, false);
+		}
+		length += folded.length;
 	}
-	return { text, at: (index) => rawIndex[index] ?? cased.length };
+	if (parts.length === 0)
+		return { ...identityFold(cased), boundary: (at) => !isContinuationAt(cased, at) };
+	parts.push(cased.slice(copyFrom));
+	const text = parts.join("");
+	const boundary = (at: number) => !isContinuationAt(text, at);
+	if (foldedStarts.length === 0) return { text, at: (at) => at, boundary };
+	const at = (folded: number): number => {
+		let low = 0;
+		let high = foldedStarts.length - 1;
+		let segment = -1;
+		while (low <= high) {
+			const middle = (low + high) >> 1;
+			if ((foldedStarts[middle] ?? 0) <= folded) {
+				segment = middle;
+				low = middle + 1;
+			} else high = middle - 1;
+		}
+		if (segment === -1) return folded;
+		const rawStart = rawStarts[segment] ?? 0;
+		return flat[segment] ? rawStart : rawStart + (folded - (foldedStarts[segment] ?? 0));
+	};
+	return { text, at, boundary };
 }
 
 export function foldMatchText(text: string): string {
 	return foldText(text).text;
 }
 
+function baseBefore(text: string, index: number): string {
+	let before = index - 1;
+	while (before > 0 && MARK.test(text[before] ?? "")) before -= 1;
+	return text[before] ?? "";
+}
+
 function isWordStart(text: string, index: number): boolean {
 	if (index === 0) return true;
-	const previous = text[index - 1] ?? "";
+	const previous = baseBefore(text, index);
 	const current = text[index] ?? "";
 	if (!LETTER_OR_DIGIT.test(previous)) return LETTER_OR_DIGIT.test(current);
 	if (UPPER.test(current) && LOWER.test(previous)) return true;
 	return DIGIT.test(current) && !DIGIT.test(previous);
+}
+
+function hasContinuation(term: string): boolean {
+	for (let index = 0; index < term.length; index++) {
+		if (isContinuationAt(term, index)) return true;
+	}
+	return false;
+}
+
+function occurrence(lower: string, term: string, folded: FoldedText, from = 0): number {
+	for (let index = lower.indexOf(term, from); index >= 0; index = lower.indexOf(term, index + 1)) {
+		if (folded.boundary(index) && folded.boundary(index + term.length)) return index;
+	}
+	return -1;
 }
 
 function matchAcronym(term: string, text: string, folded: FoldedText): MatchRange[] | null {
@@ -133,7 +237,7 @@ function matchAcronym(term: string, text: string, folded: FoldedText): MatchRang
 	const ranges: MatchRange[] = [];
 	let next = 0;
 	for (let index = 0; index < lower.length && next < term.length; index++) {
-		if (lower[index] !== term[next]) continue;
+		if (lower[index] !== term[next] || !folded.boundary(index + 1)) continue;
 		if (!isWordStart(text, folded.at(index))) continue;
 		ranges.push([folded.at(index), folded.at(index + 1)]);
 		next += 1;
@@ -143,11 +247,12 @@ function matchAcronym(term: string, text: string, folded: FoldedText): MatchRang
 
 const MAX_FUZZY_STARTS = 32;
 
-function subsequenceFrom(term: string, lower: string, start: number): number[] | null {
+function subsequenceFrom(term: string, folded: FoldedText, start: number): number[] | null {
+	const lower = folded.text;
 	const positions: number[] = [];
 	let next = 0;
 	for (let index = start; index < lower.length && next < term.length; index++) {
-		if (lower[index] !== term[next]) continue;
+		if (lower[index] !== term[next] || !folded.boundary(index + 1)) continue;
 		positions.push(index);
 		next += 1;
 	}
@@ -161,7 +266,7 @@ function matchSubsequence(term: string, text: string, folded: FoldedText): TermH
 	let span = Number.POSITIVE_INFINITY;
 	let start = lower.indexOf(term[0] ?? "");
 	for (let attempt = 0; start >= 0 && attempt < MAX_FUZZY_STARTS; attempt++) {
-		const candidate = subsequenceFrom(term, lower, start);
+		const candidate = subsequenceFrom(term, folded, start);
 		if (!candidate) break;
 		const candidateSpan = (candidate[candidate.length - 1] ?? start) - start + 1;
 		if (candidateSpan < span) {
@@ -194,11 +299,11 @@ function matchText(matchTerm: MatchTerm, rawText: string): TermHit | null {
 	const span = (from: number, to: number): MatchRange => [folded.at(from), folded.at(to)];
 	const lengthRatio = Math.min(1, term.length / lower.length);
 	if (lower === term) return { tier: MATCH_TIER.exact, score: 1, ranges: [[0, text.length]] };
-	if (lower.startsWith(term)) {
+	if (lower.startsWith(term) && folded.boundary(term.length)) {
 		return { tier: MATCH_TIER.prefix, score: lengthRatio, ranges: [span(0, term.length)] };
 	}
-	const firstSubstring = lower.indexOf(term);
-	for (let index = firstSubstring; index >= 0; index = lower.indexOf(term, index + 1)) {
+	const firstSubstring = occurrence(lower, term, folded);
+	for (let index = firstSubstring; index >= 0; index = occurrence(lower, term, folded, index + 1)) {
 		if (!isWordStart(text, folded.at(index))) continue;
 		return {
 			tier: MATCH_TIER.word,
@@ -206,7 +311,8 @@ function matchText(matchTerm: MatchTerm, rawText: string): TermHit | null {
 			ranges: [span(index, index + term.length)],
 		};
 	}
-	if (!matchTerm.literal) {
+	const clustered = hasContinuation(term);
+	if (!matchTerm.literal && !clustered) {
 		const acronym = matchAcronym(term, text, folded);
 		if (acronym) {
 			return { tier: MATCH_TIER.word, score: 0.5 * lengthRatio, ranges: acronym };
@@ -219,7 +325,7 @@ function matchText(matchTerm: MatchTerm, rawText: string): TermHit | null {
 			ranges: [span(firstSubstring, firstSubstring + term.length)],
 		};
 	}
-	return matchTerm.literal ? null : matchSubsequence(term, text, folded);
+	return matchTerm.literal || clustered ? null : matchSubsequence(term, text, folded);
 }
 
 function shifted(hit: TermHit, offset: number): TermHit {
@@ -292,4 +398,51 @@ export function matchFields(
 		score: score / terms.length,
 		fields: [...rangesByKey].map(([key, ranges]) => ({ key, ranges: mergeRanges(ranges) })),
 	};
+}
+
+export interface PreparedContent {
+	readonly raw: string;
+	readonly fold: FoldedText;
+}
+
+export interface ContentMatch {
+	readonly first: number;
+	readonly ranges: readonly MatchRange[];
+}
+
+export function prepareContent(raw: string): PreparedContent {
+	return { raw, fold: foldText(raw) };
+}
+
+function termRange(term: string, content: PreparedContent): MatchRange | null {
+	const { fold } = content;
+	const index = term ? occurrence(fold.text, term, fold) : -1;
+	return index < 0 ? null : [fold.at(index), fold.at(index + term.length)];
+}
+
+export function matchContent(
+	foldedTerms: readonly string[],
+	content: PreparedContent,
+): ContentMatch | null {
+	const found: MatchRange[] = [];
+	for (const term of foldedTerms) {
+		const range = termRange(term, content);
+		if (!range) return null;
+		found.push(range);
+	}
+	const ranges = mergeRanges(found);
+	const first = ranges[0];
+	return first ? { first: first[0], ranges } : null;
+}
+
+export function contentRanges(
+	foldedTerms: readonly string[],
+	content: PreparedContent,
+): MatchRange[] {
+	const found: MatchRange[] = [];
+	for (const term of foldedTerms) {
+		const range = termRange(term, content);
+		if (range) found.push(range);
+	}
+	return mergeRanges(found);
 }

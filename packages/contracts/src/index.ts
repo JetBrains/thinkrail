@@ -77,14 +77,24 @@ export {
 	USER_FONTS_ROUTE,
 } from "./domain";
 export type {
+	ContentMatch,
 	FieldMatch,
 	MatchField,
 	MatchRange,
 	MatchResult,
 	MatchTerm,
 	MatchTier,
+	PreparedContent,
 } from "./match";
-export { foldMatchText, MATCH_TIER, matchFields, parseMatchTerms } from "./match";
+export {
+	contentRanges,
+	foldMatchText,
+	MATCH_TIER,
+	matchContent,
+	matchFields,
+	parseMatchTerms,
+	prepareContent,
+} from "./match";
 export type * from "./nativeClient";
 export type * from "./piProtocol";
 export {
@@ -96,4 +106,6 @@ export {
 } from "./piProtocol";
 export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
+export type { SearchFieldSource } from "./searchFields";
+export { searchHitFields } from "./searchFields";
 export * from "./wsProtocol";
