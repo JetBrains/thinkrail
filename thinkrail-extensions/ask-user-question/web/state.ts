@@ -1,0 +1,233 @@
+import type {
+	AskUserQuestionAnswer,
+	AskUserQuestionArgs,
+	AskUserQuestionItem,
+	AskUserQuestionOption,
+} from "@thinkrail/pi-ask-user-question/core";
+
+export function parseQuestions(args: Record<string, unknown>): AskUserQuestionItem[] {
+	const qs = (args as Partial<AskUserQuestionArgs>).questions;
+	return Array.isArray(qs) ? qs.filter((q) => q && Array.isArray(q.options)) : [];
+}
+
+export function splitRecommended(label: string): { text: string; recommended: boolean } {
+	const m = /\s*\(recommended\)\s*$/i.exec(label);
+	return m
+		? { text: label.slice(0, m.index).trim(), recommended: true }
+		: { text: label, recommended: false };
+}
+
+export function readRecommendation(option: {
+	label: string;
+	recommendedReason?: string | undefined;
+}): {
+	text: string;
+	recommended: boolean;
+	reason?: string | undefined;
+} {
+	const { text, recommended } = splitRecommended(option.label);
+	const reason = option.recommendedReason?.trim() || undefined;
+	return { text, recommended: recommended || !!reason, reason };
+}
+
+export interface QState {
+	option: string | null;
+	customText: string;
+	customActive: boolean;
+	multi: string[];
+	cursor: number;
+	notes: Record<string, string>;
+	noteFor: string | null;
+}
+
+export const emptyQState = (): QState => ({
+	option: null,
+	customText: "",
+	customActive: false,
+	multi: [],
+	cursor: 0,
+	notes: {},
+	noteFor: null,
+});
+
+export function previewEcho(
+	option: AskUserQuestionOption,
+): Pick<AskUserQuestionAnswer, "preview" | "previewFile" | "previewBefore"> {
+	if (option.previewFile)
+		return {
+			previewFile: option.previewFile,
+			...(option.previewBefore ? { previewBefore: option.previewBefore } : {}),
+		};
+	return option.preview ? { preview: option.preview } : {};
+}
+
+export function deriveAnswer(
+	question: AskUserQuestionItem,
+	index: number,
+	state: QState,
+): AskUserQuestionAnswer | null {
+	const base = { questionIndex: index, question: question.question };
+	if (question.multiSelect) {
+		const valid = state.multi.filter((label) => question.options.some((o) => o.label === label));
+		const custom = state.customActive ? state.customText.trim() : "";
+		if (valid.length === 0 && !custom) return null;
+		const noteLines = valid.flatMap((label) => {
+			const note = state.notes[label]?.trim();
+			return note ? [`${splitRecommended(label).text}: ${note}`] : [];
+		});
+		return {
+			...base,
+			kind: "multi",
+			answer: custom || null,
+			selected: valid,
+			...(noteLines.length > 0 ? { notes: noteLines.join("\n") } : {}),
+		};
+	}
+	if (state.customActive && state.customText.trim()) {
+		return { ...base, kind: "custom", answer: state.customText.trim() };
+	}
+	if (state.option != null) {
+		const opt = question.options.find((o) => o.label === state.option);
+		if (!opt) return null;
+		const note = state.notes[state.option]?.trim();
+		return {
+			...base,
+			kind: "option",
+			answer: state.option,
+			...previewEcho(opt),
+			...(note ? { notes: note } : {}),
+		};
+	}
+	return null;
+}
+
+export function deriveAnswers(
+	questions: AskUserQuestionItem[],
+	states: Record<number, QState>,
+): AskUserQuestionAnswer[] {
+	return questions
+		.map((question, index) => deriveAnswer(question, index, states[index] ?? emptyQState()))
+		.filter((answer): answer is AskUserQuestionAnswer => answer != null);
+}
+
+export function answerSupportsNote(answer: AskUserQuestionAnswer): boolean {
+	if (answer.kind === "option") return true;
+	return answer.kind === "multi" && (answer.selected?.length ?? 0) > 0;
+}
+
+export interface RecapState {
+	selectedLabels: string[];
+	customAnswer: string | null;
+	showOptions: boolean;
+}
+
+export function deriveRecapState(answer: AskUserQuestionAnswer | undefined): RecapState {
+	const selectedLabels =
+		answer?.kind === "multi"
+			? (answer.selected ?? [])
+			: answer?.kind === "option" && answer.answer
+				? [answer.answer]
+				: [];
+	const customAnswer =
+		answer && (answer.kind === "custom" || answer.kind === "multi") ? answer.answer : null;
+	return {
+		selectedLabels,
+		customAnswer,
+		showOptions: !!answer && answer.kind !== "custom",
+	};
+}
+
+export type ChoiceKeyAction =
+	| { type: "move"; index: number }
+	| { type: "select" }
+	| { type: "confirm" }
+	| { type: "none" };
+
+export function choiceKeyAction(key: string, index: number, count: number): ChoiceKeyAction {
+	if (count <= 0) return { type: "none" };
+	if (key === "ArrowDown") return { type: "move", index: (index + 1) % count };
+	if (key === "ArrowUp") return { type: "move", index: (index - 1 + count) % count };
+	if (key === "Home") return { type: "move", index: 0 };
+	if (key === "End") return { type: "move", index: count - 1 };
+	if (key === " " || key === "Spacebar") return { type: "select" };
+	if (key === "Enter") return { type: "confirm" };
+	return { type: "none" };
+}
+
+export function customTextPatch(text: string): Partial<QState> {
+	return text.trim()
+		? { customText: text, customActive: true, option: null }
+		: { customText: text, customActive: false };
+}
+
+export function selectOptionPatch(state: QState, label: string, cursor: number): Partial<QState> {
+	const from =
+		state.option ?? Object.keys(state.notes).find((key) => !!state.notes[key]?.trim()) ?? null;
+	const carried = from != null && from !== label ? state.notes[from] : undefined;
+	const notes =
+		carried?.trim() && !state.notes[label]?.trim()
+			? Object.fromEntries([
+					...Object.entries(state.notes).filter(([key]) => key !== from),
+					[label, carried],
+				])
+			: undefined;
+	return {
+		cursor,
+		option: label,
+		customActive: false,
+		...(notes ? { notes } : {}),
+		...(state.noteFor != null && state.noteFor !== label ? { noteFor: null } : {}),
+	};
+}
+
+export function toggleMultiPatch(state: QState, label: string, cursor: number): Partial<QState> {
+	const removing = state.multi.includes(label);
+	return {
+		cursor,
+		multi: removing ? state.multi.filter((item) => item !== label) : [...state.multi, label],
+		...(removing && state.noteFor === label ? { noteFor: null } : {}),
+	};
+}
+
+export type ConfirmSource = { kind: "choice"; label: string; cursor: number } | { kind: "custom" };
+
+export function confirmStateFor(
+	state: QState,
+	multiSelect: boolean,
+	source: ConfirmSource,
+): QState {
+	if (source.kind === "custom") return state;
+	return multiSelect
+		? { ...state, cursor: source.cursor }
+		: { ...state, ...selectOptionPatch(state, source.label, source.cursor) };
+}
+
+export function noteKeyAction(
+	key: string,
+	shiftKey: boolean,
+	isComposing: boolean,
+): "finish" | "consume" | "none" {
+	if (key === "Escape") return isComposing ? "consume" : "finish";
+	if (isComposing) return "none";
+	if (key === "Enter" && !shiftKey) return "finish";
+	return "none";
+}
+
+export interface ChoiceNudge {
+	question: number;
+	seq: number;
+}
+
+export function nudgeShowsOnPage(
+	nudge: ChoiceNudge | null,
+	page: number,
+	answered: boolean,
+): boolean {
+	return !!nudge && nudge.question === page && !answered;
+}
+
+export function questionPageForKey(key: string, current: number, last: number): number | null {
+	if (key === "ArrowLeft") return Math.max(0, current - 1);
+	if (key === "ArrowRight") return Math.min(last, current + 1);
+	return null;
+}

@@ -2,7 +2,9 @@ import { describe, expect, it } from "bun:test";
 import type { ToolInteraction } from "@thinkrail/extension-api/web";
 import type { AskUserQuestionItem } from "@thinkrail/pi-ask-user-question/core";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AskUserQuestionCard, type QState, QuestionBody } from "./AskUserQuestionCard";
+import { AskUserQuestionCard } from "./AskUserQuestionCard";
+import { QuestionBody } from "./QuestionBody";
+import type { QState } from "./state";
 
 const BOTTOM = "Bottom panel";
 const single: AskUserQuestionItem = {
