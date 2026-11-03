@@ -117,12 +117,16 @@ what a group shows and its "N more" row appears. A host group's "N more" is the 
 hits it sent. Ranking runs once per input (`rankSections`); moving the selection only regroups
 (`groupSections`, `keep` holds the selected row above its group's cap).
 
-**Status.** Right of the input, the `RunningIcon` shows once a search has been pending for 200 ms; a
-settled search that may be incomplete shows a yellow mark instead, whose tip (hover, or tap on touch)
+**Status.** Right of the input, the `RunningIcon` shows once a search — one input on one connection — has
+been pending for 200 ms; a settled search that may be incomplete shows a yellow mark instead, whose tip
 names every reason — part of it failed, it is still indexing after polling stopped, only N files of the
-folder are listed (`cut.fileList`), or a provider ran out of time (`cut.time`) (`hostSearchReasons`). The
-reasons also describe the input (`aria-describedby`) and reach the live region; Escape closes an open tip
-before anything else. A host row opens through the injected `PaletteHost.openHit`. The `/` and `#`
+folder are listed (`cut.fileList`, in the interface language's digits), or a provider ran out of time
+(`cut.time`) (`hostSearchReasons`). A mouse opens the tip by hovering (a click leaves it to the hover); a
+touch toggles it per tap; pressing the mark never moves focus out of the input. The tip's state lives
+with the mark, so a tip never reopens on its own when the mark returns. The reasons also describe the input
+(`aria-describedby`) and reach the live region. Escape closes an open tip before anything else because the
+tip is the highest layer of the one shared Radix dismissable-layer stack the dialog belongs to; an
+active IME's Escape leaves it open. A host row opens through the injected `PaletteHost.openHit`. The `/` and `#`
 scopes are offered only when the host searches files and specs and a context project gives them a root,
 and the placeholder names files and specs exactly then.
 

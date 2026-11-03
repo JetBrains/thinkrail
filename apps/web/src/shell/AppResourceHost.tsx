@@ -19,7 +19,7 @@ import { openFileComparisonInTab, openFileInTab } from "../panels/openTabs";
 import { resourceBytesUrl } from "../panels/resourcePane";
 import { SendReviewButton } from "../panels/SendReviewButton";
 import { useFileReview } from "../panels/useReviewCommenting";
-import { selectFileChangeSince, selectHostReachable, useAppStore } from "../store";
+import { selectFileChangeSince, selectHostSearchReady, useAppStore } from "../store";
 import { resolveThinkrailShikiTheme } from "../themes";
 import { getTransport, wsErrorCode } from "../transport";
 
@@ -66,7 +66,7 @@ export const PALETTE_PREVIEW_HOST: ResourceHost = {
 	...HOST,
 	bytesUrl: cappedBytesUrl,
 	readFile: (workspaceId, path) => {
-		if (!selectHostReachable(useAppStore.getState())) {
+		if (!selectHostSearchReady(useAppStore.getState())) {
 			return Promise.reject(new Error(t("search.palette.previewOffline")));
 		}
 		return getTransport()
@@ -79,9 +79,9 @@ export const PALETTE_PREVIEW_HOST: ResourceHost = {
 	},
 	subscribeFileChanges: (workspaceId, onChange) =>
 		useAppStore.subscribe((state, previous) => {
-			if (!selectHostReachable(state)) return;
+			if (!selectHostSearchReady(state)) return;
 			if (
-				!selectHostReachable(previous) ||
+				!selectHostSearchReady(previous) ||
 				state.welcomeGeneration !== previous.welcomeGeneration
 			) {
 				onChange(null);

@@ -815,6 +815,7 @@ test("an incomplete search shows a yellow mark whose tip names each reason, on h
 	await expect(tip).toBeHidden();
 	await expect(palette(page)).toBeVisible();
 	await expect(page.getByTestId("search-input")).toHaveValue("zqxcut");
+	await mark.click();
 	await expect(page.getByTestId("search-input")).toBeFocused();
 });
 

@@ -2,7 +2,12 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
+import { resetAnalyticsForTests } from "../analytics";
+import { resetJbcentralStateForTests } from "../auth";
+import { resetConfigCache } from "../settings";
 import { BLOB_SIZE_LIMIT, serveBlob, serveWorktreeFile } from "./fileRoutes";
+import { createServer, type RunningServer } from "./server";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x7f]);
 
@@ -138,6 +143,36 @@ test("/files with maxBytes serves a file within the cap, refuses a larger one, a
 		expect((await serveWorktreeFile("/files/w1/notes.md", bad)).status).toBe(400);
 	}
 	expect((await serveWorktreeFile("/files/w1/gone.md", "9")).status).toBe(404);
+});
+
+test("the host passes /files its maxBytes from the request URL", async () => {
+	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
+	const savedOffline = process.env.PI_OFFLINE;
+	process.env.PI_CODING_AGENT_DIR = join(dataDir, "pi");
+	process.env.PI_OFFLINE = "1";
+	resetConfigCache();
+	await resetJbcentralStateForTests();
+	configurePiRuntime(null);
+	configurePiRuntimeFactory();
+	let server: RunningServer | undefined;
+	try {
+		server = await createServer({ port: 0, host: "127.0.0.1", analytics: { mute: true } });
+		const base = `http://127.0.0.1:${server.port}/files/w1/notes.md`;
+		expect((await fetch(`${base}?maxBytes=8`)).status).toBe(200);
+		expect((await fetch(`${base}?maxBytes=7`)).status).toBe(413);
+		expect((await fetch(`${base}?maxBytes=x`)).status).toBe(400);
+	} finally {
+		await server?.shutdown();
+		resetAnalyticsForTests();
+		resetConfigCache();
+		await resetJbcentralStateForTests();
+		configurePiRuntimeFactory();
+		configurePiRuntime(null);
+		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+		if (savedOffline === undefined) delete process.env.PI_OFFLINE;
+		else process.env.PI_OFFLINE = savedOffline;
+	}
 });
 
 test("/blob refuses objects above the response cap before reading their content", async () => {

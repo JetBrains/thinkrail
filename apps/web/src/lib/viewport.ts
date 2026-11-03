@@ -7,7 +7,7 @@ function mediaQuery(query: string): MediaQueryList | null {
 	return window.matchMedia(query);
 }
 
-export function matchesMediaQuery(query: string): boolean {
+function matchesMediaQuery(query: string): boolean {
 	return mediaQuery(query)?.matches ?? false;
 }
 

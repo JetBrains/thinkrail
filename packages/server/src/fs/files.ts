@@ -1,7 +1,6 @@
 import {
 	closeSync,
 	type Dirent,
-	fstatSync,
 	openSync,
 	readdirSync,
 	readFileSync,
@@ -114,24 +113,27 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
 }
 
+const BOUNDED_READ_CHUNK = 64 * 1024;
+
 function readBounded(abs: string, maxBytes: number): Uint8Array {
 	if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
 		throw new Error("maxBytes must be a non-negative integer");
 	}
-	const tooLarge = () =>
-		new CodedError("FILE_TOO_LARGE", "The file is larger than the read allows");
 	const fd = openSync(abs, "r");
 	try {
-		if (fstatSync(fd).size > maxBytes) throw tooLarge();
-		const buffer = Buffer.allocUnsafe(maxBytes + 1);
-		let read = 0;
-		while (read < buffer.length) {
-			const chunk = readSync(fd, buffer, read, buffer.length - read, read);
-			if (chunk === 0) break;
-			read += chunk;
+		const chunks: Buffer[] = [];
+		let total = 0;
+		while (true) {
+			const chunk = Buffer.allocUnsafe(Math.min(BOUNDED_READ_CHUNK, maxBytes + 1 - total));
+			const read = readSync(fd, chunk, 0, chunk.length, total);
+			if (read === 0) break;
+			chunks.push(chunk.subarray(0, read));
+			total += read;
+			if (total > maxBytes) {
+				throw new CodedError("FILE_TOO_LARGE", "The file is larger than the read allows");
+			}
 		}
-		if (read > maxBytes) throw tooLarge();
-		return buffer.subarray(0, read);
+		return Buffer.concat(chunks, total);
 	} finally {
 		closeSync(fd);
 	}

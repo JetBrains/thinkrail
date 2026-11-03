@@ -40,6 +40,10 @@ describe("parseNulList", () => {
 			paths: ["a", "b"],
 			truncated: true,
 		});
+		expect(await parseNulList(chunks("a\0a\0node_modules/x\0b\0b\0"), limits)).toEqual({
+			paths: ["a", "b"],
+			truncated: false,
+		});
 		const bytes = await parseNulList(chunks("a\0", "b\0", "c\0"), { maxFiles: 10, maxBytes: 3 });
 		expect(bytes).toEqual({ paths: ["a"], truncated: true });
 	});
@@ -400,6 +404,27 @@ describe("FileListCache", () => {
 		files.peek("/r");
 		await Bun.sleep(0);
 		expect(loads).toBe(3);
+	});
+
+	test("a root whose load failed keeps its retry interval when its list is evicted", async () => {
+		let clock = 0;
+		let loads = 0;
+		const files = new FileListCache(
+			async () => {
+				loads += 1;
+				throw new Error("EMFILE");
+			},
+			() => clock,
+		);
+		for (let index = 0; index < 9; index += 1) await files.load(`/root-${index}`);
+		expect(loads).toBe(9);
+		expect(files.peek("/root-0")).toMatchObject({ state: "failed", list: { paths: [] } });
+		await Bun.sleep(0);
+		expect(loads).toBe(9);
+		clock = 5_000;
+		files.peek("/root-0");
+		await Bun.sleep(0);
+		expect(loads).toBe(10);
 	});
 
 	test("cached lists are bounded by count and by the paths they hold together", async () => {
@@ -839,16 +864,26 @@ describe("search.query", () => {
 		]);
 		expect(second.groups[0]?.state).toBe("ready");
 
+		let clock = 0;
+		let attempts = 0;
 		const broken = createSearchService(
 			readers({
 				workspaces: () => [],
+				wallClock: () => clock,
 				ensureDefault: async () => {
+					attempts += 1;
 					throw new Error("folder gone");
 				},
 			}),
 		);
 		const failed = await broken.query({ query: "refresh", kinds: ["file", "spec"], context: home });
 		expect(failed.groups.map((group) => group.state)).toEqual(["failed", "failed"]);
+		clock = 4_000;
+		await broken.query({ query: "refresh", kinds: ["file"], context: home });
+		expect(attempts).toBe(1);
+		clock = 5_000;
+		await broken.query({ query: "refresh", kinds: ["file"], context: home });
+		expect(attempts).toBe(2);
 	});
 
 	test("the file-list cache keeps a bounded number of roots, and no root answers empty file and spec groups", async () => {
@@ -980,6 +1015,30 @@ describe("search.preview", () => {
 		expect(await focused(0, "Done: the refresh")).toEqual([1]);
 		expect(await focused(5, "please refresh")).toEqual([0]);
 		expect(await focused(1, "a message that is gone")).toEqual([]);
+	});
+
+	test("a preview of a chat the index is refreshing waits for the refreshed messages", async () => {
+		let reads = 0;
+		const stale: HistorySession = {
+			...(sessions[0] as HistorySession),
+			entries: [{ role: "user", text: "old text", timestamp: 1, messageIndex: 0, entryId: "o" }],
+		};
+		const service = createSearchService(
+			readers({
+				sessions: async () => {
+					reads += 1;
+					return reads === 1
+						? { sessions: [stale], state: "refreshing" }
+						: { sessions, state: "ready" };
+				},
+			}),
+		);
+		const preview = await service.preview({ kind: "chat", sessionId: "s1" });
+		if (preview.kind !== "transcript") throw new Error("expected a transcript");
+		expect(preview.messages.map((message) => message.text)).toContain(
+			"please refresh the token flow",
+		);
+		expect(reads).toBe(2);
 	});
 
 	test("a preview waits for the history index to reach a chat it has not indexed yet", async () => {

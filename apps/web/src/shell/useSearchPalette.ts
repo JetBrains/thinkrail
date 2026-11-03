@@ -31,6 +31,7 @@ import {
 	selectActiveWorkspace,
 	selectContextProject,
 	selectHistoryTarget,
+	selectHostReachable,
 	selectHostSearchAvailable,
 	selectRecordFirstPrompts,
 	selectSupportsOnboarding,
@@ -103,7 +104,6 @@ export interface SearchPaletteOptions {
 export function useSearchPalette(options: SearchPaletteOptions): SearchPaletteProps {
 	const t = useT();
 	const status = useAppStore((s) => s.status);
-	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const projects = useAppStore((s) => s.projects);
 	const workspaces = useAppStore((s) => s.workspaces);
@@ -136,7 +136,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const editors = useEditors();
 	const [nativeShortcuts] = useState(() => readSettingsShortcutLabel() !== null);
 
-	const online = status === "connected" && welcomeGeneration > 0 && protocolVersion !== null;
+	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
 	const host = useMemo<PaletteHost | undefined>(() => {
 		if (!hostSearch) return undefined;

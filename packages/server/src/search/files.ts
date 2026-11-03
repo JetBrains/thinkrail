@@ -40,26 +40,36 @@ export class FileListUnavailable extends Error {
 
 const decoder = new TextDecoder();
 
+function isHiddenFromSearch(path: string): boolean {
+	return path.split("/").some((segment) => HIDDEN_DIRECTORIES.has(segment));
+}
+
 export function parseNulList(
 	chunks: AsyncIterable<Uint8Array> | Iterable<Uint8Array>,
 	limits: { maxFiles: number; maxBytes: number } = FILE_LIST_LIMITS,
 ): Promise<FileList> {
 	return (async () => {
 		const paths: string[] = [];
+		const seen = new Set<string>();
 		let pending: Uint8Array[] = [];
 		let pendingBytes = 0;
 		let seenBytes = 0;
 		let truncated = false;
-		const flush = () => {
+		const flush = (): boolean => {
 			const joined = new Uint8Array(pendingBytes);
 			let offset = 0;
 			for (const part of pending) {
 				joined.set(part, offset);
 				offset += part.byteLength;
 			}
-			paths.push(decoder.decode(joined));
 			pending = [];
 			pendingBytes = 0;
+			const path = decoder.decode(joined);
+			if (seen.has(path) || isHiddenFromSearch(path)) return true;
+			if (paths.length >= limits.maxFiles) return false;
+			seen.add(path);
+			paths.push(path);
+			return true;
 		};
 		outer: for await (const chunk of chunks) {
 			seenBytes += chunk.byteLength;
@@ -70,15 +80,14 @@ export function parseNulList(
 			let start = 0;
 			for (let index = 0; index < chunk.byteLength; index += 1) {
 				if (chunk[index] !== 0) continue;
-				if (paths.length >= limits.maxFiles) {
-					truncated = true;
-					break outer;
-				}
 				const part = chunk.subarray(start, index);
 				pending.push(part);
 				pendingBytes += part.byteLength;
-				flush();
 				start = index + 1;
+				if (!flush()) {
+					truncated = true;
+					break outer;
+				}
 			}
 			if (start < chunk.byteLength) {
 				const rest = chunk.subarray(start);
@@ -86,10 +95,7 @@ export function parseNulList(
 				pendingBytes += rest.byteLength;
 			}
 		}
-		if (!truncated && pendingBytes > 0) {
-			if (paths.length >= limits.maxFiles) truncated = true;
-			else flush();
-		}
+		if (!truncated && pendingBytes > 0 && !flush()) truncated = true;
 		return { paths, truncated };
 	})();
 }
@@ -123,20 +129,8 @@ async function gitFileList(root: string): Promise<FileList> {
 	throw new FileListUnavailable(exit.timedOut ? "git ls-files timed out" : "git ls-files failed");
 }
 
-function isHiddenFromSearch(path: string): boolean {
-	return path.split("/").some((segment) => HIDDEN_DIRECTORIES.has(segment));
-}
-
-export async function listRootFiles(root: string): Promise<FileList> {
-	const list = await gitFileList(root);
-	const seen = new Set<string>();
-	const paths: string[] = [];
-	for (const path of list.paths) {
-		if (seen.has(path) || isHiddenFromSearch(path)) continue;
-		seen.add(path);
-		paths.push(path);
-	}
-	return { paths, truncated: list.truncated };
+export function listRootFiles(root: string): Promise<FileList> {
+	return gitFileList(root);
 }
 
 export type FileListState = "ready" | "refreshing" | "failed";
@@ -149,14 +143,13 @@ export interface FileListView {
 interface CachedList {
 	readonly at: number;
 	readonly list: IndexedFileList;
-	readonly failedAt: number | null;
 }
 
 export class FileListCache {
 	private readonly lists = new Map<string, CachedList>();
 	private readonly loading = new Map<string, Promise<void>>();
 	private readonly overtaken = new Set<string>();
-	private readonly failing = new Set<string>();
+	private readonly failedAt = new Map<string, number>();
 
 	constructor(
 		private readonly loader: (root: string) => Promise<FileList> = listRootFiles,
@@ -164,19 +157,18 @@ export class FileListCache {
 	) {}
 
 	refresh(root: string): Promise<void> {
-		const cached = this.lists.get(root);
-		if (!cached || this.due(cached)) return this.load(root);
+		if (this.due(root)) return this.load(root);
 		return this.loading.get(root) ?? Promise.resolve();
 	}
 
 	peek(root: string): FileListView | null {
 		void this.refresh(root);
 		const cached = this.lists.get(root);
-		if (!cached) return null;
+		const failed = this.failedAt.has(root);
+		if (!cached) return failed ? { list: EMPTY_LIST, state: "failed" } : null;
 		this.lists.delete(root);
 		this.lists.set(root, cached);
-		const state =
-			cached.failedAt !== null ? "failed" : this.loading.has(root) ? "refreshing" : "ready";
+		const state = failed ? "failed" : this.loading.has(root) ? "refreshing" : "ready";
 		return { list: cached.list, state };
 	}
 
@@ -196,44 +188,34 @@ export class FileListCache {
 	invalidate(root: string): void {
 		if (this.loading.has(root)) this.overtaken.add(root);
 		const cached = this.lists.get(root);
-		if (cached && cached.failedAt === null) {
-			this.lists.set(root, { ...cached, at: Number.NEGATIVE_INFINITY });
-		}
+		if (cached) this.lists.set(root, { ...cached, at: Number.NEGATIVE_INFINITY });
 	}
 
-	private due(cached: CachedList): boolean {
+	private due(root: string): boolean {
+		if (this.loading.has(root)) return false;
 		const now = this.now();
-		return cached.failedAt !== null
-			? now - cached.failedAt >= FILE_LIST_LIMITS.retryMs
-			: now - cached.at > FILE_LIST_LIMITS.ttlMs;
+		const failedAt = this.failedAt.get(root);
+		if (failedAt !== undefined) return now - failedAt >= FILE_LIST_LIMITS.retryMs;
+		const cached = this.lists.get(root);
+		return !cached || now - cached.at > FILE_LIST_LIMITS.ttlMs;
 	}
 
 	private install(root: string, list: IndexedFileList): void {
 		const overtaken = this.overtaken.delete(root);
-		this.failing.delete(root);
+		this.failedAt.delete(root);
 		this.lists.delete(root);
-		this.lists.set(root, {
-			at: overtaken ? Number.NEGATIVE_INFINITY : this.now(),
-			list,
-			failedAt: null,
-		});
+		this.lists.set(root, { at: overtaken ? Number.NEGATIVE_INFINITY : this.now(), list });
 		this.evict(root);
 	}
 
 	private fail(root: string, error: unknown): void {
 		this.overtaken.delete(root);
-		if (!this.failing.has(root)) {
-			this.failing.add(root);
-			log.warn("file list load failed", error);
+		if (!this.failedAt.has(root)) log.warn("file list load failed", error);
+		this.failedAt.set(root, this.now());
+		if (this.failedAt.size > FILE_LIST_LIMITS.maxRoots * 4) {
+			const oldest = this.failedAt.keys().next().value;
+			if (oldest !== undefined && oldest !== root) this.failedAt.delete(oldest);
 		}
-		const kept = this.lists.get(root);
-		this.lists.delete(root);
-		this.lists.set(root, {
-			at: kept?.at ?? Number.NEGATIVE_INFINITY,
-			list: kept?.list ?? EMPTY_LIST,
-			failedAt: this.now(),
-		});
-		this.evict(root);
 	}
 
 	private evict(keep: string): void {

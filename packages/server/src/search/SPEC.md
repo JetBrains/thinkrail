@@ -40,7 +40,8 @@ on Project Home the context project's folder through its Default record (`kind: 
 through `fs.readFile` / the preview tab). An open project whose Default record does not exist yet gets it
 from the injected `ensureDefault` (the host composes `listWorkspaces`, the same lazy creation
 `workspace.list` does), once per project however many queries ask meanwhile; if that fails, `file` and
-`spec` answer `failed`. No root — no context project, a closed or unknown project — answers empty `file` and
+`spec` answer `failed` and the provisioning is not tried again (nor logged) for `provisionRetryMs` (5 s). No
+root — no context project, a closed or unknown project — answers empty `file` and
 `spec` groups. The resolved root is watched through the injected `watchRoot` (the host's prewarm-pool
 watch, not awaited) so its changes reach `invalidateRoot` from its first search on. Other
 open projects' folders and sibling worktrees are never searched (the field walked back global
@@ -71,12 +72,13 @@ plan files whose session has no transcript on disk (orphans).
   once.
 - **Files:** `git ls-files -co --exclude-standard -z` streamed through `gitAsyncStream` and a capped
   NUL parser (`FILE_LIST_LIMITS`: 128k names / 16 MiB of names; a list is capped only when an entry beyond
-  a limit was seen, so a root of exactly 128k files is complete); `node_modules` and VCS directories are
-  always hidden, and the untracked side excludes them before the cap counts them. A path git lists once
-  per conflict stage is listed once. Every search root is a git working tree (`openProject` refuses a
+  a limit was seen, so a root of exactly 128k files is complete); the parser drops a repeated path (git
+  lists a conflicted path once per stage) and paths under `node_modules` and VCS directories before the
+  cap counts them. Every search root is a git working tree (`openProject` refuses a
   non-repository), so a git failure — a timeout, descriptor or memory pressure, not a repository — rejects
   the load (`FileListUnavailable`); it is logged once per root until a load succeeds and retried no sooner
-  than `retryMs` (5 s) later, so a broken repository never spawns git per keystroke. Lists are cached per
+  than `retryMs` (5 s) later — the failure is kept apart from the cached lists, so evicting a root's list
+  never cuts its retry interval short — so a broken repository never spawns git per keystroke. Lists are cached per
   root with a twin folded by the matcher's own fold (`foldMatchText`), and each term is folded the same
   way, so the prefilter never drops a path the matcher would accept. At most `maxRoots` roots and
   `maxCachedPaths` paths are held together (least recently asked first out, so switching workspaces keeps
@@ -121,9 +123,9 @@ plan files whose session has no transcript on disk (orphans).
 
 `search.preview` has one target, `chat`: a window of `previewMessages` entries around the focused
 message from the history index (never a pi session), each entry cut at `previewMessageChars`. A preview
-is asked once per settled selection, so it waits for a cold or refreshing index to reach the session
-(bounded rounds of the index's own wait) before answering; a session still unknown then, or one that is
-not an open project's workspace chat, answers `unavailable`. The focus is the hit's message while
+is asked once per settled selection, so it waits until the index is ready — a cold build or a warm
+refresh may be reloading that very chat — in bounded rounds of the index's own wait, before answering; a
+session still unknown then, or one that is not an open project's workspace chat, answers `unavailable`. The focus is the hit's message while
 it still starts with the target's `anchorText` (cut at 120 characters), else the nearest message that
 does — compaction or a branch may have shifted the index since the search — else none. Files and specs are not previewed
 by the host — the client renders them through the shared resource renderers over `fs.readFile` (code,

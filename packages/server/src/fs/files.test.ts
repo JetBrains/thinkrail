@@ -122,6 +122,12 @@ test("readFile with maxBytes reads at most the cap and refuses a larger file, co
 	expect(() => readFile("w1", "exact.txt", { maxBytes: 1.5 })).toThrow("non-negative integer");
 	writeFileSync(join(dataDir, "outside.txt"), "secret");
 	expect(() => readFile("w1", "../outside.txt", { maxBytes: 100 })).toThrow();
+	const big = 200 * 1024;
+	writeFileSync(join(root, "big.txt"), "y".repeat(big));
+	expect(readFile("w1", "big.txt", { maxBytes: big }).meta.byteLength).toBe(big);
+	expect(() => readFile("w1", "big.txt", { maxBytes: big - 1 })).toThrow(
+		expect.objectContaining({ code: "FILE_TOO_LARGE" }),
+	);
 	writeFileSync(
 		join(root, "picture.png"),
 		Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),

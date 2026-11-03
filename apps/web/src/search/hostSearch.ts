@@ -8,7 +8,7 @@ import type {
 	WsParams,
 } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
-import { selectHostReachable, useAppStore } from "../store";
+import { selectHostReachable, selectHostSearchReady, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { type Arrivals, NO_ARRIVALS, noteArrivals } from "./arrivals";
 
@@ -309,10 +309,12 @@ export function createHostPreviewLoader(
 	request: (target: SearchPreviewTarget) => Promise<SearchPreviewResult> = (target) =>
 		getTransport().request("search.preview", target),
 	generation: () => number = () => useAppStore.getState().welcomeGeneration,
+	ready: () => boolean = () => selectHostSearchReady(useAppStore.getState()),
 ): HostPreviewLoader {
 	const cache = new Map<string, Promise<SearchPreviewResult>>();
 	return {
 		load(target) {
+			if (!ready()) return Promise.resolve({ kind: "unavailable" });
 			const key = `${generation()}:${JSON.stringify(target)}`;
 			const cached = cache.get(key);
 			if (cached) return cached;

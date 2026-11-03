@@ -135,6 +135,16 @@ export function selectHostReachable(
 	);
 }
 
+export function selectHostSearchReady(
+	state: ProtocolState & { status: string; welcomeGeneration: number },
+): boolean {
+	return (
+		selectHostReachable(state) &&
+		state.protocolVersion !== null &&
+		state.protocolVersion >= SEARCH_PROTOCOL_VERSION
+	);
+}
+
 export function selectCanRenameChat(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= SESSION_RENAME_PROTOCOL_VERSION;
 }

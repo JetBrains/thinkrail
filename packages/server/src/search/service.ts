@@ -51,6 +51,7 @@ export interface SearchReaders {
 	readonly files?: FileListCache;
 	readonly stat: FileStat;
 	readonly now?: () => number;
+	readonly wallClock?: () => number;
 }
 
 export interface SearchService {
@@ -68,6 +69,7 @@ export const SEARCH_BUDGET = {
 	previewMessages: 7,
 	previewMessageChars: 600,
 	previewIndexRounds: 40,
+	provisionRetryMs: 5_000,
 } as const;
 
 function clampLimit(limit: number | undefined): number {
@@ -105,6 +107,7 @@ function settledWithin(waits: readonly (Promise<unknown> | null)[], ms: number):
 export function createSearchService(readers: SearchReaders): SearchService {
 	const files = readers.files ?? new FileListCache();
 	const now = readers.now ?? (() => performance.now());
+	const wallClock = readers.wallClock ?? Date.now;
 	const ensuring = new Map<string, Promise<unknown>>();
 
 	const openWorkspaces = (projects: readonly Project[]) => {
@@ -123,10 +126,31 @@ export function createSearchService(readers: SearchReaders): SearchService {
 		return (cwd: string) => byPath.get(cwd) ?? null;
 	};
 
+	const ensureFailedAt = new Map<string, number>();
+
 	const ensureDefault = (projectId: string): Promise<unknown> => {
+		const failedAt = ensureFailedAt.get(projectId);
+		if (failedAt !== undefined && wallClock() - failedAt < SEARCH_BUDGET.provisionRetryMs) {
+			return Promise.reject(new Error("the project's folder could not be provisioned"));
+		}
 		let pending = ensuring.get(projectId);
 		if (!pending) {
-			pending = readers.ensureDefault(projectId).finally(() => ensuring.delete(projectId));
+			pending = readers
+				.ensureDefault(projectId)
+				.then(
+					(result) => {
+						ensureFailedAt.delete(projectId);
+						return result;
+					},
+					(error: unknown) => {
+						if (!ensureFailedAt.has(projectId)) {
+							log.warn("search could not provision the project's folder", error);
+						}
+						ensureFailedAt.set(projectId, wallClock());
+						throw error;
+					},
+				)
+				.finally(() => ensuring.delete(projectId));
 			ensuring.set(projectId, pending);
 		}
 		return pending;
@@ -141,8 +165,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 		}
 		try {
 			await ensureDefault(projectId);
-		} catch (error) {
-			log.warn("search could not provision the project's folder", error);
+		} catch {
 			return { root: null, failed: true };
 		}
 		const again = readers.projects();
@@ -236,8 +259,8 @@ export function createSearchService(readers: SearchReaders): SearchService {
 		async preview(target) {
 			for (let round = 0; ; round += 1) {
 				const { sessions, state } = await readers.sessions();
-				const session = sessions.find((candidate) => candidate.sessionId === target.sessionId);
-				if (session || state === "ready" || round >= SEARCH_BUDGET.previewIndexRounds) {
+				if (state === "ready" || round >= SEARCH_BUDGET.previewIndexRounds) {
+					const session = sessions.find((candidate) => candidate.sessionId === target.sessionId);
 					const workspaces = openWorkspaces(readers.projects());
 					if (!session || !chatLabeler(workspaces)(session.cwd)) return { kind: "unavailable" };
 					return transcriptPreview(session, target.messageIndex, target.anchorText?.slice(0, 120));

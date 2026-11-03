@@ -53,7 +53,7 @@ export function parseMatchTerms(query: string): MatchTerm[] {
 	const terms: MatchTerm[] = [];
 	const pattern = /"([^"]*)"?|(\S+)/g;
 	for (const match of query.matchAll(pattern)) {
-		const text = (match[1] ?? match[2] ?? "").trim().slice(0, MAX_MATCH_TERM_LENGTH);
+		const text = clusterCut((match[1] ?? match[2] ?? "").trim(), MAX_MATCH_TERM_LENGTH);
 		if (text) terms.push({ text, literal: match[1] !== undefined });
 	}
 	return terms;
@@ -135,11 +135,48 @@ function foldCluster(cluster: string): string {
 interface FoldedText {
 	readonly text: string;
 	readonly at: (index: number) => number;
-	readonly boundary: (index: number) => boolean;
+}
+
+function isHighSurrogate(unit: number): boolean {
+	return unit >= 0xd800 && unit <= 0xdbff;
+}
+
+function isEdge(text: string, index: number): boolean {
+	if (index <= 0 || index >= text.length) return true;
+	const unit = text.charCodeAt(index);
+	return !(unit >= 0xdc00 && unit <= 0xdfff && isHighSurrogate(text.charCodeAt(index - 1)));
+}
+
+function isClusterStart(text: string, index: number): boolean {
+	return index >= text.length || (isEdge(text, index) && !isContinuationAt(text, index));
+}
+
+function clusterEnd(text: string, index: number): number {
+	let at = index;
+	while (at < text.length && !isClusterStart(text, at)) at += 1;
+	return at;
+}
+
+function nextCluster(text: string, index: number): number {
+	return clusterEnd(text, index + (pointAt(text, index) > 0xffff ? 2 : 1));
+}
+
+function clusterCut(text: string, limit: number): string {
+	return text.length <= limit ? text : text.slice(0, clusterEnd(text, limit));
+}
+
+function clustersOf(text: string): string[] {
+	const clusters: string[] = [];
+	for (let index = 0; index < text.length; ) {
+		const end = nextCluster(text, index);
+		clusters.push(text.slice(index, end));
+		index = end;
+	}
+	return clusters;
 }
 
 function identityFold(text: string): FoldedText {
-	return { text, at: (index) => index, boundary: () => true };
+	return { text, at: (index) => index };
 }
 
 function foldText(raw: string): FoldedText {
@@ -174,12 +211,10 @@ function foldText(raw: string): FoldedText {
 		}
 		length += folded.length;
 	}
-	if (parts.length === 0)
-		return { ...identityFold(cased), boundary: (at) => !isContinuationAt(cased, at) };
+	if (parts.length === 0) return identityFold(cased);
 	parts.push(cased.slice(copyFrom));
 	const text = parts.join("");
-	const boundary = (at: number) => !isContinuationAt(text, at);
-	if (foldedStarts.length === 0) return { text, at: (at) => at, boundary };
+	if (foldedStarts.length === 0) return identityFold(text);
 	const at = (folded: number): number => {
 		let low = 0;
 		let high = foldedStarts.length - 1;
@@ -195,7 +230,7 @@ function foldText(raw: string): FoldedText {
 		const rawStart = rawStarts[segment] ?? 0;
 		return flat[segment] ? rawStart : rawStart + (folded - (foldedStarts[segment] ?? 0));
 	};
-	return { text, at, boundary };
+	return { text, at };
 }
 
 export function foldMatchText(text: string): string {
@@ -217,93 +252,128 @@ function isWordStart(text: string, index: number): boolean {
 	return DIGIT.test(current) && !DIGIT.test(previous);
 }
 
-function hasContinuation(term: string): boolean {
-	for (let index = 0; index < term.length; index++) {
-		if (isContinuationAt(term, index)) return true;
-	}
-	return false;
-}
-
-function occurrence(lower: string, term: string, folded: FoldedText, from = 0): number {
+function occurrence(lower: string, term: string, from = 0): number {
 	for (let index = lower.indexOf(term, from); index >= 0; index = lower.indexOf(term, index + 1)) {
-		if (folded.boundary(index) && folded.boundary(index + term.length)) return index;
+		if (isClusterStart(lower, index) && isEdge(lower, index + term.length)) return index;
 	}
 	return -1;
 }
 
-function matchAcronym(term: string, text: string, folded: FoldedText): MatchRange[] | null {
-	if (term.length < 2) return null;
+function clusterHead(lower: string, index: number, end: number, wanted: string): boolean {
+	return index + wanted.length <= end && lower.startsWith(wanted, index);
+}
+
+function matchAcronym(
+	clusters: readonly string[],
+	text: string,
+	folded: FoldedText,
+): MatchRange[] | null {
+	if (clusters.length < 2) return null;
 	const lower = folded.text;
 	const ranges: MatchRange[] = [];
 	let next = 0;
-	for (let index = 0; index < lower.length && next < term.length; index++) {
-		if (lower[index] !== term[next] || !folded.boundary(index + 1)) continue;
-		if (!isWordStart(text, folded.at(index))) continue;
-		ranges.push([folded.at(index), folded.at(index + 1)]);
-		next += 1;
+	for (let index = 0; index < lower.length && next < clusters.length; ) {
+		const end = nextCluster(lower, index);
+		if (
+			clusterHead(lower, index, end, clusters[next] ?? "") &&
+			isWordStart(text, folded.at(index))
+		) {
+			ranges.push([folded.at(index), folded.at(end)]);
+			next += 1;
+		}
+		index = end;
 	}
-	return next === term.length ? ranges : null;
+	return next === clusters.length ? ranges : null;
 }
 
 const MAX_FUZZY_STARTS = 32;
 
-function subsequenceFrom(term: string, folded: FoldedText, start: number): number[] | null {
-	const lower = folded.text;
-	const positions: number[] = [];
+function subsequenceFrom(
+	clusters: readonly string[],
+	lower: string,
+	start: number,
+): { starts: number[]; ends: number[] } | null {
+	const starts: number[] = [];
+	const ends: number[] = [];
 	let next = 0;
-	for (let index = start; index < lower.length && next < term.length; index++) {
-		if (lower[index] !== term[next] || !folded.boundary(index + 1)) continue;
-		positions.push(index);
-		next += 1;
+	for (let index = start; index < lower.length && next < clusters.length; ) {
+		const end = nextCluster(lower, index);
+		if (clusterHead(lower, index, end, clusters[next] ?? "")) {
+			starts.push(index);
+			ends.push(end);
+			next += 1;
+		}
+		index = end;
 	}
-	return next === term.length ? positions : null;
+	return next === clusters.length ? { starts, ends } : null;
 }
 
-function matchSubsequence(term: string, text: string, folded: FoldedText): TermHit | null {
-	if (term.length < MIN_FUZZY_TERM_LENGTH) return null;
+function clusterOccurrence(lower: string, cluster: string, from: number): number {
+	for (
+		let index = lower.indexOf(cluster, from);
+		index >= 0;
+		index = lower.indexOf(cluster, index + 1)
+	) {
+		if (isClusterStart(lower, index)) return index;
+	}
+	return -1;
+}
+
+function matchSubsequence(
+	clusters: readonly string[],
+	termLength: number,
+	text: string,
+	folded: FoldedText,
+): TermHit | null {
+	if (clusters.length < MIN_FUZZY_TERM_LENGTH) return null;
 	const lower = folded.text;
-	let positions: number[] | null = null;
+	const first = clusters[0] ?? "";
+	let best: { starts: number[]; ends: number[] } | null = null;
 	let span = Number.POSITIVE_INFINITY;
-	let start = lower.indexOf(term[0] ?? "");
+	let start = clusterOccurrence(lower, first, 0);
 	for (let attempt = 0; start >= 0 && attempt < MAX_FUZZY_STARTS; attempt++) {
-		const candidate = subsequenceFrom(term, folded, start);
+		const candidate = subsequenceFrom(clusters, lower, start);
 		if (!candidate) break;
-		const candidateSpan = (candidate[candidate.length - 1] ?? start) - start + 1;
+		const candidateSpan = (candidate.ends[candidate.ends.length - 1] ?? start) - start;
 		if (candidateSpan < span) {
-			positions = candidate;
+			best = candidate;
 			span = candidateSpan;
 		}
-		start = lower.indexOf(term[0] ?? "", start + 1);
+		start = clusterOccurrence(lower, first, start + 1);
 	}
-	if (!positions || span > term.length * 3) return null;
-	const wordStarts = positions.filter((position) => isWordStart(text, folded.at(position))).length;
+	if (!best || span > termLength * 3) return null;
+	const wordStarts = best.starts.filter((at) => isWordStart(text, folded.at(at))).length;
 	const runs: [number, number][] = [];
-	for (const position of positions) {
+	best.starts.forEach((from, index) => {
+		const to = best?.ends[index] ?? from;
 		const previous = runs[runs.length - 1];
-		if (previous && previous[1] === position) previous[1] = position + 1;
-		else runs.push([position, position + 1]);
-	}
+		if (previous && previous[1] === from) previous[1] = to;
+		else runs.push([from, to]);
+	});
 	return {
 		tier: MATCH_TIER.fuzzy,
-		score: 0.7 * (term.length / span) + 0.3 * (wordStarts / term.length),
+		score: 0.7 * (termLength / span) + 0.3 * (wordStarts / clusters.length),
 		ranges: runs.map(([from, to]) => [folded.at(from), folded.at(to)]),
 	};
 }
 
 function matchText(matchTerm: MatchTerm, rawText: string): TermHit | null {
 	const term = foldText(matchTerm.text).text;
-	const text = rawText.slice(0, MAX_MATCH_TEXT_LENGTH);
+	const text = clusterCut(rawText, MAX_MATCH_TEXT_LENGTH);
 	const folded = foldText(text);
 	const lower = folded.text;
 	if (!term || !lower) return null;
-	const span = (from: number, to: number): MatchRange => [folded.at(from), folded.at(to)];
+	const span = (from: number, to: number): MatchRange => [
+		folded.at(from),
+		folded.at(clusterEnd(lower, to)),
+	];
 	const lengthRatio = Math.min(1, term.length / lower.length);
 	if (lower === term) return { tier: MATCH_TIER.exact, score: 1, ranges: [[0, text.length]] };
-	if (lower.startsWith(term) && folded.boundary(term.length)) {
+	if (lower.startsWith(term) && isEdge(lower, term.length)) {
 		return { tier: MATCH_TIER.prefix, score: lengthRatio, ranges: [span(0, term.length)] };
 	}
-	const firstSubstring = occurrence(lower, term, folded);
-	for (let index = firstSubstring; index >= 0; index = occurrence(lower, term, folded, index + 1)) {
+	const firstSubstring = occurrence(lower, term);
+	for (let index = firstSubstring; index >= 0; index = occurrence(lower, term, index + 1)) {
 		if (!isWordStart(text, folded.at(index))) continue;
 		return {
 			tier: MATCH_TIER.word,
@@ -311,9 +381,9 @@ function matchText(matchTerm: MatchTerm, rawText: string): TermHit | null {
 			ranges: [span(index, index + term.length)],
 		};
 	}
-	const clustered = hasContinuation(term);
-	if (!matchTerm.literal && !clustered) {
-		const acronym = matchAcronym(term, text, folded);
+	const clusters = clustersOf(term);
+	if (!matchTerm.literal) {
+		const acronym = matchAcronym(clusters, text, folded);
 		if (acronym) {
 			return { tier: MATCH_TIER.word, score: 0.5 * lengthRatio, ranges: acronym };
 		}
@@ -325,7 +395,7 @@ function matchText(matchTerm: MatchTerm, rawText: string): TermHit | null {
 			ranges: [span(firstSubstring, firstSubstring + term.length)],
 		};
 	}
-	return matchTerm.literal || clustered ? null : matchSubsequence(term, text, folded);
+	return matchTerm.literal ? null : matchSubsequence(clusters, term.length, text, folded);
 }
 
 function shifted(hit: TermHit, offset: number): TermHit {
@@ -416,8 +486,8 @@ export function prepareContent(raw: string): PreparedContent {
 
 function termRange(term: string, content: PreparedContent): MatchRange | null {
 	const { fold } = content;
-	const index = term ? occurrence(fold.text, term, fold) : -1;
-	return index < 0 ? null : [fold.at(index), fold.at(index + term.length)];
+	const index = term ? occurrence(fold.text, term) : -1;
+	return index < 0 ? null : [fold.at(index), fold.at(clusterEnd(fold.text, index + term.length))];
 }
 
 export function matchContent(

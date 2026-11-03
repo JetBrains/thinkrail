@@ -254,6 +254,38 @@ describe("host search controller", () => {
 		expect(h.requests.at(-1)?.params.kinds).toEqual(["spec"]);
 	});
 
+	test("a quiet re-ask answered indexing moves to the cold schedule", async () => {
+		const h = harness();
+		h.controller.update(input("move"));
+		h.fire();
+		h.requests[0]?.resolve({ groups: [group("refreshing")] });
+		await h.settle();
+		expect(h.last().pending).toBe(false);
+		expect(h.timers.at(-1)?.ms).toBe(HOST_SEARCH.quietRetryMs[0]);
+		h.fire();
+		h.requests[1]?.resolve({ groups: [group("indexing", [])] });
+		await h.settle();
+		expect(h.last().pending).toBe(true);
+		expect(h.timers.at(-1)?.ms).toBe(HOST_SEARCH.indexingPollMs);
+	});
+
+	test("a request replayed across a reconnect never paints, and the welcome's re-ask waits for it", async () => {
+		const h = harness();
+		h.controller.update(input("auth"));
+		h.fire();
+		h.controller.connect(false, 1);
+		h.controller.connect(true, 2);
+		h.fire();
+		expect(h.requests).toHaveLength(1);
+		h.requests[0]?.resolve({ groups: [group("ready", ["old"])] });
+		await h.settle();
+		expect(h.last().groups).toBeNull();
+		expect(h.requests).toHaveLength(2);
+		h.requests[1]?.resolve({ groups: [group("ready", ["new"])] });
+		await h.settle();
+		expect(h.shown()).toEqual([["file", ["new"]]]);
+	});
+
 	test("offline, the rows stay, nothing is asked and nothing late paints; a new welcome re-asks once and merges", async () => {
 		const h = harness();
 		h.controller.update(input("auth"));
@@ -337,6 +369,7 @@ describe("host previews", () => {
 		let generation = 1;
 		let answer: "fail" | "missing" | "found" = "fail";
 		const asked: string[] = [];
+		let ready = true;
 		const loader = createHostPreviewLoader(
 			async (target) => {
 				asked.push(`${generation}:${target.sessionId}`);
@@ -346,6 +379,7 @@ describe("host previews", () => {
 					: { kind: "transcript", title: "t", messages: [] };
 			},
 			() => generation,
+			() => ready,
 		);
 		const target = { kind: "chat" as const, sessionId: "s1", messageIndex: 2, anchorText: "the" };
 		expect(await loader.load(target)).toEqual({ kind: "unavailable" });
@@ -357,5 +391,9 @@ describe("host previews", () => {
 		generation = 2;
 		await loader.load(target);
 		expect(asked).toEqual(["1:s1", "1:s1", "1:s1", "2:s1"]);
+		ready = false;
+		generation = 3;
+		expect(await loader.load(target)).toEqual({ kind: "unavailable" });
+		expect(asked).toHaveLength(4);
 	});
 });

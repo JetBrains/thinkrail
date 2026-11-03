@@ -97,10 +97,10 @@ describe("matchFields tiers", () => {
 		expect(tierOf("и", title("й"))).toBe(MATCH_TIER.exact);
 		expect(tierOf("か", title("が"))).toBeNull();
 		expect(tierOf("が", title("か"))).toBeNull();
-		expect(tierOf("1", title("1\u0301"))).toBeNull();
+		expect(tierOf("1\u0301", title("1"))).toBeNull();
 	});
 
-	test("a precomposed and a decomposed spelling match alike, and no match splits a letter from its mark", () => {
+	test("a precomposed and a decomposed spelling match alike, a typed letter may stop before its marks, and no highlight splits them", () => {
 		const both = (text: string) => [text.normalize("NFC"), text.normalize("NFD")];
 		for (const text of both("がイド")) {
 			expect(tierOf("がいど", title(text))).toBeNull();
@@ -113,11 +113,32 @@ describe("matchFields tiers", () => {
 			expect(tierOf("한국", title(text))).toBe(MATCH_TIER.prefix);
 			expect(tierOf("하", title(text))).toBeNull();
 		}
-		expect(tierOf("\u0915", title("\u0958"))).toBeNull();
+		const rangeOf = (query: string, text: string) =>
+			matchFields(parseMatchTerms(query), title(text))?.fields[0]?.ranges;
+		expect(tierOf("\u0915", title("\u0958"))).toBe(MATCH_TIER.prefix);
+		expect(rangeOf("\u0915", "\u0958")).toEqual([[0, 1]]);
 		expect(tierOf("\u0958", title("\u0915\u093c"))).toBe(MATCH_TIER.exact);
-		expect(tierOf('"a"', title("a\u1ab0"))).toBeNull();
+		expect(rangeOf('"a"', "a\u1ab0")).toEqual([[0, 2]]);
+		expect(rangeOf("1", "1\u0301")).toEqual([[0, 2]]);
+		expect(tierOf("क", title("किताब"))).toBe(MATCH_TIER.prefix);
+		expect(rangeOf("क", "किताब")).toEqual([[0, 2]]);
+		expect(tierOf("कि", title("किताब"))).toBe(MATCH_TIER.prefix);
+		expect(tierOf("कि", title("कताब"))).toBeNull();
+		expect(rangeOf("ก", "กิน")).toEqual([[0, 2]]);
+		expect(rangeOf('"a"', `${"x".repeat(999)}a\u1ab0`)).toEqual([[999, 1001]]);
 		expect(tierOf("x\u1ab0\u1ab5", title("x\u1ab5\u1ab0"))).toBe(MATCH_TIER.exact);
 		for (const text of both("fóBar")) expect(tierOf("fb", title(text))).toBe(MATCH_TIER.word);
+		expect(tierOf("🔒a", title("🔑🤒a"))).toBeNull();
+		expect(rangeOf("🔒ab", "🔒xaxb")).toEqual([
+			[0, 2],
+			[3, 4],
+			[5, 6],
+		]);
+		expect(rangeOf("a\u1ab0bc", "a\u1ab0xbyc")).toEqual([
+			[0, 2],
+			[3, 4],
+			[5, 6],
+		]);
 		for (const text of both("CaféBar")) {
 			const bar = matchFields(parseMatchTerms("bar"), title(text));
 			expect(bar?.tier).toBe(MATCH_TIER.word);

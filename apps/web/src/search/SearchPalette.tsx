@@ -16,7 +16,7 @@ import {
 	type SearchPreviewTarget,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
-import { type Translator, useT } from "@thinkrail/locales/react";
+import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
@@ -73,7 +73,7 @@ function reasonText(t: Translator, reason: HostSearchReason): string {
 		case "time":
 			return t("search.palette.hostOutOfTime");
 		case "fileList":
-			return t("search.palette.hostFileList", { files: reason.files.toLocaleString() });
+			return t("search.palette.hostFileList", { files: reason.files.toLocaleString(localeOf(t)) });
 	}
 }
 
@@ -137,6 +137,7 @@ function PaletteContent({
 	const [previewOpen, setPreviewOpen] = useState(readPreviewOpen);
 	const wide = useMediaQuery(WIDE_VIEWPORT);
 	const reachable = useAppStore(selectHostReachable);
+	const generation = useAppStore((s) => s.welcomeGeneration);
 	const [learning, setLearning] = useState(readLearning);
 	const [nowMs] = useState(Date.now);
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -423,7 +424,13 @@ function PaletteContent({
 						onChange={(event) => resetQuery(event.target.value)}
 						className="h-full min-w-0 flex-1 bg-transparent tr-text-reading text-text-default outline-none placeholder:text-text-subtle"
 					/>
-					<SearchStatus t={t} pending={hostState.pending} reasons={reasons} />
+					<SearchStatus
+						t={t}
+						pendingKey={
+							hostState.pending ? `${generation}:${hostInput.text}:${parsed.scope}` : null
+						}
+						reasons={reasons}
+					/>
 					<Keycaps keys={["esc"]} />
 				</div>
 				{reasons.length > 0 ? (
@@ -542,17 +549,14 @@ function keepInputFocus(event: ReactMouseEvent): void {
 
 function SearchStatus({
 	t,
-	pending,
+	pendingKey,
 	reasons,
 }: {
 	t: Translator;
-	pending: boolean;
+	pendingKey: string | null;
 	reasons: readonly HostSearchReason[];
 }) {
-	const [open, setOpen] = useState(false);
-	const pointer = useRef("mouse");
-	const openAtPress = useRef(false);
-	const spinning = useSettled(pending ? "pending" : "settled", SPINNER_DELAY_MS) && pending;
+	const spinning = useSettled(pendingKey ?? "", SPINNER_DELAY_MS) && pendingKey !== null;
 	if (spinning) {
 		return (
 			<span data-testid="search-host-pending" className="flex shrink-0 text-text-muted">
@@ -560,7 +564,13 @@ function SearchStatus({
 			</span>
 		);
 	}
-	if (reasons.length === 0) return null;
+	return reasons.length > 0 ? <StatusMark t={t} reasons={reasons} /> : null;
+}
+
+function StatusMark({ t, reasons }: { t: Translator; reasons: readonly HostSearchReason[] }) {
+	const [open, setOpen] = useState(false);
+	const pointer = useRef("mouse");
+	const openAtPress = useRef(false);
 	return (
 		<Tooltip open={open} onOpenChange={setOpen}>
 			<TooltipTrigger asChild>
@@ -590,6 +600,9 @@ function SearchStatus({
 				align="end"
 				data-testid="search-host-status-reasons"
 				className="flex max-w-320 flex-col gap-4"
+				onEscapeKeyDown={(event) => {
+					if (isImeComposing(event)) event.preventDefault();
+				}}
 			>
 				{reasons.map((reason) => (
 					<p key={reason.kind}>{reasonText(t, reason)}</p>
@@ -949,7 +962,9 @@ function HostPreview({
 	const targetKey = `${sessionId}:${messageIndex ?? ""}:${anchorText ?? ""}`;
 	const settled = useSettled(targetKey, PREVIEW_SETTLE_MS);
 	const key = `${generation}:${targetKey}`;
-	const [loaded, setLoaded] = useState<{ key: string; result: SearchPreviewResult } | null>(null);
+	const [loaded, setLoaded] = useState<{ target: string; result: SearchPreviewResult } | null>(
+		null,
+	);
 	useEffect(() => {
 		if (!settled || !reachable) return;
 		let current = true;
@@ -961,13 +976,13 @@ function HostPreview({
 				...(anchorText === undefined ? {} : { anchorText }),
 			})
 			.then((result) => {
-				if (current) setLoaded({ key, result });
+				if (current) setLoaded({ target: targetKey, result });
 			});
 		return () => {
 			current = false;
 		};
-	}, [settled, reachable, previews, key, sessionId, messageIndex, anchorText]);
-	const result = loaded?.key === key ? loaded.result : null;
+	}, [settled, reachable, previews, key, targetKey, sessionId, messageIndex, anchorText]);
+	const result = loaded?.target === targetKey ? loaded.result : null;
 	if (result?.kind === "unavailable" || (result === null && !reachable)) {
 		return (
 			<div data-testid="search-host-preview" data-state={result ? "unavailable" : "offline"}>

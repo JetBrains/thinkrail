@@ -66,8 +66,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   script:** case folded, and marks U+0300–U+036F ignored after any letter (é = e, ё = е, ά = α; й = и is
   accepted), every other mark significant (が ≠ か); a text and a query fold alike in either Unicode spelling
   — a letter and its following marks fold together as `NFC(strip(NFD(cluster)))`, so a decomposed が, a
-  reordered mark run or a Hangul jamo sequence meets its precomposed twin — and no match starts or ends
-  inside such a cluster; a word start looks past marks to its base letter. The fold is linear in the text
+  reordered mark run or a Hangul jamo sequence meets its precomposed twin. A match never starts inside such
+  a cluster or splits a surrogate pair; it may end on a letter whose marks the text continues with (typing
+  `क` finds `किताब`, `ก` finds `กิน` — the vowel sign is typed after the consonant), every mark the query
+  holds must match, and a highlight always covers whole clusters; acronym and subsequence matches compare
+  whole clusters, a typed one matching a text cluster it begins. A word start looks past marks to its
+  base letter. The fold is linear in the text
   (memoized per code point and cluster). `foldMatchText` is that fold as plain text, for a prefilter that
   must never drop what the matcher would accept; **`prepareContent`** + **`matchContent`** (every folded term
   a substring of the whole text → raw ranges and the first) + **`contentRanges`** (the terms present, for a
