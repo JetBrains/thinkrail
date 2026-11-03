@@ -1,6 +1,7 @@
 import type {
 	AskUserQuestionAnswer,
 	AskUserQuestionArgs,
+	AskUserQuestionDiscussReason,
 	AskUserQuestionItem,
 	AskUserQuestionOption,
 } from "@thinkrail/pi-ask-user-question/core";
@@ -38,6 +39,9 @@ export interface QState {
 	cursor: number;
 	notes: Record<string, string>;
 	noteFor: string | null;
+	discuss: boolean;
+	discussReason: AskUserQuestionDiscussReason | null;
+	discussText: string;
 }
 
 export const emptyQState = (): QState => ({
@@ -48,7 +52,16 @@ export const emptyQState = (): QState => ({
 	cursor: 0,
 	notes: {},
 	noteFor: null,
+	discuss: false,
+	discussReason: null,
+	discussText: "",
 });
+
+export const DISCUSS_REASONS: readonly AskUserQuestionDiscussReason[] = [
+	"unclear",
+	"irrelevant",
+	"context",
+];
 
 export function previewEcho(
 	option: AskUserQuestionOption,
@@ -67,6 +80,16 @@ export function deriveAnswer(
 	state: QState,
 ): AskUserQuestionAnswer | null {
 	const base = { questionIndex: index, question: question.question };
+	if (state.discuss) {
+		const text = state.discussText.trim();
+		return {
+			...base,
+			kind: "discuss",
+			answer: null,
+			...(state.discussReason ? { reason: state.discussReason } : {}),
+			...(text ? { notes: text } : {}),
+		};
+	}
 	if (question.multiSelect) {
 		const valid = state.multi.filter((label) => question.options.some((o) => o.label === label));
 		const custom = state.customActive ? state.customText.trim() : "";
@@ -108,6 +131,13 @@ export function deriveAnswers(
 	return questions
 		.map((question, index) => deriveAnswer(question, index, states[index] ?? emptyQState()))
 		.filter((answer): answer is AskUserQuestionAnswer => answer != null);
+}
+
+export function hasPreview(target: {
+	preview?: string | undefined;
+	previewFile?: string | undefined;
+}): boolean {
+	return !!target.previewFile || !!target.preview?.trim();
 }
 
 export function answerSupportsNote(answer: AskUserQuestionAnswer): boolean {
@@ -156,8 +186,15 @@ export function choiceKeyAction(key: string, index: number, count: number): Choi
 
 export function customTextPatch(text: string): Partial<QState> {
 	return text.trim()
-		? { customText: text, customActive: true, option: null }
+		? { customText: text, customActive: true, option: null, discuss: false }
 		: { customText: text, customActive: false };
+}
+
+export function discussReasonPatch(
+	state: QState,
+	reason: AskUserQuestionDiscussReason,
+): Partial<QState> {
+	return { discuss: true, discussReason: state.discussReason === reason ? null : reason };
 }
 
 export function selectOptionPatch(state: QState, label: string, cursor: number): Partial<QState> {
@@ -177,6 +214,7 @@ export function selectOptionPatch(state: QState, label: string, cursor: number):
 		customActive: false,
 		...(notes ? { notes } : {}),
 		...(state.noteFor != null && state.noteFor !== label ? { noteFor: null } : {}),
+		...(state.discuss ? { discuss: false } : {}),
 	};
 }
 
@@ -186,6 +224,7 @@ export function toggleMultiPatch(state: QState, label: string, cursor: number): 
 		cursor,
 		multi: removing ? state.multi.filter((item) => item !== label) : [...state.multi, label],
 		...(removing && state.noteFor === label ? { noteFor: null } : {}),
+		...(state.discuss ? { discuss: false } : {}),
 	};
 }
 

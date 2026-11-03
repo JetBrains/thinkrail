@@ -4,7 +4,7 @@ import type { AskUserQuestionItem } from "@thinkrail/pi-ask-user-question/core";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { QuestionBody } from "./QuestionBody";
-import type { QState } from "./state";
+import { emptyQState, type QState } from "./state";
 
 const BOTTOM = "Bottom panel";
 const single: AskUserQuestionItem = {
@@ -38,18 +38,10 @@ const interaction: ToolInteraction = {
 	revealElement: noop,
 	cancelAutomaticReveal: noop,
 	focusComposer: noop,
+	hostProtocol: 103,
 };
 
-const state = (over: Partial<QState>): QState => ({
-	option: null,
-	customText: "",
-	customActive: false,
-	multi: [],
-	cursor: 0,
-	notes: {},
-	noteFor: null,
-	...over,
-});
+const state = (over: Partial<QState>): QState => ({ ...emptyQState(), ...over });
 
 const body = (question: AskUserQuestionItem, qState: QState) =>
 	renderToStaticMarkup(
@@ -57,6 +49,7 @@ const body = (question: AskUserQuestionItem, qState: QState) =>
 			question={question}
 			state={qState}
 			pageKeys
+			discussAvailable
 			onSelect={noop}
 			onToggleMulti={noop}
 			onCursor={noop}
@@ -67,6 +60,10 @@ const body = (question: AskUserQuestionItem, qState: QState) =>
 			onOpenNote={noop}
 			onCloseNote={noop}
 			onNote={noop}
+			onToggleDiscuss={noop}
+			onDiscussReason={noop}
+			onDiscussText={noop}
+			onConfirmDiscuss={noop}
 		/>,
 	);
 
@@ -106,6 +103,31 @@ describe("every control is an explicit tab stop (WebKit skips buttons without on
 	it("covers the multi-select Other include toggle", () => {
 		const html = body(multi, state({ multi: ["Lint"], customText: "own", customActive: true }));
 		expect(html).toContain('data-testid="ask-custom-toggle"');
+		expect(controlsWithoutTabStop(html)).toEqual([]);
+	});
+
+	it("covers Discuss, its reasons and text", () => {
+		const html = body(single, state({ discuss: true, discussReason: "unclear" }));
+		expect(html).toContain('data-testid="ask-discuss-reason"');
+		expect(html).toContain('data-testid="ask-discuss-text"');
+		expect(controlsWithoutTabStop(html)).toEqual([]);
+	});
+
+	it("covers the question preview fold and the option preview pane", () => {
+		const long = Array.from({ length: 40 }, (_, i) => `Line ${i}`).join("\n\n");
+		const html = body(
+			{
+				...single,
+				preview: "```mermaid\nflowchart LR\n  A --> B\n```",
+				options: [
+					{ ...(single.options[0] ?? { label: "A", description: "" }), preview: long },
+					{ label: BOTTOM, description: "Shares space." },
+				],
+			},
+			state({ option: BOTTOM, cursor: 1 }),
+		);
+		expect(html).toContain('data-testid="ask-question-preview-toggle"');
+		expect(html).toContain('data-testid="ask-preview-none"');
 		expect(controlsWithoutTabStop(html)).toEqual([]);
 	});
 });

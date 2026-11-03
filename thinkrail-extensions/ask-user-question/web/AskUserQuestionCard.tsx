@@ -22,6 +22,7 @@ import {
 	focusQuestionAttention,
 	focusTargetKind,
 	hasCoarsePointer,
+	isInsidePreview,
 	isTextEntryTarget,
 	shouldClaimQuestionFocus,
 } from "./focus";
@@ -35,6 +36,7 @@ import {
 	confirmStateFor,
 	customTextPatch,
 	deriveAnswers,
+	discussReasonPatch,
 	emptyQState,
 	nudgeShowsOnPage,
 	parseQuestions,
@@ -50,6 +52,7 @@ const panelDomId = (toolCallId: string) => `ask-panel-${toolCallId}`;
 const tabDomId = (toolCallId: string, page: number) => `ask-tab-${toolCallId}-${page}`;
 
 const claimQuestionAttention = createQuestionAttentionClaim();
+const DISCUSS_HOST_PROTOCOL = 103;
 const ATTENTION_SETTLE_FRAMES = 30;
 
 interface CachedCardState {
@@ -101,6 +104,7 @@ export function AskUserQuestionCard({
 	status,
 	streaming,
 	interaction,
+	onOpenFile,
 }: ToolRenderProps) {
 	const t = useT();
 	const localFocusScope = useRef<object>({}).current;
@@ -114,6 +118,7 @@ export function AskUserQuestionCard({
 	const superseded = interaction?.state.superseded ?? false;
 	const ended = interaction?.state.ended ?? false;
 	const canRespond = !!interaction && interaction.state.accepting;
+	const discussAvailable = (interaction?.hostProtocol ?? 0) >= DISCUSS_HOST_PROTOCOL;
 	const awaiting = !resolvedResult && !superseded && !ended && status !== "error";
 	const [states, setStates] = useState<Record<number, QState>>(
 		() => cardStateCache.get(toolCallId)?.states ?? {},
@@ -243,6 +248,9 @@ export function AskUserQuestionCard({
 
 	const answers = deriveAnswers(questions, states);
 	const answeredIndices = new Set(answers.map((a) => a.questionIndex));
+	const discussIndices = new Set(
+		answers.filter((a) => a.kind === "discuss").map((a) => a.questionIndex),
+	);
 
 	const reply = (r: AskUserQuestionResult) => {
 		if (!interaction || !canRespond) return;
@@ -301,6 +309,8 @@ export function AskUserQuestionCard({
 
 	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
 		if (isImeComposing(event.nativeEvent)) return;
+		if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
+		if (isInsidePreview(event.target)) return;
 		if (
 			event.key === "Escape" &&
 			event.shiftKey &&
@@ -338,7 +348,7 @@ export function AskUserQuestionCard({
 				aria-keyshortcuts="Shift+Escape"
 				onKeyDown={onCardKeyDown}
 				className={cn(
-					"overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg",
+					"@container overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg",
 					canRespond ? "border-primary ring-2 ring-primary-soft" : "border-border-default",
 				)}
 			>
@@ -356,6 +366,7 @@ export function AskUserQuestionCard({
 								label={question.header || t("tools.ask.questionTab", { number: i + 1 })}
 								active={idx === i}
 								answered={answeredIndices.has(i)}
+								discuss={discussIndices.has(i)}
 								onClick={() => setTab(i)}
 							/>
 						))}
@@ -387,6 +398,8 @@ export function AskUserQuestionCard({
 											question={question}
 											state={pageState}
 											pageKeys={multipleQuestions}
+											discussAvailable={discussAvailable}
+											onOpenFile={onOpenFile}
 											onSelect={(label, cursor) =>
 												patch(page, selectOptionPatch(pageState, label, cursor))
 											}
@@ -418,14 +431,26 @@ export function AskUserQuestionCard({
 												patch(
 													page,
 													question.multiSelect
-														? { cursor, noteFor: label }
-														: { cursor, option: label, customActive: false, noteFor: label },
+														? { cursor, noteFor: label, discuss: false }
+														: {
+																cursor,
+																option: label,
+																customActive: false,
+																noteFor: label,
+																discuss: false,
+															},
 												)
 											}
 											onCloseNote={() => patch(page, { noteFor: null })}
 											onNote={(label, text) =>
 												patch(page, { notes: { ...pageState.notes, [label]: text } })
 											}
+											onToggleDiscuss={() => patch(page, { discuss: !pageState.discuss })}
+											onDiscussReason={(reason) =>
+												patch(page, discussReasonPatch(pageState, reason))
+											}
+											onDiscussText={(text) => patch(page, { discussText: text })}
+											onConfirmDiscuss={() => confirmQuestion(page, pageState)}
 										/>
 									</GhostPage>
 								</div>

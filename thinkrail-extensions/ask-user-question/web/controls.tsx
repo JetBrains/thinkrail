@@ -1,4 +1,5 @@
 import {
+	RiChat3Line as ChatLine,
 	RiCheckLine as Check,
 	RiRecordCircleLine as CircleDot,
 	RiEditLine as EditLine,
@@ -86,6 +87,7 @@ export function TabChip({
 	label,
 	active,
 	answered,
+	discuss,
 	onClick,
 }: {
 	id: string;
@@ -93,8 +95,10 @@ export function TabChip({
 	label: string;
 	active: boolean;
 	answered: boolean;
+	discuss: boolean;
 	onClick: () => void;
 }) {
+	const t = useT();
 	return (
 		<button
 			type="button"
@@ -106,6 +110,7 @@ export function TabChip({
 			data-testid="ask-tab"
 			data-active={active}
 			data-answered={answered}
+			data-discuss={discuss}
 			onClick={onClick}
 			className={cn(
 				"flex shrink-0 items-center gap-4 whitespace-nowrap rounded-full px-8 py-2 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary",
@@ -115,12 +120,21 @@ export function TabChip({
 			<span
 				className={cn(
 					"flex size-14 items-center justify-center rounded-full border",
-					answered ? "border-primary text-primary" : "border-border-default",
+					discuss
+						? "border-feedback-info text-feedback-info"
+						: answered
+							? "border-primary text-primary"
+							: "border-border-default",
 				)}
 			>
-				{answered ? <Check className="size-10" /> : null}
+				{discuss ? (
+					<ChatLine aria-hidden="true" className="size-10" />
+				) : answered ? (
+					<Check aria-hidden="true" className="size-10" />
+				) : null}
 			</span>
 			{label}
+			{discuss ? <span className="sr-only">{t("tools.ask.discussMarked")}</span> : null}
 		</button>
 	);
 }

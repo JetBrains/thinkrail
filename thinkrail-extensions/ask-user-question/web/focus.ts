@@ -62,6 +62,10 @@ export function isTextEntryTarget(target: EventTarget | null): boolean {
 	);
 }
 
+export function isInsidePreview(target: EventTarget | null): boolean {
+	return target instanceof Element && !!target.closest("[data-ask-preview]");
+}
+
 export function activeQuestionPage(card: HTMLElement): HTMLElement {
 	return card.querySelector<HTMLElement>('[data-ask-active="true"]') ?? card;
 }
@@ -77,7 +81,7 @@ export function focusCurrentQuestionPage(card: HTMLElement): void {
 
 export function focusQuestionAttention(card: HTMLElement): void {
 	const selected = activeQuestionPage(card).querySelector<HTMLElement>(
-		'[data-ask-option][data-selected="true"], [data-ask-custom-row][data-selected="true"] textarea',
+		'[data-ask-discuss-text], [data-ask-option][data-selected="true"], [data-ask-custom-row][data-selected="true"] textarea',
 	);
 	if (selected) selected.focus({ preventScroll: true });
 	else focusCurrentQuestionPage(card);

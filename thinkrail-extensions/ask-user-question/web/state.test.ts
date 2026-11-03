@@ -16,9 +16,12 @@ import {
 	deriveAnswer,
 	deriveAnswers,
 	deriveRecapState,
+	discussReasonPatch,
+	emptyQState,
 	noteKeyAction,
 	nudgeShowsOnPage,
 	parseQuestions,
+	type QState,
 	questionPageForKey,
 	readRecommendation,
 	selectOptionPatch,
@@ -36,16 +39,7 @@ const q = (over: Partial<AskUserQuestionItem> = {}): AskUserQuestionItem => ({
 	...over,
 });
 
-const state = (over: Partial<Parameters<typeof deriveAnswer>[2]> = {}) => ({
-	option: null,
-	customText: "",
-	customActive: false,
-	multi: [] as string[],
-	cursor: 0,
-	notes: {} as Record<string, string>,
-	noteFor: null as string | null,
-	...over,
-});
+const state = (over: Partial<QState> = {}): QState => ({ ...emptyQState(), ...over });
 
 describe("parseQuestions", () => {
 	it("reads a well-formed questions array", () => {
@@ -213,11 +207,12 @@ describe("nudgeShowsOnPage", () => {
 });
 
 describe("customTextPatch", () => {
-	it("typed text claims the answer, taking it off the authored pick (exclusive single-select)", () => {
+	it("typed text claims the answer, taking it off the authored pick and any discuss mark", () => {
 		expect(customTextPatch("mine")).toEqual({
 			customText: "mine",
 			customActive: true,
 			option: null,
+			discuss: false,
 		});
 	});
 
@@ -255,6 +250,21 @@ describe("deriveAnswer", () => {
 			preview: "```ts\n1\n```",
 			notes: "keep it",
 		});
+	});
+
+	it("a file preview is echoed as its path (and the diff's before), never its content", () => {
+		const question = q({
+			options: [
+				{ label: "A", description: "a", previewFile: "mock/a.html" },
+				{ label: "B", description: "b", previewFile: "src/b.ts", previewBefore: "src/b.old.ts" },
+			],
+		});
+		expect(deriveAnswer(question, 0, state({ option: "A" }))).toMatchObject({
+			previewFile: "mock/a.html",
+		});
+		const diff = deriveAnswer(question, 0, state({ option: "B" }));
+		expect(diff).toMatchObject({ previewFile: "src/b.ts", previewBefore: "src/b.old.ts" });
+		expect(diff).not.toHaveProperty("preview");
 	});
 
 	it("free text wins when the custom row is active and non-empty", () => {
@@ -554,5 +564,55 @@ describe("answerSupportsNote", () => {
 	});
 	it("a custom answer has no option to hang a note on", () => {
 		expect(answerSupportsNote({ ...base, kind: "custom", answer: "mine" })).toBe(false);
+	});
+});
+
+describe("discuss first", () => {
+	it("is a distinct answer carrying the optional reason and text, never a selection", () => {
+		const s = state({
+			option: "A",
+			discuss: true,
+			discussReason: "unclear",
+			discussText: " why? ",
+		});
+		expect(deriveAnswer(q(), 0, s)).toEqual({
+			questionIndex: 0,
+			question: "Which?",
+			kind: "discuss",
+			answer: null,
+			reason: "unclear",
+			notes: "why?",
+		});
+		expect(deriveAnswer(q(), 0, state({ discuss: true }))).toEqual({
+			questionIndex: 0,
+			question: "Which?",
+			kind: "discuss",
+			answer: null,
+		});
+	});
+
+	it("a reason marks the question and toggles off when chosen again", () => {
+		expect(discussReasonPatch(state(), "context")).toEqual({
+			discuss: true,
+			discussReason: "context",
+		});
+		expect(discussReasonPatch(state({ discussReason: "context" }), "context")).toEqual({
+			discuss: true,
+			discussReason: null,
+		});
+	});
+
+	it("choosing an option cancels the mark but keeps what was typed for it", () => {
+		const s = state({ discuss: true, discussText: "kept" });
+		expect(selectOptionPatch(s, "A", 0)).toMatchObject({ discuss: false });
+		expect(toggleMultiPatch(s, "A", 0)).toMatchObject({ discuss: false });
+		expect(selectOptionPatch(s, "A", 0)).not.toHaveProperty("discussText");
+		expect(customTextPatch("")).not.toHaveProperty("discuss");
+	});
+
+	it("never offers a note on a discuss answer", () => {
+		expect(
+			answerSupportsNote({ questionIndex: 0, question: "Which?", kind: "discuss", answer: null }),
+		).toBe(false);
 	});
 });

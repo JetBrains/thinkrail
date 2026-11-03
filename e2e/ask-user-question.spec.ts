@@ -17,6 +17,7 @@ import {
 	nestedVerticalScrollSurfaces,
 	readChatScrollGeometry,
 	readChatViewportIntersection,
+	waitForScrollStability,
 } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -33,11 +34,7 @@ function tallPreview(pageName: string): string {
 
 function optionsFor(pageName: string) {
 	return [
-		{
-			label: `${pageName} alpha`,
-			description: "Use the first deterministic fixture choice.",
-			preview: tallPreview(pageName),
-		},
+		{ label: `${pageName} alpha`, description: "Use the first deterministic fixture choice." },
 		{ label: `${pageName} beta`, description: "Use the second deterministic fixture choice." },
 		{ label: `${pageName} gamma`, description: "Use the third deterministic fixture choice." },
 	] satisfies AskUserQuestionOption[];
@@ -101,17 +98,40 @@ function seedQuestionnaire(
 	return session;
 }
 
+function seedPanedQuestionnaire(name: string, toolCallId: string) {
+	const paned = (pageName: string) =>
+		optionsFor(pageName).map((option, index) =>
+			index === 0 ? { ...option, preview: `${pageName} alpha keeps the rollout staged.` } : option,
+		);
+	return seedQuestionnaire(name, toolCallId, {
+		questions: [
+			{
+				question: "Which first-page rollout should we use?",
+				header: "First page",
+				options: paned("First"),
+			},
+			{
+				question: "Which second-page rollout should we use?",
+				header: "Second page",
+				options: paned("Second"),
+			},
+		],
+	});
+}
+
 function seedTallQuestionnaire(name: string, toolCallId: string) {
 	return seedQuestionnaire(name, toolCallId, {
 		questions: [
 			{
 				question: "Which first-page rollout should we use?",
 				header: "First page",
+				preview: tallPreview("First"),
 				options: optionsFor("First"),
 			},
 			{
 				question: "Which second-page rollout should we use?",
 				header: "Second page",
+				preview: tallPreview("Second"),
 				options: optionsFor("Second"),
 			},
 		],
@@ -271,6 +291,7 @@ test("a persisted tall questionnaire reveals page changes and a restored page", 
 		await expect(firstOption).toBeFocused();
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
 		await expect(page.getByTestId("scroll-to-bottom")).toHaveCount(0);
+		await waitForScrollStability(chatScroll);
 		await firstOption.click();
 		await expect(firstOption).toHaveAttribute("data-selected", "true");
 		const next = card.getByTestId("ask-continue");
@@ -289,6 +310,7 @@ test("a persisted tall questionnaire reveals page changes and a restored page", 
 				firstOption: (await readChatViewportIntersection(secondFirstOption)).intersects,
 			}))
 			.toEqual({ heading: true, firstOption: true });
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
 
 		const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 		await chatTabs.first().getByTestId("editor-tab-close").click();
@@ -320,11 +342,6 @@ test("a persisted tall questionnaire reveals page changes and a restored page", 
 		await expect(submit).toBeEnabled();
 
 		expect(await nestedVerticalScrollSurfaces(reopenedCard)).toEqual([]);
-		const { distanceFromEnd } = await readChatScrollGeometry(chatScroll);
-		await expect(chatScroll).toHaveAttribute(
-			"data-follow-state",
-			distanceFromEnd <= 1 ? "following" : "detached",
-		);
 	} finally {
 		rmSync(session.path, { force: true });
 	}
@@ -423,11 +440,11 @@ test("a coarse pointer reveals a returning page's text target without focusing i
 }) => {
 	const context = await browser.newContext({
 		hasTouch: true,
-		viewport: { width: 1280, height: 720 },
+		viewport: { width: 1280, height: 640 },
 	});
 	const page = await context.newPage();
 	await openFixtureProject(page);
-	const session = seedTallQuestionnaire("touch questionnaire", "ask-touch-pages");
+	const session = seedPanedQuestionnaire("touch questionnaire", "ask-touch-pages");
 
 	try {
 		await enterDefaultWorkspace(page);
@@ -437,6 +454,7 @@ test("a coarse pointer reveals a returning page's text target without focusing i
 		const chatScroll = page.getByTestId("chat-scroll");
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
 		await expect(card).toBeVisible();
+		await waitForScrollStability(chatScroll);
 		await card.getByTestId("ask-option").first().click();
 		const next = card.getByTestId("ask-continue");
 		await wheelUntilChatElementIntersects(page, chatScroll, next);

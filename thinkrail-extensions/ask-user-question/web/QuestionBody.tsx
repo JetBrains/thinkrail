@@ -1,17 +1,22 @@
 import { RiQuestionnaireLine as MessageCircleQuestion } from "@remixicon/react";
-import { useT } from "@thinkrail/locales/react";
-import type { AskUserQuestionItem } from "@thinkrail/pi-ask-user-question/core";
-import { useOptionalResourceHost } from "@thinkrail/resource-renderers";
+import type {
+	AskUserQuestionDiscussReason,
+	AskUserQuestionItem,
+} from "@thinkrail/pi-ask-user-question/core";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, useEffect, useRef } from "react";
 import { type LiftKey, NoteSlot, OptionRow, OtherRow } from "./controls";
+import { DiscussPanel, DiscussToggle } from "./discuss";
 import { useTestId } from "./ghost";
-import { choiceKeyAction, type QState, splitRecommended } from "./state";
+import { OptionPreviewPane, PreviewGlyph, previewSource, QuestionPreview } from "./previews";
+import { choiceKeyAction, hasPreview, type QState, splitRecommended } from "./state";
 
 export interface QuestionBodyProps {
 	question: AskUserQuestionItem;
 	state: QState;
 	pageKeys: boolean;
+	discussAvailable: boolean;
+	onOpenFile?: ((path: string) => void) | undefined;
 	onSelect: (label: string, cursor: number) => void;
 	onToggleMulti: (label: string, cursor: number) => void;
 	onCursor: (cursor: number) => void;
@@ -22,12 +27,20 @@ export interface QuestionBodyProps {
 	onOpenNote: (label: string, cursor: number) => void;
 	onCloseNote: () => void;
 	onNote: (label: string, text: string) => void;
+	onToggleDiscuss: () => void;
+	onDiscussReason: (reason: AskUserQuestionDiscussReason) => void;
+	onDiscussText: (text: string) => void;
+	onConfirmDiscuss: () => void;
 }
+
+type PendingFocus = "note" | "discuss" | null;
 
 export function QuestionBody({
 	question,
 	state,
 	pageKeys,
+	discussAvailable,
+	onOpenFile,
 	onSelect,
 	onToggleMulti,
 	onCursor,
@@ -38,31 +51,50 @@ export function QuestionBody({
 	onOpenNote,
 	onCloseNote,
 	onNote,
+	onToggleDiscuss,
+	onDiscussReason,
+	onDiscussText,
+	onConfirmDiscuss,
 }: QuestionBodyProps) {
-	const t = useT();
 	const tid = useTestId();
 	const choiceRefs = useRef<Array<HTMLElement | null>>([]);
 	const noteRef = useRef<HTMLTextAreaElement | null>(null);
-	const focusNoteAfterRender = useRef(false);
+	const discussRef = useRef<HTMLTextAreaElement | null>(null);
+	const discussToggleRef = useRef<HTMLButtonElement | null>(null);
+	const pendingFocus = useRef<PendingFocus>(null);
 	const otherIndex = question.options.length;
 	const choiceCount = otherIndex + 1;
 	const cursor = Math.min(Math.max(state.cursor, 0), Math.max(otherIndex - 1, 0));
+	const discussing = discussAvailable && state.discuss;
 	const customOwnsPageFocus =
-		state.customActive && (!question.multiSelect || state.multi.length === 0);
-	const anyPreview = !question.multiSelect && question.options.some((option) => option.preview);
-	const previewSource =
-		question.options.find((option) => option.label === state.option && option.preview) ??
-		question.options.find((option) => option.preview);
+		!discussing && state.customActive && (!question.multiSelect || state.multi.length === 0);
+	const questionPreview = previewSource(question);
+	const paneShown = !question.multiSelect && question.options.some(hasPreview);
+	const paneOption = !paneShown
+		? null
+		: state.customActive
+			? null
+			: (question.options.find((option) => option.label === state.option) ??
+				question.options[cursor] ??
+				null);
 
 	useEffect(() => {
-		if (!focusNoteAfterRender.current || !noteRef.current) return;
-		focusNoteAfterRender.current = false;
-		noteRef.current.focus({ preventScroll: true });
+		const target = pendingFocus.current;
+		if (!target) return;
+		const element = target === "note" ? noteRef.current : discussRef.current;
+		if (!element) return;
+		pendingFocus.current = null;
+		element.focus({ preventScroll: true });
 	});
 
 	const openNote = (label: string, index: number) => {
-		focusNoteAfterRender.current = true;
+		pendingFocus.current = "note";
 		onOpenNote(label, index);
+	};
+
+	const toggleDiscuss = () => {
+		pendingFocus.current = state.discuss ? null : "discuss";
+		onToggleDiscuss();
 	};
 
 	const focusChoice = (index: number) => {
@@ -104,12 +136,44 @@ export function QuestionBody({
 				<p
 					data-testid={tid("ask-question-text")}
 					data-ask-page-start="true"
-					className="tr-title-dialog text-text-default"
+					className="min-w-0 flex-1 tr-title-dialog text-text-default"
 				>
 					{question.question}
 				</p>
+				{discussAvailable ? (
+					<DiscussToggle
+						active={state.discuss}
+						buttonRef={(node) => {
+							discussToggleRef.current = node;
+						}}
+						onToggle={toggleDiscuss}
+					/>
+				) : null}
 			</div>
-			<div className={cn("grid gap-8", anyPreview && "md:grid-cols-2")}>
+			{discussing ? (
+				<DiscussPanel
+					reason={state.discussReason}
+					text={state.discussText}
+					fieldRef={(node) => {
+						discussRef.current = node;
+					}}
+					onReason={onDiscussReason}
+					onText={onDiscussText}
+					onConfirm={onConfirmDiscuss}
+					onLeave={() => discussToggleRef.current?.focus({ preventScroll: true })}
+				/>
+			) : null}
+			{questionPreview ? (
+				<QuestionPreview source={questionPreview} onOpenFile={onOpenFile} />
+			) : null}
+			<div
+				data-discussing={discussing || undefined}
+				className={cn(
+					"grid gap-12",
+					paneShown && "@2xl:grid-cols-[2fr_3fr]",
+					discussing && "opacity-60",
+				)}
+			>
 				<div className="flex min-w-0 flex-col">
 					<div
 						{...(question.multiSelect
@@ -122,6 +186,7 @@ export function QuestionBody({
 								? state.multi.includes(option.label)
 								: state.option === option.label;
 							const ownsCursor = index === cursor;
+							const source = paneShown ? previewSource(option) : null;
 							return (
 								<div key={option.label} className="flex flex-col">
 									<OptionRow
@@ -133,9 +198,10 @@ export function QuestionBody({
 										recommendedReason={option.recommendedReason}
 										selected={selected}
 										cursor={ownsCursor}
-										pageFocus={ownsCursor && !customOwnsPageFocus}
+										pageFocus={ownsCursor && !customOwnsPageFocus && !discussing}
 										multi={!!question.multiSelect}
 										pageKeys={pageKeys}
+										glyph={source ? <PreviewGlyph source={source} /> : null}
 										onFocus={() => onCursor(index)}
 										onKeyDown={(event) => onChoiceKeyDown(event, option.label, index)}
 										onClick={() =>
@@ -168,7 +234,7 @@ export function QuestionBody({
 						multi={!!question.multiSelect}
 						active={state.customActive}
 						text={state.customText}
-						pageFocus={question.options.length === 0 || customOwnsPageFocus}
+						pageFocus={!discussing && (question.options.length === 0 || customOwnsPageFocus)}
 						onToggle={onToggleCustom}
 						onText={onCustomText}
 						onMove={(key: LiftKey) => {
@@ -179,24 +245,14 @@ export function QuestionBody({
 					/>
 				</div>
 
-				{anyPreview && previewSource?.preview ? (
-					<div
-						data-testid={tid("ask-preview")}
-						className="min-w-0 overflow-auto rounded-sm border border-border-default bg-control-bg px-8 py-4 tr-text-metadata"
-					>
-						<div className="mb-4 text-text-muted tr-text-metadata">
-							{t("tools.ask.preview", { label: previewSource.label })}
-						</div>
-						<PreviewMarkdown text={previewSource.preview} />
-					</div>
+				{paneShown ? (
+					<OptionPreviewPane
+						label={paneOption ? splitRecommended(paneOption.label).text : null}
+						source={paneOption ? previewSource(paneOption) : null}
+						onOpenFile={onOpenFile}
+					/>
 				) : null}
 			</div>
 		</div>
 	);
-}
-
-function PreviewMarkdown({ text }: { text: string }) {
-	const Markdown = useOptionalResourceHost()?.markdown;
-	if (Markdown) return <Markdown text={text} />;
-	return <pre className="whitespace-pre-wrap tr-text-metadata text-text-default">{text}</pre>;
 }
