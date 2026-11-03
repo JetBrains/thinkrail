@@ -52,6 +52,18 @@ export function setWatchStartedPublisher(publisher: WatchStartedPublisher | null
 	publishWatchStarted = publisher;
 }
 
+export function notifyWorkspacePathsChanged(workspaceId: string, paths: readonly string[]): void {
+	const skillChange: WorkspaceSkillChange =
+		isSkillPath === null
+			? "unknown"
+			: paths.some((path) => isSkillPath?.(path) === true)
+				? "detected"
+				: "none";
+	deliver("fsChanged", workspaceId, () =>
+		publish?.({ workspaceId, paths: [...paths], truncated: false, skillChange }),
+	);
+}
+
 function isRepoMetaPath(relPath: string): boolean {
 	return relPath.split(/[\\/]/)[0] === ".git";
 }

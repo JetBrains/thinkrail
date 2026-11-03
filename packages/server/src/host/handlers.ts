@@ -221,7 +221,7 @@ import {
 	updateTodo,
 } from "../todos";
 import { forgetWorkspaceTurns, listTurns } from "../turns";
-import { ensureWatch, stopWatch } from "../watch";
+import { ensureWatch, notifyWorkspacePathsChanged, stopWatch } from "../watch";
 import {
 	createWorkspace,
 	ensureWorkspaceScratchDir,
@@ -808,12 +808,17 @@ const handlers: WsHandlers = {
 	"fs.copy": (p) => {
 		void ensureWatch(p.sourceWorkspaceId);
 		void ensureWatch(p.destinationWorkspaceId);
-		return withChangeLock(p.destinationWorkspaceId, () => copyWorkspaceFile(p));
+		return withChangeLock(p.destinationWorkspaceId, async () => {
+			const result = await copyWorkspaceFile(p);
+			notifyWorkspacePathsChanged(p.destinationWorkspaceId, [result.path]);
+			return result;
+		});
 	},
 	"fs.delete": (p) => {
 		void ensureWatch(p.workspaceId);
 		return withChangeLock(p.workspaceId, async () => {
 			await deleteWorkspaceFile(p.workspaceId, p.path);
+			notifyWorkspacePathsChanged(p.workspaceId, [p.path]);
 			return { ok: true } as const;
 		});
 	},
