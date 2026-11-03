@@ -144,6 +144,71 @@ const EXPECTATIONS: Record<string, Expectation> = {
 				ui: { mode: "rpc", replies: [null] },
 				expectText: ["User declined to answer questions"],
 			},
+			{
+				tool: "ask_user_question",
+				name: "terminal-one-option-confirmation",
+				args: {
+					questions: [
+						{
+							question: "You want dates formatted with date-fns?",
+							header: "Confirm",
+							options: [{ label: "Looks right", description: "accurate as written" }],
+						},
+					],
+				},
+				ui: { mode: "tui", keys: [KEY.enter] },
+				expectText: ['"You want dates formatted with date-fns?"="Looks right"'],
+			},
+			{
+				tool: "ask_user_question",
+				name: "terminal-discuss-and-answer",
+				args: { questions: [ASK_LIBRARY, ASK_TARGETS] },
+				ui: { mode: "tui", keys: ["d", "w", "h", "y", KEY.enter, KEY.space, KEY.enter] },
+				expectText: [
+					'"Which library?"=(the user wants to discuss this question first). user notes: why.',
+					'"Which targets?"="web"',
+					"Do not guess answers to the questions the user wants to discuss first",
+				],
+				expectRender: { width: 80, contains: ["? Lib: discuss first", "✓ Targets: web"] },
+			},
+			{
+				tool: "ask_user_question",
+				name: "terminal-every-question-discussed",
+				args: { questions: [ASK_LIBRARY] },
+				ui: { mode: "tui", keys: ["d", KEY.enter] },
+				expectText: ["discuss this question first", "ask it again in a later round"],
+			},
+			{
+				tool: "ask_user_question",
+				name: "dialog-discuss",
+				args: { questions: [ASK_LIBRARY] },
+				ui: { mode: "rpc", replies: [3, "what is luxon?"] },
+				expectText: ["discuss this question first", "user notes: what is luxon?"],
+			},
+			{
+				tool: "ask_user_question",
+				name: "dialog-multi-discuss",
+				args: { questions: [ASK_TARGETS] },
+				ui: { mode: "rpc", replies: ["? which targets exist?"] },
+				expectText: ["discuss this question first", "user notes: which targets exist?"],
+			},
+			{
+				tool: "ask_user_question",
+				name: "file-previews-off-by-default",
+				args: {
+					questions: [
+						{
+							...ASK_LIBRARY,
+							options: [
+								{ label: "date-fns", description: "small", previewFile: "a.html" },
+								{ label: "luxon", description: "rich" },
+							],
+						},
+					],
+				},
+				ui: { mode: "rpc" },
+				expectText: ["file previews are not available"],
+			},
 		],
 	},
 	"@thinkrail/pi-visualize": {

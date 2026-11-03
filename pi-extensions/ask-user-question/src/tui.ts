@@ -38,6 +38,7 @@ import {
 	emptyQuestionState,
 	type QuestionState,
 	readRecommendation,
+	selectSingleOption,
 	splitRecommended,
 } from "./questionnaire.ts";
 
@@ -47,7 +48,11 @@ type Row =
 	| { kind: "submit" }
 	| { kind: "chat" };
 
-type Mode = { kind: "browse" } | { kind: "other" } | { kind: "note"; label: string };
+type Mode =
+	| { kind: "browse" }
+	| { kind: "other" }
+	| { kind: "note"; label: string }
+	| { kind: "discuss" };
 
 const WIDE_PREVIEW_MIN_WIDTH = 100;
 const MAX_PREVIEW_LINES = 24;
@@ -55,6 +60,8 @@ const ROW_INDENT = 5;
 const NEEDS_CHOICE = "Choose an option first";
 const NEEDS_ANSWER = "Answer at least one question first, or press Esc to skip";
 const SUBMIT_LABEL = "Submit answers";
+const NO_PREVIEW = "No preview for this option";
+const DISCUSS_MARK = "Discuss first";
 
 function editorTheme(theme: Theme): EditorTheme {
 	return {
@@ -83,6 +90,20 @@ function wrapIndented(text: string, width: number, indent: number, firstPrefix =
 function padTo(line: string, width: number): string {
 	const fitted = truncateToWidth(line, width);
 	return fitted + " ".repeat(Math.max(0, width - visibleWidth(fitted)));
+}
+
+function hasPreview(option: AskUserQuestionOption): boolean {
+	return !!option.preview || !!option.previewFile;
+}
+
+function filePreviewLine(
+	target: { previewFile?: string | undefined; previewBefore?: string | undefined },
+	theme: Theme,
+): string {
+	const path = target.previewBefore
+		? `${target.previewBefore} → ${target.previewFile}`
+		: (target.previewFile ?? "");
+	return `${theme.fg("muted", "preview:")} ${path}`;
 }
 
 function headerOf(question: { header?: string | undefined } | undefined, index: number): string {
@@ -216,6 +237,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 		if (matchesKey(data, Key.enter)) this.activate(row);
 		else if (matchesKey(data, Key.space)) this.toggle(row);
 		else if (row.kind === "option" && data === "n") this.openNote(row.index);
+		else if (row.kind === "option" && data === "d") this.openDiscuss();
 		else if (row.kind === "other" && isPrintable(data)) this.openOther(data);
 	}
 
@@ -234,9 +256,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 	private select(index: number): void {
 		const option = this.question().options[index];
 		if (!option) return;
-		const state = this.state();
-		state.option = option.label;
-		state.customActive = false;
+		this.states[this.page] = selectSingleOption(this.state(), option.label);
 	}
 
 	private toggle(row: Row): void {
@@ -264,6 +284,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 			this.select(row.index);
 			return;
 		}
+		state.discuss = null;
 		state.multi = state.multi.includes(option.label)
 			? state.multi.filter((label) => label !== option.label)
 			: [...state.multi, option.label];
@@ -310,6 +331,18 @@ export class QuestionnaireComponent implements Component, Focusable {
 		this.editor.setText(`${this.state().customText}${initial}`);
 	}
 
+	private openDiscuss(): void {
+		const state = this.state();
+		if (!state.discuss) {
+			state.discuss = { text: "" };
+			state.option = null;
+			state.multi = [];
+			state.customActive = false;
+		}
+		this.mode = { kind: "discuss" };
+		this.editor.setText(state.discuss.text);
+	}
+
 	private openNote(index: number): void {
 		const question = this.question();
 		const option = question.options[index];
@@ -330,9 +363,15 @@ export class QuestionnaireComponent implements Component, Focusable {
 			state.notes = { ...state.notes, [mode.label]: text.trim() };
 			return;
 		}
+		if (mode.kind === "discuss") {
+			state.discuss = { ...(state.discuss ?? {}), text: text.trim() };
+			if (submitted) this.confirm();
+			return;
+		}
 		if (mode.kind !== "other") return;
 		state.customText = text.trim();
 		state.customActive = state.customText !== "";
+		if (state.customActive) state.discuss = null;
 		if (state.customActive && !this.question().multiSelect) state.option = null;
 		if (submitted && state.customActive) this.confirm();
 	}
@@ -355,8 +394,10 @@ export class QuestionnaireComponent implements Component, Focusable {
 	private renderTabs(width: number): string[] {
 		const theme = this.theme;
 		const tabs = this.args.questions.map((question, index) => {
-			const answered = !!deriveAnswer(question, index, this.states[index] ?? emptyQuestionState());
-			const label = ` ${headerOf(question, index)}${answered ? " ✓" : ""} `;
+			const state = this.states[index] ?? emptyQuestionState();
+			const answered = !!deriveAnswer(question, index, state);
+			const mark = state.discuss ? " ?" : answered ? " ✓" : "";
+			const label = ` ${headerOf(question, index)}${mark} `;
 			if (index === this.page) return theme.bg("selectedBg", theme.fg("text", label));
 			return theme.fg(answered ? "success" : "muted", label);
 		});
@@ -368,6 +409,8 @@ export class QuestionnaireComponent implements Component, Focusable {
 		const preview = this.previewSource(question);
 		const head = (room: number) => [
 			...wrapIndented(this.theme.bold(question.question), room, 1),
+			...this.renderQuestionPreview(question, room),
+			...this.renderDiscussion(room),
 			"",
 			...this.renderRows(question, room),
 		];
@@ -393,20 +436,48 @@ export class QuestionnaireComponent implements Component, Focusable {
 
 	private previewSource(question: AskUserQuestionItem): AskUserQuestionOption | undefined {
 		if (question.multiSelect) return undefined;
+		if (!question.options.some(hasPreview)) return undefined;
 		const state = this.state();
-		return (
-			question.options.find((option) => option.label === state.option && option.preview) ??
-			question.options.find((option) => option.preview)
-		);
+		const row = this.rows()[this.cursor];
+		const focused = row?.kind === "option" ? question.options[row.index] : undefined;
+		return question.options.find((option) => option.label === state.option) ?? focused;
+	}
+
+	private markdownLines(markdown: string, width: number): string[] {
+		const body = new Markdown(markdown, 0, 0, getMarkdownTheme()).render(width);
+		const shown = body.slice(0, MAX_PREVIEW_LINES);
+		if (body.length > shown.length)
+			shown.push(this.theme.fg("dim", `… ${body.length - shown.length} more lines`));
+		return shown;
 	}
 
 	private renderPreview(option: AskUserQuestionOption, width: number): string[] {
 		const title = this.theme.fg("muted", `Preview · ${splitRecommended(option.label).text}`);
-		const body = new Markdown(option.preview ?? "", 0, 0, getMarkdownTheme()).render(width);
-		const shown = body.slice(0, MAX_PREVIEW_LINES);
-		if (body.length > shown.length)
-			shown.push(this.theme.fg("dim", `… ${body.length - shown.length} more lines`));
-		return [title, ...shown];
+		if (option.previewFile) return [title, filePreviewLine(option, this.theme)];
+		if (!option.preview) return [title, this.theme.fg("dim", NO_PREVIEW)];
+		return [title, ...this.markdownLines(option.preview, width)];
+	}
+
+	private renderQuestionPreview(question: AskUserQuestionItem, width: number): string[] {
+		if (question.previewFile)
+			return ["", ...wrapIndented(filePreviewLine(question, this.theme), width, 3)];
+		if (!question.preview) return [];
+		const room = Math.max(1, width - 3);
+		return ["", ...this.markdownLines(question.preview, room).map((line) => `   ${line}`)];
+	}
+
+	private renderDiscussion(width: number): string[] {
+		const discuss = this.state().discuss;
+		if (!discuss) return [];
+		const lines = ["", ...wrapIndented(this.theme.fg("accent", DISCUSS_MARK), width, 1)];
+		if (this.mode.kind === "discuss") {
+			lines.push(
+				...wrapIndented(this.theme.fg("muted", "What should the agent explain?"), width, 1),
+				...this.renderEditor(width),
+			);
+		} else if (discuss.text)
+			lines.push(...wrapIndented(this.theme.fg("muted", discuss.text), width, ROW_INDENT));
+		return lines;
 	}
 
 	private renderEditor(width: number): string[] {
@@ -499,11 +570,13 @@ export class QuestionnaireComponent implements Component, Focusable {
 	private hint(): string {
 		if (this.mode.kind === "note") return "Enter save note · Shift+Enter new line · Esc back";
 		if (this.mode.kind === "other") return "Enter save · Shift+Enter new line · Esc back";
+		if (this.mode.kind === "discuss")
+			return "Enter confirm · Shift+Enter new line · Esc back · choose an option to cancel";
 		const pages = this.multiple ? " · ←→/Tab questions" : "";
 		const choose = this.question().multiSelect
 			? "↑↓ move · Space toggle"
 			: "↑↓ move & select · Space select";
-		return `${choose} · Enter confirm · n note${pages} · Esc skip`;
+		return `${choose} · Enter confirm · n note · d discuss${pages} · Esc skip`;
 	}
 }
 
@@ -580,7 +653,8 @@ export function renderAskResult(
 			lines.push(`${theme.fg("dim", "–")} ${header}: ${theme.fg("dim", "not answered")}`);
 			continue;
 		}
-		lines.push(`${theme.fg("success", "✓")} ${header}: ${answerSummary(answer)}`);
+		const mark = answer.kind === "discuss" ? theme.fg("warning", "?") : theme.fg("success", "✓");
+		lines.push(`${mark} ${header}: ${answerSummary(answer)}`);
 		for (const note of answer.notes?.split("\n") ?? [])
 			lines.push(`    ${theme.fg("muted", note)}`);
 	}

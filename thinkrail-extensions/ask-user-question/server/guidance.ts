@@ -1,5 +1,4 @@
 import type { AskUserQuestionGuidance } from "@thinkrail/pi-ask-user-question";
-import { MAX_OPTIONS, MIN_OPTIONS } from "@thinkrail/pi-ask-user-question/core";
 
 export const THINKRAIL_GUIDANCE: AskUserQuestionGuidance = {
 	description: `Ask the user one or more structured, multiple-choice questions during execution, instead of guessing. Use when:
@@ -15,7 +14,7 @@ Calling this tool PAUSES EXECUTION until the user answers: the questions render 
 - Call ask_user_question as the only tool in the assistant response; other tool calls in that response are discarded and can be re-issued after the answer.
 - The user may answer only some questions; unanswered ones are reported as declined.`,
 	promptGuidelines: [
-		`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — one call is one round holding every question answerable now (dependent questions wait for the next round), with ${MIN_OPTIONS}-${MAX_OPTIONS} options each. The call blocks until its result contains the user's answers.`,
+		`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — one call is one round holding every question answerable now (dependent questions wait for the next round), with 2-4 options each (a single 'Looks right' option only to confirm an inference). The call blocks until its result contains the user's answers.`,
 		"Every option needs a concise label (1-5 words) and a description of what it means / its trade-off.",
 		'Recommend by putting the option first with "(Recommended)" appended and setting its recommendedReason to one short sentence (shown inline under the option) on why you recommend it over the alternatives; the user can always type a custom answer or skip the questionnaire.',
 		"Call ask_user_question as the only tool in the assistant response; continue with other tools after the answer.",

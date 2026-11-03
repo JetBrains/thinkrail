@@ -212,6 +212,120 @@ describe("QuestionnaireComponent — single question", () => {
 	});
 });
 
+describe("QuestionnaireComponent — discuss, previews and one option", () => {
+	test("d on an option marks the question for discussion; Enter in its editor submits a single question", () => {
+		const { press, type, screen, outcomes } = open(library);
+		press(KEY.down, "d");
+		expect(screen()).toContain("Discuss first");
+		expect(screen()).toContain("What should the agent explain?");
+		expect(screen()).toContain("○ luxon");
+		type("why dates at all?");
+		press(KEY.enter);
+		expect(outcomes).toEqual([
+			{
+				kind: "answered",
+				result: {
+					cancelled: false,
+					answers: [
+						{
+							questionIndex: 0,
+							question: "Which library should we use for dates?",
+							kind: "discuss",
+							answer: null,
+							notes: "why dates at all?",
+						},
+					],
+				},
+			},
+		]);
+	});
+
+	test("d types into the Other editor instead of discussing", () => {
+		const { press, type, screen } = open(library);
+		press(KEY.down, KEY.down);
+		type("dayjs");
+		expect(screen()).not.toContain("Discuss first");
+		expect(screen()).toContain("dayjs");
+	});
+
+	test("choosing an option after Esc cancels the discussion; the tab shows ?", () => {
+		const { press, screen, outcomes } = open(library, runtime);
+		press("d", KEY.escape);
+		expect(screen()).toContain("Lib ?");
+		expect(screen()).toContain("Discuss first");
+		press(KEY.down);
+		expect(screen()).not.toContain("Discuss first");
+		press(KEY.enter, KEY.enter);
+		const outcome = outcomes[0];
+		expect(outcome?.kind === "answered" && outcome.result.answers.map((a) => a.kind)).toEqual([
+			"option",
+			"option",
+		]);
+	});
+
+	test("a confirmed discussion advances to the next question", () => {
+		const { press, screen } = open(library, runtime);
+		press("d", KEY.enter);
+		expect(screen()).toContain("Which runtime?");
+	});
+
+	test("the note moves with the selection instead of being dropped", () => {
+		const { press, type, outcomes } = open(library);
+		press("n");
+		type("tree-shaking matters");
+		press(KEY.enter, KEY.down, KEY.enter);
+		const outcome = outcomes[0];
+		expect(outcome?.kind === "answered" && outcome.result.answers[0]).toMatchObject({
+			answer: "luxon",
+			notes: "tree-shaking matters",
+		});
+	});
+
+	test("the question preview prints above the options", () => {
+		const { screen } = open({ ...library, preview: "Today we use moment.js everywhere." });
+		const shown = screen();
+		expect(shown.indexOf("Today we use moment.js everywhere.")).toBeGreaterThan(
+			shown.indexOf("Which library should we use for dates?"),
+		);
+		expect(shown.indexOf("Today we use moment.js everywhere.")).toBeLessThan(
+			shown.indexOf("date-fns"),
+		);
+	});
+
+	test("file previews print their paths; an option without a preview says so", () => {
+		const files: AskUserQuestionItem = {
+			question: "Which page layout?",
+			header: "Page",
+			previewFile: "mockups/today.html",
+			options: [
+				{
+					label: "Split",
+					description: "two columns",
+					previewFile: "mockups/split.html",
+					previewBefore: "mockups/today.html",
+				},
+				{ label: "Keep it", description: "no change" },
+			],
+		};
+		const { press, screen } = open(files);
+		expect(screen(120)).toContain("preview: mockups/today.html");
+		expect(screen(120)).toContain("preview: mockups/today.html → mockups/split.html");
+		press(KEY.down);
+		expect(screen(120)).toContain("No preview for this option");
+	});
+
+	test("a one-option confirmation is answered with Enter", () => {
+		const { press, outcomes } = open({
+			question: "You want the queue in the right panel, collapsed when empty?",
+			header: "Confirm",
+			options: [{ label: "Looks right", description: "accurate as written" }],
+		});
+		press(KEY.enter);
+		const outcome = outcomes[0];
+		expect(outcome?.kind === "answered" && outcome.result.answers[0]?.answer).toBe("Looks right");
+	});
+});
+
 describe("QuestionnaireComponent — multi-select", () => {
 	test("Space toggles; Enter needs a choice and then submits the checked options", () => {
 		const { press, screen, outcomes } = open(targets);
