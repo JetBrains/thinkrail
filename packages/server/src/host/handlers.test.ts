@@ -12,6 +12,8 @@ import type {
 	TemplateInfo,
 	WireModel,
 	Workspace,
+	WorkspaceCreation,
+	WorkspaceCreationRemoved,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
 import {
@@ -40,10 +42,16 @@ import { resetConfigCache } from "../settings";
 import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
 import {
+	awaitWorkspaceCreation,
+	setWorkspaceCreationHandoff,
+	setWorkspaceCreationPublisher,
+} from "../workspaces";
+import {
 	handleRequest,
 	openReviewForClient,
 	requestMethodDiagnostic,
 	shouldRefreshOpenReview,
+	workspaceCreationHandoff,
 } from "./handlers";
 
 const CTX = { clientKey: "test-client" };
@@ -458,6 +466,41 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 	} finally {
 		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	}
+});
+
+test("a background create hands the finished workspace a terminal and the held chat", async () => {
+	const cleanup = await setupDefaultModelRuntime();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "kickoff-chat" }));
+	const removed: WorkspaceCreationRemoved[] = [];
+	setWorkspaceCreationPublisher((event) => {
+		if (event.kind === "removed") removed.push(event.removed);
+	});
+	setWorkspaceCreationHandoff(workspaceCreationHandoff);
+	try {
+		const models = (await handleRequest("model.list", {}, CTX)) as WireModel[];
+		const selected = models.find((model) => model.provider === "handler");
+		if (!selected) throw new Error("handler test model was not available");
+		const creation = (await handleRequest(
+			"workspace.startCreate",
+			{ projectId: "p1", kickoff: { text: "Start here", model: selected } },
+			CTX,
+		)) as WorkspaceCreation;
+		expect(creation).toMatchObject({ state: "running", kickoff: { text: "Start here" } });
+		const workspace = await awaitWorkspaceCreation(creation.id);
+
+		expect(workspace.initialTerminalPending).toBeUndefined();
+		expect(removed).toHaveLength(1);
+		expect(removed[0]).toMatchObject({ id: creation.id, workspace: { id: creation.id } });
+		expect(removed[0]?.sessionId).toEqual(expect.any(String));
+		expect(await handleRequest("workspace.listCreations", {}, CTX)).toEqual([]);
+	} finally {
+		setWorkspaceCreationHandoff(null);
+		setWorkspaceCreationPublisher(null);
+		disposeAllSessions();
+		configurePiRuntime(null);
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+		cleanup();
 	}
 });
 

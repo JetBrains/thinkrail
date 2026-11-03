@@ -21,7 +21,7 @@ import {
 } from "../git";
 import { logger } from "../log";
 import { dataDir, loadWorkspaces, type WorkspaceCreationRecord } from "../persistence";
-import { listProjects } from "../projects";
+import { getProjects } from "../projects";
 import {
 	addCreation,
 	creationRecords,
@@ -69,7 +69,7 @@ function fail(code: WsErrorCode, message: string): never {
 }
 
 function projectOf(record: WorkspaceCreationRecord): Project {
-	const project = listProjects().find((candidate) => candidate.id === record.projectId);
+	const project = getProjects().find((candidate) => candidate.id === record.projectId);
 	if (!project) throw new Error(`Unknown project: ${record.projectId}`);
 	return project;
 }
@@ -291,12 +291,13 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 				outcome = { kickoffError: err instanceof Error ? err.message : String(err) };
 			}
 		}
+		const latest = loadWorkspaces().find((candidate) => candidate.id === id) ?? workspace;
 		deleteCreation(id);
 		emitCreation({
 			kind: "removed",
-			removed: { id, projectId: workspace.projectId, workspace, ...outcome },
+			removed: { id, projectId: latest.projectId, workspace: latest, ...outcome },
 		});
-		return workspace;
+		return latest;
 	} catch (err) {
 		if (err instanceof CreationAborted || signal.aborted) throw err;
 		const message = err instanceof Error ? err.message : String(err);
@@ -330,7 +331,7 @@ function holdsLeftovers(record: WorkspaceCreationRecord): boolean {
 }
 
 async function discard(record: WorkspaceCreationRecord): Promise<void> {
-	const project = listProjects().find((candidate) => candidate.id === record.projectId);
+	const project = getProjects().find((candidate) => candidate.id === record.projectId);
 	if (project && holdsLeftovers(record) && !(await cleanupCreation(project.path, record)))
 		throw new Error(`Could not remove the partial workspace at ${record.worktreePath}`);
 	deleteCreation(record.id);
@@ -432,7 +433,7 @@ export function interruptWorkspaceCreations(): void {
 			deleteCreation(record.id);
 			continue;
 		}
-		const project = listProjects().find((candidate) => candidate.id === record.projectId);
+		const project = getProjects().find((candidate) => candidate.id === record.projectId);
 		if (!project) {
 			deleteCreation(record.id);
 			continue;
@@ -440,22 +441,6 @@ export function interruptWorkspaceCreations(): void {
 		updateCreation(record.id, (r) => {
 			r.state = "interrupted";
 		});
-	}
-}
-
-export async function dropProjectCreations(projectId: string): Promise<void> {
-	for (const record of creationRecords()) {
-		if (record.projectId !== projectId) continue;
-		const job = running.get(record.id);
-		if (job) {
-			job.abort.abort();
-			await job.done.catch(() => {});
-		}
-		const project = listProjects().find((candidate) => candidate.id === projectId);
-		const current = findCreation(record.id);
-		if (project && current) await cleanupCreation(project.path, current).catch(() => {});
-		deleteCreation(record.id);
-		emitCreation({ kind: "removed", removed: { id: record.id, projectId } });
 	}
 }
 

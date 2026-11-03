@@ -9,7 +9,6 @@ export {
 	checkoutFailureText,
 	createWorkspace,
 	dismissWorkspaceCreation,
-	dropProjectCreations,
 	interruptWorkspaceCreations,
 	listWorkspaceCreations,
 	resumeWorkspaceCreation,

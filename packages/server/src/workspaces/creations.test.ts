@@ -266,27 +266,30 @@ posix("renaming the base branch mid-create repoints the pending base", async () 
 	expect(workspace.baseBranch).toBe("renamed-base");
 });
 
-posix("a folder opened elsewhere mid-create is left alone and cannot be retried as-is", async () => {
-	hook("sleep 1");
-	const creation = startWorkspaceCreation("p1");
-	await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
-	const path = join(dataDir, "worktrees", "repo", "workspace-1");
-	writeFileSync(
-		join(dataDir, "projects.json"),
-		JSON.stringify([
-			{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 },
-			{ id: "p2", name: "taken", path, slug: "taken", lastOpened: 2 },
-		]),
-	);
-	await expect(awaitWorkspaceCreation(creation.id)).rejects.toThrow("already open in ThinkRail");
-	expect(listWorkspaceCreations()[0]?.failure?.code).toBe("WORKSPACE_PATH_TAKEN");
-	expect(existsSync(join(path, "README.md"))).toBe(true);
-	expect(() => resumeWorkspaceCreation(creation.id)).toThrow("Edit & retry");
+posix(
+	"a folder opened elsewhere mid-create is left alone and cannot be retried as-is",
+	async () => {
+		hook("sleep 1");
+		const creation = startWorkspaceCreation("p1");
+		await until(() => listWorkspaceCreations()[0]?.phase === "checking-out");
+		const path = join(dataDir, "worktrees", "repo", "workspace-1");
+		writeFileSync(
+			join(dataDir, "projects.json"),
+			JSON.stringify([
+				{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 },
+				{ id: "p2", name: "taken", path, slug: "taken", lastOpened: 2 },
+			]),
+		);
+		await expect(awaitWorkspaceCreation(creation.id)).rejects.toThrow("already open in ThinkRail");
+		expect(listWorkspaceCreations()[0]?.failure?.code).toBe("WORKSPACE_PATH_TAKEN");
+		expect(existsSync(join(path, "README.md"))).toBe(true);
+		expect(() => resumeWorkspaceCreation(creation.id)).toThrow("Edit & retry");
 
-	await dismissWorkspaceCreation(creation.id);
-	expect(existsSync(join(path, "README.md"))).toBe(true);
-	expect(listWorkspaceCreations()).toEqual([]);
-});
+		await dismissWorkspaceCreation(creation.id);
+		expect(existsSync(join(path, "README.md"))).toBe(true);
+		expect(listWorkspaceCreations()).toEqual([]);
+	},
+);
 
 test("checkout failure text drops progress lines and keeps git's last words", () => {
 	expect(
