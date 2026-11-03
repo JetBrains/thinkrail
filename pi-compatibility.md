@@ -17,41 +17,43 @@ The installed version comes only from the root dependency catalog, not a second 
 
 ## Last re-check
 
-The compaction output-cap upgrade ([upstream #11036](https://github.com/earendil-works/pi/pull/11036))
-was checked against the installed catalog version. **No removal gate is satisfied.**
+Pi 1.5.0 (pi-schema cut-over, [upstream #11460](https://github.com/earendil-works/pi/issues/11460),
+[#11520](https://github.com/earendil-works/pi/issues/11520)) was checked against the installed dist.
+**One gate is met**: pi now undoes a failed `_appendEntry` in memory, so the usage-append leaf restore is
+removed (entry below). Every other adaptation stays, with this evidence:
 
-- MCP loader/writers remain private; management/status still use commands, notifications and logs.
-  `openUrl` remains the public sign-in URL seam. The one parity change is single-leading-BOM acceptance,
-  now shared by the host loader, writers and raw-entry occupancy/fingerprint reads. Config and host
-  tests cover both scopes, approved overrides, malformed occupied names and refused-write preservation.
-- `AgentSession.dispose()` still does not emit extension shutdown; reload dispatch is sequential,
-  and MCP clears its server list before awaiting closure. Keep ordered cleanup and late-start admission.
-  Codemode still needs a worker/WASM artifact surface we do not package. Raw `structuredContent` is
-  still ephemeral, not a bounded durable transcript presentation.
-- Delivered queue removal and `clearQueue()` remain text-only. SDK creation still does not initialize
-  a headless terminal theme. Extension loading still needs Jiti/virtual-module adaptation in artifacts,
-  static OAuth/Bedrock registration and the image-resize override. Artifact probes also exercise a
-  value import from `pi-ai/models` through the external extension loader.
-- Public trust detection does not replace resource-kind discovery/exclusion reloads; session discovery
-  and prompt-template APIs still do not cover the host's read/edit surfaces. Keep their parity tests.
-- Pi now sizes history, turn-prefix and branch summaries without reserve-derived output caps. Reasoning
-  inheritance and rejection of incomplete `length` summaries remain. One public-compaction canary checks
-  turn-prefix answer room across different reserves without pinning provider option policy; lifecycle
-  tests retain cancellation and incomplete-summary rejection coverage.
-  Restored truncated-call recovery now omits the paired tool result too, but does not replace
-  `sessionRepair`'s host-restart and questionnaire repair. No host summarizer, effort-default change,
-  reserve tuning, wire migration or session migration is introduced.
-- Pi 1.3's resumed tool-loadout restore adds one host seam, the registry-tool reconcile at attach below.
-- The bundled chat catalogue changes from 1,554 to 1,599 provider/model pairs: 71 removed and 116 added.
-  Removed pairs include `openai-codex/gpt-5.5` and `openai-codex/gpt-5.3-codex-spark`;
-  `openai/gpt-5.5` remains. This is a bundled-catalogue change, not a claim that providers retired those
-  APIs; stored, refreshed and custom catalogues can differ. Release notes must advise users to check
-  their default and restored-chat model before continuing. Unavailable defaults/resumed models follow
-  the existing, different host/Pi selection rules in [[submodule-server-agent]]; the host still does not
-  surface Pi's `modelFallbackMessage`. This upgrade adds no fallback or warning UI.
-- Since Pi 1.3, `kimi-coding` uses OpenAI Chat Completions at
-  `https://api.kimi.com/coding/v1`. Users with custom `models.json` base URL overrides must include
-  `/v1`; the host does not rewrite those overrides. Include this migration notice in release notes.
+- The Anthropic SSE framing defect is unchanged upstream: the unpatched 1.5.0 dist fails all three
+  "defects the patch fixes" cases. The patch body is identical; only its hunk offsets moved, and Bun
+  does not fuzz offsets, so the patch file was regenerated rather than renamed.
+- MCP loader/validator/writers remain private; the host port gains pi's `oauth.clientRegistration:
+  "auto"` and its new error wording, pinned by the loader parity fixture. `/mcp` status and sign-in
+  wording did not change; `openUrl` remains the sign-in URL seam. `AgentSession.dispose()` still emits no
+  shutdown; codemode is still unpackaged; raw `structuredContent` is still ephemeral.
+- `_isActivatedOnRegistration`, the provider-registration queues with `extensionPath`,
+  `getAllRegisteredTools`, the `sk-ant-oat` predicate, `getPackageIdentity`, `isOfflineModeEnabled`,
+  `clearExtensionCache`, `defaultModelPerProvider` and `"pi-virtual"` are all still private and
+  unchanged in shape. `defaultModelPerProvider` moved `openai` to `gpt-6.1-sol`; the mirror follows.
+  Pi's `_applyToolLoadout` now keeps the order of surviving tools (#11495); the host already composes
+  `[...kept, ...new]`, so reconciles rebuild the prompt less often.
+- `pi.exec()` gained `maxBuffer`/`truncated`; `Usage.cost.totalFromProvider` marks billed totals; the
+  extension view that pi maps `@earendil-works/pi-ai` to for extensions re-adds TypeBox's `Type`. The
+  host relies on pi's own virtual-module map, so bundled artifacts need no change. pi-ai's root no longer
+  exports TypeBox; ThinkRail extensions import `typebox` directly and build string enums themselves.
+- `DefaultPackageManager.resolve()` no longer throws when a declared package fails to install: it skips
+  the package and reports `installFailures`, which the loader turns into startup warnings. The host's
+  catalog still resolves with `onMissing → skip` and installs through `install()`, which still throws. A
+  `pi` manifest that lists no resource type now counts as metadata-only and auto-discovers.
+- Queue removal, `clearQueue()`, compaction cut-point and summary budgeting, the headless theme, trust
+  discovery, session/prompt-template discovery and the faux-provider-based usage mirror are unchanged;
+  the faux provider now reports cached prompt tokens as cache writes rather than input, which only moved
+  test assertions.
+- The bundled chat catalogue changes from 1,599 to 1,592 provider/model pairs: 57 removed (realtime and
+  image-only models, older OpenRouter and Vercel OpenAI aliases such as `openrouter/openai/o3-mini`,
+  `radius/gpt-5.3-codex`) and 50 added (GPT-6.1 Terra across OpenAI, Codex, Azure, Bedrock, Copilot,
+  OpenRouter and Vercel; `openai/gpt-5.6-cyber`). The default `openai` model is now `gpt-6.1-sol`, also
+  after ChatGPT sign-in. Release notes must say both and advise users to check their default and
+  restored-chat model; unavailable models follow the existing selection rules in
+  [[submodule-server-agent]], and the host still does not surface Pi's `modelFallbackMessage`.
 
 ## Upgrade contract
 
@@ -75,7 +77,9 @@ not public exports. The host ports their file semantics to apply project policy 
 multi-client writes. **Removal gate:** a public loader/validator/writer surface preserving entry
 provenance and allowing admission before project overrides merge. Verify the port against the
 installed `core/mcp-servers` and `extensions/mcp/config`; run `agent/mcp/config.test.ts` and
-`host/mcp.test.ts`. Host containment, stale-write checks and private policy remain host obligations.
+`host/mcp.test.ts`. The parity fixture lists one entry per validation rule pi has, so a new config
+field (pi 1.5 added `oauth.clientRegistration: "auto"`) shows up as a parity failure before it reaches
+users. Host containment, stale-write checks and private policy remain host obligations.
 
 ### Runtime status, management and sign-in outcomes
 
@@ -186,7 +190,7 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   carries no target version; pi skips pinned npm versions in update checks; pi classifies `git@host:…`
   and `github:…` sources as local paths.
 - **Anthropic SSE framing patch** — [[submodule-server-agent]] (Provider stream framing),
-  `patches/@earendil-works%2Fpi-ai@1.4.0.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
+  `patches/@earendil-works%2Fpi-ai@1.5.0.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
   streams fail with the non-retryable "Could not parse Anthropic SSE event": a valid CRLF stream whose
   `\r\n` is split across network chunks, and a stream cut off mid-event. Patched, the first succeeds and
   the second ends with a retryable truncation error such as "stream ended before message_stop".
@@ -194,9 +198,11 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   [upstream #10390](https://github.com/earendil-works/pi/issues/10390)). Bun silently skips a patch whose
   version doesn't match, so every pi bump runs `agent/anthropicStreamFraming.test.ts` against the
   unpatched release. Its "defects the patch fixes" group decides: when it passes, delete the patch and its
-  `patchedDependencies` entry; when it fails, port the patch to the new version. If only the "behavior
-  the patch keeps" group fails, pi changed that behavior: decide whether to follow it before porting
-  anything.
+  `patchedDependencies` entry; when it fails, port the patch to the new version. Port by regenerating the
+  file from a clean 1.x dist, not by renaming it: Bun applies hunks at their recorded lines and silently
+  produces a broken module when the context moved (1.5.0 shifted it by two lines), and only the framing
+  test catches that. If only the "behavior the patch keeps" group fails, pi changed that behavior: decide
+  whether to follow it before porting anything.
 - **Registry tool precedence** — [[submodule-server-extensions]], `preferRegistryTools` in the session
   loader's `extensionsOverride`. It relies on three pi facts:
   - pi keeps every extension and gives a tool name to its first registration
@@ -263,13 +269,14 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   helper over entries or a file. Until then `delegation.test.ts` ("the subagent totals mirror matches pi's
   own totals for every spend source") pins parity with pi's `getSessionStats` on one transcript that
   carries every spend source, including off-branch spend; rerun it on every pi bump.
-- **Rollback of a failed usage append** — [[submodule-server-agent]], `recordSessionUsage`.
-  `SessionManager._appendEntry` adds the entry to memory and moves the leaf before `_persist`, and a
-  failed `appendFileSync` can leave a torn partial line. The host therefore restores the previous leaf
-  and truncates an existing transcript back to its pre-append size; `delegation.test.ts` pins both
-  ("a usage write pi kept only in memory never cuts the reopened history", "a torn usage append is cut
-  back…"). Remove the leaf restore when a failed persist leaves pi's memory and leaf unchanged; remove the
-  truncation only when pi also guarantees that a failed append leaves no torn bytes.
+- **Cut-back of a failed usage append** — [[submodule-server-agent]], `recordSessionUsage`. Since pi 1.5
+  (`#11460`) a failed `_persist` removes the entry from memory and restores the leaf, so the host's leaf
+  restore is gone and a failed append reports `false`. Pi still appends with one `appendFileSync`, which
+  can leave a torn partial line, so the host truncates an existing transcript back to its pre-append size;
+  `delegation.test.ts` pins both ("a failed usage write leaves pi's memory and leaf untouched…" against a
+  real read-only file, "a torn usage append is cut back…"). **Removal gate:** pi guarantees that a failed
+  append leaves no torn bytes. If pi ever stops rolling back memory, the first test fails: that is a
+  reason to reinstate the restore, not to weaken the test.
 
 - **Detached result hold** — [[module-pi-subagents]] (Result delivery) and
   [[module-pi-background-commands]], applied by [[submodule-server-agent]]'s `turn_end` and

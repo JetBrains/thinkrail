@@ -98,6 +98,8 @@ const PARITY_CASES: { name: string; global: unknown; project?: unknown }[] = [
 				neither: { description: "no transport" },
 				callback: { url: "https://x/mcp", oauth: { callbackUrl: "https://evil.example/cb" } },
 				cimd: { url: "https://x/mcp", oauth: { clientRegistration: "cimd", clientId: "a" } },
+				registration: { url: "https://x/mcp", oauth: { clientRegistration: "manual" } },
+				auto: { url: "https://x/mcp", oauth: { clientRegistration: "auto", clientName: "n" } },
 				auth: { url: "http://x.example/mcp", auth: { provider: "anthropic" } },
 			},
 		},

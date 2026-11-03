@@ -1224,24 +1224,6 @@ export function selectActiveTerminalId(state: TerminalState): string | null {
 	return state.activeTerminalByWorkspace[state.activeWorkspaceId] ?? null;
 }
 
-export function selectLastOpenChatSession(
-	state: {
-		tabsByWorkspace: Record<string, { kind: string; id: string; sessionId?: string }[]>;
-		activeTabByWorkspace: Record<string, string | null>;
-	},
-	workspaceId: string,
-): string | null {
-	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const activeId = state.activeTabByWorkspace[workspaceId];
-	const active = tabs.find((t) => t.id === activeId);
-	if (active?.kind === "chat" && active.sessionId) return active.sessionId;
-	for (let i = tabs.length - 1; i >= 0; i--) {
-		const tab = tabs[i];
-		if (tab?.kind === "chat" && tab.sessionId) return tab.sessionId;
-	}
-	return null;
-}
-
 export function selectReviewDraftCount(
 	state: { reviewsByWorkspace: Record<string, { comments: { status: string }[] }> },
 	workspaceId: string | null,

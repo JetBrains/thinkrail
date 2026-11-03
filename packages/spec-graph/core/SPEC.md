@@ -116,7 +116,7 @@ Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`val
   the `SPEC_TYPES` vocabulary constrains only the `spec_create` authoring surface, never the graph.
 - Finite vocabularies (`SPEC_TYPES`, `SPEC_STATUSES`, `SLICE_DIRECTIONS`, `LINK_KINDS`, `IDENTITY_FIELDS`)
   and frontmatter field names (the `FIELDS` registry) are single-sourced `as const` — no duplicated literal lists, so a
-  rename is a one-line change. `core/` stays typebox-free; only `tools/` wraps the tuples in `StringEnum`.
+  rename is a one-line change. `core/` stays typebox-free; only `tools/` wraps the tuples in its `stringEnum`.
 - Reads coerce frontmatter to a scalar/string-array dialect (lossy — nested maps and comments are
   dropped), which is fine for the derived model. The write path (`updateFrontmatterText`) is **lossless**:
   it mutates a live `yaml` Document in place, so untouched fields keep their order and any comments /

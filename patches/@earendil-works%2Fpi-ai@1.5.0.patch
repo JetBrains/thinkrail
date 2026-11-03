@@ -1,8 +1,7 @@
 diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
-index 841da8964d2b403c45a18d4d1735c1fabc441a9a..556f206d5a0739673c5a0188ab05d5d41ecde9ac 100644
 --- a/dist/api/anthropic-messages.js
 +++ b/dist/api/anthropic-messages.js
-@@ -277,11 +277,14 @@ function nextLineBreakIndex(text) {
+@@ -279,11 +279,14 @@
      }
      return Math.min(carriageReturnIndex, newlineIndex);
  }
@@ -18,7 +17,7 @@ index 841da8964d2b403c45a18d4d1735c1fabc441a9a..556f206d5a0739673c5a0188ab05d5d4
      let nextIndex = lineBreakIndex + 1;
      if (text[lineBreakIndex] === "\r" && text[nextIndex] === "\n") {
          nextIndex += 1;
-@@ -306,25 +309,25 @@ async function* iterateSseMessages(body, signal) {
+@@ -308,25 +311,25 @@
                  break;
              }
              buffer += decoder.decode(value, { stream: true });
@@ -48,7 +47,7 @@ index 841da8964d2b403c45a18d4d1735c1fabc441a9a..556f206d5a0739673c5a0188ab05d5d4
          }
          if (buffer.length > 0) {
              const event = decodeSseLine(buffer, state);
-@@ -334,7 +337,7 @@ async function* iterateSseMessages(body, signal) {
+@@ -336,7 +339,7 @@
          }
          const trailingEvent = flushSseEvent(state);
          if (trailingEvent) {
@@ -57,7 +56,7 @@ index 841da8964d2b403c45a18d4d1735c1fabc441a9a..556f206d5a0739673c5a0188ab05d5d4
          }
      }
      finally {
-@@ -354,8 +357,20 @@ async function* iterateAnthropicEvents(response, signal) {
+@@ -356,8 +359,20 @@
          if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
              continue;
          }
