@@ -135,7 +135,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 102;
+export const PROTOCOL_VERSION = 103;
+export const GITHUB_STAR_TOAST_PROTOCOL_VERSION = 103;
 export const FONTS_PROTOCOL_VERSION = 102;
 export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;
 export const PI_PACKAGES_PROTOCOL_VERSION = 100;
@@ -381,6 +382,7 @@ export const WS_METHODS = {
 	feedbackSurvey: "feedback.survey",
 	feedbackSurveySubmit: "feedback.survey.submit",
 	clientReportError: "client.reportError",
+	clientGithubStarToast: "client.githubStarToast",
 	historySearch: "history.search",
 	reviewGet: "review.get",
 	reviewCommentAdd: "review.commentAdd",
@@ -582,6 +584,9 @@ export interface ClientErrorReport {
 	boundary?: string;
 	chunkIds?: Record<string, string>;
 }
+
+export const GITHUB_STAR_TOAST_TAGS = ["shown", "ignored", "dismissed", "github_click"] as const;
+export type GithubStarToastTag = (typeof GITHUB_STAR_TOAST_TAGS)[number];
 
 export interface Ack {
 	ok: true;
@@ -1113,6 +1118,7 @@ export interface WsMethodMap {
 	};
 	"feedback.survey.submit": { params: SurveySubmitParams; result: Ack };
 	"client.reportError": { params: ClientErrorReport; result: Ack };
+	"client.githubStarToast": { params: { tag: GithubStarToastTag }; result: Ack };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
 		result: HistorySearchResult;

@@ -1,13 +1,20 @@
+import { GITHUB_STAR_TOAST_PROTOCOL_VERSION, type GithubStarToastTag } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { firstPaintPreferenceStorage } from "../clientPreferences";
 import { REPO_URL, STORAGE_PREFIX } from "../constants/branding";
-import { useAppStore } from "../store";
+import { type ToastCloseReason, useAppStore } from "../store";
+import { getTransport } from "../transport";
 
 const PROMPT_COUNT_KEY = `${STORAGE_PREFIX}github-star-prompt-count`;
 const PROMPTS_BEFORE_ASK = 10;
 const REPO_API_URL = "https://api.github.com/repos/JetBrains/thinkrail";
 const STAR_COUNT_TIMEOUT_MS = 2_000;
-const ASK_DURATION_MS = 15_000;
+const ASK_DURATION_MS = 60_000;
+const CLOSE_TAGS: Record<ToastCloseReason, GithubStarToastTag> = {
+	expired: "ignored",
+	dismissed: "dismissed",
+	action: "github_click",
+};
 
 export function countSentPrompt(getStorage = firstPaintPreferenceStorage): boolean {
 	try {
@@ -40,6 +47,16 @@ async function fetchStarCount(): Promise<number | null> {
 	}
 }
 
+function reportToast(tag: GithubStarToastTag): void {
+	const version = useAppStore.getState().protocolVersion;
+	if (version === null || version < GITHUB_STAR_TOAST_PROTOCOL_VERSION) return;
+	try {
+		getTransport()
+			.request("client.githubStarToast", { tag })
+			.catch(() => {});
+	} catch {}
+}
+
 export function askForGithubStarOnTenthPrompt(): void {
 	if (!countSentPrompt()) return;
 	void fetchStarCount().then((stars) => {
@@ -55,6 +72,8 @@ export function askForGithubStarOnTenthPrompt(): void {
 						: t("chat.githubStar.actionStars", { stars: formatStarCount(stars) }),
 				onClick: () => window.open(REPO_URL, "_blank", "noopener,noreferrer"),
 			},
+			onClose: (reason) => reportToast(CLOSE_TAGS[reason]),
 		});
+		reportToast("shown");
 	});
 }

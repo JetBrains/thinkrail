@@ -24,6 +24,7 @@ import {
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
+	GITHUB_STAR_TOAST_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
@@ -242,7 +243,7 @@ test("tool responses replace the ask-only answer method at v93", () => {
 
 test("user-selectable fonts are pinned to v102", () => {
 	expect(FONTS_PROTOCOL_VERSION).toBe(102);
-	expect(PROTOCOL_VERSION).toBe(102);
+	expect(PROTOCOL_VERSION).toBe(103);
 	expect(WS_METHODS.fontsList).toBe("fonts.list");
 	expect(WS_METHODS.fontsInstalled).toBe("fonts.installed");
 	expect(WS_METHODS.fontsReveal).toBe("fonts.reveal");
@@ -268,6 +269,12 @@ test("client error reports are pinned to v90", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CLIENT_ERROR_REPORT_PROTOCOL_VERSION);
 	expect(CLIENT_ERROR_REPORT_PROTOCOL_VERSION).toBe(90);
 	expect(WS_METHODS.clientReportError).toBe("client.reportError");
+});
+
+test("GitHub star toast reports are pinned to v103", () => {
+	expect(GITHUB_STAR_TOAST_PROTOCOL_VERSION).toBe(103);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(GITHUB_STAR_TOAST_PROTOCOL_VERSION);
+	expect(WS_METHODS.clientGithubStarToast).toBe("client.githubStarToast");
 });
 
 test("project rename is pinned to v85", () => {

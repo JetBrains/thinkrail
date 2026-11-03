@@ -282,6 +282,7 @@ import { planReviewRunning } from "./planReviewQueue";
 import {
 	additionalCapture,
 	captureAdditional,
+	captureGithubStarToast,
 	captureReviewCommentAdded,
 	captureReviewCommentResolved,
 	captureReviewCommentsSent,
@@ -1384,6 +1385,10 @@ const handlers: WsHandlers = {
 	},
 	"client.reportError": (params) => {
 		reportClientError(typeof params === "object" && params !== null ? params : {});
+		return { ok: true } as const;
+	},
+	"client.githubStarToast": (params) => {
+		captureGithubStarToast(additionalCapture(), params);
 		return { ok: true } as const;
 	},
 	"history.search": (p) => {

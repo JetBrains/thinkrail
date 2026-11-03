@@ -196,7 +196,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate,
   `CHANGE_MUTATIONS_PROTOCOL_VERSION` for the diff-mutation gate, `REVIEW_RICH_ANCHORS_PROTOCOL_VERSION`
   for the rich-anchor authoring gate, `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` + `ClientErrorReport` for
-  `client.reportError`, `provider.changed`, the empty
+  `client.reportError`, `GITHUB_STAR_TOAST_PROTOCOL_VERSION` for `client.githubStarToast`, `provider.changed`, the empty
   addressed `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` +
   `host.updateAvailable`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +

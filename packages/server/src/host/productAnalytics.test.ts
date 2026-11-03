@@ -28,6 +28,7 @@ import {
 	additionalAnalyticsEnabled,
 	applyAdditionalAnalyticsSettings,
 	captureAdditional,
+	captureGithubStarToast,
 	captureReviewCommentAdded,
 	captureReviewCommentResolved,
 	captureReviewCommentsSent,
@@ -46,6 +47,24 @@ import {
 import { TaskObservation, taskObservation } from "./taskAnalytics";
 
 const TEST_KEY = "phc_test";
+
+test("the GitHub star toast captures closed tags only, and nothing without the grant", () => {
+	const events: AdditionalAnalyticsEvent[] = [];
+	const capture: AdditionalAnalyticsCapture = (event) => events.push(event);
+	for (const tag of ["shown", "ignored", "dismissed", "github_click"]) {
+		captureGithubStarToast(capture, { tag });
+	}
+	captureGithubStarToast(capture, { tag: "my secret text" });
+	captureGithubStarToast(capture, {});
+	captureGithubStarToast(capture, null);
+	captureGithubStarToast(null, { tag: "shown" });
+	expect(events).toEqual(
+		["shown", "ignored", "dismissed", "github_click"].map((tag) => ({
+			name: "github_star_toast",
+			params: { tag },
+		})) as AdditionalAnalyticsEvent[],
+	);
+});
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;

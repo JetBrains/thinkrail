@@ -476,7 +476,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   send fetches the star count from the public GitHub API (one unauthenticated request, 2-second limit), then
   raises one info toast with a link to the repo. The button shows the count when the fetch succeeds and plain
   text otherwise. The count of sends then stops at 10, so the ask normally never repeats. It is per browser
-  origin or native profile and never reaches the host or analytics. A
+  origin or native profile. The count itself never reaches the host. The toast reports one closed tag to the host over
+  `client.githubStarToast`: `shown`, then `ignored` (timer ran out), `dismissed` (close, swipe or Escape) or `github_click`. A
   storage error the web app can see means no ask. The native adapter's write is fire-and-forget, so a failed
   desktop write can repeat the ask once per restart; a confirmed write is not worth a new RPC for this toast.
 - **Transcript/shell split** — `ChatView` (the exported integration component) splits into a churn-isolated

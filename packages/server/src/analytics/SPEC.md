@@ -64,6 +64,7 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | `review_comment_sent` | One event **per comment** delivered to the agent (the value moment), with `outdated` (`yes`/`no`); per-comment so added→sent→resolved is a countable funnel, and `outdated` is the re-anchoring quality signal. Delivery, not proof the agent acted usefully. |
 | `review_comment_resolved` | A comment's terminal outcome, by `actor` (`user`/`agent`) and `outcome` (`resolved`/`dismissed`); the human update and the agent `resolve_comment` tool, not draft deletes or Clear. An agent `resolved` is the agent's claim, never proof the concern was fixed. |
 | `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs; `source` = `plan_page` when driven from the plan page's PR stage, else `other`. |
+| `github_star_toast` | The GitHub star toast by closed `tag` (`shown`, `ignored`, `dismissed`, `github_click`). The one UI-reported outcome: the host cannot see a toast, so the browser reports the tag over `client.githubStarToast` and the host validates and captures it. |
 | `acquisition_linked` | One successful browser-claim redemption, carrying the transient journey/bridge ids and normalized first/last acquisition fields. |
 
 `survey sent` stays outside both unions: it is the user's explicit submission, not usage telemetry.

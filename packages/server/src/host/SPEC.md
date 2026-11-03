@@ -225,7 +225,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
   separately; `project.rename` likewise delegates to the projects module's `renameProject`, which owns validation and the push. `client.reportError` hands the untrusted browser report to analytics' `reportClientError` (the
-  only sanitizer) and always acks. Error tracking also rides two `server.ts` seams: every failed WS request
+  only sanitizer) and always acks; `client.githubStarToast` captures the additional `github_star_toast` event when its tag is in the closed set, and always acks. Error tracking also rides two `server.ts` seams: every failed WS request
   is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
   the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available

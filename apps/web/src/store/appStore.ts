@@ -431,7 +431,10 @@ export interface Toast {
 	title?: string;
 	durationMs?: number;
 	action?: { label: string; onClick: () => void };
+	onClose?: (reason: ToastCloseReason) => void;
 }
+
+export type ToastCloseReason = "expired" | "dismissed" | "action";
 
 const MAX_TOASTS = 5;
 

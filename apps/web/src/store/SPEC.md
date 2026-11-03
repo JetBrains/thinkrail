@@ -587,7 +587,7 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/warning/info(message, title?)`** helpers (wrap `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise
-  a transient notification. A toast may additionally carry `durationMs` and one `{ label, onClick }` action;
+  a transient notification. A toast may additionally carry `durationMs`, one `{ label, onClick }` action and `onClose(reason)`, where `reason` is `expired`, `dismissed` or `action`;
   `panels/Toaster` renders that action through Radix `ToastAction` and otherwise owns timeout/swipe closure
   (errors persist until dismissed). `pushToast` **coalesces an identical actionless live toast** (same
   variant/title/message/duration — a retried failure returns the existing id instead of stacking a twin),

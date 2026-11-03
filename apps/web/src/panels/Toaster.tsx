@@ -15,7 +15,8 @@ import {
 	ToastViewport,
 } from "@thinkrail/ui/toast";
 import { cn } from "@thinkrail/ui/utils";
-import type { Toast as ToastType } from "@/store";
+import { useRef } from "react";
+import type { ToastCloseReason, Toast as ToastType } from "@/store";
 import { useAppStore } from "@/store";
 
 const variantIcon: Record<ToastType["variant"], { Icon: typeof RiAlertLine; className: string }> = {
@@ -27,53 +28,68 @@ const variantIcon: Record<ToastType["variant"], { Icon: typeof RiAlertLine; clas
 
 const AUTO_DISMISS_MS = 5000;
 
+function ToastItem({ toast }: { toast: ToastType }) {
+	const dismissToast = useAppStore((s) => s.dismissToast);
+	const closeReason = useRef<ToastCloseReason>("expired");
+	const closedByUser = () => {
+		closeReason.current = "dismissed";
+	};
+	const { action, onClose } = toast;
+	const { Icon, className: iconClass } = variantIcon[toast.variant];
+	return (
+		<Toast
+			variant={toast.variant}
+			duration={
+				toast.durationMs ?? (toast.variant === "error" ? Number.POSITIVE_INFINITY : AUTO_DISMISS_MS)
+			}
+			onSwipeEnd={closedByUser}
+			onEscapeKeyDown={closedByUser}
+			onOpenChange={(open) => {
+				if (open) return;
+				onClose?.(closeReason.current);
+				dismissToast(toast.id);
+			}}
+			data-testid="toast"
+			data-variant={toast.variant}
+		>
+			<div className="flex items-start gap-8">
+				<Icon className={cn("mt-2 size-14 shrink-0", iconClass)} aria-hidden />
+				<div className="flex min-w-0 flex-1 flex-col gap-4">
+					{toast.title ? <ToastTitle>{toast.title}</ToastTitle> : null}
+					<ToastDescription className={toast.title ? undefined : "text-text-default"}>
+						{toast.message}
+					</ToastDescription>
+				</div>
+				<ToastClose onClick={closedByUser} />
+			</div>
+			{action ? (
+				<div className="mt-12 flex justify-end">
+					<ToastAction altText={action.label} asChild>
+						<Button
+							variant="outline"
+							size="m"
+							data-testid="toast-action"
+							onClick={() => {
+								closeReason.current = "action";
+								action.onClick();
+							}}
+						>
+							{action.label}
+						</Button>
+					</ToastAction>
+				</div>
+			) : null}
+		</Toast>
+	);
+}
+
 export function Toaster() {
 	const toasts = useAppStore((s) => s.toasts);
-	const dismissToast = useAppStore((s) => s.dismissToast);
 	return (
 		<ToastProvider swipeDirection="right">
-			{toasts.map((t) => {
-				const { Icon, className: iconClass } = variantIcon[t.variant];
-				return (
-					<Toast
-						key={t.id}
-						variant={t.variant}
-						duration={
-							t.durationMs ?? (t.variant === "error" ? Number.POSITIVE_INFINITY : AUTO_DISMISS_MS)
-						}
-						onOpenChange={(open) => {
-							if (!open) dismissToast(t.id);
-						}}
-						data-testid="toast"
-						data-variant={t.variant}
-					>
-						<div className="flex items-start gap-8">
-							<Icon className={cn("mt-2 size-14 shrink-0", iconClass)} aria-hidden />
-							<div className="flex min-w-0 flex-1 flex-col gap-4">
-								{t.title ? <ToastTitle>{t.title}</ToastTitle> : null}
-								<ToastDescription className={t.title ? undefined : "text-text-default"}>
-									{t.message}
-								</ToastDescription>
-							</div>
-							<ToastClose />
-						</div>
-						{t.action ? (
-							<div className="mt-12 flex justify-end">
-								<ToastAction altText={t.action.label} asChild>
-									<Button
-										variant="outline"
-										size="m"
-										data-testid="toast-action"
-										onClick={t.action.onClick}
-									>
-										{t.action.label}
-									</Button>
-								</ToastAction>
-							</div>
-						) : null}
-					</Toast>
-				);
-			})}
+			{toasts.map((t) => (
+				<ToastItem key={t.id} toast={t} />
+			))}
 			<ToastViewport />
 		</ToastProvider>
 	);
