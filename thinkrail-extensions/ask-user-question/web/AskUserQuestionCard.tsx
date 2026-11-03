@@ -21,7 +21,6 @@ import { cn } from "@thinkrail/ui/utils";
 import {
 	Fragment,
 	type KeyboardEvent,
-	useCallback,
 	useEffect,
 	useId,
 	useLayoutEffect,
@@ -351,7 +350,6 @@ export function AskUserQuestionCard({
 	const revealElement = interaction?.revealElement;
 	const cancelAutomaticReveal = interaction?.cancelAutomaticReveal;
 	const cardRef = useRef<HTMLElement>(null);
-	const [dictating, setDictating] = useState(false);
 	const questions = useMemo(() => parseQuestions(args), [args]);
 	const resolvedResult =
 		readAskUserQuestionResult(interaction?.state.response) ?? readAskUserQuestionResult(result);
@@ -528,9 +526,7 @@ export function AskUserQuestionCard({
 
 	const showContinue = multipleQuestions && !onReview;
 	const canSubmit =
-		canRespond &&
-		!dictating &&
-		(onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
+		canRespond && (onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
 	const nudgeVisible = nudgeShowsOnPage(nudge, idx, onReview, answeredIndices.has(idx));
 
 	const confirmQuestion = (nextState: QState) => {
@@ -660,8 +656,6 @@ export function AskUserQuestionCard({
 							}
 							onCloseNote={() => patch(idx, { noteFor: null })}
 							onNote={(label, text) => patch(idx, { notes: { ...state.notes, [label]: text } })}
-							dictating={dictating}
-							onDictatingChange={setDictating}
 						/>
 					)}
 
@@ -702,7 +696,6 @@ export function AskUserQuestionCard({
 									variant="primary"
 									size="l"
 									data-testid="ask-continue"
-									disabled={dictating}
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
 									className="shrink-0"
 								>
@@ -889,8 +882,6 @@ function QuestionBody({
 	onOpenNote,
 	onCloseNote,
 	onNote,
-	dictating,
-	onDictatingChange,
 }: {
 	question: AskUserQuestionItem;
 	state: QState;
@@ -905,11 +896,8 @@ function QuestionBody({
 	onOpenNote: (label: string, cursor: number) => void;
 	onCloseNote: () => void;
 	onNote: (label: string, text: string) => void;
-	dictating: boolean;
-	onDictatingChange: (listening: boolean) => void;
 }) {
 	const t = useT();
-	const Mic = useOptionalResourceHost()?.Mic;
 	const choiceRefs = useRef<Array<HTMLElement | null>>([]);
 	const noteRef = useRef<HTMLTextAreaElement>(null);
 	const focusNoteAfterRender = useRef(false);
@@ -1018,43 +1006,29 @@ function QuestionBody({
 									{selected ? (
 										<div className="pl-[calc(1.125rem+var(--space-8))]">
 											{state.noteFor === option.label ? (
-												<div className="relative">
-													<textarea
-														ref={noteRef}
-														data-testid="ask-note"
-														aria-label={t("tools.ask.noteLabel", { option: optionText })}
-														aria-keyshortcuts="Enter Shift+Enter Escape"
-														rows={2}
-														value={state.notes[option.label] ?? ""}
-														placeholder={t("tools.ask.notePlaceholder")}
-														onChange={(event) => onNote(option.label, event.target.value)}
-														onKeyDown={(event) => {
-															const action = noteKeyAction(
-																event.key,
-																event.shiftKey,
-																event.nativeEvent.isComposing,
-															);
-															if (action === "none") return;
-															event.stopPropagation();
-															if (action === "consume" || dictating) return;
-															event.preventDefault();
-															finishNote(index);
-														}}
-														className="w-full resize-none rounded-sm border border-control-border-default bg-control-bg px-8 py-4 pr-24 text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active"
-													/>
-													{Mic ? (
-														<Mic
-															fieldRef={noteRef}
-															apply={(text, caret) => {
-																onNote(option.label, text);
-																restoreCaret(noteRef.current, caret);
-															}}
-															onListeningChange={onDictatingChange}
-															size="s"
-															className="absolute right-2 bottom-2"
-														/>
-													) : null}
-												</div>
+												<textarea
+													ref={noteRef}
+													data-testid="ask-note"
+													aria-label={t("tools.ask.noteLabel", { option: optionText })}
+													aria-keyshortcuts="Enter Shift+Enter Escape"
+													rows={2}
+													value={state.notes[option.label] ?? ""}
+													placeholder={t("tools.ask.notePlaceholder")}
+													onChange={(event) => onNote(option.label, event.target.value)}
+													onKeyDown={(event) => {
+														const action = noteKeyAction(
+															event.key,
+															event.shiftKey,
+															event.nativeEvent.isComposing,
+														);
+														if (action === "none") return;
+														event.stopPropagation();
+														if (action === "consume") return;
+														event.preventDefault();
+														finishNote(index);
+													}}
+													className="w-full resize-none rounded-sm border border-control-border-default bg-control-bg px-8 py-4 text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active"
+												/>
 											) : (
 												<Button
 													variant="ghost"
@@ -1093,8 +1067,6 @@ function QuestionBody({
 							if (action.type === "move") moveCursor(action.index);
 						}}
 						onConfirm={onConfirmCustom}
-						dictating={dictating}
-						onDictatingChange={onDictatingChange}
 					/>
 				</div>
 
@@ -1196,12 +1168,6 @@ function OptionRow({
 	);
 }
 
-function restoreCaret(element: HTMLInputElement | HTMLTextAreaElement | null, caret: number): void {
-	requestAnimationFrame(() => {
-		if (element && element === document.activeElement) element.setSelectionRange(caret, caret);
-	});
-}
-
 function OtherOptionRow({
 	inputRef,
 	multi,
@@ -1212,8 +1178,6 @@ function OtherOptionRow({
 	onText,
 	onMove,
 	onConfirm,
-	dictating,
-	onDictatingChange,
 }: {
 	inputRef: (node: HTMLInputElement | null) => void;
 	multi: boolean;
@@ -1224,20 +1188,9 @@ function OtherOptionRow({
 	onText: (text: string) => void;
 	onMove: (key: "ArrowUp" | "ArrowDown") => void;
 	onConfirm: () => void;
-	dictating: boolean;
-	onDictatingChange: (listening: boolean) => void;
 }) {
 	const t = useT();
 	const inputId = useId();
-	const Mic = useOptionalResourceHost()?.Mic;
-	const fieldRef = useRef<HTMLInputElement | null>(null);
-	const applyDictation = useCallback(
-		(next: string, caret: number) => {
-			onText(next);
-			restoreCaret(fieldRef.current, caret);
-		},
-		[onText],
-	);
 	return (
 		<label
 			htmlFor={inputId}
@@ -1268,10 +1221,7 @@ function OtherOptionRow({
 			)}
 			<span className="tr-text-ui text-text-default">{t("tools.ask.other")}</span>
 			<input
-				ref={(node) => {
-					fieldRef.current = node;
-					inputRef(node);
-				}}
+				ref={inputRef}
 				id={inputId}
 				data-testid="ask-custom"
 				data-ask-page-focus={pageFocus || undefined}
@@ -1294,19 +1244,11 @@ function OtherOptionRow({
 					}
 					if (event.key === "Enter" && !event.nativeEvent.isComposing) {
 						event.preventDefault();
-						if (!dictating) onConfirm();
+						onConfirm();
 					}
 				}}
 				className="min-w-0 flex-1 border-none bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
-			{Mic ? (
-				<Mic
-					fieldRef={fieldRef}
-					apply={applyDictation}
-					onListeningChange={onDictatingChange}
-					size="s"
-				/>
-			) : null}
 		</label>
 	);
 }

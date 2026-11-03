@@ -16,7 +16,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
-	type ComponentType,
 	forwardRef,
 	type KeyboardEvent,
 	useCallback,
@@ -45,7 +44,7 @@ import {
 	usePendingSelection,
 	useSlashCommandCompletion,
 } from "@/prompt";
-import type { MicButtonProps } from "@/speech";
+import { DICTATION_EVENT } from "@/speech";
 import { FileChip } from "./FileChip";
 import {
 	ModelEffortPicker,
@@ -177,7 +176,6 @@ interface ComposerProps {
 	onPickTemplate?: (name: string) => void;
 	onManageTemplates?: () => void;
 	templatesEmpty?: boolean;
-	Mic?: ComponentType<MicButtonProps>;
 }
 
 export interface ComposerHandle {
@@ -215,7 +213,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onPickTemplate,
 		onManageTemplates,
 		templatesEmpty,
-		Mic,
 	},
 	handleRef,
 ) {
@@ -306,16 +303,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	);
 
 	const [dictating, setDictating] = useState(false);
-	const applyDictation = useCallback(
-		(text: string, caret: number) => {
-			recallIdxRef.current = null;
-			setSlotSession(null);
-			setSubmitError(null);
-			onChange(text);
-			if (ref.current && ref.current === document.activeElement) focusSelection(caret);
-		},
-		[onChange, focusSelection],
-	);
+	useEffect(() => {
+		const element = ref.current;
+		if (!element) return;
+		const onDictation = (event: Event) => {
+			if (event instanceof CustomEvent)
+				setDictating(Reflect.get(Object(event.detail), "listening") === true);
+		};
+		element.addEventListener(DICTATION_EVENT, onDictation);
+		return () => element.removeEventListener(DICTATION_EVENT, onDictation);
+	}, []);
 
 	const canSubmit = (raw: string) =>
 		!dictating && !templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
@@ -639,6 +636,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						<textarea
 							ref={ref}
 							data-testid="chat-input"
+							data-dictation-fallback
 							value={value}
 							onScroll={syncBackdropScroll}
 							onChange={(e) => {
@@ -675,14 +673,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						/>
 					</div>
 					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
-						{Mic ? (
-							<Mic
-								fieldRef={ref}
-								apply={applyDictation}
-								onListeningChange={setDictating}
-								fallback
-							/>
-						) : null}
 						<IconButton
 							icon={History}
 							data-testid="history-open"

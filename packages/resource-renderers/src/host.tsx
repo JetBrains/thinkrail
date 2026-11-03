@@ -1,5 +1,5 @@
 import type { ResourceMeta } from "@thinkrail/contracts";
-import type { ComponentProps, ComponentType, ReactNode, RefObject } from "react";
+import type { ComponentProps, ComponentType, ReactNode } from "react";
 import { createContext, useContext } from "react";
 import type ReactMarkdown from "react-markdown";
 import type { LanguageRegistration, ThemeRegistration } from "shiki/core";
@@ -57,16 +57,6 @@ export interface ResourceFileReviewProps {
 	children: (review: SurfaceReview) => ReactNode;
 }
 
-export interface ResourceMicProps {
-	fieldRef: RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
-	/** Writes the field's text and caret on every partial and final; it must never move focus. */
-	apply: (text: string, caret: number) => void;
-	onListeningChange?: (listening: boolean) => void;
-	disabled?: boolean;
-	size?: "s" | "m";
-	className?: string;
-}
-
 export interface ResourceHost {
 	markdown: ResourceMarkdown;
 	code: ResourceCodeHost;
@@ -83,7 +73,6 @@ export interface ResourceHost {
 	): () => void;
 	FileReview: ComponentType<ResourceFileReviewProps>;
 	ReviewSend: ComponentType<ResourceReviewSendProps>;
-	Mic?: ComponentType<ResourceMicProps>;
 }
 
 export interface ResourcePreferences {

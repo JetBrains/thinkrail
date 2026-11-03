@@ -76,7 +76,6 @@ import { useModelCatalog } from "./useModelCatalog";
 import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
-import { MicButton } from "@/speech";
 import type { ChatAttachment } from "./types";
 import { useHistorySearch } from "./useHistorySearch";
 
@@ -940,7 +939,6 @@ export default function ChatView({
 					onPickTemplate={onPickTemplate}
 					onManageTemplates={onManageTemplates}
 					templatesEmpty={templatesEmpty}
-					Mic={MicButton}
 				/>
 			</div>
 			<TemplateEditorDialog

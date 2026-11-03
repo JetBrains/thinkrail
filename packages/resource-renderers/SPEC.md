@@ -36,7 +36,7 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   uses it to hide scope-wide layout and whitespace controls no file can use;
 - the host seam — `ResourceHostProvider`, `ResourcePreferencesProvider`, `ResourceEnvironmentProvider`,
   `ResourceScopeProvider`, `useOptionalResourceHost`, `useResourceScope` and the `ResourceHost`,
-  `ResourcePreferences`, `ResourceScope`, `ResourceFileReviewProps`, `ResourceReviewSendProps`, `ResourceMicProps`,
+  `ResourcePreferences`, `ResourceScope`, `ResourceFileReviewProps`, `ResourceReviewSendProps`,
   `ResourceMarkdown`, `ResourceCodeHost`, `ResourceCodeLanguage`, `ResourceMarkdownProps`,
   `MarkdownRehypePlugins` types;
 - `canonicalWorkspacePath` — the package's copy of the app's workspace-relative path identity (`lib`'s
@@ -101,15 +101,6 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   `ReviewSend` — the host's review surface and Send review control; the optional session routes sends. The
   seam is a component, not a hook on the host object: passing hooks around as values breaks React's rules and
   made the React Compiler bail out of the preview; a before/after nests two `FileReview`s.
-- `Mic` (optional; `ResourceMicProps`: `fieldRef`, `apply`, `onListeningChange?`, `disabled?`,
-  `size?`) — the host's voice-input mic for a renderer's or a card's text field. The app injects
-  [[submodule-web-speech]]'s `MicButton`; without it, fields render no mic.
-  - `apply` must never move focus. The field keeps its value and submit, and holds its submit while
-    `onListeningChange` reports listening.
-  - `ReviewComposer` places it in the composer row, `size="s"`. Save and
-    Send (and ⌘↩) are held while listening, and the mic is disabled while a save is busy.
-  - A draft thread's inline edit has no mic: it saves on blur, so a final arriving after the blur would
-    land unsaved.
 Build the value once (the app does at module scope). Its functions are memo inputs: `documentComponents`
 defines its link and image components per call, so a new `bytesUrl`/`openFile` identity would remount every
 link and image in open previews and notebook cells. The reader's line-width preference

@@ -75,7 +75,6 @@ import {
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
 } from "@/prompt";
-import { MicButton } from "@/speech";
 import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
@@ -154,16 +153,6 @@ export function NewWorkspaceDialog({
 	);
 
 	const focusPromptSelection = usePendingSelection(promptRef);
-	const [dictating, setDictating] = useState(false);
-	const applyDictation = useCallback(
-		(text: string, caret: number) => {
-			updatePromptDraft(text, null);
-			if (promptRef.current && promptRef.current === document.activeElement) {
-				focusPromptSelection(caret);
-			}
-		},
-		[updatePromptDraft, focusPromptSelection],
-	);
 
 	const supportsProjectTemplatePreview =
 		protocolVersion !== null && protocolVersion >= PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION;
@@ -370,7 +359,7 @@ export function NewWorkspaceDialog({
 		setBaseRef(list.defaultBranch);
 		prefetchBase(list.defaultBranch);
 	});
-	const submitEnabled = !creating && !dictating && !templatePending && attachedImages.pending === 0;
+	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
 
 	const create = async () => {
 		if (!submitEnabled) return;
@@ -599,56 +588,46 @@ export function NewWorkspaceDialog({
 						testId="ws-prompt-images"
 						className={PROMPT_IMAGE_CHIPS_PADDING.dialog}
 					/>
-					<div className="relative">
-						<Textarea
-							ref={promptRef}
-							data-testid="ws-prompt"
-							value={prompt}
-							disabled={creating}
-							{...imagePasteDropHandlers(attachedImages)}
-							onChange={(e) => {
-								const next = e.target.value;
-								const nextSlotSession = slotSession
-									? applyTemplateSlotEdit(prompt, next, e.target.selectionStart, slotSession)
-									: null;
-								updatePromptDraft(next, nextSlotSession);
-							}}
-							placeholder={t("panels.newWorkspace.promptPlaceholder")}
-							spellCheck={false}
-							rows={6}
-							className="min-h-[160px] pr-24"
-							onKeyDown={(e) => {
-								if (isPromptKeyEventComposing(e.nativeEvent)) return;
-								if (slotSession && !slashCompletion.open) {
-									if (e.key === "Tab") {
-										e.preventDefault();
-										e.stopPropagation();
-										stepPromptSlot(e.shiftKey ? -1 : 1);
-										return;
-									}
-									if (e.key === "Escape") {
-										e.preventDefault();
-										e.stopPropagation();
-										updatePromptDraft(prompt, null);
-										return;
-									}
-								}
-								if (slashCompletion.handleKeyDown(e)) return;
-								if (e.key === "Enter" && !e.shiftKey) {
+					<Textarea
+						ref={promptRef}
+						data-testid="ws-prompt"
+						value={prompt}
+						disabled={creating}
+						{...imagePasteDropHandlers(attachedImages)}
+						onChange={(e) => {
+							const next = e.target.value;
+							const nextSlotSession = slotSession
+								? applyTemplateSlotEdit(prompt, next, e.target.selectionStart, slotSession)
+								: null;
+							updatePromptDraft(next, nextSlotSession);
+						}}
+						placeholder={t("panels.newWorkspace.promptPlaceholder")}
+						spellCheck={false}
+						rows={6}
+						className="min-h-[160px]"
+						onKeyDown={(e) => {
+							if (isPromptKeyEventComposing(e.nativeEvent)) return;
+							if (slotSession && !slashCompletion.open) {
+								if (e.key === "Tab") {
 									e.preventDefault();
-									if (submitEnabled) void create();
+									e.stopPropagation();
+									stepPromptSlot(e.shiftKey ? -1 : 1);
+									return;
 								}
-							}}
-						/>
-						<MicButton
-							fieldRef={promptRef}
-							apply={applyDictation}
-							onListeningChange={setDictating}
-							disabled={creating}
-							size="s"
-							className="absolute right-2 bottom-2"
-						/>
-					</div>
+								if (e.key === "Escape") {
+									e.preventDefault();
+									e.stopPropagation();
+									updatePromptDraft(prompt, null);
+									return;
+								}
+							}
+							if (slashCompletion.handleKeyDown(e)) return;
+							if (e.key === "Enter" && !e.shiftKey) {
+								e.preventDefault();
+								if (submitEnabled) void create();
+							}
+						}}
+					/>
 					{slashCompletion.open ? (
 						<SlashCommandMenu
 							commands={slashCompletion.matches}

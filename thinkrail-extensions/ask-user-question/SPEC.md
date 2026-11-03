@@ -88,13 +88,6 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   re-announce a question the user has already been told about. **Exactly one copy is in the accessibility
   tree**: the visible line goes `aria-hidden` once the region carries the text, so a remount (region
   deliberately empty) still exposes the line.
-  **Voice input.** The Other field and an open per-option note each carry the host's optional
-  `ResourceHost.Mic` ([[module-resource-renderers]]).
-  - Dictated text goes through `onText` / `onNote`, and the caret follows only while the field is
-    focused.
-  - The listening flag lives on the card: while any mic listens, Submit and Next are disabled, and
-    neither Enter in Other nor Enter in a note confirms. A click that blurs the field mid-dictation
-    therefore can't send a partial whose final would then land on a submitted card.
   Per active-chat mount it focuses the selected choice (including Other) or first authored choice once;
   a virtualized remount never reclaims focus, while a fresh `ChatView` mount does (see [[submodule-web-chat]] —
   that means any switch back to the chat tab, not only reopening the chat). It reveals but does **not**
