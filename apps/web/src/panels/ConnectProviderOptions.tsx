@@ -44,6 +44,10 @@ const DETECTED_COPY = {
 		title: "panels.connectProvider.detected.grokBuildTitle",
 		detail: "panels.connectProvider.detected.grokBuildDetail",
 	},
+	antigravity: {
+		title: "panels.connectProvider.detected.antigravityTitle",
+		detail: "panels.connectProvider.detected.antigravityDetail",
+	},
 } as const satisfies Record<DetectedAccountSource, { title: MessageKey; detail: MessageKey }>;
 
 interface DetectedChoice {

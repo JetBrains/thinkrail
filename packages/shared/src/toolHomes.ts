@@ -9,6 +9,7 @@ export function toolHomeEnv(home: string): Record<string, string> {
 		CLAUDE_CODE_OAUTH_TOKEN: "",
 		CODEX_HOME: join(home, ".codex"),
 		GEMINI_CLI_HOME: home,
+		ANTIGRAVITY_CLI_HOME: join(home, ".gemini", "antigravity-cli"),
 		XDG_CONFIG_HOME: join(home, ".config"),
 		COPILOT_HOME: join(home, ".copilot"),
 		KIMI_SHARE_DIR: join(home, ".kimi"),

@@ -34,3 +34,14 @@ test("the preferred default follows pi's provider order before falling back to t
 	});
 	expect(preferredDefaultModel([])).toBeUndefined();
 });
+
+test("prefers host-registered antigravity default model over bare model ID collision", () => {
+	const available = [
+		{ provider: "antigravity", id: "gpt-oss-120b" },
+		{ provider: "antigravity", id: "gemini-4-argon" },
+	];
+	expect(preferredDefaultModel(available)).toEqual({
+		provider: "antigravity",
+		id: "gemini-4-argon",
+	});
+});

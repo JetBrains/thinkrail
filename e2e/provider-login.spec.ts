@@ -130,3 +130,38 @@ test("when the clipboard is unavailable, Copy link reveals a selected manual-cop
 	await page.locator(SIGNOUT).click();
 	await expect(page.locator(CONFIGURED)).toHaveCount(0);
 });
+
+test("opens the OAuth dialog for antigravity, shows Google loopback auth URL and paste fallback, then cancels cleanly", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	await page.getByTestId("open-settings").click();
+	await expect(page.getByTestId("settings-providers")).toBeVisible();
+
+	const providerRow = page.locator(
+		'[data-testid="provider-row"][data-provider="antigravity"], [data-testid="provider-signin-row"][data-provider="antigravity"]',
+	);
+	await expect(providerRow).toBeVisible();
+
+	const signinButton = page.locator('[data-testid="provider-signin"][data-provider="antigravity"]');
+	await expect(signinButton).toBeVisible();
+	await signinButton.click();
+
+	const dialog = page.getByTestId("login-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog).toHaveAttribute("data-provider", "antigravity");
+
+	const link = page.getByRole("link", { name: "Open sign-in page" });
+	await expect(link).toBeVisible();
+	const href = await link.getAttribute("href");
+	expect(href).toMatch(/^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/);
+	expect(href).toContain("redirect_uri=http%3A%2F%2Flocalhost%3A51121%2Foauth-callback");
+
+	await expect(page.getByTestId("login-progress")).toHaveText(
+		"Waiting for you to finish signing in…",
+	);
+	await expect(page.getByTestId("login-paste-toggle")).toBeVisible();
+
+	await page.getByTestId("login-cancel").click();
+	await expect(dialog).toHaveCount(0);
+});

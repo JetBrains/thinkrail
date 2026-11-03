@@ -5,7 +5,7 @@ status: active
 title: agent — in-process pi sessions
 parent: module-server
 depends-on: [module-contracts, module-pi-delegation, module-pi-subagents, module-pi-background-commands]
-references: [module-spec-graph, central-integration, submodule-server-extensions, submodule-server-agent-packages]
+references: [module-spec-graph, central-integration, submodule-server-extensions, submodule-server-agent-packages, submodule-server-agent-antigravity]
 tags: [pi]
 ---
 
@@ -66,7 +66,11 @@ re-opened transcripts provider-valid.
     `provider.status` + in-app login — lives in the sibling `auth` module (which consumes the shared
     `usePiRuntime` callback), **not** here.
 
-    Candidate preparation takes only the reviewed opaque Central path set, builds a fresh runtime, applies the
+    Candidate preparation takes only the reviewed opaque Central path set, builds a fresh runtime,
+    registers the built-in `antigravity` provider ([[submodule-server-agent-antigravity]] — Google Antigravity
+    OAuth subscription provider with PKCE loopback/paste sign-in and Cloud Code Assist streaming) on every
+    `ModelRuntime` generation before `captureProviderStatus(runtime)` captures the pre-opaque
+    `providerStatusIds` allowlist, applies the
     composition root's invariant generation initializer (the source-mode e2e host uses it for its gated fake
     providers), records that pre-opaque provider-id allowlist for `provider.status` together with each id's
     display name at that moment, and then applies the opaque
@@ -126,7 +130,9 @@ re-opened transcripts provider-valid.
     the provider's error text. Direct API keys and other subscriptions keep pi's catalog: no listing was verified to
     agree with pi's aliases there.
   - `modelDefaults` — `preferredDefaultModel(available)`: pi's `defaultModelPerProvider` in pi's order,
-    then any available model whose id is one of those defaults, else the first available model. Pi does
+    then `HOST_DEFAULT_MODEL_PER_PROVIDER` by `(provider, id)` (mapping `antigravity` to `gemini-4-argon`
+    so host-registered providers resolve their preferred default before generic model-id matching), then any
+    available model whose id is one of pi's defaults, else the first available model. Pi does
     not export that map, so the host mirrors it under a parity test against the installed dist; the first
     pass is what pi's own `findInitialModel` would pick. The same-id pass covers a provider whose own
     default the account filter removed: Sign in with ChatGPT serves `openai` models from the

@@ -16,7 +16,15 @@ const webUrl = `http://${openHost}:${webPort}/`;
 printStartupMark({ status: "starting", endpoint: webUrl });
 
 const turbo = Bun.spawn(
-	["bunx", "turbo", "run", "dev", "--filter=@thinkrail/web", "--filter=@thinkrail/server"],
+	[
+		process.execPath,
+		"x",
+		"turbo",
+		"run",
+		"dev",
+		"--filter=@thinkrail/web",
+		"--filter=@thinkrail/server",
+	],
 	{
 		env: {
 			...process.env,

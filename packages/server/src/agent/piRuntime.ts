@@ -4,6 +4,7 @@ import {
 	ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
 import { logger } from "../log";
+import { registerAntigravityProvider } from "./antigravity";
 import { accountAvailableModels, type ModelAvailabilityRuntime } from "./modelAvailability";
 import { advancePiExtensionCache, createPiSettings } from "./packages";
 
@@ -80,6 +81,7 @@ export function configurePiRuntimeFactory(
 	runtimeFactory = factory
 		? async (additionalExtensionPaths) => {
 				const runtime = await factory(additionalExtensionPaths);
+				registerAntigravityProvider(runtime);
 				await generationInitializer(runtime);
 				const providerStatus = captureProviderStatus(runtime);
 				return {
@@ -120,6 +122,7 @@ async function createRuntimeWithExtensions(
 ): Promise<PreparedRuntime> {
 	await advancePiExtensionCache(getAgentDir());
 	const runtime = await createRuntimeOfflineByDefault();
+	registerAntigravityProvider(runtime);
 	await generationInitializer(runtime);
 	const providerStatus = captureProviderStatus(runtime);
 	const priorRegistrations = new Map(

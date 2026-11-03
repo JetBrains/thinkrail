@@ -254,6 +254,23 @@ async function detectGrokBuild(
 	return signedIn ? { source: "grok-build", providerIds: ["xai"] } : null;
 }
 
+async function detectAntigravity(
+	env: NodeJS.ProcessEnv,
+	home: string,
+): Promise<AccountSignal | null> {
+	const dir =
+		envPath(env, "ANTIGRAVITY_CLI_HOME") ??
+		join(envPath(env, "GEMINI_CLI_HOME") ?? home, ".gemini", "antigravity-cli");
+	const candidates = [join(dir, "oauth_creds.json"), join(dir, "state.json")];
+	const files = await Promise.all(candidates.map((path) => readJson(path)));
+	const signedIn = files.some(
+		(file) =>
+			file !== null &&
+			(filled(file.refresh_token) || (isObject(file.tokens) && filled(file.tokens.refresh_token))),
+	);
+	return signedIn ? { source: "antigravity", providerIds: ["antigravity"] } : null;
+}
+
 export async function detectAccountSignals(
 	options: DetectAccountsOptions = {},
 ): Promise<AccountSignal[]> {
@@ -270,6 +287,7 @@ export async function detectAccountSignals(
 			detectCopilotCli(env, home),
 			detectKimiCli(env, home),
 			detectGrokBuild(env, home, now),
+			detectAntigravity(env, home),
 		].map((source) => within(source, SOURCE_TIMEOUT_MS)),
 	);
 	return found.filter((signal) => signal !== null);

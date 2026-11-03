@@ -42,6 +42,7 @@ export const PROVIDER_GLYPHS: Readonly<Record<string, readonly ProviderGlyphPath
 	"amazon-bedrock": glyph_bedrock,
 	"ant-ling": glyph_claude,
 	"anthropic": glyph_claude,
+	"antigravity": glyph_gemini,
 	"azure": glyph_azure,
 	"baseten": glyph_baseten,
 	"cerebras": glyph_cerebras,

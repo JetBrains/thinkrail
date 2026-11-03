@@ -358,6 +358,49 @@ describe("Grok Build", () => {
 	});
 });
 
+describe("Antigravity", () => {
+	test("a valid refresh token in antigravity-cli/oauth_creds.json is detected", async () => {
+		put(join(home, ".gemini", "antigravity-cli", "oauth_creds.json"), { refresh_token: "secret" });
+		expect(await detect()).toEqual([{ source: "antigravity", providerIds: ["antigravity"] }]);
+	});
+
+	test("plain Gemini CLI credentials in .gemini/oauth_creds.json are not reported as Antigravity", async () => {
+		put(join(home, ".gemini", "oauth_creds.json"), { refresh_token: "secret" });
+		expect(await detect()).toEqual([]);
+	});
+
+	test("a valid refresh token in state.json is detected", async () => {
+		put(join(home, ".gemini", "antigravity-cli", "state.json"), { refresh_token: "secret" });
+		expect(await detect()).toEqual([{ source: "antigravity", providerIds: ["antigravity"] }]);
+	});
+
+	test("GEMINI_CLI_HOME and ANTIGRAVITY_CLI_HOME relocate credentials and ignore home", async () => {
+		put(join(home, ".gemini", "antigravity-cli", "oauth_creds.json"), {
+			refresh_token: "home-secret",
+		});
+		const customHome = join(home, "antigravity-custom");
+		expect(await detect({ ANTIGRAVITY_CLI_HOME: customHome })).toEqual([]);
+
+		put(join(customHome, "oauth_creds.json"), { refresh_token: "custom-secret" });
+		expect(await detect({ ANTIGRAVITY_CLI_HOME: customHome })).toEqual([
+			{ source: "antigravity", providerIds: ["antigravity"] },
+		]);
+
+		const geminiHome = join(home, "gemini-home");
+		put(join(geminiHome, ".gemini", "antigravity-cli", "oauth_creds.json"), {
+			refresh_token: "gemini-secret",
+		});
+		expect(await detect({ GEMINI_CLI_HOME: geminiHome })).toEqual([
+			{ source: "antigravity", providerIds: ["antigravity"] },
+		]);
+	});
+
+	test("missing or empty refresh token is not a sign-in", async () => {
+		put(join(home, ".gemini", "antigravity-cli", "oauth_creds.json"), { refresh_token: "   " });
+		expect(await detect()).toEqual([]);
+	});
+});
+
 describe("file robustness", () => {
 	test("a UTF-8 BOM is tolerated", async () => {
 		put(join(home, ".kimi", "credentials", "kimi-code.json"), '﻿{"refresh_token":"secret"}');
@@ -461,6 +504,15 @@ describe("resolveDetectedAccounts", () => {
 		const oauth = new Set(["openai-codex"]);
 		expect(resolveDetectedAccounts(signals, (id) => oauth.has(id))).toEqual([
 			{ providerId: "openai-codex", source: "codex" },
+		]);
+	});
+
+	test("resolves antigravity when antigravity is OAuth-capable", () => {
+		const antigravitySignal: AccountSignal[] = [
+			{ source: "antigravity", providerIds: ["antigravity"] },
+		];
+		expect(resolveDetectedAccounts(antigravitySignal, (id) => id === "antigravity")).toEqual([
+			{ providerId: "antigravity", source: "antigravity" },
 		]);
 	});
 });

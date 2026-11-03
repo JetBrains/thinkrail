@@ -83,9 +83,11 @@ ourselves and never surface a credential value over the wire.
     `github-copilot` (`github-copilot/{apps,hosts}.json` under an absolute `XDG_CONFIG_HOME`, else
     an absolute `LOCALAPPDATA` (else `~/AppData/Local`) on Windows, else `~/.config`; the CLI's commented `config.json` `loggedInUsers`); Kimi CLI
     → `kimi-coding` (`credentials/kimi-code.json` with a refresh token); Grok Build → `xai` (an `auth.json`
-    scope other than the API-key one with a refresh token or an unexpired session). An expired access token
-    with a live refresh token still counts. Gemini CLI and Meta Muse are out because pi has no matching OAuth
-    provider or no verified file. Each signal names candidate providers; the first one the current runtime can
+    scope other than the API-key one with a refresh token or an unexpired session); Antigravity CLI → `antigravity`
+    (checks `ANTIGRAVITY_CLI_HOME`, else `.gemini/antigravity-cli` under `GEMINI_CLI_HOME` or `~`,
+    for `oauth_creds.json` or `state.json` with a refresh token). An expired access token with a live refresh token still counts. Gemini CLI
+    and Meta Muse are out because pi has no matching OAuth provider (Antigravity has its own `antigravity` OAuth
+    provider) or no verified file. Each signal names candidate providers; the first one the current runtime can
     OAuth-sign-in to is reported, and a provider is reported once (first source wins). The plan label is
     reported only when it is a known plan name (`plus`, `pro`, `max`, `team`, `business`, `enterprise`, `edu`,
     lower-cased) — anything else, `free` included, drops the badge but not the sign-in. Files are read only
