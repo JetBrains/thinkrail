@@ -78,3 +78,38 @@ test("a final agent failure offers Try again as an ordinary visible prompt", asy
 		.toEqual({ sessionId: chat.id, text: "Try again." });
 	expect(prompts).toHaveLength(1);
 });
+
+test("a subscription-limit failure offers the usage page and provider settings instead of Try again", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const errorMessage =
+		'400 {"type":"error","error":{"type":"invalid_request_error","message":"Third-party apps now draw from your extra usage, not your plan limits. Add more at claude.ai/settings/usage and keep going."}}';
+	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "extra usage chat",
+		messages: [
+			{ role: "user", text: "finish the task", timestamp: BASE_TS },
+			{
+				role: "assistant",
+				text: "",
+				timestamp: BASE_TS + 1_000,
+				stopReason: "error",
+				errorMessage,
+			},
+		],
+	});
+
+	await enterDefaultWorkspace(page);
+	const failure = page
+		.locator('[data-testid="chat-message"][data-role="error"]')
+		.filter({ hasText: "Third-party apps now draw from your extra usage" });
+	await expect(failure).toBeVisible();
+	await expect(failure.getByTestId("agent-try-again")).toHaveCount(0);
+	await expect(failure.getByRole("link", { name: "Manage extra usage" })).toHaveAttribute(
+		"href",
+		"https://claude.ai/settings/usage",
+	);
+
+	await failure.getByTestId("agent-open-provider-settings").click();
+	await expect(page.getByTestId("settings-providers")).toBeVisible();
+});
