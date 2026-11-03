@@ -1157,7 +1157,12 @@ a project picker, the prompt hero, and the reused
   `ExtensionsCatalog` — title, description, tool-name chips and a `@thinkrail/ui/switch`
   (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
   toggle writes the whole list through `settings.update { disabledExtensions }` and converges on the
-  broadcast. Unknown names already in the list are carried through. **Installed** and **pi built-in**
+  broadcast. Unknown names already in the list are carried through. A catalog entry's declared `settings`
+  render as nested switches under its row (`extension-setting-<name>-<key>`, copy from a static
+  `MessageKey` map — a setting without copy is not shown), valued from **`store.extensionSettings`** else the
+  declared default, disabled while the extension is off, and written one key at a time through
+  `settings.update { extensionSettings: { name: { key: value } } }` (the host merges); they appear only
+  while `supportsExtensionSettings(protocolVersion)` holds. **Installed** and **pi built-in**
   (`PiPackagesSettings.tsx`, props-driven; every `packages.*` request and the row state live in the
   **`usePiPackages`** hook, `usePiPackages.ts`, so the page component only composes) exist only while
   `supportsPiPackages(protocolVersion)` holds — against an older host the page is the bundled group

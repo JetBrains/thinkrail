@@ -854,10 +854,14 @@ re-opened transcripts provider-valid.
     install, remove, update or outside settings change, and a switch generation the host bumps on every
     `disabledPackages` write — so a loader that resolved while a package was flipped off and back on
     never compares equal to the restored set) joins the extension policy generation
-    above, and each session loader records the key it last resolved under; `isLoaderPackagePolicyStale`
-    is one more predicate of the reconciliation `applyExtensionTools` runs at registration, after every
-    reload and on `refreshExtensionTools`, so a session prepared under an older policy reloads when it
-    registers and a change mid-reload re-reloads — the fan-out alone would miss both.
+    above, and each session loader records the key it last resolved under — together with the
+    **extension setting values** (`AppConfig.extensionSettings`, reaching `agent` through a host-injected
+    resolver like the disabled set; a `settings.update` of them calls `refreshExtensionTools`);
+    `isLoaderPolicyStale` is one more predicate of the reconciliation `applyExtensionTools` runs at
+    registration, after every reload and on `refreshExtensionTools`, so a session prepared under an older
+    policy or older setting values reloads when it registers (or once its turn ends) and a change
+    mid-reload re-reloads — the fan-out alone would miss both. A pending question keeps the arguments it
+    was asked with.
     The **`set_title`** tool (`titleTool.ts`) is how chats and workspaces get named: the main agent calls it
     with `chat_title?` / `workspace_name?` / `branch?` (English kebab slug). It is always registered and
     active, and listed via `promptSnippet`; toggling it off after naming would rebuild the system prompt

@@ -1862,6 +1862,8 @@
 	"settings.environment.vars.name": "Имя переменной",
 	"settings.environment.vars.show": "Показать значение",
 	"settings.environment.vars.value": "Значение переменной",
+	"settings.extensions.ask-user-question.richPreviews.description": "Макеты, диффы «до → после» и файлы воркспейса в превью вопросов. Если выключено, превью — только текст и схемы Mermaid, а агент не пишет файлы макетов для вопросов.",
+	"settings.extensions.ask-user-question.richPreviews.title": "Богатые превью в вопросах",
 	"settings.extensions.changeFailed": "Не удалось изменить расширение",
 	"settings.extensions.description": "Инструменты, навыки и шаблоны запросов, которые агент получает в каждом чате — встроенные в ThinkRail или установленные как пакеты pi. Изменения применяются к открытым чатам после завершения текущего хода.",
 	"settings.extensions.descriptionBundledOnly": "Расширения ThinkRail, доступные агенту на этом хосте. Отключение удаляет их инструменты и навыки из новых чатов и из открытых после завершения текущего хода; прошлые результаты остаются. Выбор сохраняется на хосте и доступен на других устройствах.",

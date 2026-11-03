@@ -42,7 +42,12 @@ function compose(
 	respond: (toolCallId: string, signal: AbortSignal | undefined) => Promise<ToolResponse>,
 	expectToolResponse: (toolCallId: string) => void = () => {},
 ) {
-	const session: ExtensionSessionServices = { expectToolResponse, awaitToolResponse: respond };
+	const session: ExtensionSessionServices = {
+		expectToolResponse,
+		awaitToolResponse: respond,
+		setting: () => true,
+		workspaceFiles: { check: async () => {}, scratchDir: ".thinkrail/context/mockups/" },
+	};
 	const factories = askUserQuestion.sessionExtensions?.(session) ?? [];
 	let tool: CapturedTool | undefined;
 	const handlers = new Map<string, MessageEndHandler>();

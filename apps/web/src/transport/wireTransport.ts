@@ -23,6 +23,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
@@ -52,6 +53,10 @@ export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 
 export function supportsUserThemes(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= USER_THEMES_PROTOCOL_VERSION;
+}
+
+export function supportsExtensionSettings(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= EXTENSION_SETTINGS_PROTOCOL_VERSION;
 }
 
 export function supportsPiPackages(protocolVersion: number | null): boolean {

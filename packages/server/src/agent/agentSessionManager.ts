@@ -61,7 +61,12 @@ import {
 } from "pi-background-commands";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS, type Subagents } from "pi-subagents";
-import { interactiveTools, registryExtensionName, serverExtensions } from "../extensions";
+import {
+	interactiveTools,
+	registryExtensionName,
+	serverExtensions,
+	workspaceFiles,
+} from "../extensions";
 import { logger } from "../log";
 import {
 	dataDir,
@@ -93,7 +98,8 @@ import {
 import {
 	buildResourceLoader,
 	disabledExtensions,
-	isLoaderPackagePolicyStale,
+	extensionSettingsKey,
+	isLoaderPolicyStale,
 	loadsDisabledExtensionSkills,
 	packagePolicyKey,
 	providerExtensionPaths,
@@ -803,7 +809,7 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	if (
 		enabledExtensionMissing(session, disabled) ||
 		loadsDisabledExtensionSkills(session.resourceLoader.getSkills().skills) ||
-		isLoaderPackagePolicyStale(session.resourceLoader)
+		isLoaderPolicyStale(session.resourceLoader)
 	) {
 		void requestSessionReload(session.sessionId).catch((error) => {
 			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(session.sessionId)) {
@@ -850,7 +856,7 @@ function enabledExtensionMissing(session: AgentSession, disabled: ReadonlySet<st
 
 let extensionPolicy = { key: "", generation: 0 };
 function noteExtensionPolicy(): void {
-	const key = `${[...disabledExtensions()].sort().join("\n")}\0${packagePolicyKey()}`;
+	const key = `${[...disabledExtensions()].sort().join("\n")}\0${packagePolicyKey()}\0${extensionSettingsKey()}`;
 	if (key !== extensionPolicy.key) {
 		extensionPolicy = { key, generation: extensionPolicy.generation + 1 };
 	}
@@ -1516,7 +1522,7 @@ async function createParentSessionInternal(
 					...mcpHost.extensions,
 					extraUsageModelSelectExtension(sessionId),
 				],
-				toolResponseSessionServices(toolResponseWaiters),
+				{ ...toolResponseSessionServices(toolResponseWaiters), workspaceFiles },
 			),
 		});
 		session = result.session;

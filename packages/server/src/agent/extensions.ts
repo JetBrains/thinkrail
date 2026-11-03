@@ -15,11 +15,15 @@ import {
 	type SettingsManager,
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
-import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
+import type {
+	ExtensionSettingValues,
+	SkillCatalogEntry,
+	SlashCommandInfo,
+} from "@thinkrail/contracts";
 import specGraphExtension from "pi-spec-graph";
 import {
-	type ExtensionSessionServices,
 	extensionSkillRoots,
+	type HostSessionServices,
 	omitDisabledRegistryExtensions,
 	preferRegistryTools,
 	registryInlineExtensions,
@@ -241,6 +245,36 @@ export function disabledExtensions(): ReadonlySet<string> {
 
 const isExtensionDisabled = (name: string): boolean => disabledExtensions().has(name);
 
+const noExtensionSettings = (): ExtensionSettingValues => ({});
+let extensionSettingsResolver: () => ExtensionSettingValues = noExtensionSettings;
+export function setExtensionSettingsResolver(
+	resolver: (() => ExtensionSettingValues) | null,
+): void {
+	extensionSettingsResolver = resolver ?? noExtensionSettings;
+}
+
+export function extensionSettings(): ExtensionSettingValues {
+	try {
+		return extensionSettingsResolver();
+	} catch {
+		return {};
+	}
+}
+
+const extensionSettingValue = (extension: string, key: string): boolean | undefined =>
+	extensionSettings()[extension]?.[key];
+
+const byKey = <T>([a]: [string, T], [b]: [string, T]): number => a.localeCompare(b);
+
+/** The extension setting values as one stable string: a change marks every loader built before stale. */
+export function extensionSettingsKey(): string {
+	return JSON.stringify(
+		Object.entries(extensionSettings())
+			.sort(byKey)
+			.map(([name, values]) => [name, Object.entries(values).sort(byKey)]),
+	);
+}
+
 const providerOwners = new Map<string, Set<string>>();
 
 function recordProviderOwners(result: LoadExtensionsResult): void {
@@ -300,12 +334,16 @@ export function packagePolicyKey(): string {
 	return `${packagesRevision}\n${switchGeneration}\n${[...disabledPackages()].sort().join("\n")}`;
 }
 
-const loaderPackagePolicies = new WeakMap<ResourceLoader, string>();
+const loaderPolicies = new WeakMap<ResourceLoader, string>();
 
-/** `true` when the loader last resolved under a package policy other than the current one. */
-export function isLoaderPackagePolicyStale(loader: ResourceLoader): boolean {
-	const recorded = loaderPackagePolicies.get(loader);
-	return recorded !== undefined && recorded !== packagePolicyKey();
+function loaderPolicyKey(): string {
+	return `${packagePolicyKey()}\0${extensionSettingsKey()}`;
+}
+
+/** `true` when the loader last resolved under a package policy or extension settings other than the current ones. */
+export function isLoaderPolicyStale(loader: ResourceLoader): boolean {
+	const recorded = loaderPolicies.get(loader);
+	return recorded !== undefined && recorded !== loaderPolicyKey();
 }
 
 let installedPackagesListener: (() => void) | null = null;
@@ -343,12 +381,18 @@ export async function buildResourceLoader(
 	getAdmission: () => SkillAdmissionContext,
 	excludedExtensionPaths: readonly string[] = [],
 	extraFactories: InlineExtension[] = [],
-	session?: ExtensionSessionServices,
+	session?: HostSessionServices,
 ): Promise<ResourceLoader> {
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
 	const sharedFactories: InlineExtension[] = [
-		...registryInlineExtensions("extensions", isDisabledAtReload, serverExtensions, session),
+		...registryInlineExtensions(
+			"extensions",
+			isDisabledAtReload,
+			serverExtensions,
+			session,
+			extensionSettingValue,
+		),
 		headlessSearchPolicy,
 		reviewToolExtension,
 		requestReviewExtension,
@@ -387,7 +431,7 @@ export async function buildResourceLoader(
 		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
 		disabledAtReload = disabledExtensions();
 		refreshSkillPaths(disabledAtReload);
-		loaderPackagePolicies.set(loader, packagePolicyKey());
+		loaderPolicies.set(loader, loaderPolicyKey());
 	};
 	// pi's reload installs a declared package that is missing; the packages layer learns of it here.
 	const noticingInstalls = async (reload: () => Promise<void>): Promise<void> => {

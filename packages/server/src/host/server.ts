@@ -50,6 +50,7 @@ import {
 	setAgentReviewEnabledResolver,
 	setDisabledExtensionsResolver,
 	setDisabledPackagesResolver,
+	setExtensionSettingsResolver,
 	setExtUiPublisher,
 	setMcpLoginPublisher,
 	setMcpPolicyResolver,
@@ -730,6 +731,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
+	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
 	setDisabledPackagesResolver(() => new Set(getConfig().disabledPackages));
 
 	setProjectPublisher((project) => {
@@ -883,6 +885,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (appliedUpdate.disabledPackages !== undefined) bumpPackageSwitchGeneration();
 		if (
 			appliedUpdate.disabledExtensions !== undefined ||
+			appliedUpdate.extensionSettings !== undefined ||
 			appliedUpdate.disabledPackages !== undefined
 		) {
 			refreshExtensionTools();
@@ -1114,6 +1117,7 @@ function restoreSeamDefaults(): void {
 	setSubagentConcurrencyResolver(null);
 	setAgentReviewEnabledResolver(null);
 	setDisabledExtensionsResolver(null);
+	setExtensionSettingsResolver(null);
 	setDisabledPackagesResolver(null);
 	setProjectPublisher(null);
 	setTerminalTabsPublisher(() => {});

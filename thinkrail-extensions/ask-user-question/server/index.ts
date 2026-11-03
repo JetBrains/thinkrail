@@ -37,6 +37,7 @@ export default defineServerExtension({
 	description:
 		"Lets the agent pause and ask you structured multiple-choice questions in chat instead of guessing.",
 	extensions: [],
+	settings: { richPreviews: { type: "boolean", default: true } },
 	sessionExtensions: (session) => [
 		createAskUserQuestionExtension({
 			ask: askThroughHost(session),

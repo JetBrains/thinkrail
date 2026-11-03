@@ -1836,6 +1836,8 @@
 	"settings.environment.vars.name": "Variable name",
 	"settings.environment.vars.show": "Show value",
 	"settings.environment.vars.value": "Variable value",
+	"settings.extensions.ask-user-question.richPreviews.description": "Mockups, before/after diffs and workspace files as question previews. Off: previews are text and Mermaid diagrams only, and the agent doesn't write mockup files for questions.",
+	"settings.extensions.ask-user-question.richPreviews.title": "Rich previews in questions",
 	"settings.extensions.changeFailed": "Couldn't change the extension",
 	"settings.extensions.description": "Tools, skills and prompts the agent gets in every chat — built into ThinkRail or installed as pi packages. Changes apply to open chats when their current turn ends.",
 	"settings.extensions.descriptionBundledOnly": "The ThinkRail extensions this host gives the agent. Turning one off removes its tools and skills from new chats and from open chats once their current turn ends; past results still render.",
