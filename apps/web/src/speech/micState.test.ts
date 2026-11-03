@@ -28,7 +28,16 @@ test("a platform, browser or origin that cannot dictate shows a disabled mic wit
 		kind: "unavailable",
 		reason: "unsupported-browser",
 	});
-	expect(micState(base, "available", "denied")).toEqual({ kind: "unavailable", reason: "denied" });
+});
+
+test("a blocked microphone stays clickable so the user can retry after allowing it", () => {
+	const ready = { ...base, install: { status: "ready" as const, model: "multilingual" as const } };
+	expect(micState(ready, "available", "denied")).toEqual({ kind: "blocked", reason: "denied" });
+	expect(micState(ready, "available", "no-device")).toEqual({
+		kind: "blocked",
+		reason: "no-device",
+	});
+	expect(micState(base, "available", "denied")).toMatchObject({ kind: "offer" });
 });
 
 test("before the download the mic offers the multilingual model with its size", () => {

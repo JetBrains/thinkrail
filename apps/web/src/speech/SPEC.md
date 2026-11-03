@@ -91,9 +91,14 @@ design:
   `readOnly`, reports `onListeningChange`, and stops on Esc (captured before the field's own handlers),
   on blur, or when the mic unmounts (a tab switch or a closed dialog). Pressing the mic itself never
   blurs: `onMouseDown` prevents default.
-- **Errors.** A dictation failure of its own is a toast (a warning for microphone access, an error
-  otherwise). A `denied` / `no-device` failure keeps every mic `unavailable` until reload, since nothing
-  can start a new dictation to clear it.
+- **Errors.** A dictation failure of its own is a toast: a warning for microphone access, an error
+  otherwise.
+  - A `denied` / `no-device` failure turns every installed mic `blocked`: the mic-off icon, still
+    clickable, with a tooltip naming where to allow access (System Settings → Privacy & Security →
+    Microphone, or the browser).
+  - The next click retries, so granting access needs no reload.
+  - An earlier version disabled the mic until reload. That left a user who had fixed the permission
+    with no way back.
 - **Chord.** ⌘⇧Space on Apple, Ctrl+Shift+Space elsewhere.
   - Window capture-phase listeners exist only while a mic is mounted.
   - The target is the focused registered field. Otherwise, when no modal layer is open and focus is in
@@ -110,8 +115,10 @@ design:
 
 - `hidden`: a pre-v103 host (`speech === null`);
 - `unavailable` with a reason: `unsupported-platform` (the host has no pinned runtime),
-  `insecure-origin`, `unsupported-browser`, or a latched `denied` / `no-device`;
+  `insecure-origin`, or `unsupported-browser`;
 - `installing` with bytes;
 - `ready`: installed, or a failed switch whose older model still works;
+- `blocked` with `denied` / `no-device`: installed, but the last dictation could not open the microphone
+  (clickable to retry);
 - `offer`: the download for the failed model (or `DEFAULT_SPEECH_MODEL`, multilingual), with its size
   and any failure code to retry.

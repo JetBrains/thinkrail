@@ -43,8 +43,11 @@ const UNAVAILABLE_LABEL = {
 	"insecure-origin": "speech.mic.unavailable.insecureOrigin",
 	"unsupported-browser": "speech.mic.unavailable.unsupportedBrowser",
 	"unsupported-platform": "speech.mic.unavailable.unsupportedPlatform",
-	denied: "speech.mic.unavailable.denied",
-	"no-device": "speech.mic.unavailable.noDevice",
+} as const satisfies Record<string, MessageKey>;
+
+const BLOCKED_LABEL = {
+	denied: "speech.mic.blocked.denied",
+	"no-device": "speech.mic.blocked.noDevice",
 } as const satisfies Record<string, MessageKey>;
 
 const ERROR_MESSAGE = {
@@ -57,8 +60,8 @@ const ERROR_MESSAGE = {
 	SPEECH_ENGINE_FAILED: "speech.error.engineFailed",
 	SPEECH_BUSY: "speech.error.busy",
 	SPEECH_PROTOCOL: "speech.error.engineFailed",
-	denied: "speech.mic.unavailable.denied",
-	"no-device": "speech.mic.unavailable.noDevice",
+	denied: "speech.mic.blocked.denied",
+	"no-device": "speech.mic.blocked.noDevice",
 	failed: "speech.error.microphoneFailed",
 } as const satisfies Record<DictationError, MessageKey>;
 
@@ -191,7 +194,7 @@ export function MicButton({
 		}
 		const current = latest.current.state;
 		if (latest.current.disabled) return false;
-		if (current.kind === "ready") {
+		if (current.kind === "ready" || current.kind === "blocked") {
 			begin();
 			return true;
 		}
@@ -264,19 +267,23 @@ export function MicButton({
 	const label =
 		state.kind === "unavailable"
 			? t(UNAVAILABLE_LABEL[state.reason])
-			: state.kind === "installing"
-				? t("speech.mic.installing", {
-						percent: String(
-							state.totalBytes > 0 ? Math.floor((state.receivedBytes / state.totalBytes) * 100) : 0,
-						),
-					})
-				: state.kind === "offer"
-					? t("speech.mic.setup")
-					: starting
-						? t("speech.mic.starting")
-						: active
-							? t("speech.mic.stop", { shortcut })
-							: t("speech.mic.start", { shortcut });
+			: state.kind === "blocked"
+				? t(BLOCKED_LABEL[state.reason])
+				: state.kind === "installing"
+					? t("speech.mic.installing", {
+							percent: String(
+								state.totalBytes > 0
+									? Math.floor((state.receivedBytes / state.totalBytes) * 100)
+									: 0,
+							),
+						})
+					: state.kind === "offer"
+						? t("speech.mic.setup")
+						: starting
+							? t("speech.mic.starting")
+							: active
+								? t("speech.mic.stop", { shortcut })
+								: t("speech.mic.start", { shortcut });
 
 	const busy = state.kind === "installing" || starting;
 	return (
@@ -289,7 +296,7 @@ export function MicButton({
 						icon={
 							busy
 								? Busy
-								: state.kind === "unavailable"
+								: state.kind === "unavailable" || state.kind === "blocked"
 									? RiMicOffLine
 									: active
 										? RiMicFill

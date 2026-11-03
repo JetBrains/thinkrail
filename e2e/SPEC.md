@@ -424,6 +424,9 @@ URL for the whole run, so a spec that sets its own repository settings names its
 - The host boots before the manifest exists (see below) and logs one unreadable-manifest warning. The
   spec's `beforeAll` runs `speech.remove`, which re-reads it.
 - The spec is serial and skipped on Windows, where the wrapper is a POSIX shell script.
+- `voice-input-blocked.spec.ts` stubs `getUserMedia` with a `NotAllowedError` in an init script. It
+  pins the blocked state (enabled, tooltip naming where to allow access) and a retry once access
+  returns. Headless Chromium without the fake-UI flag does not deny reliably.
 - **Opt-in real engine.** `voice-input.real.spec.ts` runs only with `THINKRAIL_E2E_REAL_SPEECH=1`, which
   also keeps the fixture manifest off the host: `THINKRAIL_E2E_REAL_SPEECH=1 bun run e2e
   e2e/voice-input.real.spec.ts`.

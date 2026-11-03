@@ -393,6 +393,15 @@ webview, so granting the microphone to the webview grants it only to ThinkRail's
   writes it as `NSMicrophoneUsageDescription` into `Info.plist` (verified on a `package:dev` build). The
   first dictation shows macOS's own prompt, plus the Electrobun WKWebView wrapper's per-origin
   "Microphone Access" dialog.
+- **TCC attribution.** macOS asks the *responsible* process. A ThinkRail launched from another app's
+  terminal (`bun run desktop:dev` inside ThinkRail) is attributed to that parent app. If the parent's
+  `Info.plist` has no `NSMicrophoneUsageDescription` (any release before voice input), TCC cannot
+  prompt, and WebKit denies `getUserMedia` within milliseconds. This was seen with a dev build started
+  from ThinkRail canary 0.4.0-nightly.3 (`responsible_path` in the `tccd` log). Test the microphone
+  with an app opened through LaunchServices (Finder or `open …/ThinkRail-dev.app`).
+- WebKit also hides `navigator.mediaDevices` entirely in an app whose own `Info.plist` lacks the
+  usage string (checked with a minimal WKWebView probe), so the page reports an unsupported browser
+  there.
 - **Windows.** `build.win.autoGrantPermissions: ["microphone"]` answers WebView2's permission request
   without a dialog. Auto-grant applies to every origin the webview loads, which here is only ours.
 - **Linux.** Unconfigured. Whether WebKitGTK prompts or grants by default is unverified.
