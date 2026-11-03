@@ -167,6 +167,7 @@ export function DictationLayer() {
 	const [availability] = useState(micAvailability);
 	const [focused, setFocused] = useState<HTMLElement | null>(null);
 	const [offerOpen, setOfferOpen] = useState(false);
+	const [kept, setKept] = useState<HTMLElement | null>(null);
 	const lastFallback = useRef<HTMLElement | null>(null);
 	const dictating = useDictatingElement();
 	const state = micState(status, availability, blockedMicrophone(snapshot.error?.code));
@@ -234,18 +235,21 @@ export function DictationLayer() {
 
 	const listening = snapshot.phase !== "idle" ? dictating : null;
 	const field = listening ?? focused;
-	const container = field ? layerContainer(field) : null;
+	if (field && field !== kept) setKept(field);
+	const anchor = field ?? (kept?.isConnected ? kept : null);
+	const container = anchor ? layerContainer(anchor) : null;
 	const micRef = useRef<HTMLDivElement>(null);
 	const shown = state.kind !== "hidden" && field !== null && field.isConnected && fitsMic(field);
+	if (!shown && offerOpen) setOfferOpen(false);
 	useLayoutEffect(() => {
 		const mic = micRef.current;
 		if (!mic || !field || !shown) return;
 		return followField(mic, field, container);
 	}, [field, container, shown]);
 
-	if (!shown || !field) return null;
+	if (!anchor || state.kind === "hidden") return null;
 
-	const active = listening === field;
+	const active = listening === anchor;
 	const starting = active && snapshot.phase === "connecting";
 	const busy = state.kind === "installing" || starting;
 	const shortcut = dictationShortcutLabel();
@@ -271,7 +275,7 @@ export function DictationLayer() {
 								: t("speech.mic.start", { shortcut });
 	const press = () => {
 		if (active) stopDictation();
-		else if (state.kind === "ready" || state.kind === "blocked") startDictation(field);
+		else if (state.kind === "ready" || state.kind === "blocked") startDictation(anchor);
 		else if (state.kind === "offer") setOfferOpen(true);
 		else if (state.kind === "installing") cancelInstall();
 	};
@@ -280,6 +284,7 @@ export function DictationLayer() {
 		<div
 			ref={micRef}
 			data-dictation-layer=""
+			hidden={!shown}
 			className={cn(
 				"z-50 flex -translate-x-full items-center gap-4 data-[placement=corner]:-translate-y-full data-[placement=middle]:-translate-y-1/2",
 				container ? "absolute" : "fixed",

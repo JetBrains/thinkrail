@@ -49,7 +49,10 @@ export function startDictation(element: HTMLElement): void {
 		event.stopImmediatePropagation();
 		dictation.stop(owner);
 	};
-	const onBlur = () => dictation.stop(owner);
+	const onBlur = () =>
+		setTimeout(() => {
+			if (!element.contains(document.activeElement)) dictation.stop(owner);
+		});
 	element.addEventListener("keydown", onKeyDown, true);
 	element.addEventListener("blur", onBlur);
 	const release = () => {

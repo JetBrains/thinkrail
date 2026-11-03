@@ -472,6 +472,14 @@ dependency. This keeps test process drivers outside both launchers and the serve
       50 audio frames a second.
       - Rejected: base64 frames on the wire (that same retention); the browser talking to the engine's
         port directly (breaks remote clients and exposes another local port).
+    - **Voice is a property of the page, not of fields.** One dictation layer in the web app follows
+      focus to any text input, textarea or contenteditable, and writes into it through native `input`
+      events.
+      - Every field gets voice with no API: the app's, resource renderers', and extension cards'.
+        Extensions need nothing from the Host UI SDK ([[module-thinkrail-extensions]]).
+      - The code editor and the terminal are excluded.
+      - Rejected: per-field mic components. Every surface and every extension would have to adopt and
+        wire one, and the first version did exactly that through `ResourceHost`.
     - **Where the mic is.** The browser owns the microphone ([[submodule-web-speech]]), because a remote
       client's microphone is at the client. So voice works only in a secure context (HTTPS or
       localhost).

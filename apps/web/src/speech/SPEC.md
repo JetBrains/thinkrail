@@ -109,6 +109,11 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
   - It portals into the field's nearest `[role="dialog"]` or Radix popper wrapper, absolutely
     positioned against it (including its scroll offset and border), so it sits inside that layer's focus trap and outside-click guard. Elsewhere
     it is fixed to the viewport.
+  - When focus leaves, the mic is hidden (`hidden`), not unmounted, until another field takes focus or
+    its field leaves the page. Radix focus scopes move focus to their container whenever a node inside
+    them is removed while focus is on `body`. Removing the mic mid-focus-change closed a model-picker
+    popover on a click inside it, and broke a field's own focus restore after it disabled itself.
+    For the same reason, the blur that ends a dictation acts a task later, once focus has landed.
   - It is a plain element, not a Radix popover: an always-open dismissable layer swallowed Escape for
     dialogs underneath.
 - **States** follow Mic state.

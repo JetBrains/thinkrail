@@ -237,7 +237,7 @@ test("any field a page adds gets voice, with no code in it; passwords never do",
 	await page.keyboard.press("Escape");
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await page.locator("#ext-secret").focus();
-	await expect(mic(page)).toHaveCount(0);
+	await expect(mic(page)).toBeHidden();
 	await page.evaluate(() => document.getElementById("extension-host")?.remove());
 });
 
@@ -248,7 +248,7 @@ test("the chord never reaches the composer behind an open dialog", async ({ page
 	await expect(page.getByTestId("settings-dialog")).toBeVisible();
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
 	await page.waitForTimeout(300);
-	await expect(mic(page)).toHaveCount(0);
+	await expect(mic(page)).toBeHidden();
 	await expect(page.getByTestId("chat-input")).not.toHaveAttribute("readonly", "");
 	await page.keyboard.press("Escape");
 });
