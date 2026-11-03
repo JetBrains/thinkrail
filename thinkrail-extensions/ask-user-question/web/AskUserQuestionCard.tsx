@@ -664,6 +664,7 @@ export function AskUserQuestionCard({
 							<Button
 								variant="ghost"
 								size="l"
+								tabIndex={0}
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!canRespond}
@@ -675,6 +676,7 @@ export function AskUserQuestionCard({
 								<Button
 									variant="primary"
 									size="l"
+									tabIndex={0}
 									data-testid="ask-continue"
 									onClick={() => setTab(idx + 1)}
 									className="shrink-0"
@@ -685,6 +687,7 @@ export function AskUserQuestionCard({
 								<Button
 									variant="primary"
 									size="l"
+									tabIndex={0}
 									data-testid="ask-submit"
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
@@ -835,7 +838,7 @@ function ModeHint({
 	);
 }
 
-function QuestionBody({
+export function QuestionBody({
 	question,
 	state,
 	pageKeys,
@@ -975,6 +978,7 @@ function QuestionBody({
 											{state.noteFor === option.label ? (
 												<textarea
 													ref={noteRef}
+													tabIndex={0}
 													data-testid="ask-note"
 													aria-label={t("tools.ask.noteLabel", { option: optionText })}
 													aria-keyshortcuts="Enter Shift+Enter Escape"
@@ -1001,6 +1005,7 @@ function QuestionBody({
 													variant="ghost"
 													size="s"
 													iconLeft={Pencil}
+													tabIndex={0}
 													data-testid="ask-note-toggle"
 													aria-label={
 														noteText
@@ -1103,7 +1108,10 @@ function OptionRow({
 			data-ask-page-focus={pageFocus || undefined}
 			onFocus={onFocus}
 			onKeyDown={onKeyDown}
-			onClick={onClick}
+			onClick={(event) => {
+				event.currentTarget.focus({ preventScroll: true });
+				onClick();
+			}}
 			className={cn(
 				"flex items-start gap-8 rounded-sm border px-12 py-8 text-left outline-none transition-colors focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary",
 				selected
@@ -1173,6 +1181,7 @@ function OtherOptionRow({
 			{multi ? (
 				<button
 					type="button"
+					tabIndex={0}
 					data-testid="ask-custom-toggle"
 					aria-label={active ? t("tools.ask.excludeCustom") : t("tools.ask.includeCustom")}
 					onClick={(e) => {
@@ -1190,6 +1199,7 @@ function OtherOptionRow({
 			<input
 				ref={inputRef}
 				id={inputId}
+				tabIndex={0}
 				data-testid="ask-custom"
 				data-ask-page-focus={pageFocus || undefined}
 				aria-label={t("tools.ask.otherLabel")}

@@ -1,0 +1,109 @@
+import { describe, expect, it } from "bun:test";
+import type { ToolInteraction } from "@thinkrail/extension-api/web";
+import type { AskUserQuestionItem } from "@thinkrail/pi-ask-user-question/core";
+import { renderToStaticMarkup } from "react-dom/server";
+import { AskUserQuestionCard, type QState, QuestionBody } from "./AskUserQuestionCard";
+
+const BOTTOM = "Bottom panel";
+const single: AskUserQuestionItem = {
+	question: "Where should the queue live?",
+	header: "Placement",
+	options: [
+		{
+			label: "Right panel (Recommended)",
+			description: "Next to the chat.",
+			recommendedReason: "Close.",
+		},
+		{ label: BOTTOM, description: "Shares space." },
+	],
+};
+const multi: AskUserQuestionItem = {
+	question: "Which checks?",
+	header: "Checks",
+	multiSelect: true,
+	options: [
+		{ label: "Lint", description: "Biome." },
+		{ label: "Typecheck", description: "tsc." },
+	],
+};
+
+const noop = () => undefined;
+const interaction: ToolInteraction = {
+	state: { superseded: false, ended: false, accepting: true },
+	respond: async () => undefined,
+	focusScope: {},
+	prepareLayoutChange: () => noop,
+	revealElement: noop,
+	cancelAutomaticReveal: noop,
+	focusComposer: noop,
+};
+
+const state = (over: Partial<QState>): QState => ({
+	option: null,
+	customText: "",
+	customActive: false,
+	multi: [],
+	cursor: 0,
+	notes: {},
+	noteFor: null,
+	...over,
+});
+
+const body = (question: AskUserQuestionItem, qState: QState) =>
+	renderToStaticMarkup(
+		<QuestionBody
+			question={question}
+			state={qState}
+			pageKeys
+			onSelect={noop}
+			onToggleMulti={noop}
+			onCursor={noop}
+			onConfirmChoice={noop}
+			onCustomText={noop}
+			onToggleCustom={noop}
+			onConfirmCustom={noop}
+			onOpenNote={noop}
+			onCloseNote={noop}
+			onNote={noop}
+		/>,
+	);
+
+const INTERACTIVE =
+	/<(?:button|input|textarea|select|a)\b[^>]*>|<[a-z]+\b[^>]*\brole="(?:button|radio|checkbox|tab|switch|menuitem)"[^>]*>/g;
+
+function controlsWithoutTabStop(html: string): string[] {
+	return [...html.matchAll(INTERACTIVE)]
+		.map((m) => m[0])
+		.filter((tag) => !/\btabindex="-?\d+"/.test(tag));
+}
+
+describe("every control is an explicit tab stop (WebKit skips buttons without one)", () => {
+	it("covers the active card's tabs, choices, Other and footer", () => {
+		const html = renderToStaticMarkup(
+			<AskUserQuestionCard
+				toolCallId="call-tab-stops"
+				toolName="ask_user_question"
+				args={{ questions: [single, multi] }}
+				result={undefined}
+				status="running"
+				streaming={false}
+				interaction={interaction}
+			/>,
+		);
+		expect(html).toContain('data-testid="ask-skip"');
+		expect(controlsWithoutTabStop(html)).toEqual([]);
+	});
+
+	it("covers the note toggle and the open note editor", () => {
+		expect(controlsWithoutTabStop(body(single, state({ option: BOTTOM, cursor: 1 })))).toEqual([]);
+		expect(
+			controlsWithoutTabStop(body(single, state({ option: BOTTOM, cursor: 1, noteFor: BOTTOM }))),
+		).toEqual([]);
+	});
+
+	it("covers the multi-select Other include toggle", () => {
+		const html = body(multi, state({ multi: ["Lint"], customText: "own", customActive: true }));
+		expect(html).toContain('data-testid="ask-custom-toggle"');
+		expect(controlsWithoutTabStop(html)).toEqual([]);
+	});
+});

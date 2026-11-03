@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Install Playwright's Chromium headless shell, retrying the network download a bounded number of times.
+# Install Playwright's Chromium headless shell (plus WebKit and its system libraries with `start webkit`),
+# retrying the network download a bounded number of times.
 install() {
 	for attempt in 1 2 3; do
-		bunx playwright install --only-shell chromium && return 0
+		bunx playwright install --only-shell chromium &&
+			{ [ "${2:-}" != webkit ] || bunx playwright install --with-deps webkit; } && return 0
 		echo "::warning::Playwright install failed on attempt $attempt"
 		sleep 20
 	done
@@ -16,13 +18,13 @@ case "${1:-}" in
 	start)
 		rm -f "$status"
 		(
-			install
+			install "$@"
 			echo $? > "$status.tmp" && mv "$status.tmp" "$status"
 		) > "$log" 2>&1 &
 		echo $! > "$pid"
 		;;
 	wait)
-		deadline=$((SECONDS + 240))
+		deadline=$((SECONDS + 420))
 		until [ -f "$status" ]; do
 			if ! kill -0 "$(cat "$pid")" 2> /dev/null && [ ! -f "$status" ]; then
 				cat "$log"
@@ -31,7 +33,7 @@ case "${1:-}" in
 			fi
 			if [ "$SECONDS" -ge "$deadline" ]; then
 				cat "$log"
-				echo "::error::Playwright install still running after 240 s"
+				echo "::error::Playwright install still running after 420 s"
 				exit 1
 			fi
 			sleep 1
@@ -40,7 +42,7 @@ case "${1:-}" in
 		exit "$(cat "$status")"
 		;;
 	*)
-		echo "usage: $0 start|wait" >&2
+		echo "usage: $0 start [webkit]|wait" >&2
 		exit 2
 		;;
 esac

@@ -141,6 +141,111 @@ async function wheelUntilChatElementIntersects(
 	await expect.poll(async () => (await readChatViewportIntersection(target)).intersects).toBe(true);
 }
 
+const KEYBOARD_ROLLOUT = {
+	question: "Which keyboard rollout should we use?",
+	header: "Rollout",
+	options: [
+		{ label: "Keyboard alpha", description: "Use the first fixture choice." },
+		{ label: "Keyboard beta", description: "Use the second fixture choice." },
+		{ label: "Keyboard gamma", description: "Use the third fixture choice." },
+	],
+} satisfies AskUserQuestionArgs["questions"][number];
+
+const KEYBOARD_ROUND = {
+	questions: [
+		KEYBOARD_ROLLOUT,
+		{
+			question: "Which keyboard checks should run?",
+			header: "Checks",
+			multiSelect: true,
+			options: [
+				{ label: "Keyboard lint", description: "Run the linter." },
+				{ label: "Keyboard types", description: "Run the type checker." },
+				{ label: "Keyboard units", description: "Run the unit tests." },
+			],
+		},
+	],
+} satisfies AskUserQuestionArgs;
+
+test("the keyboard alone reaches every control and answers a two-page questionnaire", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("keyboard round", "ask-keyboard-round", KEYBOARD_ROUND);
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "keyboard round");
+		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
+		const options = card.getByTestId("ask-option");
+		await expect(options.first()).toBeFocused();
+
+		await page.keyboard.press("ArrowDown");
+		await expect(options.nth(1)).toBeFocused();
+		await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
+
+		await page.keyboard.press("Tab");
+		await expect(card.getByTestId("ask-note-toggle")).toBeFocused();
+		await page.keyboard.press("Enter");
+		await expect(card.getByTestId("ask-note")).toBeFocused();
+		await page.keyboard.type("Typed without a mouse.");
+		await page.keyboard.press("Enter");
+		await expect(options.nth(1)).toBeFocused();
+
+		for (const target of ["ask-note-toggle", "ask-custom", "ask-skip", "ask-continue"]) {
+			await page.keyboard.press("Tab");
+			await expect(card.getByTestId(target)).toBeFocused();
+		}
+		await page.keyboard.press("Enter");
+		await expect(card.getByTestId("ask-question-text")).toHaveText(
+			"Which keyboard checks should run?",
+		);
+		await expect(options.first()).toBeFocused();
+
+		await page.keyboard.press("Space");
+		await page.keyboard.press("ArrowDown");
+		await page.keyboard.press("Space");
+		await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(2);
+		await page.keyboard.press("Enter");
+		await expect(
+			page.locator('[data-testid="ask-user-question"][data-tone="answered"]'),
+		).toBeVisible();
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("a click hands the keyboard to the clicked option even where clicks do not focus buttons", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("click then keys", "ask-click-then-keys", {
+		questions: [KEYBOARD_ROLLOUT],
+	});
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "click then keys");
+		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
+		const options = card.getByTestId("ask-option");
+		await expect(options.first()).toBeFocused();
+		await page.keyboard.press("ArrowDown");
+		await expect(options.nth(1)).toBeFocused();
+
+		await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+		await options.nth(2).dispatchEvent("click");
+		await expect(options.nth(2)).toBeFocused();
+		await expect(options.nth(2)).toHaveAttribute("data-selected", "true");
+		await page.keyboard.press("ArrowUp");
+		await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
+		await expect(options.nth(1)).toBeFocused();
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
 test("a persisted tall questionnaire reveals page changes and a restored page", async ({
 	page,
 }) => {
