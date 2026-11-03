@@ -1,5 +1,6 @@
 import {
 	RiCornerDownLeftLine,
+	RiErrorWarningLine,
 	RiInformationLine,
 	RiSearchLine,
 	RiSideBarLine,
@@ -19,12 +20,14 @@ import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type KeyboardEvent as ReactKeyboardEvent,
 	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
 	useEffect,
+	useId,
 	useInsertionEffect,
 	useLayoutEffect,
 	useMemo,
@@ -34,14 +37,14 @@ import {
 import { shortcutKeys } from "../commands";
 import { AttentionDot } from "../components/AttentionDot";
 import { RunningIcon } from "../components/RunningIcon";
-import { hasPlatformModifier } from "../lib";
-import { NO_ARRIVALS, noteArrivals } from "./arrivals";
+import { hasPlatformModifier, useMediaQuery } from "../lib";
+import { selectHostReachable, useAppStore } from "../store";
 import { hostItems, hostOverflow } from "./hostItems";
 import {
 	createHostPreviewLoader,
 	type HostPreviewLoader,
-	type HostSearchStatus,
-	hostSearchStatus,
+	type HostSearchReason,
+	hostSearchReasons,
 	useHostSearch,
 } from "./hostSearch";
 import { recordPick } from "./learning";
@@ -56,13 +59,23 @@ import {
 	withScopePrefix,
 } from "./query";
 import { scopeChordIndex } from "./scopeChord";
-import { buildSections, flattenRows } from "./sections";
+import { flattenRows, groupSections, rankSections } from "./sections";
 
-const HOST_STATUS_LABELS: Record<HostSearchStatus, MessageKey> = {
-	failed: "search.palette.hostFailed",
-	indexing: "search.palette.hostIndexing",
-	truncated: "search.palette.hostTruncated",
-};
+const WIDE_VIEWPORT = "(min-width: 48rem)";
+const SPINNER_DELAY_MS = 200;
+
+function reasonText(t: Translator, reason: HostSearchReason): string {
+	switch (reason.kind) {
+		case "failed":
+			return t("search.palette.hostFailed");
+		case "indexing":
+			return t("search.palette.hostIndexing");
+		case "time":
+			return t("search.palette.hostOutOfTime");
+		case "fileList":
+			return t("search.palette.hostFileList", { files: reason.files.toLocaleString() });
+	}
+}
 
 const SCOPE_LABELS: Record<SearchScope, MessageKey> = {
 	all: "search.scope.all",
@@ -80,6 +93,11 @@ export interface PaletteHost {
 	readonly renderFilePreview: (file: PaletteFile) => ReactNode;
 }
 
+export interface PaletteNotice {
+	readonly kind: "offline" | "info";
+	readonly text: string;
+}
+
 export interface SearchPaletteProps {
 	readonly onClose: () => void;
 	readonly rootItems: readonly PaletteItem[];
@@ -87,7 +105,7 @@ export interface SearchPaletteProps {
 	readonly actions: readonly PaletteItem[];
 	readonly scopes: readonly SearchScope[];
 	readonly host?: PaletteHost;
-	readonly notice?: string;
+	readonly notice?: PaletteNotice;
 }
 
 export function SearchPalette(props: SearchPaletteProps) {
@@ -116,10 +134,9 @@ function PaletteContent({
 	const [query, setQuery] = useState("");
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_GROUPS);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
-	const [arrivals, setArrivals] = useState(NO_ARRIVALS);
-	const onScreen = useRef<ReadonlySet<string>>(new Set());
-	const holdingSelection = useRef(false);
 	const [previewOpen, setPreviewOpen] = useState(readPreviewOpen);
+	const wide = useMediaQuery(WIDE_VIEWPORT);
+	const reachable = useAppStore(selectHostReachable);
 	const [learning, setLearning] = useState(readLearning);
 	const [nowMs] = useState(Date.now);
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -145,16 +162,10 @@ function PaletteContent({
 		}),
 		[hostEnabled, hostProjectId, hostWorkspaceId, hostText, parsed.scope],
 	);
-	const hostState = useHostSearch(hostInput);
+	const { state: hostState, observe } = useHostSearch(hostInput);
 	const [previews] = useState(createHostPreviewLoader);
-	useLayoutEffect(() => {
-		const landed = hostState.stale
-			? []
-			: (hostState.groups?.flatMap((group) => group.hits.map((hit) => hit.id)) ?? []);
-		const shown = onScreen.current;
-		const holding = holdingSelection.current;
-		setArrivals((current) => noteArrivals(current, landed, shown, holding));
-	}, [hostState.groups, hostState.stale]);
+	const late = hostState.arrivals.late;
+	const offlineReason = reachable ? undefined : t("search.palette.offlineReason");
 	const hostRows = useMemo(() => {
 		if (!host || !hostState.groups || hostState.groups.length === 0) return [];
 		const context = {
@@ -162,20 +173,25 @@ function PaletteContent({
 			openHit: host.openHit,
 			projectName: host.projectName,
 			workspaceName: host.workspaceName,
-			late: arrivals.late,
+			late,
 			staleTerms: hostState.stale ? parsed.terms : null,
+			...(offlineReason ? { disabledReason: offlineReason } : {}),
 		};
 		return hostItems(context, hostState.groups);
-	}, [host, hostState.groups, hostState.stale, parsed.terms, t, arrivals]);
+	}, [host, hostState.groups, hostState.stale, parsed.terms, t, late, offlineReason]);
 	const allItems = useMemo(() => [...rootItems, ...hostRows], [rootItems, hostRows]);
 	const overflow = useMemo(
 		() => (hostState.groups && !hostState.stale ? hostOverflow(hostState.groups) : {}),
 		[hostState.groups, hostState.stale],
 	);
-	const hostStatus = hostSearchStatus(hostState);
+	const reasons = useMemo(() => hostSearchReasons(hostState), [hostState]);
+	const ranked = useMemo(
+		() => rankSections({ parsed, rootItems: allItems, learning, nowMs }),
+		[parsed, allItems, learning, nowMs],
+	);
 	const sections = useMemo(
 		() =>
-			buildSections({
+			groupSections(ranked, {
 				t,
 				parsed,
 				hostOverflow: overflow,
@@ -187,28 +203,41 @@ function PaletteContent({
 				nowMs,
 				keep: selectedId,
 			}),
-		[t, parsed, overflow, allItems, waiting, emptyActions, expanded, learning, nowMs, selectedId],
+		[
+			ranked,
+			t,
+			parsed,
+			overflow,
+			allItems,
+			waiting,
+			emptyActions,
+			expanded,
+			learning,
+			nowMs,
+			selectedId,
+		],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
 	useLayoutEffect(() => {
-		onScreen.current = new Set(rows.map((row) => row.item.id));
-		holdingSelection.current = selectedId !== null;
-	}, [rows, selectedId]);
+		observe(new Set(rows.map((row) => row.item.id)), selectedId !== null);
+	}, [observe, rows, selectedId]);
 	const selectedIndex = Math.max(
 		0,
 		rows.findIndex((row) => row.item.id === selectedId),
 	);
 	const selected = rows[selectedIndex] ?? null;
+	const selectedRowId = selected?.item.id;
 
 	const selectedIndexRef = useRef(selectedIndex);
 	useInsertionEffect(() => {
 		selectedIndexRef.current = selectedIndex;
 	});
 	useEffect(() => {
+		if (selectedRowId === undefined) return;
 		listRef.current
 			?.querySelector(`[data-index="${selectedIndex}"]`)
 			?.scrollIntoView({ block: "nearest" });
-	}, [selectedIndex]);
+	}, [selectedIndex, selectedRowId]);
 
 	const select = (index: number) => {
 		const row = rows[(index + rows.length) % rows.length];
@@ -219,7 +248,6 @@ function PaletteContent({
 	const resetQuery = (next: string) => {
 		setQuery(next);
 		setSelectedId(null);
-		setArrivals(NO_ARRIVALS);
 	};
 
 	const changeScope = (scope: SearchScope) => {
@@ -304,7 +332,7 @@ function PaletteContent({
 		}
 		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
 			claim();
-			togglePreview();
+			if (wide) togglePreview();
 			return;
 		}
 		const chord = scopeChordIndex(event.nativeEvent);
@@ -336,7 +364,9 @@ function PaletteContent({
 	};
 
 	const optionId = (index: number) => `search-option-${index}`;
-	const previewItem = previewOpen ? selected?.item : undefined;
+	const showPreview = previewOpen && wide;
+	const previewItem = showPreview ? selected?.item : undefined;
+	const reasonsId = useId();
 
 	return (
 		<DialogContent
@@ -361,10 +391,12 @@ function PaletteContent({
 			<DialogTitle className="sr-only">{t("search.palette.title")}</DialogTitle>
 			<div
 				data-testid="search-palette-body"
-				data-preview={previewOpen}
+				data-preview={showPreview}
 				className={cn(
-					"relative flex max-h-[min(76vh,720px)] flex-col rounded-lg",
-					previewOpen ? "w-[min(64rem,calc(100vw-32px))]" : "w-[min(42rem,calc(100vw-32px))]",
+					"relative flex flex-col rounded-lg",
+					showPreview
+						? "h-[min(76vh,720px)] w-[min(64rem,calc(100vw-32px))]"
+						: "max-h-[min(76vh,720px)] w-[min(42rem,calc(100vw-32px))]",
 				)}
 			>
 				<div className="flex h-48 shrink-0 items-center gap-8 border-border-muted border-b px-16">
@@ -378,6 +410,7 @@ function PaletteContent({
 						aria-autocomplete="list"
 						aria-activedescendant={rows.length > 0 ? optionId(selectedIndex) : undefined}
 						aria-label={t("search.palette.title")}
+						aria-describedby={reasons.length > 0 ? reasonsId : undefined}
 						autoComplete="off"
 						spellCheck={false}
 						value={query}
@@ -390,26 +423,30 @@ function PaletteContent({
 						onChange={(event) => resetQuery(event.target.value)}
 						className="h-full min-w-0 flex-1 bg-transparent tr-text-reading text-text-default outline-none placeholder:text-text-subtle"
 					/>
+					<SearchStatus t={t} pending={hostState.pending} reasons={reasons} />
 					<Keycaps keys={["esc"]} />
 				</div>
-				<ScopeChips t={t} scopes={scopes} active={parsed.scope} onSelect={changeScope} />
-				{hostStatus ? (
-					<p
-						data-testid="search-host-status"
-						data-status={hostStatus}
-						className="flex shrink-0 items-center gap-8 border-border-muted border-b px-16 py-8 tr-text-metadata text-text-muted"
-					>
-						<RiInformationLine aria-hidden className="size-14 shrink-0" />
-						{t(HOST_STATUS_LABELS[hostStatus])}
+				{reasons.length > 0 ? (
+					<p id={reasonsId} className="sr-only">
+						{reasons.map((reason) => reasonText(t, reason)).join(" ")}
 					</p>
 				) : null}
+				<ScopeChips t={t} scopes={scopes} active={parsed.scope} onSelect={changeScope} />
 				{notice ? (
 					<p
 						data-testid="search-notice"
-						className="flex shrink-0 items-center gap-8 border-border-muted border-b px-16 py-8 tr-text-metadata text-feedback-warning"
+						data-kind={notice.kind}
+						className={cn(
+							"flex shrink-0 items-center gap-8 border-border-muted border-b px-16 py-8 tr-text-metadata",
+							notice.kind === "offline" ? "text-feedback-warning" : "text-text-muted",
+						)}
 					>
-						<RiWifiOffLine aria-hidden className="size-14 shrink-0" />
-						{notice}
+						{notice.kind === "offline" ? (
+							<RiWifiOffLine aria-hidden className="size-14 shrink-0" />
+						) : (
+							<RiInformationLine aria-hidden className="size-14 shrink-0" />
+						)}
+						{notice.text}
 					</p>
 				) : null}
 				<div className="flex min-h-0 flex-1">
@@ -446,37 +483,30 @@ function PaletteContent({
 					<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
 					<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
 					<Hint keys={["Tab"]} label={t("search.hint.scope")} />
-					{hostState.pending ? (
-						<span
-							data-testid="search-host-pending"
-							className="flex shrink-0 items-center gap-4 text-text-muted"
-						>
-							<RunningIcon className="size-12" />
-							{t("search.palette.searching")}
-						</span>
-					) : null}
 					<Hint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
 					<span className="flex-1" />
-					<Button
-						variant="ghost"
-						size="s"
-						iconLeft={RiSideBarLine}
-						selected={previewOpen}
-						aria-pressed={previewOpen}
-						tabIndex={-1}
-						data-testid="search-preview-toggle"
-						data-active={previewOpen}
-						onMouseDown={keepInputFocus}
-						onClick={togglePreview}
-					>
-						{t("search.palette.preview")}
-						<Keycaps keys={shortcutKeys({ key: "I", mod: true })} />
-					</Button>
+					{wide ? (
+						<Button
+							variant="ghost"
+							size="s"
+							iconLeft={RiSideBarLine}
+							selected={previewOpen}
+							aria-pressed={previewOpen}
+							tabIndex={-1}
+							data-testid="search-preview-toggle"
+							data-active={previewOpen}
+							onMouseDown={keepInputFocus}
+							onClick={togglePreview}
+						>
+							{t("search.palette.preview")}
+							<Keycaps keys={shortcutKeys({ key: "I", mod: true })} />
+						</Button>
+					) : null}
 				</footer>
 				<p role="status" aria-live="polite" className="sr-only">
 					{t("search.palette.resultCount", { count: rows.length })}
 					{hostState.pending ? ` ${t("search.palette.searching")}` : ""}
-					{hostStatus ? ` ${t(HOST_STATUS_LABELS[hostStatus])}` : ""}
+					{reasons.map((reason) => ` ${reasonText(t, reason)}`).join("")}
 				</p>
 			</div>
 		</DialogContent>
@@ -508,6 +538,65 @@ const MODIFIER_KEYS: ReadonlySet<string> = new Set([
 
 function keepInputFocus(event: ReactMouseEvent): void {
 	event.preventDefault();
+}
+
+function SearchStatus({
+	t,
+	pending,
+	reasons,
+}: {
+	t: Translator;
+	pending: boolean;
+	reasons: readonly HostSearchReason[];
+}) {
+	const [open, setOpen] = useState(false);
+	const pointer = useRef("mouse");
+	const openAtPress = useRef(false);
+	const spinning = useSettled(pending ? "pending" : "settled", SPINNER_DELAY_MS) && pending;
+	if (spinning) {
+		return (
+			<span data-testid="search-host-pending" className="flex shrink-0 text-text-muted">
+				<RunningIcon className="size-16" />
+			</span>
+		);
+	}
+	if (reasons.length === 0) return null;
+	return (
+		<Tooltip open={open} onOpenChange={setOpen}>
+			<TooltipTrigger asChild>
+				<button
+					type="button"
+					tabIndex={-1}
+					data-testid="search-host-status"
+					data-reasons={reasons.map((reason) => reason.kind).join(" ")}
+					aria-label={t("search.palette.incomplete")}
+					className="flex shrink-0 rounded-xs text-feedback-warning"
+					onPointerDown={(event) => {
+						event.preventDefault();
+						pointer.current = event.pointerType;
+						openAtPress.current = open;
+					}}
+					onMouseDown={keepInputFocus}
+					onClick={(event) => {
+						event.preventDefault();
+						if (pointer.current !== "mouse") setOpen(!openAtPress.current);
+					}}
+				>
+					<RiErrorWarningLine aria-hidden className="size-16" />
+				</button>
+			</TooltipTrigger>
+			<TooltipContent
+				side="bottom"
+				align="end"
+				data-testid="search-host-status-reasons"
+				className="flex max-w-320 flex-col gap-4"
+			>
+				{reasons.map((reason) => (
+					<p key={reason.kind}>{reasonText(t, reason)}</p>
+				))}
+			</TooltipContent>
+		</Tooltip>
+	);
 }
 
 function enterLabel(item: PaletteItem | undefined): MessageKey {
@@ -754,7 +843,7 @@ function Preview({
 		<aside
 			data-testid="search-preview"
 			data-kind={item.file ? "file" : item.previewTarget ? "transcript" : "card"}
-			className="hidden w-[40%] shrink-0 flex-col overflow-y-auto border-border-muted border-l px-16 py-16 md:flex"
+			className="flex w-[40%] shrink-0 flex-col overflow-y-auto border-border-muted border-l px-16 py-16"
 		>
 			{item.file && host ? (
 				<FilePreview t={t} item={item} file={item.file} host={host} />
@@ -854,25 +943,39 @@ function HostPreview({
 	target: SearchPreviewTarget;
 	previews: HostPreviewLoader;
 }) {
-	const [result, setResult] = useState<SearchPreviewResult | null>(null);
-	const key = JSON.stringify(target);
+	const generation = useAppStore((s) => s.welcomeGeneration);
+	const reachable = useAppStore(selectHostReachable);
+	const { sessionId, messageIndex, anchorText } = target;
+	const targetKey = `${sessionId}:${messageIndex ?? ""}:${anchorText ?? ""}`;
+	const settled = useSettled(targetKey, PREVIEW_SETTLE_MS);
+	const key = `${generation}:${targetKey}`;
+	const [loaded, setLoaded] = useState<{ key: string; result: SearchPreviewResult } | null>(null);
 	useEffect(() => {
+		if (!settled || !reachable) return;
 		let current = true;
-		setResult(null);
-		const timer = setTimeout(() => {
-			void previews.load(JSON.parse(key) as SearchPreviewTarget).then((loaded) => {
-				if (current) setResult(loaded);
+		void previews
+			.load({
+				kind: "chat",
+				sessionId,
+				...(messageIndex === undefined ? {} : { messageIndex }),
+				...(anchorText === undefined ? {} : { anchorText }),
+			})
+			.then((result) => {
+				if (current) setLoaded({ key, result });
 			});
-		}, PREVIEW_SETTLE_MS);
 		return () => {
 			current = false;
-			clearTimeout(timer);
 		};
-	}, [key, previews]);
-	if (result?.kind === "unavailable") {
+	}, [settled, reachable, previews, key, sessionId, messageIndex, anchorText]);
+	const result = loaded?.key === key ? loaded.result : null;
+	if (result?.kind === "unavailable" || (result === null && !reachable)) {
 		return (
-			<div data-testid="search-host-preview" data-state="unavailable">
-				<PreviewCard t={t} item={item} />
+			<div data-testid="search-host-preview" data-state={result ? "unavailable" : "offline"}>
+				{item.preview || result ? (
+					<PreviewCard t={t} item={item} />
+				) : (
+					<p className="tr-text-ui text-text-subtle">{t("search.palette.previewOffline")}</p>
+				)}
 			</div>
 		);
 	}

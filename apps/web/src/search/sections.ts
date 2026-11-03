@@ -208,18 +208,36 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 	);
 }
 
-export function buildSections(input: SectionsInput): PaletteSection[] {
-	const { t, parsed } = input;
-	if (parsed.terms.length === 0) return emptyRootSections(input);
+export interface RankedSections {
+	readonly rest: readonly RankedItem[];
+	readonly top: RankedItem | null;
+}
+
+export function rankSections(
+	input: Pick<SectionsInput, "parsed" | "rootItems" | "learning" | "nowMs">,
+): RankedSections | null {
+	const { parsed } = input;
+	if (parsed.terms.length === 0) return null;
 	const candidates = input.rootItems.filter((item) => inScope(item, parsed.scope));
 	const ranked = rankItems(candidates, parsed.terms, input.learning, parsed.text, input.nowMs);
-	const scoped = parsed.scope !== "all";
-	const top = scoped ? null : pickTopHit(ranked);
-	const rest = top ? ranked.filter((entry) => entry !== top) : ranked;
-	const sections = groupRanked(t, rest, scoped, input);
-	return top
-		? [{ id: "top", title: groupLabel(t, "top"), items: [toRow(top, true)] }, ...sections]
+	const top = parsed.scope === "all" ? pickTopHit(ranked) : null;
+	return { rest: top ? ranked.filter((entry) => entry !== top) : ranked, top };
+}
+
+export function groupSections(
+	ranked: RankedSections | null,
+	input: SectionsInput,
+): PaletteSection[] {
+	const { t, parsed } = input;
+	if (!ranked) return emptyRootSections(input);
+	const sections = groupRanked(t, ranked.rest, parsed.scope !== "all", input);
+	return ranked.top
+		? [{ id: "top", title: groupLabel(t, "top"), items: [toRow(ranked.top, true)] }, ...sections]
 		: sections;
+}
+
+export function buildSections(input: SectionsInput): PaletteSection[] {
+	return groupSections(rankSections(input), input);
 }
 
 export function flattenRows(sections: readonly PaletteSection[]): PaletteRow[] {

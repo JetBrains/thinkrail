@@ -8,8 +8,9 @@ import type {
 	WsParams,
 } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
-import { useAppStore } from "../store";
+import { selectHostReachable, useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { type Arrivals, NO_ARRIVALS, noteArrivals } from "./arrivals";
 
 export const HOST_SEARCH = {
 	debounceMs: 100,
@@ -17,6 +18,7 @@ export const HOST_SEARCH = {
 	slowIndexingPollMs: 1_000,
 	fastIndexingPolls: 10,
 	maxIndexingPolls: 37,
+	quietRetryMs: [300, 600, 1_200],
 } as const;
 
 export interface HostSearchInput {
@@ -31,9 +33,15 @@ export interface HostSearchState {
 	readonly groups: readonly SearchGroup[] | null;
 	readonly pending: boolean;
 	readonly stale: boolean;
+	readonly arrivals: Arrivals;
 }
 
-export const IDLE_HOST_SEARCH: HostSearchState = { groups: null, pending: false, stale: false };
+export const IDLE_HOST_SEARCH: HostSearchState = {
+	groups: null,
+	pending: false,
+	stale: false,
+	arrivals: NO_ARRIVALS,
+};
 
 export function sameHostInput(a: HostSearchInput, b: HostSearchInput): boolean {
 	return (
@@ -74,26 +82,35 @@ function failedGroups(kinds: readonly SearchKind[]): SearchGroup[] {
 	return kinds.map((kind) => ({ kind, hits: [], total: 0, state: "failed" }));
 }
 
-export type HostSearchStatus = "failed" | "indexing" | "truncated";
+export type HostSearchReason =
+	| { readonly kind: "failed" }
+	| { readonly kind: "indexing" }
+	| { readonly kind: "time" }
+	| { readonly kind: "fileList"; readonly files: number };
 
-export function hostSearchStatus(state: HostSearchState): HostSearchStatus | null {
-	if (!state.groups || state.stale) return null;
-	const states = new Set(state.groups.map((group) => group.state));
-	if (states.has("failed")) return "failed";
-	if (!state.pending && states.has("indexing")) return "indexing";
-	if (state.groups.some((group) => group.cut)) return "truncated";
-	return null;
+export function hostSearchReasons(state: HostSearchState): HostSearchReason[] {
+	if (!state.groups || state.stale) return [];
+	const reasons: HostSearchReason[] = [];
+	if (state.groups.some((group) => group.state === "failed")) reasons.push({ kind: "failed" });
+	if (!state.pending && state.groups.some((group) => group.state === "indexing")) {
+		reasons.push({ kind: "indexing" });
+	}
+	const files = state.groups.find((group) => group.cut?.fileList !== undefined)?.cut?.fileList;
+	if (files !== undefined) reasons.push({ kind: "fileList", files });
+	if (state.groups.some((group) => group.cut?.time)) reasons.push({ kind: "time" });
+	return reasons;
 }
 
 export interface HostSearchControllerDeps {
 	readonly request: (params: WsParams<"search.query">) => Promise<SearchQueryResult>;
-	readonly generation: () => number;
 	readonly emit: (state: HostSearchState) => void;
 	readonly schedule?: (run: () => void, ms: number) => () => void;
 }
 
 export interface HostSearchController {
 	update(input: HostSearchInput | null): void;
+	connect(reachable: boolean, generation: number): void;
+	observe(onScreen: ReadonlySet<string>, holdingSelection: boolean): void;
 	dispose(): void;
 }
 
@@ -108,21 +125,46 @@ function pollDelay(polls: number): number {
 		: HOST_SEARCH.slowIndexingPollMs;
 }
 
+function kindsIn(groups: readonly SearchGroup[], state: SearchGroup["state"]): SearchKind[] {
+	return groups.filter((group) => group.state === state).map((group) => group.kind);
+}
+
 export function createHostSearchController(deps: HostSearchControllerDeps): HostSearchController {
 	const schedule = deps.schedule ?? defaultSchedule;
-	let current: { input: HostSearchInput; generation: number } | null = null;
+	let current: HostSearchInput | null = null;
+	let reachable = false;
+	let generation = -1;
 	let issued: { token: number; generation: number } | null = null;
 	let tokens = 0;
 	let inFlight = false;
 	let queued: { input: HostSearchInput; kinds: readonly SearchKind[] } | null = null;
 	let cancelDebounce: (() => void) | null = null;
 	let cancelPoll: (() => void) | null = null;
-	let polls = 0;
+	let coldPolls = 0;
+	let quietRetries = 0;
 	let shown: { groups: readonly SearchGroup[]; input: HostSearchInput } | null = null;
+	let arrivals = NO_ARRIVALS;
+	let observed: { onScreen: ReadonlySet<string>; holding: boolean } = {
+		onScreen: new Set(),
+		holding: false,
+	};
+
+	const cancelTimers = () => {
+		cancelDebounce?.();
+		cancelDebounce = null;
+		cancelPoll?.();
+		cancelPoll = null;
+	};
+
+	const emit = (groups: readonly SearchGroup[] | null, pending: boolean, stale: boolean) => {
+		deps.emit({ groups, pending, stale, arrivals });
+	};
 
 	const show = (input: HostSearchInput, groups: readonly SearchGroup[], pending: boolean) => {
 		shown = { groups, input };
-		deps.emit({ groups, pending, stale: false });
+		const landed = groups.flatMap((group) => group.hits.map((hit) => hit.id));
+		arrivals = noteArrivals(arrivals, landed, observed.onScreen, observed.holding);
+		emit(groups, pending, false);
 	};
 
 	const issue = async (
@@ -135,8 +177,8 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 		}
 		tokens += 1;
 		const token = tokens;
-		const generation = deps.generation();
-		issued = { token, generation };
+		const asked = generation;
+		issued = { token, generation: asked };
 		inFlight = true;
 		const result = await deps
 			.request({
@@ -149,83 +191,112 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 		inFlight = false;
 		const next = queued;
 		queued = null;
-		if (next) {
+		if (next && reachable) {
 			void issue(next.input, next.kinds);
 			return;
 		}
-		if (!issued || issued.token !== token || deps.generation() !== generation) return;
-		if (current === null || !sameHostInput(current.input, request)) return;
+		if (!reachable || !issued || issued.token !== token || generation !== asked) return;
+		if (current === null || !sameHostInput(current, request)) return;
 		const previous = shown && sameHostInput(shown.input, request) ? shown.groups : null;
 		const groups = mergeHostGroups(previous, result ? result.groups : failedGroups(kinds));
-		const indexing = groups
-			.filter((group) => group.state === "indexing")
-			.map((group) => group.kind);
-		const keepPolling = indexing.length > 0 && polls < HOST_SEARCH.maxIndexingPolls;
-		show(request, groups, keepPolling);
-		if (keepPolling) {
-			const delay = pollDelay(polls);
-			polls += 1;
-			cancelPoll = schedule(() => {
-				cancelPoll = null;
-				if (issued?.token === token) void issue(request, indexing);
-			}, delay);
-		}
+		const indexing = kindsIn(groups, "indexing");
+		const refreshing = kindsIn(groups, "refreshing");
+		const askCold = indexing.length > 0 && coldPolls < HOST_SEARCH.maxIndexingPolls;
+		const quietDelay = HOST_SEARCH.quietRetryMs[quietRetries];
+		const askQuiet = refreshing.length > 0 && quietDelay !== undefined;
+		show(request, groups, askCold);
+		if (!askCold && !askQuiet) return;
+		const delay = askCold ? pollDelay(coldPolls) : (quietDelay ?? 0);
+		if (askCold) coldPolls += 1;
+		if (askQuiet) quietRetries += 1;
+		const due = [...(askCold ? indexing : []), ...(askQuiet ? refreshing : [])];
+		cancelPoll = schedule(() => {
+			cancelPoll = null;
+			if (issued?.token === token && reachable) void issue(request, due);
+		}, delay);
 	};
 
-	const update = (input: HostSearchInput | null): void => {
-		const generation = deps.generation();
-		const active = input !== null && isActiveHostInput(input);
-		if (
-			active &&
-			current &&
-			current.generation === generation &&
-			sameHostInput(current.input, input)
-		) {
-			return;
-		}
-		cancelDebounce?.();
-		cancelDebounce = null;
-		cancelPoll?.();
-		cancelPoll = null;
-		if (!active) {
-			current = null;
-			issued = null;
-			queued = null;
-			shown = null;
-			deps.emit(IDLE_HOST_SEARCH);
-			return;
-		}
-		current = { input, generation };
-		polls = 0;
-		deps.emit({
-			groups: shown?.groups ?? null,
-			pending: true,
-			stale: shown !== null && !sameHostInput(shown.input, input),
-		});
+	const ask = (input: HostSearchInput) => {
 		cancelDebounce = schedule(() => {
 			cancelDebounce = null;
 			void issue(input);
 		}, HOST_SEARCH.debounceMs);
 	};
 
-	return { update, dispose: () => update(null) };
+	const update = (input: HostSearchInput | null): void => {
+		const active = input !== null && isActiveHostInput(input);
+		if (active && current && sameHostInput(current, input)) return;
+		cancelTimers();
+		queued = null;
+		if (!active) {
+			current = null;
+			issued = null;
+			shown = null;
+			arrivals = NO_ARRIVALS;
+			deps.emit(IDLE_HOST_SEARCH);
+			return;
+		}
+		current = input;
+		coldPolls = 0;
+		quietRetries = 0;
+		arrivals = NO_ARRIVALS;
+		const stale = shown !== null && !sameHostInput(shown.input, input);
+		emit(shown?.groups ?? null, reachable, stale);
+		if (reachable) ask(input);
+	};
+
+	const connect = (nowReachable: boolean, nowGeneration: number): void => {
+		const renewed = nowGeneration !== generation;
+		reachable = nowReachable;
+		generation = nowGeneration;
+		if (!reachable) {
+			cancelTimers();
+			queued = null;
+			if (current) {
+				emit(shown?.groups ?? null, false, shown !== null && !sameHostInput(shown.input, current));
+			}
+			return;
+		}
+		if (!renewed || !current) return;
+		issued = null;
+		coldPolls = 0;
+		quietRetries = 0;
+		cancelTimers();
+		emit(shown?.groups ?? null, true, shown !== null && !sameHostInput(shown.input, current));
+		ask(current);
+	};
+
+	return {
+		update,
+		connect,
+		observe: (onScreen, holding) => {
+			observed = { onScreen, holding };
+		},
+		dispose: () => update(null),
+	};
 }
 
-export function useHostSearch(input: HostSearchInput): HostSearchState {
+export function useHostSearch(input: HostSearchInput): {
+	readonly state: HostSearchState;
+	readonly observe: HostSearchController["observe"];
+} {
 	const generation = useAppStore((s) => s.welcomeGeneration);
+	const reachable = useAppStore(selectHostReachable);
 	const [state, setState] = useState<HostSearchState>(IDLE_HOST_SEARCH);
 	const [controller] = useState(() =>
 		createHostSearchController({
 			request: (params) => getTransport().request("search.query", params),
-			generation: () => useAppStore.getState().welcomeGeneration,
 			emit: setState,
 		}),
 	);
 	useEffect(() => () => controller.dispose(), [controller]);
 	useEffect(() => {
 		controller.update(input);
-	}, [controller, input, generation]);
-	return state;
+	}, [controller, input]);
+	useEffect(() => {
+		controller.connect(reachable, generation);
+	}, [controller, reachable, generation]);
+	return { state, observe: controller.observe };
 }
 
 export interface HostPreviewLoader {
@@ -245,10 +316,16 @@ export function createHostPreviewLoader(
 			const key = `${generation()}:${JSON.stringify(target)}`;
 			const cached = cache.get(key);
 			if (cached) return cached;
-			const promise = request(target).catch((): SearchPreviewResult => {
-				cache.delete(key);
-				return { kind: "unavailable" };
-			});
+			const promise = request(target).then(
+				(result) => {
+					if (result.kind !== "transcript") cache.delete(key);
+					return result;
+				},
+				(): SearchPreviewResult => {
+					cache.delete(key);
+					return { kind: "unavailable" };
+				},
+			);
 			cache.set(key, promise);
 			if (cache.size > PREVIEW_CACHE_LIMIT) {
 				const oldest = cache.keys().next().value;

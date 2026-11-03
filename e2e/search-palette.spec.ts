@@ -1,6 +1,6 @@
-import { appendFileSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
 	MATCH_TIER,
 	MAX_SEARCH_PREVIEW_BYTES,
@@ -454,6 +454,9 @@ test("host search: a file by name opens as a tab, a spec by body opens in the Sp
 	await pressPlatformShortcut(page, "i");
 	const preview = page.getByTestId("search-file-preview");
 	await expect(preview).toContainText("plain-text-fixture");
+	await expect
+		.poll(async () => (await preview.locator(".monaco-editor").boundingBox())?.height ?? 0)
+		.toBeGreaterThan(100);
 	await pressPlatformShortcut(page, "i");
 	await file.click();
 	await expect(palette(page)).toBeHidden();
@@ -482,6 +485,7 @@ test("host search: an image and an HTML file render in the preview pane, and fro
 }) => {
 	await openFixtureProject(page);
 	await expect(defaultWorkspaceRow(page)).not.toHaveAttribute("data-active", "true");
+	const imageBytes = page.waitForRequest((request) => request.url().includes("RENDERERS.png"));
 	await openPalette(page);
 	await page.getByTestId("search-input").fill("/RENDERERS.png");
 	const image = page.locator('[data-testid="search-row"][data-kind="file"]', {
@@ -491,6 +495,9 @@ test("host search: an image and an HTML file render in the preview pane, and fro
 	await pressPlatformShortcut(page, "i");
 	const preview = page.getByTestId("search-file-preview");
 	await expect(preview.getByTestId("image-resource")).toBeVisible();
+	expect(new URL((await imageBytes).url()).searchParams.get("maxBytes")).toBe(
+		String(MAX_SEARCH_PREVIEW_BYTES),
+	);
 
 	await page.getByTestId("search-input").fill("/sample.html");
 	await expect(
@@ -646,39 +653,29 @@ test("host rows that land after the user moved the selection never push it or th
 	}
 });
 
-test("the preview pane reads a file only under its cap, even one that grows while it is shown", async ({
+test("the preview pane reads a file only under its cap, and a refresh after it grew past the cap is refused", async ({
 	page,
 }) => {
 	const notes = join(realpathSync(E2E_FIXTURE_REPO), "notes.txt");
 	const original = readFileSync(notes);
 	const reads: { maxBytes?: number | undefined; refused: boolean; grown: boolean }[] = [];
-	const outstanding = new Set<string>();
 	let grown = false;
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
 		const server = socket.connectToServer();
 		const asked = new Map<string, { maxBytes?: number | undefined; grown: boolean }>();
 		socket.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as {
-				id?: string;
-				method?: string;
-				params?: { path?: string; maxBytes?: number };
-			};
-			if (frame.id && frame.method === "fs.readFile" && frame.params?.path === "notes.txt") {
-				asked.set(frame.id, { maxBytes: frame.params.maxBytes, grown });
-				if (grown) outstanding.add(frame.id);
+			const frame = JSON.parse(String(message)) as WsClientMessage;
+			if ("method" in frame && frame.method === "fs.readFile") {
+				const params = frame.params as WsParams<"fs.readFile">;
+				if (params.path === "notes.txt") asked.set(frame.id, { maxBytes: params.maxBytes, grown });
 			}
 			server.send(message);
 		});
 		server.onMessage((message) => {
 			const frame = JSON.parse(String(message)) as { id?: string; errorCode?: string };
-			if (frame.id && asked.has(frame.id)) {
-				const read = asked.get(frame.id);
-				outstanding.delete(frame.id);
-				reads.push({
-					maxBytes: read?.maxBytes,
-					grown: read?.grown === true,
-					refused: frame.errorCode === "FILE_TOO_LARGE",
-				});
+			const read = frame.id ? asked.get(frame.id) : undefined;
+			if (frame.id && read) {
+				reads.push({ ...read, refused: frame.errorCode === "FILE_TOO_LARGE" });
 				asked.delete(frame.id);
 			}
 			socket.send(message);
@@ -695,19 +692,12 @@ test("the preview pane reads a file only under its cap, even one that grows whil
 		await pressPlatformShortcut(page, "i");
 		const preview = page.getByTestId("search-file-preview");
 		await expect(preview).toContainText("plain-text-fixture");
-		writeFileSync(notes, "x".repeat(3 * 1024 * 1024));
 		grown = true;
+		writeFileSync(notes, "x".repeat(MAX_SEARCH_PREVIEW_BYTES + 1));
 		await expect
-			.poll(
-				async () => {
-					appendFileSync(notes, "x");
-					const refused = reads.some((read) => read.grown && read.refused);
-					return refused || (await preview.getAttribute("data-state")) === "too-large";
-				},
-				{ timeout: 20_000, intervals: [500] },
-			)
+			.poll(() => reads.some((read) => read.grown && read.refused), { timeout: 15_000 })
 			.toBe(true);
-		await expect.poll(() => outstanding.size, { timeout: 10_000 }).toBe(0);
+		await expect(preview).toContainText("Too large to preview here");
 		expect(reads.filter((read) => read.grown).every((read) => read.refused)).toBe(true);
 		expect(reads.every((read) => read.maxBytes === MAX_SEARCH_PREVIEW_BYTES)).toBe(true);
 	} finally {
@@ -740,11 +730,140 @@ test("an older host gets the local scopes only, with a notice, and never a searc
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
 	await openPalette(page);
-	await expect(page.getByTestId("search-notice")).toContainText("doesn't search files");
+	const notice = page.getByTestId("search-notice");
+	await expect(notice).toContainText("doesn't search files");
+	await expect(notice).toHaveAttribute("data-kind", "info");
 	await expect(page.locator('[data-testid="search-chip"][data-scope="files"]')).toHaveCount(0);
+	await page.clock.install();
 	await page.getByTestId("search-input").fill("/notes");
 	await expect(page.getByTestId("search-input")).toHaveValue("/notes");
+	await page.clock.runFor(1_000);
 	await expect(page.locator('[data-testid="search-row"][data-kind="file"]')).toHaveCount(0);
-	await page.waitForTimeout(500);
 	expect(hostRequests).toEqual([]);
+});
+
+test("an incomplete search shows a yellow mark whose tip names each reason, on hover or tap, and Escape closes only the tip", async ({
+	page,
+}) => {
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		socket.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as WsClientMessage;
+			if (
+				!("method" in frame) ||
+				frame.method !== "search.query" ||
+				(frame.params as WsParams<"search.query">).query !== "zqxcut"
+			) {
+				server.send(message);
+				return;
+			}
+			const params = frame.params as WsParams<"search.query">;
+			const groups = (params.kinds ?? []).map((kind) =>
+				kind === "file"
+					? {
+							kind,
+							state: "ready",
+							total: 1,
+							cut: { time: true, fileList: 128_000 },
+							hits: [
+								{
+									id: `file:${params.context.workspaceId}:zqxcut.ts`,
+									kind,
+									title: "zqxcut.ts",
+									tier: MATCH_TIER.prefix,
+									score: 1,
+									projectId: params.context.projectId,
+									workspaceId: params.context.workspaceId,
+									path: "zqxcut.ts",
+								},
+							],
+						}
+					: { kind, state: "ready", total: 0, hits: [] },
+			);
+			socket.send(JSON.stringify({ id: frame.id, ok: true, result: { groups } }));
+		});
+		server.onMessage((message) => socket.send(message));
+	});
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("zqxcut");
+	await expect(page.locator('[data-testid="search-row"][data-kind="file"]')).toHaveCount(1, {
+		timeout: 15_000,
+	});
+	const mark = page.getByTestId("search-host-status");
+	await expect(mark).toHaveAttribute("data-reasons", "fileList time");
+	const tip = page.getByTestId("search-host-status-reasons");
+	await mark.hover();
+	await expect(tip).toContainText("Only 128,000 files in this folder are searched");
+	await expect(tip).toContainText("The search ran out of time");
+	const box = await page.getByTestId("search-input").boundingBox();
+	await page.mouse.move((box?.x ?? 0) + 8, (box?.y ?? 0) + 8, { steps: 4 });
+	await expect(tip).toBeHidden();
+
+	const tap = async () => {
+		await mark.dispatchEvent("pointerdown", { pointerType: "touch", isPrimary: true });
+		await mark.dispatchEvent("click");
+	};
+	await tap();
+	await expect(tip).toBeVisible();
+	await tap();
+	await expect(tip).toBeHidden();
+	await tap();
+	await expect(tip).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(tip).toBeHidden();
+	await expect(palette(page)).toBeVisible();
+	await expect(page.getByTestId("search-input")).toHaveValue("zqxcut");
+	await expect(page.getByTestId("search-input")).toBeFocused();
+});
+
+test("a dropped connection keeps the found rows and their scope, disabled until the host is back", async ({
+	page,
+}) => {
+	let offline = false;
+	let current: WebSocketRoute | undefined;
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		if (offline) {
+			void socket.close();
+			return;
+		}
+		current = socket;
+		socket.connectToServer();
+	});
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("/notes");
+	const file = page.locator('[data-testid="search-row"][data-kind="file"]', {
+		hasText: "notes.txt",
+	});
+	await expect(file).toBeVisible({ timeout: 15_000 });
+	await expect(file).not.toHaveAttribute("aria-disabled", "true");
+
+	offline = true;
+	await current?.close();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute(
+		"data-status",
+		"disconnected",
+	);
+	await expect(file).toBeVisible();
+	await expect(file).toHaveAttribute("aria-disabled", "true");
+	await expect(page.locator('[data-testid="search-chip"][data-scope="files"]')).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	await page.keyboard.press("Enter");
+	await expect(palette(page)).toBeVisible();
+
+	offline = false;
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected", {
+		timeout: 30_000,
+	});
+	await expect(file).not.toHaveAttribute("aria-disabled", "true", { timeout: 15_000 });
+	await page.keyboard.press("Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-kind="file"]', { hasText: "notes.txt" }),
+	).toBeVisible();
 });

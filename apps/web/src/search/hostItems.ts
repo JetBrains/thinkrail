@@ -37,6 +37,7 @@ export interface HostItemContext {
 	readonly workspaceName: (workspaceId: string) => string | undefined;
 	readonly late: ReadonlyMap<string, number>;
 	readonly staleTerms: readonly MatchTerm[] | null;
+	readonly disabledReason?: string;
 }
 
 function rangesOf(fields: readonly { key: string; ranges: readonly MatchRange[] }[]) {
@@ -94,6 +95,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem {
 	const base = {
 		id: hit.id,
 		...lateOf(context, hit.id),
+		...(context.disabledReason ? { disabledReason: context.disabledReason } : {}),
 		run: () => context.openHit(hit),
 	};
 	switch (hit.kind) {

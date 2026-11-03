@@ -24,9 +24,9 @@ opens its Settings section), and every verb runs through the command it was list
 - **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `SearchSettings`,
   `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`, `commandItems`,
   `SearchScope`, `PaletteItem`, `PaletteFile`.
-- **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `store`,
-  `transport` (`search.query` / `search.preview` behind `supportsHostSearch`, and the backend endpoint
-  for browser preference keys), `clientPreferences`, `constants`, `components`, `lib`,
+- **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `store`
+  (`selectHostSearchAvailable` / `selectHostReachable`, the welcome generation), `transport`
+  (`search.query` / `search.preview`, and the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`, `lib`,
   `@thinkrail/locales` (UI strings), `@thinkrail/ui/*`, `@remixicon/react`.
 - **Forbidden:** importing `panels`, `chat`, `shell` or `@thinkrail/resource-renderers` (shell injects
   the commands and their handlers, how a host hit opens, and the file renderer as the
@@ -37,8 +37,8 @@ opens its Settings section), and every verb runs through the command it was list
 
 A leading prefix selects a scope and its chip, and a chip writes the prefix back: `@` work (projects,
 workspaces, chats, transcripts, plans), `>` commands and settings, `/` files, `#` specs — the last two
-exist only when the host serves `search.query` (`supportsHostSearch`) and a context project gives them a
-root; otherwise a prefix whose scope is not offered searches the rest of the query in All (an older host
+exist only when the last welcome's host serves `search.query` (`selectHostSearchAvailable`) and a
+context project gives them a root; otherwise a prefix whose scope is not offered searches the rest of the query in All (an older host
 also shows a notice), so a doubled prefix (`##`, `//src`) never lands in an empty scope. `#<digits>` is a
 pull-request number, never the specs scope — it matches the `#N` keyword of the workspace that carries
 that review. Quoted text is one contiguous literal term — never matched as an acronym or a subsequence —
@@ -81,63 +81,73 @@ neither a prompt nor attention is not listed.
 ## Host search
 
 `useHostSearch` wraps the pure `createHostSearchController`: a 100 ms debounce, at most one request in
-flight plus the latest queued input, and fencing — a reply paints only when it answers the current input,
-it is the controller's latest request and the welcome generation is unchanged; a failed request paints
-every asked group `failed` (never a spinner that cannot end). An
-`indexing` group polls — ten times every 300 ms, then every second, about 30 s in all — asking only the
-kinds still indexing; `refreshing`, a cut group and `failed` never poll. The host is asked only for the scope's kinds
-(`scopeKinds`) and never on a page or for an empty query.
+flight plus the latest queued input (a newer input drops a queued one, so only what the user typed last
+is sent), and fencing — a reply paints only when it answers the current input, it is the controller's
+latest request and the welcome generation it was asked in still holds; a failed request paints every
+asked group `failed` (never a spinner that cannot end). The host is asked only for the scope's kinds
+(`scopeKinds`), only when the text parses to a term, never on a page. One scheduler re-asks: kinds still
+`indexing` poll on the cold schedule (ten times every 300 ms, then every second, about 30 s in all,
+spinner shown), kinds `refreshing` are re-asked quietly at 300, 600 and 1 200 ms (no spinner, no message)
+and the page then stands until the next keystroke; each schedule keeps its own allowance, a re-ask asks
+only the kinds due, and a quiet re-ask answered `indexing` moves to the cold schedule.
 
-**Result lifecycle.** A reply for the input already on screen (a poll, a reconnect's re-ask) replaces
-the groups it answers but keeps every hit the previous page showed that the new one left out
-(`mergeHostGroups`), so a refreshed corpus or a better page never pulls a row from under the
-selection; the rows go when the query changes. While a new input is pending the previous host rows stay
-on screen — replaced, never blanked — but they answered another query (`stale`): `rematchHit` matches
-each again against the current terms on the fields the host matches it on (`searchHitFields`), so it takes
-the tier the host's answer will give it, and a body or message hit stays in the `content` tier and must
-still contain every term in its snippet (`matchContent`, the content providers' rule, so never an acronym
-— a multi-term row whose later term lies outside its snippet leaves while stale and returns with the
-reply); a row that no longer matches leaves at once, and Enter can only open a row
-the typed text matches; their counts are ignored.
-A fresh reply's rows carry the host's matcher result as `PaletteItem.match`, ranked with the local rows
-by the same tiers instead of re-matching the title. The host is asked only for what the palette cannot
-list itself — files, specs, plans and message text; chats and workspaces are the store's rows (a chat row
-previews its transcript, the Default workspace is found by its branch), so no section mixes local and host
-rows and one row per id holds by construction. Rows that land while the user holds a selection
-join an arrival cohort (`noteArrivals`, `PaletteItem.late`): each later reply's newcomers sort after
-every row already on screen and every earlier cohort, across tiers and groups — a group that already
-shows rows continues below all of them in a section of its own (`cohortParts`) — and they neither take
-the top hit nor unseat the one shown, so neither the selection nor a row above it moves. A group's
-"N more" row sits below with the newcomers when they alone overflow the group; while the host reports
-more than it sent for the group, the row stays with the first rows — the one way a reply can still add a
-row above the selection (or move that row back up) is a host count that grows past what the group shows.
-A newcomer is a hit neither on screen nor in the previous reply for the same search (stale groups list
-nothing), so a hit already held behind a group's cap — re-sent by an indexing poll — never becomes late. The selected host row stays
-while the same search stands — a reply for it keeps every hit already shown, and no group's cap hides the
-selection (`keep`); a changed root or a host that stops searching drops it. A host group's "N more" is
-the host's count beyond the hits it sent. Results the palette shows as final but are not complete say so in a status line and the
-live region: part of the search failed, it is still indexing after polling stopped, or a provider ran
-out of time (`hostSearchStatus`). A host row opens through the injected `PaletteHost.openHit`. The `/` and `#` scopes are
-offered only when the host searches files and specs and a context project gives them a root, and the
-placeholder names files and specs exactly then.
+**Connection.** Host search is available from the **last** welcome's protocol, so a reconnect keeps the
+host scopes, the rows and the selection; while the host is unreachable (`selectHostReachable`: connected
+and this connection's welcome) the controller cancels its timers and queued input, asks nothing and paints
+no late reply, a changed text marks the rows stale (they are re-matched as below), and host rows are
+disabled with the offline reason. A new welcome re-asks the current input once and merges the answer; a
+welcome from a host that does not search removes the host scopes and rows.
+
+**Result lifecycle** — the invariants: a reply for the input on screen keeps every hit the previous page
+showed (`mergeHostGroups`), so rows go only when the query changes; while a new input is pending the
+previous host rows stay, re-matched against the current terms on the host's own fields
+(`searchHitFields`) — a body or message row only while every term is in its snippet (`matchContent`), so a
+multi-term row whose later term lies outside the snippet leaves while stale and returns with the reply —
+so Enter only ever opens a row the typed text matches; a fresh row carries the host's matcher result
+(`PaletteItem.match`) and ranks with the local rows by the same tiers; the host is asked only for what the
+palette cannot list itself — files, specs, plans and message text — while chats and workspaces are the
+store's rows (a chat row previews its transcript, the Default workspace is found by its branch), so no
+section mixes local and host rows and one row per id holds by construction. Rows that land while the user
+holds a selection are marked late in the very state that shows them (the controller notes arrivals from
+the rows on screen the palette last reported, `observe`): each later reply's newcomers sort after every
+row already on screen and every earlier cohort, across tiers and groups, in a section of their own
+(`cohortParts`), never take or unseat the top hit, and a hit already held behind a group's cap is no
+newcomer — so neither the selection nor a row above it moves, except when the host's count grows past
+what a group shows and its "N more" row appears. A host group's "N more" is the host's count beyond the
+hits it sent. Ranking runs once per input (`rankSections`); moving the selection only regroups
+(`groupSections`, `keep` holds the selected row above its group's cap).
+
+**Status.** Right of the input, the `RunningIcon` shows once a search has been pending for 200 ms; a
+settled search that may be incomplete shows a yellow mark instead, whose tip (hover, or tap on touch)
+names every reason — part of it failed, it is still indexing after polling stopped, only N files of the
+folder are listed (`cut.fileList`), or a provider ran out of time (`cut.time`) (`hostSearchReasons`). The
+reasons also describe the input (`aria-describedby`) and reach the live region; Escape closes an open tip
+before anything else. A host row opens through the injected `PaletteHost.openHit`. The `/` and `#`
+scopes are offered only when the host searches files and specs and a context project gives them a root,
+and the placeholder names files and specs exactly then.
 
 ## Preview pane
 
-`Mod+I` opens a pane with one of three renderings, chosen by the selected row: a **transcript window**
-around a chat or transcript hit (`search.preview`, memoized per target for the open palette and the
-connection, with the focused message marked — the hit's `anchorText` travels with the target, so a
-transcript compacted since the search still focuses the right message, or none); a **file or spec**
+`Mod+I` opens a pane — on a viewport at least `md` wide; below it the pane, its toggle and its chord are
+absent while the saved choice is kept — with one of three renderings, chosen by the selected row: a
+**transcript window** around a chat or transcript hit (`search.preview`; a transcript is cached per
+target for the open palette and the connection, a miss is asked again on the next selection, the focused
+message is marked — the hit's `anchorText` travels with the target, so a transcript compacted since the
+search still focuses the right message, or none — and a chat without a transcript shows its card); a
+**file or spec**
 rendered by the shell-injected `renderFilePreview` over `PaletteItem.file` (`{ workspaceId, path, size }`)
 — the shared resource renderers, so code highlights, images and sandboxed HTML display, and a `SPEC.md`
 renders as markdown, the same path as a preview tab; or the local **metadata card** (`PaletteItem.preview`)
 for a project, workspace or chat without a transcript hit. A host preview is read only once the
 selection rests on its row for 150 ms, so sweeping the mouse or arrows across rows reads only the row it
 stops on, and a file or spec whose hit is over `MAX_SEARCH_PREVIEW_BYTES` (2 MiB) is not read at all — the
-pane says it is too large to preview and Enter opens it. Every `fs.readFile` the pane does make, a refresh
-on a change included, asks the host for at most that cap, so a file that grows past it while shown is
-refused rather than read; an image's bytes come over the resource renderers' asset route, fetched again
-only when a bounded read reports a new version. A plan row and a command have no preview. The pane never fetches a text head from the
-host.
+pane says it is too large to preview and Enter opens it. Every read the pane makes — `fs.readFile`, a
+refresh on a change, an image's or PDF's bytes and a document's relative assets over the `/files` route —
+asks the host for at most that cap (the shell's palette resource host), so a file that grows past it is
+refused rather than read, and an embedded image over the cap does not render here. While the host is
+unreachable a loaded preview stays, a new one asks nothing and says to reconnect, and the next welcome
+refreshes it once. The pane has a definite height while shown, so a code view fills it. A plan row and a
+command have no preview.
 
 ## Interaction
 
@@ -150,7 +160,8 @@ can be copied. ↑/↓ select, ↵ opens or runs the row and closes the palette,
 and so does `Alt+1…n` on Windows and Linux when Alt types no character there — a character a layout types
 with AltGr or Option on a digit key (`#`, `@`, `|`) stays the input's, and macOS has no digit chord at all,
 since Option always types one (a chip writes its prefix into the query, so the prefix is the one source
-of scope). `Mod+I` toggles the preview pane, `Mod+K` closes the palette (the chord that opened it).
+of scope). `Mod+I` toggles the preview pane where it is shown, `Mod+K` closes the palette (the chord that
+opened it).
 Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command —
 closes outright. Closing without a pick returns focus to the element that held it when the palette
 opened (the composer an accidental double Shift interrupted, the topbar button); a pick leaves focus to

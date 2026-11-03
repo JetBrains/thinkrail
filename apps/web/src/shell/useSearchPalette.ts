@@ -31,6 +31,7 @@ import {
 	selectActiveWorkspace,
 	selectContextProject,
 	selectHistoryTarget,
+	selectHostSearchAvailable,
 	selectRecordFirstPrompts,
 	selectSupportsOnboarding,
 	selectWorkspaceReadAction,
@@ -41,7 +42,7 @@ import {
 	useAppStore,
 	workspaceName,
 } from "../store";
-import { errorText, getTransport, supportsHostSearch } from "../transport";
+import { errorText, getTransport } from "../transport";
 import {
 	openChatHistory,
 	toggleBottomPanel,
@@ -136,7 +137,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const [nativeShortcuts] = useState(() => readSettingsShortcutLabel() !== null);
 
 	const online = status === "connected" && welcomeGeneration > 0 && protocolVersion !== null;
-	const hostSearch = online && supportsHostSearch(protocolVersion);
+	const hostSearch = useAppStore(selectHostSearchAvailable);
 	const host = useMemo<PaletteHost | undefined>(() => {
 		if (!hostSearch) return undefined;
 		const names = new Map(projects.map((project) => [project.id, project.name]));
@@ -269,11 +270,14 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		...(online
 			? hostSearch
 				? {}
-				: { notice: t("search.palette.olderHost") }
+				: { notice: { kind: "info", text: t("search.palette.olderHost") } }
 			: {
-					notice: t(
-						status === "disconnected" ? "search.palette.offline" : "search.palette.connecting",
-					),
+					notice: {
+						kind: "offline",
+						text: t(
+							status === "disconnected" ? "search.palette.offline" : "search.palette.connecting",
+						),
+					},
 				}),
 		...binding,
 	};
