@@ -44,11 +44,13 @@ import {
 	deriveAnswers,
 	discussReasonPatch,
 	emptyQState,
+	hasPreview,
 	nudgeShowsOnPage,
 	parseQuestions,
 	type QState,
 	questionPageForKey,
 	selectOptionPatch,
+	toggleCustomPatch,
 	toggleMultiPatch,
 } from "./state";
 
@@ -65,6 +67,7 @@ interface CachedCardState {
 	states: Record<number, QState>;
 	tab: number;
 	submitted: boolean;
+	hostProtocol: number | undefined;
 }
 const cardStateCache = new Map<string, CachedCardState>();
 const stackHeights = new Map<string, { width: number; height: number }>();
@@ -124,7 +127,12 @@ export function AskUserQuestionCard({
 	const superseded = interaction?.state.superseded ?? false;
 	const ended = interaction?.state.ended ?? false;
 	const canRespond = !!interaction && interaction.state.accepting;
-	const discussAvailable = (interaction?.hostProtocol ?? 0) >= DISCUSS_HOST_PROTOCOL;
+	const [hostProtocol, setHostProtocol] = useState(
+		() => interaction?.hostProtocol ?? cardStateCache.get(toolCallId)?.hostProtocol,
+	);
+	const liveProtocol = interaction?.hostProtocol;
+	if (liveProtocol !== undefined && liveProtocol !== hostProtocol) setHostProtocol(liveProtocol);
+	const discussAvailable = (hostProtocol ?? 0) >= DISCUSS_HOST_PROTOCOL;
 	const awaiting = !resolvedResult && !superseded && !ended && status !== "error";
 	const [states, setStates] = useState<Record<number, QState>>(
 		() => cardStateCache.get(toolCallId)?.states ?? {},
@@ -151,12 +159,12 @@ export function AskUserQuestionCard({
 
 	useEffect(() => {
 		if (awaiting) {
-			cardStateCache.set(toolCallId, { states, tab, submitted });
+			cardStateCache.set(toolCallId, { states, tab, submitted, hostProtocol });
 			return;
 		}
 		cardStateCache.delete(toolCallId);
 		stackHeights.delete(toolCallId);
-	}, [toolCallId, awaiting, states, tab, submitted]);
+	}, [toolCallId, awaiting, states, tab, submitted, hostProtocol]);
 
 	useEffect(() => {
 		setNudgeSpoken(false);
@@ -432,7 +440,7 @@ export function AskUserQuestionCard({
 												)
 											}
 											onCustomText={(text) => patch(page, customTextPatch(text))}
-											onToggleCustom={() => patch(page, { customActive: !pageState.customActive })}
+											onToggleCustom={() => patch(page, toggleCustomPatch(pageState))}
 											onConfirmCustom={() =>
 												confirmQuestion(
 													page,
@@ -462,6 +470,9 @@ export function AskUserQuestionCard({
 												patch(page, discussReasonPatch(pageState, reason))
 											}
 											onDiscussText={(text) => patch(page, { discussText: text })}
+											onTogglePreview={() =>
+												patch(page, { previewExpanded: !pageState.previewExpanded })
+											}
 											onConfirmDiscuss={() => confirmQuestion(page, pageState)}
 										/>
 									</GhostPage>
@@ -475,6 +486,7 @@ export function AskUserQuestionCard({
 							multiSelect={!!q.multiSelect}
 							multipleQuestions={multipleQuestions}
 							noteAvailable={answers.some((a) => a.questionIndex === idx && answerSupportsNote(a))}
+							previewKeys={!q.multiSelect && q.options.some(hasPreview)}
 						/>
 						<div className="flex items-center justify-end gap-12">
 							{nudgeVisible ? (

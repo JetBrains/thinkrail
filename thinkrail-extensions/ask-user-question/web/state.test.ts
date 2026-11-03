@@ -26,6 +26,7 @@ import {
 	readRecommendation,
 	selectOptionPatch,
 	splitRecommended,
+	toggleCustomPatch,
 	toggleMultiPatch,
 } from "./state";
 
@@ -588,6 +589,12 @@ describe("discuss first", () => {
 		expect(toggleMultiPatch(s, "A", 0)).toMatchObject({ discuss: false });
 		expect(selectOptionPatch(s, "A", 0)).not.toHaveProperty("discussText");
 		expect(customTextPatch("")).not.toHaveProperty("discuss");
+	});
+
+	it("checking the multi-select own answer cancels the mark; unchecking leaves it", () => {
+		const marked = state({ discuss: true, customText: "own" });
+		expect(toggleCustomPatch(marked)).toEqual({ customActive: true, discuss: false });
+		expect(toggleCustomPatch({ ...marked, customActive: true })).toEqual({ customActive: false });
 	});
 
 	it("never offers a note on a discuss answer", () => {

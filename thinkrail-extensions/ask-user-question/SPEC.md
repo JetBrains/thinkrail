@@ -92,7 +92,8 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   the gaps. A synthetic **Review & submit** page once gated submission; it was removed as an extra step
   that re-showed what the chips and pages already showed. A single question keeps its direct **Submit**.
 - **Per-call UI state survives virtualization** — a module-level cache keyed by `toolCallId` (dropped
-  once no longer awaiting), since react-virtuoso unmounts off-screen rows. This is the pattern the
+  once no longer awaiting), since react-virtuoso unmounts off-screen rows; it holds every page's answers,
+  cursor, open note, discuss mark and Show all state. This is the pattern the
   activity fold's expansion state reuses.
 - **The card never jumps.** Every page is rendered in one grid cell, so the card takes the tallest page's
   height from the first frame and paging moves neither the tabs, the question nor the footer; shorter pages
@@ -124,8 +125,11 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   option's preview, or the cursor's before any pick: markdown (mermaid renders), or a workspace file or
   before → after diff through `FramedResourcePreview` in its compact chrome — Open in tab and Full screen
   only, with width presets and Split/Inline in full screen. An option without one says "No preview for this
-  option", never another option's preview; rows that have one carry a type glyph. Keys from inside a
-  preview region or its portaled dialog never page or skip the questionnaire. Without a resource host a
+  option", never another option's preview; rows that have one carry a type glyph. PgUp/PgDn on an option
+  row scroll the pane's markdown: WebKit does not make a scroll container a tab stop, and the lint rules
+  reject a `tabindex` on a non-interactive region. Each file gets its own frame (keyed by its path), so one
+  option's scroll offset or renderer never carries over to the next. Keys from inside a preview region or
+  its portaled dialog never page or skip the questionnaire. Without a resource host a
   file preview degrades to its path and an Open file link; the plan page provides the session's resource
   scope and `onOpenFile` so previews render there as in chat. A picked file preview is echoed as its path.
   The 240 px fold, the 380 px pane and the 8-line field cap are unconfirmed starting values.
@@ -135,7 +139,9 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   note or typing Other cancels the mark while keeping the typed reason and text for a re-mark. The chip
   shows an info chat glyph (plus screen-reader text). The answer is `kind: "discuss"`. The toggle appears
   only for a host at protocol 103 or later (`interaction.hostProtocol`), the version whose server half
-  renders discuss answers; an older host keeps the card without it.
+  renders discuss answers; an older host keeps the card without it. The last known version is latched per
+  call (and cached with its state), because the version is unknown between a disconnect and the next
+  welcome, and dropping the toggle then would reflow the page and unmount a panel being typed in.
 - **The answered record is a receipt.** A header ("Answered N questions", "Answered N of M questions" or
   "N questions to discuss", plus "· K to discuss") folds a left-ruled list of question → answer pairs;
   expanded by default, collapsed it is one line of `·`-joined answers. Each pair shows the muted question,

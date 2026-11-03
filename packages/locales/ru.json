@@ -2454,6 +2454,7 @@
 	"tools.ask.hintEnter": "· Enter — подтвердить",
 	"tools.ask.hintMoveMulti": "↑↓ — перемещение, включая «Другое»",
 	"tools.ask.hintMoveSingle": "↑↓ — переместить и выбрать",
+	"tools.ask.hintPreviewScroll": "· PgUp/PgDn — листать превью",
 	"tools.ask.hintQuestions": "· ←→ — вопросы",
 	"tools.ask.hintSkip": "· Shift+Esc — пропустить",
 	"tools.ask.hintSpaceSelect": "· Пробел — выбрать",

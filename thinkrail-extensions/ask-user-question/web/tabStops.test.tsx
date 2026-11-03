@@ -64,6 +64,7 @@ const body = (question: AskUserQuestionItem, qState: QState) =>
 			onDiscussReason={noop}
 			onDiscussText={noop}
 			onConfirmDiscuss={noop}
+			onTogglePreview={noop}
 		/>,
 	);
 

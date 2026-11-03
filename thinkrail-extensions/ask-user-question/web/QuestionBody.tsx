@@ -31,6 +31,7 @@ export interface QuestionBodyProps {
 	onDiscussReason: (reason: AskUserQuestionDiscussReason) => void;
 	onDiscussText: (text: string) => void;
 	onConfirmDiscuss: () => void;
+	onTogglePreview: () => void;
 }
 
 type PendingFocus = "note" | "discuss" | null;
@@ -55,12 +56,14 @@ export function QuestionBody({
 	onDiscussReason,
 	onDiscussText,
 	onConfirmDiscuss,
+	onTogglePreview,
 }: QuestionBodyProps) {
 	const tid = useTestId();
 	const choiceRefs = useRef<Array<HTMLElement | null>>([]);
 	const noteRef = useRef<HTMLElement | null>(null);
 	const discussRef = useRef<HTMLElement | null>(null);
 	const discussToggleRef = useRef<HTMLButtonElement | null>(null);
+	const paneScrollRef = useRef<HTMLElement | null>(null);
 	const pendingFocus = useRef<PendingFocus>(null);
 	const otherIndex = question.options.length;
 	const choiceCount = otherIndex + 1;
@@ -119,6 +122,12 @@ export function QuestionBody({
 		index: number,
 	) => {
 		if (event.altKey || event.ctrlKey || event.metaKey) return;
+		const pane = paneScrollRef.current;
+		if (pane && (event.key === "PageDown" || event.key === "PageUp")) {
+			event.preventDefault();
+			pane.scrollBy({ top: (event.key === "PageDown" ? 0.9 : -0.9) * pane.clientHeight });
+			return;
+		}
 		const action = choiceKeyAction(event.key, index, choiceCount);
 		if (action.type === "none") return;
 		event.preventDefault();
@@ -164,7 +173,12 @@ export function QuestionBody({
 				/>
 			) : null}
 			{questionPreview ? (
-				<QuestionPreview source={questionPreview} onOpenFile={onOpenFile} />
+				<QuestionPreview
+					source={questionPreview}
+					expanded={state.previewExpanded}
+					onToggleExpanded={onTogglePreview}
+					onOpenFile={onOpenFile}
+				/>
 			) : null}
 			<div
 				data-discussing={discussing || undefined}
@@ -201,6 +215,7 @@ export function QuestionBody({
 										pageFocus={ownsCursor && !customOwnsPageFocus && !discussing}
 										multi={!!question.multiSelect}
 										pageKeys={pageKeys}
+										previewKeys={paneShown}
 										glyph={source ? <PreviewGlyph source={source} /> : null}
 										onFocus={() => onCursor(index)}
 										onKeyDown={(event) => onChoiceKeyDown(event, option.label, index)}
@@ -249,6 +264,9 @@ export function QuestionBody({
 					<OptionPreviewPane
 						label={paneOption ? splitRecommended(paneOption.label).text : null}
 						source={paneOption ? previewSource(paneOption) : null}
+						scrollRef={(node) => {
+							paneScrollRef.current = node;
+						}}
 						onOpenFile={onOpenFile}
 					/>
 				) : null}

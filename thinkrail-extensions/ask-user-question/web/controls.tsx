@@ -143,10 +143,12 @@ export function ModeHint({
 	multiSelect,
 	multipleQuestions,
 	noteAvailable,
+	previewKeys,
 }: {
 	multiSelect: boolean;
 	multipleQuestions: boolean;
 	noteAvailable: boolean;
+	previewKeys: boolean;
 }) {
 	const t = useT();
 	return (
@@ -163,6 +165,7 @@ export function ModeHint({
 			<span>{multiSelect ? t("tools.ask.hintSpaceToggle") : t("tools.ask.hintSpaceSelect")}</span>
 			<span>{t("tools.ask.hintEnter")}</span>
 			<span>{noteAvailable ? t("tools.ask.hintTabNote") : t("tools.ask.hintTab")}</span>
+			{previewKeys ? <span>{t("tools.ask.hintPreviewScroll")}</span> : null}
 			<span>{t("tools.ask.hintSkip")}</span>
 			{multipleQuestions ? <span>{t("tools.ask.hintQuestions")}</span> : null}
 		</span>
@@ -179,6 +182,7 @@ export function OptionRow({
 	pageFocus,
 	multi,
 	pageKeys,
+	previewKeys,
 	glyph,
 	onFocus,
 	onKeyDown,
@@ -193,6 +197,7 @@ export function OptionRow({
 	pageFocus: boolean;
 	multi: boolean;
 	pageKeys: boolean;
+	previewKeys: boolean;
 	glyph?: ReactNode;
 	onFocus: () => void;
 	onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
@@ -208,7 +213,7 @@ export function OptionRow({
 			{...(multi
 				? { role: "checkbox", "aria-checked": selected }
 				: { role: "radio", "aria-checked": selected })}
-			aria-keyshortcuts={`ArrowUp ArrowDown Home End Space Enter${pageKeys ? " ArrowLeft ArrowRight" : ""} Shift+Escape`}
+			aria-keyshortcuts={`ArrowUp ArrowDown Home End Space Enter${pageKeys ? " ArrowLeft ArrowRight" : ""}${previewKeys ? " PageUp PageDown" : ""} Shift+Escape`}
 			tabIndex={cursor ? 0 : -1}
 			data-testid={tid("ask-option")}
 			data-ask-option=""
@@ -274,6 +279,7 @@ export function NoteSlot({
 }) {
 	const t = useT();
 	const tid = useTestId();
+	const noteId = useId();
 	const saved = note.trim();
 	return (
 		<div
@@ -315,11 +321,13 @@ export function NoteSlot({
 						tabIndex={0}
 						data-testid={tid("ask-note-toggle")}
 						aria-label={t("tools.ask.editNoteLabel", { option: optionText })}
+						aria-describedby={noteId}
 						onClick={onOpen}
 						className="flex min-w-0 flex-1 items-start gap-4 rounded-sm px-4 py-2 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<Pencil aria-hidden="true" className="mt-2 size-14 shrink-0 text-text-muted" />
 						<span
+							id={noteId}
 							data-testid={tid("ask-note-text")}
 							className="min-w-0 flex-1 whitespace-pre-wrap break-words tr-text-ui text-text-default"
 						>

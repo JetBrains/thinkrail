@@ -88,7 +88,10 @@ const LAYOUT_ROUND = {
 				{
 					label: "Flow first",
 					description: "Draw the flow before the layout.",
-					preview: "```mermaid\nflowchart LR\n  Settings --> Sidebar --> Section\n```",
+					preview: `\`\`\`mermaid\nflowchart LR\n  Settings --> Sidebar --> Section\n\`\`\`\n\n${Array.from(
+						{ length: 30 },
+						(_, i) => `${i + 1}. A flow note long enough to need the pane's own scroll.`,
+					).join("\n")}`,
 				},
 				{ label: "Keep it as is", description: "No change." },
 			],
@@ -157,6 +160,12 @@ test("previews show the question's subject and the picked option in fixed frames
 		await expect(pane).toHaveAttribute("data-preview", "markdown");
 		await expect(pane.getByTestId("mermaid-svg").locator("svg")).toBeVisible({ timeout: 15_000 });
 		expect(await height(card)).toBe(settled);
+		const scroller = pane.getByTestId("ask-preview-scroll");
+		await expect(options.nth(2)).toBeFocused();
+		await page.keyboard.press("PageDown");
+		await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+		await expect(options.nth(2)).toHaveAttribute("data-selected", "true");
+		await expect(card.getByTestId("ask-shortcuts")).toContainText("PgUp/PgDn preview");
 
 		await options.nth(3).click();
 		await expect(pane.getByTestId("ask-preview-none")).toHaveText("No preview for this option");

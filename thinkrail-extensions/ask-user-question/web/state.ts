@@ -42,6 +42,7 @@ export interface QState {
 	discuss: boolean;
 	discussReason: AskUserQuestionDiscussReason | null;
 	discussText: string;
+	previewExpanded: boolean;
 }
 
 export const emptyQState = (): QState => ({
@@ -55,6 +56,7 @@ export const emptyQState = (): QState => ({
 	discuss: false,
 	discussReason: null,
 	discussText: "",
+	previewExpanded: false,
 });
 
 export const DISCUSS_REASONS: readonly AskUserQuestionDiscussReason[] = [
@@ -183,6 +185,11 @@ export function customTextPatch(text: string): Partial<QState> {
 	return text.trim()
 		? { customText: text, customActive: true, option: null, discuss: false }
 		: { customText: text, customActive: false };
+}
+
+export function toggleCustomPatch(state: QState): Partial<QState> {
+	const on = !state.customActive;
+	return { customActive: on, ...(on && state.discuss ? { discuss: false } : {}) };
 }
 
 export function discussReasonPatch(

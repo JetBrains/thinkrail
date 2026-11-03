@@ -623,6 +623,7 @@ test("a note and Other grow in place, the note follows the pick, and the card ke
 		await page.keyboard.press("Enter");
 		await expect(card.getByTestId("ask-note")).toHaveCount(0);
 		await expect(card.getByTestId("ask-note-text")).toContainText("Fifth line");
+		await expect(card.getByTestId("ask-note-toggle")).toHaveAccessibleDescription(/Fifth line/);
 		expect((await box(card)).height).toBeGreaterThanOrEqual(typed - 0.5);
 
 		await options.nth(2).click();
@@ -847,6 +848,34 @@ test("the receipt folds to one line, remembers a manual fold and lists each ques
 				.locator('[data-testid="ask-user-question"][data-tone="answered"]')
 				.getByTestId("ask-receipt-toggle"),
 		).toHaveAttribute("aria-expanded", "false");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("an expanded question preview stays expanded when its chat is reopened", async ({ page }) => {
+	await openFixtureProject(page);
+	const session = seedTallQuestionnaire("expanded preview", "ask-expanded-preview");
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "expanded preview");
+		const card = activeAsk(page);
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+		const toggle = card.getByTestId("ask-question-preview-toggle");
+		await expect(toggle).toHaveAttribute("aria-expanded", "false");
+		await toggle.click();
+		await expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+		const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+		await chatTabs.first().getByTestId("editor-tab-close").click();
+		await expect(chatTabs).toHaveCount(0);
+		await openPersistedChat(page, "expanded preview");
+		await expect(activeAsk(page).getByTestId("ask-question-preview-toggle")).toHaveAttribute(
+			"aria-expanded",
+			"true",
+		);
 	} finally {
 		rmSync(session.path, { force: true });
 	}

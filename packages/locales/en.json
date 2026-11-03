@@ -2405,6 +2405,7 @@
 	"tools.ask.hintEnter": "· Enter confirm",
 	"tools.ask.hintMoveMulti": "↑↓ move incl. Other",
 	"tools.ask.hintMoveSingle": "↑↓ move & select",
+	"tools.ask.hintPreviewScroll": "· PgUp/PgDn preview",
 	"tools.ask.hintQuestions": "· ←→ questions",
 	"tools.ask.hintSkip": "· Shift+Esc skip",
 	"tools.ask.hintSpaceSelect": "· Space select",

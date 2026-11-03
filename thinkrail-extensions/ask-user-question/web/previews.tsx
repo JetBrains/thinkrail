@@ -109,12 +109,21 @@ function FileFrame({
 const FOLD = "max-h-[240px]";
 const FOLD_HEIGHT = 240;
 
-function FoldedMarkdown({ text, diagram }: { text: string; diagram: boolean }) {
+function FoldedMarkdown({
+	text,
+	diagram,
+	expanded,
+	onToggleExpanded,
+}: {
+	text: string;
+	diagram: boolean;
+	expanded: boolean;
+	onToggleExpanded: () => void;
+}) {
 	const t = useT();
 	const tid = useTestId();
 	const ghost = useGhostPage();
 	const contentRef = useRef<HTMLDivElement>(null);
-	const [expanded, setExpanded] = useState(false);
 	const [overflows, setOverflows] = useState(diagram);
 
 	useLayoutEffect(() => {
@@ -136,7 +145,7 @@ function FoldedMarkdown({ text, diagram }: { text: string; diagram: boolean }) {
 				tabIndex={0}
 				data-testid={tid("ask-question-preview-toggle")}
 				aria-expanded={expanded}
-				onClick={() => setExpanded((value) => !value)}
+				onClick={onToggleExpanded}
 				className={cn(!expanded && "absolute right-8 bottom-8")}
 			>
 				{expanded ? t("tools.ask.previewShowLess") : t("tools.ask.previewShowAll")}
@@ -159,9 +168,13 @@ function FoldedMarkdown({ text, diagram }: { text: string; diagram: boolean }) {
 
 export function QuestionPreview({
 	source,
+	expanded,
+	onToggleExpanded,
 	onOpenFile,
 }: {
 	source: PreviewSource;
+	expanded: boolean;
+	onToggleExpanded: () => void;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const t = useT();
@@ -180,7 +193,12 @@ export function QuestionPreview({
 				) : null}
 			</div>
 			{source.kind === "markdown" ? (
-				<FoldedMarkdown text={source.text} diagram={source.diagram} />
+				<FoldedMarkdown
+					text={source.text}
+					diagram={source.diagram}
+					expanded={expanded}
+					onToggleExpanded={onToggleExpanded}
+				/>
 			) : (
 				<div className="h-[240px]">
 					<FileFrame source={source} onOpenFile={onOpenFile} />
@@ -193,10 +211,12 @@ export function QuestionPreview({
 export function OptionPreviewPane({
 	label,
 	source,
+	scrollRef,
 	onOpenFile,
 }: {
 	label: string | null;
 	source: PreviewSource | null;
+	scrollRef: (node: HTMLDivElement | null) => void;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const t = useT();
@@ -227,11 +247,15 @@ export function OptionPreviewPane({
 						{t("tools.ask.noPreview")}
 					</div>
 				) : source.kind === "markdown" ? (
-					<div className="h-full overflow-auto rounded-sm border border-border-default bg-container-content-bg px-12 py-8">
+					<div
+						ref={scrollRef}
+						data-testid={tid("ask-preview-scroll")}
+						className="h-full overflow-auto rounded-sm border border-border-default bg-container-content-bg px-12 py-8"
+					>
 						<PreviewMarkdown text={source.text} />
 					</div>
 				) : (
-					<FileFrame source={source} onOpenFile={onOpenFile} />
+					<FileFrame key={fileTitle(source)} source={source} onOpenFile={onOpenFile} />
 				)}
 			</div>
 		</div>
