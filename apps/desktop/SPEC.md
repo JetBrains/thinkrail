@@ -20,7 +20,8 @@ engine architecture.
 ## Boundary
 
 - **Owns:** Electrobun configuration and lifecycle; native window policy, including the per-platform
-  title-bar treatment and the window-chrome geometry it publishes to the web client; local `bootHost()` startup;
+  title-bar treatment and the window-chrome geometry it publishes to the web client; native window
+  placement, including the restored frame and first-launch centring; local `bootHost()` startup;
   packaged resource staging; the PI-compatible server-runtime bundle; desktop route preload/persistence;
   a bounded generic client-preference adapter under stable backend-profile/window identity; and the
   opt-in live-window test seam. Standalone artifact harnesses belong to [[module-artifact-tests]].
@@ -110,7 +111,7 @@ another.
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
    before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
-   renderer.
+   renderer at its saved frame (see [Native window placement](#native-window-placement)).
 
 The runtime bundle is built with `--outdir` + `--entry-naming` (Bun refuses external maps with
 `--outfile`). Only in a credentialed release build (`THINKRAIL_SOURCEMAPS_RELEASE`, [[module-ci-release]])
@@ -320,6 +321,33 @@ dropped. This workaround exists only because Electrobun lacks the behavior, trac
 re-check the mirror property name and that issue: once the framework handles drag-region double-clicks
 itself, remove the preload listener, `titleBarDoubleClick` message, and handler, or the window toggles
 twice.
+
+## Native window placement
+
+A document window reopens where the user left it, and the first window of a fresh install opens centred
+instead of at a fixed corner. `windowFrame.ts` (pure, pinned by unit tests) owns the policy; the store keeps
+`window-frame.json` in the desktop user-data directory next to `routes.json` and `preferences.json`, as a
+versioned document whose `frame` is re-validated on every read, so a corrupt, truncated, or future-version
+file degrades to first-launch behaviour instead of a bad window.
+
+Placement runs once, before the `BrowserWindow` exists, against `Screen.getAllDisplays()` work areas
+(menu bar and Dock excluded):
+
+| stored frame | result |
+|---|---|
+| none, or unreadable | default 1440×920, centred in the primary work area and shrunk to fit a smaller display |
+| still reachable (≥ 96px of width and height inside some display) and no larger than that display | restored unchanged, including a deliberate overhang past one edge |
+| no longer reachable — the display it lived on is gone | moved onto the nearest display and shrunk to fit it |
+| larger than the display it is reachable in | shrunk to that display and pulled fully inside it |
+
+Persistence is debounced (400 ms) over `move` and `resize`, so a drag writes once when it settles, and
+flushed synchronously on `will-close`. A full-screen window stores nothing: the frame to restore is the
+windowed one that preceded it. Bounds are clamped on read (finite, ≥ 640×480, ≤ 20000 in every dimension)
+so a hand-edited file cannot produce an unusable window.
+
+The window is created with an explicit frame rather than by omitting `x`/`y` for Electrobun's native
+centring: the placement rule needs the work-area geometry anyway, and one code path covers both first
+launch and restore.
 
 ## Navigation and window security
 

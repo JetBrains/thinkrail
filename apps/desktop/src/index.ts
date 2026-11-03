@@ -67,6 +67,7 @@ import {
 	windowChromeGeometry,
 	windowChromePreloadSeed,
 } from "./windowChrome";
+import { initialWindowFrame, installWindowFramePersistence, WindowFrameStore } from "./windowFrame";
 import { loadWindowsFrameApi, restoreWindowsFrameControls } from "./windowsFrame";
 import {
 	desktopAppUserModelId,
@@ -317,6 +318,7 @@ async function start(): Promise<void> {
 	const origin = `http://127.0.0.1:${host.port}`;
 	const routes = new RouteStore(join(userData, "routes.json"));
 	const preferences = new PreferenceStore(join(userData, "preferences.json"));
+	const windowFrames = new WindowFrameStore(join(userData, "window-frame.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const titleBarProbePath = neutral
@@ -455,7 +457,10 @@ async function start(): Promise<void> {
 		hidden:
 			process.env.THINKRAIL_DESKTOP_HIDDEN === "1" ||
 			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
-		frame: { x: 80, y: 60, width: 1440, height: 920 },
+		frame: initialWindowFrame(
+			windowFrames.read(),
+			Electrobun.Screen.getAllDisplays().map((display) => display.workArea),
+		),
 		...(neutral
 			? {}
 			: {
@@ -467,6 +472,7 @@ async function start(): Promise<void> {
 	});
 	setWindowsWindowIcon(mainWindow);
 	if (!neutral) {
+		installWindowFramePersistence(mainWindow, windowFrames);
 		mainWindow.webview.setNavigationRules(windowNavigationRules(origin));
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
