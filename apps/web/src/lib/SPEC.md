@@ -78,28 +78,25 @@ not this module; the theme-aware highlighter remains app-local.
   accessors for untrusted tuple-keyed maps and the key-order-independent `sameLayoutAttention()` equality
   that lets a no-op attention write be dropped before it reaches the store. Optional terminal recall is workspace-local history, not a second
   selected-tab authority; the layout owner validates it against current membership. Also the shared
-  Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
-  `highlighter.ts` owns the curated grammar/id/file-association catalog shared by chat and the desktop
-  Monaco renderer (both load a grammar on its language's first use), plus
-  `createChatHighlighter(engine)`: `themes`' one generic CSS-variable registration and each catalog grammar
-  loaded on first use. Chat code is highlighted off the main thread:
-  `highlightCode.ts` resolves the language alias (unknown and `mermaid` answer `null` with no worker),
-  then posts to one lazy `highlighter.worker.ts` per page, which uses the Oniguruma WASM engine. Per
-  caller key at most one request is in flight; a newer call replaces the waiting one, which resolves
-  `null`. If no `Worker` exists, the constructor throws, the worker fires `error`/`messageerror` (the
-  host's SPA fallback serves HTML for a chunk deleted by an update), or it cannot build its highlighter
-  (WASM load failed), the client switches for good to in-thread highlighting with the JS regex engine
-  (on WebKit, the desktop webview, ~1 s on a first TS fence) and re-runs pending requests there; these
-  failures never answer `null`. A failed grammar load answers `null` (plain text) for that call and
-  retries on the next. Results live in a bounded LRU (256 entries / 4M chars of code + HTML; a result over
-  a quarter of that is not cached) that answers `cachedHighlight()` synchronously; a key owns one entry,
-  so a streaming fence does not fill it. `useHighlightedCode()` is the one component hook: it reads the
-  cache on the client only (static renders, such as the rendered diff, stay plain), applies replies in
-  request order, and shows the last highlight plus the newer streamed text as plain until the worker
-  catches up. Both files stay out of the barrel and are imported per-file (`@/lib/highlighter`,
-  `@/lib/highlightCode`). Chat's markdown imports `highlightCode` statically and `shell/AppResourceHost` hands
-  the catalog to the resource renderers, so `@shikijs/core` is in the entry graph while every grammar and the
-  worker still load on first use; theme
+  code highlighting, **kept out of the barrel** so the eager `@/lib` import stays free of it:
+  `highlighter.ts` owns the curated Shiki grammar/id/file-association catalog for the desktop Monaco
+  renderer (loaded on a language's first use), and chat borrows only its aliases. Chat code is highlighted
+  off the main thread with `@pierre/highlights`, whose one WASM file holds all 152 languages:
+  `highlightCode.ts` resolves the language alias (`mermaid`, empty and the plain-text names answer `null` with
+  no worker) and posts to one lazy `highlighter.worker.ts` per page, which calls `chatHighlighter.ts`. The
+  worker owns the supported-language check because importing Pierre compiles its WASM at once, so an
+  unsupported name costs a worker start and answers `null`. Per caller key at most one request is in flight;
+  a newer call replaces the waiting one, which resolves `null`. If no `Worker` exists, the constructor throws,
+  or the worker fires `error`/`messageerror` (no WebAssembly, or the host's SPA fallback serves HTML for a
+  chunk deleted by an update), the client stops using the worker until reload: pending and later blocks stay
+  plain text. There is no main-thread highlighter. `chatHighlighter.ts` adds `tabindex="0"` to the `<pre>`, because Pierre's HTML has none and WebKit does not make a scrollable block a focus stop on its own. Results live in a bounded LRU (256 entries / 4M chars of
+  code + HTML; a result over a quarter of that is not cached) that answers `cachedHighlight()` synchronously;
+  a key owns one entry, so a streaming fence does not fill it. `useHighlightedCode()` is the one component
+  hook: it reads the cache on the client only (static renders, such as the rendered diff, stay plain), applies
+  replies in request order, and shows the last highlight plus the newer streamed text as plain until the
+  worker catches up. These files stay out of the barrel and are imported per-file (`@/lib/highlighter`,
+  `@/lib/highlightCode`). `shell/AppResourceHost` hands the catalog to the resource renderers, while every
+  grammar and the worker load on first use; theme
   identity/palettes never live in `lib`. Collision-safe browser identity composition lives here too:
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
   namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one
@@ -137,6 +134,6 @@ not this module; the theme-aware highlighter remains app-local.
 - **Allowed deps:** React (the viewport subscription hook only); `@thinkrail/locales` (the relative-time,
   compact-age and MCP state labels, resolved in the active locale at call time);
   `@thinkrail/contracts` (types only for canonical messages, `McpServerState`, and the `GitDiffScope` the
-  default tab names read; the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
+  default tab names read; the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` and `@pierre/highlights` (the per-file highlighting modules only — never reachable
   through the barrel).
 - **Forbidden:** every app-internal module — this is a leaf.

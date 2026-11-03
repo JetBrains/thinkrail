@@ -1,6 +1,5 @@
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { createChatHighlighter, shikiLanguageId } from "./highlighter";
+import { shikiLanguageId } from "./highlighter";
 import type { HighlightReply, HighlightRequest } from "./highlighter.worker";
 
 interface HighlightWorker {
@@ -15,7 +14,6 @@ export interface HighlightWorkerEvents {
 
 interface HighlightClientDeps {
 	spawn(events: HighlightWorkerEvents): HighlightWorker | null;
-	inThread(code: string, lang: string): Promise<string | null>;
 }
 
 interface Call {
@@ -42,7 +40,15 @@ interface CacheEntry {
 export const HIGHLIGHT_CACHE_MAX_ENTRIES = 256;
 export const HIGHLIGHT_CACHE_MAX_CHARS = 4_000_000;
 
-export function createHighlightClient({ spawn, inThread }: HighlightClientDeps) {
+const PLAIN_LANGUAGES = new Set(["mermaid", "plain", "plaintext", "text", "txt"]);
+
+export function chatLanguageId(value: string) {
+	const name = value.trim().toLowerCase();
+	if (!name || PLAIN_LANGUAGES.has(name)) return null;
+	return shikiLanguageId(name) ?? name;
+}
+
+export function createHighlightClient({ spawn }: HighlightClientDeps) {
 	const cache = new Map<string, CacheEntry>();
 	const owned = new Map<string, string>();
 	let cacheChars = 0;
@@ -50,7 +56,7 @@ export function createHighlightClient({ spawn, inThread }: HighlightClientDeps) 
 	const inFlight = new Map<number, InFlight>();
 	let nextId = 0;
 	let worker: HighlightWorker | null = null;
-	let threadOnly = false;
+	let workerFailed = false;
 
 	function cacheKey(code: string, lang: string) {
 		return `${lang}\0${code}`;
@@ -90,21 +96,20 @@ export function createHighlightClient({ spawn, inThread }: HighlightClientDeps) 
 	}
 
 	function failWorker() {
-		threadOnly = true;
+		workerFailed = true;
 		worker?.terminate();
 		worker = null;
-		for (const [id, request] of inFlight) runInThread(id, request);
+		for (const id of [...inFlight.keys()]) settle(id, null);
 	}
 
 	function activeWorker() {
-		if (threadOnly) return null;
+		if (workerFailed) return null;
 		if (worker) return worker;
 		try {
 			const spawned = spawn({
 				reply(message) {
 					if (worker !== spawned) return;
-					if (message.failed) failWorker();
-					else settle(message.id, message.html);
+					settle(message.id, message.html);
 				},
 				fail() {
 					if (worker === spawned) failWorker();
@@ -114,14 +119,8 @@ export function createHighlightClient({ spawn, inThread }: HighlightClientDeps) 
 		} catch {
 			worker = null;
 		}
-		if (!worker) threadOnly = true;
+		if (!worker) workerFailed = true;
 		return worker;
-	}
-
-	function runInThread(id: number, request: InFlight) {
-		void inThread(request.code, request.lang)
-			.catch(() => null)
-			.then((html) => settle(id, html));
 	}
 
 	function dispatch(key: string, slot: Slot, call: Call) {
@@ -131,7 +130,7 @@ export function createHighlightClient({ spawn, inThread }: HighlightClientDeps) 
 		inFlight.set(id, request);
 		const target = activeWorker();
 		if (target) target.postMessage({ id, code: call.code, lang: call.lang });
-		else runInThread(id, request);
+		else settle(id, null);
 	}
 
 	function settle(id: number, html: string | null) {
@@ -159,12 +158,12 @@ export function createHighlightClient({ spawn, inThread }: HighlightClientDeps) 
 	}
 
 	function cachedHighlight(code: string, lang: string) {
-		const canonical = shikiLanguageId(lang);
+		const canonical = chatLanguageId(lang);
 		return canonical ? readCache(cacheKey(code, canonical)) : null;
 	}
 
 	function highlightCode(code: string, lang: string, key: string) {
-		const canonical = shikiLanguageId(lang);
+		const canonical = chatLanguageId(lang);
 		if (!canonical) return Promise.resolve(null);
 		const slot = slots.get(key);
 		const hit = readCache(cacheKey(code, canonical));
@@ -202,12 +201,7 @@ function spawnHighlighterWorker(events: HighlightWorkerEvents) {
 	return worker;
 }
 
-const inThreadHighlight = createChatHighlighter(createJavaScriptRegexEngine);
-
-const client = createHighlightClient({
-	spawn: spawnHighlighterWorker,
-	inThread: (code, lang) => inThreadHighlight(code, lang).catch(() => null),
-});
+const client = createHighlightClient({ spawn: spawnHighlighterWorker });
 
 export function highlightCode(code: string, lang: string, key: string) {
 	return client.highlightCode(code, lang, key);

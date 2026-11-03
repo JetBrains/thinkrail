@@ -11,12 +11,11 @@ import {
 import type { HighlightReply, HighlightRequest } from "./highlighter.worker";
 
 function render(code: string, lang: string) {
-	return `<pre class="shiki ${lang}"><code>${code}</code></pre>`;
+	return `<pre class="highlights ${lang}"><code>${code}</code></pre>`;
 }
 
 function fakeWorker(options: { throws?: boolean } = {}) {
 	const posted: HighlightRequest[] = [];
-	const threaded: string[] = [];
 	let events: HighlightWorkerEvents | null = null;
 	let spawned = 0;
 	let terminated = 0;
@@ -34,10 +33,6 @@ function fakeWorker(options: { throws?: boolean } = {}) {
 				},
 			};
 		},
-		async inThread(code, lang) {
-			threaded.push(code);
-			return render(code, lang);
-		},
 	});
 	function answer(index: number) {
 		const request = posted[index];
@@ -47,7 +42,6 @@ function fakeWorker(options: { throws?: boolean } = {}) {
 	return {
 		client,
 		posted,
-		threaded,
 		answer,
 		fail: () => events?.fail(),
 		events: () => events,
@@ -95,36 +89,51 @@ test("a repeated call on a key resolves from the cache without a second post", a
 	expect(posted).toHaveLength(1);
 });
 
-test("unknown languages and mermaid never spawn the worker", async () => {
+test("plain fences and mermaid never spawn the worker", async () => {
 	const { client, counts } = fakeWorker();
 	expect(await client.highlightCode("graph TD", "mermaid", "k")).toBeNull();
-	expect(await client.highlightCode("x", "brainfuck", "k")).toBeNull();
+	expect(await client.highlightCode("x", "text", "k")).toBeNull();
 	expect(client.cachedHighlight("x", "mermaid")).toBeNull();
 	expect(counts().spawned).toBe(0);
 });
 
-test("a throwing worker constructor falls back to in-thread highlighting for good", async () => {
-	const { client, threaded, counts } = fakeWorker({ throws: true });
-	expect(await client.highlightCode("a", "ts", "k")).toBe(render("a", "typescript"));
-	expect(await client.highlightCode("b", "ts", "k2")).toBe(render("b", "typescript"));
-	expect(threaded).toEqual(["a", "b"]);
+test("a fence language outside the Monaco catalog goes to the worker", () => {
+	const { client, posted } = fakeWorker();
+	void client.highlightCode("x", "Elixir", "k");
+	expect(posted[0]?.lang).toBe("elixir");
+});
+
+test("a throwing worker constructor leaves every later block plain", async () => {
+	const { client, counts } = fakeWorker({ throws: true });
+	expect(await client.highlightCode("a", "ts", "k")).toBeNull();
+	expect(await client.highlightCode("b", "ts", "k2")).toBeNull();
 	expect(counts().spawned).toBe(1);
 });
 
-test("a worker error re-runs pending requests in-thread and keeps later ones there", async () => {
-	const { client, posted, threaded, fail, counts } = fakeWorker();
+test("a worker error leaves pending and later blocks plain", async () => {
+	const { client, posted, fail, counts } = fakeWorker();
 	const first = client.highlightCode("a", "ts", "k1");
 	const second = client.highlightCode("b", "py", "k2");
 	const waiting = client.highlightCode("c", "py", "k2");
 	expect(posted).toHaveLength(2);
 	fail();
-	expect(await first).toBe(render("a", "typescript"));
-	expect(await second).toBe(render("b", "python"));
-	expect(await waiting).toBe(render("c", "python"));
-	expect(await client.highlightCode("d", "ts", "k3")).toBe(render("d", "typescript"));
-	expect(threaded).toEqual(["a", "b", "c", "d"]);
+	expect(await first).toBeNull();
+	expect(await second).toBeNull();
+	expect(await waiting).toBeNull();
+	expect(await client.highlightCode("d", "ts", "k3")).toBeNull();
 	expect(posted).toHaveLength(2);
 	expect(counts()).toEqual({ spawned: 1, terminated: 1 });
+});
+
+test("an unsupported language answers plain without stopping the worker", async () => {
+	const { client, posted, events, answer, counts } = fakeWorker();
+	const unknown = client.highlightCode("x", "not-a-language", "k1");
+	events()?.reply({ id: posted[0]?.id ?? -1, html: null });
+	expect(await unknown).toBeNull();
+	const known = client.highlightCode("y", "ts", "k2");
+	answer(1);
+	expect(await known).toBe(render("y", "typescript"));
+	expect(counts()).toEqual({ spawned: 1, terminated: 0 });
 });
 
 test("the cache answers synchronously and resolves aliases", async () => {
@@ -175,22 +184,12 @@ test("an oversized result is not cached and evicts nothing else", async () => {
 	expect(client.cachedHighlight("small", "ts")).toBe(render("small", "typescript"));
 });
 
-test("a worker that cannot build its highlighter switches the client to in-thread", async () => {
-	const { client, posted, threaded, events, counts } = fakeWorker();
-	const pending = client.highlightCode("a", "ts", "k");
-	events()?.reply({ id: posted[0]?.id ?? -1, html: null, failed: true });
-	expect(await pending).toBe(render("a", "typescript"));
-	expect(await client.highlightCode("b", "ts", "k2")).toBe(render("b", "typescript"));
-	expect(threaded).toEqual(["a", "b"]);
-	expect(counts()).toEqual({ spawned: 1, terminated: 1 });
-});
-
 test("staleHighlight shows the last highlight plus the new text as plain, escaped", () => {
-	const html = '<pre class="shiki"><code><span class="line">a</span></code></pre>';
+	const html = '<pre class="highlights"><code><span class="line">a</span></code></pre>';
 	const latest = { seq: 1, code: "a", lang: "ts", html };
 	expect(staleHighlight("a", "ts", latest)).toBe(html);
 	expect(staleHighlight("a\n<b>&", "ts", latest)).toBe(
-		'<pre class="shiki"><code><span class="line">a</span>\n&lt;b&gt;&amp;</code></pre>',
+		'<pre class="highlights"><code><span class="line">a</span>\n&lt;b&gt;&amp;</code></pre>',
 	);
 	expect(staleHighlight("b", "ts", latest)).toBeNull();
 	expect(staleHighlight("a", "py", latest)).toBeNull();
@@ -257,5 +256,5 @@ test("the real worker answers with highlighted html", async () => {
 	});
 	worker.terminate();
 	expect(reply.id).toBe(7);
-	expect(reply.html).toContain('class="shiki');
+	expect(reply.html).toContain('class="highlights');
 }, 20_000);

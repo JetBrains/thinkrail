@@ -29,6 +29,7 @@
 		"@fontsource-variable/jetbrains-mono": "catalog:",
 		"@fontsource-variable/orbitron": "catalog:",
 		"@remixicon/react": "catalog:",
+		"@pierre/highlights": "catalog:",
 		"@shikijs/langs": "4.5.0",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/ext-ask-user-question": "workspace:*",

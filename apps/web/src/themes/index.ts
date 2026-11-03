@@ -1,4 +1,5 @@
 export { initializeThemes } from "./bundled";
+export { THINKRAIL_PIERRE_THEME } from "./pierre";
 export {
 	applyTheme,
 	applyThemePreference,

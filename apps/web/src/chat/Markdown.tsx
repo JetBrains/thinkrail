@@ -120,7 +120,7 @@ function CodeBlock({
 		}
 		return <pre className="overflow-auto rounded-sm bg-container-elevated-bg p-8">{code}</pre>;
 	}
-	return <ShikiBlock code={code} lang={lang} />;
+	return <HighlightBlock code={code} lang={lang} />;
 }
 
 function MermaidBlock({ code }: { code: string }) {
@@ -130,7 +130,7 @@ function MermaidBlock({ code }: { code: string }) {
 		return () => clearTimeout(timer);
 	}, [code]);
 
-	const source = <ShikiBlock code={code} lang="mermaid" />;
+	const source = <HighlightBlock code={code} lang="mermaid" />;
 	if (settled !== code) return source;
 	return (
 		<div className="whitespace-normal">
@@ -139,7 +139,7 @@ function MermaidBlock({ code }: { code: string }) {
 	);
 }
 
-function ShikiBlock({ code, lang }: { code: string; lang: string }) {
+function HighlightBlock({ code, lang }: { code: string; lang: string }) {
 	const html = useHighlightedCode(code, lang);
 
 	if (html === null) {

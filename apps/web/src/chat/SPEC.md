@@ -112,7 +112,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   summarized disappear immediately rather than only after reload. Its `summary` opens on click
   (`data-testid="chat-compaction"`). Hydration/reopen starts directly from that same durable form. Both forms
   share the **"Context compacted"** title; only facts unavailable after reload disappear.
-- `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki). Safe
+- `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + code highlighting). Safe
   worktree-relative links in assistant prose open the target in ThinkRail through `ChatTurnView`'s existing
   workspace-file callback; absolute paths are accepted only when they normalize inside the active worktree,
   while URL schemes, protocol-relative URLs, fragments, and unsafe/outside paths retain ordinary safe
@@ -136,7 +136,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   ```mermaid block renders as a themed diagram via `@thinkrail/ext-visualize/web`'s `MermaidView` (fullscreen
   pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
   preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
-  `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
+  `renderToStaticMarkup`) degrade to code exactly like highlighted blocks do.
   Assistant text renders per top-level block (`BlockMarkdown`): `markdownBlocks` splits it with the `marked`
   block lexer, and each block is a memoized react-markdown render, so a streamed delta re-parses only the
   tail. Blocks are direct children of the prose `div`, separated by the same `"\n"` the whole-document
@@ -379,7 +379,7 @@ the first transcript is read, not only once the chat view mounts. Built-in app r
 side-effect registrations (`tools/register`, loaded with `ChatView`).
 Render contracts (`ToolRenderProps`, `ToolStatus`, registration metadata) and pure argument/result
 helpers come from `@thinkrail/extension-api/web`, not chat internals. `Markdown` imports the named
-`MermaidView` from `@thinkrail/ext-visualize/web` for fenced mermaid; shiki and highlighted `CodeBlock`
+`MermaidView` from `@thinkrail/ext-visualize/web` for fenced mermaid; highlighted fences and `CodeBlock`
 remain app-local. A registration is:
 
 - a **renderer** (the specialized card body; `ToolRenderProps` carries `toolCallId`/`args`/`result`/
@@ -579,7 +579,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the result
   row is transcript-positioned, so it maps its message index too); `todo-review-fix` **becomes its own
   `reviewFix` turn** (same positioning); unknown customTypes are ignored. No
-  store/transport/shiki.
+  store/transport/highlighter.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
   the workbench shell integration's open/reopen/hydrate half) — `ChatTranscript` is the sole consumer. Once
@@ -1605,7 +1605,7 @@ Unknown custom messages retain their existing behavior.
 
 - **Public surface:** the registry API (`toolRegistry`), the shared workspace-file target canonicalizer
   (`fileTargets`), and the renderers (incl. the presentational
-  `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
+  `Markdown` — GFM + code highlighting, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),
   [[module-resource-renderers]]' document preview the document skin (`tr-prose-doc`) — the shell injects this
   component as the renderers' `ResourceHost.markdown`, so chat never imports the package. A skin names exactly one generated
@@ -1620,8 +1620,8 @@ Unknown custom messages retain their existing behavior.
   reading the reload badge from the store selector `selectSkillsStale(state, workspaceId, sessionId)` —
   per-session and store-derived, so it survives the tab-switch remount; a successful reload calls
   `markSkillsSynced` to clear only this chat).
-  **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
-  **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
+  **No `index.ts` barrel** — chat pulls the **highlight client**, so per the code-splitting exception imports stay
+  **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling it.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); the lifecycle-neutral
   `prompt` module; `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
@@ -1652,7 +1652,7 @@ Unknown custom messages retain their existing behavior.
   pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
   from *any* consumer. `model.list` answers from *before* the
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
-  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter` / `lib/highlightCode`; a streaming fence
+  `react-markdown` / `remark-gfm` / code highlighting (via `lib/highlightCode`; a streaming fence
   shows its last highlight plus the newer text as plain until the worker catches up); `marked` (block lexer
   for `markdownBlocks` splitting only, never for rendering); `@thinkrail/ext-visualize/web`
   (`Markdown` consumes `MermaidView`; `mermaid` stays lazy inside the extension);
