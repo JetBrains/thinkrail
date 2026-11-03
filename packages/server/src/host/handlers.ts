@@ -124,7 +124,7 @@ import {
 	surveyResponse,
 } from "../feedback";
 import { fontsDir, listInstalledFonts, readUserFonts } from "../fonts";
-import { readDir, readFile } from "../fs";
+import { copyWorkspaceFile, deleteWorkspaceFile, readDir, readFile } from "../fs";
 import {
 	commitsAheadOf,
 	countPushDivergence,
@@ -804,6 +804,18 @@ const handlers: WsHandlers = {
 	"fs.readFile": (p) => {
 		void ensureWatch(p.workspaceId);
 		return readFile(p.workspaceId, p.path);
+	},
+	"fs.copy": (p) => {
+		void ensureWatch(p.sourceWorkspaceId);
+		void ensureWatch(p.destinationWorkspaceId);
+		return withChangeLock(p.destinationWorkspaceId, () => copyWorkspaceFile(p));
+	},
+	"fs.delete": (p) => {
+		void ensureWatch(p.workspaceId);
+		return withChangeLock(p.workspaceId, async () => {
+			await deleteWorkspaceFile(p.workspaceId, p.path);
+			return { ok: true } as const;
+		});
 	},
 	"spec.graph": (p) => {
 		void ensureWatch(p.workspaceId);
