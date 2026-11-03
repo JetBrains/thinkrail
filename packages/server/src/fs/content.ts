@@ -53,6 +53,22 @@ const AVIF_BRANDS = [
 	[0x61, 0x76, 0x69, 0x73],
 ];
 
+function isAvif(bytes: Uint8Array): boolean {
+	if (bytes.length < 16 || !startsWith(bytes, FTYP, 4)) return false;
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const size = view.getUint32(0);
+	const majorOffset = size === 1 ? 16 : 8;
+	if (bytes.length < majorOffset + 8) return false;
+	const boxEnd = size === 1 ? Number(view.getBigUint64(8)) : size;
+	if (boxEnd < majorOffset + 8) return false;
+	if (AVIF_BRANDS.some((brand) => startsWith(bytes, brand, majorOffset))) return true;
+	const end = Math.min(boxEnd, bytes.length, CONTENT_SNIFF_BYTES);
+	for (let offset = majorOffset + 8; offset + 4 <= end; offset += 4) {
+		if (AVIF_BRANDS.some((brand) => startsWith(bytes, brand, offset))) return true;
+	}
+	return false;
+}
+
 function sniffMagic(bytes: Uint8Array): string | undefined {
 	if (
 		startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
@@ -60,9 +76,7 @@ function sniffMagic(bytes: Uint8Array): string | undefined {
 	) {
 		return "image/webp";
 	}
-	if (startsWith(bytes, FTYP, 4) && AVIF_BRANDS.some((brand) => startsWith(bytes, brand, 8))) {
-		return "image/avif";
-	}
+	if (isAvif(bytes)) return "image/avif";
 	return MAGIC.find(({ bytes: magic }) => startsWith(bytes, magic))?.mime;
 }
 
