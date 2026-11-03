@@ -12,6 +12,7 @@ import {
 	type SubagentOverride,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	assertSafeRef,
@@ -261,18 +262,25 @@ export function planManagedWorkspace(
 	};
 }
 
+export function assertManagedPathFree(path: string): void {
+	const wanted = canonicalPath(path);
+	const owner =
+		loadWorkspaces().some((workspace) => canonicalPath(workspace.worktreePath) === wanted) ||
+		loadProjects().some((project) => canonicalPath(project.path) === wanted);
+	if (owner)
+		throw new CodedError(
+			"WORKSPACE_PATH_TAKEN",
+			`The workspace folder is already open in ThinkRail: ${path}`,
+		);
+}
+
 export function registerManagedWorkspace(
 	entry: Pick<Workspace, "id" | "projectId" | "name" | "branch" | "worktreePath" | "baseBranch"> & {
 		renamed?: true;
 	},
 ): Workspace {
-	const wanted = canonicalPath(entry.worktreePath);
+	assertManagedPathFree(entry.worktreePath);
 	const all = loadWorkspaces();
-	const owner =
-		all.find((workspace) => canonicalPath(workspace.worktreePath) === wanted) ??
-		loadProjects().find((project) => canonicalPath(project.path) === wanted);
-	if (owner)
-		throw new Error(`The workspace folder is already open in ThinkRail: ${entry.worktreePath}`);
 	const workspace: Workspace = {
 		id: entry.id,
 		projectId: entry.projectId,

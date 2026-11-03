@@ -31,7 +31,11 @@ import {
 	findCreation,
 	updateCreation,
 } from "./creationRecords";
-import { planManagedWorkspace, registerManagedWorkspace } from "./workspaces";
+import {
+	assertManagedPathFree,
+	planManagedWorkspace,
+	registerManagedWorkspace,
+} from "./workspaces";
 import { gitWorktreeEntries, samePath } from "./worktreeRegistry";
 
 const log = logger("workspaces");
@@ -241,6 +245,7 @@ async function prepare(id: string, project: Project, signal: AbortSignal): Promi
 async function checkOut(id: string, signal: AbortSignal): Promise<void> {
 	const record = findCreation(id);
 	if (!record) throw new CreationAborted();
+	assertManagedPathFree(record.worktreePath);
 	removeStaleIndexLock(record.worktreePath);
 	const progress = progressFeed(id);
 	const checkout = await gitAsync(
@@ -277,13 +282,7 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 		await checkOut(id, signal);
 		const done = findCreation(id);
 		if (!done) throw new CreationAborted();
-		let workspace: Workspace;
-		try {
-			workspace = registerManagedWorkspace(done);
-		} catch (err) {
-			project = undefined;
-			throw new CodedError("WORKSPACE_PATH_TAKEN", (err as Error).message);
-		}
+		const workspace = registerManagedWorkspace(done);
 		let outcome: { sessionId?: string; kickoffError?: string } = {};
 		if (handoff) {
 			try {
@@ -304,7 +303,7 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 		log.warn(`workspace creation ${id} failed`, err);
 		const record = findCreation(id);
 		let cleaned = false;
-		if (record && project) {
+		if (record && project && errorCodeOf(err) !== "WORKSPACE_PATH_TAKEN") {
 			try {
 				cleaned = await cleanupCreation(project.path, record);
 			} catch (cleanupErr) {
@@ -324,6 +323,18 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 			});
 		throw err;
 	}
+}
+
+function holdsLeftovers(record: WorkspaceCreationRecord): boolean {
+	return record.baseOid !== undefined && record.failure?.code !== "WORKSPACE_PATH_TAKEN";
+}
+
+async function discard(record: WorkspaceCreationRecord): Promise<void> {
+	const project = listProjects().find((candidate) => candidate.id === record.projectId);
+	if (project && holdsLeftovers(record) && !(await cleanupCreation(project.path, record)))
+		throw new Error(`Could not remove the partial workspace at ${record.worktreePath}`);
+	deleteCreation(record.id);
+	emitCreation({ kind: "removed", removed: { id: record.id, projectId: record.projectId } });
 }
 
 function run(id: string): Promise<Workspace> {
@@ -377,8 +388,8 @@ export async function createWorkspace(
 	try {
 		return await awaitWorkspaceCreation(creation.id);
 	} catch (err) {
-		if (findCreation(creation.id)?.state === "failed") deleteCreation(creation.id);
-		emitCreation({ kind: "removed", removed: { id: creation.id, projectId } });
+		const record = findCreation(creation.id);
+		if (record?.state === "failed") await discard(record).catch(() => {});
 		throw err;
 	}
 }
@@ -391,6 +402,8 @@ export function resumeWorkspaceCreation(id: string): WorkspaceCreation {
 	const record = findCreation(id);
 	if (!record) throw new Error(`Unknown workspace creation: ${id}`);
 	if (record.state === "running") return creationView(record);
+	if (record.failure?.code === "WORKSPACE_PATH_TAKEN")
+		throw new Error("The workspace folder is now open elsewhere in ThinkRail; use Edit & retry");
 	const updated = updateCreation(id, (r) => {
 		r.state = "running";
 		delete r.failure;
@@ -407,10 +420,7 @@ export async function dismissWorkspaceCreation(
 	if (!record) return {};
 	if (record.state === "running")
 		throw new Error("A running workspace creation cannot be dismissed");
-	const project = listProjects().find((candidate) => candidate.id === record.projectId);
-	if (project && record.state === "interrupted") await cleanupCreation(project.path, record);
-	deleteCreation(id);
-	emitCreation({ kind: "removed", removed: { id, projectId: record.projectId } });
+	await discard(record);
 	return record.kickoff ? { kickoff: record.kickoff } : {};
 }
 
