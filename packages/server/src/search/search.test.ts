@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Project, Workspace } from "@thinkrail/contracts";
+import type { Project, SearchHit, Workspace } from "@thinkrail/contracts";
 import { MATCH_TIER } from "@thinkrail/contracts";
 import type { HistorySession } from "../history";
 import type { SpecSnapshotEntry } from "../spec";
@@ -19,6 +19,11 @@ import { searchFiles, searchTranscripts } from "./providers";
 import { createSearchService, resolveSearchRoot, type SearchReaders } from "./service";
 
 const encoder = new TextEncoder();
+
+const pathOf = (hit: SearchHit) => ("path" in hit ? hit.path : undefined);
+const sizeOf = (hit: SearchHit) => ("size" in hit ? hit.size : undefined);
+const messageOf = (hit: SearchHit) =>
+	hit.kind === "transcript" ? [hit.sessionId, hit.messageIndex] : [];
 
 function chunks(...parts: string[]): Uint8Array[] {
 	return parts.map((part) => encoder.encode(part));
@@ -181,7 +186,7 @@ describe("chat providers", () => {
 	test("a budget that runs out leaves older messages unsearched, never the newest chat's", () => {
 		const group = searchTranscripts([old, recent], false, label, input("refresh", 3));
 		expect(group.state).toBe("truncated");
-		expect(group.hits.map((hit) => [hit.sessionId, hit.messageIndex])).toEqual([
+		expect(group.hits.map(messageOf)).toEqual([
 			["recent", 0],
 			["old", 499],
 			["old", 498],
@@ -212,16 +217,15 @@ describe("chat providers", () => {
 		});
 		const byMessage = (session: HistorySession) =>
 			Object.fromEntries(
-				searchTranscripts([session], false, label, input("refresh", 10)).hits.map((hit) => [
-					hit.timestamp,
-					[hit.id, hit.messageIndex],
-				]),
+				searchTranscripts([session], false, label, input("refresh", 10)).hits.map((hit) =>
+					hit.kind === "transcript" ? [hit.anchorText, [hit.id, hit.messageIndex]] : [],
+				),
 			);
 		const before = byMessage(at(0));
 		const after = byMessage(at(1));
-		expect(after[100]?.[0]).toBe(before[100]?.[0]);
-		expect(after[200]?.[0]).toBe(before[200]?.[0]);
-		expect([before[200]?.[1], after[200]?.[1]]).toEqual([3, 2]);
+		expect(after["a refresh"]?.[0]).toBe(before["a refresh"]?.[0]);
+		expect(after["b refresh"]?.[0]).toBe(before["b refresh"]?.[0]);
+		expect([before["b refresh"]?.[1], after["b refresh"]?.[1]]).toEqual([3, 2]);
 	});
 
 	test("messages queued in the same millisecond keep distinct ids, their pi entries'", () => {
@@ -312,7 +316,7 @@ describe("FileListCache", () => {
 			},
 			(_root, path) => (path === "a-gone.ts" ? "missing" : path === "c-here.ts" ? null : 3),
 		);
-		expect(group.hits.map((hit) => [hit.path, hit.size])).toEqual([
+		expect(group.hits.map((hit) => [pathOf(hit), sizeOf(hit)])).toEqual([
 			["b-here.ts", 3],
 			["c-here.ts", undefined],
 		]);
@@ -376,7 +380,7 @@ describe("FileListCache", () => {
 			},
 		);
 		expect(asked).toEqual(["/r|big.log", "/r|outside-link.log"]);
-		expect(group.hits.map((hit) => [hit.path, hit.size])).toEqual([["big.log", 4096]]);
+		expect(group.hits.map((hit) => [pathOf(hit), sizeOf(hit)])).toEqual([["big.log", 4096]]);
 		expect(group.total).toBe(1);
 	});
 
@@ -400,9 +404,9 @@ describe("FileListCache", () => {
 			hits: [],
 		});
 		await Bun.sleep(0);
-		expect(searchFiles(root, files, input("refresh"), present).hits.map((hit) => hit.path)).toEqual(
-			["src/refresh.ts"],
-		);
+		expect(searchFiles(root, files, input("refresh"), present).hits.map(pathOf)).toEqual([
+			"src/refresh.ts",
+		]);
 	});
 });
 
@@ -621,9 +625,7 @@ describe("search.query", () => {
 		await files.load("/repos/one-auth");
 		const service = createSearchService(readers({ files }));
 		const paths = async (query: string) =>
-			(await service.query({ query, kinds: ["file"], context })).groups[0]?.hits
-				.map((hit) => hit.path)
-				.sort();
+			(await service.query({ query, kinds: ["file"], context })).groups[0]?.hits.map(pathOf).sort();
 		expect(await paths("cafe")).toEqual(["docs/Café.md", "src/cafe/menu.ts"]);
 		expect(await paths("CAFÉ")).toEqual(["docs/Café.md", "src/cafe/menu.ts"]);
 		expect(await paths("fb")).toEqual(["src/FooBar.ts"]);
@@ -785,7 +787,7 @@ describe("search.query", () => {
 		});
 		expect(capped.groups[0]).toMatchObject({ state: "truncated", total: 1 });
 		const acronym = await service.query({ query: "uc", kinds: ["file"], context });
-		expect(acronym.groups[0]?.hits.map((hit) => hit.path)).toEqual(["src/auth/UserController.ts"]);
+		expect(acronym.groups[0]?.hits.map(pathOf)).toEqual(["src/auth/UserController.ts"]);
 	});
 
 	test("a provider that runs out of its budget answers what it has as truncated", async () => {
@@ -847,11 +849,7 @@ describe("search.preview", () => {
 	test("a chat preview is a bounded transcript window around the focused message", async () => {
 		const service = createSearchService(readers());
 		const preview = await service.preview({ kind: "chat", sessionId: "s1", messageIndex: 1 });
-		expect(preview).toMatchObject({
-			kind: "transcript",
-			title: "Fix auth token refresh",
-			truncated: false,
-		});
+		expect(preview).toMatchObject({ kind: "transcript", title: "Fix auth token refresh" });
 		if (preview.kind !== "transcript") throw new Error("expected a transcript");
 		expect(preview.messages.map((message) => [message.messageIndex, message.focus])).toEqual([
 			[0, false],
@@ -859,7 +857,6 @@ describe("search.preview", () => {
 		]);
 		expect(await service.preview({ kind: "chat", sessionId: "s-cli" })).toEqual({
 			kind: "unavailable",
-			reason: "missing",
 		});
 	});
 
@@ -887,7 +884,6 @@ describe("search.preview", () => {
 		const service = createSearchService(readers({ workspaces: () => [defaultOne] }));
 		expect(await service.preview({ kind: "chat", sessionId: "s1" })).toEqual({
 			kind: "unavailable",
-			reason: "missing",
 		});
 	});
 });

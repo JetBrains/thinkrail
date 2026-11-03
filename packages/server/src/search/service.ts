@@ -10,7 +10,6 @@ import type {
 	WsParams,
 } from "@thinkrail/contracts";
 import {
-	DEFAULT_SEARCH_GROUP_LIMIT,
 	MAX_SEARCH_GROUP_LIMIT,
 	MAX_SEARCH_QUERY_LENGTH,
 	parseMatchTerms,
@@ -52,6 +51,8 @@ export interface SearchService {
 	preview(target: SearchPreviewTarget): Promise<SearchPreviewResult>;
 	invalidateRoot(root: string): void;
 }
+
+const DEFAULT_SEARCH_GROUP_LIMIT = 20;
 
 export const SEARCH_BUDGET = {
 	queryMs: 300,
@@ -180,7 +181,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			const { sessions } = await readers.sessions();
 			const session = sessions.find((candidate) => candidate.sessionId === target.sessionId);
 			if (!session || !chatLabeler(workspaces)(session.cwd)) {
-				return { kind: "unavailable", reason: "missing" };
+				return { kind: "unavailable" };
 			}
 			return transcriptPreview(session, target.messageIndex, target.anchorText?.slice(0, 120));
 		},
@@ -232,10 +233,5 @@ function transcriptPreview(
 				: entry.text,
 		focus: start + offset === focusAt,
 	}));
-	return {
-		kind: "transcript",
-		title: session.title ?? "",
-		messages,
-		truncated: window.length < entries.length,
-	};
+	return { kind: "transcript", title: session.title ?? "", messages };
 }

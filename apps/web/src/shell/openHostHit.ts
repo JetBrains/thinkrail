@@ -23,30 +23,25 @@ export interface HostHitTargets {
 }
 
 export async function openHostHit(hit: SearchHit, targets: HostHitTargets): Promise<void> {
-	if (!hit.workspaceId) return;
 	const workspace = { id: hit.workspaceId, projectId: hit.projectId };
 	switch (hit.kind) {
 		case "file":
-			if ((await targets.navigateToWorkspace(workspace)) && hit.path) {
+			if (await targets.navigateToWorkspace(workspace)) {
 				await targets.openFile(workspace.id, hit.path);
 			}
 			return;
 		case "spec":
-			if ((await targets.navigateToWorkspace(workspace)) && hit.path) {
-				targets.openSpec(workspace.id, hit.path);
-			}
+			if (await targets.navigateToWorkspace(workspace)) targets.openSpec(workspace.id, hit.path);
 			return;
 		case "transcript":
-			if (hit.sessionId && hit.messageIndex !== undefined && hit.anchorText !== undefined) {
-				if (!(await targets.loadWorkspaceRow(workspace))) return;
-				targets.openChatLocation({
-					workspaceId: workspace.id,
-					projectId: workspace.projectId,
-					sessionId: hit.sessionId,
-					messageIndex: hit.messageIndex,
-					anchorText: hit.anchorText,
-				});
-			} else await targets.navigateToWorkspace(workspace, hit.sessionId);
+			if (!(await targets.loadWorkspaceRow(workspace))) return;
+			targets.openChatLocation({
+				workspaceId: workspace.id,
+				projectId: workspace.projectId,
+				sessionId: hit.sessionId,
+				messageIndex: hit.messageIndex,
+				anchorText: hit.anchorText,
+			});
 			return;
 		case "plan":
 			if (await targets.navigateToWorkspace(workspace, hit.sessionId)) {

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { SearchGroup, SearchQueryResult, WsParams } from "@thinkrail/contracts";
+import {
+	MATCH_TIER,
+	type SearchGroup,
+	type SearchHit,
+	type SearchQueryResult,
+	type WsParams,
+} from "@thinkrail/contracts";
 import {
 	createHostPreviewLoader,
 	createHostSearchController,
@@ -61,24 +67,32 @@ const input = (text: string, kinds: SearchGroup["kind"][] = ["file"]) => ({
 	context: { projectId: "p1" },
 });
 
+const hitOf = (kind: SearchGroup["kind"], id: string): SearchHit => {
+	const base = {
+		id,
+		title: id,
+		tier: MATCH_TIER.prefix,
+		score: 1,
+		projectId: "p1",
+		workspaceId: "w1",
+	};
+	switch (kind) {
+		case "file":
+			return { ...base, kind, path: id };
+		case "spec":
+			return { ...base, kind, path: id, specId: id, size: 1 };
+		case "plan":
+			return { ...base, kind, sessionId: id };
+		case "transcript":
+			return { ...base, kind, sessionId: id, messageIndex: 0, anchorText: id };
+	}
+};
+
 const group = (
 	state: SearchGroup["state"] = "ready",
 	ids: string[] = ["file:p1::a.ts"],
 	kind: SearchGroup["kind"] = "file",
-): SearchGroup => ({
-	kind,
-	hits: ids.map((id) => ({
-		id,
-		kind,
-		title: id,
-		tier: 1,
-		score: 1,
-		projectId: "p1",
-		path: id,
-	})),
-	total: ids.length,
-	state,
-});
+): SearchGroup => ({ kind, hits: ids.map((id) => hitOf(kind, id)), total: ids.length, state });
 
 const shownState = (groups: SearchGroup[] | null, pending: boolean, stale = false) => ({
 	groups,
@@ -278,12 +292,12 @@ describe("host previews", () => {
 			async (target) => {
 				asked.push(`${generation}:${target.sessionId}`);
 				if (fail) throw new Error("offline");
-				return { kind: "transcript", title: "t", messages: [], truncated: false };
+				return { kind: "transcript", title: "t", messages: [] };
 			},
 			() => generation,
 		);
 		const target = { kind: "chat" as const, sessionId: "s1", messageIndex: 2, anchorText: "the" };
-		expect(await loader.load(target)).toEqual({ kind: "unavailable", reason: "missing" });
+		expect(await loader.load(target)).toEqual({ kind: "unavailable" });
 		fail = false;
 		await loader.load(target);
 		await loader.load(target);

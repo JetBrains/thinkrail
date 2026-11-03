@@ -39,12 +39,12 @@ export interface HostItemContext {
 function hostFields(hit: SearchHit): MatchField[] {
 	switch (hit.kind) {
 		case "file":
-			return hit.path ? [{ key: "path", text: hit.path, path: true }] : [];
+			return [{ key: "path", text: hit.path, path: true }];
 		case "spec":
 			return [
 				{ key: "title", text: hit.title },
-				...(hit.specId ? [{ key: "id", text: hit.specId, secondary: true }] : []),
-				...(hit.path ? [{ key: "path", text: hit.path, path: true, secondary: true }] : []),
+				{ key: "id", text: hit.specId, secondary: true },
+				{ key: "path", text: hit.path, path: true, secondary: true },
 			];
 		case "plan":
 		case "transcript":
@@ -79,8 +79,8 @@ function contentRanges(text: string, terms: readonly MatchTerm[]): [number, numb
 
 export function rematchHit(hit: SearchHit, terms: readonly MatchTerm[]): SearchHit | null {
 	if (hit.tier === MATCH_TIER.content) {
-		const key = hit.kind === "spec" ? "snippet" : "title";
-		const ranges = contentRanges(key === "snippet" ? (hit.snippet ?? "") : hit.title, terms);
+		const [key, text] = hit.kind === "spec" ? ["snippet", hit.snippet ?? ""] : ["title", hit.title];
+		const ranges = contentRanges(text, terms);
 		return ranges ? { ...hit, score: 0, ranges: { [key]: ranges } } : null;
 	}
 	const match = matchFields(terms, hostFields(hit));
@@ -117,22 +117,18 @@ function lateOf(context: HostItemContext, id: string): { late?: number } {
 
 function where(context: HostItemContext, hit: SearchHit): string {
 	const project = context.projectName(hit.projectId) ?? "";
-	const workspace = hit.workspaceId ? context.workspaceName(hit.workspaceId) : undefined;
+	const workspace = context.workspaceName(hit.workspaceId);
 	return workspace ? context.t("search.item.inWorkspace", { project, workspace }) : project;
 }
 
-function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null {
+function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem {
 	const base = {
 		id: hit.id,
-		projectId: hit.projectId,
-		...(hit.workspaceId ? { workspaceId: hit.workspaceId } : {}),
-		...(hit.sessionId ? { sessionId: hit.sessionId } : {}),
 		...lateOf(context, hit.id),
 		run: () => context.openHit(hit),
 	};
 	switch (hit.kind) {
 		case "file": {
-			if (!hit.workspaceId || !hit.path) return null;
 			const dir = hit.subtitle ?? "";
 			const ranges = splitPathRanges(hit.ranges?.path, dir.length);
 			const location = where(context, hit);
@@ -159,12 +155,11 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 			};
 		}
 		case "spec":
-			if (!hit.workspaceId || !hit.path) return null;
 			return {
 				...base,
 				kind: "spec",
 				title: hit.title,
-				subtitle: hit.snippet ?? hit.path ?? "",
+				subtitle: hit.snippet ?? hit.path,
 				group: "specs",
 				scope: "specs",
 				icon: RiNodeTree,
@@ -174,11 +169,7 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 						? { subtitle: hit.ranges?.snippet ?? [] }
 						: { title: hit.ranges?.title ?? [], subtitle: hit.ranges?.path ?? [] },
 				),
-				file: {
-					workspaceId: hit.workspaceId,
-					path: hit.path,
-					...(hit.size === undefined ? {} : { size: hit.size }),
-				},
+				file: { workspaceId: hit.workspaceId, path: hit.path, size: hit.size },
 			};
 		case "plan":
 			return {
@@ -201,16 +192,12 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 				scope: "work",
 				icon: RiChatHistoryLine,
 				...matchOf(hit, { title: hit.ranges?.title ?? [] }),
-				...(hit.sessionId
-					? {
-							previewTarget: {
-								kind: "chat",
-								sessionId: hit.sessionId,
-								...(hit.messageIndex === undefined ? {} : { messageIndex: hit.messageIndex }),
-								...(hit.anchorText === undefined ? {} : { anchorText: hit.anchorText }),
-							},
-						}
-					: {}),
+				previewTarget: {
+					kind: "chat",
+					sessionId: hit.sessionId,
+					messageIndex: hit.messageIndex,
+					anchorText: hit.anchorText,
+				},
 			};
 	}
 }
@@ -220,8 +207,7 @@ export function hostItems(context: HostItemContext, groups: readonly SearchGroup
 	for (const group of groups) {
 		for (const hit of group.hits) {
 			const current = context.staleTerms ? rematchHit(hit, context.staleTerms) : hit;
-			const item = current ? hostItem(context, current) : null;
-			if (item) items.push(item);
+			if (current) items.push(hostItem(context, current));
 		}
 	}
 	return items;

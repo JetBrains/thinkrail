@@ -1,3 +1,4 @@
+import type { MatchTier } from "./match";
 import type { SessionState, ThinkingLevel, WireModel } from "./piProtocol";
 
 export interface SessionStateRecord {
@@ -1930,8 +1931,6 @@ export const MAX_SEARCH_QUERY_LENGTH = 200;
 
 export const MAX_SEARCH_GROUP_LIMIT = 50;
 
-export const DEFAULT_SEARCH_GROUP_LIMIT = 20;
-
 export const MAX_SEARCH_PREVIEW_BYTES = 2 * 1024 * 1024;
 
 /** Where the palette is: the active workspace, else the context project's folder, is the one root files and specs are searched in. */
@@ -1940,29 +1939,32 @@ export interface SearchContext {
 	workspaceId?: string;
 }
 
-export interface SearchHit {
+export interface SearchHitBase {
 	/** `kind:id[:locator]` — stable across replies so the client can keep a selection. */
 	id: string;
-	kind: SearchKind;
 	title: string;
 	subtitle?: string;
-	snippet?: string;
 	/** The shared matcher's tier and score; the client merges host hits with its own by these. */
-	tier: number;
+	tier: MatchTier;
 	score: number;
 	ranges?: Record<string, [number, number][]>;
 	projectId: string;
-	workspaceId?: string;
-	sessionId?: string;
-	messageIndex?: number;
-	anchorText?: string;
-	/** Root-relative POSIX path of a file or spec hit. */
-	path?: string;
-	/** Bytes on disk of a file or spec hit, so the client can decline to preview a large one. */
-	size?: number;
-	specId?: string;
-	timestamp?: number;
+	workspaceId: string;
 }
+
+export type SearchHit =
+	/** A root-relative POSIX `path`; `size` is the bytes on disk when the host could read them. */
+	| (SearchHitBase & { kind: "file"; path: string; size?: number })
+	/** `snippet` is the body line a `content`-tier hit matched. */
+	| (SearchHitBase & { kind: "spec"; path: string; specId: string; size: number; snippet?: string })
+	| (SearchHitBase & { kind: "plan"; sessionId: string })
+	/** `anchorText` re-finds the message when compaction moved `messageIndex`. */
+	| (SearchHitBase & {
+			kind: "transcript";
+			sessionId: string;
+			messageIndex: number;
+			anchorText: string;
+	  });
 
 export type SearchGroupState = "ready" | "truncated" | "indexing" | "failed";
 
@@ -1994,8 +1996,8 @@ export interface SearchPreviewMessage {
 }
 
 export type SearchPreviewResult =
-	| { kind: "transcript"; title: string; messages: SearchPreviewMessage[]; truncated: boolean }
-	| { kind: "unavailable"; reason: "missing" };
+	| { kind: "transcript"; title: string; messages: SearchPreviewMessage[] }
+	| { kind: "unavailable" };
 
 export type TemplateScope = "global" | "project";
 

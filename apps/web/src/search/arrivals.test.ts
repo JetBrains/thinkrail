@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { RiChat2Line } from "@remixicon/react";
-import { MATCH_TIER, type SearchGroup } from "@thinkrail/contracts";
+import { MATCH_TIER, type MatchTier, type SearchGroup } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { type Arrivals, NO_ARRIVALS, noteArrivals } from "./arrivals";
 import { hostItems } from "./hostItems";
@@ -53,7 +53,7 @@ describe("selection stability across host replies", () => {
 	};
 	const files = (
 		state: SearchGroup["state"],
-		tier: number,
+		tier: MatchTier,
 		names: readonly string[],
 	): SearchGroup => ({
 		kind: "file",

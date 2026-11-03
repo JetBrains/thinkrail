@@ -10,72 +10,48 @@ import { hostItems } from "./hostItems";
 import { EMPTY_LEARNING } from "./learning";
 import { rankItems } from "./rank";
 
-const hit = (
-	overrides: Partial<SearchHit> & Pick<SearchHit, "id" | "kind" | "title">,
-): SearchHit => ({
-	tier: MATCH_TIER.prefix,
-	score: 1,
-	projectId: "p1",
-	...overrides,
-});
+const base = { tier: MATCH_TIER.prefix, score: 1, projectId: "p1", workspaceId: "w1" } as const;
+
+const file: SearchHit = {
+	...base,
+	id: "file:p1:w1:src/auth/refresh.ts",
+	kind: "file",
+	title: "refresh.ts",
+	subtitle: "src/auth",
+	path: "src/auth/refresh.ts",
+	ranges: {
+		path: [
+			[4, 8],
+			[9, 16],
+		],
+	},
+};
+const plan: SearchHit = {
+	...base,
+	id: "plan:w1:remote:t1",
+	kind: "plan",
+	title: "Refresh the token",
+	subtitle: "Auth plan",
+	sessionId: "remote",
+};
+const transcript: SearchHit = {
+	...base,
+	id: "transcript:remote:3",
+	kind: "transcript",
+	title: "…the refresh now retries…",
+	subtitle: "Only the host knows",
+	tier: MATCH_TIER.content,
+	score: 0,
+	sessionId: "remote",
+	messageIndex: 3,
+	anchorText: "the refresh now retries",
+	ranges: { title: [[4, 11]] },
+};
 
 const groups: SearchGroup[] = [
-	{
-		kind: "file",
-		state: "ready",
-		total: 1,
-		hits: [
-			hit({
-				id: "file:p1:w1:src/auth/refresh.ts",
-				kind: "file",
-				title: "refresh.ts",
-				subtitle: "src/auth",
-				path: "src/auth/refresh.ts",
-				workspaceId: "w1",
-				ranges: {
-					path: [
-						[4, 8],
-						[9, 16],
-					],
-				},
-			}),
-		],
-	},
-	{
-		kind: "plan",
-		state: "ready",
-		total: 1,
-		hits: [
-			hit({
-				id: "plan:w1:remote:t1",
-				kind: "plan",
-				title: "Refresh the token",
-				subtitle: "Auth plan",
-				sessionId: "remote",
-				workspaceId: "w1",
-			}),
-		],
-	},
-	{
-		kind: "transcript",
-		state: "ready",
-		total: 1,
-		hits: [
-			hit({
-				id: "transcript:remote:3",
-				kind: "transcript",
-				title: "…the refresh now retries…",
-				subtitle: "Only the host knows",
-				tier: MATCH_TIER.content,
-				score: 0,
-				sessionId: "remote",
-				workspaceId: "w1",
-				messageIndex: 3,
-				anchorText: "the refresh now retries",
-				ranges: { title: [[4, 11]] },
-			}),
-		],
-	},
+	{ kind: "file", state: "ready", total: 1, hits: [file] },
+	{ kind: "plan", state: "ready", total: 1, hits: [plan] },
+	{ kind: "transcript", state: "ready", total: 1, hits: [transcript] },
 ];
 
 function items(late: Record<string, number> = {}, staleQuery: string | null = null) {

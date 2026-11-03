@@ -56,6 +56,10 @@ function rangesOf(match: {
 
 export type FileStat = (root: string, path: string) => number | "missing" | null;
 
+type FileHit = Extract<SearchHit, { kind: "file" }>;
+type SpecHit = Extract<SearchHit, { kind: "spec" }>;
+type TranscriptHit = Extract<SearchHit, { kind: "transcript" }>;
+
 export function searchFiles(
 	root: SearchRoot,
 	lists: FileListCache,
@@ -67,7 +71,7 @@ export function searchFiles(
 		void lists.load(root.root);
 		return buildGroup("file", [], input.limit, "indexing");
 	}
-	const hits: SearchHit[] = [];
+	const hits: FileHit[] = [];
 	const foldedTerms = input.terms.map((term) => ({
 		text: foldMatchText(term.text),
 		literal: term.literal,
@@ -117,11 +121,11 @@ export function searchFiles(
 		if (match) pushHit(path, match);
 	}
 	hits.sort(compareHits);
-	const page: SearchHit[] = [];
+	const page: FileHit[] = [];
 	let missing = 0;
 	for (const hit of hits) {
 		if (page.length >= input.limit) break;
-		const size = hit.path ? stat(root.root, hit.path) : null;
+		const size = stat(root.root, hit.path);
 		if (size !== "missing") {
 			page.push(size === null ? hit : { ...hit, size });
 			continue;
@@ -151,7 +155,7 @@ export function searchSpecs(
 	snapshot: (root: string) => SpecSnapshot,
 	input: ProviderInput,
 ): SearchGroup {
-	const hits: SearchHit[] = [];
+	const hits: SpecHit[] = [];
 	const texts = input.terms.map((term) => term.text);
 	const bodyTerms = texts.some((text) => text.length >= MIN_BODY_TERM_LENGTH);
 	const { entries, rebuilding } = snapshot(root.root);
@@ -219,7 +223,7 @@ export function searchTranscripts(
 		.map((session) => ({ session, where: label(session.cwd), last: lastActivity(session) }))
 		.filter((entry): entry is typeof entry & { where: ChatLabel } => entry.where !== null)
 		.sort((a, b) => b.last - a.last);
-	const hits: SearchHit[] = [];
+	const found: { hit: TranscriptHit; at: number }[] = [];
 	let truncated = false;
 	scan: for (const { session, where } of ordered) {
 		for (let index = session.entries.length - 1; index >= 0; index -= 1) {
@@ -229,26 +233,36 @@ export function searchTranscripts(
 			}
 			const entry = session.entries[index];
 			if (!entry || !matchesTerms(entry.text, terms)) continue;
-			const snippet = compactWhitespace(makeSnippet(entry.text, primary));
-			hits.push({
-				id: `transcript:${session.sessionId}:${entry.entryId}`,
-				kind: "transcript",
-				title: snippet.slice(0, TRANSCRIPT_TEXT_PREVIEW),
-				...(session.title ? { subtitle: session.title } : {}),
-				snippet,
-				tier: MATCH_TIER.content,
-				score: 0,
-				ranges: { title: termRanges(snippet.slice(0, TRANSCRIPT_TEXT_PREVIEW), terms) },
-				projectId: where.projectId,
-				workspaceId: where.workspaceId,
-				sessionId: session.sessionId,
-				messageIndex: entry.messageIndex,
-				anchorText: entry.text.slice(0, 120),
-				timestamp: entry.timestamp,
+			const title = compactWhitespace(makeSnippet(entry.text, primary)).slice(
+				0,
+				TRANSCRIPT_TEXT_PREVIEW,
+			);
+			found.push({
+				hit: {
+					id: `transcript:${session.sessionId}:${entry.entryId}`,
+					kind: "transcript",
+					title,
+					...(session.title ? { subtitle: session.title } : {}),
+					tier: MATCH_TIER.content,
+					score: 0,
+					ranges: { title: termRanges(title, terms) },
+					projectId: where.projectId,
+					workspaceId: where.workspaceId,
+					sessionId: session.sessionId,
+					messageIndex: entry.messageIndex,
+					anchorText: entry.text.slice(0, 120),
+				},
+				at: entry.timestamp,
 			});
 		}
 	}
-	return buildGroup("transcript", hits, input.limit, groupState(truncated, indexing));
+	found.sort((a, b) => b.at - a.at);
+	return buildGroup(
+		"transcript",
+		found.map((entry) => entry.hit),
+		input.limit,
+		groupState(truncated, indexing),
+	);
 }
 
 export function searchPlans(

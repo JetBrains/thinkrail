@@ -9,7 +9,7 @@ export function deadlineAt(endMs: number, now: () => number = performance.now): 
 }
 
 export function compareHits(a: SearchHit, b: SearchHit): number {
-	return a.tier - b.tier || b.score - a.score || (b.timestamp ?? 0) - (a.timestamp ?? 0);
+	return a.tier - b.tier || b.score - a.score;
 }
 
 export function buildGroup(

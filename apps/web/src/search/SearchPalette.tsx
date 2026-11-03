@@ -131,10 +131,11 @@ function PaletteContent({
 	const hostEnabled = host !== undefined;
 	const hostProjectId = host?.context.projectId;
 	const hostWorkspaceId = host?.context.workspaceId;
+	const hostText = parsed.terms.length > 0 ? parsed.text : "";
 	const hostInput = useMemo(
 		() => ({
 			enabled: hostEnabled,
-			text: parsed.text,
+			text: hostText,
 			kinds: scopeKinds(parsed.scope),
 			context: {
 				...(hostProjectId ? { projectId: hostProjectId } : {}),
@@ -142,7 +143,7 @@ function PaletteContent({
 			},
 			...(parsed.scope === "all" ? {} : { limit: MAX_SEARCH_GROUP_LIMIT }),
 		}),
-		[hostEnabled, hostProjectId, hostWorkspaceId, parsed.text, parsed.scope],
+		[hostEnabled, hostProjectId, hostWorkspaceId, hostText, parsed.scope],
 	);
 	const hostState = useHostSearch(hostInput);
 	const [previews] = useState(createHostPreviewLoader);

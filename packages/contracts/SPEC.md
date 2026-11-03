@@ -558,16 +558,18 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
   the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v106): **`SearchKind`** (`transcript` / `file` /
   `spec` / `plan` — chats and workspaces are the palette's own rows), **`SearchContext`** (the active workspace + context project the
-  host turns into its one file/spec root), **`SearchHit`** (a stable `kind:id[:locator]` id, title / subtitle / `snippet`,
-  the shared matcher's `tier` + `score` and highlight `ranges` so the browser merges host hits with its
-  local ones by the same rule, and the navigation target — `projectId` / `workspaceId` / `sessionId` /
-  `messageIndex` + `anchorText` / root-relative `path` / `specId` — and a file or spec hit's byte `size`, so
-  the client declines to preview a large one), **`SearchGroup`** (one per kind:
+  host turns into its one file/spec root), **`SearchHit`** (a union per kind over **`SearchHitBase`** — a stable
+  `kind:id[:locator]` id, title / subtitle, the shared matcher's `MatchTier` + `score` and highlight `ranges`
+  so the browser merges host hits with its local ones by the same rule, and the `projectId` / `workspaceId`
+  every hit opens in — with each kind's own required target: a file's root-relative `path` and byte `size`
+  when readable, a spec's `path` / `specId` / `size` and the body line a `content` hit matched (`snippet`), a
+  plan's `sessionId`, a transcript's `sessionId` / `messageIndex` + `anchorText`; a size lets the client
+  decline to preview a large file; nothing else rides the wire — sort keys stay on the host), **`SearchGroup`** (one per kind:
   capped `hits`, the true `total`, and a `state` of `ready` / `truncated` / `indexing` / `failed` — a
   client re-asks only on `indexing`), **`SearchQueryResult`** (the groups), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (the
   `chat` target only, with the hit's `anchorText` so the host can re-find a message compaction moved: a
   bounded transcript window or `unavailable` — files and specs render client-side over `fs.readFile`), and the limits `MAX_SEARCH_QUERY_LENGTH`,
-  `MAX_SEARCH_GROUP_LIMIT`, `DEFAULT_SEARCH_GROUP_LIMIT`, `MAX_SEARCH_PREVIEW_BYTES` (the preview pane's
+  `MAX_SEARCH_GROUP_LIMIT`, `MAX_SEARCH_PREVIEW_BYTES` (the preview pane's
   read cap); the matcher gains the `content` tier for
   body/transcript matches, always below every field tier;
   the **review DTOs** — **`Review`** (one open review per workspace; `baseSha` — the reviewed diff's

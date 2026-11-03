@@ -247,7 +247,7 @@ export function createHostPreviewLoader(
 			if (cached) return cached;
 			const promise = request(target).catch((): SearchPreviewResult => {
 				cache.delete(key);
-				return { kind: "unavailable", reason: "missing" };
+				return { kind: "unavailable" };
 			});
 			cache.set(key, promise);
 			if (cache.size > PREVIEW_CACHE_LIMIT) {
