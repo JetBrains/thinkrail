@@ -51,19 +51,7 @@ function applyVariable(
 	}
 }
 
-/**
- * Apply an explicit proxy config to the process environment. An absent config leaves the
- * environment untouched (preserving launch/Environment variables). Both casing variants are
- * replaced or cleared, matching Bun 1.4.4's lowercase-first lookup.
- */
-export function applyProxyConfig(
-	config: AppConfig,
-	resolveSystem: SystemProxyResolver,
-	env: Record<string, string | undefined> = process.env,
-): void {
-	const proxy = config.proxy;
-	if (!proxy) return;
-	const resolved = resolveProxy(proxy.mode, proxy.manualTarget, resolveSystem);
+function applyResolved(resolved: ResolvedProxy, env: Record<string, string | undefined>): void {
 	applyVariable("HTTPS_PROXY", "https_proxy", resolved.httpsProxy, env);
 	applyVariable("HTTP_PROXY", "http_proxy", resolved.httpProxy, env);
 	applyVariable("ALL_PROXY", "all_proxy", resolved.httpsProxy ?? resolved.httpProxy, env);
@@ -73,4 +61,26 @@ export function applyProxyConfig(
 		resolved.noProxy.length > 0 ? resolved.noProxy.join(",") : null,
 		env,
 	);
+}
+
+/**
+ * Apply an explicit proxy config to the process environment. An absent config — or a `system`
+ * selection on a platform whose resolver reports none — leaves the environment untouched
+ * (preserving launch/Environment variables). Both casing variants are replaced or cleared,
+ * matching Bun 1.4.4's lowercase-first lookup.
+ */
+export function applyProxyConfig(
+	config: AppConfig,
+	resolveSystem: SystemProxyResolver,
+	env: Record<string, string | undefined> = process.env,
+): void {
+	const proxy = config.proxy;
+	if (!proxy) return;
+	if (proxy.mode === "system") {
+		const system = resolveSystem();
+		if (!system) return;
+		applyResolved(system, env);
+		return;
+	}
+	applyResolved(resolveProxy(proxy.mode, proxy.manualTarget, resolveSystem), env);
 }

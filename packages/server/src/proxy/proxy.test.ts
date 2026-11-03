@@ -85,6 +85,16 @@ describe("applyProxyConfig", () => {
 		expect(env.http_proxy).toBeUndefined();
 	});
 
+	it("leaves the environment untouched when system mode has no resolver result", () => {
+		const env: Record<string, string | undefined> = {
+			HTTPS_PROXY: "http://launch:3128",
+			https_proxy: "http://launch:3128",
+		};
+		applyProxyConfig(config({ mode: "system" }), () => null, env);
+		expect(env.HTTPS_PROXY).toBe("http://launch:3128");
+		expect(env.https_proxy).toBe("http://launch:3128");
+	});
+
 	it("applies the system noProxy list", () => {
 		const env: Record<string, string | undefined> = {};
 		applyProxyConfig(
