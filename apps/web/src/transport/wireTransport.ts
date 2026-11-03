@@ -30,6 +30,7 @@ import {
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
+	SUBSCRIPTION_USAGE_PROTOCOL_VERSION,
 	TOOL_RESPONSE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
@@ -44,6 +45,10 @@ let transport: WsTransport | null = null;
 
 export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= HOST_UPDATE_RUN_PROTOCOL_VERSION;
+}
+
+export function supportsSubscriptionUsage(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= SUBSCRIPTION_USAGE_PROTOCOL_VERSION;
 }
 
 export function supportsUserThemes(protocolVersion: number | null): boolean {

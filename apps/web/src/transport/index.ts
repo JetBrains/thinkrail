@@ -28,6 +28,7 @@ export {
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
 	supportsRichAnchors,
+	supportsSubscriptionUsage,
 	supportsToolResponses,
 	supportsTurnChanges,
 	supportsUserThemes,

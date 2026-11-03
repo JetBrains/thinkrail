@@ -33,6 +33,7 @@ import {
 	disableAnthropicExtraUsageWarning,
 	ensureSessionAttached,
 	followUpSession,
+	getPiRuntime,
 	getResourceHistoryPage,
 	getSessionCommands,
 	getSessionMessages,
@@ -221,6 +222,7 @@ import {
 	updateTodo,
 } from "../todos";
 import { forgetWorkspaceTurns, listTurns } from "../turns";
+import { readSubscriptionUsage } from "../usage/subscriptions";
 import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
@@ -321,6 +323,20 @@ type WsHandler<M extends WsMethodName> = (
 ) => WsResult<M> | Promise<WsResult<M>>;
 
 type WsHandlers = { [M in WsMethodName]: WsHandler<M> };
+
+/**
+ * The subscription panel reads provider credentials only through pi's own store; a provider pi does
+ * not own keeps its token in its own file and is read by the usage module instead.
+ */
+async function readPiProviderToken(providerId: string): Promise<string | null> {
+	try {
+		const runtime = await getPiRuntime();
+		const auth = (await runtime.getAuth(providerId))?.auth;
+		return typeof auth?.apiKey === "string" ? auth.apiKey : null;
+	} catch {
+		return null;
+	}
+}
 
 async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
@@ -473,7 +489,7 @@ async function sendToFileChat(
 	}
 	if (existing) {
 		log.warn(
-			`review ${workspaceId}: linked chat ${existing} is no longer on disk — starting a new review chat`,
+			`review ${workspaceId}: linked chat ${existing} is no longer on disk вЂ” starting a new review chat`,
 		);
 	}
 	ensureWorkspaceScratchDir(ws);
@@ -615,7 +631,7 @@ const handlers: WsHandlers = {
 		const failed = Object.values(reloads).filter((disposition) => disposition === "failed").length;
 		if (failed > 0) {
 			throw new Error(
-				`Trust was ${p.trusted ? "granted" : "revoked"}, but ${failed} open ${failed === 1 ? "chat" : "chats"} could not reload and still ${failed === 1 ? "runs" : "run"} with the previous trust — close or reload ${failed === 1 ? "it" : "them"}.`,
+				`Trust was ${p.trusted ? "granted" : "revoked"}, but ${failed} open ${failed === 1 ? "chat" : "chats"} could not reload and still ${failed === 1 ? "runs" : "run"} with the previous trust вЂ” close or reload ${failed === 1 ? "it" : "them"}.`,
 			);
 		}
 		return updated;
@@ -843,7 +859,7 @@ const handlers: WsHandlers = {
 	"todo.startReview": async (p) => {
 		const ws = getWorkspace(p.workspaceId);
 		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath)))
-			throw new Error("This plan's chat is no longer on disk — can't review.");
+			throw new Error("This plan's chat is no longer on disk вЂ” can't review.");
 		if (!startPlanReview(p.workspaceId, p.sessionId, p.id))
 			throw new Error("This step is already being reviewed.");
 		return { ok: true };
@@ -851,7 +867,7 @@ const handlers: WsHandlers = {
 	"todo.reviewAll": async (p) => {
 		const ws = getWorkspace(p.workspaceId);
 		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath)))
-			throw new Error("This plan's chat is no longer on disk — can't review.");
+			throw new Error("This plan's chat is no longer on disk вЂ” can't review.");
 		const plan = await listTodos({ workspaceId: p.workspaceId, sessionId: p.sessionId });
 		const items = [
 			...plan.todos,
@@ -879,7 +895,7 @@ const handlers: WsHandlers = {
 		try {
 			const ws = getWorkspace(p.workspaceId);
 			if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath))) {
-				throw new Error("This plan's chat is no longer on disk — can't send the fix request.");
+				throw new Error("This plan's chat is no longer on disk вЂ” can't send the fix request.");
 			}
 			const prepared = await withReviewLock(p.workspaceId, async () => {
 				const request = requestTodoFix(p);
@@ -1329,6 +1345,11 @@ const handlers: WsHandlers = {
 			force: params.force === true,
 		});
 	},
+	"usage.subscriptions": (params) =>
+		readSubscriptionUsage({
+			force: params.force === true,
+			deps: { readPiProviderToken },
+		}),
 	"host.update": (_params, ctx) => {
 		if (!ctx.runHostUpdate) throw new Error("Host update is unavailable.");
 		ctx.runHostUpdate();
