@@ -33,7 +33,7 @@ sends it.
   - **The mic-state derivation** (`micState.ts`).
   - **`MicButton`**, the one mic every voice field renders, and the chord registry (`hotkey.ts`).
 - **Public surface (barrel):** `MicButton`, `MicButtonProps`, `speechErrorKey`, `dictationShortcutLabel`,
-  `useFieldApply`.
+  `DICTATION_EVENT`.
 - **Internal:** capture, the controller, the text rule, the mic-state derivation, and the chord registry.
 - **Forbidden:**
   - Submitting, steering, or touching the agent.
